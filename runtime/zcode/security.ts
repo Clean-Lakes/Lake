@@ -59,6 +59,39 @@ export class LakeSecurity {
     if (this.store.get("legacyProjectPolicies", projectId))
       throw new HttpError(409, "此项目的安全策略已保留，资源操作须完成迁移核验后继续");
   }
+  network(projectId:string,address:string):'allow'|'ask' {
+    this.check();this.store.project(projectId);let url:URL;try{url=new URL(address);}catch{throw new HttpError(400,'网页地址无效');}
+    if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw new HttpError(403,'网页读取仅允许不携带认证凭据的 HTTP(S) 地址');
+    const legacy=this.store.get<any>('legacyProjectPolicies',projectId);if(!legacy)return 'allow';
+    const policy=legacy.data;
+    if(!policy||policy.SchemaVersion!==1||!policy.Confirmed||policy.ProjectID!==projectId||!['legacy','restricted','compatible'].includes(policy.Mode)||!Number.isSafeInteger(policy.Revision)||policy.Revision<1||!Array.isArray(policy.Rules))throw new HttpError(403,'原项目网络策略需要核实');
+    const path=join(this.store.home,'security/control.json');if(existsSync(path)){const control=JSON.parse(readFileSync(path,'utf8'));if(policy.StoreID!==control.storeID||policy.RecoveryEpoch!==control.recoveryEpoch)throw new HttpError(409,'原项目安全身份已失效');}
+    const rules=policy.Rules.filter((rule:any)=>rule.Capability==='network.fetch'&&!rule.ResourceIDs?.length);
+    if(!rules.length||rules.some((rule:any)=>rule.Effect==='deny'))throw new HttpError(403,'原项目策略未允许该网页读取');
+    let decision:'allow'|'ask'='allow';for(const rule of rules){
+      if(rule.Limits&&Object.values(rule.Limits).some(value=>Array.isArray(value)?value.length:!!value))throw new HttpError(403,'受限网络策略需要对应地址范围适配器');
+      if(rule.Effect==='ask'){if(!['single','either'].includes(rule.Confirmation))throw new HttpError(409,'原网页策略需要专用任务授权');decision='ask';}else if(rule.Effect!=='allow')throw new HttpError(403,'原网页策略无效');
+    }return decision;
+  }
+  command(projectId:string,resourceId:string,provenReadOnly=false):'allow'|'ask' {
+    this.check();const resource=this.store.require<any>('resources',resourceId);
+    if(resource.projectId!==projectId||!['local','ssh'].includes(resource.kind)||resource.status!=='available')throw new HttpError(403,'命令资源不属于当前项目或连接不可用');
+    const legacy=this.store.get<any>('legacyProjectPolicies',projectId);if(!legacy)return 'allow';
+    const policy=legacy.data;
+    if(!policy||policy.SchemaVersion!==1||!policy.Confirmed||policy.ProjectID!==projectId||!['legacy','restricted','compatible'].includes(policy.Mode)||!Number.isSafeInteger(policy.Revision)||policy.Revision<1||!Array.isArray(policy.Rules)||!policy.ResourceIDs?.includes(resourceId))throw new HttpError(403,'原项目策略不允许此命令资源');
+    const path=join(this.store.home,'security/control.json');if(existsSync(path)){const control=JSON.parse(readFileSync(path,'utf8'));if(policy.StoreID!==control.storeID||policy.RecoveryEpoch!==control.recoveryEpoch)throw new HttpError(409,'原项目安全身份已失效');}
+    let decision:'allow'|'ask'='allow';
+    for(const capability of ['resource.resolve',...(resource.kind==='local'?['local.execute']:[]),provenReadOnly?'command.diagnostics':'terminal.execute']){
+      const rules=policy.Rules.filter((rule:any)=>rule.Capability===capability&&(!rule.ResourceIDs?.length||rule.ResourceIDs.includes(resourceId)));
+      if(!rules.length||rules.some((rule:any)=>rule.Effect==='deny'))throw new HttpError(403,'原项目策略禁止命令能力 '+capability);
+      const specific=rules.filter((rule:any)=>rule.ResourceIDs?.length),width=specific.length?Math.min(...specific.map((rule:any)=>rule.ResourceIDs.length)):0;
+      for(const rule of width?specific.filter((rule:any)=>rule.ResourceIDs.length===width):rules){
+        if(rule.Limits&&Object.values(rule.Limits).some(value=>Array.isArray(value)?value.length:!!value))throw new HttpError(403,'通用 Shell 不能替代原策略的受限执行模板');
+        if(rule.Effect==='ask'){if(!['single','either'].includes(rule.Confirmation))throw new HttpError(409,'原命令策略需要专用任务授权');decision='ask';}else if(rule.Effect!=='allow')throw new HttpError(403,'原命令策略无效');
+      }
+    }
+    return decision;
+  }
   database(projectId:string,resourceId:string,scope:DatabaseScope){
     this.check();const resource=this.store.require<any>('resources',resourceId);
     if(resource.projectId!==projectId||resource.kind!=='database'||resource.status!=='available'||resource.settings?.driver!=='mysql')throw new HttpError(403,'MySQL 资源不在当前项目或配置不可用');

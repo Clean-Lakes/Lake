@@ -37,6 +37,7 @@ export type MemorySource = {
   messageId?: string;
   taskId?: string;
   taskRevision?: number;
+  taskRoleId?: string;
   createdAt: string;
   payload: string;
   hash: string;
@@ -561,6 +562,7 @@ export class LakeMemory {
       if (this.invalidSources(used).length) return;
       if (!goal.workerId) return;
       const worker = this.store.get<{
+        inline?: boolean;
         inputEventIds: string[];
         projectId: string;
         roleId: string;
@@ -607,7 +609,8 @@ export class LakeMemory {
         .slice(-8);
       if (!business.length) return;
       for (const operation of business) this.validateOperation?.(operation);
-      const scope = this.scope("role", goal.projectId, goal.roleId);
+      const pilot=worker.inline===true&&goal.roleId==='pilot:'+goal.projectId&&this.store.get<any>('superProjects',goal.projectId)?.routerSessionId===goal.sessionId;
+      const scope = pilot?this.scope('project',goal.projectId):this.scope("role", goal.projectId, goal.roleId);
       const bindings: Binding[] = business
         .filter((operation) => operation.resourceId)
         .map((operation) => ({
@@ -657,6 +660,7 @@ export class LakeMemory {
         {
           taskId: goal.id,
           taskRevision: goal.goalRevision,
+          ...(pilot?{taskRoleId:goal.roleId}:{}),
           taskEvidence,
           sessionId: goal.sessionId,
           bindings,
@@ -713,7 +717,7 @@ export class LakeMemory {
       if (
         !goal ||
         goal.projectId !== source.projectId ||
-        goal.roleId !== source.roleId ||
+        goal.roleId !== (source.taskRoleId??source.roleId) ||
         goal.sessionId !== source.sessionId ||
         goal.goalRevision !== source.taskRevision ||
         (source.taskEvidence === "accepted" &&

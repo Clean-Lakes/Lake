@@ -4,7 +4,7 @@ import {InspectorTaskSummary,inspectorProgress} from '../src/InspectorTaskSummar
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {islandFixture} from './fixtures/pilot-island-data';
-import {hasInspectorTask,inspectedTask,inspectedAttempt,inspectorAttempts,latestInspectorSelection,resolvedInspectorSelection} from '../src/sessionInspectorModel';
+import {canonicalGoalForExecution,hasInspectorTask,inspectedTask,inspectedAttempt,inspectorAttempts,latestInspectorSelection,resolvedInspectorSelection} from '../src/sessionInspectorModel';
 import type {SessionSnapshot} from '../../shared/contracts';
 
 test('native task execution is not an empty chat turn when child records exist without parent cards',()=>{
@@ -97,4 +97,13 @@ test('latest Pilot follows real root-bound continuation while explicit historica
  assert.equal(current.taskId,task.id);assert.equal(current.followLatest,true);
  const history={sessionId:snapshot.session.id,taskId:task.id,attemptId:task.attempts[0]!.id,tab:'execution' as const};
  assert.equal(resolvedInspectorSelection(snapshot,history),history);
+});
+
+test('direct Pilot history disclosures resolve their own task rather than the latest task',()=>{
+ const snapshot={session:{id:'pilot',projectId:'project'},superagent:{task:{taskId:'new',sessionId:'pilot',projectId:'project'}}} as unknown as SessionSnapshot;
+ const old={...snapshot.superagent!.task,taskId:'old'};
+ assert.equal(canonicalGoalForExecution(snapshot,[{data:{taskId:'old'}} as any],[old]),'old');
+ assert.equal(canonicalGoalForExecution(snapshot,[{data:{taskId:'new'}} as any],[old]),'new');
+ assert.equal(canonicalGoalForExecution(snapshot,[{data:{taskId:'old'}} as any],[{...old,projectId:'other'}]),undefined);
+ assert.equal(canonicalGoalForExecution(snapshot,[],[old]),undefined,'an empty historical turn never borrows the latest task');
 });

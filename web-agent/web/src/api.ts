@@ -209,8 +209,8 @@ export const api = {
   deleteAIPreset: (id: string) => request<unknown>("/api/ai/presets", { method: "DELETE", body: JSON.stringify({ id }) }),
   createSession: (projectId: string, terminalReuse?: {terminalId: string; generation: string}) =>
     post<WorkSession>(`/api/projects/${encodeURIComponent(projectId)}/sessions`, terminalReuse ? {terminalReuse} : {}),
-  snapshot: (sessionId: string, signal?: AbortSignal) =>
-    request<SessionSnapshot>(`/api/sessions/${encodeURIComponent(sessionId)}/snapshot`, { signal }),
+  snapshot: (sessionId: string, signal?: AbortSignal, taskId?:string) =>
+    request<SessionSnapshot>(`/api/sessions/${encodeURIComponent(sessionId)}/snapshot${taskId?`?taskId=${encodeURIComponent(taskId)}`:""}`, { signal }),
   renameSession: (sessionId: string, title: string) => request<WorkSession>(`/api/sessions/${encodeURIComponent(sessionId)}`, {method: "PATCH", body: JSON.stringify({title})}),
   deleteSession: (sessionId: string) =>
     request<void>(`/api/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" }),

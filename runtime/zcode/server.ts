@@ -24,6 +24,8 @@ import { LakeStore, HttpError, id, now, privateDirectory } from "./store";
 import { LakeAgents } from "./agent";
 import { LakeNavigation } from "./navigation";
 import {LakeMySQL} from "./mysql";
+import {LakeExecution} from "./execution";
+import {agentCapabilityCatalog,nativeSearchSupported} from "./capabilities";
 import { importDevModelSettings } from "./dev-settings";
 import { LakeSuperagent } from "./superagent";
 import { applyLegacyMigration, importLegacySSH, importLegacyMySQL, loadLegacyView } from "./migration";
@@ -153,6 +155,7 @@ export async function startLakeServer(options: ServerOptions) {
   let terminals: LakeTerminals | undefined;
   let ssh:LakeSSH|undefined;
   let mysql:LakeMySQL|undefined;
+  let execution:LakeExecution|undefined;
   let draining = false;
   let closed = false;
   const clients = new Map<string, Set<ServerResponse>>();
@@ -408,6 +411,8 @@ export async function startLakeServer(options: ServerOptions) {
                 enabled: true,
                 supportsImageInput: !!data.supportsImageInput,
                 supportsImageOutput: !!data.supportsImageOutput,
+                supportsNativeWebSearch:data.supportsNativeWebSearch===true,
+                supportsVideoInput:data.supportsVideoInput===true,supportsAudioInput:data.supportsAudioInput===true,supportsPdfInput:data.supportsPdfInput===true,
               },
             ],
           };
@@ -435,7 +440,8 @@ export async function startLakeServer(options: ServerOptions) {
         if (method === "PUT") result = navigation.updateTag(path[2], data);
         else if (method === "DELETE") result = navigation.deleteTag(path[2]);
         else throw new HttpError(405, "不支持此请求方法");
-      } else if (path[1] === "projects" && path.length === 2 && method === "POST")
+      } else if(path[1]==="agent-capabilities"&&path.length===2&&method==="GET")result={upstreamVersion:"3.17.2",tools:agentCapabilityCatalog({nativeWebSearch:nativeSearchSupported(selected().provider?.protocol,selected().model?.supportsNativeWebSearch)}),resourceExecution:{local:process.platform==="darwin",ssh:!!execution}};
+      else if (path[1] === "projects" && path.length === 2 && method === "POST")
         result = store.createProject(String(data.name ?? ""));
       else if (path[1] === "projects" && path[3] === "sessions" && method === "POST")
         result = store.createSession(path[2]);
@@ -543,7 +549,7 @@ export async function startLakeServer(options: ServerOptions) {
         } else if (path.length === 4 && path[3] === "presentation") {
           if (method !== "PUT") throw new HttpError(405, "不支持此请求方法");
           result = navigation.presentation(sessionId, data);
-        } else if (path[3] === "snapshot") { const snapshot = store.snapshot(sessionId); snapshot.ai = store.viewPage(sessionId); result = superagent.decorate(snapshot); }
+        } else if (path[3] === "snapshot") { const snapshot = store.snapshot(sessionId); snapshot.ai = store.viewPage(sessionId); result = superagent.decorate(snapshot,url.searchParams.get("taskId")??undefined); }
         else if (path[3] === "events") {
           const after = Number(url.searchParams.get("after") ?? 0);
           if (!Number.isSafeInteger(after) || after < 0) throw new HttpError(400, "无效的事件游标");
@@ -678,6 +684,7 @@ export async function startLakeServer(options: ServerOptions) {
     await terminals?.close();
     await ssh?.close();
     mysql?.close();
+    await execution?.close();
     await extensions?.close();
     for (const set of clients.values()) for (const response of set) response.end();
     await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
@@ -691,7 +698,7 @@ export async function startLakeServer(options: ServerOptions) {
     agents = await LakeAgents.open(store, broadcast);
     security = new LakeSecurity(store);
     extensions = new LakeExtensions(store, security, (value) => agents!.redact(value));
-    ssh=new LakeSSH(store,security,(session)=>{broadcast(store!.event(session,"session"));superagent?.changed(session);},value=>extensions!.scrub(value));
+    ssh=new LakeSSH(store,security,(session)=>{broadcast(store!.event(session,"session"));superagent?.changed(session);},value=>extensions!.scrub(value),value=>agents!.registerSecret(value));
     mysql=new LakeMySQL(store,security,value=>agents!.registerSecret(value),value=>agents!.redact(value));
     terminals = new LakeTerminals(store, security, (value, live) => live ? agents!.redactLive(ssh!.scrub(extensions!.scrubLive(value),true)) : ssh!.scrub(value), broadcast,ssh);
     agents.guard = () => security!.check();
@@ -702,7 +709,8 @@ export async function startLakeServer(options: ServerOptions) {
       await importLegacySSH(store,ssh);
       await importLegacyMySQL(store,mysql);
     }
-    superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql);
+    execution=new LakeExecution(store,security,ssh,value=>agents!.redact(ssh!.scrub(value)));
+    superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql,execution);
     memory = new LakeMemory(store, () => security!.check(), value => agents!.redact(ssh!.scrub(extensions!.scrub(value))));
     try { await memory.initialize(); } catch { memory.disable("记忆文件需要核实，当前暂停记忆功能；原记录保留，普通新任务仍可运行"); }
     agents.memory = memory;
@@ -725,7 +733,7 @@ export async function startLakeServer(options: ServerOptions) {
     await close();
     throw error;
   }
-  return { origin, token, store, agents, superagent, memory, mysql, close };
+  return { origin, token, store, agents, superagent, memory, mysql, execution, close };
 }
 
 async function main() {

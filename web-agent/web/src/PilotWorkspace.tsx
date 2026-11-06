@@ -136,7 +136,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
       unread && <span className="pilot-worker-unread" role="img" aria-label="有已完成任务未读"/>}
     </span>
    </button>;
-  }) : <p className="pilot-workspace-empty">告诉 Pilot 你的目标，它会安排合适的专员。</p>}
+  }) : <p className="pilot-workspace-empty">告诉 Pilot 你的目标，它会执行或安排专员协作。</p>}
   {context&&<NavigationMenu title={context.channel.roleName} x={context.x} y={context.y} anchor={anchor} onClose={()=>setContext(null)} actions={[{label:'删除专员',icon:'trash',danger:true,disabled:disabled||context.channel.roleRevision===undefined,run:()=>setDeleting(context.channel)}]}/>}
   {deleting&&<SpecialistDelete channel={deleting} returnFocus={anchor} onClose={()=>setDeleting(null)} onDeleted={()=>{onDeleted?.(deleting);if(deleting.roleId===viewedRole){onPilot();anchor.current=pilotButton.current;}}}/>}
  </section>;

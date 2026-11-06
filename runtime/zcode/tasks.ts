@@ -42,11 +42,12 @@ export type Operation = {
   mcpServerId?: string; mcpTool?: string; remoteMcp?: boolean; configurationHash?: string; bindingHash?: string; catalogHash?: string;
   skillName?: string; skillHash?: string;
   hostConfigurationHash?: string;
+  commandExecutionId?:string;networkURL?:string;
   databaseConfigurationHash?:string;databaseScope?:{database:string;schema:string;maxRows:number;maxDurationMS:number};
   agentRunId?: string; childSessionId?: string; originalCallId?: string;
 };
 
-const businessReceiptTools = new Set(["inspect_host", "list_db_objects","db_table_ddl","read_db_table", "Read", "Write", "Edit", "list_project_files", "call_mcp_tool", "read_referenced_task_evidence"]);
+const businessReceiptTools = new Set(["Bash", "Glob", "Grep", "FindFiles", "SearchText", "WebFetch", "inspect_host", "list_db_objects","db_table_ddl","read_db_table", "Read", "Write", "Edit", "list_project_files", "call_mcp_tool", "read_referenced_task_evidence"]);
 
 // The goal and immutable acceptance receipts are the only completion authority.
 // Router replies, Worker prose and channel presentation never close a goal.
@@ -231,6 +232,14 @@ export class TaskLedger {
       goal.activeItemId = step.id; return this.save(goal);
     });
   }
+  settleCommand(operationId:string,executionId:string,result:unknown,valid:boolean) {
+    const operation=this.store.require<Operation>('superOperations',operationId);
+    if(operation.commandExecutionId!==executionId||operation.status!=='dispatched')return;
+    const output=JSON.parse(JSON.stringify(result)) as any;
+    operation.status=!valid?'unknown':output?.status==='completed'&&output.exitCode===0?'succeeded':operation.readOnly?'failed':'unknown';
+    operation.output=output;operation.outputHash=digest(output);operation.completedAt=now();
+    this.store.put('superOperations',operation.id,operation);
+  }
   runnable(goal: Goal) {
     if (!goal.confirmed || goal.status !== "running" || Date.parse(goal.deadlineAt) <= Date.now())
       throw new HttpError(409, "An active, confirmed task within its deadline is required");
@@ -250,7 +259,7 @@ export class TaskLedger {
   }
   async operation<T>(goalId: string, generation: number, policyHash: string, callId: string, tool: string,
     input: unknown, dispatch: () => Promise<T>, redact: <V>(value: V) => V,
-    binding: Pick<Operation, "resourceId" | "resourceRevision" | "readOnly" | "mcpServerId" | "mcpTool" | "remoteMcp" | "configurationHash" | "bindingHash" | "catalogHash" | "skillName" | "skillHash" | "hostConfigurationHash" | "databaseConfigurationHash" | "databaseScope" | "agentRunId" | "childSessionId" | "originalCallId"> = {}): Promise<T> {
+    binding: Pick<Operation, "resourceId" | "resourceRevision" | "readOnly" | "mcpServerId" | "mcpTool" | "remoteMcp" | "configurationHash" | "bindingHash" | "catalogHash" | "skillName" | "skillHash" | "hostConfigurationHash" | "commandExecutionId" | "networkURL" | "databaseConfigurationHash" | "databaseScope" | "agentRunId" | "childSessionId" | "originalCallId"> = {}): Promise<T> {
     const key = digest([this.get(goalId).sessionId, callId]);
     const previous = this.store.get<Operation>("superOperations", key);
     if (previous) {
@@ -288,8 +297,8 @@ export class TaskLedger {
       const result = output as any;
       const failed = result?.result === false || result?.isError === true || result?.success === false ||
         (typeof result?.exitCode === "number" && result.exitCode !== 0);
-      operation.status = failed ? "failed" : "succeeded";
-      operation.output = redact(output); operation.outputHash = digest(operation.output); operation.completedAt = now();
+      operation.status = binding.commandExecutionId && !binding.readOnly && (failed || ["failed","timed_out","cancelled","spawn_error"].includes(result?.status)) ? "unknown" : binding.commandExecutionId && result?.status === "backgrounded" ? "dispatched" : failed || ["failed","timed_out","cancelled","spawn_error"].includes(result?.status) ? "failed" : "succeeded";
+      operation.output = redact(output); operation.outputHash = digest(operation.output); operation.completedAt = operation.status === "dispatched" ? undefined : now();
       this.store.put("superOperations", key, operation);
       return output;
     } catch (error) {

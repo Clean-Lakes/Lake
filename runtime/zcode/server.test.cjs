@@ -7,6 +7,8 @@ const { createServer } = require("node:http");
 process.env.LAKE_TS_IMPORT_ONLY = "1";
 const { startLakeServer, previewLegacyMigration, rollbackMigration } = require("../../bin/lake-zcode/server.cjs");
 
+function isIndependentWorkerRequest(request){return request.tools?.some(tool=>tool.function?.name==='work_finish')&&!request.tools?.some(tool=>tool.function?.name==='route_work');}
+
 async function fixture(t, mode = "text", legacyDev = false) {
   const home = await mkdtemp(join(tmpdir(), "lake-ts-test-"));
   const web = join(home, "web");
@@ -32,7 +34,7 @@ async function fixture(t, mode = "text", legacyDev = false) {
         !request.tools?.some((tool) => ["route_work", "work_finish"].includes(tool.function?.name)) &&
         JSON.stringify(request.messages).includes("LAKE_SUBAGENT_FIXTURE:"))
       await backgroundChildGate;
-    if (failWorkerRequests && request.tools?.some((tool) => tool.function?.name === "work_finish")) {
+    if (failWorkerRequests && (isIndependentWorkerRequest(request) && !request.tools?.some(tool=>tool.function?.name==='route_work'))) {
       res.writeHead(401, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: { message: "synthetic-current-invocation-failure", type: "authentication_error" } }));
       return;
@@ -192,7 +194,59 @@ function nativeMemoryReply(request) {
   return { content: "已按原生文件协议保存知识。" };
 }
 
+function fullAgentReply(request,mode,home){
+ const tools=request.tools??[],router=tools.some(tool=>tool.function.name==='route_work');
+ if(router&&mode.includes('worker'))return;
+ const content=message=>typeof message.content==='string'?message.content:JSON.stringify(message.content??'');
+ const current=request.messages.findLastIndex(message=>message.role==='user'&&content(message).startsWith('[LAKE ADMITTED HUMAN EVENTS'));
+ const messages=router?request.messages.slice(Math.max(0,current)):request.messages;
+ const calls=messages.flatMap(message=>message.tool_calls??[]),names=calls.map(call=>call.function.name);
+ const stamp=router?JSON.parse(content(messages[0]).split('\n')[1])[0].id:'worker';
+ const call=(name,input,id=name)=>({tool_calls:[{index:0,id:'full-'+stamp+'-'+id,type:'function',function:{name,arguments:JSON.stringify(input)}}]});
+ const result=name=>{const id=calls.findLast(call=>call.function.name===name)?.id;const message=messages.findLast(message=>message.role==='tool'&&message.tool_call_id===id);try{return JSON.parse(content(message));}catch{return content(message??{});}};
+ if(mode.includes('child')&&!tools.some(tool=>tool.function.name==='work_finish')){
+  if(!names.includes('Bash'))return call('Bash',{command:"printf 'CHILD_NATIVE_SHELL'",description:'Read child execution marker'});
+  return {content:'子智能体已实际执行 Shell 检查。'};
+ }
+ if(mode.includes('followup')&&router){
+  const tasks=JSON.parse(content(messages[0]).split('[CURRENT TASK INDEX]\n')[1].split('\n')[0]);
+  if(tasks.length&&!names.includes('route_work')){const event=JSON.parse(content(messages[0]).split('\n')[1])[0];return call('route_work',{event_id:event.id,part_key:'continue',action:'followup',task_id:tasks[0].taskId,quote:event.text,reason:'继续原检查'});}
+ }
+ if(mode.includes('files')){
+  if(!names.some(name=>['ToolSearch','LocalToolSearch'].includes(name)))return call(tools.some(t=>t.function.name==='LocalToolSearch')?'LocalToolSearch':'ToolSearch',{query:'select:TodoRead,TodoWrite',max_results:10});
+  const workspace=require('node:fs').readFileSync(join(home,'full-workspace.txt'),'utf8');
+  if(!names.includes('TodoRead'))return call('TodoRead',{});
+  if(!names.includes('TodoWrite'))return call('TodoWrite',{todos:[{content:'读取并编辑实际文件',status:'in_progress',priority:'high'}]});
+  if(!names.includes('FindFiles'))return call('FindFiles',{path:workspace,pattern:'*.txt'});
+  if(!names.includes('SearchText'))return call('SearchText',{path:workspace,pattern:'ACTUAL_FILE_CONTENT'});
+  if(!names.includes('Read'))return call('Read',{file_path:join(workspace,'sample.txt')});
+  if(!names.includes('Write'))return call('Write',{file_path:join(workspace,'written.txt'),content:'ACTUAL_WRITTEN_CONTENT'});
+  if(!names.includes('Edit'))return call('Edit',{file_path:join(workspace,'sample.txt'),old_string:'ACTUAL_FILE_CONTENT',new_string:'ACTUAL_EDITED_CONTENT'});
+ }
+ if(mode.includes('skill')&&!names.includes('Skill'))return call('Skill',{skill:'fixture-skill'});
+ if(mode.includes('image')&&!names.includes('Read'))return call('Read',{file_path:require('node:fs').readFileSync(join(home,'full-workspace.txt'),'utf8')+'/sample.png'});
+ if(mode.includes('question')&&!names.includes('AskUserQuestion'))return call('AskUserQuestion',{questions:[{header:'目标范围',question:'选择测试范围',options:[{label:'A',description:'范围 A'},{label:'B',description:'范围 B'}],multiSelect:false}]});
+ if(mode.includes('plan')){
+  if(!names.includes('EnterPlanMode'))return call('EnterPlanMode',{});
+  if(!names.includes('ExitPlanMode'))return call('ExitPlanMode',{plan:'读取本机测试标记，核对实际输出，然后报告结果。'});
+ }
+ if(mode.includes('child')&&!names.includes('Agent'))return call('Agent',{subagent_type:'general-purpose',description:'执行独立 Shell 检查',prompt:'请通过 Bash 执行 printf CHILD_NATIVE_SHELL 并报告实际结果。'});
+ if(!['child','files','image'].some(kind=>mode.includes(kind))&&!names.includes('Bash')){
+  let command=mode.includes('danger')?"rm -f ./agent-capability-absent.txt":mode.includes('stop')?"printf 'started' > interrupted.txt; sleep 30; printf 'LATE_NATIVE_OUTPUT'":mode.includes('protected')?`cat '${home}/secrets/hidden-fixture.txt'`:mode.includes('nonzero')?"printf 'ACTUAL_FAILED_COMMAND' >&2; false":mode.includes('background')?"sleep 0.15; printf 'ACTUAL_BACKGROUND_SHELL'":"printf 'ACTUAL_NATIVE_SHELL'";
+  if(mode.includes('ssh')){
+   if(!names.includes('list_assets'))return call('list_assets',{query:'SSH fixture'});
+   const asset=result('list_assets').assets.find(asset=>asset.kind==='ssh');
+   return call('Bash',{asset_ref:asset.asset_ref,configuration_revision:asset.configuration_revision,command,description:'Inspect the remote environment',...(mode.includes('background')?{run_in_background:true}:{})});
+  }
+  return call('Bash',{command,description:'Inspect the actual environment',...(mode.includes('background')?{run_in_background:true}:{})});
+ }
+ if(mode.includes('background')&&!names.includes('TaskOutput'))return call('TaskOutput',{task_id:result('Bash').backgroundTaskId??String(result('Bash')).match(/ID: ([a-zA-Z0-9_-]+)/)?.[1],block:true,timeout:10000});
+ if(!names.includes('work_finish'))return call('work_finish',{summary:mode.includes('protected')||mode.includes('nonzero')?'该命令未成功，已保留实际错误。':'已通过真实 Shell 执行获得测试结果。',outcome:mode.includes('protected')||mode.includes('nonzero')||(mode.includes('followup')&&!names.includes('route_work'))?'partial':'completed'});
+ return {content:'已按实际执行结果完成。'};
+}
+
 function superReply(request, mode, home) {
+  if(mode.startsWith("super-full-")){const response=fullAgentReply(request,mode,home);if(response)return response;}
   if (mode === "super-host-retry") return hostRetryReply(request);
   let names = request.messages.flatMap((message) => (message.tool_calls ?? []).map((call) => call.function.name));
   const exposes = (name) => request.tools?.some((tool) => tool.function?.name === name);
@@ -778,7 +832,7 @@ test("real ZCode Pilot creates a stable specialist and independent Worker, with 
   assert.ok(JSON.stringify(operations[0].output).includes("actual-evidence.txt"));
   assert.equal(f.app.store.list("superAcceptance").filter((receipt) => receipt.scope === "goal").length, 1);
   const routerRequest = f.requests.find((request) => request.tools?.some((tool) => tool.function.name === "route_work"));
-  assert.ok(!routerRequest.tools.some((tool) => ["Bash", "Read", "Write", "Agent"].includes(tool.function.name)), "Pilot must have no resource execution tools");
+  for(const name of ["Bash","Read","Write","Agent"])assert.ok(routerRequest.tools.some(tool=>tool.function.name===name), "Pilot shares general agent capabilities");
   const channel = await f.api(`/api/sessions/${result.channels[0].sessionId}/channel`);
   assert.ok(channel.entries.some((entry) => entry.message?.author?.workerId === worker.id));
   await f.restart();
@@ -800,8 +854,8 @@ test("native ZCode subagent reads real evidence under its original Worker task a
   assert.equal(state.workers.length, 1);
   assert.equal(state.channels.length, 1, "temporary child must not create a permanent specialist channel");
   const routerRequest = f.requests.find((request) => request.tools?.some((tool) => tool.function.name === "route_work"));
-  assert.ok(!routerRequest.tools.some((tool) => tool.function.name === "Agent"));
-  const workerRequest = f.requests.find((request) => request.tools?.some((tool) => tool.function.name === "work_finish"));
+  assert.ok(routerRequest.tools.some((tool) => tool.function.name === "Agent"));
+  const workerRequest = f.requests.find((request) => isIndependentWorkerRequest(request));
   assert.ok(workerRequest.tools.some((tool) => tool.function.name === "Agent"), "managed Worker should expose the native Agent tool");
   const children = childRequests(f);
   assert.equal(children.length, 2, "a real native child must request a tool and consume its actual result");
@@ -1107,7 +1161,7 @@ test("a Worker can launch two native background children before joining their di
   assert.equal(new Set(operations.map((operation) => operation.id)).size, 2);
   assert.ok(JSON.stringify(operations).includes("ACTUAL_CHILD_EVIDENCE_A"));
   assert.ok(JSON.stringify(operations).includes("ACTUAL_CHILD_EVIDENCE_B"));
-  const lastParentRequest = f.requests.findLast((request) => request.tools?.some((tool) => tool.function.name === "work_finish"));
+  const lastParentRequest = f.requests.findLast((request) => isIndependentWorkerRequest(request));
   const parentCalls = lastParentRequest.messages.flatMap((message) => message.tool_calls ?? []);
   const firstJoin = parentCalls.findIndex((tool) => tool.function.name === "TaskOutput");
   assert.equal(parentCalls.slice(0, firstJoin).filter((tool) => tool.function.name === "Agent").length, 2,
@@ -1334,7 +1388,7 @@ test("Plan mode confirms its exact plan but never grants mutation tools", async 
   assert.equal(view.pending.kind, "work_plan");
   assert.equal(f.app.store.list("superOperations").length, 0);
   const catalog = f.requests.find((request) => request.tools?.some((tool) => tool.function.name === "work_begin")).tools.map((tool) => tool.function.name);
-  assert.ok(!catalog.includes("Write") && !catalog.includes("Edit") && !catalog.includes("Bash"));
+  assert.ok(!catalog.includes("Write") && !catalog.includes("Edit") && catalog.includes("Bash"));
   await f.api(`/api/sessions/${worker.sessionId}/ai/decision`, "POST", { id: view.pending.id, accept: true });
   await until(() => f.api(`/api/projects/${f.project.id}/superagent`), (result) => result.workers[0].task.state === "completed");
   assert.equal(f.app.store.list("superOperations").length, 1);
@@ -1946,7 +2000,7 @@ test('a short retry uses recent dialogue and current SSH capabilities, resumes t
  assert.ok(context.dialogue.some(message=>message.taskId===goalBefore.id&&message.text.includes('SSH 连接还不可用')&&message.historical));
  assert.ok(context.capabilities.workerTools.includes('inspect_host'));assert.equal(context.capabilities.ssh.adapterRegistered,true);
  assert.equal(context.capabilities.relevantResources.find(item=>item.id===resource.id).configurationStatus,'available');
- const workerRequest=retryRequests.find(request=>request.tools.some(tool=>tool.function.name==='work_finish'));
+ const workerRequest=retryRequests.find(request=>isIndependentWorkerRequest(request));
  const assignment=JSON.parse(workerRequest.messages.filter(m=>m.role==='user').map(textOf).findLast(text=>text.startsWith('{')&&text.includes('"assignment"')));
  assert.equal(assignment.assignment.taskId,goalBefore.id);assert.equal(assignment.followups.at(-1).text,'再试试');
  const pending=(await f.api(`/api/sessions/${worker.sessionId}/ai`)).pending;
@@ -2041,7 +2095,7 @@ test('native child evidence flows into stable role Memory and a new Worker reads
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'请新建另一次检查任务，重新读取本项目实际证据。'},202);
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),value=>value.workers.length===2&&value.workers.every(worker=>worker.assignmentState==='parked'));
  assert.notEqual(state.workers[0].sessionId,state.workers[1].sessionId);assert.equal(state.workers[0].roleId,state.workers[1].roleId);
- const newWorker=f.requests.slice(offset).find(request=>request.tools?.some(tool=>tool.function.name==='work_finish'));
+ const newWorker=f.requests.slice(offset).find(request=>isIndependentWorkerRequest(request));
  assert.match(JSON.stringify(newWorker.messages),/NATIVE_ROLE_MEMORY/);
  assert.ok(!JSON.stringify(newWorker.messages).includes('shared-child-read'),'new task starts without previous task tool history');
  const router=f.requests.slice(offset).find(request=>request.tools?.some(tool=>tool.function.name==='route_work'));
@@ -2121,4 +2175,166 @@ test('changing saved MySQL credentials invalidates an already displayed Worker a
  assert.equal(wire.queries.length,0);
  assert.equal(f.app.store.list('superOperations').filter(o=>o.goalId===worker.task.taskId&&o.tool==='list_db_objects'&&o.status==='succeeded').length,0);
  assert.doesNotMatch(JSON.stringify(f.requests),/original-private-mysql|updated-private-mysql/);
+});
+
+async function fullAgentTask(t,mode){
+ const f=await fixture(t,mode),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:true,maxSteps:30});
+ return {f,project,send:()=>f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'请自主执行本次测试检查并核对实际结果。'},202)};
+}
+test('Pilot directly executes native Bash with its own canonical task and no specialist role', {skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-shell');await send();
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ assert.equal(state.channels.length,0);assert.equal(state.workers[0].roleName,'Pilot');
+ const operation=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(operation.status,'succeeded');assert.match(operation.output.stdout,/ACTUAL_NATIVE_SHELL/);assert.ok(operation.commandExecutionId);
+ assert.equal(state.workers[0].task.acceptanceState,'pass');assert.ok(f.requests[0].tools.some(tool=>tool.function.name==='Bash'));
+});
+test('native Bash background work is joined before Pilot task acceptance',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-background');await send();
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(op.status,'succeeded');assert.equal(op.output.status,'completed');assert.match(op.output.stdout.text,/ACTUAL_BACKGROUND_SHELL/);
+ assert.ok(f.requests.some(request=>request.messages.some(message=>message.tool_calls?.some(call=>call.function.name==='TaskOutput'))));assert.equal(state.workers[0].task.acceptanceState,'pass');
+});
+test('Pilot can create a native general-purpose subagent with the same Bash execution capability',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-child');await send();
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const operation=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(operation.status,'succeeded');assert.ok(operation.agentRunId&&operation.childSessionId);assert.match(operation.output.stdout,/CHILD_NATIVE_SHELL/);
+ assert.equal(state.workers[0].task.acceptanceState,'pass');
+});
+test('local Bash cannot read private Lake data even through a valid read command',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-protected');await require('node:fs/promises').mkdir(join(f.home,'secrets'),{recursive:true,mode:0o700});await writeFile(join(f.home,'secrets/hidden-fixture.txt'),'NEVER_MODEL_PRIVATE_SENTINEL',{mode:0o600});await send();
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked');
+ const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(op.status,'failed');assert.doesNotMatch(JSON.stringify(f.requests)+JSON.stringify(op),/NEVER_MODEL_PRIVATE_SENTINEL/);
+});
+test('a Worker uses saved SSH credentials for general Bash commands beyond fixed diagnostics',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-worker-ssh'),server=await sshFixture(t),resource=await sshResource(f,server);
+ await send();
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=state.workers[0];
+ const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
+ assert.equal(server.auths,0);await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
+ const done=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const operation=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(operation.resourceId,resource.id);assert.match(operation.output.stdout,/ACTUAL_NATIVE_SHELL/);assert.equal(done.workers[0].task.acceptanceState,'pass');assert.ok(server.requests.some(request=>request.command.includes('ACTUAL_NATIVE_SHELL')&&!request.pty));
+ assert.doesNotMatch(JSON.stringify(f.requests)+JSON.stringify(operation),new RegExp(server.password));
+});
+
+test('native AskUserQuestion uses Lake answers and resumes the exact Pilot task',async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-question');await send();
+ const view=await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),v=>!!v.question);
+ const task=(await f.api(`/api/projects/${f.project.id}/superagent`)).workers[0].task;
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/answer`,'POST',{id:view.question.id,answers:{q0:['A']}});
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ assert.equal(state.workers[0].task.taskId,task.taskId);assert.ok(f.requests.some(request=>JSON.stringify(request.messages).includes('选择测试范围')));
+});
+test('native planning blocks mutations until its actual approval without granting new permissions',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-plan');await send();
+ const view=await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),v=>v.pending?.call.name==='ExitPlanMode');
+ assert.equal(f.app.store.list('commandExecutions').length,0);
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/decision`,'POST',{id:view.pending.id,accept:true});
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ assert.equal(f.app.store.require('agentPlans',state.workers[0].task.taskId).approved,true);
+ assert.equal(f.app.store.list('commandExecutions').length,1);
+});
+test('exact Pilot task snapshots preserve independent historical evidence across direct tasks',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-shell');await send();
+ let state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');const first=state.workers[0];
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'请执行另一个新的测试检查。'},202);
+ state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===2&&s.workers.every(w=>w.task.state==='completed'));
+ const snapshot=await f.api(`/api/sessions/${project.routerSessionId}/snapshot?taskId=${first.task.taskId}`);
+ assert.equal(snapshot.superagent.task.taskId,first.task.taskId);
+ assert.ok(snapshot.ai.cards.some(card=>card.title==='Bash'));
+ assert.ok(snapshot.ai.cards.filter(card=>card.data?.operation_id).every(card=>card.data.taskId===first.task.taskId));
+ const other=await f.api('/api/projects','POST',{name:'other project'}),session=await f.api(`/api/projects/${other.id}/sessions`,'POST',{});
+ await f.api(`/api/sessions/${session.id}/snapshot?taskId=${first.task.taskId}`,'GET',undefined,404);
+});
+
+test('dangerous native Bash still asks despite ordinary command auto-approval',async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-danger');await send();
+ const view=await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),v=>v.pending?.call.name==='Bash');
+ assert.equal(f.app.store.list('commandExecutions').length,0);
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/decision`,'POST',{id:view.pending.id,accept:false});
+ await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),v=>!v.running);
+ assert.equal(f.app.store.list('commandExecutions').length,0);
+ assert.ok(f.app.store.list('superGoals').every(goal=>goal.acceptanceState!=='pass'));
+});
+test('native mode refresh retains the private-data sandbox after plan approval',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-plan-protected');
+ await require('node:fs/promises').mkdir(join(f.home,'secrets'),{recursive:true});await writeFile(join(f.home,'secrets/hidden-fixture.txt'),'PRIVATE_AFTER_MODE_SWITCH');await send();
+ const view=await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),v=>v.pending?.call.name==='ExitPlanMode');
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/decision`,'POST',{id:view.pending.id,accept:true});
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked');
+ const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(op.status,'failed');assert.doesNotMatch(JSON.stringify(f.requests)+JSON.stringify(op),/PRIVATE_AFTER_MODE_SWITCH/);
+});
+test('native file tools use the project workspace and task Todo state stays independent',async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-files'),workspace=await f.app.store.workspace(f.project.id);
+ await writeFile(join(f.home,'full-workspace.txt'),workspace);await writeFile(join(workspace,'sample.txt'),'ACTUAL_FILE_CONTENT');
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentWriteFiles:true,maxSteps:30});await send();
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ assert.equal(await readFile(join(workspace,'sample.txt'),'utf8'),'ACTUAL_EDITED_CONTENT');assert.equal(await readFile(join(workspace,'written.txt'),'utf8'),'ACTUAL_WRITTEN_CONTENT');
+ const ops=f.app.store.list('superOperations');for(const tool of ['FindFiles','SearchText','Read','Write','Edit'])assert.equal(ops.find(o=>o.tool===tool)?.status,'succeeded',tool+JSON.stringify(f.app.store.view(project.routerSessionId).cards.map(c=>({title:c.title,content:c.content}))));
+ assert.equal(ops.some(o=>o.tool==='TodoWrite'),false);assert.equal(f.app.store.list('agentTodos').length,1);
+ await writeFile(join(workspace,'sample.txt'),'ACTUAL_FILE_CONTENT');await send();
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===2&&s.workers.every(w=>w.task.state==='completed'));
+ assert.equal(f.app.store.list('agentTodos').length,2);
+ const reads=f.requests.flatMap(r=>r.messages.filter(m=>m.role==='tool'&&m.tool_call_id.endsWith('-TodoRead')));assert.ok(reads.length);assert.ok(reads.every(m=>JSON.parse(m.content).todos.length===0));
+});
+test('native Skill loads the actual current project skill rather than a parallel registry',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-skill');
+ await f.api('/api/settings/skills/fixture-skill','PUT',{create:true,content:'---\nname: fixture-skill\ndescription: Check actual project evidence\n---\nSKILL_REAL_MANAGED_CONTENT'});await send();
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ assert.ok(f.requests.some(r=>JSON.stringify(r.messages).includes('SKILL_REAL_MANAGED_CONTENT')));
+ assert.equal(f.app.store.list('superOperations').find(o=>o.tool==='load_skill')?.status,'succeeded');
+});
+test('native Read projects real image bytes for an image-capable model',async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-image'),workspace=await f.app.store.workspace(f.project.id);
+ await writeFile(join(f.home,'full-workspace.txt'),workspace);await writeFile(join(workspace,'sample.png'),await readFile(join(__dirname,'../../third_party/zcode/public/logo/icons/16x16.png')));
+ const selected={provider:f.app.store.list('providers')[0]};await f.api('/api/settings/model','PUT',{url:selected.provider.baseURL,name:'fixture',supportsImageInput:true});await send();
+ await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),s=>s.cards.some(c=>c.title==='Read')&&!s.running);
+ assert.equal(f.app.store.list('superOperations').find(o=>o.tool==='Read')?.output.type,'image',JSON.stringify(f.app.store.view(project.routerSessionId).cards));assert.ok(f.requests.some(r=>JSON.stringify(r.messages).includes('data:image/png;base64,')));
+});
+test('continuing a direct Pilot task preserves its goal, deadline and cumulative rounds',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-followup');await send();
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked'),original=f.app.store.require('superGoals',state.workers[0].task.taskId);
+ assert.ok(original.modelRounds>=2);await send();
+ const done=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const goal=f.app.store.require('superGoals',original.id);assert.equal(done.workers.length,1);assert.equal(goal.deadlineAt,original.deadlineAt);assert.equal(goal.roundLimit,original.roundLimit);assert.ok(goal.modelRounds>original.modelRounds);
+});
+test('stopping a native mutating command preserves unknown effects and cancels the actual process',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-stop');await send();
+ await until(async()=>f.app.store.list('commandExecutions'),rows=>rows.some(r=>r.status==='running'));
+ await f.api(`/api/projects/${f.project.id}/superagent/stop`,'POST',{routerSessionId:project.routerSessionId});
+ await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),s=>!s.running);
+ const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(op.status,'unknown');assert.equal(f.app.store.list('commandExecutions')[0].status,'cancelled');assert.notEqual(f.app.store.require('superGoals',op.goalId).acceptanceState,'pass');
+});
+test('capability inventory distinguishes connected tools from optional services and unsupported native search',async t=>{
+ const f=await fixture(t),catalog=await f.api('/api/agent-capabilities');
+ for(const name of ['Bash','Read','Glob','Grep','TodoWrite','AskUserQuestion','EnterPlanMode','Agent'])assert.equal(catalog.tools.find(t=>t.name===name)?.status,'connected',name);
+ assert.equal(catalog.tools.find(t=>t.name==='WebSearch')?.status,'model_dependent');assert.ok(catalog.tools.some(t=>t.status==='requires_host_service'));
+ const selected={provider:f.app.store.list('providers')[0]};await f.api('/api/settings/model','PUT',{url:selected.provider.baseURL,name:'fixture',supportsNativeWebSearch:true});
+ assert.equal((await f.api('/api/agent-capabilities')).tools.find(t=>t.name==='WebSearch')?.status,'model_dependent','the pinned provider encoder only supports Anthropic native search');
+});
+
+test('a changed SSH resource invalidates an approved general command before authentication',async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-worker-ssh'),server=await sshFixture(t),resource=await sshResource(f,server);
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:false,maxSteps:30});await send();
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.channels[0]?.needsConfirmation),sessionId=state.workers[0].sessionId,pending=(await f.api(`/api/sessions/${sessionId}/ai`)).pending;
+ assert.equal(pending.call.name,'Bash');await f.api(`/api/resources/${resource.id}`,'PATCH',{ssh:{shell:'sh'}});
+ await f.api(`/api/sessions/${sessionId}/ai/decision`,'POST',{id:pending.id,accept:true});
+ await until(()=>f.api(`/api/sessions/${sessionId}/ai`),s=>!s.running);
+ assert.equal(server.auths,0);assert.equal(server.requests.length,0);assert.equal(f.app.store.list('commandExecutions').length,0);
+ assert.notEqual(f.app.store.list('superGoals')[0].acceptanceState,'pass');
+});
+test('SSH background Bash joins its actual remote exit result',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-worker-ssh-background'),server=await sshFixture(t);await sshResource(f,server);await send();
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),sessionId=state.workers[0].sessionId;
+ const trust=await until(()=>f.api(`/api/sessions/${sessionId}/snapshot`),s=>!!s.hostKeyTrust);await f.api(`/api/sessions/${sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const operation=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(operation.status,'succeeded');assert.match(operation.output.stdout.text,/ACTUAL_BACKGROUND_SHELL/);assert.equal(f.app.store.list('commandExecutions')[0].status,'completed');
+});
+
+test('a mutating command with a nonzero exit retains its possible partial effects as unknown',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-nonzero');await send();
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked');
+ const operation=f.app.store.list('superOperations').find(o=>o.tool==='Bash');
+ assert.equal(operation.status,'unknown');assert.equal(operation.output.exitCode,1);
+ assert.equal(f.app.store.list('commandExecutions').length,1);assert.notEqual(f.app.store.require('superGoals',operation.goalId).acceptanceState,'pass');
 });

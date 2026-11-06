@@ -269,6 +269,23 @@ test("原任务验收、工具 hash 与连接版本控制知识资格，unknown 
   });
   assert.doesNotMatch(f.projected(), /历史方法/);
 });
+
+test("Pilot 直接任务的合格经验归项目，原始任务与操作变更仍使知识失效", async (t) => {
+  const f=await fixture(t);f.enable(f.shared);
+  const {goal,operation}=f.task();goal.roleId='pilot:'+f.project.id;f.store.put('superGoals',goal.id,goal);
+  const worker=f.store.require<any>('superWorkers',goal.workerId!);
+  f.store.put('superWorkers',worker.id,{...worker,inline:true,roleId:goal.roleId});
+  f.store.put('superProjects',f.project.id,{projectId:f.project.id,routerSessionId:goal.sessionId});
+  f.memory.captureTask(goal.id);
+  assert.equal(f.store.list<MemoryJob>('memoryJobs').length,1);
+  assert.equal(f.store.list<MemoryJob>('memoryJobs')[0].scopeKey,f.shared.key);
+  f.memory.runNative=async work=>{work.guard();await writeFile(join(work.root,'pilot-method.md'),'PILOT_PROJECT_METHOD',{mode:0o600});};
+  await f.memory.wait();
+  const projected=()=>JSON.stringify(f.memory.projectRequest(f.request,{kind:'pilot',projectId:f.project.id}));
+  assert.match(projected(),/PILOT_PROJECT_METHOD/);
+  f.store.put('superOperations',operation.id,{...operation,status:'unknown'});
+  assert.doesNotMatch(projected(),/PILOT_PROJECT_METHOD/);
+});
 test("更正/遗忘清理正文与历史派生，原会话与业务账本保留", async (t) => {
   const f = await fixture(t);
   f.enable();
