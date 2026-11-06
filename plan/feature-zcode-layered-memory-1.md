@@ -54,7 +54,7 @@ tags: [feature, zcode, memory, superagent]
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-006 | 新增 runtime/zcode/memory.test.ts 及真实 ZCode/本地模型集成测试：跨 Task 同 Role 召回、同名/跨项目隔离、child 回流、设置改变、遗忘迟到、重启不重派、unknown/秘密/路径拒绝。依赖 TASK-002 至 TASK-005。 | ✅ | 2026-11-06 |
-| TASK-007 | 运行 TS 类型/构建、后端与前端回归、ADK 边界，签名 Dev 安装与原生明暗/窄窗检查，记录准确 SHA、合成与真实模型证据边界。依赖 TASK-006。 | | |
+| TASK-007 | 运行 TS 类型/构建、后端与前端回归、ADK 边界，签名 Dev 安装与原生明暗/窄窗检查，记录准确 SHA、合成与真实模型证据边界。依赖 TASK-006。 | ✅ | 2026-11-06 |
 | TASK-008 | 更新 agent.md、runtime/zcode/README.md、现有 CM/FM 计划与验证记录；提交 develop PR，保留全量迁移未验收项。依赖 TASK-007。 | | |
 
 ## 3. Alternatives
@@ -66,6 +66,7 @@ tags: [feature, zcode, memory, superagent]
 
 - **DEP-001**: 固定 ZCode v3.17.2 的公开 AgentRuntime、resolveProjectMemoryRoot、原生文件工具和会话存储。
 - **DEP-002**: LakeStore、LakeSecurity、原 TaskLedger/Operation、稳定角色身份及现有设置 UI。
+- **DEP-003**: 本次候选保留已安装 Dev 的 Pilot 调度修复 [PR #185](https://github.com/Clean-Lakes/Lake/pull/185)，依赖其 head `cb24a624`，不授权独立合并该 PR。记忆撤回同时覆盖该修复引入的 predecessor 摘要。
 
 ## 5. Files
 
