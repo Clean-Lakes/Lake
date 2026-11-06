@@ -51,7 +51,8 @@ Fix the three issues reproduced in native Lake Dev: premature unknown-effect can
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-005 | Add actual SDK stop regressions, barrier-controlled lifecycle tests, receipt-negative cases and frontend aggregation/render tests; run relevant full checks. Depends on TASK-002, TASK-003, TASK-004. | Yes | 2026-11-06 |
-| TASK-006 | Install a clean signed Dev candidate retaining PRs 190 and 191, repeat native same-role two-task execution and individual stop, verify themes/narrow UI and record tested SHA; open develop PR. Depends on TASK-005. | | |
+| TASK-006 | Install a clean signed Dev candidate retaining PRs 190 and 191, repeat native same-role two-task execution and individual stop, verify themes/narrow UI and record tested SHA. Depends on TASK-005. | Yes | 2026-11-06 |
+| TASK-007 | Open the independent develop PR with code and native validation evidence; keep it unmerged pending explicit authorization. Depends on TASK-006. | | |
 
 ## 3. Alternatives
 
@@ -75,6 +76,8 @@ Fix the three issues reproduced in native Lake Dev: premature unknown-effect can
 - **TEST-002**: Interrupted opaque writes retain unknown and the truthful verification warning; forged, foreign or incomplete receipts cannot change card status or historical prose.
 - **TEST-003**: Two running tasks show two; stopping the first shows the remaining active title; an idle role uses the latest updated task without inferring confirmation from old waiting states.
 - **TEST-004**: Native Dev shows A stopped and B continuing to success, accurate history projection, explicit stop scopes, stable drafts, and usable light/dark/narrow geometry.
+
+Native validation passed on clean signed candidate `918cae17608d06ebb29d278daa64aaae2e64efb9`, which integrates fix code `8774ea2a00f24eb291d45b12b7c3daa285f7bc46` with the previously installed PR 190/191 changes. A stopped at 17:36:31; B continued until 17:39:09 and passed independently. Combined checks: frontend 715/715, SDK/resource integration 131/131, source units 108 passed and one optional external Claude-Mem endpoint test skipped. See the [validation record](../docs/validation/zcode-typescript-candidate/specialist-concurrent-ui.md).
 
 ## 7. Risks & Assumptions
 

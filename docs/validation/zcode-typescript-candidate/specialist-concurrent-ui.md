@@ -34,4 +34,43 @@ Barrier 控制测试在 SDK 已结束而回执尚未结算时断言没有报告�
 
 ## 签名 Lake Dev 与原生复测
 
-签名候选、实际测试 SHA、明暗及窄窗复测结果在安装完成后补充。候选保留 PR 190、191 的已安装功能，修复仍通过独立 develop PR 交付。
+修复代码提交为 `8774ea2a00f24eb291d45b12b7c3daa285f7bc46`，基于 `origin/develop` 的 `406d043071b0305442e5c9f3a1c518d6b16cb59c`。本机为保留先前已安装的 PR 190、191 功能，使用本地联合验证分支构建；没有因此合并这些 GitHub PR。
+
+- 实际安装、运行和复测提交：`918cae17608d06ebb29d278daa64aaae2e64efb9`，来源记录 `dirty: false`、TypeScript 后端。
+- 构建：`scripts/build_lake_desktop.sh --dev --ts-candidate --install`；应用 `~/Applications/Lake Dev.app`，固定独立 Home `~/.lake-dev`。
+- `codesign --verify --deep --strict` 通过；来源清单的后端 SHA256 为 `743abf237697d69383d32dd7294050ca37eb063d7989b99a3262248bcd0b4495`，与实际二进制一致。
+
+联合候选完成以下检查。它含 PR 190、191 的额外测试，因此数量大于独立修复分支：
+
+| 检查 | 命令 | 结果 |
+| --- | --- | --- |
+| 前端全量 | `pnpm --dir web-agent test:frontend` | 715/715 |
+| Web 类型与构建 | `pnpm --dir web-agent build:web` | 通过；保留既有 Vite 大块提示 |
+| Runtime 类型 | `node third_party/zcode/node_modules/typescript/bin/tsc -p runtime/zcode/tsconfig.json` | 通过 |
+| Runtime bundle | `node runtime/zcode/build.mjs` | 通过 |
+| 真实 SDK／资源集成 | `node --test runtime/zcode/server.test.cjs runtime/zcode/mysql.test.cjs runtime/zcode/router-context.test.cjs runtime/zcode/service-resources.test.cjs` | 131/131 |
+| 源码单元 | 固定 tsx 执行 `runtime/zcode/*.test.ts` | 109 项，108 通过，1 项独立 Claude-Mem 端点可选测试跳过 |
+
+### 真实模型和本机进程
+
+所有任务均从原生 UI 经 Pilot 派发给同一位“并发验证专员”，每个任务有独立 Worker／Session。第一组 UI 复测确认了取消展示和草稿保留，但 B 在点击停止前已完成，因此没有用这组证明取消期间的隔离。第二组专门提前停止 A，结果如下，时间均为北京时间：
+
+| 项目 | A：快速复测 A（待停止） | B：快速复测 B（保持运行） |
+| --- | --- | --- |
+| TaskID | `st_4e9279026365c2720bf8943909d03a0b` | `st_5dd64a107ec7a8eec70dfdf30486e575` |
+| 命令开始 | 17:36:08.733 | 17:36:09.248 |
+| 命令结束 | 17:36:31.959，第三栏单独停止 | 17:39:09.554，独立完成 |
+| 原始命令结果 | cancelled，退出 137，仅 START | completed，退出 0，START、01、02、03、END 齐全 |
+| 目标／验收 | cancelled／not_evaluated | completed／pass |
+
+B 在 A 停止后继续约 158 秒。A generation 从 1 变为 2，B 仍为 1；最终无活动测试 Worker 和未决测试操作。A 原 Operation 的 failed 与退出 137 保留，界面通过可信取消回执显示中性“已停止”。安全摘要和逐类保存核对见 [实际复测数据](specialist-concurrent-ui/real-model-result.json)。
+
+### 可见界面与键盘
+
+- 同一专员只占一行，双任务运行时显示“2 项执行中”和数量徽标；停止 A 后立即显示 B 的标题和转圈，B 完成后显示同一 B 的“已验收”，不再回到 A。
+- 第三栏“仅停止此任务”的提示明确不影响其他任务；输入区分别显示“停止项目全部任务”和“停止专员全部任务”。输入非空草稿时停止与发送入口共存，Tab 可聚焦准确停止入口；本次没有触发全部停止。
+- 草稿 `UI_DRAFT_KEEP_AFTER_SINGLE_STOP` 在切换任务及单独停止后保持，验证后清除测试草稿，未发送。
+- 浅色、深色及约 850px 窄窗口均检查实际绘制：输入控件、文字、停止按钮无重叠或裁切，选择行和任务详情使用共享曲线；恢复“跟随系统”偏好。状态岛保留统一短徽标“处理中”，其完整提示／无障碍名称包含并发数量，侧栏数量为可见文字。
+- 结束后 B 的总结在频道和“结果与证据”中一致，动效停止；单独的 A 仍显示“已停止”，任务之间的分割线保留。
+
+安装前备份后逐行核对：原有 64 条目标／尝试／验收／操作／Worker／项目记录、18 条命令执行、145 个资源和 1018 条消息均未改变，仅增加四个合成复测任务的记录。旧宿主误报的持久消息仍保留原文，展示投影不会重写历史。本次没有访问业务 SSH、数据库或网络，没有验证真实远端写入；未知写入的保留核实行为由隔离集成和 barrier 测试覆盖。正式应用和正式数据未操作。
