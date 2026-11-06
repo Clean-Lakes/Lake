@@ -1,27 +1,27 @@
 ---
-goal: Refine sidebar navigation and white human bubbles in the dark theme
+goal: Refine sidebar navigation and fixed gray human bubbles across themes
 version: 1
 date_created: 2026-11-06
 last_updated: 2026-11-06
 owner: Lake
-status: 'Completed'
+status: 'In progress'
 tags: [design, sidebar, frontend]
 ---
 
 # Introduction
 
-![Status: Completed](https://img.shields.io/badge/status-Completed-green)
+![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
 
 Polish the upper sidebar highlighted in the user's screenshot, keeping the existing navigation and runtime behavior.
 
-The user's follow-up requires white human-message bubbles with dark text on the dark workbench; include that theme-only change in this UI iteration.
+The user's latest follow-up supersedes the earlier black/white theme variants: use screenshot-sampled #282828 human bubbles and #d4d4d4 text in every theme.
 
 ## 1. Requirements & Constraints
 
 - **REQ-001**: Align the Lake wordmark, root navigation icons and section captions to the existing 16px content inset. Keep search on the same header baseline.
 - **REQ-002**: Give Pilot a two-line navigation entry with a concise secondary caption, subtle resting surface, existing active surface and a compact trailing chevron.
 - **REQ-003**: Use theme colors, shared corner geometry, visible keyboard focus and existing accessible navigation names.
-- **REQ-004**: In theme.css set dark user-message background to #ffffff and foreground to #111111; in resourceReferences.css darken only resource references inside those user bubbles and keep local references legible.
+- **REQ-004**: In theme.css set root user-message background to #282828 and foreground to #d4d4d4, remove dark overrides; in resourceReferences.css lighten only user-bubble resource names with a 55% type-color mix and keep local names neutral.
 - **CON-001**: Preserve search shortcuts, routing, avatar activity, specialist counts, resource hierarchy and task cancellation behavior.
 - **SEC-001**: Use only Lake Dev and its isolated home for native validation; retain all already-installed candidate changes through a local integration build.
 - **GUD-001**: Follow docs/ui-guidelines.md; add no font, icon, motion or component dependency.
@@ -44,10 +44,10 @@ The user's follow-up requires white human-message bubbles with dark text on the 
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-004 | Run existing frontend tests and Web type/build checks, including the requested dark user-bubble follow-up; no new implementation-mirroring style tests. Depends on TASK-001, TASK-002 and TASK-007. | Yes | 2026-11-06 |
-| TASK-005 | Build a clean signed Lake Dev candidate containing the currently installed runtime; inspect actual light/dark, selected/hover/focus and narrow layouts, search and Pilot navigation. Record the SHA in docs/validation/sidebar-pilot-polish.md. Depends on TASK-004. | Yes | 2026-11-06 |
-| TASK-006 | Open an independent PR to develop with the validation evidence and leave it unmerged. Depends on TASK-005. | Yes | 2026-11-06 |
-| TASK-007 | Change the two dark user-message tokens in web-agent/web/src/theme.css; add user-bubble-only resource color overrides in resourceReferences.css; document white bubbles in docs/ui-guidelines.md. | Yes | 2026-11-06 |
+| TASK-004 | Run existing frontend tests and Web type/build checks, including the latest fixed-gray bubble follow-up; no new implementation-mirroring style tests. Depends on TASK-001, TASK-002 and TASK-007. | Yes | 2026-11-06 |
+| TASK-005 | Build a clean signed Lake Dev candidate containing the currently installed runtime; inspect actual light/dark, selected/hover/focus and narrow layouts, search and Pilot navigation. Record the SHA in docs/validation/sidebar-pilot-polish.md. Depends on TASK-004. | | |
+| TASK-006 | Update the existing independent PR 193 to develop with the latest validation evidence and leave it unmerged. Depends on TASK-005. | | |
+| TASK-007 | Set fixed-gray root message tokens and remove dark overrides in web-agent/web/src/theme.css; adapt resourceReferences.css for the shared gray surface; update docs/ui-guidelines.md. | Yes | 2026-11-06 |
 
 ## 3. Alternatives
 
@@ -64,14 +64,14 @@ The user's follow-up requires white human-message bubbles with dark text on the 
 - **FILE-001**: web-agent/web/src/sidebarWorkspace.css — brand and search geometry.
 - **FILE-002**: web-agent/web/src/PilotWorkspace.tsx and pilotWorkspace.css — Pilot navigation entry.
 - **FILE-003**: docs/ui-guidelines.md and docs/validation/sidebar-pilot-polish.md — design and native evidence.
-- **FILE-004**: web-agent/web/src/theme.css and resourceReferences.css — dark human bubble palette and readable resource names.
+- **FILE-004**: web-agent/web/src/theme.css and resourceReferences.css — fixed human bubble palette and readable resource names.
 
 ## 6. Testing
 
 - **TEST-001**: Existing frontend suite and build pass without changing navigation behavior.
 - **TEST-002**: Native Dev shows aligned header controls, distinct Pilot resting/selected/hover states, visible keyboard focus and unclipped rounded surfaces in both themes and a narrow window.
 - **TEST-003**: Search opens with the existing button and shortcut; Pilot navigation does not send messages or change task records.
-- **TEST-004**: Dark native Dev shows white user bubbles and dark readable text; light user bubbles remain black. Existing shared selectors cover image captions and resource references without changing message records.
+- **TEST-004**: Native Dev shows the same #282828 user bubbles and #d4d4d4 text in both dark and light themes. Existing shared selectors cover image captions and resource references without changing message records.
 
 ## 7. Risks & Assumptions
 
