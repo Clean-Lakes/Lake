@@ -3,6 +3,7 @@ import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { join, sep } from "node:path";
 import { HttpError, LakeStore } from "./store";
 import { digest } from "./tasks";
+import type {DatabaseScope} from './mysql';
 
 // Read the established Home's gate without changing its identity, epoch or
 // grants. Unsupported legacy authority stays closed until its adapter exists.
@@ -57,6 +58,31 @@ export class LakeSecurity {
     this.check();
     if (this.store.get("legacyProjectPolicies", projectId))
       throw new HttpError(409, "此项目的安全策略已保留，资源操作须完成迁移核验后继续");
+  }
+  database(projectId:string,resourceId:string,scope:DatabaseScope){
+    this.check();const resource=this.store.require<any>('resources',resourceId);
+    if(resource.projectId!==projectId||resource.kind!=='database'||resource.status!=='available'||resource.settings?.driver!=='mysql')throw new HttpError(403,'MySQL 资源不在当前项目或配置不可用');
+    let decision:'allow'|'ask'='allow',maxRows=scope.maxRows,maxDurationMS=scope.maxDurationMS;
+    const legacy=this.store.get<any>('legacyProjectPolicies',projectId);if(!legacy)return {decision,maxRows,maxDurationMS};
+    const policy=legacy.data;
+    if(!policy||policy.SchemaVersion!==1||!policy.Confirmed||policy.ProjectID!==projectId||!['legacy','restricted','compatible'].includes(policy.Mode)||!Number.isSafeInteger(policy.Revision)||policy.Revision<1||!Array.isArray(policy.Rules)||!Array.isArray(policy.ResourceIDs)||!policy.ResourceIDs.includes(resourceId))throw new HttpError(403,'原项目策略不允许此数据库范围');
+    const path=join(this.store.home,'security/control.json');if(existsSync(path)){const control=JSON.parse(readFileSync(path,'utf8'));if(policy.StoreID!==control.storeID||policy.RecoveryEpoch!==control.recoveryEpoch)throw new HttpError(409,'原项目安全身份已失效');}
+    for(const capability of ['resource.resolve','db.read']){
+      const applicable=policy.Rules.filter((r:any)=>r.Capability===capability&&(!r.ResourceIDs?.length||r.ResourceIDs.includes(resourceId)));
+      if(!applicable.length||applicable.some((r:any)=>r.Effect==='deny'))throw new HttpError(403,'原项目策略禁止数据库读取');
+      const specific=applicable.filter((r:any)=>r.ResourceIDs?.length),width=specific.length?Math.min(...specific.map((r:any)=>r.ResourceIDs.length)):0;
+      for(const rule of width?specific.filter((r:any)=>r.ResourceIDs.length===width):applicable){
+        const limits=rule.Limits;
+        if(limits&&Object.values(limits).some(v=>Array.isArray(v)?v.length>0:!!v)){
+          if(capability!=='db.read'||Object.entries(limits).some(([k,v])=>!['DatabaseID','Schemas','MaxRows','MaxDurationMS'].includes(k)&&(Array.isArray(v)?v.length>0:!!v))||
+            limits.DatabaseID!==scope.database||!Array.isArray(limits.Schemas)||!limits.Schemas.includes(scope.schema)||!Number.isSafeInteger(limits.MaxRows)||limits.MaxRows<1||!Number.isSafeInteger(limits.MaxDurationMS)||limits.MaxDurationMS<1)throw new HttpError(403,'数据库读取超出原策略的库/schema 范围');
+          maxRows=Math.min(maxRows,limits.MaxRows);maxDurationMS=Math.min(maxDurationMS,limits.MaxDurationMS);
+        }
+        if(rule.Effect==='ask'){if(!['single','either'].includes(rule.Confirmation))throw new HttpError(409,'原数据库策略需要专用任务授权');decision='ask';}
+        else if(rule.Effect!=='allow')throw new HttpError(403,'数据库读取规则无效');
+      }
+    }
+    return {decision,maxRows,maxDurationMS};
   }
   host(projectId:string,resourceId:string):'allow'|'ask' {
     this.check();const resource=this.store.require<any>('resources',resourceId);

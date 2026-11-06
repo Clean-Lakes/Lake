@@ -23,9 +23,10 @@ import type {
 import { LakeStore, HttpError, id, now, privateDirectory } from "./store";
 import { LakeAgents } from "./agent";
 import { LakeNavigation } from "./navigation";
+import {LakeMySQL} from "./mysql";
 import { importDevModelSettings } from "./dev-settings";
 import { LakeSuperagent } from "./superagent";
-import { applyLegacyMigration, importLegacySSH, loadLegacyView } from "./migration";
+import { applyLegacyMigration, importLegacySSH, importLegacyMySQL, loadLegacyView } from "./migration";
 import { digest } from "./tasks";
 import { LakeSecurity } from "./security";
 import { LakeMemory } from "./memory";
@@ -33,7 +34,7 @@ import { LakeExtensions } from "./extensions";
 import {LakeSSH} from "./ssh";
 import { LakeTerminals } from "./terminal";
 import { commandPolicy } from "../../web-agent/shared/command-policy";
-export { previewLegacyMigration, rollbackMigration } from "./migration";
+export { previewLegacyMigration, rollbackMigration, importLegacyMySQL } from "./migration";
 export { LakeMemory } from "./memory";
 
 export type ServerOptions = { home: string; data: string; port: number; staticRoot: string; development?: boolean; importLegacy?: boolean };
@@ -73,6 +74,8 @@ async function body(request: IncomingMessage): Promise<Record<string, any>> {
     throw new HttpError(400, "无效的 JSON 请求");
   }
 }
+
+export {LakeMySQL};
 
 export async function startLakeServer(options: ServerOptions) {
   options = {
@@ -149,6 +152,7 @@ export async function startLakeServer(options: ServerOptions) {
   let extensions: LakeExtensions | undefined;
   let terminals: LakeTerminals | undefined;
   let ssh:LakeSSH|undefined;
+  let mysql:LakeMySQL|undefined;
   let draining = false;
   let closed = false;
   const clients = new Map<string, Set<ServerResponse>>();
@@ -219,7 +223,7 @@ export async function startLakeServer(options: ServerOptions) {
           `lake_session=${token}; HttpOnly; SameSite=Strict; Path=/`,
         );
       const data = method === "GET" || method === "HEAD" ? {} : await body(request);
-      const cleanup=path[1]==="sessions"&&(path[3]==="host-key"&&data.accept===false||path[3]==="terminals"&&path[5]==="disconnect");
+      const cleanup=path[1]==="sessions"&&(path[3]==="host-key"&&data.accept===false||path[3]==="terminals"&&path[5]==="disconnect")||path[1]==="projects"&&path[3]==="superagent"&&path[4]==="stop"&&path.length===5&&method==="POST";
       if (!["GET", "HEAD"].includes(method) && !cleanup && !(path[1] === "superagent" && path[2] === "lifecycle")) security?.check();
       const navigation = new LakeNavigation(store, broadcast);
       const selection = () =>
@@ -440,7 +444,7 @@ export async function startLakeServer(options: ServerOptions) {
         if (method === "GET")
           result = store.catalog().resources.filter((resource) => resource.projectId === path[2]);
         else {
-          if (!["local","ssh"].includes(data.kind)) throw new HttpError(501, "此资源类型的连接仍在迁移中");
+          if (!["local","ssh"].includes(data.kind)&&!(data.kind==="database"&&data.settings?.driver==="mysql")) throw new HttpError(501, "此资源类型的连接仍在迁移中");
           if(method!=="POST")throw new HttpError(405,"不支持此资源请求");
           const resource: Resource = {
             id: id(),
@@ -450,14 +454,15 @@ export async function startLakeServer(options: ServerOptions) {
             ...(data.kind==="ssh"?{ssh:ssh!.prepare(data.ssh)}:{}),
             description: "",
             status: "available",
-            settings: data.settings ?? {},
+            settings: data.kind==="database"&&data.settings?.driver==="mysql"?mysql!.prepare(data.settings):data.settings ?? {},
           };
           store.put("resources", resource.id, resource);
           result = resource;
         }
       } else if (path[1] === "projects" && path[3] === "superagent") {
         store.project(path[2]);
-        if (path.length === 6 && path[4] === "specialists" && method === "DELETE")
+        if(path.length===5&&path[4]==="stop"&&method==="POST")result=await superagent.stopWorkspace(path[2],String(data.routerSessionId??""));
+        else if (path.length === 6 && path[4] === "specialists" && method === "DELETE")
           result = await superagent.deleteRole(path[2], path[5], data.revision);
         else if (path.length !== 4) throw new HttpError(404, "Super-agent 接口不存在");
         else if (method === "GET") result = superagent.workspace(path[2]);
@@ -494,7 +499,8 @@ export async function startLakeServer(options: ServerOptions) {
         else if (method === "PATCH") {
           resource.name = String(data.name ?? resource.name);
           if (data.settings && digest(data.settings) !== digest(resource.settings)) store.put("resourceRevisions", resource.id, (store.get<number>("resourceRevisions", resource.id) ?? 1) + 1);
-          resource.settings = data.settings ?? resource.settings;
+          resource.settings = resource.kind==="database"&&data.settings?mysql!.prepare(data.settings,resource.settings):data.settings ?? resource.settings;
+          if(resource.kind==="database"&&resource.settings?.driver==="mysql")resource.status="available";
           if(data.ssh!==undefined){resource.ssh=ssh!.prepare(data.ssh,resource.ssh);resource.status="available";store.put("resourceRevisions",resource.id,(store.get<number>("resourceRevisions",resource.id)??1)+1);}
           store.put("resources", resource.id, resource);
           result = resource;
@@ -671,6 +677,7 @@ export async function startLakeServer(options: ServerOptions) {
     await agents?.close();
     await terminals?.close();
     await ssh?.close();
+    mysql?.close();
     await extensions?.close();
     for (const set of clients.values()) for (const response of set) response.end();
     await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
@@ -685,6 +692,7 @@ export async function startLakeServer(options: ServerOptions) {
     security = new LakeSecurity(store);
     extensions = new LakeExtensions(store, security, (value) => agents!.redact(value));
     ssh=new LakeSSH(store,security,(session)=>{broadcast(store!.event(session,"session"));superagent?.changed(session);},value=>extensions!.scrub(value));
+    mysql=new LakeMySQL(store,security,value=>agents!.registerSecret(value),value=>agents!.redact(value));
     terminals = new LakeTerminals(store, security, (value, live) => live ? agents!.redactLive(ssh!.scrub(extensions!.scrubLive(value),true)) : ssh!.scrub(value), broadcast,ssh);
     agents.guard = () => security!.check();
     if (options.importLegacy) {
@@ -692,8 +700,9 @@ export async function startLakeServer(options: ServerOptions) {
       await agents.prepareRedaction();
       await applyLegacyMigration(store, (value) => agents!.redact(value));
       await importLegacySSH(store,ssh);
+      await importLegacyMySQL(store,mysql);
     }
-    superagent = new LakeSuperagent(store, agents, security, extensions,ssh);
+    superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql);
     memory = new LakeMemory(store, () => security!.check(), value => agents!.redact(ssh!.scrub(extensions!.scrub(value))));
     try { await memory.initialize(); } catch { memory.disable("记忆文件需要核实，当前暂停记忆功能；原记录保留，普通新任务仍可运行"); }
     agents.memory = memory;
@@ -716,7 +725,7 @@ export async function startLakeServer(options: ServerOptions) {
     await close();
     throw error;
   }
-  return { origin, token, store, agents, superagent, memory, close };
+  return { origin, token, store, agents, superagent, memory, mysql, close };
 }
 
 async function main() {

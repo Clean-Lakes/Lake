@@ -88,6 +88,7 @@ export type Bootstrap = {
   terminalMode: "command" | "pty";
   supportsImageInput?: boolean;
   aiRuntime?: "zcode" | "go" | "legacy";
+  backendRuntime?: "typescript" | "go";
   memoryEngine?: "zcode-layered";
 };
 
@@ -104,6 +105,7 @@ export const api = {
   saveMemory: (key: string, projectId: string, data: {title: string; body: string; expectedRevision: number}, entryId?: string) => request<LayeredMemoryView>(`/api/memory/scopes/${encodeURIComponent(key)}/entries${entryId ? "/"+encodeURIComponent(entryId) : ""}?projectId=${encodeURIComponent(projectId)}`, {method: entryId ? "PUT" : "POST", body: JSON.stringify(data)}),
   forgetMemory: (key: string, projectId: string, entryId: string, expectedRevision: number) => request<LayeredMemoryView>(`/api/memory/scopes/${encodeURIComponent(key)}/entries/${encodeURIComponent(entryId)}?projectId=${encodeURIComponent(projectId)}`, {method: "DELETE", body: JSON.stringify({expectedRevision})}),
 	superWorkspace:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperWorkspace>(`/api/projects/${encodeURIComponent(project)}/superagent`,{signal}),
+	stopSuperWorkspace:(project:string,routerSessionId:string)=>request<{stopped:boolean;tasks:number}>(`/api/projects/${encodeURIComponent(project)}/superagent/stop`,{method:'POST',body:JSON.stringify({routerSessionId})}),
 	deleteSpecialist:(project:string,role:string,revision:number)=>request<{deleted:boolean}>(`/api/projects/${encodeURIComponent(project)}/superagent/specialists/${encodeURIComponent(role)}`,{method:'DELETE',body:JSON.stringify({revision})}),
 	readSpecialistCompletion:(session:string,cursor:string)=>request<{cursor:string}>(`/api/sessions/${encodeURIComponent(session)}/channel/read`,{method:'PUT',body:JSON.stringify({cursor})}),
 	specialistTasks:(session:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperWorker[]>(`/api/sessions/${encodeURIComponent(session)}/channel/tasks`,{signal}),

@@ -273,6 +273,7 @@ export class LakeAgents {
     this.update(parentId, view);
   }
   private keys = new Set<string>();
+  registerSecret(value:string){if(value)this.keys.add(value);}
   async prepareRedaction() {
     const selection = this.store.get<Selection>("settings", "modelSelection");
     if (selection) {

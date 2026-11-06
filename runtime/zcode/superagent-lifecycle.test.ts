@@ -52,7 +52,7 @@ async function fixture(t: { after(fn: () => Promise<void>): void }) {
   const start = async () => {
     const event = await admit("检查本项目的当前文件列表。");
     const handoff = route(event, { action: "create", title: "检查当前项目文件", role_id: role.id });
-    settleRouter(); await activate(); await read();
+    settleRouter(); await activate(); await read(handoff.taskId);
     return { event, handoff, taskId: handoff.taskId };
   };
   return { store, host, internal, agents, project, router, role, requests, admit, route, settleRouter, activate, worker, read, finish, settleWorker, start,
@@ -234,4 +234,22 @@ for (const limit of ["rounds", "deadline"]) test(`deferred completion preserves 
   assert.equal(after.deadlineAt, goal.deadlineAt); assert.equal(after.modelRounds, goal.modelRounds);
   assert.equal(f.worker().state, "parked"); assert.equal(f.store.list("superAcceptance").length, 0);
   assert.ok(f.store.messages(f.router).some((message) => message.text.includes(limit === "rounds" ? "处理上限" : "截止时间")));
+});
+
+test('Pilot stop fences current queued/active work and late decisions without changing parked history or other projects',async t=>{
+ const f=await fixture(t),old=await f.start();await f.finish();f.settleWorker();
+ const oldGoal=JSON.stringify(f.host.ledger.get(old.taskId));
+ const current=await f.start(),active=f.worker(current.taskId);
+ f.store.put('superOperations','uncertain',{id:'uncertain',goalId:current.taskId,projectId:f.project.id,sessionId:active.sessionId,status:'unknown'});
+ const pending=await f.admit('另外读取一项当前文件记录。');const queued=f.route(pending,{action:'create',title:'排队的独立工作',role_id:f.role.id});
+ const other=f.store.createProject('other project');f.host.ensure(other.id);
+ f.store.put('superWorkers','other-worker',{...active,id:'other-worker',projectId:other.id});
+ await assert.rejects(()=>f.host.stopWorkspace(f.project.id,'wrong-router'),/不属于/);
+ const count=f.requests.length,result=await f.host.stopWorkspace(f.project.id,f.router);
+ assert.equal(result.tasks,2);assert.equal(f.worker(current.taskId).state,'stopped');
+ assert.equal(f.host.ledger.get(current.taskId).status,'blocked');assert.equal(f.store.get<any>('superOperations','uncertain')!.status,'unknown');
+ assert.equal(f.host.ledger.get(queued.taskId).status,'cancelled');assert.equal(f.store.get<any>('superInputs',pending.id)!.disposition,'stopped');
+ assert.equal(JSON.stringify(f.host.ledger.get(old.taskId)),oldGoal);assert.equal(f.store.get<any>('superWorkers','other-worker')!.state,'active');
+ assert.throws(()=>f.route(pending,{action:'create',title:'迟到任务',role_id:f.role.id}));
+ f.settleRouter();await f.activate();assert.equal(f.requests.length,count);
 });

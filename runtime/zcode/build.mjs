@@ -43,7 +43,7 @@ await build({
   legalComments: "eof",
   logLevel: "warning",
   external: ["koffi", "playwright-core", "ripgrep", "cpu-features", "./crypto/build/Release/sshcrypto.node"],
-  nodePaths: [join(source, "node_modules")],
+  nodePaths: [join(source, "node_modules"),join(root,"web-agent/node_modules")],
   plugins: [
     {
       name: "pinned-zcode-source",
@@ -78,6 +78,23 @@ for (const file of ["LICENSE", "NOTICE.md", "THIRD-PARTY-NOTICES.md"]) {
 }
 await copyFile(join(source, "node_modules/@modelcontextprotocol/client/LICENSE"), join(output, "licenses/MCP-client-LICENSE"));
 await copyFile(join(source, "node_modules/ssh2/LICENSE"), join(output, "licenses/ssh2-LICENSE"));
+// Include the pinned MySQL driver's complete production dependency notices.
+const mysqlNotices=[],mysqlSeen=new Set();
+async function copyMySQLNotices(entry){
+  let directory=dirname(entry),manifest;
+  while(!manifest?.name){try{manifest=JSON.parse(await readFile(join(directory,'package.json'),'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}if(!manifest?.name){const parent=dirname(directory);if(parent===directory)throw new Error('Missing MySQL dependency manifest');directory=parent;}}
+  const key=manifest.name+'@'+manifest.version;if(mysqlSeen.has(key))return;mysqlSeen.add(key);
+  let copied=false;
+  for(const file of await readdir(directory))if(/^(?:licen[cs]e|notice|copyright)(?:\..*)?$/i.test(file)){
+    await copyFile(join(directory,file),join(output,'licenses','mysql-'+key.replaceAll('/','_')+'-'+file));if(/^licen[cs]e(?:\..*)?$/i.test(file))copied=true;
+  }
+  if(!copied)throw new Error('Missing license for MySQL dependency '+key);
+  mysqlNotices.push({name:manifest.name,version:manifest.version,license:manifest.license});
+  const dependencyRequire=createRequire(join(directory,'package.json'));
+  for(const name of Object.keys(manifest.dependencies??{}))await copyMySQLNotices(dependencyRequire.resolve(name));
+}
+await copyMySQLNotices(createRequire(join(root,'web-agent/package.json')).resolve('mysql2'));
+await writeFile(join(output,'licenses/mysql-dependencies.json'),JSON.stringify(mysqlNotices,null,2));
 // Native PTY stays outside the SEA bundle so Node can dlopen the pinned addon.
 const ptySource = dirname(require.resolve("node-pty/package.json"));
 const ptyOutput = join(output, "native/node-pty");

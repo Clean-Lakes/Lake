@@ -94,6 +94,16 @@ test("catalog changes invalidate a cursor while the exact current target remains
   assert.equal(listProjectAssets(input, { asset_ref: "resource-139" }).assets[0].name, "京东云服务器");
 });
 
+test("MySQL catalog supplies exact configuration pins without credentials or a connectivity claim", () => {
+  const resource:Resource={...catalog(1)[0],kind:'database',settings:{driver:'mysql',database:'app',host:'private-host',username:'private-user',credentialRef:'private-ref'}};
+  const page=listProjectAssets({...source([resource]),databaseRevision:current=>{assert.equal(current.id,resource.id);return digest('current-configuration');}});
+  assert.equal(page.assets[0].driver,'mysql');assert.equal(page.assets[0].database,'app');assert.equal(page.assets[0].configuration_revision,digest('current-configuration'));
+  assert.match(page.assets[0].connectionState!,/not a connectivity/);
+  assert.doesNotMatch(JSON.stringify(page),/private-host|private-user|private-ref/);
+  const invalid=listProjectAssets({...source([resource]),databaseRevision:()=>{throw new Error('private-error');}});
+  assert.equal(invalid.assets[0].configuration_state,'unavailable');assert.doesNotMatch(JSON.stringify(invalid),/private-error/);
+});
+
 test("one broken connection does not hide later resources or disclose configuration or credential details", () => {
   const resources = catalog(3);
   const input = { ...source(resources), sshRevision: (resource: Resource) => {

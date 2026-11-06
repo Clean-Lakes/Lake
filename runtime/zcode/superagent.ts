@@ -12,6 +12,7 @@ import { buildRouterContext, projectRouterHistory, type RouterMessage } from "./
 import { listProjectAssets } from "./assets";
 import { loadLegacyView } from "./migration";
 import type { LakeSecurity } from "./security";
+import type {LakeMySQL,MySQLInput} from "./mysql";
 import type {LakeSSH} from "./ssh";
 import type { LakeExtensions } from "./extensions";
 import { toolActivityLabel } from "./activity";
@@ -40,6 +41,7 @@ const routerTools = ["list_specialists", "manage_specialist", "search_super_task
 const workTools = ["work_begin", "work_read", "work_update", "work_finish", "work_wait", "ask_user_question", "list_assets", "list_project_files",
   "list_referenced_task_evidence", "read_referenced_task_evidence"];
 const hostTools=["inspect_host"];
+const databaseTools=["list_db_objects","db_table_ddl","read_db_table"];
 const extensionTools = ["list_mcp_servers", "list_mcp_tools", "call_mcp_tool", "load_skill"];
 const childControlTools = ["Agent", "Task", "TaskOutput", "TaskStop", "SendMessage"];
 const strings = (value: unknown, max = 128): string[] => {
@@ -62,6 +64,7 @@ export class LakeSuperagent implements AgentHost {
   readonly owner = id();
   private batches = new Map<string, RouterBatch>();
   private routing = new Set<string>();
+  private stoppingProjects = new Set<string>();
   private active = new Set<string>();
   private interactions = new Map<string, Interaction>();
   private closed = false;
@@ -69,7 +72,7 @@ export class LakeSuperagent implements AgentHost {
   private lastProject = "";
   private businessQueues = new Map<string, Promise<void>>();
   private heartbeat: ReturnType<typeof setInterval>;
-  constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH) {
+  constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH,readonly mysql?:LakeMySQL) {
     this.ledger = new TaskLedger(store, (operation) => {
       if (operation.mcpServerId) {
         const project = store.require<SuperProject>("superProjects", operation.projectId);
@@ -81,6 +84,13 @@ export class LakeSuperagent implements AgentHost {
         const value = extensions?.skill(operation.skillName);
         if (!value?.skill.enabled || digest(value.content) !== operation.skillHash) throw new HttpError(409, "Skill 来源已改变或停用");
         return;
+      }
+      if(operation.databaseConfigurationHash){
+        if(!mysql||!operation.resourceId||!operation.databaseScope)throw new HttpError(409,"MySQL 适配器或操作范围缺失");
+        const resource=store.require<any>("resources",operation.resourceId);
+        const scope=security?.database(operation.projectId,resource.id,operation.databaseScope);
+        if(scope&&(scope.maxRows!==operation.databaseScope.maxRows||scope.maxDurationMS!==operation.databaseScope.maxDurationMS))throw new HttpError(409,"MySQL 原读取范围已被当前策略收紧");
+        if(mysql.revision(resource)!==operation.databaseConfigurationHash||(store.get<number>("resourceRevisions",resource.id)??1)!==operation.resourceRevision)throw new HttpError(409,"MySQL 连接/凭据或版本已变化");return;
       }
       if(operation.hostConfigurationHash){if(!ssh)throw new HttpError(409,"SSH 适配器未接入");security?.host(operation.projectId,operation.resourceId!);ssh.revalidate(store.require("resources",operation.resourceId!),operation.hostConfigurationHash,(operation.output as any)?.hostFingerprint);return;}
       if (!operation.resourceId) return;
@@ -414,6 +424,7 @@ export class LakeSuperagent implements AgentHost {
     text(value, "message", 256000);
     await this.agents.prepareRedaction();
     const source = this.store.session(sessionId), project = this.store.get<SuperProject>("superProjects", source.projectId);
+    if(this.stoppingProjects.has(source.projectId))throw new HttpError(409,"当前项目正在停止活动任务，请稍后发送");
     if (!project) return this.agents.send(sessionId, value, { ignoreMemory });
     const channel = this.channelFor(sessionId), worker = this.workerFor(sessionId);
     const preferredRoleId = channel?.roleId ?? worker?.roleId;
@@ -437,7 +448,7 @@ export class LakeSuperagent implements AgentHost {
   }
   private async pump() {
     if (this.closed) return;
-    for (const project of this.store.list<SuperProject>("superProjects")) if (!this.routing.has(project.projectId) && !this.agents.isRunning(project.routerSessionId)) {
+    for (const project of this.store.list<SuperProject>("superProjects")) if (!this.stoppingProjects.has(project.projectId)&&!this.routing.has(project.projectId) && !this.agents.isRunning(project.routerSessionId)) {
       const events = this.store.list<InputEvent>("superInputs").filter((event) => event.projectId === project.projectId && event.disposition === "pending").slice(0, 16);
       if (events.length) {
         this.routing.add(project.projectId);
@@ -467,15 +478,15 @@ export class LakeSuperagent implements AgentHost {
               blockers: (goal.items ?? []).filter((item: any) => item.reason && ["blocked", "failed", "waiting_user"].includes(item.status)).map((item: any) =>
                 ({ detail: this.agents.redact(item.reason), recordUpdatedAt: goal.updatedAt })) };
           }), resources: this.store.catalog().resources.filter((resource) => resource.projectId === project.projectId).map((resource) =>
-            ({ id: resource.id, projectId: resource.projectId, name: resource.name, kind: resource.kind, status: resource.status, revision: this.store.get<number>("resourceRevisions", resource.id) ?? 1 })),
-          adapters: { ssh: !!this.ssh, extensions: !!this.extensions } });
+            ({ id: resource.id, projectId: resource.projectId, name: resource.name, kind: resource.kind, status: resource.status, driver:typeof resource.settings?.driver==="string"?resource.settings.driver:undefined, revision: this.store.get<number>("resourceRevisions", resource.id) ?? 1 })),
+          adapters: { ssh: !!this.ssh, extensions: !!this.extensions,mysql:!!this.mysql } });
         const { input, complete, eventIds } = context;
         this.batches.set(project.routerSessionId, { eventIds, complete, input });
         try { await this.agents.send(project.routerSessionId, events.filter((event) => eventIds.includes(event.id)).map((event) => event.payload).join("\n"), { input, recordUser: false, ignoreMemory: events.some(event => event.ignoreMemory) }); }
         catch (error) { this.routerFinished(project.routerSessionId, String(error)); }
       }
     }
-    const queued = this.store.list<Worker>("superWorkers").filter((worker) => worker.state === "queued" && !this.active.has(worker.id) && this.dispatchReady(worker));
+    const queued = this.store.list<Worker>("superWorkers").filter((worker) => !this.stoppingProjects.has(worker.projectId)&&worker.state === "queued" && !this.active.has(worker.id) && this.dispatchReady(worker));
     queued.sort((a, b) => Number(a.projectId === this.lastProject) - Number(b.projectId === this.lastProject) || a.createdAt.localeCompare(b.createdAt));
     for (const worker of queued) {
       if (this.active.size >= 4) break;
@@ -534,7 +545,7 @@ export class LakeSuperagent implements AgentHost {
     return { version: `${worker.id}:${generation}:host-v3:${managed}`, systemPrompt: superWorkerPrompt,
       subagents: true, taskId: worker.taskId, workerId: worker.id,
       memoryActor: { kind: "worker", projectId: worker.projectId, roleId: worker.roleId },
-      tools: [...entries, ...this.extensionEntries(worker),...this.hostEntries(worker)], allowlist: [...entries.map((entry) => entry.metadata.name),...(this.ssh?hostTools:[]), ...(this.extensions ? extensionTools : []), ...childControlTools, "Read", ...(this.ledger.get(worker.taskId).mode === "plan" ? [] : ["Write", "Edit"])].filter((name) => this.ledger.get(worker.taskId).mode !== "plan" || name !== "call_mcp_tool"),
+      tools: [...entries, ...this.extensionEntries(worker),...this.hostEntries(worker),...this.databaseEntries(worker)], allowlist: [...entries.map((entry) => entry.metadata.name),...(this.ssh?hostTools:[]),...(this.mysql?databaseTools:[]), ...(this.extensions ? extensionTools : []), ...childControlTools, "Read", ...(this.ledger.get(worker.taskId).mode === "plan" ? [] : ["Write", "Edit"])].filter((name) => this.ledger.get(worker.taskId).mode !== "plan" || name !== "call_mcp_tool"),
       permissionRules: { scope: "session", version: 1,
         allow: [...(permissions.silentWriteFiles === true ? [{ toolName: "Write" }, { toolName: "Edit" }] : []),
           ...(this.extensions?.automaticCalls(worker.projectId, permissions) ? [{ toolName: "call_mcp_tool" }] : [])],
@@ -548,7 +559,7 @@ export class LakeSuperagent implements AgentHost {
       },
       beforeModel: () => {
         this.validateWorker(worker.id, generation);
-        for (const operation of this.store.list<Operation>("superOperations")) if (operation.goalId === worker.taskId && operation.skillName && operation.status === "succeeded") this.ledger.revalidate?.(operation);
+        for (const operation of this.store.list<Operation>("superOperations")) if (operation.goalId === worker.taskId && (operation.skillName||operation.databaseConfigurationHash) && operation.status === "succeeded") this.ledger.revalidate?.(operation);
         const goal = this.ledger.get(worker.taskId);
         if (terminal(goal.status)) throw new HttpError(409, "Canonical task is closed");
         if (Date.parse(goal.deadlineAt) <= Date.now() || goal.modelRounds >= goal.roundLimit) {
@@ -569,6 +580,7 @@ export class LakeSuperagent implements AgentHost {
       invoke: (entry, input, context) => this.serializeBusiness(worker.id, async () => {
         this.validateWorker(worker.id, generation);
         if (context.abortSignal.aborted) throw new HttpError(409, "Worker stopped");
+        if(databaseTools.includes(entry.metadata.name))return this.invokeDatabase(worker,generation,entry,input as MySQLInput,context);
         if(hostTools.includes(entry.metadata.name))return this.invokeHost(worker,generation,entry,input,context);
         if (extensionTools.includes(entry.metadata.name)) return this.invokeExtension(worker, generation, entry, input, context);
         if (workTools.includes(entry.metadata.name) && !["list_project_files", "read_referenced_task_evidence"].includes(entry.metadata.name))
@@ -627,6 +639,27 @@ export class LakeSuperagent implements AgentHost {
     const entry=this.entry("inspect_host","Read current SSH host metrics using one fixed readonly system, disks or processes profile. Copy exact asset_ref and configuration_revision from list_assets. Never accepts Shell text or credentials.",objectSchema({asset_ref:str,configuration_revision:str,metric:{type:"string",enum:["system","disks","processes"]}},["asset_ref","configuration_revision","metric"]),async(a,context)=>this.ssh!.inspect(worker.sessionId,this.store.require("resources",a.asset_ref),a.metric,context.abortSignal,()=>{this.validateWorker(worker.id,worker.generation);this.security?.host(worker.projectId,a.asset_ref);}),false,131072);
     entry.resolvePermissionCapability=(input:any)=>{const project=this.store.require<SuperProject>("superProjects",worker.projectId),options=this.store.session(project.routerSessionId).options,policy=this.security?.host(worker.projectId,input.asset_ref);const approval=options.silentCommands!==true||policy==='ask';return {needsApproval:approval,permission:{needsApproval:approval,sideEffectScope:"workspace"}};};
     return [entry];
+  }
+  private databaseEntries(worker:Worker):ToolEntry[]{
+    if(!this.mysql)return [];
+    const props={asset_ref:str,configuration_revision:str,db:str,schema:str,query_type:{type:"string",enum:["database","schema","table","view","object"]},table:str,columns:array(str),order_by:array(str),limit:integer,offset:integer,mode:{type:"string",enum:["rows","count"]}};
+    return databaseTools.map(name=>{
+      const description=name==="list_db_objects"?"Read actual MySQL databases or tables. Use query_type database first when no saved db exists, then exact db/schema. This is real bounded metadata, not a connectivity claim.":name==="db_table_ddl"?"Read actual MySQL table DDL for exact db/schema and table.":"Read bounded MySQL table rows (mode rows, limit max 500, order_by exact columns) or an exact row count (mode count). Use explicit stable order for pagination. No raw SQL. Samples/counts are not a full cross-server equality proof.";
+      const entry=this.entry(name,description+" Copy asset_ref and configuration_revision from list_assets. Host uses saved credentials and a read-only transaction.",objectSchema(props,["asset_ref","configuration_revision",...(name==='list_db_objects'?[]:['table'])]),(input,context)=>this.mysql!.read(worker.projectId,this.store.require('resources',input.asset_ref),name,input,context.abortSignal,()=>this.validateWorker(worker.id,worker.generation)),false,131072);
+      entry.resolvePermissionCapability=(input:any)=>{const resource=this.store.require<any>('resources',input.asset_ref);if(resource.projectId!==worker.projectId)throw new HttpError(403,'MySQL 不属于当前项目');const plan=this.mysql!.plan(resource,name,input),project=this.store.require<SuperProject>('superProjects',worker.projectId),options=this.store.session(project.routerSessionId).options;const approval=options.silentReadSQL!==true||plan.policy==='ask';return {needsApproval:approval,permission:{needsApproval:approval,sideEffectScope:'workspace'}};};
+      return entry;
+    });
+  }
+  private async invokeDatabase(worker:Worker,generation:number,entry:ToolEntry,input:MySQLInput,context:ToolExecutionContext){
+    if(!this.mysql)throw new HttpError(409,'MySQL 适配器未接入');
+    const resource=this.store.require<any>('resources',text(input.asset_ref,'asset_ref',200));
+    if(resource.projectId!==worker.projectId)throw new HttpError(403,'MySQL 不属于当前项目');
+    const project=this.store.require<SuperProject>('superProjects',worker.projectId),options=this.store.session(project.routerSessionId).options;
+    if(options.blockUnreferencedAssets===true)throw new HttpError(403,'Pilot 要求明确的资源引用，数据库尚未登记可执行引用');
+    const plan=this.mysql.plan(resource,entry.metadata.name,input),revision=this.mysql.revision(resource);
+    if(input.configuration_revision!==revision)throw new HttpError(409,'MySQL 配置或凭据版本已变化');
+    this.validateWorker(worker.id,generation);
+    return this.ledger.operation(worker.taskId,generation,worker.policyHash,context.toolCallId,entry.metadata.name,input,()=>entry.handler(input,context),value=>JSON.parse(this.agents.redact(JSON.stringify(value??null))),{...this.childSource(context),resourceId:resource.id,resourceRevision:this.store.get<number>('resourceRevisions',resource.id)??1,readOnly:plan.provenReadOnly,databaseConfigurationHash:revision,databaseScope:plan.scope});
   }
   private async invokeHost(worker:Worker,generation:number,entry:ToolEntry,input:any,context:ToolExecutionContext){
     if(!this.ssh)throw new HttpError(409,"SSH 适配器未接入");
@@ -810,6 +843,7 @@ export class LakeSuperagent implements AgentHost {
       this.entry("list_assets", "Find current project resource metadata: use asset_ref for an exact resource ID, or query for its name/ID (Chinese names supported). Same-name matches remain separate resources. Otherwise browse bounded pages (default 20, max 50); follow nextCursor with the same query until hasMore is false. Use the exact returned asset_ref and configuration_revision for inspect_host. Metadata and cursor are not execution permission.",
         objectSchema({ asset_ref: str, query: str, cursor: str, limit: integer }), run((a) => listProjectAssets({ projectId: worker.projectId,
           resources: this.store.catalog().resources, resourceRevision: (resource) => this.store.get<number>("resourceRevisions", resource.id) ?? 1,
+          databaseRevision:this.mysql?(resource)=>this.mysql!.revision(resource):undefined,
           sshRevision: this.ssh ? (resource) => this.ssh!.revision(resource) : undefined }, a))),
       this.entry("list_project_files", "List at most 200 immediate entries in the assigned project workspace. Symlink targets are never followed.", objectSchema({ path: str }), run(async (a) => {
         const workspace = await this.store.workspace(worker.projectId), path = await this.scopedPath(workspace, a.path ?? ".");
@@ -1123,6 +1157,24 @@ export class LakeSuperagent implements AgentHost {
     }
     await Promise.all(this.store.list<Worker>("superWorkers").filter((worker) => worker.roleId === channel.roleId && worker.projectId === channel.projectId).map((worker) => this.stopTask(worker.taskId)));
     this.notify(sessionId, "specialist"); return { stopped: true };
+  }
+  async stopWorkspace(projectId:string,routerSessionId:string) {
+    const project=this.store.require<SuperProject>("superProjects",projectId);
+    if(project.routerSessionId!==routerSessionId||this.store.session(routerSessionId).projectId!==projectId)throw new HttpError(404,"Pilot 不属于当前项目");
+    if(this.stoppingProjects.has(projectId))return {stopped:true,tasks:0};
+    this.stoppingProjects.add(projectId);
+    try {
+      this.batches.delete(routerSessionId);
+      for(const event of this.store.list<InputEvent>("superInputs"))if(event.projectId===projectId&&["pending","blocked"].includes(event.disposition)){
+        event.disposition="stopped";this.store.put("superInputs",event.id,event);
+      }
+      const workers=this.store.list<Worker>("superWorkers").filter(worker=>worker.projectId===projectId&&
+        (this.active.has(worker.id)||worker.state==="active"||worker.state==="queued"||this.pendingInteraction(worker.sessionId)));
+      await Promise.all([this.agents.abort(routerSessionId),...workers.map(worker=>this.stopTask(worker.taskId))]);
+      this.routing.delete(projectId);this.notify(routerSessionId,"specialist");
+      for(const channel of this.store.list<Channel>("superChannels"))if(channel.projectId===projectId)this.notify(channel.sessionId,"specialist");
+      return {stopped:true,tasks:workers.length};
+    } finally {this.stoppingProjects.delete(projectId);}
   }
   async deleteRole(projectId: string, roleId: string, revision: number) {
     this.store.project(projectId);

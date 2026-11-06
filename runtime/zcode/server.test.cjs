@@ -221,6 +221,19 @@ function superReply(request, mode, home) {
   if (exposes("work_begin") && !names.includes("work_begin")) return call("work_begin", { title: "检查项目工作区", items: [{ id: "inspect", title: "读取工作区并按实际结果验收" }] });
   const updates = request.messages.flatMap((message) => (message.tool_calls ?? []).filter((call) => call.function.name === "work_update").map((call) => JSON.parse(call.function.arguments)));
   if (exposes("work_update") && !updates.some((update) => update.status === "running")) return call("work_update", { item_id: "inspect", status: "running" }, "start-inspect");
+  if(mode==='super-mysql-read'){
+    if(!names.includes('list_assets'))return call('list_assets',{query:'fixture MySQL'});
+    const tools=request.messages.filter(m=>m.role==='tool').map(content);
+    const catalog=tools.map(value=>{try{return JSON.parse(value);}catch{return {};}}).find(value=>value.assets?.some(a=>a.driver==='mysql'));
+    const asset=catalog?.assets.find(a=>a.driver==='mysql');
+    if(!asset)return {content:'MySQL fixture asset not available'};
+    const pins={asset_ref:asset.asset_ref,configuration_revision:asset.configuration_revision};
+    if(!names.includes('list_db_objects'))return call('list_db_objects',{...pins,query_type:'database'});
+    if(!names.includes('db_table_ddl'))return call('db_table_ddl',{...pins,db:'fixture_database',table:'sample'});
+    if(!names.includes('read_db_table'))return call('read_db_table',{...pins,db:'fixture_database',table:'sample',mode:'count'});
+    if(!names.includes('work_finish'))return finish('真实 MySQL 只读事务已读取表结构及行数 42。','finish-mysql');
+    return {content:'本次已读取 MySQL 表结构，行数为 42；不声称跨库一致。'};
+  }
   if (mode === "super-incomplete-report") return { content: "这次还没连上服务器，暂时查不到 CPU 和内存的实际使用情况。" };
   if (mode === "super-forged") {
     if (exposes("work_update") && !updates.some((update) => update.status === "completed")) return call("work_update", { item_id: "inspect", status: "completed", evidence_ids: ["invented-success"] }, "forged-acceptance");
@@ -2053,4 +2066,59 @@ test('native background extraction failure cannot be reported as a published suc
  const view=f.app.memory.view(scope);assert.equal(view.items.length,0);assert.equal(view.jobs[0].state,'failed');assert.equal(view.jobs[0].nativeExtraction,undefined);
  assert.ok(view.jobs[0].modelAttempts>=2);assert.equal(view.jobs[0].unknownUsage,true);
  const calls=f.calls;await f.restart();assert.equal(f.calls,calls);assert.equal(f.app.memory.view(f.app.memory.scope('project',f.project.id)).jobs[0].state,'failed');
+});
+
+test('Pilot stop endpoint cancels a real SDK Worker awaiting approval after its Router reply has ended',async t=>{
+ const f=await fixture(t,'super-write'),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'检查项目并准备写入一个结果文件。'},202);
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1&&s.channels[0]?.needsConfirmation);
+ const worker=state.workers[0],pending=(await f.api(`/api/sessions/${worker.sessionId}/ai`)).pending;
+ await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),v=>v.status==='completed');
+ const stopped=await f.api(`/api/projects/${f.project.id}/superagent/stop`,'POST',{routerSessionId:project.routerSessionId});assert.equal(stopped.tasks,1);
+ await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:pending.id,accept:true},409);
+ await assert.rejects(access(join(f.home,'workspaces',f.project.id,'approved.txt')));
+ assert.equal((await f.api(`/api/projects/${f.project.id}/superagent`)).workers[0].assignmentState,'stopped');
+});
+
+test('real ZCode Worker executes scoped MySQL metadata and table count with actual protocol receipts',async t=>{
+ const {mysqlServer}=require('./mysql-fixture.cjs');
+ const wire=await mysqlServer(t,(connection,sql)=>{
+  if(sql.startsWith('SHOW CREATE'))connection.writeTextResult([{Table:'sample',DDL:'CREATE TABLE `sample` (`id` int)'}],[{name:'Table'},{name:'DDL'}]);
+  else if(sql.includes('COUNT(*)'))connection.writeTextResult([{row_count:'42'}],[{name:'row_count'}]);
+  else connection.writeTextResult([{name:'fixture_database'}],[{name:'name'}]);
+ });
+ const f=await fixture(t,'super-mysql-read');
+ const asset=await f.api(`/api/projects/${f.project.id}/resources`,'POST',{name:'fixture MySQL',kind:'database',settings:{driver:'mysql',host:'127.0.0.1',port:wire.port,username:'fixture',password:'private-fixture-mysql',tls:false,sslmode:'disable',database:''}});
+ assert.doesNotMatch(JSON.stringify(asset),/private-fixture-mysql/);
+ const project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentReadSQL:true,maxSteps:30});
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'读取 fixture MySQL 的表结构和行数，不修改数据库。'},202);
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const operations=f.app.store.list('superOperations').filter(o=>o.goalId===state.workers[0].task.taskId);
+ for(const name of ['list_db_objects','db_table_ddl','read_db_table'])assert.ok(operations.some(o=>o.tool===name&&o.status==='succeeded'&&o.databaseConfigurationHash));
+ assert.ok(wire.queries.includes('START TRANSACTION READ ONLY')&&wire.queries.filter(sql=>sql==='ROLLBACK').length===3);
+ assert.doesNotMatch(JSON.stringify(f.requests)+JSON.stringify(operations),/private-fixture-mysql/);
+ assert.equal(state.workers[0].task.acceptanceState,'pass');
+ const receipt=operations.find(o=>o.tool==='read_db_table');
+ assert.doesNotThrow(()=>f.app.superagent.ledger.revalidate(receipt));
+ await writeFile(join(f.home,'secrets',asset.settings.credentialRef),JSON.stringify({password:'rotated-private-fixture-mysql'}),{mode:0o600});
+ assert.throws(()=>f.app.superagent.ledger.revalidate(receipt),/MySQL|数据库/);
+});
+
+test('changing saved MySQL credentials invalidates an already displayed Worker approval before any database I/O',async t=>{
+ const {mysqlServer}=require('./mysql-fixture.cjs'),wire=await mysqlServer(t),f=await fixture(t,'super-mysql-read');
+ const asset=await f.api(`/api/projects/${f.project.id}/resources`,'POST',{name:'fixture MySQL',kind:'database',settings:{driver:'mysql',host:'127.0.0.1',port:wire.port,username:'fixture',password:'original-private-mysql',tls:false}});
+ const project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentReadSQL:false,maxSteps:30});
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'读取 fixture MySQL 元数据。'},202);
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.channels[0]?.needsConfirmation),worker=state.workers[0];
+ const pending=(await f.api(`/api/sessions/${worker.sessionId}/ai`)).pending;
+ await f.api(`/api/resources/${asset.id}`,'PATCH',{settings:{password:'updated-private-mysql'}});
+ await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:pending.id,accept:true});
+ const after=await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),s=>s.cards.some(card=>card.id==='list_db_objects'&&card.status==='failed'));
+ assert.match(after.cards.find(card=>card.id==='list_db_objects').content,/配置或凭据版本已变化/);
+ await f.api(`/api/projects/${f.project.id}/superagent/stop`,'POST',{routerSessionId:project.routerSessionId});
+ assert.equal(wire.queries.length,0);
+ assert.equal(f.app.store.list('superOperations').filter(o=>o.goalId===worker.task.taskId&&o.tool==='list_db_objects'&&o.status==='succeeded').length,0);
+ assert.doesNotMatch(JSON.stringify(f.requests),/original-private-mysql|updated-private-mysql/);
 });

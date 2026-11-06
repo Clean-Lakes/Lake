@@ -42,10 +42,11 @@ export type Operation = {
   mcpServerId?: string; mcpTool?: string; remoteMcp?: boolean; configurationHash?: string; bindingHash?: string; catalogHash?: string;
   skillName?: string; skillHash?: string;
   hostConfigurationHash?: string;
+  databaseConfigurationHash?:string;databaseScope?:{database:string;schema:string;maxRows:number;maxDurationMS:number};
   agentRunId?: string; childSessionId?: string; originalCallId?: string;
 };
 
-const businessReceiptTools = new Set(["inspect_host", "Read", "Write", "Edit", "list_project_files", "call_mcp_tool", "read_referenced_task_evidence"]);
+const businessReceiptTools = new Set(["inspect_host", "list_db_objects","db_table_ddl","read_db_table", "Read", "Write", "Edit", "list_project_files", "call_mcp_tool", "read_referenced_task_evidence"]);
 
 // The goal and immutable acceptance receipts are the only completion authority.
 // Router replies, Worker prose and channel presentation never close a goal.
@@ -249,7 +250,7 @@ export class TaskLedger {
   }
   async operation<T>(goalId: string, generation: number, policyHash: string, callId: string, tool: string,
     input: unknown, dispatch: () => Promise<T>, redact: <V>(value: V) => V,
-    binding: Pick<Operation, "resourceId" | "resourceRevision" | "readOnly" | "mcpServerId" | "mcpTool" | "remoteMcp" | "configurationHash" | "bindingHash" | "catalogHash" | "skillName" | "skillHash" | "hostConfigurationHash" | "agentRunId" | "childSessionId" | "originalCallId"> = {}): Promise<T> {
+    binding: Pick<Operation, "resourceId" | "resourceRevision" | "readOnly" | "mcpServerId" | "mcpTool" | "remoteMcp" | "configurationHash" | "bindingHash" | "catalogHash" | "skillName" | "skillHash" | "hostConfigurationHash" | "databaseConfigurationHash" | "databaseScope" | "agentRunId" | "childSessionId" | "originalCallId"> = {}): Promise<T> {
     const key = digest([this.get(goalId).sessionId, callId]);
     const previous = this.store.get<Operation>("superOperations", key);
     if (previous) {

@@ -6,6 +6,7 @@ import type { AICard, AIView, Message, Project, Resource, WorkSession } from "..
 import { HttpError, id, LakeStore, now, type StoredSession } from "./store";
 import { digest } from "./tasks";
 import type {LakeSSH} from './ssh';
+import type {LakeMySQL} from './mysql';
 
 const tables = ["projects", "resources", "resourceTree", "sessions", "messages", "workspaceTags", "sessionPresentation", "sessionTags", "sessionNavigation", "projectSessionNavigation", "navigationTrash", "aiScopes", "superagentRoleChannels", "superagentChannelReads", "superagentChannelTimeline"];
 const runtimeTables = ["superagent_projects", "superagent_roles", "superagent_role_channels", "superagent_workers", "native_work_goals", "native_operations", "security_project_policies", "security_legacy_session_policies"];
@@ -52,6 +53,22 @@ export async function importLegacySSH(store:LakeStore,ssh:LakeSSH) {
   if(await fingerprint(source)!==before)throw new HttpError(409,'旧连接配置正在变化，SSH 增量导入未提交');
   store.transaction(()=>{for(const item of prepared){store.put('resources',item.resource.id,item.resource);store.put('resourceRevisions',item.resource.id,(store.get<number>('resourceRevisions',item.resource.id)??1)+1);
    store.put('legacySSHConnections',item.resource.id,{resourceId:item.resource.id,sourceHash:item.hash,importedAt:now(),source:'go-resourceConnections'});}});
+ }finally{db.close();}
+}
+// Import exact saved MySQL references only; original Go data and execution history stay untouched.
+export async function importLegacyMySQL(store:LakeStore,mysql:LakeMySQL){
+ const source=join(store.data,'lake-web.sqlite'),db=await openLegacy(source,store.home);if(!db)return;
+ try{
+  if(!exists(db,'resourceConnections'))return;
+  const before=await fingerprint(source),prepared:{resource:Resource;hash:string}[]=[];
+  for(const row of db.prepare("SELECT r.id,r.projectId,c.config FROM resources r JOIN resourceConnections c ON c.resourceId=r.id WHERE r.kind='database'").all()){
+   const resource=store.get<Resource>('resources',String(row.id)),legacy=store.get<any>('legacyResources',String(row.id));
+   if(!resource||!legacy||resource.kind!=='database'||resource.projectId!==row.projectId||resource.settings?.driver||store.get('legacyMySQLConnections',resource.id))continue;
+   try{const raw=JSON.parse(String(row.config));if(raw.driver!=='mysql')continue;const settings=mysql.configuration(raw);prepared.push({resource:{...resource,settings,status:legacy.originalStatus==='available'?'available':'unavailable'},hash:digest(String(row.config))});}
+   catch{store.put('legacyMySQLConnectionErrors',resource.id,{resourceId:resource.id,reason:'MySQL 连接或 Dev 凭据引用需核实'});}
+  }
+  if(await fingerprint(source)!==before)throw new HttpError(409,'旧连接配置正在变化，MySQL 增量导入未提交');
+  store.transaction(()=>{for(const item of prepared){store.put('resources',item.resource.id,item.resource);store.put('resourceRevisions',item.resource.id,(store.get<number>('resourceRevisions',item.resource.id)??1)+1);store.put('legacyMySQLConnections',item.resource.id,{resourceId:item.resource.id,sourceHash:item.hash,importedAt:now(),source:'go-resourceConnections'});}});
  }finally{db.close();}
 }
 function rows(db: DatabaseSync | undefined, table: string): Record<string, any>[] {

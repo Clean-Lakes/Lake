@@ -86,6 +86,14 @@ TS Dev 的 Router 工作集携带当前来源频道最近四轮对话、最新�
 见 [实施计划](../../plan/refactor-zcode-conversation-runtime-1.md)及 [对话执行验收](../../docs/validation/zcode-typescript-candidate/conversation-runtime.md)。
 
 
+## Pilot 停止与 MySQL 受控读取
+
+Pilot 的输入区按当前项目真实活动计算停止状态：Router 回复结束后，排队、执行或等待交互的 Worker 仍可停止；有草稿时同时保留停止与发送，停止不丢草稿。停止先撤销待派发输入和路由批次，再取消当前项目活动 Worker 及原生 child。历史停泊任务、其他项目和原 unknown 操作不会被清除或重放。
+
+Worker 及其原生 child 增量接入 `list_db_objects`（库/表目录）、`db_table_ddl`（表结构）、`read_db_table`（有界数据或行数）三项固定 MySQL 读取。每次使用独立只读事务，回滚后断开；最长 5 秒、最多 500 行表数据、96 KiB 结果和 512 KiB 网络预算，原策略可进一步收紧。分页须显式稳定排序；样本、行数和结构都不是跨库完整一致性的证明。没有自由 SQL、数据库写入、PostgreSQL 或 SSH/Kubernetes 中数据库入口发现。
+
+启动时只读增量补充同一 Dev Home 已迁入资源的准确 MySQL 连接引用，不改旧 Go 数据、不覆盖已有 TS 配置、不继续历史比较。当前私有凭据、资源版本、连接摘要、项目/schema 范围和 Pilot 审批在派发及回执使用时重新核验，Memory 沿用同一 Operation 校验入口。元数据可独立作只读诊断；表数据读取保留原 unknown 对账屏障。资源目录中的 configured 只表示配置存在，不表示远端可达。实测范围见[停止与 MySQL 验证记录](../../docs/validation/zcode-typescript-candidate/pilot-stop-mysql-read.md)。
+
 ## 分层长期记忆
 
 2026-11-06 用户授权接入 ZCode 原生 Memory。用户明确保存的全局偏好、项目共享、稳定 RoleID 经验分别保存；新任务上下文独立，临时 child 的真实结果通过父任务回流。Provider 按当前资格投影少量知识，不把完整手册或其他任务 transcript 复制给 Worker。
