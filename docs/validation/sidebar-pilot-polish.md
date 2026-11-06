@@ -1,5 +1,7 @@
 # 侧栏导航与深色用户气泡验证
 
+交付：[PR 193](https://github.com/Clean-Lakes/Lake/pull/193)，目标 develop，未合并。
+
 日期：2026-11-06。范围：用户圈选的 Lake／Dev／搜索／Pilot 区域，以及随后要求的深色工作台白色用户气泡。
 
 ## 代码与签名来源
