@@ -555,8 +555,31 @@ export class LakeMemory {
       const goal = this.store.get<Goal>("superGoals", taskId);
       if (!goal || goal.mode === "plan" || goal.status === "cancelled") return;
       if (this.isIgnored(goal.sessionId)) return;
-      const worker=this.store.get<{inputEventIds:string[]}>("superWorkers",goal.workerId);
-      if(worker?.inputEventIds.some(id=>this.store.get<{ignoreMemory?:boolean}>("superInputs",id)?.ignoreMemory))return;
+      const used =
+        this.store.get<ReadUsage>("memoryReads", goal.sessionId)?.sourceIds ??
+        [];
+      if (this.invalidSources(used).length) return;
+      if (!goal.workerId) return;
+      const worker = this.store.get<{
+        inputEventIds: string[];
+        projectId: string;
+        roleId: string;
+        taskId: string;
+        sessionId: string;
+      }>("superWorkers", goal.workerId);
+      if (
+        !worker ||
+        worker.projectId !== goal.projectId ||
+        worker.roleId !== goal.roleId ||
+        worker.taskId !== goal.id ||
+        worker.sessionId !== goal.sessionId ||
+        worker.inputEventIds.some(
+          (id) =>
+            this.store.get<{ ignoreMemory?: boolean }>("superInputs", id)
+              ?.ignoreMemory,
+        )
+      )
+        return;
       const operations = this.store
         .list<Operation>("superOperations")
         .filter((operation) => operation.goalId === taskId);
@@ -680,6 +703,7 @@ export class LakeMemory {
         !message ||
         message.role !== "user" ||
         message.sessionId !== source.sessionId ||
+        this.store.session(message.sessionId).projectId !== source.projectId ||
         source.messageHash !== digest(this.scrub(message.text))
       )
         return false;
@@ -688,6 +712,9 @@ export class LakeMemory {
       const goal = this.store.get<Goal>("superGoals", source.taskId);
       if (
         !goal ||
+        goal.projectId !== source.projectId ||
+        goal.roleId !== source.roleId ||
+        goal.sessionId !== source.sessionId ||
         goal.goalRevision !== source.taskRevision ||
         (source.taskEvidence === "accepted" &&
           (goal.status !== "completed" || goal.acceptanceState !== "pass"))
@@ -712,6 +739,9 @@ export class LakeMemory {
       );
       if (
         !operation ||
+        operation.goalId !== source.taskId ||
+        operation.projectId !== source.projectId ||
+        operation.sessionId !== source.sessionId ||
         operation.status !== source.operationStates?.[operationId] ||
         (source.taskEvidence === "failed" && operation.readOnly !== true) ||
         operation.outputHash !== digest(operation.output) ||
@@ -869,6 +899,39 @@ export class LakeMemory {
       if (invalid.length && actor.sessionId)
         this.store.put("memoryReads", actor.sessionId, { sourceIds: [] });
     }
+    if (actor.kind === "worker")
+      projected = {
+        ...projected,
+        messages: projected.messages.map((message: any) => {
+          if (message.role !== "user" || !content(message).startsWith("{"))
+            return message;
+          let input: any;
+          try {
+            input = JSON.parse(content(message));
+          } catch {
+            return message;
+          }
+          const predecessor = input.predecessor;
+          if (
+            input.assignment?.projectId !== actor.projectId ||
+            input.assignment?.roleId !== actor.roleId ||
+            !predecessor?.taskRef?.id ||
+            !this.taskUsesInvalidMemory(predecessor.taskRef.id, excluded)
+          )
+            return message;
+          return {
+            ...message,
+            content: JSON.stringify({
+              ...input,
+              predecessor: {
+                ...predecessor,
+                summary: "",
+                summaryUnavailable: "withdrawn_knowledge",
+              },
+            }),
+          };
+        }),
+      };
     if (ignored) return projected;
     const keys = [
       ...(actor.roleId

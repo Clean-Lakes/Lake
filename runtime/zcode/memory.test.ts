@@ -79,6 +79,7 @@ async function fixture(t: any) {
         .resources.find((resource) => resource.projectId === project.id)!;
     const goal = {
       id: id(),
+      workerId: id(),
       projectId: project.id,
       roleId: role.id,
       sessionId: session.id,
@@ -92,6 +93,14 @@ async function fixture(t: any) {
       updatedAt: new Date().toISOString(),
     } as Goal;
     store.put("superGoals", goal.id, goal);
+    store.put("superWorkers", goal.workerId, {
+      id: goal.workerId,
+      projectId: goal.projectId,
+      roleId: goal.roleId,
+      taskId: goal.id,
+      sessionId: goal.sessionId,
+      inputEventIds: [],
+    });
     const output = { available: 100 };
     const operation = {
       id: id(),
@@ -566,4 +575,46 @@ test("重启清理未提交的文件版本与暂存，不重新发起模型或�
   assert.deepEqual(await readdir(join(f.memory.root, "staging")), []);
   assert.deepEqual(await readdir(orphan), []);
   assert.equal(f.memory.view(f.scope).items.length, 0);
+});
+
+test("新的复查任务不从 predecessor 摘要恢复已撤回的专员知识", async (t) => {
+  const f = await fixture(t);
+  f.enable();
+  const entry = await f.save(),
+    { goal } = f.task();
+  f.memory.projectRequest(f.request, {
+    kind: "worker",
+    projectId: f.project.id,
+    roleId: f.role.id,
+    sessionId: goal.sessionId,
+  });
+  await f.memory.forget(f.scope, entry.id, entry.revision);
+  const request = {
+    messages: [
+      {
+        role: "user",
+        content: JSON.stringify({
+          assignment: { projectId: f.project.id, roleId: f.role.id },
+          predecessor: {
+            taskRef: { id: goal.id },
+            summary: "已撤回的旧专员知识",
+            originalDeliverable: "重新检查真实磁盘指标",
+          },
+        }),
+      },
+    ],
+  };
+  const projected = JSON.stringify(
+    f.memory.projectRequest(request, {
+      kind: "worker",
+      projectId: f.project.id,
+      roleId: f.role.id,
+      sessionId: "new-worker",
+    }),
+  );
+  assert.doesNotMatch(projected, /已撤回的旧专员知识/);
+  assert.match(projected, /重新检查真实磁盘指标/);
+  assert.match(projected, /withdrawn_knowledge/);
+  f.memory.captureTask(goal.id);
+  assert.equal(f.store.list("memoryJobs").length, 0);
 });
