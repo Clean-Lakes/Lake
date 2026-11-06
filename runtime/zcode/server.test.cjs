@@ -232,7 +232,7 @@ function fullAgentReply(request,mode,home){
  }
  if(mode.includes('child')&&!names.includes('Agent'))return call('Agent',{subagent_type:'general-purpose',description:'执行独立 Shell 检查',prompt:'请通过 Bash 执行 printf CHILD_NATIVE_SHELL 并报告实际结果。'});
  if(!['child','files','image'].some(kind=>mode.includes(kind))&&!names.includes('Bash')){
-  let command=mode.includes('container')?(mode.includes('docker')?'docker exec fixture-db sh -c \'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N -B -e "SELECT 42"\'':'kubectl -n fixture exec fixture-db -- sh -c \'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N -B -e "SELECT 42"\''):mode.includes('lookup')?"command -v kubectl && kubectl config current-context && kubectl get pods -A -o wide":mode.includes('danger')?"rm -f ./agent-capability-absent.txt":mode.includes('stop')?"printf 'started' > interrupted.txt; sleep 30; printf 'LATE_NATIVE_OUTPUT'":mode.includes('protected')?`cat '${home}/secrets/hidden-fixture.txt'`:mode.includes('nonzero')?"printf 'ACTUAL_FAILED_COMMAND' >&2; false":mode.includes('background')?"printf 'BEGIN_BACKGROUND'; sleep 0.15; printf 'ACTUAL_BACKGROUND_SHELL'":"printf 'ACTUAL_NATIVE_SHELL'";
+  let command=mode.includes('container')?(mode.includes('docker')?'docker exec fixture-db sh -c \'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N -B -e "SELECT 42"\'':'kubectl -n fixture exec fixture-db -- sh -c \'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N -B -e "SELECT 42"\''):mode.includes('lookup')?"command -v kubectl && kubectl config current-context && kubectl get pods -A -o wide":mode.includes('danger')?"rm -f ./agent-capability-absent.txt":mode.includes('read-stop')?"printf 'READ_STOP_STARTED'; sleep 5; printf 'READ_STOP_LATE'":mode.includes('stop')?"printf 'started' > interrupted.txt; sleep 30; printf 'LATE_NATIVE_OUTPUT'":mode.includes('protected')?`cat '${home}/secrets/hidden-fixture.txt'`:mode.includes('nonzero')?"printf 'ACTUAL_FAILED_COMMAND' >&2; false":mode.includes('background')?"printf 'BEGIN_BACKGROUND'; sleep 0.15; printf 'ACTUAL_BACKGROUND_SHELL'":"printf 'ACTUAL_NATIVE_SHELL'";
   if(mode.includes('ssh')){
    if(!names.includes('list_assets'))return call('list_assets',{query:'SSH fixture'});
    const asset=result('list_assets').assets.find(asset=>asset.kind==='ssh');
@@ -2387,6 +2387,34 @@ test('a specialist inherits Pilot command auto-approval for actual SSH program d
  await f.api(`/api/sessions/${session}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint});
  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(op.status,'succeeded');assert.match(op.output.stdout,/FIXTURE_CONTEXT/);assert.match(op.output.stdout,/FIXTURE_POD_READY/);assert.equal(wire.requests.length,1);assert.equal(op.readOnly,false,'CLI discovery is not an unrestricted readonly proof');
+});
+
+test('stopping an actual SDK SSH read reports stopped after settlement and projects cancelled command cards without rewriting evidence',async t=>{
+ const {f,wire,worker}=await lookupCommandTask(t,true,'super-full-worker-ssh-read-stop'),session=worker.sessionId;
+ const snapshot=await until(()=>f.api(`/api/sessions/${session}/snapshot`),s=>!!s.hostKeyTrust);
+ await f.api(`/api/sessions/${session}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint});
+ await until(async()=>({executions:f.app.store.list('commandExecutions'),requests:wire.requests.length}),v=>v.requests===1&&v.executions.some(e=>e.status==='running'));
+ const goal=f.app.store.require('superGoals',worker.task.taskId);
+ await f.api(`/api/sessions/${session}/ai/workControl`,'POST',{goalId:goal.id,command:'cancel',revision:goal.revision});
+ const final=f.app.store.require('superGoals',goal.id),op=f.app.store.list('superOperations').find(o=>o.goalId===goal.id&&o.tool==='Bash');
+ assert.equal(final.status,'cancelled');assert.equal(op.status,'failed');assert.equal(op.readOnly,true);assert.equal(op.output.status,'cancelled');
+ const raw=JSON.stringify(op),view=await f.api(`/api/sessions/${session}/snapshot`),card=view.ai.cards.find(c=>c.title==='Bash');
+ assert.equal(card.status,'cancelled');assert.equal(card.data.operation_status,'failed');assert.equal(JSON.stringify(f.app.store.require('superOperations',op.id)),raw);
+ const state=await f.api(`/api/projects/${f.project.id}/superagent`),router=state.project.routerSessionId;
+ const reports=f.app.store.messages(router).filter(m=>m.author?.taskId===goal.id);assert.equal(reports.length,1);assert.equal(reports[0].text,'已停止这次工作。');
+ const channel=state.channels[0],page=await f.api(`/api/sessions/${channel.sessionId}/channel`);
+ assert.equal(page.entries.filter(e=>e.message?.author?.taskId===goal.id).length,1);assert.ok(!JSON.stringify(page).includes('有一项操作的结果还需核实'));
+ // Reproduce an old outbox's premature host notice. Only read projections may
+ // correct it; the old message and original operation remain byte-identical.
+ for(const target of [router,channel.sessionId]){
+  const saved=f.app.store.messages(target).find(m=>m.author?.taskId===goal.id);saved.text='有一项操作的结果还需核实，暂时不能重复该操作。';f.app.store.put('messages',saved.id,saved);
+ }
+ const history=f.app.store.messages(channel.sessionId).find(m=>m.author?.taskId===goal.id),historyBytes=JSON.stringify(history);
+ assert.equal((await f.api(`/api/sessions/${channel.sessionId}/channel`)).entries.find(e=>e.message?.author?.taskId===goal.id).message.text,'已停止这次工作。');
+ assert.equal((await f.api(`/api/sessions/${router}/snapshot`)).messages.find(m=>m.author?.taskId===goal.id).text,'已停止这次工作。');
+ assert.equal(JSON.stringify(f.app.store.require('messages',history.id)),historyBytes);
+ const calls=f.calls;await f.restart();assert.equal(f.calls,calls);assert.equal(wire.requests.length,1);
+ assert.equal((await f.api(`/api/sessions/${session}/snapshot`)).ai.cards.find(c=>c.title==='Bash').status,'cancelled');
 });
 
 test('the same program discovery still asks when Pilot command auto-approval is off',async t=>{

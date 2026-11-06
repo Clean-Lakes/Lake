@@ -171,6 +171,40 @@ test("stop wins a deferred finish and cannot be requeued by late Router completi
   assert.equal(f.requests.length, 1); assert.equal(f.store.list("superAcceptance").length, 0);
 });
 
+for(const readOnly of [true,false])test(`stop waits for ${readOnly?'read':'opaque write'} settlement before reporting and preserves a concurrent sibling`,async t=>{
+ const f=await fixture(t),a=await f.start();
+ const event=await f.admit('独立任务 B');const b=f.route(event,{action:'create',title:'独立任务 B',role_id:f.role.id});f.settleRouter();await f.activate();await f.read(b.taskId);
+ let release!:()=>void,aborted!:()=>void,started!:()=>void;
+ const gate=new Promise<void>(resolve=>{release=resolve;}),abortGate=new Promise<void>(resolve=>{aborted=resolve;}),startGate=new Promise<void>(resolve=>{started=resolve;});
+ const worker=f.worker(a.taskId);
+ const business=f.internal.serializeBusiness(worker.id,()=>f.host.ledger.operation(a.taskId,worker.generation,worker.policyHash,'in-flight','Bash',{},async()=>{
+  started();await gate;if(!readOnly)throw new Error('opaque process interrupted');return {status:'cancelled',cancelled:true,exitCode:137};
+ },(v:any)=>v,{readOnly}));
+ const settled=business.catch(()=>{});await startGate;
+ (f.agents as any).abort=async(session:string)=>{assert.equal(session,worker.sessionId);f.settleWorker(a.taskId);aborted();};
+ const sibling=JSON.stringify(f.worker(b.taskId)),stopping=f.host.stopTask(a.taskId),duplicate=f.host.stopTask(a.taskId);await abortGate;
+ assert.equal(f.store.messages(f.router).filter(m=>m.author?.taskId===a.taskId).length,0,'no provisional report while a receipt is in flight');
+ assert.equal(f.worker(a.taskId).generation,worker.generation+1,'duplicate stop is coalesced');
+ assert.equal(JSON.stringify(f.worker(b.taskId)),sibling);
+ release();await settled;await Promise.all([stopping,duplicate]);
+ const report=f.store.messages(f.router).filter(m=>m.author?.taskId===a.taskId);
+ assert.equal(report.length,1);assert.equal(report[0]!.text,readOnly?'已停止这次工作。':'有一项操作的结果还需核实，暂时不能重复该操作。');
+ assert.equal(f.host.ledger.get(a.taskId).status,readOnly?'cancelled':'blocked');
+ const op=f.store.list<any>('superOperations').find(o=>o.callId==='in-flight');assert.equal(op.status,readOnly?'failed':'unknown');
+ f.settleWorker(a.taskId);assert.equal(f.store.messages(f.router).filter(m=>m.author?.taskId===a.taskId).length,1,'late completion cannot add another stop report');
+ await f.finish(b.taskId);f.settleWorker(b.taskId);assert.equal(f.host.ledger.get(b.taskId).acceptanceState,'pass');
+});
+
+test('stopping the remaining reply after business acceptance preserves the accepted goal and receipts',async t=>{
+ const f=await fixture(t),work=await f.start();await f.finish(work.taskId);
+ const goal=JSON.stringify(f.host.ledger.get(work.taskId)),receipts=JSON.stringify(f.store.list('superAcceptance'));
+ (f.agents as any).abort=async()=>f.settleWorker(work.taskId);
+ await f.host.stopTask(work.taskId);
+ assert.equal(JSON.stringify(f.host.ledger.get(work.taskId)),goal);assert.equal(JSON.stringify(f.store.list('superAcceptance')),receipts);
+ const reports=f.store.messages(f.router).filter(message=>message.author?.taskId===work.taskId);
+ assert.equal(reports.length,1);assert.equal(reports[0]!.text,'已读取本次项目文件列表。');
+});
+
 test("explicit resume dispatches once without a new message and preserves the original task limits", async (t) => {
   const f = await fixture(t), initial = await f.start();
   f.settleWorker();

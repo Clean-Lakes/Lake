@@ -21,6 +21,7 @@ import type { LakeExtensions } from "./extensions";
 import { toolActivityLabel } from "./activity";
 import {agentToolNames,nativeTool,agentCapabilityCatalog} from "./capabilities";
 import type {LakeExecution,ShellInput,ShellActor} from "./execution";
+import { stoppedNotice, unresolvedNotice, stoppedReportProjection } from "./task-cancellation";
 
 type Role = { id: string; projectId: string; roleKey: string; name: string; duties: string; revision: number; deletedAt?: string };
 type Channel = { id: string; projectId: string; roleId: string; sessionId: string; revision: number; createdAt: string };
@@ -77,6 +78,7 @@ export class LakeSuperagent implements AgentHost {
   private scheduled = false;
   private lastProject = "";
   private businessQueues = new Map<string, Promise<void>>();
+  private taskStops = new Map<string, Promise<void>>();
   private heartbeat: ReturnType<typeof setInterval>;
   constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH,readonly mysql?:LakeMySQL,readonly execution?:LakeExecution) {
     this.ledger = new TaskLedger(store, (operation) => {
@@ -202,7 +204,7 @@ export class LakeSuperagent implements AgentHost {
     return { taskId: goal.id, sessionId: goal.sessionId, projectId: goal.projectId, title: goal.title,
       state: goal.status === "waiting_user" && !this.pendingInteraction(goal.sessionId) ? "paused" : states[goal.status] ?? (this.store.require<Worker>("superWorkers", goal.workerId).state === "queued" ? "queued" : "running"),
       acceptanceState: goal.acceptanceState, revision: goal.revision, originRootTurnId: goal.originRootTurnId,
-      deadlineAt: goal.deadlineAt, summary: goal.summary };
+      deadlineAt: goal.deadlineAt, summary: goal.summary, updatedAt: goal.updatedAt };
   }
   private workerView(worker: Worker): SuperWorker {
     return { id: worker.id, createdAt: worker.createdAt, roleId: worker.roleId, roleName: worker.roleSnapshot.name,
@@ -1115,7 +1117,8 @@ export class LakeSuperagent implements AgentHost {
   decorate(snapshot: SessionSnapshot,taskId?:string): SessionSnapshot {
     snapshot.hostKeyTrust=this.ssh?.prompt(snapshot.session.id)??null;
     snapshot.messages = [...snapshot.messages, ...this.store.list<Message>("superDispatchMessages").filter((message) => message.sessionId === snapshot.session.id)]
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
+      .map(message => stoppedReportProjection(this.store, message, id => this.ledger.unresolved(id)));
     const exact=taskId?this.ledger.get(taskId):undefined;
     if(exact&&(exact.projectId!==snapshot.session.projectId||exact.sessionId!==snapshot.session.id))throw new HttpError(404,'任务不属于此项目与执行会话');
     const worker = exact?this.store.require<Worker>('superWorkers',exact.workerId):this.workerFor(snapshot.session.id);
@@ -1188,6 +1191,9 @@ export class LakeSuperagent implements AgentHost {
     worker.state = worker.state === "stopped" ? "stopped" : "parked"; worker.owner = undefined; worker.leaseUntil = undefined;
     this.store.put("superWorkers", worker.id, worker);
     let goal = this.ledger.get(worker.taskId);
+    // stopTask owns final reporting after the SDK and business queue settle.
+    // A callback before that barrier must not freeze a provisional unknown.
+    if (worker.state === "stopped") { this.changed(sessionId); this.schedule(); return; }
     const deferred = this.store.get<{ inputEventIds: string[] }>("superDeferredFinishes", digest([worker.id, worker.generation]));
     if (!terminal(goal.status) && goal.status === "running") {
       goal.status = this.ledger.unresolved(goal.id) ? "blocked" : "paused";
@@ -1202,7 +1208,7 @@ export class LakeSuperagent implements AgentHost {
     this.queueFollowups(worker);
     goal = this.ledger.get(worker.taskId);
     let deferredFailure: string | undefined;
-    if (deferred && !error && worker.state !== "stopped" && !terminal(goal.status)) {
+    if (deferred && !error && !terminal(goal.status)) {
       if (goal.modelRounds >= goal.roundLimit || Date.parse(goal.deadlineAt) <= Date.now()) {
         goal.status = "paused"; goal.summary = Date.parse(goal.deadlineAt) <= Date.now() ? "deadline_reached" : "model_round_limit";
         this.ledger.save(goal);
@@ -1213,7 +1219,7 @@ export class LakeSuperagent implements AgentHost {
     }
     // A new input is being handed to the same task, not an incomplete business
     // delivery. Limits, errors and explicit stop still need their real outcome.
-    if (deferred && !deferredFailure && !error && worker.state !== "stopped" && goal.modelRounds < goal.roundLimit && Date.parse(goal.deadlineAt) > Date.now()) {
+    if (deferred && !deferredFailure && !error && goal.modelRounds < goal.roundLimit && Date.parse(goal.deadlineAt) > Date.now()) {
       this.changed(sessionId); this.schedule(); return;
     }
     const reportKey = digest([goal.id, goal.revision]);
@@ -1258,8 +1264,8 @@ export class LakeSuperagent implements AgentHost {
       const body = goal.summary?.trim() || "检查已完成。";
       return { body, channelBody: body };
     }
-    const notice = goal.status === "cancelled" ? "已停止这次工作。"
-      : this.ledger.unresolved(goal.id) ? "有一项操作的结果还需核实，暂时不能重复该操作。"
+    const notice = goal.status === "cancelled" ? stoppedNotice
+      : this.ledger.unresolved(goal.id) ? unresolvedNotice
       : goal.summary === "deadline_reached" ? "这次工作已到截止时间，剩余部分尚未完成。"
       : goal.summary === "model_round_limit" ? "这次检查已达到单次任务的处理上限，剩余部分尚未完成。"
       : error || this.store.view(goal.sessionId).status === "failed" ? "这次处理遇到错误，尚未完成。具体原因可在执行详情中查看。"
@@ -1309,7 +1315,19 @@ export class LakeSuperagent implements AgentHost {
     return projectRouterHistory(request, markers, routed, this.batches.get(project.routerSessionId)?.input);
   }
   async stopTask(taskId: string, pause = false) {
+    const pending = this.taskStops.get(taskId); if (pending) return pending;
+    let resolve!:()=>void,reject!:(error:unknown)=>void;
+    const completion = {promise:new Promise<void>((done,fail)=>{resolve=done;reject=fail;}),resolve:()=>resolve(),reject:(error:unknown)=>reject(error)};
+    this.taskStops.set(taskId, completion.promise);
+    void this.stopTaskOnce(taskId, pause).then(completion.resolve, completion.reject).finally(() => {
+      if (this.taskStops.get(taskId) === completion.promise) this.taskStops.delete(taskId);
+    });
+    return completion.promise;
+  }
+  private async stopTaskOnce(taskId: string, pause: boolean) {
     const goal = this.ledger.get(taskId), worker = this.store.require<Worker>("superWorkers", goal.workerId);
+    const alreadyTerminal=terminal(goal.status);
+    if (alreadyTerminal&&!this.active.has(worker.id)&&!this.agents.isRunning(worker.sessionId)) return;
     const resume = this.resumeControl(worker);
     if (resume && worker.resumeControlId) this.store.put("superHumanControls", worker.resumeControlId, { ...resume, revokedAt: now() });
     worker.resumeControlId = undefined;
@@ -1322,8 +1340,19 @@ export class LakeSuperagent implements AgentHost {
     // recorded its result. Drain after signalling abort so stop returns only once
     // foreground effects have been classified in the canonical operation ledger.
     await this.businessQueues.get(worker.id);
+    const stopped=this.ledger.get(taskId);
+    const state=this.ledger.unresolved(taskId)?'blocked':pause?'paused':'cancelled';
+    if(!alreadyTerminal&&stopped.status!==state){stopped.status=state;this.ledger.save(stopped);}
+    if(!alreadyTerminal&&!worker.inline){
+      const key=digest([stopped.id,stopped.revision]);
+      this.store.put('superPendingReports',key,{taskId:stopped.id,revision:stopped.revision,snapshot:structuredClone(stopped),
+        presentation:this.reportPresentation(stopped),rootTurnId:this.store.view(worker.sessionId).rootTurnId,createdAt:now()});
+    }
+    this.deliverReports();
+    this.agents.memory?.captureTask(stopped.id);
+    this.active.delete(worker.id);
     this.changed(worker.sessionId);
-    const stopped=this.ledger.get(taskId);if(stopped.status==='blocked'&&!this.ledger.unresolved(taskId)){stopped.status=pause?'paused':'cancelled';this.ledger.save(stopped);}
+    this.schedule();
   }
   async control(sessionId: string, input: any) {
     const goal = this.ledger.get(text(input.goalId, "goalId", 128));
@@ -1401,7 +1430,7 @@ export class LakeSuperagent implements AgentHost {
       if(!worker||!report.key)continue;
       const sibling=this.store.get<Message>('messages','report_'+digest([report.key,project.routerSessionId]));
       if(sibling?.author?.workerId===worker.id&&sibling.author.taskId===worker.task.taskId)
-        reportBodies.set('report_'+digest([report.key,sessionId]),sibling);
+        reportBodies.set('report_'+digest([report.key,sessionId]),stoppedReportProjection(this.store,sibling,id=>this.ledger.unresolved(id)));
     }
     for (const source of sessions) {
       await loadLegacyView(this.store, source, (value) => this.agents.redact(value));
@@ -1410,7 +1439,7 @@ export class LakeSuperagent implements AgentHost {
       if(worker&&snapshot.session.workspaceRole!=='legacy')sources.push({snapshot,worker,active:this.active.has(worker.id)||!!this.pendingInteraction(source)});
       for (const original of snapshot.messages){
         const sibling=source===sessionId&&!original.author?.rootTurnId?reportBodies.get(original.id):undefined;
-        const message=sibling?{...original,text:sibling.text}:original;
+        const message=sibling?{...original,text:sibling.text}:stoppedReportProjection(this.store,original,id=>this.ledger.unresolved(id));
         entries.push({ id: canonical(["message", source, message.id]), sourceSessionId: source,
           taskId: worker?.task.taskId, workerId: worker?.id, createdAt: message.createdAt, message });
       }

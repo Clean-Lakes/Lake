@@ -22,7 +22,7 @@ export function SuperTaskInspector({task,goal,worker,plan=false,connected=false,
    <span className="super-step-number">{item.status==='completed'?<Glyph name="check" size={12}/>:index+1}</span><div><strong>{item.title}</strong><small>{plan?'':stepLabels[item.status]??'待核实'}</small>{item.reason&&<p>{item.reason}</p>}</div>
   </li>)}</ol>)}
   {!plan&&!summaryOnly&&<p className="super-task-budget">{task.reason==='model_round_limit'?'模型调用轮数已达上限':<>已用 {goal.modelRounds} / {goal.roundLimit} 轮</>}</p>}
-  {!plan&&!summaryOnly&&!['completed','failed','cancelled'].includes(task.state)&&<button type="button" className="button secondary" disabled={!connected||busy} onClick={()=>void stop()} title="停止后续跟进，保留原操作记录"><Glyph name="stop" size={13}/>停止任务</button>}
+  {!plan&&!summaryOnly&&!['completed','failed','cancelled'].includes(task.state)&&<button type="button" className="button secondary" disabled={!connected||busy} aria-busy={busy} onClick={()=>void stop()} aria-label={`停止任务：${task.title}`} title={`仅停止「${task.title}」，不影响该专员的其他任务`}><Glyph name={busy?'loader':'stop'} size={13}/>{busy?'正在停止…':'仅停止此任务'}</button>}
   {error&&<p role="alert" className="super-task-control-error">{error}</p>}
  </section>;
 }
