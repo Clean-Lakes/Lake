@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-06
 last_updated: 2026-11-06
 owner: Codex
-status: 'In progress'
+status: 'Completed'
 tags: [feature, frontend, runtime]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 Restore the existing Mini Box in task execution details and show green unread dots for Pilot and specialist conversations.
 
@@ -42,7 +42,7 @@ Restore the existing Mini Box in task execution details and show green unread do
 |------|-------------|-----------|------|
 | TASK-003 | Add runtime/zcode/conversation-reads.ts; project cursors in workspace/channel/snapshot responses; validate monotonic read acknowledgements. | ✅ | 2026-11-06 |
 | TASK-004 | Add visible conversation read marker and Pilot/specialist green indicators; retain legacy completion protocol compatibility. | ✅ | 2026-11-06 |
-| TASK-005 | Run frontend and runtime checks, verify Lake Dev command display and unread behavior, record exact tested SHA, and open PR against develop. Automated checks and signed build passed; final native attention/light-dark/narrow checks continue after manual Mac unlock; include the requested exclusive status indicators and role spacing. See docs/validation/zcode-typescript-candidate/minibox-unread.md. | | |
+| TASK-005 | Run frontend and runtime checks, verify Lake Dev command display and unread behavior, record exact tested SHA, and open PR against develop. Automated checks and signed installation passed; native message read-on-view, role spacing, light/dark and narrow execution pane reviewed at bedcece6. Coverage limits are recorded separately. See docs/validation/zcode-typescript-candidate/minibox-unread.md. | ✅ | 2026-11-06 |
 
 ## 3. Alternatives
 
