@@ -50,7 +50,7 @@ Barrier 控制测试在 SDK 已结束而回执尚未结算时断言没有报告�
 | --- | --- | --- |
 | 前端全量 | `pnpm --dir web-agent test:frontend` | 715/715 |
 | Web 类型与构建 | `pnpm --dir web-agent build:web` | 通过；保留既有 Vite 大块提示 |
-| Runtime 类型 | `node third_party/zcode/node_modules/typescript/bin/tsc -p runtime/typescript/tsconfig.json` | 通过 |
+| Runtime 类型 | `node third_party/agent-sdk/node_modules/typescript/bin/tsc -p runtime/typescript/tsconfig.json` | 通过 |
 | Runtime bundle | `node runtime/typescript/build.mjs` | 通过 |
 | 真实 SDK／资源集成 | `node --test runtime/typescript/server.test.cjs runtime/typescript/mysql.test.cjs runtime/typescript/router-context.test.cjs runtime/typescript/service-resources.test.cjs` | 131/131 |
 | 源码单元 | 固定 tsx 执行 `runtime/typescript/*.test.ts` | 109 项，108 通过，1 项独立 Claude-Mem 端点可选测试跳过 |
