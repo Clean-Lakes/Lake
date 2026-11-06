@@ -191,10 +191,11 @@ export class LakeExecution {
   }
   /** UI projection uses both immutable operation ownership and command identity. */
   views(sessionId: string, taskId: string): HostCommandView[] {
-    const operations = this.store.list<Operation>('superOperations').filter(op => op.sessionId === sessionId && op.goalId === taskId && op.commandExecutionId);
+    const projectId = this.store.session(sessionId).projectId;
+    const operations = this.store.list<Operation>('superOperations').filter(op => op.projectId === projectId && op.sessionId === sessionId && op.goalId === taskId && op.commandExecutionId);
     return operations.flatMap(op => {
       const record = this.store.get<CommandRecord>('commandExecutions', op.commandExecutionId!);
-      if (!record || record.sessionId !== sessionId || record.taskId !== taskId || record.generation !== op.generation || record.resourceId !== op.resourceId) return [];
+      if (!record || record.sessionId !== sessionId || record.taskId !== taskId || record.generation !== op.generation || record.resourceId !== op.resourceId || record.resourceRevision !== op.resourceRevision || record.configurationRevision !== op.hostConfigurationHash) return [];
       const live = this.lives.get(record.id);
       let canStop = false;
       if (live && record.status === 'running' && !record.stopRequestedAt) {
@@ -401,7 +402,7 @@ export class LakeExecution {
         owner.store.get("commandExecutions", executionId)
       )
         throw new HttpError(409, "原 Shell 操作不能重新派发");
-      if(owner.store.list<CommandRecord>('commandExecutions').some(prior => prior.sessionId === actor.sessionId && prior.taskId === actor.taskId && prior.generation === actor.generation && prior.commandHash === digest(plan.command) && prior.stopRequestedAt))
+      if(owner.store.list<CommandRecord>('commandExecutions').some(prior => prior.sessionId === actor.sessionId && prior.taskId === actor.taskId && prior.generation === actor.generation && prior.resourceId === plan.resource.id && prior.commandHash === digest(plan.command) && prior.stopRequestedAt))
         throw new HttpError(409, '用户已终止此命令；本轮不得自动重试，请等待新的用户要求');
       const record: CommandRecord = {
         command: owner.scrub(plan.command),

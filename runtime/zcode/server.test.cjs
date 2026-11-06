@@ -1744,6 +1744,18 @@ test('Mini Box interrupts only its exact live SDK command and rejects stale or f
  await f.api(`/api/sessions/${session}/executions/${command.id}/interrupt`,'POST',{generation:command.generation},409);
  const snapshot=await f.api(`/api/sessions/${session}/snapshot`);assert.equal(snapshot.commandExecutions.find(row=>row.id===command.id).canStop,false);
  assert.notEqual(snapshot.superagent.task.acceptanceState,'pass');
+ // The stop fence is command + task generation + resource, not command text
+ // alone. A separate target must remain available in the same task.
+ const original=f.app.store.require('resources',stopped.resourceId),other={...original,id:'independent-local-target'};
+ f.app.store.put('resources',other.id,other);
+ let dispatched=0;
+ const base={run:async()=>{dispatched++;return {status:'completed',exitCode:0,stdout:{text:'independent',bytes:11,truncated:false},stderr:{text:'',bytes:0,truncated:false},startedAt:new Date(),completedAt:new Date(),durationMs:0};}};
+ const actor={sessionId:session,taskId:stopped.taskId,workerId:stopped.workerId,generation:stopped.generation,guard(){}};
+ const plan=resource=>({resource,command:stopped.command,revision:f.app.execution.revision(resource),resourceRevision:1,readOnly:true,policy:'allow',risk:'readonly'});
+ await assert.rejects(()=>f.app.execution.bind(base,actor,plan(original),'stopped-retry').run({}),/用户已终止此命令/);
+ assert.equal(dispatched,0);
+ assert.equal((await f.app.execution.bind(base,actor,plan(other),'independent-target').run({})).exitCode,0);
+ assert.equal(dispatched,1);
 });
 
 test("ordinary Pilot conversation completes in one model request without routing or spawning a Worker", async (t) => {

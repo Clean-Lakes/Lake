@@ -72,7 +72,7 @@ export function WorkerExecutionTree({snapshot,worker,connected=false,onUpdated}:
  const active=model.runs.filter(run=>needsExecutionAttention(run.status)&&run.status!=='failed'&&run.status!=='unknown').length;
  const unresolved=model.runs.filter(run=>nativeRunState(run)==='unknown').length;
  const resourceIds=new Set([...model.taskCards,...snapshot.ai?.cards??[],...model.runs.flatMap(run=>run.cards??[])].filter(isTerminalCommand).flatMap(card=>{
-  const data=card.data as {resource_id?:string;taskId?:string}|undefined;return data?.taskId===task.taskId&&data.resource_id?[data.resource_id]:[];
+  const data=card.data as {resource_id?:string;taskId?:string}|undefined;return data?.taskId===task.taskId&&snapshot.resources.some(resource=>resource.id===data.resource_id&&resource.projectId===snapshot.session.projectId&&['local','ssh'].includes(resource.kind))?[data!.resource_id!]:[];
  }));
  const scope:MiniBoxScope={session:snapshot.session.id,taskId:task.taskId,terminals:snapshot.terminals??[],executions:snapshot.commandExecutions,startedAt:worker?.createdAt??snapshot.ai?.cards[0]?.at??snapshot.session.createdAt,live:['running','waiting_user','waiting_external','queued'].includes(task.state),waiting:snapshot.ai?.status==='waiting_approval',connected,multiResource:resourceIds.size>1};
  return <ExecutionMiniContext.Provider value={{snapshot,scope,onUpdated}}><section className="worker-execution-tree" aria-label="任务执行过程" data-worker-id={identity}>
