@@ -30,7 +30,6 @@ export function workerExecutionModel(snapshot:SessionSnapshot):WorkerExecutionMo
  for(const resource of catalog){if(byResource.has(resource.id))ambiguous.add(resource.id);else byResource.set(resource.id,resource)}
  for(const id of ambiguous)byResource.delete(id);
  const raw=projectResourceTree(snapshot.session.projectId,snapshot.resourceTree??[],catalog);
- const byNode=new Map(raw.map(node=>[node.id,node]));
  const ownerNodes=new Map<string,ResourceTreeNode>();
  for(const node of [...raw].sort(compareTreeNodes))if(node.kind==='resource'&&node.resourceId&&byResource.has(node.resourceId)&&!ownerNodes.has(node.resourceId))ownerNodes.set(node.resourceId,node);
  const resourceRuns=new Map<string,AgentRun[]>(),resourceCards=new Map<string,AICard[]>();
@@ -55,35 +54,14 @@ export function workerExecutionModel(snapshot:SessionSnapshot):WorkerExecutionMo
   else result.taskRuns.push(run);
  }
  const used=new Set([...resourceRuns.keys(),...resourceCards.keys()]);
- const needed=new Set<string>();
- const safeParent=(node:ResourceTreeNode):string|null=>{
-  const seen=new Set([node.id]);let parent=node.parentId;
-  while(parent){const candidate=byNode.get(parent);if(!candidate||candidate.kind!=='folder'||seen.has(parent))return null;seen.add(parent);parent=candidate.parentId}
-  return node.parentId;
- };
- // Cross-resource children stay a single task-level identity, but every call
- // can still name its exact existing directory path, including unused peers.
- for(const [resourceId,leaf] of ownerNodes){
-  const names=[byResource.get(resourceId)!.name];let parent=safeParent(leaf);
-  while(parent){const folder=byNode.get(parent)!;names.unshift(folder.name);parent=safeParent(folder)}
-  result.resourcePaths.set(resourceId,names.join(' / '));
+ // Cross-resource calls retain exact resource identities while displaying only names.
+ for(const [resourceId] of ownerNodes)result.resourcePaths.set(resourceId,byResource.get(resourceId)!.name);
+ for(const [resourceId,node] of ownerNodes){
+  if(!used.has(resourceId))continue;
+  const resource=byResource.get(resourceId)!;
+  const runs=resourceRuns.get(resourceId)??[],cards=resourceCards.get(resourceId)??[];
+  result.resources.push({id:node.id,name:resource.name,path:resource.name,kind:'resource',resource,children:[],runs,cards,state:executionState([...runs.map(nativeRunState),...cards.map(card=>card.status)])});
  }
- for(const resourceId of used){
-  const leaf=ownerNodes.get(resourceId);if(!leaf)continue;
-  needed.add(leaf.id);let parent=safeParent(leaf);
-  while(parent){needed.add(parent);parent=safeParent(byNode.get(parent)!)}
- }
- const build=(parent:string|null,path:string[],seen:Set<string>):WorkerExecutionNode[]=>raw.filter(node=>needed.has(node.id)&&safeParent(node)===parent).sort(compareTreeNodes).flatMap(node=>{
-  if(seen.has(node.id)||node.kind==='resource'&&ownerNodes.get(node.resourceId??'')?.id!==node.id)return [];
-  const resource=node.kind==='resource'?byResource.get(node.resourceId??''):undefined;
-  const name=resource?.name??node.name;
-  const next=[...path,name],children=build(node.id,next,new Set([...seen,node.id]));
-  const runs=resourceRuns.get(resource?.id??'')??[],cards=resourceCards.get(resource?.id??'')??[];
-  if(!children.length&&!runs.length&&!cards.length)return [];
-  if(resource)result.resourcePaths.set(resource.id,next.join(' / '));
-  return [{id:node.id,name,path:next.join(' / '),kind:node.kind,resource,children,runs,cards,state:executionState([...children.map(child=>child.state),...runs.map(nativeRunState),...cards.map(card=>card.status)])}];
- });
- result.resources=build(null,[],new Set());
  return result;
 }
 

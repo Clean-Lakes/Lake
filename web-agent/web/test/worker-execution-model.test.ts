@@ -13,14 +13,15 @@ function snapshot(runs:AgentRun[],cards:AICard[]=[],tree:ResourceTreeNode[]=[fol
 }
 const flatten=(nodes:ReturnType<typeof workerExecutionModel>['resources']):ReturnType<typeof workerExecutionModel>['resources']=>nodes.flatMap(node=>[node,...flatten(node.children)]);
 
-test('native child belongs to its exact task and retains the existing nested directory path',()=>{
+test('native child appears under its resource without directory levels',()=>{
  const model=workerExecutionModel(snapshot([run('one',['a'],[call('c','a')])]));
- assert.equal(model.resources[0]?.name,'生产环境');
- assert.equal(model.resources[0]?.children[0]?.name,'京东云');
- const node=flatten(model.resources).find(node=>node.resource?.id==='a');
+ assert.equal(model.resources.length,1);
+ const node=model.resources[0];
+ assert.equal(node?.name,'同名服务器');
+ assert.equal(node?.resource?.id,'a');
+ assert.deepEqual(node?.children,[]);
  assert.equal(node?.runs[0]?.id,'one');
- assert.equal(model.resourcePaths.get('a'),'生产环境 / 京东云 / 同名服务器');
- assert.equal(flatten(model.resources).filter(node=>node.resource).length,1);
+ assert.equal(model.resourcePaths.get('a'),'同名服务器');
 });
 test('same display names never merge two resources or infer ownership from model arguments',()=>{
  const guessed={...call('guess'),data:{arguments:{asset_ref:'a'},target:'同名服务器'}};
@@ -28,12 +29,12 @@ test('same display names never merge two resources or infer ownership from model
  assert.equal(flatten(model.resources).filter(node=>node.resource).length,2);
  assert.deepEqual(model.taskCards.map(card=>card.id),['guess']);
 });
-test('a cross-resource child is retained once at task level and calls retain full resource paths',()=>{
+test('a cross-resource child is retained once at task level and calls display resource names',()=>{
  const model=workerExecutionModel(snapshot([run('compare',['a','b'],[call('ca','a'),call('cb','b')])]));
  assert.deepEqual(model.taskRuns.map(run=>run.id),['compare']);
  assert.equal(flatten(model.resources).flatMap(node=>node.runs).length,0);
- assert.equal(model.resourcePaths.get('a'),'生产环境 / 京东云 / 同名服务器');
- assert.equal(model.resourcePaths.get('b'),'生产环境 / 同名服务器');
+ assert.equal(model.resourcePaths.get('a'),'同名服务器');
+ assert.equal(model.resourcePaths.get('b'),'同名服务器');
 });
 test('unknown, missing and conflicting resource attribution remains task-level',()=>{
  const model=workerExecutionModel(snapshot([run('unknown',['gone']),run('none',[]),run('conflict',['a'],[call('actual','b')])]));
@@ -59,11 +60,11 @@ test('malformed cycles and missing folders never hide a real resource execution'
  const model=workerExecutionModel(snapshot([run('one',['a']),run('two',['b'])],[],[folder('x','循环X','y'),folder('y','循环Y','x'),leaf('a','x'),leaf('b','missing')]));
  assert.deepEqual(flatten(model.resources).flatMap(node=>node.runs.map(run=>run.id)).sort(),['one','two']);
 });
-test('completed child with an unknown business effect keeps its resource and ancestor directories open for attention',()=>{
+test('completed child with an unknown business effect keeps its resource open for attention',()=>{
  const child=run('one',['a'],[{...call('unknown-write','a'),status:'unknown'},call('later-read','a')]);
  const model=workerExecutionModel(snapshot([child]));
  assert.equal(nativeRunState(child),'unknown');
- assert.ok(flatten(model.resources).every(node=>node.state==='unknown'),'the unresolved effect propagates through every actual ancestor');
+ assert.equal(model.resources[0]?.state,'unknown');
  assert.equal(nativeRunState(run('settled',['a'],[{...call('old-read','a'),status:'failed'},call('new-read','a')])),'completed','a settled diagnostic failure alone is not an unknown mutation');
  assert.equal(workerExecutionModel(snapshot([run('clean',['a'],[call('success','a')])])).resources[0]?.state,'completed');
 });
