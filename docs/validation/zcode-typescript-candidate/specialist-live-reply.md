@@ -43,6 +43,14 @@ Ego Browser 使用独立临时 Home、真实应用构建和本地模型协议夹
 
 ![深色窄窗口结束总结](specialist-live-reply/final-dark-narrow.png)
 
+## Lake Dev 安装与原生复核
+
+- 安装并测试的源码 SHA：`635f6b5a41be8c72c334105666425da4179a4d86`，构建时工作区干净。
+- 通过 `scripts/build_lake_desktop.sh --dev --ts-candidate --install` 构建/安装；固定签名身份、`codesign --verify --deep --strict` 和实际后端 SHA256 均通过，Bundle ID 为 `com.cleanlakes.lake.desktop.dev`，后端为 TypeScript。
+- 在 Lake Dev 原生窗口进入现有数据库专员频道，已确认最后一次执行呈现完整结果、运行中间播报收拢、任务分隔线保留。没有发送新消息或重跑业务检查；现有缺少 SDK 来源绑定的历史记录保留原文。
+- Dev 原有 144 个资源、4 个专员均保留，运行/排队 Worker 为 0。安装前后 47 条 canonical 目标、尝试、操作、验收与交付记录的整行哈希一致。
+- 安装前已停止 Dev 内核并保存私有 Home/应用备份；正式版 Lake 与正式 Home 未改动。
+
 ## 限制
 
 完整 ZCode 产品功能迁移与正式版切换沿用现有门禁，本次没有发布或安装正式版，也没有重跑用户的 MySQL 比较任务。日常 develop PR 不自动运行 CI，上述结果均为本地验证。
