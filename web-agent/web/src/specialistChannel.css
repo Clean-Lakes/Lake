@@ -1,11 +1,11 @@
 .specialist-channel-entry { display:flex; flex-direction:column; gap:4px; width:100%; min-width:0; }
 .specialist-channel-entry:has(.ai-role-user) { align-items:flex-end; }
+.specialist-task-divider { display:flex; align-items:center; align-self:flex-start; gap:12px; width:100%; max-width:var(--reply-body-width,720px); margin:12px 0 16px; color:var(--text-secondary); font-size:12px; line-height:1.5; }
+.specialist-task-divider > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.specialist-task-divider::after { content:""; flex:1 0 32px; border-top:1px solid var(--border); }
 .specialist-task-select { display:flex; flex-direction:column; gap:7px; min-width:0; margin-bottom:18px; color:var(--text-muted); font-size:12px; }
 .specialist-task-select > .app-select { min-width:0; width:100%; }
 .specialist-task-select .app-select-trigger { width:100%; }
 .specialist-channel-active { width:100%; min-width:0; max-width:100%; }
 .specialist-task-controls { border:0; padding:0; margin:0; min-width:0; }
 .specialist-task-controls:empty { display:none; }
-.pilot-dispatch-text { white-space:pre-wrap; overflow-wrap:anywhere; }
-.pilot-dispatch-recipient { border:0; font-family:inherit; font-weight:inherit; cursor:pointer; }
-.pilot-dispatch-recipient:hover { background:var(--surface-selected); }

@@ -28,14 +28,21 @@ export function SpecialistTaskSelect({workers,sessionId,onTask}:{workers:SuperWo
  return <label className="specialist-task-select"><span>任务记录</span><AppSelect aria-label="查看专员任务" value={sessionId} title={workers.find(worker=>worker.sessionId===sessionId)?.task.title} onChange={event=>onTask(event.target.value)}>{workers.map(worker=><option key={worker.id} value={worker.sessionId}>{worker.task.title} · {superTaskPresentation(worker.task).label}</option>)}</AppSelect></label>;
 }
 
-export function SpecialistChannelEntries({entries,resources,activeSources,activeSnapshots}:{entries:SpecialistChannelEntry[];resources:SessionSnapshot['resources'];activeSources?:ReadonlySet<string>;activeSnapshots?:ReadonlyMap<string,SessionSnapshot>}){
+export function SpecialistChannelEntries({entries,resources,workers=[],activeSources,activeSnapshots}:{entries:SpecialistChannelEntry[];resources:SessionSnapshot['resources'];workers?:SuperWorker[];activeSources?:ReadonlySet<string>;activeSnapshots?:ReadonlyMap<string,SessionSnapshot>}){
  const forwarded=new Set(entries.flatMap(entry=>entry.message?.dispatch?[`${entry.sourceSessionId}\0${entry.message.dispatch.sourceMessageId}`]:[]));
- return <>{entries.filter(entry=>!isCompactionFallbackEntry(entry)&&!(entry.message?.role==='user'&&forwarded.has(`${entry.sourceSessionId}\0${entry.message.id}`))).map(entry=>{
+ const byTask=new Map(workers.map(worker=>[worker.task.taskId,worker])),bySession=new Map(workers.map(worker=>[worker.sessionId,worker]));
+ let previousTask:string|undefined;
+ return <>{entries.filter(entry=>!entry.message?.dispatch&&!isCompactionFallbackEntry(entry)&&!(entry.message?.role==='user'&&forwarded.has(`${entry.sourceSessionId}\0${entry.message.id}`))).map(entry=>{
   const active=activeSnapshots?.get(entry.sourceSessionId);
+  const taskId=entry.taskId??bySession.get(entry.sourceSessionId)?.task.taskId;
+  const startsTask=!!taskId&&taskId!==previousTask;
+  if(taskId)previousTask=taskId;
+  const taskTitle=taskId?byTask.get(taskId)?.task.title??active?.superagent?.task.title??'任务记录':'';
   // Keep the channel key, but plan metadata refers to the original source ID.
   // Project before Markdown so neither live nor saved plans mount their body.
   const projected=conversationPlanEntry({id:entry.card?.id??entry.message?.id??entry.id,at:entry.createdAt,card:entry.card,message:entry.message},{planMode:active?.conversationMode==='plan',live:active?.ai?.status==='running',currentPlanId:active?.ai?.proposedPlan?.id});
-  return <div className="specialist-channel-entry" key={entry.id} data-channel-entry={entry.id} data-source-session={entry.sourceSessionId} data-task-id={entry.taskId}>
+  return <div className="specialist-channel-entry" key={entry.id} data-channel-entry={entry.id} data-source-session={entry.sourceSessionId} data-task-id={taskId}>
+   {startsTask&&<div className="specialist-task-divider" role="separator" aria-label={`任务：${taskTitle}`} data-task-divider={taskId}><span title={taskTitle}>{taskTitle}</span></div>}
    {projected.message?<TranscriptMessage message={projected.message} sessionId={entry.sourceSessionId} resources={resources} hideIdentity/>:projected.card?<Card card={projected.card} streaming={activeSources?projected.card.status==='running'&&activeSources.has(entry.sourceSessionId):undefined}/>:null}
   </div>;
  })}</>;
@@ -93,7 +100,7 @@ export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,
  return <ObjectReferencesProvider resources={snapshot.resources}><div className="ai-transcript specialist-channel" data-reply-avatar="hidden">
   {!!cursor.current&&<button type="button" className="button secondary" disabled={loading} onClick={()=>void loadOlder()}>{loading?'正在加载…':'加载更早记录'}</button>}
   {error&&<p className="pilot-workspace-error" role="alert">{error}</p>}
-  <SpecialistChannelEntries entries={entries} resources={snapshot.resources} activeSources={new Set(connected?page?.active.map(active=>active.session.id)??[]:[])} activeSnapshots={new Map(page?.active.map(active=>[active.session.id,active])??[])}/>
+  <SpecialistChannelEntries entries={entries} resources={snapshot.resources} workers={page?.workers} activeSources={new Set(connected?page?.active.map(active=>active.session.id)??[]:[])} activeSnapshots={new Map(page?.active.map(active=>[active.session.id,active])??[])}/>
   {(page?.routing||admitting||!!page?.queued)&&<div className="reply-duration turn-status is-live is-thinking without-avatar" role="status" aria-label="专员正在处理消息"><LoadingWaves/><StatusText active>正在安排工作</StatusText></div>}
   {page?.active.map(active=>{
    const task=active.superagent?.task;
