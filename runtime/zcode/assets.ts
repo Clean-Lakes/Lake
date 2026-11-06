@@ -9,6 +9,8 @@ type AssetSource = {
   resources: readonly Resource[];
   resourceRevision?: (resource: Resource) => number;
   sshRevision?: (resource: Resource) => string;
+  executionRevision?:(resource:Resource)=>string;
+  databaseRevision?: (resource:Resource)=>string;
 };
 type AssetEntry = Pick<Resource, "id" | "name" | "kind" | "status"> & {
   asset_ref: string;
@@ -16,6 +18,7 @@ type AssetEntry = Pick<Resource, "id" | "name" | "kind" | "status"> & {
   configuration_revision?: string;
   configuration_state?: "unavailable";
   connectionState?: string;
+  driver?:string;database?:string;
 };
 type Cursor = { version: 1; scope: string; catalog: string; after: string };
 
@@ -89,6 +92,11 @@ export function listProjectAssets(source: AssetSource, input: AssetQuery = {}) {
         // Never include raw errors: they can contain private credential paths.
         entry.configuration_state = "unavailable";
       }
+    }
+    if(resource.kind==='local'&&source.executionRevision)entry.configuration_revision=source.executionRevision(resource);
+    if(resource.kind==='database'&&resource.settings?.driver==='mysql'){
+      entry.driver='mysql';if(typeof resource.settings.database==='string')entry.database=resource.settings.database;
+      if(resource.status==='available'&&source.databaseRevision)try{entry.configuration_revision=source.databaseRevision(resource);entry.connectionState='configured; not a connectivity or health observation';}catch{entry.configuration_state='unavailable';}
     }
     assets.push(entry);
     if (Buffer.byteLength(JSON.stringify(page())) > assetPageBytes) {

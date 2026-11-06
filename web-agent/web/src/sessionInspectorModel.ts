@@ -1,4 +1,4 @@
-import type {SessionSnapshot,SRETask} from '../../shared/contracts';
+import type {AICard,SessionSnapshot,SRETask,SuperTask} from '../../shared/contracts';
 import type {InspectorSelection} from './SessionInspectorContext';
 import {pilotIslandModel} from './pilotIslandModel';
 
@@ -50,4 +50,11 @@ export function resolvedInspectorSelection(snapshot:SessionSnapshot,selection:In
  if(!selection.followLatest)return selection;
  const current=latestInspectorSelection(snapshot,selection.tab);
  return selection.automatic===undefined?current:{...current,automatic:selection.automatic};
+}
+
+/** Bind a history disclosure to task identities from that turn's host records. */
+export function canonicalGoalForExecution(snapshot:SessionSnapshot,cards:AICard[],tasks:SuperTask[]=[]):string|undefined{
+ const ids=new Set(cards.flatMap(card=>{const id=(card.data as {taskId?:unknown}|undefined)?.taskId;return typeof id==='string'?[id]:[];}));
+ const candidates=[...tasks,...(snapshot.superagent?[snapshot.superagent.task]:[])].filter(task=>task.sessionId===snapshot.session.id&&(!task.projectId||task.projectId===snapshot.session.projectId)&&ids.has(task.taskId));
+ const found=[...new Set(candidates.map(task=>task.taskId))];return found.length===1?found[0]:undefined;
 }

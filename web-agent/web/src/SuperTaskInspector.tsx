@@ -16,7 +16,7 @@ export function SuperTaskInspector({task,goal,worker,plan=false,connected=false,
  return <section className="super-task-inspector" aria-label={plan?'任务计划':'当前任务执行'}>
   {!controlsOnly&&!hideHeading&&<><div className="super-task-heading"><Glyph name="document" size={17}/><strong>{task.title}</strong></div>
   <div className="super-task-state"><span data-tone={state.tone}>{state.label}</span><small>{accepted?'验收通过':task.acceptanceState==='fail'?'验收未通过':'尚未通过目标验收'}</small></div>
-  {owner&&<p className="worker-task-origin"><SuperRoleAvatar name={owner.roleName} roleId={owner.roleId} size={16} motion="still"/>任务来源 · {owner.roleName}</p>}
+  {owner&&<p className="worker-task-origin"><SuperRoleAvatar name={owner.roleName} roleId={owner.roleId} pilot={owner.roleId==='pilot:'+task.projectId} size={16} motion="still"/>任务来源 · {owner.roleName}</p>}
   {task.summary&&['paused','blocked','failed'].includes(task.state)&&<p className="inspector-empty">{task.summary}</p>}</>}
   {!summaryOnly&&!controlsOnly&&(!items.length?<p className="inspector-empty">计划生成后会显示在这里。</p>:<ol className="super-task-steps">{items.map((item,index)=><li key={item.id} data-state={item.status}>
    <span className="super-step-number">{item.status==='completed'?<Glyph name="check" size={12}/>:index+1}</span><div><strong>{item.title}</strong><small>{plan?'':stepLabels[item.status]??'待核实'}</small>{item.reason&&<p>{item.reason}</p>}</div>

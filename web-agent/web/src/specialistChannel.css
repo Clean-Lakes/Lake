@@ -9,3 +9,6 @@
 .specialist-channel-active { width:100%; min-width:0; max-width:100%; }
 .specialist-task-controls { border:0; padding:0; margin:0; min-width:0; }
 .specialist-task-controls:empty { display:none; }
+.specialist-reply-content { min-width:0; max-width:100%; }
+.specialist-live-reply { display:flex; align-items:flex-start; gap:10px; max-width:var(--reply-body-width,720px); padding:8px 0; color:var(--text-secondary); font-size:14px; line-height:1.75; overflow-wrap:anywhere; }
+.specialist-live-reply > .turn-status-mark { flex-shrink:0; margin-top:3px; }

@@ -8,9 +8,9 @@ export type RouterTask = { taskId: string; projectId: string; roleId: string; se
   state: string; acceptanceState: string; revision: number; hash: string; updatedAt: string; createdAt?: string;
   summary?: string; archived?: boolean; resourceIds?: string[]; pendingApproval: boolean; unresolvedOperations: number;
   blockers?: { kind?: string; detail: string; observedAt?: string; recordUpdatedAt?: string; capabilityRevision?: string }[] };
-export type RouterResource = { id: string; projectId: string; name: string; kind: string; status: string; revision: number };
+export type RouterResource = { id: string; projectId: string; name: string; kind: string; status: string; revision: number;driver?:string };
 export type RouterContextInput = { projectId: string; events: RouterEvent[]; messages: RouterMessage[]; tasks: RouterTask[];
-  resources: RouterResource[]; adapters: { ssh: boolean; extensions: boolean }; now: string; maxBytes?: number };
+  resources: RouterResource[]; agentTools?:string[]; adapters: { ssh: boolean; extensions: boolean;mysql?:boolean }; now: string; maxBytes?: number };
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 function clip(value: string, maximum: number) {
   const bytes = Buffer.from(value); let end = Math.min(bytes.length, maximum);
@@ -80,7 +80,8 @@ export function buildRouterContext(source: RouterContextInput) {
         state: task.state, acceptanceState: task.acceptanceState, archived: task.archived, updatedAt: task.updatedAt,
         basis: explicit.has(task.taskId) ? "explicit_task" : recentTasks.has(task.taskId) ? "recent_dialogue" : roles.has(task.roleId) ? "source_channel" : "recent_project_task" })),
       capabilities: { observedAt: source.now, revision: capabilityRevision,
-        workerTools: ["list_assets", "list_project_files", ...(source.adapters.ssh ? ["inspect_host"] : []), ...(source.adapters.extensions ? ["list_mcp_servers", "list_mcp_tools", "call_mcp_tool", "load_skill"] : [])],
+        rolesShareTools:true,workerTools: [...(source.agentTools??[]),"recall_task_context","recall_memory","list_assets", "list_project_files", ...(source.adapters.ssh ? ["inspect_host"] : []),...(source.adapters.mysql?["list_db_objects","db_table_ddl","read_db_table"]:[]), ...(source.adapters.extensions ? ["list_mcp_servers", "list_mcp_tools", "call_mcp_tool", "load_skill"] : [])],
+        mysql:{adapterRegistered:!!source.adapters.mysql,configuredResources:resources.filter(resource=>resource.kind==='database'&&resource.driver==='mysql'&&resource.status==='available').length,rawSQL:false},
         ssh: { adapterRegistered: source.adapters.ssh, configuredResources: resources.filter((resource) => resource.kind === "ssh" && resource.status === "available").length,
           supportedChecks: source.adapters.ssh ? ["system", "disks", "processes"] : [] },
         relevantResources: relevantResources.slice(0, resourceCount).map(({ id, name, kind, status, revision }) => ({ id, name, kind, configurationStatus: status, revision })),

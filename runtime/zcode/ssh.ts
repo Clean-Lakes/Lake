@@ -30,7 +30,7 @@ export class LakeSSH {
  private peerKeys=new WeakMap<Client,string>();
  private secrets=new Set<string>();
  private closed=false;
- constructor(readonly store:LakeStore,readonly security:LakeSecurity,readonly notify:(session:string)=>void,readonly redact:(value:string)=>string){}
+ constructor(readonly store:LakeStore,readonly security:LakeSecurity,readonly notify:(session:string)=>void,readonly redact:(value:string)=>string,readonly registerSecret?:(value:string)=>void){}
  private privateFile(value:string,maximum=1024*1024) {
   const root=join(this.store.home,'secrets'),path=isAbsolute(value)?value:resolve(root,value);
   const parent=lstatSync(root),info=lstatSync(path);
@@ -132,7 +132,7 @@ export class LakeSSH {
   this.security.check();if(this.closed||signal.aborted)throw new HttpError(409,'SSH 连接已取消');
   if(resource.kind!=='ssh'||resource.projectId!==this.store.session(session).projectId||resource.status!=='available')throw new HttpError(403,'SSH 资源不在本项目或连接配置不可用');
   const config=this.configuration(resource.ssh),revision=this.revision(resource),pins=this.pins(config),secret=config.credentialRef?readFileSync(this.privateFile(config.credentialRef,4096),'utf8'):undefined;
-  if(secret){if(/[\0\r\n]/.test(secret))throw new HttpError(409,'SSH 密码或口令文件无效');this.secrets.add(secret);}
+  if(secret){if(/[\0\r\n]/.test(secret))throw new HttpError(409,'SSH 密码或口令文件无效');this.secrets.add(secret);this.registerSecret?.(secret);}
   const conn=new Client();this.clients.add(conn);
   return new Promise<Client>((resolve,reject)=>{
    let ready=false,ended=false,peer='';
@@ -146,9 +146,11 @@ export class LakeSSH {
    conn.on('close',()=>{this.clients.delete(conn);signal.removeEventListener('abort',abort);if(!ready)fail(new HttpError(502,'SSH 在认证完成前断开'));});
    conn.once('ready',()=>{try{this.security.check();if(signal.aborted||this.revision(this.store.require<Resource>('resources',resource.id))!==revision)throw new HttpError(409,'SSH 配置已变化');clearTimeout(timer);ready=true;this.peerKeys.set(conn,peer);resolve(conn);}catch(error){fail(error);}});
    const algorithms=pins.length?{serverHostKey:[...new Set(pins.flatMap(pin=>pin.algorithm==='ssh-rsa'?['rsa-sha2-512','rsa-sha2-256','ssh-rsa']:[pin.algorithm]))] as any}:undefined;
+   const privateKey=config.authMethod==='key'?readFileSync(this.privateFile(config.identityFile!)):undefined;
+   if(privateKey){this.secrets.add(privateKey.toString('utf8'));this.registerSecret?.(privateKey.toString('utf8'));}
    conn.connect({host:config.host,port:config.port,username:config.username,readyTimeout:135000,keepaliveInterval:15000,keepaliveCountMax:2,algorithms,
     authHandler:config.authMethod==='password'?['password']:['publickey'],password:config.authMethod==='password'?secret:undefined,
-    privateKey:config.authMethod==='key'?readFileSync(this.privateFile(config.identityFile!)):undefined,passphrase:config.authMethod==='key'?secret:undefined,
+    privateKey,passphrase:config.authMethod==='key'?secret:undefined,
     hostVerifier:(key:Buffer,callback:(accepted:boolean)=>void)=>{clearTimeout(timer);void Promise.resolve().then(()=>this.authorize(session,resource,key,verificationSignal)).then(accepted=>{
      if(!accepted){fail(new HttpError(403,'已取消 SSH 服务器指纹确认'));callback(false);return;}
      if(signal.aborted||this.revision(this.store.require<Resource>('resources',resource.id))!==revision){fail(new HttpError(409,'SSH 配置已变化'));callback(false);return;}

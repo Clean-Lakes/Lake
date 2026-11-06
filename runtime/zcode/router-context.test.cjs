@@ -15,6 +15,17 @@ function parse(result) {
   return { events: JSON.parse(lines[1]), tasks: JSON.parse(lines[3]), context: JSON.parse(lines[5]) };
 }
 
+test("current MySQL capability names real fixed tools and counts only configured MySQL resources", () => {
+  const value=parse(buildRouterContext(source({adapters:{ssh:true,extensions:false,mysql:true},resources:[
+    {id:'mysql',projectId:'project',name:'MySQL',kind:'database',driver:'mysql',status:'available',revision:1},
+    {id:'postgres',projectId:'project',name:'PostgreSQL',kind:'database',driver:'postgres',status:'available',revision:1},
+    {id:'missing',projectId:'project',name:'Missing',kind:'database',driver:'mysql',status:'unavailable',revision:1}
+  ]}))).context.capabilities;
+  assert.deepEqual(value.mysql,{adapterRegistered:true,configuredResources:1,rawSQL:false});
+  for(const name of ['list_db_objects','db_table_ddl','read_db_table'])assert.ok(value.workerTools.includes(name));
+  assert.ok(!value.workerTools.includes('execute_sql'));
+});
+
 test("retry context includes the delivered report, exact original task and current SSH capability", () => {
   const result = buildRouterContext(source({ tasks: [task({ blockers: [{ detail: "当时未提供服务器读取工具", recordUpdatedAt: when(2), capabilityRevision: "old-runtime" }] }), task({ taskId: "newer-unrelated", title: "另一个检查", updatedAt: when(9), resourceIds: [] })] }));
   const value = parse(result);

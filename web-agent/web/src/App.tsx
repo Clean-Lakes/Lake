@@ -748,20 +748,20 @@ function AppContent() {
   const inspectRoleTask=async(target:string,selectedWorker?:SuperWorker)=>{
     const expected=selectedWorker??roleWorkers.find(worker=>worker.sessionId===target);
     if(!expected||expected.sessionId!==target)return;
-    if(roleInspection?.session.id===target&&inspector.selection?.sessionId===target&&inspector.selection.tab==='execution')return;
+    if(roleInspection?.session.id===target&&roleInspection.superagent?.task.taskId===expected.task.taskId&&inspector.selection?.sessionId===target&&inspector.selection.tab==='execution')return;
     const request=++roleInspectionRequest.current;
-    try{const next=await api.snapshot(target);if(request!==roleInspectionRequest.current)return;
-      if(next.session.projectId!==activeSnapshot?.session.projectId||next.session.workspaceRole!=='worker'||next.superagent?.task.taskId!==expected.task.taskId||next.superagent?.roleId!==expected.roleId)throw new Error('任务不属于当前项目或执行身份已变化');
-      setRoleInspection(next);inspector.open(latestInspectorSelection(next,'execution'));
+    try{const next=await api.snapshot(target,undefined,expected.task.taskId);if(request!==roleInspectionRequest.current)return;
+      if(next.session.projectId!==activeSnapshot?.session.projectId||(next.session.workspaceRole!=='worker'&&!(next.session.workspaceRole==='router'&&expected.roleId==='pilot:'+next.session.projectId))||next.superagent?.task.taskId!==expected.task.taskId||next.superagent?.roleId!==expected.roleId)throw new Error('任务不属于当前项目或执行身份已变化');
+      setRoleInspection(next);inspector.open({...latestInspectorSelection(next,'execution'),followLatest:false});
     }catch(error){if(request===roleInspectionRequest.current)handleFailure(error);}
   };
   useEffect(()=>{
     if(!roleInspection||inspector.selection?.sessionId!==roleInspection.session.id)return;
     const target=roleInspection.session.id,request=roleInspectionRequest.current,controller=new AbortController();let busy=false;
-    const refresh=async()=>{if(busy)return;busy=true;try{const next=await api.snapshot(target,controller.signal);if(request===roleInspectionRequest.current)setRoleInspection(next);}catch(error){if(!controller.signal.aborted&&request===roleInspectionRequest.current)handleFailure(error);}finally{busy=false;}};
+    const refresh=async()=>{if(busy)return;busy=true;try{const next=await api.snapshot(target,controller.signal,roleInspection.superagent?.task.taskId);if(request===roleInspectionRequest.current)setRoleInspection(next);}catch(error){if(!controller.signal.aborted&&request===roleInspectionRequest.current)handleFailure(error);}finally{busy=false;}};
     const timer=window.setInterval(()=>void refresh(),1000);
     return()=>{controller.abort();window.clearInterval(timer);};
-  },[sessionId,roleInspection?.session.id,inspector.selection?.sessionId]);
+  },[sessionId,roleInspection?.session.id,roleInspection?.superagent?.task.taskId,inspector.selection?.sessionId]);
   const inspectorOpen=!!inspectedSnapshot&&inspector.selection?.sessionId===inspectedSnapshot.session.id&&!selectedResource&&!isPlansPage;
   useInspectorWindow(inspectorOpen);
   // The DOM now has its final pane classes. Apply the shared width budget
@@ -776,8 +776,9 @@ function AppContent() {
       return;
     }
     if(!inspectedSnapshot||!inspectorAvailable)return;
+    if(roleInspection?.session.id===sessionId){roleInspectionRequest.current++;setRoleInspection(null);}
     const tab=inspector.lastSelection?.sessionId===inspectedSnapshot.session.id?inspector.lastSelection.tab:headerPilot?'plan':'execution';
-    inspector.open(latestInspectorSelection(inspectedSnapshot,tab));
+    inspector.open(latestInspectorSelection(activeSnapshot??inspectedSnapshot,tab));
   };
   const selectedProjectId = selectedResource?.projectId ?? selectedSession?.projectId;
   useEffect(() => {
@@ -823,7 +824,6 @@ function AppContent() {
   const historyPending=historyVisibleId!==sessionId&&!visibleSessionError;
   const hasMessageDraft = !!(messageDraft.trim() || mentionRefs.length || imageDraft.length || fileDraft.length);
   const sendFeedback=messageSubmission?.session===sessionId?(messageSubmission.accepted?"已发送，正在更新":"正在发送"):null;
-  const composerStop=turnActive&&!hasMessageDraft&&!sendFeedback;
   const queueMode = activeSnapshot?.session.workspaceRole!=='worker'&&activeSnapshot?.session.workspaceRole!=='role'&&(turnActive || (activeSnapshot?.messageQueue?.items.length ?? 0)>0);
   const messageBlocked = selectedSession?.status === "investigating" || bootstrap?.aiRuntime === "go" && activeSnapshot?.ai?.status === "waiting_approval";
   useEffect(() => {
@@ -874,6 +874,17 @@ function AppContent() {
   }, []);
   const pilotProjectId=sidebarProjectId??selectedProjectId??catalog?.projects[0]?.id;
   const pilotWorkspace=usePilotWorkspace(pilotProjectId,!!bootstrap?.authenticated&&!!catalog);
+  useEffect(()=>{
+    const selected=inspector.selection;if(!selected||selected.sessionId!==sessionId)return;
+    if(!selected.canonicalGoalId||selected.followLatest){if(roleInspection?.session.id===sessionId){roleInspectionRequest.current++;setRoleInspection(null);}return;}
+    if(selected.canonicalGoalId===roleInspection?.superagent?.task.taskId)return;
+    if(selected.canonicalGoalId===activeSnapshot?.superagent?.task.taskId){if(roleInspection){roleInspectionRequest.current++;setRoleInspection(null);}return;}
+    const worker=pilotWorkspace.workspace?.workers.find(worker=>worker.sessionId===sessionId&&worker.task.taskId===selected.canonicalGoalId);
+    if(worker)void inspectRoleTask(sessionId,worker);
+  },[sessionId,inspector.selection?.canonicalGoalId,inspector.selection?.followLatest,pilotWorkspace.workspace?.workers,activeSnapshot?.superagent?.task.taskId]);
+  const pilotWorkActive=bootstrap?.backendRuntime==='typescript'&&!!superPilotActivity(pilotWorkspace.workspace,selectedSession,sessionConnected);
+  const executionStoppable=turnActive||pilotWorkActive;
+  const composerStop=executionStoppable&&!hasMessageDraft&&!sendFeedback;
   const openedPilotProjects=useRef(new Set<string>());
   useEffect(()=>{
     const domain=pilotWorkspace.workspace?.active?pilotWorkspace.workspace.project:null;
@@ -1103,9 +1114,9 @@ function AppContent() {
     return composerResourceIds(mentionRefs, mentionable.map(resource => resource.id));
   }
   async function stopCurrentTurn() {
-    if (!sessionId || !turnActive || stoppingTurn || !sessionConnected) return;
+    if (!sessionId || !executionStoppable || stoppingTurn || !sessionConnected) return;
     setStoppingTurn(true);
-    try { if(activeSnapshot?.session.workspaceRole==='role'){await api.stopSpecialistChannel(sessionId);}else if(activeSnapshot?.superagent){const task=activeSnapshot.superagent.task;await api.aiOperation(sessionId,'workControl',{goalId:task.taskId,command:'cancel',revision:task.revision});}else await api.aiOperation(sessionId, "abort"); await refreshCurrent(); }
+    try { if(activeSnapshot?.session.workspaceRole==='router'&&bootstrap?.backendRuntime==='typescript'){await api.stopSuperWorkspace(activeSnapshot.session.projectId,sessionId);}else if(activeSnapshot?.session.workspaceRole==='role'){await api.stopSpecialistChannel(sessionId);}else if(activeSnapshot?.superagent){const task=activeSnapshot.superagent.task;await api.aiOperation(sessionId,'workControl',{goalId:task.taskId,command:'cancel',revision:task.revision});}else await api.aiOperation(sessionId, "abort"); await refreshCurrent(); }
     catch (error) { handleFailure(error); }
     finally { setStoppingTurn(false); }
   }
@@ -1415,7 +1426,7 @@ function AppContent() {
   const projectList = [...catalog.projects].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const sidebarProject = projectList.find(project => project.id === (sidebarProjectId ?? selectedProjectId)) ?? projectList[0];
   const sessionHeader=!!selectedSession&&!selectedResource&&!isPlansPage;
-  const selectedSuperWorker=pilotWorkspace.workspace?.active?pilotWorkspace.workspace.workers.find(worker=>worker.sessionId===selectedSession?.id):undefined;
+  const selectedSuperWorker=pilotWorkspace.workspace?.active&&selectedSession?.workspaceRole==='worker'?pilotWorkspace.workspace.workers.find(worker=>worker.sessionId===selectedSession?.id):undefined;
   const selectedSuperChannel=pilotWorkspace.workspace?.channels?.find(channel=>channel.sessionId===selectedSession?.id);
   const selectedSuperPilot=pilotWorkspace.workspace?.active&&pilotWorkspace.workspace.project.projectId===selectedSession?.projectId&&pilotWorkspace.workspace.project.routerSessionId===selectedSession?.id;
   const pilotActivityConnected=sessionConnected&&!pilotWorkspace.error;
@@ -1621,10 +1632,10 @@ function AppContent() {
               if (event.key === "Escape") { event.preventDefault(); setMention(null); return; }
             }
             if (isSendKey(event.nativeEvent, sendShortcut)) { event.preventDefault(); event.currentTarget.closest("form")?.requestSubmit(); }
-          }}/><div className="composer-send-actions">{sendFeedback&&<span className="composer-send-feedback" role="status">{sendFeedback}</span>}{turnActive && hasMessageDraft && <button type="button" className="send-button queued-stop-button" aria-label="停止任务" title="停止任务，保留待发送消息" aria-busy={stoppingTurn} disabled={stoppingTurn || !sessionConnected} onClick={() => void stopCurrentTurn()}><Glyph name="stop" size={15}/></button>}<button className={`send-button${composerStop ? " stop-button" : ""}`} type={composerStop ? "button" : "submit"} data-sending={sendFeedback?true:undefined} aria-label={sendFeedback??(composerStop ? "停止任务" : !modelConfigured ? "连接模型" : queueMode ? "加入待发送队列" : "发送消息")} title={sendFeedback??(composerStop ? "停止任务" : !modelConfigured ? "连接模型，保留当前草稿" : `${queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`)} aria-busy={!!sendFeedback||stoppingTurn} onClick={composerStop ? () => void stopCurrentTurn() : undefined} disabled={sendFeedback?true:composerStop ? stoppingTurn || !sessionConnected : !sessionConnected || !!pendingOperation || reasoningSaving.has(sessionId) || modeSaving.has(sessionId) || stoppingTurn || (modelConfigured && (!hasMessageDraft || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)))}><Glyph name={sendFeedback?"loader":composerStop ? "stop" : !modelConfigured ? "plug" : "return"} size={16}/></button></div></div></div><div className="composer-foot"><input ref={attachmentInputRef} className="visually-hidden" type="file" multiple aria-label="选择文件或图片" onChange={event => void attachFiles(event.target.files)}/><button type="button" className="image-attach-button" disabled={!sessionConnected || !!pendingOperation} title="添加任意文件或图片，也可拖入或粘贴文件" aria-label="添加附件" onClick={() => attachmentInputRef.current?.click()}><Glyph name="plus" size={18}/></button>{activeSnapshot?.ai && activeSnapshot.session.workspaceRole!=="role" && activeSnapshot.session.workspaceRole!=="worker" && <button type="button" ref={permissionButtonRef} className="composer-permission-button" aria-label="会话权限" title="会话权限" aria-haspopup="dialog" aria-expanded={permissionsOpen} onClick={() => setPermissionsOpen(current => !current)}><Glyph name="lakePermission" size={16}/><span className="composer-tool-label">权限</span></button>}{activeSnapshot&&canConfigurePlan&&<PlanModeToggle key={sessionId} mode={activeSnapshot.conversationMode} disabled={!sessionConnected||turnActive||!!pendingOperation||reasoningSaving.has(sessionId)||modeSaving.has(sessionId)||!!activeSnapshot.messageQueue?.items.length} onChange={changeConversationMode}/>} {activeSnapshot&&!pilotWorkspace.workspace?.active&&<LakePilotControl key={activeSnapshot.session.projectId} snapshot={activeSnapshot} onUpdated={refreshCurrent} disabled={!sessionConnected||turnActive} disabledReason={!sessionConnected?"连接恢复后可切换 Lake Pilot。":"本轮运行中，结束后可切换 Lake Pilot。"}/> }<div className="composer-status"><div className="model-switch-wrap">
+          }}/><div className="composer-send-actions">{sendFeedback&&<span className="composer-send-feedback" role="status">{sendFeedback}</span>}{executionStoppable && hasMessageDraft && <button type="button" className="send-button queued-stop-button" aria-label="停止任务" title={pilotWorkActive?"停止当前项目的活动任务，保留草稿":"停止任务，保留待发送消息"} aria-busy={stoppingTurn} disabled={stoppingTurn || !sessionConnected} onClick={() => void stopCurrentTurn()}><Glyph name="stop" size={15}/></button>}<button className={`send-button${composerStop ? " stop-button" : ""}`} type={composerStop ? "button" : "submit"} data-sending={sendFeedback?true:undefined} aria-label={sendFeedback??(composerStop ? "停止任务" : !modelConfigured ? "连接模型" : queueMode ? "加入待发送队列" : "发送消息")} title={sendFeedback??(composerStop ? (pilotWorkActive?"停止当前项目的活动任务":"停止任务") : !modelConfigured ? "连接模型，保留当前草稿" : `${queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`)} aria-busy={!!sendFeedback||stoppingTurn} onClick={composerStop ? () => void stopCurrentTurn() : undefined} disabled={sendFeedback?true:composerStop ? stoppingTurn || !sessionConnected : !sessionConnected || !!pendingOperation || reasoningSaving.has(sessionId) || modeSaving.has(sessionId) || stoppingTurn || (modelConfigured && (!hasMessageDraft || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)))}><Glyph name={sendFeedback?"loader":composerStop ? "stop" : !modelConfigured ? "plug" : "return"} size={16}/></button></div></div></div><div className="composer-foot"><input ref={attachmentInputRef} className="visually-hidden" type="file" multiple aria-label="选择文件或图片" onChange={event => void attachFiles(event.target.files)}/><button type="button" className="image-attach-button" disabled={!sessionConnected || !!pendingOperation} title="添加任意文件或图片，也可拖入或粘贴文件" aria-label="添加附件" onClick={() => attachmentInputRef.current?.click()}><Glyph name="plus" size={18}/></button>{activeSnapshot?.ai && activeSnapshot.session.workspaceRole!=="role" && activeSnapshot.session.workspaceRole!=="worker" && <button type="button" ref={permissionButtonRef} className="composer-permission-button" aria-label="会话权限" title="会话权限" aria-haspopup="dialog" aria-expanded={permissionsOpen} onClick={() => setPermissionsOpen(current => !current)}><Glyph name="lakePermission" size={16}/><span className="composer-tool-label">权限</span></button>}{activeSnapshot&&canConfigurePlan&&<PlanModeToggle key={sessionId} mode={activeSnapshot.conversationMode} disabled={!sessionConnected||turnActive||!!pendingOperation||reasoningSaving.has(sessionId)||modeSaving.has(sessionId)||!!activeSnapshot.messageQueue?.items.length} onChange={changeConversationMode}/>} {activeSnapshot&&!pilotWorkspace.workspace?.active&&<LakePilotControl key={activeSnapshot.session.projectId} snapshot={activeSnapshot} onUpdated={refreshCurrent} disabled={!sessionConnected||turnActive} disabledReason={!sessionConnected?"连接恢复后可切换 Lake Pilot。":"本轮运行中，结束后可切换 Lake Pilot。"}/> }<div className="composer-status"><div className="model-switch-wrap">
           <ComposerModelSelect available={modelMenu} modelName={bootstrap?.modelName??null} selection={bootstrap?.modelSelection??undefined} configured={modelConfigured} open={modelMenuOpen} disabled={!!pendingOperation||reasoningSaving.size>0} onOpenChange={open=>{if(open) void openModelMenu();else setModelMenuOpen(false);}} onSelect={model=>void switchModel(model)} onSettings={()=>{setModelMenuOpen(false);void openSettings();}} reasoning={activeSnapshot?.ai ? {session:sessionId,modelId:bootstrap?.modelId,disabled:!sessionConnected || turnActive || !!pendingOperation,disabledReason:!sessionConnected?"连接恢复后可调整思考级别。":turnActive?"本轮运行中，结束后可调整思考级别。":"正在保存设置，请稍后调整思考级别。",onSaving:(saving,savingSession=sessionId) => setReasoningSaving(current=>{const next=new Set(current);if(saving)next.add(savingSession);else next.delete(savingSession);return next;})}:undefined}/>
         </div>{activeSnapshot?.ai && <ContextUsage view={activeSnapshot.ai} model={bootstrap || undefined} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} compact/>}</div></div></form></div>}
-      </div>{activeSnapshot&&<SessionInspector key={inspectedSnapshot!.session.id} snapshot={inspectedSnapshot!} worker={pilotWorkspace.workspace?.workers.find(worker=>worker.sessionId===inspectedSnapshot?.session.id)} taskNavigation={activeSnapshot.session.workspaceRole==='role'&&roleWorkers.length>0?<SpecialistTaskSelect workers={roleWorkers} sessionId={inspectedSnapshot!.session.id} onTask={id=>void inspectRoleTask(id)}/>:undefined} readOnly={isLegacyHistory} connected={sessionConnected&&!modeSaving.has(inspectedSnapshot!.session.id)} onUpdated={()=>{if(roleInspection){const request=roleInspectionRequest.current;void api.snapshot(roleInspection.session.id).then(next=>{if(request===roleInspectionRequest.current)setRoleInspection(next);}).catch(handleFailure);}else void refreshCurrent();}}/>}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
+      </div>{activeSnapshot&&<SessionInspector key={inspectedSnapshot!.session.id} snapshot={inspectedSnapshot!} worker={pilotWorkspace.workspace?.workers.find(worker=>worker.task.taskId===inspectedSnapshot?.superagent?.task.taskId)} taskNavigation={activeSnapshot.session.workspaceRole==='role'&&roleWorkers.length>0?<SpecialistTaskSelect workers={roleWorkers} sessionId={inspectedSnapshot!.session.id} onTask={id=>void inspectRoleTask(id)}/>:undefined} readOnly={isLegacyHistory} connected={sessionConnected&&!modeSaving.has(inspectedSnapshot!.session.id)} onUpdated={()=>{if(roleInspection){const request=roleInspectionRequest.current;void api.snapshot(roleInspection.session.id,undefined,roleInspection.superagent?.task.taskId).then(next=>{if(request===roleInspectionRequest.current)setRoleInspection(next);}).catch(handleFailure);}else void refreshCurrent();}}/>}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
     </main>
     {terminalTabContext && <NavigationMenu title="终端" x={terminalTabContext.x} y={terminalTabContext.y} onClose={() => setTerminalTabContext(null)} actions={[
       {label: "打开终端", run: () => selectTerminalTab(terminalTabContext.terminal)},

@@ -1,6 +1,6 @@
 # Lake Super-agent 内核与三模块协作约定
 
-更新日期：2026-11-05。本文记录用户确认的架构方向，供后续 Agent 和模块维护者共同遵循。它不代表所有能力已经实现，也不改变 `AGENTS.md`、`CONTRIBUTING.md` 和 `docs/development-workflow.md` 中的开发、合并、发布与数据隔离要求。
+更新日期：2026-11-06。本文记录用户确认的架构方向，供后续 Agent 和模块维护者共同遵循。它不代表所有能力已经实现，也不改变 `AGENTS.md`、`CONTRIBUTING.md` 和 `docs/development-workflow.md` 中的开发、合并、发布与数据隔离要求。
 
 ## 后端迁移方向（2026-11-05，Dev 预览）
 
@@ -11,6 +11,9 @@
 Items、Security、Memory、任务与证据的权威职责、bearqy 当前记忆方案、范围/同意/撤回及 unknown 不重放约束继续有效。不能将上游通用权限、会话或工具能力当作 Lake 对应安全与业务合同已经迁移。独立候选使用独立 Home；已授权的原生 Dev 预览可用 `.lake-dev`，正式 Home 始终拒绝，旧运行账本不改写。下面关于 ADK 的实现说明记录现有完整产品水位；目标 TS 对接按 [迁移计划](plan/refactor-zcode-typescript-backend-1.md)、[候选边界与验证](runtime/zcode/README.md) 和完整等价矩阵逐项推进，不提前开启未完成能力。
 
 ## 0. 统一 Super-agent 内核方向（实施中）
+
+2026-11-06 用户进一步确认：Pilot、长期专员对应的 Task Worker 和临时 child 共享通用 Agent 执行能力，职责不用于裁剪 Shell、文件、搜索或工具使用。Pilot 默认协调和委派，也可直接调查与执行；首次实际执行按本轮受信输入建立原 Task/attempt/Operation，纯对话及派单不制造业务任务。直接任务在连续 Pilot 展示入口内保留独立的目标、操作、待办与有界请求工作集；专员 Worker 和 child 仍使用独立 SDK Session。SSH Bash 通过准确资源与当前配置版本接入已有凭据/指纹，模型可使用远端已安装的 kubectl、mysql 等工具自主调查；缺少专用适配器不等于没有通用执行能力。计划切换与工具延迟加载均经过同一权限包装，后台进程汇合和停止沿原 Task 记账。完整通用 Agent 接入及外部可选服务边界见[实施计划](plan/feature-zcode-agent-capabilities-1.md)和[验证记录](docs/validation/zcode-typescript-candidate/agent-capabilities.md)。此方向取代下面历史阶段的“Pilot 只路由/固定诊断”限制，既有资源、安全、记忆及未知操作职责继续有效。
+
 
 Lake 的目标业务架构统一为持续的 **Pilot Router + 独立任务 Worker**：Pilot 接收用户要求、路由工作、跨任务协调并统一回复；Worker 使用官方 ADK 完成执行，复杂任务内部按同一受控协议组织专员。普通操作、Plan、SRE、保存工作流、日程和外部结果逐步进入同一事件与任务链路，不维护彼此竞争的接单、调度与结清内核。用户无需管理执行会话；内部 Session、原 RootTurnID、操作句柄、审批和证据继续保留。 Pilot 与 Worker 复用当前项目原资源目录和已有权限，不新增用户管理的资源勾选层；未配置过独立策略时由可信宿主接入既有会话权限适配器，明确策略和项目隔离继续生效。
 
@@ -80,7 +83,7 @@ flowchart TB
 
 用户确认参考 xAI Grok Bot 的分层思路：专员按 `storeID + projectID + RoleID` 长期保留知识，每项新任务使用独立 Task/Worker/ADK Session，Pilot 只接收必要任务摘要与准确引用。频道是连续展示入口，不是共享执行历史；改名保留知识，同名新角色不继承。任务当前状态/未决操作和长期知识分开，动态观测需重查。
 
-[上下文与角色知识总方案](plan/architecture-context-role-memory-1.md)的 CM 阶段负责请求工作集、摘要、预算和角色范围适配；[文件记忆主计划](plan/feature-agent-file-memory-1.md)的 FM 阶段继续独占来源提取、整理、文件发布及旧实现退役。角色文件纳入同一 Memory 流水线，不新增每角色学习器；Claude-Mem 暂不作为首期依赖或强制正文库。
+[上下文与角色知识总方案](plan/architecture-context-role-memory-1.md)的 CM 阶段负责请求工作集、摘要、预算和角色范围适配；[文件记忆主计划](plan/feature-agent-file-memory-1.md)的 FM 阶段继续独占来源提取、整理、文件发布及旧实现退役。角色文件纳入同一 Memory 流水线，不新增每角色学习器；2026-11-06 用户要求试接 Claude-Mem，TS 候选现以可选私有本地检索索引接入，ZCode 原生 Memory 与 Lake 单一成品发布者保持；不成为强制正文库，也不启用第二套 observer。见 [本地检索适配](runtime/claude-mem/README.md)。
 
 CM 首批已接通 Pilot 短任务摘要、准确引用/hash 与实际请求历史投影，并提供基础身份/范围类型。原始档案保留；完整 Task 工作集及角色文件写入、读取、遗忘尚未交付。当前字段与限制见[首批契约](docs/design/context-role-memory-contract.md)，不能将基础类型视作 FM 发布者已经运行。
 

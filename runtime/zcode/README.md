@@ -35,7 +35,7 @@ open "$HOME/Applications/Lake Dev.app"
 
 ### Super-agent 增量
 
-`superagent.ts` 将真实 Pilot Router、长期专员管理、独立任务 Worker、连续频道、分页与当前权限接入公开 ZCode AgentRuntime。Router 只持有路由/元数据工具，不能执行资源操作。Worker 目前可在本项目独立工作区使用 Read/Write/Edit、真实文件清单和任务工具；Worker 已增量接入项目 MCP 目录/调用和 Skills 读取；本机手动 PTY 与 Worker 执行权限分开。SSH 手动 PTY、原 Dev 凭据/主机指纹和固定主机只读检查已增量接入；Agent 终端交接、远程服务管理仍未接通；分层 Memory 的新入口见下文，不可绕过。职责按建单版本冻结，任务不受专员后续改名影响。
+`superagent.ts` 将真实 Pilot Router、长期专员管理、独立任务 Worker、连续频道、分页与当前权限接入公开 ZCode AgentRuntime。Pilot 与 Worker 共享通用 Agent 工具，Pilot 可直接执行并按需建立原 Task。Worker 可在本项目独立工作区使用 Read/Write/Edit、Glob/Grep、Bash、Todo、网页和真实文件清单及任务工具；Worker 已增量接入项目 MCP 目录/调用和 Skills 读取；本机手动 PTY 与 Worker 执行权限分开。SSH 手动 PTY、原 Dev 凭据/主机指纹和固定主机只读检查已增量接入；通用 SSH Bash 已通过原生执行端口接入，模型可使用实际远端 CLI；手动持续终端交接仍未接通；分层 Memory 的新入口见下文，不可绕过。职责按建单版本冻结，任务不受专员后续改名影响。
 
 `tasks.ts` 保存原目标、步骤、独立尝试、实际派发操作及验收。普通任务自动注册计划；Plan 必须确认且始终只读。步骤验收和最终汇总核对真实操作回执、项目/任务/尝试、原修订、当前权限、资源连接修订与输出 hash。模型文字不能验收；只读失败可以在原目标建立带 retryOf 的新诊断尝试，写入不明仍为 unknown。停止和重启使原 owner/审批失效，旧操作不重放；报告使用事务 outbox 幂等进入 Pilot 与专员频道。
 
@@ -67,7 +67,7 @@ Node 命令须使用准备好的 24.14.0。测试经过真实 ZCode 源码与本
 
 ### 任务 Worker 的原生子智能体与第三联
 
-任务 Worker 使用 ZCode 公开 SubagentPort/Runner 按需创建临时子智能体；Pilot 仍只路由。子执行拥有独立 SDK Session，继承同一任务的有效业务工具、项目范围与当前权限，不创建长期专员或新的目标。根 Worker 加子实例累计最多 8 个，失败和继续任务不重置；子实例不能继续递归或调用父任务结清工具。
+Pilot 与任务 Worker 使用 ZCode 公开 SubagentPort/Runner 按需创建临时子智能体。子执行拥有独立 SDK Session，继承同一任务的有效业务工具、项目范围与当前权限，不创建长期专员或新的目标。根 Worker 加子实例累计最多 8 个，失败和继续任务不重置；子实例不能继续递归或调用父任务结清工具。
 
 原生 `Agent`、`TaskOutput`、停止与消息工具只控制协作，不作为业务成功证据。后台子任务须汇合后才能提交 `work_finish`；父执行提前结束或用户停止时，经原生端口取消子任务并等待退出。真实子工具调用使用 child Session 命名空间，写入原 Task 的步骤/attempt/操作账本；同任务实际业务派发串行，子模型可并行。原审批、权限版本、未知效果核实及禁止重放继续生效。
 
@@ -86,6 +86,14 @@ TS Dev 的 Router 工作集携带当前来源频道最近四轮对话、最新�
 见 [实施计划](../../plan/refactor-zcode-conversation-runtime-1.md)及 [对话执行验收](../../docs/validation/zcode-typescript-candidate/conversation-runtime.md)。
 
 
+## Pilot 停止与 MySQL 受控读取
+
+Pilot 的输入区按当前项目真实活动计算停止状态：Router 回复结束后，排队、执行或等待交互的 Worker 仍可停止；有草稿时同时保留停止与发送，停止不丢草稿。停止先撤销待派发输入和路由批次，再取消当前项目活动 Worker 及原生 child。历史停泊任务、其他项目和原 unknown 操作不会被清除或重放。
+
+Worker 及其原生 child 增量接入 `list_db_objects`（库/表目录）、`db_table_ddl`（表结构）、`read_db_table`（有界数据或行数）三项固定 MySQL 读取。每次使用独立只读事务，回滚后断开；最长 5 秒、最多 500 行表数据、96 KiB 结果和 512 KiB 网络预算，原策略可进一步收紧。分页须显式稳定排序；样本、行数和结构都不是跨库完整一致性的证明。这些专用工具不提供自由 SQL、数据库写入或 PostgreSQL；通用 SSH Bash 可按当前权限调查实际远端 CLI 和数据库入口。
+
+启动时只读增量补充同一 Dev Home 已迁入资源的准确 MySQL 连接引用，不改旧 Go 数据、不覆盖已有 TS 配置、不继续历史比较。当前私有凭据、资源版本、连接摘要、项目/schema 范围和 Pilot 审批在派发及回执使用时重新核验，Memory 沿用同一 Operation 校验入口。元数据可独立作只读诊断；表数据读取保留原 unknown 对账屏障。资源目录中的 configured 只表示配置存在，不表示远端可达。实测范围见[停止与 MySQL 验证记录](../../docs/validation/zcode-typescript-candidate/pilot-stop-mysql-read.md)。
+
 ## 分层长期记忆
 
 2026-11-06 用户授权接入 ZCode 原生 Memory。用户明确保存的全局偏好、项目共享、稳定 RoleID 经验分别保存；新任务上下文独立，临时 child 的真实结果通过父任务回流。Provider 按当前资格投影少量知识，不把完整手册或其他任务 transcript 复制给 Worker。
@@ -93,3 +101,15 @@ TS Dev 的 Router 工作集携带当前来源频道最近四轮对话、最新�
 项目及角色共用积累/使用开关，新 Home 默认关闭。原生提取在私有暂存运行，宿主校验来源、设置、权限及版本后发布；更正/遗忘先抑制旧读取和迟到写入。旧 Go 数据不自动导入，退役 V2 不启用。全局仅允许明确保存，聊天记忆管理以设置中的实际结果为准。
 
 设计、接口和限制见 [分层记忆说明](../../docs/design/zcode-layered-memory.md)，准确检查与 Dev 水位见 [验证记录](../../docs/validation/zcode-layered-memory/validation.md)。此项不代表全量后端迁移或真实模型长期质量已经验收。
+
+## 通用 Agent 能力
+
+Pilot、专员 Worker 与临时 child 共享公开 ZCode 文件、Bash、搜索、Todo、网页、Skill、问题和计划工具。上游在 Bash 可用时隐藏原名 Glob/Grep；Lake 通过公开 handlers 以 `FindFiles/SearchText` 注册相同文件搜索能力，继续经过文件范围与原账本；`toolSearch.mode=auto` 复用上游本地/原生工具发现，不另建分发循环。图片读取使用公开 Jimp adapter；PDF/视频/音频输入按当前模型显式能力声明，PDF 分页另需已安装 Poppler。当前模型配置支持 `supportsImageInput/supportsVideoInput/supportsAudioInput/supportsPdfInput`。固定上游仅编码 Anthropic 原生 WebSearch，需对应协议及显式 `supportsNativeWebSearch=true`；其他供应商可使用项目有效 MCP 搜索。
+
+本机 Bash 使用 macOS Seatbelt 隔离 Lake 私有数据、宿主 SSH 私钥及 Keychain；Shell 的环境只保留 PATH、工作区 HOME 与语言。通用 SSH 使用准确 `asset_ref/configuration_revision`、宿主私有凭据与首次/变化指纹确认，结果为真实退出状态。显式后台和前台等待超时转后台都保留同一实际进程，执行总时长至多十分钟。后台 Bash 保留原操作直到实际退出，TaskOutput 汇合，TaskStop 和项目停止取消真实执行。连接变化、权限撤回和停止会使旧证据失效；中断的不透明命令保留 unknown，不自动重放。
+
+原生 Enter/ExitPlanMode 连接实际 SDK mode 和 Lake 审批；批准计划不扩大命令、文件或资源权限。模式切换重新注册工具时同样保留宿主包装。Todo 以 Task + 实际 SDK Session 存储，直接 Pilot 历史任务通过准确 taskId 检查，避免多任务共用展示入口导致错读回执。合格 Pilot 执行经验进入现有项目 Memory，专员仍归 RoleID，child 通过父任务回流。
+
+`GET /api/agent-capabilities` 列出固定上游完整工具清单及实际连接状态。Cron/OffPeak、动态工作流、浏览器插件和跨会话上下文读取等还需要相应 Lake 宿主服务及范围适配，不注册成可成功调用的假工具。未连接项不被称为已完成，完整 TS 产品等价门禁保持原状态。准确检查、签名 Dev 来源和未验证项见[本批记录](../../docs/validation/zcode-typescript-candidate/agent-capabilities.md)。
+
+普通命令/只读数据库免确认的缺省值与现有 Web 设置共用 shared/execution-preferences.ts，显式关闭仍询问。程序发现和有限容器查询包装按实际内部命令判断，不因 command 或 exec 这几个字一律升级；危险动作、动态或未识别脚本保留确认。此判定只影响追加确认，不构成 readonly 证据或 TaskGrant，仍受原策略和 unknown 约束。验证见上面的本批记录。

@@ -1,18 +1,22 @@
 import type { ToolEntry, ToolExecutionContext } from "@zcode/core";
-import type { PermissionRuleset } from "@zcode/contracts";
+import type { ExecutionPort, FileSystemPort, HttpClientPort, PermissionRuleset } from "@zcode/contracts";
 import type { LayeredMemoryActor } from "../../web-agent/shared/contracts";
 
 /** Host-issued child attribution; never accepted from model arguments. */
 export type HostToolContext = ToolExecutionContext & {
-  lakeSubagent?: { id: string; sessionId: string; toolCallId: string };
+  lakeSubagent?: { id: string; sessionId: string; toolCallId: string;agentType?:string };
 };
 
 export type HostProfile = {
   version: string;
+  runtimeMode?:"build"|"plan";
   systemPrompt: string;
   tools: ToolEntry[];
   allowlist: string[];
   subagents?: boolean;
+  wrapHTTP?: (http: HttpClientPort) => HttpClientPort;
+  wrapFilesystem?: (filesystem: FileSystemPort) => FileSystemPort;
+  wrapExecution?: (execution: ExecutionPort) => ExecutionPort;
   taskId?: string;
   workerId?: string;
   memoryActor?: LayeredMemoryActor;
@@ -27,6 +31,7 @@ export type HostProfile = {
 };
 export interface AgentHost {
   profile(sessionId: string): HostProfile | undefined;
+  currentTask?(sessionId:string):string|undefined;
   changed(sessionId: string): void;
   settled(sessionId: string, outcome?: { response?: string; error?: string }): void;
 }

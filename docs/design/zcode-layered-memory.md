@@ -7,7 +7,7 @@
 - 用户层仅保存用户在设置中明确提交的跨项目偏好，供 Pilot 使用；不自动把项目消息提升成全局知识。
 - 项目层保存直接提交给项目/Pilot 的长期偏好及明确共享资料；同项目 Pilot/Worker 按需使用。
 - 角色层以 storeID/projectID/RoleID 为身份，保留真实角色消息及本角色任务的合格经验。名称、WorkerID、SessionID 和临时 child 名称不参与归属；改名保持，新建同名不继承。
-- 新任务继续使用独立 Session。临时 child 仅继承父任务允许的知识片段，实际发现通过父 Task/Operation 回流，不生成 child 长期库。
+- 专员新任务继续使用独立 Session；Pilot 直接执行按 Task 隔离目标、操作、待办和请求投影，连续展示入口保留原 SDK 档案。Pilot 合格执行经验归现有项目层，来源保留准确 Task/虚拟 Pilot 身份及原操作；不创建新的角色记忆库。临时 child 仅继承父任务允许的知识片段，实际发现通过父 Task/Operation 回流，不生成 child 长期库。
 - 项目及其角色共用积累/使用开关，内容仍分开。新 Home 默认关闭；开启只覆盖新来源，无历史扫描。用户层仅有使用开关及明确保存，不提供自动全局采集。
 
 ## 原生引擎和发布
@@ -44,3 +44,12 @@ TS 后端通过 bootstrap `memoryEngine=zcode-layered` 选择新设置，普通 
 仍未完成：旧 Go Memory 数据显式迁移、Windows 原生验收、长期使用的真实供应商质量集、向量召回、云同步，以及整个后端的 118 项全量等价验收。本批只启用新的 TS 记忆链路，不复活退役 V2，不采用第二套 ADK 整理引擎。
 
 详见[实施计划](../../plan/feature-zcode-layered-memory-1.md)和[验证记录](../validation/zcode-layered-memory/validation.md)。
+
+
+## 任务上下文与 Claude-Mem 本地检索试接（2026-11-06）
+
+新任务与原任务的 SDK Session 继续独立。宿主从同项目/准确 RoleID 的 canonical Task、原用户澄清、报告和资源引用生成有界 `taskContext`；`recall_task_context` 按需查询更旧内容，校验原任务 revision/hash。每条结果保留原状态、未决操作和时间。取消/部分任务的历史线索不等于成功经验，不导入审批或原工具证据；当前入口、连接版本、权限和事实仍需重新检查。Provider 请求刷新本次任务工作集，旧 SDK 档案和累计限制保持原状。
+
+`recall_memory` 提供显式知识检索，继续沿当前 scope/use/ignore/source 检查。可选的 Claude-Mem 15.10.0 worker 由 Dev 内核启动和停止，私有 HTTP 凭据限制访问；只为当前合格成品建立散列 namespace 的 SQLite 索引。上游正文不直接注入模型，实际返回的是 Lake 当前有效笔记和来源。未配置或索引不可用时使用本地有效笔记，不冒称向量召回已启用。真实安装/协议、鉴权、来源撤回与应用验收见 [适配说明](../../runtime/claude-mem/README.md)。
+
+任务上下文读取记录依赖的 Task/Message 与知识来源；忘记来源后阻止旧接续，也撤回其上下文派生成品及索引副本。没有依赖长期知识的普通任务历史仍属于任务运行层，不通过开启长期积累来回扫旧对话。临时 child 只接收父任务挑选的上下文，不直接检索其他 Task 或长期库。

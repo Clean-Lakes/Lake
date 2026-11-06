@@ -117,3 +117,13 @@ test('the header task list starts collapsed and reveals source on demand', () =>
  assert.match(html, /aria-expanded="false"/);
  assert.ok(!html.includes(source));
 });
+
+test('task recency uses the frozen report time while its stable reply anchor stays at invocation start',()=>{
+ const workers=['a','b'].map(id=>({id,sessionId:`worker-${id}`} as SuperWorker));
+ const entries:SpecialistChannelEntry[]=[
+  {id:'reply-a',sourceSessionId:'worker-a',createdAt:'2026-11-06T08:00:00Z',reply:{turnId:'turn-a',state:'settled'},message:{id:'report-a',sessionId:'channel',role:'assistant',text:'刚刚结束的检查',createdAt:'2026-11-06T10:00:00Z'}},
+  {id:'reply-b',sourceSessionId:'worker-b',createdAt:'2026-11-06T09:00:00Z',reply:{turnId:'turn-b',state:'settled'}},
+ ];
+ assert.deepEqual(channelTasksByRecentRecord(workers,entries).map(row=>row.id),['a','b']);
+ assert.equal(entries[0].createdAt,'2026-11-06T08:00:00Z');
+});

@@ -1,10 +1,13 @@
 import { join } from "node:path";
-import { AgentRuntime, ManualPermissionBroker, createToolRegistry, createExploreSubagentPort, InMemoryRuntimeTaskRegistry,
-  createBuiltInGeneralPurposeAgentProfile, createBuiltInExploreAgentProfile, type ExploreSubagentRuntimeRequest } from "@zcode/core";
+import { builtInTools, AgentRuntime, ManualPermissionBroker, createToolRegistry, createExploreSubagentPort, InMemoryRuntimeTaskRegistry,
+  createBuiltInGeneralPurposeAgentProfile, createBuiltInExploreAgentProfile, type ExploreSubagentRuntimeRequest, type ToolEntry } from "@zcode/core";
 import { InMemorySessionEventStore, modelDescriptorOf, getCurrentModelInvocationContext } from "@zcode/contracts";
 import { AiSdkModelAdapter } from "@zcode/adapters/model";
 import { createNodeExecutionAdapter } from "@zcode/adapters/exec";
 import { createNodeFileSystemAdapter } from "@zcode/adapters/fs";
+import {createJimpImageProcessorAdapter} from "@zcode/adapters/image";
+import {createPopplerPdfDocumentAdapter} from "@zcode/adapters/pdf";
+import {digest} from "./tasks";
 import { createNodeWebFetchHttpClientAdapter } from "@zcode/adapters/http";
 import { createSqliteSessionStore, createNodeToolArtifactStore } from "@zcode/adapters/storage";
 import type { Model, SessionEvent as ZCodeEvent, SessionId, ProjectId } from "@zcode/contracts";
@@ -30,19 +33,28 @@ import type { AgentHost, HostProfile, HostToolContext } from "./agent-host";
 import type { Operation } from "./tasks";
 import { lakeCommunicationPrompt } from "./super-prompts";
 import { LiveToolActivity } from "./activity";
+import {connectAgentToolCatalog,nativeSearchSupported} from "./capabilities";
+connectAgentToolCatalog(builtInTools);
 import type { LakeMemory, NativeMemoryWork } from "./memory";
 
 type Live = {
   runtime: AgentRuntime;
   broker: ManualPermissionBroker;
-  execution: ReturnType<typeof createNodeExecutionAdapter>;
+  execution: import("@zcode/contracts").ExecutionPort;
   controller?: AbortController;
   completion?: Promise<void>;
   selection: string;
   children?: { registry: InMemoryRuntimeTaskRegistry; active: () => boolean; cancel: () => Promise<void> };
 };
 const nativeControlTools = new Set(["Agent", "Task", "TaskOutput", "TaskStop", "SendMessage"]);
-const childForbiddenTools = new Set([...nativeControlTools, "work_begin", "work_update", "work_finish", "work_wait", "route_work", "manage_specialist", "ask_user_question"]);
+const childForbiddenTools = new Set([...nativeControlTools, "work_begin", "work_update", "work_finish", "work_wait", "recall_task_context", "recall_memory", "route_work", "manage_specialist", "ask_user_question", "EnterPlanMode", "ExitPlanMode"]);
+function guardedRegistry(transform:(entry:ToolEntry)=>ToolEntry){
+  const base=createToolRegistry(),wrapped=new WeakSet<ToolEntry>();
+  return new Proxy(base,{get(target,key){
+    if(key==='register')return (entry:ToolEntry,options?:{silentDuplicateWarning?:boolean})=>{const guarded=wrapped.has(entry)?entry:transform(entry);wrapped.add(guarded);return target.register(guarded,{...options,silentDuplicateWarning:true});};
+    const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;
+  }});
+}
 const childTerminal = new Set(["completed", "failed", "cancelled", "killed", "stopped", "lost"]);
 type Selection = { providerId: string; modelId: string };
 
@@ -91,6 +103,7 @@ export class LakeAgents {
     let card = view.cards.find((card) => card.id === cardId);
     if (!card) {
       card = { id: cardId, type, title, content: "", status: "running", at: now() };
+      card.data={root_turn_id:view.rootTurnId,taskId:this.host?.currentTask?.(view.session)};
       view.cards.push(card);
     }
     return card;
@@ -136,7 +149,7 @@ export class LakeAgents {
           "operation",
           String(call.name ?? call.toolName ?? "工具"),
         );
-        card.data = { call_id: callId, arguments: call.input, ...(nativeControlTools.has(String(call.name ?? call.toolName)) ? { source: "zcode_subagent_control" } : {}) };
+        card.data = { ...(card.data&&typeof card.data==='object'?card.data:{}), call_id: callId, arguments: call.input, ...(nativeControlTools.has(String(call.name ?? call.toolName)) ? { source: "zcode_subagent_control" } : {}) };
         break;
       }
       case "tool_call_started":
@@ -273,6 +286,7 @@ export class LakeAgents {
     this.update(parentId, view);
   }
   private keys = new Set<string>();
+  registerSecret(value:string){if(value)this.keys.add(value);}
   async prepareRedaction() {
     const selection = this.store.get<Selection>("settings", "modelSelection");
     if (selection) {
@@ -410,15 +424,15 @@ export class LakeAgents {
         inputFormat: {
           supportsText: true,
           supportsImage: model.supportsImageInput,
-          supportsVideo: false,
-          supportsAudio: false,
-          supportsPdf: false,
+          supportsVideo: model.supportsVideoInput === true,
+          supportsAudio: model.supportsAudioInput === true,
+          supportsPdf: model.supportsPdfInput === true,
         },
         outputFormat: { supportsText: true },
         requiresMfjsToolSchema: false,
         supportsToolCall: true,
         supportsJsonSchemaOutput: false,
-        supportsNativeWebSearch: false,
+        supportsNativeWebSearch: nativeSearchSupported(provider.protocol,model.supportsNativeWebSearch),
         supportsMidConversationSystem: true,
       },
       optionSpecs: {
@@ -468,7 +482,7 @@ export class LakeAgents {
       workingDirectory: work.root, mode: "yolo", maxTurns: 2, modelStreaming: "off", streamingToolExecution: "off",
       toolAllowlist: ["Read", "Write", "Edit"], modelSelection: { providerId: provider.id, modelId: model.name },
       titleGeneration: { enabled: false }, targetCompletionVerification: { enabled: false }, dynamicWorkflowEnabled: false,
-      nativeSearchEnhancementsEnabled: false, subagents: { enabled: false }, mcp: { enabled: false }, taskType: "interactive",
+      nativeSearchEnhancementsEnabled: true, toolSearch:{mode:"auto"}, subagents: { enabled: false }, mcp: { enabled: false }, taskType: "interactive",
       memory: { enabled: true, use: true, extractionEnabled: true, cliStorageRoot: work.cliStorageRoot, workspaceIdentity: work.workspaceIdentity },
     }, { sessionStore: memorySessions, eventStore: new InMemorySessionEventStore({ retention: "unbounded" }),
       modelFactory: () => boundModel, fileSystemPort: filesystem });
@@ -489,12 +503,20 @@ export class LakeAgents {
       throw new HttpError(409,this.redact(messages.join(": ")).slice(0,1024));
     } finally { work.signal.removeEventListener("abort", abort); await runtime.close(); memorySessions.close(); }
   }
+  private taskTodos(property:PropertyKey,taskId:string|undefined,sessionId:string){
+    if(!taskId||!['readTodos','updateTodos'].includes(String(property)))return;
+    const key=digest([taskId,sessionId]);
+    return async(input:any)=>{if(input.sessionID!==sessionId)throw new HttpError(409,'Todo 不属于当前执行上下文');this.guard?.();
+      if(property==='updateTodos'){if(Buffer.byteLength(JSON.stringify(input.todos))>100000)throw new HttpError(413,'任务待办超过上限');this.store.put('agentTodos',key,{taskId,sessionId,todos:input.todos,at:now()});return;}
+      return this.store.get<any>('agentTodos',key)?.todos??[];
+    };
+  }
   private async runManagedChild(options: {
     request: ExploreSubagentRuntimeRequest; signal?: AbortSignal; parent: AgentRuntime;
     parentId: string; profile: HostProfile; workspace: string; boundModel: Model;
     provider: ModelProvider; model: ProviderModel;
-    execution: ReturnType<typeof createNodeExecutionAdapter>;
-    filesystem: ReturnType<typeof createNodeFileSystemAdapter>; ownedChildren: Set<AgentRuntime>;
+    execution: import("@zcode/contracts").ExecutionPort;
+    filesystem: import("@zcode/contracts").FileSystemPort; ownedChildren: Set<AgentRuntime>;
   }) {
     const { request, signal, parent, parentId, profile, workspace, boundModel, provider, model, execution, filesystem, ownedChildren } = options;
     this.guard?.();
@@ -514,15 +536,26 @@ export class LakeAgents {
     run.status = "running"; run.startedAt = now(); run.finishedAt = undefined;
     view.agentRuns = [...(view.agentRuns ?? []).filter((entry) => entry.id !== run.id), run];
     this.update(parentId, view);
-    const allowed = profile.allowlist.filter((name) => !childForbiddenTools.has(name) &&
+    const allowed = profile.allowlist.filter((name) => (name!=="WebSearch"||boundModel.properties.supportsNativeWebSearch)&&!childForbiddenTools.has(name) &&
       (request.allowedTools.includes("*") || request.allowedTools.includes(name)) &&
       !request.disallowedTools?.includes(name));
-    const registry = createToolRegistry();
+    const registry=guardedRegistry(original=>{
+      const entry=profile.configureTool?.(original)??original,name=entry.metadata.name;
+      return {...entry,handler:(input,context)=>{
+        this.guard?.();
+        if(!allowed.includes(name)||childForbiddenTools.has(name))throw new HttpError(403,'子智能体不能使用此工具');
+        if(profile.memoryActor)this.memory?.validateContinuation({...profile.memoryActor,sessionId:parentId});
+        const scoped:HostToolContext={...context,toolCallId:`${request.sessionId}:${context.toolCallId}`,lakeSubagent:{id:request.agentId,sessionId:request.sessionId,toolCallId:context.toolCallId,agentType:request.agentType}};
+        if(!profile.invoke)throw new HttpError(409,'Child business tool fence is unavailable');
+        return profile.invoke(entry,input,scoped);
+      }};
+    });
     for (const tool of profile.tools) if (allowed.includes(tool.metadata.name)) registry.register(tool);
     const childStore = new Proxy(this.sessions, {
       get: (target, property, receiver) => {
         const value = Reflect.get(target, property, receiver);
         if (typeof value !== "function") return value;
+        const todos=this.taskTodos(property,profile.taskId,request.sessionId);if(todos)return todos;
         if (property === "createSession" || property === "updateSession") return (input: any) => {
           if (input.id !== request.sessionId) throw new HttpError(409, "Child runtime cannot write another session identity");
           return value.call(target, { ...input,
@@ -546,12 +579,13 @@ export class LakeAgents {
       maxTurns: Math.min(request.maxTurns ?? Number(parentSession.options.maxSteps ?? 500), Number(parentSession.options.maxSteps ?? 500)),
       mode: "build", modelStreaming: "on", streamingToolExecution: "off", toolConcurrency: { maxConcurrency: 1 },
       titleGeneration: { enabled: false }, targetCompletionVerification: { enabled: false },
-      dynamicWorkflowEnabled: false, nativeSearchEnhancementsEnabled: false, subagents: { enabled: false }, mcp: { enabled: false },
+      dynamicWorkflowEnabled: false, nativeSearchEnhancementsEnabled: true, toolSearch:{mode:"auto"}, subagents: { enabled: false }, mcp: { enabled: false },
     }, {
       sessionStore: childStore, toolRegistry: registry,
       eventStore: parent.getSessionEventStore(), modelFactory: () => boundModel,
       ...parent.createChildClientPorts(interaction), executionPort: execution, fileSystemPort: filesystem,
-      httpClientPort: createNodeWebFetchHttpClientAdapter(),
+      httpClientPort: profile?.wrapHTTP?.(createNodeWebFetchHttpClientAdapter())??createNodeWebFetchHttpClientAdapter(),
+      imageProcessorPort:createJimpImageProcessorAdapter(),pdfDocumentPort:createPopplerPdfDocumentAdapter({executionPort:execution,tempRoot:join(this.store.data,"pdf-temp")}),
       artifactStore: createNodeToolArtifactStore({ rootDir: join(this.store.data, "artifacts"),
         imageCacheRootDir: join(this.store.data, "images"), videoCacheRootDir: join(this.store.data, "videos") }),
       eventSink: { onSessionEvent: async (event) => {
@@ -561,19 +595,6 @@ export class LakeAgents {
       } },
     });
     ownedChildren.add(child);
-    for (const name of registry.list()) {
-      const original = registry.get(name)!;
-      const entry = profile.configureTool?.(original) ?? original;
-      registry.register({ ...entry, handler: (input, context) => {
-        this.guard?.();
-        if (!allowed.includes(name) || childForbiddenTools.has(name)) throw new HttpError(403, "子智能体不能使用此工具");
-        if (profile.memoryActor) this.memory?.validateContinuation({ ...profile.memoryActor, sessionId: parentId });
-        const scoped: HostToolContext = { ...context, toolCallId: `${request.sessionId}:${context.toolCallId}`,
-          lakeSubagent: { id: request.agentId, sessionId: request.sessionId, toolCallId: context.toolCallId } };
-        if (!profile.invoke) throw new HttpError(409, "Child business tool fence is unavailable");
-        return profile.invoke(entry, input, scoped);
-      } }, { silentDuplicateWarning: true });
-    }
     try {
       if (request.resumeFromStore) {
         if (!existing) throw new HttpError(409, "No prior child session is available for resume");
@@ -655,17 +676,18 @@ export class LakeAgents {
         this.update(sessionId, view);
       },
     });
-    const execution = createNodeExecutionAdapter({
-      outputRootDir: join(this.store.data, "tool-output"),
+    const rawExecution = createNodeExecutionAdapter({
+      outputRootDir: join(this.store.data, "tool-output", sessionId),
       processEnv: {
         PATH: process.env.PATH,
-        HOME: this.store.home,
+        HOME: workspace,
         LANG: process.env.LANG ?? "en_US.UTF-8",
       },
     });
+    const execution = profile?.wrapExecution?.(rawExecution) ?? rawExecution;
     const filesystem = createNodeFileSystemAdapter({ textSearchEngine: "javascript" });
     const secrets = join(this.store.home, "secrets");
-    const guardedFilesystem = new Proxy(filesystem, {
+    const rawGuardedFilesystem = new Proxy(filesystem, {
       get(target, property, receiver) {
         const value = Reflect.get(target, property, receiver);
         if (typeof value !== "function") return value;
@@ -682,7 +704,22 @@ export class LakeAgents {
         };
       },
     });
-    const registry = createToolRegistry();
+    const guardedFilesystem=profile?.wrapFilesystem?.(rawGuardedFilesystem)??rawGuardedFilesystem;
+    const registry=guardedRegistry(original=>{
+      let entry=profile?.configureTool?.(original)??original;
+      const name=entry.metadata.name;
+      if(profile?.subagents&&nativeControlTools.has(name))entry={...entry,metadata:{...entry.metadata,needsApproval:false},permission:{...entry.permission,needsApproval:false},resolvePermissionCapability:()=>({needsApproval:false,permission:{needsApproval:false}})};
+      return {...entry,handler:(input,context)=>{
+        this.guard?.();
+        if(name==='work_finish'&&runtimeTasks&&Object.values(runtimeTasks.all()).some(task=>!childTerminal.has(task.status)))throw new HttpError(409,'子智能体或后台命令仍在执行，请先使用 TaskOutput 汇合实际结果');
+        this.memory?.validateContinuation(memoryActor);
+        if(profile?.subagents&&nativeControlTools.has(name)){
+          if(!profile.invokeControl)throw new HttpError(409,'Managed subagent control is unavailable');
+          return profile.invokeControl(entry,input,context);
+        }
+        return profile?.invoke?profile.invoke(entry,input,context):entry.handler(input,context);
+      }};
+    });
     for (const tool of profile?.tools ?? []) registry.register(tool);
     // ZCode bootstraps its record on first input with a cwd-derived project
     // and mode-only permissions. Keep Lake's canonical host identity and
@@ -691,6 +728,7 @@ export class LakeAgents {
       get: (target, property, receiver) => {
         const value = Reflect.get(target, property, receiver);
         if (typeof value !== "function") return value;
+        const todos=this.taskTodos(property,profile.taskId,sessionId);if(todos)return todos;
         if (property === "createSession" || property === "updateSession") return (input: any) => {
           if (input.id !== sessionId) throw new HttpError(409, "Managed runtime cannot write another session identity");
           return value.call(target, { ...input, ...(property === "createSession" ? { projectID: session.projectId } : {}),
@@ -728,20 +766,20 @@ export class LakeAgents {
       sessionId as SessionId,
       {
         systemPrompt: (profile?.systemPrompt ?? "You are Lake, an operations assistant. Use the available tools and report actual results. Never read credential files.") + `\n${lakeCommunicationPrompt}\n${String(session.options.userPrompt ?? "")}`,
-        toolAllowlist: profile?.allowlist,
+        toolAllowlist: profile?.allowlist.filter(name=>name!=="WebSearch"||boundModel.properties.supportsNativeWebSearch),
         workingDirectory: workspace,
         modelSelection: { providerId: provider.id, modelId: model.name },
         maxTurns: Number(session.options.maxSteps ?? 500),
         // Lake's versioned work_begin confirmation owns Worker plan execution.
         // The upstream mode must not become a second conflicting plan authority.
-        mode: !profile && session.options.conversationMode === "plan" ? "plan" : "build",
+        mode: profile?.runtimeMode??(!profile && session.options.conversationMode === "plan" ? "plan" : "build"),
         modelStreaming: "on",
         streamingToolExecution: "off",
         toolConcurrency: { maxConcurrency: 1 },
         titleGeneration: { enabled: false },
         targetCompletionVerification: { enabled: false },
         dynamicWorkflowEnabled: false,
-        nativeSearchEnhancementsEnabled: false,
+        nativeSearchEnhancementsEnabled: true, toolSearch:{mode:"auto"},
         subagents: { enabled: !profile || profile.subagents === true, maxTurns: Number(session.options.maxSteps ?? 500) },
         mcp: { enabled: false },
       },
@@ -754,7 +792,8 @@ export class LakeAgents {
         permissionBroker: broker,
         executionPort: execution,
         fileSystemPort: guardedFilesystem,
-        httpClientPort: createNodeWebFetchHttpClientAdapter(),
+        httpClientPort: profile?.wrapHTTP?.(createNodeWebFetchHttpClientAdapter())??createNodeWebFetchHttpClientAdapter(),
+      imageProcessorPort:createJimpImageProcessorAdapter(),pdfDocumentPort:createPopplerPdfDocumentAdapter({executionPort:execution,tempRoot:join(this.store.data,"pdf-temp")}),
         artifactStore: createNodeToolArtifactStore({
           rootDir: join(this.store.data, "artifacts"),
           imageCacheRootDir: join(this.store.data, "images"),
@@ -763,24 +802,6 @@ export class LakeAgents {
         eventSink: { onSessionEvent: (event) => this.onEvent(sessionId, event) },
       },
     );
-    for (const name of registry.list()) {
-      const original = registry.get(name)!;
-      let entry = profile?.configureTool?.(original) ?? original;
-      if (profile?.subagents && nativeControlTools.has(name)) entry = { ...entry, metadata: { ...entry.metadata, needsApproval: false }, permission: { ...entry.permission, needsApproval: false }, resolvePermissionCapability: () => ({ needsApproval: false, permission: { needsApproval: false } }) };
-      // The public registry is shared with the executor. Interpose the Lake
-      // task/operation fence at the actual handler, after any approval wait.
-      registry.register({ ...entry, handler: (input, context) => {
-        this.guard?.();
-        if (entry.metadata.name === "work_finish" && runtimeTasks && Object.values(runtimeTasks.all()).some((task) => !childTerminal.has(task.status)))
-          throw new HttpError(409, "子智能体仍在执行，请先使用 TaskOutput 汇合实际结果后再提交任务结果");
-        this.memory?.validateContinuation(memoryActor);
-        if (profile?.subagents && nativeControlTools.has(entry.metadata.name)) {
-          if (!profile.invokeControl) throw new HttpError(409, "Managed subagent control is unavailable");
-          return profile.invokeControl(entry, input, context);
-        }
-        return profile?.invoke ? profile.invoke(entry, input, context) : entry.handler(input, context);
-      } }, { silentDuplicateWarning: true });
-    }
     if (existingSession)
       await (runtime as AgentRuntime & { resumeFromStore(): Promise<unknown> }).resumeFromStore();
     const children = runtimeTasks ? { registry: runtimeTasks, active: () => Object.values(runtimeTasks.all()).some((task) => !childTerminal.has(task.status)),
@@ -840,6 +861,7 @@ export class LakeAgents {
               content: this.redact(result.response),
               status: "completed",
               at: now(),
+              data: {root_turn_id:final.rootTurnId,taskId:this.host?.currentTask?.(sessionId)},
             });
           if (options.recordAssistant !== false) {
             const message = this.store.addMessage(sessionId, "assistant", this.redact(result.response));

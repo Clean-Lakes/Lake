@@ -28,7 +28,7 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
  },[!!selection]);
  const target=selection??retained.current;
  const followTurn=selection?.followLatest?snapshot.messages?.filter(message=>message.role==='user').at(-1)?.id:undefined;
- useLayoutEffect(()=>{const scroll=panel.current?.querySelector('.session-inspector-scroll');if(scroll)scroll.scrollTop=0;},[selection?.sessionId,selection?.turnId,selection?.taskId,followTurn]);
+ useLayoutEffect(()=>{const scroll=panel.current?.querySelector('.session-inspector-scroll');if(scroll)scroll.scrollTop=0;},[selection?.sessionId,selection?.turnId,selection?.taskId,selection?.canonicalGoalId,followTurn]);
  const task=target?inspectedTask(snapshot,target):undefined;
  const plan=task?.plans?.at(-1);
  const canonical=snapshot.superagent?.task;
