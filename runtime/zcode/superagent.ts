@@ -1,4 +1,5 @@
 import {permissionDefaults} from '../../web-agent/shared/execution-preferences';
+import {specialistReplies} from '../../web-agent/shared/specialist-replies';
 import { readdir, realpath } from "node:fs/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import type { ToolEntry, ToolExecutionContext } from "@zcode/core";
@@ -994,6 +995,8 @@ export class LakeSuperagent implements AgentHost {
         const goal = this.ledger.isHostManaged(this.ledger.get(worker.taskId))
           ? this.ledger.finishHost(worker.taskId, { summary, outcome: a.outcome }, worker.generation, worker.policyHash)
           : this.ledger.finish(worker.taskId, summary, worker.policyHash);
+        const reportKey=digest([goal.id,goal.revision]),pending=this.store.get<Record<string,unknown>>('superPendingReports',reportKey);
+        if(pending)this.store.put('superPendingReports',reportKey,{...pending,rootTurnId:this.store.view(worker.sessionId).rootTurnId});
         this.changed(worker.sessionId); return this.publicGoal(goal);
       }), true),
       this.entry("work_wait", "Park an invocation without polling. Original handles and task constraints remain authoritative.", objectSchema({}), run(() => {
@@ -1206,7 +1209,8 @@ export class LakeSuperagent implements AgentHost {
     // Never recover a reply from accumulated cards: it may belong to an older turn.
     const reply = !error && this.store.view(sessionId).status === "completed" ? response?.trim() : undefined;
     const presentation = deferredFailure ? { body: deferredFailure, channelBody: deferredFailure } : this.reportPresentation(goal, reply, error);
-    if (!this.store.get("superPendingReports", reportKey)) this.store.put("superPendingReports", reportKey, { taskId: goal.id, revision: goal.revision, snapshot: structuredClone(goal), presentation, createdAt: now() });
+    const rootTurnId=this.store.view(sessionId).rootTurnId;
+    if (!this.store.get("superPendingReports", reportKey)) this.store.put("superPendingReports", reportKey, { taskId: goal.id, revision: goal.revision, snapshot: structuredClone(goal), presentation, rootTurnId, createdAt: now() });
     this.deliverReports();
     this.agents.memory?.captureTask(goal.id);
     this.changed(sessionId); this.schedule();
@@ -1240,7 +1244,7 @@ export class LakeSuperagent implements AgentHost {
   private reportPresentation(goal: Goal, reply?: string, error?: string) {
     if (goal.status === "completed" && goal.acceptanceState === "pass") {
       const body = goal.summary?.trim() || "检查已完成。";
-      return { body, channelBody: reply ? null : body };
+      return { body, channelBody: body };
     }
     const notice = goal.status === "cancelled" ? "已停止这次工作。"
       : this.ledger.unresolved(goal.id) ? "有一项操作的结果还需核实，暂时不能重复该操作。"
@@ -1255,12 +1259,13 @@ export class LakeSuperagent implements AgentHost {
     // An explicit partial business report is already truthful about what remains.
     // Natural prose alone cannot turn an unaccepted task into a successful report.
     if (!error && goal.status !== "cancelled" && delivery?.outcome === "partial")
-      return { body: delivery.summary, channelBody: reply === delivery.summary ? null : delivery.summary };
-    return { body: reply ? `${notice}\n\n${reply}` : notice, channelBody: notice };
+      return { body: delivery.summary, channelBody: delivery.summary };
+    const body=reply ? `${notice}\n\n${reply}` : notice;
+    return { body, channelBody: body };
   }
   private deliverReports() {
     if (this.closed) return;
-    for (const pending of this.store.list<{ taskId: string; revision: number; snapshot: Goal; presentation?: { body: string; channelBody: string | null }; createdAt: string }>("superPendingReports")) {
+    for (const pending of this.store.list<{ taskId: string; revision: number; snapshot: Goal; presentation?: { body: string; channelBody: string | null }; rootTurnId?:string; createdAt: string }>("superPendingReports")) {
       const goal = pending.snapshot, worker = this.store.require<Worker>("superWorkers", goal.workerId);
       const key = digest([worker.taskId, pending.revision]);
       if(worker.inline){this.store.put("superReports",key,{key,workerId:worker.id,goalRevision:goal.revision,deliveredAt:now(),inline:true});this.store.delete("superPendingReports",digest([pending.taskId,pending.revision]));continue;}
@@ -1272,7 +1277,7 @@ export class LakeSuperagent implements AgentHost {
         if (body === null) continue;
         const message: Message = { id: "report_" + digest([key, target]), sessionId: target, role: "assistant", text: this.agents.redact(body), createdAt: pending.createdAt,
           author: { kind: "specialist", name: worker.roleSnapshot.name, roleId: worker.roleId, workerId: worker.id,
-            sessionId: worker.sessionId, taskId: goal.id, channelSessionId: channel.sessionId } };
+            sessionId: worker.sessionId, taskId: goal.id, channelSessionId: channel.sessionId,rootTurnId:pending.rootTurnId } };
         if (!this.store.get("messages", message.id)) this.store.put("messages", message.id, message);
       }
       this.store.put("superReports", key, { key, workerId: worker.id, goalRevision: goal.revision, deliveredAt: now() });
@@ -1368,16 +1373,18 @@ export class LakeSuperagent implements AgentHost {
   async channelPage(sessionId: string, cursor = ""): Promise<SpecialistChannelPage> {
     const channel = this.channelFor(sessionId); if (!channel) throw new HttpError(404, "Specialist channel required");
     const workers = this.channelTasks(sessionId), sessions = new Set([sessionId, ...workers.map((worker) => worker.sessionId)]);
-    const entries: SpecialistChannelPage["entries"] = [];
+    let entries: SpecialistChannelPage["entries"] = [];
+    const sources:{snapshot:SessionSnapshot;worker:SuperWorker;active:boolean}[]=[];
     for (const source of sessions) {
       await loadLegacyView(this.store, source, (value) => this.agents.redact(value));
       const worker = workers.find((worker) => worker.sessionId === source);
       const snapshot = this.store.snapshot(source);
+      if(worker&&snapshot.session.workspaceRole!=='legacy')sources.push({snapshot,worker,active:this.active.has(worker.id)||!!this.pendingInteraction(source)});
       for (const message of snapshot.messages) entries.push({ id: canonical(["message", source, message.id]), sourceSessionId: source,
         taskId: worker?.task.taskId, workerId: worker?.id, createdAt: message.createdAt, message });
-      // Active cards are shown by the live transcript below; settled cards
-      // belong to durable channel history and must survive process restart.
-      if (worker && !this.active.has(worker.id)) for (const card of snapshot.ai?.cards ?? [])
+      // Projection retires intermediate prose; the original task keeps every
+      // card for the inspector. Legacy records without SDK roots stay intact.
+      if (worker) for (const card of snapshot.ai?.cards ?? [])
         if (["message", "text"].includes(card.type) && card.content?.trim()) entries.push({ id: canonical(["card", source, card.id]), sourceSessionId: source,
           taskId: worker.task.taskId, workerId: worker.id, createdAt: card.at, card });
     }
@@ -1390,6 +1397,7 @@ export class LakeSuperagent implements AgentHost {
         entries.push({ id: canonical(["message", source.id, message.id]), sourceSessionId: source.id, taskId: row.taskId || undefined,
           workerId: row.workerId || undefined, createdAt: message.createdAt, message });
     }
+    entries=specialistReplies(entries,sources);
     entries.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
     let offset = 0;
     if (cursor) {

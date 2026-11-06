@@ -1,8 +1,12 @@
 import type {SessionSnapshot,SpecialistChannelEntry,SpecialistChannelPage} from '../../shared/contracts';
+import {liveSpecialistReplies} from '../../shared/specialist-replies';
 
 export function mergeChannelEntries(previous:SpecialistChannelEntry[],incoming:SpecialistChannelEntry[]){
  const entries=new Map(previous.map(entry=>[entry.id,entry]));
- for(const entry of incoming)entries.set(entry.id,entry);
+ for(const entry of incoming){
+  if(entries.get(entry.id)?.reply?.state==='settled'&&entry.reply?.state==='working')continue;
+  entries.set(entry.id,entry);
+ }
  return [...entries.values()].sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
 }
 
@@ -24,10 +28,14 @@ export function mergeChannelPage(previous:SpecialistChannelEntry[],page:Pick<Spe
  const durable=mergeChannelEntries(previous,page.entries);
  const byId=new Map(durable.map(entry=>[entry.id,entry]));
  const workers=new Map(page.workers.map(worker=>[worker.sessionId,worker]));
- for(const entry of liveChannelProse(page.active)){
+ // Older hosts have no SDK root IDs and retain their original projection.
+ const modern=page.active.filter(snapshot=>!!snapshot.ai?.rootTurnId);
+ const incoming=[...liveSpecialistReplies(modern,page.workers),...liveChannelProse(page.active.filter(snapshot=>!snapshot.ai?.rootTurnId))];
+ for(const entry of incoming){
   const current=byId.get(entry.id);
+  if(current?.reply?.state==='settled'&&entry.reply?.state==='working')continue;
   // A late active snapshot cannot downgrade an already committed final card.
-  if(current?.card&&current.card.status!=='running'&&entry.card?.status==='running')continue;
+  if(!entry.reply&&current?.card&&current.card.status!=='running'&&entry.card?.status==='running')continue;
   const worker=workers.get(entry.sourceSessionId);
   byId.set(entry.id,{...entry,workerId:worker?.id,taskId:entry.taskId??worker?.task.taskId});
  }

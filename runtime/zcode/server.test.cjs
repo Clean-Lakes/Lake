@@ -325,6 +325,13 @@ function superReply(request, mode, home) {
     if (!names.includes("work_finish")) return finish("已通过当前项目 MCP 的实际回执取得 42 个测试文档。");
     return { content: "MCP 查询已按真实回执完成。" };
   }
+  if(mode==='super-live-report'){
+    const reads=names.filter(name=>name==='list_project_files').length;
+    if(!reads)return {...call('list_project_files',{path:'.'},'live-read-first'),content:'正在核对当前工作区的文件清单。'};
+    if(reads<2)return {...call('list_project_files',{path:'.'},'live-read-second'),content:'已取得文件清单，正在复核检查范围。'};
+    if(!names.includes('work_finish'))return finish('已读取并复核本项目文件清单。两次读取均成功；本次检查完成。','live-final');
+    return {content:'本次检查结束。'};
+  }
   if (!names.includes("list_project_files")) return call("list_project_files", { path: "." }, "actual-files");
   if (mode.includes("write") && !names.includes("Write")) {
     const raw = [...request.messages].reverse().filter((message) => message.role === "user").map(content).find((value) => value.startsWith("{") && value.includes('"assignment"'));
@@ -2391,4 +2398,27 @@ for(const variant of ['default','container-kube','container-docker'])test(`Pilot
  const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(op.status,'succeeded');assert.equal(op.readOnly,false);
  if(variant!=='default')assert.match(op.output.stdout,/ACTUAL_CONTAINER_QUERY_42/);
  assert.equal(wire.requests.length,1);
+});
+
+test('specialist SDK progress settles into one canonical summary while the inspector retains every step',async t=>{
+ const f=await fixture(t,'super-live-report'),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'检查当前项目文件清单并给出总结。'},202);
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed'&&s.workers[0].assignmentState==='parked');
+ const worker=state.workers[0],channelPath=`/api/sessions/${state.channels[0].sessionId}/channel`;
+ const source=await f.api(`/api/sessions/${worker.sessionId}/snapshot`),original=JSON.stringify(source.ai.cards);
+ assert.ok(source.ai.cards.some(c=>c.content?.includes('正在核对当前工作区')));
+ assert.ok(source.ai.cards.some(c=>c.content?.includes('已取得文件清单')));
+ assert.equal(source.ai.cards.filter(c=>c.type==='operation'&&c.title==='list_project_files').length,2);
+ const channel=await f.api(channelPath),replies=channel.entries.filter(e=>e.reply);
+ assert.equal(replies.length,1);assert.equal(replies[0].reply.state,'settled');
+ assert.equal(replies[0].message.text,worker.task.summary);
+ assert.equal(replies[0].message.author.rootTurnId,source.ai.rootTurnId);
+ assert.equal(replies[0].sourceSessionId,worker.sessionId);assert.equal(replies[0].taskId,worker.task.taskId);
+ assert.ok(!channel.entries.some(e=>(e.card?.content??'').includes('正在核对当前工作区')));
+ assert.equal(JSON.stringify((await f.api(`/api/sessions/${worker.sessionId}/snapshot`)).ai.cards),original);
+ const calls=f.calls;
+ await f.restart();
+ const restored=await f.api(channelPath);
+ assert.deepEqual(restored.entries.filter(e=>e.reply),replies);
+ assert.equal(f.calls,calls,'reading restored summaries must never invoke a model or replay operations');
 });

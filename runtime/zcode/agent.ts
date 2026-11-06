@@ -861,6 +861,7 @@ export class LakeAgents {
               content: this.redact(result.response),
               status: "completed",
               at: now(),
+              data: {root_turn_id:final.rootTurnId,taskId:this.host?.currentTask?.(sessionId)},
             });
           if (options.recordAssistant !== false) {
             const message = this.store.addMessage(sessionId, "assistant", this.redact(result.response));
