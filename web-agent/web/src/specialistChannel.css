@@ -6,6 +6,3 @@
 .specialist-channel-active { width:100%; min-width:0; max-width:100%; }
 .specialist-task-controls { border:0; padding:0; margin:0; min-width:0; }
 .specialist-task-controls:empty { display:none; }
-.pilot-dispatch-text { white-space:pre-wrap; overflow-wrap:anywhere; }
-.pilot-dispatch-recipient { border:0; font-family:inherit; font-weight:inherit; cursor:pointer; }
-.pilot-dispatch-recipient:hover { background:var(--surface-selected); }

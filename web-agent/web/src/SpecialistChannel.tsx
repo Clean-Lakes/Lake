@@ -30,7 +30,7 @@ export function SpecialistTaskSelect({workers,sessionId,onTask}:{workers:SuperWo
 
 export function SpecialistChannelEntries({entries,resources,activeSources,activeSnapshots}:{entries:SpecialistChannelEntry[];resources:SessionSnapshot['resources'];activeSources?:ReadonlySet<string>;activeSnapshots?:ReadonlyMap<string,SessionSnapshot>}){
  const forwarded=new Set(entries.flatMap(entry=>entry.message?.dispatch?[`${entry.sourceSessionId}\0${entry.message.dispatch.sourceMessageId}`]:[]));
- return <>{entries.filter(entry=>!isCompactionFallbackEntry(entry)&&!(entry.message?.role==='user'&&forwarded.has(`${entry.sourceSessionId}\0${entry.message.id}`))).map(entry=>{
+ return <>{entries.filter(entry=>!entry.message?.dispatch&&!isCompactionFallbackEntry(entry)&&!(entry.message?.role==='user'&&forwarded.has(`${entry.sourceSessionId}\0${entry.message.id}`))).map(entry=>{
   const active=activeSnapshots?.get(entry.sourceSessionId);
   // Keep the channel key, but plan metadata refers to the original source ID.
   // Project before Markdown so neither live nor saved plans mount their body.

@@ -63,7 +63,6 @@
   font-size:var(--reply-body-size,15px); line-height:1.75;
 }
 .ai-transcript :is(.ai-chat-message.ai-role-assistant,.ai-card.ai-text,.ai-card.ai-message,.sre-role-body) .assistant-prose > p:not(:last-child) { margin-bottom:14px; }
-.ai-transcript .pilot-dispatch-text { font-size:var(--reply-body-size,15px); line-height:1.75; }
 .ai-transcript[data-transcript-mode=conversation] .ai-role-user { font-size:var(--reply-body-size); line-height:1.55; }
 .settled-reply.is-reply-continuation:not(.is-archived):not(.is-awaiting-reply) { margin-block-start:calc(8px - var(--turn-entry-gap,12px)); }
 

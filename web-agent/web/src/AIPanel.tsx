@@ -111,18 +111,10 @@ function ReplyArrival({entryId,arrive,continued=false,children}:{entryId:string;
 }
 export function TranscriptMessage({message,sessionId,resources,arrive=false,pendingImages,assistantIdentity,onSpecialist,hideIdentity=false,continued=false,motion='idle'}:{continued?:boolean;motion?:AvatarMotion;hideIdentity?:boolean;onSpecialist?:(author:SpecialistReplyAuthor)=>void;assistantIdentity?:AssistantIdentity;pendingImages?:number;message:SessionSnapshot["messages"][number];sessionId:string;resources?:SessionSnapshot["resources"];arrive?:boolean}) {
  const [animate]=useState(()=>arrive&&!document.hidden&&!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+ // Handoffs belong to execution records, not the human-facing conversation.
+ if(message.dispatch)return null;
  if(message.role==='system'&&isContextCompactionFailure(message.text||''))return <CompactionNotice message={message.text}/>;
- const attachmentSession=message.dispatch?message.sessionId:sessionId;
- const attachments=<>{message.files?.length ? <div className="message-attachments">{message.files.map(file=><a key={file.sourceId} href={`/api/sessions/${encodeURIComponent(attachmentSession)}/attachments/${encodeURIComponent(file.sourceId)}`} download={file.name}><Glyph name="file" size={14}/>{file.name}</a>)}</div> : null}{!!message.images?.length&&<MessageImages images={message.images}/>}</>;
- if(message.dispatch){
-  const d=message.dispatch;
-  // The durable dispatch stays in the task ledger. Pilot chat needs no duplicate handoff bubble.
-  if(!hideIdentity)return null;
-  return <div className="ai-chat-message ai-role-assistant pilot-dispatch" data-dispatch-id={d.id}>
-   <ReplyIdentity identity={{name:'Pilot',pilot:true}}/>
-   <div className="pilot-dispatch-text">{d.action==='followup'?'补充要求：':''}{d.instruction}</div>{attachments}
-  </div>;
- }
+ const attachments=<>{message.files?.length ? <div className="message-attachments">{message.files.map(file=><a key={file.sourceId} href={`/api/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(file.sourceId)}`} download={file.name}><Glyph name="file" size={14}/>{file.name}</a>)}</div> : null}{!!message.images?.length&&<MessageImages images={message.images}/>}</>;
  return <div className={`ai-chat-message ai-role-${message.role}${continued?' is-reply-continuation':''}${message.images?.length?" has-message-images":""}${animate?" user-message-arrival":""}`}>
           {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <ReplyIdentity identity={assistantIdentity} author={message.author} onSpecialist={onSpecialist} hidden={hideIdentity} continued={continued} motion={motion}/> }{message.text && (message.role === 'assistant' ? <AssistantMarkdown>{planMarkdown(message.text)}</AssistantMarkdown> : <div className={message.role==='user'?'user-message-text':undefined}>{message.role === "system" ? displayAiError(message.text) : <MessageText text={message.text} mentions={message.mentions} resources={resources}/>}</div>)}
           {attachments}
