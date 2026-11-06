@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-06
 last_updated: 2026-11-06
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [feature, context, memory, zcode]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 New specialist tasks receive a bounded, sourced working set and a scoped history lookup. They retain independent SDK sessions and current execution permissions.
 
@@ -76,3 +76,4 @@ New specialist tasks receive a bounded, sourced working set and a scoped history
 - [Architecture](../agent.md)
 - [Context contract](../docs/design/context-role-memory-contract.md)
 - [Layered Memory](../docs/design/zcode-layered-memory.md)
+- [Validation and installed SHA](../docs/validation/zcode-typescript-candidate/task-memory-recall.md)

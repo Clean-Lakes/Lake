@@ -36,7 +36,12 @@ SDK 协议夹具运行真实独立 Worker：先记录 K2 入口和实例，后�
 
 ## Dev 安装复核
 
-待记录本批干净源码 SHA、签名安装和原生记忆设置页复核。安装不恢复或重跑用户已停止的 MySQL 任务，不填写其待补充问题。
+- 安装并测试的源码 SHA：`8bba0756f7aa1d63874b0f2e690d750c1ddd4976`，构建时工作区干净。
+- 使用 `scripts/build_lake_desktop.sh --dev --ts-candidate --install` 签名构建／安装，`codesign --verify --deep --strict` 通过；实际后端 SHA256 与构建来源一致，Bundle ID 为 `com.cleanlakes.lake.desktop.dev`。
+- 原生设置页已显示“已接入 Claude-Mem 本地检索”，项目自动积累和读取开关保持开启。浅色正常窗口、深色窄窗口检查文字、圆角、分组裁切及可读性；复核后恢复跟随系统主题与原窗口尺寸。
+- 实际索引 worker 的 health 为 15.10.0，PID 归属于新 Dev 后端，未鉴权请求返回 401；私有设置确认 observer／Chroma／云同步关闭。
+- 144 个资源、当前项目 4 个有效专员及 51 条 canonical 目标／尝试／操作／验收／交付记录保留，安装前后整行哈希一致，运行或排队 Worker 为 0。没有发送业务消息、填写待补充问题、恢复或重跑用户已停止的 MySQL 任务。
+- 安装前停止 Dev 内核，并备份私有 Home 与应用；正式 Lake 和正式 Home 未改动。后续提交仅补充验证文档，未改动已测试代码。
 
 ## 限制
 
