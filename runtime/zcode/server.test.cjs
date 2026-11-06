@@ -231,6 +231,14 @@ function fullAgentReply(request,mode,home){
   if(!names.includes('ExitPlanMode'))return call('ExitPlanMode',{plan:'读取本机测试标记，核对实际输出，然后报告结果。'});
  }
  if(mode.includes('child')&&!names.includes('Agent'))return call('Agent',{subagent_type:'general-purpose',description:'执行独立 Shell 检查',prompt:'请通过 Bash 执行 printf CHILD_NATIVE_SHELL 并报告实际结果。'});
+ if(mode.includes('missing-discovery')){
+  if(!names.includes('list_assets'))return call('list_assets',{query:'SSH fixture'});
+  const asset=result('list_assets').assets.find(asset=>asset.kind==='ssh'),count=names.filter(name=>name==='Bash').length;
+  if(!count)return call('Bash',{asset_ref:asset.asset_ref,configuration_revision:asset.configuration_revision,command:'hostname; command -v lake_fixture_absent_program',description:'Discover an optional program'},'missing-program');
+  if(count===1&&!mode.includes('only'))return call('Bash',{asset_ref:asset.asset_ref,configuration_revision:asset.configuration_revision,command:'kubectl config current-context',description:'Inspect current fixture context'},'current-query');
+  if(!names.includes('work_finish'))return call('work_finish',{summary:'已按真实回执检查程序和当前上下文。',outcome:mode.includes('only')?'partial':'completed'});
+  return {content:'检查结束。'};
+ }
  if(!['child','files','image'].some(kind=>mode.includes(kind))&&!names.includes('Bash')){
   let command=mode.includes('container')?(mode.includes('docker')?'docker exec fixture-db sh -c \'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N -B -e "SELECT 42"\'':'kubectl -n fixture exec fixture-db -- sh -c \'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N -B -e "SELECT 42"\''):mode.includes('lookup')?"command -v kubectl && kubectl config current-context && kubectl get pods -A -o wide":mode.includes('danger')?"rm -f ./agent-capability-absent.txt":mode.includes('read-stop')?"printf 'READ_STOP_STARTED'; sleep 5; printf 'READ_STOP_LATE'":mode.includes('stop')?"printf 'started' > interrupted.txt; sleep 30; printf 'LATE_NATIVE_OUTPUT'":mode.includes('protected')?`cat '${home}/secrets/hidden-fixture.txt'`:mode.includes('nonzero')?"printf 'ACTUAL_FAILED_COMMAND' >&2; false":mode.includes('background')?"printf 'BEGIN_BACKGROUND'; sleep 0.15; printf 'ACTUAL_BACKGROUND_SHELL'":"printf 'ACTUAL_NATIVE_SHELL'";
   if(mode.includes('ssh')){
@@ -2387,6 +2395,37 @@ test('a specialist inherits Pilot command auto-approval for actual SSH program d
  await f.api(`/api/sessions/${session}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint});
  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(op.status,'succeeded');assert.match(op.output.stdout,/FIXTURE_CONTEXT/);assert.match(op.output.stdout,/FIXTURE_POD_READY/);assert.equal(wire.requests.length,1);assert.equal(op.readOnly,false,'CLI discovery is not an unrestricted readonly proof');
+});
+
+test('a missing optional program cannot lock the next ordinary SSH command or accept stale failure evidence',async t=>{
+ const {f,wire,worker}=await lookupCommandTask(t,true,'super-full-worker-ssh-missing-discovery'),session=worker.sessionId;
+ const snapshot=await until(()=>f.api(`/api/sessions/${session}/snapshot`),s=>!!s.hostKeyTrust);
+ await f.api(`/api/sessions/${session}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint});
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const ops=f.app.store.list('superOperations').filter(o=>o.tool==='Bash').sort((a,b)=>a.at.localeCompare(b.at));
+ assert.equal(ops.length,2);assert.equal(ops[0].status,'failed');assert.equal(ops[0].readOnly,true);assert.equal(ops[0].output.exitCode,1);
+ assert.equal(ops[1].status,'succeeded');assert.equal(ops[1].readOnly,false);assert.match(ops[1].output.stdout,/FIXTURE_CONTEXT/);
+ assert.equal(wire.requests.length,2);assert.equal(state.workers[0].task.acceptanceState,'pass');
+ const receipts=f.app.store.list('superAcceptance');assert.ok(receipts.every(r=>!r.evidenceIds?.includes(ops[0].id)));
+});
+
+test('startup verifies an exact legacy discovery from the real SDK archive without changing its original rows or dispatching again',async t=>{
+ const {f,wire,worker}=await lookupCommandTask(t,true,'super-full-worker-ssh-missing-discovery-only'),session=worker.sessionId;
+ const snapshot=await until(()=>f.api(`/api/sessions/${session}/snapshot`),s=>!!s.hostKeyTrust);
+ await f.api(`/api/sessions/${session}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint});
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked');
+ const crypto=require('node:crypto'),canonical=v=>Array.isArray(v)?'['+v.map(canonical).join(',')+']':v&&typeof v==='object'?'{'+Object.entries(v).filter(([,x])=>x!==undefined).sort(([a],[b])=>a<b?-1:a>b?1:0).map(([k,x])=>JSON.stringify(k)+':'+canonical(x)).join(',')+'}':JSON.stringify(v)??'null',digest=v=>crypto.createHash('sha256').update(canonical(v)).digest('hex');
+ const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash'),execution=f.app.store.require('commandExecutions',op.commandExecutionId);
+ // Seed the exact legacy host representation; the input/result source remains
+ // the actual SDK/SSH fixture call, not a model-supplied reconciliation claim.
+ op.status='unknown';op.readOnly=false;execution.readOnly=false;execution.commandHash=digest('hostname; command -v lake_fixture_absent_program');
+ f.app.store.put('superOperations',op.id,op);f.app.store.put('commandExecutions',execution.id,execution);
+ const before=['superOperations','commandExecutions','superGoals','superAttempts','superAcceptance'].map(kind=>f.app.store.list(kind));
+ const calls=f.calls;await f.restart();
+ assert.equal(wire.requests.length,1);assert.equal(f.calls,calls);
+ assert.deepEqual(['superOperations','commandExecutions','superGoals','superAttempts','superAcceptance'].map(kind=>f.app.store.list(kind)),before);
+ const receipt=f.app.store.require('commandReadReconciliations',op.id);assert.equal(receipt.effects,'none');assert.equal(receipt.operationHash,digest(op));assert.ok(receipt.sourcePartId);assert.ok(receipt.sourceMessageId);
+ await f.restart();assert.equal(f.app.store.list('commandReadReconciliations').length,1);assert.equal(wire.requests.length,1);
 });
 
 test('stopping an actual SDK SSH read reports stopped after settlement and projects cancelled command cards without rewriting evidence',async t=>{

@@ -26,6 +26,7 @@ export type ProjectMemoryList = { settings: ProjectMemorySettings; items: Projec
 export type ProjectMemoryJob = {dispatchCount?:number;unknownAttempts?:number;knownTokens?:number; jobId: string; status: string; attempts: number; lastErrorCode: string; createdAt: string; updatedAt: string; usageJSON: string };
 
 export type Resource = {
+  configurationRevision?: number;
   id: string;
   projectId: string;
   name: string;

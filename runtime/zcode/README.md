@@ -113,3 +113,9 @@ Pilot、专员 Worker 与临时 child 共享公开 ZCode 文件、Bash、搜索�
 `GET /api/agent-capabilities` 列出固定上游完整工具清单及实际连接状态。Cron/OffPeak、动态工作流、浏览器插件和跨会话上下文读取等还需要相应 Lake 宿主服务及范围适配，不注册成可成功调用的假工具。未连接项不被称为已完成，完整 TS 产品等价门禁保持原状态。准确检查、签名 Dev 来源和未验证项见[本批记录](../../docs/validation/zcode-typescript-candidate/agent-capabilities.md)。
 
 普通命令/只读数据库免确认的缺省值与现有 Web 设置共用 shared/execution-preferences.ts，显式关闭仍询问。程序发现和有限容器查询包装按实际内部命令判断，不因 command 或 exec 这几个字一律升级；危险动作、动态或未识别脚本保留确认。此判定只影响追加确认，不构成 readonly 证据或 TaskGrant，仍受原策略和 unknown 约束。验证见上面的本批记录。
+
+后续程序查找误锁修复单独将字面量 `command -v/-V` 识别为只读；可选程序不存在不会锁住后续普通执行。准确旧 SDK 调用及宿主失败回执可为有限的 hostname/程序查找链另存无写入核验凭证，原记录不改写、原调用不重放，不放行其他未知副作用或生成业务成功。范围和签名 Dev 验收见[程序发现误锁修复](../../docs/validation/zcode-typescript-candidate/program-discovery-recovery.md)。
+
+## 六类服务资源连接配置
+
+TS Dev 支持 MySQL、PostgreSQL、Redis、APISIX、Prometheus 和 VictoriaMetrics 的新增、目录归属、私有凭据、版本化编辑及显式限时连接测试。保存不访问目标；测试使用固定协议读取，不代表业务健康或任务验收。旧 Go 页面保留注册格式，不展示尚未接入的测试／编辑 API。专用 Agent 查询适配器保持实际已连接范围。实现与限制见 [验收记录](../../docs/validation/zcode-typescript-candidate/service-resources.md)。

@@ -52,7 +52,8 @@ const businessReceiptTools = new Set(["Bash", "Glob", "Grep", "FindFiles", "Sear
 // The goal and immutable acceptance receipts are the only completion authority.
 // Router replies, Worker prose and channel presentation never close a goal.
 export class TaskLedger {
-  constructor(readonly store: LakeStore, readonly revalidate?: (operation: Operation) => void) {}
+  constructor(readonly store: LakeStore, readonly revalidate?: (operation: Operation) => void,
+    readonly effectResolution?: (operation: Operation) => { effects: "none" } | undefined) {}
   get(goalId: string) { return this.store.require<Goal>("superGoals", goalId); }
   save(goal: Goal) {
     goal.revision++;
@@ -245,7 +246,10 @@ export class TaskLedger {
       throw new HttpError(409, "An active, confirmed task within its deadline is required");
   }
   unresolved(goalId: string) {
-    return this.store.list<Operation>("superOperations").some((operation) => operation.goalId === goalId && ["unknown", "dispatched"].includes(operation.status));
+    return this.store.list<Operation>("superOperations").some((operation) => operation.goalId === goalId && this.requiresReconciliation(operation));
+  }
+  requiresReconciliation(operation: Operation) {
+    return ["unknown", "dispatched"].includes(operation.status) && this.effectResolution?.(operation)?.effects !== "none";
   }
   active(goalId: string, generation: number, policyHash: string) {
     const goal = this.get(goalId); this.runnable(goal);
@@ -272,7 +276,7 @@ export class TaskLedger {
     const operation = this.store.transaction(() => {
       const { goal, step, attempt } = this.active(goalId, generation, policyHash);
       if (binding.readOnly !== true && this.unresolved(goalId)) throw new HttpError(409, "Original operation requires reconciliation");
-      if (binding.readOnly !== true && !binding.remoteMcp && this.store.list<Operation>("superOperations").some((operation) => operation.projectId === goal.projectId && operation.status === "unknown"))
+      if (binding.readOnly !== true && !binding.remoteMcp && this.store.list<Operation>("superOperations").some((operation) => operation.projectId === goal.projectId && operation.status === "unknown" && this.requiresReconciliation(operation)))
         throw new HttpError(409, "A project operation still requires reconciliation");
       if (binding.readOnly !== true && !binding.remoteMcp && this.store.list<any>("legacyOperations").some((operation) => operation.projectId === goal.projectId && !operation.riskResolvedAt &&
           (["running", "unknown", "dispatched"].includes(operation.status) || operation.orphanState === "unresolved")))

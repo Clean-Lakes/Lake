@@ -94,6 +94,9 @@ export function listProjectAssets(source: AssetSource, input: AssetQuery = {}) {
       }
     }
     if(resource.kind==='local'&&source.executionRevision)entry.configuration_revision=source.executionRevision(resource);
+    if(resource.kind==='database'&&['mysql','postgres','sqlite'].includes(String(resource.settings?.driver))){
+      entry.driver=String(resource.settings!.driver);if(typeof resource.settings?.database==='string')entry.database=resource.settings.database;
+    }
     if(resource.kind==='database'&&resource.settings?.driver==='mysql'){
       entry.driver='mysql';if(typeof resource.settings.database==='string')entry.database=resource.settings.database;
       if(resource.status==='available'&&source.databaseRevision)try{entry.configuration_revision=source.databaseRevision(resource);entry.connectionState='configured; not a connectivity or health observation';}catch{entry.configuration_state='unavailable';}
