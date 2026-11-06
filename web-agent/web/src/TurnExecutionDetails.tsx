@@ -4,6 +4,7 @@ import {createContext,useId,useState,type ReactNode} from 'react';
 import {ReplyDuration,type ReplyDurationProps} from './ReplyDuration';
 import {turnStatus} from './turnStatus';
 import {quietCoordination} from './coordinationActivity';
+import {recoveredRouteFailures} from './routeDispatchPresentation';
 export const ExecutionDetailsOpen=createContext(false);
 export function TurnExecutionDetails({details,onInspect,presentingReply=false,hideLive=false,hideIdentity:_hideIdentity=false,sessionId,latest=false,latestTaskId,canonicalGoalId,children,progress:_progress,...timing}:{hideIdentity?:boolean;latest?:boolean;latestTaskId?:string;canonicalGoalId?:string;progress?:{text:string;active:boolean};hideLive?:boolean;sessionId?:string;children?:ReactNode;details:ReactNode[];onInspect?:()=>void;presentingReply?:boolean}&ReplyDurationProps){
  const id=useId();
@@ -16,7 +17,8 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
  const previewAt=live&&presentingReply&&!hideLive?replyClock.at:undefined;
  // Detail visibility belongs to the reader, never to a streaming/status update.
  const [open,setOpen]=useState(false);
- const latestStep=timing.cards?.filter(card=>['operation','shell'].includes(card.type)&&!quietCoordination(card)).at(-1);
+ const recoveredRouting=recoveredRouteFailures(timing.cards??[]);
+ const latestStep=timing.cards?.filter(card=>['operation','shell'].includes(card.type)&&!quietCoordination(card)&&!recoveredRouting.has(card.id)).at(-1);
  const summaryDisclosure=details.length||canonicalGoalId?{open:inspector&&sessionId?canonicalGoalId?selection?.canonicalGoalId===canonicalGoalId&&selection.tab==='execution':inspecting:open,controls:inspector&&sessionId?sessionInspectorId:id,side:!!(inspector&&sessionId),onToggle:()=>{
   if(inspector&&sessionId)inspector.open(canonicalGoalId?{sessionId,canonicalGoalId,tab:'execution'}:{sessionId,turnId:id,tab:'execution'});
   else {onInspect?.();setOpen(!open);}

@@ -24,7 +24,12 @@ type InputEvent = { id: string; projectId: string; sessionId: string; messageId:
   receivedAt: string; revision: number; error?: string };
 type Worker = { id: string; projectId: string; roleId: string; roleSnapshot: Role; sessionId: string; taskId: string;
   sourceEventId: string; generation: number; state: "queued" | "active" | "parked" | "stopped";
-  owner?: string; leaseUntil?: number; policyHash: string; createdAt: string; inputEventIds: string[]; deliveredInputIds?: string[]; invocationInputIds?: string[] };
+  owner?: string; leaseUntil?: number; policyHash: string; createdAt: string; inputEventIds: string[]; deliveredInputIds?: string[]; invocationInputIds?: string[];
+  settledInputIds?: string[]; resumeControlId?: string };
+type ResumeControl = { sessionId: string; goalId: string; command: "resume"; revision: number; at: string;
+  consumedAt?: string; generation?: number; revokedAt?: string };
+type TaskPredecessor = { taskRef: { id: string; revision: number; hash: string }; roleId: string; title: string;
+  originalDeliverable: string; summary: string; resourceIds: string[]; historicalContextOnly: true };
 type RouterBatch = { eventIds: string[]; complete: Set<string>; input: string };
 type Decision = { id: string; projectId: string; eventId: string; partKey: string; action: string;
   quote: string; hash: string; taskId?: string; workerId?: string; sessionId?: string; roleId?: string };
@@ -179,7 +184,7 @@ export class LakeSuperagent implements AgentHost {
     const goal = this.ledger.get(worker.taskId);
     if (terminal(goal.status) || worker.state === "stopped") return;
     if (worker.state === "queued" && (goal.modelRounds >= goal.roundLimit || Date.parse(goal.deadlineAt) <= Date.now() ||
-      worker.inputEventIds.some((id) => this.store.get<InputEvent>("superInputs", id)?.disposition !== "routed"))) return;
+      !this.dispatchReady(worker))) return;
     const acceptedIds = new Set([...(worker.invocationInputIds ?? []), ...(worker.deliveredInputIds ?? [])]);
     const source = [...worker.inputEventIds].reverse()
       .filter((id) => worker.state === "queued" || acceptedIds.has(id))
@@ -291,6 +296,7 @@ export class LakeSuperagent implements AgentHost {
     const action = text(input.action, "action", 32), reason = text(input.reason, "reason", 2048);
     if (!["create", "followup", "context_only", "stop", "ask", "respond"].includes(action)) throw new HttpError(400, "Invalid routing action");
     if (action !== "create" && strings(input.evidence_task_ids, 8).length) throw new HttpError(400, "Historical evidence references are registered only for a new task");
+    if (action !== "create" && input.predecessor_task_id != null) throw new HttpError(400, "predecessor_task_id belongs only to a new task");
     const event = this.admitted(sessionId, input.event_id, ["create", "followup", "stop"].includes(action) ? text(input.quote, "quote", 16384) : undefined);
     const part = text(input.part_key, "part_key", 128), key = digest([event.id, part]), hash = digest(input);
     const result = this.store.transaction(() => {
@@ -318,6 +324,7 @@ export class LakeSuperagent implements AgentHost {
           this.store.put("superRoles", role.id, role);
         }
         if (event.preferredRoleId && event.preferredRoleId !== role.id) throw new HttpError(409, "Use the exact source channel role_id");
+        const predecessor = input.predecessor_task_id == null ? undefined : this.predecessor(event, role, input.predecessor_task_id);
         this.ensureChannel(role);
         const suffix = digest([event.id, part]).slice(0, 32), workerId = "worker_" + suffix, taskId = "st_" + suffix, workerSession = "sw_" + suffix;
         const source = this.store.session(event.sessionId), router = this.store.session(sessionId);
@@ -335,8 +342,9 @@ export class LakeSuperagent implements AgentHost {
           originRootTurnId: "super_" + suffix, userText: event.payload, title, status: "running", roundLimit: Math.max(1, Math.min(500, Number(session.options.maxSteps) || 500)),
           deadlineAt: new Date(Date.parse(event.receivedAt) + 86400000).toISOString(), mode: session.options.conversationMode === "plan" ? "plan" : "default",
           executionMode: session.options.conversationMode === "plan" ? "explicit_plan" : "host_managed" });
+        if (predecessor) this.store.put("superTaskPredecessors", taskId, predecessor);
         const worker: Worker = { id: workerId, projectId: event.projectId, roleId: role.id, roleSnapshot: structuredClone(role), sessionId: workerSession, taskId,
-          sourceEventId: event.id, generation: 0, state: "queued", policyHash: this.policy(event.projectId), createdAt: now(), inputEventIds: [event.id] };
+          sourceEventId: event.id, generation: 0, state: "queued", policyHash: this.policy(event.projectId), createdAt: now(), inputEventIds: [event.id], settledInputIds: [] };
         this.store.put("superWorkers", workerId, worker);
         Object.assign(decision, { taskId, workerId, sessionId: workerSession, roleId: role.id });
       } else if (["followup", "context_only", "stop"].includes(action)) {
@@ -346,7 +354,16 @@ export class LakeSuperagent implements AgentHost {
         if (event.preferredRoleId && event.preferredRoleId !== worker.roleId) throw new HttpError(404, "Task not found in source specialist");
         if (event.explicitTaskId && event.explicitTaskId !== goal.id) throw new HttpError(409, "Input belongs to another explicit task");
         if (action === "followup") {
-          if (terminal(goal.status)) throw new HttpError(409, "Closed tasks require a new independent task; old evidence is retained");
+          if (terminal(goal.status)) throw new HttpError(409, "Closed tasks remain unchanged. " + canonical({ code: "task_closed",
+            taskRef: { id: goal.id, revision: goal.revision, hash: digest(goal) }, role_id: worker.roleId,
+            state: goal.status, acceptanceState: goal.acceptanceState,
+            recovery: goal.status === "completed" && goal.acceptanceState === "pass" && !this.ledger.unresolved(goal.id)
+              ? { action: "create", predecessor_task_id: goal.id, role_id: worker.roleId,
+                instruction: "Only if this admitted human event requests a fresh check: create a new task with its exact quote and a resolved title; omit task_id. Explanation-only questions need respond." }
+              : { action: "respond", instruction: "Read the original outcome and limits. Do not create a replacement to bypass them." } }));
+          // Old parked invocations are already historical. New workers track
+          // actual invocation inputs separately from merely queued SDK steering.
+          worker.settledInputIds ??= worker.state === "parked" ? [...new Set([...(worker.deliveredInputIds ?? []), ...(worker.invocationInputIds ?? [])])] : [];
           worker.inputEventIds.push(event.id);
           if (worker.state !== "active" && goal.modelRounds < goal.roundLimit && Date.parse(goal.deadlineAt) > Date.now()) {
             worker.state = "queued"; goal.status = "running"; this.ledger.save(goal);
@@ -371,8 +388,27 @@ export class LakeSuperagent implements AgentHost {
     const worker = this.store.require<Worker>("superWorkers", result.workerId), goal = this.ledger.get(worker.taskId);
     const state = this.pendingInteraction(worker.sessionId) ? "needs_input" : Date.parse(goal.deadlineAt) <= Date.now() || goal.modelRounds >= goal.roundLimit ? "limit_reached"
       : worker.state === "active" ? "running" : worker.state === "queued" ? "queued" : "recorded";
-    return { ...result, dispatch: { state, reason: state === "limit_reached" ? Date.parse(goal.deadlineAt) <= Date.now() ? "deadline_reached" : "model_round_limit" : undefined,
-      unresolvedOperations: this.ledger.unresolved(goal.id), observation: "Current scheduling result; each operation still checks current permissions." } };
+    const observedAt = now();
+    return { ...result, handoff: { recorded: true, observedAt, meaning: "The assignment was recorded. This does not grant permission, prove execution or accept the result." },
+      dispatch: { state, observedAt, reason: state === "limit_reached" ? Date.parse(goal.deadlineAt) <= Date.now() ? "deadline_reached" : "model_round_limit" : undefined,
+      unresolvedOperations: this.ledger.unresolved(goal.id), observation: "Point-in-time scheduling snapshot, not a durable current-status claim. Acknowledge the recorded handoff; the live activity row owns current progress. Each operation checks current permissions." } };
+  }
+  private predecessor(event: InputEvent, role: Role, taskId: unknown): TaskPredecessor {
+    const source = this.ledger.get(text(taskId, "predecessor_task_id", 128));
+    if (source.projectId !== event.projectId || source.roleId !== role.id) throw new HttpError(404, "Predecessor task not found in this project and specialist");
+    if (event.explicitTaskId && event.explicitTaskId !== source.id) throw new HttpError(409, "Predecessor must match the explicitly referenced task");
+    if (source.sourceEventId === event.id) throw new HttpError(409, "A fresh check requires a new admitted human event");
+    if (source.status !== "completed" || source.acceptanceState !== "pass" || this.ledger.unresolved(source.id))
+      throw new HttpError(409, "Only an accepted completed task without unresolved operations can supply fresh-check context; original limits cannot be reset");
+    const decision = this.store.list<Decision>("superDecisions").find((item) => item.action === "create" && item.taskId === source.id);
+    if (!decision) throw new HttpError(409, "Predecessor has no canonical assignment source");
+    const prior = this.store.get<TaskPredecessor>("superTaskPredecessors", source.id);
+    const resourceIds = [...new Set([...(prior?.resourceIds ?? []),
+      ...this.store.list<Operation>("superOperations").filter((operation) => operation.goalId === source.id).map((operation) => operation.resourceId).filter((value): value is string => !!value)])]
+      .filter((resourceId) => this.store.get<{ projectId: string }>("resources", resourceId)?.projectId === event.projectId);
+    return { taskRef: { id: source.id, revision: source.revision, hash: digest(source) }, roleId: source.roleId, title: source.title,
+      originalDeliverable: prior?.originalDeliverable ?? decision.quote, summary: clip(this.agents.redact(source.summary ?? ""), 4096),
+      resourceIds, historicalContextOnly: true };
   }
   async send(sessionId: string, value: string, explicitTaskId?: string, ignoreMemory = false) {
     text(value, "message", 256000);
@@ -439,8 +475,7 @@ export class LakeSuperagent implements AgentHost {
         catch (error) { this.routerFinished(project.routerSessionId, String(error)); }
       }
     }
-    const queued = this.store.list<Worker>("superWorkers").filter((worker) => worker.state === "queued" && !this.active.has(worker.id) &&
-      worker.inputEventIds.every((eventId) => this.store.require<InputEvent>("superInputs", eventId).disposition === "routed"));
+    const queued = this.store.list<Worker>("superWorkers").filter((worker) => worker.state === "queued" && !this.active.has(worker.id) && this.dispatchReady(worker));
     queued.sort((a, b) => Number(a.projectId === this.lastProject) - Number(b.projectId === this.lastProject) || a.createdAt.localeCompare(b.createdAt));
     for (const worker of queued) {
       if (this.active.size >= 4) break;
@@ -449,7 +484,12 @@ export class LakeSuperagent implements AgentHost {
       if (terminal(goal.status) || Date.parse(goal.deadlineAt) <= Date.now() || goal.modelRounds >= goal.roundLimit) continue;
       try { this.role(worker.projectId, worker.roleId); } catch { continue; }
       worker.state = "active"; worker.generation++; worker.owner = this.owner; worker.leaseUntil = Date.now() + 45000; worker.policyHash = this.policy(worker.projectId);
-      worker.invocationInputIds = worker.inputEventIds.filter((eventId) => !worker.deliveredInputIds?.includes(eventId));
+      worker.invocationInputIds = this.routedInputs(worker);
+      const resume = this.resumeControl(worker);
+      if (resume && worker.resumeControlId) {
+        this.store.put("superHumanControls", worker.resumeControlId, { ...resume, consumedAt: now(), generation: worker.generation });
+        worker.resumeControlId = undefined;
+      }
       for (const step of goal.items) if (!this.ledger.isHostManaged(goal) && step.status === "running" && step.attemptId) {
         const attempt = this.store.require<import("./tasks").Attempt>("superAttempts", step.attemptId);
         if (attempt.state === "running" && attempt.policyHash === worker.policyHash) {
@@ -463,6 +503,8 @@ export class LakeSuperagent implements AgentHost {
       const input = canonical({ assignment: { projectId: worker.projectId, roleId: worker.roleId, roleRevision: worker.roleSnapshot.revision,
         taskId: worker.taskId, workerId: worker.id, sessionId: worker.sessionId }, roleSnapshot: worker.roleSnapshot,
         originalRequirement: origin.payload, assignedDeliverable: decision.quote, goal: this.publicGoal(goal),
+        predecessor: this.store.get<TaskPredecessor>("superTaskPredecessors", worker.taskId),
+        humanControl: resume ? { command: resume.command, at: resume.at } : undefined,
         followups: followups.map((event) => ({ id: event.id, text: event.payload })) });
       try { await this.agents.send(worker.sessionId, "[Task assignment] " + goal.title, { input, recordUser: false, recordAssistant: false,
         ignoreMemory: worker.invocationInputIds.some(eventId => this.store.get<InputEvent>("superInputs", eventId)?.ignoreMemory === true) }); }
@@ -661,8 +703,8 @@ export class LakeSuperagent implements AgentHost {
       this.entry("list_specialists", "List stable project specialist role IDs and revisions. Metadata, not permissions.", objectSchema({ cursor: str, limit: integer }), (a) => this.listRoles(projectId, a.cursor, a.limit)),
       this.entry("manage_specialist", "Create/edit a long-lived specialist from an exact admitted human quote, independently of tasks. create requires immutable role_key; update exact role_id/expected_revision. Duties affect future assignments only.",
         objectSchema({ event_id: str, part_key: str, action: { enum: ["create", "update"], type: "string" }, role_id: str, role_key: str, name: str, duties: str, expected_revision: integer, quote: str }, ["event_id", "part_key", "action", "name", "duties", "quote"]), (a) => this.manage(sessionId, a)),
-      this.entry("route_work", "Commit one exact admitted event part. create: title, role_id (or new role_key), exact quote; omit task_id. followup/context_only/stop: exact project task_id. ask/respond: no task_id. This only routes metadata, never grants execution or acceptance.",
-        objectSchema({ event_id: str, part_key: str, action: { type: "string", enum: ["create", "followup", "context_only", "stop", "ask", "respond"] }, task_id: str, title: str, role_id: str, role_key: str, quote: str, reason: str, evidence_task_ids: array(str) }, ["event_id", "part_key", "action", "reason"]), (a) => this.route(sessionId, a)),
+      this.entry("route_work", "Commit one exact admitted event part. create: resolved title, role_id (or new role_key), exact current human quote; omit task_id. A fresh check after completed+pass may set predecessor_task_id for same-role historical context only, never prior evidence or permission. followup resumes an unfinished task with its original limits. followup/context_only/stop require exact project task_id. ask/respond omit task_id. handoff.recorded confirms the assignment record; dispatch is only a point-in-time scheduling snapshot, not current user-facing progress.",
+        objectSchema({ event_id: str, part_key: str, action: { type: "string", enum: ["create", "followup", "context_only", "stop", "ask", "respond"] }, task_id: str, predecessor_task_id: str, title: str, role_id: str, role_key: str, quote: str, reason: str, evidence_task_ids: array(str) }, ["event_id", "part_key", "action", "reason"]), (a) => this.route(sessionId, a)),
       this.entry("search_super_tasks", "Search all canonical project tasks, beyond the recent index. Read-only, never resumes work.", objectSchema({ role_id: str, resource_id: str, query: str, cursor: str, limit: integer, created_after: str, created_before: str }), (a) => {
         const limit = a.limit ?? 20; if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) throw new HttpError(400, "Invalid task page size");
         if (a.resource_id && this.store.require<{ projectId: string }>("resources", a.resource_id).projectId !== projectId) throw new HttpError(404, "Resource not found in project");
@@ -743,6 +785,18 @@ export class LakeSuperagent implements AgentHost {
         })),
       this.entry("work_finish", this.ledger.isHostManaged(this.ledger.get(worker.taskId)) ? "Submit the business result. Use completed only when the user's requested deliverable is satisfied, partial for useful findings with remaining work or a blocker. Summary is the public reply. The host verifies actual current tool receipts; a report alone never proves success." : "Submit the final business report after every original plan item has accepted evidence. Use the existing plan tools for incomplete steps; summary does not create acceptance.", this.ledger.isHostManaged(this.ledger.get(worker.taskId)) ? objectSchema({ summary: str, outcome: { type: "string", enum: ["completed", "partial"] } }, ["summary", "outcome"]) : objectSchema({ summary: str }, ["summary"]), run((a) => {
         const summary = this.agents.redact(text(a.summary, "summary", 32768));
+        const current = this.store.require<Worker>("superWorkers", worker.id);
+        const waiting = current.inputEventIds.filter((eventId) => !current.invocationInputIds?.includes(eventId) && !current.settledInputIds?.includes(eventId))
+          .filter((eventId) => ["pending", "routed"].includes(this.store.require<InputEvent>("superInputs", eventId).disposition));
+        if (waiting.length) {
+          // A steering queue acknowledgement is not evidence that this model
+          // invocation considered the new input. End it without accepting the
+          // old result, then dispatch the exact inputs in another invocation.
+          this.store.put("superDeferredFinishes", digest([current.id, current.generation]), { taskId: current.taskId,
+            generation: current.generation, inputEventIds: waiting, summary, outcome: a.outcome, at: now() });
+          return { taskId: current.taskId, completionDeferred: true, inputEventIds: waiting,
+            reason: "New human input will be included in the next invocation of this same task; no completion or acceptance was recorded." };
+        }
         const goal = this.ledger.isHostManaged(this.ledger.get(worker.taskId))
           ? this.ledger.finishHost(worker.taskId, { summary, outcome: a.outcome }, worker.generation, worker.policyHash)
           : this.ledger.finish(worker.taskId, summary, worker.policyHash);
@@ -894,36 +948,91 @@ export class LakeSuperagent implements AgentHost {
     if (success) this.store.put("superRouterArchives", digest(batch.input), { projectId: project.projectId, eventIds: batch.eventIds, hash: digest(batch.input) });
     if (success) for (const decision of this.store.list<Decision>("superDecisions").filter((decision) => batch.eventIds.includes(decision.eventId) && decision.action === "stop" && decision.taskId))
       void this.stopTask(decision.taskId!);
+    if (success) {
+      const targets = new Set(this.store.list<Decision>("superDecisions").filter((decision) =>
+        batch.eventIds.includes(decision.eventId) && decision.action === "followup").map((decision) => decision.workerId));
+      for (const worker of this.store.list<Worker>("superWorkers").filter((worker) => worker.projectId === project.projectId && targets.has(worker.id)))
+        this.queueFollowups(worker);
+    }
+    if (!success) for (const worker of this.store.list<Worker>("superWorkers").filter((worker) => worker.projectId === project.projectId && ["parked", "queued"].includes(worker.state))) {
+      if (!worker.inputEventIds.some((eventId) => batch.eventIds.includes(eventId)) || this.routedInputs(worker).length ||
+          worker.inputEventIds.some((eventId) => this.store.require<InputEvent>("superInputs", eventId).disposition === "pending")) continue;
+      const goal = this.ledger.get(worker.taskId); if (terminal(goal.status)) continue;
+      worker.state = "parked"; this.store.put("superWorkers", worker.id, worker);
+      goal.status = this.ledger.unresolved(goal.id) ? "blocked" : "paused";
+      goal.summary = "这条消息没有处理成功，检查暂时停在这里。请重试这条消息。"; this.ledger.save(goal);
+      this.store.put("superPendingReports", digest([goal.id, goal.revision]), { taskId: goal.id, revision: goal.revision,
+        snapshot: structuredClone(goal), presentation: { body: goal.summary, channelBody: goal.summary }, createdAt: now() });
+      this.deliverReports(); this.changed(worker.sessionId);
+    }
     this.batches.delete(sessionId); this.routing.delete(project.projectId); this.notify(sessionId, "specialist"); this.schedule();
-    if (success) void this.deliverFollowups(project.projectId).catch((error) => {
-      this.store.put("superDispatchErrors", id(), { projectId: project.projectId, error: this.agents.redact(String(error)), at: now() });
-    });
   }
   private workerFinished(sessionId: string, error?: string, response?: string) {
     const worker = this.workerFor(sessionId); if (!worker) return;
     this.active.delete(worker.id);
     worker.deliveredInputIds = [...new Set([...(worker.deliveredInputIds ?? []), ...(worker.invocationInputIds ?? [])])];
+    worker.settledInputIds = [...new Set([...(worker.settledInputIds ?? []), ...(worker.invocationInputIds ?? [])])];
     worker.state = worker.state === "stopped" ? "stopped" : "parked"; worker.owner = undefined; worker.leaseUntil = undefined;
     this.store.put("superWorkers", worker.id, worker);
-    const goal = this.ledger.get(worker.taskId);
+    let goal = this.ledger.get(worker.taskId);
+    const deferred = this.store.get<{ inputEventIds: string[] }>("superDeferredFinishes", digest([worker.id, worker.generation]));
     if (!terminal(goal.status) && goal.status === "running") {
       goal.status = this.ledger.unresolved(goal.id) ? "blocked" : "paused";
-      goal.summary = error ? this.agents.redact(error) : response?.trim() ? this.agents.redact(response.trim()).slice(0, 32768) : goal.summary || "这次检查还没完成。";
+      goal.summary = error ? this.agents.redact(error) : deferred ? goal.summary : response?.trim() ? this.agents.redact(response.trim()).slice(0, 32768) : goal.summary || "这次检查还没完成。";
       this.ledger.save(goal);
     }
-    const pending = worker.inputEventIds.some((eventId) => !worker.deliveredInputIds?.includes(eventId) && this.store.require<InputEvent>("superInputs", eventId).disposition === "routed");
-    if (pending && worker.state !== "stopped" && !terminal(goal.status) && !this.closed && goal.modelRounds < goal.roundLimit && Date.parse(goal.deadlineAt) > Date.now()) {
-      worker.state = "queued"; goal.status = "running"; this.ledger.save(goal); this.store.put("superWorkers", worker.id, worker);
+    this.queueFollowups(worker);
+    goal = this.ledger.get(worker.taskId);
+    let deferredFailure: string | undefined;
+    if (deferred && !error && worker.state !== "stopped" && !terminal(goal.status)) {
+      if (goal.modelRounds >= goal.roundLimit || Date.parse(goal.deadlineAt) <= Date.now()) {
+        goal.status = "paused"; goal.summary = Date.parse(goal.deadlineAt) <= Date.now() ? "deadline_reached" : "model_round_limit";
+        this.ledger.save(goal);
+      } else if (!deferred.inputEventIds.some((eventId) => ["pending", "routed"].includes(this.store.require<InputEvent>("superInputs", eventId).disposition))) {
+        deferredFailure = "这条消息没有处理成功，检查暂时停在这里。请重试这条消息。";
+        goal.status = this.ledger.unresolved(goal.id) ? "blocked" : "paused"; goal.summary = deferredFailure; this.ledger.save(goal);
+      }
+    }
+    // A new input is being handed to the same task, not an incomplete business
+    // delivery. Limits, errors and explicit stop still need their real outcome.
+    if (deferred && !deferredFailure && !error && worker.state !== "stopped" && goal.modelRounds < goal.roundLimit && Date.parse(goal.deadlineAt) > Date.now()) {
+      this.changed(sessionId); this.schedule(); return;
     }
     const reportKey = digest([goal.id, goal.revision]);
     // Freeze this invocation's public report separately from the completion ledger.
     // Never recover a reply from accumulated cards: it may belong to an older turn.
     const reply = !error && this.store.view(sessionId).status === "completed" ? response?.trim() : undefined;
-    const presentation = this.reportPresentation(goal, reply, error);
+    const presentation = deferredFailure ? { body: deferredFailure, channelBody: deferredFailure } : this.reportPresentation(goal, reply, error);
     if (!this.store.get("superPendingReports", reportKey)) this.store.put("superPendingReports", reportKey, { taskId: goal.id, revision: goal.revision, snapshot: structuredClone(goal), presentation, createdAt: now() });
     this.deliverReports();
     this.agents.memory?.captureTask(goal.id);
     this.changed(sessionId); this.schedule();
+  }
+  private queueFollowups(worker: Worker) {
+    if (this.closed || worker.state !== "parked") return false;
+    if (!this.routedInputs(worker).length) return false;
+    const goal = this.ledger.get(worker.taskId);
+    if (terminal(goal.status) || this.pendingInteraction(worker.sessionId)) return false;
+    if (goal.modelRounds >= goal.roundLimit || Date.parse(goal.deadlineAt) <= Date.now()) {
+      goal.status = "paused"; goal.summary = Date.parse(goal.deadlineAt) <= Date.now() ? "deadline_reached" : "model_round_limit";
+      this.ledger.save(goal); return false;
+    }
+    worker.state = "queued"; goal.status = "running";
+    this.ledger.save(goal); this.store.put("superWorkers", worker.id, worker); return true;
+  }
+  private routedInputs(worker: Worker) {
+    return worker.inputEventIds.filter((eventId) => !(worker.settledInputIds ?? worker.deliveredInputIds)?.includes(eventId) &&
+      this.store.require<InputEvent>("superInputs", eventId).disposition === "routed");
+  }
+  private dispatchReady(worker: Worker) {
+    return this.store.require<InputEvent>("superInputs", worker.sourceEventId).disposition === "routed" &&
+      !worker.inputEventIds.some((eventId) => this.store.require<InputEvent>("superInputs", eventId).disposition === "pending") &&
+      (this.routedInputs(worker).length > 0 || !!this.resumeControl(worker));
+  }
+  private resumeControl(worker: Worker) {
+    const control = worker.resumeControlId ? this.store.get<ResumeControl>("superHumanControls", worker.resumeControlId) : undefined;
+    return control?.command === "resume" && control.goalId === worker.taskId && control.sessionId === worker.sessionId &&
+      !control.consumedAt && !control.revokedAt ? control : undefined;
   }
   private reportPresentation(goal: Goal, reply?: string, error?: string) {
     if (goal.status === "completed" && goal.acceptanceState === "pass") {
@@ -969,21 +1078,7 @@ export class LakeSuperagent implements AgentHost {
     this.store.delete("superPendingReports", digest([pending.taskId, pending.revision]));
     }
   }
-  private async deliverFollowups(projectId: string) {
-    for (const worker of this.store.list<Worker>("superWorkers").filter((worker) => worker.projectId === projectId && worker.state === "active")) {
-      for (const eventId of worker.inputEventIds.filter((id) => !worker.invocationInputIds?.includes(id) && !worker.deliveredInputIds?.includes(id))) {
-        const event = this.store.require<InputEvent>("superInputs", eventId);
-        if (event.disposition !== "routed" || terminal(this.ledger.get(worker.taskId).status)) continue;
-        if (event.ignoreMemory) this.agents.memory?.setIgnored(worker.sessionId, true);
-        const accepted = await this.agents.steer(worker.sessionId, "[ACTUAL HUMAN TASK FOLLOWUP — same canonical task, no new permission]\n" + canonical({ eventId: event.id, taskId: worker.taskId, text: event.payload }), event.id);
-        const current = this.store.require<Worker>("superWorkers", worker.id);
-        if (accepted && current.generation === worker.generation) {
-          current.deliveredInputIds = [...new Set([...(current.deliveredInputIds ?? []), event.id])]; this.store.put("superWorkers", current.id, current);
-          this.changed(current.sessionId);
-        }
-      }
-    }
-  }
+
   private projectRouterRequest<T>(projectId: string, request: T): T {
     // Current input already contains bounded channel dialogue and report facts.
     // Remove only acknowledged complete SDK groups, retaining original archives.
@@ -994,6 +1089,9 @@ export class LakeSuperagent implements AgentHost {
   }
   async stopTask(taskId: string, pause = false) {
     const goal = this.ledger.get(taskId), worker = this.store.require<Worker>("superWorkers", goal.workerId);
+    const resume = this.resumeControl(worker);
+    if (resume && worker.resumeControlId) this.store.put("superHumanControls", worker.resumeControlId, { ...resume, revokedAt: now() });
+    worker.resumeControlId = undefined;
     worker.generation++; worker.state = "stopped"; worker.owner = undefined; worker.leaseUntil = undefined;
     this.store.put("superWorkers", worker.id, worker);
     if (!terminal(goal.status)) { goal.status = this.ledger.unresolved(taskId) ? "blocked" : pause ? "paused" : "cancelled"; this.ledger.save(goal); }
@@ -1009,9 +1107,11 @@ export class LakeSuperagent implements AgentHost {
       const worker = this.store.require<Worker>("superWorkers", goal.workerId); this.role(worker.projectId, worker.roleId);
       if (terminal(goal.status) || worker.state === "active" || goal.modelRounds >= goal.roundLimit || Date.parse(goal.deadlineAt) <= Date.now())
         throw new HttpError(409, "Original task limits prohibit resume");
-      goal.status = "running"; this.ledger.save(goal); worker.state = "queued";
-      this.store.put("superWorkers", worker.id, worker);
-      this.store.put("superHumanControls", id(), { sessionId, goalId: goal.id, command: "resume", revision: input.revision, at: now() });
+      this.store.transaction(() => {
+        goal.status = "running"; this.ledger.save(goal); worker.state = "queued"; worker.resumeControlId = id();
+        this.store.put("superHumanControls", worker.resumeControlId, { sessionId, goalId: goal.id, command: "resume", revision: input.revision, at: now() });
+        this.store.put("superWorkers", worker.id, worker);
+      });
       this.schedule();
     } else throw new HttpError(400, "Unknown task control command");
     return this.publicGoal(this.ledger.get(goal.id));

@@ -14,6 +14,7 @@ import {conversationPlanEntry} from './planConversation';
 import {isAssistantProse,trailingTurnReplyId} from './completedTurnProse';
 import {SettledReply} from './SettledReply';
 import {pilotReplyContinuations} from './replyGrouping';
+import {recoveredRouteFailures} from './routeDispatchPresentation';
 import {OperationOutcomes} from './OperationOutcomes';
 import {MessageText} from './MessageText';
 import {StrategyCorrectionCard} from './StrategyCorrectionCard';
@@ -217,12 +218,19 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       const fallbackDiagnostic=turn.find(isCompactionFallbackEntry);
       const compactionDiagnostics=turn.flatMap(entry=>entry.card?.type==='error'&&isContextCompactionFailure(entry.card.content||'')?[<details className="compaction-diagnostic" key={`diagnostic-${entry.id}`}><DisclosureSummary>整理请求诊断</DisclosureSummary><pre>{entry.card.content}</pre></details>]:[]);
       if(fallbackDiagnostic)compactionDiagnostics.push(<details className="compaction-diagnostic" key={`diagnostic-${fallbackDiagnostic.id}`}><DisclosureSummary>整理请求诊断</DisclosureSummary><pre>{fallbackDiagnostic.card?.content??fallbackDiagnostic.message?.text}</pre></details>);
-      const notices=[['failed','项失败'],['pending','项待确认'],['unknown','项结果待核查'],['background_running','项后台执行中'],['not_executed','项未执行'],['interrupted','项已停止'],['cancelled','项已停止']].flatMap(([status,label])=>{const count=processGroups.flatMap(group=>group.entries).filter(entry=>entry.card?.status===status).length;return count?[`${count} ${label}`]:[];}).join(' · ');
+      const recoveredRouting=recoveredRouteFailures(turn.flatMap(entry=>entry.card?[entry.card]:[]));
+      const notices=[['failed','项失败'],['pending','项待确认'],['unknown','项结果待核查'],['background_running','项后台执行中'],['not_executed','项未执行'],['interrupted','项已停止'],['cancelled','项已停止']].flatMap(([status,label])=>{const count=processGroups.flatMap(group=>group.entries).filter(entry=>entry.card?.status===status&&!(status==='failed'&&recoveredRouting.has(entry.id))).length;return count?[`${count} ${label}`]:[];}).join(' · ');
       const timingProps={timing:timingForTurn(turn,snapshot),view:turn.some(entry=>entry.message?.id===latestUser?.id)?snapshot.ai:undefined,cards:turn.flatMap(entry=>entry.card?[entry.card]:[]),latestUserAt:turn.find(entry=>entry.message?.role==='user')?.at??''};
       const miniStartedAt=timingProps.timing?.startedAt||timingProps.latestUserAt||turn[0]!.at;
       const miniEndedAt=turns[index+1]?.find(entry=>entry.message?.role==='user')?.at;
       const miniScope={session:snapshot.session.id,terminals:snapshot.terminals??[],startedAt:miniStartedAt,endedAt:miniEndedAt,live:turn===currentTurn&&liveConversation,waiting:snapshot.ai?.status==='waiting_approval',connected:!disabled,multiResource:hasMultipleMiniResources(processGroups)};
-      const continuations=mode==='conversation'&&assistantIdentity?.pilot?pilotReplyContinuations(turn,new Set()):new Set<string>();
+      const hiddenProcess=new Set(processGroups.flatMap(group=>group.entries).filter(entry=>entry.card?.title!=='ask_user_question'&&!!entry.card&&(['running','completed','succeeded','success'].includes(entry.card.status)||recoveredRouting.has(entry.id))).map(entry=>entry.id));
+      for(const entry of turn){
+        if(entry.message?.dispatch&&!hideReplyIdentity)hiddenProcess.add(entry.id);
+        if(entry.card?.type==='thinking'&&!entry.card.content?.trim()&&['running','completed','succeeded','success'].includes(entry.card.status))hiddenProcess.add(entry.id);
+      }
+      const emptyProse=new Set(turn.filter(entry=>isAssistantProse(entry)&&!(entry.message?.text.trim()||entry.card?.content?.trim())).map(entry=>entry.id));
+      const continuations=mode==='conversation'&&assistantIdentity?.pilot?pilotReplyContinuations(turn,emptyProse,hiddenProcess):new Set<string>();
       const activeIdentity=activeReply&&continuations.has(activeReply)?turn.slice(0,turn.findIndex(entry=>entry.id===activeReply)).filter(entry=>isAssistantProse(entry)&&!continuations.has(entry.id)).at(-1)?.id:activeReply;
       const replyMotion=(id:string)=>id===activeIdentity?conversationAvatarMotion(conversationActivity(snapshot.ai)):'idle';
       const renderGroup=({entries:group,progress,resource}:ConversationGroup)=>{
