@@ -2,7 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import type {SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {greetRoleAvatar,SuperRoleAvatar} from './SuperRoleAvatar';
-import {conversationAvatarMotion,superAvatarMotion,superTaskPresentation,type ConversationAvatarActivity,type ConversationActivity} from './superAgentPresentation';
+import {conversationAvatarMotion,superAvatarMotion,superTaskPresentation,specialistTaskActivity,type ConversationAvatarActivity,type ConversationActivity} from './superAgentPresentation';
 import {Glyph} from './Icons';
 import {NavigationMenu} from './NavigationDelete';
 import {SpecialistDelete} from './SpecialistDelete';
@@ -106,7 +106,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
   </button>
   <div className="nav-heading"><span>专员</span><small>{entries.length}</small></div>
   {entries.length ? entries.map(({channel, workers}) => {
-   const worker = workers[0], task = worker?.task;
+   const aggregate=specialistTaskActivity(workers),worker = aggregate.worker, task = worker?.task;
    const name = channel?.roleName ?? worker!.roleName;
    const selected = channel ? channel.roleId === viewedRole : worker?.sessionId === selectedId;
    // Only the host can attest that a live, source-bound interaction exists.
@@ -122,15 +122,17 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
     cursor > (read?.requested ?? '') && cursor > (read?.acknowledged ?? '');
    const status = [needsConfirmation && '需确认', activityLabel, unread && '有已完成任务未读'].filter(Boolean).join(' · ') ||
     (task && task.state !== 'running' ? superTaskPresentation(task).label : task ? '暂无正在执行的任务' : '暂无任务');
-   const label = `${name} · ${task?.title ?? (channel?.duties || '持续沟通')} · ${status}`;
+   const detail=aggregate.detail??(channel?.duties||'持续沟通');
+   const label = `${name} · ${detail}${detail.endsWith(status)?'':` · ${status}`}`;
    return <button type="button" key={channel?.id ?? worker!.id} className={`nav-row pilot-worker-row${selected ? ' active' : ''}`}
      aria-current={selected ? 'page' : undefined} aria-label={label} title={label}
      aria-haspopup={channel?'menu':undefined}
      onContextMenu={event=>{event.preventDefault();event.stopPropagation();if(channel&&!disabled){anchor.current=event.currentTarget;setContext({channel,x:event.clientX,y:event.clientY});}}}
      onKeyDown={event=>{if(channel&&!disabled&&(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10')){event.preventDefault();const bounds=event.currentTarget.getBoundingClientRect();anchor.current=event.currentTarget;setContext({channel,x:bounds.left+20,y:bounds.bottom});}}}
      onClick={event=>{greetRoleAvatar(event.currentTarget);if(channel&&onChannel)onChannel(channel);else if(worker)onWorker(worker);}}>
-    <SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId} motion={preparing?'working':replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/><span className="nav-row-text"><strong>{name}</strong><span className="pilot-worker-task">{task?.title ?? (channel?.duties || '持续沟通')}</span></span>
+    <SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId} motion={preparing?'working':replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/><span className="nav-row-text"><strong>{name}</strong><span className="pilot-worker-task">{detail}</span></span>
     <span className="pilot-worker-status">
+     {aggregate.runningCount>1&&<span className="pilot-worker-count" aria-label={`${aggregate.runningCount} 项任务执行中`}>{aggregate.runningCount}</span>}
      {needsConfirmation && <span className="pilot-worker-confirmation">需确认</span>}
      {activityLabel ? <span className="pilot-worker-running" role="img" aria-label={activityLabel}><Glyph name="loader" size={14} className="activity-indicator"/></span> :
       unread && <span className="pilot-worker-unread" role="img" aria-label="有已完成任务未读"/>}

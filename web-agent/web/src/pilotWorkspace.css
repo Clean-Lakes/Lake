@@ -12,6 +12,7 @@
 .pilot-worker-status { display:inline-flex; align-items:center; justify-content:flex-end; gap:6px; flex:0 0 auto; }
 .pilot-worker-status:empty { display:none; }
 .pilot-worker-running { display:inline-flex; }
+.pilot-worker-count { min-width:18px; padding:1px 4px; border-radius:5px; corner-shape:var(--corner-window); background:color-mix(in srgb,var(--info) 10%,transparent); color:var(--info); font-size:11px; line-height:16px; text-align:center; }
 .nav-row .pilot-worker-running .activity-indicator { color:var(--info); }
 .pilot-worker-unread { width:7px; height:7px; border-radius:50%; background:var(--success); }
 .super-role-avatar { display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; background:none; }

@@ -71,7 +71,7 @@ export function WorkerExecutionResults({snapshot}:{snapshot:SessionSnapshot}){
  if(!task)return null;
  const cards=workerBusinessReceipts(snapshot);
  return <section className="worker-execution-results" aria-label="任务结果与证据">
-  {task.summary?<p className="worker-task-report">{task.summary}</p>:<p className="inspector-empty">任务结果尚未提交。</p>}
+  {task.summary?<p className="worker-task-report">{task.summary}</p>:<p className="inspector-empty">{task.state==='cancelled'?'此任务已停止，未提交完成结果。':'任务结果尚未提交。'}</p>}
   <Branch summary={<><Glyph name="document" size={15}/><span className="worker-execution-name">业务工具回执</span><small>{cards.length} 项</small></>}><Calls cards={cards} paths={model.resourcePaths}/></Branch>
  </section>;
 }
