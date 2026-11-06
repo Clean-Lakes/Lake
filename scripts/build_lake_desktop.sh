@@ -1,5 +1,5 @@
 #!/bin/sh
-# macOS client. TS/ZCode is an explicit Dev-only build choice.
+# macOS client. TypeScript is an explicit Dev-only build choice.
 set -eu
 lake_repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$lake_repo_root"
@@ -15,7 +15,7 @@ for lake_argument in "$@"; do
   esac
 done
 [ "$typescript_candidate" -eq 0 ] || [ "$development_app" -eq 1 ] || {
-  echo 'TS/ZCode 候选只允许 --dev；正式版后端切换仍需完整功能验收' >&2; exit 2;
+  echo 'TypeScript 候选只允许 --dev；正式版后端切换仍需完整功能验收' >&2; exit 2;
 }
 lake_backend_runtime=go
 lake_backend_binary=bin/lake
@@ -62,7 +62,7 @@ mkdir -p "$lake_app/Contents/MacOS" "$lake_app/Contents/Resources/licenses"
 cp "$lake_swift_bin/LakeDesktop" "$lake_app/Contents/MacOS/Lake"
 cp "$lake_backend_binary" "$lake_app/Contents/Resources/lake"
 if [ "$typescript_candidate" -eq 1 ]; then
-  ditto --norsrc bin/lake-zcode "$lake_app/Contents/Resources/lake-zcode"
+  ditto --norsrc bin/lake-runtime "$lake_app/Contents/Resources/lake-runtime"
 fi
 cp client/macos/Resources/install-update.sh "$lake_app/Contents/Resources/"
 cp web-agent/web/src/workbenchLayout.js "$lake_app/Contents/Resources/workbench-layout.js"
@@ -106,7 +106,7 @@ codesign --verify --deep --strict "$lake_app"
 "$lake_app/Contents/Resources/lake" --version
 lake_name="Lake-$lake_version-macos-$lake_arch"
 if [ "$development_app" -eq 1 ]; then lake_name="$lake_name-dev"; fi
-if [ "$typescript_candidate" -eq 1 ]; then lake_name="$lake_name-zcode"; fi
+if [ "$typescript_candidate" -eq 1 ]; then lake_name="$lake_name-typescript"; fi
 ditto --norsrc -c -k --keepParent "$lake_app" "$lake_output/$lake_name.zip"
 (cd "$lake_output" && shasum -a 256 "$lake_name.zip" > "$lake_name.zip.sha256")
 mkdir "$lake_stage/dmg"

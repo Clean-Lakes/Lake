@@ -18,7 +18,7 @@ tags: [architecture, agent, typescript, sre, operations, implementation]
 
 用户确认的最终结构为：**一个会话可以由多个专员协作；专员是拥有独立模型上下文的子智能体；所有专员默认拥有诊断、coding、部署、调试、验证、报告技能；专员按任务使用多个 Power；会话统一持有终端会话、任务进度与证据。** SSH、K8s、数据库是 Power，而不是必须切换的专员身份。
 
-本分支从零编写 Agent 循环、模型协议适配、专员调度、上下文管理、工具执行协议和运维状态管理。不导入 ZCode、天枢或旧 Lake Agent 的运行时实现。已有代码只作为数据兼容、签名与许可参考。此目标取代旧计划中“新客户端必须仅使用 ZCode 原生 Agent”的实施约束；旧客户端与旧数据在新版本验收前继续保持可用。
+本分支从零编写 Agent 循环、模型协议适配、专员调度、上下文管理、工具执行协议和运维状态管理。不导入 Agent SDK、天枢或旧 Lake Agent 的运行时实现。已有代码只作为数据兼容、签名与许可参考。此目标取代旧计划中“新客户端必须仅使用 原生 Agent”的实施约束；旧客户端与旧数据在新版本验收前继续保持可用。
 
 Lake v0.0.1 的产品价值是把业务服务映射、现场事实、共享调查、受控变更和业务验收连接起来。多专员、终端和模型本身是实现基础。首版交付两个完整场景：HTTP 服务故障排查与受控恢复；单机 HTTP 服务配置变更与验证。K8s 与 PostgreSQL 同时提供真实只读诊断能力，用于跨资源调查；其发布、DDL、主从切换等写能力不在首版自动执行范围内。
 
@@ -42,7 +42,7 @@ Lake v0.0.1 的产品价值是把业务服务映射、现场事实、共享调�
 - **REQ-014**: Web 工作台同时展示会话、共享任务进度、专员状态、终端输出、事实、变更与验收结果；支持等待审批、用户接管、交还终端和会话恢复。
 - **REQ-015**: 模型适配首版支持一个明确的 Chat Completions 兼容 HTTP 协议和结构化工具调用；模型名称、地址、能力与价格由配置给出，业务层不绑定具体模型名称。
 - **REQ-016**: 记录模型调用次数、输入/输出用量、费用来源、上下文压缩、工具耗时与缓存计量；未知用量及未知价格使用 `null` 和来源标签，不能记录成零或宣称固定缓存命中率。
-- **REQ-017**: 新数据使用 `<LAKE_HOME>/agent/` 独立命名空间；默认父目录仍为 `~/.lake`。不得自动迁移、改写或执行旧 Lake/ZCode 的会话、工作流、配置和数据库。
+- **REQ-017**: 新数据使用 `<LAKE_HOME>/agent/` 独立命名空间；默认父目录仍为 `~/.lake`。不得自动迁移、改写或执行旧 Lake/运行时的会话、工作流、配置和数据库。
 - **REQ-018**: 发布验收同时覆盖合成模型、真实本地 SSH 服务、临时 PostgreSQL、K8s API/CLI 夹具、故障注入和源码目录外启动；真实外部模型与生产环境的验收结果单独记录。
 - **REQ-019**: 交付资料包括运行说明、配置示例、Power 契约、技能格式、恢复语义、实际验收记录和第三方许可；首版界面、协议版本及报告不能宣称尚未接入的能力。
 
@@ -57,7 +57,7 @@ Lake v0.0.1 的产品价值是把业务服务映射、现场事实、共享调�
 - **SEC-009**: 工具输出按结构化字段和已知敏感值进行流式脱敏；截断、大小限制及日志净化必须标注。脱敏不是针对任意恶意编码输出的完整信息流隔离，首版不接纳未授信可执行插件。
 - **SEC-010**: 人工终端输入与模型动作共用资源授权及审计；交互输入使用绑定资源、会话、持有者和有效期的接管授权，不能绕过主机身份校验或任务作用域。
 
-- **CON-001**: v0.0.1 不复制或依赖 `third_party/zcode` 的模型、上下文、子智能体、会话或工作流内核，也不新增 Go 运维业务逻辑。已有 Go 入口仅允许保留启动、信号转发、签名兼容和显式旧凭据迁移边界。
+- **CON-001**: v0.0.1 不复制或依赖 `third_party/agent-sdk` 的模型、上下文、子智能体、会话或工作流内核，也不新增 Go 运维业务逻辑。已有 Go 入口仅允许保留启动、信号转发、签名兼容和显式旧凭据迁移边界。
 - **CON-002**: 首版不交付 Electron/Tauri/Wails 安装包、CUA、语音、移动端、云端多租户、OAuth 订阅认证、任意 MCP 插件宿主、定时自治巡检或完整工作流编辑器；CLI 和本地 Web 是正式入口，不以模拟界面替代内核验收。
 - **CON-003**: 首版只支持单机运行时和本机 SQLite；所有 CLI/Web 客户端接入唯一 daemon，禁止第二个 daemon 独立操作同一个 home。分布式锁和跨机器协作留到后续版本。
 - **CON-004**: SSH 首版支持 Linux/POSIX 目标；真实交互 PTY 仅由 SSH 适配器提供，本地执行会话提供结构化命令/输出视图。macOS 为构建与用户端验收平台，Linux 为运行与远端验收平台；Windows 首版不计入验收。
@@ -348,7 +348,7 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-001 | 无前置依赖。创建 `agent/package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml`、`.node-version`、`tsconfig.json`、`src/version.ts`、`ui/package.json`、`ui/tsconfig.json`、`ui/vite.config.ts`、`ui/index.html`、`ui/src/main.tsx`；核心 ESM/NodeNext，UI Bundler/react-jsx，统一 strict，version.ts 导出 VERSION=0.0.1，首阶段页面只显示产品名与版本。使用 DEP-001 至 DEP-007 固定版本。创建 `agent/scripts/check-runtime.mjs` 的 `assertRuntime()`；Node 不为 24.x 或低于 24.14.0 时拒绝运行。锁文件从空 TS 工程生成，不复用 ZCode lock。验收：`pnpm --dir agent install --frozen-lockfile` 与核心/UI typecheck 成功。 | Yes | 2026-10-08 |
+| TASK-001 | 无前置依赖。创建 `agent/package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml`、`.node-version`、`tsconfig.json`、`src/version.ts`、`ui/package.json`、`ui/tsconfig.json`、`ui/vite.config.ts`、`ui/index.html`、`ui/src/main.tsx`；核心 ESM/NodeNext，UI Bundler/react-jsx，统一 strict，version.ts 导出 VERSION=0.0.1，首阶段页面只显示产品名与版本。使用 DEP-001 至 DEP-007 固定版本。创建 `agent/scripts/check-runtime.mjs` 的 `assertRuntime()`；Node 不为 24.x 或低于 24.14.0 时拒绝运行。锁文件从空 TS 工程生成，不复用 Agent SDK lock。验收：`pnpm --dir agent install --frozen-lockfile` 与核心/UI typecheck 成功。 | Yes | 2026-10-08 |
 | TASK-002 | 依赖 TASK-001。创建 `agent/src/domain/entities.ts`、`schemas.ts`、`config.ts`，实现第 1.3 节对象、`TaskContractSchema`、`ActionProposalSchema`、`ConfigSchema`；输入 unknown 使用 Zod parse，错误包含字段路径与稳定 code，排除私有字段。创建 `agent/config.example.json`，只包含合成资源与模型配置字段、不含凭据值。验收：合法/非法输入和公共 DTO 的 TEST-001 通过。 | Yes | 2026-10-08 |
 | TASK-003 | 依赖 TASK-002。创建 `agent/src/domain/state-machines.ts`、`events.ts`，实现 `validateTransition()`、`reduceEvent()` 与第 1.4/1.10 节全部枚举和事件 schema；非法跳转、旧 revision、缺失 action 证据拒绝。规范第 1.13 节错误 code，禁止把 waiting_reason 混入生命周期枚举。验收：所有允许边及 unknown 禁止重派发边的 TEST-002 通过。 | Yes | 2026-10-08 |
 | TASK-004 | 依赖 TASK-002。创建 `agent/src/domain/ports.ts`、`errors.ts`，定义 `ModelPort/StorePort/CredentialPort/ExecutionAdapterPort/VerificationPort/ReconciliationPort/OperationGatewayPort/ClockPort`、`AbortSignal`、`ToolResult`、`PublicError`；ToolResult 包含 status、data、artifactRefs、truncated、retryPolicy；断线后效果不明确必须可表达。验收：fake 实现均编译，业务模块不依赖具体 IO 库。 | Yes | 2026-10-08 |
@@ -437,7 +437,7 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-041 | 依赖 TASK-012、TASK-022、TASK-026、TASK-036、TASK-040。创建 `agent/src/app/application.ts`、`services.ts` 的 `createLakeApplication()`、`LakeApplication.start()/stop()`；组合全部 ports，先恢复后接受客户端，所有 clients 使用同一 daemon；不从 ZCode 目录动态加载。验收：空 home 启动完成，shutdown 无新派发，真实运行组件无 fake 替代。 | Yes | 2026-10-08 |
+| TASK-041 | 依赖 TASK-012、TASK-022、TASK-026、TASK-036、TASK-040。创建 `agent/src/app/application.ts`、`services.ts` 的 `createLakeApplication()`、`LakeApplication.start()/stop()`；组合全部 ports，先恢复后接受客户端，所有 clients 使用同一 daemon；不从 Agent SDK 目录动态加载。验收：空 home 启动完成，shutdown 无新派发，真实运行组件无 fake 替代。 | Yes | 2026-10-08 |
 | TASK-042 | 依赖 TASK-008、TASK-025、TASK-037。创建 `agent/src/app/data-service.ts`、`imports.ts` 的 `DataService.snapshot()/serviceContext()`、`importResources()/importServices()`；校验明确绑定和引用，不自动发现关系，导入整批失败回滚；事实带 freshness/source。验收：同一服务 SSH+K8s+Postgres 绑定可查询，重复 ID/错环境/失效引用拒绝，TEST-034 通过。 | Yes | 2026-10-08 |
 | TASK-043 | 依赖 TASK-008、TASK-037、TASK-042。创建 `agent/src/app/investigation.ts`、`report.ts` 的 `recordObservation()`、`updateHypothesis()`、`buildEvidenceReport()`；区分候选/支持/反驳/确认，报告输出目标、发现、变更、验收、未验证项与恢复结果；confirmed 要求配置的验证或人工确认。验收：相互矛盾事实保留而非覆盖，报告不能把相关性或 rollback success 当原变更成功，TEST-035 通过。 | Yes | 2026-10-08 |
 | TASK-044 | 依赖 TASK-019、TASK-038、TASK-039、TASK-041、TASK-043。创建 `agent/test/fixtures/scenarios/http-service.ts` 的 `makeIncidentScenario()`、`makeConfigChangeScenario()`，把默认技能接到两条业务场景；协调者按工单创建不同侧重点专员，独立诊断/验证，复用一个 managed 终端和共享进度。验收：TEST-036/037 在真实受控 Linux 目标上通过，固定模型夹具保证可重复。 | Yes | 2026-10-08 |
@@ -463,7 +463,7 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 |------|-------------|-----------|------|
 | TASK-051 | 依赖 TASK-018、TASK-030、TASK-032、TASK-044、TASK-047、TASK-050。创建 `agent/test/fixtures/compose.yaml`、`ssh-server.ts`、`kube-api.ts`、`fault-injection.ts`，实现 `startFixtures()/stopFixtures()/crashAt()`；使用临时合成密钥和私有 home，提供真实 SSH、PostgreSQL、固定 kubectl API 响应及具备 systemd 的Docker Linux 虚拟化内真实 systemd PID 1 的一次性目标接口；TEST-036/037 的 Linux 目标未提供时必需验收返回 prerequisite_missing，不记为 passed。验收：同一场景可稳定注入三个 crash 点、工具出口无生产地址。 | Yes | 2026-10-08 |
 | TASK-052 | 依赖 TASK-051。创建 `agent/test/acceptance/incident.test.ts`、`config-change.test.ts`、`multi-specialist.test.ts`、`recovery.test.ts`、`surface-parity.test.ts`，实现 `runAcceptance()`；运行 Section 6 的场景并写私有事件/计时/证据报告；真实模型 smoke 与确定性模型结果分开。验收：TEST-036 至 TEST-042 的必需场景无 false success、无重复未知写派发、无凭据泄露。 | Yes | 2026-10-08 |
-| TASK-053 | 依赖 TASK-005、TASK-041、TASK-048、TASK-052。创建 `agent/scripts/build.mjs`、`verify-release.mjs` 的 `buildRuntime()/verifyRelease()`；核心 tsc 与 UI vite 产出 `agent/dist/`、`agent/ui/dist/`；打包到 `bin/lake-agent-runtime/releases/<version>-<digest>/{node,dist,builtin,ui,node_modules,manifest.json}`，运行依赖与 fs-ext 针对目标 Node ABI 构建，不依赖 bin/zcode；manifest 记录版本、架构、Node、文件 hash，digest 对 manifest 中除自身外字段计算。验收：空 PATH 除系统工具、源码目录外、独立私有 home 启动，TEST-042 通过。 | Yes | 2026-10-08 |
+| TASK-053 | 依赖 TASK-005、TASK-041、TASK-048、TASK-052。创建 `agent/scripts/build.mjs`、`verify-release.mjs` 的 `buildRuntime()/verifyRelease()`；核心 tsc 与 UI vite 产出 `agent/dist/`、`agent/ui/dist/`；打包到 `bin/lake-agent-runtime/releases/<version>-<digest>/{node,dist,builtin,ui,node_modules,manifest.json}`，运行依赖与 fs-ext 针对目标 Node ABI 构建，不依赖 bin/typescript；manifest 记录版本、架构、Node、文件 hash，digest 对 manifest 中除自身外字段计算。验收：空 PATH 除系统工具、源码目录外、独立私有 home 启动，TEST-042 通过。 | Yes | 2026-10-08 |
 | TASK-054 | 依赖 TASK-053。修改 `cmd/lake/main.go` 的 `launch()` 与 `scripts/build_lake.sh`：Go 以构建时嵌入的相对 release 路径定位新 Node/dist CLI，转发参数/信号/LAKE_HOME；创建 `agent/src/storage/legacy-migration.ts` 的 `migrateFromSignedPipe()`，只在第 1.12 节显式命令/env/签名 launcher 条件满足时使用 fd 私有迁移，不复用旧 runtime。build 脚本先校验身份、构建/签名并校验临时 runtime，安装不可变 release 目录，最后原子 rename 已签名 launcher；旧 launcher 对应 release 不删除。macOS Node 与原生 .node 逐个用同身份签名/verify，签名后生成最终文件摘要。验收：用户入口只能由规定脚本生成，身份缺失不会替换已有可用版本，TEST-043 通过。 | Yes | 2026-10-08 |
 | TASK-055 | 依赖 TASK-047、TASK-052、TASK-054。创建 `docs/lake-ts-agent-v0.0.1.md`、`docs/lake-ts-power-contract.md`、`docs/lake-ts-recovery.md`；更新 `README.md` 中新分支入口与旧客户端边界，记录 doctor/install/import/grant/运行/审批/恢复及实际限制；第三方声明写 `agent/THIRD_PARTY_NOTICES.md`。验收：按文档在空 home 完成资源导入和两场景，不引用旧 runtime 作为新实现入口。 | Yes | 2026-10-08 |
 | TASK-056 | 依赖 TASK-052、TASK-054、TASK-055。创建 `agent/scripts/collect-release-evidence.mjs` 的 `collectReleaseEvidence()` 和 `docs/validation/lake-ts-agent-v0.0.1.md`，收集 commit、平台、依赖锁摘要、测试结果、签名标识、故障场景、模型 smoke 可用性；不记录秘密或完整模型请求。验收：本节发布门禁全部逐项有证据，失败/缺前置条件不更新为 Completed。 | Yes | 2026-10-08 |
@@ -481,7 +481,7 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 
 ## 3. Alternatives
 
-- **ALT-001**: 复用 ZCode/Tianshu 的 Agent 内核可以减少首版工作，但与本次“从零使用 TS 编写 Agent”的要求冲突。本分支仅研究契约和模式，自己的循环、持久状态、工具协议与专员调度独立实现；不复制未核实许可的源码。
+- **ALT-001**: 复用 Agent SDK/Tianshu 的 Agent 内核可以减少首版工作，但与本次“从零使用 TS 编写 Agent”的要求冲突。本分支仅研究契约和模式，自己的循环、持久状态、工具协议与专员调度独立实现；不复制未核实许可的源码。
 - **ALT-002**: 使用一个固定 SRE 专员搭配所有 Power，会限制用户要求的会话内并行调查。采用一个协调者和按工单创建的 N 个专员；专员仍是通用 Agent 实例，Power 根据资源和任务组合。
 - **ALT-003**: 按 SSH/K8s/DB 固定 N 类专员容易把跨系统诊断拆成上下文切换。首版用 profile 表达“调查、修复、验证”等侧重点，但不强制分工；同一专员可使用多个 Power，简单任务无需创建多个专员。
 - **ALT-004**: 一个万能 PTY 由所有模型直接输入会造成命令交错、状态漂移与恢复歧义。采用 session 拥有的逻辑终端、managed 结构化操作、多读单写和人工专用 PTY；保留真实交互体验，同时明确执行结果边界。
@@ -493,7 +493,7 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 
 ## 4. Dependencies
 
-以下版本在编写计划时已查询 package registry；它们是首版固定基线，不表示当前“最新”版本。实现时生成并提交 `agent/pnpm-lock.yaml`，禁止无说明自动升版。Node 运行时从独立分发来源取得并核对官方 SHA256；不把现有 `bin/zcode/node` 当新 Agent 的发布依赖。
+以下版本在编写计划时已查询 package registry；它们是首版固定基线，不表示当前“最新”版本。实现时生成并提交 `agent/pnpm-lock.yaml`，禁止无说明自动升版。Node 运行时从独立分发来源取得并核对官方 SHA256；不把现有 `bin/typescript/node` 当新 Agent 的发布依赖。
 
 - **DEP-001**: Node.js `24.14.0`、pnpm `10.33.4`；核心 `engines.node` 为 `>=24.14.0 <25`，`packageManager` 为 `pnpm@10.33.4`。内置 fetch、crypto、worker_threads、node:test、node:sqlite；仓库当前 shell Node 22.22.0 不作为验收运行时。该版本的 node:sqlite 仍处于 active development，SQLite 驱动封装版本差异，不把实验接口宣称为完全稳定。[固定版本文档](https://nodejs.org/download/release/v24.14.0/docs/api/sqlite.html)
 - **DEP-002**: TypeScript `5.9.3`、tsx `4.22.0`、`@types/node` `24.10.0`；开发/测试依赖，生产核心输出为 ESM JavaScript，发布不要求 tsx 或 TypeScript 编译器。
@@ -573,7 +573,7 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 - **TEST-039**: `agent/test/integration/http-idempotency.test.ts`：同 request ID/相同输入重复创建仅一个对象，不同输入冲突；事件 reconnect 缺口恢复，不重复审批/派发。
 - **TEST-040**: `agent/test/acceptance/surface-parity.test.ts`：CLI/API/Web 消费同一 session/action/step IDs，run JSON 退出码与 pending approval 一致，stdout 不混入 token/日志。
 - **TEST-041**: 在真实浏览器打开本地 Web，人工完成新会话、多专员状态、主会话追加输入、双终端订阅、审批、接管/交还、刷新重连和证据报告；以一次完整操作记录列出浏览器/时间/结果。自动测试覆盖事件状态，不能把人工项标成自动通过。
-- **TEST-042**: `agent/scripts/verify-release.mjs`：复制产物到无源码目录，清空 LAKE_ZCODE_DIR/PATH 依赖并使用合成 home，启动 Node/CLI/Web、加载 builtin 与 fs-ext；Linux/macOS 目标各验一次，不要求生产 kubectl/Docker 凭空存在。
+- **TEST-042**: `agent/scripts/verify-release.mjs`：复制产物到无源码目录，清空 LAKE_AGENT_SOURCE_DIR/PATH 依赖并使用合成 home，启动 Node/CLI/Web、加载 builtin 与 fs-ext；Linux/macOS 目标各验一次，不要求生产 kubectl/Docker 凭空存在。
 - **TEST-043**: `agent/test/acceptance/signed-launcher.test.ts`：只通过 `scripts/build_lake.sh` 生成用户 launcher；校验 persistent identity、Node/原生模块/launcher 的签名，缺身份失败且不覆盖旧分发，普通操作不触发 Keychain migration。显式迁移使用合成 signed-pipe fixture 验证 manifest/权限/幂等冲突，不读取用户真实 Keychain。
 
 非功能验收在固定环境执行：3 active specialists/2 model requests，10 分钟共 2000 个业务事件及 10MiB 终端输出；无模拟模型延迟的 snapshot API p95 < 300ms、活动更新 p95 < 500ms、daemon RSS < 500MiB。环境为 macOS Apple Silicon 或 Linux amd64、4 CPU、8GiB 内存、本地 SSD；记录实际平台和数据，缺少基准记录不得宣称性能门禁通过。远端 SSH/模型延迟不计入上述本地投影耗时，仍单独记录端到端耗时。
@@ -606,9 +606,9 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 仓库约束与历史参考：
 
 - [Lake 构建与凭据规则](../AGENTS.md)：本分支继续执行的签名与秘密处理要求。
-- [现有 Lake 设计](../docs/lake-design.md)、[现有 ZCode runtime 接入](https://github.com/Clean-Lakes/Lake/blob/c894965e973a8cb92842ddbb2210fb9d0efdf521/docs/zcode-runtime.md)、[旧原生客户端计划](https://github.com/Clean-Lakes/Lake/blob/c894965e973a8cb92842ddbb2210fb9d0efdf521/plan/refactor-native-zcode-client-1.md)：理解已有用户入口和数据边界；本方案 Introduction 明确替代旧“仅 ZCode Agent”约束。
+- [现有 Lake 设计](../docs/lake-design.md)、[现有 TypeScript runtime 接入](https://github.com/Clean-Lakes/Lake/blob/c894965e973a8cb92842ddbb2210fb9d0efdf521/docs/zcode-runtime.md)、[旧原生客户端计划](https://github.com/Clean-Lakes/Lake/blob/c894965e973a8cb92842ddbb2210fb9d0efdf521/plan/refactor-native-zcode-client-1.md)：理解已有用户入口和数据边界；本方案 Introduction 明确替代旧“仅 Agent SDK Agent”约束。
 - [现有签名启动器](../cmd/lake/main.go)、[规定构建入口](../scripts/build_lake.sh)、[一次签名设置](../scripts/setup_lake_signing.sh)：只复用发布/兼容边界，不复用 Agent 内核。
-- [ZCode profile 参考](https://github.com/Clean-Lakes/Lake/blob/c894965e973a8cb92842ddbb2210fb9d0efdf521/third_party/zcode/apps/zcode-cli/packages/core/src/subagent/profile.ts)、[子智能体 context 参考](https://github.com/Clean-Lakes/Lake/blob/c894965e973a8cb92842ddbb2210fb9d0efdf521/third_party/zcode/apps/zcode-cli/packages/core/src/subagent/context-builder.ts)：专员独立上下文与 profile 的研究参考，首版新源码不得 import 这些文件。
+- [Agent SDK profile 参考](https://github.com/Clean-Lakes/Lake/blob/c894965e973a8cb92842ddbb2210fb9d0efdf521/third_party/zcode/apps/zcode-cli/packages/core/src/subagent/profile.ts)、[子智能体 context 参考](https://github.com/Clean-Lakes/Lake/blob/c894965e973a8cb92842ddbb2210fb9d0efdf521/third_party/zcode/apps/zcode-cli/packages/core/src/subagent/context-builder.ts)：专员独立上下文与 profile 的研究参考，首版新源码不得 import 这些文件。
 - [Tianshu harness](https://github.com/huiliyi37/Tianshu-harness)：用户最初提供的项目参考；不把未核实的能力声明当作 Lake 的验收结果。
 
 协议、库与运维原则：

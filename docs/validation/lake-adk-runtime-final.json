@@ -1142,7 +1142,7 @@
   "performanceComparison": {
     "status": "passed",
     "baselineCommit": "06ae341b6bbd22342f0a9046e7cc1e58ac2ad43b",
-    "baselineKind": "tracked pre-ADK HEAD, exported read-only to a temporary directory; excludes uncommitted ZCode prototype",
+    "baselineKind": "tracked pre-ADK HEAD, exported read-only to a temporary directory; excludes uncommitted Agent SDK prototype",
     "buildCommand": "LAKE_REUSE_WEB_ASSETS=1 scripts/build_lake.sh",
     "buildExitCode": 0,
     "baselineBinaryBytes": 29220400,
@@ -1221,5 +1221,6 @@
     "acceptanceBranchOnly": true,
     "noMergeOrRelease": true
   },
-  "remainingGates": []
+  "remainingGates": [],
+  "namingNote": "命名说明：本文路径和协议名称已映射到当前 TypeScript 后端；历史提交 SHA 保留，原始命令与输出以对应提交为准，此映射不表示重新执行历史验证。"
 }

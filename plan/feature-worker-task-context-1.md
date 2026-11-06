@@ -5,7 +5,7 @@ date_created: 2026-11-06
 last_updated: 2026-11-06
 owner: Lake
 status: 'Completed'
-tags: [feature, context, memory, zcode]
+tags: [feature, context, memory, typescript]
 ---
 
 # Introduction
@@ -31,9 +31,9 @@ New specialist tasks receive a bounded, sourced working set and a scoped history
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-001 | Add runtime/zcode/task-context.ts for bounded canonical same-role task context and exact lookup. | Yes | 2026-11-06 |
-| TASK-002 | Integrate assignment/provider context and recall_task_context into runtime/zcode/superagent.ts and super-prompts.ts. Depends on TASK-001. | Yes | 2026-11-06 |
-| TASK-003 | Extend runtime/zcode/memory.ts continuation provenance to filter withdrawn contextual dependencies. Depends on TASK-001. | Yes | 2026-11-06 |
+| TASK-001 | Add runtime/typescript/task-context.ts for bounded canonical same-role task context and exact lookup. | Yes | 2026-11-06 |
+| TASK-002 | Integrate assignment/provider context and recall_task_context into runtime/typescript/superagent.ts and super-prompts.ts. Depends on TASK-001. | Yes | 2026-11-06 |
+| TASK-003 | Extend runtime/typescript/memory.ts continuation provenance to filter withdrawn contextual dependencies. Depends on TASK-001. | Yes | 2026-11-06 |
 | TASK-006 | Add the optional pinned Claude-Mem local index, recall_memory, managed lifecycle, authenticated HTTP boundary and index forgetting. Depends on TASK-003. | Yes | 2026-11-06 |
 
 ### Implementation Phase 2
@@ -56,9 +56,9 @@ New specialist tasks receive a bounded, sourced working set and a scoped history
 
 ## 5. Files
 
-- **FILE-001**: runtime/zcode/task-context.ts owns the ephemeral working-set projection.
-- **FILE-002**: runtime/zcode/superagent.ts and runtime/zcode/super-prompts.ts connect dispatch and recall.
-- **FILE-003**: runtime/zcode/memory.ts, memory.test.ts, superagent-lifecycle.test.ts and server.test.cjs verify recall and forgetting.
+- **FILE-001**: runtime/typescript/task-context.ts owns the ephemeral working-set projection.
+- **FILE-002**: runtime/typescript/superagent.ts and runtime/typescript/super-prompts.ts connect dispatch and recall.
+- **FILE-003**: runtime/typescript/memory.ts, memory.test.ts, superagent-lifecycle.test.ts and server.test.cjs verify recall and forgetting.
 
 ## 6. Testing
 
@@ -75,5 +75,5 @@ New specialist tasks receive a bounded, sourced working set and a scoped history
 
 - [Architecture](../agent.md)
 - [Context contract](../docs/design/context-role-memory-contract.md)
-- [Layered Memory](../docs/design/zcode-layered-memory.md)
-- [Validation and installed SHA](../docs/validation/zcode-typescript-candidate/task-memory-recall.md)
+- [Layered Memory](../docs/design/typescript-layered-memory.md)
+- [Validation and installed SHA](../docs/validation/typescript-candidate/task-memory-recall.md)

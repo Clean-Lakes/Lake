@@ -1,12 +1,15 @@
 # Lake Go backend migration validation
 
+命名说明：本文路径和协议名称已映射到当前 TypeScript 后端；历史提交 SHA 保留，原始命令与输出以对应提交为准，此映射不表示重新执行历史验证。
+
+
 Date: 2026-10-10. Target: macOS/arm64, Go 1.25, CGO enabled.
 
 ## Delivered architecture
 
 `bin/lake` is the signed Go executable. It embeds the React/Vite static output and runs net/http, SQLite, AI Engine, PTY/VT and SSH management in one process. There is no Node launch, Node release directory lookup, node_modules load, stdio AI worker dependency, or legacy runtime fallback in the active entry.
 
-The old Node Web backend and its scripts/tests are preserved in `legacy/web-agent/`. The older independent `agent/` TypeScript implementation, ZCode and desktop code remain historical source. The new CLI operates on the Go Web contract; legacy grants/tasks/workflow commands have not been ported as equivalent contracts and do not silently launch the old runtime. Existing historical Agent files are not deleted or automatically imported.
+The old Node Web backend and its scripts/tests are preserved in `legacy/web-agent/`. The older independent `agent/` TypeScript implementation, Agent SDK and desktop code remain historical source. The new CLI operates on the Go Web contract; legacy grants/tasks/workflow commands have not been ported as equivalent contracts and do not silently launch the old runtime. Existing historical Agent files are not deleted or automatically imported.
 
 ## Automated verification
 

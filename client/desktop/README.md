@@ -1,6 +1,6 @@
 # Lake Desktop（历史 Wails 客户端）
 
-当前 Go/React 原生 macOS 客户端与更新流程见 [client/macos](../macos/README.md)。此目录仅保留历史 Wails 桥接实现和测试；以下说明记录旧版行为。ZCode 源码快照和旧 Electron 构建脚本已移除。
+当前 Go/React 原生 macOS 客户端与更新流程见 [client/macos](../macos/README.md)。此目录仅保留历史 Wails 桥接实现和测试；以下说明记录旧版行为。Agent SDK 源码快照和旧 Electron 构建脚本已移除。
 
 `scripts/build_lake_desktop.sh --dev --install` 构建并安装当前的 Swift/WebKit Lake Dev 客户端，不再构建此目录或旧 Electron 客户端。本地开发流程见 [CONTRIBUTING.md](../../CONTRIBUTING.md)。
 

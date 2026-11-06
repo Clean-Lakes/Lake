@@ -88,7 +88,7 @@ export type AgentRole = "host" | "application" | "data" | "network" | "change" |
 export type AgentRunStatus = "queued" | "running" | "waiting_approval" | "waiting_input" | "completed" | "failed" | "cancelled" | "interrupted" | "unknown";
 export type AgentRun = {
   /** Native child execution remains owned by the canonical task Worker. */
-  source?: "zcode_subagent";
+  source?: "native_subagent";
   taskId?: string;
   workerId?: string;
   parentRunId?: string;

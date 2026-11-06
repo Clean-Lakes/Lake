@@ -1,5 +1,5 @@
 ---
-goal: Replace Lake's single-model form with a ZCode-style provider and model manager
+goal: Replace Lake's single-model form with a Agent SDK-style provider and model manager
 version: 1
 date_created: 2026-10-12
 last_updated: 2026-10-12
@@ -22,7 +22,7 @@ Manage multiple providers and per-provider models in a wide two-column settings 
 - **REQ-004**: Preserve existing single-model settings through migration and compatibility APIs; distinguish an empty key update from explicit clearing.
 - **SEC-001**: Never return saved API keys to the browser, display them in validation errors, or store them outside private files under Lake secrets.
 - **CON-001**: Build bin/lake through scripts/build_lake.sh and the installed macOS app through scripts/build_lake_desktop.sh; preserve current backend and terminal connections.
-- **PAT-001**: Follow ZCode Navigation.tsx and Detail.tsx's two-column arrangement, without importing its account product integrations.
+- **PAT-001**: Follow Agent SDK Navigation.tsx and Detail.tsx's two-column arrangement, without importing its account product integrations.
 
 ## 2. Implementation Steps
 
@@ -59,7 +59,7 @@ Manage multiple providers and per-provider models in a wide two-column settings 
 ## 3. Alternatives
 
 - **ALT-001**: A visual-only split of the current form cannot preserve several credentials and model lists; add real provider persistence.
-- **ALT-002**: ZCode account login and subscription integrations exceed the requested settings UI and require separate credentials; retain Lake's API-key providers.
+- **ALT-002**: Agent SDK account login and subscription integrations exceed the requested settings UI and require separate credentials; retain Lake's API-key providers.
 
 ## 4. Dependencies
 
@@ -87,7 +87,7 @@ Manage multiple providers and per-provider models in a wide two-column settings 
 
 ## 8. Related Specifications / Further Reading
 
-[Credential rules](../AGENTS.md) · [ZCode provider navigation](../third_party/zcode/packages/ui/src/settings/model-provider-section/Navigation.tsx) · [ZCode provider editor](../third_party/zcode/packages/ui/src/settings/model-provider-section/Detail.tsx)
+[Credential rules](../AGENTS.md) · [Agent SDK provider navigation](../third_party/agent-sdk/packages/ui/src/settings/model-provider-section/Navigation.tsx) · [Agent SDK provider editor](../third_party/agent-sdk/packages/ui/src/settings/model-provider-section/Detail.tsx)
 
 ## 9. Validation Results
 

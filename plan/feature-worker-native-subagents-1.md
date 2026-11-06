@@ -1,22 +1,22 @@
 ---
-goal: 为任务 Worker 接入 ZCode 原生子智能体并在第三联按资源目录展示执行过程
+goal: 为任务 Worker 接入 原生子智能体并在第三联按资源目录展示执行过程
 version: 1
 date_created: 2026-11-06
 last_updated: 2026-11-06
 owner: Lake
 status: 'Completed'
-tags: [feature, zcode, worker, subagent, inspector]
+tags: [feature, typescript, worker, subagent, inspector]
 ---
 
 # Introduction
 
 ![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
-用户确认沿用 Lake 三联界面：点击任务打开第三联，查看由 Lake 为任务分配的 Worker、其临时子智能体及真实工具记录。多资源保留项目已有目录层级。本次在 TS/ZCode 候选 PR #183 上增量实现，用户随后明确要求提交 PR 并将所有 PR 合入 Dev；[PR #183](https://github.com/Clean-Lakes/Lake/pull/183) 已合入 `develop`，集成提交为 `c3076dae12f30b78fb7a66b96934c9f340cc186b`。
+用户确认沿用 Lake 三联界面：点击任务打开第三联，查看由 Lake 为任务分配的 Worker、其临时子智能体及真实工具记录。多资源保留项目已有目录层级。本次在 TypeScript 候选 PR #183 上增量实现，用户随后明确要求提交 PR 并将所有 PR 合入 Dev；[PR #183](https://github.com/Clean-Lakes/Lake/pull/183) 已合入 `develop`，集成提交为 `c3076dae12f30b78fb7a66b96934c9f340cc186b`。
 
 ## 1. Requirements & Constraints
 
-- **REQ-001**: Pilot 仅路由；任务 Worker 可以使用 ZCode v3.17.2 原生子智能体控制工具。复用公开 SubagentPort、runner、AgentRuntime，不新增模型循环或修改上游实现。
+- **REQ-001**: Pilot 仅路由；任务 Worker 可以使用 Agent SDK v3.17.2 原生子智能体控制工具。复用公开 SubagentPort、runner、AgentRuntime，不新增模型循环或修改上游实现。
 - **REQ-002**: 子智能体拥有独立执行 Session，绑定原项目、Task、Worker 与真实 agentId；不创建长期专员或第二份任务完成状态。
 - **REQ-003**: 子智能体只取得父 Worker 业务能力与角色配置的交集；不能调用父任务结清、路由、专员管理工具或继续递归。
 - **REQ-004**: 前台与后台子任务使用原生等待/停止/消息协议；父任务须汇合所有子任务，不能在子任务仍运行时结清。提前结束、停止和重启保留实际记录并禁止重放。
@@ -34,9 +34,9 @@ tags: [feature, zcode, worker, subagent, inspector]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-001 | 扩展 runtime/zcode/agent-host.ts 的 HostProfile 与可信子调用上下文；在 runtime/zcode/agent.ts 通过公开 createExploreSubagentPort 构造受管理 child AgentRuntime，并投影原生运行记录。 | ✅ | 2026-11-06 |
-| TASK-002 | 修改 runtime/zcode/superagent.ts 的 Worker profile，开放原生控制工具并加入 invokeControl；原业务工具串行派发，执行前重验任务、权限与取消。依赖 TASK-001。 | ✅ | 2026-11-06 |
-| TASK-003 | 在 runtime/zcode/tasks.ts 的 Operation 与 operation() 保存可信子调用来源；原验收不把子 Agent 控制回执作为业务成功。依赖 TASK-002。 | ✅ | 2026-11-06 |
+| TASK-001 | 扩展 runtime/typescript/agent-host.ts 的 HostProfile 与可信子调用上下文；在 runtime/typescript/agent.ts 通过公开 createExploreSubagentPort 构造受管理 child AgentRuntime，并投影原生运行记录。 | ✅ | 2026-11-06 |
+| TASK-002 | 修改 runtime/typescript/superagent.ts 的 Worker profile，开放原生控制工具并加入 invokeControl；原业务工具串行派发，执行前重验任务、权限与取消。依赖 TASK-001。 | ✅ | 2026-11-06 |
+| TASK-003 | 在 runtime/typescript/tasks.ts 的 Operation 与 operation() 保存可信子调用来源；原验收不把子 Agent 控制回执作为业务成功。依赖 TASK-002。 | ✅ | 2026-11-06 |
 | TASK-004 | 在 web-agent/shared/contracts.ts 扩展 AgentRun 的原生来源、任务、Worker、child Session 和工具卡字段，旧记录保持缺省兼容。 | ✅ | 2026-11-06 |
 
 ### Implementation Phase 2
@@ -54,9 +54,9 @@ tags: [feature, zcode, worker, subagent, inspector]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-007 | 扩展 runtime/zcode/server.test.cjs 的本地合成模型夹具，覆盖真实子 Read、纯文字不验收、Write 审批、停止/重启与同 callId 隔离；父 Worker 不预先读取以免假阳性。依赖 TASK-001 至 TASK-004。 | ✅ | 2026-11-06 |
+| TASK-007 | 扩展 runtime/typescript/server.test.cjs 的本地合成模型夹具，覆盖真实子 Read、纯文字不验收、Write 审批、停止/重启与同 callId 隔离；父 Worker 不预先读取以免假阳性。依赖 TASK-001 至 TASK-004。 | ✅ | 2026-11-06 |
 | TASK-008 | 为执行树模型覆盖嵌套目录、重名资源、多资源与未知资源、跨任务隔离；完成前后端检查、签名候选构建、合成多资源界面明暗/窄窗验证及 Lake Dev 原生交互复核。依赖 TASK-005 至 TASK-007。 | ✅ | 2026-11-06 |
-| TASK-009 | 更新 runtime/zcode/README.md、agent.md 和验证记录，保存 tested SHA、检查结果与未验证边界；通过 develop PR 提交，并按用户后续明确授权合并。依赖 TASK-008。 | ✅ | 2026-11-06 |
+| TASK-009 | 更新 runtime/typescript/README.md、agent.md 和验证记录，保存 tested SHA、检查结果与未验证边界；通过 develop PR 提交，并按用户后续明确授权合并。依赖 TASK-008。 | ✅ | 2026-11-06 |
 
 ## 3. Alternatives
 
@@ -65,15 +65,15 @@ tags: [feature, zcode, worker, subagent, inspector]
 
 ## 4. Dependencies
 
-- **DEP-001**: PR #183 的 TypeScript/ZCode 候选及其固定 v3.17.2 依赖，实现起始基线 35e40262344048528a2145b4c809db79c92c995b。
+- **DEP-001**: PR #183 的 TypeScript/Agent SDK 候选及其固定 v3.17.2 依赖，实现起始基线 35e40262344048528a2145b4c809db79c92c995b。
 - **DEP-002**: 现有 TaskLedger、LakeSecurity、项目资源目录与三联 Inspector。
 
 ## 5. Files
 
-- **FILE-001**: runtime/zcode/agent.ts、agent-host.ts 与所需宿主子智能体模块：公开运行时接入与事件投影。
-- **FILE-002**: runtime/zcode/superagent.ts、tasks.ts：可信绑定、实际操作与原目标验收。
+- **FILE-001**: runtime/typescript/agent.ts、agent-host.ts 与所需宿主子智能体模块：公开运行时接入与事件投影。
+- **FILE-002**: runtime/typescript/superagent.ts、tasks.ts：可信绑定、实际操作与原目标验收。
 - **FILE-003**: web-agent/shared/contracts.ts、web-agent/web/src/WorkerExecutionTree.tsx 及相邻组件/模型/CSS：任务执行详情与目录。
-- **FILE-004**: runtime/zcode/server.test.cjs、前端执行树测试、说明和验证材料。
+- **FILE-004**: runtime/typescript/server.test.cjs、前端执行树测试、说明和验证材料。
 
 ## 6. Testing
 
@@ -86,13 +86,13 @@ tags: [feature, zcode, worker, subagent, inspector]
 
 - **RISK-001**: 原生后台完成通知、子权限与父任务结束存在竞争；使用真实 registry 状态、取消信号和派发前重验，不根据文字推断完成。
 - **RISK-002**: 同任务并行业务调用切换 active attempt；本期保留子模型并发，对实际业务派发使用任务内串行约束。
-- **ASSUMPTION-001**: 用户授权本次 TS/ZCode Dev 功能改造与原型界面实现，随后明确授权提交 PR 并将所有 PR 合入 Dev；该授权不包括生产发布。
+- **ASSUMPTION-001**: 用户授权本次 TypeScript Dev 功能改造与原型界面实现，随后明确授权提交 PR 并将所有 PR 合入 Dev；该授权不包括生产发布。
 
 ## 8. Related Specifications / Further Reading
 
 - [贡献流程](../CONTRIBUTING.md)
 - [开发工作流](../docs/development-workflow.md)
-- [当前候选](../runtime/zcode/README.md)
+- [当前候选](../runtime/typescript/README.md)
 - [Super-agent 架构](architecture-lake-superagent-1.md)
 - [UI 规范](../docs/ui-guidelines.md)
 

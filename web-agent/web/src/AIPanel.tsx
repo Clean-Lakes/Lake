@@ -1,3 +1,4 @@
+import {isNativeAgentSource} from '../../shared/runtime-compat';
 import {conversationActivity,conversationAvatarMotion,type AvatarMotion} from './superAgentPresentation';
 import {ReplyIdentity,type AssistantIdentity} from './ReplyIdentity';
 import type {SpecialistReplyAuthor,SuperTask,SuperWorkspace} from '../../shared/contracts';
@@ -148,7 +149,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
   const loadOlder = async () => { onInspect?.(); setLoading(true); try { const page = await api.aiCards(snapshot.session.id, before); setOlder(current => [...page.cards, ...current]); setOffset(page.cardsOffset); } catch (error) { setError(readableError(error)); } finally { setLoading(false); } };
   // Native children are task execution records. Their independent sessions and
   // tool results belong in the task inspector, not another chat participant.
-  const entries = orderedTranscript(displaySnapshot, cards, before).filter(entry=>mode!=='conversation'||entry.agentRun?.source!=='zcode_subagent').map(entry=>mode==='conversation'?conversationPlanEntry(entry,{planMode:snapshot.conversationMode==='plan',live:snapshot.ai?.status==='running',currentPlanId:snapshot.ai?.proposedPlan?.id}):entry);
+  const entries = orderedTranscript(displaySnapshot, cards, before).filter(entry=>mode!=='conversation'||!isNativeAgentSource(entry.agentRun?.source)).map(entry=>mode==='conversation'?conversationPlanEntry(entry,{planMode:snapshot.conversationMode==='plan',live:snapshot.ai?.status==='running',currentPlanId:snapshot.ai?.proposedPlan?.id}):entry);
   const loadOlderSRE=async()=>{onInspect?.();const session=snapshot.session.id;setLoadingSRE(true);try{const page=await api.sreTasks(session,sreCursor??snapshot.sre?.tasks.at(-1)?.id??'');if(selectedSession.current===session){setOlderSRE(old=>[...old,...page.items]);setSRECursor(page.nextCursor)}}catch(e){setError(readableError(e))}finally{setLoadingSRE(false)}};
   const visibleEntries = entries.filter(entry => !isFileChangeCard(entry.card));
   const lastBudgetCard=cards.filter(card=>!!card.content).at(-1);

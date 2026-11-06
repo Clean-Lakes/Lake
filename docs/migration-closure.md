@@ -1,14 +1,14 @@
 # 原生客户端迁移
 
-> 历史记录：本文描述已停用的 ZCode 集成。相关源码与构建入口已移除；当前 Go/React 架构和本地开发流程见 [CONTRIBUTING.md](../CONTRIBUTING.md)。
+> 历史记录：本文描述已停用的 Agent SDK 集成。相关源码与构建入口已移除；当前 Go/React 架构和本地开发流程见 [CONTRIBUTING.md](../CONTRIBUTING.md)。
 
-2026-10-02 用户最终要求：采用完整 ZCode 原生客户端和 CLI，只加入 LAKE 数据层、湖关联及产品语义。取消此前保留 Wails 前端和自定义运维工作流执行器的方案。
+2026-10-02 用户最终要求：采用完整 原生客户端和 CLI，只加入 LAKE 数据层、湖关联及产品语义。取消此前保留 Wails 前端和自定义运维工作流执行器的方案。
 
-新入口使用原生会话、工具、权限、模型和工作流代码；旧 `zcode.cjs lake` 常规执行入口已停用，只有显式签名的秘密迁移例外。历史 Wails/LAKE 执行器源码不参与新的客户端入口。
+新入口使用原生会话、工具、权限、模型和工作流代码；旧 `typescript.cjs lake` 常规执行入口已停用，只有显式签名的秘密迁移例外。历史 Wails/LAKE 执行器源码不参与新的客户端入口。
 
 原有 SQLite 湖、资源、对话、运维工作流、计划和湖志保留。schema 20 仅增加 `lake_native_workspace` 与 `lake_native_workflow` 两张关联表，升级前创建权限为 0600 的备份，未来版本拒绝打开。旧工作流定义不会复制成原生文件或自动启用计划。
 
-原生配置、模型凭据、会话、插件、工作流、缓存、设备状态与日志使用 LAKE 自己的目录。项目配置改为 `.lake` / `lake.json` / `.lakeignore`；客户端应用标识和 `lake://` 协议独立。没有隐式读取或迁入正版 ZCode 用户数据的路径。`LAKE_HOME` 可以用于隔离测试和独立安装。
+原生配置、模型凭据、会话、插件、工作流、缓存、设备状态与日志使用 LAKE 自己的目录。项目配置改为 `.lake` / `lake.json` / `.lakeignore`；客户端应用标识和 `lake://` 协议独立。没有隐式读取或迁入正版 Agent SDK 用户数据的路径。`LAKE_HOME` 可以用于隔离测试和独立安装。
 
 若 `~/.lake/v2/provider_config.json` 不存在，启动数据层时将旧 LAKE `config.toml` 和私有文件凭据迁入原生 Provider Repository。已存在的原生配置不会被覆盖；源配置与凭据保留。迁移只读取 LAKE 文件，普通运行不会访问 Keychain。旧 Keychain 凭据的一次性迁移仍须由签名 `bin/lake secrets migrate` 显式启动。
 
@@ -22,4 +22,4 @@
 
 开源上游 Computer Use/CUA 为不可用占位实现。使用原生实现仍可能遇到模型服务限制、外部服务故障或权限不足，合成回归不能替代真实服务验证。
 
-最终签名安装包在隔离目录中再次通过原生会话并行、工作流执行与产物内容读取测试；Main、Host 和原生 Scheduler 均启动成功。固定 Node 与 Electron Node 的运行时探测、包内 CLI 启动和应用深层签名校验通过。原生客户端已安装到 `~/Applications/Lake.app`，原客户端保留为时间戳备份；运行中的旧客户端须先退出后再打开新版本。实现已推送至 `codex/zcode-lake-runtime`。
+最终签名安装包在隔离目录中再次通过原生会话并行、工作流执行与产物内容读取测试；Main、Host 和原生 Scheduler 均启动成功。固定 Node 与 Electron Node 的运行时探测、包内 CLI 启动和应用深层签名校验通过。原生客户端已安装到 `~/Applications/Lake.app`，原客户端保留为时间戳备份；运行中的旧客户端须先退出后再打开新版本。实现已推送至 `codex/typescript-lake-runtime`。

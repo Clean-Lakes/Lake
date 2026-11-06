@@ -21,7 +21,7 @@ superseded_by: feature-agent-file-memory-1.md
 
 用户应得到的效果是：Lake 能记住“这个项目通常怎样排查和发布”，能找到“上次在哪台资源上看到过什么”，也能明确说明“这条记录已经过期，需要重新检查”。记忆不能替代当前授权、现场采样或执行结果。
 
-本文是实施规格，当前正在开发；未通过验收的能力保持关闭。代码基线为 `origin/develop` 的 `eb4d90028b1c2e0b870475f44445f5613b185bba`，不将未合并 PR、旧验收记录或 Zcode 截图视作当前实现证明。仓库相对路径均以 Lake 根目录为基准；任务表记录代码状态；完整验收结果和剩余门槛见 [V2 验证记录](../docs/validation/lake-operational-memory-v2.md)。
+本文是实施规格，当前正在开发；未通过验收的能力保持关闭。代码基线为 `origin/develop` 的 `eb4d90028b1c2e0b870475f44445f5613b185bba`，不将未合并 PR、旧验收记录或 原生 Agent 截图视作当前实现证明。仓库相对路径均以 Lake 根目录为基准；任务表记录代码状态；完整验收结果和剩余门槛见 [V2 验证记录](../docs/validation/lake-operational-memory-v2.md)。
 
 ### 当前能力与缺口
 
@@ -433,4 +433,4 @@ pnpm build:web
 - [开发与分支流程](../docs/development-workflow.md)：阶段 PR、Dev 验证、生产提升及授权边界。
 - [贡献指南](../CONTRIBUTING.md)：签名构建、隔离 Home、凭据和官方 ADK 约束。
 - [官方 ADK 运行时架构](../docs/experiments/adk-runtime.md)：执行与恢复职责；记忆不能接管操作账本。
-- 实施入口源码：`internal/ai/project_memory.go`、`internal/ai/project_memory_snapshot.go`、`internal/web/project_memory_store.go`、`internal/web/project_memory_jobs.go`、`internal/web/project_memory_worker.go`、`internal/ai/directory_targets.go`。本文没有断言 Zcode 的未核实内部实现；仅采用用户讨论的短索引、按需读取和增量提炼模式。
+- 实施入口源码：`internal/ai/project_memory.go`、`internal/ai/project_memory_snapshot.go`、`internal/web/project_memory_store.go`、`internal/web/project_memory_jobs.go`、`internal/web/project_memory_worker.go`、`internal/ai/directory_targets.go`。本文没有断言 原生 Agent 的未核实内部实现；仅采用用户讨论的短索引、按需读取和增量提炼模式。
