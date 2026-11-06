@@ -9,6 +9,8 @@
     "types": ["node"],
     "typeRoots": ["../../third_party/zcode/node_modules/@types"],
     "paths": {
+      "pg": ["../../web-agent/node_modules/@types/pg/index.d.ts"],
+      "@redis/client": ["../../web-agent/node_modules/@redis/client/dist/index.d.ts"],
       "mysql2": ["../../web-agent/node_modules/mysql2/typings/mysql/index.d.ts"],
       "ssh2": ["../../third_party/zcode/node_modules/@types/ssh2/index.d.ts"],
       "node-pty": ["../../third_party/zcode/node_modules/node-pty/typings/node-pty.d.ts"],

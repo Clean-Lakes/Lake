@@ -140,3 +140,15 @@
  .composer-reference-token,
  .message-reference-token
 ) { position:relative; }
+
+/* Keep human text out of WebKit's clipped background paint when switching
+   native appearance. The existing masked layer alone paints the bubble. */
+:root.lake-corner-fallback :is(
+ .ai-chat-message.ai-role-user:not(.has-message-images),
+ .ai-chat-message.ai-role-user.has-message-images > .user-message-text
+) {
+ background:transparent;
+ -webkit-background-clip:border-box;
+ background-clip:border-box;
+ &::before { background:var(--user-message-background); }
+}

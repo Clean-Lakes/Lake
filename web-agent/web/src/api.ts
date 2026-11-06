@@ -193,8 +193,10 @@ export const api = {
   createSshResource: (projectId: string, name: string, ssh: SSHConnectionInput, parentId?: string | null) =>
     post<Resource>(`/api/projects/${encodeURIComponent(projectId)}/resources`, { kind: "ssh", name, ssh, ...(parentId ? { parentId } : {}) }),
   editTerminalResource: (id: string, data: {name: string; ssh?: SSHConnectionInput; settings?: {shell: string}}) => request<Resource>(`/api/resources/${encodeURIComponent(id)}`, {method: "PATCH", body: JSON.stringify(data)}),
+  editServiceResource:(id:string,data:{name:string;settings:object})=>request<Resource>(`/api/resources/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify(data)}),
   testKubernetesResource: (projectId:string,settings:object,signal?:AbortSignal) => request<{success:boolean;message:string;version:string;endpoint:string;context?:string;namespace?:string}>(`/api/projects/${encodeURIComponent(projectId)}/resources/test`,{method:'POST',body:JSON.stringify({kind:'kubernetes',settings}),signal}),
   createServiceResource: (projectId: string, name: string, kind: string, settings: object, parentId?: string | null) => post<Resource>(`/api/projects/${encodeURIComponent(projectId)}/resources`, { name, kind, settings, ...(parentId ? { parentId } : {}) }),
+  testServiceResource: (projectId:string,input:object,signal?:AbortSignal)=>request<{message:string;protocol:string;testedAt:string}>(`/api/projects/${encodeURIComponent(projectId)}/resources/test`,{method:'POST',body:JSON.stringify(input),signal}),
   previewResourceImport: (projectId: string, name: string, text: string) => post<ResourceImportPreview>(`/api/projects/${encodeURIComponent(projectId)}/resource-import-preview`, {name, text}),
   previewHexhubImport: (projectId: string) => post<ResourceImportPreview>(`/api/projects/${encodeURIComponent(projectId)}/resource-import-preview`, {hexhub: true}),
   importResources: (projectId: string, planId: string, indexes: number[]) => post<{createdCount: number; skippedCount: number; updatedCount: number}>(`/api/projects/${encodeURIComponent(projectId)}/resource-import`, {planId, indexes}),

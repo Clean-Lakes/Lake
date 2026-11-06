@@ -8,6 +8,7 @@ import { createNodeFileSystemAdapter } from "@zcode/adapters/fs";
 import {createJimpImageProcessorAdapter} from "@zcode/adapters/image";
 import {createPopplerPdfDocumentAdapter} from "@zcode/adapters/pdf";
 import {digest} from "./tasks";
+import { cancelledReadOperation } from "./task-cancellation";
 import { createNodeWebFetchHttpClientAdapter } from "@zcode/adapters/http";
 import { createSqliteSessionStore, createNodeToolArtifactStore } from "@zcode/adapters/storage";
 import type { Model, SessionEvent as ZCodeEvent, SessionId, ProjectId } from "@zcode/contracts";
@@ -245,6 +246,7 @@ export class LakeAgents {
         ...(scoped.agentRunId ? { agentRunId: scoped.agentRunId } : {}),
         ...(scoped.childSessionId ? { childSessionId: scoped.childSessionId } : {}) } : {}) };
     if (scoped?.status === "unknown") card.status = "unknown";
+    else if (scoped && cancelledReadOperation(this.store, scoped)) card.status = "cancelled";
     if (run && scoped?.resourceId && !run.resourceIds.includes(scoped.resourceId)) run.resourceIds.push(scoped.resourceId);
   }
   private childEvent(parentId: string, runId: string, event: ZCodeEvent) {
