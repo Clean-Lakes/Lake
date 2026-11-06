@@ -2,6 +2,8 @@ import {useEffect,useRef} from 'react';
 import type {ConversationReadState} from '../../shared/contracts';
 import {api} from './api';
 
+declare global {interface Window {lakeWindowAttention?:{isReading:()=>Promise<boolean>};}}
+
 /** A route selection alone is not a read. Acknowledge the cursor delivered
  * with rendered content only after its end is visible in a foreground window. */
 export function ConversationReadMarker({session,state,enabled=true}:{session:string;state?:ConversationReadState;enabled?:boolean}) {
@@ -13,7 +15,11 @@ export function ConversationReadMarker({session,state,enabled=true}:{session:str
   const acknowledge=async()=>{
    if(disposed||!visible||document.hidden||!document.hasFocus()||pending||saved)return;
    pending=true;
-   try{await api.readConversation(session,cursor);saved=true;if(!disposed)window.dispatchEvent(new Event('lake:conversation-read'));}
+   try{
+    const attention=window.lakeWindowAttention?await window.lakeWindowAttention.isReading():true;
+    if(!attention||disposed||!visible||document.hidden||!document.hasFocus())return;
+    await api.readConversation(session,cursor);saved=true;if(!disposed)window.dispatchEvent(new Event('lake:conversation-read'));
+   }
    catch{/* Retain the unread dot; retry while this content remains visible. */}
    finally{pending=false;}
   };
