@@ -52,6 +52,7 @@ const bundled = await build({
     "playwright-core",
     "ripgrep",
     "cpu-features",
+    "pg-native",
     "./crypto/build/Release/sshcrypto.node",
   ],
   nodePaths: [
@@ -177,6 +178,14 @@ async function copyDependencyNotices(entry) {
     );
     copied = true;
   }
+  if(!copied&&['pg-types@2.2.0','pgpass@1.0.5'].includes(key)){
+    const readme=await readFile(join(directory,'README.md'),'utf8'),start=readme.search(/^## [Ll]icense\s*$/m),license=readme.slice(start);
+    if(start<0||!license.includes('Permission is hereby granted, free of charge')||!license.includes('THE SOFTWARE IS PROVIDED "AS IS"'))throw new Error('Missing pinned PostgreSQL dependency license');
+    await writeFile(join(output,'licenses',noticePrefix+'-'+key+'-README-LICENSE.md'),license);copied=true;
+  }
+  if(!copied&&key==='@redis/client@6.3.1'){
+    await copyFile(join(root,'runtime/zcode/licenses/redis-client-6.3.1-LICENSE.md'),join(output,'licenses/service-redis-client-6.3.1-LICENSE.md'));copied=true;
+  }
   if (!copied) throw new Error("Missing license for runtime dependency " + key);
   dependencyNotices.push({
     name: manifest.name,
@@ -217,6 +226,10 @@ await writeFile(
   join(output, "licenses/mysql-dependencies.json"),
   JSON.stringify(dependencyNotices, null, 2),
 );
+dependencyNotices.length = 0;
+noticePrefix = 'services';
+for(const name of ['pg','@redis/client'])await copyDependencyNotices(createRequire(join(root,'web-agent/package.json')).resolve(name));
+await writeFile(join(output,'licenses/service-dependencies.json'),JSON.stringify(dependencyNotices,null,2));
 dependencyNotices.length = 0;
 noticePrefix = "image";
 await copyDependencyNotices(require.resolve("jimp"));
