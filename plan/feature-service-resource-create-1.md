@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-06
 last_updated: 2026-11-06
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [feature, items, resources, zcode]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
 Enable MySQL, PostgreSQL, Redis, APISIX, Prometheus and VictoriaMetrics creation with validated configuration, private credentials and explicit connection checks in the TS candidate.
 
@@ -42,7 +42,7 @@ Enable MySQL, PostgreSQL, Redis, APISIX, Prometheus and VictoriaMetrics creation
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-004 | Add service lifecycle/HTTP tests and frontend draft/render tests, run full relevant frontend/backend/type/build checks. Depends on TASK-003. | Yes | 2026-11-06 |
-| TASK-005 | Update docs/ui-guidelines.md, install signed Lake Dev from a clean code SHA, verify light/dark/narrow creation forms and preserve actual task records; open develop PR. Depends on TASK-004. | | |
+| TASK-005 | Update docs/ui-guidelines.md, install signed Lake Dev from a clean code SHA, verify light/dark/narrow creation forms and preserve actual task records; open develop PR. Depends on TASK-004. | Yes | 2026-11-06 |
 
 ## 3. Alternatives
 
@@ -78,3 +78,4 @@ Enable MySQL, PostgreSQL, Redis, APISIX, Prometheus and VictoriaMetrics creation
 - [Ownership](../agent.md)
 - [Items integration](../docs/design/items-security-memory-integration.md)
 - [UI guidelines](../docs/ui-guidelines.md)
+- [Validation and tested code SHA](../docs/validation/zcode-typescript-candidate/service-resources.md)

@@ -43,7 +43,13 @@ VM 编辑页验证 Bearer 认证、显式测试、修改端点立即清除旧成
 
 ## 签名 Lake Dev
 
-待记录干净代码 SHA、签名安装和原生新增表单复核。实际 Dev 只检查及取消草稿，不添加虚构业务连接、不执行真实业务检查。
+代码提交 `6fe33062640c3cf6200cea975b3b95b4601ffa31` 从干净工作区执行 `scripts/build_lake_desktop.sh --dev --ts-candidate --install`，构建、签名、安装均通过。安装前通过原生菜单停止 Dev 内核并退出，确认后端已停止，保留当前 Dev Home 与应用的私有 APFS 克隆备份。
+
+安装并启动 `~/Applications/Lake Dev.app` 后，构建来源的 `dirty` 为 `false`、后端 SHA256 与安装文件一致；`codesign --verify --deep --strict` 通过，Bundle ID 为 `com.cleanlakes.lake.desktop.dev`，实际 API 报告 TypeScript 后端，使用独立 `~/.lake-dev`。
+
+原生窗口中检查六类选项均可选，PostgreSQL 默认端口为 5432、TLS 默认开启；VictoriaMetrics 深色表单、约 850 像素宽窗口的圆角、焦点和裁切通过目视复核。浅色与深色浏览器实页验证见上节。实际 Dev 仅打开并取消草稿，没有添加虚构业务连接，也没有点击真实服务连接测试；随后恢复原窗口布局和“跟随系统”主题。
+
+安装后与原生复核结束后分别对比停机备份：原有 144 个资源数量保持一致，55 条目标、尝试、操作、交付和验收记录的完整行逐项一致；安装后活动／排队任务为 0。没有发送业务消息、重放操作、访问正式版 Home 或重启正式版应用。后续提交仅补充本验收记录与计划，不改变已测试的代码。
 
 ## 边界
 
