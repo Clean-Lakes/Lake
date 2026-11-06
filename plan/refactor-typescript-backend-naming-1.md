@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-06
 last_updated: 2026-11-07
 owner: Codex
-status: 'In progress'
+status: 'Completed'
 tags: [refactor, typescript, compatibility]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
 Describe the implementation as Lake's TypeScript backend. Keep actual dependency identifiers and attribution at the integration boundary, and retain explicit read compatibility for existing data.
 
@@ -41,7 +41,7 @@ Describe the implementation as Lake's TypeScript backend. Keep actual dependency
 |------|-------------|-----------|------|
 | TASK-003 | Add shared legacy source normalization and a private SQLite backup migration to agent-sessions.sqlite; preserve the original archive and reject conflicting or changed legacy archives. | true | 2026-11-07 |
 | TASK-004 | Add scripts/check_backend_naming.py with explicit dependency, attribution and compatibility exceptions; test migration and legacy-child rendering and run appropriate frontend/runtime/build checks. | true | 2026-11-07 |
-| TASK-005 | Build the signed combined Dev candidate, validate the neutral window title and existing history, record tested SHA and coverage, and open a develop PR. | | |
+| TASK-005 | Build the signed combined Dev candidate, validate the neutral window title and existing history, record tested SHA and coverage, and open a develop PR. | true | 2026-11-07 |
 
 ## 3. Alternatives
 
@@ -79,3 +79,5 @@ Describe the implementation as Lake's TypeScript backend. Keep actual dependency
 - [Development workflow](../docs/development-workflow.md)
 - [Architecture ownership](../agent.md)
 - [Frontend guidelines](../docs/ui-guidelines.md)
+
+Implemented in [PR 195](https://github.com/Clean-Lakes/Lake/pull/195), targeting develop and left open. [Validation](../docs/validation/typescript-candidate/backend-naming.md) records the functional and combined Dev source commits; no merge or release was performed.
