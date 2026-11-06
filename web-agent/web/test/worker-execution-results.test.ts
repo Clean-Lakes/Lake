@@ -7,8 +7,18 @@ import type {AICard,SessionSnapshot} from '../../shared/contracts';
 
 // Browser-only stylesheet loading is irrelevant to the rendered record set.
 const css=registerHooks({load(url,context,nextLoad){return url.endsWith('.css')?{format:'module',source:'export {};',shortCircuit:true}:nextLoad(url,context)}});
-const {WorkerExecutionResults}=await import('../src/WorkerExecutionTree');
+const {WorkerExecutionResults,WorkerExecutionTree}=await import('../src/WorkerExecutionTree');
 css.deregister();
+
+test('execution tree renders resources at the top and retains task-level records',()=>{
+ const card=(id:string,resourceId?:string):AICard=>({id,title:id,type:'operation',content:'记录内容',at:'2026-11-06T00:00:00Z',status:'completed',data:{taskId:'task',...(resourceId?{resource_id:resourceId}:{})}});
+ const snapshot={session:{id:'session',projectId:'project'},resources:[{id:'a',name:'目标服务器',projectId:'project',kind:'ssh'}],resourceTree:[{id:'folder',name:'生产目录',projectId:'project',kind:'folder',parentId:null,position:0},{id:'leaf',projectId:'project',kind:'resource',resourceId:'a',parentId:'folder',position:0}],superagent:{task:{taskId:'task',sessionId:'session',state:'completed'}},ai:{cards:[card('资源操作','a'),card('任务操作')],agentRuns:[]}} as unknown as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(WorkerExecutionTree,{snapshot}));
+ assert.match(html,/目标服务器/);
+ assert.match(html,/资源操作/);
+ assert.match(html,/任务操作/);
+ assert.doesNotMatch(html,/生产目录/);
+});
 
 test('results render only canonical business receipts and preserve failure and unknown states',()=>{
  const card=(id:string,title:string,status='completed',operationId?:string):AICard=>({id,title,type:'operation',content:'fixture payload',at:'2026-11-06T00:00:00Z',status,data:{taskId:'task',...(operationId?{operation_id:operationId}:{})}});
