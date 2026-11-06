@@ -13,7 +13,7 @@ export type LayeredMemoryScope = { key: string; kind: "user" | "project" | "role
 export type LayeredMemorySettings = { useEnabled: boolean; extractionEnabled: boolean; revision: number };
 export type LayeredMemoryEntry = { id: string; title: string; revision: number; contentHash: string; updatedAt: string;
   body?: string; available?: boolean; sources?: { id: string; kind: string; createdAt: string; taskId?: string; messageId?: string; evidenceState?: "accepted" | "failed" }[] };
-export type LayeredMemoryView = { scope: LayeredMemoryScope; settings: LayeredMemorySettings; items: LayeredMemoryEntry[];
+export type LayeredMemoryView = {search?:{engine:string;error?:string;pendingDeletions:number}; scope: LayeredMemoryScope; settings: LayeredMemorySettings; items: LayeredMemoryEntry[];
   jobs: { id: string; state: string; createdAt: string; finishedAt?: string; error?: string; nativeExtraction?: boolean }[] };
 
 export type MemoryKnowledgeKind = "preference" | "procedure" | "topology" | "configuration" | "incident_lesson";

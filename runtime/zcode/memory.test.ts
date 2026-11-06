@@ -635,3 +635,58 @@ test("新的复查任务不从 predecessor 摘要恢复已撤回的专员知识"
   f.memory.captureTask(goal.id);
   assert.equal(f.store.list("memoryJobs").length, 0);
 });
+
+test('task context inherits withdrawal provenance and fences dependent provider/tool continuation',async t=>{
+ const f=await fixture(t);f.enable();const note=await f.save(),source=f.task(),target=f.task();
+ f.memory.projectRequest(f.request,{kind:'worker',projectId:f.project.id,roleId:f.role.id,sessionId:source.goal.sessionId});
+ const row={taskRef:{id:source.goal.id,revision:1,hash:digest(source.goal)},title:'先前检查',observedAt:source.goal.updatedAt,state:'paused',acceptanceState:'not_evaluated',unresolvedOperations:0,summary:'K2 入口 192.0.2.75',humanInputs:[],reports:[],resources:[],historicalContextOnly:true,requiresCurrentCheck:true,truncated:false} as const;
+ const actor={kind:'worker' as const,projectId:f.project.id,roleId:f.role.id,sessionId:target.goal.sessionId};
+ const shown=f.memory.projectTaskContext([row as any],actor,true);assert.match(shown[0].summary,/192\.0\.2\.75/);
+ const before=JSON.stringify(f.store.get('superGoals',source.goal.id));
+ await f.memory.forget(f.scope,note.id,note.revision);
+ assert.throws(()=>f.memory.validateContinuation(actor),/停用或撤回/);
+ assert.throws(()=>f.memory.projectRequest(f.request,actor),/停用或撤回/);
+ const fresh=f.memory.projectTaskContext([row as any],{...actor,sessionId:'new-context-reader'});
+ assert.equal(fresh[0].summary,'');assert.equal(fresh[0].summaryUnavailable,'withdrawn_knowledge');
+ assert.equal(JSON.stringify(f.store.get('superGoals',source.goal.id)),before);
+ f.memory.captureTask(target.goal.id);assert.equal(f.store.list('memoryJobs').length,0);
+});
+
+test('forgetting a task source also withdraws notes derived through task context',async t=>{
+ const f=await fixture(t);f.enable();const a=f.task(),b=f.task();
+ f.memory.captureTask(a.goal.id);
+ const source=f.store.list<any>('memorySources').find(s=>s.taskId===a.goal.id)!;
+ const row={taskRef:{id:a.goal.id,revision:1,hash:digest(a.goal)},title:'历史任务',observedAt:a.goal.updatedAt,state:'completed',acceptanceState:'pass',unresolvedOperations:0,summary:'历史入口',humanInputs:[],reports:[],resources:[],historicalContextOnly:true,requiresCurrentCheck:true,truncated:false};
+ const actor={kind:'worker' as const,projectId:f.project.id,roleId:f.role.id,sessionId:b.goal.sessionId};
+ f.memory.projectTaskContext([row as any],actor,true);f.memory.captureTask(b.goal.id);
+ const derived=f.store.list<any>('memorySources').find(s=>s.taskId===b.goal.id)!;assert.ok(derived);
+ const note={id:'context-note',scopeKey:source.scopeKey,sourceIds:[source.id],revision:1,filePath:'published/synthetic-unused.md'};
+ f.store.put('memoryEntries',note.id,note);
+ await (f.memory as any).withdraw(f.scope,note);
+ assert.equal(f.store.get<any>('memorySources',derived.id)!.withdrawn,true);
+ assert.equal(f.store.get<any>('memorySources',derived.id)!.payload,'');
+ assert.throws(()=>f.memory.validateContinuation(actor),/停用或撤回/);
+});
+
+test('explicit memory recall uses only current actor scopes and honors per-turn ignore and forgotten sources',async t=>{
+ const f=await fixture(t);f.enable();const note=await f.save(f.scope,'K2 的入口为 192.0.2.75。','K2 入口'),actor={kind:'worker' as const,projectId:f.project.id,roleId:f.role.id,sessionId:'recall-worker'};
+ const result=await f.memory.recall(actor,{query:'K2'});assert.equal(result.items.length,1);assert.match(result.items[0].body,/192\.0\.2\.75/);
+ assert.equal((await f.memory.recall({...actor,roleId:f.role2.id,sessionId:'other-role'},{query:'K2'})).items.length,0);
+ f.memory.setIgnored('ignored-recall',true);assert.equal((await f.memory.recall({...actor,sessionId:'ignored-recall'},{query:'K2'})).items.length,0);
+ await f.memory.forget(f.scope,note.id,note.revision);
+ await assert.rejects(()=>f.memory.recall(actor,{query:'K2'}),/停用或撤回/);
+ assert.equal((await f.memory.recall({...actor,sessionId:'fresh-recall'},{query:'K2'})).items.length,0);
+});
+
+test('real Claude-Mem ranks Lake notes while Lake remains the source and forget authority',{skip:!process.env.LAKE_TEST_CLAUDE_MEM_URL},async t=>{
+ const {ClaudeMemIndex}=await import('./claude-mem');
+ const f=await fixture(t);f.enable();f.memory.searchIndex=new ClaudeMemIndex(f.store,process.env.LAKE_TEST_CLAUDE_MEM_URL!,()=>{});
+ const note=await f.save(f.scope,'K2 的已知入口是 192.0.2.75，实例 db/mysql141-0。','K2 database entrance');
+ const actor={kind:'worker' as const,projectId:f.project.id,roleId:f.role.id,sessionId:'indexed-worker'};
+ const result=await f.memory.recall(actor,{query:'K2'});
+ assert.equal(result.engine,'claude-mem-sqlite');assert.equal(result.items[0].entryId,note.id);assert.equal(result.items[0].revision,note.revision);
+ assert.match(result.items[0].body,/db\/mysql141-0/);assert.ok(result.items[0].sourceRefs.length);
+ await f.memory.forget(f.scope,note.id,note.revision);
+ assert.equal(f.store.list('claudeMemIndex').length,0);
+ assert.equal((await f.memory.recall({...actor,sessionId:'after-forget'},{query:'K2'})).items.length,0);
+});

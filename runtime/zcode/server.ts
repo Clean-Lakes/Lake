@@ -32,6 +32,7 @@ import { applyLegacyMigration, importLegacySSH, importLegacyMySQL, loadLegacyVie
 import { digest } from "./tasks";
 import { LakeSecurity } from "./security";
 import { LakeMemory } from "./memory";
+import {openClaudeMemIndex} from './claude-mem';
 import { LakeExtensions } from "./extensions";
 import {LakeSSH} from "./ssh";
 import { LakeTerminals } from "./terminal";
@@ -714,6 +715,7 @@ export async function startLakeServer(options: ServerOptions) {
     memory = new LakeMemory(store, () => security!.check(), value => agents!.redact(ssh!.scrub(extensions!.scrub(value))));
     try { await memory.initialize(); } catch { memory.disable("记忆文件需要核实，当前暂停记忆功能；原记录保留，普通新任务仍可运行"); }
     agents.memory = memory;
+    try{memory.searchIndex=await openClaudeMemIndex(store,()=>security!.check());}catch{memory.searchIndexError='本地检索索引未就绪，仍可使用有效的 Lake 记忆。';}
     memory.runNative = work => agents!.runMemory(work);
     memory.isForegroundBusy = () => agents!.foregroundBusy();
     memory.validateOperation = operation => superagent!.ledger.revalidate?.(operation);

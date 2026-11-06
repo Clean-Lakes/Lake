@@ -253,3 +253,59 @@ test('Pilot stop fences current queued/active work and late decisions without ch
  assert.throws(()=>f.route(pending,{action:'create',title:'迟到任务',role_id:f.role.id}));
  f.settleRouter();await f.activate();assert.equal(f.requests.length,count);
 });
+
+test('a distinct follow-on task recalls same-role entrance clarifications and reports without borrowing execution authority',async t=>{
+ const f=await fixture(t);
+ const event=await f.admit('比较源库与 K2 数据。'),first=f.route(event,{action:'create',title:'比较两端数据库',role_id:f.role.id});
+ f.settleRouter();await f.activate();await f.read(first.taskId);f.settleWorker(first.taskId);
+ const entrance=await f.admit('192.0.2.75 是 K2 入口。');f.route(entrance,{action:'followup',task_id:first.taskId});
+ f.settleRouter();await f.activate();
+ const old=f.host.ledger.get(first.taskId);old.summary='K2 的数据库实例为 db/mysql141-0；这次只做了历史比较。';f.host.ledger.save(old);f.settleWorker(first.taskId);
+ await f.host.stopTask(first.taskId);
+ const original=JSON.stringify(f.host.ledger.get(first.taskId)),receipts=JSON.stringify(f.store.list('superOperations'));
+ const next=await f.admit('同步到k2'),handoff=f.route(next,{action:'create',title:'同步源库到 K2',role_id:f.role.id});
+ f.settleRouter();await f.activate();
+ const assigned=f.requests.at(-1)!.input,previous=assigned.taskContext.items.find((row:any)=>row.taskRef.id===first.taskId);
+ assert.match(JSON.stringify(previous),/192\.0\.2\.75/);assert.match(previous.summary,/db\/mysql141-0/);
+ assert.equal(previous.historicalContextOnly,true);assert.equal(previous.state,'cancelled');
+ assert.notEqual(assigned.assignment.sessionId,f.worker(first.taskId).sessionId);
+ assert.equal(f.store.list<any>('superOperations').filter(op=>op.goalId===handoff.taskId).length,0);
+ assert.equal(f.host.ledger.get(handoff.taskId).acceptanceState,'not_evaluated');
+ const current=f.worker(handoff.taskId),recall=f.host.profile(current.sessionId)!.tools.find(tool=>tool.metadata.name==='recall_task_context')!;
+ const found:any=await recall.handler({task_id:first.taskId,revision:previous.taskRef.revision,expected_hash:previous.taskRef.hash},{abortSignal:new AbortController().signal} as any);
+ assert.equal(found.items[0].taskRef.id,first.taskId);
+ await assert.rejects(async()=>recall.handler({task_id:first.taskId,expected_hash:'stale'},{abortSignal:new AbortController().signal} as any),/hash changed/);
+ assert.equal(JSON.stringify(f.host.ledger.get(first.taskId)),original);assert.equal(JSON.stringify(f.store.list('superOperations')),receipts);
+});
+
+test('task recall rejects a different role and forged actor, and provider projection refreshes only the latest exact assignment',async t=>{
+ const f=await fixture(t),first=await f.start();f.settleWorker(first.taskId);
+ const next=await f.admit('进行另一项工作'),created=f.route(next,{action:'create',title:'后续工作',role_id:f.role.id});f.settleRouter();await f.activate();
+ const current=f.worker(created.taskId),profile=f.host.profile(current.sessionId)!;
+ const foreign={...f.worker(first.taskId),id:'other-worker',taskId:'other-task',roleId:'other-role'};
+ f.store.put('superWorkers',foreign.id,foreign);f.store.put('superGoals',foreign.taskId,{...f.host.ledger.get(first.taskId),id:foreign.taskId,workerId:foreign.id,roleId:foreign.roleId});
+ const recall=profile.tools.find(tool=>tool.metadata.name==='recall_task_context')!;
+ await assert.rejects(async()=>recall.handler({task_id:foreign.taskId},{abortSignal:new AbortController().signal} as any),/not found/);
+ const assigned=f.requests.at(-1)!.input;
+ const request={messages:[{role:'system',content:'preserve system'},{role:'user',content:JSON.stringify({...assigned,taskContext:{stale:'OLD_CONTEXT'}})},{role:'assistant',content:'old reasoning'},{role:'user',content:JSON.stringify(assigned)}]};
+ const before=JSON.stringify(request),projected:any=profile.projectRequest!(request);
+ assert.equal(JSON.parse(projected.messages[1].content).taskContext,undefined);
+ assert.equal(JSON.parse(projected.messages[3].content).taskContext.items[0].taskRef.id,first.taskId);
+ assert.equal(projected.messages[2],request.messages[2]);assert.equal(JSON.stringify(request),before);
+});
+
+test('task context enforces actual actor identity and UTF-8/JSON budgets across paged history',async t=>{
+ const {TaskContext}=await import('./task-context');
+ const f=await fixture(t),first=await f.start(),current=f.worker(first.taskId),goal=f.host.ledger.get(first.taskId),context=new TaskContext(f.store,value=>value);
+ for(let index=0;index<12;index++){
+  const taskId='history-'+index,workerId='history-worker-'+index,sessionId='history-session-'+index;
+  f.store.put('superGoals',taskId,{...goal,id:taskId,workerId,sessionId,summary:'中文上下文和入口线索。'.repeat(3000),title:'历史任务 '+index});
+  f.store.put('superWorkers',workerId,{...current,id:workerId,taskId,sessionId,createdAt:`2026-11-06T08:00:${String(index).padStart(2,'0')}Z`,inputEventIds:[]});
+ }
+ const actor={projectId:current.projectId,roleId:current.roleId,sessionId:current.sessionId,taskId:current.taskId};
+ const before=JSON.stringify(f.store.list('superGoals'));
+ assert.throws(()=>context.recall({...actor,projectId:'foreign'}),/actor not found/);
+ let cursor='',ids:string[]=[];
+ do{const page=context.recall(actor,{limit:6,cursor});assert.ok(Buffer.byteLength(JSON.stringify(page))<=16384);for(const row of page.items){assert.ok(Buffer.byteLength(JSON.stringify(row))<=4096);assert.doesNotMatch(JSON.stringify(row),/�/);ids.push(row.taskRef.id);}cursor=page.nextCursor;}while(cursor);
+ assert.equal(new Set(ids).size,12);assert.equal(ids.length,12);assert.equal(JSON.stringify(f.store.list('superGoals')),before);
+});

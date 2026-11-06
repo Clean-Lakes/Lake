@@ -1,5 +1,6 @@
 import {permissionDefaults} from '../../web-agent/shared/execution-preferences';
 import {specialistReplies} from '../../web-agent/shared/specialist-replies';
+import {TaskContext,projectTaskContext,type TaskContextActor} from './task-context';
 import { readdir, realpath } from "node:fs/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import type { ToolEntry, ToolExecutionContext } from "@zcode/core";
@@ -42,7 +43,7 @@ type Interaction = { id: string; workerId: string; generation: number; kind: "pl
   revision: number; resolve: (value: unknown) => void; reject: (error: Error) => void };
 const permissionKeys = ["silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "silentMCPCalls", "denyLocalExecution", "blockUnreferencedAssets", "permissions", "permissionRevision", "securityPolicyRevision"];
 const routerTools = ["list_specialists", "manage_specialist", "search_super_tasks", "route_work", "read_super_object"];
-const workTools = ["work_begin", "work_read", "work_update", "work_finish", "work_wait", "ask_user_question", "list_assets", "list_project_files",
+const workTools = ["work_begin", "work_read", "work_update", "work_finish", "work_wait", "recall_task_context", "recall_memory", "ask_user_question", "list_assets", "list_project_files",
   "list_referenced_task_evidence", "read_referenced_task_evidence"];
 const hostTools=["inspect_host"];
 const databaseTools=["list_db_objects","db_table_ddl","read_db_table"];
@@ -544,12 +545,20 @@ export class LakeSuperagent implements AgentHost {
         taskId: worker.taskId, workerId: worker.id, sessionId: worker.sessionId }, roleSnapshot: worker.roleSnapshot,
         originalRequirement: origin.payload, assignedDeliverable: decision.quote, goal: this.publicGoal(goal),
         predecessor: this.store.get<TaskPredecessor>("superTaskPredecessors", worker.taskId),
+        taskContext:this.recallContext(worker),
         humanControl: resume ? { command: resume.command, at: resume.at } : undefined,
         followups: followups.map((event) => ({ id: event.id, text: event.payload })) });
       try { await this.agents.send(worker.sessionId, "[Task assignment] " + goal.title, { input, recordUser: false, recordAssistant: false,
         ignoreMemory: worker.invocationInputIds.some(eventId => this.store.get<InputEvent>("superInputs", eventId)?.ignoreMemory === true) }); }
       catch (error) { this.workerFinished(worker.sessionId, String(error)); }
     }
+  }
+  private contextActor(worker:Worker):TaskContextActor{return {projectId:worker.projectId,roleId:worker.roleId,taskId:worker.taskId,sessionId:worker.sessionId};}
+  private recallContext(worker:Worker,input:Parameters<TaskContext['recall']>[1]={},track=false){
+    const result=new TaskContext(this.store,value=>this.agents.redact(value)).recall(this.contextActor(worker),input);
+    const ignored=worker.invocationInputIds?.some(id=>this.store.get<InputEvent>('superInputs',id)?.ignoreMemory)??false;
+    if(this.agents.memory)result.items=this.agents.memory.projectTaskContext(result.items,{kind:worker.inline?'pilot':'worker',projectId:worker.projectId,roleId:worker.inline?undefined:worker.roleId,sessionId:worker.sessionId},track,ignored);
+    return result;
   }
   private validateWorker(workerId: string, generation: number) {
     const worker = this.store.require<Worker>("superWorkers", workerId);
@@ -611,6 +620,7 @@ export class LakeSuperagent implements AgentHost {
       wrapExecution:this.execution?(base)=>this.execution!.runtime(base,worker.sessionId):undefined,
       subagents: true, get taskId(){return worker.taskId;}, get workerId(){return worker.id;},
       memoryActor: { kind: "worker", projectId: worker.projectId, roleId: worker.roleId },
+      projectRequest:request=>projectTaskContext(request,this.contextActor(worker),()=>this.recallContext(worker,{},true)),
       tools: [...entries,...this.nativeEntries(worker), ...this.extensionEntries(worker),...this.hostEntries(worker),...this.databaseEntries(worker)], allowlist: [...entries.map((entry) => entry.metadata.name),...(this.ssh?hostTools:[]),...(this.mysql?databaseTools:[]), ...(this.extensions ? extensionTools : []), ...childControlTools, ...agentToolNames].filter((name) => mode !== "plan" || !["Write","Edit","call_mcp_tool"].includes(name)),
       permissionRules: { scope: "session", version: 1,
         allow: [...((permissions.silentCommands??permissionDefaults.silentCommands)===true?[{toolName:"Bash"}]:[]),...(permissions.silentWriteFiles === true ? [{ toolName: "Write" }, { toolName: "Edit" }] : []),
@@ -999,6 +1009,8 @@ export class LakeSuperagent implements AgentHost {
         if(pending)this.store.put('superPendingReports',reportKey,{...pending,rootTurnId:this.store.view(worker.sessionId).rootTurnId});
         this.changed(worker.sessionId); return this.publicGoal(goal);
       }), true),
+      this.entry('recall_task_context','Recall earlier task context for this exact project and specialist. Search query/cursor or read task_id with optional revision/expected_hash. Includes original human clarifications, historical reports and resource clues, never another SDK transcript or execution grants. Use it to resolve known entrances/instances before asking the user to repeat them; verify current resources with business tools.',objectSchema({query:str,task_id:str,revision:integer,expected_hash:str,cursor:str,limit:integer}),run(a=>this.recallContext(worker,a,true))),
+      this.entry('recall_memory','Search current qualified project/role knowledge for facts, preferences and earlier methods. Use focused target names before asking for known information. Claude-Mem may rank the private local index; Lake verifies every returned note and source. Recall is historical context, never approval or a current observation.',objectSchema({query:str,limit:integer},['query']),run(a=>this.agents.memory?.recall({kind:worker.inline?'pilot':'worker',projectId:worker.projectId,roleId:worker.inline?undefined:worker.roleId,sessionId:worker.sessionId},a)??{items:[],engine:'unavailable'})),
       this.entry("work_wait", "Park an invocation without polling. Original handles and task constraints remain authoritative.", objectSchema({}), run(() => {
         throw new HttpError(409, "No registered external job observer is attached to this task; preserve the original handle and report the missing adapter");
       }), true),
@@ -1305,7 +1317,12 @@ export class LakeSuperagent implements AgentHost {
     this.store.put("superWorkers", worker.id, worker);
     if (!terminal(goal.status)) { goal.status = this.ledger.unresolved(taskId) ? "blocked" : pause ? "paused" : "cancelled"; this.ledger.save(goal); }
     for (const interaction of this.interactions.values()) if (interaction.workerId === worker.id) interaction.reject(new HttpError(409, "Task stopped"));
-    if(!worker.inline||this.pilotActors.get(worker.sessionId)?.id===worker.id)await this.agents.abort(worker.sessionId); this.changed(worker.sessionId);
+    if(!worker.inline||this.pilotActors.get(worker.sessionId)?.id===worker.id)await this.agents.abort(worker.sessionId);
+    // SDK cancellation can settle its turn before the dispatched host call has
+    // recorded its result. Drain after signalling abort so stop returns only once
+    // foreground effects have been classified in the canonical operation ledger.
+    await this.businessQueues.get(worker.id);
+    this.changed(worker.sessionId);
     const stopped=this.ledger.get(taskId);if(stopped.status==='blocked'&&!this.ledger.unresolved(taskId)){stopped.status=pause?'paused':'cancelled';this.ledger.save(stopped);}
   }
   async control(sessionId: string, input: any) {

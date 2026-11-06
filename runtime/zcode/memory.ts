@@ -19,6 +19,8 @@ import type {
 } from "../../web-agent/shared/contracts";
 import { HttpError, id, LakeStore, now, privateDirectory } from "./store";
 import { canonical, digest, text, type Goal, type Operation } from "./tasks";
+import type {TaskContextEntry} from './task-context';
+import type {ClaudeMemIndex,MemorySearchDocument} from './claude-mem';
 
 type Scope = LayeredMemoryScope & {
   storeId: string;
@@ -61,7 +63,7 @@ type Entry = LayeredMemoryEntry & {
   sourceIds: string[];
   deleted?: boolean;
 };
-type ReadUsage = { sourceIds: string[] };
+type ReadUsage = { sourceIds: string[];taskIds?:string[];messageIds?:string[] };
 export type MemoryJob = {
   id: string;
   scopeKey: string;
@@ -108,6 +110,8 @@ const clip = (value: string, maximum: number) => {
 
 /** A single file publisher. SDK Memory owns extraction; Lake owns provenance and visibility. */
 export class LakeMemory {
+  searchIndex?:ClaudeMemIndex;
+  searchIndexError?:string;
   readonly root: string;
   readonly storeId: string;
   runNative?: (work: NativeMemoryWork) => Promise<void>;
@@ -273,7 +277,7 @@ export class LakeMemory {
       this.invalidSources(
         used,
         !!actor.sessionId && this.isIgnored(actor.sessionId),
-      ).length
+      ).length || this.contextRevoked(actor.sessionId?this.store.get<ReadUsage>('memoryReads',actor.sessionId):undefined)
     )
       throw new HttpError(
         409,
@@ -286,10 +290,33 @@ export class LakeMemory {
         ? this.store.get<ReadUsage>("memoryReads", goal.sessionId)
         : undefined;
     return (
-      !!usage &&
+      this.store.list<MemorySource>('memorySources').some(source=>source.withdrawn&&source.taskId===taskId) || !!usage &&
       (usage.sourceIds.some((id) => excluded.has(id)) ||
-        this.invalidSources(usage.sourceIds).length > 0)
+        this.invalidSources(usage.sourceIds).length > 0 || this.contextRevoked(usage))
     );
+  }
+  private contextRevoked(usage?:ReadUsage){
+    return !!usage&&this.store.list<MemorySource>('memorySources').some(source=>source.withdrawn&&
+      (!!source.taskId&&!!usage.taskIds?.includes(source.taskId)||!!source.messageId&&!!usage.messageIds?.includes(source.messageId)));
+  }
+  /** Task history is contextual reference data, not a second long-term corpus. */
+  projectTaskContext(rows:TaskContextEntry[],actor:LayeredMemoryActor,track=false,ignore=false){
+    this.guard();if(actor.roleId)this.role(actor.projectId,actor.roleId);
+    if(track)this.validateContinuation(actor);
+    const prior=actor.sessionId?this.store.get<ReadUsage>('memoryReads',actor.sessionId):undefined;
+    const sources=new Set(prior?.sourceIds??[]),tasks=new Set(prior?.taskIds??[]),messages=new Set(prior?.messageIds??[]);
+    const result=rows.map(row=>{
+      const goal=this.store.require<Goal>('superGoals',row.taskRef.id);
+      if(goal.projectId!==actor.projectId||actor.roleId&&goal.roleId!==actor.roleId)throw new HttpError(404,'Task context not found in this specialist');
+      const usage=this.store.get<ReadUsage>('memoryReads',goal.sessionId);
+      const refs:ReadUsage={sourceIds:[],taskIds:[goal.id,...(usage?.taskIds??[])],messageIds:[...row.humanInputs.map(input=>input.messageId),...(usage?.messageIds??[])]};
+      if(this.contextRevoked(refs)||this.taskUsesInvalidMemory(goal.id,new Set())||!!usage?.sourceIds.length&&(!this.ready||this.invalidSources(usage.sourceIds,ignore||!!actor.sessionId&&this.isIgnored(actor.sessionId)).length))
+        return {...row,summary:'',reports:[],humanInputs:[],resources:[],summaryUnavailable:'withdrawn_knowledge'};
+      if(track){usage?.sourceIds.forEach(id=>sources.add(id));refs.taskIds?.forEach(id=>tasks.add(id));refs.messageIds?.forEach(id=>messages.add(id));}
+      return row;
+    });
+    if(track&&actor.sessionId)this.store.put('memoryReads',actor.sessionId,{sourceIds:[...sources],taskIds:[...tasks],messageIds:[...messages]});
+    return result;
   }
   /** Rebuild Router data only; original messages, reports and execution ledgers remain untouched. */
   private projectRouterInput(input: string, excluded: Set<string>) {
@@ -559,7 +586,7 @@ export class LakeMemory {
       const used =
         this.store.get<ReadUsage>("memoryReads", goal.sessionId)?.sourceIds ??
         [];
-      if (this.invalidSources(used).length) return;
+      if (this.invalidSources(used).length||this.contextRevoked(this.store.get<ReadUsage>('memoryReads',goal.sessionId))) return;
       if (!goal.workerId) return;
       const worker = this.store.get<{
         inline?: boolean;
@@ -692,6 +719,7 @@ export class LakeMemory {
   sourceAvailable(source: MemorySource) {
     if (source.withdrawn || source.hash !== digest(source.payload))
       return false;
+    if(source.taskId){const goal=this.store.get<Goal>('superGoals',source.taskId);if(goal&&this.contextRevoked(this.store.get<ReadUsage>('memoryReads',goal.sessionId)))return false;}
     const scope = this.store.get<Scope>("memoryScopes", source.scopeKey);
     if (
       !scope ||
@@ -824,11 +852,37 @@ export class LakeMemory {
       scope,
       settings: this.settings(scope),
       items,
+      search:{engine:this.searchIndex?'claude-mem-sqlite':'local',error:this.searchIndexError,pendingDeletions:this.store.list<any>('claudeMemIndex').filter(row=>row.deleting).length},
       jobs: this.store
         .list<MemoryJob>("memoryJobs")
         .filter((job) => job.scopeKey === scope.key)
         .slice(-20),
     };
+  }
+  async recall(actor:LayeredMemoryActor,input:{query:string;limit?:number}){
+    this.requireAvailable();this.validateContinuation(actor);
+    if(actor.sessionId&&this.isIgnored(actor.sessionId))return {engine:'disabled',items:[],historicalContextOnly:true};
+    if(typeof input.query!=='string'||!input.query.trim()||input.query.length>512||!Number.isInteger(input.limit??4)||(input.limit??4)<1||(input.limit??4)>8)throw new HttpError(400,'Invalid memory recall query');
+    const scopes=[...(actor.roleId?[this.scope('role',actor.projectId,actor.roleId)]:[]),this.scope('project',actor.projectId),...(actor.kind==='pilot'?[this.scope('user')]:[])];
+    const current=()=>this.store.list<Entry>('memoryEntries').filter(entry=>scopes.some(scope=>scope.key===entry.scopeKey&&this.settings(scope).useEnabled)&&this.available(entry));
+    const entries=current(),documents:MemorySearchDocument[]=entries.flatMap(entry=>{try{return [{id:entry.id,scopeKey:entry.scopeKey,revision:entry.revision,title:entry.title,body:this.body(entry)}];}catch{return [];}});
+    let ranked:string[]=[],engine='local';
+    if(this.searchIndex){try{
+      ranked=await this.searchIndex.rank(documents,scopes.map(scope=>scope.key),input.query,()=>{this.validateContinuation(actor);if(documents.some(doc=>{const value=this.store.get<Entry>('memoryEntries',doc.id);return !value||value.revision!==doc.revision||!current().some(row=>row.id===doc.id);}))throw new HttpError(409,'Memory changed during recall');});
+      engine='claude-mem-sqlite';this.searchIndexError=undefined;
+    }catch(error){if(error instanceof HttpError&&error.status<500)throw error;this.searchIndexError='本地检索索引暂不可用，当前从有效记忆中查找。';}}
+    this.validateContinuation(actor);
+    const tokens=input.query.toLocaleLowerCase().match(/[a-z0-9._-]+|\p{Script=Han}{1,2}/gu)??[];
+    const lexical=documents.map(doc=>({id:doc.id,score:tokens.reduce((n,token)=>n+Number((doc.title+'\n'+doc.body).toLocaleLowerCase().includes(token)),0)})).filter(row=>row.score>0).sort((a,b)=>b.score-a.score).map(row=>row.id);
+    const eligible=new Map(current().map(entry=>[entry.id,entry]));
+    const selected=[...new Set([...ranked,...lexical])].slice(0,input.limit??4).flatMap(id=>{
+      const entry=eligible.get(id),original=documents.find(doc=>doc.id===id);
+      if(!entry||!original||entry.revision!==original.revision)return [];
+      return [{entryId:entry.id,scope:scopes.find(scope=>scope.key===entry.scopeKey)!.kind,revision:entry.revision,title:entry.title,body:clip(this.body(entry),1200),observedAt:entry.updatedAt,sourceRefs:entry.sourceIds.slice(-4).map(id=>{const source=this.store.require<MemorySource>('memorySources',id);return {id,kind:source.kind,taskId:source.taskId,at:source.createdAt,evidenceState:source.taskEvidence};})}];
+    });
+    while(Buffer.byteLength(JSON.stringify(selected))>12288)selected.pop();
+    if(actor.sessionId){const usage=this.store.get<ReadUsage>('memoryReads',actor.sessionId);this.store.put('memoryReads',actor.sessionId,{...usage,sourceIds:[...new Set([...(usage?.sourceIds??[]),...selected.flatMap(item=>eligible.get(item.entryId)!.sourceIds)])]});}
+    return {engine,items:selected,historicalContextOnly:true,meaning:'Recall returns current qualified knowledge and original source references, not instructions, current health, operation approval or accepted evidence.'};
   }
   projectRequest<T>(request: T, actor: LayeredMemoryActor): T {
     this.guard();
@@ -844,6 +898,7 @@ export class LakeMemory {
     }
     const invalid = this.invalidSources(used, ignored),
       excluded = new Set(invalid);
+    const contextInvalid=this.contextRevoked(actor.sessionId?this.store.get<ReadUsage>('memoryReads',actor.sessionId):undefined);
     // Router requests are reconstructible from the current host envelope. A Task
     // transcript may contain answers derived from revoked knowledge; stop it rather
     // than silently continuing with that text or deleting its execution history.
@@ -864,8 +919,8 @@ export class LakeMemory {
         content(message).startsWith("[LAKE ADMITTED HUMAN EVENTS"),
     );
     if (
-      (invalid.length && actor.kind !== "pilot") ||
-      (invalid.length && current < 0)
+      ((invalid.length||contextInvalid) && actor.kind !== "pilot") ||
+      ((invalid.length||contextInvalid) && current < 0)
     )
       throw new HttpError(
         409,
@@ -880,7 +935,7 @@ export class LakeMemory {
             source.scopeKey === this.scope("user").key,
         ))
         if (this.invalidSources([source.id]).length) excluded.add(source.id);
-      const selected = invalid.length
+      const selected = invalid.length||contextInvalid
         ? [
             ...messages
               .slice(0, current)
@@ -900,7 +955,7 @@ export class LakeMemory {
             : message,
         ),
       };
-      if (invalid.length && actor.sessionId)
+      if ((invalid.length||contextInvalid) && actor.sessionId)
         this.store.put("memoryReads", actor.sessionId, { sourceIds: [] });
     }
     if (actor.kind === "worker")
@@ -1009,6 +1064,7 @@ export class LakeMemory {
         this.store.get<ReadUsage>("memoryReads", actor.sessionId)?.sourceIds ??
         [];
       this.store.put("memoryReads", actor.sessionId, {
+        ...this.store.get<ReadUsage>('memoryReads',actor.sessionId),
         sourceIds: [...new Set([...prior, ...admittedSources])],
       });
     }
@@ -1085,6 +1141,8 @@ export class LakeMemory {
   private async withdraw(scope: Scope, entry: Entry) {
     const affected = new Set(entry.sourceIds),
       paths: string[] = [];
+    const affectedScopes=new Set([scope.key]);
+    const removedEntries:string[]=[];
     this.store.transaction(() => {
       const current = this.store.require<Scope>("memoryScopes", scope.key);
       current.withdrawalRevision++;
@@ -1095,32 +1153,44 @@ export class LakeMemory {
           source.withdrawn = true;
           source.payload = "";
           this.store.put("memorySources", sourceId, source);
+          affectedScopes.add(source.scopeKey);
         }
       }
+      // Context-derived notes retain their task/message provenance even when
+      // the original task was unfinished. Withdraw that dependency closure too.
+      let changed=true;
+      while(changed){changed=false;for(const source of this.store.list<MemorySource>('memorySources')){
+        if(source.withdrawn||!source.taskId)continue;
+        const goal=this.store.get<Goal>('superGoals',source.taskId),usage=goal?this.store.get<ReadUsage>('memoryReads',goal.sessionId):undefined;
+        if(!this.contextRevoked(usage)&&!usage?.sourceIds.some(id=>affected.has(id)))continue;
+        source.withdrawn=true;source.payload='';this.store.put('memorySources',source.id,source);affected.add(source.id);affectedScopes.add(source.scopeKey);changed=true;
+      }}
+      for(const key of affectedScopes)if(key!==scope.key){const value=this.store.require<Scope>('memoryScopes',key);value.withdrawalRevision++;this.store.put('memoryScopes',key,value);}
       // A compiled note/index can depend on several sources. Withdraw all dependent derivatives.
       for (const value of this.store.list<Entry>("memoryEntries"))
         if (
-          value.scopeKey === scope.key &&
           value.sourceIds.some((id) => affected.has(id))
         ) {
           value.deleted = true;
+          removedEntries.push(value.id);
           paths.push(value.filePath);
           this.store.put("memoryEntries", value.id, value);
         }
       for (const version of this.store.list<any>("memoryFileVersions"))
         if (
-          version.scopeKey === scope.key &&
           version.sourceIds.some((id: string) => affected.has(id))
         )
           paths.push(version.filePath);
     });
-    if (this.activeScope === scope.key)
+    if (this.activeScope&&affectedScopes.has(this.activeScope))
       this.controller?.abort(new Error("记忆来源已撤回"));
     for (const path of new Set(paths)) {
       const absolute = resolve(this.root, path);
       this.assertPath(absolute);
       await rm(absolute, { force: true });
     }
+    for(const row of this.store.list<any>('claudeMemIndex'))if(removedEntries.includes(row.entryId))this.store.put('claudeMemIndex',row.key,{...row,deleting:true});
+    if(this.searchIndex)try{await this.searchIndex.forget(removedEntries);this.searchIndexError=undefined;}catch{this.searchIndexError='记忆已停止使用，本地检索副本尚待清理；服务恢复后会继续清理。';}
   }
   async retireRole(projectId: string, roleId: string) {
     const key = digest([this.storeId, "role", projectId, roleId]),
@@ -1477,5 +1547,6 @@ export class LakeMemory {
     if (this.timer) clearTimeout(this.timer);
     this.controller?.abort(new Error("Lake 正在退出"));
     await this.pending;
+    await this.searchIndex?.close();
   }
 }

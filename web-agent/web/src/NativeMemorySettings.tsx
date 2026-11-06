@@ -180,6 +180,8 @@ export function NativeMemorySettings({
       )}
       {view && (
         <>
+          {view.search?.engine==='claude-mem-sqlite'&&<p className="settings-note" role="status">已接入 Claude-Mem 本地检索。</p>}
+          {(view.search?.error||!!view.search?.pendingDeletions)&&<p className="settings-note" role="status">{view.search?.error??'记忆已停止使用，本地检索副本尚待清理；服务恢复后会继续清理。'}</p>}
           <section className="memory-controls" aria-label="记忆开关">
             {scope?.kind !== "user" && (
               <label className="memory-control">

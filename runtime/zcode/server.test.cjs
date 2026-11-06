@@ -289,6 +289,15 @@ function superReply(request, mode, home) {
     return {content:'本次已读取 MySQL 表结构，行数为 42；不声称跨库一致。'};
   }
   if (mode === "super-incomplete-report") return { content: "这次还没连上服务器，暂时查不到 CPU 和内存的实际使用情况。" };
+  if(mode==='super-context-recall'){
+    const assigned=request.messages.filter(m=>m.role==='user').map(content).filter(value=>value.startsWith('{')).map(value=>{try{return JSON.parse(value);}catch{return {};}}).findLast(value=>value.assignment);
+    const followon=assigned.originalRequirement.includes('同步到k2');
+    if(followon&&!JSON.stringify(assigned.taskContext).includes('192.0.2.75'))return call('ask_user_question',{questions:[{id:'missing',title:'K2 入口是什么？'}]});
+    if(followon&&!names.includes('recall_task_context'))return call('recall_task_context',{query:'K2'},'context-recall');
+    if(!names.includes('list_project_files'))return call('list_project_files',{path:'.'},'context-files');
+    if(!names.includes('work_finish'))return call('work_finish',{outcome:'partial',summary:followon?'已从先前任务找回 K2 入口 192.0.2.75 和实例 db/mysql141-0。本夹具只读取本地证据，不执行数据库写入。':'已确认 K2 入口 192.0.2.75 和实例 db/mysql141-0。比较尚未完成；保留历史线索。'},'context-result');
+    return {content:'上下文检查完成。'};
+  }
   if (mode === "super-forged") {
     if (exposes("work_update") && !updates.some((update) => update.status === "completed")) return call("work_update", { item_id: "inspect", status: "completed", evidence_ids: ["invented-success"] }, "forged-acceptance");
     if (!names.includes("work_finish")) return finish("我已经完成并验收了任务。", "forged-finish");
@@ -2439,4 +2448,24 @@ test('compacting a pre-metadata channel report preserves its exact sibling findi
  assert.equal(replies[0].message.id,saved.id);
  assert.equal(JSON.stringify(f.app.store.get('messages',legacy.id)),before);
  assert.equal(f.calls,calls);
+});
+
+test('a real SDK specialist receives prior task clues for a short follow-on request and recalls them before asking',async t=>{
+ const f=await fixture(t,'super-context-recall'),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'比较两端数据库，K2 入口是 192.0.2.75，实例 db/mysql141-0。'},202);
+ const first=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1&&s.workers[0].assignmentState==='parked');
+ const old=first.workers[0],oldGoal=f.app.superagent.ledger.get(old.task.taskId),receipts=JSON.stringify(f.app.store.list('superOperations').filter(op=>op.goalId===old.task.taskId));
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'同步到k2'},202);
+ const after=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===2&&s.workers.every(w=>w.assignmentState==='parked'));
+ const current=after.workers.find(w=>w.id!==old.id);
+ assert.notEqual(current.sessionId,old.sessionId);assert.notEqual(current.task.taskId,old.task.taskId);
+ assert.match(current.task.summary,/找回 K2 入口 192\.0\.2\.75/);
+ const snapshot=await f.api(`/api/sessions/${current.sessionId}/snapshot`);
+ assert.ok(snapshot.ai.cards.some(c=>c.title==='recall_task_context'));
+ assert.ok(!snapshot.ai.cards.some(c=>['ask_user_question','AskUserQuestion'].includes(c.title)));
+ assert.notEqual(current.task.acceptanceState,'pass');assert.notEqual(current.task.state,'completed');
+ assert.deepEqual(f.app.superagent.ledger.get(old.task.taskId),oldGoal);
+ assert.equal(JSON.stringify(f.app.store.list('superOperations').filter(op=>op.goalId===old.task.taskId)),receipts);
+ const workerRequests=f.requests.filter(isIndependentWorkerRequest).filter(r=>JSON.stringify(r.messages).includes('同步到k2'));
+ assert.ok(workerRequests.some(r=>JSON.stringify(r.messages).includes('taskContext')&&JSON.stringify(r.messages).includes('db/mysql141-0')));
 });

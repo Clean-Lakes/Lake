@@ -80,7 +80,7 @@ export function buildRouterContext(source: RouterContextInput) {
         state: task.state, acceptanceState: task.acceptanceState, archived: task.archived, updatedAt: task.updatedAt,
         basis: explicit.has(task.taskId) ? "explicit_task" : recentTasks.has(task.taskId) ? "recent_dialogue" : roles.has(task.roleId) ? "source_channel" : "recent_project_task" })),
       capabilities: { observedAt: source.now, revision: capabilityRevision,
-        rolesShareTools:true,workerTools: [...(source.agentTools??[]),"list_assets", "list_project_files", ...(source.adapters.ssh ? ["inspect_host"] : []),...(source.adapters.mysql?["list_db_objects","db_table_ddl","read_db_table"]:[]), ...(source.adapters.extensions ? ["list_mcp_servers", "list_mcp_tools", "call_mcp_tool", "load_skill"] : [])],
+        rolesShareTools:true,workerTools: [...(source.agentTools??[]),"recall_task_context","recall_memory","list_assets", "list_project_files", ...(source.adapters.ssh ? ["inspect_host"] : []),...(source.adapters.mysql?["list_db_objects","db_table_ddl","read_db_table"]:[]), ...(source.adapters.extensions ? ["list_mcp_servers", "list_mcp_tools", "call_mcp_tool", "load_skill"] : [])],
         mysql:{adapterRegistered:!!source.adapters.mysql,configuredResources:resources.filter(resource=>resource.kind==='database'&&resource.driver==='mysql'&&resource.status==='available').length,rawSQL:false},
         ssh: { adapterRegistered: source.adapters.ssh, configuredResources: resources.filter((resource) => resource.kind === "ssh" && resource.status === "available").length,
           supportedChecks: source.adapters.ssh ? ["system", "disks", "processes"] : [] },
