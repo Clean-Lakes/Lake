@@ -41,7 +41,7 @@ Restore the existing Mini Box in task execution details and show green unread do
 |------|-------------|-----------|------|
 | TASK-003 | Add runtime/zcode/conversation-reads.ts; project cursors in workspace/channel/snapshot responses; validate monotonic read acknowledgements. | ✅ | 2026-11-06 |
 | TASK-004 | Add visible conversation read marker and Pilot/specialist green indicators; retain legacy completion protocol compatibility. | ✅ | 2026-11-06 |
-| TASK-005 | Run frontend and runtime checks, verify Lake Dev command display and unread behavior, record exact tested SHA, and open PR against develop. | | |
+| TASK-005 | Run frontend and runtime checks, verify Lake Dev command display and unread behavior, record exact tested SHA, and open PR against develop. Automated checks and signed build passed; final native attention/light-dark/narrow checks await manual Mac unlock. See docs/validation/zcode-typescript-candidate/minibox-unread.md. | | |
 
 ## 3. Alternatives
 
