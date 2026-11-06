@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-06
 last_updated: 2026-11-06
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [fix, security, zcode, execution]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
 Classify literal program discovery as read-only and reconcile only verifiable historical discovery failures without changing original operation results or replaying commands.
 
@@ -42,7 +42,7 @@ Classify literal program discovery as read-only and reconcile only verifiable hi
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-004 | Run frontend, runtime type/build/integration, ledger and Dev isolation checks; record exact results in docs/validation/zcode-typescript-candidate/program-discovery-recovery.md. Depends on TASK-003. | Yes | 2026-11-06 |
-| TASK-005 | Build a clean local candidate combining this branch and resource PR 190, install signed Lake Dev, verify exact historical discovery reconciliation and unchanged canonical records without running business commands; open a develop PR. Depends on TASK-004. | | |
+| TASK-005 | Build a clean local candidate combining this branch and resource PR 190, install signed Lake Dev, verify exact historical discovery reconciliation and unchanged canonical records without running business commands; open a develop PR. Depends on TASK-004. | Yes | 2026-11-06 |
 
 ## 3. Alternatives
 
@@ -78,3 +78,4 @@ Classify literal program discovery as read-only and reconcile only verifiable hi
 - [Security ownership](../agent.md)
 - [Conversation execution](../docs/validation/zcode-typescript-candidate/conversation-runtime.md)
 - [Agent capabilities](../docs/validation/zcode-typescript-candidate/agent-capabilities.md)
+- [Validation and installed candidate](../docs/validation/zcode-typescript-candidate/program-discovery-recovery.md)

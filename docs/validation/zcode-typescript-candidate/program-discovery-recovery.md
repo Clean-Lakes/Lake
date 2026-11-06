@@ -37,4 +37,10 @@
 
 ## Lake Dev 集成
 
-代码提交与签名候选安装记录在本批安装完成后补充。候选会组合资源 PR 190 的已安装功能，避免本次修复移除六类资源入口；普通 PR 仍单独针对 develop。
+修复代码提交 `affa04af` 基于 `origin/develop` 的 `406d0430`。为保留已安装的六类资源功能，本地验证分支 `codex/discovery-dev-validation` 组合资源 PR 190 的 `49bed546` 与本修复，产生干净候选 `5a344fe24da0d438c68ba9ae0cf29dc9baba4af1`；没有向 develop/master 直接推送，也没有合并任何 GitHub PR。
+
+合并候选再次通过前端 710/710、后端集成 130/130、源码单元 86 项（85 通过、同一可选 Claude-Mem 测试跳过）、TS 类型及 bundle 检查。执行 `scripts/build_lake_desktop.sh --dev --ts-candidate --install` 构建、签名并安装；`codesign --verify --deep --strict`、构建来源 gitHead、dirty=false、实际后端 SHA256 均通过，Bundle ID 为 `com.cleanlakes.lake.desktop.dev`，启动 API 报告 TypeScript 后端。
+
+安装前从原生菜单停止 Dev 内核，保留同一 Home 与应用的私有 APFS 克隆备份。安装、启动后与停机备份逐行比较：55 条目标／尝试／操作／交付／验收记录、16 条命令执行记录及 144 个资源完整行均不变。准确旧查找记录获得 1 条独立“无写入”核验凭证。只读使用实际同版核验器验证凭证及账本：原 unknown 结果仍保留，但该目标的未核实副作用阻断为 false，活动／排队 Worker 为 0。
+
+原生 Lake Dev 已启动，没有发送业务消息、重新比较或同步用户数据库、重放原命令、修改原权限或触碰正式版。截图中的历史消息不被改写。后续提交仅补充验证文档与计划，不修改上述已测试代码；修复 PR 单独针对 develop，两个功能 PR 的合并仍需用户明确授权。本地验证分支保留为已安装候选 SHA 的来源。
