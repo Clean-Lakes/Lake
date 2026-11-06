@@ -2,6 +2,8 @@
 
 日期：2026-11-06。本批实现基线 `develop@624a49d5`。实际自动验证及已安装 Dev 的源码为 **`0ba23164335a78be966a9034b6b6aeefa3cf9388`**，构建时工作区干净；后续提交仅补充文档。为保留此前已安装的 Pilot 修复，候选包含 [PR #185](https://github.com/Clean-Lakes/Lake/pull/185) head `cb24a624a83d6dbe364a6ff694745dd156243806`。这只建立候选依赖，没有合并或修改该开放 PR。
 
+交付 [PR #186](https://github.com/Clean-Lakes/Lake/pull/186)，目标 `develop`，当前未合并；工作分支和 worktree 为开放 PR 保留。
+
 ## 已完成的自动验证
 
 - TS 类型检查与 Web 生产构建通过，保留既有 bundle-size 提示。

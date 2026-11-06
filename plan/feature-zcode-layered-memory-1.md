@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-06
 last_updated: 2026-11-06
 owner: Lake Runtime / Memory
-status: 'In progress'
+status: 'Completed'
 tags: [feature, zcode, memory, superagent]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
 用户确认启用 ZCode 原生长期记忆并结合现有 Super-agent 分层模型。实施基线为 develop `624a49d5`。复用公开 AgentRuntime、原生 Memory 文件协议及原生提取；Lake 管理准确范围、来源、独立积累/使用开关、单写者、发布与撤回。任务独立上下文和原操作/验收账本不变，不修改 ZCode 上游源码，不启用旧 Go Memory 或退役 V2。
 
@@ -55,7 +55,7 @@ tags: [feature, zcode, memory, superagent]
 |------|-------------|-----------|------|
 | TASK-006 | 新增 runtime/zcode/memory.test.ts 及真实 ZCode/本地模型集成测试：跨 Task 同 Role 召回、同名/跨项目隔离、child 回流、设置改变、遗忘迟到、重启不重派、unknown/秘密/路径拒绝。依赖 TASK-002 至 TASK-005。 | ✅ | 2026-11-06 |
 | TASK-007 | 运行 TS 类型/构建、后端与前端回归、ADK 边界，签名 Dev 安装与原生明暗/窄窗检查，记录准确 SHA、合成与真实模型证据边界。依赖 TASK-006。 | ✅ | 2026-11-06 |
-| TASK-008 | 更新 agent.md、runtime/zcode/README.md、现有 CM/FM 计划与验证记录；提交 develop PR，保留全量迁移未验收项。依赖 TASK-007。 | | |
+| TASK-008 | 更新 agent.md、runtime/zcode/README.md、现有 CM/FM 计划与验证记录；提交 develop PR，保留全量迁移未验收项。依赖 TASK-007。[PR #186](https://github.com/Clean-Lakes/Lake/pull/186) 已创建，未合并。 | ✅ | 2026-11-06 |
 
 ## 3. Alternatives
 
