@@ -102,7 +102,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
   roots.map(worker => ({channel: undefined, workers: [worker]}));
  return <section className="pilot-workspace" aria-label="Pilot 与专员">
   <button ref={pilotButton} type="button" className={`nav-row pilot-workspace-entry${selectedId===workspace.project.routerSessionId?' active':''}`} aria-current={selectedId===workspace.project.routerSessionId?'page':undefined} title="Pilot · 持续沟通，自动安排工作" onClick={event=>{greetRoleAvatar(event.currentTarget);onPilot();}}>
-   <SuperRoleAvatar pilot motion={conversationAvatarMotion(activity?.sessionId===workspace.project.routerSessionId?activity.state:pilotActivity)}/><span className="nav-row-text"><strong>Pilot</strong></span><Glyph name="arrow" size={14}/>
+   <SuperRoleAvatar pilot motion={conversationAvatarMotion(activity?.sessionId===workspace.project.routerSessionId?activity.state:pilotActivity)}/><span className="nav-row-text"><strong>Pilot</strong><span className="pilot-entry-caption" aria-hidden="true">对话与任务</span></span><Glyph name="next" size={12}/>
   </button>
   <div className="nav-heading"><span>专员</span><small>{entries.length}</small></div>
   {entries.length ? entries.map(({channel, workers}) => {
