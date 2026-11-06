@@ -4,7 +4,7 @@ export { builtInTools, AgentRuntime, ManualPermissionBroker, createToolRegistry,
   createBuiltInExploreAgentProfile, resolveProjectMemoryRoot,
   type ExploreSubagentRuntimeRequest, type ToolEntry, type ToolExecutionContext } from '@zcode/core';
 export { InMemorySessionEventStore, modelDescriptorOf, getCurrentModelInvocationContext,
-  type Model, type SessionEvent as NativeSessionEvent, type SessionId, type ProjectId,
+  type SessionStorePort, type Model, type SessionEvent as NativeSessionEvent, type SessionId, type ProjectId,
   type ExecutionPort, type ExecutionRequest, type ExecutionResult, type ExecutionRunOptions,
   type BackgroundExecutionSnapshot, type FileSystemPort, type HttpClientPort, type PermissionRuleset } from '@zcode/contracts';
 export { AiSdkModelAdapter } from '@zcode/adapters/model';
