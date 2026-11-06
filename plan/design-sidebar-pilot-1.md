@@ -45,7 +45,7 @@ The user's follow-up requires white human-message bubbles with dark text on the 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-004 | Run existing frontend tests and Web type/build checks, including the requested dark user-bubble follow-up; no new implementation-mirroring style tests. Depends on TASK-001, TASK-002 and TASK-007. | Yes | 2026-11-06 |
-| TASK-005 | Build a clean signed Lake Dev candidate containing the currently installed runtime; inspect actual light/dark, selected/hover/focus and narrow layouts, search and Pilot navigation. Record the SHA in docs/validation/sidebar-pilot-polish.md. Depends on TASK-004. | | |
+| TASK-005 | Build a clean signed Lake Dev candidate containing the currently installed runtime; inspect actual light/dark, selected/hover/focus and narrow layouts, search and Pilot navigation. Record the SHA in docs/validation/sidebar-pilot-polish.md. Depends on TASK-004. | Yes | 2026-11-06 |
 | TASK-006 | Open an independent PR to develop with the validation evidence and leave it unmerged. Depends on TASK-005. | | |
 | TASK-007 | Change the two dark user-message tokens in web-agent/web/src/theme.css; add user-bubble-only resource color overrides in resourceReferences.css; document white bubbles in docs/ui-guidelines.md. | Yes | 2026-11-06 |
 
