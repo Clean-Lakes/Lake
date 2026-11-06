@@ -342,7 +342,7 @@ export class LakeExecution {
     const run = async (
       request: ExecutionRequest,
       options: ExecutionRunOptions = {},
-      background = false,
+      lifecycle?: { mode: string },
     ) => {
       actor.guard();
       owner.security.command(
@@ -391,6 +391,8 @@ export class LakeExecution {
         try {
           actor.guard();
           owner.revalidate(record);
+          if (Date.now() - Date.parse(record.startedAt) >= 600000)
+            throw new HttpError(409, "命令达到十分钟执行上限");
         } catch {
           controller.abort();
           void live.cancel?.();
@@ -426,7 +428,10 @@ export class LakeExecution {
           const output = owner.remote(
             actor,
             plan,
-            { ...request, timeoutMs: request.timeoutMs || 600000 },
+            {
+              ...request,
+              timeoutMs: lifecycle ? 600000 : request.timeoutMs || 600000,
+            },
             requestOptions,
           );
           const taskId = "ssh_" + id();
@@ -436,7 +441,7 @@ export class LakeExecution {
           const work = output.then(finish, (error) =>
             finish(owner.failure(error, record.startedAt, signal)),
           );
-          if (background) {
+          const backgrounded = () => {
             owner.store.put("commandExecutions", record.id, record);
             return {
               kind: "backgrounded",
@@ -446,6 +451,26 @@ export class LakeExecution {
                 startedAt: new Date(record.startedAt),
               },
             };
+          };
+          if (lifecycle?.mode === "explicit") return backgrounded();
+          if (
+            lifecycle?.mode === "auto_on_timeout" &&
+            (request.timeoutMs ?? 0) > 0
+          ) {
+            let promotion: ReturnType<typeof setTimeout> | undefined;
+            try {
+              return await Promise.race([
+                work.then((result) => ({ kind: "foreground", result })),
+                new Promise<ReturnType<typeof backgrounded>>((resolve) => {
+                  promotion = setTimeout(
+                    () => resolve(backgrounded()),
+                    request.timeoutMs,
+                  );
+                }),
+              ]);
+            } finally {
+              clearTimeout(promotion);
+            }
           }
           return { kind: "foreground", result: await work };
         }
@@ -453,10 +478,10 @@ export class LakeExecution {
         actor.guard();
         owner.revalidate(record);
         // Keep the upstream background lifecycle and registry, with the same resource fence.
-        if (background && base.runBashWithBackgroundLifecycle) {
+        if (lifecycle && base.runBashWithBackgroundLifecycle) {
           const started = await base.runBashWithBackgroundLifecycle(
             local,
-            { mode: "explicit" },
+            lifecycle,
             requestOptions,
           );
           if (started.kind === "foreground")
@@ -507,7 +532,7 @@ export class LakeExecution {
         request: ExecutionRequest,
         lifecycle: { mode: string },
         options?: ExecutionRunOptions,
-      ) => run(request, options, lifecycle.mode === "explicit"),
+      ) => run(request, options, lifecycle),
       getBackgroundTask: runtime.getBackgroundTask?.bind(runtime),
       cancelBackgroundTask: runtime.cancelBackgroundTask?.bind(runtime),
       readBackgroundBashOutput: runtime.readBackgroundBashOutput?.bind(runtime),

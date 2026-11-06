@@ -232,13 +232,13 @@ function fullAgentReply(request,mode,home){
  }
  if(mode.includes('child')&&!names.includes('Agent'))return call('Agent',{subagent_type:'general-purpose',description:'执行独立 Shell 检查',prompt:'请通过 Bash 执行 printf CHILD_NATIVE_SHELL 并报告实际结果。'});
  if(!['child','files','image'].some(kind=>mode.includes(kind))&&!names.includes('Bash')){
-  let command=mode.includes('danger')?"rm -f ./agent-capability-absent.txt":mode.includes('stop')?"printf 'started' > interrupted.txt; sleep 30; printf 'LATE_NATIVE_OUTPUT'":mode.includes('protected')?`cat '${home}/secrets/hidden-fixture.txt'`:mode.includes('nonzero')?"printf 'ACTUAL_FAILED_COMMAND' >&2; false":mode.includes('background')?"sleep 0.15; printf 'ACTUAL_BACKGROUND_SHELL'":"printf 'ACTUAL_NATIVE_SHELL'";
+  let command=mode.includes('danger')?"rm -f ./agent-capability-absent.txt":mode.includes('stop')?"printf 'started' > interrupted.txt; sleep 30; printf 'LATE_NATIVE_OUTPUT'":mode.includes('protected')?`cat '${home}/secrets/hidden-fixture.txt'`:mode.includes('nonzero')?"printf 'ACTUAL_FAILED_COMMAND' >&2; false":mode.includes('background')?"printf 'BEGIN_BACKGROUND'; sleep 0.15; printf 'ACTUAL_BACKGROUND_SHELL'":"printf 'ACTUAL_NATIVE_SHELL'";
   if(mode.includes('ssh')){
    if(!names.includes('list_assets'))return call('list_assets',{query:'SSH fixture'});
    const asset=result('list_assets').assets.find(asset=>asset.kind==='ssh');
-   return call('Bash',{asset_ref:asset.asset_ref,configuration_revision:asset.configuration_revision,command,description:'Inspect the remote environment',...(mode.includes('background')?{run_in_background:true}:{})});
+   return call('Bash',{asset_ref:asset.asset_ref,configuration_revision:asset.configuration_revision,command,description:'Inspect the remote environment',...(mode.includes('background')?mode.includes('auto')?{timeout:50}:{run_in_background:true}:{})});
   }
-  return call('Bash',{command,description:'Inspect the actual environment',...(mode.includes('background')?{run_in_background:true}:{})});
+  return call('Bash',{command,description:'Inspect the actual environment',...(mode.includes('background')?mode.includes('auto')?{timeout:50}:{run_in_background:true}:{})});
  }
  if(mode.includes('background')&&!names.includes('TaskOutput'))return call('TaskOutput',{task_id:result('Bash').backgroundTaskId??String(result('Bash')).match(/ID: ([a-zA-Z0-9_-]+)/)?.[1],block:true,timeout:10000});
  if(!names.includes('work_finish'))return call('work_finish',{summary:mode.includes('protected')||mode.includes('nonzero')?'该命令未成功，已保留实际错误。':'已通过真实 Shell 执行获得测试结果。',outcome:mode.includes('protected')||mode.includes('nonzero')||(mode.includes('followup')&&!names.includes('route_work'))?'partial':'completed'});
@@ -2337,4 +2337,13 @@ test('a mutating command with a nonzero exit retains its possible partial effect
  const operation=f.app.store.list('superOperations').find(o=>o.tool==='Bash');
  assert.equal(operation.status,'unknown');assert.equal(operation.output.exitCode,1);
  assert.equal(f.app.store.list('commandExecutions').length,1);assert.notEqual(f.app.store.require('superGoals',operation.goalId).acceptanceState,'pass');
+});
+
+for(const remote of [false,true])test(`native Bash foreground timeout promotes ${remote?'SSH':'local'} execution without killing or redispatching`,{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,remote?'super-full-worker-ssh-background-auto':'super-full-pilot-background-auto');
+ const wire=remote?await sshFixture(t):undefined;if(wire)await sshResource(f,wire);await send();
+ if(remote){const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),session=state.workers[0].sessionId;const trust=await until(()=>f.api(`/api/sessions/${session}/snapshot`),s=>!!s.hostKeyTrust);await f.api(`/api/sessions/${session}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});}
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(op.status,'succeeded');assert.match(op.output.stdout.text,/ACTUAL_BACKGROUND_SHELL/);assert.equal(f.app.store.list('commandExecutions').length,1);
+ if(wire)assert.equal(wire.requests.length,1);
 });

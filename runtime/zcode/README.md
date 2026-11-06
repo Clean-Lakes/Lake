@@ -106,7 +106,7 @@ Worker 及其原生 child 增量接入 `list_db_objects`（库/表目录）、`d
 
 Pilot、专员 Worker 与临时 child 共享公开 ZCode 文件、Bash、搜索、Todo、网页、Skill、问题和计划工具。上游在 Bash 可用时隐藏原名 Glob/Grep；Lake 通过公开 handlers 以 `FindFiles/SearchText` 注册相同文件搜索能力，继续经过文件范围与原账本；`toolSearch.mode=auto` 复用上游本地/原生工具发现，不另建分发循环。图片读取使用公开 Jimp adapter；PDF/视频/音频输入按当前模型显式能力声明，PDF 分页另需已安装 Poppler。当前模型配置支持 `supportsImageInput/supportsVideoInput/supportsAudioInput/supportsPdfInput`。固定上游仅编码 Anthropic 原生 WebSearch，需对应协议及显式 `supportsNativeWebSearch=true`；其他供应商可使用项目有效 MCP 搜索。
 
-本机 Bash 使用 macOS Seatbelt 隔离 Lake 私有数据、宿主 SSH 私钥及 Keychain；Shell 的环境只保留 PATH、工作区 HOME 与语言。通用 SSH 使用准确 `asset_ref/configuration_revision`、宿主私有凭据与首次/变化指纹确认，结果为真实退出状态。后台 Bash 保留原操作直到实际退出，TaskOutput 汇合，TaskStop 和项目停止取消真实执行。连接变化、权限撤回和停止会使旧证据失效；中断的不透明命令保留 unknown，不自动重放。
+本机 Bash 使用 macOS Seatbelt 隔离 Lake 私有数据、宿主 SSH 私钥及 Keychain；Shell 的环境只保留 PATH、工作区 HOME 与语言。通用 SSH 使用准确 `asset_ref/configuration_revision`、宿主私有凭据与首次/变化指纹确认，结果为真实退出状态。显式后台和前台等待超时转后台都保留同一实际进程，执行总时长至多十分钟。后台 Bash 保留原操作直到实际退出，TaskOutput 汇合，TaskStop 和项目停止取消真实执行。连接变化、权限撤回和停止会使旧证据失效；中断的不透明命令保留 unknown，不自动重放。
 
 原生 Enter/ExitPlanMode 连接实际 SDK mode 和 Lake 审批；批准计划不扩大命令、文件或资源权限。模式切换重新注册工具时同样保留宿主包装。Todo 以 Task + 实际 SDK Session 存储，直接 Pilot 历史任务通过准确 taskId 检查，避免多任务共用展示入口导致错读回执。合格 Pilot 执行经验进入现有项目 Memory，专员仍归 RoleID，child 通过父任务回流。
 

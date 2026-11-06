@@ -6,7 +6,7 @@
 
 - Pilot、专员 Worker、原生临时 child 共享通用执行工具。Pilot 可以直接执行，首次实际业务/控制工具才建立原 Task；纯对话和路由不创建假执行。直接任务沿原轮次/目标、独立 Todo、准确 Operation 和有界工作集隔离；独立 Worker/child 使用独立 SDK Session。
 - 原生 Bash 连接实际本机/SSH ExecutionPort；SSH 从准确资源与当前 configuration_revision 解析宿主私有凭据，首次/变化指纹仍须确认。模型能自主使用远端已安装的 kubectl/mysql 等 CLI，专用固定指标/数据库工具仍可复用。
-- 本机 macOS Seatbelt 限制 Lake 私有 Home、正式 Home、SSH 密钥及 Keychain；不支持的平台拒绝本机 Shell。命令超时、输出预算、后台 TaskOutput/TaskStop 和父任务停止连接真实进程/通道。关闭 SSH 不证明远端副作用回滚，不透明中断保留 unknown。
+- 本机 macOS Seatbelt 限制 Lake 私有 Home、正式 Home、SSH 密钥及 Keychain；不支持的平台拒绝本机 Shell。命令超时、输出预算、显式后台及前台等待超时转后台、十分钟总执行上限、TaskOutput/TaskStop 和父任务停止连接真实进程/通道。关闭 SSH 不证明远端副作用回滚，不透明中断保留 unknown。
 - 前台/后台实际结果进入原 Operation。后台仍运行时不能验收；完成后原记录结算，不建立第二套完成权威。资源、配置/凭据、项目策略、父任务 generation 和权限在调用及回执使用时重验。
 - SDK Plan 切换、AskUserQuestion 和 Skill 连接实际 Lake 交互/目录；退出计划须真实审批，不扩大后续权限。SDK 重新注册工具时，宿主包装仍保留。Todo、发现与协作控制不是业务成功证据。
 - 固定上游在 Bash 分支隐藏 Glob/Grep；Lake 通过公开 handler 以 FindFiles/SearchText 接入相同能力。工具发现使用公开 auto/local 模式。图片通过 Jimp 原生 adapter 处理；保留全部实际打包依赖许可与原包遗漏的固定版本许可证。
@@ -19,7 +19,7 @@
 | 检查 | 结果 |
 | --- | --- |
 | TS 类型、固定源码 bundle | 通过 |
-| server + MySQL + router-context | 107/107 + 不透明命令非零退出专项 1/1 |
+| server + MySQL + router-context | 110/110 |
 | Task/assets/activity/Memory/lifecycle | 57/57 |
 | React 类型、前端测试与构建 | 653/653，Vite 构建通过；保留现有大 chunk 提示 |
 | ADK runtime boundary | 通过 |
