@@ -14,6 +14,8 @@ tags: [migration, bug, runtime, memory, security]
 
 Repair findings A01–A14 in the 2026-11-07 cutover audit. An implemented endpoint requires a valid response, persistent state where applicable, regression coverage and recorded validation. Unimplemented platform integrations remain explicit limitations and cannot pass the full-cutover gate.
 
+The first validated repair batch is submitted as [PR 199](https://github.com/Clean-Lakes/Lake/pull/199). Remaining No entries below are outstanding; the overall plan remains In progress. Per-stage native evidence and the final installed code SHA are recorded in FILE-004.
+
 ## 1. Requirements & Constraints
 
 - **REQ-001**: Preserve PR 197's model error and Pilot handoff fixes and the immutable audit in PR 198.
@@ -42,7 +44,8 @@ Repair findings A01–A14 in the 2026-11-07 cutover audit. An implemented endpoi
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-004 | In runtime/typescript/server.ts, store.ts, agent.ts and superagent.ts carry structured resource IDs, mentions and attachment ownership into a frozen user message and task execution; use existing attachment size/hash/type contracts and reject cross-session references. | No | — |
+| TASK-004 | In runtime/typescript/server.ts, store.ts, agent.ts and superagent.ts restore attachment/image admission and ownership in the frozen user input; use existing attachment size/hash/type contracts and reject cross-session references. Structured references are delivered by TASK-018. | No | — |
+| TASK-018 | In runtime/typescript/message-input.ts validate exact same-project resource identities and mention spans, persist their original user-message source and carry them through routing to the Worker; enforce referenced-only operations against that frozen source. | ✅ | 2026-11-07 |
 | TASK-005 | Connect plans/mode/executePlan in server.ts and superagent.ts to the canonical frozen Goal plan, original live confirmation and transactional user-action receipt; reject stale, foreign and restarted confirmations. | ✅ | 2026-11-07 |
 | TASK-013 | Implement persistent user queues with pause/resume/edit/remove/reorder, compare-and-swap revisions and dispatch-time reference validation in message-queue.ts; retain uncertain admissions without resubmitting them after restart. | ✅ | 2026-11-07 |
 | TASK-014 | Connect queue push to the exact original SDK task/root supplement receipt; ambiguous or unsupported task targeting must retain the queued item and return an explicit error. | No | — |
@@ -59,7 +62,8 @@ Repair findings A01–A14 in the 2026-11-07 cutover audit. An implemented endpoi
 | TASK-009 | Restore the saved workflow catalog with versioned CRUD and migration receipts; preserve templates without executing them or creating grants. Keep unavailable frozen workflow execution explicit. | ✅ | 2026-11-07 |
 
 | TASK-015 | Restore Kubernetes and local workspace configuration with exact ownership and execution adapters; do not turn copied metadata into an executable connection. | No | — |
-| TASK-016 | Restore frozen workflow runs, schedule eligibility, model reasoning controls and legacy read-only evidence/export APIs through their existing authorities. | No | — |
+| TASK-016 | Restore frozen workflow runs, schedule eligibility and legacy read-only evidence/export APIs through their existing authorities. | No | — |
+| TASK-017 | In runtime/typescript/reasoning.ts, agent.ts and server.ts restore provider-first reasoning metadata and the exact legacy model-version registry, persist model-bound choices and freeze them into Workers/children; verify actual SDK wire options, stale models and explicit empty capability overrides. | ✅ | 2026-11-07 |
 
 ### Implementation Phase 4
 
@@ -69,7 +73,7 @@ Repair findings A01–A14 in the 2026-11-07 cutover audit. An implemented endpoi
 |------|-------------|-----------|------|
 | TASK-010 | Exercise security recovery, unknown-operation reconciliation, watchdog owner leases and queued dispatch eligibility through runtime tests; change only proven defects in the existing authorities. | No | — |
 | TASK-011 | Update runtime/typescript/README.md and validation evidence with actual host-port/CLI/platform capabilities and every unfinished audit requirement; keep full-cutover gate closed until parity evidence exists. | ✅ | 2026-11-07 |
-| TASK-012 | Run source/server/frontend regressions and boundary checks, commit source, verify idle Dev, run scripts/build_lake_desktop.sh --dev --ts-candidate --install, inspect native Dev and record tested SHA. Open a PR against develop with the exact remaining limits. | No | — |
+| TASK-012 | Run source/server/frontend regressions and boundary checks, commit source, verify idle Dev, run scripts/build_lake_desktop.sh --dev --ts-candidate --install, inspect native Dev and record tested SHA. Open a PR against develop with the exact remaining limits. | ✅ | 2026-11-07 |
 
 ## 3. Alternatives
 
