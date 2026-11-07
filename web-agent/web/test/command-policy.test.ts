@@ -167,3 +167,21 @@ test("only literal exercise file inspections and compiled nobody inventory are c
   for(const cmd of ["nl -ba "+dir+"/../x","sha256sum -c "+dir+"/list","sha256sum /etc/passwd","nl --body-numbering=p "+dir+"/app.log","sha256sum "+dir+"/a > "+dir+"/f"])
     assert.notEqual(commandPolicy(cmd).risk,"readonly",cmd);
 });
+
+test("only compiles a bounded nobody delay followed by literal one-line output", async () => {
+  const {compileNobodyDelay} = await import("../../shared/command-policy");
+  const shell = (script: string) => "runuser -u nobody -- /bin/sh -c '" + script.replaceAll("'", "'\"'\"'") + "'";
+  for (const script of ['sleep 5 && printf "%s\\n" "finished"', 'sleep 0; printf "finished\\n"']) {
+    const source = shell(script);
+    assert.match(compileNobodyDelay(source)!, /^\/usr\/bin\/env -i .*\/usr\/sbin\/runuser -u nobody -- \/usr\/bin\/env -i /);
+    assert.notEqual(commandPolicy(source).risk, "readonly");
+  }
+  const sample = shell('sleep 5 && printf "%s\\n" complete');
+  for (const source of [sample.replace("nobody", "root"), sample.replace("runuser", "/tmp/runuser"),
+    sample.replace("/bin/sh", "/tmp/sh"), sample + " > /tmp/destination", sample + "; touch /tmp/x",
+    ...['sleep 601 && printf "done\\n"', 'sleep -1 && printf "done\\n"', 'sleep 0 && printf "abc%n\\n"',
+      'sleep 0 || printf "done\\n"', 'sleep 0 && printf "%s\\n" "$(id)"', 'sleep 0 && printf "%s\\n" ok > file',
+      'sleep 0 && printf "done\\n" && rm -f file', 'sleep 0 && printf -v var done'].map(shell)]) {
+    assert.equal(compileNobodyDelay(source), undefined, source);
+  }
+});

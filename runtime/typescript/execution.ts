@@ -16,7 +16,7 @@ import type { HostCommandView } from '../../web-agent/shared/contracts';
 import type { Operation } from './tasks';
 import { HttpError, LakeStore, id, now } from "./store";
 import { digest, text } from "./tasks";
-import { commandPolicy, compileNobodyInspection, type NobodyInspection } from "../../web-agent/shared/command-policy";
+import { commandPolicy, compileNobodyInspection, compileNobodyDelay, type NobodyInspection } from "../../web-agent/shared/command-policy";
 
 const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
 const outputLimit = 256 * 1024;
@@ -45,6 +45,7 @@ export type ShellPlan = {
   cwd?: string;
   readOnly: boolean;
   nobodyInspection?: NobodyInspection;
+  delayedOutput?: true;
   policy: "allow" | "ask";
   risk: "readonly" | "write" | "dangerous";
 };
@@ -63,6 +64,7 @@ type CommandRecord = {
   configurationRevision: string;
   commandHash: string;
   nobodyInspection?: {directory:string;inventoryDepth?:number};
+  delayedOutput?: true;
   readOnly: boolean;
   status: string;
   startedAt: string;
@@ -163,17 +165,20 @@ export class LakeExecution {
     )
       throw new HttpError(403, "Shell 不允许读取或导出宿主认证凭据");
     const inspection = resource.kind==="ssh" && !input.run_in_background && !input.cwd && policy.risk!=="dangerous" ? compileNobodyInspection(command) : undefined;
-    const readOnly = policy.risk === "readonly" || !!inspection;
+    const delay = resource.kind === "ssh" && input.run_in_background && !input.cwd && policy.risk !== "dangerous"
+      ? compileNobodyDelay(command) : undefined;
+    const readOnly = policy.risk === "readonly" || !!inspection || !!delay;
     return {
       resource,
       revision,
       resourceRevision:
         this.store.get<number>("resourceRevisions", resource.id) ?? 1,
-      command: inspection?.command ?? policy.safeCommand ?? command,
+      command: inspection?.command ?? delay ?? policy.safeCommand ?? command,
+      ...(delay && {delayedOutput:true as const}),
       nobodyInspection:inspection,
       cwd: input.cwd,
       readOnly,
-      policy: this.security.command(projectId, resource.id, readOnly && !inspection),
+      policy: this.security.command(projectId, resource.id, readOnly && !inspection && !delay),
       risk: policy.risk,
     };
   }
@@ -185,7 +190,7 @@ export class LakeExecution {
     this.security.command(
       this.store.session(record.sessionId).projectId,
       resource.id,
-      record.readOnly && !record.nobodyInspection,
+      record.readOnly && !record.nobodyInspection && !record.delayedOutput,
     );
     if (
       this.revision(resource) !== record.configurationRevision ||
@@ -395,7 +400,7 @@ export class LakeExecution {
       owner.security.command(
         plan.resource.projectId,
         plan.resource.id,
-        plan.readOnly && !plan.nobodyInspection,
+        plan.readOnly && !plan.nobodyInspection && !plan.delayedOutput,
       );
       if (
         owner.revision(owner.store.require("resources", plan.resource.id)) !==
@@ -426,6 +431,7 @@ export class LakeExecution {
         resourceRevision: plan.resourceRevision,
         configurationRevision: plan.revision,
         commandHash: digest(plan.command),
+        ...(plan.delayedOutput && {delayedOutput: true}),
         ...(plan.nobodyInspection && {nobodyInspection:{directory:plan.nobodyInspection.directory, inventoryDepth:plan.nobodyInspection.inventoryDepth}}),
         readOnly: plan.readOnly,
         status: "running",
@@ -726,11 +732,11 @@ export class LakeExecution {
           resourceId: plan.resource.id,
           configurationRevision: plan.revision,
           resourceRevision: plan.resourceRevision,
-          readOnly: plan.readOnly, nobodyInspection: plan.nobodyInspection,
+          readOnly: plan.readOnly, nobodyInspection: plan.nobodyInspection, delayedOutput: plan.delayedOutput,
         } as CommandRecord);
         // The compiler enters a clean environment before running any Bash.
         // Wrapping this again would source the SSH account's BASH_ENV first.
-        const command = plan.nobodyInspection?.command ??
+        const command = plan.nobodyInspection || plan.delayedOutput ? plan.command :
           (plan.cwd ? `cd -- ${quote(plan.cwd)} && ` : "") +
           `/bin/bash --noprofile --norc -c ${quote(plan.command)}`;
         connection.exec(command, (error: any, stream: any) => {
@@ -755,7 +761,7 @@ export class LakeExecution {
                 resourceId: plan.resource.id,
                 configurationRevision: plan.revision,
                 resourceRevision: plan.resourceRevision,
-                readOnly: plan.readOnly, nobodyInspection: plan.nobodyInspection,
+                readOnly: plan.readOnly, nobodyInspection: plan.nobodyInspection, delayedOutput: plan.delayedOutput,
               } as CommandRecord);
               if (stdout.length + stderr.length + chunk.length > outputLimit)
                 throw new HttpError(413, "SSH 命令输出超过预算");

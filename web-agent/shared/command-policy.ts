@@ -91,6 +91,33 @@ export function compileNobodyInspection(source: string): NobodyInspection | unde
   return {directory,inventoryDepth,command:clean+" /usr/sbin/runuser -u nobody -- "+clean+" /bin/bash --noprofile --norc -c "+quote(script)};
 }
 
+/** Rebuild a literal sleep and one line of output as nobody. No user shell or
+ * inherited environment runs, and the command never opens a file or a network connection. */
+export function compileNobodyDelay(source: string): string | undefined {
+  if (source.length > 2048 || /[\0\r\n]/.test(source)) return;
+  const outer = tokenize(source);
+  if (outer.dynamic || outer.substitution || outer.words.length !== 7 || outer.words.some(t => t.operator)) return;
+  const [command, flag, user, separator, shell, option, body] = outer.words.map(t => t.word);
+  if (!["runuser", "/usr/sbin/runuser", "/sbin/runuser"].includes(command!) ||
+      flag !== "-u" || user !== "nobody" || separator !== "--" ||
+      !["/bin/sh", "/bin/bash"].includes(shell!) || option !== "-c") return;
+
+  const inner = tokenize(body!);
+  if (inner.dynamic || inner.substitution || inner.words.some((t, index) => t.operator !== (index === 2))) return;
+  const [sleep, duration, join, printf, format, argument] = inner.words.map(t => t.word);
+  if (!["sleep", "/usr/bin/sleep", "/bin/sleep"].includes(sleep!) || !/^(?:0|[1-9]\d{0,2})$/.test(duration ?? "") ||
+      Number(duration) > 600 || !["&&", ";"].includes(join!) || !["printf", "/usr/bin/printf"].includes(printf!)) return;
+
+  let line: string;
+  if (inner.words.length === 6 && format === "%s\\n") line = argument!;
+  else if (inner.words.length === 5 && format?.endsWith("\\n") && !/[\\%]/.test(format.slice(0,-2))) line = format.slice(0,-2);
+  else return;
+  if (line.length > 256 || /[\u0000-\u001f\u007f]/.test(line)) return;
+  const clean = "/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C";
+  const script = `/usr/bin/sleep ${duration} ${join} /usr/bin/printf '%s\\n' ${quote(line)}`;
+  return `${clean} /usr/sbin/runuser -u nobody -- ${clean} /bin/sh -c ${quote(script)}`;
+}
+
 function literalFileInspection(program:string,args:string[]) {
   if (!["nl","sha256sum"].includes(program)) return false;
   const paths = program==="nl" ? args[0]==="-ba" ? args.slice(1) : [] : args;

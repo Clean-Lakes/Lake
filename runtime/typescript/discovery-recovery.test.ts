@@ -650,6 +650,7 @@ test("SSH dispatches the compiled identity inspection directly and retains origi
       });
       callback(null, stream);
       queueMicrotask(() => {
+        stream.emit("data", Buffer.from("finished\n"));
         stream.emit("exit", 0);
         stream.emit("close");
       });
@@ -682,6 +683,20 @@ test("SSH dispatches the compiled identity inspection directly and retains origi
   assert.equal(result.exitCode, 0);
   assert.deepEqual(commands, [plan.nobodyInspection!.command]);
   assert.match(commands[0]!, /^\/usr\/bin\/env -i /);
+  const delayInput = {...input, command: "runuser -u nobody -- /bin/sh -c 'sleep 1 && printf \"finished\\n\"'", run_in_background:true};
+  const delay = host.plan("project",delayInput);
+  assert.equal(delay.readOnly,true);
+  assert.equal(delay.risk,"write");
+  assert.equal(host.plan("project",{...delayInput,run_in_background:false}).readOnly,false);
+  assert.equal(host.plan("project",{...delayInput,cwd:"/tmp"}).readOnly,false);
+  const runtime = host.runtime({} as any,actor.sessionId);
+  const bound = host.bind(runtime,actor,delay,"delayed");
+  const task = await Reflect.get(bound,"runBashWithBackgroundLifecycle")({},{mode:"explicit"});
+  assert.equal(task.kind,"backgrounded");
+  const done=await Reflect.get(runtime,"waitForBackgroundTask")(task.task.taskId);
+  assert.equal(done?.result?.exitCode,0);
+  assert.equal(done?.result?.stdout.text,"finished\n");
+  assert.deepEqual(commands,[plan.nobodyInspection!.command,delay.command]);
   assert.ok(permissionChecks.length >= 3);
   assert.ok(permissionChecks.every((readOnly) => readOnly === false));
 });
