@@ -703,3 +703,25 @@ test("a cross-resource comparison can include both selected endpoints and newly 
   f.settleRouter();await f.activate();
   for(const req of f.requests) assert.deepEqual(req.input.assignment.targetResourceIds,["one","two"]);
 });
+
+test("sample interval runs within the worker deadline, supports cancellation and never provides business evidence", async t => {
+  const f = await fixture(t), handoff = await f.start(), worker = f.worker(handoff.taskId);
+  const profile=f.host.profile(worker.sessionId)!;
+  const tool=profile.tools.find(entry => entry.metadata.name==="work_wait")!;
+  const wait=(seconds:unknown,signal = new AbortController().signal) =>
+    tool.handler({seconds}, {abortSignal:signal} as any) as Promise<{waitedMs:number}>;
+  assert.equal(tool.metadata.stopTurnOnSuccess,false);
+  const before=f.store.list("superOperations");
+  for(const bad of [0,-1,61,0.1,"2"]) await assert.rejects(wait(bad), /1 至 60/);
+  const cancel=new AbortController();
+  const pending=wait(60,cancel.signal);
+  cancel.abort();
+  await assert.rejects(pending,{name:"AbortError"});
+  const result=await wait(1);
+  assert.ok(result.waitedMs>=990);
+  const goal=f.host.ledger.get(handoff.taskId);
+  goal.deadlineAt=new Date(Date.now()+500).toISOString();
+  f.host.ledger.save(goal);
+  await assert.rejects(wait(2), /原任务期限/);
+  assert.deepEqual(f.store.list("superOperations"),before);
+});

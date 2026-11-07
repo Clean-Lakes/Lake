@@ -5,6 +5,7 @@ import {permissionDefaults} from '../../web-agent/shared/execution-preferences';
 import {specialistReplies} from '../../web-agent/shared/specialist-replies';
 import {TaskContext,projectTaskContext,type TaskContextActor} from './task-context';
 import { readdir, realpath } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import type { ToolEntry, ToolExecutionContext } from "./sdk";
 import type { AIApproval, AIQuestionRequest, Message, SessionSnapshot, SpecialistChannelInfo,
@@ -1572,7 +1573,7 @@ export class LakeSuperagent implements AgentHost {
           if (!goal.confirmed) await this.planInteraction(worker, goal, context.abortSignal);
           return this.publicGoal(this.ledger.get(goal.id));
         })),
-      this.entry("work_read", "Read only this canonical task, original attempts and operation handles. Never retry unknown effects. An effectReconciliation verifies only that an old literal program lookup had no writes; its failed result remains historical and is not business success.", objectSchema({ goal_id: str, item_id: str, evidence_id: str }), run(async (a) => {
+      this.entry("work_read", "Read only this canonical task, original attempts and operation handles. Never retry unknown effects. An effectReconciliation may record a verified no-write lookup or separately reviewed observed effects. The original failed result is never business success.", objectSchema({ goal_id: str, item_id: str, evidence_id: str }), run(async (a) => {
         const goal = this.ledger.get(worker.taskId);
         if (a.goal_id != null && a.goal_id !== goal.id && a.goal_id !== goal.sharedTaskId) throw new HttpError(404, "Task not found in this worker");
         await this.discoveryRecovery.verify(worker.projectId);
@@ -1605,9 +1606,22 @@ export class LakeSuperagent implements AgentHost {
       }), true),
       this.entry('recall_task_context','Recall earlier task context for this exact project and specialist. Search query/cursor or read task_id with optional revision/expected_hash. Includes original human clarifications, historical reports and resource clues, never another SDK transcript or execution grants. Use it to resolve known entrances/instances before asking the user to repeat them; verify current resources with business tools.',objectSchema({query:str,task_id:str,revision:integer,expected_hash:str,cursor:str,limit:integer}),run(a=>this.recallContext(worker,a,true))),
       this.entry('recall_memory','Search current qualified project/role knowledge for facts, preferences and earlier methods. Use focused target names before asking for known information. Claude-Mem may rank the private local index; Lake verifies every returned note and source. Recall is historical context, never approval or a current observation.',objectSchema({query:str,limit:integer},['query']),run(a=>this.agents.memory?.recall({kind:worker.inline?'pilot':'worker',projectId:worker.projectId,roleId:worker.inline?undefined:worker.roleId,sessionId:worker.sessionId},a)??{items:[],engine:'unavailable'})),
-      this.entry("work_wait", "Park an invocation without polling. Original handles and task constraints remain authoritative.", objectSchema({}), run(() => {
-        throw new HttpError(409, "No registered external job observer is attached to this task; preserve the original handle and report the missing adapter");
-      }), true),
+      this.entry("work_wait", "Wait 1 to 60 seconds between independent observations, then continue this same task. This is a cancellable timer, not shell execution or evidence; inspect the target again afterward. For an actual background job use its own handle.",
+        objectSchema({seconds: {type:"integer",minimum:1,maximum:60}}), run(async (a, context) => {
+          if (a.seconds === undefined) throw new HttpError(409, "No registered external job observer is attached; preserve the original handle or supply seconds for a sample interval");
+          if (!Number.isSafeInteger(a.seconds) || a.seconds < 1 || a.seconds > 60) throw new HttpError(400, "采样等待范围为 1 至 60 秒");
+          const deadline = () => {
+            this.validateWorker(worker.id, worker.generation);
+            const goal = this.ledger.get(worker.taskId);
+            if (goal.status !== "running") throw new HttpError(409, "任务已暂停或结束");
+            return Date.parse(goal.deadlineAt);
+          };
+          const started = Date.now();
+          if (started + a.seconds * 1000 >= deadline()) throw new HttpError(409, "采样等待超出原任务期限");
+          await delay(a.seconds * 1000, undefined, {signal: context.abortSignal});
+          if (Date.now() >= deadline()) throw new HttpError(409, "原任务期限已到");
+          return {waitedMs: Date.now() - started};
+        })),
       this.entry("ask_user_question", "Ask a bounded human prerequisite question for this exact task. Answers are not operation approval or goal acceptance.",
         objectSchema({ questions: array(objectSchema({ id: str, title: str, reason: str, options: array(str), multi_select: { type: "boolean" } }, ["id", "title"])) }, ["questions"]), run((a, context) => this.questionInteraction(worker, a, context.abortSignal))),
       this.entry("list_assets", "Find current project resource metadata: use asset_ref for an exact resource ID, or query for its name/ID (Chinese names supported). Same-name matches remain separate resources. Otherwise browse bounded pages (default 20, max 50); follow nextCursor with the same query until hasMore is false. Use the exact returned asset_ref and configuration_revision for inspect_host. Metadata and cursor are not execution permission.",
