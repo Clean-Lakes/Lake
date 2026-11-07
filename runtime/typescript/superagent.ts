@@ -1,3 +1,4 @@
+import { projectTaskProgress } from "./task-progress";
 import {authorizeNetworkProbe, networkProbe} from "./network-probe";
 import { boundResourceRevision, issueResourcePin } from "./resource-pin";
 import {conversationReadState} from "./conversation-reads";
@@ -1737,7 +1738,9 @@ export class LakeSuperagent implements AgentHost {
   }
   private publicGoal(goal: Goal) {
     const { projectId, workerId, roleId, sourceEventId, goalRevision, planRevision, planHash, acceptanceState, confirmed, mode, activeItemId, ...publicGoal } = goal;
-    return goal.sharedTaskId ? {...publicGoal, modelRounds:goal.roundLimit-this.ledger.roundsRemaining(goal)} : publicGoal;
+    const owner = this.store.get<Worker>("superWorkers",goal.workerId);
+    const items = projectTaskProgress(this.store,goal,owner,commandId => this.execution?.hasLiveCommand(goal.sessionId,goal.id,commandId) === true);
+    return {...publicGoal,items,...(goal.sharedTaskId && {modelRounds:goal.roundLimit-this.ledger.roundsRemaining(goal)})};
   }
   /** A shared identifier is navigable in every assigned session. An execution
    * identifier never authorizes a different session, even in the same project. */
@@ -1764,7 +1767,7 @@ export class LakeSuperagent implements AgentHost {
       snapshot.commandExecutions = this.execution?.views(snapshot.session.id, goal.id);
       if (snapshot.ai) {
         snapshot.ai = this.agents.executionView(snapshot.session.id, snapshot.ai);
-        snapshot.ai.workGoals = [this.publicGoal(goal)];
+        snapshot.ai.workGoals = [snapshot.superagent.goal!];
         if(taskId){snapshot.ai.cards=snapshot.ai.cards.filter(card=>(card.data as any)?.taskId===goal.id||(card.data as any)?.root_turn_id===goal.originRootTurnId);snapshot.ai.agentRuns=snapshot.ai.agentRuns?.filter(run=>run.taskId===goal.id);snapshot.ai.cardsOffset=0;snapshot.ai.totalCards=snapshot.ai.cards.length;snapshot.ai.rootTurnId=goal.originRootTurnId;}
       }
     } else {

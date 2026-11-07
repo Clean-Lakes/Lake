@@ -98,6 +98,8 @@ export class LakeStore {
       CREATE TABLE IF NOT EXISTS records(kind TEXT NOT NULL,id TEXT NOT NULL,value TEXT NOT NULL,PRIMARY KEY(kind,id));
       CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,session TEXT NOT NULL,value TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS messages_by_session ON records(json_extract(value,'$.sessionId')) WHERE kind='messages';
+      CREATE INDEX IF NOT EXISTS unsettled_ops_by_goal ON records(json_extract(value,'$.goalId'))
+        WHERE kind='superOperations' AND json_extract(value,'$.status') IN ('unknown','dispatched');
       CREATE INDEX IF NOT EXISTS session_events ON events(session,seq);`);
     const store = new LakeStore(home, data, db);
     // A restart never resumes a model/tool request from a UI projection.

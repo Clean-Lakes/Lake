@@ -62,6 +62,8 @@
 .super-task-steps strong { font-size:inherit; font-weight:var(--font-weight-ui); }
 .super-task-steps small { display:block; font-size:inherit; color:var(--text-muted); padding-top:3px; }
 .super-task-steps p { color:var(--text-muted); margin:5px 0 0; }
+.super-step-attempts { margin-top:6px; font-size:var(--text-sm,13px); color:var(--text-muted); }
+.super-step-attempts summary { width:fit-content; cursor:pointer; }
 .super-task-budget { padding-top:12px; }
 .super-task-control-error { color:var(--danger); overflow-wrap:anywhere; }
 

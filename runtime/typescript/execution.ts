@@ -199,9 +199,9 @@ export class LakeExecution {
     )
       throw new HttpError(409, "Shell 资源配置或凭据已变化");
   }
-  hasLiveCommand(sessionId: string, executionId: string) {
+  hasLiveCommand(sessionId: string, executionId: string, commandId?: string) {
     for (const {record} of this.lives.values())
-      if (record.sessionId === sessionId && record.taskId === executionId && record.status === "running") return true;
+      if ((!commandId || record.id === commandId) && record.sessionId === sessionId && record.taskId === executionId && record.status === "running") return true;
     return false;
   }
 
