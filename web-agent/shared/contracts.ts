@@ -200,9 +200,9 @@ export type ReplyTiming = {messageId:string;startedAt:string;finishedAt:string;s
 export type OperationReviewEvidence = {operationId: string; sessionId: string; taskId: string; at: string; summary: string; command: string};
 export type OperationReview = {
   operationId: string; eligible: boolean; reason?: string; revision?: string;
-  effects?: "none" | "observed"; directory?: string; command?: string; evidence: OperationReviewEvidence[]; resolved?: boolean;
+  closureState?: "reconciled"; closureEligible?: boolean; effects?: "none" | "observed"; directory?: string; command?: string; evidence: OperationReviewEvidence[]; resolved?: boolean;
 };
-export type OperationReviewConfirmation = {revision: string; evidenceOperationId: string; note: string} & ({confirmNoWrite: true} | {confirmObservedEffects: true});
+export type OperationReviewConfirmation = {revision: string; evidenceOperationId: string; note: string} & ({confirmNoWrite: true} | {confirmObservedEffects: true; reconcileRisk?:true});
 export type HostCommandView = {id:string;operationId:string;operationState?: string;taskId:string;sessionId:string;generation:number;resourceId:string;command:string;output:string;exitCode:number|null;status:string;canStop:boolean;stopRequestedAt?:string;startedAt:string;finishedAt?:string};
 
 export type ConversationReadState = {cursor:string;seenCursor:string};

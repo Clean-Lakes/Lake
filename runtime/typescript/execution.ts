@@ -1,4 +1,5 @@
 import type {SSHTarget} from "./ssh-target";
+import {compileServiceInspection} from "./service-inspection";
 import { boundResourceRevision } from "./resource-pin";
 import { existsSync } from "node:fs";
 import { localShellProfile } from "./local-shell-profile";
@@ -47,6 +48,7 @@ export type ShellPlan = {
   cwd?: string;
   readOnly: boolean;
   nobodyInspection?: NobodyInspection;
+  serviceInspection?: {directory:string;profile:"service-inspection-v1"};
   delayedOutput?: true;
   policy: "allow" | "ask";
   risk: "readonly" | "write" | "dangerous";
@@ -68,6 +70,7 @@ type CommandRecord = {
   configurationRevision: string;
   commandHash: string;
   nobodyInspection?: {directory:string;inventoryDepth?:number};
+  serviceInspection?: {directory:string;profile:"service-inspection-v1"};
   delayedOutput?: true;
   readOnly: boolean;
   status: string;
@@ -172,18 +175,22 @@ export class LakeExecution {
     const inspection = parsedInspection && requestedInspectionRoot(parsedInspection.directory, requests) ? parsedInspection : undefined;
     const delay = resource.kind === "ssh" && input.run_in_background && !input.cwd && policy.risk !== "dangerous"
       ? compileNobodyDelay(command) : undefined;
-    const readOnly = policy.risk === "readonly" || !!inspection || !!delay;
+    const parsedService = resource.kind==="ssh" && !input.run_in_background && (!input.cwd || input.cwd==="/tmp") &&
+      policy.risk!=="dangerous" ? compileServiceInspection(command) : undefined;
+    const service=parsedService && requestedInspectionRoot(parsedService.directory,requests) ? parsedService : undefined;
+    const readOnly = policy.risk === "readonly" || !!inspection || !!delay || !!service;
     return {
       resource,
       revision,
       resourceRevision:
         this.store.get<number>("resourceRevisions", resource.id) ?? 1,
-      command: inspection?.command ?? delay ?? policy.safeCommand ?? command,
+      command: inspection?.command ?? service?.command ?? delay ?? policy.safeCommand ?? command,
+      ...(service && {serviceInspection:{directory:service.directory,profile:service.profile}}),
       ...(delay && {delayedOutput:true as const}),
       nobodyInspection:inspection,
-      cwd: input.cwd,
+      cwd: service ? undefined : input.cwd,
       readOnly,
-      policy: this.security.command(projectId, resource.id, readOnly && !inspection && !delay),
+      policy: this.security.command(projectId, resource.id, readOnly && !inspection && !delay && !service),
       risk: policy.risk,
     };
   }
@@ -195,7 +202,7 @@ export class LakeExecution {
     this.security.command(
       this.store.session(record.sessionId).projectId,
       resource.id,
-      record.readOnly && !record.nobodyInspection && !record.delayedOutput,
+      record.readOnly && !record.nobodyInspection && !record.delayedOutput && !record.serviceInspection,
     );
     if (
       this.revision(resource) !== record.configurationRevision ||
@@ -436,6 +443,7 @@ export class LakeExecution {
         resourceRevision: plan.resourceRevision,
         configurationRevision: plan.revision,
         commandHash: digest(plan.command),
+        ...(plan.serviceInspection && {serviceInspection:plan.serviceInspection}),
         ...(plan.delayedOutput && {delayedOutput: true}),
         ...(plan.nobodyInspection && {nobodyInspection:{directory:plan.nobodyInspection.directory, inventoryDepth:plan.nobodyInspection.inventoryDepth}}),
         readOnly: plan.readOnly,
@@ -672,6 +680,11 @@ export class LakeExecution {
         signal,
       );
     try {
+      const authenticated=this.ssh.mutationTarget?.(plan.resource,connection);
+      if (authenticated) {
+        record.authenticatedTarget=authenticated;
+        this.store.put("commandExecutions",record.id,record);
+      }
       if (!plan.readOnly) {
         // Recheck the actual peer after trust negotiation and before a channel is opened.
         const identity = this.ssh.mutationTarget?.(plan.resource,connection);
@@ -749,11 +762,11 @@ export class LakeExecution {
           resourceId: plan.resource.id,
           configurationRevision: plan.revision,
           resourceRevision: plan.resourceRevision,
-          readOnly: plan.readOnly, nobodyInspection: plan.nobodyInspection, delayedOutput: plan.delayedOutput,
+          readOnly: plan.readOnly, nobodyInspection: plan.nobodyInspection, delayedOutput: plan.delayedOutput,serviceInspection:plan.serviceInspection,
         } as CommandRecord);
         // The compiler enters a clean environment before running any Bash.
         // Wrapping this again would source the SSH account's BASH_ENV first.
-        const command = plan.nobodyInspection || plan.delayedOutput ? plan.command :
+        const command = plan.nobodyInspection || plan.delayedOutput || plan.serviceInspection ? plan.command :
           (plan.cwd ? `cd -- ${quote(plan.cwd)} && ` : "") +
           `/bin/bash --noprofile --norc -c ${quote(plan.command)}`;
         connection.exec(command, (error: any, stream: any) => {
@@ -778,7 +791,7 @@ export class LakeExecution {
                 resourceId: plan.resource.id,
                 configurationRevision: plan.revision,
                 resourceRevision: plan.resourceRevision,
-                readOnly: plan.readOnly, nobodyInspection: plan.nobodyInspection, delayedOutput: plan.delayedOutput,
+                readOnly: plan.readOnly, nobodyInspection: plan.nobodyInspection, delayedOutput: plan.delayedOutput,serviceInspection:plan.serviceInspection,
               } as CommandRecord);
               if (stdout.length + stderr.length + chunk.length > outputLimit)
                 throw new HttpError(413, "SSH 命令输出超过预算");

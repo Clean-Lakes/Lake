@@ -1288,7 +1288,11 @@ export class LakeSuperagent implements AgentHost {
   private async invokeBash(worker:Worker,entry:ToolEntry,input:ShellInput,context:HostToolContext){
     const {plan}=this.shellPlan(worker,input),actor=this.shellActor(worker),generation=worker.generation;
     if (!plan.readOnly && plan.resource.kind === "ssh") {
-      actor.checkSSHTarget = target => this.ledger.checkMutationTarget(worker.projectId, {resourceId:plan.resource.id,commandExecutionId:this.execution!.executionId(actor,context.toolCallId)}, target ?? null);
+      actor.checkSSHTarget = target => {
+        const binding={resourceId:plan.resource.id,commandExecutionId:this.execution!.executionId(actor,context.toolCallId)};
+        this.ledger.checkMutationTarget(worker.projectId,binding,target??null);
+        this.ledger.protectReconciledMutation(worker.taskId,input,binding,target??null);
+      };
     }
     await this.discoveryRecovery.verify(worker.projectId);
     if(context.lakeSubagent?.agentType==='explore'&&!plan.readOnly)throw new HttpError(403,'Explore 子智能体仅允许只读调查命令');

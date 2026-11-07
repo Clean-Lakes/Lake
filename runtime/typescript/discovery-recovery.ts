@@ -1,3 +1,4 @@
+import {compileServiceInspection, reportedServiceIdentity, serviceInspectionSource} from "./service-inspection";
 import type { SessionId, SessionStorePort } from "./sdk";
 import {
   isLiteralProgramDiscovery,
@@ -9,7 +10,7 @@ import { HttpError, LakeStore, now } from "./store";
 import { digest, type Goal, type Operation } from "./tasks";
 
 type Receipt = {
-  method: "literal_program_discovery_v1" | "operator_nobody_inventory_v1" | "operator_observed_effects_v1";
+  method: "literal_program_discovery_v1" | "operator_nobody_inventory_v1" | "operator_observed_effects_v1" | "operator_service_inspection_v1";
   evidenceOperationId?: string;
   evidenceHash?: string;
   evidenceExecutionHash?: string;
@@ -24,6 +25,7 @@ type Receipt = {
   sourceHash: string;
   verifiedAt: string;
   effects: "none" | "observed";
+
 };
 
 // Receipt matching only. This byte-for-byte v1 identity is never dispatched.
@@ -102,7 +104,7 @@ export class ProgramDiscoveryRecovery {
     return execution;
   }
 
-  resolution(operation: Operation): Receipt | undefined {
+  resolution(operation: Operation): (Receipt & {closureState?: "reconciled";closedAt?:string}) | undefined {
     const execution = this.candidate(operation);
     const receipt = this.store.get<Receipt>(
       "commandReadReconciliations", operation.id,
@@ -111,7 +113,7 @@ export class ProgramDiscoveryRecovery {
       execution &&
       ((receipt?.effects === "none" &&
         (receipt.method === "literal_program_discovery_v1" ||
-          (receipt.method === "operator_nobody_inventory_v1" && this.matchesVerification(operation, receipt)))) ||
+          ((receipt.method === "operator_nobody_inventory_v1" || receipt.method === "operator_service_inspection_v1") && this.matchesVerification(operation, receipt)))) ||
        (receipt?.effects === "observed" && receipt.method === "operator_observed_effects_v1" &&
         this.matchesVerification(operation, receipt))) &&
       receipt.operationId === operation.id &&
@@ -119,7 +121,13 @@ export class ProgramDiscoveryRecovery {
       receipt.executionHash === digest(execution) &&
       receipt.inputHash === operation.argsHash
     )
-      return receipt;
+      {
+        const closure=this.store.get<{operationId:string;reviewHash:string;sourceKind:string;state:string;closedAt:string;evidenceHash:string;evidenceOperationId:string}>("commandEffectClosures",operation.id);
+        return {...receipt,...(closure?.operationId===operation.id && closure.reviewHash===digest(receipt) && closure.sourceKind==="user_action" &&
+          closure.evidenceHash===receipt.evidenceHash && closure.evidenceOperationId===receipt.evidenceOperationId &&
+          Number.isFinite(Date.parse(closure.closedAt)) && closure.state==="reconciled" &&
+          {closureState:"reconciled" as const,closedAt:closure.closedAt})};
+      }
   }
 
   private matchesInputRevision(operation: Operation, supplied: unknown) {
@@ -161,11 +169,16 @@ export class ProgramDiscoveryRecovery {
     const command = String(execution.command ?? "");
     const inventory = compileNobodyInspection(command);
     const isInventory = inventory?.inventoryDepth != null;
-    const removal = isInventory ? undefined : removalReviewScope(command);
-    const directory = isInventory ? inventory.directory : removal?.directory;
+    const service = compileServiceInspection(command);
+    const serviceIdentity = service && reportedServiceIdentity((operation.output as any)?.stdout ?? "");
+    if (service && (!serviceIdentity || !Array.isArray(execution.authenticatedTarget?.hostKeys) || !execution.authenticatedTarget.hostKeys.some((k:any)=>
+      k && typeof k.fingerprint==="string" && /^SHA256:[A-Za-z0-9+/]{43}$/.test(k.fingerprint)) ||
+      execution.peerRejected || (operation.output as any)?.stderr !== "")) return;
+    const removal = isInventory || service ? undefined : removalReviewScope(command);
+    const directory = inventory?.directory ?? service?.directory ?? removal?.directory;
     if (!directory) return;
     const scope = { directory, inventoryDepth: isInventory ? inventory.inventoryDepth! : 1 };
-    const effects = isInventory ? "none" as const : "observed" as const;
+    const effects = isInventory || service ? "none" as const : "observed" as const;
     const output = operation.output as any,
       goal = this.store.get<Goal>("superGoals", operation.goalId);
     const event =
@@ -187,7 +200,7 @@ export class ProgramDiscoveryRecovery {
       resource?.kind !== "ssh" ||
       resource.projectId !== operation.projectId ||
       event?.projectId !== operation.projectId ||
-      !(isInventory ? requestedInspectionRoot(scope.directory,[event.payload]) : event.payload.includes(scope.directory)) ||
+      !((isInventory || service) ? requestedInspectionRoot(scope.directory,[event.payload]) : event.payload.includes(scope.directory)) ||
       !event.selectedReferences?.resourceIds.includes(operation.resourceId!) ||
       (isInventory && (!/^find: failed to restore initial working directory: Permission denied\n?$/.test(output.stderr) ||
         !/^uid=\d+\(nobody\) gid=\d+\([\w-]+\)/.test(output.stdout) ||
@@ -251,6 +264,7 @@ export class ProgramDiscoveryRecovery {
     return {
       effects,
       removedName: removal?.removedName,
+      serviceIdentity,
       directory: scope.directory,
       depth: scope.inventoryDepth,
       sourcePartId: part.id,
@@ -264,6 +278,7 @@ export class ProgramDiscoveryRecovery {
     directory: string,
     depth: number,
     removedName?: string,
+    serviceIdentity?: ReturnType<typeof reportedServiceIdentity>,
   ) {
     return this.store.list<Operation>("superOperations").flatMap((op) => {
       if (
@@ -292,8 +307,8 @@ export class ProgramDiscoveryRecovery {
         output = op.output as any;
       if (
         !run ||
-        run.nobodyInspection?.directory !== directory ||
-        run.nobodyInspection.inventoryDepth !== depth ||
+        (serviceIdentity ? (run.serviceInspection?.directory !== directory || run.serviceInspection.profile !== "service-inspection-v1")
+          : (run.nobodyInspection?.directory !== directory || run.nobodyInspection.inventoryDepth !== depth)) ||
         !goal ||
         goal.projectId !== op.projectId ||
         goal.sessionId !== op.sessionId ||
@@ -331,20 +346,32 @@ export class ProgramDiscoveryRecovery {
         output.stderrBytes !== 0 ||
         !op.outputHash ||
         digest(output) !== op.outputHash ||
-        !/^uid=\d+\(nobody\)/.test(output.stdout) ||
+        (!serviceIdentity && (!/^uid=\d+\(nobody\)/.test(output.stdout) ||
         !output.stdout
           .split("\n")
           .some(
             (line: string) =>
               line.startsWith("d ") && line.endsWith(" " + directory),
-          )
+          )))
       )
         return [];
+      if (serviceIdentity) {
+        const peer=this.store.get<any>("commandExecutions",original.commandExecutionId!)?.authenticatedTarget;
+        if(!peer || run.peerRejected || !run.authenticatedTarget || digest(peer)!==digest(run.authenticatedTarget)) return [];
+        let state;
+        try { state=JSON.parse(output.stdout); } catch {return [];}
+        if(!state || state.directory!==directory || state.current!==serviceIdentity.current ||
+          state.pid!==serviceIdentity.pid || state.port!==serviceIdentity.port || state.listener!==true ||
+          !Number.isSafeInteger(state.uid) || state.uid<=0 || !Number.isSafeInteger(state.startTicks) || state.startTicks<=0 ||
+          !Array.isArray(state.instances) || !state.instances.includes(state.pid) ||
+          !Array.isArray(state.listenAddresses) || !state.listenAddresses.includes(serviceIdentity.address) ||
+          typeof state.script!=="string" || !state.script.startsWith(directory+"/"+serviceIdentity.current+"/")) return [];
+      }
       if (removedName && output.stdout.split("\n").some((line:string) =>
         line.endsWith(" " + directory + "/" + removedName))) return [];
       // Match the actual compiled command. Matching directory and profile text
       // alone cannot qualify another inspection, result or captured output.
-      const source =
+      const source = serviceIdentity ? serviceInspectionSource(directory) :
         "runuser -u nobody -- /bin/bash -c 'id; ls -la " +
         directory +
         "; find " +
@@ -353,10 +380,10 @@ export class ProgramDiscoveryRecovery {
         depth +
         ' -printf "%y %s %p\\n"' +
         String.fromCharCode(39);
-      const compiled = compileNobodyInspection(source);
+      const compiled = serviceIdentity ? compileServiceInspection(source) : compileNobodyInspection(source);
       if (
         !compiled ||
-        (run.command !== compiled.command && !isLegacyInventoryReceipt(run.command, directory, depth)) ||
+        (run.command !== compiled.command && (serviceIdentity || !isLegacyInventoryReceipt(run.command, directory, depth))) ||
         run.commandHash !== digest(run.command)
       )
         return [];
@@ -367,7 +394,8 @@ export class ProgramDiscoveryRecovery {
           sessionId: op.sessionId,
           at: op.completedAt!,
           command: source,
-          summary: removedName ? "同一目录的后续只读盘点中已无 " + removedName + "。退出码 0。"
+          summary: serviceIdentity ? "同一 SSH 对端和目录重新取得发布链接 "+serviceIdentity.current+"、PID "+serviceIdentity.pid+" 和监听端口 "+serviceIdentity.port+"，进程身份已核对。"
+            : removedName ? "同一目录的后续只读盘点中已无 " + removedName + "。退出码 0。"
             : "同一 SSH 资源上以 nobody 成功核查 " +
             directory +
             "，扫描深度 " +
@@ -401,7 +429,7 @@ export class ProgramDiscoveryRecovery {
     const evidence = this.inventoryEvidence(
       operation,
       source.directory,
-      source.depth, source.removedName,
+      source.depth, source.removedName, source.serviceIdentity,
     );
     const revision = digest([
       digest(operation),
@@ -426,8 +454,13 @@ export class ProgramDiscoveryRecovery {
         reason: "原命令及回执不满足目录巡检人工核实条件",
       };
     const receipt = this.resolution(entry.operation);
-    if (receipt)
-      return { operationId, eligible: false, resolved: true, effects: receipt.effects, evidence: [] };
+    if (receipt) return {
+      operationId, eligible: false, resolved: true, effects: receipt.effects,
+      closureState: receipt.closureState,
+      closureEligible: receipt.effects === "observed" && !receipt.closureState,
+      revision: entry.revision, directory: entry.source.directory, command: entry.run.command,
+      evidence: entry.evidence.filter(row=>row.operationId===receipt.evidenceOperationId).map(({operationHash,executionHash,...row})=>row),
+    };
     const { evidence, revision, source, run } = entry;
     return {
       operationId,
@@ -436,7 +469,8 @@ export class ProgramDiscoveryRecovery {
       effects: source.effects,
       directory: source.directory,
       command: run.command,
-      reason: source.effects === "observed"
+      reason: source.serviceIdentity ? "原服务检查在进程筛选阶段退出 1。请核对完整命令、旧执行环境及后续同机发布和监听证据，由操作者判断是否发生写入。"
+        : source.effects === "observed"
         ? "请核对完整原命令、已发生的变更和后续独立回执。仍有其他可能影响时应继续核实。"
         : "原目录检查返回工作目录权限错误。请独立核对原执行和同目标重采证据，再判断是否发生写入。",
       evidence: evidence.map(
@@ -469,6 +503,8 @@ export class ProgramDiscoveryRecovery {
     if (!entry || input.revision !== entry.revision)
       throw new HttpError(409, "原始记录或重采证据已变化，请重新核实");
     const expected = input.confirmNoWrite === true ? "none" : "observed";
+    if (input.reconcileRisk !== undefined && (input.reconcileRisk !== true || expected !== "observed"))
+      throw new HttpError(400, "只有已独立核实全部影响的实际变更可登记结清");
     if (entry.source.effects !== expected) throw new HttpError(409, "判定与原操作的核实类型不符");
     const proof = entry.evidence.find(
       (row) => row.operationId === input.evidenceOperationId,
@@ -490,7 +526,7 @@ export class ProgramDiscoveryRecovery {
       const verified = this.inventoryEvidence(
         op,
         entry.source.directory,
-        entry.source.depth, entry.source.removedName,
+        entry.source.depth, entry.source.removedName, entry.source.serviceIdentity,
       ).find((row) => row.operationId === proof.operationId);
       if (
         !verified ||
@@ -503,9 +539,12 @@ export class ProgramDiscoveryRecovery {
         proof.operationId,
       );
       revalidate(fresh.commandExecutionId!, fresh.goalId, fresh.generation);
-      if (!this.resolution(op))
+      const previous = this.resolution(op);
+      if (input.reconcileRisk===true && (previous?.effects!=="observed" || previous.evidenceOperationId!==proof.operationId))
+        throw new HttpError(409,"请先登记实际变更的人工核实，再明确结清风险");
+      if (!previous)
         this.store.put<Receipt>(expected === "none" ? "commandReadReconciliations" : "commandObservedEffectReviews", op.id, {
-          method: expected === "none" ? "operator_nobody_inventory_v1" : "operator_observed_effects_v1",
+          method: entry.source.serviceIdentity ? "operator_service_inspection_v1" : expected === "none" ? "operator_nobody_inventory_v1" : "operator_observed_effects_v1",
           effects: expected,
           sourceKind: "user_action",
           operationId: op.id,
@@ -521,6 +560,15 @@ export class ProgramDiscoveryRecovery {
           evidenceHash: proof.operationHash,
           evidenceExecutionHash: proof.executionHash,
         });
+      if (input.reconcileRisk===true) {
+        const review=this.store.require<Receipt>("commandObservedEffectReviews",op.id);
+        const existing=this.store.get<{reviewHash:string}>("commandEffectClosures",op.id);
+        if (existing && existing.reviewHash!==digest(review)) throw new HttpError(409,"原人工复核记录已变化");
+        if (!existing) this.store.put("commandEffectClosures",op.id,{
+          operationId:op.id,reviewHash:digest(review),state:"reconciled",sourceKind:"user_action",
+          note,closedAt:now(),evidenceOperationId:proof.operationId,evidenceHash:proof.operationHash,
+        });
+      }
       return { operationId, resolved: true };
     });
   }

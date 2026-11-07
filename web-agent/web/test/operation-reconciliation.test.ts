@@ -56,5 +56,14 @@ test('observed change has a distinct explicit decision and never records a no-wr
  assert.deepEqual(reviewConfirmation(reviewed,'later','已删除标志并复核现状',true),
    {revision:view.revision,evidenceOperationId:'later',confirmObservedEffects:true,note:'已删除标志并复核现状'});
  const html=renderToStaticMarkup(createElement(OperationReviewForm,{review:reviewed,connected:true,busy:false,failed:'',onSubmit(){},onRefresh(){}}));
- assert.match(html,/实际变更/); assert.match(html,/同一台主机及身份未核实的目标仍受保护/); assert.doesNotMatch(html,/确认原操作未写入/);
+ assert.match(html,/实际变更/); assert.match(html,/核实全部影响并结清后/); assert.doesNotMatch(html,/确认原操作未写入/);
+});
+
+
+test('risk closure is a separate explicit judgement after recording an observed effect',()=>{
+ const closure={...view,resolved:true,eligible:false,effects:'observed' as const,closureEligible:true};
+ assert.equal(reviewConfirmation({...closure,closureEligible:false},'later','核实全部影响',true),undefined);
+ assert.equal(reviewConfirmation(closure,'later','核实全部影响',false),undefined);
+ assert.deepEqual(reviewConfirmation(closure,'later','核实全部影响',true),
+  {revision:view.revision,evidenceOperationId:'later',confirmObservedEffects:true,reconcileRisk:true,note:'核实全部影响'});
 });

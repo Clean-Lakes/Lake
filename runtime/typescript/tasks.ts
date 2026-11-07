@@ -1,4 +1,6 @@
+import {removalReviewScope} from "./removal-review";
 import {distinctSSHTargets, sameSSHHost, type SSHTarget} from "./ssh-target";
+import {posix} from "node:path";
 import { createHash } from "node:crypto";
 import type { WorkGoal } from "../../web-agent/shared/contracts";
 import { HttpError, id, LakeStore, now } from "./store";
@@ -73,7 +75,7 @@ const businessReceiptTools = new Set(["Bash", "Glob", "Grep", "FindFiles", "Sear
 // Router replies, Worker prose and channel presentation never close a goal.
 export class TaskLedger {
   constructor(readonly store: LakeStore, readonly revalidate?: (operation: Operation) => void,
-    readonly effectResolution?: (operation: Operation) => { effects: "none" | "observed" } | undefined,
+    readonly effectResolution?: (operation: Operation) => { effects: "none" | "observed"; closureState?: "reconciled";closedAt?:string } | undefined,
     readonly sshTarget?: (resourceId:string, expectedRevision?:string) => SSHTarget | undefined) {}
   get(goalId: string) { return this.store.require<Goal>("superGoals", goalId); }
   jointTask(taskId: string) { return jointTask(this.store, taskId); }
@@ -331,7 +333,7 @@ export class TaskLedger {
         if (original.resourceId !== binding.resourceId && !sameSSHHost(prior,candidate) && !sameSSHHost(prior,peer ?? undefined)) continue;
       }
       const receipt = this.effectResolution?.(original);
-      if (receipt?.effects === "none") continue;
+      if (receipt?.effects === "none" || receipt?.closureState === "reconciled") continue;
       if (isSSH && (!sameProject || receipt?.effects === "observed")) {
         if (sameProject && original.resourceId !== binding.resourceId &&
             distinctSSHTargets(archived,peer === undefined ? candidate : peer ?? undefined)) continue;
@@ -341,6 +343,45 @@ export class TaskLedger {
         const hint = binding.commandExecutionId ? " This command was not dispatched. Inspect the target with a relevant read-only inspect_host profile or a bounded read of the authorized directory; never retry the uncertain write." : "";
         throw new HttpError(409,"A project operation still requires reconciliation ("+original.id+")."+hint);
       }
+    }
+  }
+  protectReconciledMutation(goalId:string, input:unknown, binding:{resourceId?:string;commandExecutionId?:string;remoteMcp?:boolean}, peer?:SSHTarget|null) {
+    const goal=this.get(goalId), shell=input as {command?:unknown;cwd?:unknown}|null;
+    for (const closure of this.store.list<{operationId:string}>("commandEffectClosures")) {
+      const original=this.store.get<Operation>("superOperations",closure.operationId);
+      const receipt=original && this.effectResolution?.(original);
+      if (!original || receipt?.closureState!=="reconciled") continue;
+      const old=this.get(original.goalId);
+      const run=original.commandExecutionId && this.store.get<{command:string;authenticatedTarget?:SSHTarget}>("commandExecutions",original.commandExecutionId);
+      if (!run) throw new HttpError(409,"原已核实变更的来源缺失");
+      if (goal.id===old.id || goal.sourceEventId===old.sourceEventId ||
+          goal.sharedTaskId && goal.sharedTaskId===old.sharedTaskId)
+        throw new HttpError(409,"原已核实调用禁止重放，请使用新的授权请求");
+      const resource=binding.resourceId && this.store.get<{kind:string}>("resources",binding.resourceId);
+      if (!binding.commandExecutionId || binding.remoteMcp || resource && resource.kind!=="ssh") continue;
+      const prior=run.authenticatedTarget ?? (original.resourceId && original.hostConfigurationHash ?
+        this.sshTarget?.(original.resourceId,original.hostConfigurationHash) : undefined);
+      const candidate=peer===undefined && binding.resourceId ? this.sshTarget?.(binding.resourceId) : peer??undefined;
+      const related=original.resourceId===binding.resourceId || sameSSHHost(prior,candidate) ||
+        original.projectId===goal.projectId && !distinctSSHTargets(prior,candidate);
+      if (!related && goal.id!==old.id) continue;
+      const event=this.store.get<{projectId:string;sessionId:string;messageId:string;receivedAt:string}>("superInputs",goal.sourceEventId);
+      const message=event && this.store.get<{role:string;sessionId:string}>("messages",event.messageId);
+      const admitted=event && this.store.get<{projectId:string;sessionId:string;messageId:string}>("messageInputs",event.messageId);
+      if (!event || event.projectId!==goal.projectId || message?.role!=="user" || message.sessionId!==event.sessionId ||
+          admitted?.projectId!==event.projectId || admitted.sessionId!==event.sessionId || admitted.messageId!==event.messageId ||
+          !(Date.parse(event.receivedAt)>Date.parse(receipt.closedAt??"")))
+        throw new HttpError(409,"风险结清后的变更需要新的已接收用户请求");
+      const command=shell?.command;
+      if (typeof command!=="string") continue;
+      const scope=removalReviewScope(run.command);
+      if (!scope) throw new HttpError(409,"原变更范围已无法核对");
+      const escaped=scope.directory.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+      const mentions=new RegExp("(?<![a-zA-Z0-9_./-])"+escaped+"(?![a-zA-Z0-9_.-])").test(command);
+      const cwd=typeof shell?.cwd==="string" ? posix.normalize(shell.cwd) : undefined;
+      if (cwd && (cwd===scope.directory || cwd.startsWith(scope.directory+"/")) ||
+          mentions || digest(command.trim())===digest(run.command.trim()))
+        throw new HttpError(409,"原已核实调用的目标目录禁止重放，请保留原结果并执行新请求");
     }
   }
   active(goalId: string, generation: number, policyHash: string) {
@@ -364,6 +405,7 @@ export class TaskLedger {
       if (previous.status === "succeeded") { this.revalidate?.(previous); return previous.output as T; }
       throw new HttpError(409, "The original operation must be reconciled; it cannot be replayed");
     }
+    if (binding.readOnly !== true) this.protectReconciledMutation(goalId,input,binding);
     if (this.isHostManaged(this.get(goalId))) this.prepareHostOperation(goalId, generation, policyHash, binding);
     const operation = this.store.transaction(() => {
       const { goal, step, attempt } = this.active(goalId, generation, policyHash);
