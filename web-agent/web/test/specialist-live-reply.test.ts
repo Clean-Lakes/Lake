@@ -151,6 +151,17 @@ test('latest reply grouping never absorbs another task, source, direct message o
  assert.equal(JSON.stringify(entries),before);
 });
 
+test('task rounds show their exact start times and frozen speakers without inventing paginated round numbers',()=>{
+ const old=report('历史执行结果'),latest=report('本轮执行结果','new','2026-11-07T09:00:00Z');
+ old.message!.author!.name='原知识库专员';latest.message!.author!.name='当前知识库专员';
+ const entries=specialistReplies([old,latest],[{snapshot:snapshot([],'completed'),worker,active:false}]);
+ const html=render(entries);
+ assert.match(html,/最新一轮<\/span><span>当前知识库专员<\/span><time dateTime="2026-11-07T09:00:00Z"/);
+ assert.match(html,/历史轮次<\/span><span>原知识库专员<\/span><time dateTime="2026-11-06T08:01:00Z"/);
+ assert.doesNotMatch(html,/第[12]轮/);
+ assert.equal(entries[0].message?.author?.name,'原知识库专员');
+});
+
 test("one SDK invocation replaces progress in place and the final host report replaces all narration", () => {
   const first = card("first", "正在连接两端数据库"),
     second = card("second", "已取得库表清单，正在核对差异");

@@ -17,4 +17,5 @@
 .specialist-reply-history > summary:focus-visible { outline:2px solid var(--focus-outline); outline-offset:3px; border-radius:4px; }
 .specialist-reply-history > div { border-inline-start:1px solid var(--border); padding-inline-start:16px; margin-top:10px; }
 .specialist-reply-history section + section { margin-top:18px; }
-.specialist-reply-history time { display:block; margin-bottom:8px; color:var(--text-muted); font-size:11px; }
+.specialist-reply-meta { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; margin-bottom:8px; color:var(--text-muted); font-size:12px; line-height:1.5; }
+.specialist-reply-meta time { white-space:nowrap; font-variant-numeric:tabular-nums; }

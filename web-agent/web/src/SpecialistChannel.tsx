@@ -59,6 +59,14 @@ export function SpecialistReplyTransition({revision,text='',enabled=true,childre
  return <div ref={element} className="specialist-reply-transition">{children}</div>;
 }
 
+function SpecialistReplyMeta({entry,worker,previous=false,latest=true}:{entry:SpecialistChannelEntry;worker?:SuperWorker;previous?:boolean;latest?:boolean}){
+ const name=entry.message?.author?.name??worker?.roleName;
+ const time=new Date(entry.createdAt),valid=Number.isFinite(time.getTime());
+ // A paged channel cannot know a global round number. Use the original start
+ // time and frozen author instead of renumbering when more history is loaded.
+ return <div className="specialist-reply-meta"><span>{previous?'历史轮次':latest?'最新一轮':'执行记录'}</span>{name&&<span>{name}</span>}{valid&&<time dateTime={entry.createdAt} title="本轮记录时间">{time.toLocaleString('zh-CN',{hour12:false})}</time>}</div>;
+}
+
 export function SpecialistChannelEntries({entries,resources,workers=[],activeSources,activeSnapshots,connected=true}:{entries:SpecialistChannelEntry[];resources:SessionSnapshot['resources'];workers?:SuperWorker[];activeSources?:ReadonlySet<string>;activeSnapshots?:ReadonlyMap<string,SessionSnapshot>;connected?:boolean}){
  const forwarded=new Set(entries.flatMap(entry=>entry.message?.dispatch?[`${entry.sourceSessionId}\0${entry.message.dispatch.sourceMessageId}`]:[]));
  const byTask=new Map(workers.map(worker=>[worker.task.taskId,worker])),bySession=new Map(workers.map(worker=>[worker.sessionId,worker]));
@@ -77,12 +85,13 @@ export function SpecialistChannelEntries({entries,resources,workers=[],activeSou
   return <div className="specialist-channel-entry" key={current.keys.get(entry.id)??entry.id} data-channel-entry={entry.id} data-source-session={entry.sourceSessionId} data-task-id={taskId}>
    {startsTask&&<div className="specialist-task-divider" role="separator" aria-label={`任务：${taskTitle}`} data-task-divider={taskId}><span title={taskTitle}>{taskTitle}</span></div>}
    <div className="specialist-reply-content" data-reply-state={entry.reply?.state}>
+   {entry.reply&&<SpecialistReplyMeta entry={entry} worker={bySession.get(entry.sourceSessionId)} latest={current.keys.has(entry.id)}/>}
    <SpecialistReplyTransition revision={`${entry.reply?.turnId??entry.id}:${entry.reply?.state??''}`} text={entry.reply?.state==='working'?'':entry.message?.text??entry.card?.content} enabled={connected&&!['failed','cancelled','blocked','paused','waiting_user','waiting_external'].includes(bySession.get(entry.sourceSessionId)?.task.state??'')}>
     {entry.reply?.state==='working'&&projected.card?.type!=='plan_reference'?<SpecialistLiveReply text={entry.card?.content} worker={bySession.get(entry.sourceSessionId)} snapshot={active} connected={connected}/>:projected.message?<TranscriptMessage message={projected.message} sessionId={entry.sourceSessionId} resources={resources} hideIdentity/>:projected.card?<Card card={projected.card} streaming={activeSources?projected.card.status==='running'&&activeSources.has(entry.sourceSessionId):undefined}/>:null}
    </SpecialistReplyTransition>
    {history.length>0&&<details className="specialist-reply-history"><summary>之前的 {history.length} 次执行</summary><div>{history.map(previous=>{
     const saved=conversationPlanEntry({id:previous.card?.id??previous.message?.id??previous.id,at:previous.createdAt,card:previous.card,message:previous.message},{planMode:false,live:false});
-    return <section key={previous.id} data-reply-history={previous.id}><time dateTime={previous.createdAt}>{new Date(previous.createdAt).toLocaleString()}</time>{saved.message?<TranscriptMessage message={saved.message} sessionId={previous.sourceSessionId} resources={resources} hideIdentity/>:saved.card?<Card card={saved.card} streaming={false}/>:null}</section>;
+    return <section key={previous.id} data-reply-history={previous.id}><SpecialistReplyMeta entry={previous} worker={bySession.get(previous.sourceSessionId)} previous/>{saved.message?<TranscriptMessage message={saved.message} sessionId={previous.sourceSessionId} resources={resources} hideIdentity/>:saved.card?<Card card={saved.card} streaming={false}/>:null}</section>;
    })}</div></details>}
    </div>
   </div>;
