@@ -141,7 +141,7 @@ export class LakeExecution {
       throw new HttpError(403, "Shell 需要当前项目的可用本机或 SSH 资源");
     const command = text(input.command, "command", 64000),
       revision = this.revision(resource),
-      policy = commandPolicy(command, requests);
+      policy = commandPolicy(command);
     if (input.asset_ref && !boundResourceRevision(this.store,resource,input.configuration_revision,revision))
       throw new HttpError(409, "Shell 连接配置已变化，请重新读取资源目录");
     if (input.dangerouslyDisableSandbox)

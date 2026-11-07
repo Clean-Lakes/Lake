@@ -1,7 +1,7 @@
 import type { SessionId, SessionStorePort } from "./sdk";
 import {
   isLiteralProgramDiscovery,
-  compileNobodyInspection,
+  compileNobodyInspection, requestedInspectionRoot,
 } from "../../web-agent/shared/command-policy";
 import { removalReviewScope } from "./removal-review";
 import { boundResourceRevision } from "./resource-pin";
@@ -25,6 +25,16 @@ type Receipt = {
   verifiedAt: string;
   effects: "none" | "observed";
 };
+
+// Receipt matching only. This byte-for-byte v1 identity is never dispatched.
+function isLegacyInventoryReceipt(command: string, directory: string, depth: number) {
+  const quote = (word: string) => "'"+word.replaceAll("'", "'\"'\"'")+"'";
+  const clean = "/usr/bin/env -i PATH=/usr/sbin:/usr/bin:/bin LC_ALL=C";
+  const listing = ["/usr/bin/ls", quote("-la"), quote(directory)].join(" ");
+  const inventory = ["/usr/bin/find", ...[directory,"-maxdepth",String(depth),"-printf","%y %s %p\\n"].map(quote)].join(" ");
+  const script = "builtin cd -- / || exit 1; /usr/bin/id  ; "+listing+" ; "+inventory;
+  return command===clean+" /usr/sbin/runuser -u nobody -- "+clean+" /bin/bash --noprofile --norc -c "+quote(script);
+}
 
 /** A host-only compatibility reconciliation. Original results never change. */
 export class ProgramDiscoveryRecovery {
@@ -177,7 +187,7 @@ export class ProgramDiscoveryRecovery {
       resource?.kind !== "ssh" ||
       resource.projectId !== operation.projectId ||
       event?.projectId !== operation.projectId ||
-      !event.payload.includes(scope.directory) ||
+      !(isInventory ? requestedInspectionRoot(scope.directory,[event.payload]) : event.payload.includes(scope.directory)) ||
       !event.selectedReferences?.resourceIds.includes(operation.resourceId!) ||
       (isInventory && (!/^find: failed to restore initial working directory: Permission denied\n?$/.test(output.stderr) ||
         !/^uid=\d+\(nobody\) gid=\d+\([\w-]+\)/.test(output.stdout) ||
@@ -346,8 +356,8 @@ export class ProgramDiscoveryRecovery {
       const compiled = compileNobodyInspection(source);
       if (
         !compiled ||
-        run.command !== compiled.command ||
-        run.commandHash !== digest(compiled.command)
+        (run.command !== compiled.command && !isLegacyInventoryReceipt(run.command, directory, depth)) ||
+        run.commandHash !== digest(run.command)
       )
         return [];
       return [

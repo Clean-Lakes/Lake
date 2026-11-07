@@ -457,6 +457,18 @@ async function inventoryFixture(t: Parameters<typeof fixture>[0]) {
   return { ...f, directory, verify, run };
 }
 
+test("existing v1 compiled evidence stays reviewable without admitting modified commands", async t=>{
+  const {store,recovery,operation,run,verify} = await inventoryFixture(t);
+  const legacy = "/usr/bin/env -i PATH=/usr/sbin:/usr/bin:/bin LC_ALL=C /usr/sbin/runuser -u nobody -- /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/bin LC_ALL=C /bin/bash --noprofile --norc -c 'builtin cd -- / || exit 1; /usr/bin/id  ; /usr/bin/ls '\"'\"'-la'\"'\"' '\"'\"'/tmp/lake-ops-UK-fixture'\"'\"' ; /usr/bin/find '\"'\"'/tmp/lake-ops-UK-fixture'\"'\"' '\"'\"'-maxdepth'\"'\"' '\"'\"'4'\"'\"' '\"'\"'-printf'\"'\"' '\"'\"'%y %s %p\\n'\"'\"''";
+  assert.notEqual(run.command,legacy);
+  store.put("superOperations",verify.id,verify);
+  store.put("commandExecutions",run.id,{...run,command:legacy,commandHash:digest(legacy)});
+  assert.equal((await recovery.reviewInfo("session",operation.id)).evidence.length,1);
+  const changed=legacy+" ";
+  store.put("commandExecutions",run.id,{...run,command:changed,commandHash:digest(changed)});
+  assert.equal((await recovery.reviewInfo("session",operation.id)).evidence.length,0);
+});
+
 test("cwd inventory requires explicit human confirmation and immutable same-directory follow-up; never upgrades or replays original", async (t) => {
   const f = await inventoryFixture(t),
     { store, recovery, ledger, operation, run, verify } = f;
@@ -670,6 +682,10 @@ test("SSH dispatches the compiled identity inspection directly and retains origi
   );
   const scope = "/tmp/lake-ops-UK-fixture";
   assert.equal(host.plan("project",input,["inspect "+scope+"-other"]).readOnly,false);
+  for(const command of ["nl -ba "+scope+"/link", "sha256sum "+scope+"/link",
+      "runuser -u nobody -- /bin/bash -c 'cat "+scope+"/link'"]){
+    assert.equal(host.plan("project",{...input,command},["inspect "+scope]).readOnly,false);
+  }
   const plan = host.plan("project", input, ["inspect "+scope]);
   assert.equal(plan.readOnly, true);
   assert.equal(plan.risk, "write");
