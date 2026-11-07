@@ -97,6 +97,7 @@ export class LakeStore {
     db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS records(kind TEXT NOT NULL,id TEXT NOT NULL,value TEXT NOT NULL,PRIMARY KEY(kind,id));
       CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,session TEXT NOT NULL,value TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS messages_by_session ON records(json_extract(value,'$.sessionId')) WHERE kind='messages';
       CREATE INDEX IF NOT EXISTS session_events ON events(session,seq);`);
     const store = new LakeStore(home, data, db);
     // A restart never resumes a model/tool request from a UI projection.
@@ -283,7 +284,12 @@ export class LakeStore {
     return view;
   }
   messages(sessionId: string) {
-    return this.list<Message>("messages").filter((message) => message.sessionId === sessionId);
+    // Unread/channel polling reads many sessions. Select before decoding JSON
+    // so another conversation's entire history never blocks this session.
+    return this.db
+      .prepare("SELECT value FROM records WHERE kind='messages' AND json_extract(value,'$.sessionId')=? ORDER BY rowid")
+      .all(sessionId)
+      .map(row => JSON.parse(String(row.value)) as Message);
   }
   viewPage(sessionId: string, before?: number, limit = 300): AIView {
     const view = this.view(sessionId), total = view.cards.length;
