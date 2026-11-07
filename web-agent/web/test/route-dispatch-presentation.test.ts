@@ -153,3 +153,23 @@ test('ordinary assistants, clipped pages and pending user controls keep their or
  snapshot.ai!.cardsOffset=0;snapshot.ai!.question={} as NonNullable<NonNullable<SessionSnapshot['ai']>['question']>;
  assert.ok(mainReply(handoffHTML(snapshot)).includes('我安排重新检查运行时长。'));
 });
+
+test('HTTP-inserted dispatch forwarding bridges only its exact successful receipt and source user',()=>{
+ const cards=handoff();cards[1]={...cards[1]!,content:JSON.stringify({...receipt(),id:'receipt'})};
+ const snapshot=handoffSnapshot(cards);
+ const dispatch={id:'receipt',sourceMessageId:'user',workerId:'worker',sessionId:'worker-session',taskId:'task',roleId:'ops',roleName:'运维专员',instruction:'重新检查运行时长',action:'create'} as const;
+ snapshot.messages.push({id:'forward',sessionId:'pilot',role:'assistant',text:'内部转发',createdAt:at(2),dispatch});
+ snapshot.ai!.cardsOffset=122;
+ // A clipped earlier turn must not disable folding a later complete turn.
+ snapshot.messages.unshift({id:'earlier',sessionId:'pilot',role:'user',text:'前一轮',createdAt:'2026-11-05T00:00:00Z'});
+ cards.unshift(bound({id:'earlier-card',type:'message',status:'completed',content:'前一轮的回复',at:'2026-11-05T00:01:00Z'},'earlier-root'));
+ const html=handoffHTML(snapshot),main=mainReply(html);
+ assert.ok(!main.includes('我安排重新检查运行时长。')&&!html.includes('内部转发'));
+ assert.ok(main.includes('已安排重新检查运行时长。')&&html.includes('我安排重新检查运行时长。'));
+ const entries=orderedTranscript(snapshot,cards,0).filter(entry=>entry.id!=='earlier');
+ assert.deepEqual([...pilotHandoffInterimIds(entries)],['before']);
+ for(const changed of [{id:'other'},{sourceMessageId:'other'},{workerId:'other'},{taskId:'other'},{action:'followup'}]){
+  const altered=entries.map(entry=>entry.id==='forward'?{...entry,message:{...entry.message!,dispatch:{...dispatch,...changed}}}:entry);
+  assert.equal(pilotHandoffInterimIds(altered).size,0,JSON.stringify(changed));
+ }
+});
