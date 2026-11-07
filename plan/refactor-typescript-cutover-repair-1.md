@@ -65,6 +65,7 @@ The first validated repair batch is submitted as [PR 199](https://github.com/Cle
 | TASK-016 | Restore frozen workflow runs, schedule eligibility and legacy read-only evidence/export APIs through their existing authorities. | No | — |
 | TASK-017 | In runtime/typescript/reasoning.ts, agent.ts and server.ts restore provider-first reasoning metadata and the exact legacy model-version registry, persist model-bound choices and freeze them into Workers/children; verify actual SDK wire options, stale models and explicit empty capability overrides. | ✅ | 2026-11-07 |
 | TASK-019 | Read the current Home's private Magpie plugin configuration and model catalog dynamically; preserve native source choices, default-scoped Magpie overrides, exact legacy selection, disconnect fallback and next-turn key rotation. Validate actual plugin output, SDK requests, credential redaction and signed Lake Dev installation. See the [Magpie evidence](../docs/validation/typescript-candidate/magpie-2026-11-07.md). CLI/non-macOS parity remains outstanding. | ✅ | 2026-11-07 |
+| TASK-020 | Profile slow conversation switching and message admission against current history; index message lookup by exact session before JSON decoding, preserve original rows/order and verify update/delete/restart behavior. Measure concurrent send admission and signed daily Dev latency. See [latency evidence](../docs/validation/typescript-candidate/session-latency-2026-11-07.md). | ✅ | 2026-11-07 |
 
 ### Implementation Phase 4
 
