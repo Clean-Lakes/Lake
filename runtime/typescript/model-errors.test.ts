@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {types} from 'node:util';
 import {redactModelValue,describeTurnFailure} from './model-errors';
 
 const secret='synthetic-private-token';
@@ -12,6 +13,7 @@ test('model redaction retains Error identity, non-enumerable cause/message and S
  const original=new ProviderError('Model request failed.',{cause});
  const clean=redactModelValue({type:'error',error:original},redact).error;
  assert.ok(clean instanceof ProviderError);assert.ok(clean.cause instanceof TypeError);
+ assert.ok(types.isNativeError(clean));
  assert.equal(clean[brand],true);assert.equal(clean.message,'Model request failed.');
  assert.equal((clean.cause as Error).message,'Provider stream broke [REDACTED]');
  assert.ok(!String((clean.cause as Error).stack).includes(secret));
@@ -20,6 +22,14 @@ test('model redaction retains Error identity, non-enumerable cause/message and S
  assert.deepEqual(describeTurnFailure(new Error('Turn execution failed',{cause:clean}),redact),{
   message:'模型调用失败：Provider stream broke [REDACTED]',source:'provider',code:'model_request_failed',phase:'stream',retryable:false,
  });
+});
+
+test('native cancellation exceptions keep readable names and codes after redaction',()=>{
+ const source=new DOMException('stopped '+secret,'AbortError');
+ const clean=redactModelValue(source,redact);
+ assert.ok(clean instanceof DOMException);assert.equal(clean.name,'AbortError');
+ assert.equal(clean.code,source.code);assert.equal(clean.message,'stopped [REDACTED]');
+ assert.equal(String(clean),'AbortError: stopped [REDACTED]');
 });
 
 test('public failure data includes only bounded classification, not headers, stacks or response payloads',()=>{

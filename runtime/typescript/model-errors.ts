@@ -6,14 +6,17 @@ export function redactModelValue<T>(value:T, redact:(text:string)=>string, seen=
   if(!value||typeof value!=='object'||value instanceof Date)return value;
   if(seen.has(value))return seen.get(value) as T;
   if(value instanceof Error){
-    const result=Object.create(Object.getPrototypeOf(value));seen.set(value,result);
+    const result=new Error(redact(value.message));Object.setPrototypeOf(result,Object.getPrototypeOf(value));seen.set(value,result);
     for(const key of Reflect.ownKeys(value)){
       const descriptor=Object.getOwnPropertyDescriptor(value,key)!;
       if('value' in descriptor)Object.defineProperty(result,key,{...descriptor,value:redactModelValue(descriptor.value,redact,seen)});
       else if(key==='stack')Object.defineProperty(result,key,{configurable:true,enumerable:false,writable:true,value:redact(String(value.stack??''))});
     }
-    if(!Object.hasOwn(result,'message'))Object.defineProperty(result,'message',{configurable:true,writable:true,value:redact(value.message)});
-    return result;
+    // DOMException's name/code are prototype accessors backed by private slots.
+    // Snapshot them from the original so a cloned AbortError stays readable.
+    for(const key of ['name','code'] as const)if(!Object.hasOwn(result,key)&&key in value)
+      Object.defineProperty(result,key,{configurable:true,writable:true,value:redactModelValue((value as any)[key],redact,seen)});
+    return result as T;
   }
   const result:any=Array.isArray(value)?[]:{};seen.set(value,result);
   for(const [key,item] of Object.entries(value))Object.defineProperty(result,key,{configurable:true,enumerable:true,writable:true,value:redactModelValue(item,redact,seen)});
