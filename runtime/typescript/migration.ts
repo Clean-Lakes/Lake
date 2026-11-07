@@ -7,6 +7,10 @@ import { HttpError, id, LakeStore, now, type StoredSession } from "./store";
 import { digest } from "./tasks";
 import type {LakeSSH} from './ssh';
 import type {LakeMySQL} from './mysql';
+import type {LakeSecurity} from './security';
+import type {McpBinding} from './extensions';
+import type {LakeServiceResources} from './service-resources';
+import {LakeWorkflowCatalog} from './workflow-catalog';
 
 const tables = ["projects", "resources", "resourceTree", "sessions", "messages", "workspaceTags", "sessionPresentation", "sessionTags", "sessionNavigation", "projectSessionNavigation", "navigationTrash", "aiScopes", "superagentRoleChannels", "superagentChannelReads", "superagentChannelTimeline"];
 const runtimeTables = ["superagent_projects", "superagent_roles", "superagent_role_channels", "superagent_workers", "native_work_goals", "native_operations", "security_project_policies", "security_legacy_session_policies"];
@@ -34,6 +38,57 @@ async function openLegacy(path: string, home?: string) {
   return db;
 }
 const exists = (db: DatabaseSync, table: string) => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table);
+
+// Restore project choices from the original authority, never grants, owners or
+// operations. Incremental receipts keep restarts from reimporting deleted data.
+export async function importLegacyMCP(store: LakeStore, security: LakeSecurity) {
+  const authority = security.authority();
+  if (!authority) return;
+  const path = join(store.data, 'adk/sessions.sqlite'), db = await openLegacy(path, store.home);
+  if (!db) return;
+  try {
+    const before = await fingerprint(path);
+    const meta = exists(db, 'security_schema_meta') ? db.prepare('SELECT * FROM security_schema_meta WHERE id=1').get() : undefined;
+    if (!meta || meta.store_id !== authority.storeID || meta.recovery_epoch !== authority.recoveryEpoch || meta.migration_state !== 'ready')
+      throw new HttpError(409, '原 MCP 安全权威尚未就绪');
+    const writes: { kind: string; key: string; receipt: string; value: McpBinding; sourceHash: string }[] = [];
+    const add = (kind: string, key: string, value: McpBinding, source: unknown) => {
+      const receipt = digest([kind, key]);
+      if (store.get(kind, key) || store.get('legacyMcpChoices', receipt)) return;
+      writes.push({kind, key, receipt, value: {...value, LegacyAuthority: authority}, sourceHash: digest(source)});
+    };
+    if (exists(db, 'security_authority_events')) for (const project of store.list<Project>('projects')) {
+      const row = db.prepare("SELECT result,after_revision FROM security_authority_events WHERE kind='mcp.inheritance' AND project_id=? AND object_id=? AND store_id=? AND recovery_epoch=? ORDER BY after_revision DESC LIMIT 1")
+        .get(project.id, project.id, authority.storeID, authority.recoveryEpoch);
+      if (!row) continue;
+      let value: McpBinding; try { value = JSON.parse(String(row.result)); } catch { throw new HttpError(409, '原 MCP 继承记录无效'); }
+      if (value.ProjectID !== project.id || typeof value.Enabled !== 'boolean' || value.Revision !== Number(row.after_revision) ||
+          !Number.isSafeInteger(value.Revision) || value.Revision < 1 || value.Revision >= 2 ** 50)
+        throw new HttpError(409, '原 MCP 继承记录版本冲突');
+      add('mcpInheritance', project.id, {ProjectID: project.id, Enabled: value.Enabled, Revision: value.Revision}, row);
+    }
+    if (exists(db, 'security_mcp_bindings')) for (const row of db.prepare('SELECT * FROM security_mcp_bindings').all()) {
+      const project = String(row.project_id), server = String(row.server_id);
+      if (!store.get('projects', project)) continue;
+      if (!safeId(server)) throw new HttpError(409, '原 MCP 服务身份无效');
+      const valid = row.store_id === authority.storeID && row.recovery_epoch === authority.recoveryEpoch &&
+        Number.isSafeInteger(Number(row.revision)) && Number(row.revision) >= 1 && Number(row.revision) < 2 ** 50;
+      let names: unknown; try { names = JSON.parse(String(row.tool_names)); } catch { names = undefined; }
+      const catalogValid = Array.isArray(names) && names.length <= 1000 && names.every(name => typeof name === 'string') && new Set(names).size === names.length;
+      // A stale explicit binding must still override inherited access with a deny.
+      add('mcpBindings', digest([project, server]), {ProjectID: project, ServerID: server, Revision: valid ? Number(row.revision) : 1,
+        Enabled: valid && catalogValid && row.enabled === 1, ToolNames: catalogValid ? names as string[] : []}, row);
+    }
+    security.check();
+    if (digest(security.authority()) !== digest(authority) || await fingerprint(path) !== before)
+      throw new HttpError(409, '原 MCP 权威正在变化，本次迁移未提交');
+    store.transaction(() => { for (const entry of writes) {
+      if (store.get(entry.kind, entry.key) || store.get('legacyMcpChoices', entry.receipt)) continue;
+      store.put(entry.kind, entry.key, entry.value);
+      store.put('legacyMcpChoices', entry.receipt, {kind: entry.kind, id: entry.key, sourceHash: entry.sourceHash, authority, importedAt: now()});
+    } });
+  } finally { db.close(); }
+}
 
 // Catalog v1 intentionally retained only metadata. Supplement exact SSH config
 // references without rewriting that batch's immutable receipts or old Go data.
@@ -70,6 +125,50 @@ export async function importLegacyMySQL(store:LakeStore,mysql:LakeMySQL){
   if(await fingerprint(source)!==before)throw new HttpError(409,'旧连接配置正在变化，MySQL 增量导入未提交');
   store.transaction(()=>{for(const item of prepared){store.put('resources',item.resource.id,item.resource);store.put('resourceRevisions',item.resource.id,(store.get<number>('resourceRevisions',item.resource.id)??1)+1);store.put('legacyMySQLConnections',item.resource.id,{resourceId:item.resource.id,sourceHash:item.hash,importedAt:now(),source:'go-resourceConnections'});}});
  }finally{db.close();}
+}
+export async function importLegacyServices(store: LakeStore, services: LakeServiceResources) {
+  const source = join(store.data, 'lake-web.sqlite'), db = await openLegacy(source, store.home); if (!db) return;
+  try {
+    if (!exists(db, 'resourceConnections')) return;
+    const before = await fingerprint(source), prepared: {resource: Resource; sourceHash: string}[] = [];
+    for (const row of db.prepare("SELECT r.id,r.projectId,r.kind,c.config FROM resources r JOIN resourceConnections c ON c.resourceId=r.id WHERE r.kind IN ('database','redis')").all()) {
+      const resource = store.get<Resource>('resources', String(row.id)), legacy = store.get<any>('legacyResources', String(row.id));
+      if (!resource || !legacy || resource.projectId !== row.projectId || resource.kind !== row.kind || resource.settings?.host || store.get('legacyServiceConnections', resource.id)) continue;
+      try {
+        const input = JSON.parse(String(row.config)); if (resource.kind === 'database' && input.driver !== 'postgres') continue;
+        const settings = services.configuration(resource.kind, input);
+        prepared.push({resource: {...resource, settings, status: legacy.originalStatus === 'available' ? 'available' : 'unavailable'}, sourceHash: digest(String(row.config))});
+      } catch { store.put('legacyServiceConnectionErrors', resource.id, {resourceId: resource.id, reason: '原服务连接、TLS 或 Dev 凭据引用需核实'}); }
+    }
+    if (await fingerprint(source) !== before) throw new HttpError(409, '旧服务连接正在变化，本次迁移未提交');
+    store.transaction(() => { for (const entry of prepared) {
+      store.put('resources', entry.resource.id, entry.resource);
+      store.put('resourceRevisions', entry.resource.id, (store.get<number>('resourceRevisions', entry.resource.id) ?? 1) + 1);
+      store.put('legacyServiceConnections', entry.resource.id, {resourceId: entry.resource.id, sourceHash: entry.sourceHash, source: 'go-resourceConnections', importedAt: now()});
+      store.delete('legacyServiceConnectionErrors', entry.resource.id);
+    } });
+  } finally { db.close(); }
+}
+export async function importLegacyWorkflows(store: LakeStore, redact: (value: string) => string) {
+  const source = join(store.data, 'lake-web.sqlite'), db = await openLegacy(source, store.home); if (!db) return;
+  try {
+    if (!exists(db, 'workflows')) return;
+    const before = await fingerprint(source), catalog = new LakeWorkflowCatalog(store, redact), prepared: {value: any; sourceHash: string}[] = [];
+    for (const row of db.prepare('SELECT id,projectId,name,goal,steps,version,createdAt,updatedAt FROM workflows').all()) {
+      const key = String(row.id), projectId = String(row.projectId);
+      if (!store.get('projects', projectId) || store.get('workflowTemplates', key) || store.get('legacyWorkflowTemplates', key)) continue;
+      try {
+        if (!safeId(key) || !Number.isSafeInteger(Number(row.version)) || Number(row.version) < 1) throw new Error();
+        const value = catalog.validate(projectId, {name: row.name, goal: row.goal, steps: JSON.parse(String(row.steps))});
+        prepared.push({value: {id: key, projectId, ...value, version: Number(row.version), createdAt: String(row.createdAt), updatedAt: String(row.updatedAt)}, sourceHash: digest(row)});
+      } catch { store.put('legacyWorkflowErrors', key, {id: key, projectId, reason: '原工作流模板或资源需核实，未启动运行'}); }
+    }
+    if (await fingerprint(source) !== before) throw new HttpError(409, '原工作流模板正在变化，本次导入未提交');
+    store.transaction(() => { for (const entry of prepared) {
+      store.put('workflowTemplates', entry.value.id, entry.value);
+      store.put('legacyWorkflowTemplates', entry.value.id, {id: entry.value.id, sourceHash: entry.sourceHash, importedAt: now()});
+    } });
+  } finally { db.close(); }
 }
 function rows(db: DatabaseSync | undefined, table: string): Record<string, any>[] {
   if (!db || !exists(db, table)) return [];

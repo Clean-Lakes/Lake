@@ -42,3 +42,16 @@ test('task execution mounts Mini Box immediately for host-owned Bash and inspect
  assert.match(html,/MINI_FIRST/);assert.match(html,/原始执行记录/);
  assert.doesNotMatch(renderToStaticMarkup(createElement(WorkerExecutionTree,{snapshot:{...snapshot,ai:{...snapshot.ai!,cards:[{...card('foreign','Bash'),data:{taskId:'other',resource_id:'a'}}],agentRuns:[]}}})),/Mini Box/);
 });
+
+test('a parked specialist shows separate outcomes for its original and verification attempts',async()=>{
+ const {SuperTaskInspector}=await import('../src/SuperTaskInspector');
+ const task={sessionId:'worker',taskId:'goal',state:'blocked',acceptanceState:'not_evaluated'} as any;
+ const goal={id:'goal',items:[{id:'inspect',title:'验证探针',status:'blocked',attempts:[
+  {id:'prior',status:'unknown',createdAt:'2026-11-07T01:00:00Z'},
+  {id:'followup',status:'blocked',createdAt:'2026-11-07T01:01:00Z'}]}]} as any;
+ const html=renderToStaticMarkup(createElement(SuperTaskInspector,{task,goal,plan:true,hideHeading:true}));
+ assert.match(html,/2 次执行/);
+ assert.match(html,/结果待核实/);
+ assert.match(html,/data-state="blocked"/);
+ assert.doesNotMatch(html,/执行中|执行成功/);
+});

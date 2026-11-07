@@ -16,17 +16,34 @@ async function fixture(t, mode = "text", legacyDev = false) {
   await writeFile(join(web, "index.html"), "<html>Lake fixture</html>");
   let calls = 0;
   let failWorkerRequests = false;
+  let modelFailure = mode.startsWith('model-error-');
   let backgroundJoinRequested = false;
   let releaseBackgroundChild;
   const backgroundChildGate = new Promise((resolve) => { releaseBackgroundChild = resolve; });
+  let releaseWatchdogWorker, holdingWatchdogWorker=false;
+  const watchdogGate=new Promise(resolve=>{releaseWatchdogWorker=resolve;});
   const requests = [];
+  const requestAuthorizations = [];
   const target = join(home, "approved.txt");
   const provider = createServer(async (req, res) => {
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     const request = JSON.parse(Buffer.concat(chunks).toString());
     requests.push(request);
+    requestAuthorizations.push(req.headers.authorization);
     calls++;
+    const watchdogReview=mode==="super-watchdog-guide" && request.messages.some(m=>m.role==="system" && JSON.stringify(m.content).includes("independent Watchdog reviewer"));
+    if(mode==="super-watchdog-guide" && isIndependentWorkerRequest(request) && !holdingWatchdogWorker &&
+        request.messages.filter(m=>m.role==="tool").length>=2) {
+      holdingWatchdogWorker=true;
+      await watchdogGate;
+    }
+    if(modelFailure){
+      const error={message:'SYNTHETIC_PROVIDER_REJECTION synthetic-secret-no-real-credential',type:'invalid_request_error',code:'synthetic_rejection'};
+      if(mode==='model-error-http'){res.writeHead(401,{'Content-Type':'application/json'});res.end(JSON.stringify({error}));}
+      else {res.writeHead(200,{'Content-Type':'text/event-stream'});res.end('data: '+JSON.stringify({error})+'\n\ndata: [DONE]\n\n');}
+      return;
+    }
     // Keep the background child's first resource read pending until the parent
     // asks to join it. This proves work_finish cannot accept a still-live child,
     // independently of machine speed or an arbitrary delay.
@@ -35,7 +52,7 @@ async function fixture(t, mode = "text", legacyDev = false) {
         JSON.stringify(request.messages).includes("LAKE_SUBAGENT_FIXTURE:"))
       await backgroundChildGate;
     if (failWorkerRequests && (isIndependentWorkerRequest(request) && !request.tools?.some(tool=>tool.function?.name==='route_work'))) {
-      res.writeHead(401, { "Content-Type": "application/json" });
+      res.writeHead(mode==="super-watchdog-outage"?503:401, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: { message: "synthetic-current-invocation-failure", type: "authentication_error" } }));
       return;
     }
@@ -57,8 +74,12 @@ async function fixture(t, mode = "text", legacyDev = false) {
         }
       : { content: "Lake TS 完成" };
     const nativeMemory = JSON.stringify(request.messages).includes("persistent file-based memory at");
-    if (nativeMemory) {
-      delta = nativeMemoryReply(request);
+    if(watchdogReview){
+      delta={content:JSON.stringify({verdict:"stalled",reason:"同一目录已多次检查，尚未取得新的业务证据。"})};
+      tool=false;
+    } else if (nativeMemory) {
+      delta = mode === 'memory-native-nochange' && JSON.stringify(request.messages).includes('You are now acting as the memory extraction subagent')
+        ? {content: 'Nothing to save.'} : nativeMemoryReply(request);
       tool = !!delta.tool_calls;
     } else if (mode.startsWith("super")) {
       delta = superReply(request, mode, home);
@@ -80,7 +101,8 @@ async function fixture(t, mode = "text", legacyDev = false) {
       return;
     }
     res.writeHead(200, { "Content-Type": "text/event-stream" });
-    const deltas =
+    const echo = mode === 'magpie-secret' ? req.headers.authorization?.replace(/^Bearer /, '') : undefined;
+    const deltas = echo ? [{content: 'prefix ' + echo.slice(0, 13)}, {content: echo.slice(13) + ' suffix'}] :
       mode === "secret"
         ? [{ content: "prefix synthetic-secret-" }, { content: "no-real-credential suffix" }]
         : [delta];
@@ -101,18 +123,24 @@ async function fixture(t, mode = "text", legacyDev = false) {
     await fs.mkdir(join(home, "secrets"), { mode: 0o700 });
     await writeFile(join(home, "secrets/provider-fixture.key"), "synthetic-secret-no-real-credential", { mode: 0o600 });
     await writeFile(join(options.data, "providers.json"), JSON.stringify({
-      version: 1, activeProviderId: "legacy.fixture", activeModelId: "fixture", activeSource: "native",
+      version: 1, activeProviderId: "legacy.fixture", activeModelId: "fixture", activeSource: mode === 'legacy-magpie-source' ? 'magpie' : 'native',
       providers: [{
         id: "legacy.fixture", name: "Existing Dev provider", baseURL: `http://127.0.0.1:${provider.address().port}/v1`,
         protocol: "openai", enabled: true, credentialRef: "provider-fixture.key",
-        models: [{ id: "fixture", name: "fixture", enabled: true }],
+        models: [{ id: "fixture", name: "fixture", enabled: true, ...(mode === 'legacy-rich-model-flags' ? {
+          supportsVideoInput: true, supportsAudioInput: true, supportsPdfInput: true, supportsNativeWebSearch: true,
+          imageInputMode: 'on', imageInputDetected: true, reasoningCapability: {levels: ['low', 'high'], default: 'high', source: 'saved-settings'},
+          ignoredPrivateField: 'must-not-import',
+        } : {}) }],
       }],
     }), { mode: 0o600 });
     await writeFile(join(options.data, "lake-web.sqlite"), "legacy database sentinel", { mode: 0o600 });
+    if (mode === 'legacy-magpie-source') await writeFile(join(home, 'secrets/magpie-agent.json'), JSON.stringify({model: 'legacy-magpie', baseURL: `http://127.0.0.1:${provider.address().port}/v1`, key: 'synthetic-legacy-magpie-key'}), {mode: 0o600});
   }
   let app = await startLakeServer(options);
   t.after(async () => {
     releaseBackgroundChild();
+    releaseWatchdogWorker();
     await app.close();
     await new Promise((resolve) => provider.close(resolve));
   });
@@ -154,7 +182,13 @@ async function fixture(t, mode = "text", legacyDev = false) {
     api,
     wait,
     requests,
+    get holdingWatchdogWorker(){return holdingWatchdogWorker;},
+    releaseWatchdogWorker,
+    requestAuthorizations,
+    gatewayURL: `http://127.0.0.1:${provider.address().port}/v1`,
     failWorkerRequests() { failWorkerRequests = true; },
+    restoreWorkerRequests() { failWorkerRequests = false; },
+    recoverModel() { modelFailure = false; },
     options,
     get app() {
       return app;
@@ -173,11 +207,140 @@ async function fixture(t, mode = "text", legacyDev = false) {
   };
 }
 
+async function writeMagpie(f, updates = {}) {
+  const value = {model: 'magpie-first', baseURL: f.gatewayURL, key: 'synthetic-magpie-private-only', contextWindow: 64000, maxOutput: 2048,
+    supportsImageInput: true, reasoningEfforts: ['low', 'high'], catalog: [
+      {id: 'magpie-first', name: 'Magpie First', contextWindow: 64000, maxOutput: 2048, supportsImageInput: true, reasoningEfforts: ['low', 'high']},
+      {id: 'magpie-second', name: 'Magpie Second', contextWindow: 32000, maxOutput: 4096, reasoningEfforts: ['low', 'high']},
+      {id: 'magpie-third', name: 'Magpie Third', contextWindow: 48000, maxOutput: 4096},
+    ], ...updates};
+  await writeFile(join(f.home, 'secrets/magpie-agent.json'), JSON.stringify(value), {mode: 0o600});
+  return value;
+}
+
+test('Magpie and native selections coexist, synchronize after file edits and restore the native fallback without copying credentials', async t => {
+  const f = await fixture(t), file = join(f.home, 'secrets/magpie-agent.json'), config = await writeMagpie(f);
+  const original = await readFile(file), native = (await f.api('/api/bootstrap')).modelSelection;
+  let state = await f.api('/api/settings/model/state');
+  assert.equal(state.providers.activeProviderId, 'custom'); assert.equal(state.settings.managedBy, undefined);
+  assert.equal(state.settings.magpie.name, 'magpie-first'); assert.equal(state.available.entries.length, 4); assert.equal(f.calls, 0);
+  assert.deepEqual(state.providers.providers.map(provider => provider.id), ['custom'], 'the managed source is not an editable or duplicated native provider');
+  await f.api('/api/settings/model/select', 'POST', {providerId: 'magpie', modelId: 'magpie-second'});
+  state = await f.api('/api/settings/model/state');
+  assert.equal(state.settings.managedBy, 'magpie'); assert.equal(state.modelSelection.displayName, 'Magpie Second');
+  assert.equal(state.available.source, 'magpie'); assert.equal(state.available.activeModelId, 'magpie-second');
+  await f.restart(); assert.equal((await f.api('/api/bootstrap')).modelName, 'magpie-second');
+  await writeMagpie(f, {model: 'magpie-third'});
+  assert.equal((await f.api('/api/settings/model/state')).modelName, 'magpie-third', 'changing the Magpie default invalidates an override scoped to the old default');
+  await f.api('/api/settings/model/select', 'POST', {providerId: native.providerId, modelId: native.modelId});
+  await writeMagpie(f, {model: 'magpie-second'}); await f.restart();
+  assert.equal((await f.api('/api/bootstrap')).modelSelection.providerId, 'custom', 'manual selection survives a new gateway default and restart');
+  await f.api('/api/settings/model/select', 'POST', {providerId: 'magpie', modelId: 'magpie-first'});
+  await writeFile(file, '{}\n'); state = await f.api('/api/settings/model/state');
+  assert.equal(state.settings.magpie, undefined); assert.equal(state.modelSelection.providerId, 'custom');
+  await writeMagpie(f); await f.restart(); assert.equal((await f.api('/api/bootstrap')).modelName, 'magpie-first', 'reconnection retains the selected source');
+  await f.api('/api/settings/model/select', 'POST', {providerId: 'magpie', modelId: 'absent'}, 400);
+  assert.equal((await f.api('/api/bootstrap')).modelName, 'magpie-first');
+  assert.deepEqual(await readFile(file), original, 'only the external plugin owns its configuration');
+  assert.ok(!JSON.stringify(f.app.store.list('providers')).includes(config.key));
+  assert.ok(!JSON.stringify(f.app.store.list('settings')).includes(config.key));
+  await assert.rejects(access(join(f.home, 'secrets/model-magpie.json')));
+  assert.ok(!JSON.stringify(state).includes('synthetic-'));
+});
+
+test('Magpie inference uses its real SDK model, scoped reasoning and output limits and reloads rotated credentials on the next turn', async t => {
+  const f = await fixture(t), config = await writeMagpie(f), base = `/api/sessions/${f.session.id}`;
+  await f.api('/api/settings/model/select', 'POST', {providerId: 'magpie', modelId: 'magpie-first'});
+  const reasoning = await f.api(base + '/ai/reasoning'); assert.deepEqual(reasoning.levels, ['low','high']);
+  await f.api(base + '/ai/reasoning', 'POST', {modelId: reasoning.modelId, effort: 'low'});
+  await f.api(base + '/messages', 'POST', {text: 'Magpie initial inference', ignoreProjectMemory: true}, 202); await f.wait(['completed']);
+  assert.equal(f.requests.at(-1).model, 'magpie-first'); assert.equal(f.requests.at(-1).reasoning_effort, 'low'); assert.equal(f.requests.at(-1).max_tokens, 2048);
+  assert.equal(f.requestAuthorizations.at(-1), 'Bearer ' + config.key);
+  const oldProvider = f.app.store.modelProvider('magpie');
+  const rotated = await writeMagpie(f, {key: 'synthetic-magpie-rotated-private-only'});
+  await assert.rejects(f.app.store.modelCredential(oldProvider), /连接已变化/, 'an old endpoint snapshot cannot obtain the replacement credential');
+  await f.api(base + '/messages', 'POST', {text: 'Magpie after key rotation', ignoreProjectMemory: true}, 202); await f.wait(['completed']);
+  assert.equal(f.requestAuthorizations.at(-1), 'Bearer ' + rotated.key);
+  await writeMagpie(f, {model: 'magpie-second', key: rotated.key});
+  await f.api(base + '/messages', 'POST', {text: 'Magpie after a new default', ignoreProjectMemory: true}, 202); await f.wait(['completed']);
+  assert.equal(f.requests.at(-1).model, 'magpie-second'); assert.equal(f.requests.at(-1).reasoning_effort, undefined, 'reasoning does not cross model identities');
+  assert.equal(f.requests.at(-1).max_tokens, 4096);
+  await writeFile(join(f.home, 'secrets/magpie-agent.json'), '{}\n');
+  await f.api(base + '/messages', 'POST', {text: 'Return to original native configuration', ignoreProjectMemory: true}, 202); await f.wait(['completed']);
+  assert.equal(f.requests.at(-1).model, 'fixture'); assert.equal(f.requestAuthorizations.at(-1), 'Bearer synthetic-secret-no-real-credential');
+  assert.equal((await f.api(base + '/snapshot')).messages.filter(message => message.role === 'user').length, 4);
+});
+
+test('a fresh Magpie source works without a native provider and becomes unavailable after disconnect', async t => {
+  const f = await fixture(t); await f.api('/api/settings/providers/custom', 'DELETE'); await writeMagpie(f);
+  const state = await f.api('/api/settings/model/state'); assert.equal(state.modelConfigured, true); assert.equal(state.settings.managedBy, 'magpie');
+  assert.equal(state.providers.providers.length, 0); assert.equal(state.available.entries.length, 3);
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'Only the Magpie source is configured', ignoreProjectMemory: true}, 202);
+  assert.equal((await f.wait(['completed', 'failed'])).status, 'completed'); assert.equal(f.requests[0].model, 'magpie-first');
+  await writeFile(join(f.home, 'secrets/magpie-agent.json'), '{}\n');
+  assert.equal((await f.api('/api/bootstrap')).modelConfigured, false);
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'Must not reuse the disconnected key'}, 409);
+  assert.equal(f.calls, 1);
+});
+
+test('Magpie never reads an unsafe optional configuration or permits native API writes to the managed provider', async t => {
+  const f = await fixture(t), fs = require('node:fs/promises'), file = join(f.home, 'secrets/magpie-agent.json'), config = await writeMagpie(f);
+  const original = await readFile(file);
+  await f.api('/api/settings/providers/magpie', 'PUT', {apiKey: 'synthetic-replacement'}, 409);
+  await f.api('/api/settings/providers/magpie', 'DELETE', undefined, 409);
+  await assert.rejects(f.app.store.secret('magpie', 'synthetic-replacement'), /插件管理/);
+  assert.deepEqual(await readFile(file), original);
+  await fs.chmod(file, 0o644); assert.equal((await f.api('/api/settings/model')).magpie, undefined); assert.equal((await fs.stat(file)).mode & 0o777, 0o644);
+  await fs.chmod(file, 0o600); assert.ok((await f.api('/api/settings/model')).magpie);
+  const external = join(f.home, 'outside-config.json'); await writeFile(external, original, {mode: 0o600}); await fs.unlink(file); await fs.symlink(external, file);
+  assert.equal((await f.api('/api/settings/model')).magpie, undefined); assert.deepEqual(await readFile(external), original);
+  await fs.unlink(file); await writeFile(file, JSON.stringify({...config, baseURL: 'http://user:password@127.0.0.1:9/v1'}), {mode: 0o600});
+  assert.equal((await f.api('/api/settings/model')).magpie, undefined);
+  await writeFile(file, '{'); assert.equal((await f.api('/api/settings/model')).magpie, undefined);
+  await writeFile(file, 'x'.repeat(2*1024*1024+1)); assert.equal((await f.api('/api/settings/model')).magpie, undefined);
+  assert.equal((await f.api('/api/bootstrap')).modelSelection.providerId, 'custom'); assert.equal(f.calls, 0, 'file synchronization makes no provider requests');
+});
+
+test('Magpie imports an exact legacy selection once and never resurrects it over a new TS choice', async t => {
+  const f = await fixture(t); await writeMagpie(f); await f.api('/api/settings/model', 'DELETE');
+  await writeFile(join(f.options.data, 'magpie-selection.json'), JSON.stringify({defaultModel: 'magpie-first', model: 'magpie-second'}), {mode: 0o600});
+  f.app.store.delete('settings', 'magpieSelectionImported'); await f.restart();
+  assert.equal((await f.api('/api/bootstrap')).modelName, 'magpie-second');
+  await f.api('/api/settings/model/select', 'POST', {providerId: 'magpie', modelId: 'magpie-first'}); await f.restart();
+  assert.equal((await f.api('/api/bootstrap')).modelName, 'magpie-first');
+  assert.equal(JSON.parse(await readFile(join(f.options.data, 'magpie-selection.json'), 'utf8')).model, 'magpie-second');
+});
+
+test('a fresh Dev import preserves an explicit old Magpie source and its exact native fallback', async t => {
+  const f = await fixture(t, 'legacy-magpie-source', true), config = join(f.home, 'secrets/magpie-agent.json');
+  assert.equal((await f.api('/api/bootstrap')).modelSelection.providerId, 'magpie');
+  assert.equal((await f.api('/api/settings/model')).name, 'legacy-magpie');
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'Use the original selected source', ignoreProjectMemory: true}, 202); await f.wait(['completed']);
+  assert.equal(f.requestAuthorizations.at(-1), 'Bearer synthetic-legacy-magpie-key');
+  await writeFile(config, '{}\n'); const fallback = await f.api('/api/bootstrap');
+  assert.equal(fallback.modelSelection.providerId, 'legacy.fixture'); assert.equal(fallback.modelName, 'fixture');
+  await f.restart(); assert.equal((await f.api('/api/bootstrap')).modelSelection.providerId, 'legacy.fixture');
+});
+
+test('Magpie credentials split across model chunks stay out of public views and the native session archive', async t => {
+  const f = await fixture(t, 'magpie-secret'), config = await writeMagpie(f);
+  await f.api('/api/settings/model/select', 'POST', {providerId: 'magpie', modelId: config.model});
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'Synthetic redaction probe', ignoreProjectMemory: true}, 202);
+  const view = await f.wait(['completed']); assert.ok(JSON.stringify(view).includes('[REDACTED]')); assert.ok(!JSON.stringify(view).includes(config.key));
+  assert.ok(!JSON.stringify(await f.api(`/api/sessions/${f.session.id}/snapshot`)).includes(config.key));
+  for (const name of ['agent-sessions.sqlite', 'agent-sessions.sqlite-wal']) {
+    try { assert.ok(!(await readFile(join(f.options.data,name))).includes(Buffer.from(config.key))); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
+});
+
 function nativeMemoryReply(request) {
   const content = message => typeof message.content === "string" ? message.content : (message.content ?? []).map(part => part.text ?? "").join("");
   const messages = request.messages.map(content);
   const extractionStart = messages.findIndex(value => value.includes("You are now acting as the memory extraction subagent"));
   if (extractionStart < 0) return { content: "已收到限定范围的来源，交由原生记忆提取。" };
+  assert.ok(!request.messages.some(message => message.role === 'system' && content(message).includes('Do not call tools in this acknowledgement stage')),
+    'foreground acknowledgement instructions must not suppress detached native extraction');
   const root = messages.join("\n").match(/persistent file-based memory at `([^`]+)`/)?.[1];
   assert.ok(root, "real SDK Memory prompt must provide its actual private directory");
   const calls = request.messages.slice(extractionStart).flatMap(message => message.tool_calls ?? []);
@@ -194,6 +357,371 @@ function nativeMemoryReply(request) {
   }
   return { content: "已按原生文件协议保存知识。" };
 }
+
+test('model settings tests call the actual model and never save a test credential or selection', async t => {
+  const f = await fixture(t), selection = f.app.store.get('settings', 'modelSelection');
+  const provider = f.app.store.list('providers')[0], calls = f.calls;
+  assert.equal((await f.api('/api/settings/model/test', 'POST', {url: provider.baseURL, name: 'fixture'})).ok, true);
+  assert.equal(f.calls, calls + 1);
+  await f.api('/api/settings/model/test', 'POST', {url: 'http://127.0.0.1:1/v1', name: 'fixture', apiKey: 'temporary-test-secret'}, 502);
+  assert.deepEqual(f.app.store.get('settings', 'modelSelection'), selection);
+  assert.equal(f.app.store.list('providers').length, 1);
+  await f.api('/api/settings/model/test', 'GET', undefined, 405);
+});
+
+test('presets persist updates and deletion across restart; unknown routes cannot return unrelated success DTOs', async t => {
+  const f = await fixture(t);
+  const saved = await f.api('/api/ai/presets', 'POST', {title: '证据报告', content: '先给结论，再列证据'});
+  await f.restart();
+  assert.deepEqual(await f.api('/api/ai/presets'), [saved]);
+  const updated = await f.api('/api/ai/presets', 'POST', {...saved, content: '先给结论与时间'});
+  assert.deepEqual(await f.api('/api/ai/presets'), [updated]);
+  await f.api('/api/ai/presets', 'DELETE', {id: saved.id});
+  await f.restart(); assert.deepEqual(await f.api('/api/ai/presets'), []);
+  await f.api('/api/ai/presets', 'POST', {title: '', content: 'invalid'}, 400);
+  for (const [path, method, data] of [
+    [`/api/sessions/${f.session.id}/text-files`, 'POST', {}],
+    [`/api/sessions/${f.session.id}/sre/tasks`, 'GET'],
+    [`/api/sessions/${f.session.id}/unknown`, 'PATCH', {title: 'must not change'}],
+    [`/api/resources/${(await f.api('/api/catalog')).resources[0].id}/unknown`, 'GET'],
+  ]) await f.api(path, method, data, 404);
+  assert.notEqual((await f.api(`/api/sessions/${f.session.id}`)).title, 'must not change');
+  await f.api(`/api/sessions/${f.session.id}/ai/abort`, 'GET', undefined, 405);
+  await f.api('/api/settings/providers/missing/test', 'PUT', {}, 405);
+  assert.equal(f.app.store.list('providers').length, 1);
+});
+
+async function legacyMcpAuthority(f, entries, bindings = []) {
+  const fs = require('node:fs/promises'), {DatabaseSync} = require('node:sqlite');
+  await fs.mkdir(join(f.home, 'security'), {mode: 0o700});
+  await fs.mkdir(join(f.options.data, 'adk'), {mode: 0o700});
+  const authority = {storeID: 'a'.repeat(64), recoveryEpoch: 'b'.repeat(64)};
+  await writeFile(join(f.home, 'security/control.json'), JSON.stringify({formatVersion: 1, ...authority, storeReady: true,
+    gate: 'open', runtimeRoot: await fs.realpath(join(f.options.data, 'adk'))}), {mode: 0o600});
+  const path = join(f.options.data, 'adk/sessions.sqlite'), db = new DatabaseSync(path);
+  db.exec(`CREATE TABLE security_schema_meta(id INTEGER,schema_version INTEGER,minimum_reader_version INTEGER,store_id TEXT,recovery_epoch TEXT,migration_state TEXT);
+    CREATE TABLE security_authority_events(kind TEXT,project_id TEXT,object_id TEXT,store_id TEXT,recovery_epoch TEXT,after_revision INTEGER,result TEXT);
+    CREATE TABLE security_mcp_bindings(project_id TEXT,server_id TEXT,store_id TEXT,recovery_epoch TEXT,revision INTEGER,enabled INTEGER,tool_names TEXT);`);
+  db.prepare('INSERT INTO security_schema_meta VALUES(1,1,3,?,?,?)').run(authority.storeID, authority.recoveryEpoch, 'ready');
+  for (const entry of entries) db.prepare('INSERT INTO security_authority_events VALUES(?,?,?,?,?,?,?)').run('mcp.inheritance', entry.projectId, entry.projectId,
+    authority.storeID, entry.epoch ?? authority.recoveryEpoch, entry.revision, JSON.stringify({ProjectID: entry.projectId, Revision: entry.revision, Enabled: entry.enabled}));
+  for (const entry of bindings) db.prepare('INSERT INTO security_mcp_bindings VALUES(?,?,?,?,?,?,?)').run(entry.projectId, entry.serverId,
+    authority.storeID, entry.epoch ?? authority.recoveryEpoch, entry.revision, entry.enabled ? 1 : 0, JSON.stringify(entry.names ?? []));
+  db.close(); await fs.chmod(path, 0o600); f.options.development = true; f.options.importLegacy = true;
+  return {path, authority};
+}
+
+test('MCP migration restores exact current-epoch choices, explicit denials and latest revisions without contacting services', async t => {
+  const f = await fixture(t), mcp = await mcpFixture(t);
+  const a = await f.api('/api/settings/mcp', 'POST', {name: 'A', transport: 'http', enabled: true, url: mcp.url});
+  const b = await f.api('/api/settings/mcp', 'POST', {name: 'B', transport: 'http', enabled: true, url: mcp.url});
+  const stale = await f.api('/api/projects', 'POST', {name: '旧纪元项目'});
+  await legacyMcpAuthority(f, [
+    {projectId: f.project.id, revision: 1, enabled: false}, {projectId: f.project.id, revision: 2, enabled: true},
+    {projectId: stale.id, revision: 9, enabled: true, epoch: 'c'.repeat(64)},
+  ], [{projectId: f.project.id, serverId: b.id, revision: 4, enabled: false}]);
+  await f.restart();
+  const base = `/api/projects/${f.project.id}/security/mcp-inheritance`;
+  assert.deepEqual((await f.api(base)).servers.map(row => row.id), [a.id]);
+  assert.equal((await f.api(base)).Revision, 2);
+  assert.equal((await f.api(`/api/projects/${stale.id}/security/mcp-inheritance`)).Enabled, false);
+  await f.api(base, 'PUT', {enabled: false, expectedRevision: 2, actionId: 'new-ts-denial'});
+  await f.restart();
+  assert.equal((await f.api(base)).Enabled, false, 'saved TS choices win on restart');
+  assert.equal(f.app.store.list('legacyMcpChoices').length, 2);
+  assert.deepEqual(mcp.requests, [], 'catalog migration never connects to an MCP service');
+});
+
+test('stale explicit MCP bindings cannot fall back to inherited access and migrated choices cannot survive a recovery epoch', async t => {
+  const f = await fixture(t), mcp = await mcpFixture(t), fs = require('node:fs/promises');
+  const a = await f.api('/api/settings/mcp', 'POST', {name: 'A', transport: 'http', enabled: true, url: mcp.url});
+  const source = await legacyMcpAuthority(f, [{projectId: f.project.id, revision: 1, enabled: true}],
+    [{projectId: f.project.id, serverId: a.id, revision: 5, enabled: true, epoch: 'c'.repeat(64), names: ['fixture']}]);
+  await f.restart();
+  const base = `/api/projects/${f.project.id}/security/mcp-inheritance`;
+  assert.deepEqual((await f.api(base)).servers, []);
+  // Simulate an externally completed recovery while the server is stopped.
+  await f.restart(async () => {
+    const controlPath = join(f.home, 'security/control.json'), control = JSON.parse(await readFile(controlPath, 'utf8'));
+    control.recoveryEpoch = 'd'.repeat(64); await writeFile(controlPath, JSON.stringify(control), {mode: 0o600});
+    const db = new (require('node:sqlite').DatabaseSync)(source.path); db.prepare('UPDATE security_schema_meta SET recovery_epoch=?').run(control.recoveryEpoch); db.close();
+  });
+  assert.deepEqual((await f.api(base)).servers, []);
+  assert.equal(f.app.store.list('legacyMcpChoices').length, 2);
+  assert.deepEqual(mcp.requests, []);
+});
+
+test('resource folders preserve nested parents, ordering, archive and restore through restart without deleting resource history', async t => {
+  const f = await fixture(t), base = `/api/projects/${f.project.id}/resource-tree`;
+  const root = (await f.api(base, 'POST', {operation: 'create', name: '南京'})).nodes.find(node => node.name === '南京');
+  const child = (await f.api(base, 'POST', {operation: 'create', parentId: root.id, name: 'K2'})).nodes.find(node => node.name === 'K2');
+  const resource = await f.api(`/api/projects/${f.project.id}/resources`, 'POST', {name: '集群入口', kind: 'local', parentId: child.id, settings: {shell: 'zsh'}});
+  await f.restart();
+  let catalog = await f.api('/api/catalog');
+  assert.equal(catalog.resourceTree.find(node => node.resourceId === resource.id).parentId, child.id);
+  await f.api(base, 'POST', {operation: 'move', nodeId: root.id, parentId: child.id}, 409);
+  const other = await f.api('/api/projects', 'POST', {name: '其他项目'});
+  await f.api(`/api/projects/${other.id}/resources`, 'POST', {kind: 'local', parentId: child.id}, 404);
+  await f.api(base, 'POST', {operation: 'rename', nodeId: resource.id, name: '准确入口'});
+  assert.equal((await f.api(`/api/resources/${resource.id}`)).name, '准确入口');
+  await f.api(base, 'POST', {operation: 'delete', nodeId: root.id});
+  assert.ok(!(await f.api('/api/catalog')).resources.some(entry => entry.id === resource.id));
+  assert.equal(f.app.store.get('resources', resource.id).name, '准确入口', 'soft deletion preserves the canonical resource');
+  await f.api(`/api/resources/${resource.id}`, 'GET', undefined, 404);
+  await f.restart();
+  assert.equal((await f.api('/api/navigation-trash')).items.length, 3);
+  await f.api('/api/navigation-trash', 'POST', {kind: 'folder', id: root.id});
+  catalog = await f.api('/api/catalog');
+  assert.equal(catalog.resourceTree.find(node => node.id === child.id).parentId, root.id);
+  assert.equal(catalog.resourceTree.find(node => node.id === resource.id).parentId, child.id);
+  await f.api('/api/navigation-delete', 'POST', {kind: 'project', id: f.project.id});
+  assert.ok(!(await f.api('/api/catalog')).projects.some(project => project.id === f.project.id));
+  await f.api(`/api/projects/${f.project.id}/sessions`, 'POST', {}, 404);
+  await f.api('/api/navigation-trash', 'POST', {kind: 'project', id: f.project.id});
+  assert.ok((await f.api('/api/catalog')).resources.some(entry => entry.id === resource.id));
+});
+
+test('selected resource and extension references persist with exact spans and reject foreign or stale identities before sending', async t => {
+  const f = await fixture(t), resource = (await f.api('/api/catalog')).resources[0];
+  const message = await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: `检查 ${resource.name}`, resourceIds: [resource.id],
+    mentions: [{kind: 'resource', id: resource.id, label: resource.name, start: 3, end: 3 + resource.name.length}]}, 202);
+  await f.wait(['completed']);
+  const stored = f.app.store.list('messages').find(row => row.role === 'user');
+  assert.deepEqual(stored.mentions, [{kind: 'resource', id: resource.id, label: resource.name, start: 3, end: 3 + resource.name.length}]);
+  assert.deepEqual(f.app.store.get('messageInputs', stored.id).resourceIds, [resource.id]);
+  assert.deepEqual(await f.api(`/api/sessions/${f.session.id}/ai/references`), [resource.id]);
+  assert.ok(f.requests.some(request => JSON.stringify(request.messages).includes(resource.id)));
+  const other = await f.api('/api/projects', 'POST', {name: '外国项目'}), foreign = (await f.api('/api/catalog')).resources.find(row => row.projectId === other.id);
+  const calls = f.calls;
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: '检查资源', resourceIds: [foreign.id]}, 403);
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: '检查资源', mentions: [{kind: 'resource', id: resource.id, label: resource.name, start: 0, end: 2}]}, 400);
+  assert.equal(f.calls, calls);
+  await f.restart(); assert.deepEqual(f.app.store.get('messageInputs', stored.id).resourceIds, [resource.id]);
+  await f.api(`/api/sessions/${f.session.id}/ai/clearReferences`, 'POST', {});
+  assert.deepEqual(await f.api(`/api/sessions/${f.session.id}/ai/references`), []);
+  assert.deepEqual(f.app.store.get('messageInputs', stored.id).resourceIds, [resource.id], 'clearing the access cache never rewrites an admitted task source');
+});
+
+test('referenced-only execution uses the real admitted user selection and cannot borrow another task selection', {skip: process.platform !== 'darwin'}, async t => {
+  const f = await fixture(t, 'super-full-worker'), project = await f.api(`/api/projects/${f.project.id}/superagent`, 'POST', {});
+  const resource = (await f.api('/api/catalog')).resources.find(row => row.projectId === f.project.id && row.kind === 'local');
+  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`, 'POST', {blockUnreferencedAssets: true, silentReadFiles: true});
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`, 'POST', {text: '检查项目文件', resourceIds: [resource.id]}, 202);
+  let state = await until(() => f.api(`/api/projects/${f.project.id}/superagent`), value => value.workers.some(row => row.assignmentState === 'parked'));
+  assert.ok(f.app.store.list('superOperations').some(operation => operation.resourceId === resource.id && operation.status === 'succeeded'));
+  const operations = f.app.store.list('superOperations').length;
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`, 'POST', {text: '再创建一项检查项目文件的工作'}, 202);
+  state = await until(() => f.api(`/api/projects/${f.project.id}/superagent`), value => value.workers.length === 2 && value.workers.every(row => row.assignmentState === 'parked'));
+  assert.equal(f.app.store.list('superOperations').length, operations, 'a sibling task cannot inherit an earlier user selection');
+});
+
+test('editable user queues persist pause, edit and ordering with revision checks and dispatch actual messages once after resume', async t => {
+  const f = await fixture(t), base = `/api/sessions/${f.session.id}/message-queue`, messages = `/api/sessions/${f.session.id}/messages`;
+  await f.api(base, 'POST', {operation: 'pause', revision: 0});
+  const a = await f.api(messages, 'POST', {text: '第一条排队消息', enqueue: true}, 202);
+  const b = await f.api(messages, 'POST', {text: '第二条排队消息', enqueue: true}, 202);
+  let queue = await f.api(base); assert.equal(queue.items.length, 2); assert.equal(queue.paused, true);
+  assert.equal(queue.pushSupported, false);
+  assert.equal((await f.api(`/api/sessions/${f.session.id}/snapshot`)).messageQueue.pushSupported, false);
+  await f.api(base, 'POST', {operation: 'push', revision: queue.revision, id: a.queuedMessageId}, 501);
+  assert.equal((await f.api(base)).items.length, 2, 'an unsupported supplement preserves the exact pending drafts');
+  await f.api(base, 'POST', {operation: 'resume', revision: 0}, 409);
+  queue = await f.api(base, 'POST', {operation: 'edit', revision: queue.revision, id: a.queuedMessageId, text: '已编辑的第一条消息', resourceIds: [], mentions: []});
+  queue = await f.api(base, 'POST', {operation: 'reorder', revision: queue.revision, ids: [b.queuedMessageId, a.queuedMessageId]});
+  await f.restart(); queue = await f.api(base); assert.equal(queue.paused, true); assert.equal(f.calls, 0);
+  assert.deepEqual((await f.api(`/api/sessions/${f.session.id}/snapshot`)).messageQueue.items.map(item => item.id), [b.queuedMessageId, a.queuedMessageId]);
+  await f.api(base, 'POST', {operation: 'resume', revision: queue.revision});
+  await until(() => f.api(base), value => value.items.length === 0); await f.wait(['completed']);
+  assert.deepEqual(f.app.store.messages(f.session.id).filter(message => message.role === 'user').map(message => message.text), ['第二条排队消息', '已编辑的第一条消息']);
+  assert.equal(f.calls, 2); assert.equal(f.app.store.list('messageQueueDispatches').filter(row => row.state === 'accepted').length, 2);
+  await f.restart(); assert.equal(f.calls, 2); assert.deepEqual((await f.api(base)).items, []);
+});
+
+test('stopping a conversation pauses its unsent queue and an explicit resume is required after the stopped root', async t => {
+  const f = await fixture(t, 'write'), base = `/api/sessions/${f.session.id}/message-queue`, messages = `/api/sessions/${f.session.id}/messages`;
+  await f.api(messages, 'POST', {text: '等待明确审批的测试写入'}, 202); await f.wait(['waiting_approval']);
+  await f.api(messages, 'POST', {text: '停止后仍须保留的下一条', enqueue: true}, 202);
+  await f.api(`/api/sessions/${f.session.id}/ai/abort`, 'POST', {});
+  let queue = await f.api(base); assert.equal(queue.paused, true); assert.equal(queue.items.length, 1);
+  assert.equal(f.calls, 1); await assert.rejects(access(f.target));
+  await f.api(base, 'POST', {operation: 'resume', revision: queue.revision});
+  await until(() => f.api(base), value => value.items.length === 0); await f.wait(['completed']);
+  assert.equal(f.calls, 2); await assert.rejects(access(f.target));
+});
+
+test('a fault after message admission never retries an uncertain queue item across restart or resume', async t => {
+  const f = await fixture(t), base = `/api/sessions/${f.session.id}/message-queue`;
+  const original = f.app.superagent.send.bind(f.app.superagent);
+  f.app.superagent.send = async (...args) => { await original(...args); throw new Error('synthetic post-admission process-loss boundary'); };
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: '只应接入一次的排队消息', enqueue: true}, 202);
+  await until(() => f.api(base), value => value.paused && !!value.lastError); await f.wait(['completed']);
+  assert.equal(f.calls, 1); assert.equal(f.app.store.messages(f.session.id).filter(message => message.role === 'user').length, 1);
+  await f.restart(); const queue = await f.api(base);
+  await f.api(base, 'POST', {operation: 'resume', revision: queue.revision}, 409);
+  assert.equal(f.calls, 1); assert.equal(queue.items.length, 1);
+  await f.api(base, 'POST', {operation: 'remove', revision: queue.revision, id: queue.items[0].id});
+  assert.equal(f.app.store.messages(f.session.id).filter(message => message.role === 'user').length, 1, 'removing an unsent copy never deletes admitted history');
+});
+
+test('Plan mode persists and its catalog execution confirms only the exact live frozen original proposal', async t => {
+  const f = await fixture(t, 'super-inspect'), project = await f.api(`/api/projects/${f.project.id}/superagent`, 'POST', {});
+  const base = `/api/sessions/${project.routerSessionId}/ai`;
+  const update = await f.api(base + '/mode', 'POST', {mode: 'plan'}); assert.equal(update.mode, 'plan'); assert.ok(update.cursor > 0);
+  await f.restart(); assert.equal((await f.api(`/api/sessions/${project.routerSessionId}/snapshot`)).conversationMode, 'plan');
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`, 'POST', {text: '先制定准确计划，再读取项目工作区。'}, 202);
+  const state = await until(() => f.api(`/api/projects/${f.project.id}/superagent`), value => value.channels[0]?.needsConfirmation);
+  const worker = state.workers[0], goal = f.app.store.list('superGoals')[0], beforeDeadline = goal.deadlineAt;
+  const plans = (await f.api(base + '/plans')).plans; assert.equal(plans.length, 1); assert.ok(plans[0].content.includes(goal.items[0].title));
+  assert.equal(f.app.store.list('superOperations').length, 0);
+  await f.api(`/api/sessions/${worker.sessionId}/ai/mode`, 'POST', {mode: 'default'}, 409);
+  const other = await f.api('/api/projects', 'POST', {name: '无关项目'}), foreign = await f.api(`/api/projects/${other.id}/sessions`, 'POST', {});
+  await f.api(`/api/sessions/${foreign.id}/ai/executePlan`, 'POST', {planId: plans[0].id}, 404);
+  await f.api(base + '/executePlan', 'POST', {planId: plans[0].id});
+  await until(() => f.api(`/api/projects/${f.project.id}/superagent`), value => value.workers[0]?.assignmentState === 'parked');
+  assert.equal(f.app.store.list('superGoals').length, 1); assert.equal(f.app.store.list('superGoals')[0].deadlineAt, beforeDeadline);
+  assert.equal(f.app.store.list('superOperations').length, 1); assert.equal(f.app.store.list('superPlanConfirmations').length, 1);
+  assert.equal(f.app.store.list('superPlanConfirmations')[0].sourceKind, 'user_action');
+  assert.equal(f.app.store.list('superPlanConfirmations')[0].sourceSessionId, project.routerSessionId);
+  await f.api(base + '/executePlan', 'POST', {planId: plans[0].id}, 409);
+});
+
+test('a saved Plan cannot restart its cancelled input checkpoint or acquire new execution eligibility after process restart', async t => {
+  const f = await fixture(t, 'super-inspect'), project = await f.api(`/api/projects/${f.project.id}/superagent`, 'POST', {}), base = `/api/sessions/${project.routerSessionId}/ai`;
+  await f.api(base + '/mode', 'POST', {mode: 'plan'});
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`, 'POST', {text: '制定计划但暂不批准。'}, 202);
+  await until(() => f.api(`/api/projects/${f.project.id}/superagent`), value => value.channels[0]?.needsConfirmation);
+  const plan = (await f.api(base + '/plans')).plans[0], calls = f.calls;
+  await f.restart(); await f.api(base + '/executePlan', 'POST', {planId: plan.id}, 409);
+  assert.equal(f.calls, calls); assert.equal(f.app.store.list('superOperations').length, 0); assert.equal(f.app.store.list('superPlanConfirmations').length, 0);
+});
+
+test('workflow templates support validated versioned persistence while unsupported execution never reports an empty successful run', async t => {
+  const f = await fixture(t), base = `/api/projects/${f.project.id}/workflows`, resource = (await f.api('/api/catalog')).resources[0];
+  const input = {name: '只读检查手册', goal: '检查项目运行条件', steps: [{id: 'inspect', role: 'host', task: '查看主机负载', resourceIds: [resource.id]}]};
+  const saved = await f.api(base, 'POST', input); assert.equal(saved.version, 1);
+  await f.restart(); assert.deepEqual((await f.api(base)).templates, [saved]);
+  await f.api(base + '/' + saved.id, 'PUT', {...input, version: 0}, 409);
+  const next = await f.api(base + '/' + saved.id, 'PUT', {...input, name: '已修改的手册', version: 1}); assert.equal(next.version, 2);
+  const other = await f.api('/api/projects', 'POST', {name: '其他项目'});
+  await f.api(`/api/projects/${other.id}/workflows/${saved.id}`, 'DELETE', {version: 2}, 404);
+  await f.api(base + '/' + saved.id + '/run', 'POST', {version: 2}, 501);
+  assert.equal(f.calls, 0); assert.deepEqual((await f.api(base)).runs, []);
+  await f.api(base, 'POST', {...input, name: 'synthetic-secret-no-real-credential'}, 400);
+  await f.api(base + '/' + saved.id, 'DELETE', {version: 1}, 409);
+  await f.api(base + '/' + saved.id, 'DELETE', {version: 2}); await f.restart();
+  assert.deepEqual((await f.api(base)).templates, []); assert.equal(f.app.store.get('archivedWorkflowTemplates', saved.id).version, 2);
+});
+
+test('the saved Go workflow catalog migrates without executing it and later edits or deletion are never resurrected', async t => {
+  const f = await fixture(t), resource = (await f.api('/api/catalog')).resources[0], {DatabaseSync} = require('node:sqlite'), fs = require('node:fs/promises');
+  const path = join(f.options.data, 'lake-web.sqlite'), db = new DatabaseSync(path), at = '2026-11-01T00:00:00Z';
+  db.exec('CREATE TABLE workflows(id TEXT,projectId TEXT,name TEXT,goal TEXT,steps TEXT,version INTEGER,createdAt TEXT,updatedAt TEXT);');
+  db.prepare('INSERT INTO workflows VALUES(?,?,?,?,?,?,?,?)').run('saved-go-workflow', f.project.id, '原只读手册', '原目标',
+    JSON.stringify([{id: 'inspect', role: 'host', task: '查看当前负载', resourceIds: [resource.id]}]), 3, at, at);
+  db.close(); await fs.chmod(path, 0o600); const before = await readFile(path);
+  f.options.development = true; f.options.importLegacy = true; await f.restart();
+  const base = `/api/projects/${f.project.id}/workflows`, saved = (await f.api(base)).templates[0];
+  assert.equal(saved.id, 'saved-go-workflow'); assert.equal(saved.version, 3); assert.equal(f.calls, 0);
+  await f.api(base + '/' + saved.id, 'PUT', {...saved, name: '新的 TS 选择', version: 3}); await f.restart();
+  assert.equal((await f.api(base)).templates[0].name, '新的 TS 选择');
+  await f.api(base + '/' + saved.id, 'DELETE', {version: 4}); await f.restart();
+  assert.deepEqual((await f.api(base)).templates, []); assert.deepEqual(await readFile(path), before); assert.equal(f.calls, 0);
+});
+
+test('Gemini and Ollama catalog and actual SDK model tests reach their correct compatibility endpoints', async t => {
+  const f = await fixture(t), requests = [];
+  const wire = createServer(async (req, res) => {
+    let raw = ''; for await (const chunk of req) raw += chunk;
+    requests.push({url: req.url, authorization: req.headers.authorization, key: req.headers['x-api-key'], version: req.headers['anthropic-version'], method: req.method});
+    res.writeHead(200, {'Content-Type': 'application/json'});
+    res.end(JSON.stringify(req.method === 'GET' ? {data: [{id: 'fixture', context_window: 64000, effort: {supported_levels: ['low', 'high'], default_level: 'high'}}]} : {id: 'model-test', object: 'chat.completion', created: 1, model: 'fixture', choices: [{index: 0, message: {role: 'assistant', content: 'OK'}, finish_reason: 'stop'}], usage: {prompt_tokens: 1, completion_tokens: 1, total_tokens: 2}}));
+  });
+  await new Promise(resolve => wire.listen(0, '127.0.0.1', resolve)); t.after(() => new Promise(resolve => {wire.closeAllConnections(); wire.close(resolve);}));
+  const base = `http://127.0.0.1:${wire.address().port}`;
+  for (const [protocol, path, expected] of [['gemini', '/v1beta', '/v1beta/openai'], ['ollama', '', '/v1']]) {
+    const provider = await f.api('/api/settings/providers', 'POST', {name: protocol, baseURL: base + path, protocol, apiKey: protocol === 'gemini' ? 'synthetic-provider-key' : '', enabled: true, models: []});
+    const result = await f.api(`/api/settings/providers/${provider.savedProviderId}/discover`, 'POST', {}); assert.deepEqual(result.models, ['fixture']);
+    assert.deepEqual(result.reasoningCapabilities.fixture, {levels: ['low', 'high'], default: 'high', source: 'provider'}); assert.equal(result.contextLimits.fixture, 64000);
+    assert.equal(requests.at(-1).url, expected + '/models');
+    await f.api('/api/settings/model/test', 'POST', {url: base + path, name: 'fixture', protocol});
+    assert.equal(requests.at(-1).url, expected + '/chat/completions');
+  }
+  const anthropic = await f.api('/api/settings/providers', 'POST', {name: 'Claude catalog', baseURL: base + '/anthropic/v1', protocol: 'claude', apiKey: 'synthetic-anthropic-key', enabled: true, models: []});
+  await f.api(`/api/settings/providers/${anthropic.savedProviderId}/test`, 'POST', {});
+  assert.equal(requests.at(-1).key, 'synthetic-anthropic-key'); assert.equal(requests.at(-1).authorization, undefined); assert.equal(requests.at(-1).version, '2023-06-01');
+  const before = requests.length; await f.api('/api/settings/model/test', 'POST', {url: base, name: 'fixture', protocol: 'unknown'}, 400); assert.equal(requests.length, before);
+});
+
+test('declared reasoning options persist, reach the actual SDK request and cannot cross model identities or frozen Workers', async t => {
+  const f = await fixture(t), catalog = await f.api('/api/settings/providers'), provider = catalog.providers[0], base = `/api/sessions/${f.session.id}/ai/reasoning`;
+  provider.models[0].reasoningCapability = {levels: ['low', 'high', 'not-a-real-level'], default: 'high', source: 'provider'};
+  await f.api(`/api/settings/providers/${provider.id}`, 'PUT', provider);
+  let settings = await f.api(base); assert.deepEqual(settings.levels, ['low', 'high']); assert.equal(settings.effort, '');
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'Default request'}, 202); await f.wait(['completed']);
+  assert.equal(f.requests.at(-1).reasoning_effort, undefined, 'default leaves the provider request unchanged');
+  await f.api(base, 'POST', {modelId: settings.modelId, effort: 'max'}, 400);
+  await f.api(base, 'POST', {modelId: 'stale-model', effort: 'high'}, 409);
+  await f.api(base, 'POST', {modelId: settings.modelId, effort: 'high'}); await f.restart();
+  assert.equal((await f.api(base)).effort, 'high');
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'Explicit high request'}, 202); await f.wait(['completed']);
+  assert.equal(f.requests.at(-1).reasoning_effort, 'high');
+  const frozen = f.app.store.createSession(f.project.id, '冻结任务'); frozen.workspaceRole = 'worker'; f.app.store.put('sessions', frozen.id, frozen);
+  await f.api(`/api/sessions/${frozen.id}/ai/reasoning`, 'POST', {modelId: settings.modelId, effort: 'low'}, 409);
+  const changed = {...provider, id: undefined}; const saved = await f.api('/api/settings/providers', 'POST', changed);
+  await f.api('/api/settings/model/select', 'POST', {providerId: saved.savedProviderId, modelId: provider.models[0].id});
+  settings = await f.api(base); assert.equal(settings.effort, '');
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'New identity default'}, 202); await f.wait(['completed']);
+  assert.equal(f.requests.at(-1).reasoning_effort, undefined);
+});
+
+test('the existing exact DeepSeek reasoning registry reaches the wire and explicit empty metadata disables the fallback', async t => {
+  const f = await fixture(t), provider = (await f.api('/api/settings/providers')).providers[0], base = `/api/sessions/${f.session.id}/ai/reasoning`;
+  provider.models[0].name = 'deepseek-flash'; await f.api(`/api/settings/providers/${provider.id}`, 'PUT', provider);
+  let settings = await f.api(base); assert.deepEqual(settings.levels, ['none', 'low', 'high', 'max']); assert.equal(settings.source, 'model');
+  for (const effort of ['none', 'high']) {
+    await f.api(base, 'POST', {modelId: settings.modelId, effort});
+    await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'Reasoning compatibility check ' + effort}, 202); await f.wait(['completed']);
+    assert.deepEqual(f.requests.at(-1).thinking, {type: effort === 'none' ? 'disabled' : 'enabled'});
+    assert.equal(f.requests.at(-1).reasoning_effort, effort === 'none' ? undefined : effort);
+  }
+  provider.models[0].reasoningCapability = {levels: [], source: 'provider'}; await f.api(`/api/settings/providers/${provider.id}`, 'PUT', provider);
+  assert.deepEqual((await f.api(base)).levels, []);
+  delete provider.models[0].reasoningCapability; provider.models[0].name = 'deepseek-flash-unrelated'; await f.api(`/api/settings/providers/${provider.id}`, 'PUT', provider);
+  assert.deepEqual((await f.api(base)).levels, [], 'similar names cannot inherit another model version capability');
+});
+
+test('extracting a preset makes a real bounded model request and saves a persistent result with its source', async t => {
+  const f = await fixture(t);
+  await f.api(`/api/sessions/${f.session.id}/ai/extractPreset`, 'POST', {}, 400);
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: '排查时先给结论，再列实际证据。'}, 202); await f.wait(['completed']);
+  const calls = f.calls, preset = await f.api(`/api/sessions/${f.session.id}/ai/extractPreset`, 'POST', {});
+  assert.equal(f.calls, calls + 1); assert.ok(preset.content); assert.ok(f.app.store.get('presetSources', preset.id).messageIds.length > 0);
+  assert.match(JSON.stringify(f.requests.at(-1).messages), /Extract a reusable instruction preset/);
+  await f.restart(); assert.ok((await f.api('/api/ai/presets')).some(row => row.id === preset.id && row.content === preset.content));
+});
+
+test('a failed preset extraction cannot save an empty or fabricated success', async t => {
+  const f = await fixture(t, 'model-error-http');
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: '有来源的预设测试'}, 202); await f.wait(['failed']);
+  const failure = await f.api(`/api/sessions/${f.session.id}/ai/extractPreset`, 'POST', {}, 502);
+  assert.ok(!JSON.stringify(failure).includes('synthetic-secret-no-real-credential'));
+  assert.deepEqual(await f.api('/api/ai/presets'), []); assert.equal(f.app.store.list('presetSources').length, 0);
+});
+
+test('raw SDK stream error callbacks never print provider-echoed credentials to stderr while the user still receives the failure', async t => {
+  const original = console.error, logged = [];
+  console.error = (...args) => {logged.push(require('node:util').inspect(args));};
+  try {
+    for (const mode of ['model-error-http', 'model-error-sse']) {
+      const f = await fixture(t, mode);
+      await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: '验证错误日志脱敏'}, 202);
+      const view = await f.wait(['failed']); await f.app.agents.wait(f.session.id);
+      assert.ok(JSON.stringify(view).includes('SYNTHETIC_PROVIDER_REJECTION'));
+      assert.ok(!JSON.stringify(view).includes('synthetic-secret-no-real-credential'));
+    }
+    assert.ok(logged.every(line => !line.includes('synthetic-secret-no-real-credential')), 'console logging is a credential boundary too');
+  } finally {console.error = original;}
+});
 
 function fullAgentReply(request,mode,home){
  const tools=request.tools??[],router=tools.some(tool=>tool.function.name==='route_work');
@@ -245,7 +773,7 @@ function fullAgentReply(request,mode,home){
   if(mode.includes('ssh')){
    if(!names.includes('list_assets'))return call('list_assets',{query:'SSH fixture'});
    const asset=result('list_assets').assets.find(asset=>asset.kind==='ssh');
-   return call('Bash',{asset_ref:asset.asset_ref,configuration_revision:asset.configuration_revision,command,description:'Inspect the remote environment',...(mode.includes('background')?mode.includes('auto')?{timeout:50}:{run_in_background:true}:{})});
+   return call('Bash',{asset_ref:asset.asset_ref,configuration_revision:asset.configuration_pin??asset.configuration_revision,command,description:'Inspect the remote environment',...(mode.includes('background')?mode.includes('auto')?{timeout:50}:{run_in_background:true}:{})});
   }
   return call('Bash',{command,description:'Inspect the actual environment',...(mode.includes('background')?mode.includes('auto')?{timeout:50}:{run_in_background:true}:{})});
  }
@@ -266,6 +794,30 @@ function superReply(request, mode, home) {
     return call("work_finish", { summary, ...(schema?.properties?.outcome ? { outcome: "completed" } : {}) }, id);
   };
   const router = request.tools?.some((tool) => tool.function?.name === "route_work");
+  if (mode === "super-joint-contribution") {
+    if (router) {
+      const start = request.messages.findLastIndex(m => m.role === "user" && content(m).startsWith("[LAKE ADMITTED HUMAN EVENTS"));
+      const event = JSON.parse(content(request.messages[start]).split("\n")[1])[0];
+      const called = request.messages.slice(start + 1).flatMap(m => m.tool_calls ?? []);
+      const roles = ["目录专员", "文件专员"];
+      if (called.length < roles.length) {
+        const name = roles[called.length];
+        return call("manage_specialist", {event_id:event.id, action:"create", part_key:name, role_key:name, name, duties:"检查本项目的工作区", quote:event.text}, "register-" + called.length);
+      }
+      if (called.length === roles.length) {
+        const role_ids = request.messages.slice(start + 1).filter(m => m.role === "tool").map(m => JSON.parse(content(m)).id);
+        return call("route_work", {event_id:event.id, part_key:"joint", action:"create", title:"共同检查工作区", quote:event.text, reason:"共同交付",
+          role_ids, role_instructions:role_ids.map((role_id, i)=>({role_id, instruction: i ? "复核乙目录" : "检查甲目录"}))});
+      }
+      return {content:"已安排两位专员共同检查。"};
+    }
+    const assignment = JSON.parse(content(request.messages.findLast(m=>m.role==="user" && content(m).includes('"assignedDeliverable"'))));
+    const second = assignment.assignedDeliverable === "复核乙目录";
+    if (!names.includes("list_project_files")) return call("list_project_files", {path:second?"乙":"甲"}, "inspect");
+    if (second && !names.includes("ask_user_question")) return call("ask_user_question", {questions:[{id:"review",title:"提交复核结果？"}]});
+    if (!names.includes("work_finish")) return finish(second ? "已复核乙目录。" : "已检查甲目录。", "finish");
+    return {content:"检查已结束。"};
+  }
   if (router) {
     if (mode === "super-chat") return { content: "我是 Lake Pilot，可以回答问题，并为实际工作安排专员。" };
     const raw = [...request.messages].reverse().filter((message) => message.role === "user").map(content).find((text) => text.startsWith("[LAKE ADMITTED HUMAN EVENTS"));
@@ -281,6 +833,12 @@ function superReply(request, mode, home) {
     return { content: "已交给项目检查员处理，执行结果将从原任务回报。" };
   }
   if (mode.startsWith("super-subagent")) return subagentReply(request, mode, home);
+  if (mode === "super-watchdog-guide") {
+    const checks=names.filter(name=>name==="list_project_files").length;
+    if(checks<2) return call("list_project_files",{path:"."},"directory-"+checks);
+    if(!names.includes("work_finish")) return finish("已读取目录，并核对检查结果。","finish");
+    return {content:"已完成。"};
+  }
   if (exposes("work_begin") && !names.includes("work_begin")) return call("work_begin", { title: "检查项目工作区", items: [{ id: "inspect", title: "读取工作区并按实际结果验收" }] });
   const updates = request.messages.flatMap((message) => (message.tool_calls ?? []).filter((call) => call.function.name === "work_update").map((call) => JSON.parse(call.function.arguments)));
   if (exposes("work_update") && !updates.some((update) => update.status === "running")) return call("work_update", { item_id: "inspect", status: "running" }, "start-inspect");
@@ -491,6 +1049,94 @@ async function until(read, predicate, milliseconds = 15000) {
   assert.fail("Timed out waiting for actual host state: " + JSON.stringify(value));
 }
 
+test("two specialist channels share one task, retain their own evidence and receive exactly one final verdict after restart", async t => {
+  const f=await fixture(t,"super-joint-contribution"), api=f.api, path="/api/projects/"+f.project.id+"/superagent";
+  const {routerSessionId:pilot}=await api(path,"POST",{});
+  await api("/api/sessions/"+pilot+"/ai/configure","POST",{maxSteps:30});
+  const workspace=await f.app.store.workspace(f.project.id);
+  for(const name of ["甲","乙"]) await require("node:fs/promises").mkdir(join(workspace,name));
+  await api("/api/sessions/"+pilot+"/messages","POST",{text:"让目录专员和文件专员共同检查工作区，甲检查目录，乙复核，最后统一验收。"},202);
+  const ws=await until(()=>api(path), s=>s.workers.some(w=>w.task.state==="completed")&&s.channels.some(c=>c.needsConfirmation));
+  const [a,b]=["目录专员","文件专员"].map(name=>ws.workers.find(w=>w.roleName===name));
+  assert.equal(a.task.taskId,b.task.taskId);
+  assert.notEqual(a.sessionId,b.sessionId);
+  assert.notEqual(a.task.executionGoalId,b.task.executionGoalId);
+  assert.equal(a.task.collaboration.acceptanceId,undefined);
+  assert.deepEqual(a.task.collaboration.participants.map(p=>[p.roleId,p.contributed]),[[a.roleId,true],[b.roleId,false]]);
+  for(const worker of [a,b]) {
+    const channel=ws.channels.find(c=>c.roleId===worker.roleId);
+    assert.deepEqual((await api("/api/sessions/"+channel.sessionId+"/channel/tasks")).map(w=>[w.task.taskId,w.id]),[[a.task.taskId,worker.id]]);
+    const detail=await api("/api/sessions/"+worker.sessionId+"/snapshot?taskId="+a.task.taskId);
+    assert.equal(detail.superagent.goal.id,worker.task.executionGoalId);
+  }
+  const question=(await api("/api/sessions/"+b.sessionId+"/ai")).question;
+  await api("/api/sessions/"+a.sessionId+"/ai/answer","POST",{id:question.id,answers:{review:["提交"]}},409);
+  await api("/api/sessions/"+b.sessionId+"/ai/answer","POST",{id:question.id,answers:{review:["提交"]}});
+  const completed=await until(()=>api(path), s=>s.workers.every(w=>w.task.collaboration?.acceptanceState==="pass" && w.assignmentState==="parked"));
+  const receipt=completed.workers[0].task.collaboration.acceptanceId;
+  assert.ok(receipt);
+  const goalReceipts=f.app.store.list("superAcceptance").filter(row=>row.scope==="goal");
+  assert.deepEqual(goalReceipts.map(row=>row.id),[receipt]);
+  const ops=f.app.store.list("superOperations").filter(op=>op.tool==="list_project_files");
+  assert.deepEqual(new Set(ops.map(op=>op.goalId)),new Set([a.task.executionGoalId,b.task.executionGoalId]));
+  await f.restart();
+  for(const channel of ws.channels) {
+    const page=await api("/api/sessions/"+channel.sessionId+"/channel");
+    assert.deepEqual(page.entries.filter(e=>e.message?.jointAcceptance).map(e=>[e.taskId,e.message.jointAcceptance.receiptId]),[[a.task.taskId,receipt]]);
+    assert.deepEqual([...new Set(page.entries.flatMap(e=>e.message?.author?[e.message.author.roleId]:[]))],[channel.roleId]);
+  }
+  const pilotHistory=(await api("/api/sessions/"+pilot+"/snapshot")).messages;
+  assert.deepEqual(pilotHistory.filter(m=>m.jointAcceptance).map(m=>m.jointAcceptance.receiptId),[receipt]);
+  assert.deepEqual(new Set(pilotHistory.filter(m=>m.author?.taskId===a.task.taskId).map(m=>m.author.roleId)),new Set([a.roleId,b.roleId]));
+});
+
+test("timed Watchdog reviews a live SDK Worker and queues one guide; an actual result still settles the task", {timeout:20_000}, async t=>{
+  const f=await fixture(t,"super-watchdog-guide"), project="/api/projects/"+f.project.id;
+  const {routerSessionId}=await f.api(project+"/superagent","POST",{});
+  const settings=project+"/watchdog";
+  assert.deepEqual(await f.api(settings),{mode:"observe"});
+  assert.deepEqual(await f.api(settings,"PUT",{mode:"guide"}),{mode:"guide"});
+  await f.api("/api/sessions/"+routerSessionId+"/ai/configure","POST",{maxSteps:24});
+  await f.api("/api/sessions/"+routerSessionId+"/messages","POST",{text:"让项目检查员检查本项目目录，并报告结果。"},202);
+  try {
+    await until(async()=>f.holdingWatchdogWorker,Boolean);
+    const worker=(await f.api(project+"/superagent")).workers[0];
+    const snapshot=()=>f.api("/api/sessions/"+worker.sessionId+"/snapshot?taskId="+worker.task.taskId);
+    let time=Date.now();
+    f.app.superagent.watchdog.clock=()=>time;
+    for(let i=0;i<4;i++){await f.app.superagent.scanWatchdog();time+=60_000;}
+    const current=await snapshot(), findings=current.superagent.watchdog.findings;
+    assert.equal(findings.length,1);
+    assert.equal(findings[0].kind,"stalled");
+    assert.equal(findings[0].action,"guided");
+    assert.equal(current.superagent.task.acceptanceState,"not_evaluated");
+    f.releaseWatchdogWorker();
+    await until(snapshot,s=>s.superagent.watchdog.findings[0]?.action==="recovered" && s.superagent.task.acceptanceState==="pass");
+    await f.restart();
+    assert.equal((await snapshot()).superagent.watchdog.findings.length,1);
+  } finally {f.releaseWatchdogWorker();}
+});
+
+test("Watchdog identifies a real provider 503 and retries the same SDK assignment after the service recovers", {timeout:30_000}, async t=>{
+  const f=await fixture(t,"super-watchdog-outage"), project="/api/projects/"+f.project.id;
+  const {routerSessionId}=await f.api(project+"/superagent","POST",{});
+  await f.api(project+"/watchdog","PUT",{mode:"guide"});
+  f.failWorkerRequests();
+  await f.api("/api/sessions/"+routerSessionId+"/ai/configure","POST",{maxSteps:24});
+  await f.api("/api/sessions/"+routerSessionId+"/messages","POST",{text:"请安排项目检查员检查当前工作区并报告。"},202);
+  const state=await until(()=>f.api(project+"/superagent"),s=>s.workers.some(w=>w.assignmentState==="parked"));
+  const worker=state.workers[0], snapshot=()=>f.api("/api/sessions/"+worker.sessionId+"/snapshot");
+  const failed=await snapshot();
+  assert.ok(failed.superagent.watchdog.findings.some(record=>record.kind==="infrastructure"),"missing structured provider failure: "+JSON.stringify(failed.ai.cards.filter(c=>c.type==="error").map(c=>c.data?.failure)));
+  assert.equal(f.app.store.list("superWatchdogRetry").length,1);
+  f.restoreWorkerRequests();
+  f.app.superagent.watchdogClock=()=>Date.now()+65_000;
+  await f.app.superagent.scanWatchdog();
+  const recovered=await until(snapshot,s=>s.superagent.watchdog.findings.some(record=>record.action==="recovered"));
+  assert.equal(recovered.superagent.task.taskId,worker.task.taskId);
+  assert.equal(recovered.superagent.task.acceptanceState,"pass");
+});
+
 async function startSubagentTask(t, mode, memory = false) {
   const f = await fixture(t, mode);
   const project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
@@ -700,6 +1346,30 @@ test("credentials split across provider chunks are removed before events and can
   assert.ok(JSON.stringify(artifacts).includes("[REDACTED]"));
 });
 
+for(const mode of ['model-error-http','model-error-stream'])test(`Pilot retains redacted provider failure and accepts an explicit retry (${mode})`,async(t)=>{
+  const f=await fixture(t,mode);
+  const project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+  const session=project.routerSessionId;
+  await f.api(`/api/sessions/${session}/messages`,'POST',{text:'仅回复测试文本，不调用工具。'},202);
+  const failed=await until(()=>f.api(`/api/sessions/${session}/ai`),view=>view.status==='failed');
+  const card=failed.cards.filter(card=>card.type==='error').at(-1);
+  assert.match(card.content,/SYNTHETIC_PROVIDER_REJECTION/,JSON.stringify(card));
+  assert.ok(!card.content.includes('Turn execution failed'));
+  assert.equal(card.data.failure.source,'provider');
+  if(mode==='model-error-http')assert.equal(card.data.failure.statusCode,401);
+  const input=f.app.store.list('superInputs').find(item=>item.sessionId===session);
+  assert.equal(input.disposition,'blocked');assert.equal(input.error,card.content);
+  assert.equal(f.app.store.list('superOperations').length,0);
+  const canonical=await f.app.agents.sessions.messages({sessionID:session});
+  assert.ok(!JSON.stringify([failed,canonical,f.app.store.events(session,0)]).includes('synthetic-secret-no-real-credential'));
+  assert.ok(JSON.stringify([failed,canonical]).includes('[REDACTED]'));
+  const calls=f.calls;await f.restart();assert.equal(f.calls,calls,'restart cannot retry a failed model or business operation');
+  f.recoverModel();
+  await f.api(`/api/sessions/${session}/messages`,'POST',{text:'重新测试，仅回复文本。'},202);
+  await until(()=>f.api(`/api/sessions/${session}/ai`),view=>view.status==='completed');
+  assert.equal(f.app.store.list('superInputs').find(item=>item.id===input.id).disposition,'blocked','a fresh request does not replay the blocked input');
+});
+
 test("session tags and icons preserve project scope, revisions, activity and restart state", async (t) => {
   const f = await fixture(t);
   const other = await f.api("/api/projects", "POST", { name: "Other" });
@@ -845,11 +1515,22 @@ test("Dev opt-in never permits the production Home, and daily Dev still requires
   await assert.rejects(startLakeServer({ ...f.options, home: join(userHome, ".lake-dev"), development: false }), /独立 Home/);
 });
 
+test('Dev provider import preserves declared modality and reasoning metadata without probing or importing arbitrary fields', async t => {
+  const f = await fixture(t, 'legacy-rich-model-flags', true), model = (await f.api('/api/settings/providers')).providers[0].models[0];
+  for (const key of ['supportsVideoInput', 'supportsAudioInput', 'supportsPdfInput', 'supportsNativeWebSearch', 'imageInputDetected']) assert.equal(model[key], true);
+  assert.equal(model.imageInputMode, 'on'); assert.deepEqual(model.reasoningCapability, {levels: ['low', 'high'], default: 'high', source: 'saved-settings'});
+  assert.equal(model.ignoredPrivateField, undefined); assert.equal(f.calls, 0);
+});
+
 test("native Pilot creates a stable specialist and independent Worker, with evidence-backed completion and persistent channels", async (t) => {
   const f = await fixture(t, "super-inspect");
   const project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
   const again = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
   assert.equal(project.routerSessionId, again.routerSessionId);
+  const provider = (await f.api('/api/settings/providers')).providers[0]; provider.models[0].reasoningCapability = {levels: ['low', 'high'], source: 'provider'};
+  await f.api(`/api/settings/providers/${provider.id}`, 'PUT', provider);
+  const reasoningPath = `/api/sessions/${project.routerSessionId}/ai/reasoning`, reasoning = await f.api(reasoningPath);
+  await f.api(reasoningPath, 'POST', {modelId: reasoning.modelId, effort: 'high'});
   const workspace = await f.app.store.workspace(f.project.id);
   await writeFile(join(workspace, "actual-evidence.txt"), "real fixture file");
   await f.api(`/api/sessions/${project.routerSessionId}/messages`, "POST", { text: "请创建项目检查员，并检查这个项目工作区的实际文件。" }, 202);
@@ -859,6 +1540,8 @@ test("native Pilot creates a stable specialist and independent Worker, with evid
   const worker = result.workers[0];
   assert.equal(worker.task.acceptanceState, "pass");
   assert.notEqual(worker.sessionId, project.routerSessionId);
+  assert.equal(f.app.store.session(worker.sessionId).options.reasoningEffort, 'high');
+  assert.equal(f.requests.find(isIndependentWorkerRequest).reasoning_effort, 'high', 'the frozen source choice reaches the independent Worker model');
   assert.equal(result.channels.length, 1);
   assert.equal(result.channels[0].roleId, worker.roleId);
   const snapshot = await f.api(`/api/sessions/${worker.sessionId}/snapshot`);
@@ -2170,8 +2853,10 @@ test('native Memory extracts after real user input, publishes scoped files, reca
  await until(async()=>!f.app.agents.foregroundBusy(),Boolean);await f.app.memory.wait();
  let view=await f.api(`/api/memory/scopes/${scope.key}?projectId=${f.project.id}`);
  assert.equal(view.jobs[0].state,'completed',JSON.stringify(view.jobs));assert.equal(view.items.length,1,JSON.stringify(view));
+ assert.equal(view.jobs[0].outcome, 'published'); assert.equal(view.jobs[0].noteCount, 1); assert.equal(view.jobs[0].publishedRevision, 1);
  assert.match(view.items[0].body,/NATIVE_PROJECT_MEMORY/);assert.equal(view.items[0].sources[0].kind,'user');
  assert.ok(f.requests.some(request=>JSON.stringify(request.messages).includes('You are now acting as the memory extraction subagent')));
+ assert.ok(f.requests.some(request => JSON.stringify(request.messages).includes('[LAKE MEMORY CAPTURE]')), 'a natural request to remember uses scoped background capture instead of ordinary project file writes');
  const learnedCalls=f.calls;
  const next=await f.api(`/api/projects/${f.project.id}/sessions`,'POST',{});
  await f.api(`/api/sessions/${next.id}/messages`,'POST',{text:'再做一个新的检查任务。'},202);await until(()=>f.api(`/api/sessions/${next.id}/ai`),view=>view.status==='completed');
@@ -2185,6 +2870,17 @@ test('native Memory extracts after real user input, publishes scoped files, reca
  const fresh=await f.api(`/api/projects/${f.project.id}/sessions`,'POST',{});await f.api(`/api/sessions/${fresh.id}/messages`,'POST',{text:'在新的任务中检查当前状态。'},202);await until(()=>f.api(`/api/sessions/${fresh.id}/ai`),view=>view.status==='completed');
  assert.ok(f.requests.slice(baseline).every(request=>!JSON.stringify(request.messages).includes('NATIVE_PROJECT_MEMORY')),'withdrawn knowledge never entered canonical model history');
  assert.deepEqual(await require('node:fs/promises').readdir(join(f.options.data,'memory/staging')),[]);
+});
+
+test('native Memory records a legitimate no-change extraction without claiming a published note', async t => {
+  const f = await fixture(t, 'memory-native-nochange');
+  const catalog = await f.api(`/api/memory?projectId=${f.project.id}`), scope = catalog.scopes.find(scope => scope.kind === 'project');
+  await f.api(`/api/memory/scopes/${scope.key}/settings?projectId=${f.project.id}`, 'PATCH', {useEnabled: true, extractionEnabled: true, expectedRevision: 0});
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: '这次仅查看临时输出，不包含新的长期偏好。'}, 202);
+  await f.wait(['completed']); await until(async () => !f.app.agents.foregroundBusy(), Boolean); await f.app.memory.wait();
+  const view = await f.api(`/api/memory/scopes/${scope.key}?projectId=${f.project.id}`);
+  assert.equal(view.jobs[0].state, 'completed'); assert.equal(view.jobs[0].outcome, 'unchanged');
+  assert.equal(view.jobs[0].publishedRevision, 0); assert.equal(view.jobs[0].noteCount, 0); assert.deepEqual(view.items, []);
 });
 
 test('native child evidence flows into stable role Memory and a new Worker reads it without sharing execution history',async t=>{
@@ -2392,7 +3088,7 @@ test('native Read projects real image bytes for an image-capable model',async t=
  const {f,project,send}=await fullAgentTask(t,'super-full-pilot-image'),workspace=await f.app.store.workspace(f.project.id);
  await writeFile(join(f.home,'full-workspace.txt'),workspace);await writeFile(join(workspace,'sample.png'),await readFile(join(__dirname,'../../third_party/agent-sdk/public/logo/icons/16x16.png')));
  const selected={provider:f.app.store.list('providers')[0]};await f.api('/api/settings/model','PUT',{url:selected.provider.baseURL,name:'fixture',supportsImageInput:true});await send();
- await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),s=>s.cards.some(c=>c.title==='Read')&&!s.running);
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  assert.equal(f.app.store.list('superOperations').find(o=>o.tool==='Read')?.output.type,'image',JSON.stringify(f.app.store.view(project.routerSessionId).cards));assert.ok(f.requests.some(r=>JSON.stringify(r.messages).includes('data:image/png;base64,')));
 });
 test('continuing a direct Pilot task preserves its goal, deadline and cumulative rounds',{skip:process.platform!=='darwin'},async t=>{

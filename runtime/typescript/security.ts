@@ -54,6 +54,15 @@ export class LakeSecurity {
     } finally { db.close(); }
   }
   readOnly() { try { this.check(); return false; } catch { return true; } }
+  authority() {
+    this.check();
+    const path = join(this.store.home, "security/control.json");
+    if (!existsSync(path)) return;
+    this.ownedFile(path);
+    const control = JSON.parse(readFileSync(path, "utf8"));
+    if (!control.storeReady) return;
+    return { storeID: String(control.storeID), recoveryEpoch: String(control.recoveryEpoch) };
+  }
   resource(projectId: string) {
     this.check();
     if (this.store.get("legacyProjectPolicies", projectId))

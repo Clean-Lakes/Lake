@@ -1,7 +1,9 @@
-import {useState} from 'react';
+import {useState,useRef} from 'react';
 import {createRoot} from 'react-dom/client';
 import type {SuperWorkspace} from '../../../shared/contracts';
 import {PilotWorkspace} from '../../src/PilotWorkspace';
+import {SidebarPilotEntry} from '../../src/SidebarPilotEntry';
+import '../../src/sidebarWorkspace.css';
 import {initializeFocusModality} from '../../src/focusModality';
 import '../../src/styles.css';
 
@@ -23,8 +25,10 @@ const initial:SuperWorkspace={active:true,project:{projectId:'fixture-project',r
 ]};
 function Fixture(){
  const [workspace,setWorkspace]=useState(initial),[selected,setSelected]=useState('session-a');
+ const pilotButton=useRef<HTMLButtonElement|null>(null);
  return <main style={{fontFamily:'var(--font-ui)',color:'var(--foreground)'}}><aside className="sidebar workspace-navigation" style={{width:'min(300px,100vw)',padding:8,height:'auto'}}>
-  <PilotWorkspace workspace={workspace} error="" selectedId={selected} onPilot={()=>setSelected('pilot')} onWorker={()=>{}} onChannel={channel=>setSelected(channel.sessionId)} onDeleted={channel=>setWorkspace(current=>({...current,channels:current.channels?.filter(row=>row.roleId!==channel.roleId)}))}/>
+  <div className="sidebar-brand-row"><SidebarPilotEntry selected={selected==='pilot'} buttonRef={pilotButton} onPilot={()=>setSelected('pilot')}/></div>
+  <PilotWorkspace pilotButton={pilotButton} workspace={workspace} error="" selectedId={selected} onPilot={()=>setSelected('pilot')} onWorker={()=>{}} onChannel={channel=>setSelected(channel.sessionId)} onDeleted={channel=>setWorkspace(current=>({...current,channels:current.channels?.filter(row=>row.roleId!==channel.roleId)}))}/>
  </aside><output aria-label="当前会话">{selected}</output></main>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture/>);

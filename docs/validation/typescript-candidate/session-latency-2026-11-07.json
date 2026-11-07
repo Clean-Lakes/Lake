@@ -1,0 +1,211 @@
+{
+  "date": "2026-11-07",
+  "sourceSHA": "9f3073139d55318a53328ff38cd770252f99d5c5",
+  "cause": {
+    "globalMessageDecodesPerWorkspaceRequest": 29,
+    "initialWorkspaceMS": 936,
+    "initialMessageLookupMS": 924
+  },
+  "isolatedSameCopy": {
+    "globalScan": {
+      "ms": [
+        794.1,
+        779.6,
+        936.9
+      ],
+      "profile": [
+        {
+          "method": "list:messages",
+          "calls": 87,
+          "ms": 2469
+        },
+        {
+          "method": "view",
+          "calls": 87,
+          "ms": 10
+        },
+        {
+          "method": "get:views",
+          "calls": 87,
+          "ms": 10
+        },
+        {
+          "method": "get:superGoals",
+          "calls": 300,
+          "ms": 9
+        },
+        {
+          "method": "list:superWorkers",
+          "calls": 87,
+          "ms": 4
+        },
+        {
+          "method": "session",
+          "calls": 102,
+          "ms": 3
+        },
+        {
+          "method": "get:legacyGoals",
+          "calls": 225,
+          "ms": 2
+        },
+        {
+          "method": "get:superRoles",
+          "calls": 252,
+          "ms": 1
+        }
+      ]
+    },
+    "sessionIndex": {
+      "ms": [
+        7.2,
+        7.3,
+        7.2
+      ],
+      "profile": [
+        {
+          "method": "view",
+          "calls": 87,
+          "ms": 6
+        },
+        {
+          "method": "get:views",
+          "calls": 87,
+          "ms": 5
+        },
+        {
+          "method": "list:superWorkers",
+          "calls": 87,
+          "ms": 4
+        },
+        {
+          "method": "get:superGoals",
+          "calls": 300,
+          "ms": 2
+        },
+        {
+          "method": "get:legacyGoals",
+          "calls": 225,
+          "ms": 2
+        },
+        {
+          "method": "session",
+          "calls": 102,
+          "ms": 2
+        },
+        {
+          "method": "messages",
+          "calls": 87,
+          "ms": 2
+        },
+        {
+          "method": "get:superRoles",
+          "calls": 252,
+          "ms": 1
+        }
+      ]
+    }
+  },
+  "concurrentHttpAdmission": {
+    "globalScan": {
+      "admissionMS": 870.8,
+      "modelHeldUntilAfterAdmission": true,
+      "acceptedUserMessage": true
+    },
+    "sessionIndex": {
+      "admissionMS": 57.6,
+      "modelHeldUntilAfterAdmission": true,
+      "acceptedUserMessage": true
+    }
+  },
+  "installedDev": {
+    "dirty": false,
+    "codesignDeepStrict": true,
+    "backendSHA256": "aedfd8675bf24cc55664a428028fea477477bd327b32ac1d978fb86a5b58346f",
+    "nativePilotAndSpecialistSwitchObserved": true,
+    "timings": [
+      {
+        "route": "/api/bootstrap",
+        "ms": [
+          3.8,
+          8.1,
+          3.2
+        ],
+        "bytes": 548
+      },
+      {
+        "route": "/api/catalog",
+        "ms": [
+          12.7,
+          14.7,
+          7.1
+        ],
+        "bytes": 135725
+      },
+      {
+        "route": "/api/settings/model/state",
+        "ms": [
+          2.7,
+          2.1,
+          2.0
+        ],
+        "bytes": 35524
+      },
+      {
+        "route": "/api/sessions/super_7890dbd12b7f5f6d15f4b49471b085a5/snapshot",
+        "ms": [
+          17.7,
+          14.5,
+          14.3
+        ],
+        "bytes": 300905
+      },
+      {
+        "route": "/api/projects/e43b93db3c937f4fe57d939427cd5604/superagent",
+        "ms": [
+          10.3,
+          9.4,
+          7.9
+        ],
+        "bytes": 25244
+      },
+      {
+        "route": "/api/sessions/sc_ac2baf5edbe405497c56921d7ce0c2ff/channel",
+        "ms": [
+          17.8,
+          15.1,
+          14.9
+        ],
+        "bytes": 8578
+      }
+    ],
+    "preservation": {
+      "records": 2949,
+      "missing": [],
+      "changed": [],
+      "added": [],
+      "magpieUnchanged": true,
+      "indexPresent": true
+    }
+  },
+  "tests": {
+    "runtimeCJS": {
+      "passed": 165,
+      "failed": 0
+    },
+    "source": {
+      "passed": 125,
+      "failed": 0,
+      "skippedExternalClaudeMem": 3
+    },
+    "newSessionLookupTests": 2,
+    "typescriptCheck": true,
+    "frontendChanged": false,
+    "frontendSuiteRerun": false,
+    "frontendRebuilt": true,
+    "namingViolations": 0,
+    "adkBoundary": true
+  },
+  "fullCutoverNotClaimed": true,
+  "merged": false
+}

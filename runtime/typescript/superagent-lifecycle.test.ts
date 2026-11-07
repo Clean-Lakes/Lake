@@ -5,10 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LakeStore } from "./store";
 import { LakeSuperagent } from "./superagent";
+import type { MessageInput } from "./message-input";
 
 // Exercise the actual host and SQLite ledger with a controlled SDK boundary.
 // No model, credential, remote server or existing Dev data is accessed.
-async function fixture(t: { after(fn: () => Promise<void>): void }) {
+async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date.now) {
   const home = await mkdtemp(join(tmpdir(), "lake-dispatch-lifecycle-"));
   const store = await LakeStore.open(home, join(home, "data"));
   const requests: { sessionId: string; input: any }[] = [];
@@ -16,14 +17,14 @@ async function fixture(t: { after(fn: () => Promise<void>): void }) {
   const agents = { redact: (value: string) => value, publish() {}, prepareRedaction: async () => {}, isRunning: () => false,
     send: async (sessionId: string, _text: string, options: any) => { requests.push({ sessionId, input: JSON.parse(options.input) }); },
     steer: async () => { steering++; return true; }, abort: async () => {} };
-  const host = new LakeSuperagent(store, agents as any), internal = host as any;
+  const host = new LakeSuperagent(store, agents as any, undefined, undefined, undefined, undefined, undefined, clock), internal = host as any;
   internal.schedule = () => {};
   t.after(async () => { await host.close(); store.db.close(); await rm(home, { recursive: true, force: true }); });
   const project = store.createProject("isolated lifecycle"), router = host.ensure(project.id).routerSessionId;
   const role = { id: "role-checker", projectId: project.id, roleKey: "checker", name: "项目检查员", duties: "检查当前项目", revision: 1 };
   store.put("superRoles", role.id, role);
-  const admit = async (value: string) => {
-    const message = await host.send(router, value) as { id: string };
+  const admit = async (value: string, selected?: MessageInput) => {
+    const message = await host.send(router, value, undefined, false, selected) as { id: string };
     const event = store.list<any>("superInputs").find((item) => item.messageId === message.id)!;
     internal.batches.set(router, { eventIds: [event.id], complete: new Set([event.id]), input: JSON.stringify({ event: event.id }) });
     return event;
@@ -36,10 +37,10 @@ async function fixture(t: { after(fn: () => Promise<void>): void }) {
   };
   const activate = async () => { await internal.pump(); };
   const worker = (taskId?: string) => store.list<any>("superWorkers").find((item) => !taskId || item.taskId === taskId)!;
-  const read = async (taskId?: string) => {
+  const read = async (taskId?: string, callId?: string) => {
     const current = worker(taskId), profile = host.profile(current.sessionId)!;
     const entry = profile.tools.find((item) => item.metadata.name === "list_project_files")!;
-    return profile.invoke!(entry, {}, { toolCallId: `files-${current.generation}`, abortSignal: new AbortController().signal } as any);
+    return profile.invoke!(entry, {}, { toolCallId: callId ?? `files-${current.generation}`, abortSignal: new AbortController().signal } as any);
   };
   const finish = async (taskId?: string) => {
     const current = worker(taskId), entry = host.profile(current.sessionId)!.tools.find((item) => item.metadata.name === "work_finish")!;
@@ -342,4 +343,392 @@ test('task context enforces actual actor identity and UTF-8/JSON budgets across 
  let cursor='',ids:string[]=[];
  do{const page=context.recall(actor,{limit:6,cursor});assert.ok(Buffer.byteLength(JSON.stringify(page))<=16384);for(const row of page.items){assert.ok(Buffer.byteLength(JSON.stringify(row))<=4096);assert.doesNotMatch(JSON.stringify(row),/�/);ids.push(row.taskRef.id);}cursor=page.nextCursor;}while(cursor);
  assert.equal(new Set(ids).size,12);assert.equal(ids.length,12);assert.equal(JSON.stringify(f.store.list('superGoals')),before);
+});
+
+test("shared handoff binds each contribution and scoped stop to its exact participant", async (t) => {
+  const f = await fixture(t);
+  const second = { ...f.role, id: "role-b", name: "数据库专员" };
+  f.store.put("superRoles", second.id, second);
+  const event = await f.admit("甲乙一起检查系统和数据库");
+  const input = { action: "create", title: "联合检查", role_ids: [f.role.id, second.id], role_instructions: [
+    { role_id: f.role.id, instruction: "只核对主机" }, { role_id: second.id, instruction: "只核对库表" },
+  ] };
+  const receipt = f.route(event, input), retry = f.route(event, input);
+  const [a, b] = receipt.assignments;
+  assert.equal(receipt.workerId, undefined);
+  assert.equal(receipt.taskId, retry.taskId);
+  assert.deepEqual(retry.assignments.map((row: any) => row.executionId), [a.executionId, b.executionId]);
+  assert.notEqual(a.workerId, b.workerId);
+  assert.notEqual(a.sessionId, b.sessionId);
+  assert.deepEqual(f.host.workspace(f.project.id).workers.map(worker => worker.task.taskId), [receipt.taskId, receipt.taskId]);
+  assert.throws(() => f.route(event, { ...input, part_key: "overlap", role_ids: [second.id], role_instructions: [] }), /Overlapping/);
+  f.settleRouter(); await f.activate();
+  assert.deepEqual(f.requests.map(call => call.input.assignedDeliverable).sort(), ["只核对主机", "只核对库表"].sort());
+  assert.ok(f.requests.every(call => call.input.assignment.taskId === receipt.taskId));
+  const readTask = (args: object) => JSON.parse(f.internal.readObject(f.router, { kind: "task", id: receipt.taskId, ...args }).content);
+  assert.equal(readTask({}).participants.length, 2);
+  assert.equal(readTask({ role_id: second.id }).id, b.executionId);
+  const followup = await f.admit("仅给乙补充：核对数据库名称");
+  assert.equal(f.route(followup, { action: "followup", task_id: receipt.taskId, role_id: second.id }).workerId, b.workerId);
+  assert.equal(f.worker(a.executionId).inputEventIds.includes(followup.id), false);
+  f.settleRouter();
+  const stop = await f.admit("只停止乙");
+  assert.throws(() => f.route(stop, { action: "stop", task_id: receipt.taskId }), /participant role_id/);
+  assert.throws(() => f.route(stop, { action: "stop", task_id: receipt.taskId, role_id: "unknown" }), /not assigned/);
+  const stopped = f.route(stop, { action: "stop", task_id: receipt.taskId, role_id: second.id });
+  assert.equal(stopped.workerId, b.workerId);
+  f.settleRouter();
+  await f.host.stopTask(b.executionId); // join the stop already dispatched by the Router
+  assert.equal(f.host.ledger.get(b.executionId).status, "cancelled");
+  assert.equal(f.host.ledger.get(a.executionId).status, "running");
+});
+
+test("Pilot cannot borrow a different specialist's receipt and can add a participant to the original task", async (t) => {
+  const f = await fixture(t), second = { ...f.role, id: "beta" };
+  f.store.put("superRoles", second.id, second);
+  const initial = await f.admit("检查数据库"); const create = { action: "create", title: "检查数据库", role_id: f.role.id };
+  const first = f.route(initial, create);
+  assert.throws(() => f.route(initial, { ...create, role_id: second.id }), /decision conflict/);
+  assert.throws(() => f.route(initial, { ...create, role_id: second.id, part_key: "other" }), /Overlapping/);
+  f.settleRouter();
+  const event = await f.admit("把乙加到刚才的任务，一起核对数据库");
+  for (const action of ["stop", "followup", "context_only"]) {
+    assert.throws(() => f.route(event, { action, task_id: first.taskId, role_id: second.id }), /not found in source specialist/);
+  }
+  assert.throws(() => f.route(event, { action: "assign", task_id: first.taskId, role_ids: [second.id, "unknown"] }));
+  assert.equal(f.store.list("superWorkers").length, 1);
+  const input = { action: "assign", task_id: first.taskId, role_id: second.id };
+  const joined = f.route(event, input);
+  assert.equal(joined.taskId, first.taskId);
+  assert.equal(joined.roleId, second.id);
+  assert.notEqual(joined.sessionId, first.sessionId);
+  assert.equal(f.route(event, input).workerId, joined.workerId);
+  f.settleRouter(); await f.activate();
+  const b = f.requests.find(call => call.sessionId === joined.sessionId)?.input;
+  assert.equal(b.originalRequirement, initial.payload);
+  assert.deepEqual(b.followups, [{ id: event.id, text: event.payload }]);
+  assert.equal(b.assignment.taskId, first.taskId);
+  const channel = f.store.require<any>("superChannels", second.id);
+  await f.host.send(channel.sessionId, "在乙频道继续", first.taskId);
+  const request = f.store.list<any>("superInputs").find(row => row.payload === "在乙频道继续");
+  f.internal.batches.set(f.router, { eventIds: [request.id], complete: new Set([request.id]), input: request.payload });
+  assert.throws(() => f.route(request, { action: "followup", task_id: first.taskId, role_id: f.role.id }), /not found in source specialist/);
+  assert.equal(f.route(request, { action: "followup", task_id: first.taskId }).workerId, joined.workerId);
+});
+
+test("a registered joint result exposes both original roles' evidence and rejects a changed member revision", async (t) => {
+  const f = await fixture(t), secondary = { ...f.role, id: "role-b" };
+  f.store.put("superRoles", secondary.id, secondary);
+  const event = await f.admit("一起检查文件");
+  const joint = f.route(event, { action: "create", title: "检查文件", role_ids: [f.role.id, secondary.id] });
+  f.settleRouter(); await f.activate();
+  for (const assignment of joint.assignments) {
+    await f.read(assignment.executionId);
+    await f.finish(assignment.executionId);
+    f.settleWorker(assignment.executionId);
+  }
+  const review = await f.admit("读取上次联合检查的证据");
+  const handoff = f.route(review, { action: "create", role_id: f.role.id, title: "复核结果", evidence_task_ids: [joint.taskId] });
+  const actor = f.worker(handoff.taskId);
+  const rows = f.internal.referencedEvidence(actor, { task_id: joint.taskId }).items;
+  assert.deepEqual(rows.map((row: any) => row.roleId).sort(), [f.role.id, secondary.id].sort());
+  for (const row of rows) {
+    assert.equal(f.internal.readReferenced(actor, { task_id: joint.taskId, evidence_id: row.evidenceId, reference_id: row.referenceId }).state, "succeeded");
+  }
+  f.host.ledger.save(f.host.ledger.get(joint.assignments[1].executionId));
+  assert.throws(() => f.internal.referencedEvidence(actor, { task_id: joint.taskId }), /source changed/);
+});
+
+for (const recovery of ["followup", "resume"] as const) test(`a failed additional handoff starts only on exact ${recovery} and preserves unknown operations`, async t => {
+  const f = await fixture(t), first = await f.start();
+  const beta = { ...f.role, id: "beta" }; f.store.put("superRoles", beta.id, beta);
+  const addition = await f.admit("请让乙加入核对");
+  const handoff = f.route(addition, { action: "assign", task_id: first.taskId, role_id: beta.id });
+  f.settleRouter("simulated provider error after tool response");
+  const a = f.worker(first.taskId), b = f.worker(handoff.assignments[0].executionId);
+  assert.equal(b.state, "parked");
+  await f.activate();
+  assert.equal(f.requests.filter(call => call.sessionId === b.sessionId).length, 0);
+  let dispatches = 0;
+  const mutation = { path: "example" };
+  await assert.rejects(f.host.ledger.operation(a.taskId, a.generation, a.policyHash, "write-A", "Write", mutation, async () => {
+    dispatches++; throw new Error("unsettled external write");
+  }, x => x, { readOnly: false }), /unsettled external write/);
+  const prior = f.store.list<any>("superOperations").find(op => op.callId === "write-A");
+  assert.equal(prior.status, "unknown");
+
+  const unrelated = await f.admit("仅和甲继续");
+  f.route(unrelated, { action: "followup", task_id: first.taskId, role_id: f.role.id });
+  f.settleRouter(); await f.activate();
+  assert.equal(f.requests.filter(call => call.sessionId === b.sessionId).length, 0);
+
+  if (recovery === "followup") {
+    const retry = await f.admit("继续乙自己的分工");
+    f.route(retry, { action: "followup", task_id: first.taskId, role_id: beta.id });
+    f.settleRouter();
+  } else {
+    await f.host.control(b.sessionId, { command: "resume", goalId: first.taskId, revision: f.host.ledger.get(b.taskId).revision });
+  }
+  await f.activate();
+  const member = f.worker(b.taskId), runs = f.requests.filter(call => call.sessionId === b.sessionId);
+  assert.equal(member.state, "active");
+  assert.equal(runs.length, 1);
+  assert.deepEqual(runs[0].input.followups.map((row: any) => row.text), recovery === "followup" ? ["继续乙自己的分工"] : []);
+  assert.equal(f.store.require<any>("superInputs", addition.id).disposition, "blocked");
+  await f.read(member.taskId);
+  const read = f.host.profile(member.sessionId)!.tools.find(entry => entry.metadata.name === "work_read")!;
+  const snapshot = await read.handler({ goal_id: first.taskId }, { abortSignal: new AbortController().signal } as any) as any;
+  assert.equal(snapshot.goal.id, member.taskId);
+  assert.ok(snapshot.operations.length && snapshot.operations.every((op: any) => op.goalId === member.taskId));
+  await assert.rejects(f.host.ledger.operation(member.taskId, member.generation, member.policyHash, "write-B", "Write",
+    mutation, async () => { dispatches++; return {}; }, x => x, { readOnly: false }), /reconcil|unresolved|mutation/i);
+  assert.equal(dispatches, 1);
+  assert.deepEqual(f.store.require("superOperations", prior.id), prior);
+});
+
+async function watchdogFixture(t: Parameters<typeof fixture>[0], joint = false) {
+  let time = Date.now();
+  const f = await fixture(t, () => time);
+  const second = { ...f.role, id: "watchdog-db", name: "数据库专员" };
+  f.store.put("superRoles", second.id, second);
+  const event = await f.admit("运维检查主机，数据库专员检查慢查询");
+  const handoff = f.route(event, {
+    action: "create", title: "共同排查超时",
+    ...(joint ? {role_ids:[f.role.id,second.id],role_instructions:[
+      {role_id:f.role.id,instruction:"检查主机"}, {role_id:second.id,instruction:"检查慢查询"}]} : {role_id:f.role.id}),
+  });
+  f.settleRouter();
+  await f.activate();
+  const member = f.worker(handoff.assignments[0].executionId);
+  const fail = (statusCode = 503, currentFailure = true) => {
+    const current = f.worker(member.taskId);
+    const view = f.store.view(current.sessionId);
+    view.rootTurnId = currentFailure ? "watchdog-root-" + current.generation : "previous-sdk-root";
+    view.status = "failed";
+    const failure = {message:"provider rejected",source:"provider",statusCode,phase:"response",retryable:statusCode===503};
+    view.cards.push({id:"failure-"+current.generation,at:new Date(time).toISOString(),type:"error",status:"failed",content:"provider rejected",
+      data:{root_turn_id:view.rootTurnId,taskId:current.taskId,failure}});
+    f.store.put("views",current.sessionId,view);
+    // A setup error may not emit an SDK root at all. The view can then still
+    // show the previous turn's failure, matching its old root ID perfectly.
+    f.host.settled(current.sessionId,currentFailure ? {error:failure.message,failure} : {error:"本轮本地准备失败"});
+  };
+  return {...f, member, fail, event, handoff, advance:(ms:number)=>{time+=ms;}};
+}
+
+test("watchdog retries a scoped pre-execution outage once due and marks recovery only after original acceptance", async t => {
+  const f = await watchdogFixture(t), before = f.host.ledger.get(f.member.taskId);
+  f.host.setWatchdogMode(f.project.id,"guide");
+  f.fail();
+  const ticket=f.store.require<any>("superWatchdogRetry",f.member.id);
+  assert.equal(ticket.generation,f.member.generation);
+  assert.deepEqual(ticket.inputIds,[f.event.id]);
+  f.advance(59_999); await f.host.scanWatchdog(); await f.activate();
+  assert.equal(f.requests.length,1);
+  f.advance(1); await f.host.scanWatchdog(); await f.activate(); await f.activate();
+  assert.equal(f.requests.length,2);
+  const retry=f.requests[1]!;
+  assert.equal(retry.sessionId,f.member.sessionId);
+  assert.equal(retry.input.assignment.executionId,f.member.taskId);
+  assert.equal(f.worker().generation,f.member.generation+1);
+  assert.equal(f.host.ledger.get(f.member.taskId).deadlineAt,before.deadlineAt);
+  assert.equal(f.store.list("superAcceptance").length,0);
+  assert.equal(f.host.watchdog.records(f.project.id,f.member.taskId)[0]?.state,"retry_queued");
+  await f.read(f.member.taskId); await f.finish(f.member.taskId); f.settleWorker(f.member.taskId);
+  assert.equal(f.host.watchdog.records(f.project.id,f.member.taskId)[0]?.state,"recovered");
+  assert.equal(f.host.ledger.get(f.member.taskId).acceptanceState,"pass");
+  assert.equal(f.store.list("superGoals").length,1);
+});
+
+test("watchdog retry backoff stops after two actual retries on the original execution", async t => {
+  const f=await watchdogFixture(t);
+  f.host.setWatchdogMode(f.project.id,"guide");
+  f.fail(); f.advance(60_000); await f.activate();
+  f.fail(); f.advance(299_999); await f.activate();
+  assert.equal(f.requests.length,2);
+  f.advance(1); await f.activate();
+  assert.equal(f.store.require<any>("superWatchdogLastRetry",f.member.id).attempt,2);
+  f.fail(); f.advance(600_000); await f.host.scanWatchdog(); await f.activate();
+  assert.equal(f.requests.length,3);
+  assert.equal(f.store.get("superWatchdogRetry",f.member.id),undefined);
+  assert.equal(f.store.list("superAcceptance").length,0);
+});
+
+for (const intervention of ["stop","disable","permission","unresolved sibling","restart"] as const) {
+  test("watchdog pending recovery honors " + intervention, async t => {
+    const f=await watchdogFixture(t,intervention==="unresolved sibling");
+    f.host.setWatchdogMode(f.project.id,"guide");
+    f.fail();
+    assert.ok(f.store.get("superWatchdogRetry",f.member.id));
+    const before=f.requests.length;
+    if (intervention==="stop") await f.host.stopTask(f.member.taskId);
+    if (intervention==="disable") f.host.setWatchdogMode(f.project.id,"off");
+    if (intervention==="permission") {
+      const session=f.store.session(f.router); session.options.denyLocalExecution=true;
+      f.store.put("sessions",session.id,session);
+    }
+    if (intervention==="unresolved sibling") {
+      const b=f.worker(f.handoff.assignments[1].executionId);
+      await assert.rejects(f.host.ledger.operation(b.taskId,b.generation,b.policyHash,"ambiguous-change","Write",
+        {path:"fixture"}, async()=>{throw new Error("delivery unknown");},value=>value,{readOnly:false}));
+    }
+    f.advance(600_000);
+    if (intervention==="restart") {
+      await f.host.close();
+      const restored=new LakeSuperagent(f.store,f.agents as any,undefined,undefined,undefined,undefined,undefined,()=>Date.now()+600_000);
+      try { await (restored as any).pump(); } finally { await restored.close(); }
+    } else {
+      await f.host.scanWatchdog();
+      await f.activate();
+    }
+    assert.equal(f.requests.length,before);
+    assert.equal(f.store.get("superWatchdogLastRetry",f.member.id),undefined);
+    assert.equal(f.store.get("superWatchdogRetry",f.member.id),undefined);
+    assert.equal(f.store.list("superAcceptance").length,0);
+  });
+}
+
+test("watchdog only retries a transient model failure bound to this turn, before any business operations",async t=>{
+  for (const condition of ["previous failure only","authentication","operation","observe"] as const) {
+    const f=await watchdogFixture(t);
+    if(condition!=="observe")f.host.setWatchdogMode(f.project.id,"guide");
+    if(condition==="operation")await f.read(f.member.taskId);
+    f.fail(condition==="authentication"?401:503,condition!=="previous failure only");
+    f.advance(600_000); await f.activate();
+    assert.equal(f.requests.length,1,condition);
+    assert.equal(f.store.get("superWatchdogRetry",f.member.id),undefined,condition);
+  }
+});
+
+test("watchdog reviews repeated identical evidence only on the affected member, preserving a sibling waiting on approval",async t=>{
+  const f=await watchdogFixture(t,true);
+  const a=f.member,b=f.worker(f.handoff.assignments[1].executionId);
+  const pending={id:"original-approval",fingerprint:"fixed",call:{name:"Read"}} as any;
+  const aView=f.store.view(a.sessionId); aView.pending=pending; f.store.put("views",a.sessionId,aView);
+  const reviews:{projectId:string;sessionId:string;assignment:string;observations:string[]}[]=[], guided:string[]=[];
+  Object.assign(f.agents,{
+    isRunning:(sessionId:string)=>[a.sessionId,b.sessionId].includes(sessionId),
+    currentActivity:()=>undefined,hasActiveChildren:()=>false,
+    reviewWatchdog:async(input:typeof reviews[number])=>{reviews.push(input);return {verdict:"stalled",reason:"重复取得相同文件清单。"};},
+    steer:async(sessionId:string)=>{guided.push(sessionId);return true;},
+  });
+  f.host.setWatchdogMode(f.project.id,"guide");
+  await f.read(b.taskId,"first-file-list"); await f.host.scanWatchdog();
+  for(let i=0;i<3;i++){
+    f.advance(60_000); await f.read(b.taskId,"repeated-"+i); await f.host.scanWatchdog();
+  }
+  assert.deepEqual(reviews.map(input=>[input.sessionId,input.assignment]),[[b.sessionId,"检查慢查询"]]);
+  assert.ok(reviews[0]!.observations.some(line=>line.includes("4 次工具调用") && line.includes("1 组")));
+  assert.deepEqual(guided,[b.sessionId]);
+  assert.equal(f.host.watchdog.records(f.project.id,a.taskId).length,0);
+  const record=f.host.watchdog.records(f.project.id,b.taskId)[0]!;
+  assert.deepEqual([record.taskId,record.executionId,record.workerId,record.state],[f.handoff.taskId,b.taskId,b.id,"guided"]);
+  assert.deepEqual(f.store.view(a.sessionId).pending,pending);
+  assert.equal(f.store.list("superAcceptance").length,0);
+});
+
+test("watchdog distinguishes changed foreground Bash output from a replay with a new command handle",async t=>{
+  const f=await watchdogFixture(t);
+  Object.assign(f.agents,{isRunning:()=>true,currentActivity:()=>undefined,hasActiveChildren:()=>false});
+  const sample=()=>f.internal.watchdogSample(f.member.id);
+  const command=(id:string,stdout:string,background:boolean)=>{
+    // Foreground Bash returns flat strings, a settled background command
+    // returns the SDK execution result with stdout/stderr text envelopes.
+    const output={exitCode:0,stdout:background?{text:stdout}:stdout,stderr:background?{text:""}:""};
+    f.store.put("superOperations",id,{id,projectId:f.project.id,sessionId:f.member.sessionId,
+      goalId:f.member.taskId,generation:f.member.generation,tool:"Bash",argsHash:"same-shell-command",
+      resourceId:"local",commandExecutionId:id,status:"succeeded",output,outputHash:id,readOnly:true});
+  };
+  command("one","ready",false); const first=sample().progressKey;
+  command("two","ready",false); assert.equal(sample().progressKey,first);
+  command("three","updated",false); const changed=sample().progressKey;
+  assert.notEqual(first,changed,"a foreground command produced distinct evidence");
+  command("four","updated",true); assert.equal(sample().progressKey,changed,"background Bash produced the same evidence");
+  assert.doesNotMatch(JSON.stringify(sample().evidence),/updated|ready/,"raw output is not sent to the reviewer");
+});
+
+test("one human quote can dispatch disjoint selected resources and execution cannot cross the original assignment", async t=>{
+  const f=await fixture(t), ids=["jd","uk"];
+  for(const id of ids) f.store.put("resources",id,{id,projectId:f.project.id,name:id,kind:"ssh",status:"available"});
+  const selected:MessageInput={resourceIds:ids,mentions:[],references:[]};
+  const event=await f.admit("请分别巡检两台服务器并独立提交",selected);
+  const create={action:"create",role_id:f.role.id};
+  assert.throws(()=>f.route(event,{...create,title:"检查全部"}),/multiple resources/);
+  assert.throws(()=>f.route(event,{...create,title:"检查第三台",resource_ids:["other"]}),/subset/);
+  const jd=f.route(event,{...create,title:"检查京东云",resource_ids:["jd"]});
+  assert.throws(()=>f.route(event,{...create,part_key:"overlapping",title:"检查有交集的两台",resource_ids:ids}),/Overlapping/);
+  const uk=f.route(event,{...create,title:"检查优刻云",part_key:"uk",resource_ids:["uk"]});
+  assert.notEqual(jd.taskId,uk.taskId);
+  f.settleRouter();await f.activate();
+  for(const [receipt,resource,title] of [[jd,"jd","检查京东云"],[uk,"uk","检查优刻云"]] as const){
+    const worker=f.worker(receipt.taskId), input=f.requests.find(req=>req.sessionId===worker.sessionId)!.input;
+    assert.deepEqual(input.assignment.targetResourceIds,[resource]);
+    assert.deepEqual(input.selectedReferences.resourceIds,[resource]);
+    assert.equal(input.assignedDeliverable,title);
+    const profile=f.host.profile(worker.sessionId)!;
+    assert.ok(!profile.allowlist.includes("WebSearch")&&!profile.allowlist.includes("Read")&&!profile.allowlist.includes("list_project_files"));
+    const listing=profile.tools.find(tool=>tool.metadata.name==="list_assets")!;
+    const result=await listing.handler({}, {abortSignal:new AbortController().signal} as any) as any;
+    assert.deepEqual(result.assets.map((asset:any)=>asset.asset_ref),[resource]);
+  }
+  const worker=f.worker(jd.taskId),profile=f.host.profile(worker.sessionId)!;
+  let scopedRequests: string[] | undefined;
+  f.internal.execution={plan:(_p:string,i:{asset_ref?:string},requests:string[])=>{
+    scopedRequests=requests;return {resource:{id:i.asset_ref??"local",kind:i.asset_ref?"ssh":"local"},readOnly:true};
+  }};
+  assert.throws(()=>f.internal.shellPlan(worker,{command:"hostname"}),/分工/);
+  assert.throws(()=>f.internal.shellPlan(worker,{command:"hostname",asset_ref:"uk"}),/分工/);
+  assert.equal(f.internal.shellPlan(worker,{command:"hostname",asset_ref:"jd"}).plan.resource.id,"jd");
+  assert.deepEqual(scopedRequests,[], "a multi-resource quote cannot attest a path on either host");
+  const single=await f.admit("检查 /tmp/example 的目录", {resourceIds:["jd"],mentions:[],references:[]});
+  f.internal.shellPlan({...worker,inputEventIds:[event.id,single.id]},{command:"hostname",asset_ref:"jd"});
+  assert.deepEqual(scopedRequests,[single.payload]);
+  f.internal.ssh={};
+  const inspect=f.internal.hostEntries(worker)[0];
+  assert.throws(()=>inspect.resolvePermissionCapability({asset_ref:"uk"}),/分工/);
+  for(const name of ["Bash","inspect_host","list_db_objects","list_project_files","WebFetch","call_mcp_tool"]){
+    let called=false;
+    const entry={metadata:{name},handler:()=>{called=true;}} as any;
+    await assert.rejects(profile.invoke!(entry,{asset_ref:"uk"},{toolCallId:"child-"+name,abortSignal:new AbortController().signal,
+      lakeSubagent:{id:"child",sessionId:"childSession",toolCallId:name}} as any),/分工/);
+    assert.equal(called,false);
+  }
+  assert.equal(f.store.list("superOperations").length,0);
+});
+
+test("a cross-resource comparison can include both selected endpoints and newly assigned participants inherit its scope", async t=>{
+  const f=await fixture(t);
+  for(const id of ["one","two"])f.store.put("resources",id,{id,projectId:f.project.id,name:id,kind:"ssh",status:"available"});
+  const selected={resourceIds:["one","two"],mentions:[],references:[]};
+  const event=await f.admit("比较两台主机的配置",selected);
+  const result=f.route(event,{action:"create",role_id:f.role.id,resource_ids:["one","two"],title:"比较两端"});
+  f.settleRouter();
+  const add=await f.admit("另一位专员也加入此任务");
+  const member=f.route(add,{action:"assign",task_id:result.taskId,role_key:"second"});
+  assert.deepEqual(f.worker(member.assignments[0].executionId).targetResourceIds,["one","two"]);
+  assert.throws(()=>f.route(add,{action:"followup",task_id:result.taskId,role_id:f.role.id,part_key:"widen",resource_ids:["third"]}),/Only create/);
+  f.settleRouter();await f.activate();
+  for(const req of f.requests) assert.deepEqual(req.input.assignment.targetResourceIds,["one","two"]);
+});
+
+test("sample interval runs within the worker deadline, supports cancellation and never provides business evidence", async t => {
+  const f = await fixture(t), handoff = await f.start(), worker = f.worker(handoff.taskId);
+  const profile=f.host.profile(worker.sessionId)!;
+  const tool=profile.tools.find(entry => entry.metadata.name==="work_wait")!;
+  const wait=(seconds:unknown,signal = new AbortController().signal) =>
+    tool.handler({seconds}, {abortSignal:signal} as any) as Promise<{waitedMs:number}>;
+  assert.equal(tool.metadata.stopTurnOnSuccess,false);
+  const before=f.store.list("superOperations");
+  for(const bad of [0,-1,61,0.1,"2"]) await assert.rejects(wait(bad), /1 至 60/);
+  const cancel=new AbortController();
+  const pending=wait(60,cancel.signal);
+  cancel.abort();
+  await assert.rejects(pending,{name:"AbortError"});
+  const result=await wait(1);
+  assert.ok(result.waitedMs>=990);
+  const goal=f.host.ledger.get(handoff.taskId);
+  goal.deadlineAt=new Date(Date.now()+500).toISOString();
+  f.host.ledger.save(goal);
+  await assert.rejects(wait(2), /原任务期限/);
+  assert.deepEqual(f.store.list("superOperations"),before);
 });

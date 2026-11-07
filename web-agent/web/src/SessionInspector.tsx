@@ -1,4 +1,7 @@
+import {hasCurrentTaskProgress,TaskProgress} from './TaskProgress';
 import {SuperTaskInspector} from './SuperTaskInspector';
+import {TaskWatchdog} from './TaskWatchdog';
+import {OperationReconciliation} from './OperationReconciliation';
 import {WorkerExecutionTree,WorkerExecutionResults} from './WorkerExecutionTree';
 import {InspectorTaskSummary} from './InspectorTaskSummary';
 import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
@@ -11,7 +14,7 @@ import {ObjectReferencesProvider} from './AssistantMarkdown';
 import {SREPlanCard} from './SREPlanCard';
 import {SRERoleMessage} from './SRERoleMessage';
 import {sreRoles,sreStatus,sreStepStatus} from './sreTranscript';
-import {hasInspectorTask,inspectedTask,inspectedAttempt,inspectorAttempts,resolvedInspectorSelection} from './sessionInspectorModel';
+import {inspectorGoal,hasInspectorTask,inspectedTask,inspectedAttempt,inspectorAttempts,resolvedInspectorSelection} from './sessionInspectorModel';
 import {sessionInspectorId,useSessionInspector,type InspectorSelection} from './SessionInspectorContext';
 
 export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=false,taskNavigation}:{snapshot:SessionSnapshot;connected:boolean;onUpdated:()=>void;worker?:SuperWorker;readOnly?:boolean;taskNavigation?:ReactNode}){
@@ -32,7 +35,7 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
  const task=target?inspectedTask(snapshot,target):undefined;
  const plan=task?.plans?.at(-1);
  const canonical=snapshot.superagent?.task;
- const goal=canonical&&canonical.taskId===target?.canonicalGoalId?[snapshot.superagent?.goal,...(snapshot.ai?.workGoals??[])].find(goal=>goal?.id===canonical.taskId&&goal.sessionId===snapshot.session.id&&goal.revision===canonical.revision):undefined;
+ const goal=inspectorGoal(snapshot,target?.canonicalGoalId);
  const hasPlan=!!plan||!!goal?.items?.length;
  const selected=task?inspectedAttempt(task,target?.attemptId):undefined;
  useLayoutEffect(()=>{
@@ -57,6 +60,9 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
     {task&&activeTab==='plan'&&<InspectorTaskSummary task={task} title={snapshot.session.title} runs={snapshot.ai?.agentRuns}/>}
     <div role="tabpanel" id="inspector-plan-panel" aria-labelledby="inspector-plan-tab" hidden={activeTab!=='plan'}>
      {task&&plan?<SREPlanCard task={task} resources={snapshot.resources} agentRuns={snapshot.ai?.agentRuns} enabled={connected&&!readOnly&&snapshot.sre?.enabled===true} onUpdated={onUpdated} inspector onInspectStep={stepId=>{const attempt=inspectorAttempts(task).find(item=>item.step.id===stepId)?.attempt;if(attempt)choose('execution',attempt.id,true);}}/>:goal&&canonical?<><WorkerExecutionResults snapshot={snapshot}/><SuperTaskInspector task={canonical} goal={goal} worker={worker} plan hideHeading/></>:<p className="inspector-empty">计划生成后会显示在这里。</p>}
+     {activeTab==='plan'&&goal&&canonical&&!readOnly&&<OperationReconciliation
+       key={JSON.stringify([snapshot.session.projectId,snapshot.session.id,goal.id])}
+       snapshot={snapshot} executionId={goal.id} connected={connected} onUpdated={onUpdated}/>}
     </div>
     <div role="tabpanel" id="inspector-execution-panel" aria-labelledby="inspector-execution-tab" hidden={activeTab!=='execution'}>
      {task&&<>
@@ -68,7 +74,11 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
        {currentEntry?<SRERoleMessage key={`${task.id}:${currentEntry.attemptId}`} detailsOnly connected={connected&&!readOnly} task={task} entry={currentEntry} snapshot={snapshot} onUpdated={onUpdated} renderApproval={()=>null}/>:<p className="inspector-empty">本步骤尚无执行记录。</p>}
       </details>
      </>}
-     {goal&&canonical&&<><WorkerExecutionTree snapshot={snapshot} worker={worker} connected={connected&&!readOnly} onUpdated={onUpdated}/><SuperTaskInspector task={canonical} goal={goal} worker={worker} controlsOnly connected={connected&&!readOnly} onUpdated={onUpdated}/></>}
+     {goal&&canonical&&<><TaskProgress cards={snapshot.ai?.cards??[]} executionId={goal.id} historical={!hasCurrentTaskProgress(canonical.state)}/><WorkerExecutionTree snapshot={snapshot} worker={worker} connected={connected&&!readOnly} onUpdated={onUpdated}/><SuperTaskInspector task={canonical} goal={goal} worker={worker} controlsOnly connected={connected&&!readOnly} onUpdated={onUpdated}/></>}
+     {goal && canonical && snapshot.superagent?.watchdog && <TaskWatchdog
+       key={JSON.stringify([snapshot.session.projectId, snapshot.session.id, goal.id])}
+       projectId={snapshot.session.projectId} view={snapshot.superagent.watchdog} connected={connected && !readOnly}
+       onUpdated={onUpdated}/>}
      {!task&&!goal&&<h3 className="inspector-execution-title"><Glyph name="document" size={17}/>当前执行</h3>}
      {!hasInspectorTask(snapshot,target)&&!target.turnId&&(!target.followLatest||!(snapshot.messages?.length??0)&&!snapshot.ai?.cards.length)&&<p className="inspector-empty">本轮尚无执行记录。</p>}
      {!goal&&<div ref={inspector.setHost} className="inspector-turn-host"/>}

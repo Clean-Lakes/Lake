@@ -1,5 +1,6 @@
 import { LakeStore, HttpError } from "./store";
 import { digest, type Goal, type Operation } from "./tasks";
+import {hasAcceptedExecution, jointTask} from "./joint-tasks";
 import type { Message } from "../../web-agent/shared/contracts";
 
 export type TaskContextActor = {
@@ -10,6 +11,7 @@ export type TaskContextActor = {
 };
 export type TaskContextEntry = {
   taskRef: { id: string; revision: number; hash: string };
+  sharedTaskId?: string;
   title: string;
   observedAt: string;
   state: string;
@@ -95,10 +97,10 @@ export class TaskContext {
         (a, b) =>
           b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
       );
-    if (
-      input.task_id &&
-      !rows.some((worker) => worker.taskId === input.task_id)
-    )
+    const shared = input.task_id ? jointTask(this.store, input.task_id) : undefined;
+    const executionId = shared ? rows.find(worker => shared.projectId === actor.projectId &&
+      shared.memberIds.includes(worker.taskId))?.taskId : input.task_id;
+    if (input.task_id && !rows.some(worker => worker.taskId === executionId))
       throw new HttpError(404, "Task context not found in this specialist");
     const operations = this.store
       .list<Operation>("superOperations")
@@ -109,7 +111,7 @@ export class TaskContext {
       ),
       reports = this.store.messages(project.routerSessionId);
     const matches = rows
-      .filter((worker) => !input.task_id || worker.taskId === input.task_id)
+      .filter((worker) => !input.task_id || worker.taskId === executionId)
       .map((worker) => this.entry(worker, operations, reports));
     const query = input.query?.toLocaleLowerCase();
     const selected = matches.filter(
@@ -166,7 +168,8 @@ export class TaskContext {
     const allReports = reports.filter(
       (message) =>
         message.author?.workerId === worker.id &&
-        message.author.taskId === goal.id,
+        message.author.roleId === worker.roleId && message.author.sessionId === worker.sessionId &&
+        message.author.taskId === (goal.sharedTaskId ?? goal.id),
     );
     const resources = [
       ...new Set(
@@ -190,10 +193,11 @@ export class TaskContext {
     });
     const row: TaskContextEntry = {
       taskRef: { id: goal.id, revision: goal.revision, hash: digest(goal) },
+      sharedTaskId: goal.sharedTaskId,
       title: clip(this.scrub(goal.title), 256),
       observedAt: goal.updatedAt,
       state: goal.status,
-      acceptanceState: goal.acceptanceState,
+      acceptanceState: hasAcceptedExecution(this.store, goal) ? "pass" : goal.acceptanceState,
       unresolvedOperations: operations.filter((op) =>
         ["unknown", "dispatched"].includes(op.status),
       ).length,

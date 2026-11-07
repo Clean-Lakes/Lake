@@ -52,6 +52,17 @@ export async function importDevModelSettings(store: LakeStore) {
         contextWindow: Number.isSafeInteger(model.contextWindow) && model.contextWindow > 0 ? model.contextWindow : undefined,
         supportsImageInput: model.supportsImageInput === true,
         supportsImageOutput: model.supportsImageOutput === true,
+        supportsNativeWebSearch: model.supportsNativeWebSearch === true,
+        supportsVideoInput: model.supportsVideoInput === true,
+        supportsAudioInput: model.supportsAudioInput === true,
+        supportsPdfInput: model.supportsPdfInput === true,
+        ...( ['auto', 'on', 'off'].includes(model.imageInputMode) ? {imageInputMode: model.imageInputMode} : {}),
+        ...(typeof model.imageInputDetected === 'boolean' ? {imageInputDetected: model.imageInputDetected} : {}),
+        ...(model.reasoningCapability && Array.isArray(model.reasoningCapability.levels) && model.reasoningCapability.levels.length <= 16 &&
+          model.reasoningCapability.levels.every((value: unknown) => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,32}$/.test(value)) &&
+          (model.reasoningCapability.default === undefined || model.reasoningCapability.levels.includes(model.reasoningCapability.default)) ?
+          {reasoningCapability: {levels: [...model.reasoningCapability.levels], default: model.reasoningCapability.default,
+            source: typeof model.reasoningCapability.source === 'string' ? model.reasoningCapability.source.slice(0, 80) : undefined}} : {}),
       };
     });
     const provider: ModelProvider = {
@@ -69,8 +80,13 @@ export async function importDevModelSettings(store: LakeStore) {
       if (ref) store.put("providerCredentialRefs", provider.id, ref);
     }
     const selected = providers.find(({ provider }) => provider.id === raw.activeProviderId && provider.enabled)?.provider;
-    if (selected?.models.some((model) => model.id === raw.activeModelId && model.enabled))
-      store.put("settings", "modelSelection", { providerId: selected.id, modelId: raw.activeModelId });
+    if (selected?.models.some((model) => model.id === raw.activeModelId && model.enabled)) {
+      const native = {providerId: selected.id, modelId: raw.activeModelId};
+      store.put('settings', 'nativeModelSelection', native);
+      // The old reader preferred connected Magpie unless the user explicitly
+      // chose native. Preserve that source choice and its original fallback.
+      store.put('settings', 'modelSelection', raw.activeSource === 'native' ? native : {providerId: 'magpie', modelId: ''});
+    } else if (raw.activeSource === 'magpie') store.put('settings', 'modelSelection', {providerId: 'magpie', modelId: ''});
     store.put("settings", "devProviderImport", { status: "imported", providers: providers.length, at: now() });
   });
 }

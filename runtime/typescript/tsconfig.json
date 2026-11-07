@@ -13,6 +13,7 @@
       "../../third_party/agent-sdk/node_modules/@types"
     ],
     "paths": {
+      "ai": ["../../third_party/agent-sdk/apps/zcode-cli/packages/adapters/node_modules/ai/dist/index.d.ts"],
       "pg": [
         "../../web-agent/node_modules/@types/pg/index.d.ts"
       ],

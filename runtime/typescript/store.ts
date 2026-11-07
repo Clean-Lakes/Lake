@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { chmod, lstat, mkdir, open, readFile, realpath, rename, unlink } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
+import type {LakeMagpie} from './magpie';
 import type { Position, Presentation } from "./navigation";
 import type {
   AIView,
@@ -44,6 +45,38 @@ export async function privateDirectory(path: string) {
 }
 
 export class LakeStore {
+  magpie?: LakeMagpie;
+  async refreshModels() { await this.magpie?.refresh(); }
+  modelProvider(providerId: string) { return providerId === 'magpie' ? this.magpie?.provider() : this.get<ModelProvider>('providers', providerId); }
+  modelProviders() { const native = this.list<ModelProvider>('providers').filter(value => value.id !== 'magpie'); const managed = this.magpie?.provider(); return managed ? [...native, managed] : native; }
+  modelSelection() {
+    type Selection = {providerId: string; modelId: string};
+    const valid = (choice: Selection | undefined) => {
+      if (!choice || choice.providerId === 'magpie') return false;
+      const provider = this.modelProvider(choice.providerId);
+      return provider?.enabled && provider.models.some(model => model.id === choice.modelId && model.enabled);
+    };
+    const selected = this.get<Selection>('settings', 'modelSelection');
+    if (valid(selected)) return selected;
+    const managed = this.magpie?.selectedId();
+    if (managed) return {providerId: 'magpie', modelId: managed};
+    const native = this.get<Selection>('settings', 'nativeModelSelection');
+    return valid(native) ? native : undefined;
+  }
+  selectModel(providerId: string, modelId: string) {
+    const provider = this.modelProvider(providerId);
+    if (!provider?.enabled || !provider.models.some(model => model.id === modelId && model.enabled)) throw new HttpError(400, '模型不可用');
+    this.transaction(() => {
+      const previous = this.modelSelection();
+      if (providerId === 'magpie') {
+        if (previous && previous.providerId !== 'magpie') this.put('settings', 'nativeModelSelection', previous);
+        this.magpie!.select(modelId);
+      } else this.put('settings', 'nativeModelSelection', {providerId, modelId});
+      this.put('settings', 'modelSelection', {providerId, modelId});
+    });
+  }
+  async modelCredential(provider: ModelProvider) { return provider.id === 'magpie' ? this.magpie?.credential(provider) : this.secret(provider.id); }
+  modelConnectionVersion(provider: ModelProvider) { return provider.id === 'magpie' ? this.magpie?.version(provider) : undefined; }
   private constructor(
     public home: string,
     public data: string,
@@ -64,6 +97,9 @@ export class LakeStore {
     db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS records(kind TEXT NOT NULL,id TEXT NOT NULL,value TEXT NOT NULL,PRIMARY KEY(kind,id));
       CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,session TEXT NOT NULL,value TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS messages_by_session ON records(json_extract(value,'$.sessionId')) WHERE kind='messages';
+      CREATE INDEX IF NOT EXISTS unsettled_ops_by_goal ON records(json_extract(value,'$.goalId'))
+        WHERE kind='superOperations' AND json_extract(value,'$.status') IN ('unknown','dispatched');
       CREATE INDEX IF NOT EXISTS session_events ON events(session,seq);`);
     const store = new LakeStore(home, data, db);
     // A restart never resumes a model/tool request from a UI projection.
@@ -98,6 +134,11 @@ export class LakeStore {
     return row ? (JSON.parse(String(row.value)) as T) : undefined;
   }
   require<T>(kind: string, key: string): T {
+    if (['projects', 'resources'].includes(kind)) {
+      const itemKind = kind === 'projects' ? 'project' : 'resource';
+      if (this.list<{kind: string; id: string}>('navigationTrash').some(item => item.kind === itemKind && item.id === key))
+        throw new HttpError(404, '对象已移入回收站，请先恢复');
+    }
     const value = this.get<T>(kind, key);
     if (!value) throw new HttpError(404, "记录不存在");
     return value;
@@ -170,8 +211,10 @@ export class LakeStore {
     return project;
   }
   catalog(): Catalog {
-    const resources = this.list<Resource>("resources").map(resource=>({...resource,configurationRevision:this.get<number>('resourceRevisions',resource.id)??1}));
-    const tree = this.list<ResourceTreeNode>("tree");
+    const trash = this.list<{kind: string; id: string}>('navigationTrash');
+    const hidden = (kind: string, key: string) => trash.some(item => item.kind === kind && item.id === key);
+    const resources = this.list<Resource>("resources").filter(resource => !hidden('resource', resource.id) && !hidden('project', resource.projectId)).map(resource=>({...resource,configurationRevision:this.get<number>('resourceRevisions',resource.id)??1}));
+    const tree = this.list<ResourceTreeNode>("tree").filter(node => !hidden('project', node.projectId) && !hidden(node.kind, node.resourceId ?? node.id));
     for (const resource of resources)
       if (!tree.some((node) => node.resourceId === resource.id))
         tree.push({
@@ -184,10 +227,10 @@ export class LakeStore {
           position: tree.length,
         });
     return {
-      projects: this.list<Project>("projects"),
+      projects: this.list<Project>("projects").filter(project => !hidden('project', project.id)),
       resources,
       resourceTree: tree,
-      sessions: this.list<StoredSession>("sessions").filter((session) => !this.list<string>("terminalScopes").includes(session.id)).map(({ id }) => {
+      sessions: this.list<StoredSession>("sessions").filter((session) => !hidden('project', session.projectId) && !this.list<string>("terminalScopes").includes(session.id)).map(({ id }) => {
         const { options, ...session } = this.session(id);
         return session;
       }),
@@ -243,7 +286,12 @@ export class LakeStore {
     return view;
   }
   messages(sessionId: string) {
-    return this.list<Message>("messages").filter((message) => message.sessionId === sessionId);
+    // Unread/channel polling reads many sessions. Select before decoding JSON
+    // so another conversation's entire history never blocks this session.
+    return this.db
+      .prepare("SELECT value FROM records WHERE kind='messages' AND json_extract(value,'$.sessionId')=? ORDER BY rowid")
+      .all(sessionId)
+      .map(row => JSON.parse(String(row.value)) as Message);
   }
   viewPage(sessionId: string, before?: number, limit = 300): AIView {
     const view = this.view(sessionId), total = view.cards.length;
@@ -252,8 +300,8 @@ export class LakeStore {
     const start = Math.max(0, end - limit);
     return { ...view, cards: view.cards.slice(start, end), cardsOffset: start, totalCards: total };
   }
-  addMessage(sessionId: string, role: Message["role"], text: string) {
-    const message: Message = { id: id(), sessionId, role, text, createdAt: now() };
+  addMessage(sessionId: string, role: Message["role"], text: string, metadata: Pick<Message, 'mentions' | 'images' | 'files'> = {}) {
+    const message: Message = { ...metadata, id: id(), sessionId, role, text, createdAt: now() };
     return this.put("messages", message.id, message);
   }
   cursor(sessionId: string) {
@@ -295,12 +343,16 @@ export class LakeStore {
       actions: [],
       terminals: (catalog.terminals ?? []).filter((terminal) => terminal.sessionId === sessionId),
       cursor: this.cursor(sessionId),
+      messageQueue: {...(this.get<import('../../web-agent/shared/contracts').MessageQueue>('messageQueues', sessionId) ?? {paused: false, revision: 0, lastError: '', items: []}), pushSupported: false},
       ai: this.view(sessionId),
       conversationMode: options.conversationMode === "plan" ? "plan" : "default",
-      messageQueue: { paused: false, revision: 0, lastError: "", items: [] },
     };
   }
   async secret(providerId: string, value?: string | null) {
+    if (providerId === 'magpie') {
+      if (value !== undefined) throw new HttpError(409, 'Magpie 凭据由插件管理');
+      const provider = this.magpie?.provider(); return provider ? this.magpie!.credential(provider) : '';
+    }
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,119}$/.test(providerId))
       throw new HttpError(400, "Invalid provider identity");
     const directory = join(this.home, "secrets");

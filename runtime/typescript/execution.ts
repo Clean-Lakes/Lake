@@ -1,6 +1,8 @@
+import type {SSHTarget} from "./ssh-target";
+import { boundResourceRevision } from "./resource-pin";
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { localShellProfile } from "./local-shell-profile";
+import { resolve } from "node:path";
 import type {
   ExecutionPort,
   ExecutionRequest,
@@ -15,7 +17,7 @@ import type { HostCommandView } from '../../web-agent/shared/contracts';
 import type { Operation } from './tasks';
 import { HttpError, LakeStore, id, now } from "./store";
 import { digest, text } from "./tasks";
-import { commandPolicy } from "../../web-agent/shared/command-policy";
+import { commandPolicy, compileNobodyInspection, requestedInspectionRoot, compileNobodyDelay, type NobodyInspection } from "../../web-agent/shared/command-policy";
 
 const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
 const outputLimit = 256 * 1024;
@@ -35,6 +37,7 @@ export type ShellActor = {
   workerId: string;
   generation: number;
   guard: () => void;
+  checkSSHTarget?: (target?: SSHTarget) => void;
 };
 export type ShellPlan = {
   resource: Resource;
@@ -43,11 +46,15 @@ export type ShellPlan = {
   command: string;
   cwd?: string;
   readOnly: boolean;
+  nobodyInspection?: NobodyInspection;
+  delayedOutput?: true;
   policy: "allow" | "ask";
   risk: "readonly" | "write" | "dangerous";
 };
 type CommandRecord = {
   command?: string;
+  authenticatedTarget?: SSHTarget;
+  peerRejected?: true;
   stdoutTail?: string;
   stderrTail?: string;
   stopRequestedAt?: string;
@@ -60,6 +67,8 @@ type CommandRecord = {
   resourceRevision: number;
   configurationRevision: string;
   commandHash: string;
+  nobodyInspection?: {directory:string;inventoryDepth?:number};
+  delayedOutput?: true;
   readOnly: boolean;
   status: string;
   startedAt: string;
@@ -109,7 +118,7 @@ export class LakeExecution {
           this.store.get("projectSettings", resource.projectId),
         ]);
   }
-  plan(projectId: string, input: ShellInput): ShellPlan {
+  plan(projectId: string, input: ShellInput, requests: readonly string[] = []): ShellPlan {
     const resource = input.asset_ref
       ? this.store.require<Resource>(
           "resources",
@@ -133,7 +142,7 @@ export class LakeExecution {
     const command = text(input.command, "command", 64000),
       revision = this.revision(resource),
       policy = commandPolicy(command);
-    if (input.asset_ref && input.configuration_revision !== revision)
+    if (input.asset_ref && !boundResourceRevision(this.store,resource,input.configuration_revision,revision))
       throw new HttpError(409, "Shell 连接配置已变化，请重新读取资源目录");
     if (input.dangerouslyDisableSandbox)
       throw new HttpError(403, "不能通过模型参数关闭 Lake 秘密保护");
@@ -159,16 +168,22 @@ export class LakeExecution {
       )
     )
       throw new HttpError(403, "Shell 不允许读取或导出宿主认证凭据");
-    const readOnly = policy.risk === "readonly";
+    const parsedInspection = resource.kind==="ssh" && !input.run_in_background && !input.cwd && policy.risk!=="dangerous" ? compileNobodyInspection(command) : undefined;
+    const inspection = parsedInspection && requestedInspectionRoot(parsedInspection.directory, requests) ? parsedInspection : undefined;
+    const delay = resource.kind === "ssh" && input.run_in_background && !input.cwd && policy.risk !== "dangerous"
+      ? compileNobodyDelay(command) : undefined;
+    const readOnly = policy.risk === "readonly" || !!inspection || !!delay;
     return {
       resource,
       revision,
       resourceRevision:
         this.store.get<number>("resourceRevisions", resource.id) ?? 1,
-      command: readOnly ? policy.safeCommand! : command,
+      command: inspection?.command ?? delay ?? policy.safeCommand ?? command,
+      ...(delay && {delayedOutput:true as const}),
+      nobodyInspection:inspection,
       cwd: input.cwd,
       readOnly,
-      policy: this.security.command(projectId, resource.id, readOnly),
+      policy: this.security.command(projectId, resource.id, readOnly && !inspection && !delay),
       risk: policy.risk,
     };
   }
@@ -180,7 +195,7 @@ export class LakeExecution {
     this.security.command(
       this.store.session(record.sessionId).projectId,
       resource.id,
-      record.readOnly,
+      record.readOnly && !record.nobodyInspection && !record.delayedOutput,
     );
     if (
       this.revision(resource) !== record.configurationRevision ||
@@ -189,6 +204,12 @@ export class LakeExecution {
     )
       throw new HttpError(409, "Shell 资源配置或凭据已变化");
   }
+  hasLiveCommand(sessionId: string, executionId: string, commandId?: string) {
+    for (const {record} of this.lives.values())
+      if ((!commandId || record.id === commandId) && record.sessionId === sessionId && record.taskId === executionId && record.status === "running") return true;
+    return false;
+  }
+
   /** UI projection uses both immutable operation ownership and command identity. */
   views(sessionId: string, taskId: string): HostCommandView[] {
     const projectId = this.store.session(sessionId).projectId;
@@ -201,7 +222,7 @@ export class LakeExecution {
       if (live && record.status === 'running' && !record.stopRequestedAt) {
         try { live.actor.guard(); this.revalidate(record); canStop = true; } catch { /* Historical or fenced command. */ }
       }
-      return [{ id: record.id, operationId: op.id, taskId, sessionId, generation: record.generation, resourceId: record.resourceId,
+      return [{ id: record.id, operationId: op.id, operationState:op.status, taskId, sessionId, generation: record.generation, resourceId: record.resourceId,
         command: this.scrub(record.command ?? ''), output: this.scrub(record.result ? [record.result.stdout?.text, record.result.stderr?.text].filter(Boolean).join('\n') : [record.stdoutTail, record.stderrTail].filter(Boolean).join('\n')),
         exitCode: record.result?.exitCode ?? null, status: record.status, canStop, stopRequestedAt: record.stopRequestedAt,
         startedAt: record.startedAt, finishedAt: record.finishedAt }];
@@ -384,7 +405,7 @@ export class LakeExecution {
       owner.security.command(
         plan.resource.projectId,
         plan.resource.id,
-        plan.readOnly,
+        plan.readOnly && !plan.nobodyInspection && !plan.delayedOutput,
       );
       if (
         owner.revision(owner.store.require("resources", plan.resource.id)) !==
@@ -415,6 +436,8 @@ export class LakeExecution {
         resourceRevision: plan.resourceRevision,
         configurationRevision: plan.revision,
         commandHash: digest(plan.command),
+        ...(plan.delayedOutput && {delayedOutput: true}),
+        ...(plan.nobodyInspection && {nobodyInspection:{directory:plan.nobodyInspection.directory, inventoryDepth:plan.nobodyInspection.inventoryDepth}}),
         readOnly: plan.readOnly,
         status: "running",
         startedAt: now(),
@@ -470,7 +493,7 @@ export class LakeExecution {
         };
         if (plan.resource.kind === "ssh") {
           const output = owner.remote(
-            actor,
+            record, actor,
             plan,
             {
               ...request,
@@ -612,10 +635,8 @@ export class LakeExecution {
   ): Promise<ExecutionRequest> {
     if (process.platform !== "darwin" || !existsSync("/usr/bin/sandbox-exec"))
       throw new HttpError(501, "此平台尚未配置本机 Shell 的凭据隔离执行器");
-    const workspace = await this.store.workspace(plan.resource.projectId),
-      output = join(this.store.data, "tool-output", actor.sessionId);
-    const literal = (value: string) => JSON.stringify(resolve(value));
-    const profile = `(version 1)(allow default)(deny file-read* file-write* (require-all (subpath ${literal(this.store.home)}) (require-not (subpath ${literal(workspace)})) (require-not (subpath ${literal(output)}))))(deny file-read* file-write* (subpath ${literal(join(homedir(), ".lake"))}) (subpath ${literal(join(homedir(), ".ssh"))}) (subpath ${literal(join(homedir(), "Library/Keychains"))}) (subpath "/Library/Keychains"))(deny process-exec (literal "/usr/bin/security"))`;
+    const workspace = await this.store.workspace(plan.resource.projectId);
+    const profile = localShellProfile(this.store.home, this.store.data, workspace, plan.resource.projectId, actor.sessionId);
     const command = `/usr/bin/sandbox-exec -p ${quote(profile)} /bin/bash --noprofile --norc -c ${quote(plan.command)}`;
     return {
       ...request,
@@ -638,7 +659,7 @@ export class LakeExecution {
     };
   }
   private async remote(
-    actor: ShellActor,
+    record: CommandRecord, actor: ShellActor,
     plan: ShellPlan,
     request: ExecutionRequest,
     options: ExecutionRunOptions,
@@ -651,6 +672,20 @@ export class LakeExecution {
         signal,
       );
     try {
+      if (!plan.readOnly) {
+        // Recheck the actual peer after trust negotiation and before a channel is opened.
+        const identity = this.ssh.mutationTarget?.(plan.resource,connection);
+        try { actor.checkSSHTarget?.(identity); }
+        catch (error) {
+          record.peerRejected = true;
+          this.store.put("commandExecutions",record.id,record);
+          throw error;
+        }
+        if (identity) {
+          record.authenticatedTarget = identity;
+          this.store.put("commandExecutions",record.id,record);
+        }
+      }
       return await new Promise((resolve, reject) => {
         let channel: any,
           stdout = Buffer.alloc(0),
@@ -714,9 +749,11 @@ export class LakeExecution {
           resourceId: plan.resource.id,
           configurationRevision: plan.revision,
           resourceRevision: plan.resourceRevision,
-          readOnly: plan.readOnly,
+          readOnly: plan.readOnly, nobodyInspection: plan.nobodyInspection, delayedOutput: plan.delayedOutput,
         } as CommandRecord);
-        const command =
+        // The compiler enters a clean environment before running any Bash.
+        // Wrapping this again would source the SSH account's BASH_ENV first.
+        const command = plan.nobodyInspection || plan.delayedOutput ? plan.command :
           (plan.cwd ? `cd -- ${quote(plan.cwd)} && ` : "") +
           `/bin/bash --noprofile --norc -c ${quote(plan.command)}`;
         connection.exec(command, (error: any, stream: any) => {
@@ -741,7 +778,7 @@ export class LakeExecution {
                 resourceId: plan.resource.id,
                 configurationRevision: plan.revision,
                 resourceRevision: plan.resourceRevision,
-                readOnly: plan.readOnly,
+                readOnly: plan.readOnly, nobodyInspection: plan.nobodyInspection, delayedOutput: plan.delayedOutput,
               } as CommandRecord);
               if (stdout.length + stderr.length + chunk.length > outputLimit)
                 throw new HttpError(413, "SSH 命令输出超过预算");
