@@ -13,6 +13,7 @@ import { HttpError, id, LakeStore, now, type StoredSession } from "./store";
 import { canonical, digest, TaskLedger, terminal, text, type Goal, type Operation } from "./tasks";
 import { superRouterPrompt, superWorkerPrompt } from "./super-prompts";
 import { buildRouterContext, projectRouterHistory, type RouterMessage } from "./router-context";
+import type {MessageInput} from './message-input';
 import { listProjectAssets } from "./assets";
 import { loadLegacyView } from "./migration";
 import type { LakeSecurity } from "./security";
@@ -28,6 +29,7 @@ import { stoppedNotice, unresolvedNotice, stoppedReportProjection } from "./task
 type Role = { id: string; projectId: string; roleKey: string; name: string; duties: string; revision: number; deletedAt?: string };
 type Channel = { id: string; projectId: string; roleId: string; sessionId: string; revision: number; createdAt: string };
 type InputEvent = { id: string; projectId: string; sessionId: string; messageId: string; payload: string;
+  selectedReferences?: MessageInput;
   ignoreMemory?: boolean;
   preferredRoleId?: string; explicitTaskId?: string; disposition: "pending" | "routed" | "blocked" | "stopped";
   receivedAt: string; revision: number; error?: string };
@@ -456,12 +458,12 @@ export class LakeSuperagent implements AgentHost {
       originalDeliverable: prior?.originalDeliverable ?? decision.quote, summary: clip(this.agents.redact(source.summary ?? ""), 4096),
       resourceIds, historicalContextOnly: true };
   }
-  async send(sessionId: string, value: string, explicitTaskId?: string, ignoreMemory = false) {
+  async send(sessionId: string, value: string, explicitTaskId?: string, ignoreMemory = false, selectedReferences?: MessageInput) {
     text(value, "message", 256000);
     await this.agents.prepareRedaction();
     const source = this.store.session(sessionId), project = this.store.get<SuperProject>("superProjects", source.projectId);
     if(this.stoppingProjects.has(source.projectId))throw new HttpError(409,"当前项目正在停止活动任务，请稍后发送");
-    if (!project) return this.agents.send(sessionId, value, { ignoreMemory });
+    if (!project) return this.agents.send(sessionId, value, { ignoreMemory, messageInput: selectedReferences });
     const channel = this.channelFor(sessionId), worker = this.workerFor(sessionId);
     const preferredRoleId = channel?.roleId ?? (worker?.inline?undefined:worker?.roleId);
     if (preferredRoleId) this.role(source.projectId, preferredRoleId);
@@ -469,9 +471,10 @@ export class LakeSuperagent implements AgentHost {
       const goal = this.ledger.get(explicitTaskId);
       if (goal.projectId !== source.projectId || preferredRoleId && preferredRoleId !== goal.roleId) throw new HttpError(404, "Explicit task not found in this channel");
     }
-    const message = this.store.addMessage(sessionId, "user", this.agents.redact(value));
+    const message = this.store.addMessage(sessionId, "user", this.agents.redact(value), {mentions: selectedReferences?.mentions});
+    if (selectedReferences) this.store.put('messageInputs', message.id, {messageId: message.id, projectId: source.projectId, sessionId, ...selectedReferences});
     const event: InputEvent = { id: id(), projectId: source.projectId, sessionId, messageId: message.id, payload: this.agents.redact(value),
-      preferredRoleId, explicitTaskId: explicitTaskId ?? (worker?.inline?undefined:worker?.taskId), disposition: "pending", receivedAt: message.createdAt, revision: 1, ignoreMemory };
+      preferredRoleId, explicitTaskId: explicitTaskId ?? (worker?.inline?undefined:worker?.taskId), disposition: "pending", receivedAt: message.createdAt, revision: 1, ignoreMemory, selectedReferences };
     this.store.put("superInputs", event.id, event); this.notify(sessionId, "message");
     this.agents.memory?.captureUser(sessionId, message.id, preferredRoleId, ignoreMemory);
     this.schedule();
@@ -550,7 +553,7 @@ export class LakeSuperagent implements AgentHost {
       const followups = worker.invocationInputIds.filter((eventId) => eventId !== origin.id).map((eventId) => this.store.require<InputEvent>("superInputs", eventId));
       const input = canonical({ assignment: { projectId: worker.projectId, roleId: worker.roleId, roleRevision: worker.roleSnapshot.revision,
         taskId: worker.taskId, workerId: worker.id, sessionId: worker.sessionId }, roleSnapshot: worker.roleSnapshot,
-        originalRequirement: origin.payload, assignedDeliverable: decision.quote, goal: this.publicGoal(goal),
+        originalRequirement: origin.payload, selectedReferences: origin.selectedReferences, assignedDeliverable: decision.quote, goal: this.publicGoal(goal),
         predecessor: this.store.get<TaskPredecessor>("superTaskPredecessors", worker.taskId),
         taskContext:this.recallContext(worker),
         humanControl: resume ? { command: resume.command, at: resume.at } : undefined,
@@ -691,8 +694,7 @@ export class LakeSuperagent implements AgentHost {
         const resource = entry.metadata.name === "read_referenced_task_evidence" ? undefined : this.store.catalog().resources.find((resource) =>
           resource.projectId === worker.projectId && resource.kind === "local" && resource.status === "available");
         if (!resource && entry.metadata.name !== "read_referenced_task_evidence") throw new HttpError(409, "Project local resource is unavailable");
-        if (resource && this.store.session(project.routerSessionId).options.blockUnreferencedAssets === true)
-          throw new HttpError(403, "Pilot 当前仅允许操作明确引用的资源；尚未登记此工作区的用户引用");
+        if (resource && this.store.session(project.routerSessionId).options.blockUnreferencedAssets === true) this.requireReference(worker, resource.id);
         return this.ledger.operation(worker.taskId, worker.generation, worker.policyHash, context.toolCallId, entry.metadata.name, input,
           () => entry.handler(input, context), (value) => JSON.parse(this.agents.redact(JSON.stringify(value ?? null))) as typeof value,
           { ...this.childSource(context), readOnly: entry.metadata.readOnly, resourceId: resource?.id, resourceRevision: resource ? this.store.get<number>("resourceRevisions", resource.id) ?? 1 : undefined });
@@ -723,11 +725,24 @@ export class LakeSuperagent implements AgentHost {
     return this.ledger.operation(worker.taskId,worker.generation,worker.policyHash,context.toolCallId,'WebFetch',input,()=>entry.handler(input,context),value=>JSON.parse(this.agents.redact(JSON.stringify(value??null))),{...this.childSource(context),readOnly:true,networkURL:input.url});
   }
   private shellActor(worker:Worker):ShellActor{return {sessionId:worker.sessionId,taskId:worker.taskId,workerId:worker.id,generation:worker.generation,guard:()=>this.validateWorker(worker.id,worker.generation)};}
+  private requireReference(worker: Worker, resourceId: string) {
+    const referenced = worker.inputEventIds.some(eventId => {
+      const event = this.store.require<InputEvent>('superInputs', eventId);
+      const message = this.store.get<Message>('messages', event.messageId);
+      const selected = this.store.get<MessageInput & {projectId: string; sessionId: string; messageId: string}>('messageInputs', event.messageId);
+      return event.projectId === worker.projectId && event.selectedReferences?.resourceIds.includes(resourceId) &&
+        message?.role === 'user' && message.sessionId === event.sessionId && selected?.projectId === worker.projectId &&
+        selected.sessionId === event.sessionId && selected.messageId === event.messageId && digest(event.selectedReferences) === digest({resourceIds: selected.resourceIds, mentions: selected.mentions, references: selected.references});
+    });
+    if (!referenced) throw new HttpError(403, '当前任务尚未收到此资源的准确用户引用，请在消息中选择资源');
+    const resource = this.store.require<import('../../web-agent/shared/contracts').Resource>('resources', resourceId);
+    if (resource.projectId !== worker.projectId) throw new HttpError(403, '资源引用不属于当前项目');
+  }
   private shellPlan(worker:Worker,input:ShellInput){
     if(!this.execution)throw new HttpError(409,'Shell 执行器未连接');
     const plan=this.execution.plan(worker.projectId,input),project=this.store.require<SuperProject>('superProjects',worker.projectId),options=this.store.session(project.routerSessionId).options;
     if(plan.resource.kind==='local'&&options.denyLocalExecution===true)throw new HttpError(403,'当前 Pilot 权限禁止本机执行');
-    if(options.blockUnreferencedAssets===true)throw new HttpError(403,'当前 Pilot 仅允许明确登记的资源引用');
+    if(options.blockUnreferencedAssets===true)this.requireReference(worker,plan.resource.id);
     const mode=this.store.get<Goal>('superGoals',worker.taskId)?.mode;
     if((mode==='plan'||this.store.get<any>('agentPlans',worker.taskId)?.active)&&!plan.readOnly)throw new HttpError(403,'计划阶段仅允许宿主可证明只读的命令');
     return {plan,options};
@@ -835,7 +850,7 @@ export class LakeSuperagent implements AgentHost {
     const resource=this.store.require<any>('resources',text(input.asset_ref,'asset_ref',200));
     if(resource.projectId!==worker.projectId)throw new HttpError(403,'MySQL 不属于当前项目');
     const project=this.store.require<SuperProject>('superProjects',worker.projectId),options=this.store.session(project.routerSessionId).options;
-    if(options.blockUnreferencedAssets===true)throw new HttpError(403,'Pilot 要求明确的资源引用，数据库尚未登记可执行引用');
+    if(options.blockUnreferencedAssets===true)this.requireReference(worker,resource.id);
     const plan=this.mysql.plan(resource,entry.metadata.name,input),revision=this.mysql.revision(resource);
     if(input.configuration_revision!==revision)throw new HttpError(409,'MySQL 配置或凭据版本已变化');
     this.validateWorker(worker.id,generation);
@@ -844,8 +859,8 @@ export class LakeSuperagent implements AgentHost {
   private async invokeHost(worker:Worker,generation:number,entry:ToolEntry,input:any,context:ToolExecutionContext){
     if(!this.ssh)throw new HttpError(409,"SSH 适配器未接入");
     const project=this.store.require<SuperProject>("superProjects",worker.projectId),options=this.store.session(project.routerSessionId).options;
-    if(options.blockUnreferencedAssets===true)throw new HttpError(403,"Pilot 当前要求明确的资源引用；该主机尚未登记可执行引用");
     const resource=this.store.require<import("../../web-agent/shared/contracts").Resource>("resources",text(input.asset_ref,"asset_ref",200));
+    if(options.blockUnreferencedAssets===true)this.requireReference(worker,resource.id);
     this.security?.host(worker.projectId,resource.id);const revision=this.ssh.revision(resource);if(input.configuration_revision!==revision)throw new HttpError(409,"SSH 配置或凭据版本已变化，请重新读取资源目录");
     this.validateWorker(worker.id,generation);
     return this.ledger.operation(worker.taskId,generation,worker.policyHash,context.toolCallId,entry.metadata.name,input,()=>entry.handler(input,context),value=>JSON.parse(this.ssh!.scrub(JSON.stringify(value??null))),{...this.childSource(context),resourceId:resource.id,resourceRevision:this.store.get<number>("resourceRevisions",resource.id)??1,readOnly:true,hostConfigurationHash:revision});

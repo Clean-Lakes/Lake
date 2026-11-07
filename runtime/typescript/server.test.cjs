@@ -65,7 +65,8 @@ async function fixture(t, mode = "text", legacyDev = false) {
       : { content: "Lake TS 完成" };
     const nativeMemory = JSON.stringify(request.messages).includes("persistent file-based memory at");
     if (nativeMemory) {
-      delta = nativeMemoryReply(request);
+      delta = mode === 'memory-native-nochange' && JSON.stringify(request.messages).includes('You are now acting as the memory extraction subagent')
+        ? {content: 'Nothing to save.'} : nativeMemoryReply(request);
       tool = !!delta.tool_calls;
     } else if (mode.startsWith("super")) {
       delta = superReply(request, mode, home);
@@ -186,6 +187,8 @@ function nativeMemoryReply(request) {
   const messages = request.messages.map(content);
   const extractionStart = messages.findIndex(value => value.includes("You are now acting as the memory extraction subagent"));
   if (extractionStart < 0) return { content: "已收到限定范围的来源，交由原生记忆提取。" };
+  assert.ok(!request.messages.some(message => message.role === 'system' && content(message).includes('Do not call tools in this acknowledgement stage')),
+    'foreground acknowledgement instructions must not suppress detached native extraction');
   const root = messages.join("\n").match(/persistent file-based memory at `([^`]+)`/)?.[1];
   assert.ok(root, "real SDK Memory prompt must provide its actual private directory");
   const calls = request.messages.slice(extractionStart).flatMap(message => message.tool_calls ?? []);
@@ -202,6 +205,159 @@ function nativeMemoryReply(request) {
   }
   return { content: "已按原生文件协议保存知识。" };
 }
+
+test('model settings tests call the actual model and never save a test credential or selection', async t => {
+  const f = await fixture(t), selection = f.app.store.get('settings', 'modelSelection');
+  const provider = f.app.store.list('providers')[0], calls = f.calls;
+  assert.equal((await f.api('/api/settings/model/test', 'POST', {url: provider.baseURL, name: 'fixture'})).ok, true);
+  assert.equal(f.calls, calls + 1);
+  await f.api('/api/settings/model/test', 'POST', {url: 'http://127.0.0.1:1/v1', name: 'fixture', apiKey: 'temporary-test-secret'}, 502);
+  assert.deepEqual(f.app.store.get('settings', 'modelSelection'), selection);
+  assert.equal(f.app.store.list('providers').length, 1);
+  await f.api('/api/settings/model/test', 'GET', undefined, 405);
+});
+
+test('presets persist updates and deletion across restart; unknown routes cannot return unrelated success DTOs', async t => {
+  const f = await fixture(t);
+  const saved = await f.api('/api/ai/presets', 'POST', {title: '证据报告', content: '先给结论，再列证据'});
+  await f.restart();
+  assert.deepEqual(await f.api('/api/ai/presets'), [saved]);
+  const updated = await f.api('/api/ai/presets', 'POST', {...saved, content: '先给结论与时间'});
+  assert.deepEqual(await f.api('/api/ai/presets'), [updated]);
+  await f.api('/api/ai/presets', 'DELETE', {id: saved.id});
+  await f.restart(); assert.deepEqual(await f.api('/api/ai/presets'), []);
+  await f.api('/api/ai/presets', 'POST', {title: '', content: 'invalid'}, 400);
+  for (const [path, method, data] of [
+    [`/api/sessions/${f.session.id}/text-files`, 'POST', {}],
+    [`/api/sessions/${f.session.id}/sre/tasks`, 'GET'],
+    [`/api/sessions/${f.session.id}/unknown`, 'PATCH', {title: 'must not change'}],
+    [`/api/resources/${(await f.api('/api/catalog')).resources[0].id}/unknown`, 'GET'],
+  ]) await f.api(path, method, data, 404);
+  assert.notEqual((await f.api(`/api/sessions/${f.session.id}`)).title, 'must not change');
+  await f.api(`/api/sessions/${f.session.id}/ai/abort`, 'GET', undefined, 405);
+  await f.api('/api/settings/providers/missing/test', 'PUT', {}, 405);
+  assert.equal(f.app.store.list('providers').length, 1);
+});
+
+async function legacyMcpAuthority(f, entries, bindings = []) {
+  const fs = require('node:fs/promises'), {DatabaseSync} = require('node:sqlite');
+  await fs.mkdir(join(f.home, 'security'), {mode: 0o700});
+  await fs.mkdir(join(f.options.data, 'adk'), {mode: 0o700});
+  const authority = {storeID: 'a'.repeat(64), recoveryEpoch: 'b'.repeat(64)};
+  await writeFile(join(f.home, 'security/control.json'), JSON.stringify({formatVersion: 1, ...authority, storeReady: true,
+    gate: 'open', runtimeRoot: await fs.realpath(join(f.options.data, 'adk'))}), {mode: 0o600});
+  const path = join(f.options.data, 'adk/sessions.sqlite'), db = new DatabaseSync(path);
+  db.exec(`CREATE TABLE security_schema_meta(id INTEGER,schema_version INTEGER,minimum_reader_version INTEGER,store_id TEXT,recovery_epoch TEXT,migration_state TEXT);
+    CREATE TABLE security_authority_events(kind TEXT,project_id TEXT,object_id TEXT,store_id TEXT,recovery_epoch TEXT,after_revision INTEGER,result TEXT);
+    CREATE TABLE security_mcp_bindings(project_id TEXT,server_id TEXT,store_id TEXT,recovery_epoch TEXT,revision INTEGER,enabled INTEGER,tool_names TEXT);`);
+  db.prepare('INSERT INTO security_schema_meta VALUES(1,1,3,?,?,?)').run(authority.storeID, authority.recoveryEpoch, 'ready');
+  for (const entry of entries) db.prepare('INSERT INTO security_authority_events VALUES(?,?,?,?,?,?,?)').run('mcp.inheritance', entry.projectId, entry.projectId,
+    authority.storeID, entry.epoch ?? authority.recoveryEpoch, entry.revision, JSON.stringify({ProjectID: entry.projectId, Revision: entry.revision, Enabled: entry.enabled}));
+  for (const entry of bindings) db.prepare('INSERT INTO security_mcp_bindings VALUES(?,?,?,?,?,?,?)').run(entry.projectId, entry.serverId,
+    authority.storeID, entry.epoch ?? authority.recoveryEpoch, entry.revision, entry.enabled ? 1 : 0, JSON.stringify(entry.names ?? []));
+  db.close(); await fs.chmod(path, 0o600); f.options.development = true; f.options.importLegacy = true;
+  return {path, authority};
+}
+
+test('MCP migration restores exact current-epoch choices, explicit denials and latest revisions without contacting services', async t => {
+  const f = await fixture(t), mcp = await mcpFixture(t);
+  const a = await f.api('/api/settings/mcp', 'POST', {name: 'A', transport: 'http', enabled: true, url: mcp.url});
+  const b = await f.api('/api/settings/mcp', 'POST', {name: 'B', transport: 'http', enabled: true, url: mcp.url});
+  const stale = await f.api('/api/projects', 'POST', {name: '旧纪元项目'});
+  await legacyMcpAuthority(f, [
+    {projectId: f.project.id, revision: 1, enabled: false}, {projectId: f.project.id, revision: 2, enabled: true},
+    {projectId: stale.id, revision: 9, enabled: true, epoch: 'c'.repeat(64)},
+  ], [{projectId: f.project.id, serverId: b.id, revision: 4, enabled: false}]);
+  await f.restart();
+  const base = `/api/projects/${f.project.id}/security/mcp-inheritance`;
+  assert.deepEqual((await f.api(base)).servers.map(row => row.id), [a.id]);
+  assert.equal((await f.api(base)).Revision, 2);
+  assert.equal((await f.api(`/api/projects/${stale.id}/security/mcp-inheritance`)).Enabled, false);
+  await f.api(base, 'PUT', {enabled: false, expectedRevision: 2, actionId: 'new-ts-denial'});
+  await f.restart();
+  assert.equal((await f.api(base)).Enabled, false, 'saved TS choices win on restart');
+  assert.equal(f.app.store.list('legacyMcpChoices').length, 2);
+  assert.deepEqual(mcp.requests, [], 'catalog migration never connects to an MCP service');
+});
+
+test('stale explicit MCP bindings cannot fall back to inherited access and migrated choices cannot survive a recovery epoch', async t => {
+  const f = await fixture(t), mcp = await mcpFixture(t), fs = require('node:fs/promises');
+  const a = await f.api('/api/settings/mcp', 'POST', {name: 'A', transport: 'http', enabled: true, url: mcp.url});
+  const source = await legacyMcpAuthority(f, [{projectId: f.project.id, revision: 1, enabled: true}],
+    [{projectId: f.project.id, serverId: a.id, revision: 5, enabled: true, epoch: 'c'.repeat(64), names: ['fixture']}]);
+  await f.restart();
+  const base = `/api/projects/${f.project.id}/security/mcp-inheritance`;
+  assert.deepEqual((await f.api(base)).servers, []);
+  // Simulate an externally completed recovery while the server is stopped.
+  await f.restart(async () => {
+    const controlPath = join(f.home, 'security/control.json'), control = JSON.parse(await readFile(controlPath, 'utf8'));
+    control.recoveryEpoch = 'd'.repeat(64); await writeFile(controlPath, JSON.stringify(control), {mode: 0o600});
+    const db = new (require('node:sqlite').DatabaseSync)(source.path); db.prepare('UPDATE security_schema_meta SET recovery_epoch=?').run(control.recoveryEpoch); db.close();
+  });
+  assert.deepEqual((await f.api(base)).servers, []);
+  assert.equal(f.app.store.list('legacyMcpChoices').length, 2);
+  assert.deepEqual(mcp.requests, []);
+});
+
+test('resource folders preserve nested parents, ordering, archive and restore through restart without deleting resource history', async t => {
+  const f = await fixture(t), base = `/api/projects/${f.project.id}/resource-tree`;
+  const root = (await f.api(base, 'POST', {operation: 'create', name: '南京'})).nodes.find(node => node.name === '南京');
+  const child = (await f.api(base, 'POST', {operation: 'create', parentId: root.id, name: 'K2'})).nodes.find(node => node.name === 'K2');
+  const resource = await f.api(`/api/projects/${f.project.id}/resources`, 'POST', {name: '集群入口', kind: 'local', parentId: child.id, settings: {shell: 'zsh'}});
+  await f.restart();
+  let catalog = await f.api('/api/catalog');
+  assert.equal(catalog.resourceTree.find(node => node.resourceId === resource.id).parentId, child.id);
+  await f.api(base, 'POST', {operation: 'move', nodeId: root.id, parentId: child.id}, 409);
+  const other = await f.api('/api/projects', 'POST', {name: '其他项目'});
+  await f.api(`/api/projects/${other.id}/resources`, 'POST', {kind: 'local', parentId: child.id}, 404);
+  await f.api(base, 'POST', {operation: 'rename', nodeId: resource.id, name: '准确入口'});
+  assert.equal((await f.api(`/api/resources/${resource.id}`)).name, '准确入口');
+  await f.api(base, 'POST', {operation: 'delete', nodeId: root.id});
+  assert.ok(!(await f.api('/api/catalog')).resources.some(entry => entry.id === resource.id));
+  assert.equal(f.app.store.get('resources', resource.id).name, '准确入口', 'soft deletion preserves the canonical resource');
+  await f.api(`/api/resources/${resource.id}`, 'GET', undefined, 404);
+  await f.restart();
+  assert.equal((await f.api('/api/navigation-trash')).items.length, 3);
+  await f.api('/api/navigation-trash', 'POST', {kind: 'folder', id: root.id});
+  catalog = await f.api('/api/catalog');
+  assert.equal(catalog.resourceTree.find(node => node.id === child.id).parentId, root.id);
+  assert.equal(catalog.resourceTree.find(node => node.id === resource.id).parentId, child.id);
+  await f.api('/api/navigation-delete', 'POST', {kind: 'project', id: f.project.id});
+  assert.ok(!(await f.api('/api/catalog')).projects.some(project => project.id === f.project.id));
+  await f.api(`/api/projects/${f.project.id}/sessions`, 'POST', {}, 404);
+  await f.api('/api/navigation-trash', 'POST', {kind: 'project', id: f.project.id});
+  assert.ok((await f.api('/api/catalog')).resources.some(entry => entry.id === resource.id));
+});
+
+test('selected resource and extension references persist with exact spans and reject foreign or stale identities before sending', async t => {
+  const f = await fixture(t), resource = (await f.api('/api/catalog')).resources[0];
+  const message = await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: `检查 ${resource.name}`, resourceIds: [resource.id],
+    mentions: [{kind: 'resource', id: resource.id, label: resource.name, start: 3, end: 3 + resource.name.length}]}, 202);
+  await f.wait(['completed']);
+  const stored = f.app.store.list('messages').find(row => row.role === 'user');
+  assert.deepEqual(stored.mentions, [{kind: 'resource', id: resource.id, label: resource.name, start: 3, end: 3 + resource.name.length}]);
+  assert.deepEqual(f.app.store.get('messageInputs', stored.id).resourceIds, [resource.id]);
+  assert.ok(f.requests.some(request => JSON.stringify(request.messages).includes(resource.id)));
+  const other = await f.api('/api/projects', 'POST', {name: '外国项目'}), foreign = (await f.api('/api/catalog')).resources.find(row => row.projectId === other.id);
+  const calls = f.calls;
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: '检查资源', resourceIds: [foreign.id]}, 403);
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: '检查资源', mentions: [{kind: 'resource', id: resource.id, label: resource.name, start: 0, end: 2}]}, 400);
+  assert.equal(f.calls, calls);
+  await f.restart(); assert.deepEqual(f.app.store.get('messageInputs', stored.id).resourceIds, [resource.id]);
+});
+
+test('referenced-only execution uses the real admitted user selection and cannot borrow another task selection', {skip: process.platform !== 'darwin'}, async t => {
+  const f = await fixture(t, 'super-full-worker'), project = await f.api(`/api/projects/${f.project.id}/superagent`, 'POST', {});
+  const resource = (await f.api('/api/catalog')).resources.find(row => row.projectId === f.project.id && row.kind === 'local');
+  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`, 'POST', {blockUnreferencedAssets: true, silentReadFiles: true});
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`, 'POST', {text: '检查项目文件', resourceIds: [resource.id]}, 202);
+  let state = await until(() => f.api(`/api/projects/${f.project.id}/superagent`), value => value.workers.some(row => row.assignmentState === 'parked'));
+  assert.ok(f.app.store.list('superOperations').some(operation => operation.resourceId === resource.id && operation.status === 'succeeded'));
+  const operations = f.app.store.list('superOperations').length;
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`, 'POST', {text: '再创建一项检查项目文件的工作'}, 202);
+  state = await until(() => f.api(`/api/projects/${f.project.id}/superagent`), value => value.workers.length === 2 && value.workers.every(row => row.assignmentState === 'parked'));
+  assert.equal(f.app.store.list('superOperations').length, operations, 'a sibling task cannot inherit an earlier user selection');
+});
 
 function fullAgentReply(request,mode,home){
  const tools=request.tools??[],router=tools.some(tool=>tool.function.name==='route_work');
@@ -2202,6 +2358,7 @@ test('native Memory extracts after real user input, publishes scoped files, reca
  await until(async()=>!f.app.agents.foregroundBusy(),Boolean);await f.app.memory.wait();
  let view=await f.api(`/api/memory/scopes/${scope.key}?projectId=${f.project.id}`);
  assert.equal(view.jobs[0].state,'completed',JSON.stringify(view.jobs));assert.equal(view.items.length,1,JSON.stringify(view));
+ assert.equal(view.jobs[0].outcome, 'published'); assert.equal(view.jobs[0].noteCount, 1); assert.equal(view.jobs[0].publishedRevision, 1);
  assert.match(view.items[0].body,/NATIVE_PROJECT_MEMORY/);assert.equal(view.items[0].sources[0].kind,'user');
  assert.ok(f.requests.some(request=>JSON.stringify(request.messages).includes('You are now acting as the memory extraction subagent')));
  const learnedCalls=f.calls;
@@ -2217,6 +2374,17 @@ test('native Memory extracts after real user input, publishes scoped files, reca
  const fresh=await f.api(`/api/projects/${f.project.id}/sessions`,'POST',{});await f.api(`/api/sessions/${fresh.id}/messages`,'POST',{text:'在新的任务中检查当前状态。'},202);await until(()=>f.api(`/api/sessions/${fresh.id}/ai`),view=>view.status==='completed');
  assert.ok(f.requests.slice(baseline).every(request=>!JSON.stringify(request.messages).includes('NATIVE_PROJECT_MEMORY')),'withdrawn knowledge never entered canonical model history');
  assert.deepEqual(await require('node:fs/promises').readdir(join(f.options.data,'memory/staging')),[]);
+});
+
+test('native Memory records a legitimate no-change extraction without claiming a published note', async t => {
+  const f = await fixture(t, 'memory-native-nochange');
+  const catalog = await f.api(`/api/memory?projectId=${f.project.id}`), scope = catalog.scopes.find(scope => scope.kind === 'project');
+  await f.api(`/api/memory/scopes/${scope.key}/settings?projectId=${f.project.id}`, 'PATCH', {useEnabled: true, extractionEnabled: true, expectedRevision: 0});
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: '这次仅查看临时输出，不包含新的长期偏好。'}, 202);
+  await f.wait(['completed']); await until(async () => !f.app.agents.foregroundBusy(), Boolean); await f.app.memory.wait();
+  const view = await f.api(`/api/memory/scopes/${scope.key}?projectId=${f.project.id}`);
+  assert.equal(view.jobs[0].state, 'completed'); assert.equal(view.jobs[0].outcome, 'unchanged');
+  assert.equal(view.jobs[0].publishedRevision, 0); assert.equal(view.jobs[0].noteCount, 0); assert.deepEqual(view.items, []);
 });
 
 test('native child evidence flows into stable role Memory and a new Worker reads it without sharing execution history',async t=>{

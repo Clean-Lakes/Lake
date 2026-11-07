@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 export type RouterEvent = { id: string; projectId: string; sessionId: string; messageId: string; payload: string;
+  selectedReferences?: import('./message-input').MessageInput;
   receivedAt: string; revision: number; hash: string; preferredRoleId?: string; explicitTaskId?: string };
 export type RouterMessage = { id: string; projectId: string; sessionId: string; sourceSessionId?: string;
   role: "user" | "assistant" | "system"; text: string; createdAt: string; taskId?: string; kind?: "report" | "dispatch" };
@@ -62,7 +63,7 @@ export function buildRouterContext(source: RouterContextInput) {
   const format = () => {
     const admitted = events.map((event) => ({ id: event.id, sourceSessionId: event.sessionId, preferredRoleID: event.preferredRoleId,
       explicitTaskID: event.explicitTaskId, revision: event.revision, hash: event.hash, text: clip(event.payload, previewBytes),
-      clipped: Buffer.byteLength(event.payload) > previewBytes }));
+      selectedReferences: event.selectedReferences, clipped: Buffer.byteLength(event.payload) > previewBytes }));
     const tasks = taskRows.slice(0, taskCount).map((task) => ({ taskId: task.taskId, roleId: task.roleId, title: clip(task.title, 128),
       state: task.state, acceptanceState: task.acceptanceState, pendingApproval: task.pendingApproval, unresolvedOperations: task.unresolvedOperations,
       archived: task.archived === true, updatedAt: task.updatedAt, summary: clip(task.summary ?? "", summaryBytes),

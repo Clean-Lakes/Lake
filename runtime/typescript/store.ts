@@ -98,6 +98,11 @@ export class LakeStore {
     return row ? (JSON.parse(String(row.value)) as T) : undefined;
   }
   require<T>(kind: string, key: string): T {
+    if (['projects', 'resources'].includes(kind)) {
+      const itemKind = kind === 'projects' ? 'project' : 'resource';
+      if (this.list<{kind: string; id: string}>('navigationTrash').some(item => item.kind === itemKind && item.id === key))
+        throw new HttpError(404, '对象已移入回收站，请先恢复');
+    }
     const value = this.get<T>(kind, key);
     if (!value) throw new HttpError(404, "记录不存在");
     return value;
@@ -170,8 +175,10 @@ export class LakeStore {
     return project;
   }
   catalog(): Catalog {
-    const resources = this.list<Resource>("resources").map(resource=>({...resource,configurationRevision:this.get<number>('resourceRevisions',resource.id)??1}));
-    const tree = this.list<ResourceTreeNode>("tree");
+    const trash = this.list<{kind: string; id: string}>('navigationTrash');
+    const hidden = (kind: string, key: string) => trash.some(item => item.kind === kind && item.id === key);
+    const resources = this.list<Resource>("resources").filter(resource => !hidden('resource', resource.id) && !hidden('project', resource.projectId)).map(resource=>({...resource,configurationRevision:this.get<number>('resourceRevisions',resource.id)??1}));
+    const tree = this.list<ResourceTreeNode>("tree").filter(node => !hidden('project', node.projectId) && !hidden(node.kind, node.resourceId ?? node.id));
     for (const resource of resources)
       if (!tree.some((node) => node.resourceId === resource.id))
         tree.push({
@@ -184,10 +191,10 @@ export class LakeStore {
           position: tree.length,
         });
     return {
-      projects: this.list<Project>("projects"),
+      projects: this.list<Project>("projects").filter(project => !hidden('project', project.id)),
       resources,
       resourceTree: tree,
-      sessions: this.list<StoredSession>("sessions").filter((session) => !this.list<string>("terminalScopes").includes(session.id)).map(({ id }) => {
+      sessions: this.list<StoredSession>("sessions").filter((session) => !hidden('project', session.projectId) && !this.list<string>("terminalScopes").includes(session.id)).map(({ id }) => {
         const { options, ...session } = this.session(id);
         return session;
       }),
@@ -252,8 +259,8 @@ export class LakeStore {
     const start = Math.max(0, end - limit);
     return { ...view, cards: view.cards.slice(start, end), cardsOffset: start, totalCards: total };
   }
-  addMessage(sessionId: string, role: Message["role"], text: string) {
-    const message: Message = { id: id(), sessionId, role, text, createdAt: now() };
+  addMessage(sessionId: string, role: Message["role"], text: string, metadata: Pick<Message, 'mentions' | 'images' | 'files'> = {}) {
+    const message: Message = { ...metadata, id: id(), sessionId, role, text, createdAt: now() };
     return this.put("messages", message.id, message);
   }
   cursor(sessionId: string) {

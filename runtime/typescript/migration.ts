@@ -7,6 +7,8 @@ import { HttpError, id, LakeStore, now, type StoredSession } from "./store";
 import { digest } from "./tasks";
 import type {LakeSSH} from './ssh';
 import type {LakeMySQL} from './mysql';
+import type {LakeSecurity} from './security';
+import type {McpBinding} from './extensions';
 
 const tables = ["projects", "resources", "resourceTree", "sessions", "messages", "workspaceTags", "sessionPresentation", "sessionTags", "sessionNavigation", "projectSessionNavigation", "navigationTrash", "aiScopes", "superagentRoleChannels", "superagentChannelReads", "superagentChannelTimeline"];
 const runtimeTables = ["superagent_projects", "superagent_roles", "superagent_role_channels", "superagent_workers", "native_work_goals", "native_operations", "security_project_policies", "security_legacy_session_policies"];
@@ -34,6 +36,57 @@ async function openLegacy(path: string, home?: string) {
   return db;
 }
 const exists = (db: DatabaseSync, table: string) => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table);
+
+// Restore project choices from the original authority, never grants, owners or
+// operations. Incremental receipts keep restarts from reimporting deleted data.
+export async function importLegacyMCP(store: LakeStore, security: LakeSecurity) {
+  const authority = security.authority();
+  if (!authority) return;
+  const path = join(store.data, 'adk/sessions.sqlite'), db = await openLegacy(path, store.home);
+  if (!db) return;
+  try {
+    const before = await fingerprint(path);
+    const meta = exists(db, 'security_schema_meta') ? db.prepare('SELECT * FROM security_schema_meta WHERE id=1').get() : undefined;
+    if (!meta || meta.store_id !== authority.storeID || meta.recovery_epoch !== authority.recoveryEpoch || meta.migration_state !== 'ready')
+      throw new HttpError(409, '原 MCP 安全权威尚未就绪');
+    const writes: { kind: string; key: string; receipt: string; value: McpBinding; sourceHash: string }[] = [];
+    const add = (kind: string, key: string, value: McpBinding, source: unknown) => {
+      const receipt = digest([kind, key]);
+      if (store.get(kind, key) || store.get('legacyMcpChoices', receipt)) return;
+      writes.push({kind, key, receipt, value: {...value, LegacyAuthority: authority}, sourceHash: digest(source)});
+    };
+    if (exists(db, 'security_authority_events')) for (const project of store.list<Project>('projects')) {
+      const row = db.prepare("SELECT result,after_revision FROM security_authority_events WHERE kind='mcp.inheritance' AND project_id=? AND object_id=? AND store_id=? AND recovery_epoch=? ORDER BY after_revision DESC LIMIT 1")
+        .get(project.id, project.id, authority.storeID, authority.recoveryEpoch);
+      if (!row) continue;
+      let value: McpBinding; try { value = JSON.parse(String(row.result)); } catch { throw new HttpError(409, '原 MCP 继承记录无效'); }
+      if (value.ProjectID !== project.id || typeof value.Enabled !== 'boolean' || value.Revision !== Number(row.after_revision) ||
+          !Number.isSafeInteger(value.Revision) || value.Revision < 1 || value.Revision >= 2 ** 50)
+        throw new HttpError(409, '原 MCP 继承记录版本冲突');
+      add('mcpInheritance', project.id, {ProjectID: project.id, Enabled: value.Enabled, Revision: value.Revision}, row);
+    }
+    if (exists(db, 'security_mcp_bindings')) for (const row of db.prepare('SELECT * FROM security_mcp_bindings').all()) {
+      const project = String(row.project_id), server = String(row.server_id);
+      if (!store.get('projects', project)) continue;
+      if (!safeId(server)) throw new HttpError(409, '原 MCP 服务身份无效');
+      const valid = row.store_id === authority.storeID && row.recovery_epoch === authority.recoveryEpoch &&
+        Number.isSafeInteger(Number(row.revision)) && Number(row.revision) >= 1 && Number(row.revision) < 2 ** 50;
+      let names: unknown; try { names = JSON.parse(String(row.tool_names)); } catch { names = undefined; }
+      const catalogValid = Array.isArray(names) && names.length <= 1000 && names.every(name => typeof name === 'string') && new Set(names).size === names.length;
+      // A stale explicit binding must still override inherited access with a deny.
+      add('mcpBindings', digest([project, server]), {ProjectID: project, ServerID: server, Revision: valid ? Number(row.revision) : 1,
+        Enabled: valid && catalogValid && row.enabled === 1, ToolNames: catalogValid ? names as string[] : []}, row);
+    }
+    security.check();
+    if (digest(security.authority()) !== digest(authority) || await fingerprint(path) !== before)
+      throw new HttpError(409, '原 MCP 权威正在变化，本次迁移未提交');
+    store.transaction(() => { for (const entry of writes) {
+      if (store.get(entry.kind, entry.key) || store.get('legacyMcpChoices', entry.receipt)) continue;
+      store.put(entry.kind, entry.key, entry.value);
+      store.put('legacyMcpChoices', entry.receipt, {kind: entry.kind, id: entry.key, sourceHash: entry.sourceHash, authority, importedAt: now()});
+    } });
+  } finally { db.close(); }
+}
 
 // Catalog v1 intentionally retained only metadata. Supplement exact SSH config
 // references without rewriting that batch's immutable receipts or old Go data.

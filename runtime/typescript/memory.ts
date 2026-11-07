@@ -79,6 +79,9 @@ export type MemoryJob = {
   finishedAt?: string;
   error?: string;
   nativeExtraction?: boolean;
+  outcome?: "published" | "unchanged";
+  publishedRevision?: number;
+  noteCount?: number;
   modelAttempts?: number;
   inputTokens?: number;
   outputTokens?: number;
@@ -1508,6 +1511,9 @@ export class LakeMemory {
         );
       job.state = "completed";
       job.nativeExtraction = true;
+      job.outcome = changed ? "published" : "unchanged";
+      job.publishedRevision = this.store.require<Scope>("memoryScopes", scope.key).publishedRevision;
+      job.noteCount = files.size;
     } catch (error) {
       Object.assign(job, this.store.require<MemoryJob>("memoryJobs", job.id));
       job.state = controller.signal.aborted ? "withdrawn" : "failed";
