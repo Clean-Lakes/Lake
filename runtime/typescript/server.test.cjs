@@ -486,13 +486,14 @@ test('Gemini and Ollama catalog and actual SDK model tests reach their correct c
     let raw = ''; for await (const chunk of req) raw += chunk;
     requests.push({url: req.url, authorization: req.headers.authorization, key: req.headers['x-api-key'], version: req.headers['anthropic-version'], method: req.method});
     res.writeHead(200, {'Content-Type': 'application/json'});
-    res.end(JSON.stringify(req.method === 'GET' ? {data: [{id: 'fixture'}]} : {id: 'model-test', object: 'chat.completion', created: 1, model: 'fixture', choices: [{index: 0, message: {role: 'assistant', content: 'OK'}, finish_reason: 'stop'}], usage: {prompt_tokens: 1, completion_tokens: 1, total_tokens: 2}}));
+    res.end(JSON.stringify(req.method === 'GET' ? {data: [{id: 'fixture', context_window: 64000, effort: {supported_levels: ['low', 'high'], default_level: 'high'}}]} : {id: 'model-test', object: 'chat.completion', created: 1, model: 'fixture', choices: [{index: 0, message: {role: 'assistant', content: 'OK'}, finish_reason: 'stop'}], usage: {prompt_tokens: 1, completion_tokens: 1, total_tokens: 2}}));
   });
   await new Promise(resolve => wire.listen(0, '127.0.0.1', resolve)); t.after(() => new Promise(resolve => {wire.closeAllConnections(); wire.close(resolve);}));
   const base = `http://127.0.0.1:${wire.address().port}`;
   for (const [protocol, path, expected] of [['gemini', '/v1beta', '/v1beta/openai'], ['ollama', '', '/v1']]) {
     const provider = await f.api('/api/settings/providers', 'POST', {name: protocol, baseURL: base + path, protocol, apiKey: protocol === 'gemini' ? 'synthetic-provider-key' : '', enabled: true, models: []});
-    const result = await f.api(`/api/settings/providers/${provider.savedProviderId}/discover`, 'POST', {}); assert.equal(result.models[0].id, 'fixture');
+    const result = await f.api(`/api/settings/providers/${provider.savedProviderId}/discover`, 'POST', {}); assert.deepEqual(result.models, ['fixture']);
+    assert.deepEqual(result.reasoningCapabilities.fixture, {levels: ['low', 'high'], default: 'high', source: 'provider'}); assert.equal(result.contextLimits.fixture, 64000);
     assert.equal(requests.at(-1).url, expected + '/models');
     await f.api('/api/settings/model/test', 'POST', {url: base + path, name: 'fixture', protocol});
     assert.equal(requests.at(-1).url, expected + '/chat/completions');
@@ -501,6 +502,28 @@ test('Gemini and Ollama catalog and actual SDK model tests reach their correct c
   await f.api(`/api/settings/providers/${anthropic.savedProviderId}/test`, 'POST', {});
   assert.equal(requests.at(-1).key, 'synthetic-anthropic-key'); assert.equal(requests.at(-1).authorization, undefined); assert.equal(requests.at(-1).version, '2023-06-01');
   const before = requests.length; await f.api('/api/settings/model/test', 'POST', {url: base, name: 'fixture', protocol: 'unknown'}, 400); assert.equal(requests.length, before);
+});
+
+test('declared reasoning options persist, reach the actual SDK request and cannot cross model identities or frozen Workers', async t => {
+  const f = await fixture(t), catalog = await f.api('/api/settings/providers'), provider = catalog.providers[0], base = `/api/sessions/${f.session.id}/ai/reasoning`;
+  provider.models[0].reasoningCapability = {levels: ['low', 'high', 'not-a-real-level'], default: 'high', source: 'provider'};
+  await f.api(`/api/settings/providers/${provider.id}`, 'PUT', provider);
+  let settings = await f.api(base); assert.deepEqual(settings.levels, ['low', 'high']); assert.equal(settings.effort, '');
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'Default request'}, 202); await f.wait(['completed']);
+  assert.equal(f.requests.at(-1).reasoning_effort, undefined, 'default leaves the provider request unchanged');
+  await f.api(base, 'POST', {modelId: settings.modelId, effort: 'max'}, 400);
+  await f.api(base, 'POST', {modelId: 'stale-model', effort: 'high'}, 409);
+  await f.api(base, 'POST', {modelId: settings.modelId, effort: 'high'}); await f.restart();
+  assert.equal((await f.api(base)).effort, 'high');
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'Explicit high request'}, 202); await f.wait(['completed']);
+  assert.equal(f.requests.at(-1).reasoning_effort, 'high');
+  const frozen = f.app.store.createSession(f.project.id, '冻结任务'); frozen.workspaceRole = 'worker'; f.app.store.put('sessions', frozen.id, frozen);
+  await f.api(`/api/sessions/${frozen.id}/ai/reasoning`, 'POST', {modelId: settings.modelId, effort: 'low'}, 409);
+  const changed = {...provider, id: undefined}; const saved = await f.api('/api/settings/providers', 'POST', changed);
+  await f.api('/api/settings/model/select', 'POST', {providerId: saved.savedProviderId, modelId: provider.models[0].id});
+  settings = await f.api(base); assert.equal(settings.effort, '');
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'New identity default'}, 202); await f.wait(['completed']);
+  assert.equal(f.requests.at(-1).reasoning_effort, undefined);
 });
 
 test('extracting a preset makes a real bounded model request and saves a persistent result with its source', async t => {
@@ -1222,6 +1245,10 @@ test("native Pilot creates a stable specialist and independent Worker, with evid
   const project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
   const again = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
   assert.equal(project.routerSessionId, again.routerSessionId);
+  const provider = (await f.api('/api/settings/providers')).providers[0]; provider.models[0].reasoningCapability = {levels: ['low', 'high'], source: 'provider'};
+  await f.api(`/api/settings/providers/${provider.id}`, 'PUT', provider);
+  const reasoningPath = `/api/sessions/${project.routerSessionId}/ai/reasoning`, reasoning = await f.api(reasoningPath);
+  await f.api(reasoningPath, 'POST', {modelId: reasoning.modelId, effort: 'high'});
   const workspace = await f.app.store.workspace(f.project.id);
   await writeFile(join(workspace, "actual-evidence.txt"), "real fixture file");
   await f.api(`/api/sessions/${project.routerSessionId}/messages`, "POST", { text: "请创建项目检查员，并检查这个项目工作区的实际文件。" }, 202);
@@ -1231,6 +1258,8 @@ test("native Pilot creates a stable specialist and independent Worker, with evid
   const worker = result.workers[0];
   assert.equal(worker.task.acceptanceState, "pass");
   assert.notEqual(worker.sessionId, project.routerSessionId);
+  assert.equal(f.app.store.session(worker.sessionId).options.reasoningEffort, 'high');
+  assert.equal(f.requests.find(isIndependentWorkerRequest).reasoning_effort, 'high', 'the frozen source choice reaches the independent Worker model');
   assert.equal(result.channels.length, 1);
   assert.equal(result.channels[0].roleId, worker.roleId);
   const snapshot = await f.api(`/api/sessions/${worker.sessionId}/snapshot`);

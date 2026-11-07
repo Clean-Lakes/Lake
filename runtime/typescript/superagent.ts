@@ -368,6 +368,8 @@ export class LakeSuperagent implements AgentHost {
         const source = this.store.session(event.sessionId), router = this.store.session(sessionId);
         const session = this.session(event.projectId, workerSession, title, "worker");
         session.options = { ...session.options, conversationMode: source.options.conversationMode ?? router.options.conversationMode ?? "default",
+          reasoningModelId: source.options.reasoningModelId ?? router.options.reasoningModelId,
+          reasoningEffort: source.options.reasoningEffort ?? router.options.reasoningEffort,
           maxSteps: source.options.maxSteps ?? router.options.maxSteps ?? 500, ignoreProjectMemory: true, ignoreNaturalMemory: true };
         this.store.put("sessions", session.id, session);
         const refs = strings(input.evidence_task_ids, 8);

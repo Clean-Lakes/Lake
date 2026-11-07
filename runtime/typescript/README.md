@@ -67,6 +67,12 @@ Node 命令须使用准备好的 24.14.0。测试经过真实 Agent SDK 源码�
 
 本轮准确源码 SHA、签名进程检查、界面截图与未验证项见[阶段验证记录](../../docs/validation/typescript-candidate/README.md)。
 
+### 2026-11-07 切换缺口修复
+
+已增量接通原安全 epoch 下的 MCP 继承/绑定迁移、原生自动记忆提取、准确资源引用、Plan 模式与原计划确认、持久消息队列、目录编辑/回收站、原 PostgreSQL/Redis 配置及工作流模板保留。保存的模型思考能力可通过原 UI 选择，按供应商/地址/协议/模型身份校验，并冻结到任务及其子执行；默认不添加推理参数，未知模型不猜测能力。模型目录返回前端要求的名称数组，保留服务明确报告的上下文和思考能力；Gemini/Ollama 使用对应的 OpenAI 兼容入口。
+
+队列支持暂停、编辑、排序、移除及空闲后继续发送；重启暂停未发送输入，准入结果不明时保留且不重发。准确的同轮补充协议尚未接通，因此返回 `pushSupported=false` 并禁用队列推送按钮。附件/图片、上下文压缩/回退/文件恢复、资源导入、Kubernetes 与旧本机执行适配、直接 PostgreSQL/Redis 查询、工作流运行/日程、完整安全恢复、CLI/平台能力仍有缺口。现有 API 不以空成功伪装支持；已保存配置不等于实际连接成功。完整切换门禁继续关闭，后续验证和未完成条目须与[修复记录](../../docs/validation/typescript-candidate/cutover-repair-2026-11-07.md)一起评审。
+
 持续终端与 MCP/Skills 增量的实际范围、36 项隔离回归和 Dev 实测另见[验证记录](../../docs/validation/typescript-candidate/terminal-extensions.md)。本机 PTY 使用随包签名的 node-pty 1.1.0 原生 addon/启动程序，macOS 无需系统 Node；该记录保留当时的本机 PTY 水位；后续 SSH/确认入口修复见[SSH 增量记录](../../docs/validation/typescript-candidate/ssh-confirmation.md)，Agent 接管仍待移植。
 
 ## 普通任务与对话续派

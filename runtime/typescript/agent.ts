@@ -1,6 +1,7 @@
 import {prepareSessionArchive} from "./session-archive";
 import type {MessageInput} from "./message-input";
 import {providerConnection} from './provider-connection';
+import {reasoningBinding} from './reasoning';
 import {redactModelValue,describeTurnFailure} from "./model-errors";
 import { join } from "node:path";
 import { builtInTools, AgentRuntime, ManualPermissionBroker, createToolRegistry, createExploreSubagentPort, InMemoryRuntimeTaskRegistry,
@@ -401,7 +402,7 @@ export class LakeAgents {
     if (view.pendingApprovals)
       view.pendingApprovals = JSON.parse(this.redact(JSON.stringify(view.pendingApprovals)));
   }
-  private async model(provider: ModelProvider, model: ProviderModel, profile?: HostProfile, memoryActor?: LayeredMemoryActor, testKey?: string): Promise<Model> {
+  private async model(provider: ModelProvider, model: ProviderModel, profile?: HostProfile, memoryActor?: LayeredMemoryActor, testKey?: string, options: Record<string, unknown> = {}): Promise<Model> {
     const key = testKey ?? await this.store.secret(provider.id);
     if (key) this.keys.add(key);
     const adapter = new AiSdkModelAdapter({ env: {}, retry: { maxAttempts: 2 }, runtime: {
@@ -413,6 +414,7 @@ export class LakeAgents {
       }}),
     } });
     const {apiType, baseURL, localKeyPlaceholder} = providerConnection(provider.protocol, provider.baseURL);
+    const reasoning = reasoningBinding(provider, model, options);
     const providerConfig = new ProviderConfig({
       access: new ApiKeyAccessConfig({ apiKey: key || (localKeyPlaceholder ? 'ollama' : undefined) }),
       api: new ProviderApiConfig({ type: apiType, baseUrl: baseURL }),
@@ -444,7 +446,7 @@ export class LakeAgents {
               ? '{"max_output_tokens": maxOutputTokens}'
               : '{"max_tokens": maxOutputTokens}',
         },
-        reasoningLevel: { values: ["disabled"], map: "{}" },
+        reasoningLevel: reasoning.spec,
       },
     }) as RegistryModelConfig;
     return this.safeModel(
@@ -453,7 +455,7 @@ export class LakeAgents {
         modelId: model.name,
         providerConfig,
         modelConfig,
-        options: { maxOutputTokens: 8192, reasoningLevel: "disabled" },
+        options: { maxOutputTokens: 8192, reasoningLevel: reasoning.value },
       }), profile, memoryActor,
     );
   }
@@ -705,7 +707,7 @@ export class LakeAgents {
     }
     if (existingSession && profile?.permissionRules) await this.sessions.updateSession({ id: sessionId as SessionId, permission: profile.permissionRules });
     const memoryActor = { ...(profile?.memoryActor ?? { kind: "pilot" as const, projectId: session.projectId }), sessionId };
-    const boundModel = await this.model(provider, model, profile, memoryActor);
+    const boundModel = await this.model(provider, model, profile, memoryActor, undefined, session.options);
     const broker = new ManualPermissionBroker({
       onRequest: (request) => {
         const view = this.store.view(sessionId);

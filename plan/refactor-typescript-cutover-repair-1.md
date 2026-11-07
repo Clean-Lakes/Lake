@@ -33,7 +33,7 @@ Repair findings A01–A14 in the 2026-11-07 cutover audit. An implemented endpoi
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-001 | In runtime/typescript/migration.ts import verified legacy MCP inheritance and explicit bindings from the current security authority epoch, without overwriting TS choices; test absent, stale, denied and restart cases. | ✅ | 2026-11-07 |
-| TASK-002 | In runtime/typescript/agent.ts scope acknowledgement instructions to the foreground memory stage; verify SDK extraction receives its own native protocol. In memory.ts preserve guarded publication and expose meaningful no-change results. Test a real durable preference, independent recall and forgetting. | No | — |
+| TASK-002 | In runtime/typescript/agent.ts scope acknowledgement instructions to the foreground memory stage; verify SDK extraction receives its own native protocol. In memory.ts preserve guarded publication and expose meaningful no-change results. Test a real durable preference, independent recall and forgetting. | ✅ | 2026-11-07 |
 | TASK-003 | In runtime/typescript/server.ts constrain method/path dispatch, implement persisted presets and real model connection testing, and reject unknown session/resource actions instead of returning unrelated DTOs. Test malformed, unreachable, restart and deletion cases. | ✅ | 2026-11-07 |
 
 ### Implementation Phase 2
@@ -43,8 +43,8 @@ Repair findings A01–A14 in the 2026-11-07 cutover audit. An implemented endpoi
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-004 | In runtime/typescript/server.ts, store.ts, agent.ts and superagent.ts carry structured resource IDs, mentions and attachment ownership into a frozen user message and task execution; use existing attachment size/hash/type contracts and reject cross-session references. | No | — |
-| TASK-005 | Connect plans/mode/executePlan in server.ts and superagent.ts to the canonical frozen Goal plan, original live confirmation and transactional user-action receipt; reject stale, foreign and restarted confirmations. | No | — |
-| TASK-013 | Implement persistent user queues with pause/resume/edit/remove/reorder, compare-and-swap revisions and dispatch-time reference validation in message-queue.ts; retain uncertain admissions without resubmitting them after restart. | No | — |
+| TASK-005 | Connect plans/mode/executePlan in server.ts and superagent.ts to the canonical frozen Goal plan, original live confirmation and transactional user-action receipt; reject stale, foreign and restarted confirmations. | ✅ | 2026-11-07 |
+| TASK-013 | Implement persistent user queues with pause/resume/edit/remove/reorder, compare-and-swap revisions and dispatch-time reference validation in message-queue.ts; retain uncertain admissions without resubmitting them after restart. | ✅ | 2026-11-07 |
 | TASK-014 | Connect queue push to the exact original SDK task/root supplement receipt; ambiguous or unsupported task targeting must retain the queued item and return an explicit error. | No | — |
 | TASK-006 | Connect compact, rollback, clear and child cancellation through supported SDK APIs; preserve operation/approval history and return explicit unsupported capability errors for absent host ports. | No | — |
 
@@ -55,8 +55,8 @@ Repair findings A01–A14 in the 2026-11-07 cutover audit. An implemented endpoi
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-007 | Implement resource-tree parent validation, movement and navigation trash/restore in server.ts and store.ts; prevent cross-project parents, cycles and execution-owner deletion; test restart and restored hierarchy. | ✅ | 2026-11-07 |
-| TASK-008 | Extend migration.ts and service-resources.ts to exact saved PostgreSQL and Redis configuration and private credential references; preserve TLS and later edits. Imported availability records saved configuration, not a successful live probe. | No | — |
-| TASK-009 | Restore the saved workflow catalog with versioned CRUD and migration receipts; preserve templates without executing them or creating grants. Keep unavailable frozen workflow execution explicit. | No | — |
+| TASK-008 | Extend migration.ts and service-resources.ts to exact saved PostgreSQL and Redis configuration and private credential references; preserve TLS and later edits. Imported availability records saved configuration, not a successful live probe. | ✅ | 2026-11-07 |
+| TASK-009 | Restore the saved workflow catalog with versioned CRUD and migration receipts; preserve templates without executing them or creating grants. Keep unavailable frozen workflow execution explicit. | ✅ | 2026-11-07 |
 
 | TASK-015 | Restore Kubernetes and local workspace configuration with exact ownership and execution adapters; do not turn copied metadata into an executable connection. | No | — |
 | TASK-016 | Restore frozen workflow runs, schedule eligibility, model reasoning controls and legacy read-only evidence/export APIs through their existing authorities. | No | — |

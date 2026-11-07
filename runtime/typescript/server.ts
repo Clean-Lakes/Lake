@@ -29,6 +29,7 @@ import {messageInput} from './message-input';
 import {LakeMessageQueue} from './message-queue';
 import {LakeWorkflowCatalog} from './workflow-catalog';
 import {providerConnection, modelCatalogHeaders} from './provider-connection';
+import {reasoningSettings, reasoningUpdate} from './reasoning';
 import {LakeMySQL} from "./mysql";
 import {LakeExecution} from "./execution";
 import {agentCapabilityCatalog,nativeSearchSupported} from "./capabilities";
@@ -355,11 +356,21 @@ export async function startLakeServer(options: ServerOptions) {
             signal: AbortSignal.timeout(15000),
           });
           if (!probe.ok) throw new HttpError(502, `模型服务返回 HTTP ${probe.status}`);
-          const response = (await probe.json()) as { data?: { id: string }[] };
+          const response = (await probe.json()) as { data?: { id: string; context_window?: number; supported_reasoning_efforts?: string[]; effort?: {supported_levels?: string[]; default_level?: string} }[] };
+          if (!Array.isArray(response.data) || response.data.length > 10000 || response.data.some(item => !item || typeof item.id !== 'string' || !item.id || item.id.length > 512))
+            throw new HttpError(502, '模型目录返回格式无效');
+          const models = [...new Set(response.data.map(item => item.id))];
+          const reasoningCapabilities = Object.fromEntries(response.data.flatMap(item => {
+            const levels = item.effort?.supported_levels ?? item.supported_reasoning_efforts;
+            if (!Array.isArray(levels)) return [];
+            const clean = reasoningSettings({id: path[3], protocol: data.protocol ?? existing?.protocol ?? 'openai', baseURL: data.baseURL ?? existing?.baseURL ?? ''} as ModelProvider,
+              {id: item.id, name: item.id, reasoningCapability: {levels, default: item.effort?.default_level, source: 'provider'}} as ProviderModel);
+            return [[item.id, {levels: clean.levels, ...(clean.default ? {default: clean.default} : {}), source: 'provider'}]];
+          }));
           result =
             path[4] === "test"
               ? { ok: true, message: "模型服务连接正常" }
-              : { models: (response.data ?? []).map((item) => ({ id: item.id, name: item.id })) };
+              : {models, reasoningCapabilities, contextLimits: Object.fromEntries(response.data.filter(item => Number.isSafeInteger(item.context_window) && item.context_window! > 0).map(item => [item.id, item.context_window]))};
         } else if (method === "POST" && path.length === 3 || method === "PUT" && path.length === 4) {
           const providerId = path[3] ?? id();
           const previous = store.get<ModelProvider>("providers", providerId);
@@ -689,13 +700,15 @@ export async function startLakeServer(options: ServerOptions) {
               if (superagent.messageQueueBusy(sessionId)) throw new HttpError(409, '请先结束当前回复再清除资源访问记忆');
               store.delete('sessionResourceReferences', sessionId); result = {}; break;
             case "reasoning":
-              if (method !== "GET") throw new HttpError(501, "当前模型推理等级设置尚未接入");
-              result = {
-                effort: "",
-                levels: [],
-                supported: false,
-                modelId: selected().model?.id ?? "",
-              };
+              if (method === 'POST') {
+                if (session.workspaceRole === 'worker') throw new HttpError(409, '当前任务的模型选项已冻结，请在 Pilot 或专员频道设置后续任务');
+                if (superagent.messageQueueBusy(sessionId) || messageQueue!.get(sessionId).items.length) throw new HttpError(409, '请先结束本轮并处理待发送消息，再设置思考级别');
+                const {provider, model} = selected();
+                session.options = {...session.options, ...reasoningUpdate(provider, model, data)};
+                store.put('sessions', sessionId, session);
+                broadcast(store.event(sessionId, 'session'));
+              }
+              result = reasoningSettings(selected().provider, selected().model, session.options);
               break;
             default:
               throw new HttpError(501, "此会话操作尚未迁移完成");
