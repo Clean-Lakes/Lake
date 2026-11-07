@@ -700,3 +700,45 @@ test("SSH dispatches the compiled identity inspection directly and retains origi
   assert.ok(permissionChecks.length >= 3);
   assert.ok(permissionChecks.every((readOnly) => readOnly === false));
 });
+
+test("a human may release distinct work after a verified removal; original failure and cross-task replay stay fenced", async t => {
+  const f = await inventoryFixture(t);
+  const {store, operation, execution, input, part, directory, verify, run, recovery, ledger} = f;
+  const {compileNobodyInspection} = await import("../../web-agent/shared/command-policy");
+  const command = "runuser -u nobody -- /bin/bash -c 'cd " + directory +
+    " || exit 1; rm -- maintenance || exit 1; test result = expected'";
+  input.command = command;
+  operation.argsHash = digest(input);
+  const out = Object.assign(operation.output as Record<string,unknown>, {stdout: "ready\n", stdoutBytes: 6, stderr: "", stderrBytes: 0});
+  operation.outputHash = digest(out);
+  Object.assign(execution, {command, commandHash:digest(command)});
+  Object.assign(execution.result, {stdout:{text:"ready\n",bytes:6,truncated:false},stderr:{text:"",bytes:0,truncated:false}});
+  part.state.output = "Exit code 1\nready";
+  store.put("superOperations", operation.id, operation);
+  store.put("commandExecutions", execution.id!, execution);
+  const check = compileNobodyInspection('runuser -u nobody -- /bin/bash -c \'id; ls -la ' +
+    directory + '; find ' + directory + ' -maxdepth 1 -printf "%y %s %p\\n"\'')!;
+  Object.assign(run, {command:check.command,commandHash:digest(check.command),nobodyInspection:{directory,inventoryDepth:1}});
+  store.put("commandExecutions", run.id, run);
+  store.put("superOperations", verify.id, verify);
+  const view = await recovery.reviewInfo(operation.sessionId, operation.id);
+  assert.equal(view.effects,"observed");
+  assert.equal(view.evidence.length,1);
+  const req = {revision:view.revision,evidenceOperationId:verify.id,note:"原权限复查了已删除的标志和进程终态。"};
+  await assert.rejects(recovery.confirmInventoryReview(operation.sessionId,operation.id,{...req,confirmNoWrite:true},()=>{}), /判定/);
+  assert.equal(await recovery.verify(operation.projectId),0);
+  await recovery.confirmInventoryReview(operation.sessionId,operation.id,{...req,confirmObservedEffects:true},()=>{});
+  assert.equal(recovery.resolution(operation)?.effects,"observed");
+  assert.equal(ledger.unresolved(operation.goalId), true);
+  assert.equal(store.require<Operation>("superOperations",operation.id).status,"unknown");
+  assert.equal(store.list("superAcceptance").length,0);
+  const originalGoal = ledger.get(operation.goalId);
+  ledger.create({...originalGoal,id:"next",workerId:"other",sessionId:"worker-next",sourceEventId:"another-event"});
+  const bind={resourceId:operation.resourceId,readOnly:false};
+  const unrelated = (cmd:string,callId:string) => ledger.operation("next",1,"policy",callId,"Bash",{command:cmd},async()=>({exitCode:0}),v=>v,bind);
+  await assert.rejects(unrelated(command,"replay"), /禁止重复/);
+  await unrelated("a distinct approved operation","another");
+  store.put("commandExecutions",run.id,{...run,configurationRevision:"unrelated"});
+  assert.equal(recovery.resolution(operation),undefined);
+  await assert.rejects(unrelated("new action","later"), /requires reconciliation/);
+});

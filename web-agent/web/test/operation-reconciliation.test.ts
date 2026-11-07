@@ -50,3 +50,11 @@ test('review GET and deliberate confirmation POST both target the original sessi
  assert.deepEqual(calls.map(c=>[c.url,c.method]),[['/api/sessions/session%2F1/operation-reconciliation/op%2F2','GET'],['/api/sessions/session%2F1/operation-reconciliation/op%2F2','POST']]);
  assert.deepEqual(calls[1].body,confirmation);
 });
+
+test('observed change has a distinct explicit decision and never records a no-write statement',()=>{
+ const reviewed={...view,effects:'observed' as const};
+ assert.deepEqual(reviewConfirmation(reviewed,'later','已删除标志并复核现状',true),
+   {revision:view.revision,evidenceOperationId:'later',confirmObservedEffects:true,note:'已删除标志并复核现状'});
+ const html=renderToStaticMarkup(createElement(OperationReviewForm,{review:reviewed,connected:true,busy:false,failed:'',onSubmit(){},onRefresh(){}}));
+ assert.match(html,/实际变更/); assert.doesNotMatch(html,/确认原操作未写入/);
+});

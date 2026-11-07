@@ -72,7 +72,7 @@ const businessReceiptTools = new Set(["Bash", "Glob", "Grep", "FindFiles", "Sear
 // Router replies, Worker prose and channel presentation never close a goal.
 export class TaskLedger {
   constructor(readonly store: LakeStore, readonly revalidate?: (operation: Operation) => void,
-    readonly effectResolution?: (operation: Operation) => { effects: "none" } | undefined) {}
+    readonly effectResolution?: (operation: Operation) => { effects: "none" | "observed" } | undefined) {}
   get(goalId: string) { return this.store.require<Goal>("superGoals", goalId); }
   jointTask(taskId: string) { return jointTask(this.store, taskId); }
   jointState(taskId: string) {
@@ -318,8 +318,20 @@ export class TaskLedger {
     const operation = this.store.transaction(() => {
       const { goal, step, attempt } = this.active(goalId, generation, policyHash);
       if (binding.readOnly !== true && this.unresolved(goalId)) throw new HttpError(409, "Original operation requires reconciliation");
-      if (binding.readOnly !== true && !binding.remoteMcp && this.store.list<Operation>("superOperations").some((operation) => operation.projectId === goal.projectId && operation.status === "unknown" && this.requiresReconciliation(operation)))
-        throw new HttpError(409, "A project operation still requires reconciliation");
+      if (binding.readOnly !== true && !binding.remoteMcp) {
+        const command = (input as {command?: unknown} | null)?.command;
+        const commandHash = typeof command === "string" ? digest(command) : undefined;
+        for (const original of this.store.list<Operation>("superOperations")) {
+          if (original.projectId !== goal.projectId || original.status !== "unknown") continue;
+          const receipt = this.effectResolution?.(original);
+          if (!receipt) throw new HttpError(409, "A project operation still requires reconciliation");
+          // A human may release independent work after observing actual effects.
+          // Keep the original goal unresolved and fence its exact command across new tasks/IDs.
+          if (receipt.effects === "observed" && commandHash && original.resourceId === binding.resourceId &&
+              original.commandExecutionId && this.store.get<{commandHash:string}>("commandExecutions", original.commandExecutionId)?.commandHash === commandHash)
+            throw new HttpError(409, "原命令已产生经人工核实的变更，禁止重复派发");
+        }
+      }
       if (binding.readOnly !== true && !binding.remoteMcp && this.store.list<any>("legacyOperations").some((operation) => operation.projectId === goal.projectId && !operation.riskResolvedAt &&
           (["running", "unknown", "dispatched"].includes(operation.status) || operation.orphanState === "unresolved")))
         throw new HttpError(409, "旧 Go 操作仍需核实；迁移不会解除原未决风险");

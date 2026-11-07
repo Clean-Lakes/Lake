@@ -3,12 +3,13 @@ import {
   isLiteralProgramDiscovery,
   compileNobodyInspection,
 } from "../../web-agent/shared/command-policy";
+import { removalReviewScope } from "./removal-review";
 import { boundResourceRevision } from "./resource-pin";
 import { HttpError, LakeStore, now } from "./store";
 import { digest, type Goal, type Operation } from "./tasks";
 
 type Receipt = {
-  method: "literal_program_discovery_v1" | "operator_nobody_inventory_v1";
+  method: "literal_program_discovery_v1" | "operator_nobody_inventory_v1" | "operator_observed_effects_v1";
   evidenceOperationId?: string;
   evidenceHash?: string;
   evidenceExecutionHash?: string;
@@ -22,7 +23,7 @@ type Receipt = {
   sourceMessageId: string;
   sourceHash: string;
   verifiedAt: string;
-  effects: "none";
+  effects: "none" | "observed";
 };
 
 /** A host-only compatibility reconciliation. Original results never change. */
@@ -94,15 +95,15 @@ export class ProgramDiscoveryRecovery {
   resolution(operation: Operation): Receipt | undefined {
     const execution = this.candidate(operation);
     const receipt = this.store.get<Receipt>(
-      "commandReadReconciliations",
-      operation.id,
-    );
+      "commandReadReconciliations", operation.id,
+    ) ?? this.store.get<Receipt>("commandObservedEffectReviews", operation.id);
     if (
       execution &&
-      (receipt?.method === "literal_program_discovery_v1" ||
-        (receipt?.method === "operator_nobody_inventory_v1" &&
-          this.matchesVerification(operation, receipt))) &&
-      receipt.effects === "none" &&
+      ((receipt?.effects === "none" &&
+        (receipt.method === "literal_program_discovery_v1" ||
+          (receipt.method === "operator_nobody_inventory_v1" && this.matchesVerification(operation, receipt)))) ||
+       (receipt?.effects === "observed" && receipt.method === "operator_observed_effects_v1" &&
+        this.matchesVerification(operation, receipt))) &&
       receipt.operationId === operation.id &&
       receipt.operationHash === digest(operation) &&
       receipt.executionHash === digest(execution) &&
@@ -147,7 +148,14 @@ export class ProgramDiscoveryRecovery {
   }
 
   private async inventorySource(operation: Operation, execution: any) {
-    const scope = compileNobodyInspection(execution.command ?? "");
+    const command = String(execution.command ?? "");
+    const inventory = compileNobodyInspection(command);
+    const isInventory = inventory?.inventoryDepth != null;
+    const removal = isInventory ? undefined : removalReviewScope(command);
+    const directory = isInventory ? inventory.directory : removal?.directory;
+    if (!directory) return;
+    const scope = { directory, inventoryDepth: isInventory ? inventory.inventoryDepth! : 1 };
+    const effects = isInventory ? "none" as const : "observed" as const;
     const output = operation.output as any,
       goal = this.store.get<Goal>("superGoals", operation.goalId);
     const event =
@@ -164,7 +172,6 @@ export class ProgramDiscoveryRecovery {
       operation.resourceId!,
     );
     if (
-      scope?.inventoryDepth == null ||
       execution.workerId !== goal?.workerId ||
       execution.id !== operation.commandExecutionId ||
       resource?.kind !== "ssh" ||
@@ -172,16 +179,9 @@ export class ProgramDiscoveryRecovery {
       event?.projectId !== operation.projectId ||
       !event.payload.includes(scope.directory) ||
       !event.selectedReferences?.resourceIds.includes(operation.resourceId!) ||
-      !/^find: failed to restore initial working directory: Permission denied\n?$/.test(
-        output.stderr,
-      ) ||
-      !/^uid=\d+\(nobody\) gid=\d+\([\w-]+\)/.test(output.stdout) ||
-      !output.stdout
-        .split("\n")
-        .some(
-          (line: string) =>
-            line.startsWith("d ") && line.endsWith(" " + scope.directory),
-        ) ||
+      (isInventory && (!/^find: failed to restore initial working directory: Permission denied\n?$/.test(output.stderr) ||
+        !/^uid=\d+\(nobody\) gid=\d+\([\w-]+\)/.test(output.stdout) ||
+        !output.stdout.split("\n").some((line: string) => line.startsWith("d ") && line.endsWith(" " + directory)))) ||
       output.interrupted !== false ||
       output.stdoutTruncated !== false ||
       output.stderrTruncated !== false ||
@@ -235,12 +235,12 @@ export class ProgramDiscoveryRecovery {
       input.dangerouslyDisableSandbox === true ||
       digest(input) !== operation.argsHash ||
       part.state.output !==
-        ["Exit code 1", output.stdout.trimEnd(), output.stderr.trimEnd()].join(
-          "\n",
-        )
+        ["Exit code 1", output.stdout.trimEnd(), output.stderr.trimEnd()].filter(Boolean).join("\n")
     )
       return;
     return {
+      effects,
+      removedName: removal?.removedName,
       directory: scope.directory,
       depth: scope.inventoryDepth,
       sourcePartId: part.id,
@@ -253,6 +253,7 @@ export class ProgramDiscoveryRecovery {
     original: Operation,
     directory: string,
     depth: number,
+    removedName?: string,
   ) {
     return this.store.list<Operation>("superOperations").flatMap((op) => {
       if (
@@ -329,6 +330,8 @@ export class ProgramDiscoveryRecovery {
           )
       )
         return [];
+      if (removedName && output.stdout.split("\n").some((line:string) =>
+        line.endsWith(" " + directory + "/" + removedName))) return [];
       // Match the actual compiled command. Matching directory and profile text
       // alone cannot qualify another inspection, result or captured output.
       const source =
@@ -354,8 +357,8 @@ export class ProgramDiscoveryRecovery {
           sessionId: op.sessionId,
           at: op.completedAt!,
           command: source,
-          summary:
-            "同一 SSH 资源上以 nobody 成功核查 " +
+          summary: removedName ? "同一目录的后续只读盘点中已无 " + removedName + "。退出码 0。"
+            : "同一 SSH 资源上以 nobody 成功核查 " +
             directory +
             "，扫描深度 " +
             depth +
@@ -388,7 +391,7 @@ export class ProgramDiscoveryRecovery {
     const evidence = this.inventoryEvidence(
       operation,
       source.directory,
-      source.depth,
+      source.depth, source.removedName,
     );
     const revision = digest([
       digest(operation),
@@ -412,17 +415,20 @@ export class ProgramDiscoveryRecovery {
         evidence: [],
         reason: "原命令及回执不满足目录巡检人工核实条件",
       };
-    if (this.resolution(entry.operation))
-      return { operationId, eligible: false, resolved: true, evidence: [] };
+    const receipt = this.resolution(entry.operation);
+    if (receipt)
+      return { operationId, eligible: false, resolved: true, effects: receipt.effects, evidence: [] };
     const { evidence, revision, source, run } = entry;
     return {
       operationId,
       eligible: true,
       revision,
+      effects: source.effects,
       directory: source.directory,
       command: run.command,
-      reason:
-        "原目录检查返回工作目录权限错误。请独立核对原执行和同目标重采证据，再判断是否发生写入。",
+      reason: source.effects === "observed"
+        ? "请核对完整原命令、已发生的变更和后续独立回执。仍有其他可能影响时应继续核实。"
+        : "原目录检查返回工作目录权限错误。请独立核对原执行和同目标重采证据，再判断是否发生写入。",
       evidence: evidence.map(
         ({ operationHash, executionHash, ...publicEvidence }) => publicEvidence,
       ),
@@ -440,18 +446,20 @@ export class ProgramDiscoveryRecovery {
     ) => void,
   ) {
     if (
-      input.confirmNoWrite !== true ||
+      (input.confirmNoWrite === true) === (input.confirmObservedEffects === true) ||
       typeof input.note !== "string" ||
       !input.note.trim() ||
       input.note.length > 2000 ||
       typeof input.evidenceOperationId !== "string" ||
       typeof input.revision !== "string"
     )
-      throw new HttpError(400, "请确认未发生写入，填写核实理由并选择重采证据");
+      throw new HttpError(400, "请选择本次判定，填写核实理由并选择重采证据");
     const note = input.note.trim(),
       entry = await this.review(sessionId, operationId);
     if (!entry || input.revision !== entry.revision)
       throw new HttpError(409, "原始记录或重采证据已变化，请重新核实");
+    const expected = input.confirmNoWrite === true ? "none" : "observed";
+    if (entry.source.effects !== expected) throw new HttpError(409, "判定与原操作的核实类型不符");
     const proof = entry.evidence.find(
       (row) => row.operationId === input.evidenceOperationId,
     );
@@ -472,7 +480,7 @@ export class ProgramDiscoveryRecovery {
       const verified = this.inventoryEvidence(
         op,
         entry.source.directory,
-        entry.source.depth,
+        entry.source.depth, entry.source.removedName,
       ).find((row) => row.operationId === proof.operationId);
       if (
         !verified ||
@@ -486,9 +494,9 @@ export class ProgramDiscoveryRecovery {
       );
       revalidate(fresh.commandExecutionId!, fresh.goalId, fresh.generation);
       if (!this.resolution(op))
-        this.store.put<Receipt>("commandReadReconciliations", op.id, {
-          method: "operator_nobody_inventory_v1",
-          effects: "none",
+        this.store.put<Receipt>(expected === "none" ? "commandReadReconciliations" : "commandObservedEffectReviews", op.id, {
+          method: expected === "none" ? "operator_nobody_inventory_v1" : "operator_observed_effects_v1",
+          effects: expected,
           sourceKind: "user_action",
           operationId: op.id,
           operationHash: digest(op),

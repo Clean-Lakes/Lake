@@ -16,7 +16,7 @@ export function reviewConfirmation(review: OperationReview, evidenceId: string, 
   const reason = note.trim();
   if (!review.eligible || review.resolved || !review.revision || !confirmed || !reason || reason.length > 512 ||
       !review.evidence.some(item => item.operationId === evidenceId && item.operationId !== review.operationId)) return;
-  return {revision: review.revision, evidenceOperationId: evidenceId, confirmNoWrite: true, note: reason};
+  return {revision: review.revision, evidenceOperationId: evidenceId, note: reason, ...(review.effects === "observed" ? {confirmObservedEffects: true as const} : {confirmNoWrite: true as const})};
 }
 
 export function OperationReviewForm({review, connected, busy, failed, onSubmit, onRefresh}: {
@@ -24,13 +24,15 @@ export function OperationReviewForm({review, connected, busy, failed, onSubmit, 
   onSubmit: (value: OperationReviewConfirmation) => void; onRefresh: () => void;
 }) {
   const [selected, setSelected] = useState(''), [note, setNote] = useState(''), [confirmed, setConfirmed] = useState(false);
-  if (review.resolved) return <p className="operation-review-resolved" role="status">人工复核已登记：此操作未写入。</p>;
+  const observed = review.effects === "observed";
+  if (review.resolved) return <p className="operation-review-resolved" role="status">{observed ? "已登记实际变更。原任务仍保留失败记录。" : "已核实此操作未写入。"}</p>;
   if (!review.eligible || !review.revision) return null;
   const evidence = review.evidence.find(item => item.operationId === selected);
   const request = reviewConfirmation(review, selected, note, confirmed);
   const submit = (event: FormEvent) => {event.preventDefault(); if (request && connected && !busy) onSubmit(request);};
   return <form className="operation-review" onSubmit={submit} aria-label="操作人工复核">
-    <h4>核实原操作是否写入</h4>
+    <h4>{observed ? "核实原操作的实际变更" : "核实原操作是否写入"}</h4>
+    {observed && <p>请核对原命令及完整执行输出，确认变更范围和剩余风险。登记后其他任务可以继续执行。</p>}
     <p>复核目录 <code>{review.directory}</code></p>
     <details><summary>查看原命令</summary><pre>{review.command}</pre></details>
     {review.evidence.length === 0 ? <p>请在原主机对该目录执行独立只读复查，取得回执后刷新。 <button type="button" className="button secondary" onClick={onRefresh} disabled={busy||!connected}>刷新证据</button></p> :
@@ -42,7 +44,7 @@ export function OperationReviewForm({review, connected, busy, failed, onSubmit, 
         {evidence && <div className="operation-review-evidence"><p>{evidence.summary}</p><code>{evidence.operationId}</code>
           <details><summary>查看复查命令</summary><pre>{evidence.command}</pre></details></div>}
         <label>判定依据<textarea rows={2} maxLength={512} value={note} onChange={event=>{setNote(event.target.value);setConfirmed(false);}}/></label>
-        <label className="operation-review-consent"><input type="checkbox" disabled={!evidence||!note.trim()} checked={confirmed} onChange={event=>setConfirmed(event.target.checked)}/>我已核对独立回执，确认原操作未写入。</label>
+        <label className="operation-review-consent"><input type="checkbox" disabled={!evidence||!note.trim()} checked={confirmed} onChange={event=>setConfirmed(event.target.checked)}/>{observed ? "我已独立核实实际变更和进程终态，确认其余任务可以继续执行。" : "我已核对独立回执，确认原操作未写入。"}</label>
         <button type="submit" className="button secondary" disabled={!request || busy || !connected}>登记复核结果</button>
       </fieldset>}
     {failed && <p role="alert">{failed}</p>}
@@ -68,7 +70,7 @@ function CommandReview({sessionId, operationId, connected, onUpdated}: {sessionI
     try{
       const result=await api.confirmOperationReview(sessionId,operationId,body);
       if(result.operationId!==operationId || !result.resolved) throw new Error('未收到本次操作的复核回执');
-      if(alive.current){setReview({operationId,eligible:false,resolved:true,evidence:[]});onUpdated();}
+      if(alive.current){setReview({operationId,eligible:false,resolved:true,evidence:[],effects:review?.effects});onUpdated();}
     } catch(cause) {
       if(alive.current){setError(readableError(cause));setReview(undefined);setLoad(n=>n+1);}
     } finally {saving.current=false;if(alive.current)setPending(false);}
