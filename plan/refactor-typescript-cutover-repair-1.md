@@ -68,7 +68,7 @@ Repair findings A01–A14 in the 2026-11-07 cutover audit. An implemented endpoi
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-010 | Exercise security recovery, unknown-operation reconciliation, watchdog owner leases and queued dispatch eligibility through runtime tests; change only proven defects in the existing authorities. | No | — |
-| TASK-011 | Update runtime/typescript/README.md and validation evidence with actual host-port/CLI/platform capabilities and every unfinished audit requirement; keep full-cutover gate closed until parity evidence exists. | No | — |
+| TASK-011 | Update runtime/typescript/README.md and validation evidence with actual host-port/CLI/platform capabilities and every unfinished audit requirement; keep full-cutover gate closed until parity evidence exists. | ✅ | 2026-11-07 |
 | TASK-012 | Run source/server/frontend regressions and boundary checks, commit source, verify idle Dev, run scripts/build_lake_desktop.sh --dev --ts-candidate --install, inspect native Dev and record tested SHA. Open a PR against develop with the exact remaining limits. | No | — |
 
 ## 3. Alternatives
