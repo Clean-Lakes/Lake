@@ -1,0 +1,40 @@
+{
+  "date": "2026-11-07",
+  "sourceSHA": "8f282f30f861785adbc232d2a1da8cf0bcec595a",
+  "frontend": {
+    "passed": 730,
+    "failed": 0,
+    "typecheck": true,
+    "built": true,
+    "newTests": 2
+  },
+  "backendUnchangedSince": "9f3073139d55318a53328ff38cd770252f99d5c5",
+  "backendTestsRerun": false,
+  "isolatedUI": {
+    "taskNodeStable": true,
+    "historyCollapsed": true,
+    "keyboardHistoryOpens": true,
+    "independentQuestionPreserved": true,
+    "overlappedRefreshDrained": true,
+    "initialAnimations": 0,
+    "replacementAnimations": 3,
+    "reducedMotionAnimations": 0,
+    "fixtureCursorToVisibleMilliseconds": 20.2,
+    "realSSELatencyClaimed": false,
+    "actualHiddenVerified": false,
+    "darkNarrowCSSPixels": 420,
+    "horizontalOverflow": false,
+    "taskSpaceClosed": true,
+    "temporaryServerStopped": true
+  },
+  "signedCandidate": {
+    "dirty": false,
+    "codesignDeepStrict": true,
+    "backendSHA256": "b536d3b7b69880ef249e9a9903b6f16171c5b208c24e2ca70727ab90c16b8b67"
+  },
+  "nativeDev": {
+    "installed": false,
+    "blockedBy": "Mac lock screen; current Dev backend still running"
+  },
+  "merged": false
+}
