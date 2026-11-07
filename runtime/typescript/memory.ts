@@ -486,19 +486,18 @@ export class LakeMemory {
     ]);
   }
   private providerFence() {
-    const selected = this.store.get<{ providerId: string; modelId: string }>(
-        "settings",
-        "modelSelection",
-      ),
+    const selected = this.store.modelSelection(),
       provider = selected
-        ? this.store.get<any>("providers", selected.providerId)
+        ? this.store.modelProvider(selected.providerId)
         : undefined;
     return digest([
+      this.store.get('settings', 'modelSelection'),
       selected,
       provider?.enabled,
       provider?.baseURL,
       provider?.protocol,
       provider?.models?.find((model: any) => model.id === selected?.modelId),
+      provider && this.store.modelConnectionVersion(provider),
     ]);
   }
   private source(

@@ -80,8 +80,13 @@ export async function importDevModelSettings(store: LakeStore) {
       if (ref) store.put("providerCredentialRefs", provider.id, ref);
     }
     const selected = providers.find(({ provider }) => provider.id === raw.activeProviderId && provider.enabled)?.provider;
-    if (selected?.models.some((model) => model.id === raw.activeModelId && model.enabled))
-      store.put("settings", "modelSelection", { providerId: selected.id, modelId: raw.activeModelId });
+    if (selected?.models.some((model) => model.id === raw.activeModelId && model.enabled)) {
+      const native = {providerId: selected.id, modelId: raw.activeModelId};
+      store.put('settings', 'nativeModelSelection', native);
+      // The old reader preferred connected Magpie unless the user explicitly
+      // chose native. Preserve that source choice and its original fallback.
+      store.put('settings', 'modelSelection', raw.activeSource === 'native' ? native : {providerId: 'magpie', modelId: ''});
+    } else if (raw.activeSource === 'magpie') store.put('settings', 'modelSelection', {providerId: 'magpie', modelId: ''});
     store.put("settings", "devProviderImport", { status: "imported", providers: providers.length, at: now() });
   });
 }

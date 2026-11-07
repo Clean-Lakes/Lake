@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { chmod, lstat, mkdir, open, readFile, realpath, rename, unlink } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
+import type {LakeMagpie} from './magpie';
 import type { Position, Presentation } from "./navigation";
 import type {
   AIView,
@@ -44,6 +45,38 @@ export async function privateDirectory(path: string) {
 }
 
 export class LakeStore {
+  magpie?: LakeMagpie;
+  async refreshModels() { await this.magpie?.refresh(); }
+  modelProvider(providerId: string) { return providerId === 'magpie' ? this.magpie?.provider() : this.get<ModelProvider>('providers', providerId); }
+  modelProviders() { const native = this.list<ModelProvider>('providers').filter(value => value.id !== 'magpie'); const managed = this.magpie?.provider(); return managed ? [...native, managed] : native; }
+  modelSelection() {
+    type Selection = {providerId: string; modelId: string};
+    const valid = (choice: Selection | undefined) => {
+      if (!choice || choice.providerId === 'magpie') return false;
+      const provider = this.modelProvider(choice.providerId);
+      return provider?.enabled && provider.models.some(model => model.id === choice.modelId && model.enabled);
+    };
+    const selected = this.get<Selection>('settings', 'modelSelection');
+    if (valid(selected)) return selected;
+    const managed = this.magpie?.selectedId();
+    if (managed) return {providerId: 'magpie', modelId: managed};
+    const native = this.get<Selection>('settings', 'nativeModelSelection');
+    return valid(native) ? native : undefined;
+  }
+  selectModel(providerId: string, modelId: string) {
+    const provider = this.modelProvider(providerId);
+    if (!provider?.enabled || !provider.models.some(model => model.id === modelId && model.enabled)) throw new HttpError(400, '模型不可用');
+    this.transaction(() => {
+      const previous = this.modelSelection();
+      if (providerId === 'magpie') {
+        if (previous && previous.providerId !== 'magpie') this.put('settings', 'nativeModelSelection', previous);
+        this.magpie!.select(modelId);
+      } else this.put('settings', 'nativeModelSelection', {providerId, modelId});
+      this.put('settings', 'modelSelection', {providerId, modelId});
+    });
+  }
+  async modelCredential(provider: ModelProvider) { return provider.id === 'magpie' ? this.magpie?.credential(provider) : this.secret(provider.id); }
+  modelConnectionVersion(provider: ModelProvider) { return provider.id === 'magpie' ? this.magpie?.version(provider) : undefined; }
   private constructor(
     public home: string,
     public data: string,
@@ -308,6 +341,10 @@ export class LakeStore {
     };
   }
   async secret(providerId: string, value?: string | null) {
+    if (providerId === 'magpie') {
+      if (value !== undefined) throw new HttpError(409, 'Magpie 凭据由插件管理');
+      const provider = this.magpie?.provider(); return provider ? this.magpie!.credential(provider) : '';
+    }
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,119}$/.test(providerId))
       throw new HttpError(400, "Invalid provider identity");
     const directory = join(this.home, "secrets");

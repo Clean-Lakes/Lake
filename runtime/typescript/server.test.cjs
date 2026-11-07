@@ -21,12 +21,14 @@ async function fixture(t, mode = "text", legacyDev = false) {
   let releaseBackgroundChild;
   const backgroundChildGate = new Promise((resolve) => { releaseBackgroundChild = resolve; });
   const requests = [];
+  const requestAuthorizations = [];
   const target = join(home, "approved.txt");
   const provider = createServer(async (req, res) => {
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     const request = JSON.parse(Buffer.concat(chunks).toString());
     requests.push(request);
+    requestAuthorizations.push(req.headers.authorization);
     calls++;
     if(modelFailure){
       const error={message:'SYNTHETIC_PROVIDER_REJECTION synthetic-secret-no-real-credential',type:'invalid_request_error',code:'synthetic_rejection'};
@@ -88,7 +90,8 @@ async function fixture(t, mode = "text", legacyDev = false) {
       return;
     }
     res.writeHead(200, { "Content-Type": "text/event-stream" });
-    const deltas =
+    const echo = mode === 'magpie-secret' ? req.headers.authorization?.replace(/^Bearer /, '') : undefined;
+    const deltas = echo ? [{content: 'prefix ' + echo.slice(0, 13)}, {content: echo.slice(13) + ' suffix'}] :
       mode === "secret"
         ? [{ content: "prefix synthetic-secret-" }, { content: "no-real-credential suffix" }]
         : [delta];
@@ -109,7 +112,7 @@ async function fixture(t, mode = "text", legacyDev = false) {
     await fs.mkdir(join(home, "secrets"), { mode: 0o700 });
     await writeFile(join(home, "secrets/provider-fixture.key"), "synthetic-secret-no-real-credential", { mode: 0o600 });
     await writeFile(join(options.data, "providers.json"), JSON.stringify({
-      version: 1, activeProviderId: "legacy.fixture", activeModelId: "fixture", activeSource: "native",
+      version: 1, activeProviderId: "legacy.fixture", activeModelId: "fixture", activeSource: mode === 'legacy-magpie-source' ? 'magpie' : 'native',
       providers: [{
         id: "legacy.fixture", name: "Existing Dev provider", baseURL: `http://127.0.0.1:${provider.address().port}/v1`,
         protocol: "openai", enabled: true, credentialRef: "provider-fixture.key",
@@ -121,6 +124,7 @@ async function fixture(t, mode = "text", legacyDev = false) {
       }],
     }), { mode: 0o600 });
     await writeFile(join(options.data, "lake-web.sqlite"), "legacy database sentinel", { mode: 0o600 });
+    if (mode === 'legacy-magpie-source') await writeFile(join(home, 'secrets/magpie-agent.json'), JSON.stringify({model: 'legacy-magpie', baseURL: `http://127.0.0.1:${provider.address().port}/v1`, key: 'synthetic-legacy-magpie-key'}), {mode: 0o600});
   }
   let app = await startLakeServer(options);
   t.after(async () => {
@@ -166,6 +170,8 @@ async function fixture(t, mode = "text", legacyDev = false) {
     api,
     wait,
     requests,
+    requestAuthorizations,
+    gatewayURL: `http://127.0.0.1:${provider.address().port}/v1`,
     failWorkerRequests() { failWorkerRequests = true; },
     recoverModel() { modelFailure = false; },
     options,
@@ -185,6 +191,133 @@ async function fixture(t, mode = "text", legacyDev = false) {
     },
   };
 }
+
+async function writeMagpie(f, updates = {}) {
+  const value = {model: 'magpie-first', baseURL: f.gatewayURL, key: 'synthetic-magpie-private-only', contextWindow: 64000, maxOutput: 2048,
+    supportsImageInput: true, reasoningEfforts: ['low', 'high'], catalog: [
+      {id: 'magpie-first', name: 'Magpie First', contextWindow: 64000, maxOutput: 2048, supportsImageInput: true, reasoningEfforts: ['low', 'high']},
+      {id: 'magpie-second', name: 'Magpie Second', contextWindow: 32000, maxOutput: 4096, reasoningEfforts: ['low', 'high']},
+      {id: 'magpie-third', name: 'Magpie Third', contextWindow: 48000, maxOutput: 4096},
+    ], ...updates};
+  await writeFile(join(f.home, 'secrets/magpie-agent.json'), JSON.stringify(value), {mode: 0o600});
+  return value;
+}
+
+test('Magpie and native selections coexist, synchronize after file edits and restore the native fallback without copying credentials', async t => {
+  const f = await fixture(t), file = join(f.home, 'secrets/magpie-agent.json'), config = await writeMagpie(f);
+  const original = await readFile(file), native = (await f.api('/api/bootstrap')).modelSelection;
+  let state = await f.api('/api/settings/model/state');
+  assert.equal(state.providers.activeProviderId, 'custom'); assert.equal(state.settings.managedBy, undefined);
+  assert.equal(state.settings.magpie.name, 'magpie-first'); assert.equal(state.available.entries.length, 4); assert.equal(f.calls, 0);
+  assert.deepEqual(state.providers.providers.map(provider => provider.id), ['custom'], 'the managed source is not an editable or duplicated native provider');
+  await f.api('/api/settings/model/select', 'POST', {providerId: 'magpie', modelId: 'magpie-second'});
+  state = await f.api('/api/settings/model/state');
+  assert.equal(state.settings.managedBy, 'magpie'); assert.equal(state.modelSelection.displayName, 'Magpie Second');
+  assert.equal(state.available.source, 'magpie'); assert.equal(state.available.activeModelId, 'magpie-second');
+  await f.restart(); assert.equal((await f.api('/api/bootstrap')).modelName, 'magpie-second');
+  await writeMagpie(f, {model: 'magpie-third'});
+  assert.equal((await f.api('/api/settings/model/state')).modelName, 'magpie-third', 'changing the Magpie default invalidates an override scoped to the old default');
+  await f.api('/api/settings/model/select', 'POST', {providerId: native.providerId, modelId: native.modelId});
+  await writeMagpie(f, {model: 'magpie-second'}); await f.restart();
+  assert.equal((await f.api('/api/bootstrap')).modelSelection.providerId, 'custom', 'manual selection survives a new gateway default and restart');
+  await f.api('/api/settings/model/select', 'POST', {providerId: 'magpie', modelId: 'magpie-first'});
+  await writeFile(file, '{}\n'); state = await f.api('/api/settings/model/state');
+  assert.equal(state.settings.magpie, undefined); assert.equal(state.modelSelection.providerId, 'custom');
+  await writeMagpie(f); await f.restart(); assert.equal((await f.api('/api/bootstrap')).modelName, 'magpie-first', 'reconnection retains the selected source');
+  await f.api('/api/settings/model/select', 'POST', {providerId: 'magpie', modelId: 'absent'}, 400);
+  assert.equal((await f.api('/api/bootstrap')).modelName, 'magpie-first');
+  assert.deepEqual(await readFile(file), original, 'only the external plugin owns its configuration');
+  assert.ok(!JSON.stringify(f.app.store.list('providers')).includes(config.key));
+  assert.ok(!JSON.stringify(f.app.store.list('settings')).includes(config.key));
+  await assert.rejects(access(join(f.home, 'secrets/model-magpie.json')));
+  assert.ok(!JSON.stringify(state).includes('synthetic-'));
+});
+
+test('Magpie inference uses its real SDK model, scoped reasoning and output limits and reloads rotated credentials on the next turn', async t => {
+  const f = await fixture(t), config = await writeMagpie(f), base = `/api/sessions/${f.session.id}`;
+  await f.api('/api/settings/model/select', 'POST', {providerId: 'magpie', modelId: 'magpie-first'});
+  const reasoning = await f.api(base + '/ai/reasoning'); assert.deepEqual(reasoning.levels, ['low','high']);
+  await f.api(base + '/ai/reasoning', 'POST', {modelId: reasoning.modelId, effort: 'low'});
+  await f.api(base + '/messages', 'POST', {text: 'Magpie initial inference', ignoreProjectMemory: true}, 202); await f.wait(['completed']);
+  assert.equal(f.requests.at(-1).model, 'magpie-first'); assert.equal(f.requests.at(-1).reasoning_effort, 'low'); assert.equal(f.requests.at(-1).max_tokens, 2048);
+  assert.equal(f.requestAuthorizations.at(-1), 'Bearer ' + config.key);
+  const oldProvider = f.app.store.modelProvider('magpie');
+  const rotated = await writeMagpie(f, {key: 'synthetic-magpie-rotated-private-only'});
+  await assert.rejects(f.app.store.modelCredential(oldProvider), /连接已变化/, 'an old endpoint snapshot cannot obtain the replacement credential');
+  await f.api(base + '/messages', 'POST', {text: 'Magpie after key rotation', ignoreProjectMemory: true}, 202); await f.wait(['completed']);
+  assert.equal(f.requestAuthorizations.at(-1), 'Bearer ' + rotated.key);
+  await writeMagpie(f, {model: 'magpie-second', key: rotated.key});
+  await f.api(base + '/messages', 'POST', {text: 'Magpie after a new default', ignoreProjectMemory: true}, 202); await f.wait(['completed']);
+  assert.equal(f.requests.at(-1).model, 'magpie-second'); assert.equal(f.requests.at(-1).reasoning_effort, undefined, 'reasoning does not cross model identities');
+  assert.equal(f.requests.at(-1).max_tokens, 4096);
+  await writeFile(join(f.home, 'secrets/magpie-agent.json'), '{}\n');
+  await f.api(base + '/messages', 'POST', {text: 'Return to original native configuration', ignoreProjectMemory: true}, 202); await f.wait(['completed']);
+  assert.equal(f.requests.at(-1).model, 'fixture'); assert.equal(f.requestAuthorizations.at(-1), 'Bearer synthetic-secret-no-real-credential');
+  assert.equal((await f.api(base + '/snapshot')).messages.filter(message => message.role === 'user').length, 4);
+});
+
+test('a fresh Magpie source works without a native provider and becomes unavailable after disconnect', async t => {
+  const f = await fixture(t); await f.api('/api/settings/providers/custom', 'DELETE'); await writeMagpie(f);
+  const state = await f.api('/api/settings/model/state'); assert.equal(state.modelConfigured, true); assert.equal(state.settings.managedBy, 'magpie');
+  assert.equal(state.providers.providers.length, 0); assert.equal(state.available.entries.length, 3);
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'Only the Magpie source is configured', ignoreProjectMemory: true}, 202);
+  assert.equal((await f.wait(['completed', 'failed'])).status, 'completed'); assert.equal(f.requests[0].model, 'magpie-first');
+  await writeFile(join(f.home, 'secrets/magpie-agent.json'), '{}\n');
+  assert.equal((await f.api('/api/bootstrap')).modelConfigured, false);
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'Must not reuse the disconnected key'}, 409);
+  assert.equal(f.calls, 1);
+});
+
+test('Magpie never reads an unsafe optional configuration or permits native API writes to the managed provider', async t => {
+  const f = await fixture(t), fs = require('node:fs/promises'), file = join(f.home, 'secrets/magpie-agent.json'), config = await writeMagpie(f);
+  const original = await readFile(file);
+  await f.api('/api/settings/providers/magpie', 'PUT', {apiKey: 'synthetic-replacement'}, 409);
+  await f.api('/api/settings/providers/magpie', 'DELETE', undefined, 409);
+  await assert.rejects(f.app.store.secret('magpie', 'synthetic-replacement'), /插件管理/);
+  assert.deepEqual(await readFile(file), original);
+  await fs.chmod(file, 0o644); assert.equal((await f.api('/api/settings/model')).magpie, undefined); assert.equal((await fs.stat(file)).mode & 0o777, 0o644);
+  await fs.chmod(file, 0o600); assert.ok((await f.api('/api/settings/model')).magpie);
+  const external = join(f.home, 'outside-config.json'); await writeFile(external, original, {mode: 0o600}); await fs.unlink(file); await fs.symlink(external, file);
+  assert.equal((await f.api('/api/settings/model')).magpie, undefined); assert.deepEqual(await readFile(external), original);
+  await fs.unlink(file); await writeFile(file, JSON.stringify({...config, baseURL: 'http://user:password@127.0.0.1:9/v1'}), {mode: 0o600});
+  assert.equal((await f.api('/api/settings/model')).magpie, undefined);
+  await writeFile(file, '{'); assert.equal((await f.api('/api/settings/model')).magpie, undefined);
+  await writeFile(file, 'x'.repeat(2*1024*1024+1)); assert.equal((await f.api('/api/settings/model')).magpie, undefined);
+  assert.equal((await f.api('/api/bootstrap')).modelSelection.providerId, 'custom'); assert.equal(f.calls, 0, 'file synchronization makes no provider requests');
+});
+
+test('Magpie imports an exact legacy selection once and never resurrects it over a new TS choice', async t => {
+  const f = await fixture(t); await writeMagpie(f); await f.api('/api/settings/model', 'DELETE');
+  await writeFile(join(f.options.data, 'magpie-selection.json'), JSON.stringify({defaultModel: 'magpie-first', model: 'magpie-second'}), {mode: 0o600});
+  f.app.store.delete('settings', 'magpieSelectionImported'); await f.restart();
+  assert.equal((await f.api('/api/bootstrap')).modelName, 'magpie-second');
+  await f.api('/api/settings/model/select', 'POST', {providerId: 'magpie', modelId: 'magpie-first'}); await f.restart();
+  assert.equal((await f.api('/api/bootstrap')).modelName, 'magpie-first');
+  assert.equal(JSON.parse(await readFile(join(f.options.data, 'magpie-selection.json'), 'utf8')).model, 'magpie-second');
+});
+
+test('a fresh Dev import preserves an explicit old Magpie source and its exact native fallback', async t => {
+  const f = await fixture(t, 'legacy-magpie-source', true), config = join(f.home, 'secrets/magpie-agent.json');
+  assert.equal((await f.api('/api/bootstrap')).modelSelection.providerId, 'magpie');
+  assert.equal((await f.api('/api/settings/model')).name, 'legacy-magpie');
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'Use the original selected source', ignoreProjectMemory: true}, 202); await f.wait(['completed']);
+  assert.equal(f.requestAuthorizations.at(-1), 'Bearer synthetic-legacy-magpie-key');
+  await writeFile(config, '{}\n'); const fallback = await f.api('/api/bootstrap');
+  assert.equal(fallback.modelSelection.providerId, 'legacy.fixture'); assert.equal(fallback.modelName, 'fixture');
+  await f.restart(); assert.equal((await f.api('/api/bootstrap')).modelSelection.providerId, 'legacy.fixture');
+});
+
+test('Magpie credentials split across model chunks stay out of public views and the native session archive', async t => {
+  const f = await fixture(t, 'magpie-secret'), config = await writeMagpie(f);
+  await f.api('/api/settings/model/select', 'POST', {providerId: 'magpie', modelId: config.model});
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'Synthetic redaction probe', ignoreProjectMemory: true}, 202);
+  const view = await f.wait(['completed']); assert.ok(JSON.stringify(view).includes('[REDACTED]')); assert.ok(!JSON.stringify(view).includes(config.key));
+  assert.ok(!JSON.stringify(await f.api(`/api/sessions/${f.session.id}/snapshot`)).includes(config.key));
+  for (const name of ['agent-sessions.sqlite', 'agent-sessions.sqlite-wal']) {
+    try { assert.ok(!(await readFile(join(f.options.data,name))).includes(Buffer.from(config.key))); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
+});
 
 function nativeMemoryReply(request) {
   const content = message => typeof message.content === "string" ? message.content : (message.content ?? []).map(part => part.text ?? "").join("");
@@ -2822,7 +2955,7 @@ test('native Read projects real image bytes for an image-capable model',async t=
  const {f,project,send}=await fullAgentTask(t,'super-full-pilot-image'),workspace=await f.app.store.workspace(f.project.id);
  await writeFile(join(f.home,'full-workspace.txt'),workspace);await writeFile(join(workspace,'sample.png'),await readFile(join(__dirname,'../../third_party/agent-sdk/public/logo/icons/16x16.png')));
  const selected={provider:f.app.store.list('providers')[0]};await f.api('/api/settings/model','PUT',{url:selected.provider.baseURL,name:'fixture',supportsImageInput:true});await send();
- await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),s=>s.cards.some(c=>c.title==='Read')&&!s.running);
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  assert.equal(f.app.store.list('superOperations').find(o=>o.tool==='Read')?.output.type,'image',JSON.stringify(f.app.store.view(project.routerSessionId).cards));assert.ok(f.requests.some(r=>JSON.stringify(r.messages).includes('data:image/png;base64,')));
 });
 test('continuing a direct Pilot task preserves its goal, deadline and cumulative rounds',{skip:process.platform!=='darwin'},async t=>{

@@ -30,6 +30,7 @@ import {LakeMessageQueue} from './message-queue';
 import {LakeWorkflowCatalog} from './workflow-catalog';
 import {providerConnection, modelCatalogHeaders} from './provider-connection';
 import {reasoningSettings, reasoningUpdate} from './reasoning';
+import {LakeMagpie} from './magpie';
 import {LakeMySQL} from "./mysql";
 import {LakeExecution} from "./execution";
 import {agentCapabilityCatalog,nativeSearchSupported} from "./capabilities";
@@ -242,8 +243,9 @@ export async function startLakeServer(options: ServerOptions) {
       if (!["GET", "HEAD"].includes(method) && !cleanup && !(path[1] === "superagent" && path[2] === "lifecycle")) security?.check();
       const navigation = new LakeNavigation(store, broadcast);
       const resourceNavigation = new LakeResourceNavigation(store, projectId => store!.list<any>('sessions').some(session => session.projectId === projectId && agents!.isRunning(session.id)));
+      await store.refreshModels();
       const selection = () =>
-        store!.get<{ providerId: string; modelId: string }>("settings", "modelSelection");
+        store!.modelSelection();
       const catalog = () => ({
         providers: store!.list<ModelProvider>("providers"),
         activeProviderId: selection()?.providerId ?? "",
@@ -251,7 +253,7 @@ export async function startLakeServer(options: ServerOptions) {
       });
       const selected = () => {
         const choice = selection();
-        const provider = choice && store!.get<ModelProvider>("providers", choice.providerId);
+        const provider = choice && store!.modelProvider(choice.providerId);
         return { provider, model: provider?.models.find((model) => model.id === choice?.modelId) };
       };
       const modelSettings = () => {
@@ -264,6 +266,8 @@ export async function startLakeServer(options: ServerOptions) {
           protocol: provider?.protocol ?? "openai",
           keyConfigured: provider?.keyConfigured ?? false,
           supportsImageInput: model?.supportsImageInput ?? false,
+          ...(store!.magpie?.provider() ? {magpie: {name: store!.magpie!.selectedId()}} : {}),
+          ...(provider?.id === 'magpie' ? {managedBy: 'magpie'} : {}),
         };
       };
       const entry = (provider: ModelProvider, model: ProviderModel) => ({
@@ -276,8 +280,7 @@ export async function startLakeServer(options: ServerOptions) {
       });
       const available = () => {
         const { provider, model } = selected();
-        const entries = catalog()
-          .providers.filter((provider) => provider.enabled)
+        const entries = store!.modelProviders().filter((provider) => provider.enabled)
           .flatMap((provider) =>
             provider.models.filter((model) => model.enabled).map((model) => entry(provider, model)),
           );
@@ -286,6 +289,7 @@ export async function startLakeServer(options: ServerOptions) {
           entries,
           activeModelId: model?.id ?? "",
           activeProviderId: provider?.id ?? "",
+          ...(provider?.id === 'magpie' ? {source: 'magpie'} : {}),
         };
       };
       const bootstrap = () => {
@@ -339,6 +343,7 @@ export async function startLakeServer(options: ServerOptions) {
           setImmediate(() => void close());
         }
       } else if (path[1] === "settings" && path[2] === "providers") {
+        if (path[3] === 'magpie') throw new HttpError(409, 'Magpie 模型和凭据由插件管理，请在 Magpie 中修改连接');
         if (method === "GET" && path.length === 3) result = catalog();
         else if (method === "DELETE" && path.length === 4) {
           store.require<ModelProvider>("providers", path[3]);
@@ -398,16 +403,13 @@ export async function startLakeServer(options: ServerOptions) {
         if (action && method !== (["test", "select"].includes(action) ? "POST" : "GET")) throw new HttpError(405, "不支持此模型请求");
         if (action === "test") result = await agents.testModel(data);
         else if (path[3] === "select") {
-          const provider = store.require<ModelProvider>("providers", String(data.providerId));
+          const provider = store.modelProvider(String(data.providerId));
           if (
-            !provider.enabled ||
+            !provider?.enabled ||
             !provider.models.some((model) => model.id === data.modelId && model.enabled)
           )
             throw new HttpError(400, "模型不可用");
-          store.put("settings", "modelSelection", {
-            providerId: data.providerId,
-            modelId: data.modelId,
-          });
+          store.selectModel(data.providerId, data.modelId);
           result = catalog();
         } else if (path[3] === "state")
           result = {
@@ -444,10 +446,11 @@ export async function startLakeServer(options: ServerOptions) {
             ],
           };
           store.put("providers", providerId, provider);
-          store.put("settings", "modelSelection", { providerId, modelId: name });
+          store.selectModel(providerId, name);
           result = modelSettings();
         } else if (method === "DELETE") {
           store.delete("settings", "modelSelection");
+          store.delete('settings', 'nativeModelSelection');
           result = modelSettings();
         } else if (method === "GET" && path.length === 3) result = modelSettings();
         else throw new HttpError(405, "不支持此模型请求");
@@ -796,6 +799,7 @@ export async function startLakeServer(options: ServerOptions) {
     store = await LakeStore.open(options.home, options.data);
     if (options.development) await importDevModelSettings(store);
     agents = await LakeAgents.open(store, broadcast);
+    store.magpie = await LakeMagpie.connect(store, key => agents!.registerSecret(key));
     security = new LakeSecurity(store);
     extensions = new LakeExtensions(store, security, (value) => agents!.redact(value));
     ssh=new LakeSSH(store,security,(session)=>{broadcast(store!.event(session,"session"));superagent?.changed(session);},value=>extensions!.scrub(value),value=>agents!.registerSecret(value));

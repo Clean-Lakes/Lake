@@ -39,6 +39,12 @@ open "$HOME/Applications/Lake Dev.app"
 
 这是已授权的 Dev 预览覆盖，不表示所有功能已通过等价验收。回退使用备份应用；旧 Go 数据原样保留，TS 新会话不会自动反向同步。
 
+### Magpie 模型来源
+
+TS 后端动态读取当前显式 Home 下的 `secrets/magpie-agent.json`，使用插件的 `model`、`baseURL`、`key` 和 `catalog`，同步模型名称、上下文、输出限制、图片输入与明确的思考能力。启动时准备权限为 `0600` 的空配置，避免插件首次创建宽权限文件；后续读取拒绝非私有文件、符号链接、非法地址和不完整 JSON。只读取当前实例，Dev 不读取正式版的配置。
+
+Magpie 与手动供应商共存。明确选择手动模型后保持该选择；切到 Magpie 后保留按其默认模型绑定的本地选择，插件默认模型变化时自动跟随新默认。断开时回到之前有效的手动模型，没有手动配置则显示未配置；重新接入保留来源偏好。配置和密钥变化在下一轮重新绑定 SDK，运行中的任务保留原模型快照，不重放历史。插件独占连接配置和密钥，TS 仅保存非敏感的选择偏好；旧 `magpie-selection.json` 只读导入一次。此接入不表示 CLI 或非 macOS 平台已完成等价验收。
+
 ### Super-agent 增量
 
 `superagent.ts` 将真实 Pilot Router、长期专员管理、独立任务 Worker、连续频道、分页与当前权限接入公开 AgentRuntime。Pilot 与 Worker 共享通用 Agent 工具，Pilot 可直接执行并按需建立原 Task。Worker 可在本项目独立工作区使用 Read/Write/Edit、Glob/Grep、Bash、Todo、网页和真实文件清单及任务工具；Worker 已增量接入项目 MCP 目录/调用和 Skills 读取；本机手动 PTY 与 Worker 执行权限分开。SSH 手动 PTY、原 Dev 凭据/主机指纹和固定主机只读检查已增量接入；通用 SSH Bash 已通过原生执行端口接入，模型可使用实际远端 CLI；手动持续终端交接仍未接通；分层 Memory 的新入口见下文，不可绕过。职责按建单版本冻结，任务不受专员后续改名影响。

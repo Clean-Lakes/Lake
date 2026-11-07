@@ -264,7 +264,7 @@ export type ModelTestResult = { ok: boolean; message: string };
 
 /** Models the configured endpoint reports, for the composer's model switcher. */
 export type ModelReasoningCapability = {levels: string[]; default?: string; source?: string};
-export type ProviderModel = {id: string; name: string; displayName?: string; enabled: boolean; contextWindow?: number; supportsImageInput: boolean; supportsImageOutput: boolean; supportsNativeWebSearch?:boolean; supportsVideoInput?:boolean; supportsAudioInput?:boolean; supportsPdfInput?:boolean; imageInputMode?: "auto" | "on" | "off"; imageInputDetected?: boolean; reasoningCapability?: ModelReasoningCapability};
+export type ProviderModel = {id: string; name: string; displayName?: string; enabled: boolean; contextWindow?: number; maxOutputTokens?:number; supportsImageInput: boolean; supportsImageOutput: boolean; supportsNativeWebSearch?:boolean; supportsVideoInput?:boolean; supportsAudioInput?:boolean; supportsPdfInput?:boolean; imageInputMode?: "auto" | "on" | "off"; imageInputDetected?: boolean; reasoningCapability?: ModelReasoningCapability};
 export type ModelProvider = {id: string; name: string; baseURL: string; protocol: string; enabled: boolean; keyConfigured: boolean; models: ProviderModel[]};
 export type ProviderCatalog = {providers: ModelProvider[]; activeProviderId: string; activeModelId: string; savedProviderId?: string};
 export type ProviderInput = Omit<ModelProvider,"id" | "keyConfigured"> & {apiKey?: string | null};

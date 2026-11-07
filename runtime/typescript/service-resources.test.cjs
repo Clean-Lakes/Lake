@@ -69,7 +69,7 @@ const secretFiles = async (home) =>
 
 test('legacy PostgreSQL and Redis configurations adopt exact private Dev references without copying secrets or overwriting later edits', async t => {
   const f = await fixture(t), {DatabaseSync} = require('node:sqlite'), {importLegacyServices} = require('../../bin/lake-runtime/server.cjs');
-  await fs.mkdir(join(f.home, 'secrets'), {mode: 0o700});
+  await fs.mkdir(join(f.home, 'secrets'), {mode: 0o700, recursive: true});
   const ref = 'legacy-db.json', secret = JSON.stringify({username: 'reader', password: 'synthetic-legacy-only'});
   await fs.writeFile(join(f.home, 'secrets', ref), secret, {mode: 0o600});
   const path = join(f.home, 'data/lake-web.sqlite'), db = new DatabaseSync(path);
