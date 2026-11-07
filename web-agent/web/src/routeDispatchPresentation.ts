@@ -1,4 +1,5 @@
 import type {AICard} from '../../shared/contracts';
+import type {TranscriptEntry} from './timeline';
 
 function record(value:unknown):Record<string,unknown>|undefined {
  if(typeof value==='string'){try{value=JSON.parse(value)}catch{return}}
@@ -34,4 +35,40 @@ export function recoveredRouteFailures(cards:readonly AICard[]):Set<string> {
   else if(card.status==='failed'&&succeeded.has(call.identity))recovered.add(card.id);
  }
  return recovered;
+}
+
+const normal=new Set(['running','completed','succeeded','success']);
+const settled=new Set(['completed','succeeded','success']);
+// Deliberately excludes history/evidence reads and business tools: their prose
+// may contain findings, rather than just an announcement of delegation.
+const handoffTools=new Set(['list_specialists','manage_specialist','search_super_tasks','route_work']);
+const rootOf=(card:AICard)=>{const root=record(card.data)?.root_turn_id;return typeof root==='string'&&root.trim()?root:undefined};
+
+/** Retire only a proven Pilot handoff preamble, after its actual reply arrives.
+ * Exact SDK root and host receipt bind both packets; text similarity is never
+ * evidence. Original packets remain in the execution details and saved history. */
+export function pilotHandoffInterimIds(turn:readonly TranscriptEntry[]):Set<string> {
+ const ids=new Set<string>();
+ if(turn.filter(entry=>entry.message?.role==='user').length!==1||turn.some(entry=>entry.action||entry.agentRun||entry.sre||entry.card?.type==='error'))return ids;
+ const cards=turn.flatMap(entry=>entry.card?[entry.card]:[]);
+ // Incomplete/legacy bindings cannot safely establish a delegation-only round.
+ if(cards.some(card=>!rootOf(card)))return ids;
+ for(const root of new Set(cards.map(rootOf))){
+  const entries=turn.filter(entry=>entry.card&&rootOf(entry.card)===root);
+  if(entries.some(({card:c})=>!normal.has(c!.status)||!['message','text','thinking'].includes(c!.type)&&(c!.type!=='operation'||!handoffTools.has(c!.title??''))))continue;
+  const operations=entries.filter(entry=>entry.card?.type==='operation');
+  const routes=operations.filter(entry=>entry.card?.title==='route_work');
+  if(!routes.length||operations.some(entry=>!settled.has(entry.card!.status))||routes.some(entry=>{const call=routingCall(entry.card!);return !call||!confirmsDispatch(entry.card!,call)}))continue;
+  const lastTool=turn.indexOf(operations.at(-1)!);
+  const final=turn.findIndex((entry,index)=>index>lastTool&&entry.card&&rootOf(entry.card)===root&&['message','text'].includes(entry.card.type)&&!!entry.card.content?.trim());
+  if(final<0)continue;
+  // A role report, another SDK round, or an unbound message is a real boundary.
+  const candidates=turn.slice(0,lastTool).filter(entry=>entry.card&&rootOf(entry.card)===root&&['message','text'].includes(entry.card.type));
+  for(const entry of candidates){
+   const between=turn.slice(turn.indexOf(entry)+1,final);
+   if(between.some(other=>other.message||other.card&&rootOf(other.card)!==root))continue;
+   ids.add(entry.id);
+  }
+ }
+ return ids;
 }
