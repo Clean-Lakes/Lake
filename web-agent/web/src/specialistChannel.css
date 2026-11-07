@@ -12,3 +12,9 @@
 .specialist-reply-content { min-width:0; max-width:100%; }
 .specialist-live-reply { display:flex; align-items:flex-start; gap:10px; max-width:var(--reply-body-width,720px); padding:8px 0; color:var(--text-secondary); font-size:14px; line-height:1.75; overflow-wrap:anywhere; }
 .specialist-live-reply > .turn-status-mark { flex-shrink:0; margin-top:3px; }
+.specialist-reply-history { margin-top:14px; max-width:var(--reply-body-width,720px); color:var(--text-secondary); font-size:12px; }
+.specialist-reply-history > summary { width:fit-content; cursor:pointer; padding:4px 0; }
+.specialist-reply-history > summary:focus-visible { outline:2px solid var(--focus-outline); outline-offset:3px; border-radius:4px; }
+.specialist-reply-history > div { border-inline-start:1px solid var(--border); padding-inline-start:16px; margin-top:10px; }
+.specialist-reply-history section + section { margin-top:18px; }
+.specialist-reply-history time { display:block; margin-bottom:8px; color:var(--text-muted); font-size:11px; }
