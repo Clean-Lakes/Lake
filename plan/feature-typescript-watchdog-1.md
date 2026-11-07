@@ -33,7 +33,7 @@ DeepSeek Harness 的设计文章第 6 节用独立会话定时审阅 Worker 的�
 | TASK-001 | 在 runtime/typescript/watchdog.ts 基于时钟、业务证据与等待状态认领巡检，按执行持久化观察、审阅、动作和处置结果。每个执行最多每 15 分钟语义审阅一次，每项目每小时最多 4 次。 | true | 2026-11-07 |
 | TASK-002 | 在 runtime/typescript/agent.ts 用独立的有界审阅上下文调用模型，在 superagent.ts 接入定时采样、代际和权限核验、明确的原 Worker 纠偏与故障复查。纠偏由宿主根据审阅分类形成；记录排队、失效和恢复的区别。 | true | 2026-11-07 |
 | TASK-003 | 在 runtime/typescript/server.ts 提供项目级开关，在共享 contracts 与任务检查器展示当前成员的发现。Pilot 的只读工具可按任务和角色追问依据。 | true | 2026-11-07 |
-| TASK-004 | 在 runtime/typescript 的账本与 HTTP/SDK 测试、web-agent/web/test 以及签名 Dev 上验证多专员、恢复、误报和审阅预算。 | false | |
+| TASK-004 | 在 runtime/typescript 的账本与 HTTP/SDK 测试、web-agent/web/test 以及签名 Dev 上验证多专员、恢复、误报和审阅预算。 | true | 2026-11-07 |
 
 ### Implementation Phase 2
 
@@ -76,3 +76,5 @@ DeepSeek Harness 的设计文章第 6 节用独立会话定时审阅 Worker 的�
 - [作者公开原型及与内部系统的差别](https://github.com/deepseek-ai/dsh-superagent-prototype)
 - [Lake 二期规划，TASK-011 / TASK-012](architecture-lake-superagent-2.md)
 - [Lake 宿主与执行验收边界](../agent.md)
+
+[本机闭环测试记录及边界](../docs/validation/typescript-candidate/watchdog.md)
