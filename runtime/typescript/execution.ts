@@ -10,6 +10,7 @@ import type {
   ExecutionResult,
   ExecutionRunOptions,
   BackgroundExecutionSnapshot,
+  ToolEntry,
 } from "./sdk";
 import type { Resource } from "../../web-agent/shared/contracts";
 import type { LakeSSH } from "./ssh";
@@ -78,6 +79,7 @@ type CommandRecord = {
   finishedAt?: string;
   result?: ExecutionResult;
   backgroundTaskId?: string;
+  publishedBackground?: true;
   outputPath?: string;
 };
 type Live = {
@@ -89,6 +91,7 @@ type Live = {
   timer?: ReturnType<typeof setInterval>;
   cancel?: () => Promise<unknown>;
 };
+type OutputOwner = { id: string; taskId: string; sessionId: string; projectId: string; generation: number; targetResourceIds?: string[] };
 
 /** Resource-bound public ExecutionPort. The SDK owns Bash, scheduling and model loops. */
 export class LakeExecution {
@@ -288,6 +291,66 @@ export class LakeExecution {
   }
   executionId(actor: ShellActor, callId: string) {
     return digest([actor.taskId, actor.generation, callId]);
+  }
+  /** Only TaskOutput may read a finished Bash receipt after the original SDK registry closes. */
+  taskOutput(entry: ToolEntry, owner: OutputOwner): ToolEntry {
+    if (entry.metadata.name !== "TaskOutput") return entry;
+    return {
+      ...entry,
+      validateInput: (input, context) => {
+        const checked = entry.validateInput?.(input, context) ?? {result: true as const};
+        // The SDK validates the schema first; error 2 means the runtime registry lost the handle.
+        if (!checked.result && checked.errorCode === 2 && this.archivedOutput(owner, input))
+          return {result: true};
+        return checked;
+      },
+      handler: (input, context) => {
+        const handle = (input as {task_id?: string})?.task_id;
+        if (handle && !context.runtimeTaskRegistry?.get(handle) && !context.abortSignal.aborted) {
+          const output = this.archivedOutput(owner, input);
+          if (output) return Promise.resolve(output);
+        }
+        return entry.handler(input, context);
+      },
+    };
+  }
+  private archivedOutput(owner: OutputOwner, input: unknown) {
+    const handle = (input as {task_id?: unknown})?.task_id;
+    if (typeof handle !== "string" || !handle || handle.length > 200) return;
+    const matches = this.store.db.prepare(`SELECT id FROM records WHERE kind='commandExecutions'
+      AND json_extract(value,'$.backgroundTaskId')=? AND json_extract(value,'$.sessionId')=?
+      AND json_extract(value,'$.taskId')=? LIMIT 2`).all(handle,owner.sessionId,owner.taskId);
+    if (matches.length !== 1) return;
+    const record = this.store.require<CommandRecord>("commandExecutions", String(matches[0].id));
+    const result = record.result;
+    if (!result || !record.finishedAt || record.status !== result.status ||
+        record.workerId !== owner.id || record.generation > owner.generation ||
+        !["completed","failed","cancelled","timed_out","spawn_error"].includes(record.status) ||
+        (owner.targetResourceIds && !owner.targetResourceIds.includes(record.resourceId))) return;
+    const links = this.store.db.prepare(`SELECT id FROM records WHERE kind='superOperations'
+      AND json_extract(value,'$.commandExecutionId')=? LIMIT 2`).all(record.id);
+    if (links.length !== 1) return;
+    const op = this.store.require<Operation>("superOperations",String(links[0].id));
+    if (op.tool !== "Bash" || op.agentRunId || op.childSessionId || !op.completedAt ||
+        op.status === "dispatched" || op.sessionId !== owner.sessionId || op.projectId !== owner.projectId ||
+        op.goalId !== owner.taskId || op.generation !== record.generation ||
+        op.id !== digest([owner.sessionId, op.callId]) || record.id !== digest([op.goalId,op.generation,op.callId]) ||
+        op.resourceId !== record.resourceId || op.resourceRevision !== record.resourceRevision ||
+        op.hostConfigurationHash !== record.configurationRevision || op.outputHash !== digest(result) ||
+        op.outputHash !== digest(op.output)) return;
+    // Earlier versions also allocated an internal handle for foreground SSH. Only return a
+    // handle actually handed to this worker by the background Bash tool.
+    if (!record.publishedBackground && !this.store.view(owner.sessionId).cards.some(card =>
+      card.type === "operation" && card.title === "Bash" && (card.data as {call_id?: string} | undefined)?.call_id === op.callId &&
+      /^Command (?:running in background|[^\n]*was moved to the background)/.test(card.content ?? "") &&
+      (card.content?.includes("ID: " + handle + ".") || card.content?.includes("ID: " + handle + ")")))) return;
+    const resource = this.store.require<Resource>("resources",record.resourceId);
+    if (resource.projectId !== owner.projectId || resource.status !== "available" ||
+        this.store.session(owner.sessionId).projectId !== owner.projectId) return;
+    this.revalidate(record);
+    return {retrieval_status: "success", task: {task_id: handle, task_type: "local_bash", status: result.status,
+      description: op.status === "unknown" ? "后台命令已结束，实际影响待核实" : "后台命令执行回执",
+      output: this.scrub([result.stdout.text,result.stderr.text].filter(Boolean).join("\n")), exitCode: result.exitCode ?? null}};
   }
   runtime(base: ExecutionPort, sessionId: string): ExecutionPort {
     const owner = this;
@@ -517,6 +580,7 @@ export class LakeExecution {
             finish(owner.failure(error, record.startedAt, signal)),
           );
           const backgrounded = () => {
+            record.publishedBackground = true;
             owner.store.put("commandExecutions", record.id, record);
             return {
               kind: "backgrounded",
@@ -564,6 +628,7 @@ export class LakeExecution {
           const taskId = started.task.taskId;
           live.backgroundTaskId = taskId;
           record.backgroundTaskId = taskId;
+          record.publishedBackground = true;
           record.outputPath = started.task.outputPath;
           owner.handles.set(taskId, live);
           owner.store.put("commandExecutions", record.id, record);

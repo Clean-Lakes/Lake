@@ -1149,6 +1149,7 @@ export class LakeSuperagent implements AgentHost {
         const project = this.store.require<SuperProject>("superProjects", worker.projectId), options = this.store.session(project.routerSessionId).options;
         if(entry.metadata.name==="WebFetch")return {...entry,resolvePermissionCapability:(input:any)=>{const ask=this.security?.network(worker.projectId,input.url)==='ask';return {needsApproval:ask,permission:{needsApproval:ask,...(ask?{alwaysAsk:true as const}:{})}};}};
         if(entry.metadata.name==="Bash")return this.configureBash(worker,entry);
+        if(entry.metadata.name==="TaskOutput" && this.execution)return this.execution.taskOutput(entry,worker);
         if(["AskUserQuestion","EnterPlanMode","ExitPlanMode","Skill"].includes(entry.metadata.name))return this.configureNativeControl(worker,entry);
         const read = ["Read", "Glob", "Grep", "FindFiles", "SearchText", "list_project_files"].includes(entry.metadata.name), write = ["Write", "Edit"].includes(entry.metadata.name);
         if (!read && !write) return entry;
