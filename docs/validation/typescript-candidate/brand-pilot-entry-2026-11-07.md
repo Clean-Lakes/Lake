@@ -1,5 +1,15 @@
 # Lake 品牌与 Pilot 主入口合并
 
+## 当前单行字标
+
+2026-11-07，签名安装的 TypeScript Lake Dev 源码为 `7df1b7db47d8d8966244b31b0cd3aec116a96c46`，构建记录为干净工作区，应用通过 `codesign --verify --deep --strict`。原生浅色与深色均能看到同一行 Lake / Pilot 和 Dev 标记。实测从专员会话打开并关闭搜索后仍在专员页，点击字标回到 Pilot，显示青色下划线。验证后恢复原浅色偏好。
+
+隔离的真实页头组件另外验证了 200px 窄栏、键盘、触摸搜索热区、Windows 的 48px 布局，以及运行、待确认和未读状态的互斥。Windows 布局在浏览器模拟。731/731 项前端测试通过，类型检查、Web 构建、后端命名及 ADK 边界检查通过。
+
+[深色选中态（300px）](brand-pilot-entry/wordmark-dark.png) · [浅色未读态（200px）](brand-pilot-entry/wordmark-light-narrow.png)
+
+## 初始双行入口的验证记录
+
 2026-11-07，macOS / Apple Silicon。测试并签名安装的源码为 `81a14296b03a412568380f0a947f5065c994c9b9`；后续提交只补充文档和验证图片。延续 [PR 199](https://github.com/Clean-Lakes/Lake/pull/199)，本轮未合并。
 
 ## 行为
