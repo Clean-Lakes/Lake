@@ -3,7 +3,7 @@ import {useEffect,useRef,useState,type RefObject} from 'react';
 import type {SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {greetRoleAvatar,SuperRoleAvatar} from './SuperRoleAvatar';
-import {conversationAvatarMotion,superAvatarMotion,superTaskPresentation,specialistTaskActivity,type ConversationAvatarActivity} from './superAgentPresentation';
+import {conversationAvatarMotion,superAvatarMotion,channelTaskPresentation,specialistTaskActivity,type ConversationAvatarActivity} from './superAgentPresentation';
 import {Glyph} from './Icons';
 import {NavigationMenu} from './NavigationDelete';
 import {SpecialistDelete} from './SpecialistDelete';
@@ -122,7 +122,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
     cursor > (read?.requested ?? '') && cursor > (read?.acknowledged ?? '');
    const showUnread = unread && !activityLabel;
    const status = [needsConfirmation && '需确认', activityLabel, showUnread && '有新消息未读'].filter(Boolean).join(' · ') ||
-    (task && task.state !== 'running' ? superTaskPresentation(task).label : task ? '暂无正在执行的任务' : '暂无任务');
+    (task && task.state !== 'running' ? channelTaskPresentation(task).label : task ? '暂无正在执行的任务' : '暂无任务');
    const detail=aggregate.detail??(channel?.duties||'持续沟通');
    const label = `${name} · ${detail}${detail.endsWith(status)?'':` · ${status}`}`;
    return <button type="button" key={channel?.id ?? worker!.id} className={`nav-row pilot-worker-row${selected ? ' active' : ''}`}

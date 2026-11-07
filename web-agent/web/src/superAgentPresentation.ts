@@ -1,4 +1,4 @@
-import type {AIView,SuperTask,SuperWorker} from '../../shared/contracts';
+import type {AIView,SuperTask,SuperWorker,TaskParticipant} from '../../shared/contracts';
 import type {AgentIconName} from './AgentIcon';
 import {lakeAvatarGroups} from './lakeAvatarCatalog';
 
@@ -37,6 +37,17 @@ export function superTaskPresentation(task:Pick<SuperTask,'state'|'acceptanceSta
  return {label:labels[task.state]??'待核实',tone};
 }
 
+export function participantPresentation(member:TaskParticipant):ReturnType<typeof superTaskPresentation> {
+ if(member.contributed)return {label:'已提交',tone:'success'};
+ if(member.state==='completed')return {label:'未提交',tone:'attention'};
+ return superTaskPresentation({state:member.state,acceptanceState:'not_evaluated'});
+}
+
+export function channelTaskPresentation(task:SuperTask) {
+ const member=task.collaboration?.participants.find(member=>member.sessionId===task.sessionId);
+ return member?participantPresentation(member):superTaskPresentation(task);
+}
+
 // A restored invocation can have ended while its canonical task is paused.
 export function superTaskHeaderPresentation(task?:SuperTask) {
  if(task?.state==='blocked'&&task.reason==='token_limit_removed')return {status:'failed' as const,label:'等待后续核对'};
@@ -56,9 +67,10 @@ export function specialistTaskActivity(workers:SuperWorker[]) {
  return {worker,detail,runningCount:running.length,waitingCount:waiting.length,queuedCount:queued.length};
 }
 
-export function stopControlPresentation(role?:string,typescript=false) {
+export function stopControlPresentation(role?:string,typescript=false,collaborating=false) {
  if(role==='router'&&typescript)return {label:'停止当前项目全部任务',shortLabel:'停止项目全部任务',title:'停止当前项目全部活动任务，保留历史和草稿'};
  if(role==='role')return {label:'停止该专员全部任务',shortLabel:'停止专员全部任务',title:'停止该专员全部活动任务；单独停止请进入对应任务详情'};
+ if(role==='worker'&&collaborating)return {label:'停止本专员的执行',shortLabel:'停止本专员的执行',title:'其他专员会继续执行'};
  if(role==='worker')return {label:'停止当前任务',shortLabel:'停止当前任务',title:'仅停止当前任务，不影响同一专员的其他任务'};
  return {label:'停止本轮回复',shortLabel:'停止本轮',title:'停止本轮回复，保留草稿'};
 }

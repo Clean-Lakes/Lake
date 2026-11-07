@@ -61,6 +61,7 @@ export type MessageMention = {kind: "resource" | "skill" | "mcp" | "role"; id: s
 
 export type SpecialistReplyAuthor = {kind:'specialist';name:string;roleId?:string;workerId:string;sessionId:string;taskId:string;channelSessionId?:string;rootTurnId?:string};
 export type Message = {
+  jointAcceptance?: {taskId:string;receiptId:string};
   author?: SpecialistReplyAuthor;
   dispatch?: {id:string;sourceMessageId:string;workerId:string;sessionId:string;taskId:string;roleId:string;roleName:string;channelSessionId:string;instruction:string;action:'create'|'followup'};
   id: string;
@@ -333,7 +334,16 @@ export type PilotDirectionBatch = {id:string;decisionId:string;directionId:strin
 export type PilotTaskPolicy = {directionBatches?:PilotDirectionBatch[];autoAdvance:boolean;settingsRevision:number;decisions?:{requestId:string;planRevisionId:string;stepId:string;attemptId:string;direction?:PilotDirection;selection:PilotSelection;fingerprints?:string[];operations?:PilotOperationCandidate[];createdAt:string}[]};
 export type SRETask = {pilot?:PilotTaskPolicy;id:string;sessionId:string;projectId:string;requestId:string;goal:string;scope:string[];mode:'assist'|'plan_only';status:string;outcome:string;recoveryStatus:string;rootCauseStatus:string;profileId:string;profileVersion:number;revision:number;tokenBudget:number;budgetPolicy?:string;budgetSpent:number;usage:AIUsage;plans:SREPlanRevision[];runs:SREPlanRun[];attempts:SREStepAttempt[];messages:SRETranscriptEntry[];verifications:SREVerificationResult[];error?:string;createdAt:string;updatedAt:string};
 export type PilotSettings = {enabled:boolean;autoAdvance:boolean;revision:number};
-export type SuperTask = {taskId:string;sessionId:string;projectId?:string;title:string;state:'queued'|'running'|'waiting_external'|'waiting_user'|'paused'|'blocked'|'completed'|'failed'|'cancelled';acceptanceState:'not_evaluated'|'insufficient'|'pass'|'fail';revision:number;originRootTurnId:string;deadlineAt:string;updatedAt?:string;reason?:string;summary?:string;resources?:{runtime:string;assetRef?:string;terminalId?:string}[]};
+export type SuperTaskState = 'queued'|'running'|'waiting_external'|'waiting_user'|'paused'|'blocked'|'completed'|'failed'|'cancelled';
+export type SuperTaskAcceptance = 'not_evaluated'|'insufficient'|'pass'|'fail';
+export type TaskParticipant = {
+  workerId: string; sessionId: string; roleId: string; roleName: string;
+  state: SuperTaskState; contributed: boolean;
+};
+export type TaskCollaboration = {
+  participants: TaskParticipant[]; state: SuperTaskState; acceptanceState: SuperTaskAcceptance; acceptanceId?: string;
+};
+export type SuperTask = {taskId:string;executionGoalId?:string;collaboration?:TaskCollaboration;sessionId:string;projectId?:string;title:string;state:SuperTaskState;acceptanceState:SuperTaskAcceptance;revision:number;originRootTurnId:string;deadlineAt:string;updatedAt?:string;reason?:string;summary?:string;resources?:{runtime:string;assetRef?:string;terminalId?:string}[]};
 export type SuperProject = {projectId:string;routerSessionId:string;version:number};
 export type SuperWorkerActivity = {phase:'queued'|'thinking'|'tool'|'waiting_approval'|'waiting_input'|'waiting_external';label:string;toolName?:string;updatedAt:string;sourceMessageId?:string;sourceSessionId?:string};
 export type SuperWorker = {id:string;createdAt?:string;roleId:string;roleName:string;sessionId:string;task:SuperTask;assignmentState:string;parentWorkerId?:string;activity?:SuperWorkerActivity};

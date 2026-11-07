@@ -4,7 +4,7 @@ import type {SuperWorker} from '../../shared/contracts';
 import {api, readableError} from './api';
 import {DisclosureSummary} from './DisclosureSummary';
 import {Glyph} from './Icons';
-import {superTaskPresentation} from './superAgentPresentation';
+import {channelTaskPresentation} from './superAgentPresentation';
 import {useTerminalPopover} from './useTerminalPopover';
 
 type Props = {
@@ -67,9 +67,9 @@ function TaskRows({sessionId, currentTaskId, onTask}: Pick<Props, 'sessionId' | 
   const labels = duplicateTaskLabels(workers);
   return <ul className="specialist-task-rows">{workers.map(worker => {
     const current = worker.task.taskId === currentTaskId;
-    const state = superTaskPresentation(worker.task);
-    const subtitle = labels.get(worker.id);
-    return <li key={worker.task.taskId}><button type="button" className="specialist-task-row"
+    const state = channelTaskPresentation(worker.task);
+    const subtitle = [worker.task.collaboration && `${worker.task.collaboration.participants.length} 位专员协作`, labels.get(worker.id)].filter(Boolean).join(' · ');
+    return <li key={worker.id}><button type="button" className="specialist-task-row"
       aria-current={current || undefined} title={worker.task.title} onClick={() => onTask(worker)}>
       <span className="specialist-task-copy"><span className="specialist-task-title">{worker.task.title}</span>
         {subtitle && <small>{subtitle}</small>}

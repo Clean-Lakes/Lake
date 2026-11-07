@@ -5,22 +5,40 @@ function record(value:unknown):Record<string,unknown>|undefined {
  if(typeof value==='string'){try{value=JSON.parse(value)}catch{return}}
  return value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:undefined;
 }
+const nonempty=(value:unknown):value is string=>typeof value==='string'&&!!value.trim();
+
 function routingCall(card:AICard) {
  if(card.type!=='operation'||card.title!=='route_work')return;
- const {event_id,part_key,action}=record(record(card.data)?.arguments)??{};
- if(typeof event_id!=='string'||!event_id.trim()||typeof part_key!=='string'||!part_key.trim())return;
- if(action!=='create'&&action!=='followup')return;
- return {identity:JSON.stringify([event_id,part_key]),eventId:event_id,partKey:part_key,action};
+ const {event_id,part_key,action,role_ids,role_id,role_key,task_id}=record(record(card.data)?.arguments)??{};
+ if(!nonempty(event_id)||!nonempty(part_key)||!['create','assign','followup'].includes(String(action)))return;
+ if(role_ids!=null&&(!Array.isArray(role_ids)||!role_ids.length||!role_ids.every(nonempty)||new Set(role_ids).size!==role_ids.length))return;
+ const roles=Array.isArray(role_ids)?[...role_ids].sort():nonempty(role_id)?[role_id]:[];
+ return {identity:JSON.stringify([event_id,part_key,action,roles,role_key,task_id]),eventId:event_id,partKey:part_key,action,roles,taskId:task_id};
 }
+
+function dispatchReady(dispatch:Record<string,unknown>|undefined,recorded:boolean) {
+ const state=dispatch?.state;
+ if(state!==undefined&&state!=='queued'&&state!=='running')return false;
+ if(dispatch?.unresolvedOperations===true||typeof dispatch?.unresolvedOperations==='number'&&dispatch.unresolvedOperations>0)return false;
+ return recorded||state==='queued'||state==='running';
+}
+
 function confirmsDispatch(card:AICard,call:NonNullable<ReturnType<typeof routingCall>>):boolean {
  const result=record(card.content);
- if(!result||result.eventId!==call.eventId||result.partKey!==call.partKey||result.action!==call.action)return false;
- if(typeof result.workerId!=='string'||!result.workerId.trim()||typeof result.taskId!=='string'||!result.taskId.trim())return false;
- const dispatch=record(result.dispatch),state=dispatch?.state;
- // A stored decision that remains blocked or awaits the user is not recovery.
- if(state!==undefined&&!['queued','running'].includes(String(state)))return false;
- if(dispatch?.unresolvedOperations===true||typeof dispatch?.unresolvedOperations==='number'&&dispatch.unresolvedOperations>0)return false;
- return record(result.handoff)?.recorded===true||state==='queued'||state==='running';
+ if(!result||result.eventId!==call.eventId||result.partKey!==call.partKey||result.action!==call.action||!nonempty(result.taskId))return false;
+ if(call.taskId&&call.taskId!==result.taskId)return false;
+ const recorded=record(result.handoff)?.recorded===true;
+ if(result.assignments!==undefined){
+  if(!Array.isArray(result.assignments)||!result.assignments.length)return false;
+  const members=result.assignments.map(record);
+  if(members.some(member=>!member||!nonempty(member.workerId)||!nonempty(member.sessionId)||!nonempty(member.roleId)||
+   !dispatchReady(record(member.dispatch),recorded)))return false;
+  for(const key of ['roleId','workerId','sessionId'])if(new Set(members.map(member=>member![key])).size!==members.length)return false;
+  const roles=members.map(member=>member!.roleId).sort();
+  return !call.roles.length||JSON.stringify(roles)===JSON.stringify(call.roles);
+ }
+ if(!nonempty(result.workerId)||call.roles.length&&(call.roles.length!==1||result.roleId!==call.roles[0]))return false;
+ return dispatchReady(record(result.dispatch),recorded);
 }
 
 /** Main-flow presentation only. Input is one turn in original chronological order.
@@ -68,7 +86,15 @@ export function pilotHandoffInterimIds(turn:readonly TranscriptEntry[]):Set<stri
   // reply. Only the exact receipt's persisted forwarding metadata can bridge it.
   const internalDispatch=(entry:TranscriptEntry)=>{
    const dispatch=entry.message?.dispatch;
-   return !!dispatch&&!entry.message?.author&&dispatch.sourceMessageId===user.id&&receipts.some(result=>result.id===dispatch.id&&result.workerId===dispatch.workerId&&result.taskId===dispatch.taskId&&result.action===dispatch.action);
+   return !!dispatch&&!entry.message?.author&&dispatch.sourceMessageId===user.id&&receipts.some(result=>{
+    if(result.id!==dispatch.id||result.taskId!==dispatch.taskId||(result.action==='assign'?'create':result.action)!==dispatch.action)return false;
+    if(Array.isArray(result.assignments))return result.assignments.some(value=>{
+     const member=record(value);
+     return member?.workerId===dispatch.workerId&&member.roleId===dispatch.roleId&&member.sessionId===dispatch.sessionId;
+    });
+    // Historical single-recipient receipts may lack the two optional identities.
+    return result.workerId===dispatch.workerId&&(!result.roleId||result.roleId===dispatch.roleId)&&(!result.sessionId||result.sessionId===dispatch.sessionId);
+   });
   };
   // A role report, another SDK round, or an unbound message is a real boundary.
   const candidates=turn.slice(0,lastTool).filter(entry=>entry.card&&rootOf(entry.card)===root&&['message','text'].includes(entry.card.type));

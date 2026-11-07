@@ -37,6 +37,22 @@
 .super-task-state [data-tone=attention] { color:var(--warning); }
 .super-task-state [data-tone=danger] { color:var(--danger); }
 .super-task-state [data-tone=success] { color:var(--success); }
+/* A joint goal has one verdict. Each specialist retains a separate execution. */
+.joint-task-summary { margin-top:10px; }
+.joint-task-verdict,.joint-task-summary li { display:flex; gap:7px; align-items:center; }
+.joint-task-verdict { flex-wrap:wrap; justify-content:space-between; margin:0 0 9px; }
+.joint-task-verdict strong { font-weight:var(--font-weight-ui); }
+.joint-task-summary small,.joint-member-state { color:var(--text-muted); font-size:12px; }
+.joint-task-summary ul { list-style:none; margin:0; padding:5px 0 0; border-top:1px solid var(--line); }
+.joint-task-summary li { padding:3px 0; min-width:0; }
+.joint-task-summary li>small,.joint-member-state,.joint-task-summary .super-role-avatar { flex:none; }
+.joint-member-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.joint-member-state { margin-left:auto; }
+.joint-task-summary [data-tone=success] { color:var(--success); }
+.joint-task-summary [data-tone=attention] { color:var(--warning); }
+.joint-task-summary [data-tone=danger] { color:var(--danger); }
+.joint-task-summary [data-tone=active] { color:var(--info); }
+.worker-contribution-label { margin:4px 0 8px; font-size:inherit; font-weight:var(--font-weight-ui); overflow-wrap:anywhere; }
 .super-task-steps { list-style:none; padding:0; margin:0; display:grid; gap:18px; }
 .super-task-steps li { display:flex; gap:10px; }
 .super-task-steps li>div { min-width:0; overflow-wrap:anywhere; }

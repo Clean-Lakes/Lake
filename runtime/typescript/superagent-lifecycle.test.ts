@@ -343,3 +343,144 @@ test('task context enforces actual actor identity and UTF-8/JSON budgets across 
  do{const page=context.recall(actor,{limit:6,cursor});assert.ok(Buffer.byteLength(JSON.stringify(page))<=16384);for(const row of page.items){assert.ok(Buffer.byteLength(JSON.stringify(row))<=4096);assert.doesNotMatch(JSON.stringify(row),/�/);ids.push(row.taskRef.id);}cursor=page.nextCursor;}while(cursor);
  assert.equal(new Set(ids).size,12);assert.equal(ids.length,12);assert.equal(JSON.stringify(f.store.list('superGoals')),before);
 });
+
+test("shared handoff binds each contribution and scoped stop to its exact participant", async (t) => {
+  const f = await fixture(t);
+  const second = { ...f.role, id: "role-b", name: "数据库专员" };
+  f.store.put("superRoles", second.id, second);
+  const event = await f.admit("甲乙一起检查系统和数据库");
+  const input = { action: "create", title: "联合检查", role_ids: [f.role.id, second.id], role_instructions: [
+    { role_id: f.role.id, instruction: "只核对主机" }, { role_id: second.id, instruction: "只核对库表" },
+  ] };
+  const receipt = f.route(event, input), retry = f.route(event, input);
+  const [a, b] = receipt.assignments;
+  assert.equal(receipt.workerId, undefined);
+  assert.equal(receipt.taskId, retry.taskId);
+  assert.deepEqual(retry.assignments.map((row: any) => row.executionId), [a.executionId, b.executionId]);
+  assert.notEqual(a.workerId, b.workerId);
+  assert.notEqual(a.sessionId, b.sessionId);
+  assert.deepEqual(f.host.workspace(f.project.id).workers.map(worker => worker.task.taskId), [receipt.taskId, receipt.taskId]);
+  assert.throws(() => f.route(event, { ...input, part_key: "overlap", role_ids: [second.id], role_instructions: [] }), /Overlapping/);
+  f.settleRouter(); await f.activate();
+  assert.deepEqual(f.requests.map(call => call.input.assignedDeliverable).sort(), ["只核对主机", "只核对库表"].sort());
+  assert.ok(f.requests.every(call => call.input.assignment.taskId === receipt.taskId));
+  const readTask = (args: object) => JSON.parse(f.internal.readObject(f.router, { kind: "task", id: receipt.taskId, ...args }).content);
+  assert.equal(readTask({}).participants.length, 2);
+  assert.equal(readTask({ role_id: second.id }).id, b.executionId);
+  const followup = await f.admit("仅给乙补充：核对数据库名称");
+  assert.equal(f.route(followup, { action: "followup", task_id: receipt.taskId, role_id: second.id }).workerId, b.workerId);
+  assert.equal(f.worker(a.executionId).inputEventIds.includes(followup.id), false);
+  f.settleRouter();
+  const stop = await f.admit("只停止乙");
+  assert.throws(() => f.route(stop, { action: "stop", task_id: receipt.taskId }), /participant role_id/);
+  assert.throws(() => f.route(stop, { action: "stop", task_id: receipt.taskId, role_id: "unknown" }), /not assigned/);
+  const stopped = f.route(stop, { action: "stop", task_id: receipt.taskId, role_id: second.id });
+  assert.equal(stopped.workerId, b.workerId);
+  f.settleRouter();
+  await f.host.stopTask(b.executionId); // join the stop already dispatched by the Router
+  assert.equal(f.host.ledger.get(b.executionId).status, "cancelled");
+  assert.equal(f.host.ledger.get(a.executionId).status, "running");
+});
+
+test("Pilot cannot borrow a different specialist's receipt and can add a participant to the original task", async (t) => {
+  const f = await fixture(t), second = { ...f.role, id: "beta" };
+  f.store.put("superRoles", second.id, second);
+  const initial = await f.admit("检查数据库"); const create = { action: "create", title: "检查数据库", role_id: f.role.id };
+  const first = f.route(initial, create);
+  assert.throws(() => f.route(initial, { ...create, role_id: second.id }), /decision conflict/);
+  assert.throws(() => f.route(initial, { ...create, role_id: second.id, part_key: "other" }), /Overlapping/);
+  f.settleRouter();
+  const event = await f.admit("把乙加到刚才的任务，一起核对数据库");
+  for (const action of ["stop", "followup", "context_only"]) {
+    assert.throws(() => f.route(event, { action, task_id: first.taskId, role_id: second.id }), /not found in source specialist/);
+  }
+  assert.throws(() => f.route(event, { action: "assign", task_id: first.taskId, role_ids: [second.id, "unknown"] }));
+  assert.equal(f.store.list("superWorkers").length, 1);
+  const input = { action: "assign", task_id: first.taskId, role_id: second.id };
+  const joined = f.route(event, input);
+  assert.equal(joined.taskId, first.taskId);
+  assert.equal(joined.roleId, second.id);
+  assert.notEqual(joined.sessionId, first.sessionId);
+  assert.equal(f.route(event, input).workerId, joined.workerId);
+  f.settleRouter(); await f.activate();
+  const b = f.requests.find(call => call.sessionId === joined.sessionId)?.input;
+  assert.equal(b.originalRequirement, initial.payload);
+  assert.deepEqual(b.followups, [{ id: event.id, text: event.payload }]);
+  assert.equal(b.assignment.taskId, first.taskId);
+  const channel = f.store.require<any>("superChannels", second.id);
+  await f.host.send(channel.sessionId, "在乙频道继续", first.taskId);
+  const request = f.store.list<any>("superInputs").find(row => row.payload === "在乙频道继续");
+  f.internal.batches.set(f.router, { eventIds: [request.id], complete: new Set([request.id]), input: request.payload });
+  assert.throws(() => f.route(request, { action: "followup", task_id: first.taskId, role_id: f.role.id }), /not found in source specialist/);
+  assert.equal(f.route(request, { action: "followup", task_id: first.taskId }).workerId, joined.workerId);
+});
+
+test("a registered joint result exposes both original roles' evidence and rejects a changed member revision", async (t) => {
+  const f = await fixture(t), secondary = { ...f.role, id: "role-b" };
+  f.store.put("superRoles", secondary.id, secondary);
+  const event = await f.admit("一起检查文件");
+  const joint = f.route(event, { action: "create", title: "检查文件", role_ids: [f.role.id, secondary.id] });
+  f.settleRouter(); await f.activate();
+  for (const assignment of joint.assignments) {
+    await f.read(assignment.executionId);
+    await f.finish(assignment.executionId);
+    f.settleWorker(assignment.executionId);
+  }
+  const review = await f.admit("读取上次联合检查的证据");
+  const handoff = f.route(review, { action: "create", role_id: f.role.id, title: "复核结果", evidence_task_ids: [joint.taskId] });
+  const actor = f.worker(handoff.taskId);
+  const rows = f.internal.referencedEvidence(actor, { task_id: joint.taskId }).items;
+  assert.deepEqual(rows.map((row: any) => row.roleId).sort(), [f.role.id, secondary.id].sort());
+  for (const row of rows) {
+    assert.equal(f.internal.readReferenced(actor, { task_id: joint.taskId, evidence_id: row.evidenceId, reference_id: row.referenceId }).state, "succeeded");
+  }
+  f.host.ledger.save(f.host.ledger.get(joint.assignments[1].executionId));
+  assert.throws(() => f.internal.referencedEvidence(actor, { task_id: joint.taskId }), /source changed/);
+});
+
+for (const recovery of ["followup", "resume"] as const) test(`a failed additional handoff starts only on exact ${recovery} and preserves unknown operations`, async t => {
+  const f = await fixture(t), first = await f.start();
+  const beta = { ...f.role, id: "beta" }; f.store.put("superRoles", beta.id, beta);
+  const addition = await f.admit("请让乙加入核对");
+  const handoff = f.route(addition, { action: "assign", task_id: first.taskId, role_id: beta.id });
+  f.settleRouter("simulated provider error after tool response");
+  const a = f.worker(first.taskId), b = f.worker(handoff.assignments[0].executionId);
+  assert.equal(b.state, "parked");
+  await f.activate();
+  assert.equal(f.requests.filter(call => call.sessionId === b.sessionId).length, 0);
+  let dispatches = 0;
+  const mutation = { path: "example" };
+  await assert.rejects(f.host.ledger.operation(a.taskId, a.generation, a.policyHash, "write-A", "Write", mutation, async () => {
+    dispatches++; throw new Error("unsettled external write");
+  }, x => x, { readOnly: false }), /unsettled external write/);
+  const prior = f.store.list<any>("superOperations").find(op => op.callId === "write-A");
+  assert.equal(prior.status, "unknown");
+
+  const unrelated = await f.admit("仅和甲继续");
+  f.route(unrelated, { action: "followup", task_id: first.taskId, role_id: f.role.id });
+  f.settleRouter(); await f.activate();
+  assert.equal(f.requests.filter(call => call.sessionId === b.sessionId).length, 0);
+
+  if (recovery === "followup") {
+    const retry = await f.admit("继续乙自己的分工");
+    f.route(retry, { action: "followup", task_id: first.taskId, role_id: beta.id });
+    f.settleRouter();
+  } else {
+    await f.host.control(b.sessionId, { command: "resume", goalId: first.taskId, revision: f.host.ledger.get(b.taskId).revision });
+  }
+  await f.activate();
+  const member = f.worker(b.taskId), runs = f.requests.filter(call => call.sessionId === b.sessionId);
+  assert.equal(member.state, "active");
+  assert.equal(runs.length, 1);
+  assert.deepEqual(runs[0].input.followups.map((row: any) => row.text), recovery === "followup" ? ["继续乙自己的分工"] : []);
+  assert.equal(f.store.require<any>("superInputs", addition.id).disposition, "blocked");
+  await f.read(member.taskId);
+  const read = f.host.profile(member.sessionId)!.tools.find(entry => entry.metadata.name === "work_read")!;
+  const snapshot = await read.handler({ goal_id: first.taskId }, { abortSignal: new AbortController().signal } as any) as any;
+  assert.equal(snapshot.goal.id, member.taskId);
+  assert.ok(snapshot.operations.length && snapshot.operations.every((op: any) => op.goalId === member.taskId));
+  await assert.rejects(f.host.ledger.operation(member.taskId, member.generation, member.policyHash, "write-B", "Write",
+    mutation, async () => { dispatches++; return {}; }, x => x, { readOnly: false }), /reconcil|unresolved|mutation/i);
+  assert.equal(dispatches, 1);
+  assert.deepEqual(f.store.require("superOperations", prior.id), prior);
+});

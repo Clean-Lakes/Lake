@@ -779,6 +779,30 @@ function superReply(request, mode, home) {
     return call("work_finish", { summary, ...(schema?.properties?.outcome ? { outcome: "completed" } : {}) }, id);
   };
   const router = request.tools?.some((tool) => tool.function?.name === "route_work");
+  if (mode === "super-joint-contribution") {
+    if (router) {
+      const start = request.messages.findLastIndex(m => m.role === "user" && content(m).startsWith("[LAKE ADMITTED HUMAN EVENTS"));
+      const event = JSON.parse(content(request.messages[start]).split("\n")[1])[0];
+      const called = request.messages.slice(start + 1).flatMap(m => m.tool_calls ?? []);
+      const roles = ["目录专员", "文件专员"];
+      if (called.length < roles.length) {
+        const name = roles[called.length];
+        return call("manage_specialist", {event_id:event.id, action:"create", part_key:name, role_key:name, name, duties:"检查本项目的工作区", quote:event.text}, "register-" + called.length);
+      }
+      if (called.length === roles.length) {
+        const role_ids = request.messages.slice(start + 1).filter(m => m.role === "tool").map(m => JSON.parse(content(m)).id);
+        return call("route_work", {event_id:event.id, part_key:"joint", action:"create", title:"共同检查工作区", quote:event.text, reason:"共同交付",
+          role_ids, role_instructions:role_ids.map((role_id, i)=>({role_id, instruction: i ? "复核乙目录" : "检查甲目录"}))});
+      }
+      return {content:"已安排两位专员共同检查。"};
+    }
+    const assignment = JSON.parse(content(request.messages.findLast(m=>m.role==="user" && content(m).includes('"assignedDeliverable"'))));
+    const second = assignment.assignedDeliverable === "复核乙目录";
+    if (!names.includes("list_project_files")) return call("list_project_files", {path:second?"乙":"甲"}, "inspect");
+    if (second && !names.includes("ask_user_question")) return call("ask_user_question", {questions:[{id:"review",title:"提交复核结果？"}]});
+    if (!names.includes("work_finish")) return finish(second ? "已复核乙目录。" : "已检查甲目录。", "finish");
+    return {content:"检查已结束。"};
+  }
   if (router) {
     if (mode === "super-chat") return { content: "我是 Lake Pilot，可以回答问题，并为实际工作安排专员。" };
     const raw = [...request.messages].reverse().filter((message) => message.role === "user").map(content).find((text) => text.startsWith("[LAKE ADMITTED HUMAN EVENTS"));
@@ -1003,6 +1027,47 @@ async function until(read, predicate, milliseconds = 15000) {
   }
   assert.fail("Timed out waiting for actual host state: " + JSON.stringify(value));
 }
+
+test("two specialist channels share one task, retain their own evidence and receive exactly one final verdict after restart", async t => {
+  const f=await fixture(t,"super-joint-contribution"), api=f.api, path="/api/projects/"+f.project.id+"/superagent";
+  const {routerSessionId:pilot}=await api(path,"POST",{});
+  await api("/api/sessions/"+pilot+"/ai/configure","POST",{maxSteps:30});
+  const workspace=await f.app.store.workspace(f.project.id);
+  for(const name of ["甲","乙"]) await require("node:fs/promises").mkdir(join(workspace,name));
+  await api("/api/sessions/"+pilot+"/messages","POST",{text:"让目录专员和文件专员共同检查工作区，甲检查目录，乙复核，最后统一验收。"},202);
+  const ws=await until(()=>api(path), s=>s.workers.some(w=>w.task.state==="completed")&&s.channels.some(c=>c.needsConfirmation));
+  const [a,b]=["目录专员","文件专员"].map(name=>ws.workers.find(w=>w.roleName===name));
+  assert.equal(a.task.taskId,b.task.taskId);
+  assert.notEqual(a.sessionId,b.sessionId);
+  assert.notEqual(a.task.executionGoalId,b.task.executionGoalId);
+  assert.equal(a.task.collaboration.acceptanceId,undefined);
+  assert.deepEqual(a.task.collaboration.participants.map(p=>[p.roleId,p.contributed]),[[a.roleId,true],[b.roleId,false]]);
+  for(const worker of [a,b]) {
+    const channel=ws.channels.find(c=>c.roleId===worker.roleId);
+    assert.deepEqual((await api("/api/sessions/"+channel.sessionId+"/channel/tasks")).map(w=>[w.task.taskId,w.id]),[[a.task.taskId,worker.id]]);
+    const detail=await api("/api/sessions/"+worker.sessionId+"/snapshot?taskId="+a.task.taskId);
+    assert.equal(detail.superagent.goal.id,worker.task.executionGoalId);
+  }
+  const question=(await api("/api/sessions/"+b.sessionId+"/ai")).question;
+  await api("/api/sessions/"+a.sessionId+"/ai/answer","POST",{id:question.id,answers:{review:["提交"]}},409);
+  await api("/api/sessions/"+b.sessionId+"/ai/answer","POST",{id:question.id,answers:{review:["提交"]}});
+  const completed=await until(()=>api(path), s=>s.workers.every(w=>w.task.collaboration?.acceptanceState==="pass" && w.assignmentState==="parked"));
+  const receipt=completed.workers[0].task.collaboration.acceptanceId;
+  assert.ok(receipt);
+  const goalReceipts=f.app.store.list("superAcceptance").filter(row=>row.scope==="goal");
+  assert.deepEqual(goalReceipts.map(row=>row.id),[receipt]);
+  const ops=f.app.store.list("superOperations").filter(op=>op.tool==="list_project_files");
+  assert.deepEqual(new Set(ops.map(op=>op.goalId)),new Set([a.task.executionGoalId,b.task.executionGoalId]));
+  await f.restart();
+  for(const channel of ws.channels) {
+    const page=await api("/api/sessions/"+channel.sessionId+"/channel");
+    assert.deepEqual(page.entries.filter(e=>e.message?.jointAcceptance).map(e=>[e.taskId,e.message.jointAcceptance.receiptId]),[[a.task.taskId,receipt]]);
+    assert.deepEqual([...new Set(page.entries.flatMap(e=>e.message?.author?[e.message.author.roleId]:[]))],[channel.roleId]);
+  }
+  const pilotHistory=(await api("/api/sessions/"+pilot+"/snapshot")).messages;
+  assert.deepEqual(pilotHistory.filter(m=>m.jointAcceptance).map(m=>m.jointAcceptance.receiptId),[receipt]);
+  assert.deepEqual(new Set(pilotHistory.filter(m=>m.author?.taskId===a.task.taskId).map(m=>m.author.roleId)),new Set([a.roleId,b.roleId]));
+});
 
 async function startSubagentTask(t, mode, memory = false) {
   const f = await fixture(t, mode);

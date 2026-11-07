@@ -11,7 +11,7 @@ import {ObjectReferencesProvider} from './AssistantMarkdown';
 import {SREPlanCard} from './SREPlanCard';
 import {SRERoleMessage} from './SRERoleMessage';
 import {sreRoles,sreStatus,sreStepStatus} from './sreTranscript';
-import {hasInspectorTask,inspectedTask,inspectedAttempt,inspectorAttempts,resolvedInspectorSelection} from './sessionInspectorModel';
+import {inspectorGoal,hasInspectorTask,inspectedTask,inspectedAttempt,inspectorAttempts,resolvedInspectorSelection} from './sessionInspectorModel';
 import {sessionInspectorId,useSessionInspector,type InspectorSelection} from './SessionInspectorContext';
 
 export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=false,taskNavigation}:{snapshot:SessionSnapshot;connected:boolean;onUpdated:()=>void;worker?:SuperWorker;readOnly?:boolean;taskNavigation?:ReactNode}){
@@ -32,7 +32,7 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
  const task=target?inspectedTask(snapshot,target):undefined;
  const plan=task?.plans?.at(-1);
  const canonical=snapshot.superagent?.task;
- const goal=canonical&&canonical.taskId===target?.canonicalGoalId?[snapshot.superagent?.goal,...(snapshot.ai?.workGoals??[])].find(goal=>goal?.id===canonical.taskId&&goal.sessionId===snapshot.session.id&&goal.revision===canonical.revision):undefined;
+ const goal=inspectorGoal(snapshot,target?.canonicalGoalId);
  const hasPlan=!!plan||!!goal?.items?.length;
  const selected=task?inspectedAttempt(task,target?.attemptId):undefined;
  useLayoutEffect(()=>{

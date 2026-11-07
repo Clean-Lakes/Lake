@@ -68,15 +68,16 @@ export function WorkerExecutionTree({snapshot,worker,connected=false,onUpdated}:
  const model=workerExecutionModel(snapshot);
  if(!task)return null;
  const status=task.state==='waiting_user'?'waiting_input':task.state;
- const identity=worker?.task.taskId===task.taskId?worker.id:undefined;
+ const executionId=task.executionGoalId??task.taskId;
+ const owner=worker?.sessionId===task.sessionId&&worker.task.taskId===task.taskId?worker:undefined;
  const active=model.runs.filter(run=>needsExecutionAttention(run.status)&&run.status!=='failed'&&run.status!=='unknown').length;
  const unresolved=model.runs.filter(run=>nativeRunState(run)==='unknown').length;
  const resourceIds=new Set([...model.taskCards,...snapshot.ai?.cards??[],...model.runs.flatMap(run=>run.cards??[])].filter(isTerminalCommand).flatMap(card=>{
-  const data=card.data as {resource_id?:string;taskId?:string}|undefined;return data?.taskId===task.taskId&&snapshot.resources.some(resource=>resource.id===data.resource_id&&resource.projectId===snapshot.session.projectId&&['local','ssh'].includes(resource.kind))?[data!.resource_id!]:[];
+  const data=card.data as {resource_id?:string;taskId?:string}|undefined;return data?.taskId===executionId&&snapshot.resources.some(resource=>resource.id===data.resource_id&&resource.projectId===snapshot.session.projectId&&['local','ssh'].includes(resource.kind))?[data!.resource_id!]:[];
  }));
- const scope:MiniBoxScope={session:snapshot.session.id,taskId:task.taskId,terminals:snapshot.terminals??[],executions:snapshot.commandExecutions,startedAt:worker?.createdAt??snapshot.ai?.cards[0]?.at??snapshot.session.createdAt,live:['running','waiting_user','waiting_external','queued'].includes(task.state),waiting:snapshot.ai?.status==='waiting_approval',connected,multiResource:resourceIds.size>1};
- return <ExecutionMiniContext.Provider value={{snapshot,scope,onUpdated}}><section className="worker-execution-tree" aria-label="任务执行过程" data-worker-id={identity}>
-  <header className="worker-execution-root"><Glyph name="lakeWorkflow" size={19}/><strong>任务 Worker</strong><small>由 Lake 分配</small><State status={status}/></header>
+ const scope:MiniBoxScope={session:snapshot.session.id,taskId:executionId,terminals:snapshot.terminals??[],executions:snapshot.commandExecutions,startedAt:owner?.createdAt??snapshot.ai?.cards[0]?.at??snapshot.session.createdAt,live:['running','waiting_user','waiting_external','queued'].includes(task.state),waiting:snapshot.ai?.status==='waiting_approval',connected,multiResource:resourceIds.size>1};
+ return <ExecutionMiniContext.Provider value={{snapshot,scope,onUpdated}}><section className="worker-execution-tree" aria-label="任务执行过程" data-worker-id={owner?.id}>
+  <header className="worker-execution-root"><Glyph name="lakeWorkflow" size={19}/><strong>{task.collaboration&&owner?owner.roleName:'任务 Worker'}</strong><small>{task.collaboration?'本次执行':'由 Lake 分配'}</small><State status={status}/></header>
   {model.runs.length>0&&<p className="worker-execution-caption">临时子智能体 · {model.runs.length}{active>0&&<span>{active} 个需要跟进</span>}</p>}
   <div className="worker-execution-trunk">
    {model.resources.map(node=><ResourceBranch key={node.id} node={node} paths={model.resourcePaths}/>)}
@@ -91,7 +92,9 @@ export function WorkerExecutionResults({snapshot}:{snapshot:SessionSnapshot}){
  const task=snapshot.superagent?.task,model=workerExecutionModel(snapshot);
  if(!task)return null;
  const cards=workerBusinessReceipts(snapshot);
+ const member=task.collaboration?.participants.find(member=>member.sessionId===task.sessionId);
  return <section className="worker-execution-results" aria-label="任务结果与证据">
+  {member&&<h4 className="worker-contribution-label">{member.roleName}的执行结果</h4>}
   {task.summary?<p className="worker-task-report">{task.summary}</p>:<p className="inspector-empty">{task.state==='cancelled'?'此任务已停止，未提交完成结果。':'任务结果尚未提交。'}</p>}
   <Branch summary={<><Glyph name="document" size={15}/><span className="worker-execution-name">业务工具回执</span><small>{cards.length} 项</small></>}><Calls cards={cards} paths={model.resourcePaths}/></Branch>
  </section>;

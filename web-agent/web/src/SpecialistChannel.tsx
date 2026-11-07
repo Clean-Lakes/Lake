@@ -6,7 +6,7 @@ import {AIPending,AITranscript,Card,TranscriptMessage} from './AIPanel';
 import {AgentQuestion} from './AgentQuestion';
 import {HostKeyTrust} from './HostKeyTrust';
 import {ObjectReferencesProvider} from './AssistantMarkdown';
-import {conversationActivity,superTaskPresentation} from './superAgentPresentation';
+import {conversationActivity,channelTaskPresentation} from './superAgentPresentation';
 import {isCompactionFallbackEntry} from './timeline';
 import {AppSelect} from './AppSelect';
 import {LoadingWaves} from './LoadingWaves';
@@ -28,7 +28,7 @@ export function channelTasksByRecentRecord(workers:SuperWorker[],entries:Special
 }
 
 export function SpecialistTaskSelect({workers,sessionId,onTask}:{workers:SuperWorker[];sessionId:string;onTask:(sessionId:string)=>void}){
- return <label className="specialist-task-select"><span>任务记录</span><AppSelect aria-label="查看专员任务" value={sessionId} title={workers.find(worker=>worker.sessionId===sessionId)?.task.title} onChange={event=>onTask(event.target.value)}>{workers.map(worker=><option key={worker.id} value={worker.sessionId}>{worker.task.title} · {superTaskPresentation(worker.task).label}</option>)}</AppSelect></label>;
+ return <label className="specialist-task-select"><span>任务记录</span><AppSelect aria-label="查看专员任务" value={sessionId} title={workers.find(worker=>worker.sessionId===sessionId)?.task.title} onChange={event=>onTask(event.target.value)}>{workers.map(worker=><option key={worker.id} value={worker.sessionId}>{worker.task.title} · {channelTaskPresentation(worker.task).label}</option>)}</AppSelect></label>;
 }
 
 export function SpecialistLiveReply({text,worker,snapshot,connected=true}:{text?:string;worker?:SuperWorker;snapshot?:SessionSnapshot;connected?:boolean}){
@@ -77,13 +77,14 @@ export function SpecialistChannelEntries({entries,resources,workers=[],activeSou
   const taskId=entry.taskId??bySession.get(entry.sourceSessionId)?.task.taskId;
   const startsTask=!!taskId&&taskId!==previousTask;
   if(taskId)previousTask=taskId;
-  const taskTitle=taskId?byTask.get(taskId)?.task.title??active?.superagent?.task.title??'任务记录':'';
+  const task=taskId?byTask.get(taskId)?.task:undefined;
+  const taskTitle=taskId?task?.title??active?.superagent?.task.title??'任务记录':'';
   // Keep the channel key, but plan metadata refers to the original source ID.
   // Project before Markdown so neither live nor saved plans mount their body.
   const projected=conversationPlanEntry({id:entry.card?.id??entry.message?.id??entry.id,at:entry.createdAt,card:entry.card,message:entry.message},{planMode:active?.conversationMode==='plan',live:active?.ai?.status==='running',currentPlanId:active?.ai?.proposedPlan?.id});
   const history=current.history.get(entry.id)??[];
   return <div className="specialist-channel-entry" key={current.keys.get(entry.id)??entry.id} data-channel-entry={entry.id} data-source-session={entry.sourceSessionId} data-task-id={taskId}>
-   {startsTask&&<div className="specialist-task-divider" role="separator" aria-label={`任务：${taskTitle}`} data-task-divider={taskId}><span title={taskTitle}>{taskTitle}</span></div>}
+   {startsTask&&<div className="specialist-task-divider" role="separator" aria-label={`任务：${taskTitle}`} data-task-divider={taskId}><span title={taskTitle}>{taskTitle}{task?.collaboration&&` · ${task.collaboration.participants.length} 位专员协作`}</span></div>}
    <div className="specialist-reply-content" data-reply-state={entry.reply?.state}>
    {entry.reply&&<SpecialistReplyMeta entry={entry} worker={bySession.get(entry.sourceSessionId)} latest={current.keys.has(entry.id)}/>}
    <SpecialistReplyTransition revision={`${entry.reply?.turnId??entry.id}:${entry.reply?.state??''}`} text={entry.reply?.state==='working'?'':entry.message?.text??entry.card?.content} enabled={connected&&!['failed','cancelled','blocked','paused','waiting_user','waiting_external'].includes(bySession.get(entry.sourceSessionId)?.task.state??'')}>

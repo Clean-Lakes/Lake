@@ -6,6 +6,7 @@ export type RouterEvent = { id: string; projectId: string; sessionId: string; me
 export type RouterMessage = { id: string; projectId: string; sessionId: string; sourceSessionId?: string;
   role: "user" | "assistant" | "system"; text: string; createdAt: string; taskId?: string; kind?: "report" | "dispatch" };
 export type RouterTask = { taskId: string; projectId: string; roleId: string; sessionId: string; title: string;
+  executionGoalId?:string; jointState?:string; jointAcceptanceState?:string;
   state: string; acceptanceState: string; revision: number; hash: string; updatedAt: string; createdAt?: string;
   summary?: string; archived?: boolean; resourceIds?: string[]; pendingApproval: boolean; unresolvedOperations: number;
   blockers?: { kind?: string; detail: string; observedAt?: string; recordUpdatedAt?: string; capabilityRevision?: string }[] };
@@ -67,7 +68,8 @@ export function buildRouterContext(source: RouterContextInput) {
     const tasks = taskRows.slice(0, taskCount).map((task) => ({ taskId: task.taskId, roleId: task.roleId, title: clip(task.title, 128),
       state: task.state, acceptanceState: task.acceptanceState, pendingApproval: task.pendingApproval, unresolvedOperations: task.unresolvedOperations,
       archived: task.archived === true, updatedAt: task.updatedAt, summary: clip(task.summary ?? "", summaryBytes),
-      ref: { kind: "task", id: task.taskId, revision: task.revision, hash: task.hash },
+      ...(task.executionGoalId && {jointState:task.jointState, jointAcceptanceState:task.jointAcceptanceState}),
+      ref: { kind: "task", id: task.taskId, ...(task.executionGoalId && {role_id:task.roleId}), revision: task.revision, hash: task.hash },
       historicalBlockers: task.blockers?.slice(-2).map((blocker) => ({ kind: blocker.kind ?? "legacy_unclassified", detail: clip(blocker.detail, 220),
         observedAt: blocker.observedAt ?? null, recordUpdatedAt: blocker.recordUpdatedAt ?? task.updatedAt,
         capabilityRevision: blocker.capabilityRevision ?? null,
@@ -78,7 +80,7 @@ export function buildRouterContext(source: RouterContextInput) {
         kind: message.kind ?? "message", text: clip(message.text, conversationBytes), clipped: Buffer.byteLength(message.text) > conversationBytes,
         historical: true })),
       focus: tasks.slice(0, 3).map((task) => ({ task: task.ref, roleId: task.roleId, title: task.title,
-        state: task.state, acceptanceState: task.acceptanceState, archived: task.archived, updatedAt: task.updatedAt,
+        state: task.state, acceptanceState: task.acceptanceState, jointState:task.jointState, jointAcceptanceState:task.jointAcceptanceState, archived: task.archived, updatedAt: task.updatedAt,
         basis: explicit.has(task.taskId) ? "explicit_task" : recentTasks.has(task.taskId) ? "recent_dialogue" : roles.has(task.roleId) ? "source_channel" : "recent_project_task" })),
       capabilities: { observedAt: source.now, revision: capabilityRevision,
         rolesShareTools:true,workerTools: [...(source.agentTools??[]),"recall_task_context","recall_memory","list_assets", "list_project_files", ...(source.adapters.ssh ? ["inspect_host"] : []),...(source.adapters.mysql?["list_db_objects","db_table_ddl","read_db_table"]:[]), ...(source.adapters.extensions ? ["list_mcp_servers", "list_mcp_tools", "call_mcp_tool", "load_skill"] : [])],

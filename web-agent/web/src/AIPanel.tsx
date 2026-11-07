@@ -217,7 +217,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       const timingProps={timing:timingForTurn(turn,snapshot),view:turn.some(entry=>entry.message?.id===latestUser?.id)?snapshot.ai:undefined,cards:turn.flatMap(entry=>entry.card?[entry.card]:[]),latestUserAt:turn.find(entry=>entry.message?.role==='user')?.at??''};
       const miniStartedAt=timingProps.timing?.startedAt||timingProps.latestUserAt||turn[0]!.at;
       const miniEndedAt=turns[index+1]?.find(entry=>entry.message?.role==='user')?.at;
-      const miniScope={session:snapshot.session.id,taskId:snapshot.superagent?.task.taskId,executions:snapshot.commandExecutions,terminals:snapshot.terminals??[],startedAt:miniStartedAt,endedAt:miniEndedAt,live:turn===currentTurn&&liveConversation,waiting:snapshot.ai?.status==='waiting_approval',connected:!disabled,multiResource:hasMultipleMiniResources(processGroups)};
+      const miniScope={session:snapshot.session.id,taskId:snapshot.superagent?.task.executionGoalId??snapshot.superagent?.task.taskId,executions:snapshot.commandExecutions,terminals:snapshot.terminals??[],startedAt:miniStartedAt,endedAt:miniEndedAt,live:turn===currentTurn&&liveConversation,waiting:snapshot.ai?.status==='waiting_approval',connected:!disabled,multiResource:hasMultipleMiniResources(processGroups)};
       const hiddenProcess=new Set(processGroups.flatMap(group=>group.entries).filter(entry=>entry.card?.title!=='ask_user_question'&&!!entry.card&&(['running','completed','succeeded','success'].includes(entry.card.status)||recoveredRouting.has(entry.id))).map(entry=>entry.id));
       for(const entry of turn){
         if(entry.message?.dispatch&&!hideReplyIdentity)hiddenProcess.add(entry.id);

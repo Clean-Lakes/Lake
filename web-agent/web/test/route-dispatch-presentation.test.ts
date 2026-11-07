@@ -173,3 +173,23 @@ test('HTTP-inserted dispatch forwarding bridges only its exact successful receip
   assert.equal(pilotHandoffInterimIds(altered).size,0,JSON.stringify(changed));
  }
 });
+
+test('joint handoff folds only with all requested members and each exact forwarded session',()=>{
+ const cards=handoff(),members=['a','b'].map(roleId=>({roleId,workerId:'w'+roleId,sessionId:'s'+roleId,dispatch:{state:'queued'}}));
+ const call={event_id:'event',part_key:'host',action:'assign',task_id:'shared',role_ids:['b','a']};
+ const result={eventId:'event',partKey:'host',action:'assign',id:'decision',taskId:'shared',assignments:members,handoff:{recorded:true}};
+ cards[1]=bound({...cards[1]!,data:{arguments:call},content:JSON.stringify(result)});
+ const entries=orderedTranscript(handoffSnapshot(cards),cards,0);
+ const before=entries.slice(0,-1),final=entries.at(-1)!;
+ const forwards=members.map(member=>({id:'f'+member.roleId,at:at(2),message:{id:'f'+member.roleId,role:'assistant',text:'',sessionId:'pilot',createdAt:at(2),dispatch:{
+  ...member,id:'decision',sourceMessageId:'user',roleName:member.roleId,instruction:'检查',action:'create' as const,taskId:'shared',
+ }}}));
+ const folded=(extra:typeof forwards)=>pilotHandoffInterimIds([...before,...extra,final]).has('before');
+ assert.ok(folded(forwards));
+ assert.ok(!folded([forwards[0]!,{...forwards[1]!,message:{...forwards[1]!.message,dispatch:{...forwards[1]!.message.dispatch,sessionId:'sa'}}}]));
+ for(const assignments of [[members[0]],[members[0],members[0]],[members[0],{...members[1],dispatch:{state:'needs_input'}}]]){
+  assert.equal(interim([cards[0]!,{...cards[1]!,content:JSON.stringify({...result,assignments})},cards[2]!]).size,0);
+ }
+ const failed=bound({...cards[1]!,id:'earlier',status:'failed',data:{arguments:{...call,role_ids:['a']}}});
+ assert.equal(recoveredRouteFailures([failed,cards[1]!]).size,0);
+});

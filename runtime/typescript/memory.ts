@@ -19,6 +19,7 @@ import type {
 } from "../../web-agent/shared/contracts";
 import { HttpError, id, LakeStore, now, privateDirectory } from "./store";
 import { canonical, digest, text, type Goal, type Operation } from "./tasks";
+import { hasAcceptedExecution } from "./joint-tasks";
 import type {TaskContextEntry} from './task-context';
 import type {ClaudeMemIndex,MemorySearchDocument} from './claude-mem';
 
@@ -622,8 +623,7 @@ export class LakeMemory {
         )
       )
         return;
-      const accepted =
-        goal.acceptanceState === "pass" && goal.status === "completed";
+      const accepted = hasAcceptedExecution(this.store, goal);
       if (!accepted && !["paused", "failed", "blocked"].includes(goal.status))
         return;
       const business = operations
@@ -669,7 +669,7 @@ export class LakeMemory {
           taskId: goal.id,
           title: goal.title,
           state: goal.status,
-          acceptanceState: goal.acceptanceState,
+          acceptanceState: accepted ? "pass" : goal.acceptanceState,
           observedAt: goal.updatedAt,
           report: clip(goal.summary ?? "", 2000),
           observations: business.map((operation) => ({
@@ -751,7 +751,7 @@ export class LakeMemory {
         goal.sessionId !== source.sessionId ||
         goal.goalRevision !== source.taskRevision ||
         (source.taskEvidence === "accepted" &&
-          (goal.status !== "completed" || goal.acceptanceState !== "pass"))
+          !hasAcceptedExecution(this.store, goal))
       )
         return false;
     }
