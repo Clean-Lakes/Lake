@@ -1156,7 +1156,7 @@ export class LakeSuperagent implements AgentHost {
     if(!worker.inline){const channel = this.store.require<Channel>("superChannels", worker.roleId);this.notify(channel.sessionId, "specialist");}
   }
   settled(sessionId: string, outcome?: { response?: string; error?: string }) {
-    if (this.projectFor(sessionId)) {const actor=this.pilotActors.get(sessionId),worker=actor&&this.store.get<Worker>('superWorkers',actor.id);if(worker?.inline)this.workerFinished(sessionId,outcome?.error,outcome?.response);this.routerFinished(sessionId);}
+    if (this.projectFor(sessionId)) {const actor=this.pilotActors.get(sessionId),worker=actor&&this.store.get<Worker>('superWorkers',actor.id);if(worker?.inline)this.workerFinished(sessionId,outcome?.error,outcome?.response);this.routerFinished(sessionId,outcome?.error);}
     else if (this.workerFor(sessionId)) this.workerFinished(sessionId, outcome?.error, outcome?.response);
     this.schedule();
   }

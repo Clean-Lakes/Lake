@@ -1,4 +1,5 @@
 import {prepareSessionArchive} from "./session-archive";
+import {redactModelValue,describeTurnFailure} from "./model-errors";
 import { join } from "node:path";
 import { builtInTools, AgentRuntime, ManualPermissionBroker, createToolRegistry, createExploreSubagentPort, InMemoryRuntimeTaskRegistry,
   createBuiltInGeneralPurposeAgentProfile, createBuiltInExploreAgentProfile, type ExploreSubagentRuntimeRequest, type ToolEntry } from "./sdk";
@@ -315,13 +316,7 @@ export class LakeAgents {
     return this.redact(keep ? text.slice(0, -keep) : text) + (keep ? "[REDACTED]" : "");
   }
   private scrub<T>(value: T): T {
-    if (typeof value === "string") return this.redact(value) as T;
-    if (Array.isArray(value)) return value.map((item) => this.scrub(item)) as T;
-    if (value && typeof value === "object" && !(value instanceof Date))
-      return Object.fromEntries(
-        Object.entries(value).map(([key, item]) => [key, this.scrub(item)]),
-      ) as T;
-    return value;
+    return redactModelValue(value,text=>this.redact(text));
   }
   private safeModel(base: Model, profile?: HostProfile, memoryActor?: LayeredMemoryActor): Model {
     const owner = this;
@@ -344,7 +339,7 @@ export class LakeAgents {
           if (memoryActor) owner.memory?.validateContinuation(memoryActor);
           profile?.recordModel?.("success", operation, result.usage);
           return owner.scrub(result);
-        } catch (error) { profile?.recordModel?.("error", operation); throw error; }
+        } catch (error) { profile?.recordModel?.("error", operation); throw owner.scrub(error); }
       },
       async *streamText(request) {
         owner.guard?.();
@@ -358,7 +353,7 @@ export class LakeAgents {
             if (item.text) yield { ...item.event, [item.field]: owner.redact(item.text) } as any;
           held.clear();
         };
-        for await (const event of base.streamText(project(request))) {
+        try { for await (const event of base.streamText(project(request))) {
           if (memoryActor) owner.memory?.validateContinuation(memoryActor);
           const raw = event as unknown as Record<string, any>;
           const field =
@@ -386,7 +381,7 @@ export class LakeAgents {
             if (String(raw.type).endsWith("_end") || raw.type === "finish") yield* flush();
             yield owner.scrub(event);
           }
-        }
+        } } catch(error) { throw owner.scrub(error); }
         yield* flush();
       },
     };
@@ -616,7 +611,7 @@ export class LakeAgents {
       return result;
     } catch (error) {
       const finalView = this.store.view(parentId), final = finalView.agentRuns?.find((entry) => entry.id === request.agentId);
-      if (final) { final.status = signal?.aborted || this.live.get(parentId)?.controller?.signal.aborted ? "cancelled" : "failed"; final.summary = this.redact(error instanceof Error ? error.message : String(error)); final.finishedAt = now(); final.pending = undefined;
+      if (final) { final.status = signal?.aborted || this.live.get(parentId)?.controller?.signal.aborted ? "cancelled" : "failed"; final.summary = describeTurnFailure(error,text=>this.redact(text)).message; final.finishedAt = now(); final.pending = undefined;
         for (const card of final.cards ?? []) if (["running", "pending"].includes(card.status)) card.status = final.status; }
       this.update(parentId, finalView);
       throw error;
@@ -874,14 +869,16 @@ export class LakeAgents {
         final.status = controller.signal.aborted ? "cancelled" : "completed";
         this.update(sessionId, final);
       } catch (error) {
-        outcome.error = this.redact(error instanceof Error ? error.message : String(error));
+        const failure=describeTurnFailure(error,text=>this.redact(text));
+        outcome.error = failure.message;
         const final = this.store.view(sessionId);
         final.status = controller.signal.aborted ? "cancelled" : "failed";
         if (!controller.signal.aborted)
           final.cards.push({
             id: id(),
             type: "error",
-            content: this.redact(error instanceof Error ? error.message : String(error)),
+            content: failure.message,
+            data:{root_turn_id:final.rootTurnId,taskId:this.host?.currentTask?.(sessionId),failure},
             status: "failed",
             at: now(),
           });

@@ -16,6 +16,7 @@ async function fixture(t, mode = "text", legacyDev = false) {
   await writeFile(join(web, "index.html"), "<html>Lake fixture</html>");
   let calls = 0;
   let failWorkerRequests = false;
+  let modelFailure = mode.startsWith('model-error-');
   let backgroundJoinRequested = false;
   let releaseBackgroundChild;
   const backgroundChildGate = new Promise((resolve) => { releaseBackgroundChild = resolve; });
@@ -27,6 +28,12 @@ async function fixture(t, mode = "text", legacyDev = false) {
     const request = JSON.parse(Buffer.concat(chunks).toString());
     requests.push(request);
     calls++;
+    if(modelFailure){
+      const error={message:'SYNTHETIC_PROVIDER_REJECTION synthetic-secret-no-real-credential',type:'invalid_request_error',code:'synthetic_rejection'};
+      if(mode==='model-error-http'){res.writeHead(401,{'Content-Type':'application/json'});res.end(JSON.stringify({error}));}
+      else {res.writeHead(200,{'Content-Type':'text/event-stream'});res.end('data: '+JSON.stringify({error})+'\n\ndata: [DONE]\n\n');}
+      return;
+    }
     // Keep the background child's first resource read pending until the parent
     // asks to join it. This proves work_finish cannot accept a still-live child,
     // independently of machine speed or an arbitrary delay.
@@ -155,6 +162,7 @@ async function fixture(t, mode = "text", legacyDev = false) {
     wait,
     requests,
     failWorkerRequests() { failWorkerRequests = true; },
+    recoverModel() { modelFailure = false; },
     options,
     get app() {
       return app;
@@ -698,6 +706,30 @@ test("credentials split across provider chunks are removed before events and can
   ];
   assert.ok(!JSON.stringify(artifacts).includes(secret));
   assert.ok(JSON.stringify(artifacts).includes("[REDACTED]"));
+});
+
+for(const mode of ['model-error-http','model-error-stream'])test(`Pilot retains redacted provider failure and accepts an explicit retry (${mode})`,async(t)=>{
+  const f=await fixture(t,mode);
+  const project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+  const session=project.routerSessionId;
+  await f.api(`/api/sessions/${session}/messages`,'POST',{text:'仅回复测试文本，不调用工具。'},202);
+  const failed=await until(()=>f.api(`/api/sessions/${session}/ai`),view=>view.status==='failed');
+  const card=failed.cards.filter(card=>card.type==='error').at(-1);
+  assert.match(card.content,/SYNTHETIC_PROVIDER_REJECTION/,JSON.stringify(card));
+  assert.ok(!card.content.includes('Turn execution failed'));
+  assert.equal(card.data.failure.source,'provider');
+  if(mode==='model-error-http')assert.equal(card.data.failure.statusCode,401);
+  const input=f.app.store.list('superInputs').find(item=>item.sessionId===session);
+  assert.equal(input.disposition,'blocked');assert.equal(input.error,card.content);
+  assert.equal(f.app.store.list('superOperations').length,0);
+  const canonical=await f.app.agents.sessions.messages({sessionID:session});
+  assert.ok(!JSON.stringify([failed,canonical,f.app.store.events(session,0)]).includes('synthetic-secret-no-real-credential'));
+  assert.ok(JSON.stringify([failed,canonical]).includes('[REDACTED]'));
+  const calls=f.calls;await f.restart();assert.equal(f.calls,calls,'restart cannot retry a failed model or business operation');
+  f.recoverModel();
+  await f.api(`/api/sessions/${session}/messages`,'POST',{text:'重新测试，仅回复文本。'},202);
+  await until(()=>f.api(`/api/sessions/${session}/ai`),view=>view.status==='completed');
+  assert.equal(f.app.store.list('superInputs').find(item=>item.id===input.id).disposition,'blocked','a fresh request does not replay the blocked input');
 });
 
 test("session tags and icons preserve project scope, revisions, activity and restart state", async (t) => {

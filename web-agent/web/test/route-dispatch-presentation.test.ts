@@ -4,7 +4,8 @@ import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {AICard,SessionSnapshot} from '../../shared/contracts';
 import {AITranscript} from '../src/AIPanel';
-import {recoveredRouteFailures} from '../src/routeDispatchPresentation';
+import {pilotHandoffInterimIds,recoveredRouteFailures} from '../src/routeDispatchPresentation';
+import {orderedTranscript} from '../src/timeline';
 import {TurnExecutionDetails} from '../src/TurnExecutionDetails';
 
 const at=(n:number)=>`2026-11-06T02:00:${String(n).padStart(2,'0')}Z`;
@@ -77,4 +78,98 @@ test('recovered routing cannot remain the latest failed operation while the mode
  assert.ok(html.includes('original audit retained'));
  assert.ok(renderState([cards[0]!]).includes('turn-current-step'),'unrecovered routing failures still require attention');
  assert.ok(renderState([...cards,{...route('host','failed',3),title:'inspect_host'}]).includes('turn-current-step'),'real operation failures are never cleared by routing recovery');
+});
+
+const bound=(card:AICard,root='root'):AICard=>({...card,data:{...card.data as object,root_turn_id:root}});
+const prose=(id:string,n:number,content:string,status='completed')=>bound({id,type:'message',status,content,at:at(n)});
+const handoff=()=>[prose('before',1,'我安排重新检查运行时长。'),bound(route('dispatch','completed',2)),prose('after',3,'已安排重新检查运行时长。')];
+function handoffSnapshot(cards:AICard[],status='completed'):SessionSnapshot {
+ return {session:{id:'pilot',workspaceRole:'router'},messages:[{id:'user',sessionId:'pilot',role:'user',text:'再查一下',createdAt:at(0)}],resources:[],actions:[],ai:{session:'pilot',status,cardsOffset:0,cards}} as SessionSnapshot;
+}
+const interim=(cards:AICard[])=>pilotHandoffInterimIds(orderedTranscript(handoffSnapshot(cards),cards,0));
+function handoffHTML(snapshot:SessionSnapshot,pilot=true){return renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:pilot?'Pilot':'普通助手',pilot}}))}
+const mainReply=(html:string)=>html.split(/<div[^>]*class="turn-execution-details/)[0]!;
+
+test('confirmed pure delegation retires the preamble only after a real reply, retaining its original audit and reply identity',()=>{
+ for(const status of ['running','completed']){
+  const cards=handoff();cards[2]={...cards[2]!,status};
+  const original=JSON.stringify(cards),html=handoffHTML(handoffSnapshot(cards,status)),main=mainReply(html);
+  assert.deepEqual([...interim(cards)],['before']);
+  assert.ok(!main.includes('我安排重新检查运行时长。'));
+  assert.ok(main.includes('已安排重新检查运行时长。'));
+  assert.equal((main.match(/<strong>Pilot<\/strong>/g)??[]).length,1,'surviving reply retains its Pilot identity');
+  assert.ok(!main.includes('is-reply-continuation'),'a retired preamble cannot suppress the actual reply identity');
+  assert.ok(html.includes('我安排重新检查运行时长。')&&html.includes('data-conversation-entry="dispatch"'),'original preamble and receipt remain inspectable');
+  assert.equal(JSON.stringify(cards),original);
+ }
+ const pending=handoff().slice(0,2);
+ assert.equal(interim(pending).size,0,'confirmation cannot be invented');
+ assert.ok(mainReply(handoffHTML(handoffSnapshot(pending,'running'))).includes('我安排重新检查运行时长。'));
+ assert.equal(interim([...pending,prose('empty',3,'','running')]).size,0);
+});
+
+test('handoff projection preserves business findings, restrictions, ambiguous binding and unrelated rounds',()=>{
+ const base=handoff(),dispatch=base[1]!;
+ for(const operation of [
+  {...dispatch,status:'running'}, {...dispatch,status:'failed'}, {...dispatch,status:'pending'}, {...dispatch,status:'unknown'},
+  {...dispatch,content:'{}'}, {...dispatch,content:JSON.stringify({...receipt(),eventId:'different'})},
+  {...dispatch,content:JSON.stringify({...receipt(),dispatch:{state:'needs_input'},handoff:{recorded:true}})},
+  {...dispatch,content:JSON.stringify({...receipt(),dispatch:{state:'queued',unresolvedOperations:1}})},
+  {...dispatch,data:{arguments:{event_id:'event',part_key:'host',action:'create'}}},
+ ])assert.equal(interim([base[0]!,operation,base[2]!]).size,0,JSON.stringify(operation));
+ for(const title of ['Bash','inspect_host','read_super_object','read_tool_result','unknown_tool']){
+  const business=bound({id:'business',type:'operation',title,status:'completed',at:at(2)});
+  assert.equal(interim([base[0]!,business,dispatch,base[2]!]).size,0,title);
+ }
+ assert.equal(interim([base[0]!,dispatch,bound(base[2]!,'another-root')]).size,0);
+ assert.equal(interim([bound(base[0]!,'another-root'),dispatch,base[2]!]).size,0);
+ assert.equal(interim([...base,bound({id:'error',type:'error',status:'failed',content:'模型连接失败',at:at(4)})]).size,0);
+ const entries=orderedTranscript(handoffSnapshot(base),base,0);
+ assert.equal(pilotHandoffInterimIds(entries.filter(entry=>!entry.message)).size,0,'clipped history has no complete user boundary');
+ assert.equal(pilotHandoffInterimIds([...entries,{id:'question',at:at(4),action:{} as NonNullable<typeof entries[number]['action']>}]).size,0);
+ const next={id:'next',at:at(2),message:{id:'next',sessionId:'pilot',role:'user',text:'另一项',createdAt:at(2)}};
+ assert.equal(pilotHandoffInterimIds([...entries,next]).size,0,'never cross independent user turns');
+});
+
+test('independent assignments share one final confirmation without combining later role reports or distinct findings',()=>{
+ const cards=[prose('before',1,'我安排两项检查。'),bound(route('one','completed',2)),prose('middle',3,'第一项已安排，继续第二项。'),bound(route('two','completed',4,'event','second')),prose('after',5,'两项检查已分别安排。'),prose('finding',6,'上次记录仅用于历史参考。')];
+ const original=JSON.stringify(cards);
+ assert.deepEqual([...interim(cards)],['before','middle']);
+ const snapshot=handoffSnapshot(cards);
+ snapshot.messages.push({id:'report',sessionId:'pilot',role:'assistant',text:'服务器检查的实际结果。',createdAt:at(7),author:{roleId:'ops',workerId:'worker',name:'运维专员'} as NonNullable<SessionSnapshot['messages'][number]['author']>});
+ const html=mainReply(handoffHTML(snapshot));
+ assert.ok(html.includes('两项检查已分别安排。')&&html.includes('上次记录仅用于历史参考。')&&html.includes('服务器检查的实际结果。'));
+ assert.ok(html.includes('运维专员')&&html.includes('is-role-break'));
+ assert.equal(JSON.stringify(cards),original);
+ const reportBeforeFinal={id:'report',at:at(2),message:snapshot.messages[1]!};
+ assert.equal(pilotHandoffInterimIds([orderedTranscript(snapshot,cards,0)[0]!,{id:'before',at:at(1),card:cards[0]},reportBeforeFinal,...cards.slice(1).map(card=>({id:card.id,at:card.at,card}))]).size,1,'a role boundary protects the earlier packet while a later independent preamble can still retire');
+});
+
+test('ordinary assistants, clipped pages and pending user controls keep their original prose',()=>{
+ const snapshot=handoffSnapshot(handoff());
+ assert.ok(mainReply(handoffHTML(snapshot,false)).includes('我安排重新检查运行时长。'));
+ snapshot.ai!.cardsOffset=1;
+ assert.ok(mainReply(handoffHTML(snapshot)).includes('我安排重新检查运行时长。'));
+ snapshot.ai!.cardsOffset=0;snapshot.ai!.question={} as NonNullable<NonNullable<SessionSnapshot['ai']>['question']>;
+ assert.ok(mainReply(handoffHTML(snapshot)).includes('我安排重新检查运行时长。'));
+});
+
+test('HTTP-inserted dispatch forwarding bridges only its exact successful receipt and source user',()=>{
+ const cards=handoff();cards[1]={...cards[1]!,content:JSON.stringify({...receipt(),id:'receipt'})};
+ const snapshot=handoffSnapshot(cards);
+ const dispatch={id:'receipt',sourceMessageId:'user',workerId:'worker',sessionId:'worker-session',taskId:'task',roleId:'ops',roleName:'运维专员',instruction:'重新检查运行时长',action:'create'} as const;
+ snapshot.messages.push({id:'forward',sessionId:'pilot',role:'assistant',text:'内部转发',createdAt:at(2),dispatch});
+ snapshot.ai!.cardsOffset=122;
+ // A clipped earlier turn must not disable folding a later complete turn.
+ snapshot.messages.unshift({id:'earlier',sessionId:'pilot',role:'user',text:'前一轮',createdAt:'2026-11-05T00:00:00Z'});
+ cards.unshift(bound({id:'earlier-card',type:'message',status:'completed',content:'前一轮的回复',at:'2026-11-05T00:01:00Z'},'earlier-root'));
+ const html=handoffHTML(snapshot),main=mainReply(html);
+ assert.ok(!main.includes('我安排重新检查运行时长。')&&!html.includes('内部转发'));
+ assert.ok(main.includes('已安排重新检查运行时长。')&&html.includes('我安排重新检查运行时长。'));
+ const entries=orderedTranscript(snapshot,cards,0).filter(entry=>entry.id!=='earlier');
+ assert.deepEqual([...pilotHandoffInterimIds(entries)],['before']);
+ for(const changed of [{id:'other'},{sourceMessageId:'other'},{workerId:'other'},{taskId:'other'},{action:'followup'}]){
+  const altered=entries.map(entry=>entry.id==='forward'?{...entry,message:{...entry.message!,dispatch:{...dispatch,...changed}}}:entry);
+  assert.equal(pilotHandoffInterimIds(altered).size,0,JSON.stringify(changed));
+ }
 });
