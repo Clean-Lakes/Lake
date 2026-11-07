@@ -302,7 +302,7 @@ export class LakeStore {
       actions: [],
       terminals: (catalog.terminals ?? []).filter((terminal) => terminal.sessionId === sessionId),
       cursor: this.cursor(sessionId),
-      messageQueue: this.get('messageQueues', sessionId) ?? {paused: false, revision: 0, lastError: '', items: []},
+      messageQueue: {...(this.get<import('../../web-agent/shared/contracts').MessageQueue>('messageQueues', sessionId) ?? {paused: false, revision: 0, lastError: '', items: []}), pushSupported: false},
       ai: this.view(sessionId),
       conversationMode: options.conversationMode === "plan" ? "plan" : "default",
     };

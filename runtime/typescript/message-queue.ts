@@ -24,7 +24,7 @@ export class LakeMessageQueue {
   }
   get(sessionId: string): Queue {
     this.store.session(sessionId);
-    return this.store.get<Queue>('messageQueues', sessionId) ?? {sessionId, paused: false, revision: 0, lastError: '', items: []};
+    return {...(this.store.get<Queue>('messageQueues', sessionId) ?? {sessionId, paused: false, revision: 0, lastError: '', items: []}), pushSupported: false};
   }
   private save(queue: Queue, notify = true) { queue.revision++; this.store.put('messageQueues', queue.sessionId, queue); if (notify) this.notify(queue.sessionId); return queue; }
   enqueue(sessionId: string, text: string, raw: Record<string, unknown>) {

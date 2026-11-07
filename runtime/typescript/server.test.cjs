@@ -373,6 +373,10 @@ test('editable user queues persist pause, edit and ordering with revision checks
   const a = await f.api(messages, 'POST', {text: '第一条排队消息', enqueue: true}, 202);
   const b = await f.api(messages, 'POST', {text: '第二条排队消息', enqueue: true}, 202);
   let queue = await f.api(base); assert.equal(queue.items.length, 2); assert.equal(queue.paused, true);
+  assert.equal(queue.pushSupported, false);
+  assert.equal((await f.api(`/api/sessions/${f.session.id}/snapshot`)).messageQueue.pushSupported, false);
+  await f.api(base, 'POST', {operation: 'push', revision: queue.revision, id: a.queuedMessageId}, 501);
+  assert.equal((await f.api(base)).items.length, 2, 'an unsupported supplement preserves the exact pending drafts');
   await f.api(base, 'POST', {operation: 'resume', revision: 0}, 409);
   queue = await f.api(base, 'POST', {operation: 'edit', revision: queue.revision, id: a.queuedMessageId, text: '已编辑的第一条消息', resourceIds: [], mentions: []});
   queue = await f.api(base, 'POST', {operation: 'reorder', revision: queue.revision, ids: [b.queuedMessageId, a.queuedMessageId]});

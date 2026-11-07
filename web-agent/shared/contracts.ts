@@ -190,7 +190,7 @@ export type Catalog = {
 };
 
 export type QueuedMessage = {supplementRootTurnId?:string; id: string; text: string; resourceIds: string[]; references?: Record<string,unknown>[]; mentions?: MessageMention[]; images: Pick<AIImage,"id" | "name" | "mimeType">[]; files: TextFileAttachment[]; createdAt: string};
-export type MessageQueue = {paused: boolean; revision: number; lastError: string; items: QueuedMessage[]};
+export type MessageQueue = {pushSupported?:boolean; paused: boolean; revision: number; lastError: string; items: QueuedMessage[]};
 export type QueueOperation = {operation:"pause" | "resume"; revision:number} | {operation:"remove" | "push"; revision:number; id:string} | {operation:"edit"; revision:number; id:string; text:string; resourceIds:string[]; references?:Record<string,unknown>[]; mentions?:MessageMention[]} | {operation:"reorder"; revision:number; ids:string[]};
 export type SendMessageResult = {pilotSessionId?:string;queued?: boolean; queuedMessageId?: string; messageQueue?: MessageQueue};
 
