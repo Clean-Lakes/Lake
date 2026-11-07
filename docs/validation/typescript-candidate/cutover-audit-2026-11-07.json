@@ -1,0 +1,862 @@
+{
+  "date": "2026-11-07",
+  "sourceCommit": "ee4570b4649fe57a9c5cbd3dab41c8d05888740e",
+  "installedDevCommit": "878f9f6657a3b82c6aa653afd329f3687ce18e63",
+  "developBase": "72b0b018233c9f3acb24de251264462981f70d1d",
+  "backendSHA256": "da4b6e549fb93707b246b60ae8d1af189bd1ab894db0c2985371d46a6d964ba4",
+  "coverage": {
+    "frontendApiFunctions": 128,
+    "matrixCandidateEvidence": 48,
+    "matrixFullParityVerified": 0,
+    "domains": 20,
+    "liveReadProbes": 25,
+    "isolatedEndpointProbes": 36
+  },
+  "checks": {
+    "frontend": {
+      "pass": 726
+    },
+    "runtimeServer": {
+      "pass": 135
+    },
+    "runtimeSource": {
+      "pass": 121,
+      "skip": 3,
+      "skipReason": "existing external Claude-Mem integration"
+    },
+    "devScriptTests": {
+      "pass": 19
+    },
+    "typescript": true,
+    "namingBoundary": true,
+    "adkBoundary": true,
+    "installedDevSignature": true,
+    "fullParityGate": "BLOCKED; expected exit 1, not waived"
+  },
+  "liveReadProbes": [
+    {
+      "name": "bootstrap",
+      "status": 200,
+      "keys": [
+        "authenticated",
+        "modelConfigured",
+        "modelName",
+        "modelId",
+        "modelSelection",
+        "supportsImageInput",
+        "terminalMode",
+        "aiRuntime",
+        "memoryEngine",
+        "backendRuntime",
+        "upstreamVersion",
+        "recoveryReadOnly"
+      ],
+      "counts": {},
+      "flags": {
+        "supportsImageInput": true,
+        "memoryEngine": "layered",
+        "backendRuntime": "typescript",
+        "recoveryReadOnly": false
+      }
+    },
+    {
+      "name": "catalog",
+      "status": 200,
+      "keys": [
+        "projects",
+        "resources",
+        "resourceTree",
+        "sessions",
+        "tags",
+        "terminals"
+      ],
+      "counts": {
+        "projects": 7,
+        "resources": 146,
+        "resourceTree": 155,
+        "sessions": 104,
+        "tags": 2,
+        "terminals": 5
+      }
+    },
+    {
+      "name": "capabilities",
+      "status": 200,
+      "keys": [
+        "upstreamVersion",
+        "tools",
+        "resourceExecution"
+      ],
+      "counts": {
+        "tools": 44
+      },
+      "toolStatus": {
+        "connected": [
+          "ToolSearch",
+          "DeferredToolCall",
+          "Read",
+          "Write",
+          "Edit",
+          "Bash",
+          "Glob",
+          "Grep",
+          "WebFetch",
+          "TodoRead",
+          "TodoWrite",
+          "EnterPlanMode",
+          "ExitPlanMode",
+          "AskUserQuestion",
+          "SendMessage",
+          "TaskOutput",
+          "TaskStop",
+          "Agent",
+          "Task",
+          "Skill"
+        ],
+        "model_dependent": [
+          "WebSearch"
+        ],
+        "requires_host_service": [
+          "CronCreate",
+          "CronList",
+          "CronUpdate",
+          "CronDelete",
+          "CronPauseSelf",
+          "OffPeakCreate",
+          "OffPeakList",
+          "RespondToCoordinator",
+          "submit_result",
+          "escalate",
+          "ReadSessionContext",
+          "js",
+          "CreateWorkflow",
+          "AmendWorkflow",
+          "SaveWorkflow",
+          "EvalWorkflowSnippet",
+          "ListWorkflowRuns",
+          "GetWorkflowRun",
+          "ResumeWorkflowRun",
+          "ResolveWorkflowQuestion",
+          "FillWorkflowHole",
+          "ListSavedWorkflows",
+          "ListModels"
+        ]
+      }
+    },
+    {
+      "name": "providers",
+      "status": 200,
+      "keys": [
+        "providers",
+        "activeProviderId",
+        "activeModelId"
+      ],
+      "counts": {
+        "providers": 4
+      }
+    },
+    {
+      "name": "modelState",
+      "status": 200,
+      "keys": [
+        "authenticated",
+        "modelConfigured",
+        "modelName",
+        "modelId",
+        "modelSelection",
+        "supportsImageInput",
+        "terminalMode",
+        "aiRuntime",
+        "memoryEngine",
+        "backendRuntime",
+        "upstreamVersion",
+        "recoveryReadOnly",
+        "available",
+        "providers",
+        "settings"
+      ],
+      "counts": {}
+    },
+    {
+      "name": "modelCapacity",
+      "status": 200,
+      "keys": [
+        "limit",
+        "source"
+      ],
+      "counts": {},
+      "flags": {
+        "limit": 500000,
+        "source": "provider"
+      }
+    },
+    {
+      "name": "mcp",
+      "status": 200,
+      "keys": [
+        "servers"
+      ],
+      "counts": {
+        "servers": 2
+      }
+    },
+    {
+      "name": "skills",
+      "status": 200,
+      "keys": [
+        "skills",
+        "roots",
+        "defaultRoot"
+      ],
+      "counts": {
+        "skills": 0,
+        "roots": 0
+      }
+    },
+    {
+      "name": "superagent",
+      "status": 200,
+      "keys": [
+        "pilotMessageRead",
+        "active",
+        "project",
+        "workers",
+        "channels",
+        "cursor"
+      ],
+      "counts": {
+        "workers": 25,
+        "channels": 4
+      }
+    },
+    {
+      "name": "workflows",
+      "status": 200,
+      "keys": [
+        "items",
+        "templates",
+        "runs"
+      ],
+      "counts": {
+        "items": 0,
+        "templates": 0,
+        "runs": 0
+      }
+    },
+    {
+      "name": "schedules",
+      "status": 200,
+      "keys": [
+        "items",
+        "templates",
+        "runs"
+      ],
+      "counts": {
+        "items": 0,
+        "templates": 0,
+        "runs": 0
+      }
+    },
+    {
+      "name": "legacyPilot",
+      "status": 200,
+      "keys": [
+        "enabled",
+        "autoAdvance",
+        "revision"
+      ],
+      "counts": {},
+      "flags": {
+        "enabled": false,
+        "autoAdvance": false,
+        "revision": 0
+      }
+    },
+    {
+      "name": "legacySRE",
+      "status": 200,
+      "keys": [
+        "enabled",
+        "autoAdvance",
+        "revision"
+      ],
+      "counts": {},
+      "flags": {
+        "enabled": false,
+        "autoAdvance": false,
+        "revision": 0
+      }
+    },
+    {
+      "name": "legacyMemorySettings",
+      "status": 200,
+      "keys": [
+        "projectId",
+        "useEnabled",
+        "extractionEnabled",
+        "epoch",
+        "revision",
+        "settingsRevision",
+        "publishedRevision"
+      ],
+      "counts": {},
+      "flags": {
+        "useEnabled": false,
+        "extractionEnabled": false,
+        "revision": 0
+      }
+    },
+    {
+      "name": "legacyMemories",
+      "status": 404,
+      "error": "接口不存在"
+    },
+    {
+      "name": "layeredMemory",
+      "status": 200,
+      "keys": [
+        "engine",
+        "scopes"
+      ],
+      "counts": {
+        "scopes": 6
+      },
+      "scopeKinds": {
+        "user": 1,
+        "project": 1,
+        "role": 4
+      }
+    },
+    {
+      "name": "mcpInheritance",
+      "status": 200,
+      "keys": [
+        "ProjectID",
+        "Enabled",
+        "Revision",
+        "servers"
+      ],
+      "counts": {
+        "servers": 2
+      },
+      "flags": {
+        "Enabled": true,
+        "Revision": 1
+      }
+    },
+    {
+      "name": "snapshot",
+      "status": 200,
+      "keys": [
+        "session",
+        "resources",
+        "resourceTree",
+        "messages",
+        "specialists",
+        "evidence",
+        "actions",
+        "terminals",
+        "cursor",
+        "ai",
+        "conversationMode",
+        "messageQueue",
+        "hostKeyTrust",
+        "messageRead"
+      ],
+      "counts": {
+        "resources": 136,
+        "resourceTree": 145,
+        "messages": 195,
+        "specialists": 0,
+        "evidence": 0,
+        "actions": 0,
+        "terminals": 0
+      }
+    },
+    {
+      "name": "options",
+      "status": 200,
+      "keys": [
+        "conversationMode",
+        "agentRuntime",
+        "profile",
+        "maxSteps",
+        "runtime",
+        "ignoreNaturalMemory",
+        "silentMCPCalls",
+        "silentReadFiles",
+        "silentWriteFiles",
+        "silentReadSQL",
+        "silentCommands",
+        "silentTerminalCreation",
+        "blockUnreferencedAssets",
+        "denyLocalExecution"
+      ],
+      "counts": {}
+    },
+    {
+      "name": "plans",
+      "status": 501,
+      "error": "此会话操作尚未迁移完成"
+    },
+    {
+      "name": "references",
+      "status": 200,
+      "keys": "array",
+      "counts": {
+        "items": 0
+      }
+    },
+    {
+      "name": "reasoning",
+      "status": 200,
+      "keys": [
+        "effort",
+        "levels",
+        "supported",
+        "modelId"
+      ],
+      "counts": {
+        "levels": 0
+      },
+      "flags": {
+        "effort": "",
+        "supported": false
+      }
+    },
+    {
+      "name": "queue",
+      "status": 200,
+      "keys": [
+        "paused",
+        "revision",
+        "lastError",
+        "items"
+      ],
+      "counts": {
+        "items": 0
+      }
+    },
+    {
+      "name": "trash",
+      "status": 200,
+      "keys": [
+        "items"
+      ],
+      "counts": {
+        "items": 0
+      }
+    },
+    {
+      "name": "presets",
+      "status": 200,
+      "keys": "array",
+      "counts": {
+        "items": 0
+      }
+    }
+  ],
+  "isolatedEndpointProbes": [
+    {
+      "name": "resourceTreeCreate",
+      "status": 404,
+      "keys": [
+        "error"
+      ],
+      "error": "接口不存在"
+    },
+    {
+      "name": "resourceImportPreview",
+      "status": 404,
+      "keys": [
+        "error"
+      ],
+      "error": "接口不存在"
+    },
+    {
+      "name": "resourceImport",
+      "status": 404,
+      "keys": [
+        "error"
+      ],
+      "error": "接口不存在"
+    },
+    {
+      "name": "sshKeyPicker",
+      "status": 404,
+      "keys": [
+        "error"
+      ],
+      "error": "接口不存在"
+    },
+    {
+      "name": "navigationDelete",
+      "status": 404,
+      "keys": [
+        "error"
+      ],
+      "error": "接口不存在"
+    },
+    {
+      "name": "navigationRestore",
+      "status": 200,
+      "keys": [
+        "items"
+      ]
+    },
+    {
+      "name": "workflowSave",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "工作流与日程尚未迁移完成"
+    },
+    {
+      "name": "workflowRun",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "工作流与日程尚未迁移完成"
+    },
+    {
+      "name": "scheduleUpdate",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "工作流与日程尚未迁移完成"
+    },
+    {
+      "name": "planList",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "此会话操作尚未迁移完成"
+    },
+    {
+      "name": "planMode",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "此会话操作尚未迁移完成"
+    },
+    {
+      "name": "executePlan",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "此会话操作尚未迁移完成"
+    },
+    {
+      "name": "sendImage",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "附件与资源引用尚未迁移完成"
+    },
+    {
+      "name": "sendReferences",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "附件与资源引用尚未迁移完成"
+    },
+    {
+      "name": "uploadTextFile",
+      "status": 200,
+      "keys": [
+        "id",
+        "projectId",
+        "title",
+        "status",
+        "resourceIds",
+        "createdAt",
+        "updatedAt",
+        "options",
+        "icon",
+        "presentationRevision",
+        "tags",
+        "pinned",
+        "navigationRevision"
+      ]
+    },
+    {
+      "name": "queueMutation",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "消息队列尚未接入"
+    },
+    {
+      "name": "presetSave",
+      "status": 200,
+      "keys": "array"
+    },
+    {
+      "name": "presetReadAfterSave",
+      "status": 200,
+      "keys": "array"
+    },
+    {
+      "name": "presetDelete",
+      "status": 200,
+      "keys": "array"
+    },
+    {
+      "name": "modelConnectionTest",
+      "status": 200,
+      "keys": [
+        "source",
+        "configured",
+        "url",
+        "name",
+        "protocol",
+        "keyConfigured",
+        "supportsImageInput"
+      ]
+    },
+    {
+      "name": "reasoningChange",
+      "status": 200,
+      "keys": [
+        "effort",
+        "levels",
+        "supported",
+        "modelId"
+      ]
+    },
+    {
+      "name": "sreHistory",
+      "status": 200,
+      "keys": [
+        "id",
+        "projectId",
+        "title",
+        "status",
+        "resourceIds",
+        "createdAt",
+        "updatedAt",
+        "options",
+        "icon",
+        "presentationRevision",
+        "tags",
+        "pinned",
+        "navigationRevision"
+      ]
+    },
+    {
+      "name": "sreTask",
+      "status": 200,
+      "keys": [
+        "id",
+        "projectId",
+        "title",
+        "status",
+        "resourceIds",
+        "createdAt",
+        "updatedAt",
+        "options",
+        "icon",
+        "presentationRevision",
+        "tags",
+        "pinned",
+        "navigationRevision"
+      ]
+    },
+    {
+      "name": "sreExport",
+      "status": 200,
+      "keys": [
+        "id",
+        "projectId",
+        "title",
+        "status",
+        "resourceIds",
+        "createdAt",
+        "updatedAt",
+        "options",
+        "icon",
+        "presentationRevision",
+        "tags",
+        "pinned",
+        "navigationRevision"
+      ]
+    },
+    {
+      "name": "kubernetesCreate",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "此资源类型的连接仍在迁移中"
+    },
+    {
+      "name": "actionDecision",
+      "status": 404,
+      "keys": [
+        "error"
+      ],
+      "error": "接口不存在"
+    },
+    {
+      "name": "compact",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "此会话操作尚未迁移完成"
+    },
+    {
+      "name": "rollback",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "此会话操作尚未迁移完成"
+    },
+    {
+      "name": "undoFile",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "此会话操作尚未迁移完成"
+    },
+    {
+      "name": "clear",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "此会话操作尚未迁移完成"
+    },
+    {
+      "name": "clearReferences",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "此会话操作尚未迁移完成"
+    },
+    {
+      "name": "extractPreset",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "此会话操作尚未迁移完成"
+    },
+    {
+      "name": "resolveOperation",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "此会话操作尚未迁移完成"
+    },
+    {
+      "name": "cancelAgent",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "此会话操作尚未迁移完成"
+    },
+    {
+      "name": "agentQuestionReply",
+      "status": 501,
+      "keys": [
+        "error"
+      ],
+      "error": "此会话操作尚未迁移完成"
+    },
+    {
+      "name": "binaryAttachment",
+      "status": 415,
+      "keys": [
+        "error"
+      ],
+      "error": "Content-Type must be application/json"
+    }
+  ],
+  "memoryLiveProbe": {
+    "automatic": {
+      "jobs": [
+        {
+          "state": "completed",
+          "nativeExtraction": true,
+          "modelAttempts": 2,
+          "error": null,
+          "inputTokens": 12929,
+          "outputTokens": 67
+        }
+      ],
+      "publishedRevision": 0,
+      "items": 0,
+      "markerPublished": false
+    },
+    "manual": {
+      "publishedRevision": 1,
+      "items": 1,
+      "markerPublished": true
+    },
+    "qaMemoryDisabledAfterProbe": true,
+    "independentRecall": {
+      "status": "completed",
+      "reply": "湖岸校验7429",
+      "businessToolCards": 0,
+      "phase": "manual",
+      "markerReturned": true,
+      "qualifiedSourceCount": 1
+    },
+    "durablePreferenceAuto": {
+      "turn": {
+        "status": "waiting_approval"
+      },
+      "beforeRevision": 1,
+      "afterRevision": 1,
+      "beforeItems": 1,
+      "afterItems": 1,
+      "changed": false,
+      "jobs": [
+        {
+          "state": "completed",
+          "nativeExtraction": true,
+          "modelAttempts": 2,
+          "error": null,
+          "outputTokens": 81
+        }
+      ]
+    }
+  },
+  "legacyData": {
+    "originalAvailableNowUnavailable": {
+      "local": 5,
+      "postgres": 4,
+      "redis": 1,
+      "kubernetes": 1
+    },
+    "sshConnectionsImported": 123,
+    "mysqlConnectionsImported": 5,
+    "savedWorkflowsInCurrentProject": 1,
+    "workflowsReturnedByTypeScript": 0,
+    "preAuditAutomaticJobsCompleted": 21,
+    "preAuditPublishedMemoryFiles": 0
+  },
+  "scopeNotes": [
+    "No production application or data changed.",
+    "Live read probes do not establish business execution or full functional parity.",
+    "Mutation probes used an isolated Home and loopback port with zero model calls and zero business Operations.",
+    "Memory probe used a new isolated audit project in Lake Dev, current configured model, synthetic data and separate sessions; only its proposed foreground Write was stopped without approval.",
+    "Audit project memory use/extraction disabled after verification; existing projects and global consent unchanged.",
+    "This evidence does not modify parity verifiedOperations or enable default/release cutover."
+  ]
+}
