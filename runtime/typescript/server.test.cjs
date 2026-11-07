@@ -773,7 +773,7 @@ function fullAgentReply(request,mode,home){
   if(mode.includes('ssh')){
    if(!names.includes('list_assets'))return call('list_assets',{query:'SSH fixture'});
    const asset=result('list_assets').assets.find(asset=>asset.kind==='ssh');
-   return call('Bash',{asset_ref:asset.asset_ref,configuration_revision:asset.configuration_revision,command,description:'Inspect the remote environment',...(mode.includes('background')?mode.includes('auto')?{timeout:50}:{run_in_background:true}:{})});
+   return call('Bash',{asset_ref:asset.asset_ref,configuration_revision:asset.configuration_pin??asset.configuration_revision,command,description:'Inspect the remote environment',...(mode.includes('background')?mode.includes('auto')?{timeout:50}:{run_in_background:true}:{})});
   }
   return call('Bash',{command,description:'Inspect the actual environment',...(mode.includes('background')?mode.includes('auto')?{timeout:50}:{run_in_background:true}:{})});
  }

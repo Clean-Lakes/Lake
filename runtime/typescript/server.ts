@@ -582,6 +582,12 @@ export async function startLakeServer(options: ServerOptions) {
         }
         if (path[3] === "messages-read" && path.length === 4 && method === "PUT") result = acknowledgeConversation(store, sessionId, data.cursor);
         else if (path[3] === "executions" && path.length === 6 && path[5] === "interrupt" && method === "POST") { result = execution!.interrupt(sessionId, path[4], data.generation); status = 202; }
+        else if (path[3] === "operation-reconciliation" && path.length===5) {
+          if (method==="GET") result=await superagent.discoveryRecovery.reviewInfo(sessionId,path[4]);
+          else if (method==="POST") result=await superagent.discoveryRecovery.confirmInventoryReview(sessionId,path[4],{...data,
+            note:typeof data.note==="string"?agents.redact(data.note):data.note},(executionId,goalId,generation)=>{execution!.evidence(executionId,goalId,generation);});
+          else throw new HttpError(405,"不支持此核实请求");
+        }
         else if (path[3] === "host-key" && path.length===4 && method==="POST")result=ssh!.decide(sessionId,data);
         else if (path[3] === "terminals") {
           if (path.length === 4 && method === "POST") { await agents.prepareRedaction(); extensions!.servers(); result = await terminals!.open(sessionId, data); status = 201; }

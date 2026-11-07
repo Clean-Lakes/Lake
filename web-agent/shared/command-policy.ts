@@ -32,6 +32,72 @@ function tokenize(command: string): { words: Array<{ word: string; operator: boo
   return { words, dynamic: dynamic || !!mode, substitution };
 }
 
+const opsDirectory = /^\/tmp\/lake-ops-[A-Za-z0-9][A-Za-z0-9-]{1,80}(?:\/[A-Za-z0-9_][A-Za-z0-9._-]*)*$/;
+const inventoryFormat = "%y %s %p\\n";
+export type NobodyInspection = { command: string; directory: string; inventoryDepth?: number };
+
+/** A deliberately small util-linux SSH compiler. The outer identity and all
+ * programs/options/data words are regenerated, never copied as a shell script. */
+export function compileNobodyInspection(source: string): NobodyInspection | undefined {
+  if (source.length > 8192 || /[\0\r\n]/.test(source)) return;
+  const outer = /^(?:\/(?:usr\/)?sbin\/)?runuser -u nobody -- \/bin\/bash -c '([^']+)'$/.exec(source);
+  if (!outer) return;
+  const parsed = tokenize(outer[1]!);
+  if (parsed.dynamic || parsed.substitution || parsed.words.length > 128) return;
+  const groups: string[][] = [[]], joins: string[] = [];
+  for (const token of parsed.words) {
+    if (!token.operator) groups.at(-1)!.push(token.word);
+    else if ([";", "&&"].includes(token.word)) { joins.push(token.word); groups.push([]); }
+    else return;
+  }
+  const render: string[] = [];
+  let directory: string | undefined, inventoryDepth: number | undefined;
+  for (const [i, group] of groups.entries()) {
+    const [name,...args] = group;
+    if (!name) return;
+    const program = name.replace(/^\/usr\/bin\//,"");
+    const paths = args.filter(v=>v.startsWith("/"));
+    for (const path of paths) {
+      if (program === "df" && path === "/") continue;
+      if (!opsDirectory.test(path)) return;
+      const root=path.split("/").slice(0,3).join("/");
+      if (directory && directory!==root) return;
+      directory=root;
+    }
+    let valid = false;
+    if (program==="id") valid=!args.length || args.length===1 && ["-u","-g"].includes(args[0]!);
+    if (program==="find") {
+      valid = args.length===5 && opsDirectory.test(args[0]!) && args[1]==="-maxdepth" && /^[0-8]$/.test(args[2]!) &&
+        args[3]==="-printf" && args[4]===inventoryFormat;
+      if(valid && args[0]===directory && i===2 && groups.length===3 &&
+        groups[0]!.join(" ")==="id" && groups[1]!.join(" ")==="ls -la "+directory && joins.every(j=>j===";"))
+        inventoryDepth=Number(args[2]);
+    }
+    if (["ls","du","df","wc","nl","sha256sum","cat"].includes(program)) {
+      const options: Record<string,string[]> = {ls:["","-la","-l","-al"],du:["-sk","-ks","-sh"],df:["-Pk","-kP"],
+        wc:["-c","-l"],nl:["-ba"],sha256sum:[""],cat:[""]};
+      const index=args.findIndex(v=>v.startsWith("/"));
+      const optionsIn = args.slice(0,index);
+      if (optionsIn.at(-1)==="--") optionsIn.pop();
+      valid = index>=0 && args.length-index<=8 && options[program]!.includes(optionsIn.join(" ")) &&
+        args.slice(index).every(v=>opsDirectory.test(v) || program==="df" && v==="/");
+    }
+    if (!valid) return;
+    render.push((i ? joins[i-1]+" " : "")+"/usr/bin/"+program+" "+args.map(quote).join(" "));
+  }
+  if(!directory) return;
+  const clean="/usr/bin/env -i PATH=/usr/sbin:/usr/bin:/bin LC_ALL=C";
+  const script="builtin cd -- / || exit 1; "+render.join(" ");
+  return {directory,inventoryDepth,command:clean+" /usr/sbin/runuser -u nobody -- "+clean+" /bin/bash --noprofile --norc -c "+quote(script)};
+}
+
+function literalFileInspection(program:string,args:string[]) {
+  if (!["nl","sha256sum"].includes(program)) return false;
+  const paths = program==="nl" ? args[0]==="-ba" ? args.slice(1) : [] : args;
+  const files = paths[0]==="--" ? paths.slice(1) : paths;
+  return files.length>0 && files.length<=8 && files.every(path=>opsDirectory.test(path));
+}
+
 function programLookup(group: string[]): boolean {
   return (
     group[0] === "command" &&
@@ -287,7 +353,7 @@ export function commandPolicy(command: string): CommandPolicy {
   for (const group of groups) {
     const path = group[0]!, program = path.split("/").at(-1)!;
     const args = group.slice(1);
-    let safe = (readPrograms.has(program) && (!path.includes("/") || /^\/(?:usr\/)?s?bin\/[^/]+$/.test(path))) || programLookup(group);
+    let safe = (readPrograms.has(program) && (!path.includes("/") || /^\/(?:usr\/)?s?bin\/[^/]+$/.test(path))) || programLookup(group) || (path===program || path==="/usr/bin/"+program) && literalFileInspection(program,args);
     if (program === "date") safe &&= args.every(arg => arg === "-u" || arg === "--utc" || arg.startsWith("+"));
     if (program === "hostname") safe &&= args.every(arg => ["-f", "-s", "-d", "-i", "-I", "-a", "--fqdn"].includes(arg));
     if (program === "file") safe &&= !args.some(arg => arg === "--compile" || /^-[^-]*C/.test(arg));

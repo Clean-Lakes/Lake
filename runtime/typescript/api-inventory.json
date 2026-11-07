@@ -130,6 +130,15 @@
       ]
     },
     {
+      "name": "confirmOperationReview",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/sessions/${encodeURIComponent(sessionId)}/operation-reconciliation/${encodeURIComponent(operationId)}`"
+        }
+      ]
+    },
+    {
       "name": "createProject",
       "routes": [
         {
@@ -495,6 +504,15 @@
         {
           "method": "GET",
           "path": "\"/api/navigation-trash\""
+        }
+      ]
+    },
+    {
+      "name": "operationReview",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "`/api/sessions/${encodeURIComponent(sessionId)}/operation-reconciliation/${encodeURIComponent(operationId)}`"
         }
       ]
     },

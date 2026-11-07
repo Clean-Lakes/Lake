@@ -148,3 +148,22 @@ test("vertical result formatting does not turn a metadata query into arbitrary e
     "write",
   );
 });
+
+test("only literal exercise file inspections and compiled nobody inventory are classified", async()=>{
+  const {compileNobodyInspection}=await import("../../shared/command-policy");
+  const dir="/tmp/lake-ops-UK-fixture";
+  const raw="runuser -u nobody -- /bin/bash -c 'id; ls -la "+dir+"; find "+dir+' -maxdepth 4 -printf "%y %s %p\\n"'+String.fromCharCode(39);
+  const compiled=compileNobodyInspection(raw)!;
+  assert.equal(compiled.directory,dir); assert.equal(compiled.inventoryDepth,4);
+  assert.match(compiled.command,/\/usr\/sbin\/runuser/);assert.match(compiled.command,/builtin cd -- \/ /);
+  for(const tool of ["id","ls","find"]) assert.ok(compiled.command.includes("/usr/bin/"+tool));
+  assert.notEqual(commandPolicy(raw).risk,"readonly");
+  for(const bad of [raw.replace("nobody","root"),raw.replace("runuser","/tmp/runuser"),raw.replace("id;","touch /tmp/file;"),
+      raw.replace("ls -la","ls -la > /tmp/bad"),raw.replace("-printf","-fprintf"),raw.replace("-printf","-delete -printf"),
+      raw.replace("id;","$(touch /tmp/bad);"),raw.replace(" -maxdepth","/../escape -maxdepth"),raw+"; touch /tmp/escape",
+      raw.replace("id;","id | touch /tmp/bad;"),raw.replace("ls -la","bash -lc"),raw.replace("find ","/tmp/find ")])
+    assert.equal(compileNobodyInspection(bad),undefined,bad);
+  for(const cmd of ["nl -ba "+dir+"/app.log","sha256sum -- "+dir+"/quota/app.log"])assert.equal(commandPolicy(cmd).risk,"readonly");
+  for(const cmd of ["nl -ba "+dir+"/../x","sha256sum -c "+dir+"/list","sha256sum /etc/passwd","nl --body-numbering=p "+dir+"/app.log","sha256sum "+dir+"/a > "+dir+"/f"])
+    assert.notEqual(commandPolicy(cmd).risk,"readonly",cmd);
+});

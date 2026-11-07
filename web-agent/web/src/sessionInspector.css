@@ -148,3 +148,15 @@ html.lake-windows-chrome .session-inspector { padding-top:52px; }
 .workspace.inspector-window-sizing .session-inspector.is-closing { position:relative; right:auto; top:auto; bottom:auto; }
 
 .inspector-execution-outcome { margin:0 0 22px; padding:0 0 18px; border-top:0; border-bottom:1px solid var(--border); }
+
+.operation-review {margin-block:16px;display:grid;gap:8px;font-size:var(--text-sm,13px);}
+.operation-review h4,.operation-review p {margin:0;}
+.operation-review fieldset {display:grid;gap:10px;min-width:0;margin:0;padding:0;border:0;}
+.operation-review label:not(.operation-review-consent) {display:grid;gap:4px;}
+.operation-review pre,.operation-review code {white-space:pre-wrap;overflow-wrap:anywhere;}
+.operation-review pre {max-height:10em;overflow:auto;}
+.operation-review textarea {width:100%;min-width:0;box-sizing:border-box;resize:vertical;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-settings-control);padding:6px 8px;}
+.operation-review .operation-review-consent {display:flex;align-items:baseline;gap:5px;}
+.operation-review-evidence {color:var(--muted);min-width:0;}
+.operation-review button[type=submit] {justify-self:start;}
+.operation-review-resolved {color:var(--muted);font-size:13px;}

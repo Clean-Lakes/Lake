@@ -1,3 +1,4 @@
+import { boundResourceRevision, issueResourcePin } from "./resource-pin";
 import {conversationReadState} from "./conversation-reads";
 import {permissionDefaults} from '../../web-agent/shared/execution-preferences';
 import {specialistReplies} from '../../web-agent/shared/specialist-replies';
@@ -38,6 +39,7 @@ type InputEvent = { id: string; projectId: string; sessionId: string; messageId:
   preferredRoleId?: string; explicitTaskId?: string; disposition: "pending" | "routed" | "blocked" | "stopped";
   receivedAt: string; revision: number; error?: string };
 type Worker = { inline?:boolean; preTaskModelRounds?:number; id: string; projectId: string; roleId: string; roleSnapshot: Role; sessionId: string; taskId: string;
+  targetResourceIds?: string[];
   sourceEventId: string; generation: number; state: "queued" | "active" | "parked" | "stopped";
   owner?: string; leaseUntil?: number; policyHash: string; createdAt: string; inputEventIds: string[]; deliveredInputIds?: string[]; invocationInputIds?: string[];
   settledInputIds?: string[]; resumeControlId?: string };
@@ -48,7 +50,7 @@ type TaskPredecessor = { taskRef: { id: string; revision: number; hash: string }
 type EvidenceBinding = { taskId: string; sourceTaskId: string; projectId: string; revision: number;
   jointRevision?: number; members?: { executionId: string; revision: number }[] };
 type RouterBatch = { eventIds: string[]; complete: Set<string>; input: string };
-type Assignment = { executionId: string; workerId: string; sessionId: string; roleId: string; instruction?: string };
+type Assignment = { executionId: string; workerId: string; sessionId: string; roleId: string; instruction?: string; resourceIds?: string[] };
 type Decision = { id: string; projectId: string; eventId: string; partKey: string; action: string;
   quote: string; hash: string; reason?: string; taskId?: string; workerId?: string; sessionId?: string; roleId?: string; assignments?: Assignment[] };
 type Interaction = { id: string; workerId: string; generation: number; kind: "plan" | "question";
@@ -605,7 +607,8 @@ export class LakeSuperagent implements AgentHost {
     this.notify(sessionId, "specialist"); return result;
   }
   private assignment(worker: Worker, instruction?: string): Assignment {
-    return { executionId: worker.taskId, workerId: worker.id, sessionId: worker.sessionId, roleId: worker.roleId, instruction };
+    return { executionId: worker.taskId, workerId: worker.id, sessionId: worker.sessionId, roleId: worker.roleId, instruction,
+      ...(worker.targetResourceIds && {resourceIds:worker.targetResourceIds}) };
   }
   private decisionAssignments(decision: Decision): Assignment[] {
     if (decision.assignments) return decision.assignments;
@@ -661,7 +664,7 @@ export class LakeSuperagent implements AgentHost {
     return instructions;
   }
   private newAssignment(event: InputEvent, routerSessionId: string, suffix: string, role: Role, title: string,
-    refs: string[], predecessor?: TaskPredecessor, original?: Goal): Worker {
+    refs: string[], predecessor?: TaskPredecessor, original?: Goal, targetResourceIds?: string[]): Worker {
     const origin = original ? this.store.require<InputEvent>("superInputs", original.sourceEventId) : event;
     this.ensureChannel(role);
     const workerId = "worker_" + suffix, taskId = "st_" + suffix, workerSession = "sw_" + suffix;
@@ -695,6 +698,7 @@ export class LakeSuperagent implements AgentHost {
       executionMode: session.options.conversationMode === "plan" ? "explicit_plan" : "host_managed" });
     if (predecessor) this.store.put("superTaskPredecessors", taskId, predecessor);
     const worker: Worker = { id: workerId, projectId: event.projectId, roleId: role.id, roleSnapshot: structuredClone(role), sessionId: workerSession, taskId,
+      ...(targetResourceIds && {targetResourceIds}),
       sourceEventId: event.id, generation: 0, state: "queued", policyHash: this.policy(event.projectId), createdAt: now(), inputEventIds: [...new Set([origin.id, event.id])], settledInputIds: origin.id === event.id ? [] : [origin.id] };
     this.store.put("superWorkers", workerId, worker);
     return worker;
@@ -718,6 +722,7 @@ export class LakeSuperagent implements AgentHost {
     if (!["create", "assign", "followup", "context_only", "stop", "ask", "respond"].includes(action)) throw new HttpError(400, "Invalid routing action");
     const assigning = action === "create" || action === "assign";
     const refs = strings(input.evidence_task_ids, 8);
+    if (action !== "create" && input.resource_ids !== undefined) throw new HttpError(400, "Only create sets resource_ids; existing assignments retain their original scope");
     if (action !== "create" && refs.length) throw new HttpError(400, "Historical evidence references are registered only for a new task");
     if (action !== "create" && input.predecessor_task_id != null) throw new HttpError(400, "predecessor_task_id belongs only to a new task");
     if (!assigning && [input.role_key, input.role_ids, input.role_instructions].some(value => value != null)) throw new HttpError(400, "Specify a single recipient by role_id");
@@ -746,6 +751,7 @@ export class LakeSuperagent implements AgentHost {
           throw new HttpError(409, "Use the exact source channel role_id; additional specialists must be assigned by Pilot");
         const instructions = this.roleInstructions(input.role_instructions, roles);
         let root: Goal | undefined;
+        let targetResourceIds: string[] | undefined;
         if (action === "assign") {
           root = this.ledger.get(text(input.task_id, "task_id", 128));
           if (root.projectId !== event.projectId || root.sharedTaskId && root.sharedTaskId !== root.id)
@@ -756,19 +762,32 @@ export class LakeSuperagent implements AgentHost {
             members.some(goal => (terminal(goal.status) && !goal.contributionReceiptId) || this.ledger.roundsRemaining(goal) <= 0 || this.ledger.unresolved(goal.id)) || Date.parse(root.deadlineAt) <= Date.now())
             throw new HttpError(409, "Only an open specialist task within its original limits can accept additional specialists");
           if (roles.some(role => members.some(member => member.roleId === role.id))) throw new HttpError(409, "Specialist already assigned to this task");
+          targetResourceIds = this.store.require<Worker>("superWorkers",root.workerId).targetResourceIds;
         } else {
+          const selected = event.selectedReferences?.resourceIds ?? [];
+          if (input.resource_ids === undefined && selected.length > 1)
+            throw new HttpError(400,"This input selects multiple resources. Set resource_ids to the exact target subset for this task (all targets for one comparison).");
+          if (input.resource_ids !== undefined) {
+            targetResourceIds = strings(input.resource_ids,32);
+            if (!targetResourceIds.length || targetResourceIds.some(id=>!selected.includes(id)))
+              throw new HttpError(400,"resource_ids must be a nonempty subset of this human event's selected resource IDs");
+            for (const resourceId of targetResourceIds) this.verifyEventReference(event,resourceId);
+          }
           for (const old of parts.filter(p => p.action === "create")) {
             const start = event.payload.indexOf(quote), oldStart = event.payload.indexOf(old.quote);
-            if (start < oldStart + old.quote.length && oldStart < start + quote.length)
-              throw new HttpError(409, "Overlapping deliverables: reuse the original part for replay or assign additional specialists to its task_id");
+            if (start < oldStart + old.quote.length && oldStart < start + quote.length) {
+              const earlier = this.decisionAssignments(old);
+              if (targetResourceIds && earlier.length && earlier.every(a=>a.resourceIds?.length && a.resourceIds.every(id=>!targetResourceIds!.includes(id)))) continue;
+              throw new HttpError(409, "Overlapping deliverables: use disjoint selected resource_ids for independent assignments or add specialists to the existing task");
+            }
           }
         }
         const title = root?.title ?? text(input.title, "title", 1000);
         const assignments = roles.map((role, i) => {
           const predecessor = input.predecessor_task_id == null ? undefined : this.predecessor(event, role, input.predecessor_task_id);
           const suffix = digest(i === 0 ? [event.id, part] : [event.id, part, role.id]).slice(0, 32);
-          const worker = this.newAssignment(event, sessionId, suffix, role, title, refs, predecessor, root);
-          return this.assignment(worker, instructions.get(role.id));
+          const worker = this.newAssignment(event, sessionId, suffix, role, title, refs, predecessor, root, targetResourceIds);
+          return this.assignment(worker, instructions.get(role.id) ?? (targetResourceIds ? title : undefined));
         });
         decision.taskId = root?.id ?? assignments[0]!.executionId;
         if (root || assignments.length > 1) this.ledger.joinTask(decision.taskId, assignments.map(assignment => assignment.executionId));
@@ -1016,11 +1035,14 @@ export class LakeSuperagent implements AgentHost {
       const instruction = this.decisionAssignments(decision).find(member => member.workerId === worker.id)?.instruction;
       const publicTaskId = goal.sharedTaskId ?? goal.id;
       const followups = worker.invocationInputIds.filter((eventId) => eventId !== origin.id).map((eventId) => this.store.require<InputEvent>("superInputs", eventId));
+      const targets = worker.targetResourceIds;
+      const selectedReferences = targets && origin.selectedReferences ? {...origin.selectedReferences,
+        resourceIds:targets, mentions:origin.selectedReferences.mentions.filter(m=>m.kind!=="resource" || targets.includes(m.id))} : origin.selectedReferences;
       const input = canonical({ assignment: { projectId: worker.projectId, roleId: worker.roleId, roleRevision: worker.roleSnapshot.revision,
         taskId: publicTaskId, executionId: goal.id, workerId: worker.id, sessionId: worker.sessionId,
-        joint: !!goal.sharedTaskId }, roleSnapshot: worker.roleSnapshot,
-        originalRequirement: origin.payload, selectedReferences: origin.selectedReferences,
-        assignedDeliverable: instruction ?? (decision.action === "assign" ? goal.title : decision.quote), goal: this.publicGoal(goal),
+        joint: !!goal.sharedTaskId, ...(targets && {targetResourceIds:targets}) }, roleSnapshot: worker.roleSnapshot,
+        originalRequirement: origin.payload, selectedReferences,
+        assignedDeliverable: instruction ?? (targets || decision.action === "assign" ? goal.title : decision.quote), goal: this.publicGoal(goal),
         predecessor: this.store.get<TaskPredecessor>("superTaskPredecessors", worker.taskId),
         taskContext:this.recallContext(worker),
         humanControl: resume ? { command: resume.command, at: resume.at } : undefined,
@@ -1091,6 +1113,16 @@ export class LakeSuperagent implements AgentHost {
     const entries = this.workerEntries(worker).filter((entry) => worker.inline || !managed || !["work_begin", "work_update"].includes(entry.metadata.name));
     const mode=worker.inline?(this.store.get<Goal>("superGoals",worker.taskId)?.mode??(this.store.session(worker.sessionId).options.conversationMode==='plan'?'plan':'default')):this.ledger.get(worker.taskId).mode;
     const router = this.store.require<SuperProject>("superProjects", worker.projectId), permissions = this.store.session(router.routerSessionId).options;
+    const assignmentAllows=(name:string)=>{
+      if (!worker.targetResourceIds) return true;
+      if (["Read","Write","Edit","Glob","Grep","FindFiles","SearchText","list_project_files"].includes(name)) {
+        const workspace=this.store.catalog().resources.find(r=>r.projectId===worker.projectId && r.kind==="local" && r.status==="available");
+        return !!workspace && worker.targetResourceIds.includes(workspace.id);
+      }
+      // An unbound web request or opaque MCP invocation cannot establish which
+      // selected resource will execute it. SSH tasks can use host-bound Bash.
+      return !["WebFetch","WebSearch","call_mcp_tool","list_mcp_tools"].includes(name);
+    };
     return { runtimeMode:this.store.get<any>("agentPlans",worker.taskId)?.active?"plan":"build",version: `${worker.id}:${worker.generation}:host-v3:${managed}`, systemPrompt: superWorkerPrompt,
       wrapHTTP:base=>this.httpPort(worker,base),
       wrapFilesystem:base=>this.filePort(worker,base),
@@ -1098,7 +1130,7 @@ export class LakeSuperagent implements AgentHost {
       subagents: true, get taskId(){return worker.taskId;}, get workerId(){return worker.id;},
       memoryActor: { kind: "worker", projectId: worker.projectId, roleId: worker.roleId },
       projectRequest:request=>projectTaskContext(request,this.contextActor(worker),()=>this.recallContext(worker,{},true)),
-      tools: [...entries,...this.nativeEntries(worker), ...this.extensionEntries(worker),...this.hostEntries(worker),...this.databaseEntries(worker)], allowlist: [...entries.map((entry) => entry.metadata.name),...(this.ssh?hostTools:[]),...(this.mysql?databaseTools:[]), ...(this.extensions ? extensionTools : []), ...childControlTools, ...agentToolNames].filter((name) => mode !== "plan" || !["Write","Edit","call_mcp_tool"].includes(name)),
+      tools: [...entries,...this.nativeEntries(worker), ...this.extensionEntries(worker),...this.hostEntries(worker),...this.databaseEntries(worker)], allowlist: [...entries.map((entry) => entry.metadata.name),...(this.ssh?hostTools:[]),...(this.mysql?databaseTools:[]), ...(this.extensions ? extensionTools : []), ...childControlTools, ...agentToolNames].filter((name) => assignmentAllows(name) && (mode !== "plan" || !["Write","Edit","call_mcp_tool"].includes(name))),
       permissionRules: { scope: "session", version: 1,
         allow: [...((permissions.silentCommands??permissionDefaults.silentCommands)===true?[{toolName:"Bash"}]:[]),...(permissions.silentWriteFiles === true ? [{ toolName: "Write" }, { toolName: "Edit" }] : []),
           ...(this.extensions?.automaticCalls(worker.projectId, permissions) ? [{ toolName: "call_mcp_tool" }] : [])],
@@ -1136,6 +1168,9 @@ export class LakeSuperagent implements AgentHost {
       invoke: (entry, input, context) => this.serializeBusiness(worker.id, async () => {
         this.validateWorker(worker.id, worker.generation);
         if (context.abortSignal.aborted) throw new HttpError(409, "Worker stopped");
+        if(!assignmentAllows(entry.metadata.name)) throw new HttpError(403,"此工具无法绑定本次分工的目标资源，请使用资源绑定工具");
+        if(hostTools.includes(entry.metadata.name) || databaseTools.includes(entry.metadata.name))
+          this.requireTarget(worker,(input as {asset_ref?:unknown})?.asset_ref);
         if(entry.metadata.name==='WebFetch')return this.invokeWebFetch(worker,entry,input as any,context);
         if(entry.metadata.name==='Bash')return this.invokeBash(worker,entry,input as ShellInput,context);
         if(['AskUserQuestion','EnterPlanMode','ExitPlanMode','Skill','TodoRead','TodoWrite','ToolSearch','LocalToolSearch','DeferredToolCall'].includes(entry.metadata.name))return entry.handler(input,context);
@@ -1192,22 +1227,36 @@ export class LakeSuperagent implements AgentHost {
     return this.ledger.operation(worker.taskId,worker.generation,worker.policyHash,context.toolCallId,'WebFetch',input,()=>entry.handler(input,context),value=>JSON.parse(this.agents.redact(JSON.stringify(value??null))),{...this.childSource(context),readOnly:true,networkURL:input.url});
   }
   private shellActor(worker:Worker):ShellActor{return {sessionId:worker.sessionId,taskId:worker.taskId,workerId:worker.id,generation:worker.generation,guard:()=>this.validateWorker(worker.id,worker.generation)};}
+  private eventReferences(event: InputEvent, resourceId: string) {
+    const message = this.store.get<Message>('messages', event.messageId);
+    const selected = this.store.get<MessageInput & {projectId:string;sessionId:string;messageId:string}>('messageInputs',event.messageId);
+    return event.selectedReferences?.resourceIds.includes(resourceId) &&
+      message?.role === 'user' && message.sessionId === event.sessionId && selected?.projectId === event.projectId &&
+      selected.sessionId === event.sessionId && selected.messageId === event.messageId &&
+      digest(event.selectedReferences) === digest({resourceIds:selected.resourceIds,mentions:selected.mentions,references:selected.references});
+  }
+  private verifyEventReference(event: InputEvent, resourceId: string) {
+    if (!this.eventReferences(event,resourceId) || this.store.require<{projectId:string}>('resources',resourceId).projectId !== event.projectId)
+      throw new HttpError(403,"Target must match a verified resource reference on the original human event");
+  }
   private requireReference(worker: Worker, resourceId: string) {
-    const referenced = worker.inputEventIds.some(eventId => {
-      const event = this.store.require<InputEvent>('superInputs', eventId);
-      const message = this.store.get<Message>('messages', event.messageId);
-      const selected = this.store.get<MessageInput & {projectId: string; sessionId: string; messageId: string}>('messageInputs', event.messageId);
-      return event.projectId === worker.projectId && event.selectedReferences?.resourceIds.includes(resourceId) &&
-        message?.role === 'user' && message.sessionId === event.sessionId && selected?.projectId === worker.projectId &&
-        selected.sessionId === event.sessionId && selected.messageId === event.messageId && digest(event.selectedReferences) === digest({resourceIds: selected.resourceIds, mentions: selected.mentions, references: selected.references});
+    const referenced = worker.inputEventIds.some(eventId=>{
+      const event=this.store.require<InputEvent>("superInputs",eventId);
+      return worker.projectId===event.projectId && this.eventReferences(event,resourceId);
     });
     if (!referenced) throw new HttpError(403, '当前任务尚未收到此资源的准确用户引用，请在消息中选择资源');
     const resource = this.store.require<import('../../web-agent/shared/contracts').Resource>('resources', resourceId);
     if (resource.projectId !== worker.projectId) throw new HttpError(403, '资源引用不属于当前项目');
   }
+  private requireTarget(worker: Worker, resourceId: unknown) {
+    if (worker.targetResourceIds && (typeof resourceId!=="string" || !worker.targetResourceIds.includes(resourceId)))
+      throw new HttpError(403,"资源不属于本次专员分工，请使用该分工内的准确 asset_ref");
+  }
   private shellPlan(worker:Worker,input:ShellInput){
     if(!this.execution)throw new HttpError(409,'Shell 执行器未连接');
+    if(input.asset_ref) this.requireTarget(worker,input.asset_ref);
     const plan=this.execution.plan(worker.projectId,input),project=this.store.require<SuperProject>('superProjects',worker.projectId),options=this.store.session(project.routerSessionId).options;
+    this.requireTarget(worker,plan.resource.id);
     if(plan.resource.kind==='local'&&options.denyLocalExecution===true)throw new HttpError(403,'当前 Pilot 权限禁止本机执行');
     if(options.blockUnreferencedAssets===true)this.requireReference(worker,plan.resource.id);
     const mode=this.store.get<Goal>('superGoals',worker.taskId)?.mode;
@@ -1218,7 +1267,7 @@ export class LakeSuperagent implements AgentHost {
     const schema=entry.inputSchema as any;
     return {...entry,runtimeInputSchema:undefined,resolvePermissionRulePolicy:undefined,
       permission:{...entry.permission,needsApproval:false},
-      metadata:{...entry.metadata,needsApproval:false,description:entry.metadata.description+'\nLake resource execution: omit asset_ref for the assigned local workspace. For SSH copy exact asset_ref and configuration_revision from list_assets; the host connects with saved credentials. Optional cwd is an absolute path on that target. Never supply passwords/private keys. Inspect the actual environment and use its installed kubectl/mysql/docker tools; do not stop at a missing specialized adapter. Background commands must finish or be stopped before work_finish.'},
+      metadata:{...entry.metadata,needsApproval:false,description:entry.metadata.description+'\nLake resource execution: omit asset_ref for the assigned local workspace. For SSH copy the exact asset_ref and use the short configuration_pin from list_assets for the configuration_revision argument (the full revision is also supported); the host connects with saved credentials. Optional cwd is an absolute path on that target. Never supply passwords/private keys. Inspect the actual environment and use its installed kubectl/mysql/docker tools; do not stop at a missing specialized adapter. Background commands must finish or be stopped before work_finish.'},
       inputSchema:{...schema,properties:{...schema.properties,asset_ref:str,configuration_revision:str,cwd:str}},
       resolvePermissionCapability:(input:any)=>{const {plan,options}=this.shellPlan(worker,input);const ask=(options.silentCommands??permissionDefaults.silentCommands)!==true||plan.policy==='ask'||plan.risk==='dangerous';return {readOnly:plan.readOnly,needsApproval:ask,permission:{needsApproval:ask,...(ask?{alwaysAsk:true as const}:{}),riskLevel:plan.risk==='dangerous'?'high':plan.readOnly?'low':'medium',sideEffectScope:'system'}};},
       handler:(input:any,context)=>{const {asset_ref,configuration_revision,cwd,...native}=input;return entry.handler(native,context);}};
@@ -1298,8 +1347,8 @@ export class LakeSuperagent implements AgentHost {
   }
   private hostEntries(worker:Worker):ToolEntry[]{
     if(!this.ssh)return [];
-    const entry=this.entry("inspect_host","Read current SSH host metrics using one fixed readonly system, disks or processes profile. Copy exact asset_ref and configuration_revision from list_assets. Never accepts Shell text or credentials.",objectSchema({asset_ref:str,configuration_revision:str,metric:{type:"string",enum:["system","disks","processes"]}},["asset_ref","configuration_revision","metric"]),async(a,context)=>this.ssh!.inspect(worker.sessionId,this.store.require("resources",a.asset_ref),a.metric,context.abortSignal,()=>{this.validateWorker(worker.id,worker.generation);this.security?.host(worker.projectId,a.asset_ref);}),false,131072);
-    entry.resolvePermissionCapability=(input:any)=>{const project=this.store.require<SuperProject>("superProjects",worker.projectId),options=this.store.session(project.routerSessionId).options,policy=this.security?.host(worker.projectId,input.asset_ref);const approval=(options.silentCommands??permissionDefaults.silentCommands)!==true||policy==='ask';return {needsApproval:approval,permission:{needsApproval:approval,sideEffectScope:"workspace"}};};
+    const entry=this.entry("inspect_host","Read current SSH host metrics using one fixed readonly system, disks or processes profile. Copy asset_ref and use the short configuration_pin for configuration_revision from list_assets. For short-lived Linux processes under a known directory use metric=processes with process_directory: returns two time-stamped ps CPU readings 2 seconds apart, PID, start ticks and matched script path.",objectSchema({asset_ref:str,configuration_revision:str,metric:{type:"string",enum:["system","disks","processes"]},process_directory:str},["asset_ref","configuration_revision","metric"]),async(a,context)=>this.ssh!.inspect(worker.sessionId,this.store.require("resources",a.asset_ref),a.metric,context.abortSignal,()=>{this.validateWorker(worker.id,worker.generation);this.security?.host(worker.projectId,a.asset_ref);},a.process_directory),false,131072);
+    entry.resolvePermissionCapability=(input:any)=>{this.requireTarget(worker,input.asset_ref);const project=this.store.require<SuperProject>("superProjects",worker.projectId),options=this.store.session(project.routerSessionId).options,policy=this.security?.host(worker.projectId,input.asset_ref);const approval=(options.silentCommands??permissionDefaults.silentCommands)!==true||policy==='ask';return {needsApproval:approval,permission:{needsApproval:approval,sideEffectScope:"workspace"}};};
     return [entry];
   }
   private databaseEntries(worker:Worker):ToolEntry[]{
@@ -1307,8 +1356,8 @@ export class LakeSuperagent implements AgentHost {
     const props={asset_ref:str,configuration_revision:str,db:str,schema:str,query_type:{type:"string",enum:["database","schema","table","view","object"]},table:str,columns:array(str),order_by:array(str),limit:integer,offset:integer,mode:{type:"string",enum:["rows","count"]}};
     return databaseTools.map(name=>{
       const description=name==="list_db_objects"?"Read actual MySQL databases or tables. Use query_type database first when no saved db exists, then exact db/schema. This is real bounded metadata, not a connectivity claim.":name==="db_table_ddl"?"Read actual MySQL table DDL for exact db/schema and table.":"Read bounded MySQL table rows (mode rows, limit max 500, order_by exact columns) or an exact row count (mode count). Use explicit stable order for pagination. No raw SQL. Samples/counts are not a full cross-server equality proof.";
-      const entry=this.entry(name,description+" Copy asset_ref and configuration_revision from list_assets. Host uses saved credentials and a read-only transaction.",objectSchema(props,["asset_ref","configuration_revision",...(name==='list_db_objects'?[]:['table'])]),(input,context)=>this.mysql!.read(worker.projectId,this.store.require('resources',input.asset_ref),name,input,context.abortSignal,()=>this.validateWorker(worker.id,worker.generation)),false,131072);
-      entry.resolvePermissionCapability=(input:any)=>{const resource=this.store.require<any>('resources',input.asset_ref);if(resource.projectId!==worker.projectId)throw new HttpError(403,'MySQL 不属于当前项目');const plan=this.mysql!.plan(resource,name,input),project=this.store.require<SuperProject>('superProjects',worker.projectId),options=this.store.session(project.routerSessionId).options;const approval=(options.silentReadSQL??permissionDefaults.silentReadSQL)!==true||plan.policy==='ask';return {needsApproval:approval,permission:{needsApproval:approval,sideEffectScope:'workspace'}};};
+      const entry=this.entry(name,description+" Copy the asset_ref and use the short configuration_pin for configuration_revision from list_assets. Host uses saved credentials and a read-only transaction.",objectSchema(props,["asset_ref","configuration_revision",...(name==='list_db_objects'?[]:['table'])]),(input,context)=>this.mysql!.read(worker.projectId,this.store.require('resources',input.asset_ref),name,input,context.abortSignal,()=>this.validateWorker(worker.id,worker.generation)),false,131072);
+      entry.resolvePermissionCapability=(input:any)=>{this.requireTarget(worker,input.asset_ref);const resource=this.store.require<any>('resources',input.asset_ref);if(resource.projectId!==worker.projectId)throw new HttpError(403,'MySQL 不属于当前项目');const plan=this.mysql!.plan(resource,name,input),project=this.store.require<SuperProject>('superProjects',worker.projectId),options=this.store.session(project.routerSessionId).options;const approval=(options.silentReadSQL??permissionDefaults.silentReadSQL)!==true||plan.policy==='ask';return {needsApproval:approval,permission:{needsApproval:approval,sideEffectScope:'workspace'}};};
       return entry;
     });
   }
@@ -1319,7 +1368,7 @@ export class LakeSuperagent implements AgentHost {
     const project=this.store.require<SuperProject>('superProjects',worker.projectId),options=this.store.session(project.routerSessionId).options;
     if(options.blockUnreferencedAssets===true)this.requireReference(worker,resource.id);
     const plan=this.mysql.plan(resource,entry.metadata.name,input),revision=this.mysql.revision(resource);
-    if(input.configuration_revision!==revision)throw new HttpError(409,'MySQL 配置或凭据版本已变化');
+    if(!boundResourceRevision(this.store,resource,input.configuration_revision,revision))throw new HttpError(409,'MySQL 配置或凭据版本已变化');
     this.validateWorker(worker.id,generation);
     return this.ledger.operation(worker.taskId,generation,worker.policyHash,context.toolCallId,entry.metadata.name,input,()=>entry.handler(input,context),value=>JSON.parse(this.agents.redact(JSON.stringify(value??null))),{...this.childSource(context),resourceId:resource.id,resourceRevision:this.store.get<number>('resourceRevisions',resource.id)??1,readOnly:plan.provenReadOnly,databaseConfigurationHash:revision,databaseScope:plan.scope});
   }
@@ -1328,7 +1377,7 @@ export class LakeSuperagent implements AgentHost {
     const project=this.store.require<SuperProject>("superProjects",worker.projectId),options=this.store.session(project.routerSessionId).options;
     const resource=this.store.require<import("../../web-agent/shared/contracts").Resource>("resources",text(input.asset_ref,"asset_ref",200));
     if(options.blockUnreferencedAssets===true)this.requireReference(worker,resource.id);
-    this.security?.host(worker.projectId,resource.id);const revision=this.ssh.revision(resource);if(input.configuration_revision!==revision)throw new HttpError(409,"SSH 配置或凭据版本已变化，请重新读取资源目录");
+    this.security?.host(worker.projectId,resource.id);const revision=this.ssh.revision(resource);if(!boundResourceRevision(this.store,resource,input.configuration_revision,revision))throw new HttpError(409,"SSH 配置或凭据版本已变化，请重新读取资源目录");
     this.validateWorker(worker.id,generation);
     return this.ledger.operation(worker.taskId,generation,worker.policyHash,context.toolCallId,entry.metadata.name,input,()=>entry.handler(input,context),value=>JSON.parse(this.ssh!.scrub(JSON.stringify(value??null))),{...this.childSource(context),resourceId:resource.id,resourceRevision:this.store.get<number>("resourceRevisions",resource.id)??1,readOnly:true,hostConfigurationHash:revision});
   }
@@ -1398,9 +1447,9 @@ export class LakeSuperagent implements AgentHost {
       this.entry("list_specialists", "List stable project specialist role IDs and revisions. Metadata, not permissions.", objectSchema({ cursor: str, limit: integer }), (a) => this.listRoles(projectId, a.cursor, a.limit)),
       this.entry("manage_specialist", "Create/edit a long-lived specialist from an exact admitted human quote, independently of tasks. create requires immutable role_key; update exact role_id/expected_revision. Duties affect future assignments only.",
         objectSchema({ event_id: str, part_key: str, action: { enum: ["create", "update"], type: "string" }, role_id: str, role_key: str, name: str, duties: str, expected_revision: integer, quote: str }, ["event_id", "part_key", "action", "name", "duties", "quote"]), (a) => this.manage(sessionId, a)),
-      this.entry("route_work", "Commit one exact admitted event part. Create requires title, quote and one recipient selector: role_id, new role_key, or role_ids for one shared task. Specify role_instructions for each contributor. Omit task_id for create; for assign supply the existing public task_id and additional roles. Followup, context_only and stop target the exact task and recipient role_id, using the public ID for a shared task. A fresh check of an accepted task can use predecessor_task_id for historical context. Inspect assignments in the receipt for the exact recipients. ask/respond omit task_id.",
+      this.entry("route_work", "Commit one exact admitted event part. For an event selecting multiple resources, create must set resource_ids to its exact subset of selected IDs. Independent per-resource tasks may quote the same request if subsets are disjoint; for a single comparison include both IDs. Create requires title, quote and one recipient selector: role_id, new role_key, or role_ids for one shared task. Specify role_instructions for each contributor. Omit task_id for create; for assign supply the existing public task_id and additional roles. Followup, context_only and stop target the exact task and recipient role_id, using the public ID for a shared task. A fresh check of an accepted task can use predecessor_task_id for historical context. Inspect assignments in the receipt for the exact recipients. ask/respond omit task_id.",
         objectSchema({ event_id: str, part_key: str, action: { type: "string", enum: ["create", "assign", "followup", "context_only", "stop", "ask", "respond"] },
-          task_id: str, predecessor_task_id: str, title: str, role_id: str, role_key: str, role_ids: array(str),
+          task_id: str, predecessor_task_id: str, title: str, role_id: str, role_key: str, role_ids: array(str), resource_ids:array(str),
           role_instructions: array(objectSchema({role_id: str, instruction: str}, ["role_id", "instruction"])), quote: str, reason: str, evidence_task_ids: array(str) }, ["event_id", "part_key", "action", "reason"]), (a) => this.route(sessionId, a)),
       this.entry("inspect_watchdog","Explain recent Watchdog findings for the current event. Supply a task_id to inspect all contributors, or include role_id for one. Each action has its own timing and evidence.",
         objectSchema({event_id:str,task_id:str,role_id:str},["event_id"]), a=>{
@@ -1544,8 +1593,8 @@ export class LakeSuperagent implements AgentHost {
       this.entry("ask_user_question", "Ask a bounded human prerequisite question for this exact task. Answers are not operation approval or goal acceptance.",
         objectSchema({ questions: array(objectSchema({ id: str, title: str, reason: str, options: array(str), multi_select: { type: "boolean" } }, ["id", "title"])) }, ["questions"]), run((a, context) => this.questionInteraction(worker, a, context.abortSignal))),
       this.entry("list_assets", "Find current project resource metadata: use asset_ref for an exact resource ID, or query for its name/ID (Chinese names supported). Same-name matches remain separate resources. Otherwise browse bounded pages (default 20, max 50); follow nextCursor with the same query until hasMore is false. Use the exact returned asset_ref and configuration_revision for inspect_host. Metadata and cursor are not execution permission.",
-        objectSchema({ asset_ref: str, query: str, cursor: str, limit: integer }), run((a) => listProjectAssets({ projectId: worker.projectId,
-          resources: this.store.catalog().resources, resourceRevision: (resource) => this.store.get<number>("resourceRevisions", resource.id) ?? 1,
+        objectSchema({ asset_ref: str, query: str, cursor: str, limit: integer }), run((a) => listProjectAssets({ projectId: worker.projectId, configurationPin:(resource,revision)=>issueResourcePin(this.store,resource,revision),
+          resources: this.store.catalog().resources.filter(resource=>!worker.targetResourceIds || worker.targetResourceIds.includes(resource.id)), resourceRevision: (resource) => this.store.get<number>("resourceRevisions", resource.id) ?? 1,
           executionRevision:this.execution?(resource)=>this.execution!.revision(resource):undefined,
           databaseRevision:this.mysql?(resource)=>this.mysql!.revision(resource):undefined,
           sshRevision: this.ssh ? (resource) => this.ssh!.revision(resource) : undefined }, a))),

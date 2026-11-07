@@ -1,3 +1,4 @@
+import { boundResourceRevision } from "./resource-pin";
 import { createConnection, type Connection, type FieldPacket } from "mysql2";
 import { createConnection as socketConnection } from "node:net";
 import {
@@ -313,7 +314,7 @@ export class LakeMySQL {
     if (resource.projectId !== projectId || resource.status !== "available")
       throw new HttpError(403, "MySQL 资源不属于当前项目或配置不可用");
     const revision = this.revision(resource);
-    if (input.configuration_revision !== revision)
+    if (!boundResourceRevision(this.store,resource,input.configuration_revision,revision))
       throw new HttpError(409, "MySQL 配置或凭据已变化，请重新读取资源目录");
     const plan = this.plan(resource, name, input),
       credentials = this.credentials(plan.config);

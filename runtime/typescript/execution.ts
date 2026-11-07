@@ -1,3 +1,4 @@
+import { boundResourceRevision } from "./resource-pin";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -15,7 +16,7 @@ import type { HostCommandView } from '../../web-agent/shared/contracts';
 import type { Operation } from './tasks';
 import { HttpError, LakeStore, id, now } from "./store";
 import { digest, text } from "./tasks";
-import { commandPolicy } from "../../web-agent/shared/command-policy";
+import { commandPolicy, compileNobodyInspection, type NobodyInspection } from "../../web-agent/shared/command-policy";
 
 const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
 const outputLimit = 256 * 1024;
@@ -43,6 +44,7 @@ export type ShellPlan = {
   command: string;
   cwd?: string;
   readOnly: boolean;
+  nobodyInspection?: NobodyInspection;
   policy: "allow" | "ask";
   risk: "readonly" | "write" | "dangerous";
 };
@@ -60,6 +62,7 @@ type CommandRecord = {
   resourceRevision: number;
   configurationRevision: string;
   commandHash: string;
+  nobodyInspection?: {directory:string;inventoryDepth?:number};
   readOnly: boolean;
   status: string;
   startedAt: string;
@@ -133,7 +136,7 @@ export class LakeExecution {
     const command = text(input.command, "command", 64000),
       revision = this.revision(resource),
       policy = commandPolicy(command);
-    if (input.asset_ref && input.configuration_revision !== revision)
+    if (input.asset_ref && !boundResourceRevision(this.store,resource,input.configuration_revision,revision))
       throw new HttpError(409, "Shell 连接配置已变化，请重新读取资源目录");
     if (input.dangerouslyDisableSandbox)
       throw new HttpError(403, "不能通过模型参数关闭 Lake 秘密保护");
@@ -159,16 +162,18 @@ export class LakeExecution {
       )
     )
       throw new HttpError(403, "Shell 不允许读取或导出宿主认证凭据");
-    const readOnly = policy.risk === "readonly";
+    const inspection = resource.kind==="ssh" && !input.run_in_background && !input.cwd && policy.risk!=="dangerous" ? compileNobodyInspection(command) : undefined;
+    const readOnly = policy.risk === "readonly" || !!inspection;
     return {
       resource,
       revision,
       resourceRevision:
         this.store.get<number>("resourceRevisions", resource.id) ?? 1,
-      command: readOnly ? policy.safeCommand! : command,
+      command: inspection?.command ?? policy.safeCommand ?? command,
+      nobodyInspection:inspection,
       cwd: input.cwd,
       readOnly,
-      policy: this.security.command(projectId, resource.id, readOnly),
+      policy: this.security.command(projectId, resource.id, readOnly && !inspection),
       risk: policy.risk,
     };
   }
@@ -180,7 +185,7 @@ export class LakeExecution {
     this.security.command(
       this.store.session(record.sessionId).projectId,
       resource.id,
-      record.readOnly,
+      record.readOnly && !record.nobodyInspection,
     );
     if (
       this.revision(resource) !== record.configurationRevision ||
@@ -207,7 +212,7 @@ export class LakeExecution {
       if (live && record.status === 'running' && !record.stopRequestedAt) {
         try { live.actor.guard(); this.revalidate(record); canStop = true; } catch { /* Historical or fenced command. */ }
       }
-      return [{ id: record.id, operationId: op.id, taskId, sessionId, generation: record.generation, resourceId: record.resourceId,
+      return [{ id: record.id, operationId: op.id, operationState:op.status, taskId, sessionId, generation: record.generation, resourceId: record.resourceId,
         command: this.scrub(record.command ?? ''), output: this.scrub(record.result ? [record.result.stdout?.text, record.result.stderr?.text].filter(Boolean).join('\n') : [record.stdoutTail, record.stderrTail].filter(Boolean).join('\n')),
         exitCode: record.result?.exitCode ?? null, status: record.status, canStop, stopRequestedAt: record.stopRequestedAt,
         startedAt: record.startedAt, finishedAt: record.finishedAt }];
@@ -390,7 +395,7 @@ export class LakeExecution {
       owner.security.command(
         plan.resource.projectId,
         plan.resource.id,
-        plan.readOnly,
+        plan.readOnly && !plan.nobodyInspection,
       );
       if (
         owner.revision(owner.store.require("resources", plan.resource.id)) !==
@@ -421,6 +426,7 @@ export class LakeExecution {
         resourceRevision: plan.resourceRevision,
         configurationRevision: plan.revision,
         commandHash: digest(plan.command),
+        ...(plan.nobodyInspection && {nobodyInspection:{directory:plan.nobodyInspection.directory, inventoryDepth:plan.nobodyInspection.inventoryDepth}}),
         readOnly: plan.readOnly,
         status: "running",
         startedAt: now(),
@@ -720,9 +726,11 @@ export class LakeExecution {
           resourceId: plan.resource.id,
           configurationRevision: plan.revision,
           resourceRevision: plan.resourceRevision,
-          readOnly: plan.readOnly,
+          readOnly: plan.readOnly, nobodyInspection: plan.nobodyInspection,
         } as CommandRecord);
-        const command =
+        // The compiler enters a clean environment before running any Bash.
+        // Wrapping this again would source the SSH account's BASH_ENV first.
+        const command = plan.nobodyInspection?.command ??
           (plan.cwd ? `cd -- ${quote(plan.cwd)} && ` : "") +
           `/bin/bash --noprofile --norc -c ${quote(plan.command)}`;
         connection.exec(command, (error: any, stream: any) => {
@@ -747,7 +755,7 @@ export class LakeExecution {
                 resourceId: plan.resource.id,
                 configurationRevision: plan.revision,
                 resourceRevision: plan.resourceRevision,
-                readOnly: plan.readOnly,
+                readOnly: plan.readOnly, nobodyInspection: plan.nobodyInspection,
               } as CommandRecord);
               if (stdout.length + stderr.length + chunk.length > outputLimit)
                 throw new HttpError(413, "SSH 命令输出超过预算");

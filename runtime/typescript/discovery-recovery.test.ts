@@ -1,10 +1,13 @@
 import { test } from "node:test";
+import { EventEmitter } from "node:events";
+import { LakeExecution } from "./execution";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LakeStore } from "./store";
 import { digest, TaskLedger, type Operation } from "./tasks";
+import { issueResourcePin } from "./resource-pin";
 import { ProgramDiscoveryRecovery } from "./discovery-recovery";
 
 async function fixture(t: { after: (fn: () => Promise<void>) => void }) {
@@ -341,4 +344,344 @@ test("verification becomes invalid when either frozen operation or execution cha
   op.resourceRevision = 2;
   f.store.put("superOperations", op.id, op);
   assert.equal(f.ledger.unresolved("goal"), true);
+});
+
+async function inventoryFixture(t: Parameters<typeof fixture>[0]) {
+  const f = await fixture(t),
+    { store, operation, input, execution, part } = f;
+  const directory = "/tmp/lake-ops-UK-fixture",
+    command =
+      "runuser -u nobody -- /bin/bash -c 'id; ls -la " +
+      directory +
+      "; find " +
+      directory +
+      ' -maxdepth 4 -printf "%y %s %p\\n"' +
+      String.fromCharCode(39);
+  const { compileNobodyInspection } =
+    await import("../../web-agent/shared/command-policy");
+  input.command = command;
+  operation.argsHash = digest(input);
+  execution.commandHash = digest(command);
+  const stdout =
+    "uid=99(nobody) gid=99(nobody) groups=99(nobody)\ntotal 1\nd 10 " +
+    directory +
+    "\n";
+  const stderr =
+    "find: failed to restore initial working directory: Permission denied\n";
+  const output = {
+    ...(operation.output as any),
+    stdout,
+    stderr,
+    stdoutBytes: Buffer.byteLength(stdout),
+    stderrBytes: Buffer.byteLength(stderr),
+    stdoutTruncated: false,
+    stderrTruncated: false,
+    interrupted: false,
+  };
+  operation.output = output;
+  operation.outputHash = digest(output);
+  Object.assign(execution, { command, workerId: "worker" });
+  execution.result.stdout = {
+    text: stdout,
+    truncated: false,
+    bytes: Buffer.byteLength(stdout),
+  } as any;
+  execution.result.stderr = {
+    text: stderr,
+    truncated: false,
+    bytes: Buffer.byteLength(stderr),
+  } as any;
+  part.state.output = ["Exit code 1", stdout.trimEnd(), stderr.trimEnd()].join(
+    "\n",
+  );
+  store.put("projects", "project", { id: "project" });
+  store.put("resources", "host", {
+    id: "host",
+    projectId: "project",
+    kind: "ssh",
+  });
+  store.put("sessions", "session", {
+    id: "session",
+    projectId: "project",
+    tags: [],
+  });
+  store.put("sessions", "else", { id: "else", projectId: "project", tags: [] });
+  store.put("superInputs", "event", {
+    id: "event",
+    projectId: "project",
+    sessionId: "router",
+    messageId: "user",
+    payload: "检查 " + directory,
+    selectedReferences: { resourceIds: ["host"] },
+  });
+  store.put("superOperations", operation.id, operation);
+  store.put("commandExecutions", execution.id!, execution);
+  const verify = {
+    ...operation,
+    at: new Date(Date.parse(operation.completedAt!) + 1000).toISOString(),
+    completedAt: new Date(
+      Date.parse(operation.completedAt!) + 1200,
+    ).toISOString(),
+    callId: "recheck",
+    generation: 2,
+    status: "succeeded" as const,
+    readOnly: true,
+    output: {
+      ...output,
+      exitCode: 0,
+      status: "completed",
+      stderr: "",
+      stderrBytes: 0,
+    },
+    id: digest(["session", "recheck"]),
+    commandExecutionId: digest(["goal", 2, "recheck"]),
+  };
+  verify.outputHash = digest(verify.output);
+  const compiled = compileNobodyInspection(command)!;
+  const run = {
+    ...execution,
+    id: verify.commandExecutionId,
+    generation: 2,
+    readOnly: true,
+    status: "completed",
+    command: compiled.command,
+    nobodyInspection: { directory, inventoryDepth: 4 },
+    commandHash: digest(compiled.command),
+    result: {
+      ...execution.result,
+      status: "completed",
+      exitCode: 0,
+      stderr: { text: "", truncated: false, bytes: 0 },
+    },
+  };
+  return { ...f, directory, verify, run };
+}
+
+test("cwd inventory requires explicit human confirmation and immutable same-directory follow-up; never upgrades or replays original", async (t) => {
+  const f = await inventoryFixture(t),
+    { store, recovery, ledger, operation, run, verify } = f;
+  const original = structuredClone(operation);
+  assert.equal(await recovery.verify("project"), 0);
+  assert.equal(ledger.unresolved("goal"), true);
+  await assert.rejects(recovery.reviewInfo("else", operation.id), /会话/);
+  const before = await recovery.reviewInfo("session", operation.id);
+  assert.ok(before.eligible);
+  assert.deepEqual(before.evidence, []);
+  store.put("superOperations", verify.id, verify);
+  store.put("commandExecutions", run.id, run);
+  const ready = await recovery.reviewInfo("session", operation.id);
+  assert.equal(ready.evidence.length, 1);
+  assert.equal(ready.evidence[0]!.operationId, verify.id);
+  const submit = {
+    confirmNoWrite: true,
+    evidenceOperationId: verify.id,
+    revision: ready.revision,
+    note: "独立重采与命令/目录状态一致。",
+  };
+  await assert.rejects(
+    recovery.confirmInventoryReview(
+      "session",
+      operation.id,
+      { ...submit, confirmNoWrite: false },
+      () => {},
+    ),
+  );
+  await assert.rejects(
+    recovery.confirmInventoryReview(
+      "session",
+      operation.id,
+      { ...submit, revision: before.revision },
+      () => {},
+    ),
+  );
+  await assert.rejects(
+    recovery.confirmInventoryReview(
+      "session",
+      operation.id,
+      { ...submit, evidenceOperationId: "foreign" },
+      () => {},
+    ),
+  );
+  await assert.rejects(
+    recovery.confirmInventoryReview("session", operation.id, submit, () => {
+      throw Error("permission changed");
+    }),
+  );
+  assert.equal(ledger.unresolved("goal"), true);
+  const revalidate = (id: string, task: string, generation: number) =>
+    assert.deepEqual([id, task, generation], [run.id, verify.goalId, 2]);
+  assert.equal(
+    (
+      await recovery.confirmInventoryReview(
+        "session",
+        operation.id,
+        submit,
+        revalidate,
+      )
+    ).resolved,
+    true,
+  );
+  await recovery.confirmInventoryReview(
+    "session",
+    operation.id,
+    submit,
+    revalidate,
+  );
+  assert.equal(store.list("commandReadReconciliations").length, 1);
+  assert.equal(ledger.unresolved("goal"), false);
+  assert.deepEqual(store.get("superOperations", operation.id), original);
+  assert.equal(store.list("superAcceptance").length, 0);
+  assert.equal(recovery.resolution(original)?.sourceKind, "user_action");
+  store.put("commandExecutions", run.id, {
+    ...run,
+    result: { ...run.result, exitCode: 3 },
+  });
+  assert.equal(ledger.unresolved("goal"), true);
+});
+
+test("other mutations, wrong failures, incomplete historical data and unrelated validation cannot qualify for this review", async (t) => {
+  const f = await inventoryFixture(t),
+    { recovery, store, operation, execution, verify, run, part } = f;
+  for (const altered of [
+    { ...execution, workerId: "foreign" },
+    {
+      ...execution,
+      result: {
+        ...execution.result,
+        stderr: { ...execution.result.stderr, truncated: true },
+      },
+    },
+  ]) {
+    store.put("commandExecutions", execution.id!, altered);
+    assert.equal(
+      (await recovery.reviewInfo("session", operation.id)).eligible,
+      false,
+    );
+  }
+  store.put("commandExecutions", execution.id!, {
+    ...execution,
+    command: execution.commandHash + "; rm -f /tmp/x",
+  });
+  assert.equal(
+    (await recovery.reviewInfo("session", operation.id)).eligible,
+    false,
+  );
+  store.put("commandExecutions", execution.id!, execution);
+  const old = part.state.output;
+  part.state.output = "Exit code 1";
+  assert.equal(
+    (await recovery.reviewInfo("session", operation.id)).eligible,
+    false,
+  );
+  part.state.output = old;
+  store.put("superOperations", verify.id, verify);
+  for (const altered of [
+    {
+      ...run,
+      nobodyInspection: {
+        directory: "/tmp/lake-ops-JD-other",
+        inventoryDepth: 4,
+      },
+    },
+    { ...run, nobodyInspection: { directory: f.directory, inventoryDepth: 3 } },
+    { ...run, resourceId: "foreign" },
+    { ...run, result: { ...run.result, cancelled: true } },
+    { ...run, command: run.command + "; touch /tmp/leak" },
+  ]) {
+    store.put("commandExecutions", run.id, altered);
+    assert.deepEqual(
+      (await recovery.reviewInfo("session", operation.id)).evidence,
+      [],
+    );
+  }
+});
+
+test("review accepts resource pins only for the exact archived project, target and ledger revision", async (t) => {
+  const f = await inventoryFixture(t);
+  for (const [projectId, resourceId, revision, expected] of [
+    ["other", "host", "configuration", false],
+    ["project", "different", "configuration", false],
+    ["project", "host", "stale", false],
+    ["project", "host", "configuration", true],
+  ] as const) {
+    f.input.configuration_revision = issueResourcePin(
+      f.store,
+      { projectId, id: resourceId },
+      revision,
+    )!;
+    f.operation.argsHash = digest(f.input);
+    f.store.put("superOperations", f.operation.id, f.operation);
+    assert.equal(
+      (await f.recovery.reviewInfo("session", f.operation.id)).eligible,
+      expected,
+    );
+  }
+});
+
+test("historical command discovery can resolve a valid issued revision pin", async (t) => {
+  const f = await fixture(t);
+  f.input.configuration_revision = issueResourcePin(
+    f.store,
+    { projectId: "project", id: "host" },
+    "configuration",
+  )!;
+  f.operation.argsHash = digest(f.input);
+  f.store.put("superOperations", f.operation.id, f.operation);
+  assert.equal(await f.recovery.verify("project"), 1);
+});
+
+test("SSH dispatches the compiled identity inspection directly and retains original permission checks", async (t) => {
+  const { store, input } = await inventoryFixture(t);
+  store.put("resources", "host", {
+    id: "host",
+    projectId: "project",
+    kind: "ssh",
+    status: "available",
+  });
+  const commands: string[] = [],
+    permissionChecks: boolean[] = [];
+  const connection = Object.assign(new EventEmitter(), {
+    end() {},
+    exec(command: string, callback: (error: null, stream: any) => void) {
+      commands.push(command);
+      const stream = Object.assign(new EventEmitter(), {
+        stderr: new EventEmitter(),
+        close() {},
+      });
+      callback(null, stream);
+      queueMicrotask(() => {
+        stream.emit("exit", 0);
+        stream.emit("close");
+      });
+    },
+  });
+  const host = new LakeExecution(
+    store,
+    {
+      command: (_project: string, _resource: string, readOnly: boolean) => {
+        permissionChecks.push(readOnly);
+        return "allow";
+      },
+    } as any,
+    { revision: () => "configuration", connect: async () => connection } as any,
+    (value) => value,
+  );
+  const plan = host.plan("project", input);
+  assert.equal(plan.readOnly, true);
+  assert.equal(plan.risk, "write");
+  const actor = {
+    sessionId: "session",
+    taskId: "goal",
+    workerId: "worker",
+    generation: 2,
+    guard() {},
+  };
+  const result = await host
+    .bind({} as any, actor, plan, "transport")
+    .run({} as any);
+  assert.equal(result.exitCode, 0);
+  assert.deepEqual(commands, [plan.nobodyInspection!.command]);
+  assert.match(commands[0]!, /^\/usr\/bin\/env -i /);
+  assert.ok(permissionChecks.length >= 3);
+  assert.ok(permissionChecks.every((readOnly) => readOnly === false));
 });

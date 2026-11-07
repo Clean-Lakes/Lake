@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LakeStore } from "./store";
 import { LakeSuperagent } from "./superagent";
+import type { MessageInput } from "./message-input";
 
 // Exercise the actual host and SQLite ledger with a controlled SDK boundary.
 // No model, credential, remote server or existing Dev data is accessed.
@@ -22,8 +23,8 @@ async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date
   const project = store.createProject("isolated lifecycle"), router = host.ensure(project.id).routerSessionId;
   const role = { id: "role-checker", projectId: project.id, roleKey: "checker", name: "项目检查员", duties: "检查当前项目", revision: 1 };
   store.put("superRoles", role.id, role);
-  const admit = async (value: string) => {
-    const message = await host.send(router, value) as { id: string };
+  const admit = async (value: string, selected?: MessageInput) => {
+    const message = await host.send(router, value, undefined, false, selected) as { id: string };
     const event = store.list<any>("superInputs").find((item) => item.messageId === message.id)!;
     internal.batches.set(router, { eventIds: [event.id], complete: new Set([event.id]), input: JSON.stringify({ event: event.id }) });
     return event;
@@ -644,4 +645,61 @@ test("watchdog distinguishes changed foreground Bash output from a replay with a
   assert.notEqual(first,changed,"a foreground command produced distinct evidence");
   command("four","updated",true); assert.equal(sample().progressKey,changed,"background Bash produced the same evidence");
   assert.doesNotMatch(JSON.stringify(sample().evidence),/updated|ready/,"raw output is not sent to the reviewer");
+});
+
+test("one human quote can dispatch disjoint selected resources and execution cannot cross the original assignment", async t=>{
+  const f=await fixture(t), ids=["jd","uk"];
+  for(const id of ids) f.store.put("resources",id,{id,projectId:f.project.id,name:id,kind:"ssh",status:"available"});
+  const selected:MessageInput={resourceIds:ids,mentions:[],references:[]};
+  const event=await f.admit("请分别巡检两台服务器并独立提交",selected);
+  const create={action:"create",role_id:f.role.id};
+  assert.throws(()=>f.route(event,{...create,title:"检查全部"}),/multiple resources/);
+  assert.throws(()=>f.route(event,{...create,title:"检查第三台",resource_ids:["other"]}),/subset/);
+  const jd=f.route(event,{...create,title:"检查京东云",resource_ids:["jd"]});
+  assert.throws(()=>f.route(event,{...create,part_key:"overlapping",title:"检查有交集的两台",resource_ids:ids}),/Overlapping/);
+  const uk=f.route(event,{...create,title:"检查优刻云",part_key:"uk",resource_ids:["uk"]});
+  assert.notEqual(jd.taskId,uk.taskId);
+  f.settleRouter();await f.activate();
+  for(const [receipt,resource,title] of [[jd,"jd","检查京东云"],[uk,"uk","检查优刻云"]] as const){
+    const worker=f.worker(receipt.taskId), input=f.requests.find(req=>req.sessionId===worker.sessionId)!.input;
+    assert.deepEqual(input.assignment.targetResourceIds,[resource]);
+    assert.deepEqual(input.selectedReferences.resourceIds,[resource]);
+    assert.equal(input.assignedDeliverable,title);
+    const profile=f.host.profile(worker.sessionId)!;
+    assert.ok(!profile.allowlist.includes("WebSearch")&&!profile.allowlist.includes("Read")&&!profile.allowlist.includes("list_project_files"));
+    const listing=profile.tools.find(tool=>tool.metadata.name==="list_assets")!;
+    const result=await listing.handler({}, {abortSignal:new AbortController().signal} as any) as any;
+    assert.deepEqual(result.assets.map((asset:any)=>asset.asset_ref),[resource]);
+  }
+  const worker=f.worker(jd.taskId),profile=f.host.profile(worker.sessionId)!;
+  f.internal.execution={plan:(_p:string,i:{asset_ref?:string})=>({resource:{id:i.asset_ref??"local",kind:i.asset_ref?"ssh":"local"},readOnly:true})};
+  assert.throws(()=>f.internal.shellPlan(worker,{command:"hostname"}),/分工/);
+  assert.throws(()=>f.internal.shellPlan(worker,{command:"hostname",asset_ref:"uk"}),/分工/);
+  assert.equal(f.internal.shellPlan(worker,{command:"hostname",asset_ref:"jd"}).plan.resource.id,"jd");
+  f.internal.ssh={};
+  const inspect=f.internal.hostEntries(worker)[0];
+  assert.throws(()=>inspect.resolvePermissionCapability({asset_ref:"uk"}),/分工/);
+  for(const name of ["Bash","inspect_host","list_db_objects","list_project_files","WebFetch","call_mcp_tool"]){
+    let called=false;
+    const entry={metadata:{name},handler:()=>{called=true;}} as any;
+    await assert.rejects(profile.invoke!(entry,{asset_ref:"uk"},{toolCallId:"child-"+name,abortSignal:new AbortController().signal,
+      lakeSubagent:{id:"child",sessionId:"childSession",toolCallId:name}} as any),/分工/);
+    assert.equal(called,false);
+  }
+  assert.equal(f.store.list("superOperations").length,0);
+});
+
+test("a cross-resource comparison can include both selected endpoints and newly assigned participants inherit its scope", async t=>{
+  const f=await fixture(t);
+  for(const id of ["one","two"])f.store.put("resources",id,{id,projectId:f.project.id,name:id,kind:"ssh",status:"available"});
+  const selected={resourceIds:["one","two"],mentions:[],references:[]};
+  const event=await f.admit("比较两台主机的配置",selected);
+  const result=f.route(event,{action:"create",role_id:f.role.id,resource_ids:["one","two"],title:"比较两端"});
+  f.settleRouter();
+  const add=await f.admit("另一位专员也加入此任务");
+  const member=f.route(add,{action:"assign",task_id:result.taskId,role_key:"second"});
+  assert.deepEqual(f.worker(member.assignments[0].executionId).targetResourceIds,["one","two"]);
+  assert.throws(()=>f.route(add,{action:"followup",task_id:result.taskId,role_id:f.role.id,part_key:"widen",resource_ids:["third"]}),/Only create/);
+  f.settleRouter();await f.activate();
+  for(const req of f.requests) assert.deepEqual(req.input.assignment.targetResourceIds,["one","two"]);
 });

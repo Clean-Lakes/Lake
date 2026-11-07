@@ -39,6 +39,8 @@
     "moveSessionNavigation",
     "superWorkspace",
     "setWatchdogMode",
+    "operationReview",
+    "confirmOperationReview",
     "ensureSuperWorkspace",
     "deleteSpecialist",
     "specialistChannel",

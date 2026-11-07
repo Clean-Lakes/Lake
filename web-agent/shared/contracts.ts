@@ -197,7 +197,13 @@ export type SendMessageResult = {pilotSessionId?:string;queued?: boolean; queued
 
 export type ReplyTiming = {messageId:string;startedAt:string;finishedAt:string;status:"running" | "completed" | "cancelled" | "failed" | "interrupted"};
 
-export type HostCommandView = {id:string;operationId:string;taskId:string;sessionId:string;generation:number;resourceId:string;command:string;output:string;exitCode:number|null;status:string;canStop:boolean;stopRequestedAt?:string;startedAt:string;finishedAt?:string};
+export type OperationReviewEvidence = {operationId: string; sessionId: string; taskId: string; at: string; summary: string; command: string};
+export type OperationReview = {
+  operationId: string; eligible: boolean; reason?: string; revision?: string;
+  directory?: string; command?: string; evidence: OperationReviewEvidence[]; resolved?: boolean;
+};
+export type OperationReviewConfirmation = {revision: string; evidenceOperationId: string; confirmNoWrite: true; note: string};
+export type HostCommandView = {id:string;operationId:string;operationState?: string;taskId:string;sessionId:string;generation:number;resourceId:string;command:string;output:string;exitCode:number|null;status:string;canStop:boolean;stopRequestedAt?:string;startedAt:string;finishedAt?:string};
 
 export type ConversationReadState = {cursor:string;seenCursor:string};
 
