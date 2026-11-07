@@ -1,3 +1,4 @@
+import type {SSHTarget} from "./ssh-target";
 import { boundResourceRevision } from "./resource-pin";
 import { existsSync } from "node:fs";
 import { localShellProfile } from "./local-shell-profile";
@@ -36,6 +37,7 @@ export type ShellActor = {
   workerId: string;
   generation: number;
   guard: () => void;
+  checkSSHTarget?: (target?: SSHTarget) => void;
 };
 export type ShellPlan = {
   resource: Resource;
@@ -51,6 +53,8 @@ export type ShellPlan = {
 };
 type CommandRecord = {
   command?: string;
+  authenticatedTarget?: SSHTarget;
+  peerRejected?: true;
   stdoutTail?: string;
   stderrTail?: string;
   stopRequestedAt?: string;
@@ -489,7 +493,7 @@ export class LakeExecution {
         };
         if (plan.resource.kind === "ssh") {
           const output = owner.remote(
-            actor,
+            record, actor,
             plan,
             {
               ...request,
@@ -655,7 +659,7 @@ export class LakeExecution {
     };
   }
   private async remote(
-    actor: ShellActor,
+    record: CommandRecord, actor: ShellActor,
     plan: ShellPlan,
     request: ExecutionRequest,
     options: ExecutionRunOptions,
@@ -668,6 +672,20 @@ export class LakeExecution {
         signal,
       );
     try {
+      if (!plan.readOnly) {
+        // Recheck the actual peer after trust negotiation and before a channel is opened.
+        const identity = this.ssh.mutationTarget?.(plan.resource,connection);
+        try { actor.checkSSHTarget?.(identity); }
+        catch (error) {
+          record.peerRejected = true;
+          this.store.put("commandExecutions",record.id,record);
+          throw error;
+        }
+        if (identity) {
+          record.authenticatedTarget = identity;
+          this.store.put("commandExecutions",record.id,record);
+        }
+      }
       return await new Promise((resolve, reject) => {
         let channel: any,
           stdout = Buffer.alloc(0),

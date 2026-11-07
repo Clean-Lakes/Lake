@@ -640,6 +640,7 @@ test("SSH dispatches the compiled identity inspection directly and retains origi
   });
   const commands: string[] = [],
     permissionChecks: boolean[] = [];
+  const negotiated={hostHash:digest("host"),endpointHash:digest(["host",22]),addressFamily:4,hostKeys:[]};
   const connection = Object.assign(new EventEmitter(), {
     end() {},
     exec(command: string, callback: (error: null, stream: any) => void) {
@@ -664,7 +665,7 @@ test("SSH dispatches the compiled identity inspection directly and retains origi
         return "allow";
       },
     } as any,
-    { revision: () => "configuration", connect: async () => connection } as any,
+    { revision: () => "configuration", connect: async () => connection, mutationTarget:()=>negotiated } as any,
     (value) => value,
   );
   const scope = "/tmp/lake-ops-UK-fixture";
@@ -699,6 +700,19 @@ test("SSH dispatches the compiled identity inspection directly and retains origi
   assert.equal(done?.result?.exitCode,0);
   assert.equal(done?.result?.stdout.text,"finished\n");
   assert.deepEqual(commands,[plan.nobodyInspection!.command,delay.command]);
+  const change=host.plan("project",{...input,command:"touch marker"});
+  const denied=await host.bind(runtime,{...actor,checkSSHTarget:target=>{
+    assert.equal(target,negotiated);
+    throw new Error("unverified peer");
+  }},change,"wrong-peer").run({} as any);
+  assert.equal(denied.status,"spawn_error");
+  assert.equal(store.require<any>("commandExecutions",host.executionId(actor,"wrong-peer")).peerRejected,true);
+  assert.equal(commands.length,2,"refusal after handshake never opens the SSH command channel");
+  let checked=false;
+  await host.bind(runtime,{...actor,checkSSHTarget:target=>{assert.equal(target,negotiated);checked=true;}},change,"right-peer").run({} as any);
+  assert.equal(checked,true);
+  assert.deepEqual(store.require<any>("commandExecutions",host.executionId(actor,"right-peer")).authenticatedTarget,negotiated);
+
   assert.ok(permissionChecks.length >= 3);
   assert.ok(permissionChecks.every((readOnly) => readOnly === false));
 });
@@ -713,7 +727,17 @@ test("a human may release distinct work after a verified removal; original failu
   operation.argsHash = digest(input);
   const out = Object.assign(operation.output as Record<string,unknown>, {stdout: "ready\n", stdoutBytes: 6, stderr: "", stderrBytes: 0});
   operation.outputHash = digest(out);
-  Object.assign(execution, {command, commandHash:digest(command)});
+  const peer = (host:string,port:number,key:string, family=4,algorithm="ssh-ed25519") => ({
+    hostHash:digest(host),endpointHash:digest([host,port]),addressFamily:family,hostKeys:[{algorithm,fingerprint:"SHA256:"+Buffer.from(digest(key),"hex").toString("base64").replace(/=+$/,"")}],
+  });
+  const source = peer("192.0.2.1",22,"first");
+  const distinct = peer("192.0.2.2",22,"second");
+  const peers = new Map([
+    ["separate",distinct], ["other-port",peer("192.0.2.1",2222,"second")],
+    ["alias",peer("192.0.2.3",22,"first")], ["hostname",peer("other.example",22,"second",0)],
+    ["new-key-type",peer("192.0.2.3",22,"rsa",4,"rsa")],
+  ]);
+  Object.assign(execution, {command, commandHash:digest(command),authenticatedTarget:source});
   Object.assign(execution.result, {stdout:{text:"ready\n",bytes:6,truncated:false},stderr:{text:"",bytes:0,truncated:false}});
   part.state.output = "Exit code 1\nready";
   store.put("superOperations", operation.id, operation);
@@ -736,11 +760,37 @@ test("a human may release distinct work after a verified removal; original failu
   assert.equal(store.list("superAcceptance").length,0);
   const originalGoal = ledger.get(operation.goalId);
   ledger.create({...originalGoal,id:"next",workerId:"other",sessionId:"worker-next",sourceEventId:"another-event"});
-  const bind={resourceId:operation.resourceId,readOnly:false};
-  const unrelated = (cmd:string,callId:string) => ledger.operation("next",1,"policy",callId,"Bash",{command:cmd},async()=>({exitCode:0}),v=>v,bind);
-  await assert.rejects(unrelated(command,"replay"), /禁止重复/);
-  await unrelated("a distinct approved operation","another");
+  const originalRevision=operation.hostConfigurationHash;
+  let boundRevision=originalRevision;
+  const gated = new TaskLedger(store, undefined, op=>recovery.resolution(op), (id,expected)=>
+    expected && expected !== boundRevision ? undefined : peers.get(id));
+  const mutate=(resourceId:string|undefined,cmd:string,callId:string,goal="next") =>
+    gated.operation(goal,1,"policy",callId,"Bash",{command:cmd},async()=>({exitCode:0}),v=>v,
+      {resourceId,commandExecutionId:"exec-"+callId,readOnly:false});
+  let sequence=0;
+  for (const resource of [operation.resourceId, "other-port","alias","hostname","new-key-type",undefined]) {
+    for (const replay of [command,command+" ",command+"; :","a completely different mutation"])
+      await assert.rejects(mutate(resource,replay,"blocked-"+sequence++),/SSH 目标/);
+  }
+  gated.create({...originalGoal,id:"foreign",projectId:"foreign-project",workerId:"foreign-worker",sessionId:"foreign-session",sourceEventId:"another-human-event"});
+  await assert.rejects(mutate("alias",command,"new-project","foreign"),/SSH 目标/);
+  await gated.operation("foreign",1,"policy","independent-mcp","call_mcp_tool",{},async()=>({}),v=>v,{remoteMcp:true});
+  await gated.operation("foreign",1,"policy","unrelated-file","Write",{},async()=>({}),v=>v,{readOnly:false});
+  await mutate("separate","a distinct approved operation","disjoint");
+  assert.throws(()=>gated.checkMutationTarget("foreign-project",{resourceId:"separate",commandExecutionId:"new"},source),/SSH 目标/);
+  assert.throws(()=>gated.checkMutationTarget(originalGoal.projectId,{resourceId:"separate",commandExecutionId:"new"},null),/SSH 目标/);
+  assert.equal(store.require<Operation>("superOperations",operation.id).status,"unknown");
   store.put("commandExecutions",run.id,{...run,configurationRevision:"unrelated"});
   assert.equal(recovery.resolution(operation),undefined);
-  await assert.rejects(unrelated("new action","later"), /requires reconciliation/);
+  await assert.rejects(mutate("separate","new action","revised-proof"), /requires reconciliation/);
+  store.put("commandExecutions",execution.id!,{...execution,authenticatedTarget:undefined});
+  store.put("superOperations","missing-history",{...operation,id:"missing-history",resourceId:"deleted-ssh",commandExecutionId:"missing-command",projectId:"other-old-project"});
+  await mutate("separate","independent foreign target","legacy","foreign");
+  await gated.operation("foreign",1,"policy","local-write-after-legacy","Write",{path:"another-report"},async()=>({}),v=>v,{readOnly:false});
+  peers.set(operation.resourceId!,source);
+  await assert.rejects(mutate("alias","positive legacy alias","legacy-alias","foreign"),/SSH 目标/);
+  boundRevision="changed-binding";
+  await mutate("alias","unproven historical alias","no-cross-contamination","foreign");
+  store.put("resources","local-only",{id:"local-only",kind:"local"});
+  await mutate("local-only","independent local command","allowed-local","foreign");
 });

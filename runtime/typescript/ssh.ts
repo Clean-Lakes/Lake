@@ -1,3 +1,4 @@
+import type {SSHTarget} from "./ssh-target";
 import {networkProbe, networkProbeProgram, networkProbeShell} from "./network-probe";
 import {directoryProcessSample} from "./process-sampling";
 import {Client, utils, type ClientChannel} from 'ssh2';
@@ -76,6 +77,19 @@ export class LakeSSH {
  revision(resource:Resource) {
   const config=this.configuration(resource.ssh),files=[config.identityFile,config.credentialRef].filter(Boolean).map(value=>{const info=lstatSync(this.privateFile(value!));return [info.ino,info.size,info.mtimeMs,info.ctimeMs];});
   return digest([resource.id,resource.projectId,config,files,this.store.get('resourceRevisions',resource.id)??1]);
+ }
+ mutationTarget(resource:Resource, connection?:Client):SSHTarget|undefined {
+  if(resource.kind!=='ssh' || !resource.ssh) return;
+  const config = this.configuration(resource.ssh);
+  const raw = canonicalHost(config.host), family = isIP(raw);
+  if (raw.includes('%')) return; // A link-local zone is not a portable peer identity.
+  const canonical = family === 6 ? new URL('http://['+raw+']/').hostname : raw;
+  const peer = connection && this.peerKeys.get(connection);
+  if (connection && !peer) return;
+  const keys = this.pins(config).map(pin=>({algorithm:pin.algorithm,fingerprint:fingerprint(pin.key)}));
+  const hostKeys = peer ? keys.filter(pin=>pin.fingerprint===peer) : keys;
+  if (connection && !hostKeys.length) return;
+  return {hostHash:digest(canonical), endpointHash:digest([canonical,config.port]),addressFamily:family,hostKeys};
  }
  prompt(session:string){return this.prompts.get(session)?.public??null;}
  revalidate(resource:Resource,revision:string,peer?:string){if(this.revision(resource)!==revision||peer&&!this.pins(this.configuration(resource.ssh)).some(pin=>fingerprint(pin.key)===peer))throw new HttpError(409,'SSH 连接配置、凭据或已验证的服务器身份已变化');}

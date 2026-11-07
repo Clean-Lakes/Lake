@@ -137,7 +137,13 @@ export class LakeSuperagent implements AgentHost {
       if (resource.projectId !== operation.projectId || resource.status !== "available" ||
           (store.get<number>("resourceRevisions", resource.id) ?? 1) !== operation.resourceRevision)
         throw new HttpError(409, "Resource ownership, availability or connection revision changed");
-    }, operation => this.discoveryRecovery.resolution(operation)); agents.host = this;
+    }, operation => this.discoveryRecovery.resolution(operation), (id,expected) => {
+      const resource=store.get<import("../../web-agent/shared/contracts").Resource>("resources",id);
+      try {
+        if (!resource || resource.kind !== "ssh" || !this.ssh || (expected && this.ssh.revision(resource) !== expected)) return;
+        return this.ssh.mutationTarget?.(resource);
+      } catch { return; }
+    }); agents.host = this;
     prepareWatchdogEvidence(store);
     this.watchdog = new TaskWatchdog(store, {
       activeWorkerIds: () => [...this.active],
@@ -1281,6 +1287,9 @@ export class LakeSuperagent implements AgentHost {
   }
   private async invokeBash(worker:Worker,entry:ToolEntry,input:ShellInput,context:HostToolContext){
     const {plan}=this.shellPlan(worker,input),actor=this.shellActor(worker),generation=worker.generation;
+    if (!plan.readOnly && plan.resource.kind === "ssh") {
+      actor.checkSSHTarget = target => this.ledger.checkMutationTarget(worker.projectId, {resourceId:plan.resource.id,commandExecutionId:this.execution!.executionId(actor,context.toolCallId)}, target ?? null);
+    }
     await this.discoveryRecovery.verify(worker.projectId);
     if(context.lakeSubagent?.agentType==='explore'&&!plan.readOnly)throw new HttpError(403,'Explore 子智能体仅允许只读调查命令');
     if(!context.executionPort)throw new HttpError(409,'原生执行端口 未连接');

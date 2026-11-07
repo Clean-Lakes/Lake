@@ -1,3 +1,4 @@
+import {distinctSSHTargets, sameSSHHost, type SSHTarget} from "./ssh-target";
 import { createHash } from "node:crypto";
 import type { WorkGoal } from "../../web-agent/shared/contracts";
 import { HttpError, id, LakeStore, now } from "./store";
@@ -72,7 +73,8 @@ const businessReceiptTools = new Set(["Bash", "Glob", "Grep", "FindFiles", "Sear
 // Router replies, Worker prose and channel presentation never close a goal.
 export class TaskLedger {
   constructor(readonly store: LakeStore, readonly revalidate?: (operation: Operation) => void,
-    readonly effectResolution?: (operation: Operation) => { effects: "none" | "observed" } | undefined) {}
+    readonly effectResolution?: (operation: Operation) => { effects: "none" | "observed" } | undefined,
+    readonly sshTarget?: (resourceId:string, expectedRevision?:string) => SSHTarget | undefined) {}
   get(goalId: string) { return this.store.require<Goal>("superGoals", goalId); }
   jointTask(taskId: string) { return jointTask(this.store, taskId); }
   jointState(taskId: string) {
@@ -274,11 +276,16 @@ export class TaskLedger {
       goal.activeItemId = step.id; return this.save(goal);
     });
   }
+  private rejectedBeforeDispatch(op:Operation) {
+    if (!op.commandExecutionId || op.commandExecutionId !== digest([op.goalId,op.generation,op.callId])) return false;
+    const run=this.store.get<{sessionId:string;taskId:string;generation:number;peerRejected?:boolean}>("commandExecutions",op.commandExecutionId);
+    return run?.peerRejected === true && run.taskId===op.goalId && run.sessionId===op.sessionId && run.generation===op.generation;
+  }
   settleCommand(operationId:string,executionId:string,result:unknown,valid:boolean) {
     const operation=this.store.require<Operation>('superOperations',operationId);
     if(operation.commandExecutionId!==executionId||operation.status!=='dispatched')return;
     const output=JSON.parse(JSON.stringify(result)) as any;
-    operation.status=!valid?'unknown':output?.status==='completed'&&output.exitCode===0?'succeeded':operation.readOnly?'failed':'unknown';
+    operation.status=!valid?'unknown':output?.status==='completed'&&output.exitCode===0?'succeeded':(operation.readOnly||this.rejectedBeforeDispatch(operation))?'failed':'unknown';
     operation.output=output;operation.outputHash=digest(output);operation.completedAt=now();
     if (operation.status === 'succeeded') operation.watchdogOutputHash = watchdogOutputHash(operation);
     this.store.put('superOperations',operation.id,operation);
@@ -292,6 +299,49 @@ export class TaskLedger {
   }
   requiresReconciliation(operation: Operation) {
     return ["unknown", "dispatched"].includes(operation.status) && this.effectResolution?.(operation)?.effects !== "none";
+  }
+  checkMutationTarget(projectId:string, binding: {resourceId?:string; commandExecutionId?:string; remoteMcp?:boolean}, peer?:SSHTarget|null) {
+    const commandResource = binding.resourceId && binding.commandExecutionId && this.store.get<{kind:string}>("resources",binding.resourceId);
+    const checkAliases = !!binding.commandExecutionId && !!binding.resourceId && (!commandResource || commandResource.kind === "ssh");
+    const unknown = this.store.db.prepare(
+      "SELECT value FROM records WHERE kind='superOperations' AND json_extract(value,'$.status')='unknown' AND (? OR json_extract(value,'$.projectId')=?)"
+    ).all(Number(checkAliases),projectId);
+    for (const row of unknown) {
+      const original:Operation = JSON.parse(String(row.value));
+      const sameProject = original.projectId === projectId;
+      const record = original.commandExecutionId && this.store.get<{
+        id:string; taskId:string; sessionId:string; resourceId:string; generation:number; resourceRevision:number; configurationRevision:string; authenticatedTarget?:SSHTarget
+      }>("commandExecutions",original.commandExecutionId);
+      const archived = record && record.id === original.commandExecutionId && record.taskId === original.goalId &&
+        record.sessionId === original.sessionId && record.resourceId === original.resourceId && record.generation === original.generation &&
+        record.configurationRevision === original.hostConfigurationHash && record.resourceRevision === original.resourceRevision &&
+        record.id === digest([original.goalId,original.generation,original.callId]) ? record.authenticatedTarget : undefined;
+      const kind = original.resourceId && this.store.get<{kind:string}>("resources",original.resourceId)?.kind;
+      const unchangedLocal = !!original.resourceId && kind === "local" &&
+        (this.store.get<number>("resourceRevisions",original.resourceId) ?? 1) === original.resourceRevision;
+      const isSSH = !!archived || original.tool === "Bash" && !!original.commandExecutionId && !unchangedLocal;
+      if (!sameProject && !isSSH) continue;
+      const candidate = binding.resourceId && binding.commandExecutionId ? this.sshTarget?.(binding.resourceId) : undefined;
+      if (!sameProject) {
+        if (!binding.resourceId || !binding.commandExecutionId) continue;
+        // Historical bindings may establish a positive conflict when unchanged,
+        // but a missing record must not freeze an unrelated project.
+        const prior = archived ?? (original.resourceId && original.hostConfigurationHash ?
+          this.sshTarget?.(original.resourceId,original.hostConfigurationHash) : undefined);
+        if (original.resourceId !== binding.resourceId && !sameSSHHost(prior,candidate) && !sameSSHHost(prior,peer ?? undefined)) continue;
+      }
+      const receipt = this.effectResolution?.(original);
+      if (receipt?.effects === "none") continue;
+      if (isSSH && (!sameProject || receipt?.effects === "observed")) {
+        if (sameProject && original.resourceId !== binding.resourceId &&
+            distinctSSHTargets(archived,peer === undefined ? candidate : peer ?? undefined)) continue;
+        throw new HttpError(409,"SSH 目标有未决变更或缺少独立主机证明，禁止派发新的有副作用操作");
+      }
+      if (sameProject && (!binding.remoteMcp || isSSH)) {
+        const hint = binding.commandExecutionId ? " This command was not dispatched. Inspect the target with a relevant read-only inspect_host profile or a bounded read of the authorized directory; never retry the uncertain write." : "";
+        throw new HttpError(409,"A project operation still requires reconciliation ("+original.id+")."+hint);
+      }
+    }
   }
   active(goalId: string, generation: number, policyHash: string) {
     const goal = this.get(goalId); this.runnable(goal);
@@ -318,26 +368,7 @@ export class TaskLedger {
     const operation = this.store.transaction(() => {
       const { goal, step, attempt } = this.active(goalId, generation, policyHash);
       if (binding.readOnly !== true && this.unresolved(goalId)) throw new HttpError(409, "Original operation requires reconciliation");
-      if (binding.readOnly !== true && !binding.remoteMcp) {
-        const command = (input as {command?: unknown} | null)?.command;
-        const commandHash = typeof command === "string" ? digest(command) : undefined;
-        for (const original of this.store.list<Operation>("superOperations")) {
-          if (original.projectId !== goal.projectId || original.status !== "unknown") continue;
-          const receipt = this.effectResolution?.(original);
-          if (!receipt) {
-            const resource = binding.resourceId && this.store.get<{kind:string}>("resources", binding.resourceId);
-            const hint = binding.commandExecutionId && resource && resource.kind === "ssh"
-              ? " This command was not dispatched. Inspect the target with a relevant read-only inspect_host profile (system, disks, processes, dns_a or https), or a bounded read of the authorized directory. Report any remaining mutation as blocked; never retry the uncertain write."
-              : "";
-            throw new HttpError(409, "A project operation still requires reconciliation (" + original.id + ")." + hint);
-          }
-          // A human may release independent work after observing actual effects.
-          // Keep the original goal unresolved and fence its exact command across new tasks/IDs.
-          if (receipt.effects === "observed" && commandHash && original.resourceId === binding.resourceId &&
-              original.commandExecutionId && this.store.get<{commandHash:string}>("commandExecutions", original.commandExecutionId)?.commandHash === commandHash)
-            throw new HttpError(409, "原命令已产生经人工核实的变更，禁止重复派发");
-        }
-      }
+      if (binding.readOnly !== true) this.checkMutationTarget(goal.projectId,binding);
       if (binding.readOnly !== true && !binding.remoteMcp && this.store.list<any>("legacyOperations").some((operation) => operation.projectId === goal.projectId && !operation.riskResolvedAt &&
           (["running", "unknown", "dispatched"].includes(operation.status) || operation.orphanState === "unresolved")))
         throw new HttpError(409, "旧 Go 操作仍需核实；迁移不会解除原未决风险");
@@ -371,7 +402,7 @@ export class TaskLedger {
       const result = output as any;
       const failed = result?.result === false || result?.isError === true || result?.success === false ||
         (typeof result?.exitCode === "number" && result.exitCode !== 0);
-      operation.status = binding.commandExecutionId && !binding.readOnly && (failed || ["failed","timed_out","cancelled","spawn_error"].includes(result?.status)) ? "unknown" : binding.commandExecutionId && result?.status === "backgrounded" ? "dispatched" : failed || ["failed","timed_out","cancelled","spawn_error"].includes(result?.status) ? "failed" : "succeeded";
+      operation.status = binding.commandExecutionId && !binding.readOnly && !this.rejectedBeforeDispatch(operation) && (failed || ["failed","timed_out","cancelled","spawn_error"].includes(result?.status)) ? "unknown" : binding.commandExecutionId && result?.status === "backgrounded" ? "dispatched" : failed || ["failed","timed_out","cancelled","spawn_error"].includes(result?.status) ? "failed" : "succeeded";
       operation.output = redact(output); operation.outputHash = digest(operation.output); operation.completedAt = operation.status === "dispatched" ? undefined : now();
       if (operation.status === "succeeded" && (binding.commandExecutionId || binding.databaseConfigurationHash || operation.tool === "inspect_host"))
         operation.watchdogOutputHash = watchdogOutputHash(operation);
@@ -380,7 +411,7 @@ export class TaskLedger {
     } catch (error) {
       // Only the host's frozen proven read-only descriptor can settle a read
       // failure without an unknown side effect. Writes remain unknown.
-      operation.status = binding.readOnly ? "failed" : "unknown"; operation.completedAt = now();
+      operation.status = binding.readOnly || this.rejectedBeforeDispatch(operation) ? "failed" : "unknown"; operation.completedAt = now();
       operation.output = redact({ success: false, error: error instanceof Error ? error.message : String(error) });
       operation.outputHash = digest(operation.output);
       this.store.put("superOperations", key, operation);
