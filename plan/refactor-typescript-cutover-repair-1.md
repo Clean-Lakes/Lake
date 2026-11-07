@@ -64,6 +64,7 @@ The first validated repair batch is submitted as [PR 199](https://github.com/Cle
 | TASK-015 | Restore Kubernetes and local workspace configuration with exact ownership and execution adapters; do not turn copied metadata into an executable connection. | No | — |
 | TASK-016 | Restore frozen workflow runs, schedule eligibility and legacy read-only evidence/export APIs through their existing authorities. | No | — |
 | TASK-017 | In runtime/typescript/reasoning.ts, agent.ts and server.ts restore provider-first reasoning metadata and the exact legacy model-version registry, persist model-bound choices and freeze them into Workers/children; verify actual SDK wire options, stale models and explicit empty capability overrides. | ✅ | 2026-11-07 |
+| TASK-019 | Read the current Home's private Magpie plugin configuration and model catalog dynamically; preserve native source choices, default-scoped Magpie overrides, exact legacy selection, disconnect fallback and next-turn key rotation. Validate actual plugin output, SDK requests, credential redaction and signed Lake Dev installation. See the [Magpie evidence](../docs/validation/typescript-candidate/magpie-2026-11-07.md). CLI/non-macOS parity remains outstanding. | ✅ | 2026-11-07 |
 
 ### Implementation Phase 4
 
