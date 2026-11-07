@@ -28,7 +28,7 @@ async function fixture(t: TestContext) {
     backgroundTaskId: handle, readOnly: false, result, status: result.status, finishedAt: new Date().toISOString()};
   const operation = {id: digest([session.id,call]), tool: "Bash", callId: call, sessionId: session.id, goalId: owner.taskId,
     generation: 1, projectId: project.id, resourceId: resource.id, resourceRevision: 1, hostConfigurationHash: record.configurationRevision,
-    status: "unknown", commandExecutionId: commandId, output: result, outputHash: digest(result), completedAt: record.finishedAt};
+    status: "unknown", readOnly: false, commandExecutionId: commandId, output: result, outputHash: digest(result), completedAt: record.finishedAt};
   store.put("commandExecutions",record.id,record);
   store.put("superOperations",operation.id,operation);
   const input = {task_id: handle, block: true, timeout: 5000};
@@ -69,7 +69,7 @@ test("current scope, original generation, authoritative operation output and liv
   assert.deepEqual(await entry.handler({task_id:"made-up"},context),missing);
   const activeContext = {...context,runtimeTaskRegistry:{get:()=>({status:"running"})}} as unknown as ToolExecutionContext;
   assert.deepEqual(await entry.handler(input,activeContext),missing);
-  for (const changed of [{generation:2},{commandExecutionId:"foreign"},{callId:"other-call"},{outputHash:"forged"},{status:"dispatched"},{childSessionId:"child"}]) {
+  for (const changed of [{generation:2},{commandExecutionId:"foreign"},{callId:"other-call"},{outputHash:"forged"},{status:"dispatched"},{childSessionId:"child"},{readOnly:true}]) {
     store.put("superOperations",operation.id,{...operation,...changed});
     assert.deepEqual(entry.validateInput!(input,context),missing);
   }

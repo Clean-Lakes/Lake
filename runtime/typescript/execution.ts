@@ -323,7 +323,7 @@ export class LakeExecution {
     if (matches.length !== 1) return;
     const record = this.store.require<CommandRecord>("commandExecutions", String(matches[0].id));
     const result = record.result;
-    if (!result || !record.finishedAt || record.status !== result.status ||
+    if (!result || record.id !== matches[0].id || !record.finishedAt || record.status !== result.status ||
         record.workerId !== owner.id || record.generation > owner.generation ||
         !["completed","failed","cancelled","timed_out","spawn_error"].includes(record.status) ||
         (owner.targetResourceIds && !owner.targetResourceIds.includes(record.resourceId))) return;
@@ -331,11 +331,11 @@ export class LakeExecution {
       AND json_extract(value,'$.commandExecutionId')=? LIMIT 2`).all(record.id);
     if (links.length !== 1) return;
     const op = this.store.require<Operation>("superOperations",String(links[0].id));
-    if (op.tool !== "Bash" || op.agentRunId || op.childSessionId || !op.completedAt ||
+    if (op.id !== links[0].id || op.tool !== "Bash" || op.agentRunId || op.childSessionId || !op.completedAt ||
         op.status === "dispatched" || op.sessionId !== owner.sessionId || op.projectId !== owner.projectId ||
         op.goalId !== owner.taskId || op.generation !== record.generation ||
         op.id !== digest([owner.sessionId, op.callId]) || record.id !== digest([op.goalId,op.generation,op.callId]) ||
-        op.resourceId !== record.resourceId || op.resourceRevision !== record.resourceRevision ||
+        op.resourceId !== record.resourceId || op.resourceRevision !== record.resourceRevision || op.readOnly !== record.readOnly ||
         op.hostConfigurationHash !== record.configurationRevision || op.outputHash !== digest(result) ||
         op.outputHash !== digest(op.output)) return;
     // Earlier versions also allocated an internal handle for foreground SSH. Only return a
