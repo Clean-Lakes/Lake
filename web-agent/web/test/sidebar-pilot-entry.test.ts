@@ -6,7 +6,7 @@ import {SidebarPilotEntry} from '../src/SidebarPilotEntry';
 
 test('the brand names the Pilot destination and exposes the current page without a duplicate navigation row',()=>{
  const html=renderToStaticMarkup(createElement(SidebarPilotEntry,{selected:true,onPilot(){}}));
- assert.match(html,/aria-label="Lake · Pilot 对话与任务"/);
+ assert.match(html,/aria-label="Lake · Pilot 主对话"/);
  assert.match(html,/aria-current="page"/);
  assert.match(html,/brand\/lake-app-icon\.png/);
  assert.match(html,/>Lake<\/strong>/);
@@ -19,8 +19,8 @@ test('the single brand entry preserves unread metadata while running and waiting
  const state={cursor:'00000000000000000002',seenCursor:'00000000000000000001'};
  const render=(activity:'idle'|'running'|'waiting',seenCursor=state.seenCursor)=>renderToStaticMarkup(createElement(SidebarPilotEntry,{selected:false,activity,messageRead:{...state,seenCursor},onPilot(){}}));
  assert.match(render('idle'),/pilot-worker-unread/);
- assert.match(render('running'),/aria-label="处理中"/);
- assert.match(render('waiting'),/aria-label="待确认"/);
+ assert.match(render('running'),/aria-label="Lake · Pilot 主对话 · 处理中"/);
+ assert.match(render('waiting'),/aria-label="Lake · Pilot 主对话 · 待确认"/);
  assert.doesNotMatch(render('running'),/pilot-worker-unread/);
  assert.doesNotMatch(render('waiting'),/pilot-worker-unread/);
  assert.doesNotMatch(render('idle',state.cursor),/pilot-worker-unread/);
