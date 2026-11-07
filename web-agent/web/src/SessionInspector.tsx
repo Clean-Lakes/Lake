@@ -1,3 +1,4 @@
+import {hasCurrentTaskProgress,TaskProgress} from './TaskProgress';
 import {SuperTaskInspector} from './SuperTaskInspector';
 import {TaskWatchdog} from './TaskWatchdog';
 import {OperationReconciliation} from './OperationReconciliation';
@@ -73,7 +74,7 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
        {currentEntry?<SRERoleMessage key={`${task.id}:${currentEntry.attemptId}`} detailsOnly connected={connected&&!readOnly} task={task} entry={currentEntry} snapshot={snapshot} onUpdated={onUpdated} renderApproval={()=>null}/>:<p className="inspector-empty">本步骤尚无执行记录。</p>}
       </details>
      </>}
-     {goal&&canonical&&<><WorkerExecutionTree snapshot={snapshot} worker={worker} connected={connected&&!readOnly} onUpdated={onUpdated}/><SuperTaskInspector task={canonical} goal={goal} worker={worker} controlsOnly connected={connected&&!readOnly} onUpdated={onUpdated}/></>}
+     {goal&&canonical&&<><TaskProgress cards={snapshot.ai?.cards??[]} executionId={goal.id} historical={!hasCurrentTaskProgress(canonical.state)}/><WorkerExecutionTree snapshot={snapshot} worker={worker} connected={connected&&!readOnly} onUpdated={onUpdated}/><SuperTaskInspector task={canonical} goal={goal} worker={worker} controlsOnly connected={connected&&!readOnly} onUpdated={onUpdated}/></>}
      {goal && canonical && snapshot.superagent?.watchdog && <TaskWatchdog
        key={JSON.stringify([snapshot.session.projectId, snapshot.session.id, goal.id])}
        projectId={snapshot.session.projectId} view={snapshot.superagent.watchdog} connected={connected && !readOnly}

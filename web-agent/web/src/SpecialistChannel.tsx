@@ -1,3 +1,4 @@
+import {hasCurrentTaskProgress,TaskProgress} from './TaskProgress';
 import {ConversationReadMarker} from './ConversationReadMarker';
 import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 import type {SessionSnapshot,SpecialistChannelEntry,SpecialistChannelPage,SuperWorker} from '../../shared/contracts';
@@ -166,6 +167,7 @@ export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,
    const cards=active.ai?.cards.filter(card=>!!active.ai?.turnStartedAt&&card.at>=active.ai.turnStartedAt)??[];
    const live={...active,messages:[],ai:active.ai?{...active.ai,cards,cardsOffset:0,totalCards:cards.length}:undefined};
    return <section className="specialist-channel-active" key={active.session.id} aria-label={task?.title??'当前任务'}>
+    {page.replyPresentation==='invocation'&&task&&<TaskProgress cards={cards} executionId={task.executionGoalId??task.taskId} historical={!hasCurrentTaskProgress(task.state)}/>}
     {page.replyPresentation!=='invocation'&&<AITranscript snapshot={live} proseInChannel superTask={task} assistantIdentity={{name:page.channel.roleName}} disabled={!connected} refresh={()=>api.snapshot(active.session.id)} onInspect={()=>onTask(active.session.id)}/>}
     <SpecialistTaskControls snapshot={active} connected={connected}/>
    </section>;
