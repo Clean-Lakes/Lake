@@ -526,6 +526,22 @@ test('declared reasoning options persist, reach the actual SDK request and canno
   assert.equal(f.requests.at(-1).reasoning_effort, undefined);
 });
 
+test('the existing exact DeepSeek reasoning registry reaches the wire and explicit empty metadata disables the fallback', async t => {
+  const f = await fixture(t), provider = (await f.api('/api/settings/providers')).providers[0], base = `/api/sessions/${f.session.id}/ai/reasoning`;
+  provider.models[0].name = 'deepseek-flash'; await f.api(`/api/settings/providers/${provider.id}`, 'PUT', provider);
+  let settings = await f.api(base); assert.deepEqual(settings.levels, ['none', 'low', 'high', 'max']); assert.equal(settings.source, 'model');
+  for (const effort of ['none', 'high']) {
+    await f.api(base, 'POST', {modelId: settings.modelId, effort});
+    await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'Reasoning compatibility check ' + effort}, 202); await f.wait(['completed']);
+    assert.deepEqual(f.requests.at(-1).thinking, {type: effort === 'none' ? 'disabled' : 'enabled'});
+    assert.equal(f.requests.at(-1).reasoning_effort, effort === 'none' ? undefined : effort);
+  }
+  provider.models[0].reasoningCapability = {levels: [], source: 'provider'}; await f.api(`/api/settings/providers/${provider.id}`, 'PUT', provider);
+  assert.deepEqual((await f.api(base)).levels, []);
+  delete provider.models[0].reasoningCapability; provider.models[0].name = 'deepseek-flash-unrelated'; await f.api(`/api/settings/providers/${provider.id}`, 'PUT', provider);
+  assert.deepEqual((await f.api(base)).levels, [], 'similar names cannot inherit another model version capability');
+});
+
 test('extracting a preset makes a real bounded model request and saves a persistent result with its source', async t => {
   const f = await fixture(t);
   await f.api(`/api/sessions/${f.session.id}/ai/extractPreset`, 'POST', {}, 400);
