@@ -40,6 +40,7 @@ export type Operation = {
   goalId: string; sessionId: string; stepId: string; attemptId: string;
   goalRevision: number; planRevision: number; generation: number; policyHash: string;
   status: "dispatched" | "succeeded" | "failed" | "unknown";
+  watchdogInputHash?: string; watchdogOutputHash?: string;
   output?: unknown; outputHash?: string; at: string; completedAt?: string;
   resourceId?: string; resourceRevision?: number; readOnly?: boolean;
   mcpServerId?: string; mcpTool?: string; remoteMcp?: boolean; configurationHash?: string; bindingHash?: string; catalogHash?: string;
@@ -49,6 +50,21 @@ export type Operation = {
   databaseConfigurationHash?:string;databaseScope?:{database:string;schema:string;maxRows:number;maxDurationMS:number};
   agentRunId?: string; childSessionId?: string; originalCallId?: string;
 };
+
+/** Derived observation metadata only. Acceptance still verifies the exact original outputHash. */
+export function watchdogOutputHash(operation: Pick<Operation,"tool"|"commandExecutionId"|"output"|"outputHash">) {
+  const output = operation.output as Record<string,unknown> | null;
+  if (!output || typeof output !== "object") return operation.outputHash;
+  if (operation.commandExecutionId) {
+    const stream = (value:unknown) => typeof value === "string" ? value : (value as {text?:string} | null)?.text;
+    return digest([output.exitCode, stream(output.stdout), stream(output.stderr)]);
+  }
+  if (["inspect_host","list_db_objects","db_table_ddl","read_db_table"].includes(operation.tool)) {
+    const {observedAt, ...businessData} = output;
+    return digest(businessData);
+  }
+  return operation.outputHash;
+}
 
 const businessReceiptTools = new Set(["Bash", "Glob", "Grep", "FindFiles", "SearchText", "WebFetch", "inspect_host", "list_db_objects","db_table_ddl","read_db_table", "Read", "Write", "Edit", "list_project_files", "call_mcp_tool", "read_referenced_task_evidence"]);
 
@@ -264,6 +280,7 @@ export class TaskLedger {
     const output=JSON.parse(JSON.stringify(result)) as any;
     operation.status=!valid?'unknown':output?.status==='completed'&&output.exitCode===0?'succeeded':operation.readOnly?'failed':'unknown';
     operation.output=output;operation.outputHash=digest(output);operation.completedAt=now();
+    if (operation.status === 'succeeded') operation.watchdogOutputHash = watchdogOutputHash(operation);
     this.store.put('superOperations',operation.id,operation);
   }
   runnable(goal: Goal) {
@@ -324,6 +341,10 @@ export class TaskLedger {
       const operation: Operation = { id: key, callId, tool, argsHash: digest(input), projectId: goal.projectId,
         goalId, sessionId: goal.sessionId, stepId: step.id, attemptId: attempt.id, goalRevision: goal.goalRevision,
         planRevision: goal.planRevision, generation, policyHash, status: "dispatched", at: now(), ...binding };
+      if (binding.commandExecutionId && typeof (input as {command?:unknown})?.command === "string") {
+        const shell = input as {command:string;cwd?:string};
+        operation.watchdogInputHash = digest([digest(shell.command),shell.cwd ?? null]);
+      }
       this.revalidate?.(operation);
       return this.store.put("superOperations", key, operation);
     });
@@ -334,6 +355,8 @@ export class TaskLedger {
         (typeof result?.exitCode === "number" && result.exitCode !== 0);
       operation.status = binding.commandExecutionId && !binding.readOnly && (failed || ["failed","timed_out","cancelled","spawn_error"].includes(result?.status)) ? "unknown" : binding.commandExecutionId && result?.status === "backgrounded" ? "dispatched" : failed || ["failed","timed_out","cancelled","spawn_error"].includes(result?.status) ? "failed" : "succeeded";
       operation.output = redact(output); operation.outputHash = digest(operation.output); operation.completedAt = operation.status === "dispatched" ? undefined : now();
+      if (operation.status === "succeeded" && (binding.commandExecutionId || binding.databaseConfigurationHash || operation.tool === "inspect_host"))
+        operation.watchdogOutputHash = watchdogOutputHash(operation);
       this.store.put("superOperations", key, operation);
       return output;
     } catch (error) {

@@ -1,6 +1,7 @@
 import {prepareSessionArchive} from "./session-archive";
 import type {MessageInput} from "./message-input";
 import {providerConnection} from './provider-connection';
+import {parseWatchdogReview, watchdogReviewData, watchdogReviewPrompt, type WatchdogReviewInput, type WatchdogReviewResult} from "./watchdog-review";
 import {reasoningBinding} from './reasoning';
 import {redactModelValue,describeTurnFailure} from "./model-errors";
 import { join } from "node:path";
@@ -73,6 +74,7 @@ export class LakeAgents {
     return !!this.live.get(sessionId)?.controller;
   }
   currentActivity(sessionId: string) { return this.isRunning(sessionId) ? this.toolActivity.latest(sessionId) : undefined; }
+  hasActiveChildren(sessionId: string) { return this.live.get(sessionId)?.children?.active() ?? false; }
   foregroundBusy() { return [...this.live.values()].some(live => !!live.controller); }
   private constructor(
     readonly store: LakeStore,
@@ -146,6 +148,11 @@ export class LakeAgents {
         break;
       }
       case "tool_call_scheduled": {
+        // A planned SDK interaction (including a question or a child) fences
+        // transport recovery even after the original UI cards are paginated.
+        const taskId = this.host?.currentTask?.(sessionId);
+        if (taskId && !this.store.get("superToolIntent",taskId))
+          this.store.put("superToolIntent",taskId,{sessionId,rootTurnId:view.rootTurnId,at:now()});
         const call = payload.toolCall ?? payload;
         const callId = String(call.id ?? call.toolCallId ?? payload.toolCallId);
         const card = this.card(
@@ -402,10 +409,10 @@ export class LakeAgents {
     if (view.pendingApprovals)
       view.pendingApprovals = JSON.parse(this.redact(JSON.stringify(view.pendingApprovals)));
   }
-  private async model(provider: ModelProvider, model: ProviderModel, profile?: HostProfile, memoryActor?: LayeredMemoryActor, testKey?: string, options: Record<string, unknown> = {}): Promise<Model> {
+  private async model(provider: ModelProvider, model: ProviderModel, profile?: HostProfile, memoryActor?: LayeredMemoryActor, testKey?: string, options: Record<string, unknown> = {}, maxAttempts = 2): Promise<Model> {
     const key = testKey ?? await this.store.modelCredential(provider);
     if (key) this.keys.add(key);
-    const adapter = new AiSdkModelAdapter({ env: {}, retry: { maxAttempts: 2 }, runtime: {
+    const adapter = new AiSdkModelAdapter({ env: {}, retry: { maxAttempts }, runtime: {
       generateText: aiGenerateText,
       streamText: options => aiStreamText({...options, onError: event => {
         // The AI library's default callback prints raw provider errors. Keep
@@ -481,6 +488,43 @@ export class LakeAgents {
       await bound.generateText({ messages: [{ role: "user", content: "Reply with OK." }], abortSignal: AbortSignal.timeout(15000) });
       return { ok: true, message: "模型调用成功" };
     } catch (error) { throw new HttpError(502, describeTurnFailure(error, value => this.redact(value)).message); }
+  }
+  async reviewWatchdog(input: WatchdogReviewInput, signal: AbortSignal): Promise<WatchdogReviewResult> {
+    const guard = () => {
+      signal.throwIfAborted();
+      this.guard?.();
+      this.store.project(input.projectId);
+      if (this.store.session(input.sessionId).projectId !== input.projectId)
+        throw new HttpError(404, "巡检对象不属于当前项目");
+    };
+    guard();
+    await this.store.refreshModels();
+    const selection = this.store.modelSelection();
+    const provider = selection && this.store.modelProvider(selection.providerId);
+    const model = provider?.models.find(item => item.enabled && item.id === selection?.modelId);
+    if (!provider?.enabled || !model) throw new HttpError(409, "巡检需要当前可用模型");
+    // A fresh SDK request has its own context. It receives no business tools,
+    // session history, project memory, or provider-side search tools.
+    const bound = await this.model(provider, model, undefined, undefined, undefined, {}, 1);
+    guard();
+    const redact = (value: string) => this.redact(value);
+    const abortSignal = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
+    const result = await bound.generateText({
+      messages: [
+        {role: "system", content: watchdogReviewPrompt},
+        {role: "user", content: watchdogReviewData(input, redact)},
+      ],
+      toolSearchEnabled: false, tools: [], abortSignal,
+      options: {maxOutputTokens: Math.min(768, bound.options.maxOutputTokens ?? 768)},
+    }).catch(() => {
+      abortSignal.throwIfAborted();
+      throw new HttpError(502, "巡检模型请求失败");
+    });
+    guard();
+    abortSignal.throwIfAborted();
+    if (result.toolCalls?.length || result.toolResults?.length || result.finishReason !== "stop")
+      throw new HttpError(502, "巡检模型未返回完整判断");
+    return parseWatchdogReview(result.text, redact);
   }
   async extractPreset(sessionId: string) {
     this.guard?.(); const session = this.store.session(sessionId); this.store.project(session.projectId);
@@ -905,7 +949,7 @@ export class LakeAgents {
     const controller = new AbortController();
     live.controller = controller;
     live.completion = (async () => {
-      const outcome: { response?: string; error?: string } = {};
+      const outcome: { response?: string; error?: string; failure?: ReturnType<typeof describeTurnFailure> } = {};
       try {
         const result = await live.runtime.executeTurn(options.input ?? (text + (options.messageInput ? '\n[SELECTED REFERENCES — identities only, not authorization]\n' + JSON.stringify(options.messageInput) : '')), undefined, {
           abortSignal: controller.signal,
@@ -936,6 +980,7 @@ export class LakeAgents {
         this.update(sessionId, final);
       } catch (error) {
         const failure=describeTurnFailure(error,text=>this.redact(text));
+        if (!controller.signal.aborted) outcome.failure=failure;
         outcome.error = failure.message;
         const final = this.store.view(sessionId);
         final.status = controller.signal.aborted ? "cancelled" : "failed";

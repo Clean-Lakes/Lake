@@ -8,7 +8,7 @@ import { LakeSuperagent } from "./superagent";
 
 // Exercise the actual host and SQLite ledger with a controlled SDK boundary.
 // No model, credential, remote server or existing Dev data is accessed.
-async function fixture(t: { after(fn: () => Promise<void>): void }) {
+async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date.now) {
   const home = await mkdtemp(join(tmpdir(), "lake-dispatch-lifecycle-"));
   const store = await LakeStore.open(home, join(home, "data"));
   const requests: { sessionId: string; input: any }[] = [];
@@ -16,7 +16,7 @@ async function fixture(t: { after(fn: () => Promise<void>): void }) {
   const agents = { redact: (value: string) => value, publish() {}, prepareRedaction: async () => {}, isRunning: () => false,
     send: async (sessionId: string, _text: string, options: any) => { requests.push({ sessionId, input: JSON.parse(options.input) }); },
     steer: async () => { steering++; return true; }, abort: async () => {} };
-  const host = new LakeSuperagent(store, agents as any), internal = host as any;
+  const host = new LakeSuperagent(store, agents as any, undefined, undefined, undefined, undefined, undefined, clock), internal = host as any;
   internal.schedule = () => {};
   t.after(async () => { await host.close(); store.db.close(); await rm(home, { recursive: true, force: true }); });
   const project = store.createProject("isolated lifecycle"), router = host.ensure(project.id).routerSessionId;
@@ -36,10 +36,10 @@ async function fixture(t: { after(fn: () => Promise<void>): void }) {
   };
   const activate = async () => { await internal.pump(); };
   const worker = (taskId?: string) => store.list<any>("superWorkers").find((item) => !taskId || item.taskId === taskId)!;
-  const read = async (taskId?: string) => {
+  const read = async (taskId?: string, callId?: string) => {
     const current = worker(taskId), profile = host.profile(current.sessionId)!;
     const entry = profile.tools.find((item) => item.metadata.name === "list_project_files")!;
-    return profile.invoke!(entry, {}, { toolCallId: `files-${current.generation}`, abortSignal: new AbortController().signal } as any);
+    return profile.invoke!(entry, {}, { toolCallId: callId ?? `files-${current.generation}`, abortSignal: new AbortController().signal } as any);
   };
   const finish = async (taskId?: string) => {
     const current = worker(taskId), entry = host.profile(current.sessionId)!.tools.find((item) => item.metadata.name === "work_finish")!;
@@ -483,4 +483,165 @@ for (const recovery of ["followup", "resume"] as const) test(`a failed additiona
     mutation, async () => { dispatches++; return {}; }, x => x, { readOnly: false }), /reconcil|unresolved|mutation/i);
   assert.equal(dispatches, 1);
   assert.deepEqual(f.store.require("superOperations", prior.id), prior);
+});
+
+async function watchdogFixture(t: Parameters<typeof fixture>[0], joint = false) {
+  let time = Date.now();
+  const f = await fixture(t, () => time);
+  const second = { ...f.role, id: "watchdog-db", name: "数据库专员" };
+  f.store.put("superRoles", second.id, second);
+  const event = await f.admit("运维检查主机，数据库专员检查慢查询");
+  const handoff = f.route(event, {
+    action: "create", title: "共同排查超时",
+    ...(joint ? {role_ids:[f.role.id,second.id],role_instructions:[
+      {role_id:f.role.id,instruction:"检查主机"}, {role_id:second.id,instruction:"检查慢查询"}]} : {role_id:f.role.id}),
+  });
+  f.settleRouter();
+  await f.activate();
+  const member = f.worker(handoff.assignments[0].executionId);
+  const fail = (statusCode = 503, currentFailure = true) => {
+    const current = f.worker(member.taskId);
+    const view = f.store.view(current.sessionId);
+    view.rootTurnId = currentFailure ? "watchdog-root-" + current.generation : "previous-sdk-root";
+    view.status = "failed";
+    const failure = {message:"provider rejected",source:"provider",statusCode,phase:"response",retryable:statusCode===503};
+    view.cards.push({id:"failure-"+current.generation,at:new Date(time).toISOString(),type:"error",status:"failed",content:"provider rejected",
+      data:{root_turn_id:view.rootTurnId,taskId:current.taskId,failure}});
+    f.store.put("views",current.sessionId,view);
+    // A setup error may not emit an SDK root at all. The view can then still
+    // show the previous turn's failure, matching its old root ID perfectly.
+    f.host.settled(current.sessionId,currentFailure ? {error:failure.message,failure} : {error:"本轮本地准备失败"});
+  };
+  return {...f, member, fail, event, handoff, advance:(ms:number)=>{time+=ms;}};
+}
+
+test("watchdog retries a scoped pre-execution outage once due and marks recovery only after original acceptance", async t => {
+  const f = await watchdogFixture(t), before = f.host.ledger.get(f.member.taskId);
+  f.host.setWatchdogMode(f.project.id,"guide");
+  f.fail();
+  const ticket=f.store.require<any>("superWatchdogRetry",f.member.id);
+  assert.equal(ticket.generation,f.member.generation);
+  assert.deepEqual(ticket.inputIds,[f.event.id]);
+  f.advance(59_999); await f.host.scanWatchdog(); await f.activate();
+  assert.equal(f.requests.length,1);
+  f.advance(1); await f.host.scanWatchdog(); await f.activate(); await f.activate();
+  assert.equal(f.requests.length,2);
+  const retry=f.requests[1]!;
+  assert.equal(retry.sessionId,f.member.sessionId);
+  assert.equal(retry.input.assignment.executionId,f.member.taskId);
+  assert.equal(f.worker().generation,f.member.generation+1);
+  assert.equal(f.host.ledger.get(f.member.taskId).deadlineAt,before.deadlineAt);
+  assert.equal(f.store.list("superAcceptance").length,0);
+  assert.equal(f.host.watchdog.records(f.project.id,f.member.taskId)[0]?.state,"retry_queued");
+  await f.read(f.member.taskId); await f.finish(f.member.taskId); f.settleWorker(f.member.taskId);
+  assert.equal(f.host.watchdog.records(f.project.id,f.member.taskId)[0]?.state,"recovered");
+  assert.equal(f.host.ledger.get(f.member.taskId).acceptanceState,"pass");
+  assert.equal(f.store.list("superGoals").length,1);
+});
+
+test("watchdog retry backoff stops after two actual retries on the original execution", async t => {
+  const f=await watchdogFixture(t);
+  f.host.setWatchdogMode(f.project.id,"guide");
+  f.fail(); f.advance(60_000); await f.activate();
+  f.fail(); f.advance(299_999); await f.activate();
+  assert.equal(f.requests.length,2);
+  f.advance(1); await f.activate();
+  assert.equal(f.store.require<any>("superWatchdogLastRetry",f.member.id).attempt,2);
+  f.fail(); f.advance(600_000); await f.host.scanWatchdog(); await f.activate();
+  assert.equal(f.requests.length,3);
+  assert.equal(f.store.get("superWatchdogRetry",f.member.id),undefined);
+  assert.equal(f.store.list("superAcceptance").length,0);
+});
+
+for (const intervention of ["stop","disable","permission","unresolved sibling","restart"] as const) {
+  test("watchdog pending recovery honors " + intervention, async t => {
+    const f=await watchdogFixture(t,intervention==="unresolved sibling");
+    f.host.setWatchdogMode(f.project.id,"guide");
+    f.fail();
+    assert.ok(f.store.get("superWatchdogRetry",f.member.id));
+    const before=f.requests.length;
+    if (intervention==="stop") await f.host.stopTask(f.member.taskId);
+    if (intervention==="disable") f.host.setWatchdogMode(f.project.id,"off");
+    if (intervention==="permission") {
+      const session=f.store.session(f.router); session.options.denyLocalExecution=true;
+      f.store.put("sessions",session.id,session);
+    }
+    if (intervention==="unresolved sibling") {
+      const b=f.worker(f.handoff.assignments[1].executionId);
+      await assert.rejects(f.host.ledger.operation(b.taskId,b.generation,b.policyHash,"ambiguous-change","Write",
+        {path:"fixture"}, async()=>{throw new Error("delivery unknown");},value=>value,{readOnly:false}));
+    }
+    f.advance(600_000);
+    if (intervention==="restart") {
+      await f.host.close();
+      const restored=new LakeSuperagent(f.store,f.agents as any,undefined,undefined,undefined,undefined,undefined,()=>Date.now()+600_000);
+      try { await (restored as any).pump(); } finally { await restored.close(); }
+    } else {
+      await f.host.scanWatchdog();
+      await f.activate();
+    }
+    assert.equal(f.requests.length,before);
+    assert.equal(f.store.get("superWatchdogLastRetry",f.member.id),undefined);
+    assert.equal(f.store.get("superWatchdogRetry",f.member.id),undefined);
+    assert.equal(f.store.list("superAcceptance").length,0);
+  });
+}
+
+test("watchdog only retries a transient model failure bound to this turn, before any business operations",async t=>{
+  for (const condition of ["previous failure only","authentication","operation","observe"] as const) {
+    const f=await watchdogFixture(t);
+    if(condition!=="observe")f.host.setWatchdogMode(f.project.id,"guide");
+    if(condition==="operation")await f.read(f.member.taskId);
+    f.fail(condition==="authentication"?401:503,condition!=="previous failure only");
+    f.advance(600_000); await f.activate();
+    assert.equal(f.requests.length,1,condition);
+    assert.equal(f.store.get("superWatchdogRetry",f.member.id),undefined,condition);
+  }
+});
+
+test("watchdog reviews repeated identical evidence only on the affected member, preserving a sibling waiting on approval",async t=>{
+  const f=await watchdogFixture(t,true);
+  const a=f.member,b=f.worker(f.handoff.assignments[1].executionId);
+  const pending={id:"original-approval",fingerprint:"fixed",call:{name:"Read"}} as any;
+  const aView=f.store.view(a.sessionId); aView.pending=pending; f.store.put("views",a.sessionId,aView);
+  const reviews:{projectId:string;sessionId:string;assignment:string;observations:string[]}[]=[], guided:string[]=[];
+  Object.assign(f.agents,{
+    isRunning:(sessionId:string)=>[a.sessionId,b.sessionId].includes(sessionId),
+    currentActivity:()=>undefined,hasActiveChildren:()=>false,
+    reviewWatchdog:async(input:typeof reviews[number])=>{reviews.push(input);return {verdict:"stalled",reason:"重复取得相同文件清单。"};},
+    steer:async(sessionId:string)=>{guided.push(sessionId);return true;},
+  });
+  f.host.setWatchdogMode(f.project.id,"guide");
+  await f.read(b.taskId,"first-file-list"); await f.host.scanWatchdog();
+  for(let i=0;i<3;i++){
+    f.advance(60_000); await f.read(b.taskId,"repeated-"+i); await f.host.scanWatchdog();
+  }
+  assert.deepEqual(reviews.map(input=>[input.sessionId,input.assignment]),[[b.sessionId,"检查慢查询"]]);
+  assert.ok(reviews[0]!.observations.some(line=>line.includes("4 次工具调用") && line.includes("1 组")));
+  assert.deepEqual(guided,[b.sessionId]);
+  assert.equal(f.host.watchdog.records(f.project.id,a.taskId).length,0);
+  const record=f.host.watchdog.records(f.project.id,b.taskId)[0]!;
+  assert.deepEqual([record.taskId,record.executionId,record.workerId,record.state],[f.handoff.taskId,b.taskId,b.id,"guided"]);
+  assert.deepEqual(f.store.view(a.sessionId).pending,pending);
+  assert.equal(f.store.list("superAcceptance").length,0);
+});
+
+test("watchdog distinguishes changed foreground Bash output from a replay with a new command handle",async t=>{
+  const f=await watchdogFixture(t);
+  Object.assign(f.agents,{isRunning:()=>true,currentActivity:()=>undefined,hasActiveChildren:()=>false});
+  const sample=()=>f.internal.watchdogSample(f.member.id);
+  const command=(id:string,stdout:string,background:boolean)=>{
+    // Foreground Bash returns flat strings, a settled background command
+    // returns the SDK execution result with stdout/stderr text envelopes.
+    const output={exitCode:0,stdout:background?{text:stdout}:stdout,stderr:background?{text:""}:""};
+    f.store.put("superOperations",id,{id,projectId:f.project.id,sessionId:f.member.sessionId,
+      goalId:f.member.taskId,generation:f.member.generation,tool:"Bash",argsHash:"same-shell-command",
+      resourceId:"local",commandExecutionId:id,status:"succeeded",output,outputHash:id,readOnly:true});
+  };
+  command("one","ready",false); const first=sample().progressKey;
+  command("two","ready",false); assert.equal(sample().progressKey,first);
+  command("three","updated",false); const changed=sample().progressKey;
+  assert.notEqual(first,changed,"a foreground command produced distinct evidence");
+  command("four","updated",true); assert.equal(sample().progressKey,changed,"background Bash produced the same evidence");
+  assert.doesNotMatch(JSON.stringify(sample().evidence),/updated|ready/,"raw output is not sent to the reviewer");
 });

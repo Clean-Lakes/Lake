@@ -201,10 +201,22 @@ export type HostCommandView = {id:string;operationId:string;taskId:string;sessio
 
 export type ConversationReadState = {cursor:string;seenCursor:string};
 
+export type WatchdogMode = 'off' | 'observe' | 'guide';
+export type WatchdogFinding = {
+  id: string;
+  at: string;
+  kind: 'stalled' | 'drift' | 'infrastructure' | 'uncertain';
+  reason: string;
+  evidence: string[];
+  action: 'observed' | 'guided' | 'recovered' | 'skipped' | 'retry_queued';
+  verdict?: string;
+};
+export type WatchdogView = {mode: WatchdogMode; findings: WatchdogFinding[]};
+
 export type SessionSnapshot = {
  commandExecutions?:HostCommandView[];
  messageRead?:ConversationReadState;
-	superagent?:{task:SuperTask;goal?:WorkGoal;roleId?:string};
+	superagent?:{task:SuperTask;goal?:WorkGoal;roleId?:string;watchdog?:WatchdogView};
  naturalMemoryNotices?:{changeId:string;scope:string;entryId:string;revision:number;batchId?:string}[];
   commandStopNotices?: CommandStopNotice[];
  conversationMode?: ConversationMode;

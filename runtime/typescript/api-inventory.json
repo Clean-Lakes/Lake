@@ -845,6 +845,15 @@
       ]
     },
     {
+      "name": "setWatchdogMode",
+      "routes": [
+        {
+          "method": "PUT",
+          "path": "`/api/projects/${encodeURIComponent(projectId)}/watchdog`"
+        }
+      ]
+    },
+    {
       "name": "skill",
       "routes": [
         {

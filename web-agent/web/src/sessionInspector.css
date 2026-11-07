@@ -107,6 +107,19 @@
 .execution-step-records .execution-records-description { min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .execution-step-records > summary > .lake-disclosure-chevron { grid-column:3; }
 .execution-step-records[open] > summary { margin-bottom:18px; }
+.task-watchdog { border-top:1px solid var(--border); padding:14px 2px 4px; color:var(--foreground); line-height:1.55; }
+.watchdog-setting,.watchdog-record-heading { display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; }
+.watchdog-setting { justify-content:space-between; font-size:var(--font-size-ui); }
+.watchdog-setting .app-select { min-width:0; max-width:100%; }
+.task-watchdog ol { list-style:none; padding:0; margin:12px 0 0; }
+.watchdog-record { min-width:0; margin:12px 0; overflow-wrap:anywhere; }
+.watchdog-record-heading { font-size:12px; color:var(--text-muted); }
+.watchdog-record-heading strong { color:var(--foreground); font-weight:var(--font-weight-semibold); }
+.watchdog-record-heading time { margin-inline-start:auto; }
+.watchdog-record p { margin:4px 0; white-space:pre-wrap; font-size:var(--font-size-ui); }
+.watchdog-record ul { padding-inline-start:18px; margin:5px 0; }
+.task-watchdog details { font-size:12px; color:var(--text-muted); }
+.task-watchdog details > summary { width:fit-content; max-width:100%; gap:5px; }
 @keyframes inspector-arrive { from { opacity:0; transform:translateX(12px); } to { opacity:1; transform:translateX(0); } }
 @keyframes inspector-depart { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(10px); } }
 @media (max-width:1100px) {

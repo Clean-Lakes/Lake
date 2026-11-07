@@ -20,6 +20,8 @@ async function fixture(t, mode = "text", legacyDev = false) {
   let backgroundJoinRequested = false;
   let releaseBackgroundChild;
   const backgroundChildGate = new Promise((resolve) => { releaseBackgroundChild = resolve; });
+  let releaseWatchdogWorker, holdingWatchdogWorker=false;
+  const watchdogGate=new Promise(resolve=>{releaseWatchdogWorker=resolve;});
   const requests = [];
   const requestAuthorizations = [];
   const target = join(home, "approved.txt");
@@ -30,6 +32,12 @@ async function fixture(t, mode = "text", legacyDev = false) {
     requests.push(request);
     requestAuthorizations.push(req.headers.authorization);
     calls++;
+    const watchdogReview=mode==="super-watchdog-guide" && request.messages.some(m=>m.role==="system" && JSON.stringify(m.content).includes("independent Watchdog reviewer"));
+    if(mode==="super-watchdog-guide" && isIndependentWorkerRequest(request) && !holdingWatchdogWorker &&
+        request.messages.filter(m=>m.role==="tool").length>=2) {
+      holdingWatchdogWorker=true;
+      await watchdogGate;
+    }
     if(modelFailure){
       const error={message:'SYNTHETIC_PROVIDER_REJECTION synthetic-secret-no-real-credential',type:'invalid_request_error',code:'synthetic_rejection'};
       if(mode==='model-error-http'){res.writeHead(401,{'Content-Type':'application/json'});res.end(JSON.stringify({error}));}
@@ -44,7 +52,7 @@ async function fixture(t, mode = "text", legacyDev = false) {
         JSON.stringify(request.messages).includes("LAKE_SUBAGENT_FIXTURE:"))
       await backgroundChildGate;
     if (failWorkerRequests && (isIndependentWorkerRequest(request) && !request.tools?.some(tool=>tool.function?.name==='route_work'))) {
-      res.writeHead(401, { "Content-Type": "application/json" });
+      res.writeHead(mode==="super-watchdog-outage"?503:401, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: { message: "synthetic-current-invocation-failure", type: "authentication_error" } }));
       return;
     }
@@ -66,7 +74,10 @@ async function fixture(t, mode = "text", legacyDev = false) {
         }
       : { content: "Lake TS 完成" };
     const nativeMemory = JSON.stringify(request.messages).includes("persistent file-based memory at");
-    if (nativeMemory) {
+    if(watchdogReview){
+      delta={content:JSON.stringify({verdict:"stalled",reason:"同一目录已多次检查，尚未取得新的业务证据。"})};
+      tool=false;
+    } else if (nativeMemory) {
       delta = mode === 'memory-native-nochange' && JSON.stringify(request.messages).includes('You are now acting as the memory extraction subagent')
         ? {content: 'Nothing to save.'} : nativeMemoryReply(request);
       tool = !!delta.tool_calls;
@@ -129,6 +140,7 @@ async function fixture(t, mode = "text", legacyDev = false) {
   let app = await startLakeServer(options);
   t.after(async () => {
     releaseBackgroundChild();
+    releaseWatchdogWorker();
     await app.close();
     await new Promise((resolve) => provider.close(resolve));
   });
@@ -170,9 +182,12 @@ async function fixture(t, mode = "text", legacyDev = false) {
     api,
     wait,
     requests,
+    get holdingWatchdogWorker(){return holdingWatchdogWorker;},
+    releaseWatchdogWorker,
     requestAuthorizations,
     gatewayURL: `http://127.0.0.1:${provider.address().port}/v1`,
     failWorkerRequests() { failWorkerRequests = true; },
+    restoreWorkerRequests() { failWorkerRequests = false; },
     recoverModel() { modelFailure = false; },
     options,
     get app() {
@@ -818,6 +833,12 @@ function superReply(request, mode, home) {
     return { content: "已交给项目检查员处理，执行结果将从原任务回报。" };
   }
   if (mode.startsWith("super-subagent")) return subagentReply(request, mode, home);
+  if (mode === "super-watchdog-guide") {
+    const checks=names.filter(name=>name==="list_project_files").length;
+    if(checks<2) return call("list_project_files",{path:"."},"directory-"+checks);
+    if(!names.includes("work_finish")) return finish("已读取目录，并核对检查结果。","finish");
+    return {content:"已完成。"};
+  }
   if (exposes("work_begin") && !names.includes("work_begin")) return call("work_begin", { title: "检查项目工作区", items: [{ id: "inspect", title: "读取工作区并按实际结果验收" }] });
   const updates = request.messages.flatMap((message) => (message.tool_calls ?? []).filter((call) => call.function.name === "work_update").map((call) => JSON.parse(call.function.arguments)));
   if (exposes("work_update") && !updates.some((update) => update.status === "running")) return call("work_update", { item_id: "inspect", status: "running" }, "start-inspect");
@@ -1067,6 +1088,53 @@ test("two specialist channels share one task, retain their own evidence and rece
   const pilotHistory=(await api("/api/sessions/"+pilot+"/snapshot")).messages;
   assert.deepEqual(pilotHistory.filter(m=>m.jointAcceptance).map(m=>m.jointAcceptance.receiptId),[receipt]);
   assert.deepEqual(new Set(pilotHistory.filter(m=>m.author?.taskId===a.task.taskId).map(m=>m.author.roleId)),new Set([a.roleId,b.roleId]));
+});
+
+test("timed Watchdog reviews a live SDK Worker and queues one guide; an actual result still settles the task", {timeout:20_000}, async t=>{
+  const f=await fixture(t,"super-watchdog-guide"), project="/api/projects/"+f.project.id;
+  const {routerSessionId}=await f.api(project+"/superagent","POST",{});
+  const settings=project+"/watchdog";
+  assert.deepEqual(await f.api(settings),{mode:"observe"});
+  assert.deepEqual(await f.api(settings,"PUT",{mode:"guide"}),{mode:"guide"});
+  await f.api("/api/sessions/"+routerSessionId+"/ai/configure","POST",{maxSteps:24});
+  await f.api("/api/sessions/"+routerSessionId+"/messages","POST",{text:"让项目检查员检查本项目目录，并报告结果。"},202);
+  try {
+    await until(async()=>f.holdingWatchdogWorker,Boolean);
+    const worker=(await f.api(project+"/superagent")).workers[0];
+    const snapshot=()=>f.api("/api/sessions/"+worker.sessionId+"/snapshot?taskId="+worker.task.taskId);
+    let time=Date.now();
+    f.app.superagent.watchdog.clock=()=>time;
+    for(let i=0;i<4;i++){await f.app.superagent.scanWatchdog();time+=60_000;}
+    const current=await snapshot(), findings=current.superagent.watchdog.findings;
+    assert.equal(findings.length,1);
+    assert.equal(findings[0].kind,"stalled");
+    assert.equal(findings[0].action,"guided");
+    assert.equal(current.superagent.task.acceptanceState,"not_evaluated");
+    f.releaseWatchdogWorker();
+    await until(snapshot,s=>s.superagent.watchdog.findings[0]?.action==="recovered" && s.superagent.task.acceptanceState==="pass");
+    await f.restart();
+    assert.equal((await snapshot()).superagent.watchdog.findings.length,1);
+  } finally {f.releaseWatchdogWorker();}
+});
+
+test("Watchdog identifies a real provider 503 and retries the same SDK assignment after the service recovers", {timeout:30_000}, async t=>{
+  const f=await fixture(t,"super-watchdog-outage"), project="/api/projects/"+f.project.id;
+  const {routerSessionId}=await f.api(project+"/superagent","POST",{});
+  await f.api(project+"/watchdog","PUT",{mode:"guide"});
+  f.failWorkerRequests();
+  await f.api("/api/sessions/"+routerSessionId+"/ai/configure","POST",{maxSteps:24});
+  await f.api("/api/sessions/"+routerSessionId+"/messages","POST",{text:"请安排项目检查员检查当前工作区并报告。"},202);
+  const state=await until(()=>f.api(project+"/superagent"),s=>s.workers.some(w=>w.assignmentState==="parked"));
+  const worker=state.workers[0], snapshot=()=>f.api("/api/sessions/"+worker.sessionId+"/snapshot");
+  const failed=await snapshot();
+  assert.ok(failed.superagent.watchdog.findings.some(record=>record.kind==="infrastructure"),"missing structured provider failure: "+JSON.stringify(failed.ai.cards.filter(c=>c.type==="error").map(c=>c.data?.failure)));
+  assert.equal(f.app.store.list("superWatchdogRetry").length,1);
+  f.restoreWorkerRequests();
+  f.app.superagent.watchdogClock=()=>Date.now()+65_000;
+  await f.app.superagent.scanWatchdog();
+  const recovered=await until(snapshot,s=>s.superagent.watchdog.findings.some(record=>record.action==="recovered"));
+  assert.equal(recovered.superagent.task.taskId,worker.task.taskId);
+  assert.equal(recovered.superagent.task.acceptanceState,"pass");
 });
 
 async function startSubagentTask(t, mode, memory = false) {

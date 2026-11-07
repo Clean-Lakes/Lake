@@ -33,5 +33,5 @@ export interface AgentHost {
   profile(sessionId: string): HostProfile | undefined;
   currentTask?(sessionId:string):string|undefined;
   changed(sessionId: string): void;
-  settled(sessionId: string, outcome?: { response?: string; error?: string }): void;
+  settled(sessionId: string, outcome?: { response?: string; error?: string; failure?: import("./model-errors").TurnFailure }): void;
 }

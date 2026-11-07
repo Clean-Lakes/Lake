@@ -507,6 +507,11 @@ export async function startLakeServer(options: ServerOptions) {
           store.transaction(() => { store!.put("resources", resource.id, resource); resourceNavigation.attach(resource, parentId); });
           result = resource;
         }
+      } else if (path[1] === "projects" && path[3] === "watchdog" && path.length === 4) {
+        store.project(path[2]);
+        if (method === "GET") result = {mode:superagent.watchdog.mode(path[2])};
+        else if (method === "PUT") result = superagent.setWatchdogMode(path[2],data.mode);
+        else throw new HttpError(405,"不支持此巡检请求");
       } else if (path[1] === "projects" && path[3] === "superagent") {
         store.project(path[2]);
         if(path.length===5&&path[4]==="stop"&&method==="POST"){

@@ -25,6 +25,10 @@ import {agentToolNames,nativeTool,agentCapabilityCatalog} from "./capabilities";
 import type {LakeExecution,ShellInput,ShellActor} from "./execution";
 import { ProgramDiscoveryRecovery } from "./discovery-recovery";
 import { stoppedNotice, unresolvedNotice, stoppedReportProjection } from "./task-cancellation";
+import {TaskWatchdog, type WatchdogSample, type WatchdogRecord} from "./watchdog";
+import {prepareWatchdogEvidence, watchdogEvidence, transientModelFailure, type WatchdogRetry} from "./watchdog-observation";
+import type {TurnFailure} from "./model-errors";
+import type {WatchdogFinding, WatchdogMode} from "../../web-agent/shared/contracts";
 
 type Role = { id: string; projectId: string; roleKey: string; name: string; duties: string; revision: number; deletedAt?: string };
 type Channel = { id: string; projectId: string; roleId: string; sessionId: string; revision: number; createdAt: string };
@@ -50,7 +54,7 @@ type Decision = { id: string; projectId: string; eventId: string; partKey: strin
 type Interaction = { id: string; workerId: string; generation: number; kind: "plan" | "question";
   revision: number; resolve: (value: unknown) => void; reject: (error: Error) => void };
 const permissionKeys = ["silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "silentMCPCalls", "denyLocalExecution", "blockUnreferencedAssets", "permissions", "permissionRevision", "securityPolicyRevision"];
-const routerTools = ["list_specialists", "manage_specialist", "search_super_tasks", "route_work", "read_super_object"];
+const routerTools = ["list_specialists", "manage_specialist", "search_super_tasks", "route_work", "read_super_object", "inspect_watchdog"];
 const workTools = ["work_begin", "work_read", "work_update", "work_finish", "work_wait", "recall_task_context", "recall_memory", "ask_user_question", "list_assets", "list_project_files",
   "list_referenced_task_evidence", "read_referenced_task_evidence"];
 const hostTools=["inspect_host"];
@@ -74,6 +78,7 @@ function clip(value: string, maximum: number) {
 
 export class LakeSuperagent implements AgentHost {
   readonly ledger: TaskLedger;
+  readonly watchdog: TaskWatchdog;
   readonly discoveryRecovery: ProgramDiscoveryRecovery;
   readonly owner = id();
   private batches = new Map<string, RouterBatch>();
@@ -88,7 +93,8 @@ export class LakeSuperagent implements AgentHost {
   private businessQueues = new Map<string, Promise<void>>();
   private taskStops = new Map<string, Promise<void>>();
   private heartbeat: ReturnType<typeof setInterval>;
-  constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH,readonly mysql?:LakeMySQL,readonly execution?:LakeExecution) {
+  private watchdogTimer: ReturnType<typeof setInterval>;
+  constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH,readonly mysql?:LakeMySQL,readonly execution?:LakeExecution, private readonly watchdogClock = Date.now) {
     this.discoveryRecovery = new ProgramDiscoveryRecovery(store, agents.sessions);
     this.ledger = new TaskLedger(store, (operation) => {
       if (operation.mcpServerId) {
@@ -126,6 +132,22 @@ export class LakeSuperagent implements AgentHost {
           (store.get<number>("resourceRevisions", resource.id) ?? 1) !== operation.resourceRevision)
         throw new HttpError(409, "Resource ownership, availability or connection revision changed");
     }, operation => this.discoveryRecovery.resolution(operation)); agents.host = this;
+    prepareWatchdogEvidence(store);
+    this.watchdog = new TaskWatchdog(store, {
+      activeWorkerIds: () => [...this.active],
+      snapshot: workerId => this.watchdogSample(workerId),
+      review: (sample, signal) => agents.reviewWatchdog({
+        projectId:sample.projectId, sessionId:sample.sessionId, goal:sample.title, assignment:sample.assignment,
+        observations:[...sample.evidence,...sample.recent],
+      }, signal),
+      steer: (sample, inputId, text, signal) => {
+        signal.throwIfAborted();
+        this.validateWorker(sample.workerId,sample.generation);
+        this.security?.check();
+        return agents.steer(sample.sessionId,text,inputId);
+      },
+      changed: sample => this.notify(sample.sessionId,"specialist"),
+    },watchdogClock);
     // A process boundary revokes every previous execution owner. Unknown effects
     // remain unknown; neither a pending UI approval nor a queued SDK call is replayed.
     store.transaction(() => {
@@ -133,11 +155,13 @@ export class LakeSuperagent implements AgentHost {
         operation.status = "unknown"; store.put("superOperations", operation.id, operation);
       }
       for (const worker of store.list<Worker>("superWorkers")) if (worker.state === "active") {
+        const interrupted = this.watchdogIdentity(worker,this.ledger.get(worker.taskId));
         worker.state = "parked"; worker.owner = undefined; worker.leaseUntil = undefined;
         worker.generation++; store.put("superWorkers", worker.id, worker);
         const goal = this.ledger.get(worker.taskId);
         if (!terminal(goal.status)) { goal.status = this.ledger.unresolved(goal.id) ? "blocked" : "paused";
-          goal.summary = "运行已中断；原任务、审批和操作保留，需要核对后继续。"; this.ledger.save(goal); }
+          goal.summary = "运行已中断；原任务、审批和操作保留，需要核对后继续。"; this.ledger.save(goal);
+          if(!worker.inline) this.watchdog.recordIncident(interrupted,"后端重启中断了原执行，请核对该次执行的记录。"); }
       }
       for (const event of store.list<InputEvent>("superInputs")) if (event.disposition === "pending") {
         event.disposition = "blocked"; event.error = "Router interrupted; original input retained";
@@ -153,10 +177,243 @@ export class LakeSuperagent implements AgentHost {
       }
     }, 15000);
     this.heartbeat.unref();
+    this.watchdogTimer=setInterval(()=>{void this.scanWatchdog().catch(()=>console.warn("Lake Watchdog 本次扫描失败，将在下一周期复查。"));},60_000);
+    this.watchdogTimer.unref();
     queueMicrotask(() => this.deliverReports());
   }
   private notify(sessionId: string, type: "session" | "specialist" | "message" = "session") {
     this.agents.publish(this.store.event(sessionId, type));
+  }
+  private watchdogIdentity(worker: Worker, goal: Goal) {
+    return {
+      projectId: worker.projectId,
+      workerId: worker.id,
+      sessionId: worker.sessionId,
+      executionId: goal.id,
+      taskId: goal.sharedTaskId ?? goal.id,
+      generation: worker.generation,
+    };
+  }
+  private watchdogSample(workerId: string): WatchdogSample | undefined {
+    const worker = this.store.get<Worker>("superWorkers", workerId);
+    if (
+      this.closed ||
+      !worker ||
+      this.watchdog.mode(worker.projectId) === "off" ||
+      worker.inline ||
+      worker.state !== "active" ||
+      !this.active.has(workerId) ||
+      this.stoppingProjects.has(worker.projectId) ||
+      !this.agents.isRunning(worker.sessionId)
+    )
+      return;
+    try {
+      this.validateWorker(workerId, worker.generation);
+      this.security?.check();
+    } catch {
+      return;
+    }
+    const goal = this.ledger.get(worker.taskId);
+    if (
+      terminal(goal.status) ||
+      Date.parse(goal.deadlineAt) <= this.watchdogClock() ||
+      this.ledger.roundsRemaining(goal) <= 0
+    )
+      return;
+    const view = this.store.view(worker.sessionId),
+      origin = this.sourceDecision(worker);
+    const assignment =
+      origin && this.decisionAssignments(origin).find((member) => member.workerId === worker.id)?.instruction;
+    const currentText = view.cards
+      .filter(
+        (card) =>
+          (card.data as { root_turn_id?: string })?.root_turn_id === view.rootTurnId &&
+          ["text", "message"].includes(card.type) &&
+          card.content?.trim(),
+      )
+      .slice(-2);
+    const wait =
+      this.pendingInteraction(worker.sessionId) ||
+      !!this.agents.currentActivity(worker.sessionId) ||
+      this.agents.hasActiveChildren(worker.sessionId) ||
+      !!this.execution?.hasLiveCommand(worker.sessionId, goal.id);
+    const evidence = wait
+      ? { progressKey: "", evidence: [] }
+      : watchdogEvidence(this.store, goal, (value) => this.agents.redact(value));
+    return {
+      ...this.watchdogIdentity(worker, goal),
+      policyHash: worker.policyHash,
+      controlKey: digest([
+        worker.inputEventIds,
+        worker.resumeControlId,
+        goal.goalRevision,
+        goal.planRevision,
+        goal.sharedTaskId && this.ledger.jointTask(goal.sharedTaskId)?.revision,
+      ]),
+      eligible: goal.status === "running",
+      waiting: wait,
+      unresolved: this.ledger.unresolved(goal.id),
+      progressKey: evidence.progressKey,
+      title: this.agents.redact(goal.userText || goal.title),
+      assignment: this.agents.redact(assignment ?? origin?.quote ?? goal.title),
+      evidence: evidence.evidence,
+      recent: [
+        ...goal.items
+          .filter((step) => step.status === "running")
+          .slice(-2)
+          .map((step) => "当前步骤：" + this.agents.redact(step.title)),
+        ...currentText.map((card) => "专员近期说明：" + this.agents.redact(card.content!)),
+      ],
+    };
+  }
+  private watchdogFinding(record: WatchdogRecord): WatchdogFinding {
+    const kind =
+      record.kind === "infrastructure"
+        ? "infrastructure"
+        : record.verdict === "drift"
+          ? "drift"
+          : record.verdict === "stalled"
+            ? "stalled"
+            : "uncertain";
+    const action =
+      record.state === "guided" || record.state === "retry_queued" || record.state === "recovered"
+        ? record.state
+        : record.state === "error" || record.state === "stale"
+          ? "skipped"
+          : "observed";
+    return {
+      id: record.id,
+      at: record.updatedAt,
+      reason: record.reason,
+      evidence: record.evidence,
+      kind,
+      action,
+      verdict: record.verdict,
+    };
+  }
+  setWatchdogMode(projectId: string, mode: WatchdogMode) {
+    this.store.project(projectId);
+    const old = this.watchdog.mode(projectId);
+    this.watchdog.setMode(projectId, mode);
+    if (old !== mode) this.clearWatchdogRetries(projectId);
+    return { mode };
+  }
+  private clearWatchdogRetries(projectId: string) {
+    this.store.db
+      .prepare("DELETE FROM records WHERE kind='superWatchdogRetry' AND json_extract(value,'$.projectId')=?")
+      .run(projectId);
+  }
+  async scanWatchdog() {
+    if (this.closed) return;
+    // The existing scheduler owns admission and capacity, including retries.
+    if (
+      this.store
+        .list<WatchdogRetry>("superWatchdogRetry")
+        .some((ticket) => ticket.due <= this.watchdogClock())
+    )
+      this.schedule();
+    await this.watchdog.scan();
+  }
+  private mayRetryModel(worker: Worker, goal: Goal) {
+    if (
+      worker.inline ||
+      worker.state !== "parked" ||
+      goal.status !== "paused" ||
+      !this.ledger.isHostManaged(goal) ||
+      this.watchdog.mode(worker.projectId) !== "guide" ||
+      this.policy(worker.projectId) !== worker.policyHash ||
+      this.active.has(worker.id) ||
+      this.agents.isRunning(worker.sessionId) ||
+      this.ledger.roundsRemaining(goal) <= 0 ||
+      Date.parse(goal.deadlineAt) <= this.watchdogClock() ||
+      this.pendingInteraction(worker.sessionId) ||
+      this.security?.readOnly()
+    )
+      return false;
+    const executions = goal.sharedTaskId ? this.ledger.jointTask(goal.sharedTaskId)?.memberIds : [goal.id];
+    if (!executions || executions.some((id) => this.ledger.unresolved(id))) return false;
+    // Automatic recovery is limited to a model transport failure before any
+    // business invocation or interaction in this member's execution.
+    if (
+      this.store.db
+        .prepare(
+          "SELECT 1 FROM records WHERE kind='superOperations' AND json_extract(value,'$.goalId')=? LIMIT 1",
+        )
+        .get(goal.id)
+    )
+      return false;
+    const view = this.store.view(worker.sessionId);
+    if (
+      view.status !== "failed" ||
+      this.store.get("superToolIntent", goal.id) ||
+      view.agentRuns?.length ||
+      view.cards.some((card) => ["operation", "tool", "approval", "question"].includes(card.type))
+    )
+      return false;
+    return (
+      !!worker.invocationInputIds?.length &&
+      worker.inputEventIds.every(
+        (id) => this.store.get<InputEvent>("superInputs", id)?.disposition === "routed",
+      )
+    );
+  }
+  private recordWorkerOutcome(worker: Worker, goal: Goal, error?: string, failure?: TurnFailure) {
+    const identity = this.watchdogIdentity(worker, goal);
+    if (goal.contributionReceiptId || goal.acceptanceState === "pass") this.watchdog.completed(identity);
+    const prior = this.store.get<WatchdogRetry>("superWatchdogLastRetry", worker.id);
+    if (
+      prior &&
+      prior.generation + 1 === worker.generation &&
+      !error &&
+      (goal.contributionReceiptId || goal.acceptanceState === "pass")
+    ) {
+      this.watchdog.recordIncident({ ...identity, generation: prior.generation }, prior.reason, "recovered");
+    }
+    if (!error || !failure || this.watchdog.mode(worker.projectId) === "off") return;
+    if (!transientModelFailure(failure)) {
+      if (failure.source === "network" || failure.source === "provider")
+        this.watchdog.recordIncident(identity, "模型请求失败，请查看该次执行的错误记录。");
+      return;
+    }
+    const reason = "模型服务暂时不可用，本次执行在模型请求处中断。";
+    this.watchdog.recordIncident(identity, reason);
+    const attempt = (prior?.attempt ?? 0) + 1;
+    if (attempt > 2 || !this.mayRetryModel(worker, goal)) return;
+    this.store.put<WatchdogRetry>("superWatchdogRetry", worker.id, {
+      ...identity,
+      revision: goal.revision,
+      policyHash: worker.policyHash,
+      inputIds: [...worker.invocationInputIds!],
+      controlKey: digest(worker.inputEventIds),
+      attempt,
+      due: this.watchdogClock() + (attempt === 1 ? 60_000 : 300_000),
+      reason,
+      owner: this.owner,
+    });
+  }
+  private dueWatchdogRetries() {
+    const retries = new Map<string, WatchdogRetry>();
+    for (const ticket of this.store.list<WatchdogRetry>("superWatchdogRetry")) {
+      const worker = this.store.get<Worker>("superWorkers", ticket.workerId);
+      if (ticket.due > this.watchdogClock()) continue;
+      if (
+        !worker ||
+        ticket.owner !== this.owner ||
+        worker.generation !== ticket.generation ||
+        worker.taskId !== ticket.executionId ||
+        worker.projectId !== ticket.projectId ||
+        worker.sessionId !== ticket.sessionId ||
+        worker.policyHash !== ticket.policyHash ||
+        digest(worker.inputEventIds) !== ticket.controlKey ||
+        this.ledger.get(worker.taskId).revision !== ticket.revision ||
+        !this.mayRetryModel(worker, this.ledger.get(worker.taskId))
+      ) {
+        this.store.delete("superWatchdogRetry", ticket.workerId);
+        continue;
+      }
+      if (!this.routing.has(worker.projectId)) retries.set(worker.id, ticket);
+    }
+    return retries;
   }
   private session(projectId: string, sessionId: string, title: string, role: StoredSession["workspaceRole"]) {
     const existing = this.store.get<StoredSession>("sessions", sessionId);
@@ -718,16 +975,30 @@ export class LakeSuperagent implements AgentHost {
         catch (error) { this.routerFinished(project.routerSessionId, String(error)); }
       }
     }
-    const queued = this.store.list<Worker>("superWorkers").filter((worker) => !worker.inline&&!this.stoppingProjects.has(worker.projectId)&&worker.state === "queued" && !this.active.has(worker.id) && this.dispatchReady(worker));
+    const retries=this.dueWatchdogRetries();
+    const queued = this.store.list<Worker>("superWorkers").filter((worker) => !worker.inline&&!this.stoppingProjects.has(worker.projectId)&& !this.active.has(worker.id) &&
+      (worker.state === "queued" && this.dispatchReady(worker) || retries.has(worker.id)));
     queued.sort((a, b) => Number(a.projectId === this.lastProject) - Number(b.projectId === this.lastProject) || a.createdAt.localeCompare(b.createdAt));
     for (const worker of queued) {
       if (this.active.size >= 4) break;
       if ([...this.active].filter((id) => this.store.require<Worker>("superWorkers", id).projectId === worker.projectId).length >= 2) continue;
-      const goal = this.ledger.get(worker.taskId);
+      const goal = this.ledger.get(worker.taskId), retry=retries.get(worker.id);
       if (terminal(goal.status) || Date.parse(goal.deadlineAt) <= Date.now() || this.ledger.roundsRemaining(goal) <= 0) continue;
       try { this.role(worker.projectId, worker.roleId); } catch { continue; }
+      if(retry) {
+        // Earlier dispatches in this pump may have yielded control to the UI.
+        const current=this.store.require<Worker>("superWorkers",worker.id);
+        if(!this.store.get("superWatchdogRetry",worker.id) || current.generation!==retry.generation || goal.revision!==retry.revision ||
+            !this.mayRetryModel(current,goal) || digest(current.inputEventIds)!==retry.controlKey) continue;
+        this.store.transaction(()=>{
+          this.store.delete("superWatchdogRetry",worker.id);
+          this.store.put("superWatchdogLastRetry",worker.id,retry);
+          this.watchdog.recordIncident(this.watchdogIdentity(worker,goal),retry.reason,"retry_queued");
+          goal.status="running";this.ledger.save(goal);
+        });
+      }
       worker.state = "active"; worker.generation++; worker.owner = this.owner; worker.leaseUntil = Date.now() + 45000; worker.policyHash = this.policy(worker.projectId);
-      worker.invocationInputIds = this.routedInputs(worker);
+      worker.invocationInputIds = retry?.inputIds ?? this.routedInputs(worker);
       const resume = this.resumeControl(worker);
       if (resume && worker.resumeControlId) {
         this.store.put("superHumanControls", worker.resumeControlId, { ...resume, consumedAt: now(), generation: worker.generation });
@@ -1131,6 +1402,26 @@ export class LakeSuperagent implements AgentHost {
         objectSchema({ event_id: str, part_key: str, action: { type: "string", enum: ["create", "assign", "followup", "context_only", "stop", "ask", "respond"] },
           task_id: str, predecessor_task_id: str, title: str, role_id: str, role_key: str, role_ids: array(str),
           role_instructions: array(objectSchema({role_id: str, instruction: str}, ["role_id", "instruction"])), quote: str, reason: str, evidence_task_ids: array(str) }, ["event_id", "part_key", "action", "reason"]), (a) => this.route(sessionId, a)),
+      this.entry("inspect_watchdog","Explain recent Watchdog findings for the current event. Supply a task_id to inspect all contributors, or include role_id for one. Each action has its own timing and evidence.",
+        objectSchema({event_id:str,task_id:str,role_id:str},["event_id"]), a=>{
+          const event=this.admitted(sessionId,a.event_id);
+          if(event.preferredRoleId && a.role_id && a.role_id!==event.preferredRoleId)
+            throw new HttpError(404,"该专员不属于当前频道");
+          if(a.task_id && event.explicitTaskId && a.task_id!==event.explicitTaskId)
+            throw new HttpError(404,"任务与当前输入不匹配");
+          const taskId=a.task_id == null ? event.explicitTaskId : text(a.task_id,"task_id",128);
+          const roleId=a.role_id == null ? event.preferredRoleId : text(a.role_id,"role_id",128);
+          const joint=taskId ? this.ledger.jointTask(taskId) : undefined;
+          if(joint && joint.projectId!==projectId) throw new HttpError(404,"当前项目没有此任务");
+          const records=joint && !roleId ? joint.memberIds.flatMap((id:string)=>this.watchdog.records(projectId,id))
+            : this.watchdog.records(projectId,taskId ? this.routedGoal(projectId,taskId,roleId).id : undefined,50);
+          const findings=records.flatMap(record=>{
+            const worker=this.store.require<Worker>("superWorkers",record.workerId);
+            if(roleId && worker.roleId!==roleId || worker.projectId!==projectId || record.sessionId!==worker.sessionId) return [];
+            return [{...this.watchdogFinding(record),taskId:record.taskId,roleId:worker.roleId,roleName:worker.roleSnapshot.name}];
+          }).sort((a,b)=>b.at.localeCompare(a.at)).slice(0,20);
+          return {mode:this.watchdog.mode(projectId),findings};
+        }),
       this.entry("search_super_tasks", "Search all canonical project tasks, beyond the recent index. Read-only, never resumes work.", objectSchema({ role_id: str, resource_id: str, query: str, cursor: str, limit: integer, created_after: str, created_before: str }), (a) => {
         const limit = a.limit ?? 20; if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) throw new HttpError(400, "Invalid task page size");
         if (a.resource_id && this.store.require<{ projectId: string }>("resources", a.resource_id).projectId !== projectId) throw new HttpError(404, "Resource not found in project");
@@ -1386,6 +1677,9 @@ export class LakeSuperagent implements AgentHost {
     if (worker) {
       const goal = this.ledger.get(worker.taskId);
       snapshot.superagent = { task: this.taskView(goal), goal: this.publicGoal(goal), roleId: worker.roleId };
+      if(!worker.inline) snapshot.superagent.watchdog={mode:this.watchdog.mode(worker.projectId),findings:this.watchdog.records(worker.projectId,goal.id)
+        .filter(record=>record.workerId===worker.id && record.sessionId===worker.sessionId && record.state!=="reviewing" && record.state!=="guiding")
+        .map(record=>this.watchdogFinding(record))};
       snapshot.commandExecutions = this.execution?.views(snapshot.session.id, goal.id);
       if (snapshot.ai) {
         snapshot.ai = this.agents.executionView(snapshot.session.id, snapshot.ai);
@@ -1413,9 +1707,9 @@ export class LakeSuperagent implements AgentHost {
       for(const roleId of roles) this.notify(this.store.require<Channel>("superChannels", roleId).sessionId,"specialist");
     }
   }
-  settled(sessionId: string, outcome?: { response?: string; error?: string }) {
+  settled(sessionId: string, outcome?: { response?: string; error?: string; failure?:TurnFailure }) {
     if (this.projectFor(sessionId)) {const actor=this.pilotActors.get(sessionId),worker=actor&&this.store.get<Worker>('superWorkers',actor.id);if(worker?.inline)this.workerFinished(sessionId,outcome?.error,outcome?.response);this.routerFinished(sessionId,outcome?.error);}
-    else if (this.workerFor(sessionId)) this.workerFinished(sessionId, outcome?.error, outcome?.response);
+    else if (this.workerFor(sessionId)) this.workerFinished(sessionId, outcome?.error, outcome?.response, outcome?.failure);
     this.schedule();
   }
   private routerFinished(sessionId: string, error?: string) {
@@ -1450,7 +1744,7 @@ export class LakeSuperagent implements AgentHost {
     }
     this.batches.delete(sessionId); this.routing.delete(project.projectId); this.notify(sessionId, "specialist"); this.schedule();
   }
-  private workerFinished(sessionId: string, error?: string, response?: string) {
+  private workerFinished(sessionId: string, error?: string, response?: string, failure?:TurnFailure) {
     const worker = this.workerFor(sessionId); if (!worker) return;
     this.active.delete(worker.id);
     worker.deliveredInputIds = [...new Set([...(worker.deliveredInputIds ?? []), ...(worker.invocationInputIds ?? [])])];
@@ -1497,6 +1791,7 @@ export class LakeSuperagent implements AgentHost {
     const rootTurnId=this.store.view(sessionId).rootTurnId;
     if (!this.store.get("superPendingReports", reportKey)) this.store.put("superPendingReports", reportKey, { taskId: goal.id, revision: goal.revision, snapshot: structuredClone(goal), presentation, rootTurnId, createdAt: now() });
     this.deliverReports();
+    this.recordWorkerOutcome(worker,goal,error,failure);
     this.agents.memory?.captureTask(goal.id);
     this.changed(sessionId); this.schedule();
   }
@@ -1684,6 +1979,7 @@ export class LakeSuperagent implements AgentHost {
     if(this.stoppingProjects.has(projectId))return {stopped:true,tasks:0};
     this.stoppingProjects.add(projectId);
     try {
+      this.clearWatchdogRetries(projectId);
       this.batches.delete(routerSessionId);
       for(const event of this.store.list<InputEvent>("superInputs"))if(event.projectId===projectId&&["pending","blocked"].includes(event.disposition)){
         event.disposition="stopped";this.store.put("superInputs",event.id,event);
@@ -1780,7 +2076,8 @@ export class LakeSuperagent implements AgentHost {
     const saved = previous > cursor ? previous : cursor; this.store.put("superChannelReads", channel.id, saved); return { cursor: saved };
   }
   async close() {
-    this.closed = true; clearInterval(this.heartbeat);
+    this.closed = true; clearInterval(this.heartbeat); clearInterval(this.watchdogTimer);
+    await this.watchdog.close();
     for (const interaction of this.interactions.values()) interaction.reject(new HttpError(409, "Lake 正在退出"));
     await Promise.allSettled([...this.active].map((workerId) => this.agents.abort(this.store.require<Worker>("superWorkers", workerId).sessionId)));
   }

@@ -1,4 +1,5 @@
 import {SuperTaskInspector} from './SuperTaskInspector';
+import {TaskWatchdog} from './TaskWatchdog';
 import {WorkerExecutionTree,WorkerExecutionResults} from './WorkerExecutionTree';
 import {InspectorTaskSummary} from './InspectorTaskSummary';
 import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
@@ -69,6 +70,10 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
       </details>
      </>}
      {goal&&canonical&&<><WorkerExecutionTree snapshot={snapshot} worker={worker} connected={connected&&!readOnly} onUpdated={onUpdated}/><SuperTaskInspector task={canonical} goal={goal} worker={worker} controlsOnly connected={connected&&!readOnly} onUpdated={onUpdated}/></>}
+     {goal && canonical && snapshot.superagent?.watchdog && <TaskWatchdog
+       key={JSON.stringify([snapshot.session.projectId, snapshot.session.id, goal.id])}
+       projectId={snapshot.session.projectId} view={snapshot.superagent.watchdog} connected={connected && !readOnly}
+       onUpdated={onUpdated}/>}
      {!task&&!goal&&<h3 className="inspector-execution-title"><Glyph name="document" size={17}/>当前执行</h3>}
      {!hasInspectorTask(snapshot,target)&&!target.turnId&&(!target.followLatest||!(snapshot.messages?.length??0)&&!snapshot.ai?.cards.length)&&<p className="inspector-empty">本轮尚无执行记录。</p>}
      {!goal&&<div ref={inspector.setHost} className="inspector-turn-host"/>}

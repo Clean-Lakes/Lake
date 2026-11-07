@@ -38,6 +38,7 @@
     "saveSessionPresentation",
     "moveSessionNavigation",
     "superWorkspace",
+    "setWatchdogMode",
     "ensureSuperWorkspace",
     "deleteSpecialist",
     "specialistChannel",
