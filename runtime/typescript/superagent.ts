@@ -1258,7 +1258,9 @@ export class LakeSuperagent implements AgentHost {
   private shellPlan(worker:Worker,input:ShellInput){
     if(!this.execution)throw new HttpError(409,'Shell 执行器未连接');
     if(input.asset_ref) this.requireTarget(worker,input.asset_ref);
-    const plan=this.execution.plan(worker.projectId,input),project=this.store.require<SuperProject>('superProjects',worker.projectId),options=this.store.session(project.routerSessionId).options;
+    const requested = input.asset_ref ? worker.inputEventIds.map(id => this.store.require<InputEvent>("superInputs", id))
+      .filter(event => event.projectId === worker.projectId && this.eventReferences(event, input.asset_ref!)).map(event => event.payload) : [];
+    const plan=this.execution.plan(worker.projectId,input,requested),project=this.store.require<SuperProject>('superProjects',worker.projectId),options=this.store.session(project.routerSessionId).options;
     this.requireTarget(worker,plan.resource.id);
     if(plan.resource.kind==='local'&&options.denyLocalExecution===true)throw new HttpError(403,'当前 Pilot 权限禁止本机执行');
     if(options.blockUnreferencedAssets===true)this.requireReference(worker,plan.resource.id);

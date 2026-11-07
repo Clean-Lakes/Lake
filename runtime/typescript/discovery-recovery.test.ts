@@ -667,7 +667,9 @@ test("SSH dispatches the compiled identity inspection directly and retains origi
     { revision: () => "configuration", connect: async () => connection } as any,
     (value) => value,
   );
-  const plan = host.plan("project", input);
+  const scope = "/tmp/lake-ops-UK-fixture";
+  assert.equal(host.plan("project",input,["inspect "+scope+"-other"]).readOnly,false);
+  const plan = host.plan("project", input, ["inspect "+scope]);
   assert.equal(plan.readOnly, true);
   assert.equal(plan.risk, "write");
   const actor = {

@@ -324,7 +324,13 @@ export class TaskLedger {
         for (const original of this.store.list<Operation>("superOperations")) {
           if (original.projectId !== goal.projectId || original.status !== "unknown") continue;
           const receipt = this.effectResolution?.(original);
-          if (!receipt) throw new HttpError(409, "A project operation still requires reconciliation");
+          if (!receipt) {
+            const resource = binding.resourceId && this.store.get<{kind:string}>("resources", binding.resourceId);
+            const hint = binding.commandExecutionId && resource && resource.kind === "ssh"
+              ? " This command was not dispatched. Inspect the target with a relevant read-only inspect_host profile (system, disks, processes, dns_a or https), or a bounded read of the authorized directory. Report any remaining mutation as blocked; never retry the uncertain write."
+              : "";
+            throw new HttpError(409, "A project operation still requires reconciliation (" + original.id + ")." + hint);
+          }
           // A human may release independent work after observing actual effects.
           // Keep the original goal unresolved and fence its exact command across new tasks/IDs.
           if (receipt.effects === "observed" && commandHash && original.resourceId === binding.resourceId &&

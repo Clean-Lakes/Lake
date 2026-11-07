@@ -32,7 +32,17 @@ function tokenize(command: string): { words: Array<{ word: string; operator: boo
   return { words, dynamic: dynamic || !!mode, substitution };
 }
 
-const opsDirectory = /^\/tmp\/lake-ops-[A-Za-z0-9][A-Za-z0-9-]{1,80}(?:\/[A-Za-z0-9_][A-Za-z0-9._-]*)*$/;
+const temporaryPath = /^\/tmp\/[A-Za-z0-9_][A-Za-z0-9_.-]{0,80}(?:\/[A-Za-z0-9_][A-Za-z0-9._-]*)*$/;
+
+/** The human request must name the complete directory, rather than a prefix,
+ * neighboring path, or URL. The resource binding is checked by the caller. */
+export function requestedInspectionRoot(path: string, requests: readonly string[]) {
+  if (!temporaryPath.test(path)) return false;
+  const root = path.split("/").slice(0,3).join("/");
+  const literal = root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const mention = new RegExp("(?<![a-zA-Z0-9_./:@-])" + literal + "(?![a-zA-Z0-9_./-])");
+  return requests.some(request => mention.test(request));
+}
 const inventoryFormat = "%y %s %p\\n";
 export type NobodyInspection = { command: string; directory: string; inventoryDepth?: number };
 
@@ -59,7 +69,7 @@ export function compileNobodyInspection(source: string): NobodyInspection | unde
     const paths = args.filter(v=>v.startsWith("/"));
     for (const path of paths) {
       if (program === "df" && path === "/") continue;
-      if (!opsDirectory.test(path)) return;
+      if (!temporaryPath.test(path)) return;
       const root=path.split("/").slice(0,3).join("/");
       if (directory && directory!==root) return;
       directory=root;
@@ -67,7 +77,7 @@ export function compileNobodyInspection(source: string): NobodyInspection | unde
     let valid = false;
     if (program==="id") valid=!args.length || args.length===1 && ["-u","-g"].includes(args[0]!);
     if (program==="find") {
-      valid = args.length===5 && opsDirectory.test(args[0]!) && args[1]==="-maxdepth" && /^[0-8]$/.test(args[2]!) &&
+      valid = args.length===5 && temporaryPath.test(args[0]!) && args[1]==="-maxdepth" && /^[0-8]$/.test(args[2]!) &&
         args[3]==="-printf" && args[4]===inventoryFormat;
       if(valid && args[0]===directory && i===2 && groups.length===3 &&
         groups[0]!.join(" ")==="id" && groups[1]!.join(" ")==="ls -la "+directory && joins.every(j=>j===";"))
@@ -80,7 +90,7 @@ export function compileNobodyInspection(source: string): NobodyInspection | unde
       const optionsIn = args.slice(0,index);
       if (optionsIn.at(-1)==="--") optionsIn.pop();
       valid = index>=0 && args.length-index<=8 && options[program]!.includes(optionsIn.join(" ")) &&
-        args.slice(index).every(v=>opsDirectory.test(v) || program==="df" && v==="/");
+        args.slice(index).every(v=>temporaryPath.test(v) || program==="df" && v==="/");
     }
     if (!valid) return;
     render.push((i ? joins[i-1]+" " : "")+"/usr/bin/"+program+" "+args.map(quote).join(" "));
@@ -118,11 +128,11 @@ export function compileNobodyDelay(source: string): string | undefined {
   return `${clean} /usr/sbin/runuser -u nobody -- ${clean} /bin/sh -c ${quote(script)}`;
 }
 
-function literalFileInspection(program:string,args:string[]) {
+function literalFileInspection(program:string,args:string[],requests:readonly string[]) {
   if (!["nl","sha256sum"].includes(program)) return false;
   const paths = program==="nl" ? args[0]==="-ba" ? args.slice(1) : [] : args;
   const files = paths[0]==="--" ? paths.slice(1) : paths;
-  return files.length>0 && files.length<=8 && files.every(path=>opsDirectory.test(path));
+  return files.length>0 && files.length<=8 && files.every(path=>requestedInspectionRoot(path,requests));
 }
 
 function programLookup(group: string[]): boolean {
@@ -352,7 +362,7 @@ function inspectionGroup(original: string[], depth = 0): boolean {
   return true;
 }
 
-export function commandPolicy(command: string): CommandPolicy {
+export function commandPolicy(command: string, requests: readonly string[] = []): CommandPolicy {
   const parsed = tokenize(command);
   const sensitive = /(?:\.lake\/secrets|\.ssh\/(?:id_|.*\.pem)|\bid_(?:rsa|ed25519|ecdsa|dsa)\b|(?:^|[\/\s])\.env(?:\b|\.)|keychain|\/dev\/(?:disk|sd[a-z]|nvme))/i.test(command);
   const groups: string[][] = [[]];
@@ -380,7 +390,7 @@ export function commandPolicy(command: string): CommandPolicy {
   for (const group of groups) {
     const path = group[0]!, program = path.split("/").at(-1)!;
     const args = group.slice(1);
-    let safe = (readPrograms.has(program) && (!path.includes("/") || /^\/(?:usr\/)?s?bin\/[^/]+$/.test(path))) || programLookup(group) || (path===program || path==="/usr/bin/"+program) && literalFileInspection(program,args);
+    let safe = (readPrograms.has(program) && (!path.includes("/") || /^\/(?:usr\/)?s?bin\/[^/]+$/.test(path))) || programLookup(group) || (path===program || path==="/usr/bin/"+program) && literalFileInspection(program,args,requests);
     if (program === "date") safe &&= args.every(arg => arg === "-u" || arg === "--utc" || arg.startsWith("+"));
     if (program === "hostname") safe &&= args.every(arg => ["-f", "-s", "-d", "-i", "-I", "-a", "--fqdn"].includes(arg));
     if (program === "file") safe &&= !args.some(arg => arg === "--compile" || /^-[^-]*C/.test(arg));

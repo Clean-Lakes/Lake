@@ -16,7 +16,7 @@ import type { HostCommandView } from '../../web-agent/shared/contracts';
 import type { Operation } from './tasks';
 import { HttpError, LakeStore, id, now } from "./store";
 import { digest, text } from "./tasks";
-import { commandPolicy, compileNobodyInspection, compileNobodyDelay, type NobodyInspection } from "../../web-agent/shared/command-policy";
+import { commandPolicy, compileNobodyInspection, requestedInspectionRoot, compileNobodyDelay, type NobodyInspection } from "../../web-agent/shared/command-policy";
 
 const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
 const outputLimit = 256 * 1024;
@@ -114,7 +114,7 @@ export class LakeExecution {
           this.store.get("projectSettings", resource.projectId),
         ]);
   }
-  plan(projectId: string, input: ShellInput): ShellPlan {
+  plan(projectId: string, input: ShellInput, requests: readonly string[] = []): ShellPlan {
     const resource = input.asset_ref
       ? this.store.require<Resource>(
           "resources",
@@ -137,7 +137,7 @@ export class LakeExecution {
       throw new HttpError(403, "Shell 需要当前项目的可用本机或 SSH 资源");
     const command = text(input.command, "command", 64000),
       revision = this.revision(resource),
-      policy = commandPolicy(command);
+      policy = commandPolicy(command, requests);
     if (input.asset_ref && !boundResourceRevision(this.store,resource,input.configuration_revision,revision))
       throw new HttpError(409, "Shell 连接配置已变化，请重新读取资源目录");
     if (input.dangerouslyDisableSandbox)
@@ -164,7 +164,8 @@ export class LakeExecution {
       )
     )
       throw new HttpError(403, "Shell 不允许读取或导出宿主认证凭据");
-    const inspection = resource.kind==="ssh" && !input.run_in_background && !input.cwd && policy.risk!=="dangerous" ? compileNobodyInspection(command) : undefined;
+    const parsedInspection = resource.kind==="ssh" && !input.run_in_background && !input.cwd && policy.risk!=="dangerous" ? compileNobodyInspection(command) : undefined;
+    const inspection = parsedInspection && requestedInspectionRoot(parsedInspection.directory, requests) ? parsedInspection : undefined;
     const delay = resource.kind === "ssh" && input.run_in_background && !input.cwd && policy.risk !== "dangerous"
       ? compileNobodyDelay(command) : undefined;
     const readOnly = policy.risk === "readonly" || !!inspection || !!delay;
