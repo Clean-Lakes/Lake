@@ -22,6 +22,7 @@ test("only canonical A names, public destinations and simple absolute paths are 
   const dns = networkProbe("dns_a",{hostname:"Origin.Example.org."});
   assert.equal(dns?.hostname,"origin.example.org");
   authorizeNetworkProbe(dns,["Look up origin.example.org."]);
+  assert.throws(()=>authorizeNetworkProbe(networkProbe("dns_a",{hostname:"unexpected.invalid"}),["check DNS"]));
   for (const hostname of ["-a.test","x..test","a.test\nwhoami","a.test/","127.0.0.1","user@a.test"])
     assert.throws(()=>networkProbe("dns_a",{hostname}));
   for (const ipv4 of ["::1","127.0.0.1","169.254.169.254","10.0.0.1","172.31.0.1","192.168.1.1","0.0.0.0","100.64.0.1","192.0.2.1","198.18.0.1","255.255.255.255"])

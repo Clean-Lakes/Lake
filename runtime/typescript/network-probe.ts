@@ -47,7 +47,7 @@ export function authorizeNetworkProbe(probe: ReturnType<typeof networkProbe>, re
   const escaped = (s: string)=>s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
   const ipOrName = (s: string)=>new RegExp("(?<![a-z0-9_.@/-])"+escaped(s)+"(?:\\.(?![a-z0-9_.-]))?(?![a-z0-9_-]|\\.[a-z0-9.-])","i");
   if (probe.metric==="dns_a") {
-    if (!probe.hostname.endsWith(".invalid") && !requests.some(text=>ipOrName(probe.hostname).test(text)))
+    if (!requests.some(text=>ipOrName(probe.hostname).test(text)))
       throw new HttpError(403,"DNS 查询名称须来自本任务的用户输入");
     return;
   }
@@ -55,7 +55,7 @@ export function authorizeNetworkProbe(probe: ReturnType<typeof networkProbe>, re
   const endpoint = new RegExp("(?<![a-z0-9_./%@-])(?:https://)?"+escaped(probe.hostname)+port+
     escaped(probe.path!)+"(?![a-z0-9_~.%/?#@=&:-])","i");
   if (!requests.some(text=>ipOrName(probe.ipv4!).test(text) && endpoint.test(text) &&
-      (!probe.negative_hostname || probe.negative_hostname==="lake-name-check.invalid" || ipOrName(probe.negative_hostname).test(text))))
+      (!probe.negative_hostname || ipOrName(probe.negative_hostname).test(text))))
     throw new HttpError(403,"HTTPS 域名、端口、路径与固定 IP 须来自本任务同一条用户输入");
 }
 
