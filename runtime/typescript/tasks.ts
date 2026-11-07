@@ -192,13 +192,17 @@ export class TaskLedger {
       return this.save(goal);
     });
   }
-  confirm(goalId: string, revision: number, accept: boolean) {
+  confirm(goalId: string, revision: number, accept: boolean, action?: {sessionId: string; interactionId: string}) {
     return this.store.transaction(() => {
       const goal = this.get(goalId);
       if (goal.revision !== revision || !goal.planHash || goal.confirmed || terminal(goal.status))
         throw new HttpError(409, "Plan confirmation is stale");
       goal.confirmed = accept; goal.status = accept ? "running" : "paused";
-      return this.save(goal);
+      const saved = this.save(goal);
+      if (action) this.store.put('superPlanConfirmations', digest([goal.id, action.interactionId]), {goalId: goal.id, planRevision: goal.planRevision,
+        planHash: goal.planHash, beforeRevision: revision, afterRevision: saved.revision, accept, sourceKind: 'user_action',
+        sourceSessionId: action.sessionId, executionSessionId: goal.sessionId, interactionId: action.interactionId, at: now()});
+      return saved;
     });
   }
   start(goalId: string, stepId: string, generation: number, policyHash: string) {

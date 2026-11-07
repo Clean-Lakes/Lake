@@ -1002,6 +1002,11 @@ export class LakeMemory {
       this.scope("project", actor.projectId),
       ...(actor.kind === "pilot" ? [this.scope("user")] : []),
     ];
+    const captureScope = actor.roleId ? this.scope('role', actor.projectId, actor.roleId) : this.scope('project', actor.projectId);
+    const captureNotice = this.settings(captureScope).extractionEnabled
+      ? "[LAKE MEMORY CAPTURE]\nEligible preferences are captured by the enabled scoped background Memory service after foreground work. Do not use ordinary filesystem Write/Edit just to remember them. Acknowledge the preference without claiming publication until a real published result exists. Never promote it to a broader scope."
+      : '';
+    if (captureNotice) projected = {...projected, messages: [{role: 'system', content: captureNotice}, ...(projected.messages ?? [])]};
     const query = JSON.stringify(
       projected.messages?.slice(-2) ?? [],
     ).toLowerCase();
@@ -1054,7 +1059,7 @@ export class LakeMemory {
           }),
           body: clip(body, 900),
         };
-        if (Buffer.byteLength(JSON.stringify([...parts, fragment])) <= 3500) {
+        if (Buffer.byteLength(JSON.stringify([...parts, fragment])) <= 3500 - Buffer.byteLength(captureNotice)) {
           parts.push(fragment);
           entry.sourceIds.forEach((id) => admittedSources.add(id));
         }

@@ -289,6 +289,22 @@ export class LakeServiceResources {
     for (const value of Object.values(secrets)) this.registerSecret(value!);
     return { config, secrets };
   }
+  /** Migration-only adoption of an exact private Dev reference. Never creates
+   * a credential, weakens TLS or accepts credentials from an HTTP request. */
+  configuration(kind: string, input: Settings) {
+    if (!input || typeof input !== 'object' || Array.isArray(input) || secretKeys.some(key => input[key] !== undefined) || input.clearCredential !== undefined)
+      throw new HttpError(400, '旧资源配置不能包含内联凭据或清除动作');
+    const normalized = {...input};
+    if (kind === 'database') {
+      if (input.driver !== 'postgres') throw new HttpError(400, '此迁移仅适用于 PostgreSQL');
+      if (input.sslmode !== undefined && !['disable', 'verify-full'].includes(input.sslmode))
+        throw new HttpError(409, '旧 PostgreSQL TLS 模式需要专用适配，未更改原连接');
+      if (input.sslmode !== undefined) normalized.tls = input.sslmode !== 'disable';
+    } else if (kind !== 'redis') throw new HttpError(400, '不支持的旧服务资源类型');
+    const {config} = this.parse(kind, normalized, normalized);
+    if (input.credentialRef) { this.readSecrets(input.credentialRef); config.credentialRef = input.credentialRef; }
+    return config;
+  }
   prepare(kind: string, input: Settings, previous?: Settings) {
     const { config, secrets } = this.parse(kind, input, previous);
     let created: string | undefined;

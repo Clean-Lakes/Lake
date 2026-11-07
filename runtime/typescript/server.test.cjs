@@ -113,7 +113,11 @@ async function fixture(t, mode = "text", legacyDev = false) {
       providers: [{
         id: "legacy.fixture", name: "Existing Dev provider", baseURL: `http://127.0.0.1:${provider.address().port}/v1`,
         protocol: "openai", enabled: true, credentialRef: "provider-fixture.key",
-        models: [{ id: "fixture", name: "fixture", enabled: true }],
+        models: [{ id: "fixture", name: "fixture", enabled: true, ...(mode === 'legacy-rich-model-flags' ? {
+          supportsVideoInput: true, supportsAudioInput: true, supportsPdfInput: true, supportsNativeWebSearch: true,
+          imageInputMode: 'on', imageInputDetected: true, reasoningCapability: {levels: ['low', 'high'], default: 'high', source: 'saved-settings'},
+          ignoredPrivateField: 'must-not-import',
+        } : {}) }],
       }],
     }), { mode: 0o600 });
     await writeFile(join(options.data, "lake-web.sqlite"), "legacy database sentinel", { mode: 0o600 });
@@ -337,6 +341,7 @@ test('selected resource and extension references persist with exact spans and re
   const stored = f.app.store.list('messages').find(row => row.role === 'user');
   assert.deepEqual(stored.mentions, [{kind: 'resource', id: resource.id, label: resource.name, start: 3, end: 3 + resource.name.length}]);
   assert.deepEqual(f.app.store.get('messageInputs', stored.id).resourceIds, [resource.id]);
+  assert.deepEqual(await f.api(`/api/sessions/${f.session.id}/ai/references`), [resource.id]);
   assert.ok(f.requests.some(request => JSON.stringify(request.messages).includes(resource.id)));
   const other = await f.api('/api/projects', 'POST', {name: '外国项目'}), foreign = (await f.api('/api/catalog')).resources.find(row => row.projectId === other.id);
   const calls = f.calls;
@@ -344,6 +349,9 @@ test('selected resource and extension references persist with exact spans and re
   await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: '检查资源', mentions: [{kind: 'resource', id: resource.id, label: resource.name, start: 0, end: 2}]}, 400);
   assert.equal(f.calls, calls);
   await f.restart(); assert.deepEqual(f.app.store.get('messageInputs', stored.id).resourceIds, [resource.id]);
+  await f.api(`/api/sessions/${f.session.id}/ai/clearReferences`, 'POST', {});
+  assert.deepEqual(await f.api(`/api/sessions/${f.session.id}/ai/references`), []);
+  assert.deepEqual(f.app.store.get('messageInputs', stored.id).resourceIds, [resource.id], 'clearing the access cache never rewrites an admitted task source');
 });
 
 test('referenced-only execution uses the real admitted user selection and cannot borrow another task selection', {skip: process.platform !== 'darwin'}, async t => {
@@ -357,6 +365,171 @@ test('referenced-only execution uses the real admitted user selection and cannot
   await f.api(`/api/sessions/${project.routerSessionId}/messages`, 'POST', {text: '再创建一项检查项目文件的工作'}, 202);
   state = await until(() => f.api(`/api/projects/${f.project.id}/superagent`), value => value.workers.length === 2 && value.workers.every(row => row.assignmentState === 'parked'));
   assert.equal(f.app.store.list('superOperations').length, operations, 'a sibling task cannot inherit an earlier user selection');
+});
+
+test('editable user queues persist pause, edit and ordering with revision checks and dispatch actual messages once after resume', async t => {
+  const f = await fixture(t), base = `/api/sessions/${f.session.id}/message-queue`, messages = `/api/sessions/${f.session.id}/messages`;
+  await f.api(base, 'POST', {operation: 'pause', revision: 0});
+  const a = await f.api(messages, 'POST', {text: '第一条排队消息', enqueue: true}, 202);
+  const b = await f.api(messages, 'POST', {text: '第二条排队消息', enqueue: true}, 202);
+  let queue = await f.api(base); assert.equal(queue.items.length, 2); assert.equal(queue.paused, true);
+  await f.api(base, 'POST', {operation: 'resume', revision: 0}, 409);
+  queue = await f.api(base, 'POST', {operation: 'edit', revision: queue.revision, id: a.queuedMessageId, text: '已编辑的第一条消息', resourceIds: [], mentions: []});
+  queue = await f.api(base, 'POST', {operation: 'reorder', revision: queue.revision, ids: [b.queuedMessageId, a.queuedMessageId]});
+  await f.restart(); queue = await f.api(base); assert.equal(queue.paused, true); assert.equal(f.calls, 0);
+  assert.deepEqual((await f.api(`/api/sessions/${f.session.id}/snapshot`)).messageQueue.items.map(item => item.id), [b.queuedMessageId, a.queuedMessageId]);
+  await f.api(base, 'POST', {operation: 'resume', revision: queue.revision});
+  await until(() => f.api(base), value => value.items.length === 0); await f.wait(['completed']);
+  assert.deepEqual(f.app.store.messages(f.session.id).filter(message => message.role === 'user').map(message => message.text), ['第二条排队消息', '已编辑的第一条消息']);
+  assert.equal(f.calls, 2); assert.equal(f.app.store.list('messageQueueDispatches').filter(row => row.state === 'accepted').length, 2);
+  await f.restart(); assert.equal(f.calls, 2); assert.deepEqual((await f.api(base)).items, []);
+});
+
+test('stopping a conversation pauses its unsent queue and an explicit resume is required after the stopped root', async t => {
+  const f = await fixture(t, 'write'), base = `/api/sessions/${f.session.id}/message-queue`, messages = `/api/sessions/${f.session.id}/messages`;
+  await f.api(messages, 'POST', {text: '等待明确审批的测试写入'}, 202); await f.wait(['waiting_approval']);
+  await f.api(messages, 'POST', {text: '停止后仍须保留的下一条', enqueue: true}, 202);
+  await f.api(`/api/sessions/${f.session.id}/ai/abort`, 'POST', {});
+  let queue = await f.api(base); assert.equal(queue.paused, true); assert.equal(queue.items.length, 1);
+  assert.equal(f.calls, 1); await assert.rejects(access(f.target));
+  await f.api(base, 'POST', {operation: 'resume', revision: queue.revision});
+  await until(() => f.api(base), value => value.items.length === 0); await f.wait(['completed']);
+  assert.equal(f.calls, 2); await assert.rejects(access(f.target));
+});
+
+test('a fault after message admission never retries an uncertain queue item across restart or resume', async t => {
+  const f = await fixture(t), base = `/api/sessions/${f.session.id}/message-queue`;
+  const original = f.app.superagent.send.bind(f.app.superagent);
+  f.app.superagent.send = async (...args) => { await original(...args); throw new Error('synthetic post-admission process-loss boundary'); };
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: '只应接入一次的排队消息', enqueue: true}, 202);
+  await until(() => f.api(base), value => value.paused && !!value.lastError); await f.wait(['completed']);
+  assert.equal(f.calls, 1); assert.equal(f.app.store.messages(f.session.id).filter(message => message.role === 'user').length, 1);
+  await f.restart(); const queue = await f.api(base);
+  await f.api(base, 'POST', {operation: 'resume', revision: queue.revision}, 409);
+  assert.equal(f.calls, 1); assert.equal(queue.items.length, 1);
+  await f.api(base, 'POST', {operation: 'remove', revision: queue.revision, id: queue.items[0].id});
+  assert.equal(f.app.store.messages(f.session.id).filter(message => message.role === 'user').length, 1, 'removing an unsent copy never deletes admitted history');
+});
+
+test('Plan mode persists and its catalog execution confirms only the exact live frozen original proposal', async t => {
+  const f = await fixture(t, 'super-inspect'), project = await f.api(`/api/projects/${f.project.id}/superagent`, 'POST', {});
+  const base = `/api/sessions/${project.routerSessionId}/ai`;
+  const update = await f.api(base + '/mode', 'POST', {mode: 'plan'}); assert.equal(update.mode, 'plan'); assert.ok(update.cursor > 0);
+  await f.restart(); assert.equal((await f.api(`/api/sessions/${project.routerSessionId}/snapshot`)).conversationMode, 'plan');
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`, 'POST', {text: '先制定准确计划，再读取项目工作区。'}, 202);
+  const state = await until(() => f.api(`/api/projects/${f.project.id}/superagent`), value => value.channels[0]?.needsConfirmation);
+  const worker = state.workers[0], goal = f.app.store.list('superGoals')[0], beforeDeadline = goal.deadlineAt;
+  const plans = (await f.api(base + '/plans')).plans; assert.equal(plans.length, 1); assert.ok(plans[0].content.includes(goal.items[0].title));
+  assert.equal(f.app.store.list('superOperations').length, 0);
+  await f.api(`/api/sessions/${worker.sessionId}/ai/mode`, 'POST', {mode: 'default'}, 409);
+  const other = await f.api('/api/projects', 'POST', {name: '无关项目'}), foreign = await f.api(`/api/projects/${other.id}/sessions`, 'POST', {});
+  await f.api(`/api/sessions/${foreign.id}/ai/executePlan`, 'POST', {planId: plans[0].id}, 404);
+  await f.api(base + '/executePlan', 'POST', {planId: plans[0].id});
+  await until(() => f.api(`/api/projects/${f.project.id}/superagent`), value => value.workers[0]?.assignmentState === 'parked');
+  assert.equal(f.app.store.list('superGoals').length, 1); assert.equal(f.app.store.list('superGoals')[0].deadlineAt, beforeDeadline);
+  assert.equal(f.app.store.list('superOperations').length, 1); assert.equal(f.app.store.list('superPlanConfirmations').length, 1);
+  assert.equal(f.app.store.list('superPlanConfirmations')[0].sourceKind, 'user_action');
+  assert.equal(f.app.store.list('superPlanConfirmations')[0].sourceSessionId, project.routerSessionId);
+  await f.api(base + '/executePlan', 'POST', {planId: plans[0].id}, 409);
+});
+
+test('a saved Plan cannot restart its cancelled input checkpoint or acquire new execution eligibility after process restart', async t => {
+  const f = await fixture(t, 'super-inspect'), project = await f.api(`/api/projects/${f.project.id}/superagent`, 'POST', {}), base = `/api/sessions/${project.routerSessionId}/ai`;
+  await f.api(base + '/mode', 'POST', {mode: 'plan'});
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`, 'POST', {text: '制定计划但暂不批准。'}, 202);
+  await until(() => f.api(`/api/projects/${f.project.id}/superagent`), value => value.channels[0]?.needsConfirmation);
+  const plan = (await f.api(base + '/plans')).plans[0], calls = f.calls;
+  await f.restart(); await f.api(base + '/executePlan', 'POST', {planId: plan.id}, 409);
+  assert.equal(f.calls, calls); assert.equal(f.app.store.list('superOperations').length, 0); assert.equal(f.app.store.list('superPlanConfirmations').length, 0);
+});
+
+test('workflow templates support validated versioned persistence while unsupported execution never reports an empty successful run', async t => {
+  const f = await fixture(t), base = `/api/projects/${f.project.id}/workflows`, resource = (await f.api('/api/catalog')).resources[0];
+  const input = {name: '只读检查手册', goal: '检查项目运行条件', steps: [{id: 'inspect', role: 'host', task: '查看主机负载', resourceIds: [resource.id]}]};
+  const saved = await f.api(base, 'POST', input); assert.equal(saved.version, 1);
+  await f.restart(); assert.deepEqual((await f.api(base)).templates, [saved]);
+  await f.api(base + '/' + saved.id, 'PUT', {...input, version: 0}, 409);
+  const next = await f.api(base + '/' + saved.id, 'PUT', {...input, name: '已修改的手册', version: 1}); assert.equal(next.version, 2);
+  const other = await f.api('/api/projects', 'POST', {name: '其他项目'});
+  await f.api(`/api/projects/${other.id}/workflows/${saved.id}`, 'DELETE', {version: 2}, 404);
+  await f.api(base + '/' + saved.id + '/run', 'POST', {version: 2}, 501);
+  assert.equal(f.calls, 0); assert.deepEqual((await f.api(base)).runs, []);
+  await f.api(base, 'POST', {...input, name: 'synthetic-secret-no-real-credential'}, 400);
+  await f.api(base + '/' + saved.id, 'DELETE', {version: 1}, 409);
+  await f.api(base + '/' + saved.id, 'DELETE', {version: 2}); await f.restart();
+  assert.deepEqual((await f.api(base)).templates, []); assert.equal(f.app.store.get('archivedWorkflowTemplates', saved.id).version, 2);
+});
+
+test('the saved Go workflow catalog migrates without executing it and later edits or deletion are never resurrected', async t => {
+  const f = await fixture(t), resource = (await f.api('/api/catalog')).resources[0], {DatabaseSync} = require('node:sqlite'), fs = require('node:fs/promises');
+  const path = join(f.options.data, 'lake-web.sqlite'), db = new DatabaseSync(path), at = '2026-11-01T00:00:00Z';
+  db.exec('CREATE TABLE workflows(id TEXT,projectId TEXT,name TEXT,goal TEXT,steps TEXT,version INTEGER,createdAt TEXT,updatedAt TEXT);');
+  db.prepare('INSERT INTO workflows VALUES(?,?,?,?,?,?,?,?)').run('saved-go-workflow', f.project.id, '原只读手册', '原目标',
+    JSON.stringify([{id: 'inspect', role: 'host', task: '查看当前负载', resourceIds: [resource.id]}]), 3, at, at);
+  db.close(); await fs.chmod(path, 0o600); const before = await readFile(path);
+  f.options.development = true; f.options.importLegacy = true; await f.restart();
+  const base = `/api/projects/${f.project.id}/workflows`, saved = (await f.api(base)).templates[0];
+  assert.equal(saved.id, 'saved-go-workflow'); assert.equal(saved.version, 3); assert.equal(f.calls, 0);
+  await f.api(base + '/' + saved.id, 'PUT', {...saved, name: '新的 TS 选择', version: 3}); await f.restart();
+  assert.equal((await f.api(base)).templates[0].name, '新的 TS 选择');
+  await f.api(base + '/' + saved.id, 'DELETE', {version: 4}); await f.restart();
+  assert.deepEqual((await f.api(base)).templates, []); assert.deepEqual(await readFile(path), before); assert.equal(f.calls, 0);
+});
+
+test('Gemini and Ollama catalog and actual SDK model tests reach their correct compatibility endpoints', async t => {
+  const f = await fixture(t), requests = [];
+  const wire = createServer(async (req, res) => {
+    let raw = ''; for await (const chunk of req) raw += chunk;
+    requests.push({url: req.url, authorization: req.headers.authorization, key: req.headers['x-api-key'], version: req.headers['anthropic-version'], method: req.method});
+    res.writeHead(200, {'Content-Type': 'application/json'});
+    res.end(JSON.stringify(req.method === 'GET' ? {data: [{id: 'fixture'}]} : {id: 'model-test', object: 'chat.completion', created: 1, model: 'fixture', choices: [{index: 0, message: {role: 'assistant', content: 'OK'}, finish_reason: 'stop'}], usage: {prompt_tokens: 1, completion_tokens: 1, total_tokens: 2}}));
+  });
+  await new Promise(resolve => wire.listen(0, '127.0.0.1', resolve)); t.after(() => new Promise(resolve => {wire.closeAllConnections(); wire.close(resolve);}));
+  const base = `http://127.0.0.1:${wire.address().port}`;
+  for (const [protocol, path, expected] of [['gemini', '/v1beta', '/v1beta/openai'], ['ollama', '', '/v1']]) {
+    const provider = await f.api('/api/settings/providers', 'POST', {name: protocol, baseURL: base + path, protocol, apiKey: protocol === 'gemini' ? 'synthetic-provider-key' : '', enabled: true, models: []});
+    const result = await f.api(`/api/settings/providers/${provider.savedProviderId}/discover`, 'POST', {}); assert.equal(result.models[0].id, 'fixture');
+    assert.equal(requests.at(-1).url, expected + '/models');
+    await f.api('/api/settings/model/test', 'POST', {url: base + path, name: 'fixture', protocol});
+    assert.equal(requests.at(-1).url, expected + '/chat/completions');
+  }
+  const anthropic = await f.api('/api/settings/providers', 'POST', {name: 'Claude catalog', baseURL: base + '/anthropic/v1', protocol: 'claude', apiKey: 'synthetic-anthropic-key', enabled: true, models: []});
+  await f.api(`/api/settings/providers/${anthropic.savedProviderId}/test`, 'POST', {});
+  assert.equal(requests.at(-1).key, 'synthetic-anthropic-key'); assert.equal(requests.at(-1).authorization, undefined); assert.equal(requests.at(-1).version, '2023-06-01');
+  const before = requests.length; await f.api('/api/settings/model/test', 'POST', {url: base, name: 'fixture', protocol: 'unknown'}, 400); assert.equal(requests.length, before);
+});
+
+test('extracting a preset makes a real bounded model request and saves a persistent result with its source', async t => {
+  const f = await fixture(t);
+  await f.api(`/api/sessions/${f.session.id}/ai/extractPreset`, 'POST', {}, 400);
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: '排查时先给结论，再列实际证据。'}, 202); await f.wait(['completed']);
+  const calls = f.calls, preset = await f.api(`/api/sessions/${f.session.id}/ai/extractPreset`, 'POST', {});
+  assert.equal(f.calls, calls + 1); assert.ok(preset.content); assert.ok(f.app.store.get('presetSources', preset.id).messageIds.length > 0);
+  assert.match(JSON.stringify(f.requests.at(-1).messages), /Extract a reusable instruction preset/);
+  await f.restart(); assert.ok((await f.api('/api/ai/presets')).some(row => row.id === preset.id && row.content === preset.content));
+});
+
+test('a failed preset extraction cannot save an empty or fabricated success', async t => {
+  const f = await fixture(t, 'model-error-http');
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: '有来源的预设测试'}, 202); await f.wait(['failed']);
+  const failure = await f.api(`/api/sessions/${f.session.id}/ai/extractPreset`, 'POST', {}, 502);
+  assert.ok(!JSON.stringify(failure).includes('synthetic-secret-no-real-credential'));
+  assert.deepEqual(await f.api('/api/ai/presets'), []); assert.equal(f.app.store.list('presetSources').length, 0);
+});
+
+test('raw SDK stream error callbacks never print provider-echoed credentials to stderr while the user still receives the failure', async t => {
+  const original = console.error, logged = [];
+  console.error = (...args) => {logged.push(require('node:util').inspect(args));};
+  try {
+    for (const mode of ['model-error-http', 'model-error-sse']) {
+      const f = await fixture(t, mode);
+      await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: '验证错误日志脱敏'}, 202);
+      const view = await f.wait(['failed']); await f.app.agents.wait(f.session.id);
+      assert.ok(JSON.stringify(view).includes('SYNTHETIC_PROVIDER_REJECTION'));
+      assert.ok(!JSON.stringify(view).includes('synthetic-secret-no-real-credential'));
+    }
+    assert.ok(logged.every(line => !line.includes('synthetic-secret-no-real-credential')), 'console logging is a credential boundary too');
+  } finally {console.error = original;}
 });
 
 function fullAgentReply(request,mode,home){
@@ -1031,6 +1204,13 @@ test("Dev opt-in never permits the production Home, and daily Dev still requires
   const userHome = require("node:os").homedir();
   await assert.rejects(startLakeServer({ ...f.options, home: join(userHome, ".lake"), development: true }), /独立 Home/);
   await assert.rejects(startLakeServer({ ...f.options, home: join(userHome, ".lake-dev"), development: false }), /独立 Home/);
+});
+
+test('Dev provider import preserves declared modality and reasoning metadata without probing or importing arbitrary fields', async t => {
+  const f = await fixture(t, 'legacy-rich-model-flags', true), model = (await f.api('/api/settings/providers')).providers[0].models[0];
+  for (const key of ['supportsVideoInput', 'supportsAudioInput', 'supportsPdfInput', 'supportsNativeWebSearch', 'imageInputDetected']) assert.equal(model[key], true);
+  assert.equal(model.imageInputMode, 'on'); assert.deepEqual(model.reasoningCapability, {levels: ['low', 'high'], default: 'high', source: 'saved-settings'});
+  assert.equal(model.ignoredPrivateField, undefined); assert.equal(f.calls, 0);
 });
 
 test("native Pilot creates a stable specialist and independent Worker, with evidence-backed completion and persistent channels", async (t) => {
@@ -2361,6 +2541,7 @@ test('native Memory extracts after real user input, publishes scoped files, reca
  assert.equal(view.jobs[0].outcome, 'published'); assert.equal(view.jobs[0].noteCount, 1); assert.equal(view.jobs[0].publishedRevision, 1);
  assert.match(view.items[0].body,/NATIVE_PROJECT_MEMORY/);assert.equal(view.items[0].sources[0].kind,'user');
  assert.ok(f.requests.some(request=>JSON.stringify(request.messages).includes('You are now acting as the memory extraction subagent')));
+ assert.ok(f.requests.some(request => JSON.stringify(request.messages).includes('[LAKE MEMORY CAPTURE]')), 'a natural request to remember uses scoped background capture instead of ordinary project file writes');
  const learnedCalls=f.calls;
  const next=await f.api(`/api/projects/${f.project.id}/sessions`,'POST',{});
  await f.api(`/api/sessions/${next.id}/messages`,'POST',{text:'再做一个新的检查任务。'},202);await until(()=>f.api(`/api/sessions/${next.id}/ai`),view=>view.status==='completed');

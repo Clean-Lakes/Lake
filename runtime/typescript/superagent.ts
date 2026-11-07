@@ -462,6 +462,7 @@ export class LakeSuperagent implements AgentHost {
     text(value, "message", 256000);
     await this.agents.prepareRedaction();
     const source = this.store.session(sessionId), project = this.store.get<SuperProject>("superProjects", source.projectId);
+    this.store.project(source.projectId);
     if(this.stoppingProjects.has(source.projectId))throw new HttpError(409,"当前项目正在停止活动任务，请稍后发送");
     if (!project) return this.agents.send(sessionId, value, { ignoreMemory, messageInput: selectedReferences });
     const channel = this.channelFor(sessionId), worker = this.workerFor(sessionId);
@@ -473,6 +474,7 @@ export class LakeSuperagent implements AgentHost {
     }
     const message = this.store.addMessage(sessionId, "user", this.agents.redact(value), {mentions: selectedReferences?.mentions});
     if (selectedReferences) this.store.put('messageInputs', message.id, {messageId: message.id, projectId: source.projectId, sessionId, ...selectedReferences});
+    if (selectedReferences?.resourceIds.length) this.store.put('sessionResourceReferences', sessionId, {resourceIds: selectedReferences.resourceIds, sourceMessageId: message.id});
     const event: InputEvent = { id: id(), projectId: source.projectId, sessionId, messageId: message.id, payload: this.agents.redact(value),
       preferredRoleId, explicitTaskId: explicitTaskId ?? (worker?.inline?undefined:worker?.taskId), disposition: "pending", receivedAt: message.createdAt, revision: 1, ignoreMemory, selectedReferences };
     this.store.put("superInputs", event.id, event); this.notify(sessionId, "message");
@@ -484,6 +486,39 @@ export class LakeSuperagent implements AgentHost {
     if (this.closed || this.scheduled) return;
     this.scheduled = true;
     queueMicrotask(() => { this.scheduled = false; void this.pump(); });
+  }
+  messageQueueBusy(sessionId: string) {
+    const session = this.store.session(sessionId), project = this.store.get<SuperProject>('superProjects', session.projectId);
+    if (!project) return this.agents.isRunning(sessionId);
+    const channel = this.channelFor(sessionId);
+    if (channel) return this.store.list<Worker>('superWorkers').some(worker => worker.projectId === session.projectId && worker.roleId === channel.roleId && ['active', 'queued'].includes(worker.state));
+    const worker = this.workerFor(sessionId);
+    if (worker) return ['active', 'queued'].includes(worker.state) || this.agents.isRunning(worker.sessionId);
+    return this.routing.has(session.projectId) || this.agents.isRunning(project.routerSessionId) ||
+      this.store.list<InputEvent>('superInputs').some(event => event.projectId === session.projectId && event.disposition === 'pending');
+  }
+  private planGoals(sessionId: string) {
+    const session = this.store.session(sessionId); this.store.project(session.projectId);
+    const channel = this.channelFor(sessionId), project = this.store.get<SuperProject>('superProjects', session.projectId);
+    return this.store.list<Goal>('superGoals').filter(goal => goal.projectId === session.projectId && goal.mode === 'plan' && !!goal.planHash &&
+      (goal.sessionId === sessionId || channel && goal.roleId === channel.roleId || project?.routerSessionId === sessionId));
+  }
+  private planView(goal: Goal) {
+    return {id: 'plan_' + digest([goal.id, goal.planRevision, goal.planHash]), at: goal.updatedAt,
+      content: this.agents.redact(['# ' + goal.title, ...goal.items.map((item, index) => `${index + 1}. ${item.title}${item.dependsOn.length ? '\n   依赖：' + item.dependsOn.join('、') : ''}`)].join('\n\n'))};
+  }
+  plans(sessionId: string) { return {plans: this.planGoals(sessionId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(goal => this.planView(goal))}; }
+  executePlan(sessionId: string, planId: unknown) {
+    this.security?.check();
+    const goal = this.planGoals(sessionId).find(goal => this.planView(goal).id === planId);
+    if (!goal) throw new HttpError(404, '计划不属于当前会话或版本已变化');
+    const worker = this.store.require<Worker>('superWorkers', goal.workerId);
+    const entry = [...this.interactions.values()].find(entry => entry.kind === 'plan' && entry.workerId === worker.id && entry.revision === goal.revision);
+    const pending = this.store.view(worker.sessionId).pending;
+    if (!entry || goal.confirmed || terminal(goal.status) || pending?.id !== entry.id || pending.fingerprint !== goal.planHash)
+      throw new HttpError(409, '原计划确认已失效；未创建替代任务或重放历史执行');
+    this.decision(worker.sessionId, {id: entry.id, accept: true}, sessionId);
+    return {pilotSessionId: sessionId};
   }
   private async pump() {
     if (this.closed) return;
@@ -1108,12 +1143,12 @@ export class LakeSuperagent implements AgentHost {
       view.status = "waiting_input"; this.store.put("views", worker.sessionId, view); this.changed(worker.sessionId);
     });
   }
-  decision(sessionId: string, input: any): boolean {
+  decision(sessionId: string, input: any, actionSessionId = sessionId): boolean {
     const entry = this.interactions.get(input.id);
     if (!entry) return false;
     const worker = this.validateWorker(entry.workerId, entry.generation);
     if (worker.sessionId !== sessionId || entry.kind !== "plan") throw new HttpError(409, "Plan approval belongs to another task");
-    const goal = this.ledger.confirm(worker.taskId, entry.revision, input.accept === true);
+    const goal = this.ledger.confirm(worker.taskId, entry.revision, input.accept === true, {sessionId: actionSessionId, interactionId: entry.id});
     if (goal.confirmed) entry.resolve(this.publicGoal(goal)); else {
       entry.reject(new HttpError(409, "用户未确认计划，未执行资源操作"));
       void this.stopTask(goal.id, true);

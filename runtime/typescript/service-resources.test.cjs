@@ -67,6 +67,38 @@ const secretFiles = async (home) =>
     name.startsWith("service-"),
   );
 
+test('legacy PostgreSQL and Redis configurations adopt exact private Dev references without copying secrets or overwriting later edits', async t => {
+  const f = await fixture(t), {DatabaseSync} = require('node:sqlite'), {importLegacyServices} = require('../../bin/lake-runtime/server.cjs');
+  await fs.mkdir(join(f.home, 'secrets'), {mode: 0o700});
+  const ref = 'legacy-db.json', secret = JSON.stringify({username: 'reader', password: 'synthetic-legacy-only'});
+  await fs.writeFile(join(f.home, 'secrets', ref), secret, {mode: 0o600});
+  const path = join(f.home, 'data/lake-web.sqlite'), db = new DatabaseSync(path);
+  db.exec('CREATE TABLE resources(id TEXT,projectId TEXT,kind TEXT); CREATE TABLE resourceConnections(resourceId TEXT,config TEXT);');
+  for (const [id, kind, settings] of [
+    ['pg-legacy', 'database', {driver: 'postgres', host: '127.0.0.1', port: 5432, username: 'reader', sslmode: 'disable', credentialRef: ref}],
+    ['redis-legacy', 'redis', {host: '127.0.0.1', port: 6379, tls: false, credentialRef: ref}],
+    ['pg-unsupported-tls', 'database', {driver: 'postgres', host: '127.0.0.1', username: 'reader', sslmode: 'require', credentialRef: ref}],
+  ]) {
+    db.prepare('INSERT INTO resources VALUES(?,?,?)').run(id, f.project.id, kind);
+    db.prepare('INSERT INTO resourceConnections VALUES(?,?)').run(id, JSON.stringify(settings));
+    f.app.store.put('resources', id, {id, projectId: f.project.id, kind, name: id, settings: {}, status: 'unavailable'});
+    f.app.store.put('legacyResources', id, {originalStatus: 'available'});
+  }
+  db.close(); await fs.chmod(path, 0o600); const before = await fs.readFile(path);
+  await importLegacyServices(f.app.store, f.app.services);
+  const pg = f.app.store.require('resources', 'pg-legacy'), redis = f.app.store.require('resources', 'redis-legacy');
+  assert.equal(pg.settings.credentialRef, ref); assert.equal(redis.settings.credentialRef, ref);
+  assert.equal(pg.settings.sslmode, 'disable'); assert.equal(pg.settings.tls, false);
+  assert.equal(pg.status, 'available'); assert.equal(redis.status, 'available');
+  assert.equal(f.app.store.require('resources', 'pg-unsupported-tls').status, 'unavailable');
+  assert.ok(f.app.store.get('legacyServiceConnectionErrors', 'pg-unsupported-tls'));
+  f.app.store.put('resources', pg.id, {...pg, settings: {...pg.settings, host: 'later-user-edit.test'}});
+  await importLegacyServices(f.app.store, f.app.services);
+  assert.equal(f.app.store.require('resources', pg.id).settings.host, 'later-user-edit.test');
+  assert.deepEqual(await fs.readFile(path), before); assert.equal(await fs.readFile(join(f.home, 'secrets', ref), 'utf8'), secret);
+  assert.deepEqual(await secretFiles(f.home), []); assert.ok(!JSON.stringify(f.app.store.list('resources')).includes('synthetic-legacy-only'));
+});
+
 test("all six service types save private configuration under the requested directory without network I/O", async (t) => {
   const f = await fixture(t);
   let requests = 0;

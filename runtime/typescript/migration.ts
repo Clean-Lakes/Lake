@@ -9,6 +9,8 @@ import type {LakeSSH} from './ssh';
 import type {LakeMySQL} from './mysql';
 import type {LakeSecurity} from './security';
 import type {McpBinding} from './extensions';
+import type {LakeServiceResources} from './service-resources';
+import {LakeWorkflowCatalog} from './workflow-catalog';
 
 const tables = ["projects", "resources", "resourceTree", "sessions", "messages", "workspaceTags", "sessionPresentation", "sessionTags", "sessionNavigation", "projectSessionNavigation", "navigationTrash", "aiScopes", "superagentRoleChannels", "superagentChannelReads", "superagentChannelTimeline"];
 const runtimeTables = ["superagent_projects", "superagent_roles", "superagent_role_channels", "superagent_workers", "native_work_goals", "native_operations", "security_project_policies", "security_legacy_session_policies"];
@@ -123,6 +125,50 @@ export async function importLegacyMySQL(store:LakeStore,mysql:LakeMySQL){
   if(await fingerprint(source)!==before)throw new HttpError(409,'旧连接配置正在变化，MySQL 增量导入未提交');
   store.transaction(()=>{for(const item of prepared){store.put('resources',item.resource.id,item.resource);store.put('resourceRevisions',item.resource.id,(store.get<number>('resourceRevisions',item.resource.id)??1)+1);store.put('legacyMySQLConnections',item.resource.id,{resourceId:item.resource.id,sourceHash:item.hash,importedAt:now(),source:'go-resourceConnections'});}});
  }finally{db.close();}
+}
+export async function importLegacyServices(store: LakeStore, services: LakeServiceResources) {
+  const source = join(store.data, 'lake-web.sqlite'), db = await openLegacy(source, store.home); if (!db) return;
+  try {
+    if (!exists(db, 'resourceConnections')) return;
+    const before = await fingerprint(source), prepared: {resource: Resource; sourceHash: string}[] = [];
+    for (const row of db.prepare("SELECT r.id,r.projectId,r.kind,c.config FROM resources r JOIN resourceConnections c ON c.resourceId=r.id WHERE r.kind IN ('database','redis')").all()) {
+      const resource = store.get<Resource>('resources', String(row.id)), legacy = store.get<any>('legacyResources', String(row.id));
+      if (!resource || !legacy || resource.projectId !== row.projectId || resource.kind !== row.kind || resource.settings?.host || store.get('legacyServiceConnections', resource.id)) continue;
+      try {
+        const input = JSON.parse(String(row.config)); if (resource.kind === 'database' && input.driver !== 'postgres') continue;
+        const settings = services.configuration(resource.kind, input);
+        prepared.push({resource: {...resource, settings, status: legacy.originalStatus === 'available' ? 'available' : 'unavailable'}, sourceHash: digest(String(row.config))});
+      } catch { store.put('legacyServiceConnectionErrors', resource.id, {resourceId: resource.id, reason: '原服务连接、TLS 或 Dev 凭据引用需核实'}); }
+    }
+    if (await fingerprint(source) !== before) throw new HttpError(409, '旧服务连接正在变化，本次迁移未提交');
+    store.transaction(() => { for (const entry of prepared) {
+      store.put('resources', entry.resource.id, entry.resource);
+      store.put('resourceRevisions', entry.resource.id, (store.get<number>('resourceRevisions', entry.resource.id) ?? 1) + 1);
+      store.put('legacyServiceConnections', entry.resource.id, {resourceId: entry.resource.id, sourceHash: entry.sourceHash, source: 'go-resourceConnections', importedAt: now()});
+      store.delete('legacyServiceConnectionErrors', entry.resource.id);
+    } });
+  } finally { db.close(); }
+}
+export async function importLegacyWorkflows(store: LakeStore, redact: (value: string) => string) {
+  const source = join(store.data, 'lake-web.sqlite'), db = await openLegacy(source, store.home); if (!db) return;
+  try {
+    if (!exists(db, 'workflows')) return;
+    const before = await fingerprint(source), catalog = new LakeWorkflowCatalog(store, redact), prepared: {value: any; sourceHash: string}[] = [];
+    for (const row of db.prepare('SELECT id,projectId,name,goal,steps,version,createdAt,updatedAt FROM workflows').all()) {
+      const key = String(row.id), projectId = String(row.projectId);
+      if (!store.get('projects', projectId) || store.get('workflowTemplates', key) || store.get('legacyWorkflowTemplates', key)) continue;
+      try {
+        if (!safeId(key) || !Number.isSafeInteger(Number(row.version)) || Number(row.version) < 1) throw new Error();
+        const value = catalog.validate(projectId, {name: row.name, goal: row.goal, steps: JSON.parse(String(row.steps))});
+        prepared.push({value: {id: key, projectId, ...value, version: Number(row.version), createdAt: String(row.createdAt), updatedAt: String(row.updatedAt)}, sourceHash: digest(row)});
+      } catch { store.put('legacyWorkflowErrors', key, {id: key, projectId, reason: '原工作流模板或资源需核实，未启动运行'}); }
+    }
+    if (await fingerprint(source) !== before) throw new HttpError(409, '原工作流模板正在变化，本次导入未提交');
+    store.transaction(() => { for (const entry of prepared) {
+      store.put('workflowTemplates', entry.value.id, entry.value);
+      store.put('legacyWorkflowTemplates', entry.value.id, {id: entry.value.id, sourceHash: entry.sourceHash, importedAt: now()});
+    } });
+  } finally { db.close(); }
 }
 function rows(db: DatabaseSync | undefined, table: string): Record<string, any>[] {
   if (!db || !exists(db, table)) return [];

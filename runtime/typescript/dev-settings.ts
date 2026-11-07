@@ -52,6 +52,17 @@ export async function importDevModelSettings(store: LakeStore) {
         contextWindow: Number.isSafeInteger(model.contextWindow) && model.contextWindow > 0 ? model.contextWindow : undefined,
         supportsImageInput: model.supportsImageInput === true,
         supportsImageOutput: model.supportsImageOutput === true,
+        supportsNativeWebSearch: model.supportsNativeWebSearch === true,
+        supportsVideoInput: model.supportsVideoInput === true,
+        supportsAudioInput: model.supportsAudioInput === true,
+        supportsPdfInput: model.supportsPdfInput === true,
+        ...( ['auto', 'on', 'off'].includes(model.imageInputMode) ? {imageInputMode: model.imageInputMode} : {}),
+        ...(typeof model.imageInputDetected === 'boolean' ? {imageInputDetected: model.imageInputDetected} : {}),
+        ...(model.reasoningCapability && Array.isArray(model.reasoningCapability.levels) && model.reasoningCapability.levels.length <= 16 &&
+          model.reasoningCapability.levels.every((value: unknown) => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,32}$/.test(value)) &&
+          (model.reasoningCapability.default === undefined || model.reasoningCapability.levels.includes(model.reasoningCapability.default)) ?
+          {reasoningCapability: {levels: [...model.reasoningCapability.levels], default: model.reasoningCapability.default,
+            source: typeof model.reasoningCapability.source === 'string' ? model.reasoningCapability.source.slice(0, 80) : undefined}} : {}),
       };
     });
     const provider: ModelProvider = {

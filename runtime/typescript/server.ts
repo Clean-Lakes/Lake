@@ -26,12 +26,15 @@ import { LakeAgents } from "./agent";
 import { LakeNavigation } from "./navigation";
 import { LakeResourceNavigation } from "./resource-navigation";
 import {messageInput} from './message-input';
+import {LakeMessageQueue} from './message-queue';
+import {LakeWorkflowCatalog} from './workflow-catalog';
+import {providerConnection, modelCatalogHeaders} from './provider-connection';
 import {LakeMySQL} from "./mysql";
 import {LakeExecution} from "./execution";
 import {agentCapabilityCatalog,nativeSearchSupported} from "./capabilities";
 import { importDevModelSettings } from "./dev-settings";
 import { LakeSuperagent } from "./superagent";
-import { applyLegacyMigration, importLegacySSH, importLegacyMySQL, importLegacyMCP, loadLegacyView } from "./migration";
+import { applyLegacyMigration, importLegacySSH, importLegacyMySQL, importLegacyMCP, importLegacyServices, importLegacyWorkflows, loadLegacyView } from "./migration";
 import { digest } from "./tasks";
 import { LakeSecurity } from "./security";
 import { LakeMemory } from "./memory";
@@ -41,7 +44,7 @@ import { LakeExtensions } from "./extensions";
 import {LakeSSH} from "./ssh";
 import { LakeTerminals } from "./terminal";
 import { commandPolicy } from "../../web-agent/shared/command-policy";
-export { previewLegacyMigration, rollbackMigration, importLegacyMySQL, importLegacyMCP } from "./migration";
+export { previewLegacyMigration, rollbackMigration, importLegacyMySQL, importLegacyMCP, importLegacyServices } from "./migration";
 export { LakeMemory } from "./memory";
 export {sessionArchiveName, legacySessionArchiveName} from "./session-archive";
 
@@ -163,6 +166,7 @@ export async function startLakeServer(options: ServerOptions) {
   let mysql:LakeMySQL|undefined;
   let services:LakeServiceResources|undefined;
   let execution:LakeExecution|undefined;
+  let messageQueue: LakeMessageQueue | undefined;
   let draining = false;
   let closed = false;
   const clients = new Map<string, Set<ServerResponse>>();
@@ -344,13 +348,10 @@ export async function startLakeServer(options: ServerOptions) {
           if (path[4] === "detect-capabilities")
             throw new HttpError(501, "此后端暂不支持自动探测模型能力");
           const existing = store.get<ModelProvider>("providers", path[3]);
-          const base = String(data.baseURL ?? existing?.baseURL ?? "").replace(
-            /\/(chat\/completions|responses|messages)\/?$/,
-            "",
-          );
+          const connection = providerConnection(String(data.protocol ?? existing?.protocol ?? 'openai'), String(data.baseURL ?? existing?.baseURL ?? ''));
           const key = data.apiKey ?? (await store.secret(path[3]));
-          const probe = await fetch(base.replace(/\/$/, "") + "/models", {
-            headers: key ? { Authorization: `Bearer ${key}` } : {},
+          const probe = await fetch(connection.modelsURL, {
+            headers: modelCatalogHeaders(connection.apiType, key), redirect: 'error',
             signal: AbortSignal.timeout(15000),
           });
           if (!probe.ok) throw new HttpError(502, `模型服务返回 HTTP ${probe.status}`);
@@ -374,6 +375,7 @@ export async function startLakeServer(options: ServerOptions) {
           const endpoint = new URL(provider.baseURL);
           if (!["http:", "https:"].includes(endpoint.protocol))
             throw new HttpError(400, "模型地址需要 HTTP 或 HTTPS");
+          providerConnection(provider.protocol, provider.baseURL);
           if (data.apiKey !== undefined)
             provider.keyConfigured = !!(await store.secret(providerId, data.apiKey));
           store.put("providers", providerId, provider);
@@ -410,6 +412,7 @@ export async function startLakeServer(options: ServerOptions) {
           const providerId = "custom";
           const name = String(data.name ?? "");
           if (!name.trim()) throw new HttpError(400, "模型名称不能为空");
+          providerConnection(String(data.protocol ?? 'openai'), String(data.url ?? ''));
           const provider: ModelProvider = {
             id: providerId,
             name: "自定义模型",
@@ -492,7 +495,10 @@ export async function startLakeServer(options: ServerOptions) {
         }
       } else if (path[1] === "projects" && path[3] === "superagent") {
         store.project(path[2]);
-        if(path.length===5&&path[4]==="stop"&&method==="POST")result=await superagent.stopWorkspace(path[2],String(data.routerSessionId??""));
+        if(path.length===5&&path[4]==="stop"&&method==="POST"){
+          if (superagent.workspace(path[2]).project.routerSessionId !== data.routerSessionId) throw new HttpError(409, 'Pilot 工作区身份已变化');
+          messageQueue!.pauseProject(path[2]);result=await superagent.stopWorkspace(path[2],String(data.routerSessionId??""));
+        }
         else if (path.length === 6 && path[4] === "specialists" && method === "DELETE")
           result = await superagent.deleteRole(path[2], path[5], data.revision);
         else if (path.length !== 4) throw new HttpError(404, "Super-agent 接口不存在");
@@ -503,7 +509,15 @@ export async function startLakeServer(options: ServerOptions) {
         store.project(path[2]);
         result = { enabled: false, autoAdvance: false, revision: 0 };
         if (method !== "GET") throw new HttpError(501, "Pilot 与长期专员调度尚未迁移完成");
-      } else if (path[1] === "projects" && ["workflows", "schedules"].includes(path[3])) {
+      } else if (path[1] === "projects" && path[3] === 'workflows') {
+        store.project(path[2]); await agents.prepareRedaction(); const workflows = new LakeWorkflowCatalog(store, value => agents!.redact(value));
+        if (path.length === 4 && method === 'GET') result = workflows.list(path[2]);
+        else if (path.length === 4 && method === 'POST') result = workflows.save(path[2], data);
+        else if (path.length === 5 && method === 'PUT') result = workflows.save(path[2], data, path[4]);
+        else if (path.length === 5 && method === 'DELETE') result = workflows.remove(path[2], path[4], data.version);
+        else if (path.length === 6 && path[5] === 'run' && method === 'POST') throw new HttpError(501, '工作流只读执行和冻结权限绑定尚未接入，模板已保留，未启动运行');
+        else throw new HttpError(405, '不支持此工作流请求');
+      } else if (path[1] === "projects" && path[3] === 'schedules') {
         store.project(path[2]);
         if (method !== "GET") throw new HttpError(501, "工作流与日程尚未迁移完成");
         result = { items: [], templates: [], runs: [] };
@@ -573,7 +587,7 @@ export async function startLakeServer(options: ServerOptions) {
           else if (path.length === 5 && path[4] === "read" && method === "PUT") result = superagent.readCompletion(sessionId, data.cursor);
           else if (path.length !== 4) throw new HttpError(404, "频道接口不存在");
           else if (method === "GET") { await agents.prepareRedaction(); result = await superagent.channelPage(sessionId, url.searchParams.get("cursor") ?? ""); }
-          else if (method === "POST" && data.action === "stop") result = await superagent.stopChannel(sessionId);
+          else if (method === "POST" && data.action === "stop") {messageQueue!.pause(sessionId);result = await superagent.stopChannel(sessionId);}
           else throw new HttpError(405, "不支持此请求方法");
         } else if (path.length === 4 && path[3] === "presentation") {
           if (method !== "PUT") throw new HttpError(405, "不支持此请求方法");
@@ -612,17 +626,30 @@ export async function startLakeServer(options: ServerOptions) {
           if (data.terminalReuse) throw new HttpError(501, '终端交接尚未接入，未发送此消息');
           await agents.prepareRedaction();
           const input = messageInput(store, sessionId, agents.redact(String(data.text ?? '')), data);
-          result = await superagent.send(sessionId, String(data.text ?? ""), data.taskId, data.ignoreProjectMemory === true, input);
+          if (data.enqueue === true || messageQueue!.get(sessionId).items.length) result = messageQueue!.enqueue(sessionId, agents.redact(String(data.text ?? '')), {...data, ...input});
+          else result = await superagent.send(sessionId, String(data.text ?? ""), data.taskId, data.ignoreProjectMemory === true, input);
           status = 202;
         } else if (path[3] === "message-queue") {
-          if (method !== "GET") throw new HttpError(501, "消息队列尚未接入");
-          result = { paused: false, revision: 0, lastError: "", items: [] };
+          if (path.length !== 4) throw new HttpError(404, '消息队列接口不存在');
+          if (method === 'GET') result = messageQueue!.get(sessionId);
+          else if (method === 'POST') result = messageQueue!.mutate(sessionId, data);
+          else throw new HttpError(405, '不支持此消息队列请求');
         } else if (path[3] === "ai") {
           if (path.length > 5) throw new HttpError(404, "会话接口不存在");
-          const reads = [undefined, "snapshot", "options", "references"];
+          const reads = [undefined, "snapshot", "options", "references", "plans"];
           if (method !== (reads.includes(path[4]) || path[4] === "reasoning" && method === "GET" ? "GET" : "POST"))
             throw new HttpError(405, "不支持此会话请求方法");
           switch (path[4]) {
+            case 'plans': result = superagent.plans(sessionId); break;
+            case 'extractPreset': result = await agents.extractPreset(sessionId); break;
+            case 'executePlan': result = superagent.executePlan(sessionId, data.planId); break;
+            case 'mode': {
+              if (!['default', 'plan'].includes(data.mode)) throw new HttpError(400, '会话模式无效');
+              if (session.workspaceRole === 'worker') throw new HttpError(409, '当前任务的计划模式已冻结，请在 Pilot 或专员频道设置后续任务模式');
+              if (superagent.messageQueueBusy(sessionId) || messageQueue!.get(sessionId).items.length) throw new HttpError(409, '请先结束本轮并处理待发送消息，再切换模式');
+              session.options = {...session.options, conversationMode: data.mode}; store.put('sessions', sessionId, session);
+              const event = store.event(sessionId, 'session', {conversationMode: data.mode}); broadcast(event); result = {mode: data.mode, cursor: event.seq}; break;
+            }
             case undefined:
             case "snapshot":
               result = agents.executionView(sessionId, store.viewPage(sessionId, url.searchParams.has("before") ? Number(url.searchParams.get("before")) : undefined));
@@ -638,6 +665,7 @@ export async function startLakeServer(options: ServerOptions) {
               result = { ...session.options, agentRuntime: "typescript" };
               break;
             case "abort":
+              messageQueue!.pause(sessionId);
               await agents.abort(sessionId);
               result = {};
               break;
@@ -654,8 +682,12 @@ export async function startLakeServer(options: ServerOptions) {
               result = await superagent.control(sessionId, data);
               break;
             case "references":
-              result = [];
+              result = (store.get<{resourceIds: string[]}>('sessionResourceReferences', sessionId)?.resourceIds ?? [])
+                .filter(id => store!.catalog().resources.some(resource => resource.id === id && resource.projectId === session.projectId));
               break;
+            case 'clearReferences':
+              if (superagent.messageQueueBusy(sessionId)) throw new HttpError(409, '请先结束当前回复再清除资源访问记忆');
+              store.delete('sessionResourceReferences', sessionId); result = {}; break;
             case "reasoning":
               if (method !== "GET") throw new HttpError(501, "当前模型推理等级设置尚未接入");
               result = {
@@ -674,6 +706,7 @@ export async function startLakeServer(options: ServerOptions) {
           result = session;
         } else if (method === "DELETE" && path.length === 3) {
           if (["router", "role", "worker"].includes(session.workspaceRole ?? "")) throw new HttpError(409, "受管理会话保留任务与频道身份；请使用停止任务或删除专员");
+          await messageQueue!.archiveSession(sessionId);
           await agents.abort(sessionId);
           store.delete("sessions", sessionId);
           result = {};
@@ -731,6 +764,7 @@ export async function startLakeServer(options: ServerOptions) {
     if (closed) return;
     closed = true;
     draining = true;
+    await messageQueue?.close();
     await superagent?.close();
     await memory?.close();
     await agents?.close();
@@ -762,6 +796,8 @@ export async function startLakeServer(options: ServerOptions) {
       await applyLegacyMigration(store, (value) => agents!.redact(value));
       await importLegacySSH(store,ssh);
       await importLegacyMySQL(store,mysql);
+      await importLegacyServices(store, services);
+      await importLegacyWorkflows(store, value => agents!.redact(value));
       // A closed recovery gate preserves read-only startup and all old records.
       if (!security.readOnly()) {
         try { await importLegacyMCP(store, security); store.delete("settings", "legacyMcpMigrationError"); }
@@ -774,6 +810,9 @@ export async function startLakeServer(options: ServerOptions) {
     memory = new LakeMemory(store, () => security!.check(), value => agents!.redact(ssh!.scrub(extensions!.scrub(value))));
     try { await memory.initialize(); } catch { memory.disable("记忆文件需要核实，当前暂停记忆功能；原记录保留，普通新任务仍可运行"); }
     agents.memory = memory;
+    messageQueue = new LakeMessageQueue(store, () => security!.check(), session => superagent!.messageQueueBusy(session),
+      async (session, item) => { const input = messageInput(store!, session, item.text, item); return superagent!.send(session, item.text, item.taskId, item.ignoreProjectMemory === true, input); },
+      session => broadcast(store!.event(session, 'session')), value => agents!.redact(value));
     try{memory.searchIndex=await openClaudeMemIndex(store,()=>security!.check());}catch{memory.searchIndexError='本地检索索引未就绪，仍可使用有效的 Lake 记忆。';}
     memory.runNative = work => agents!.runMemory(work);
     memory.isForegroundBusy = () => agents!.foregroundBusy();

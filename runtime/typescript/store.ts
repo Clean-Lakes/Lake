@@ -302,9 +302,9 @@ export class LakeStore {
       actions: [],
       terminals: (catalog.terminals ?? []).filter((terminal) => terminal.sessionId === sessionId),
       cursor: this.cursor(sessionId),
+      messageQueue: this.get('messageQueues', sessionId) ?? {paused: false, revision: 0, lastError: '', items: []},
       ai: this.view(sessionId),
       conversationMode: options.conversationMode === "plan" ? "plan" : "default",
-      messageQueue: { paused: false, revision: 0, lastError: "", items: [] },
     };
   }
   async secret(providerId: string, value?: string | null) {
