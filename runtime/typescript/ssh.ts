@@ -1,3 +1,4 @@
+import {networkProbe, networkProbeProgram, networkProbeShell} from "./network-probe";
 import {directoryProcessSample} from "./process-sampling";
 import {Client, utils, type ClientChannel} from 'ssh2';
 import {EventEmitter} from 'node:events';
@@ -173,22 +174,26 @@ export class LakeSSH {
   return {get error(){return lastError;},write:data=>{if(!channel||ended)throw new HttpError(409,'SSH 终端尚未就绪');channel.write(data);},resize:(cols,rows)=>channel?.setWindow(rows,cols,0,0),
    kill:()=>{controller.abort();channel?.close();conn?.destroy();finish(1);},onData:callback=>events.on('data',callback),onExit:callback=>events.once('exit',callback)};
  }
- async inspect(session:string,resource:Resource,metric:string,signal:AbortSignal,guard:()=>void,processDirectory?:unknown) {
-  if(!Object.hasOwn(profiles,metric))throw new HttpError(400,'不支持的主机读取指标');
+ async inspect(session:string,resource:Resource,metric:string,signal:AbortSignal,guard:()=>void,processDirectory?:unknown,networkInput?:unknown) {
+  const network=networkProbe(metric,networkInput);
+  if(networkInput!==undefined && !network) throw new HttpError(400,"网络参数只适用于网络诊断");
+  if(!network && !Object.hasOwn(profiles,metric))throw new HttpError(400,'不支持的主机读取指标');
   if(processDirectory!==undefined && metric!=='processes') throw new HttpError(400,'进程目录只适用于 processes');
   const scoped=processDirectory===undefined ? undefined : directoryProcessSample(processDirectory);
   const profile=metric as keyof typeof profiles,revision=this.revision(resource),conn=await this.connect(session,resource,signal);
   try{return await new Promise((resolve,reject)=>{
-   let channel:ClientChannel|undefined,output=Buffer.alloc(0),done=false;const timer=setTimeout(()=>finish(new HttpError(504,'SSH 只读检查超时')),20000);
+   let channel:ClientChannel|undefined,output=Buffer.alloc(0),done=false;const timer=setTimeout(()=>finish(new HttpError(504,'SSH 只读检查超时')),network?27000:20000);
    const finish=(error?:unknown,result?:unknown)=>{if(done)return;done=true;clearTimeout(timer);signal.removeEventListener('abort',abort);channel?.close();error?reject(error):resolve(result);};
    const abort=()=>finish(new HttpError(409,'SSH 只读检查已取消'));signal.addEventListener('abort',abort,{once:true});
    try{guard();if(signal.aborted||this.revision(this.store.require<Resource>('resources',resource.id))!==revision)throw new HttpError(409,'SSH 连接配置或任务资格已变化');}
    catch(error){finish(error);return;}
-   const command='/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C /bin/sh -c '+quote(scoped?.script ?? profiles[profile])+(scoped?' lake-process-sample '+quote(scoped.directory):'');
+   const shell='/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C /bin/sh -c ';
+   const command=network ? shell+quote(networkProbeShell)+' lake-network-probe '+quote(networkProbeProgram)+' '+quote(JSON.stringify(network))
+     : shell+quote(scoped?.script ?? profiles[profile])+(scoped?' lake-process-sample '+quote(scoped.directory):'');
    conn.exec(command,(error,stream)=>{if(error){finish(new HttpError(502,'SSH 只读命令未启动'));return;}channel=stream;let code:number|undefined;
     const collect=(data:Buffer)=>{if(output.length+data.length>131072){finish(new HttpError(502,'SSH 只读结果超过上限'));return;}output=Buffer.concat([output,data]);};
     stream.on('data',collect);stream.stderr.on('data',collect);stream.on('exit',(value:number)=>{code=value;});
-    stream.once('close',()=>code===0?finish(undefined,{command,resourceId:resource.id,metric:profile,profileId:scoped?'lake.host.directory-processes':'lake.host.'+profile,profileVersion:1,configurationRevision:revision,hostFingerprint:this.peerKeys.get(conn),exitCode:code,output:this.scrub(output.toString('utf8')),observedAt:new Date().toISOString()}):finish(new HttpError(502,'SSH 只读检查未取得成功退出回执')));
+    stream.once('close',()=>code===0?finish(undefined,{command:network?'inspect_host '+JSON.stringify(network):command,resourceId:resource.id,metric,profileId:scoped?'lake.host.directory-processes':'lake.host.'+profile,profileVersion:1,configurationRevision:revision,hostFingerprint:this.peerKeys.get(conn),exitCode:code,output:this.scrub(output.toString('utf8')),observedAt:new Date().toISOString()}):finish(new HttpError(502,'SSH 只读检查未取得成功退出回执')));
     stream.once('error',()=>finish(new HttpError(502,'SSH 只读检查连接中断')));
    });conn.once('close',()=>finish(new HttpError(502,'SSH 连接中断，读取结果未确认')));
   });}finally{conn.end();}

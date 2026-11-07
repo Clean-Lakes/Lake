@@ -1,3 +1,4 @@
+import {authorizeNetworkProbe, networkProbe} from "./network-probe";
 import { boundResourceRevision, issueResourcePin } from "./resource-pin";
 import {conversationReadState} from "./conversation-reads";
 import {permissionDefaults} from '../../web-agent/shared/execution-preferences';
@@ -1347,7 +1348,24 @@ export class LakeSuperagent implements AgentHost {
   }
   private hostEntries(worker:Worker):ToolEntry[]{
     if(!this.ssh)return [];
-    const entry=this.entry("inspect_host","Read current SSH host metrics using one fixed readonly system, disks or processes profile. Copy asset_ref and use the short configuration_pin for configuration_revision from list_assets. For short-lived Linux processes under a known directory use metric=processes with process_directory: returns two time-stamped ps CPU readings 2 seconds apart, PID, start ticks and matched script path.",objectSchema({asset_ref:str,configuration_revision:str,metric:{type:"string",enum:["system","disks","processes"]},process_directory:str},["asset_ref","configuration_revision","metric"]),async(a,context)=>this.ssh!.inspect(worker.sessionId,this.store.require("resources",a.asset_ref),a.metric,context.abortSignal,()=>{this.validateWorker(worker.id,worker.generation);this.security?.host(worker.projectId,a.asset_ref);},a.process_directory),false,131072);
+    const networkSchema = objectSchema({hostname:str, ipv4:str, port:integer, path:str, negative_hostname:str}, ["hostname"]);
+    const entry=this.entry("inspect_host",
+      "Read a fixed profile on the selected SSH host. Copy asset_ref and use the short configuration_pin from list_assets as configuration_revision. For time-sensitive Linux processes use metric=processes with process_directory for two PID/CPU readings 2 seconds apart. For DNS use metric=dns_a and network_probe.hostname. For authorized public HTTPS use metric=https with network_probe {hostname, ipv4, port, path, negative_hostname?}; provide the exact target given in the user request. Returns route, DNS A, TCP source, certificate validation, status and body digest. A .invalid control tests TLS name rejection then repeats the verified request. Check each observation for errors.",
+      objectSchema({asset_ref:str,configuration_revision:str,metric:{type:"string",enum:["system","disks","processes","dns_a","https"]},process_directory:str,network_probe:networkSchema},["asset_ref","configuration_revision","metric"]),async(a,context)=>{
+        const probe=networkProbe(a.metric,a.network_probe);
+        if(probe) {
+          const userInput=worker.inputEventIds.map(id=>this.store.require<InputEvent>("superInputs",id))
+            .filter(e=>e.projectId===worker.projectId).map(e=>e.payload);
+          authorizeNetworkProbe(probe,userInput);
+        }
+        return this.ssh!.inspect(worker.sessionId,this.store.require("resources",a.asset_ref),a.metric,context.abortSignal,()=>{
+          this.validateWorker(worker.id,worker.generation);
+          this.security?.host(worker.projectId,a.asset_ref);
+          const current=this.store.require<import("../../web-agent/shared/contracts").Resource>("resources",a.asset_ref);
+          if(!boundResourceRevision(this.store,current,a.configuration_revision,this.ssh!.revision(current)))
+            throw new HttpError(409,"SSH 配置或凭据版本已变化，请重新读取资源目录");
+        },a.process_directory,a.network_probe);
+      },false,131072);
     entry.resolvePermissionCapability=(input:any)=>{this.requireTarget(worker,input.asset_ref);const project=this.store.require<SuperProject>("superProjects",worker.projectId),options=this.store.session(project.routerSessionId).options,policy=this.security?.host(worker.projectId,input.asset_ref);const approval=(options.silentCommands??permissionDefaults.silentCommands)!==true||policy==='ask';return {needsApproval:approval,permission:{needsApproval:approval,sideEffectScope:"workspace"}};};
     return [entry];
   }
