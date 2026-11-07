@@ -6,6 +6,7 @@ import {permissionDefaults} from '../../web-agent/shared/execution-preferences';
 import {specialistReplies} from '../../web-agent/shared/specialist-replies';
 import {TaskContext,projectTaskContext,type TaskContextActor} from './task-context';
 import { readdir, realpath } from "node:fs/promises";
+import { overlapsPrivateStorage } from "./local-shell-profile";
 import { setTimeout as delay } from "node:timers/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import type { ToolEntry, ToolExecutionContext } from "./sdk";
@@ -1259,7 +1260,8 @@ export class LakeSuperagent implements AgentHost {
     if(!this.execution)throw new HttpError(409,'Shell 执行器未连接');
     if(input.asset_ref) this.requireTarget(worker,input.asset_ref);
     const requested = input.asset_ref ? worker.inputEventIds.map(id => this.store.require<InputEvent>("superInputs", id))
-      .filter(event => event.projectId === worker.projectId && this.eventReferences(event, input.asset_ref!)).map(event => event.payload) : [];
+      .filter(event => event.projectId === worker.projectId && event.selectedReferences?.resourceIds.length === 1 &&
+        this.eventReferences(event, input.asset_ref!)).map(event => event.payload) : [];
     const plan=this.execution.plan(worker.projectId,input,requested),project=this.store.require<SuperProject>('superProjects',worker.projectId),options=this.store.session(project.routerSessionId).options;
     this.requireTarget(worker,plan.resource.id);
     if(plan.resource.kind==='local'&&options.denyLocalExecution===true)throw new HttpError(403,'当前 Pilot 权限禁止本机执行');
@@ -1348,6 +1350,8 @@ export class LakeSuperagent implements AgentHost {
       actual = join(await this.scopedPath(workspace, dirname(candidate)), basename(candidate));
     }
     if (actual !== workspace && !actual.startsWith(workspace + sep)) throw new HttpError(403, "File is outside the assigned project workspace");
+    if (overlapsPrivateStorage(this.store.home,this.store.data,workspace,actual))
+      throw new HttpError(403,"工作区读取范围与 Lake 私有数据重叠");
     return actual;
   }
   private hostEntries(worker:Worker):ToolEntry[]{

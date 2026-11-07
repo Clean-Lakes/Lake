@@ -1,7 +1,7 @@
 import { boundResourceRevision } from "./resource-pin";
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { localShellProfile } from "./local-shell-profile";
+import { resolve } from "node:path";
 import type {
   ExecutionPort,
   ExecutionRequest,
@@ -631,10 +631,8 @@ export class LakeExecution {
   ): Promise<ExecutionRequest> {
     if (process.platform !== "darwin" || !existsSync("/usr/bin/sandbox-exec"))
       throw new HttpError(501, "此平台尚未配置本机 Shell 的凭据隔离执行器");
-    const workspace = await this.store.workspace(plan.resource.projectId),
-      output = join(this.store.data, "tool-output", actor.sessionId);
-    const literal = (value: string) => JSON.stringify(resolve(value));
-    const profile = `(version 1)(allow default)(deny file-read* file-write* (require-all (subpath ${literal(this.store.home)}) (require-not (subpath ${literal(workspace)})) (require-not (subpath ${literal(output)}))))(deny file-read* file-write* (subpath ${literal(join(homedir(), ".lake"))}) (subpath ${literal(join(homedir(), ".ssh"))}) (subpath ${literal(join(homedir(), "Library/Keychains"))}) (subpath "/Library/Keychains"))(deny process-exec (literal "/usr/bin/security"))`;
+    const workspace = await this.store.workspace(plan.resource.projectId);
+    const profile = localShellProfile(this.store.home, this.store.data, workspace, plan.resource.projectId, actor.sessionId);
     const command = `/usr/bin/sandbox-exec -p ${quote(profile)} /bin/bash --noprofile --norc -c ${quote(plan.command)}`;
     return {
       ...request,

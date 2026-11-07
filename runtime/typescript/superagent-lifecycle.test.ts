@@ -672,10 +672,17 @@ test("one human quote can dispatch disjoint selected resources and execution can
     assert.deepEqual(result.assets.map((asset:any)=>asset.asset_ref),[resource]);
   }
   const worker=f.worker(jd.taskId),profile=f.host.profile(worker.sessionId)!;
-  f.internal.execution={plan:(_p:string,i:{asset_ref?:string})=>({resource:{id:i.asset_ref??"local",kind:i.asset_ref?"ssh":"local"},readOnly:true})};
+  let scopedRequests: string[] | undefined;
+  f.internal.execution={plan:(_p:string,i:{asset_ref?:string},requests:string[])=>{
+    scopedRequests=requests;return {resource:{id:i.asset_ref??"local",kind:i.asset_ref?"ssh":"local"},readOnly:true};
+  }};
   assert.throws(()=>f.internal.shellPlan(worker,{command:"hostname"}),/分工/);
   assert.throws(()=>f.internal.shellPlan(worker,{command:"hostname",asset_ref:"uk"}),/分工/);
   assert.equal(f.internal.shellPlan(worker,{command:"hostname",asset_ref:"jd"}).plan.resource.id,"jd");
+  assert.deepEqual(scopedRequests,[], "a multi-resource quote cannot attest a path on either host");
+  const single=await f.admit("检查 /tmp/example 的目录", {resourceIds:["jd"],mentions:[],references:[]});
+  f.internal.shellPlan({...worker,inputEventIds:[event.id,single.id]},{command:"hostname",asset_ref:"jd"});
+  assert.deepEqual(scopedRequests,[single.payload]);
   f.internal.ssh={};
   const inspect=f.internal.hostEntries(worker)[0];
   assert.throws(()=>inspect.resolvePermissionCapability({asset_ref:"uk"}),/分工/);
