@@ -8,8 +8,10 @@ test('the brand names the Pilot destination and exposes the current page without
  const html=renderToStaticMarkup(createElement(SidebarPilotEntry,{selected:true,onPilot(){}}));
  assert.match(html,/aria-label="Lake · Pilot 主对话"/);
  assert.match(html,/aria-current="page"/);
- assert.match(html,/brand\/lake-app-icon\.png/);
- assert.match(html,/>Lake<\/strong>/);
+ assert.doesNotMatch(html,/brand\/lake-app-icon\.png/);
+ const visible=html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+ assert.match(visible,/^Lake\s*(?:\/\s*)?Pilot(?:\s+Dev)?$/);
+ assert.match(html,/title="Lake · Pilot 主对话 · 持续沟通，自动安排工作"/);
  assert.equal((html.match(/<button/g)??[]).length,1);
  assert.doesNotMatch(html,/pilot-workspace-entry|super-role-avatar/);
  assert.doesNotMatch(renderToStaticMarkup(createElement(SidebarPilotEntry,{selected:false,disabled:true,onPilot(){}})),/aria-current=/);

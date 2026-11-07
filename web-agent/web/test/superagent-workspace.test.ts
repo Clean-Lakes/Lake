@@ -13,7 +13,7 @@ test('Pilot and real specialist instances replace session creation',()=>{
  assert.match(html,/订单专员/);assert.match(html,/排查订单超时/);assert.match(html,/待核实/);
  assert.doesNotMatch(html,/新会话|新对话|已验收|项目执行范围|设置执行范围/);
  assert.match(html,/aria-current="page"/);
- assert.match(html,/brand\/lake-app-icon\.png/);
+ assert.doesNotMatch(html,/brand\/lake-app-icon\.png/);
  assert.equal((html.match(/class="sidebar-pilot-entry/g)??[]).length,1);
  assert.doesNotMatch(html,/pilot-workspace-entry/);
 });
