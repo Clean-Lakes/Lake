@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 jobs:
-  workbench:
+  macos_runtime:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.head.ref == 'develop' &&
@@ -39,11 +39,45 @@ jobs:
       - run: python3 -m unittest discover -s scripts -p 'test_branch_policy.py'
       - run: python3 -m unittest discover -s scripts -p 'test_dev_*py'
       - run: python3 -m unittest discover -s scripts -p 'test_memory_compatibility_tools.py'
-      # The full Web package reached its 20-minute suite deadline while still
-      # progressing; the then-current durable-store test had run for one second.
-      # Keep full coverage and race instrumentation, with a bounded suite budget.
-      - run: go test -race -timeout=30m ./... && go vet ./...
       - run: swift run --package-path client/macos --build-system native LakeUpdateTests
       - run: swift run --package-path client/macos --build-system native LakeWindowTests
       - run: swift build --package-path client/macos --build-system native --product LakeDesktop
       - run: python3 scripts/test_lake_macos_installer.py
+  legacy_go:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.ref == 'develop' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+      - run: pnpm --dir web-agent install --frozen-lockfile
+      - run: pnpm --dir web-agent build:web
+      - run: mkdir -p assets/web/dist && cp -R web-agent/web/dist/. assets/web/dist/
+      # Retain the full legacy Go race/vet checks. The macOS distribution now
+      # ships TypeScript; disk-heavy legacy fixtures run on the Linux runner.
+      - run: go test -race -timeout=30m ./... && go vet ./...
+  workbench:
+    needs: [macos_runtime, legacy_go]
+    if: >-
+      always() &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.pull_request.head.ref == 'develop' &&
+        github.event.pull_request.head.repo.full_name == github.repository))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require macOS runtime and legacy Go compatibility
+        env:
+          MACOS_RESULT: ${{ needs.macos_runtime.result }}
+          LEGACY_GO_RESULT: ${{ needs.legacy_go.result }}
+        run: test "$MACOS_RESULT" = success && test "$LEGACY_GO_RESULT" = success
