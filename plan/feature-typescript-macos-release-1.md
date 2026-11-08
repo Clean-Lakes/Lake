@@ -43,7 +43,7 @@ The user explicitly requested merging all PRs into develop, a macOS-only product
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-005 | Add pure profile, isolated production migration and native distribution tests; run source/server/frontend suites, signing/package/installer checks and an isolated real packaged backend smoke test. | Yes | 2026-11-08 |
-| TASK-006 | Prepare VERSION 0.3.28, truthful macOS release notes and validation/rollback documentation; preserve parity diagnostic status and merge the preparation PR into develop. Depends on TASK-005. | No | 2026-11-08 |
+| TASK-006 | Prepare VERSION 0.3.28, truthful macOS release notes and validation/rollback documentation; preserve parity diagnostic status and merge the preparation PR into develop. Depends on TASK-005. | Yes | 2026-11-08 |
 | TASK-007 | Create develop-to-master release PR, satisfy its checks/review requirements, merge with a merge commit, and verify final source. Depends on TASK-006. | No | 2026-11-08 |
 | TASK-008 | Build from clean master, verify ZIP/DMG/signatures/checksums and publish v0.3.28 with only four macOS assets. Verify downloaded assets and release target. Depends on TASK-007. | No | 2026-11-08 |
 
@@ -75,7 +75,7 @@ The user explicitly requested merging all PRs into develop, a macOS-only product
 
 - **RISK-001**: Current TypeScript does not implement every legacy API. Release notes must identify these limits; publishing does not mark parity verified.
 - **RISK-002**: Large legacy history can exceed the native startup deadline. Preparation must be bounded and rollback must preserve original databases and unresolved operations.
-- **ASSUMPTION-001**: This release targets Apple Silicon macOS 13+ using the existing persistent signing certificate; Windows is not published.
+- **ASSUMPTION-001**: This release targets Apple Silicon macOS 13.5+ using the existing persistent signing certificate; Windows is not published.
 
 ## 8. Related Specifications / Further Reading
 

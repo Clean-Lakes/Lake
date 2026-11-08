@@ -14,7 +14,7 @@ Lake v0.3.28 · macOS Apple Silicon
 
 ## 下载、升级与回退
 
-仅提供 macOS Apple Silicon（M 系列）arm64 ZIP、DMG 和各自 SHA-256，要求 macOS 13+；不发布 Windows 包。沿用 Lake Local Development Code Signing 持久证书，尚未使用 Apple Developer ID 公证。
+仅提供 macOS Apple Silicon（M 系列）arm64 ZIP、DMG 和各自 SHA-256，要求 macOS 13.5+；不发布 Windows 包。沿用 Lake Local Development Code Signing 持久证书，尚未使用 Apple Developer ID 公证。
 
 升级前结束当前操作并备份自己的 Lake Home。自动更新先退出旧后端，在准确生产 Home/data 以不启动任务的模式准备独立 TS 数据库，最多等待 120 秒；准备失败或新 UI 在 45 秒内未就绪时恢复旧应用。原数据库不改写，未知操作不重放。
 

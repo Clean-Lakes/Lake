@@ -2,7 +2,7 @@
 
 点击窗口关闭按钮只隐藏工作台，保留同一个 WebView、会话、终端连接和后台任务。点击 Dock 图标、再次打开应用，或选择 Lake 菜单中的“显示工作台”恢复窗口；“退出 Lake”或 ⌘Q 才执行正常退出和后台清理。此行为不改变系统休眠规则。
 
-当前 TypeScript/React 工作台的 AppKit + WKWebView 客户端，macOS 13+，仅 Apple Silicon（M 系列）arm64，运行不需要 Node、pnpm 或 Electron。应用启动内置签名 TS SEA，按包身份传入 `--dev` 或 `--production`，使用系统分配的 loopback 端口。只复用相同 runtime、准确 Home/data 的健康服务。当前 TS 正式水位由用户明确选择，完整旧版等价验收仍未完成，见 [发布说明](RELEASE_NOTES.md)。
+当前 TypeScript/React 工作台的 AppKit + WKWebView 客户端，macOS 13.5+，仅 Apple Silicon（M 系列）arm64，运行不需要 Node、pnpm 或 Electron。应用启动内置签名 TS SEA，按包身份传入 `--dev` 或 `--production`，使用系统分配的 loopback 端口。只复用相同 runtime、准确 Home/data 的健康服务。当前 TS 正式水位由用户明确选择，完整旧版等价验收仍未完成，见 [发布说明](RELEASE_NOTES.md)。
 
 ```sh
 pnpm --dir web-agent install --frozen-lockfile

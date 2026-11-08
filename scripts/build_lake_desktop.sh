@@ -39,6 +39,7 @@ security find-identity -v -p codesigning | grep -Fq "\"$lake_identity\"" || {
 }
 lake_version=$(cat VERSION)
 lake_arch=arm64
+lake_minimum_macos=13.5
 [ "${LAKE_DESKTOP_ARCH:-arm64}" = arm64 ] || { echo '当前仅发布 Apple Silicon（M 系列）arm64 包' >&2; exit 2; }
 export GOARCH=arm64
 export GOOS=darwin CGO_ENABLED=1
@@ -48,8 +49,8 @@ if [ "$typescript_candidate" -eq 1 ]; then
 else
   scripts/build_lake.sh --typescript
 fi
-swift build --package-path client/macos --build-system native -c release --triple "$lake_arch-apple-macosx13.0"
-lake_swift_bin=$(swift build --package-path client/macos --build-system native -c release --triple "$lake_arch-apple-macosx13.0" --show-bin-path)
+swift build --package-path client/macos --build-system native -c release --triple "$lake_arch-apple-macosx$lake_minimum_macos"
+lake_swift_bin=$(swift build --package-path client/macos --build-system native -c release --triple "$lake_arch-apple-macosx$lake_minimum_macos" --show-bin-path)
 lake_output="$lake_repo_root/dist/macos/$lake_version/$lake_arch"
 if [ "$development_app" -eq 1 ]; then lake_output="$lake_output/dev"; fi
 mkdir -p "$lake_output"
@@ -79,7 +80,7 @@ cat > "$lake_app/Contents/Info.plist" <<EOF
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>LakeBackendRuntime</key><string>$lake_backend_runtime</string>
 <key>CFBundleIconFile</key><string>Lake.icns</string>
-<key>LSMinimumSystemVersion</key><string>13.0</string>
+<key>LSMinimumSystemVersion</key><string>$lake_minimum_macos</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict></plist>
