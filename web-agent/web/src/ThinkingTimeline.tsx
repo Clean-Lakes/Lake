@@ -1,7 +1,7 @@
 import type {ProgressResource} from './conversation-progress-model';
 import {MiniBox} from './MiniBox';
 import {isTerminalCommand,type MiniBoxScope} from './miniBoxModel';
-import {ExecutionDetailsOpen} from './TurnExecutionDetails';
+import {ExecutionDetailsOpen,RoutingRecoveryContext} from './TurnExecutionDetails';
 import {ExecutionIcon} from './ExecutionIcon';
 import {DisclosureSummary} from './DisclosureSummary';
 import { memo, useContext, useRef, useState, type ReactNode } from "react";
@@ -11,12 +11,13 @@ import type { AICard } from "../../shared/contracts";
 import { sameCard } from "./cardEquality";
 import { processDescription, toolDescription, toolLabels } from "./activity";
 export const ToolStep = memo(function ToolStep({ card, onInspect, active=false, hideTarget=false }: { card: AICard; onInspect?: () => void; active?:boolean; hideTarget?:boolean }) {
+  const recovered=useContext(RoutingRecoveryContext).has(card.id);
   const [open,setOpen]=useState(false);
   const data = card.data && typeof card.data === "object" ? card.data as Record<string, unknown> : {};
   const args = data.arguments && typeof data.arguments === "object" ? data.arguments as Record<string, unknown> : {};
-  const state = card.status === "pending" ? "等待确认" : card.status === "background_running" ? "后台执行中" : card.status === "running" ? "执行中" : card.status === "failed" ? "失败" : card.status === "not_executed" ? "未执行" : ["interrupted", "cancelled"].includes(card.status) ? "已停止" : ["completed", "succeeded", "success"].includes(card.status) ? "已完成" : "结果待核查";
+  const state = recovered ? "首次失败 · 重试后已恢复" : card.status === "pending" ? "等待确认" : card.status === "background_running" ? "后台执行中" : card.status === "running" ? "执行中" : card.status === "failed" ? "失败" : card.status === "not_executed" ? "未执行" : ["interrupted", "cancelled"].includes(card.status) ? "已停止" : ["completed", "succeeded", "success"].includes(card.status) ? "已完成" : "结果待核查";
   const command = typeof args.command === "string" ? args.command : "";
-  return <li className={`thinking-step thinking-tool step-${card.status}`}>
+  return <li className={`thinking-step thinking-tool step-${recovered?'recovered':card.status}`}>
     <span className="thinking-step-marker"><ExecutionIcon card={card} active={active&&["running","completed","succeeded","success"].includes(card.status)} size={20}/></span>
     <details onToggle={event => { setOpen(event.currentTarget.open); if (event.currentTarget.open) onInspect?.(); }}>
       <summary><span className="thinking-tool-label">{toolLabels[card.title || ""] || card.title || "执行操作"}</span>{!hideTarget && typeof data.target === "string" && <span className="thinking-tool-target">{data.target}</span>}<small>{state}</small><svg className="thinking-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></summary>
@@ -45,16 +46,18 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
   const hasOpened=useRef(open);if(open)hasOpened.current=true;
   const [rawOpen, setRawOpen] = useState(false);
   const [commandsOpen,setCommandsOpen]=useState(false);
+  const recovered=useContext(RoutingRecoveryContext);
   const tools = cards.filter(card => card.type !== "thinking");
   const thoughts = cards.filter(card => card.type === "thinking" && card.content);
-  const attention=tools.find(card=>!['running','completed','succeeded','success'].includes(card.status));
+  const attention=tools.find(card=>!recovered.has(card.id)&&!['running','completed','succeeded','success'].includes(card.status));
   const notices=[
     ['等待确认','pending'],['执行失败','failed'],['结果待核查','unknown'],['未执行','not_executed'],['已停止','interrupted','cancelled'],['后台执行中','background_running'],
-  ].flatMap(([label,...statuses])=>{const count=tools.filter(card=>statuses.includes(card.status)).length;return count?[tools.length>1?`${count} 项${label}`:label]:[]});
+  ].flatMap(([label,...statuses])=>{const count=tools.filter(card=>statuses.includes(card.status)&&!recovered.has(card.id)).length;return count?[tools.length>1?`${count} 项${label}`:label]:[]});
+  if(tools.some(card=>recovered.has(card.id)))notices.push('重试后已恢复');
   const state=notices.join(' · ')||(attention?'执行结果待核查':'');
   const currentTool=tools.filter(card=>card.status==='running').at(-1)??tools.at(-1);
   const description=resource?.name??(resourceRow&&currentTool?toolDescription(currentTool):processDescription(cards));
-  const blocked=tools.some(card=>!['running','completed','succeeded','success'].includes(card.status));
+  const blocked=tools.some(card=>!recovered.has(card.id)&&!['running','completed','succeeded','success'].includes(card.status));
   const executing=live&&!blocked&&cards.some(card=>card.status==='running');
   const progressing=live&&continuing&&!blocked&&tools.length>0;
   const iconActive=live&&!tools.some(card=>card.status==='pending')&&(currentTool

@@ -39,7 +39,7 @@ Lake 面向需要调查、处置和验证服务问题的运维工程师与小型
 - **SEC-002**: 沿用现有静默执行、文件／SQL 权限、禁止本地执行、引用资源限制、SSH 信任及灾难性操作规则。新 Profile 不允许放宽这些规则。
 - **SEC-003**: 操作派发前持久化冻结的目标、参数摘要和授权关联；派发结果不明时进入 `unknown`，先核实状态，不自动重放写操作。
 - **SEC-004**: 模型密钥、SSH 私钥及其他秘密不进入 Plan、消息、事件、证据摘要、截图和日志。运行使用私有 secrets，不读 Keychain；新增敏感文件沿用 0700 目录、0600 文件权限。
-- **CON-001**: 实施基于当前 `internal/ai`、`internal/web`、`web-agent/web` 的 Go/React 架构；不恢复已移除的 ZCode 运行时，不依赖历史 `lake/workflow` 路径。
+- **CON-001**: 实施基于当前 `internal/ai`、`internal/web`、`web-agent/web` 的 Go/React 架构；不恢复已移除的 Agent SDK 运行时，不依赖历史 `lake/workflow` 路径。
 - **CON-002**: 保留旧 AgentRun、工作流、会话和客户端的兼容读取。新任务采用新契约，历史事实不重命名、不补造角色发言或 Plan。
 - **CON-003**: 本地联调仅用独立 Lake Dev；按 `scripts/build_lake_desktop.sh --dev --install` 构建安装。CLI 只能由 `scripts/build_lake.sh` 签名构建，不操作正式版应用及数据。
 - **CON-004**: 普通界面图标继续使用 `Glyph`、表单单选继续使用 `AppSelect`、厂商品牌继续使用 `ProviderIcon`。角色专用图形统一从 `AgentIcon` 输出本地 SVG。
@@ -81,7 +81,7 @@ Lake 面向需要调查、处置和验证服务问题的运维工程师与小型
 | `web-agent/web/src/AIPanel.tsx`：`AITranscript`，`AgentTaskList.tsx` | 当前偏向折叠子任务／工具记录 | 新任务按角色署名直接回应；旧任务继续原展示 |
 | `web-agent/web/src/agentTasks.ts`、`AgentIcon.tsx` | 当前按领域角色映射名称和功能图标 | 新任务四角色映射及湖生态头像，历史映射保留 |
 
-旧 `plan/architecture-lake-multi-agent-1.md` 提出的八种领域模板在本方案中收敛为内部能力模块；本方案的新任务不以八种模板作为用户角色名单。旧“仅主 Agent 与用户对话”的规则不适用于新协作任务。`docs/lake-design.md` 已标注为停用 ZCode 架构的历史记录，不作为本方案实施依据。
+旧 `plan/architecture-lake-multi-agent-1.md` 提出的八种领域模板在本方案中收敛为内部能力模块；本方案的新任务不以八种模板作为用户角色名单。旧“仅主 Agent 与用户对话”的规则不适用于新协作任务。`docs/lake-design.md` 已标注为停用 Agent SDK 架构的历史记录，不作为本方案实施依据。
 
 ### 1.3 四个固定角色
 

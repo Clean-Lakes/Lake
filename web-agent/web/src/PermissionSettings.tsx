@@ -3,21 +3,15 @@ import { createPortal } from "react-dom";
 import { Glyph } from "./Icons";
 import {DisclosureSummary} from "./DisclosureSummary";
 
-export const permissionDefaults = {
-  silentReadFiles: true,
-  silentWriteFiles: false,
-  silentReadSQL: true,
-  silentCommands: true,
-  silentTerminalCreation: true,
-  blockUnreferencedAssets: false,
-  denyLocalExecution: false,
-};
+import {permissionDefaults} from '../../shared/execution-preferences';
+export {permissionDefaults} from '../../shared/execution-preferences';
 
 const groups: Array<{title: string; hint?: string; fields: Array<{key: keyof typeof permissionDefaults; label: string; description: string}>}> = [
   {title: "免确认操作", hint: "关闭后先询问", fields: [
     {key: "silentReadFiles", label: "读取文件", description: "浏览目录、搜索和查看文件内容。"},
     {key: "silentWriteFiles", label: "写入文件", description: "上传和编辑文件；删除、移动按命令规则。"},
     {key: "silentReadSQL", label: "查询数据库", description: "执行只读 SQL，查看表结构。"},
+    {key: "silentMCPCalls", label: "调用 MCP 工具", description: "自动调用项目已启用的 MCP 工具，包括可能修改外部系统的工具。"},
     {key: "silentCommands", label: "运行命令", description: "包括修改、指定文件的删除和移动；大范围删除等仍需确认。"},
     {key: "silentTerminalCreation", label: "建立终端连接", description: "新建或重连终端；首次 SSH 指纹仍需核对。"},
   ]},
@@ -27,9 +21,9 @@ const groups: Array<{title: string; hint?: string; fields: Array<{key: keyof typ
   ]},
 ];
 
-export function PermissionSettings({anchor, options, disabled, saving=false, error, onChange, onClose}: {
+export function PermissionSettings({anchor, options, disabled, saving=false, error, onChange, onClose, pilot=false}: {
   anchor: RefObject<HTMLButtonElement | null>;
-  options: Record<string, unknown>; disabled: boolean; saving?: boolean; error?: string;
+  options: Record<string, unknown>; pilot?: boolean; disabled: boolean; saving?: boolean; error?: string;
   onChange: (key: string, value: boolean) => void; onClose: () => void;
 }) {
   const panel = useRef<HTMLElement>(null);
@@ -78,6 +72,7 @@ export function PermissionSettings({anchor, options, disabled, saving=false, err
   return createPortal(<section ref={panel} className="permission-popover" role="dialog" aria-label="会话权限" aria-busy={saving}
     style={{left: position.left, top: position.top, maxHeight: position.maxHeight, visibility: position.ready ? "visible" : "hidden"}}>
     <header><strong className="permission-heading"><Glyph name="waves" size={18}/>执行偏好</strong><span className="permission-save-state">自动保存</span><button type="button" className="permission-close" aria-label="关闭会话权限" onClick={() => {onClose(); anchor.current?.focus();}}><Glyph name="close" size={14}/></button></header>
+    {pilot && <p className="settings-note">本项目的专员统一沿用这里的设置。</p>}
     {error && <p className="form-error" role="alert">{error}</p>}
     {groups.map((group, index) => <div className="permission-group" role="group" aria-labelledby={`${id}-group-${index}`} key={group.title}>
       <div className="permission-group-heading"><span id={`${id}-group-${index}`}>{group.title}</span>{group.hint && <small>{group.hint}</small>}</div>

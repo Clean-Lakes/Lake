@@ -53,7 +53,7 @@ tags: [feature, migration, runtime, desktop]
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-004 | 在 cmd/lake/workflow_v2_cli.go 增加结构化定义管理入口，bridge.go/chat.go 增加 v2 执行请求；client/desktop/app.go 和前端增加编辑、预览、运行与恢复面板。 | ✅ | 2026-10-01 |
-| TASK-005 | 增加四项回归测试，运行 Go/前端验证与签名发布脚本，更新 docs/zcode-capability-matrix.md 和使用文档。依赖 TASK-001 至 TASK-004 及 TASK-006。 | ✅ | 2026-10-01 |
+| TASK-005 | 增加四项回归测试，运行 Go/前端验证与签名发布脚本，更新 docs/typescript-capability-matrix.md 和使用文档。依赖 TASK-001 至 TASK-004 及 TASK-006。 | ✅ | 2026-10-01 |
 | TASK-006 | 在 lake/store/store.go 添加 v17 条件补列迁移及私有备份，migration_v17_test.go 验证旧会话保留、正常读取和重复打开。 | ✅ | 2026-10-01 |
 | TASK-007 | 修复空会话 null 事件恢复错误，事件接口返回空数组，时间线兼容旧响应，并把桌面时间线回归纳入发布验收。 | ✅ | 2026-10-01 |
 

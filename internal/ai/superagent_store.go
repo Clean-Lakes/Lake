@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const superSchemaVersion = 4
+const superSchemaVersion = 6
 
 type superSchemaRow struct {
 	ID      int `gorm:"primaryKey"`
@@ -56,14 +56,17 @@ type superDecisionRow struct {
 func (superDecisionRow) TableName() string { return "superagent_decisions" }
 
 type superRoleRow struct {
+	DeletedAt                              *time.Time
 	ID                                     string `gorm:"primaryKey"`
 	ProjectID, RoleKey, Name, Capabilities string
+	Duties                                 string
 	Revision                               int64
 }
 
 func (superRoleRow) TableName() string { return "superagent_roles" }
 
 type superWorkerRow struct {
+	RoleSnapshot                                          string
 	Protocol                                              string
 	ParentGeneration                                      int64
 	GoalSessionID                                         string
@@ -155,6 +158,10 @@ type superLegacyAliasRow struct {
 func (superLegacyAliasRow) TableName() string { return "superagent_legacy_aliases" }
 
 func superagentModels() []any {
+	return append(superagentV4Models(), &superRoleMutationRow{})
+}
+
+func superagentV4Models() []any {
 	return append(superagentV3Models(), &superChannelRow{}, &superChannelSourceRow{}, &superTaskReferenceRow{})
 }
 
@@ -170,7 +177,7 @@ func MigrateSuperagentStore(db *gorm.DB) error {
 		if err := db.First(&row, "id = ?", 1).Error; err != nil {
 			return err
 		}
-		if row.Version != 3 && row.Version != superSchemaVersion {
+		if row.Version != 3 && row.Version != 4 && row.Version != 5 && row.Version != superSchemaVersion {
 			return errors.New("superagent: unsupported schema")
 		}
 		if row.Version == 3 {
@@ -179,7 +186,7 @@ func MigrateSuperagentStore(db *gorm.DB) error {
 					return errors.New("superagent: incomplete previous schema")
 				}
 			}
-			return db.Transaction(func(tx *gorm.DB) error {
+			if err := db.Transaction(func(tx *gorm.DB) error {
 				if err := tx.AutoMigrate(&superChannelRow{}, &superChannelSourceRow{}, &superTaskReferenceRow{}); err != nil {
 					return err
 				}
@@ -192,7 +199,49 @@ func MigrateSuperagentStore(db *gorm.DB) error {
 						return err
 					}
 				}
-				return tx.Model(&superSchemaRow{}).Where("id = ? AND version = ?", 1, 3).Update("version", superSchemaVersion).Error
+				return tx.Model(&superSchemaRow{}).Where("id = ? AND version = ?", 1, 3).Update("version", 4).Error
+			}); err != nil {
+				return err
+			}
+			row.Version = 4
+		}
+		if row.Version == 4 {
+			for _, model := range superagentV4Models() {
+				if !db.Migrator().HasTable(model) {
+					return errors.New("superagent: incomplete previous schema")
+				}
+			}
+			return db.Transaction(func(tx *gorm.DB) error {
+				if err := tx.AutoMigrate(&superRoleRow{}, &superWorkerRow{}, &superRoleMutationRow{}); err != nil {
+					return err
+				}
+				var workers []superWorkerRow
+				if err := tx.Find(&workers).Error; err != nil {
+					return err
+				}
+				for _, worker := range workers {
+					var role superRoleRow
+					if err := tx.First(&role, "id = ? AND project_id = ?", worker.RoleID, worker.ProjectID).Error; err != nil {
+						return err
+					}
+					if err := tx.Model(&worker).Update("role_snapshot", js(specialistRole(role))).Error; err != nil {
+						return err
+					}
+				}
+				return tx.Model(&superSchemaRow{}).Where("id = ? AND version = ?", 1, 4).Update("version", superSchemaVersion).Error
+			})
+		}
+		if row.Version == 5 {
+			for _, model := range superagentModels() {
+				if !db.Migrator().HasTable(model) {
+					return errors.New("superagent: incomplete previous schema")
+				}
+			}
+			return db.Transaction(func(tx *gorm.DB) error {
+				if err := tx.AutoMigrate(&superRoleRow{}); err != nil {
+					return err
+				}
+				return tx.Model(&superSchemaRow{}).Where("id = ? AND version = ?", 1, 5).Update("version", superSchemaVersion).Error
 			})
 		}
 		for _, model := range superagentModels() {
@@ -234,7 +283,7 @@ func (e *Engine) superStore() (*gorm.DB, error) {
 		var schema superSchemaRow
 		needsBackup := !store.DB.Migrator().HasTable(&superSchemaRow{})
 		if !needsBackup && store.DB.First(&schema, "id = ?", 1).Error == nil {
-			needsBackup = schema.Version == 3
+			needsBackup = schema.Version == 3 || schema.Version == 4
 		}
 		if needsBackup {
 			lifetime := owner.HostContext

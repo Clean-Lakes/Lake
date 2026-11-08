@@ -2,23 +2,26 @@
 goal: 为 Lake 建立可追溯、按资源隔离、按需读取且不会把历史现场当成当前事实的运维记忆
 version: "2.1"
 date_created: 2026-10-23
-last_updated: 2026-10-28
+last_updated: 2026-11-04
 owner: Lake
-status: In progress
+status: Superseded
 tags: [feature, architecture, memory, sre, migration]
+superseded_by: feature-agent-file-memory-1.md
 ---
 
 # Introduction
 
+> **2026-11-04：已由 [Agent 本地文件记忆主计划](feature-agent-file-memory-1.md) 替代。** 下文保留历史设计、任务勾选和验收水位，不再作为新开发指令；未完成项不继续按旧实现推进。当前运行代码尚未因本次计划更新而停用。采集/同意/撤回及实际任务依赖按新计划接替，旧整理、条目管理、注入/投影和无依赖 V2 代码分批下线；不为旧体系补齐放量，也不删除必要审计和未知操作账本。
+
 > 2026-10-28：[自然记忆重塑计划](feature-natural-memory-1.md)承接统一记忆体验，扩展用户级偏好、自然长期意图、提交后轻提示/撤销及压缩前增量采集。本计划继续规定项目/资源事实的隔离、时效、来源和 V2 验收；“项目为隔离上界”针对项目事实，不表示允许跨项目共享事实。当前 `operationalMemoryV2Ready=false`，本次文档不改变门控，也不解除尚缺的验收要求。
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Superseded](https://img.shields.io/badge/status-Superseded-lightgrey)
 
 本方案把 Lake 现有项目记忆升级为运维记忆 V2：每次请求只附带与当前问题相关的短索引，模型需要时分页读取专题；一次真实用户轮次完成后，在后台提炼有来源的增量。资源范围、事实发生时间和适用条件必须随记忆一起流转。
 
 用户应得到的效果是：Lake 能记住“这个项目通常怎样排查和发布”，能找到“上次在哪台资源上看到过什么”，也能明确说明“这条记录已经过期，需要重新检查”。记忆不能替代当前授权、现场采样或执行结果。
 
-本文是实施规格，当前正在开发；未通过验收的能力保持关闭。代码基线为 `origin/develop` 的 `eb4d90028b1c2e0b870475f44445f5613b185bba`，不将未合并 PR、旧验收记录或 Zcode 截图视作当前实现证明。仓库相对路径均以 Lake 根目录为基准；任务表记录代码状态；完整验收结果和剩余门槛见 [V2 验证记录](../docs/validation/lake-operational-memory-v2.md)。
+本文是实施规格，当前正在开发；未通过验收的能力保持关闭。代码基线为 `origin/develop` 的 `eb4d90028b1c2e0b870475f44445f5613b185bba`，不将未合并 PR、旧验收记录或 原生 Agent 截图视作当前实现证明。仓库相对路径均以 Lake 根目录为基准；任务表记录代码状态；完整验收结果和剩余门槛见 [V2 验证记录](../docs/validation/lake-operational-memory-v2.md)。
 
 ### 当前能力与缺口
 
@@ -430,4 +433,4 @@ pnpm build:web
 - [开发与分支流程](../docs/development-workflow.md)：阶段 PR、Dev 验证、生产提升及授权边界。
 - [贡献指南](../CONTRIBUTING.md)：签名构建、隔离 Home、凭据和官方 ADK 约束。
 - [官方 ADK 运行时架构](../docs/experiments/adk-runtime.md)：执行与恢复职责；记忆不能接管操作账本。
-- 实施入口源码：`internal/ai/project_memory.go`、`internal/ai/project_memory_snapshot.go`、`internal/web/project_memory_store.go`、`internal/web/project_memory_jobs.go`、`internal/web/project_memory_worker.go`、`internal/ai/directory_targets.go`。本文没有断言 Zcode 的未核实内部实现；仅采用用户讨论的短索引、按需读取和增量提炼模式。
+- 实施入口源码：`internal/ai/project_memory.go`、`internal/ai/project_memory_snapshot.go`、`internal/web/project_memory_store.go`、`internal/web/project_memory_jobs.go`、`internal/web/project_memory_worker.go`、`internal/ai/directory_targets.go`。本文没有断言 原生 Agent 的未核实内部实现；仅采用用户讨论的短索引、按需读取和增量提炼模式。

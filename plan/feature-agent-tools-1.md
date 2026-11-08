@@ -11,7 +11,7 @@ tags: [feature, tools]
 
 ![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
-在 Go 后端实现对照 ZCode 后确认的工具缺口。浏览器、JS runtime 和通用动态工作流不属于本次范围。
+在 Go 后端实现对照 Agent SDK 后确认的工具缺口。浏览器、JS runtime 和通用动态工作流不属于本次范围。
 
 ## 1. Requirements & Constraints
 
@@ -72,4 +72,4 @@ tags: [feature, tools]
 ## 8. Related Specifications / Further Reading
 
 [工作流](feature-operations-workflow-1.md)
-[ZCode 工具注册](../third_party/zcode/apps/zcode-cli/packages/core/src/tool/handlers/index.ts)
+[Agent SDK 工具注册](../third_party/agent-sdk/apps/zcode-cli/packages/core/src/tool/handlers/index.ts)

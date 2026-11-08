@@ -1,4 +1,4 @@
-import type {SessionSnapshot,SRETask} from '../../shared/contracts';
+import type {AICard,SessionSnapshot,SRETask,SuperTask,SuperWorker} from '../../shared/contracts';
 import type {InspectorSelection} from './SessionInspectorContext';
 import {pilotIslandModel} from './pilotIslandModel';
 
@@ -7,6 +7,30 @@ export function inspectedTask(snapshot:SessionSnapshot,selection:InspectorSelect
  const task=snapshot.sre?.tasks.find(task=>task.id===selection.taskId)??selection.task;
  return task&&task.id===selection.taskId&&task.sessionId===snapshot.session.id&&task.projectId===snapshot.session.projectId?task:undefined;
 }
+
+/** A canonical task remains a valid execution target while its goal or tool
+ * projection is catching up. An empty chat turn must not hide its records. */
+export function hasInspectorTask(snapshot:SessionSnapshot,selection:InspectorSelection):boolean{
+ if(inspectedTask(snapshot,selection))return true;
+ const task=snapshot.superagent?.task;
+ return !!task&&selection.sessionId===snapshot.session.id&&task.sessionId===snapshot.session.id&&
+  task.taskId===selection.canonicalGoalId&&(!task.projectId||task.projectId===snapshot.session.projectId);
+}
+export function inspectorWorker(workers:readonly SuperWorker[],snapshot?:SessionSnapshot|null){
+ const task=snapshot?.superagent?.task;
+ if(!task||task.sessionId!==snapshot.session.id)return;
+ return workers.find(worker=>worker.sessionId===task.sessionId&&worker.task.taskId===task.taskId&&
+  (!snapshot.superagent?.roleId||worker.roleId===snapshot.superagent.roleId));
+}
+
+export function inspectorGoal(snapshot:SessionSnapshot,selectedTaskId?:string){
+ const canonical=snapshot.superagent?.task;
+ if(!canonical||canonical.sessionId!==snapshot.session.id||canonical.taskId!==selectedTaskId)return;
+ const executionId=canonical.executionGoalId??canonical.taskId;
+ return [snapshot.superagent?.goal,...(snapshot.ai?.workGoals??[])].find(goal=>
+  goal?.id===executionId&&goal.sessionId===snapshot.session.id&&goal.revision===canonical.revision);
+}
+
 export function inspectorAttempts(task:SRETask){
  const run=task.runs?.at(-1),plan=task.plans?.find(p=>p.id===run?.planRevisionId)??task.plans?.at(-1);
  return (plan?.steps??[]).flatMap(step=>{
@@ -41,4 +65,11 @@ export function resolvedInspectorSelection(snapshot:SessionSnapshot,selection:In
  if(!selection.followLatest)return selection;
  const current=latestInspectorSelection(snapshot,selection.tab);
  return selection.automatic===undefined?current:{...current,automatic:selection.automatic};
+}
+
+/** Bind a history disclosure to task identities from that turn's host records. */
+export function canonicalGoalForExecution(snapshot:SessionSnapshot,cards:AICard[],tasks:SuperTask[]=[]):string|undefined{
+ const ids=new Set(cards.flatMap(card=>{const id=(card.data as {taskId?:unknown}|undefined)?.taskId;return typeof id==='string'?[id]:[];}));
+ const candidates=[...tasks,...(snapshot.superagent?[snapshot.superagent.task]:[])].filter(task=>task.sessionId===snapshot.session.id&&(!task.projectId||task.projectId===snapshot.session.projectId)&&ids.has(task.executionGoalId??task.taskId));
+ const found=[...new Set(candidates.map(task=>task.taskId))];return found.length===1?found[0]:undefined;
 }

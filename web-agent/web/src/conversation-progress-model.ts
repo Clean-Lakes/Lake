@@ -59,7 +59,7 @@ function backgroundResource(entry:TranscriptEntry,owners:Map<string,ProgressReso
 const sessionFamilies:Record<string,string>={
  list_workflows:'workflow',get_workflow_run:'workflow',run_workflow:'workflow',save_workflow:'workflow',
  schedule_create:'schedule',schedule_list:'schedule',schedule_update:'schedule',schedule_delete:'schedule',
- todo_read:'progress',todo_write:'progress',
+ TodoRead:'progress',TodoWrite:'progress',todo_read:'progress',todo_write:'progress',
  list_assets:'resource-catalog',list_resource_groups:'resource-catalog',
  load_skill:'skill',read_session_context:'history',read_tool_result:'tool-result',
  task_output:'task',task_stop:'task',
@@ -72,6 +72,7 @@ function operationGroupKey(entry:TranscriptEntry,targetRefs:Map<string,Set<strin
  const data=record(card.data),args=record(data.arguments),family=sessionFamilies[card.title??''];
  if(resource?.id)return JSON.stringify(['resource',resource.id]);
  if(family){
+  if(family==='progress')return JSON.stringify(['session-family',family,text(data.taskId),text(data.agentRunId),text(data.childSessionId)]);
   const scope=(familyScope[family]??[]).map(key=>text(args[key]));
   if(scope.some(value=>!value))return;
   return JSON.stringify(['session-family',family,...scope,...(family==='task'?[text(args.type)]:[])]);
@@ -127,21 +128,10 @@ export function conversationGroups(entries:TranscriptEntry[],resources:Resource[
  return result;
 }
 
-/** Keep visible assistant prose above progress while a turn is still active.
- * Reorder only the presentation groups: stable row IDs, raw tool chronology,
- * exceptional states and decision controls remain intact. */
-export function conversationDisplayGroups(entries:TranscriptEntry[],active=false,resources:Resource[]=[]):ConversationGroup[] {
- if(!active)return conversationGroups(entries,resources);
- const background=backgroundResources(entries,resources);
- return transcriptTurns(entries).flatMap(turn=>{
-  const groups=conversationGroups(turn,resources,background);
-  const firstProgress=groups.findIndex(group=>group.progress);
-  if(firstProgress<0)return groups;
-  const isProse=(group:ConversationGroup)=>!group.progress&&group.entries.every(entry=>
-   entry.message?.role==='assistant'||!!entry.card&&['message','text'].includes(entry.card.type));
-  const tail=groups.slice(firstProgress);
-  return [...groups.slice(0,firstProgress),...tail.filter(isProse),...tail.filter(group=>!isProse(group))];
- });
+/** Stable chronological presentation in every lifecycle state. Tool groups are
+ * rendered separately by the transcript; completing a turn never reorders prose. */
+export function conversationDisplayGroups(entries:TranscriptEntry[],_active=false,resources:Resource[]=[]):ConversationGroup[] {
+ return conversationGroups(entries,resources);
 }
 
 /** Render position is anchored at first use, so find the live row by its latest

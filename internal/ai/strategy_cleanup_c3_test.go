@@ -71,6 +71,12 @@ func TestC3RequiredCanonicalStorageFailureStillStopsDispatch(t *testing.T) {
 
 func TestC3ProductionRuntimeHasNoRetiredExecutionHooks(t *testing.T) {
 	forbidden := map[string]bool{"onlineBeforeCall": true, "onlineReserve": true, "onlineSettle": true, "onlinePropose": true, "onlinePolicyTrace": true, "strategyExperimentRuntime": true, "collectStrategySnapshot": true, "MaterializeStrategySnapshot": true, "StrategyLearnEnabled": true, "StrategyCorrectEnabled": true, "StrategyBudget": true, "CorrectionGuard": true}
+	retiredAPIs := map[string]bool{
+		"StrategyOutbox": true, "AckStrategyOutbox": true,
+		"PendingStrategySessions": true, "PersistedStrategyOutboxes": true,
+		"StrategyLearningInputBytes": true,
+		"StrategyUsageHistory":       true, "StrategyUsageRequest": true, "RecordedMemoryEvidenceAvailable": true,
+	}
 	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
@@ -84,6 +90,10 @@ func TestC3ProductionRuntimeHasNoRetiredExecutionHooks(t *testing.T) {
 			t.Fatal(err)
 		}
 		ast.Inspect(file, func(n ast.Node) bool {
+			// StrategyOutbox is still a persisted field, never a callable queue.
+			if decl, ok := n.(*ast.FuncDecl); ok && retiredAPIs[decl.Name.Name] {
+				t.Errorf("retired runtime API %s in %s", decl.Name.Name, path)
+			}
 			if id, ok := n.(*ast.Ident); ok && forbidden[id.Name] {
 				t.Errorf("retired execution dependency %s in %s", id.Name, path)
 			}

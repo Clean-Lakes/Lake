@@ -79,7 +79,7 @@ func TestMemoryV2ProjectionFailureIsRecoverableAfterCommittedMigration(t *testin
 	}
 }
 
-func TestMemoryV2RestartPreservesQueuedSourcesAndRepairsMissingFiles(t *testing.T) {
+func TestMemoryV2RestartPreservesRetiredSourcesAndRepairsMissingFiles(t *testing.T) {
 	dir := t.TempDir()
 	s, err := openStore(dir, true)
 	if err != nil {
@@ -106,8 +106,14 @@ func TestMemoryV2RestartPreservesQueuedSourcesAndRepairsMissingFiles(t *testing.
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if s.ClaimMemoryJob() == nil {
-		t.Fatal("startup migration skipped a genuine V2 queued source")
+	if s.ClaimMemoryJob() != nil {
+		t.Fatal("retired V2 source became dispatchable after restart")
+	}
+	row := s.read(func() any {
+		return s.row("SELECT snapshotHash,snapshotJSON FROM projectMemoryTurns WHERE turnId=?", snapshot.TurnID)
+	}).(Object)
+	if row["snapshotHash"] != snapshot.SnapshotHash || row["snapshotJSON"] != jsonText(snapshot) {
+		t.Fatal("restart lost the historical V2 source")
 	}
 	if _, err := os.Stat(filepath.Join(memoryV2ProjectionPath(s.Dir, p), "restart-rule.md")); err != nil {
 		t.Fatal("missing mirror not rebuilt")

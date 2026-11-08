@@ -36,6 +36,7 @@ type session struct {
 	sreReply            *sreReply
 }
 type Engine struct {
+	SuperRolesChanged              func(context.Context, string) error                  // Host projection notification, never authority; durable roles survive failed delivery.
 	SuperInputResolver             func(context.Context, SuperEvent) (TurnInput, error) // Trusted host; resolves existing source data, never authority.
 	HostContext                    context.Context                                      // Trusted host lifetime; cancels startup snapshots and preserves unanswered SDK waits on host shutdown.
 	superOnce                      sync.Once
@@ -479,6 +480,17 @@ func (e *Engine) SnapshotPage(id string, before, limit int) (View, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.cancel == nil && s.questionReply == nil {
+		obsolete, err := e.obsoleteSecurityQuestionLocked(s, s.state.View.Question)
+		if err != nil {
+			return View{}, err
+		}
+		if obsolete {
+			if err := e.dismissQuestionLocked(s, s.state.View.Question, "expired"); err != nil {
+				return View{}, err
+			}
+		}
+	}
 	view := s.state.View
 	view.ReplyStatus = ""
 	// Canonical goals below may be blocked while a real human followup is
@@ -559,15 +571,31 @@ func (e *Engine) Abort(id string) error {
 	}
 	s.mu.Lock()
 	goalID := s.state.WorkGoalID
-	if s.cancel != nil {
-		s.cancel()
+	if cancel := s.cancel; cancel != nil {
+		// Cancel the canonical goal first. The worker's cancellation callback
+		// otherwise races WorkControl with a new progress revision.
+		defer cancel()
+	}
+	if err := e.dismissQuestionLocked(s, s.state.View.Question, "cancelled"); err != nil {
+		s.mu.Unlock()
+		return err
 	}
 	s.mu.Unlock()
 	if goalID != "" {
-		_, g, loadErr := e.workRow(id, goalID)
-		if loadErr == nil && !workTerminal(g.Status) {
-			return e.WorkControl(context.Background(), id, goalID, "cancel", g.Revision)
+		for range 3 {
+			_, g, err := e.workRow(id, goalID)
+			if err != nil {
+				return err
+			}
+			if workTerminal(g.Status) {
+				return nil
+			}
+			err = e.WorkControl(context.Background(), id, goalID, "cancel", g.Revision)
+			if !errors.Is(err, errWorkConflict) {
+				return err
+			}
 		}
+		return errWorkConflict
 	}
 	return nil
 }
@@ -724,8 +752,8 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		return errors.New("model not configured")
 	}
 	modelUserText := text
-	if c.superRole == "router" && len(modelUserText) > 4096 {
-		modelUserText = utf8Prefix(modelUserText, 4096) + "\n[Original message continues in the immutable event. Read all pages before routing; the preview does not replace its constraints.]"
+	if c.superRole == "router" {
+		modelUserText = routerUserPreview(modelUserText)
 	}
 	message := modelUserText
 	hasTargetReference := false
@@ -779,6 +807,10 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	}
 	c.ReferencedAssets = validRemembered(c, c.ReferencedAssets)
 	s.state.ReferencedAssetIDs = append([]string(nil), c.ReferencedAssets...)
+	if err = e.projectSuperRouterHistoryLocked(ctx, s, c); err != nil {
+		s.mu.Unlock()
+		return err
+	}
 	resume := e.worker == nil && shouldCompactResumedConversation(s.state, time.Now())
 	sourceMessageID := input.StrategyMessageID
 	if e.worker != nil {
@@ -1138,6 +1170,15 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	chars := estimatedContextCost(s.state, history, toolCost)
 	s.mu.Unlock()
 	budget := (c.Model.ContextWindow - c.Model.MaxOutput) * 2
+	// Router history is an archive, not its provider working set. Both the
+	// SDK callback and the foreground gate use the same request projection.
+	working, projectionErr := e.pilotRequestHistory(ctx, s, c, history)
+	if projectionErr != nil {
+		return projectionErr
+	}
+	if !force && len(working) < len(history) && historyCost(working)+toolCost < budget*80/100 {
+		return nil
+	}
 	historyBudget := budget - toolCost
 	if !force && chars < budget*80/100 {
 		return nil

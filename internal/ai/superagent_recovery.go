@@ -18,6 +18,9 @@ type SuperRecoveryResult struct {
 // repairs a lost process handle with a fresh command. Original work observers
 // retain their own handle/checkpoint and Security recovery gate.
 func (e *Engine) RecoverSuperagent(ctx context.Context, projectID string) ([]SuperRecoveryResult, error) {
+	if err := e.reconcileDeletedSpecialists(ctx, projectID); err != nil {
+		return nil, err
+	}
 	db, err := e.superStore()
 	if err != nil {
 		return nil, err

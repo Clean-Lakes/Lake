@@ -32,7 +32,7 @@ type SecurityCatalogResource struct {
 	ConnectionIdentity                  string
 }
 type SecurityCatalogView struct {
-	HardLocalDeny                                                 bool // Current trusted host session setting, a denial floor only.
+	HardLocalDeny, HardReferencedOnly                             bool // Current trusted host session restrictions.
 	Resources                                                     []SecurityCatalogResource
 	Credentials                                                   []SecurityCatalogCredential
 	TerminalID, TerminalGeneration, TerminalResourceID            string
@@ -44,6 +44,8 @@ type SecurityCatalogView struct {
 	MCPFactory                                                    SecurityMCPFactory `json:"-"`
 	MCPAllowedServerIDs                                           []string
 	MCPAllowedToolNames                                           []string
+	mcpBindingRevision                                            int64
+	mcpInherited                                                  bool
 }
 
 type SecurityMCPFactory interface {
@@ -430,22 +432,23 @@ func (e *Engine) bindCurrentCatalogSnapshot(ctx context.Context, tx *gorm.DB, o 
 		return nil, err
 	}
 	if o.Tool == "list_mcp_servers" {
-		var bindings []securityMCPBindingRow
-		if err = tx.Where("project_id = ? AND store_id = ? AND recovery_epoch = ? AND enabled = ?", o.ProjectID, o.StoreID, o.RecoveryEpoch, true).Find(&bindings).Error; err != nil {
+		bindings, err := effectiveMCPBindingsTx(tx, o.ProjectID, o.StoreID, o.RecoveryEpoch, "", true)
+		if err != nil {
 			return nil, err
 		}
+		view.MCPAllowedServerIDs = nil
 		for _, binding := range bindings {
 			view.MCPAllowedServerIDs = append(view.MCPAllowedServerIDs, binding.ServerID)
 		}
 	}
 	if o.MCPServerID != "" {
-		var binding securityMCPBindingRow
-		if err := tx.First(&binding, "project_id = ? AND server_id = ? AND store_id = ? AND recovery_epoch = ? AND enabled = ?", o.ProjectID, o.MCPServerID, o.StoreID, o.RecoveryEpoch, true).Error; err != nil {
+		binding, names, err := effectiveMCPBindingTx(tx, o)
+		if err != nil {
 			return nil, err
 		}
-		if err := decodeSecurityJSON(binding.ToolNames, &view.MCPAllowedToolNames); err != nil {
-			return nil, err
-		}
+		view.MCPAllowedToolNames = names
+		view.mcpBindingRevision = binding.Revision
+		view.mcpInherited = binding.Inherited
 	}
 	return tx.Set("lake_security_catalog", view).Session(&gorm.Session{}), nil
 }
@@ -470,6 +473,9 @@ func applyCurrentCatalogSnapshot(tx *gorm.DB, o security.PreparedOperation, in *
 	view, ok := value.(SecurityCatalogView)
 	if !ok {
 		return ErrSecurityCatalogUnavailable
+	}
+	if view.HardReferencedOnly && mcpRequiresUnrestrictedResources(o.Tool, view.MCPLocal) {
+		return errMCPReferencedResourcesOnly
 	}
 	in.SessionDenyLocal = view.HardLocalDeny
 	in.LocalExecution = view.MCPLocal
@@ -520,17 +526,6 @@ func applyCurrentCatalogSnapshot(tx *gorm.DB, o security.PreparedOperation, in *
 		}
 	}
 	if o.MCPServerID != "" {
-		var binding securityMCPBindingRow
-		if err = tx.First(&binding, "project_id = ? AND server_id = ? AND store_id = ? AND recovery_epoch = ? AND enabled = ?", o.ProjectID, o.MCPServerID, o.StoreID, o.RecoveryEpoch, true).Error; err != nil {
-			return err
-		}
-		var allowed []string
-		if err = decodeSecurityJSON(binding.ToolNames, &allowed); err != nil {
-			return err
-		}
-		if o.MCPToolName != "" && !slices.Contains(allowed, o.MCPToolName) {
-			return errors.New("security: MCP tool outside project binding")
-		}
 		var row securityMCPRevisionRow
 		if err = tx.First(&row, "id = ?", o.MCPServerID).Error; err != nil {
 			return err
@@ -545,9 +540,7 @@ func applyCurrentCatalogSnapshot(tx *gorm.DB, o security.PreparedOperation, in *
 		if o.MCPToolName != "" && !slices.Contains(tools, o.MCPToolName) {
 			return errors.New("security: MCP tool missing from current catalog")
 		}
-		in.MCPBindingRevision = binding.Revision
-		view.MCPAllowedToolNames = slices.Clone(allowed)
-		tx.Set("lake_security_catalog", view).Session(&gorm.Session{})
+		in.MCPBindingRevision = view.mcpBindingRevision
 		in.MCPServerID, in.MCPToolName, in.MCPConfigRevision, in.MCPCatalogRevision = view.MCPServerID, view.MCPToolName, row.ConfigRevision, row.CatalogRevision
 	}
 	return nil
@@ -579,6 +572,7 @@ func (e *Engine) ExecuteSecurityMCP(ctx context.Context, name string, args map[s
 	}
 	var frozen SecurityMCPExecutor
 	var allowed, allowedTools []string
+	var inheritTools bool
 	err := e.validateSecurityPermitAtIO(ctx, permit.operation.ProjectID, permit.operation.SessionID, func(view SecurityCatalogView) error {
 		if view.MCPFactory == nil {
 			return ErrSecurityCatalogUnavailable
@@ -587,6 +581,7 @@ func (e *Engine) ExecuteSecurityMCP(ctx context.Context, name string, args map[s
 		frozen, err = view.MCPFactory.Freeze(ctx)
 		allowed = slices.Clone(view.MCPAllowedServerIDs)
 		allowedTools = slices.Clone(view.MCPAllowedToolNames)
+		inheritTools = view.mcpInherited
 		return err
 	})
 	if err != nil {
@@ -609,7 +604,7 @@ func (e *Engine) ExecuteSecurityMCP(ctx context.Context, name string, args map[s
 		return map[string]any{"servers": rows}, nil
 	}
 	if name == "list_mcp_tools" {
-		if err = e.RecordSecurityMCPCatalog(ctx, permit.operation.MCPServerID, permit.operation.MCPConfigRevision, obj(result)); err != nil {
+		if err = e.recordSecurityMCPCatalog(ctx, permit.operation.MCPServerID, permit.operation.MCPConfigRevision, obj(result), &permit.operation); err != nil {
 			return nil, err
 		}
 		value := obj(result)
@@ -619,7 +614,7 @@ func (e *Engine) ExecuteSecurityMCP(ctx context.Context, name string, args map[s
 		}
 		filtered := []map[string]any{}
 		for _, entry := range entries {
-			if slices.Contains(allowedTools, str(entry["name"])) {
+			if inheritTools || slices.Contains(allowedTools, str(entry["name"])) {
 				filtered = append(filtered, entry)
 			}
 		}
@@ -640,7 +635,11 @@ func (e *Engine) BootstrapSecurityMCP(ctx context.Context, updates []SecurityMCP
 		return err
 	}
 	return e.withSecurityDispatchBarrier(func() error {
-		return db.Transaction(func(tx *gorm.DB) error {
+		return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			inherited, err := anySecurityMCPInheritanceTx(tx, storeID, epoch)
+			if err != nil {
+				return err
+			}
 			for _, update := range updates {
 				var row securityMCPRevisionRow
 				err := tx.First(&row, "id = ?", update.ID).Error
@@ -650,8 +649,9 @@ func (e *Engine) BootstrapSecurityMCP(ctx context.Context, updates []SecurityMCP
 					if err := tx.Model(&securityMCPBindingRow{}).Where("server_id = ?", update.ID).Count(&bindings).Error; err != nil {
 						return err
 					}
-					if bindings > 0 {
+					if bindings > 0 || inherited {
 						row.State = "changing"
+						row.ChangeID = "startup-" + uid()
 					}
 					if err := tx.Create(&row).Error; err != nil {
 						return err
@@ -671,7 +671,7 @@ func (e *Engine) BootstrapSecurityMCP(ctx context.Context, updates []SecurityMCP
 				if err := tx.Model(&securityMCPBindingRow{}).Where("server_id = ? AND project_id IN (SELECT project_id FROM security_project_policies)", row.ID).Count(&configured).Error; err != nil {
 					return err
 				}
-				if configured > 0 {
+				if configured > 0 || inherited {
 					if err := tx.Model(&securityMCPRevisionRow{}).Where("id = ?", row.ID).Updates(map[string]any{"state": "changing", "change_id": "startup-" + uid()}).Error; err != nil {
 						return err
 					}
@@ -804,6 +804,10 @@ func (e *Engine) MutateSecurityMCP(ctx context.Context, ids []string, beforeStor
 }
 
 func (e *Engine) RecordSecurityMCPCatalog(ctx context.Context, serverID string, expectedConfigRevision int64, result map[string]any) error {
+	return e.recordSecurityMCPCatalog(ctx, serverID, expectedConfigRevision, result, nil)
+}
+
+func (e *Engine) recordSecurityMCPCatalog(ctx context.Context, serverID string, expectedConfigRevision int64, result map[string]any, caller *security.PreparedOperation) error {
 	db, storeID, epoch, err := e.securityTaskDB()
 	if err != nil {
 		return err
@@ -817,24 +821,44 @@ func (e *Engine) RecordSecurityMCPCatalog(ctx context.Context, serverID string, 
 	if len(rows) > 500 {
 		return errors.New("security: MCP catalog exceeds limit")
 	}
+	slices.SortFunc(rows, func(a, b map[string]any) int { return strings.Compare(str(a["name"]), str(b["name"])) })
 	for _, row := range rows {
-		if name := str(row["name"]); name != "" {
-			names = append(names, name)
+		name := str(row["name"])
+		if name == "" || len(names) > 0 && names[len(names)-1] == name {
+			return errors.New("security: missing or duplicate MCP tool identity")
 		}
+		names = append(names, name)
 	}
-	slices.Sort(names)
-	if len(slices.Compact(slices.Clone(names))) != len(names) {
-		return errors.New("security: duplicate MCP tool identity")
-	}
-	digest := hash(js(names))
+	// Repeated discovery by another Worker must not invalidate a pending
+	// approval. A change to a tool schema or description must invalidate it.
+	digest := hash(js(rows))
 	return e.withSecurityDispatchBarrier(func() error {
 		return db.Transaction(func(tx *gorm.DB) error {
 			var row securityMCPRevisionRow
 			if err := tx.First(&row, "id = ? AND store_id = ? AND recovery_epoch = ? AND state = ?", serverID, storeID, epoch, "ready").Error; err != nil {
 				return err
 			}
-			if row.ConfigRevision != expectedConfigRevision {
+			if !row.Enabled || row.ConfigRevision != expectedConfigRevision {
 				return security.ErrConflict
+			}
+			if caller != nil {
+				if caller.StoreID != storeID || caller.RecoveryEpoch != epoch {
+					return security.ErrConflict
+				}
+				current, _, err := effectiveMCPBindingTx(tx, *caller)
+				if err != nil {
+					return err
+				}
+				policy, err := loadSecurityPolicy(tx, caller.ProjectID, storeID, epoch)
+				if err != nil {
+					return err
+				}
+				if policy.Revision != caller.PolicyRevision || current.Revision != caller.MCPBindingRevision || (row.CatalogRevision != caller.MCPCatalogRevision && row.CatalogDigest != digest) {
+					return security.ErrConflict
+				}
+			}
+			if row.CatalogDigest == digest {
+				return nil
 			}
 			return tx.Model(&securityMCPRevisionRow{}).Where("id = ? AND config_revision = ?", serverID, row.ConfigRevision).Updates(map[string]any{"catalog_revision": row.CatalogRevision + 1, "catalog_digest": digest, "tool_names": js(names)}).Error
 		})
@@ -1204,7 +1228,7 @@ func securityCatalogResources(resources []security.ResourceRevision) []string {
 
 // Running operations keep the exact original catalog authority. This is a
 // revocation check only; it never grants a replacement endpoint or spends uses.
-func runningCatalogAuthorityValid(tx *gorm.DB, o security.PreparedOperation) (bool, error) {
+func runningCatalogAuthorityValid(tx *gorm.DB, o security.PreparedOperation, historical ...bool) (bool, error) {
 	if o.CommandProfileID != "" {
 		if len(o.Resources) != 1 {
 			return false, nil
@@ -1218,11 +1242,18 @@ func runningCatalogAuthorityValid(tx *gorm.DB, o security.PreparedOperation) (bo
 		}
 	}
 	if o.LegacyPolicyRevision > 0 {
-		var legacy securityLegacySessionPolicyRow
-		if err := tx.First(&legacy, "session_id = ? AND project_id = ? AND store_id = ? AND recovery_epoch = ?", o.SessionID, o.ProjectID, o.StoreID, o.RecoveryEpoch).Error; err != nil {
+		legacy, source, err := effectiveLegacyPolicyTx(tx, o.ProjectID, o.SessionID, o.StoreID, o.RecoveryEpoch)
+		if len(historical) == 1 && historical[0] && o.LegacyPolicySourceID == "" {
+			// Old committed observations retain their original session snapshot.
+			// This exception is never used for dispatch or running ownership.
+			source = ""
+			legacy = securityLegacySessionPolicyRow{}
+			err = tx.First(&legacy, "session_id = ? AND project_id = ? AND store_id = ? AND recovery_epoch = ?", o.SessionID, o.ProjectID, o.StoreID, o.RecoveryEpoch).Error
+		}
+		if err != nil {
 			return false, err
 		}
-		if legacy.Revision != o.LegacyPolicyRevision {
+		if source != o.LegacyPolicySourceID || legacy.Revision != o.LegacyPolicyRevision {
 			return false, nil
 		}
 	}
@@ -1264,22 +1295,14 @@ func runningCatalogAuthorityValid(tx *gorm.DB, o security.PreparedOperation) (bo
 		if server.State != "ready" || !server.Enabled || server.ConfigRevision != o.MCPConfigRevision || server.CatalogRevision != o.MCPCatalogRevision {
 			return false, nil
 		}
-		var binding securityMCPBindingRow
-		err = tx.First(&binding, "project_id = ? AND server_id = ? AND store_id = ? AND recovery_epoch = ?", o.ProjectID, o.MCPServerID, o.StoreID, o.RecoveryEpoch).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		binding, _, err := effectiveMCPBindingTx(tx, o)
+		if errors.Is(err, errMCPOutsideProject) {
 			return false, nil
 		}
 		if err != nil {
 			return false, err
 		}
-		if !binding.Enabled || binding.Revision != o.MCPBindingRevision {
-			return false, nil
-		}
-		var allowed []string
-		if err = decodeSecurityJSON(binding.ToolNames, &allowed); err != nil {
-			return false, err
-		}
-		if o.MCPToolName != "" && !slices.Contains(allowed, o.MCPToolName) {
+		if binding.Revision != o.MCPBindingRevision {
 			return false, nil
 		}
 	}

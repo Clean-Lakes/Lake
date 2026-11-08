@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -54,14 +55,20 @@ func superChannelForEventTx(tx *gorm.DB, event superEventRow) (*superChannelRow,
 }
 
 type SpecialistChannel struct {
-	ID                string    `json:"id"`
-	ProjectID         string    `json:"projectId"`
-	RoleID            string    `json:"roleId"`
-	RoleName          string    `json:"roleName"`
-	SessionID         string    `json:"sessionId"`
-	Revision          int64     `json:"revision"`
-	CreatedAt         time.Time `json:"createdAt"`
-	NeedsConfirmation bool      `json:"needsConfirmation,omitempty"`
+	ID                   string    `json:"id"`
+	ProjectID            string    `json:"projectId"`
+	RoleID               string    `json:"roleId"`
+	RoleName             string    `json:"roleName"`
+	Duties               string    `json:"duties"`
+	RoleRevision         int64     `json:"roleRevision"`
+	SessionID            string    `json:"sessionId"`
+	Revision             int64     `json:"revision"`
+	CreatedAt            time.Time `json:"createdAt"`
+	NeedsConfirmation    bool      `json:"needsConfirmation,omitempty"`
+	Running              bool      `json:"running,omitempty"`
+	Preparing            bool      `json:"preparing,omitempty"`
+	CompletionCursor     string    `json:"completionCursor,omitempty"`
+	SeenCompletionCursor string    `json:"seenCompletionCursor,omitempty"`
 }
 
 func ensureSuperChannelTx(tx *gorm.DB, project, role string, at time.Time) (superChannelRow, error) {
@@ -85,8 +92,114 @@ func (e *Engine) ListSpecialistChannels(ctx context.Context, project string) ([]
 		return nil, err
 	}
 	out := []SpecialistChannel{}
-	err = db.WithContext(ctx).Table("superagent_role_channels c").Select("c.id,c.project_id,c.role_id,r.name AS role_name,c.host_session_id AS session_id,c.revision,c.created_at").Joins("JOIN superagent_roles r ON r.id=c.role_id AND r.project_id=c.project_id").Where("c.project_id = ?", project).Order("c.created_at,c.id").Scan(&out).Error
+	err = db.WithContext(ctx).Table("superagent_role_channels c").Select("c.id,c.project_id,c.role_id,r.name AS role_name,r.duties,r.revision AS role_revision,c.host_session_id AS session_id,c.revision,c.created_at").Joins("JOIN superagent_roles r ON r.id=c.role_id AND r.project_id=c.project_id").Where("c.project_id = ? AND r.deleted_at IS NULL", project).Order("c.created_at,c.id").Scan(&out).Error
+	if err != nil || len(out) == 0 {
+		return out, err
+	}
+	activity, err := specialistActivity(db.WithContext(ctx), project, "")
+	if err != nil {
+		return nil, err
+	}
+	preparing, err := specialistPreparations(db.WithContext(ctx), project)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		a := activity[out[i].RoleID]
+		out[i].Running = a.Running
+		out[i].Preparing = preparing[out[i].RoleID]
+		out[i].CompletionCursor = a.completionCursor()
+	}
+	return out, nil
+}
+
+// Preparation is presentation, not an execution lease. Read exact role/source
+// bindings across all tasks, including work outside the recent-100 preview.
+// A retained blocked input or parked assignment alone is never live activity.
+func specialistPreparations(db *gorm.DB, project string) (map[string]bool, error) {
+	var roles []string
+	err := db.Raw(`SELECT DISTINCT role_id FROM (
+		SELECT w.role_id FROM superagent_workers w
+		JOIN superagent_assignments a ON a.worker_id=w.id AND a.project_id=w.project_id
+		JOIN native_work_goals g ON g.id=w.task_id AND g.session_id=COALESCE(NULLIF(w.goal_session_id,''),w.session_id)
+		JOIN superagent_events e ON e.id=COALESCE(NULLIF(a.input_event_id,''),w.source_event_id) AND e.project_id=w.project_id
+		WHERE w.project_id=? AND w.parent_worker_id='' AND a.state='queued'
+		  AND e.disposition IN ('pending','routed') AND g.status NOT IN ('completed','failed','cancelled')
+		  AND (g.status IN ('pending','idle','queued','running') OR a.invocation_kind IN ('human','human_recovery'))
+		UNION
+		SELECT c.role_id FROM superagent_role_channels c
+		JOIN superagent_channel_sources s ON s.channel_id=c.id
+		JOIN superagent_events e ON e.id=s.event_id AND e.project_id=c.project_id
+		WHERE c.project_id=? AND e.disposition IN ('pending','staged')
+		UNION
+		SELECT w.role_id FROM superagent_workers w
+		JOIN superagent_inbox i ON i.worker_id=w.id AND i.task_id=w.task_id
+		JOIN superagent_events e ON e.id=i.event_id AND e.project_id=w.project_id
+		WHERE w.project_id=? AND w.parent_worker_id='' AND i.mode='followup'
+		  AND i.delivered_at IS NULL AND i.consumed_at IS NULL AND e.disposition='pending'
+	)`, project, project, project).Scan(&roles).Error
+	out := make(map[string]bool, len(roles))
+	for _, role := range roles {
+		out[role] = true
+	}
 	return out, err
+}
+
+type specialistActivityRow struct {
+	RoleID    string
+	Running   bool
+	Completed int64
+}
+
+func (a specialistActivityRow) completionCursor() string {
+	if a.Completed == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%020d", a.Completed)
+}
+
+// Count each immutable accepted root goal once. A step receipt, later report
+// delivery or ordinary goal revision does not advance the role's read cursor.
+func specialistActivity(db *gorm.DB, project, role string) (map[string]specialistActivityRow, error) {
+	query := db.Table("superagent_workers w").
+		Joins("JOIN native_work_goals g ON g.id = w.task_id AND g.session_id = COALESCE(NULLIF(w.goal_session_id, ''), w.session_id)").
+		Where("w.project_id = ? AND w.parent_worker_id = ''", project)
+	if role != "" {
+		query = query.Where("w.role_id = ?", role)
+	}
+	var rows []specialistActivityRow
+	err := query.Select(`w.role_id,
+		MAX(CASE WHEN g.status IN ('pending','idle','queued','running') AND EXISTS (
+			SELECT 1 FROM superagent_workers runner JOIN superagent_assignments a ON a.worker_id = runner.id
+			WHERE runner.task_id = w.task_id AND runner.project_id = w.project_id AND a.project_id = w.project_id
+			  AND (runner.id = w.id OR runner.parent_worker_id = w.id)
+			  AND a.state = 'active' AND a.owner_id <> '' AND a.lease_until > ?
+		) THEN 1 ELSE 0 END) AS running,
+		COUNT(DISTINCT CASE WHEN g.status = 'completed' AND g.closure_contract <> '' AND EXISTS (
+			SELECT 1 FROM work_acceptance_records receipt
+			WHERE receipt.goal_id = g.id AND receipt.session_id = g.session_id AND receipt.project_id = w.project_id
+			  AND receipt.goal_revision = g.goal_revision AND receipt.plan_revision = g.plan_revision
+			  AND receipt.scope = 'goal' AND receipt.state = 'pass'
+		) THEN g.id END) AS completed`, time.Now().UTC()).Group("w.role_id").Scan(&rows).Error
+	activity := make(map[string]specialistActivityRow, len(rows))
+	for _, row := range rows {
+		activity[row.RoleID] = row
+	}
+	return activity, err
+}
+
+// SpecialistCompletionCursor checks the role watermark without projecting
+// every task or loading a different channel's history.
+func (e *Engine) SpecialistCompletionCursor(ctx context.Context, project, role string) (string, error) {
+	if project == "" || role == "" {
+		return "", errSuperBinding
+	}
+	db, err := e.superStore()
+	if err != nil {
+		return "", err
+	}
+	activity, err := specialistActivity(db.WithContext(ctx), project, role)
+	return activity[role].completionCursor(), err
 }
 
 func (e *Engine) SpecialistChannelForSession(ctx context.Context, project, session string) (SpecialistChannel, error) {
@@ -95,7 +208,7 @@ func (e *Engine) SpecialistChannelForSession(ctx context.Context, project, sessi
 		return SpecialistChannel{}, err
 	}
 	var out SpecialistChannel
-	result := db.WithContext(ctx).Table("superagent_role_channels c").Select("c.id,c.project_id,c.role_id,r.name AS role_name,c.host_session_id AS session_id,c.revision,c.created_at").Joins("JOIN superagent_roles r ON r.id=c.role_id AND r.project_id=c.project_id").Where("c.project_id = ? AND c.host_session_id = ?", project, session).Scan(&out)
+	result := db.WithContext(ctx).Table("superagent_role_channels c").Select("c.id,c.project_id,c.role_id,r.name AS role_name,r.duties,r.revision AS role_revision,c.host_session_id AS session_id,c.revision,c.created_at").Joins("JOIN superagent_roles r ON r.id=c.role_id AND r.project_id=c.project_id").Where("c.project_id = ? AND c.host_session_id = ?", project, session).Scan(&out)
 	if result.Error != nil {
 		return out, result.Error
 	}
@@ -115,6 +228,9 @@ func (e *Engine) BindSpecialistSource(ctx context.Context, project, session, eve
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var channel superChannelRow
 		if err := tx.First(&channel, "project_id = ? AND host_session_id = ?", project, session).Error; err != nil {
+			return err
+		}
+		if err := checkSuperRoleAvailableTx(tx, project, channel.RoleID); err != nil {
 			return err
 		}
 		var event superEventRow
@@ -180,7 +296,7 @@ func (e *Engine) SpecialistChannelWorkers(ctx context.Context, project, session,
 			if err := tx.First(&a, "worker_id = ?", w.ID).Error; err != nil {
 				return err
 			}
-			out = append(out, SuperWorkerView{ID: w.ID, RoleID: w.RoleID, RoleName: ch.RoleName, SessionID: w.SessionID, Task: view, AssignmentState: a.State})
+			out = append(out, SuperWorkerView{ID: w.ID, CreatedAt: w.CreatedAt, RoleID: w.RoleID, RoleName: ch.RoleName, SessionID: w.SessionID, Task: view, AssignmentState: a.State})
 		}
 		return nil
 	})

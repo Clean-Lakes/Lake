@@ -16,6 +16,13 @@ class BuildOriginTests(unittest.TestCase):
             (repo / "VERSION").write_text("fixture")
             (repo / "docs").mkdir()
             (repo / "docs/validation.md").write_text("before validation")
+            (repo / "plan").mkdir()
+            (repo / "plan/implementation.md").write_text("before plan")
+            (repo / "runtime/typescript").mkdir(parents=True)
+            (repo / "runtime/typescript/README.md").write_text("before host overview")
+            (repo / "runtime/typescript/rules.md").write_text("required runtime rules")
+            (repo / "web-agent").mkdir()
+            (repo / "web-agent/THIRD_PARTY_NOTICES.md").write_text("required license notices")
             git(repo, "add", ".")
             git(repo, "-c", "commit.gpgsign=false", "commit", "-m", "base")
             base = git(repo, "rev-parse", "HEAD").stdout.strip()
@@ -30,7 +37,9 @@ class BuildOriginTests(unittest.TestCase):
                 git(repo, "checkout", "-b", "integration", base)
                 git(repo, "merge", "--squash", "feature")
                 (repo / "docs/validation.md").write_text("retained integration evidence")
-                git(repo, "add", "docs/validation.md")
+                (repo / "plan/implementation.md").write_text("completed integration plan")
+                (repo / "runtime/typescript/README.md").write_text("integrated host overview")
+                git(repo, "add", ".")
                 git(repo, "-c", "commit.gpgsign=false", "commit", "-m", "squash")
                 self.assertNotEqual(git(repo, "merge-base", "--is-ancestor", installed, "HEAD").returncode, 0)
                 check(repo, manifest)
@@ -50,8 +59,23 @@ class BuildOriginTests(unittest.TestCase):
                 # A divergent checkout with modified/deleted installed source
                 # has no equivalent baseline, even if it adds other new files.
                 git(repo, "checkout", "-b", "divergent", base)
+                # Equal code with divergent operational Markdown or notices
+                # must not pass merely because other Markdown is documentary.
+                (repo / "runtime.go").write_text("validated implementation")
+                (repo / "runtime/typescript/rules.md").write_text("different runtime rules")
+                git(repo, "add", ".")
+                git(repo, "-c", "commit.gpgsign=false", "commit", "-m", "divergent rules")
+                with self.assertRaisesRegex(ValueError, "阻止旧代码覆盖"):
+                    check(repo, manifest)
+                (repo / "runtime/typescript/rules.md").write_text("required runtime rules")
+                (repo / "web-agent/THIRD_PARTY_NOTICES.md").write_text("different notices")
+                git(repo, "add", ".")
+                git(repo, "-c", "commit.gpgsign=false", "commit", "-m", "divergent notices")
+                with self.assertRaisesRegex(ValueError, "阻止旧代码覆盖"):
+                    check(repo, manifest)
+                (repo / "web-agent/THIRD_PARTY_NOTICES.md").write_text("required license notices")
                 (repo / "runtime.go").write_text("older implementation")
-                git(repo, "add", "runtime.go")
+                git(repo, "add", ".")
                 git(repo, "-c", "commit.gpgsign=false", "commit", "-m", "divergent")
                 with self.assertRaisesRegex(ValueError, "阻止旧代码覆盖"):
                     check(repo, manifest)

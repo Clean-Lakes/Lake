@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -16,7 +17,28 @@ const superChannelSchema = `
 CREATE TABLE IF NOT EXISTS superagentRoleChannels(channelId TEXT PRIMARY KEY,projectId TEXT NOT NULL REFERENCES projects(id),roleId TEXT NOT NULL,sessionId TEXT NOT NULL UNIQUE REFERENCES sessions(id),UNIQUE(projectId,roleId));
 CREATE TABLE IF NOT EXISTS superagentChannelTimeline(channelId TEXT NOT NULL REFERENCES superagentRoleChannels(channelId),kind TEXT NOT NULL,sourceSessionId TEXT NOT NULL,sourceId TEXT NOT NULL,taskId TEXT NOT NULL DEFAULT '',workerId TEXT NOT NULL DEFAULT '',createdAt TEXT NOT NULL,PRIMARY KEY(channelId,kind,sourceSessionId,sourceId));
 CREATE INDEX IF NOT EXISTS superagentChannelTimelinePage ON superagentChannelTimeline(channelId,createdAt,kind,sourceSessionId,sourceId);
+CREATE TABLE IF NOT EXISTS superagentChannelReads(channelId TEXT PRIMARY KEY REFERENCES superagentRoleChannels(channelId) ON DELETE CASCADE, completionCursor TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS superagentChannelCursors(channelId TEXT NOT NULL,sessionId TEXT NOT NULL,cardsThrough INTEGER NOT NULL,eventThrough INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(channelId,sessionId));`
+
+// Canonical metadata commits before this repairable Web projection. Emit a
+// durable Router event so the sidebar refreshes even while the reply streams.
+func (b *Server) syncSuperSpecialists(ctx context.Context, project string) (err error) {
+	defer func() {
+		if recover() != nil {
+			err = fmt.Errorf("specialist projection unavailable; retry from canonical roles")
+		}
+	}()
+	b.reconcileSpecialistChannels(ctx, project)
+	domain, active, err := b.Engine.SuperProject(ctx, project)
+	if err != nil || !active {
+		return err
+	}
+	b.Store.update(func() any {
+		b.Store.event(domain.RouterSessionID, "specialist")
+		return nil
+	})
+	return nil
+}
 
 func (b *Server) reconcileSpecialistChannels(ctx context.Context, project string) []ai.SpecialistChannel {
 	channels, err := b.Engine.ListSpecialistChannels(ctx, project)
@@ -29,6 +51,23 @@ func (b *Server) reconcileSpecialistChannels(ctx context.Context, project string
 		})
 	}
 	return channels
+}
+
+// Resolve both the channel and a direct task link to the same project role.
+func (b *Server) specialistTasks(ctx context.Context, session string) []ai.SuperWorkerView {
+	project := stringOf(b.Store.Session(session)["projectId"])
+	switch b.Store.superSessionKind(session) {
+	case "worker":
+		channel, err := b.Engine.SpecialistChannelForWorker(ctx, project, session)
+		aiFailure(err)
+		session = channel.SessionID
+	case "role":
+	default:
+		fail(404, "Specialist session required")
+	}
+	workers := b.channelWorkers(ctx, project, session)
+	sort.SliceStable(workers, func(i, j int) bool { return workers[i].CreatedAt.After(workers[j].CreatedAt) })
+	return workers
 }
 
 func (b *Server) channelWorkers(ctx context.Context, project, session string) []ai.SuperWorkerView {
@@ -45,7 +84,32 @@ func (b *Server) channelWorkers(ctx context.Context, project, session string) []
 	}
 }
 
-func (b *Server) reconcileRoleChannelTimeline(ctx context.Context, ch ai.SpecialistChannel, workers []ai.SuperWorkerView) {
+func (b *Server) reconcileRoleChannelTimeline(ctx context.Context, ch ai.SpecialistChannel, workers []ai.SuperWorkerView) map[string]Object {
+	dispatches := map[string]Object{}
+	forwarded := map[string]bool{}
+	workerIDs := map[string]bool{}
+	workerSessions := []string{}
+	for _, worker := range workers {
+		workerIDs[worker.ID] = true
+		workerSessions = append(workerSessions, worker.SessionID)
+	}
+	for _, message := range b.pilotDispatchMessages(ctx, ch.ProjectID, workerSessions...) {
+		d := object(message["dispatch"])
+		if workerIDs[stringOf(d["workerId"])] {
+			dispatches[stringOf(message["id"])] = message
+			forwarded[stringOf(message["sessionId"])+"\x00"+stringOf(d["sourceMessageId"])] = true
+		}
+	}
+	b.Store.update(func() any {
+		for id, message := range dispatches {
+			d := object(message["dispatch"])
+			b.Store.exec("INSERT OR IGNORE INTO superagentChannelTimeline(channelId,kind,sourceSessionId,sourceId,taskId,workerId,createdAt) VALUES(?,'dispatch',?,?,?,?,?)", ch.ID, message["sessionId"], id, d["taskId"], d["workerId"], channelEntryTime(stringOf(message["createdAt"])))
+			// Repair only the display index. The original user message, event,
+			// task source and execution context are preserved in their stores.
+			b.Store.exec("DELETE FROM superagentChannelTimeline WHERE channelId=? AND kind='message' AND sourceSessionId=? AND sourceId=?", ch.ID, message["sessionId"], d["sourceMessageId"])
+		}
+		return nil
+	})
 	for _, worker := range workers {
 		b.ensureSuperWorkerSession(ch.ProjectID, worker.SessionID, worker.Task.Title)
 		cursorState := b.Store.read(func() any {
@@ -60,7 +124,7 @@ func (b *Server) reconcileRoleChannelTimeline(ctx context.Context, ch ai.Special
 		b.Store.update(func() any {
 			for _, id := range ids {
 				row := b.Store.row("SELECT m.id,m.sessionId,m.createdAt FROM superagentInputs i JOIN messages m ON m.id=i.messageId AND m.sessionId=i.sessionId JOIN sessions s ON s.id=m.sessionId WHERE i.eventId=? AND s.projectId=?", id, ch.ProjectID)
-				if row != nil {
+				if row != nil && !forwarded[stringOf(row["sessionId"])+"\x00"+stringOf(row["id"])] {
 					b.Store.exec("INSERT OR IGNORE INTO superagentChannelTimeline(channelId,kind,sourceSessionId,sourceId,createdAt) VALUES(?,'message',?,?,?)", ch.ID, row["sessionId"], row["id"], channelEntryTime(stringOf(row["createdAt"])))
 				}
 			}
@@ -103,6 +167,7 @@ func (b *Server) reconcileRoleChannelTimeline(ctx context.Context, ch ai.Special
 		}
 		return nil
 	})
+	return dispatches
 }
 
 type roleChannelEntry struct {
@@ -121,7 +186,7 @@ func (b *Server) roleChannelPage(ctx context.Context, session, cursor string, li
 	ch, err := b.Engine.SpecialistChannelForSession(ctx, project, session)
 	aiFailure(err)
 	workers := b.channelWorkers(ctx, project, session)
-	b.reconcileRoleChannelTimeline(ctx, ch, workers)
+	dispatches := b.reconcileRoleChannelTimeline(ctx, ch, workers)
 	args := []any{ch.ID}
 	condition := ""
 	if cursor != "" {
@@ -175,7 +240,9 @@ func (b *Server) roleChannelPage(ctx context.Context, session, cursor string, li
 			snapshots[source] = b.Store.Snapshot(source)
 		}
 		entry := roleChannelEntry{ID: jsonText([]any{row["kind"], source, row["sourceId"]}), SourceSessionID: source, TaskID: stringOf(row["taskId"]), WorkerID: stringOf(row["workerId"]), CreatedAt: stringOf(row["createdAt"])}
-		if row["kind"] == "message" {
+		if row["kind"] == "dispatch" {
+			entry.Message = dispatches[stringOf(row["sourceId"])]
+		} else if row["kind"] == "message" {
 			for _, m := range objects(snapshots[source]["messages"]) {
 				if m["id"] == row["sourceId"] {
 					entry.Message = m
@@ -210,6 +277,13 @@ func (b *Server) roleChannelPage(ctx context.Context, session, cursor string, li
 			entries = append(entries, entry)
 		}
 	}
+	hostMessages := []Object{}
+	for _, entry := range entries {
+		if entry.SourceSessionID == session && entry.Message != nil {
+			hostMessages = append(hostMessages, entry.Message)
+		}
+	}
+	b.projectPilotReportMessages(ctx, project, session, hostMessages)
 	active := []Object{}
 	for _, w := range workers {
 		hostStatus := b.Store.Session(w.SessionID)["status"]
@@ -269,6 +343,7 @@ func (b *Server) roleChannelRoute(w http.ResponseWriter, r *http.Request, sessio
 		}
 		project := stringOf(b.Store.Session(session)["projectId"])
 		aiFailure(b.Engine.StopSpecialistChannel(r.Context(), project, session))
+		_ = b.syncSuperSpecialists(r.Context(), project)
 		b.Store.AddMessage(session, "system", "已停止本专员当前处理与待派发工作；原任务和操作记录保留，远端执行状态以原记录为准。", nil)
 		reply(w, 200, Object{"stopped": true})
 		return

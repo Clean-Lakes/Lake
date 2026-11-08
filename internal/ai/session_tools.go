@@ -105,9 +105,9 @@ func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, ca
 			if server.Transport == "stdio" && c.Permissions != nil && c.Permissions.DenyLocalExecution {
 				return nil, errors.New("当前会话禁止启动本机 MCP")
 			}
-			if call.Name == "call_mcp_tool" || server.Transport == "stdio" {
+			if mcpRequiresUnrestrictedResources(call.Name, server.Transport == "stdio") {
 				if c.Permissions != nil && c.Permissions.BlockUnreferencedAssets {
-					return nil, errors.New("MCP 无法验证项目资源范围；当前会话仅允许操作已引用资源")
+					return nil, errMCPReferencedResourcesOnly
 				}
 				if c.Permissions == nil || !c.Permissions.SilentCommands {
 					target := server.Name + " · " + str(a["tool"])
@@ -132,7 +132,7 @@ func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, ca
 				if lookupErr != nil || !server.Enabled {
 					return nil, errors.New("MCP 服务已不可用")
 				}
-				if c.Permissions != nil && (server.Transport == "stdio" && c.Permissions.DenyLocalExecution || (call.Name == "call_mcp_tool" || server.Transport == "stdio") && c.Permissions.BlockUnreferencedAssets) {
+				if c.Permissions != nil && (server.Transport == "stdio" && c.Permissions.DenyLocalExecution || mcpRequiresUnrestrictedResources(call.Name, server.Transport == "stdio") && c.Permissions.BlockUnreferencedAssets) {
 					return nil, errors.New("当前父会话权限已禁止此次 MCP 操作")
 				}
 			}
@@ -306,6 +306,12 @@ func (e *Engine) askQuestion(ctx context.Context, s *session, call Call, pilot .
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
+		defer s.mu.Unlock()
+		// A stopped/superseded wait must not clear a newer question or turn a
+		// finished task back into a running input state.
+		if s.state.View.Question == nil || s.state.View.Question.ID != req.ID {
+			return
+		}
 		s.questionReply = nil
 		e.runMu.Lock()
 		closing := e.runtimeClosed || e.HostContext != nil && e.HostContext.Err() != nil
@@ -317,7 +323,6 @@ func (e *Engine) askQuestion(ctx context.Context, s *session, call Call, pilot .
 		}
 		_ = e.saveHumanInputState(s)
 		e.notify(s, "question", s.state.View.Question)
-		s.mu.Unlock()
 	}()
 	if err != nil {
 		return nil, err
@@ -373,6 +378,27 @@ func (e *Engine) ReplyQuestionWithTarget(id, requestID string, answers map[strin
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	req := s.state.View.Question
+	if req == nil && strings.HasPrefix(requestID, "security-confirm-") && noQuestionAnswers(answers) {
+		return nil // Dismissing an already closed card is idempotent.
+	}
+	if req != nil && req.ID == requestID {
+		obsolete, err := e.obsoleteSecurityQuestionLocked(s, req)
+		if err != nil {
+			return err
+		}
+		if obsolete {
+			if s.questionReply != nil && s.cancel != nil {
+				s.cancel()
+			}
+			if err := e.dismissQuestionLocked(s, req, "expired"); err != nil {
+				return err
+			}
+			if noQuestionAnswers(answers) {
+				return nil
+			}
+			return errors.New("security: confirmation expired; no answer or authorization recorded")
+		}
+	}
 	if req == nil || req.ID != requestID || s.questionReply == nil && (!nativeQuestionReady(req) || s.cancel != nil) {
 		return errors.New("question expired")
 	}

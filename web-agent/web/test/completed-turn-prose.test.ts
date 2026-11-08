@@ -39,17 +39,19 @@ test('completed tool turns archive only narration before the real final response
   assert.equal(completedTurnInterimIds([...turn, {id:'role',at:'now',agentRun:{id:'role'} as AgentRun}], true).size, 0, 'role reports retain their own identity');
 });
 
-test('final prose keeps its stable entry; original narration remains available in folded records', () => {
+test('public prose stays visible once through tool rounds, completion and refreshed snapshots', () => {
   const cards = turn.map(entry => entry.card!) as AICard[];
   const snapshot = {session: {id: 'fixture'}, messages: [{id: 'user', role: 'user', text: '检查测试服务', createdAt: '2026-10-21T00:00:00Z'}], actions: [], ai: {status: 'completed', cards, cardsOffset: 0}} as unknown as SessionSnapshot;
   const html = renderToStaticMarkup(createElement(AITranscript, {snapshot}));
-  assert.ok(html.includes('过程播报 · 1') && html.includes('先核对测试节点。'));
-  assert.ok(html.includes('class="settled-reply is-archived" aria-hidden="true" inert=""'));
-  assert.ok(html.includes('data-conversation-entry="final"'));
-  assert.match(html, /class="settled-reply"><div class="settled-reply-content"><div data-conversation-entry="final"/);
+  assert.ok(!html.includes('过程播报')&&!html.includes('is-archived')&&!html.includes('is-awaiting-reply'));
+  for(const id of ['interim','final'])assert.match(html,new RegExp('class="settled-reply"><div class="settled-reply-content"><div data-conversation-entry="'+id+'"'));
+  assert.equal((html.match(/先核对测试节点。/g)??[]).length,1);
+  assert.ok(html.indexOf('data-conversation-entry="interim"')<html.indexOf('data-conversation-entry="final"'));
   const live = renderToStaticMarkup(createElement(AITranscript, {snapshot: {...snapshot, ai: {...snapshot.ai!, status: 'running'}}}));
-  assert.ok(live.includes('is-archived') && live.includes('过程播报 ·'),'a trailing answer retires process prose before turn completion');
-  assert.ok(!live.includes('turn-execution-details is-open'),'process closes when the answer starts');
+  assert.ok(!live.includes('is-archived')&&!live.includes('过程播报')&&!live.includes('is-awaiting-reply'));
+  for(const text of ['先核对测试节点。','最终结果：测试服务正常。'])assert.equal((live.split(text).length-1),1);
+  assert.ok(!live.includes('turn-execution-details is-open'),'operation details stay closed until the reader opens them');
+  assert.equal(renderToStaticMarkup(createElement(AITranscript,{snapshot:structuredClone(snapshot)})),html,'an unchanged restored snapshot does not switch prose projection');
   const activity = renderToStaticMarkup(createElement(AITranscript, {snapshot, mode: 'activity'}));
   assert.ok(!activity.includes('is-archived'));
 });
@@ -68,7 +70,7 @@ test('an incomplete turn with a real post-tool answer archives only proven pre-t
  const snapshot={session:{id:'fixture'},resources:[],actions:[],messages:[{id:'user',role:'user',text:'继续处理',createdAt:'2026-10-21T00:00:00Z'}],replyTimings:[{messageId:'user',startedAt:'2026-10-21T00:00:00Z',finishedAt:'2026-10-21T00:00:05Z',status:'failed'}],ai:{session:'fixture',status:'failed',cardsOffset:0,cards:ended.map(entry=>entry.card!)}} as unknown as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
  assert.ok(html.includes('未完成')&&html.includes('实际操作失败'));
- assert.ok(html.includes('过程播报 · 1'));
- assert.match(html,/class="settled-reply is-archived"[^>]*><div class="settled-reply-content"><div data-conversation-entry="interim"/);
- for(const id of ['final','second'])assert.match(html,new RegExp('class="settled-reply"><div class="settled-reply-content"><div data-conversation-entry="'+id+'"'));
+ assert.ok(!html.includes('过程播报')&&!html.includes('is-archived'));
+ for(const id of ['interim','final','second'])assert.match(html,new RegExp('class="settled-reply"><div class="settled-reply-content"><div data-conversation-entry="'+id+'"'));
+ assert.equal((html.match(/先核对测试节点。/g)??[]).length,1);
 });

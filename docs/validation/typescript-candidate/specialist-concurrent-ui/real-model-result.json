@@ -1,0 +1,112 @@
+{
+  "date": "2026-11-06",
+  "timezone": "Asia/Shanghai",
+  "timestampFieldsTimezone": "UTC",
+  "testedCommit": "918cae17608d06ebb29d278daa64aaae2e64efb9",
+  "fixCodeCommit": "8774ea2a00f24eb291d45b12b7c3daa285f7bc46",
+  "testsUseOnly": "synthetic local printf and sleep",
+  "sameRoleId": "217ca2d449243a4562739c6ed6a3562f66ea8963e4ccb8f157ff69f488845176",
+  "tasks": [
+    {
+      "id": "st_4e9279026365c2720bf8943909d03a0b",
+      "title": "快速复测 A（待停止）",
+      "status": "cancelled",
+      "acceptance": "not_evaluated",
+      "summary": null
+    },
+    {
+      "id": "st_5dd64a107ec7a8eec70dfdf30486e575",
+      "title": "快速复测 B（保持运行）",
+      "status": "completed",
+      "acceptance": "pass",
+      "summary": "快速复测 B 已运行结束，完整输出 START、01 至 03 和 END，退出码为 0。"
+    }
+  ],
+  "workers": [
+    {
+      "id": "worker_4e9279026365c2720bf8943909d03a0b",
+      "roleId": "217ca2d449243a4562739c6ed6a3562f66ea8963e4ccb8f157ff69f488845176",
+      "sessionId": "sw_4e9279026365c2720bf8943909d03a0b",
+      "taskId": "st_4e9279026365c2720bf8943909d03a0b",
+      "state": "stopped",
+      "generation": 2
+    },
+    {
+      "id": "worker_5dd64a107ec7a8eec70dfdf30486e575",
+      "roleId": "217ca2d449243a4562739c6ed6a3562f66ea8963e4ccb8f157ff69f488845176",
+      "sessionId": "sw_5dd64a107ec7a8eec70dfdf30486e575",
+      "taskId": "st_5dd64a107ec7a8eec70dfdf30486e575",
+      "state": "parked",
+      "generation": 1
+    }
+  ],
+  "executions": [
+    {
+      "id": "7da6a7a149492a64bf3f3003f045ceee401292137176629ca7dbf7138a9ac24e",
+      "taskId": "st_5dd64a107ec7a8eec70dfdf30486e575",
+      "status": "completed",
+      "startedAt": "2026-11-06T09:36:09.248Z",
+      "finishedAt": "2026-11-06T09:39:09.554Z",
+      "exitCode": 0,
+      "stdout": "LAKE_FAST_B_START\nLAKE_FAST_B_01\nLAKE_FAST_B_02\nLAKE_FAST_B_03\nLAKE_FAST_B_END\n"
+    },
+    {
+      "id": "a937b8dcb65262aca30d96d3189e3e23aa7d322f819d72fd1c7be5f036755478",
+      "taskId": "st_4e9279026365c2720bf8943909d03a0b",
+      "status": "cancelled",
+      "startedAt": "2026-11-06T09:36:08.733Z",
+      "finishedAt": "2026-11-06T09:36:31.959Z",
+      "exitCode": 137,
+      "stdout": "LAKE_FAST_A_START\n"
+    }
+  ],
+  "activeTestWorkers": [],
+  "unresolvedTestOperations": [],
+  "preservationByBaselineId": {
+    "superGoals": {
+      "baseline": 7,
+      "changed": 0,
+      "added": 4
+    },
+    "superAttempts": {
+      "baseline": 9,
+      "changed": 0,
+      "added": 4
+    },
+    "superAcceptance": {
+      "baseline": 8,
+      "changed": 0,
+      "added": 4
+    },
+    "superOperations": {
+      "baseline": 30,
+      "changed": 0,
+      "added": 4
+    },
+    "superWorkers": {
+      "baseline": 7,
+      "changed": 0,
+      "added": 4
+    },
+    "superProjects": {
+      "baseline": 3,
+      "changed": 0,
+      "added": 0
+    },
+    "commandExecutions": {
+      "baseline": 18,
+      "changed": 0,
+      "added": 4
+    },
+    "resources": {
+      "baseline": 145,
+      "changed": 0,
+      "added": 0
+    },
+    "messages": {
+      "baseline": 1018,
+      "changed": 0,
+      "added": 12
+    }
+  }
+}

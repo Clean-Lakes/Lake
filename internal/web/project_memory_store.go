@@ -115,7 +115,6 @@ func memoryType(t string) bool {
 
 type MemoryMutation struct {
 	Details          *MemoryDetails
-	Claim            Object
 	Key              string
 	Type             string
 	Description      string

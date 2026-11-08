@@ -299,22 +299,17 @@ func loadSecurityEvaluation(tx *gorm.DB, o security.PreparedOperation, owner Exe
 		if len(ignoreOperationID) == 1 && ignoreOperationID[0] == o.ID {
 			blockQuery = tx.Where("id <> ?", o.ID)
 		}
-		ids := securityCatalogResources(o.Resources)
-		if len(ids) == 0 {
-			ids = []string{""}
-		}
-		for _, id := range ids {
-			if err = CheckResourceWriteBlock(blockQuery, id); err != nil {
-				return in, err
-			}
+		if err = checkSecurityOperationConflicts(blockQuery, o); err != nil {
+			return in, err
 		}
 	}
 
 	if in.Policy.Mode == "legacy" {
-		var legacy securityLegacySessionPolicyRow
-		if err := tx.First(&legacy, "session_id = ? AND project_id = ? AND store_id = ? AND recovery_epoch = ?", o.SessionID, o.ProjectID, o.StoreID, o.RecoveryEpoch).Error; err != nil {
+		legacy, source, err := effectiveLegacyPolicyTx(tx, o.ProjectID, o.SessionID, o.StoreID, o.RecoveryEpoch)
+		if err != nil {
 			return in, err
 		}
+		in.LegacyPolicySourceID = source
 		in.LegacyPolicyRevision = legacy.Revision
 	}
 	if err = applyLegacySessionPolicyTx(tx, &in); err != nil {

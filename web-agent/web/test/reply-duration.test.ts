@@ -24,14 +24,14 @@ test("thinking identity appears immediately while brief tool activity and elapse
  for(const elapsed of [0,500,999]){
   now=Date.parse(start)+elapsed;
   for(const html of [render({timing:running}),render({view:{status:"running",turnStartedAt:start,cards:[]} as never})]){
-   assert.ok(html.includes('turn-thinking-avatar')&&html.includes('turn-thinking-dots'));
-   assert.ok(!html.includes('reply-duration-spinner')&&!html.includes('turn-status-elapsed'));
+   assert.ok(html.includes('turn-thinking-avatar')&&html.includes('turn-activity-mark'));
+   assert.ok(html.includes('reply-duration-spinner')&&!html.includes('turn-status-elapsed'));
   }
   assert.equal(render({timing:running,cards:[{id:'tool',type:'operation',status:'running',at:start}]}),'');
  }
  now=Date.parse(start)+1000;
  const active=render({timing:running});
- assert.ok(active.includes("turn-thinking-dots")&&!active.includes("用时")&&active.includes("正在思考…"));
+ assert.ok(active.includes("turn-activity-mark")&&!active.includes("用时")&&active.includes("正在思考…"));
  const quick={...timing,finishedAt:"2026-10-12T03:00:00.999Z"};
  assert.equal(render({timing:quick}),"");
  assert.ok(render({timing:{...quick,status:"failed"}}).includes("未完成"));
@@ -41,7 +41,7 @@ test("thinking identity appears immediately while brief tool activity and elapse
  assert.ok(!waiting.includes("不到1秒"));
 });
 
-test('Pilot and specialist identities survive initial, empty-stream and reasoning snapshots without the old animation',t=>{
+test('Pilot and specialist identities survive initial, empty-stream and reasoning snapshots with the original water-wave loading animation',t=>{
  t.mock.method(Date,'now',()=>Date.parse(start)+100);
  for(const assistantIdentity of [{name:'Pilot',pilot:true},{name:'服务器运维排查专员'}]){
   for(const cards of [[],[{id:'empty',type:'message',status:'running',content:'',at:start}],[{id:'empty-text',type:'text',status:'running',content:'  ',at:start}],[{id:'reasoning',type:'thinking',status:'running',content:'',at:start}]] as AICard[][]){
@@ -49,26 +49,26 @@ test('Pilot and specialist identities survive initial, empty-stream and reasonin
    const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity}));
    if(assistantIdentity.pilot)assert.ok(html.slice(html.indexOf('turn-thinking-avatar')).includes('data-role="coordinator"'));
    else assert.ok(!html.includes('turn-thinking-avatar')&&html.includes('data-reply-avatar="hidden"'));
-   assert.ok(html.includes('turn-thinking-dots')&&!html.includes('reply-duration-spinner'));
+   assert.ok(html.includes('turn-activity-mark')&&html.includes('reply-duration-spinner')&&!html.includes('turn-thinking-bubble'));
    assert.equal((html.match(/class="response-avatar"/g)||[]).length,assistantIdentity.pilot?1:0,'empty reply placeholders do not add another blank identity bubble');
   }
  }
 });
 
-test('a direct specialist supplement shows dots without saved timing or a new task root',t=>{
+test('a direct specialist supplement shows water waves without saved timing or a new task root',t=>{
  t.mock.method(Date,'now',()=>Date.parse(start)+2000);
  const userAt=new Date(Date.parse(start)+1000).toISOString();
  const snapshot={session:{id:'worker',workspaceRole:'worker'},messages:[{id:'followup',sessionId:'worker',role:'user',text:'为什么受阻？',createdAt:userAt}],resources:[],actions:[],replyTimings:[],superagent:{task:{state:'blocked'},goal:{status:'blocked'}},ai:{session:'worker',status:'running',replyStatus:'running',rootTurnId:'original-task-root',turnStartedAt:start,cards:[],cardsOffset:0,workGoals:[{id:'original-task',status:'blocked'}]}} as unknown as SessionSnapshot;
  const render=(s:SessionSnapshot)=>renderToStaticMarkup(createElement(AITranscript,{snapshot:s,assistantIdentity:{name:'服务器运维排查专员'}}));
  const active=render(snapshot);
- assert.ok(active.includes('turn-thinking-dots')&&active.includes('data-reply-avatar="hidden"'));
+ assert.ok(active.includes('turn-activity-mark')&&active.includes('data-reply-avatar="hidden"'));
  assert.ok(!active.includes('response-avatar')&&!active.includes('turn-thinking-avatar'));
  const ended=render({...snapshot,ai:{...snapshot.ai!,status:'blocked',replyStatus:undefined,turnFinishedAt:new Date().toISOString()}});
- assert.ok(!ended.includes('turn-thinking-dots'),'business blockage alone must not invent a live reply');
+ assert.ok(!ended.includes('turn-activity-mark'),'business blockage alone must not invent a live reply');
  assert.equal(snapshot.superagent!.goal!.status,'blocked');
  assert.equal(snapshot.ai!.rootTurnId,'original-task-root');
 });
-test('direct specialist compaction uses dots immediately and preserves approval, stop and completion states',t=>{
+test('direct specialist compaction uses water waves immediately and preserves approval, stop and completion states',t=>{
  const userAt=new Date(Date.parse(start)+1000).toISOString();
  const compact:AICard={id:'compact',type:'compaction',status:'running',content:'正在压缩上下文…',at:userAt};
  const snapshot={session:{id:'worker',workspaceRole:'worker'},messages:[{id:'followup',sessionId:'worker',role:'user',text:'为什么？',createdAt:userAt}],resources:[],actions:[],replyTimings:[],ai:{session:'worker',status:'running',replyStatus:'running',rootTurnId:'original-task-root',turnStartedAt:start,cards:[compact],cardsOffset:0}} as SessionSnapshot;
@@ -77,20 +77,20 @@ test('direct specialist compaction uses dots immediately and preserves approval,
   t.mock.method(Date,'now',()=>Date.parse(userAt)+elapsed);
   const html=render();
   assert.equal((html.match(/class="reply-duration /g)||[]).length,1);
-  assert.ok(html.includes('turn-thinking-dots')&&!html.includes('reply-duration-spinner')&&!html.includes('status-text--active'));
-  assert.ok(html.includes('role="status" aria-live="polite">正在压缩上下文…'));
+  assert.ok(html.includes('turn-activity-mark')&&html.includes('reply-duration-spinner')&&html.includes('status-text--active'));
+  assert.ok(html.includes('role="status" aria-live="polite" aria-atomic="true">正在压缩上下文…'));
   assert.ok(!html.includes('turn-thinking-avatar'));
  }
  snapshot.ai!.status='waiting_approval';
- assert.ok(render().includes('等待确认')&&!render().includes('turn-thinking-dots'));
+ assert.ok(render().includes('等待确认')&&!render().includes('turn-activity-mark'));
  snapshot.ai!.status='cancelled';
- assert.ok(render().includes('已停止')&&!render().includes('turn-thinking-dots'),'a stale running compaction card cannot keep a stopped turn busy');
+ assert.ok(render().includes('已停止')&&!render().includes('turn-activity-mark'),'a stale running compaction card cannot keep a stopped turn busy');
  snapshot.ai!.status='running';compact.status='completed';
- assert.ok(render().includes('turn-thinking-dots')&&!render().includes('正在压缩上下文'),'after compaction the same bubble continues with normal thinking');
+ assert.ok(render().includes('turn-activity-mark')&&!render().includes('正在压缩上下文'),'after compaction the same bubble continues with normal thinking');
  snapshot.ai!.cards.push({id:'reply',type:'message',status:'running',content:'这是答复',at:new Date(Date.parse(userAt)+3000).toISOString()});
- assert.ok(!render().includes('turn-thinking-dots'),'real prose ends the waiting bubble');
+ assert.ok(!render().includes('turn-activity-mark'),'real prose ends the waiting bubble');
  snapshot.ai!.status='completed';
- assert.ok(!render().includes('turn-thinking-dots'));
+ assert.ok(!render().includes('turn-activity-mark'));
 });
 test("cancelled and failed turns are identified; unknown endpoints do not fabricate time",()=>{
  assert.equal(replyDurationText({...timing,status:"cancelled"},Date.now()),"1分钟 13秒 · 已停止");
@@ -107,7 +107,7 @@ test('streamed prose replaces the model waiting row while details and real tool 
   const snapshot={session:{id:'stream',workspaceRole:pilot?'router':'worker'},messages:[{id:'u',sessionId:'stream',role:'user',text:'a',createdAt:start}],resources:[],actions:[],replyTimings:pilot?[{...timing,status:'running',finishedAt:''}]:[],ai:{session:'stream',status:'running',turnStartedAt:start,cards,cardsOffset:0}} as SessionSnapshot;
   const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:pilot?'Pilot':'服务器运维排查专员',pilot}}));
   assert.ok(html.includes(cards[0]!.content!));
-  assert.ok(!html.includes('正在生成回复')&&!html.includes('reply-duration-spinner')&&!html.includes('turn-thinking-dots')&&!html.includes('class="reply-duration '),'plain model streaming needs no second activity row');
+  assert.ok(!html.includes('正在生成回复')&&!html.includes('reply-duration-spinner')&&!html.includes('turn-activity-mark')&&!html.includes('class="reply-duration '),'plain model streaming needs no second activity row');
   const props={timing:{...timing,status:'running' as const,finishedAt:''},view:snapshot.ai,cards,latestUserAt:start};
   const details=renderToStaticMarkup(createElement(ReplyDuration,{...props,disclosure:{open:false,controls:'steps',onToggle:()=>{}}}));
   assert.ok(details.includes('执行过程')&&details.includes('aria-controls="steps"'));
@@ -133,7 +133,7 @@ test("each footer stays with its own user turn and multi-Agent replies keep one 
 test("waiting for first model data already has visible motion, independent of idle engine state",()=>{
  const snapshot={session:{id:"s"},messages:[{id:"u",role:"user",text:"你能看懂图片吗",createdAt:start}],resources:[],actions:[],replyTimings:[{...timing,status:"running",finishedAt:""}],ai:{session:"s",status:"idle",cards:[],cardsOffset:0}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
- assert.ok(html.includes("turn-thinking-dots") && html.includes("正在思考…"));
+ assert.ok(html.includes("turn-activity-mark") && html.includes("正在思考…"));
  const completed=renderToStaticMarkup(createElement(AITranscript,{snapshot:{...snapshot,replyTimings:[timing]}}));
  assert.ok(!completed.includes("reply-duration-spinner") && completed.includes("用时 1分钟 13秒")&&!completed.includes("reply-duration-clock"));
  assert.ok(!completed.includes("回复结束")&&!completed.includes("turn-status-mark"),"finished timing uses a quiet Chinese elapsed caption without an icon or repeated completion label");
@@ -160,14 +160,15 @@ test('elapsed disclosure matches the Chinese reference and exposes a real access
 });
 
 
-test('thinking uses three accessible dots; tool activity keeps elapsed text and completion freezes it',t=>{
+test('thinking restores the water-wave mark and one accessible status; tool activity keeps elapsed text and completion freezes it',t=>{
  t.mock.method(Date,'now',()=>Date.parse(start)+19000);
  const running={...timing,status:'running' as const,finishedAt:''};
  const html=renderToStaticMarkup(createElement(ReplyDuration,{timing:running}));
- assert.ok(html.includes('turn-thinking-bubble')&&html.includes('class="visually-hidden" role="status"'));
- assert.equal((html.match(/<i>/g)||[]).length,3);
+ assert.ok(html.includes('turn-activity-mark')&&!html.includes('turn-thinking-bubble'));
+ assert.equal((html.match(/class="turn-status-mark"/g)||[]).length,1);
+ assert.equal((html.match(/role="status" aria-live="polite"/g)||[]).length,1);
  assert.ok(html.includes('title="正在思考 · 已处理 19秒"'));
- assert.ok(!html.includes('turn-status-elapsed')&&!html.includes('reply-duration-spinner')&&!html.includes('status-text--active'));
+ assert.ok(html.includes('turn-status-elapsed')&&html.includes('reply-duration-spinner')&&html.includes('status-text--active'));
  const tool:AICard={id:'tool',type:'operation',title:'inspect_host',status:'running',at:start};
  const toolHTML=renderToStaticMarkup(createElement(ReplyDuration,{timing:running,cards:[tool]}));
  const active=toolHTML.match(/<span class="status-text status-text--active [^"]*">([\s\S]*?)<\/span><\/span>/)?.[1]??'';
@@ -216,7 +217,7 @@ test('latest-step caption hides while expanded and stops sweeping on attention o
  const running={...timing,status:'running' as const,finishedAt:''};
  assert.ok(render({timing:running,latestStep,disclosure}).includes('execution-icon-water'));
  const returned=render({timing:running,latestStep:{...latestStep,status:'completed'},disclosure});
- assert.ok(returned.includes('status-text--active turn-current-step-label')&&returned.includes('execution-icon-water'));
+ assert.ok(!returned.includes('turn-current-step')&&!returned.includes('execution-icon-water'),'thinking must not keep an already completed tool caption active');
  assert.ok(!render({timing:running,view:{status:'waiting_approval',cards:[]} as never,latestStep,disclosure}).includes('execution-icon-water'));
  const open=render({timing:running,latestStep,detailNotice:'2 项失败',disclosure:{...disclosure,open:true}});
  assert.ok(!open.includes('turn-current-step')&&open.includes('2 项失败')&&open.includes('aria-expanded="true"'));
@@ -264,5 +265,24 @@ test('Pilot hides the running turn timer without reserving space and restores or
  assert.equal(live,'<p>专员正文</p>');
  const ended=renderToStaticMarkup(createElement(TurnExecutionDetails,{hideLive:true,timing,details:[],children:body}));
  assert.ok(ended.includes('用时 1分钟 13秒')&&ended.includes('is-finished'));
- assert.ok(ended.indexOf('用时')<ended.indexOf('专员正文'));
+ assert.ok(ended.indexOf('专员正文')<ended.indexOf('用时'),'finished timing stays in the same slot after prose');
+});
+
+test('the elapsed and decision status owns one fixed slot after prose throughout the turn',t=>{
+ t.mock.method(Date,'now',()=>Date.parse(start)+19000);
+ for(const status of ['running','waiting_approval','completed','failed','cancelled'] as const){
+  const active=status==='running'||status==='waiting_approval';
+  const html=renderToStaticMarkup(createElement(TurnExecutionDetails,{
+   timing:{...timing,status:active?'running':status,finishedAt:active?'':timing.finishedAt},
+   view:{status,cards:[]} as never,details:[createElement('span',{key:'record'},'操作详细记录')],
+   children:createElement('p',{'data-public-reply':'reply'},'已经展示的公开正文'),
+  }));
+  assert.equal((html.match(/class="reply-duration /g)??[]).length,1,status);
+  assert.ok(html.indexOf('已经展示的公开正文')<html.indexOf('class="reply-duration '),status);
+  assert.ok(html.indexOf('class="reply-duration ')<html.indexOf('class="turn-execution-details"'),status);
+  assert.ok(html.includes('aria-hidden="true" inert="" role="region"'),status+' must not auto-open process records');
+  if(status==='waiting_approval')assert.ok(html.includes('等待确认'));
+  if(status==='failed')assert.ok(html.includes('未完成'));
+  if(status==='cancelled')assert.ok(html.includes('已停止'));
+ }
 });

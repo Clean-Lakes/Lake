@@ -44,7 +44,7 @@ func (e *Engine) CheckSuperagentProgress(ctx context.Context, projectID string) 
 				if channel != nil {
 					destination = channel.HostSessionID
 				}
-				payload := js(map[string]any{"text": "Pilot 处理一条消息连续失败，原始要求已保留。请检查模型配置，或提供新的要求；尚未派发的工作没有自动执行。"})
+				payload := js(map[string]any{"text": "这次没能处理完你的要求，原始消息和已有结果都已保留。可以重试；尚未派发的工作还没有开始。"})
 				if err := tx.Create(&superOutputRow{ID: id, ProjectID: projectID, ChannelRef: destination, SourceMessageID: event.SourceEventID, Kind: "router_reply", Payload: payload, RequestHash: hash(payload), ReportRevision: 1, State: "pending", CreatedAt: time.Now().UTC()}).Error; err != nil {
 					return err
 				}

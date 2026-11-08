@@ -88,7 +88,11 @@ client/desktop/frontend/dist/
 __pycache__/
 *.pyc
 
-# Retired ZCode snapshots, local tooling and generated runtime
-/third_party/zcode/
+# Runtime dependency workspaces and legacy local caches
+/third_party/agent-sdk/
+/third_party/.lake-cache/
 /zcode-plugin-ops-data/
 /.zcodeignore
+
+# Legacy local dependency cache; never stage extracted source.
+/third_party/zcode/

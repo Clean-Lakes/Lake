@@ -118,6 +118,8 @@ import LakeDesktopCore
         config.userContentController.add(self, name: "lakeChrome")
         config.userContentController.addScriptMessageHandler(self, contentWorld: .page, name: "lakeInspectorWindow")
         config.userContentController.addUserScript(WKUserScript(source: "window.lakeInspectorWindow = {setOpen: open => window.webkit.messageHandlers.lakeInspectorWindow.postMessage({open})};", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        config.userContentController.addScriptMessageHandler(self, contentWorld: .page, name: "lakeWindowAttention")
+        config.userContentController.addUserScript(WKUserScript(source: "window.lakeWindowAttention = {isReading: () => window.webkit.messageHandlers.lakeWindowAttention.postMessage({})};", injectionTime: .atDocumentStart, forMainFrameOnly: true))
         config.userContentController.addScriptMessageHandler(self, contentWorld: .page, name: "lakeUpdates")
         #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
@@ -136,7 +138,7 @@ import LakeDesktopCore
         webView.uiDelegate = self
         window = WorkbenchWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 840),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-        window.title = profile.name
+        window.title = backend.backendRuntime == "typescript" ? profile.name + " · TypeScript" : profile.name
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.toolbarStyle = .unified
@@ -171,11 +173,12 @@ import LakeDesktopCore
         writeReceiptPID()
         Task {
             do {
-                let url = try await backend.start()
-                origin = backend.runtime?.url
-                if let receipt = receiptURL(), let child = backend.process {
-                    try? String(child.processIdentifier).data(using: .utf8)?.write(to: URL(fileURLWithPath: receipt.path + ".backend"), options: .atomic)
+                let url = try await backend.start { [weak self] pid in
+                    if let receipt = self?.receiptURL() {
+                        try? String(pid).data(using: .utf8)?.write(to: URL(fileURLWithPath: receipt.path + ".backend"), options: .atomic)
+                    }
                 }
+                origin = backend.runtime?.url
                 webView.load(URLRequest(url: url))
             } catch {
                 let alert = NSAlert()
@@ -238,6 +241,12 @@ import LakeDesktopCore
         webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('lake-desktop-update', {detail: \(json)}));", completionHandler: nil)
     }
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage, replyHandler: @escaping (Any?, String?) -> Void) {
+        if message.name == "lakeWindowAttention" {
+            guard message.webView === webView, message.frameInfo.isMainFrame,
+                  sameOrigin(message.frameInfo.request.url) else { replyHandler(nil, "窗口状态不可用"); return }
+            replyHandler(NSApp.isActive && window.isKeyWindow && window.occlusionState.contains(.visible), nil)
+            return
+        }
         if message.name == "lakeInspectorWindow" {
             guard message.webView === webView, message.frameInfo.isMainFrame,
                   sameOrigin(message.frameInfo.request.url), let body = message.body as? [String: Any],

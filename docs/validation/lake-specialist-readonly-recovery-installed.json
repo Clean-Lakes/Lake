@@ -1,0 +1,24 @@
+{
+  "sameTaskAndWorker": true,
+  "metadataOperations": 2,
+  "readOnlyTransactions": 2,
+  "rollbacks": 2,
+  "unknownSSHPreserved": true,
+  "operationApprovals": 0,
+  "acceptanceState": "pass",
+  "provider": "scripted loopback, not a model intelligence benchmark",
+  "realDatabaseComparison": "not executed",
+  "passed": true,
+  "testedSHA": "5cd4eca6e3111c13635ce5396e36be952879a795",
+  "buildDirty": false,
+  "fixtureSHA": "088c8abdeb7649d3fca3362272188f9d92343527",
+  "sourceDirty": false,
+  "binarySHA256": "6c10879d3eac8fec8a9670fb81270f030f2232e6017fd5d089907e6d72f7fc97",
+  "installedApp": {
+    "signed": true,
+    "featureSHA": "403733cba0b51b2e10c4e361ed22440c797b9b40",
+    "home": "~/.lake-dev",
+    "runtimeMatchesInstalledBuild": true,
+    "originalDataUnchanged": true
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "date": "2026-11-07",
+  "sourceSHA": "865c7c0b4cd6fe0b81d7e7ff56885ccfb13b8c56",
+  "tests": {
+    "runtimeCJS": {
+      "passed": 165,
+      "failed": 0
+    },
+    "source": {
+      "passed": 123,
+      "skippedExternalClaudeMem": 3,
+      "failed": 0
+    },
+    "frontend": {
+      "passed": 726,
+      "failed": 0
+    },
+    "typescriptCheck": true,
+    "frontendTypecheck": true,
+    "backendNamingViolations": 0,
+    "adkBoundary": true,
+    "newMagpieIntegrationTests": 7
+  },
+  "pluginUI": {
+    "actualConnectExport": true,
+    "agentId": "lake-dev",
+    "pluginSHA256": "f526794b1c1e6ae0d5cb4b7616d93b0c769c3aad6a23679b7842573089646354",
+    "isolatedHome": true,
+    "syntheticGateway": true,
+    "catalogModels": 3,
+    "selectedModel": "magpie-ui-b",
+    "authenticated": true,
+    "maxTokens": 4096,
+    "reply": "MAGPIE_UI_OK",
+    "newDefaultAutoSynced": true,
+    "disconnectNativeFallbackVisible": true,
+    "reconnectMagpieVisible": true,
+    "taskSpaceClosed": true,
+    "temporaryServerStopped": true
+  },
+  "nativeDev": {
+    "installed": true,
+    "dirty": false,
+    "backendSHA256": "e675cfeb633d875be0ba76e916d2c22cc39260243954c8181a5a5343fe4d56fd",
+    "codesignDeepStrict": true,
+    "nativeSettingsObserved": true,
+    "dailyMagpieDevSwitch": "off-unchanged",
+    "liveMagpieEnabledNotClaimed": true,
+    "baselineRecords": 2925,
+    "missing": [],
+    "changed": [],
+    "added": [
+      "settings:magpieSelectionImported"
+    ],
+    "magpieFileUnchanged": true,
+    "nativeModelStillSelected": true,
+    "manualProviders": 4,
+    "magpieConnected": false
+  },
+  "cutover": {
+    "allowed": false,
+    "parityGateExit": 1,
+    "cliAndNonMacOSNotClaimed": true
+  },
+  "pullRequest": 199,
+  "merged": false
+}

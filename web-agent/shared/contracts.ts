@@ -8,17 +8,25 @@ export type Project = {
   createdAt: string;
 };
 
+export type LayeredMemoryActor = { kind: "pilot" | "worker"; projectId: string; roleId?: string; sessionId?: string };
+export type LayeredMemoryScope = { key: string; kind: "user" | "project" | "role"; name: string; projectId?: string; roleId?: string };
+export type LayeredMemorySettings = { useEnabled: boolean; extractionEnabled: boolean; revision: number };
+export type LayeredMemoryEntry = { id: string; title: string; revision: number; contentHash: string; updatedAt: string;
+  body?: string; available?: boolean; sources?: { id: string; kind: string; createdAt: string; taskId?: string; messageId?: string; evidenceState?: "accepted" | "failed" }[] };
+export type LayeredMemoryView = {search?:{engine:string;error?:string;pendingDeletions:number}; scope: LayeredMemoryScope; settings: LayeredMemorySettings; items: LayeredMemoryEntry[];
+  jobs: { id: string; state: string; createdAt: string; finishedAt?: string; error?: string; nativeExtraction?: boolean }[] };
+
 export type MemoryKnowledgeKind = "preference" | "procedure" | "topology" | "configuration" | "incident_lesson";
 export type MemoryTaskContext = {taskId?:string;workerId?:string;taskRevision?:number;goalRevision?:number;planRevision?:number;ledger?:{kind:string;id:string;stepId?:string;attemptId?:string;state?:string}[];truncated?:boolean};
 export type MemorySource = {taskContext?:MemoryTaskContext;sourceId?:string; kind:string; sessionId?:string; turnId?:string; messageId?:string; evidenceId?:string; at?:string; observedAt?:string; assertedAt?:string; excerpt?:string; outcome?:string};
 export type MemoryAccess = {key:string; revision:number; kind:"index"|"read"|"prepared"; category?:string; scope?:string; contentHash?:string; scopeSignature?:string; offsetLine?:number; byteOffset?:number; bytesRead?:number; at:string; observedAt?:string; historical?:boolean};
-export type MemoryCandidate = {candidateId:string; candidateHash:string; baseKey:string; baseRevision:number; reason:string; status:string; createdAt:string; expiresAt:string; proposal:Partial<ProjectMemoryEntry>};
 export type ProjectMemorySettings = {memorySchemaVersion?:number; projectId: string; useEnabled: boolean; extractionEnabled: boolean; epoch: number; revision: number; settingsRevision: number; publishedRevision: number };
 export type ProjectMemoryEntry = {knowledgeKind?:MemoryKnowledgeKind; scopeKind?:"project"|"resources"; resourceIds?:string[]; resourceNames?:string[]; subject?:Record<string,unknown>; factKey?:string; alwaysReference?:boolean; eligibility?:string; reviewState?:string; observedAt?:string; assertedAt?:string; historical?:boolean; projectId: string; key: string; type: "user" | "feedback" | "project" | "reference"; description: string; body?: string; revision: number; projectRevision: number; verification: string; validUntil: string; expired: boolean; deletedAt: string; createdAt: string; updatedAt: string; sources?: MemorySource[] };
 export type ProjectMemoryList = { settings: ProjectMemorySettings; items: ProjectMemoryEntry[]; total: number; projectRevision: number };
 export type ProjectMemoryJob = {dispatchCount?:number;unknownAttempts?:number;knownTokens?:number; jobId: string; status: string; attempts: number; lastErrorCode: string; createdAt: string; updatedAt: string; usageJSON: string };
 
 export type Resource = {
+  configurationRevision?: number;
   id: string;
   projectId: string;
   name: string;
@@ -51,9 +59,11 @@ export type WorkspaceTag = {id: string; projectId: string; name: string; color: 
 
 export type MessageMention = {kind: "resource" | "skill" | "mcp" | "role"; id: string; label: string; start: number; end: number; resourceKind?: Resource["kind"]};
 
-export type SpecialistReplyAuthor = {kind:'specialist';name:string;workerId:string;sessionId:string;taskId:string;channelSessionId?:string};
+export type SpecialistReplyAuthor = {kind:'specialist';name:string;roleId?:string;workerId:string;sessionId:string;taskId:string;channelSessionId?:string;rootTurnId?:string};
 export type Message = {
+  jointAcceptance?: {taskId:string;receiptId:string};
   author?: SpecialistReplyAuthor;
+  dispatch?: {id:string;sourceMessageId:string;workerId:string;sessionId:string;taskId:string;roleId:string;roleName:string;channelSessionId:string;instruction:string;action:'create'|'followup'};
   id: string;
   sessionId: string;
   role: "user" | "assistant" | "system";
@@ -79,6 +89,13 @@ export type Specialist = {
 export type AgentRole = "host" | "application" | "data" | "network" | "change" | "verify" | "plan" | "memory";
 export type AgentRunStatus = "queued" | "running" | "waiting_approval" | "waiting_input" | "completed" | "failed" | "cancelled" | "interrupted" | "unknown";
 export type AgentRun = {
+  /** Native child execution remains owned by the canonical task Worker. */
+  source?: "native_subagent";
+  taskId?: string;
+  workerId?: string;
+  parentRunId?: string;
+  childSessionId?: string;
+  cards?: AICard[];
   liveTextId?: string; liveText?: string;
   activityPhase?: string; activityTool?: string; activityUpdatedAt?: string;
 	sreTaskId?:string;
@@ -174,14 +191,53 @@ export type Catalog = {
 };
 
 export type QueuedMessage = {supplementRootTurnId?:string; id: string; text: string; resourceIds: string[]; references?: Record<string,unknown>[]; mentions?: MessageMention[]; images: Pick<AIImage,"id" | "name" | "mimeType">[]; files: TextFileAttachment[]; createdAt: string};
-export type MessageQueue = {paused: boolean; revision: number; lastError: string; items: QueuedMessage[]};
+export type MessageQueue = {pushSupported?:boolean; paused: boolean; revision: number; lastError: string; items: QueuedMessage[]};
 export type QueueOperation = {operation:"pause" | "resume"; revision:number} | {operation:"remove" | "push"; revision:number; id:string} | {operation:"edit"; revision:number; id:string; text:string; resourceIds:string[]; references?:Record<string,unknown>[]; mentions?:MessageMention[]} | {operation:"reorder"; revision:number; ids:string[]};
 export type SendMessageResult = {pilotSessionId?:string;queued?: boolean; queuedMessageId?: string; messageQueue?: MessageQueue};
 
 export type ReplyTiming = {messageId:string;startedAt:string;finishedAt:string;status:"running" | "completed" | "cancelled" | "failed" | "interrupted"};
 
+export type OperationReviewEvidence = {operationId: string; sessionId: string; taskId: string; at: string; summary: string; command: string};
+export type OperationReview = {
+  operationId: string; eligible: boolean; reason?: string; revision?: string;
+  closureState?: "reconciled"; closureEligible?: boolean; effects?: "none" | "observed"; directory?: string; command?: string; evidence: OperationReviewEvidence[]; resolved?: boolean;
+};
+export type OperationReviewConfirmation = {revision: string; evidenceOperationId: string; note: string} & ({confirmNoWrite: true} | {confirmObservedEffects: true; reconcileRisk?:true});
+export type OperatorEffectEvidence = {
+  operationId:string; sessionId:string; taskId:string; at:string; directory:string; summary:string; output:string;
+};
+export type OperatorEffectReview = {
+  operationId:string; eligible:boolean; reason?:string; revision?:string; command?:string; output?:string;
+  executionStatus?:string; backgroundTaskId?:string; directories:string[]; evidence:OperatorEffectEvidence[];
+  recorded?:boolean; closureEligible?:boolean; closureState?:"reconciled";
+  judgment?:{effects:"none"|"observed";directory:string;evidenceOperationId:string;actualEffects:string;processDisposition:string;remainingWork:string;operatorName:string;note:string};
+};
+export type OperatorEffectConfirmation = {
+  revision:string; directory:string; evidenceOperationId:string; effects:"none"|"observed";
+  actualEffects:string; processDisposition:string; remainingWork:string; operatorName:string; note:string;
+  confirmSourceRead:true; confirmAllEffectsKnown:true; confirmRemoteProcessesAccounted:true;
+  reconcileRisk?:true;
+};
+export type HostCommandView = {id:string;operationId:string;operationState?: string;taskId:string;sessionId:string;generation:number;resourceId:string;command:string;output:string;exitCode:number|null;status:string;canStop:boolean;stopRequestedAt?:string;startedAt:string;finishedAt?:string};
+
+export type ConversationReadState = {cursor:string;seenCursor:string};
+
+export type WatchdogMode = 'off' | 'observe' | 'guide';
+export type WatchdogFinding = {
+  id: string;
+  at: string;
+  kind: 'stalled' | 'drift' | 'infrastructure' | 'uncertain';
+  reason: string;
+  evidence: string[];
+  action: 'observed' | 'guided' | 'recovered' | 'skipped' | 'retry_queued';
+  verdict?: string;
+};
+export type WatchdogView = {mode: WatchdogMode; findings: WatchdogFinding[]};
+
 export type SessionSnapshot = {
-	superagent?:{task:SuperTask;goal?:WorkGoal};
+ commandExecutions?:HostCommandView[];
+ messageRead?:ConversationReadState;
+	superagent?:{task:SuperTask;goal?:WorkGoal;roleId?:string;deliveredReplies?:Message[];watchdog?:WatchdogView};
  naturalMemoryNotices?:{changeId:string;scope:string;entryId:string;revision:number;batchId?:string}[];
   commandStopNotices?: CommandStopNotice[];
  conversationMode?: ConversationMode;
@@ -242,7 +298,7 @@ export type ModelTestResult = { ok: boolean; message: string };
 
 /** Models the configured endpoint reports, for the composer's model switcher. */
 export type ModelReasoningCapability = {levels: string[]; default?: string; source?: string};
-export type ProviderModel = {id: string; name: string; displayName?: string; enabled: boolean; contextWindow?: number; supportsImageInput: boolean; supportsImageOutput: boolean; imageInputMode?: "auto" | "on" | "off"; imageInputDetected?: boolean; reasoningCapability?: ModelReasoningCapability};
+export type ProviderModel = {id: string; name: string; displayName?: string; enabled: boolean; contextWindow?: number; maxOutputTokens?:number; supportsImageInput: boolean; supportsImageOutput: boolean; supportsNativeWebSearch?:boolean; supportsVideoInput?:boolean; supportsAudioInput?:boolean; supportsPdfInput?:boolean; imageInputMode?: "auto" | "on" | "off"; imageInputDetected?: boolean; reasoningCapability?: ModelReasoningCapability};
 export type ModelProvider = {id: string; name: string; baseURL: string; protocol: string; enabled: boolean; keyConfigured: boolean; models: ProviderModel[]};
 export type ProviderCatalog = {providers: ModelProvider[]; activeProviderId: string; activeModelId: string; savedProviderId?: string};
 export type ProviderInput = Omit<ModelProvider,"id" | "keyConfigured"> & {apiKey?: string | null};
@@ -272,7 +328,8 @@ export type ConversationMode = "default" | "plan";
 export type ConversationModeUpdate = {mode:ConversationMode;cursor:number};
 export type ProposedPlan = {id:string;content:string;at:string};
 export type ExternalWorkWatch={adapter:string;operationId:string;handle:string;state:string;lastObservedAt?:string};
-export type WorkGoal={userText?:string;id:string;sessionId:string;originRootTurnId:string;title:string;status:string;revision:number;items:{id:string;title:string;status:string;reason?:string;watch?:ExternalWorkWatch}[];modelRounds:number;roundLimit:number;deadlineAt:string;updatedAt:string;summary?:string};
+export type WorkAttemptView = {id:string; status:string; createdAt:string};
+export type WorkGoal={userText?:string;id:string;sessionId:string;originRootTurnId:string;title:string;status:string;revision:number;items:{id:string;title:string;status:string;reason?:string;attempts?:WorkAttemptView[];watch?:ExternalWorkWatch}[]|null;modelRounds:number;roundLimit?:number;deadlineAt:string;updatedAt:string;summary?:string};
 export type AIView = {replyStatus?:string;workGoals?:WorkGoal[]; proposedPlan?: ProposedPlan; operationOutcomes?: AIOperationOutcome[]; todos?: AITodo[]; question?: AIQuestionRequest; session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; pendingApprovals?: AIApproval[]; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; memoryAccess?: MemoryAccess[]; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
 export type AIPreset = { id: string; title: string; content: string };
 
@@ -311,13 +368,23 @@ export type PilotDirectionBatch = {id:string;decisionId:string;directionId:strin
 export type PilotTaskPolicy = {directionBatches?:PilotDirectionBatch[];autoAdvance:boolean;settingsRevision:number;decisions?:{requestId:string;planRevisionId:string;stepId:string;attemptId:string;direction?:PilotDirection;selection:PilotSelection;fingerprints?:string[];operations?:PilotOperationCandidate[];createdAt:string}[]};
 export type SRETask = {pilot?:PilotTaskPolicy;id:string;sessionId:string;projectId:string;requestId:string;goal:string;scope:string[];mode:'assist'|'plan_only';status:string;outcome:string;recoveryStatus:string;rootCauseStatus:string;profileId:string;profileVersion:number;revision:number;tokenBudget:number;budgetPolicy?:string;budgetSpent:number;usage:AIUsage;plans:SREPlanRevision[];runs:SREPlanRun[];attempts:SREStepAttempt[];messages:SRETranscriptEntry[];verifications:SREVerificationResult[];error?:string;createdAt:string;updatedAt:string};
 export type PilotSettings = {enabled:boolean;autoAdvance:boolean;revision:number};
-export type SuperTask = {taskId:string;sessionId:string;projectId?:string;title:string;state:'queued'|'running'|'waiting_external'|'waiting_user'|'paused'|'blocked'|'completed'|'failed'|'cancelled';acceptanceState:'not_evaluated'|'insufficient'|'pass'|'fail';revision:number;originRootTurnId:string;deadlineAt:string;reason?:string;summary?:string;resources?:{runtime:string;assetRef?:string;terminalId?:string}[]};
+export type SuperTaskState = 'queued'|'running'|'waiting_external'|'waiting_user'|'paused'|'blocked'|'completed'|'failed'|'cancelled';
+export type SuperTaskAcceptance = 'not_evaluated'|'insufficient'|'pass'|'fail';
+export type TaskParticipant = {
+  workerId: string; sessionId: string; roleId: string; roleName: string;
+  state: SuperTaskState; contributed: boolean;
+};
+export type TaskCollaboration = {
+  participants: TaskParticipant[]; state: SuperTaskState; acceptanceState: SuperTaskAcceptance; acceptanceId?: string;
+};
+export type SuperTask = {taskId:string;executionGoalId?:string;collaboration?:TaskCollaboration;sessionId:string;projectId?:string;title:string;state:SuperTaskState;acceptanceState:SuperTaskAcceptance;revision:number;originRootTurnId:string;deadlineAt:string;updatedAt?:string;reason?:string;summary?:string;resources?:{runtime:string;assetRef?:string;terminalId?:string}[]};
 export type SuperProject = {projectId:string;routerSessionId:string;version:number};
-export type SuperWorker = {id:string;roleId:string;roleName:string;sessionId:string;task:SuperTask;assignmentState:string;parentWorkerId?:string};
-export type SpecialistChannelInfo = {id:string;projectId:string;roleId:string;roleName:string;sessionId:string;revision:number;createdAt:string;needsConfirmation?:boolean};
-export type SpecialistChannelEntry = {id:string;sourceSessionId:string;taskId?:string;workerId?:string;createdAt:string;message?:Message;card?:AICard};
-export type SpecialistChannelPage = {channel:SpecialistChannelInfo;entries:SpecialistChannelEntry[];nextCursor:string;workers:SuperWorker[];active:SessionSnapshot[];routing:boolean;queued:number};
-export type SuperWorkspace = {active:boolean;project:SuperProject;workers:SuperWorker[];channels?:SpecialistChannelInfo[]};
+export type SuperWorkerActivity = {phase:'queued'|'thinking'|'tool'|'waiting_approval'|'waiting_input'|'waiting_external';label:string;toolName?:string;updatedAt:string;sourceMessageId?:string;sourceSessionId?:string};
+export type SuperWorker = {id:string;createdAt?:string;roleId:string;roleName:string;sessionId:string;task:SuperTask;assignmentState:string;parentWorkerId?:string;activity?:SuperWorkerActivity};
+export type SpecialistChannelInfo = {messageRead?:ConversationReadState;id:string;projectId:string;roleId:string;roleName:string;duties?:string;roleRevision?:number;sessionId:string;revision:number;createdAt:string;needsConfirmation?:boolean;running?:boolean;preparing?:boolean;completionCursor?:string;seenCompletionCursor?:string};
+export type SpecialistChannelEntry = {id:string;sourceSessionId:string;taskId?:string;workerId?:string;createdAt:string;message?:Message;card?:AICard;reply?:{turnId:string;state:'working'|'settled'}};
+export type SpecialistChannelPage = {replyPresentation?:'invocation';channel:SpecialistChannelInfo;entries:SpecialistChannelEntry[];nextCursor:string;workers:SuperWorker[];active:SessionSnapshot[];routing:boolean;queued:number};
+export type SuperWorkspace = {pilotMessageRead?:ConversationReadState;active:boolean;project:SuperProject;workers:SuperWorker[];channels?:SpecialistChannelInfo[];cursor?:number};
 export type SRESnapshot = {featureVersion:number;enabled:boolean;tasks:SRETask[];pilot?:PilotSettings};
 
 export type ScheduleExecution={id:string;scheduled_at:string;started_at?:string;finished_at?:string;status:string;error?:string;task_id?:string;session_id?:string};

@@ -1,6 +1,6 @@
 /* Each pane owns one floating surface; the shell only carries their shared overlay. */
 .lake-workbench-islands { position:absolute; inset:0 0 auto; height:0; z-index:25; pointer-events:none; }
-.lake-workbench-island { position:absolute; top:12px; height:46px; min-width:0; display:flex; align-items:center; border:1px solid var(--border); border-radius:var(--radius-window); corner-shape:var(--corner-window); box-shadow:0 3px 12px rgb(0 0 0 / 5%); background:transparent; isolation:isolate; visibility:hidden; pointer-events:auto; container-type:inline-size; transition:none!important; }
+.lake-workbench-island { --island-header-inset:14px; --island-header-gap:10px; position:absolute; top:12px; height:46px; min-width:0; display:flex; align-items:center; border:1px solid var(--border); border-radius:var(--radius-window); corner-shape:var(--corner-window); box-shadow:0 3px 12px rgb(0 0 0 / 5%); background:transparent; isolation:isolate; visibility:hidden; pointer-events:auto; container-type:inline-size; transition:none!important; }
 .lake-workbench-island[data-ready=true][data-present=true] { visibility:visible; }
 .lake-workbench-island[data-open=false] { pointer-events:none; }
 .lake-workbench-island[data-moving=true] { z-index:3; will-change:transform,opacity; }
@@ -10,13 +10,14 @@
 .lake-workbench-island > .workspace-header-glass { z-index:-1; }
 .lake-workbench-island > :not(.workspace-header-glass,.workspace-header-sweep) { position:relative; z-index:2; min-width:0; }
 .lake-workbench-island [hidden] { display:none!important; }
-.lake-workbench-island .workspace-header { justify-content:flex-start; position:relative; display:flex; align-items:center; gap:10px; min-width:0; min-height:44px; height:44px; width:100%; padding:5px 14px; border:0; border-radius:0; background:transparent; box-shadow:none; }
+.lake-workbench-island .workspace-header { justify-content:flex-start; position:relative; display:flex; align-items:center; gap:var(--island-header-gap); min-width:0; min-height:44px; height:44px; width:100%; padding:5px var(--island-header-inset); border:0; border-radius:0; background:transparent; box-shadow:none; }
 .lake-workbench-island .workspace-header > .workspace-header-glass { display:none; }
 .lake-workbench-island .workspace-header > :not(.workspace-header-sweep) { position:relative; z-index:2; }
 .lake-workbench-island .breadcrumbs { flex:0 1 auto; min-width:60px; max-width:213px; gap:8px; }
 .lake-workbench-island .breadcrumbs strong { min-width:0; }
 .lake-workbench-island .pilot-island-trigger { border:0; padding-left:8px; gap:8px; }
 .lake-workbench-island .header-state-area { flex:0 1 auto; }
+.lake-workbench-island .header-inspector-toggle { flex:none; margin-left:0; }
 /* Keep Pilot in its own segment, allowing the copy to give space to its controls.
    Its preferred width is independent of the currently constrained pane width. */
 .island-conversation { --pilot-state-width:238px; }
@@ -120,21 +121,20 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .xter
 /* Keep the session identity visible on tight rails. The status text shares
    the remaining space and can truncate, while its disclosure stays reachable. */
 @container(max-width:300px) {
- .lake-workbench-island .workspace-header { display:grid; grid-template-columns:minmax(0,1fr) 114px; padding-inline:8px; gap:4px; }
+ .lake-workbench-island .workspace-header { display:grid; grid-template-columns:minmax(0,1fr) auto; }
+ .lake-workbench-island .workspace-header.has-specialist-tasks { grid-template-columns:minmax(0,1fr) auto 28px; }
  .lake-workbench-island .workspace-header.has-pilot-island { grid-template-columns:minmax(48px,1fr) minmax(0,var(--pilot-state-width)); }
  .lake-workbench-island .breadcrumbs { display:flex; min-width:0; width:100%; max-width:none; }
  .lake-workbench-island .breadcrumbs strong { display:flex; align-items:center; min-width:0; width:100%; }
  .lake-workbench-island .crumb-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
- .lake-workbench-island .header-state-area { min-width:0; width:100%; max-width:100%; }
- .lake-workbench-island .header-normal-state.is-visible { flex:1; min-width:0; max-width:100%; width:100%!important; }
- .lake-workbench-island .header-normal-state .header-morph-content { display:grid; grid-template-columns:minmax(0,1fr) 28px; width:100%; min-width:0; gap:4px; }
+ .lake-workbench-island .header-state-area { min-width:0; max-width:100%; }
+ .lake-workbench-island .header-normal-state.is-visible { flex:0 1 auto; min-width:0; max-width:100%; }
+ .lake-workbench-island .header-normal-state .header-morph-content { display:flex; width:max-content; min-width:0; gap:4px; }
  /* Outrank the WKWebView corner fallback, which otherwise restores visible overflow. */
- .lake-workbench-island .header-normal-state .session-state-badge { min-width:0; padding-inline:6px; display:inline-flex; overflow:hidden; }
+ .lake-workbench-island .header-normal-state .session-state-badge { min-width:0; display:inline-flex; overflow:hidden; }
  :root.lake-corner-fallback .lake-workbench-island .header-morph-slot.header-normal-state .session-state-badge { overflow:hidden; }
- .lake-workbench-island .header-inspector-toggle { flex:none; margin-left:0; }
 }
 
-@container(max-width:200px) { .lake-workbench-island .workspace-header { grid-template-columns:minmax(0,1fr) 100px; } }
 
 .terminal-island-title-short { display:none; }
 @container(max-width:180px) {

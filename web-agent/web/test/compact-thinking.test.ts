@@ -11,6 +11,17 @@ import {progressGlyph} from '../src/activity';
 const start="2026-10-11T00:00:00Z";
 const thought:AICard={id:"thought",type:"thinking",content:"VERY_VERBOSE_RAW_REASONING",status:"running",at:start};
 const read:AICard={id:"read",type:"operation",title:"read",status:"running",at:start,data:{arguments:{path:"/tmp/example.log"},target:"Local machine"}};
+test('one turn shows its original compaction failure once while every retry stays in diagnostics',()=>{
+ const errors=['context compaction: context deadline exceeded','context compaction: summary cooling down and protected input does not fit; progress retained','context compaction: summary cooling down and protected input does not fit; progress retained'];
+ const snapshot={session:{id:'pilot'},resources:[],actions:[],messages:[{id:'u',sessionId:'pilot',role:'user',text:'运维组多少文档呢',createdAt:start}],ai:{session:'pilot',status:'failed',cardsOffset:0,cards:errors.map((content,i)=>({id:'error-'+i,type:'error',status:'failed',content,at:new Date(Date.parse(start)+1000*(i+1)).toISOString()}))}} as SessionSnapshot;
+ const before=JSON.stringify(snapshot),html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+ assert.equal((html.match(/class="ai-compaction-notice"/g)||[]).length,1);
+ assert.ok(html.includes('上下文整理超时'));
+ assert.equal((html.match(/class="compaction-diagnostic"/g)||[]).length,3);
+ const records=renderToStaticMarkup(createElement(AITranscript,{snapshot,mode:'activity'}));
+ assert.equal((records.match(/class="ai-compaction-notice"/g)||[]).length,3);
+ assert.equal(JSON.stringify(snapshot),before);
+});
 test('malformed model calls explain that planning can continue with existing evidence',()=>{
  const message=displayAiError('invalid or duplicate model tool call: arguments must be a JSON object');
  assert.match(message,/本轮未完成/);assert.match(message,/已有调查结果和消息已保留/);assert.match(message,/原会话继续/);
@@ -71,16 +82,17 @@ test("finished history stays collapsed and describes the actual operation",()=>{
   const html=renderToStaticMarkup(createElement(ThinkingTimeline,{cards:[{...thought,status:"completed"},{...read,status:"completed"}],live:false}));
   assert.ok(html.includes("读取 example.log · Local machine"));assert.ok(!html.includes(thought.content!));
 });
-test("live execution opens its resource row without duplicating the latest action caption",()=>{
+test("live execution keeps one status and a folded resource record without synthesizing prose",()=>{
   const view={session:"demo",status:"running",turnStartedAt:start,profile:"core",cards:[thought,read],cardsOffset:0} as AIView;
   const snapshot={session:{id:"demo"},messages:[{id:"user",role:"user",createdAt:start,text:"Read fixture"}],actions:[],ai:view} as SessionSnapshot;
   const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
-  assert.equal((html.match(/class="turn-current-step"/g)||[]).length,0);
+  assert.ok(!html.includes('turn-progress-reply'));
   assert.ok(html.includes('<span class="thinking-label">Local machine</span>'));
-  assert.ok(html.includes('class="turn-execution-details is-open" aria-hidden="false"'));
+  assert.ok(html.includes('class="turn-execution-details" aria-hidden="true" inert=""'));
   assert.ok(!html.includes("VERY_VERBOSE_RAW_REASONING"));
   assert.equal((html.match(/turn-status-text/g)||[]).length,1);
-  assert.ok(html.indexOf("正在执行工具…")>html.indexOf("Local machine"));
+  assert.ok(html.indexOf("正在执行工具…")<html.indexOf('class="turn-execution-details"'));
+  assert.ok(html.indexOf('<span class="thinking-label">Local machine</span>')>html.indexOf('class="turn-execution-details"'));
 });
 
 test("compaction limit failures display one Chinese message with history-preservation guidance",()=>{
@@ -117,6 +129,28 @@ test("plain output-limit errors are localized and retain original-session recove
 test("automatic output recovery shows a single notice while previous compaction hints stay hidden",()=>{
  const snapshot={session:{id:"demo"},messages:[{id:"user",role:"user",createdAt:start,text:"继续调查"}],actions:[],ai:{session:"demo",status:"running",cards:[{id:"retry",type:"notice",content:"模型回复达到单次输出上限，正在缩短回复后重试；已完成的操作保留",status:"completed",at:start}],cardsOffset:0}} as SessionSnapshot;
  assert.ok(renderToStaticMarkup(createElement(AITranscript,{snapshot})).includes("正在缩短回复后重试"));
+});
+
+test('optional context resume fallback stays in diagnostics for live and restored conversations',()=>{
+ const text='历史上下文整理未完成，已保留原上下文继续本轮对话。';
+ for(const status of ['running','completed']){
+  const snapshot={session:{id:'demo'},messages:[{id:'user',role:'user',createdAt:start,text:'继续调查'},{id:'legacy-system',role:'system',createdAt:start,text}],actions:[],ai:{session:'demo',status,turnStartedAt:start,cardsOffset:0,cards:[{id:'fallback',type:'notice',status:'completed',content:text,at:start},{id:'reply',type:'message',status:'completed',content:'这是正常回复。',at:start}]}} as SessionSnapshot;
+  const before=JSON.stringify(snapshot);
+  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+  assert.ok(!html.split('class="turn-execution-details')[0]!.includes(text),'optional maintenance diagnostics must not appear as chat prose');
+  assert.ok(html.includes('这是正常回复。'));
+  assert.ok(html.includes('整理请求诊断')&&html.includes(text),'the disclosure retains the fallback diagnostic');
+  assert.ok(renderToStaticMarkup(createElement(AITranscript,{snapshot,mode:'activity'})).includes(text),'raw execution records remain readable');
+  assert.equal(JSON.stringify(snapshot),before,'presentation never removes persisted records');
+ }
+});
+
+test('context fallback wording in human or assistant prose is not suppressed',()=>{
+ const text='历史上下文整理未完成，已保留原上下文继续本轮对话。';
+ const snapshot={session:{id:'demo'},messages:[{id:'user',role:'user',createdAt:start,text}],actions:[],ai:{session:'demo',status:'completed',cardsOffset:0,cards:[{id:'reply',type:'message',status:'completed',content:text,at:start},{id:'other-notice',type:'notice',status:'completed',content:'模型回复达到单次输出上限，正在缩短回复后重试；已完成的操作保留',at:start}]}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+ assert.ok(html.split(text).length>=3,'user quotation and actual assistant prose both remain');
+ assert.ok(html.includes('正在缩短回复后重试'));
 });
 
 test('resource summaries reuse the exact catalog resource icon; lookup retains its search identity',()=>{

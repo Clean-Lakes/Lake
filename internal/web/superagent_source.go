@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
 )
@@ -26,7 +25,7 @@ func (b *Server) recordSuperInput(event ai.SuperEvent, refs, files []Object, ign
 	input := superHostInput{References: refs, Files: files, IgnoreMemory: ignoreMemory}
 	options := b.sessionOptions(event.ThreadRef)
 	input.TargetOptions = Object{}
-	for _, key := range []string{"runtime", "asset_ref", "terminal_id", "terminal_generation", "container_id", "conversationMode", "maxSteps", "reasoningEffort", "reasoningModelId", "contextBudgetMode", "contextWindow", "maxOutput", "silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "blockUnreferencedAssets", "denyLocalExecution"} {
+	for _, key := range []string{"runtime", "asset_ref", "terminal_id", "terminal_generation", "container_id", "conversationMode", "maxSteps", "reasoningEffort", "reasoningModelId", "contextBudgetMode", "contextWindow", "maxOutput", "silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "silentMCPCalls", "blockUnreferencedAssets", "denyLocalExecution"} {
 		if value, ok := options[key]; ok {
 			input.TargetOptions[key] = value
 		}
@@ -82,6 +81,9 @@ func (b *Server) recordSuperInput(event ai.SuperEvent, refs, files []Object, ign
 		b.Store.exec("UPDATE superagentInputs SET ready=1 WHERE eventId=? AND requestHash=?", event.ID, requestHash)
 		return nil
 	})
+	if kind := b.Store.superSessionKind(event.ThreadRef); kind == "role" || kind == "worker" {
+		_ = b.syncSuperSpecialists(b.Context, event.ProjectID)
+	}
 	return nil
 }
 
@@ -213,6 +215,10 @@ func (s *Store) ensureSuperSession(project, id, title, kind string) Object {
 			if row["projectId"] != project || row["kind"] != kind {
 				fail(409, "专员身份冲突")
 			}
+			if kind == "role" && s.session(id)["title"] != title {
+				s.exec("UPDATE sessions SET title=?,updatedAt=? WHERE id=?", title, now(), id)
+				s.event(id, "session")
+			}
 			return s.session(id)
 		}
 		if s.row("SELECT id FROM sessions WHERE id=?", id) != nil {
@@ -323,6 +329,9 @@ func (b *Server) ensureSuperProject(ctx context.Context, project string) (ai.Sup
 	if existing, ok, err := b.Engine.SuperProject(ctx, project); err != nil || ok {
 		if err == nil && ok {
 			b.reconcileSuperSessionRoles(existing)
+			if err := b.capturePilotPermissions(ctx, existing); err != nil {
+				return existing, err
+			}
 		}
 		return existing, err
 	}
@@ -372,6 +381,9 @@ func (b *Server) ensureSuperProject(ctx context.Context, project string) (ai.Sup
 	b.Store.ensureSuperSession(project, routerID, "Pilot", "router")
 	domain, err := b.Engine.ActivateSuperProject(ctx, project, routerID, ids)
 	if err != nil {
+		return domain, err
+	}
+	if err := b.capturePilotPermissions(ctx, domain); err != nil {
 		return domain, err
 	}
 	b.Store.update(func() any {
@@ -435,23 +447,15 @@ func (b *Server) DeliverPilotReport(ctx context.Context, project, routerID, repo
 		}
 	}
 	destination := report.ChannelRef
-	var payload struct {
-		Task ai.SuperTaskView `json:"task"`
-		Text string           `json:"text"`
-	}
+	var payload pilotReportPayload
 	if err = json.Unmarshal([]byte(report.Payload), &payload); err != nil {
 		return err
 	}
-	states := map[string]string{"queued": "排队中", "running": "执行中", "waiting_external": "等待外部结果", "waiting_user": "需要你回答", "paused": "已暂停", "blocked": "待核实", "completed": "已验收", "failed": "执行失败", "cancelled": "已停止后续跟进"}
-	acceptance := map[string]string{"pass": "通过", "fail": "未通过", "insufficient": "条件尚不充分", "not_evaluated": "未验收"}
-	text := fmt.Sprintf("%s\n\n任务「%s」· %s · 验收：%s", payload.Text, payload.Task.Title, states[payload.Task.State], acceptance[payload.Task.AcceptanceState])
-	if report.Kind == "router_reply" && report.TaskID == "" {
-		text = payload.Text
-	}
+	text := payload.Text
 	b.Store.update(func() any {
 		b.Store.session(destination)
 		if prior := b.Store.row("SELECT sessionId,text FROM messages WHERE id=?", report.ID); prior != nil {
-			if prior["sessionId"] != destination || prior["text"] != text {
+			if prior["sessionId"] != destination || (prior["text"] != text && prior["text"] != legacyPilotReportText(report, payload)) {
 				fail(409, "回复回执内容冲突")
 			}
 			return nil

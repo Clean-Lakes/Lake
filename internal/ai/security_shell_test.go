@@ -440,6 +440,10 @@ func TestSecurityManagedWorkWaitResumesOfficialSDKFromActualMachineEvent(t *test
 		t.Fatal("official wait source not persisted", row.WaitCallID, goal)
 	}
 	goal.Items[0].Watch.NextCheckAt = time.Now().Add(-time.Second)
+	// Historical task references are not the active operation's connection scope.
+	// The real process and its permit below still identify the original target.
+	goal.Binding = WorkBinding{Runtime: "ssh", AssetRef: "old-reference", TerminalID: "old-terminal", ResourceIdentity: "old-config"}
+	goal.ResourceBindings = []WorkBinding{goal.Binding, {AssetRef: "unrelated-removed-resource", ResourceIdentity: "stale-unused-config"}}
 	if err = e.writeWorkGoal(&row, &goal, false); err != nil {
 		t.Fatal(err)
 	}
@@ -485,7 +489,7 @@ func TestSecurityManagedWorkWaitResumesOfficialSDKFromActualMachineEvent(t *test
 }
 
 func TestSecurityWorkMachineResumeRejectsExpiryRevocationAndUnregisteredObserver(t *testing.T) {
-	for _, kind := range []string{"expired-task", "revoked-policy", "foreign-source", "opaque-observer"} {
+	for _, kind := range []string{"expired-task", "revoked-policy", "changed-operation-connection", "foreign-source", "opaque-observer"} {
 		t.Run(kind, func(t *testing.T) {
 			e, c, ctx, cancel, operation, original, a := managedShellFixture(t, true, "sleep 0.1; printf original-machine-source")
 			defer cancel()
@@ -533,6 +537,8 @@ func TestSecurityWorkMachineResumeRejectsExpiryRevocationAndUnregisteredObserver
 				err = store.DB.Model(&securityTaskRow{}).Where("id = ?", original.Task.ID).Update("expires_at", time.Now().Add(-time.Second)).Error
 			case "revoked-policy":
 				err = store.DB.Model(&securityProjectPolicyRow{}).Where("project_id = ?", "project").Update("revision", 4).Error
+			case "changed-operation-connection":
+				err = store.DB.Model(&securityResourceRevisionRow{}).Where("project_id = ? AND resource_id = ?", operation.ProjectID, operation.ResourceID).Update("connection_revision", operation.ResourceConnectionRevision+1).Error
 			case "foreign-source":
 				err = store.DB.Model(&nativeWorkObservation{}).Where("id = ?", watch.EvidenceID).Update("operation_id", "other-operation").Error
 			case "opaque-observer":

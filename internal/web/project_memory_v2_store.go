@@ -91,7 +91,7 @@ func (s *Store) appendMemoryV2Source(entry, source Object) {
  WHERE projectId=? AND key=? AND sourceId NOT IN (SELECT sourceId FROM projectMemorySourcesV2 WHERE projectId=? AND key=? ORDER BY entryRevision DESC,rowid DESC LIMIT 8)`, entry["projectId"], entry["key"], entry["projectId"], entry["key"])
 }
 
-func ValidateMemoryV2(m MemoryMutation, allowUnbound ...bool) {
+func ValidateMemoryV2(m MemoryMutation) {
 	validateMemoryMutation(m)
 	if m.Forget {
 		return
@@ -109,7 +109,7 @@ func ValidateMemoryV2(m MemoryMutation, allowUnbound ...bool) {
 	if !set("preference procedure topology configuration incident_lesson")[d.KnowledgeKind] || !set("project resources")[d.ScopeKind] || !memoryFactPattern.MatchString(d.FactKey) {
 		fail(400, "Invalid memory classification")
 	}
-	if d.ScopeKind == "project" && (len(d.ResourceIDs) != 0 || d.KnowledgeKind != "preference" && d.KnowledgeKind != "procedure") || d.ScopeKind == "resources" && (len(d.ResourceIDs) == 0 && (len(allowUnbound) == 0 || !allowUnbound[0]) || len(d.ResourceIDs) > 32) {
+	if d.ScopeKind == "project" && (len(d.ResourceIDs) != 0 || d.KnowledgeKind != "preference" && d.KnowledgeKind != "procedure") || d.ScopeKind == "resources" && (len(d.ResourceIDs) == 0 || len(d.ResourceIDs) > 32) {
 		fail(422, "Invalid memory resource scope")
 	}
 	if d.AlwaysReference && (d.ScopeKind != "project" || d.KnowledgeKind != "preference" && d.KnowledgeKind != "procedure") {
@@ -236,7 +236,7 @@ func (s *Store) CommitMemoryV2(project string, m MemoryMutation) Object {
 		fail(409, ai.ErrSecurityMemoryRecoveryUnqualified.Error())
 	}
 	ValidateMemoryV2(m)
-	result := s.update(func() any { return s.commitMemoryV2Locked(project, m, nil, false) }).(Object)
+	result := s.update(func() any { return s.commitMemoryV2Locked(project, m, nil) }).(Object)
 	if s.skipMemoryInitialization {
 		result["publicationError"] = "Memory tombstone committed; projection cleanup requires Memory-owner recovery qualification"
 		return result
@@ -250,9 +250,8 @@ func (s *Store) CommitMemoryV2(project string, m MemoryMutation) Object {
 	return result
 }
 
-// The caller owns the transaction. Automatic commits never increase epoch, so
-// another source turn remains eligible; manual edits invalidate earlier jobs.
-func (s *Store) commitMemoryV2Locked(project string, m MemoryMutation, sources []Object, automatic bool) Object {
+// The caller owns the transaction. Manual edits invalidate earlier jobs.
+func (s *Store) commitMemoryV2Locked(project string, m MemoryMutation, sources []Object) Object {
 	s.ensureMemorySettings(project)
 	settings := s.storedMemorySettings(project)
 	old := s.row("SELECT * FROM projectMemoryEntriesV2 WHERE projectId=? AND key=?", project, m.Key)
@@ -263,7 +262,7 @@ func (s *Store) commitMemoryV2Locked(project string, m MemoryMutation, sources [
 	if m.ExpectedRevision != revision {
 		fail(409, "Memory changed; refresh and retry")
 	}
-	if old != nil && stringOf(old["deletedAt"]) != "" && (!m.RestoreDeleted || automatic) {
+	if old != nil && stringOf(old["deletedAt"]) != "" && !m.RestoreDeleted {
 		fail(409, "Memory was forgotten; explicit restore required")
 	}
 	t := now()
@@ -301,7 +300,7 @@ func (s *Store) commitMemoryV2Locked(project string, m MemoryMutation, sources [
 			created, originSession, originTurn = stringOf(old["createdAt"]), stringOf(old["originSessionId"]), stringOf(old["originTurnId"])
 		}
 		entry = Object{"projectId": project, "key": m.Key, "type": m.Type, "description": m.Description, "body": m.Body, "revision": revision + 1, "projectRevision": next, "contentHash": memoryHash(m.Body), "knowledgeKind": d.KnowledgeKind, "scopeKind": d.ScopeKind, "scopeHash": scopeHash, "subjectJSON": jsonText(subject), "claimJSON": "{}", "factKey": d.FactKey, "bindingsJSON": jsonText(bindings), "verification": "user-stated", "assertedAt": t, "observedAt": "", "validUntil": m.ValidUntil, "reviewState": "active", "alwaysReference": 0, "originSessionId": originSession, "originTurnId": originTurn, "createdAt": created, "updatedAt": t, "deletedAt": ""}
-		if !automatic && old != nil && (d.KnowledgeKind == "topology" || d.KnowledgeKind == "configuration") && old["bindingsJSON"] != entry["bindingsJSON"] && sameMemoryResources(memoryObjects(old["bindingsJSON"]), bindings) {
+		if old != nil && (d.KnowledgeKind == "topology" || d.KnowledgeKind == "configuration") && old["bindingsJSON"] != entry["bindingsJSON"] && sameMemoryResources(memoryObjects(old["bindingsJSON"]), bindings) {
 			proved := true
 			for _, binding := range bindings {
 				matched := false
@@ -323,28 +322,12 @@ func (s *Store) commitMemoryV2Locked(project string, m MemoryMutation, sources [
 			entry["reviewState"] = "disabled"
 			entry["alwaysReference"] = 0
 		}
-		if automatic {
-			entry["assertedAt"] = ""
-			for _, source := range sources {
-				if at := stringOf(source["assertedAt"]); at != "" && (stringOf(entry["assertedAt"]) == "" || at < stringOf(entry["assertedAt"])) {
-					entry["assertedAt"] = at
-				}
-				if len(m.Claim) > 0 && source["outcome"] == "completed_success" {
-					if at := stringOf(source["observedAt"]); at != "" && (stringOf(entry["observedAt"]) == "" || at < stringOf(entry["observedAt"])) {
-						entry["observedAt"] = at
-					}
-				}
-			}
-			if len(m.Claim) > 0 {
-				entry["claimJSON"] = jsonText(m.Claim)
-				entry["verification"] = "observed"
-			}
-		}
-		if !automatic && old != nil && old["reviewState"] == "needs_review" && (d.KnowledgeKind == "topology" || d.KnowledgeKind == "configuration") {
+
+		if old != nil && old["reviewState"] == "needs_review" && (d.KnowledgeKind == "topology" || d.KnowledgeKind == "configuration") {
 			entry["assertedAt"] = ""
 			entry["observedAt"] = ""
 		}
-		if !automatic && old != nil && old["body"] == m.Body && old["knowledgeKind"] == d.KnowledgeKind && old["scopeHash"] == scopeHash && old["bindingsJSON"] == entry["bindingsJSON"] && old["subjectJSON"] == entry["subjectJSON"] && old["factKey"] == entry["factKey"] {
+		if old != nil && old["body"] == m.Body && old["knowledgeKind"] == d.KnowledgeKind && old["scopeHash"] == scopeHash && old["bindingsJSON"] == entry["bindingsJSON"] && old["subjectJSON"] == entry["subjectJSON"] && old["factKey"] == entry["factKey"] {
 			entry["observedAt"], entry["assertedAt"], entry["verification"] = old["observedAt"], old["assertedAt"], old["verification"]
 			entry["claimJSON"] = old["claimJSON"]
 		}
@@ -361,11 +344,8 @@ func (s *Store) commitMemoryV2Locked(project string, m MemoryMutation, sources [
 		s.exec("INSERT INTO projectMemoryRevisionsV2(projectId,key,revision,snapshotJSON,changeKind,changedAt) VALUES(?,?,?,?,?,?)", project, m.Key, entry["revision"], jsonText(entry), "upsert", t)
 		s.exec("DELETE FROM projectMemoryRevisionsV2 WHERE projectId=? AND key=? AND revision NOT IN (SELECT revision FROM projectMemoryRevisionsV2 WHERE projectId=? AND key=? ORDER BY revision DESC LIMIT 20)", project, m.Key, project, m.Key)
 	}
-	epoch := integer(settings["epoch"])
-	if !automatic {
-		epoch++
-		s.exec("UPDATE projectMemoryJobs SET status='skipped',lastErrorCode='memory_changed',leaseToken='',leaseOwner='',leaseUntilMs=0,updatedAt=? WHERE turnSequence IN (SELECT sequence FROM projectMemoryTurns WHERE projectId=?) AND status IN ('queued','retry_wait','running','budget_wait')", t, project)
-	}
+	epoch := integer(settings["epoch"]) + 1
+	s.exec("UPDATE projectMemoryJobs SET status='skipped',lastErrorCode='memory_changed',leaseToken='',leaseOwner='',leaseUntilMs=0,updatedAt=? WHERE turnSequence IN (SELECT sequence FROM projectMemoryTurns WHERE projectId=?) AND status IN ('queued','retry_wait','running','budget_wait')", t, project)
 	s.exec("UPDATE projectMemorySettings SET revision=?,epoch=?,updatedAt=? WHERE projectId=?", next, epoch, t, project)
 	id := ident()
 	s.exec("INSERT INTO projectMemoryCommits(commitId,projectId,revision,mutationKeysJSON,createdAt) VALUES(?,?,?,?,?)", id, project, next, jsonText([]string{m.Key}), t)

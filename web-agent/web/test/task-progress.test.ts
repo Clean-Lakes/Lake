@@ -4,7 +4,9 @@ import {createElement} from "react";
 import {renderToStaticMarkup} from "react-dom/server";
 import type {AICard, AITodo, SessionSnapshot} from "../../shared/contracts";
 import {AITranscript} from "../src/AIPanel";
-import {turnTodos} from "../src/TaskProgress";
+import {TaskProgress,turnTodos} from "../src/TaskProgress";
+import {progressGlyph,toolDescription} from "../src/activity";
+import {conversationGroups} from "../src/conversation-progress-model";
 
 const at = (second: number) => `2026-10-16T03:00:${String(second).padStart(2, "0")}Z`;
 const oldTasks: AITodo[] = ["恢复 Master", "恢复 Worker", "核对日志"].map(content => ({content, status: "completed"}));
@@ -65,4 +67,35 @@ test("large or legacy result previews use validated successful arguments; invali
   assert.deepEqual(turnTodos([{...write("large", 2, newTasks), content: '{"todos": [truncated'}]), newTasks);
   assert.deepEqual(turnTodos([{...write("legacy", 2, newTasks), data: undefined}]), newTasks);
   assert.deepEqual(turnTodos([{...write("invalid", 2, newTasks), content: "null", data: {arguments: {todos: [{content: "x", status: "invented"}]}}}]), []);
+});
+
+test("native task receipts survive a cold paused snapshot and show the checklist from precisely the selected execution", () => {
+  const native = (taskId:string, id:string, todos:AITodo[]):AICard => ({
+    ...write(id,12,todos),title:"TodoWrite",
+    data:{root_turn_id:"turn-second",taskId,call_id:id,arguments:{todos}},
+    content:JSON.stringify({oldTodos:[],todos,success:true}),
+  });
+  const own=native("execution-A","write-A",newTasks), other=native("execution-B","write-B",oldTasks);
+  const child={...other,data:{...(other.data as object),taskId:"execution-A",agentRunId:"subagent"}};
+  const unbound=write("legacy",14,oldTasks);
+  const cards=JSON.parse(JSON.stringify([own,other,child,unbound,
+    {...other,title:"TodoRead"},{...other,title:"todo_read"},{...own,status:"failed"}]));
+  assert.deepEqual(turnTodos(cards,"execution-A"),newTasks);
+  assert.deepEqual(turnTodos(cards,"unrelated"),[]);
+  assert.deepEqual(turnTodos([unbound],"execution-A",true),oldTasks);
+  const html=renderToStaticMarkup(createElement(TaskProgress,{cards,executionId:"execution-A",historical:true}));
+  assert.match(html,/任务进度 1 \/ 2/);
+  assert.match(html,/上次进行至此/);
+  assert.doesNotMatch(html,/恢复 Master|>进行中</);
+});
+
+test("native todo reads and writes retain localized names and stay grouped per execution", () => {
+  const native=write("n",10,newTasks);native.title="TodoWrite";native.data={taskId:"execution-A"};
+  const read={...native,id:"r",title:"TodoRead"};
+  const other={...native,id:"o",data:{taskId:"execution-B"}};
+  assert.equal(toolDescription(native),"更新任务进度");
+  assert.equal(toolDescription(read),"查看任务进度");
+  assert.equal(progressGlyph(native),"lakeWorkflow");
+  const groups=conversationGroups([native,read,other].map(card=>({id:card.id,at:card.at,card})));
+  assert.deepEqual(groups.map(group=>group.entries.map(e=>e.id)),[["n","r"],["o"]]);
 });

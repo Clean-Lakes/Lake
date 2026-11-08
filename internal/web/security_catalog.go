@@ -152,9 +152,11 @@ func (b *Server) securityCatalogSnapshotUnchecked(ctx context.Context, query ai.
 			fail(403, "Session outside project")
 		}
 		if query.SessionID != "" {
-			options := b.Store.row("SELECT value FROM aiOptions WHERE sessionId=?", query.SessionID)
+			options := b.Store.row("SELECT value FROM aiOptions WHERE sessionId=?", b.Store.permissionOwnerLocked(query.SessionID))
 			if options != nil {
-				out.HardLocalDeny = object(parsed(stringOf(options["value"])))["denyLocalExecution"] == true
+				settings := object(parsed(stringOf(options["value"])))
+				out.HardLocalDeny = settings["denyLocalExecution"] == true
+				out.HardReferencedOnly = settings["blockUnreferencedAssets"] == true
 			}
 		}
 		for _, row := range b.Store.rows("SELECT r.*,c.config,CASE WHEN EXISTS(SELECT 1 FROM navigationTrash d WHERE (d.kind='resource' AND d.id=r.id) OR (d.kind='project' AND d.id=r.projectId)) THEN 1 ELSE 0 END AS securityDisabled FROM resources r LEFT JOIN resourceConnections c ON c.resourceId=r.id ORDER BY r.id") {

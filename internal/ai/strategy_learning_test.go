@@ -30,9 +30,9 @@ func TestStrategyRetiredLearningNeverCapturesSignals(t *testing.T) {
 			if err := e.ExecuteTurn(context.Background(), "case", TurnInput{StrategyMessageID: "genuine", UserText: text}); err != nil {
 				t.Fatal(err)
 			}
-			out, err := e.StrategyOutbox("case")
-			if err != nil || len(out) != 0 {
-				t.Fatal("retired source captured", out, err)
+			out := historicalStrategyOutbox(t, e, "case")
+			if len(out) != 0 {
+				t.Fatal("retired source captured", out)
 			}
 		})
 	}

@@ -1,5 +1,7 @@
 # Third-party notices
 
+The TypeScript candidate uses mysql2 v3.24.6 (MIT) for bounded MySQL reads. Its pinned production dependency licenses and any upstream NOTICE/COPYRIGHT files are bundled in `bin/lake-runtime/licenses/mysql-*`; `mysql-dependencies.json` records the exact shipped dependency versions and license identifiers. This includes long (Apache-2.0) and the MIT-licensed driver dependencies.
+
 The Go backend uses the pinned modules in repository `go.mod` / `go.sum`: pgx, go-sql-driver/mysql, go-sqlite3, creack/pty (MIT), hinshun/vt10x (MIT), golang.org/x/image, x/crypto, x/text, x/sync and x/sys (BSD), github.com/syndtr/goleveldb v1.0.0 and github.com/golang/snappy v1.0.0 (BSD-3-Clause) for read-only HexHub import, plus mvdan.cc/sh/v3 v3.12.0 (BSD-3-Clause) for shell syntax analysis. Corresponding license files are in `licenses/`.
 
 The embedded React frontend uses React (MIT), xterm.js (MIT), react-markdown (MIT), remark-gfm (MIT), jsdiff (BSD-3-Clause), Lucide React (ISC, with MIT-licensed Feather-derived icons) and their locked transitive packages. Exact frontend versions are in `pnpm-lock.yaml`. Node/Vite/TypeScript/pnpm are build tools and are not shipped as runtime dependencies.

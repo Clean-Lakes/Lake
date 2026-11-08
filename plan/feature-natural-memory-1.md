@@ -2,13 +2,16 @@
 goal: 将策略资产重塑为自然交流中形成、空闲整理、按范围使用且可追溯撤销的记忆
 version: 1.5
 date_created: 2026-10-28
-last_updated: 2026-10-29
+last_updated: 2026-11-04
 owner: Lake
-status: In Progress
+status: Superseded
 tags: [feature, memory, preferences, compaction, migration, adk]
+superseded_by: feature-agent-file-memory-1.md
 ---
 
 # Lake 自然记忆重塑开发计划
+
+> **2026-11-04：已由 [Agent 本地文件记忆主计划](feature-agent-file-memory-1.md) 替代。** 下文保留历史设计、任务勾选和验收水位，不再作为新开发指令；未完成项不继续按旧实现推进。当前运行代码尚未因本次计划更新而停用。采集/同意/撤回及实际任务依赖按新计划接替，旧整理、条目管理、注入/投影和无依赖 V2 代码分批下线；不为旧体系补齐放量，也不删除必要审计和未知操作账本。
 
 Lake 的新记忆功能承接原策略资产：用户正常交流，系统在用户开启自动记忆后识别明确的长期偏好，在空闲时整理项目事实和历史经验，回答时按范围取用。上下文压缩前再捕获一次尚未整理的来源，减少长对话中的遗漏。用户不需要固定说“记住”，日常也不需要逐条审核、采用。
 

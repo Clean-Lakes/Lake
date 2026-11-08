@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-var defaults = Object{"conversationMode": "default", "multiAgentMode": "off", "agentRuntime": "adk", "reasoningEffort": "", "reasoningModelId": "", "profile": "core", "runtime": "local", "asset_ref": "", "container_id": "", "terminal_id": "", "terminal_generation": "", "userPrompt": "", "contextBudgetMode": "auto", "contextWindow": 64000, "maxOutput": 8192, "maxSteps": 500, "silentReadFiles": true, "silentWriteFiles": false, "silentReadSQL": true, "silentCommands": true, "silentTerminalCreation": true, "blockUnreferencedAssets": false, "denyLocalExecution": false}
+var defaults = Object{"conversationMode": "default", "multiAgentMode": "off", "agentRuntime": "adk", "reasoningEffort": "", "reasoningModelId": "", "profile": "core", "runtime": "local", "asset_ref": "", "container_id": "", "terminal_id": "", "terminal_generation": "", "userPrompt": "", "contextBudgetMode": "auto", "contextWindow": 64000, "maxOutput": 8192, "maxSteps": 500, "silentReadFiles": true, "silentWriteFiles": false, "silentReadSQL": true, "silentCommands": true, "silentTerminalCreation": true, "silentMCPCalls": false, "blockUnreferencedAssets": false, "denyLocalExecution": false}
 
 func (b *Server) sessionOptions(id string) Object {
 	options := Object{}
@@ -22,6 +22,16 @@ func (b *Server) sessionOptions(id string) Object {
 	stored := b.Store.Options(id)
 	for k, v := range stored {
 		options[k] = v
+	}
+	if owner := b.Store.permissionOwner(id); owner != id {
+		inherited := b.Store.Options(owner)
+		for _, key := range permissionOptionKeys {
+			value, ok := inherited[key]
+			if !ok {
+				value = defaults[key]
+			}
+			options[key] = value
+		}
 	}
 	// Old clients saved the former 64K default on unrelated setting changes.
 	// Preserve non-default budgets; explicit new budget updates select manual.
@@ -59,12 +69,33 @@ func (b *Server) configureUserOptions(id string, updates Object) Object {
 
 func (b *Server) configureSessionOptions(id string, updates Object, saveOptions func(string, Object), userAction bool) Object {
 	explicitPermissions := false
-	for _, key := range []string{"silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "blockUnreferencedAssets", "denyLocalExecution"} {
+	for _, key := range []string{"silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "silentMCPCalls", "blockUnreferencedAssets", "denyLocalExecution"} {
 		if _, exists := updates[key]; userAction && exists {
 			explicitPermissions = true
 		}
 	}
 	options := b.sessionOptions(id)
+	if userAction && explicitPermissions && b.Store.permissionOwner(id) != id {
+		filtered := Object{}
+		for key, value := range updates {
+			permission := false
+			for _, name := range permissionOptionKeys {
+				if key == name {
+					permission = true
+					break
+				}
+			}
+			if permission {
+				if value != options[key] {
+					fail(409, "专员权限由 Pilot 统一管理，请在 Pilot 中修改")
+				}
+			} else {
+				filtered[key] = value
+			}
+		}
+		updates = filtered
+		explicitPermissions = false
+	}
 	if mode, exists := updates["conversationMode"]; exists && mode != ai.ModeDefault && mode != ai.ModePlan {
 		fail(400, "Invalid conversation mode")
 	}
@@ -105,7 +136,7 @@ func (b *Server) configureSessionOptions(id string, updates Object, saveOptions 
 		fail(400, "Invalid AI options")
 	}
 	permissions := ai.DefaultPermissions()
-	for _, k := range []string{"silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "blockUnreferencedAssets", "denyLocalExecution"} {
+	for _, k := range []string{"silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "silentMCPCalls", "blockUnreferencedAssets", "denyLocalExecution"} {
 		if _, ok := options[k].(bool); !ok {
 			fail(400, "Invalid permission option")
 		}
@@ -299,6 +330,16 @@ func (b *Server) event(event ai.Event) {
 		}
 	default:
 		b.Store.Touch(event.Session)
+	}
+	if event.Type == "inputState" || event.Type == "approval" || event.Type == "done" {
+		// This callback can hold an Engine session lock. Only consult the host
+		// projection here; the receiving client reads the canonical snapshot.
+		b.Store.update(func() any {
+			for _, row := range b.Store.rows("SELECT pilot.sessionId FROM superagentSessions worker JOIN superagentSessions pilot ON pilot.projectId=worker.projectId AND pilot.kind='router' WHERE worker.sessionId=? AND worker.kind='worker'", event.Session) {
+				b.Store.event(stringOf(row["sessionId"]), "specialist")
+			}
+			return nil
+		})
 	}
 }
 func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachment, refs, files []Object, ignoreProjectMemory bool) {

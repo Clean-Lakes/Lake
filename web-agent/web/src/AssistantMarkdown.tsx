@@ -87,10 +87,12 @@ const components: Components = {
   },
 };
 
-export const AssistantMarkdown = memo(function AssistantMarkdown({children, tags = [], className = ''}: {children: string; tags?: readonly WorkspaceTag[]; className?: string}) {
+const textImageComponents:Components={...components,img:({alt})=>alt?<span>{alt}</span>:null};
+
+export const AssistantMarkdown = memo(function AssistantMarkdown({children, tags = [], className = '', allowImages = true}: {children: string; tags?: readonly WorkspaceTag[]; className?: string; allowImages?: boolean}) {
   const {catalog} = useContext(References);
   const signature = conversationTagSignature(tags);
   const decorateTags = useMemo(() => remarkConversationTags(tags), [signature]);
   const decorateObjects = useMemo(() => remarkObjectReferences(catalog), [catalog]);
-  return <div className={`ai-markdown assistant-prose${className ? ` ${className}` : ''}`}><Markdown remarkPlugins={[remarkGfm, remarkAssistantProse, remarkReplyInfo, decorateTags, decorateObjects]} components={components} skipHtml>{children}</Markdown></div>;
+  return <div className={`ai-markdown assistant-prose${className ? ` ${className}` : ''}`}><Markdown remarkPlugins={[remarkGfm, remarkAssistantProse, remarkReplyInfo, decorateTags, decorateObjects]} components={allowImages?components:textImageComponents} skipHtml>{children}</Markdown></div>;
 });

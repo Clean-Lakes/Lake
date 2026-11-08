@@ -36,6 +36,9 @@ func (b *Server) deliverPendingSuperReports(domain ai.SuperProject) {
 }
 
 func (b *Server) startSuperWorkers(domain ai.SuperProject) {
+	if err := b.capturePilotPermissions(b.Context, domain); err != nil {
+		return
+	}
 	if b.Engine.InheritSuperProjectAccess(b.Context, domain.ProjectID) != nil {
 		return
 	}
@@ -79,6 +82,7 @@ func (b *Server) startSuperWorkers(domain ai.SuperProject) {
 			b.configure(task.SessionID, b.superWorkerTargetOptions(domain.ProjectID, task.WorkerID, task.SessionID))
 			c, err := b.Engine.ConfigForSession(task.SessionID)
 			if err == nil {
+				c.ProjectMCPServers = b.projectMCPIndex(b.Context, domain.ProjectID, c.Permissions)
 				err = b.Engine.ConfigureTaskWorker(b.Context, domain.ProjectID, task.WorkerID, c)
 			}
 			if err == nil {
@@ -210,7 +214,16 @@ func (b *Server) superWorkerTargetOptions(project, workerID string, workerSessio
 		must(json.Unmarshal([]byte(stringOf(row["data"])), &host))
 		return nil
 	})
-	current := b.sessionOptions(event.ThreadRef)
+	owner := b.Store.permissionOwner(event.ThreadRef)
+	if kind := b.Store.superSessionKind(owner); kind != "router" {
+		domain, ok, err := b.Engine.SuperProject(b.Context, project)
+		aiFailure(err)
+		if !ok {
+			fail(409, "Pilot 不可用")
+		}
+		owner = domain.RouterSessionID
+	}
+	current := b.sessionOptions(owner)
 	opts := Object{}
 	// Channel-local options seed only a new task. Later channel edits never
 	// overwrite an existing task's independent configuration.
@@ -229,11 +242,8 @@ func (b *Server) superWorkerTargetOptions(project, workerID string, workerSessio
 			opts[key] = value
 		}
 	}
-	for _, key := range []string{"silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation"} {
-		opts[key] = host.TargetOptions[key] == true && current[key] == true
-	}
-	for _, key := range []string{"denyLocalExecution", "blockUnreferencedAssets"} {
-		opts[key] = host.TargetOptions[key] == true || current[key] == true
+	for _, key := range permissionOptionKeys {
+		opts[key] = current[key]
 	}
 	return opts
 }

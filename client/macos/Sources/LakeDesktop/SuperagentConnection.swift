@@ -4,7 +4,7 @@ import Foundation
 // explicit and uses the private authenticated loopback channel, even when this
 // UI did not spawn the process. Never signal a PID read from an unverified file.
 enum SuperagentConnection {
-    static func matches(_ info: RuntimeInfo, home: URL, data: URL) async -> Bool {
+    static func matches(_ info: RuntimeInfo, home: URL, data: URL, backendRuntime: String = "go") async -> Bool {
         guard let origin = info.url else { return false }
         var request = URLRequest(url: origin.appendingPathComponent("api/superagent/lifecycle"))
         request.timeoutInterval = 2
@@ -13,7 +13,7 @@ enum SuperagentConnection {
               (response as? HTTPURLResponse)?.statusCode == 200,
               let value = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
               value["pid"] as? Int32 == info.pid,
-              value["backendRuntime"] as? String == "go",
+              value["backendRuntime"] as? String == backendRuntime,
               value["draining"] as? Bool == false,
               let actualHome = value["home"] as? String,
               let actualData = value["dataDirectory"] as? String else { return false }
@@ -21,8 +21,8 @@ enum SuperagentConnection {
             && normalized(URL(fileURLWithPath: actualData)) == normalized(data)
     }
 
-    static func drain(_ info: RuntimeInfo, home: URL, data: URL) async -> Bool {
-        guard await matches(info, home: home, data: data), let origin = info.url else { return false }
+    static func drain(_ info: RuntimeInfo, home: URL, data: URL, backendRuntime: String = "go") async -> Bool {
+        guard await matches(info, home: home, data: data, backendRuntime: backendRuntime), let origin = info.url else { return false }
         var request = URLRequest(url: origin.appendingPathComponent("api/superagent/lifecycle"))
         request.httpMethod = "POST"
         request.timeoutInterval = 5

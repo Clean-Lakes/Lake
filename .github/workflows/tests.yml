@@ -6,12 +6,12 @@ on:
 permissions:
   contents: read
 jobs:
-  workbench:
+  macos_runtime:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.head.ref == 'develop' &&
        github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
@@ -27,15 +27,82 @@ jobs:
       - run: pnpm --dir web-agent install --frozen-lockfile
       - run: pnpm --dir web-agent test:frontend && pnpm --dir web-agent build:web
       - run: mkdir -p assets/web/dist && cp -R web-agent/web/dist/. assets/web/dist/
+      - name: Verify TypeScript production runtime
+        run: |
+          lake_node=$(python3 scripts/prepare_typescript_runtime.py)
+          export PATH="$(dirname "$lake_node"):$PATH"
+          "$lake_node" third_party/agent-sdk/node_modules/typescript/bin/tsc -p runtime/typescript/tsconfig.json
+          "$lake_node" runtime/typescript/build.mjs
+          web-agent/node_modules/.bin/tsx --tsconfig runtime/typescript/tsconfig.json --test runtime/typescript/*.test.ts
+          "$lake_node" --test runtime/typescript/*.test.cjs
       - run: python3 scripts/check_adk_runtime_boundary.py
       - run: python3 -m unittest discover -s scripts -p 'test_branch_policy.py'
       - run: python3 -m unittest discover -s scripts -p 'test_dev_*py'
       - run: python3 -m unittest discover -s scripts -p 'test_memory_compatibility_tools.py'
-      # The full Web package reached its 20-minute suite deadline while still
-      # progressing; the then-current durable-store test had run for one second.
-      # Keep full coverage and race instrumentation, with a bounded suite budget.
-      - run: go test -race -timeout=30m ./... && go vet ./...
       - run: swift run --package-path client/macos --build-system native LakeUpdateTests
       - run: swift run --package-path client/macos --build-system native LakeWindowTests
       - run: swift build --package-path client/macos --build-system native --product LakeDesktop
       - run: python3 scripts/test_lake_macos_installer.py
+  legacy_go:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.ref == 'develop' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [ai, web, remaining]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+          cache-dependency-path: |
+            go.sum
+            internal/${{ matrix.group }}/**/*.go
+      - run: pnpm --dir web-agent install --frozen-lockfile
+      - run: pnpm --dir web-agent build:web
+      - run: mkdir -p assets/web/dist && cp -R web-agent/web/dist/. assets/web/dist/
+      # Keep the complete package set, race instrumentation and vet. Heavy
+      # persistence suites get separate runners rather than competing for RAM.
+      - name: Verify complete legacy Go package partition
+        env:
+          GO_TEST_GROUP: ${{ matrix.group }}
+        run: |
+          python3 - <<'PY'
+          import os, subprocess
+          packages = subprocess.check_output(['go', 'list', './...'], text=True).splitlines()
+          module = subprocess.check_output(['go', 'list', '-m'], text=True).strip()
+          groups = {name: [module + '/internal/' + name] for name in ('ai', 'web')}
+          selected = groups['ai'] + groups['web']
+          assert set(selected) <= set(packages)
+          groups['remaining'] = [package for package in packages if package not in selected]
+          flattened = [package for group in groups.values() for package in group]
+          assert len(flattened) == len(set(flattened)) and set(flattened) == set(packages)
+          actual = groups[os.environ['GO_TEST_GROUP']]
+          assert actual
+          subprocess.run(['go', 'test', '-race', '-timeout=30m', *actual], check=True)
+          subprocess.run(['go', 'vet', *actual], check=True)
+          PY
+  workbench:
+    needs: [macos_runtime, legacy_go]
+    if: >-
+      always() &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.pull_request.head.ref == 'develop' &&
+        github.event.pull_request.head.repo.full_name == github.repository))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require macOS runtime and legacy Go compatibility
+        env:
+          MACOS_RESULT: ${{ needs.macos_runtime.result }}
+          LEGACY_GO_RESULT: ${{ needs.legacy_go.result }}
+        run: test "$MACOS_RESULT" = success && test "$LEGACY_GO_RESULT" = success

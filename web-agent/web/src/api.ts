@@ -2,6 +2,7 @@ import type {MCPServerConfig,MCPToolCatalog,SkillConfig,SkillCatalog} from "../.
 import {displayAiError} from "./aiErrors";
 import type { CommandPolicy } from "../../shared/command-policy";
 import type { WorkspaceTag } from "../../shared/contracts";
+import type { LayeredMemoryScope, LayeredMemorySettings, LayeredMemoryView } from "../../shared/contracts";
 import type {
   SSHConnectionInput,
   SSHKeyDirectory,
@@ -28,8 +29,6 @@ import type {
   ProjectMemoryJob,
   ProjectMemoryList,
   ProjectMemorySettings,
-  MemoryCandidate,
-  MemorySource,
   Resource,
   ResourceTreeNode,
   SessionSnapshot,
@@ -40,6 +39,11 @@ import type {
   TextFileAttachment,
   MessageMention,
   WorkSession,
+  WatchdogMode,
+  OperationReview,
+  OperationReviewConfirmation,
+  OperatorEffectReview,
+  OperatorEffectConfirmation,
 } from "../../shared/contracts";
 
 export class ApiRequestError extends Error {
@@ -88,7 +92,9 @@ export type Bootstrap = {
   modelSelection?: AvailableModelEntry | null;
   terminalMode: "command" | "pty";
   supportsImageInput?: boolean;
-  aiRuntime?: "go" | "legacy";
+  aiRuntime?: "typescript" | "go" | "legacy";
+  backendRuntime?: "typescript" | "go";
+  memoryEngine?: "layered";
 };
 
 export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"modelId"|"modelSelection"|"supportsImageInput"> & {
@@ -98,7 +104,30 @@ export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"model
 };
 
 export const api = {
+  memoryScopes: (projectId = "", signal?: AbortSignal) => request<{engine: "typescript"; scopes: LayeredMemoryScope[]}>(`/api/memory?projectId=${encodeURIComponent(projectId)}`, {signal}),
+  memoryView: (key: string, projectId = "", signal?: AbortSignal) => request<LayeredMemoryView>(`/api/memory/scopes/${encodeURIComponent(key)}?projectId=${encodeURIComponent(projectId)}`, {signal}),
+  memorySettings: (key: string, projectId: string, data: LayeredMemorySettings) => request<LayeredMemorySettings>(`/api/memory/scopes/${encodeURIComponent(key)}/settings?projectId=${encodeURIComponent(projectId)}`, {method: "PATCH", body: JSON.stringify({useEnabled: data.useEnabled, extractionEnabled: data.extractionEnabled, expectedRevision: data.revision})}),
+  saveMemory: (key: string, projectId: string, data: {title: string; body: string; expectedRevision: number}, entryId?: string) => request<LayeredMemoryView>(`/api/memory/scopes/${encodeURIComponent(key)}/entries${entryId ? "/"+encodeURIComponent(entryId) : ""}?projectId=${encodeURIComponent(projectId)}`, {method: entryId ? "PUT" : "POST", body: JSON.stringify(data)}),
+  forgetMemory: (key: string, projectId: string, entryId: string, expectedRevision: number) => request<LayeredMemoryView>(`/api/memory/scopes/${encodeURIComponent(key)}/entries/${encodeURIComponent(entryId)}?projectId=${encodeURIComponent(projectId)}`, {method: "DELETE", body: JSON.stringify({expectedRevision})}),
 	superWorkspace:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperWorkspace>(`/api/projects/${encodeURIComponent(project)}/superagent`,{signal}),
+  operationReview: (sessionId: string, operationId: string, signal?: AbortSignal) =>
+    request<OperationReview>(`/api/sessions/${encodeURIComponent(sessionId)}/operation-reconciliation/${encodeURIComponent(operationId)}`, {signal}),
+  confirmOperationReview: (sessionId: string, operationId: string, confirmation: OperationReviewConfirmation) =>
+    post<{operationId: string; resolved: true}>(`/api/sessions/${encodeURIComponent(sessionId)}/operation-reconciliation/${encodeURIComponent(operationId)}`, confirmation),
+  operatorEffectReview: (sessionId:string, operationId:string, signal?:AbortSignal) =>
+    request<OperatorEffectReview>(`/api/sessions/${encodeURIComponent(sessionId)}/operator-effect-review/${encodeURIComponent(operationId)}`,{signal}),
+  confirmOperatorEffectReview: (sessionId:string,operationId:string,confirmation:OperatorEffectConfirmation) =>
+    post<{operationId:string;recorded:true;closureState?:'reconciled'}>(`/api/sessions/${encodeURIComponent(sessionId)}/operator-effect-review/${encodeURIComponent(operationId)}`,confirmation),
+  watchdogMode: (projectId:string,signal?:AbortSignal) => request<{mode:WatchdogMode}>(`/api/projects/${encodeURIComponent(projectId)}/watchdog`,{signal}),
+  setWatchdogMode: (projectId: string, mode: WatchdogMode) => request<{mode: WatchdogMode}>(`/api/projects/${encodeURIComponent(projectId)}/watchdog`, {
+    method: "PUT", body: JSON.stringify({mode}),
+  }),
+	stopSuperWorkspace:(project:string,routerSessionId:string)=>request<{stopped:boolean;tasks:number}>(`/api/projects/${encodeURIComponent(project)}/superagent/stop`,{method:'POST',body:JSON.stringify({routerSessionId})}),
+	deleteSpecialist:(project:string,role:string,revision:number)=>request<{deleted:boolean}>(`/api/projects/${encodeURIComponent(project)}/superagent/specialists/${encodeURIComponent(role)}`,{method:'DELETE',body:JSON.stringify({revision})}),
+	interruptExecution:(session:string,execution:string,generation:number)=>request<{requested:boolean}>(`/api/sessions/${encodeURIComponent(session)}/executions/${encodeURIComponent(execution)}/interrupt`,{method:'POST',body:JSON.stringify({generation})}),
+	readConversation:(session:string,cursor:string)=>request<{cursor:string}>(`/api/sessions/${encodeURIComponent(session)}/messages-read`,{method:'PUT',body:JSON.stringify({cursor})}),
+	readSpecialistCompletion:(session:string,cursor:string)=>request<{cursor:string}>(`/api/sessions/${encodeURIComponent(session)}/channel/read`,{method:'PUT',body:JSON.stringify({cursor})}),
+	specialistTasks:(session:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperWorker[]>(`/api/sessions/${encodeURIComponent(session)}/channel/tasks`,{signal}),
 	specialistChannel:(session:string,cursor='',signal?:AbortSignal)=>request<import('../../shared/contracts').SpecialistChannelPage>(`/api/sessions/${encodeURIComponent(session)}/channel${cursor?`?cursor=${encodeURIComponent(cursor)}`:''}`,{signal}),
 	stopSpecialistChannel:(session:string)=>request<{stopped:boolean}>(`/api/sessions/${encodeURIComponent(session)}/channel`,{method:'POST',body:JSON.stringify({action:'stop'})}),
 	ensureSuperWorkspace:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperProject>(`/api/projects/${encodeURIComponent(project)}/superagent`,{method:'POST',body:'{}',signal}),
@@ -170,14 +199,9 @@ export const api = {
   createProject: (name: string) => post<Project>("/api/projects", { name }),
   projectMemories: (projectId: string, query = "", includeExpired = false, includeDeleted = false, offset = 0, signal?: AbortSignal) => request<ProjectMemoryList>(`/api/projects/${encodeURIComponent(projectId)}/memory?query=${encodeURIComponent(query)}&includeExpired=${includeExpired}&includeDeleted=${includeDeleted}&offset=${offset}&limit=50`, {signal}),
   projectMemory: (projectId: string, key: string, includeDeleted = false, signal?: AbortSignal) => request<ProjectMemoryEntry>(`/api/projects/${encodeURIComponent(projectId)}/memory/${encodeURIComponent(key)}${includeDeleted ? "?includeDeleted=true" : ""}`, {signal}),
-  saveProjectMemory: (projectId: string, key: string, data: {type: ProjectMemoryEntry["type"]; description: string; body: string; expectedRevision: number; validUntil?: string; restoreDeleted?: boolean; knowledgeKind?:ProjectMemoryEntry["knowledgeKind"];scopeKind?:"project"|"resources";resourceIds?:string[];subject?:Record<string,unknown>;factKey?:string;alwaysReference?:boolean;reviewState?:"active"|"disabled"}) => request<{revision:number}>(`/api/projects/${encodeURIComponent(projectId)}/memory/${encodeURIComponent(key)}`, {method:"PUT", body:JSON.stringify(data)}),
+  saveProjectMemory: (projectId: string, key: string, data: {type: ProjectMemoryEntry["type"]; description: string; body: string; expectedRevision: number; validUntil?: string; restoreDeleted?: boolean}) => request<{revision:number}>(`/api/projects/${encodeURIComponent(projectId)}/memory/${encodeURIComponent(key)}`, {method:"PUT", body:JSON.stringify(data)}),
   forgetProjectMemory: (projectId: string, key: string, expectedRevision: number) => request(`/api/projects/${encodeURIComponent(projectId)}/memory/${encodeURIComponent(key)}`, {method:"DELETE", body:JSON.stringify({expectedRevision})}),
   projectMemorySettings: (projectId: string, signal?:AbortSignal) => request<ProjectMemorySettings>(`/api/projects/${encodeURIComponent(projectId)}/memory-settings`,{signal}),
-  projectMemoriesV2:(projectId:string,filters:Record<string,string>,signal?:AbortSignal)=>request<ProjectMemoryList>(`/api/projects/${encodeURIComponent(projectId)}/memory?${new URLSearchParams(filters)}`,{signal}),
-  classifyProjectMemories:(projectId:string,data:Record<string,unknown>)=>post(`/api/projects/${encodeURIComponent(projectId)}/memory-classification`,data),
-  projectMemoryCandidates:(projectId:string,signal?:AbortSignal)=>request<{items:MemoryCandidate[]}>(`/api/projects/${encodeURIComponent(projectId)}/memory-candidates`,{signal}),
-  decideMemoryCandidate:(projectId:string,id:string,data:Record<string,unknown>)=>post(`/api/projects/${encodeURIComponent(projectId)}/memory-candidates/${encodeURIComponent(id)}/decision`,data),
-  projectMemorySource:(projectId:string,key:string,sourceId:string)=>request<{available:boolean;reason?:string;sessionId?:string;turnId?:string;messageId?:string;source:MemorySource}>(`/api/projects/${encodeURIComponent(projectId)}/memory/${encodeURIComponent(key)}/sources/${encodeURIComponent(sourceId)}`),
   setProjectMemorySettings: (projectId: string, useEnabled: boolean, extractionEnabled: boolean, expectedRevision: number) => request<ProjectMemorySettings>(`/api/projects/${encodeURIComponent(projectId)}/memory-settings`, {method:"PATCH", body:JSON.stringify({useEnabled,extractionEnabled,expectedRevision})}),
   projectMemoryJobs: (projectId: string) => request<{items:ProjectMemoryJob[]}>(`/api/projects/${encodeURIComponent(projectId)}/memory-jobs`),
   retryProjectMemoryJob: (projectId: string, jobId: string, expectedProjectRevision: number) => post<{jobId:string;status:string}>(`/api/projects/${encodeURIComponent(projectId)}/memory-jobs/${encodeURIComponent(jobId)}/retry`, {expectedProjectRevision}),
@@ -186,8 +210,10 @@ export const api = {
   createSshResource: (projectId: string, name: string, ssh: SSHConnectionInput, parentId?: string | null) =>
     post<Resource>(`/api/projects/${encodeURIComponent(projectId)}/resources`, { kind: "ssh", name, ssh, ...(parentId ? { parentId } : {}) }),
   editTerminalResource: (id: string, data: {name: string; ssh?: SSHConnectionInput; settings?: {shell: string}}) => request<Resource>(`/api/resources/${encodeURIComponent(id)}`, {method: "PATCH", body: JSON.stringify(data)}),
+  editServiceResource:(id:string,data:{name:string;settings:object})=>request<Resource>(`/api/resources/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify(data)}),
   testKubernetesResource: (projectId:string,settings:object,signal?:AbortSignal) => request<{success:boolean;message:string;version:string;endpoint:string;context?:string;namespace?:string}>(`/api/projects/${encodeURIComponent(projectId)}/resources/test`,{method:'POST',body:JSON.stringify({kind:'kubernetes',settings}),signal}),
   createServiceResource: (projectId: string, name: string, kind: string, settings: object, parentId?: string | null) => post<Resource>(`/api/projects/${encodeURIComponent(projectId)}/resources`, { name, kind, settings, ...(parentId ? { parentId } : {}) }),
+  testServiceResource: (projectId:string,input:object,signal?:AbortSignal)=>request<{message:string;protocol:string;testedAt:string}>(`/api/projects/${encodeURIComponent(projectId)}/resources/test`,{method:'POST',body:JSON.stringify(input),signal}),
   previewResourceImport: (projectId: string, name: string, text: string) => post<ResourceImportPreview>(`/api/projects/${encodeURIComponent(projectId)}/resource-import-preview`, {name, text}),
   previewHexhubImport: (projectId: string) => post<ResourceImportPreview>(`/api/projects/${encodeURIComponent(projectId)}/resource-import-preview`, {hexhub: true}),
   importResources: (projectId: string, planId: string, indexes: number[]) => post<{createdCount: number; skippedCount: number; updatedCount: number}>(`/api/projects/${encodeURIComponent(projectId)}/resource-import`, {planId, indexes}),
@@ -204,8 +230,8 @@ export const api = {
   deleteAIPreset: (id: string) => request<unknown>("/api/ai/presets", { method: "DELETE", body: JSON.stringify({ id }) }),
   createSession: (projectId: string, terminalReuse?: {terminalId: string; generation: string}) =>
     post<WorkSession>(`/api/projects/${encodeURIComponent(projectId)}/sessions`, terminalReuse ? {terminalReuse} : {}),
-  snapshot: (sessionId: string, signal?: AbortSignal) =>
-    request<SessionSnapshot>(`/api/sessions/${encodeURIComponent(sessionId)}/snapshot`, { signal }),
+  snapshot: (sessionId: string, signal?: AbortSignal, taskId?:string) =>
+    request<SessionSnapshot>(`/api/sessions/${encodeURIComponent(sessionId)}/snapshot${taskId?`?taskId=${encodeURIComponent(taskId)}`:""}`, { signal }),
   renameSession: (sessionId: string, title: string) => request<WorkSession>(`/api/sessions/${encodeURIComponent(sessionId)}`, {method: "PATCH", body: JSON.stringify({title})}),
   deleteSession: (sessionId: string) =>
     request<void>(`/api/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" }),

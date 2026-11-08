@@ -43,8 +43,17 @@ type SSH struct {
 	CredentialRef string `json:"credentialRef,omitempty"`
 	KnownHosts    string `json:"-"`
 }
+
+// ProjectMCPServer is a public planning hint. Calls resolve permissions and
+// configuration versions again at the actual tool boundary.
+type ProjectMCPServer struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 type Config struct {
-	superRole                 string // Host-only Router/Worker identity; never restored from JSON.
+	ProjectMCPServers         []ProjectMCPServer `json:"-"`
+	superRole                 string             // Host-only Router/Worker identity; never restored from JSON.
 	superTaskID               string
 	superAssignment           *SuperAssignmentToken
 	superRoundBase            int

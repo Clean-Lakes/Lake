@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -18,25 +19,19 @@ func TestStrategyHistoryAnchorNeverChangesProviderPayloadOrBudget(t *testing.T) 
 	}
 }
 
-func TestHistoricalStrategyOutboxCanBeAcknowledgedWithoutMaterialization(t *testing.T) {
-	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "unused"}, nil)
-	s, _ := e.get("case")
-	event := SealStrategySnapshot(StrategyTurnSnapshot{Deferred: true, HistoryStart: 0, HistoryEnd: 1, UserTextHash: hash("original"), UserMessageID: "actual", SessionID: "case", ProjectID: "project", TurnID: "turn", Status: "completed"})
-	s.state.StrategyOutbox = []StrategyTurnSnapshot{event}
-	if !ValidStrategySnapshot(event) {
-		t.Fatal("legacy hash changed")
-	}
-	if err := e.AckStrategyOutbox("case", "turn", "wrong"); err == nil {
-		t.Fatal("wrong exact receipt accepted")
-	}
-	if err := e.AckStrategyOutbox("case", "turn", event.SnapshotHash); err != nil {
+// A frozen historical payload catches JSON/tag/order changes that would make
+// existing source withdrawal checks reject previously valid snapshots.
+func TestHistoricalStrategySnapshotHashAndTamperCompatibility(t *testing.T) {
+	const historical = `{"deferred":true,"historyEnd":1,"userTextHash":"original-text-hash","userMessageId":"actual","sessionId":"case","projectId":"project","turnId":"turn","startedAt":"","finishedAt":"","globalEpoch":0,"projectEpoch":0,"status":"completed","profile":"","userText":"","assistantText":"","evidence":null,"correction":false,"modelRef":"","snapshotHash":"ab3783d6a6722d6968a2045bb143a84a75ee1f471b114f23dc88486c18f58a06"}`
+	var snapshot StrategyTurnSnapshot
+	if err := json.Unmarshal([]byte(historical), &snapshot); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.AckStrategyOutbox("case", "turn", event.SnapshotHash); err != nil {
-		t.Fatal("ack not idempotent")
+	if !ValidStrategySnapshot(snapshot) || js(snapshot) != historical {
+		t.Fatal("historical snapshot JSON/hash changed")
 	}
-	out, _ := e.StrategyOutbox("case")
-	if len(out) != 0 {
-		t.Fatal("legacy handoff remained")
+	snapshot.UserText = "altered historical source"
+	if ValidStrategySnapshot(snapshot) {
+		t.Fatal("changed historical source accepted")
 	}
 }

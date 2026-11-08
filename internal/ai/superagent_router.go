@@ -33,12 +33,14 @@ type SuperDecision struct {
 	TaskID           string   `json:"taskId,omitempty"`
 	Title            string   `json:"title,omitempty"`
 	RoleKey          string   `json:"roleKey,omitempty"`
+	RoleID           string   `json:"roleId,omitempty"`
 	Quote            string   `json:"quote,omitempty"`
 	Reason           string   `json:"reason"`
 	EvidenceTaskIDs  []string `json:"evidenceTaskIds,omitempty"`
 	roundLimit       int
 }
 type SuperRouteResult struct {
+	RoleID     string `json:"roleId,omitempty"`
 	Protocol   string `json:"protocol,omitempty"`
 	DecisionID string `json:"decisionId"`
 	TaskID     string `json:"taskId,omitempty"`
@@ -57,7 +59,7 @@ func superRouteResult(tx *gorm.DB, r superDecisionRow) (SuperRouteResult, error)
 		if err := tx.Where("task_id = ? AND parent_worker_id = ''", r.TaskID).First(&w).Error; err != nil {
 			return out, err
 		}
-		out.WorkerID, out.SessionID = w.ID, w.SessionID
+		out.WorkerID, out.SessionID, out.RoleID = w.ID, w.SessionID, w.RoleID
 		view, err := projectSuperTaskTx(tx, w.goalSession(), w.TaskID)
 		if err != nil {
 			return out, err
@@ -82,8 +84,8 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 		if in.TaskID != "" {
 			return out, errors.New("superagent: route_work create must omit task_id; the host assigns the new task ID")
 		}
-		if strings.TrimSpace(in.Title) == "" || strings.TrimSpace(in.RoleKey) == "" {
-			return out, errors.New("superagent: route_work create requires both title and role_key; supply the specialist role_key and retry the same event_id and part_key")
+		if strings.TrimSpace(in.Title) == "" || strings.TrimSpace(in.RoleKey) == "" && in.RoleID == "" {
+			return out, errors.New("superagent: route_work create requires both title and role_key or an exact role_id; supply the specialist and retry the same event_id and part_key")
 		}
 	case "followup", "context_only", "stop":
 		if in.TaskID == "" {
@@ -135,6 +137,18 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 		if event.Disposition != "pending" {
 			return errSuperConflict
 		}
+		var selectedRole superRoleRow
+		if in.RoleID != "" {
+			if in.Action != "create" {
+				return errSuperBinding
+			}
+			if err := tx.First(&selectedRole, "id = ? AND project_id = ?", in.RoleID, b.ProjectID).Error; err != nil {
+				return err
+			}
+			if in.RoleKey != "" && in.RoleKey != selectedRole.RoleKey {
+				return errSuperBinding
+			}
+		}
 		if source.Kind != "user" && in.Action != "context_only" && in.Action != "ask" {
 			return errSuperBinding
 		}
@@ -147,8 +161,8 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 			if err := tx.First(&role, "id = ? AND project_id = ?", channel.RoleID, b.ProjectID).Error; err != nil {
 				return err
 			}
-			if in.Action == "create" && in.RoleKey != role.RoleKey {
-				return errors.New("superagent: use the exact preferred role_key from the source channel")
+			if in.Action == "create" && (in.RoleID != "" && in.RoleID != role.ID || in.RoleID == "" && in.RoleKey != role.RoleKey) {
+				return errors.New("superagent: use the exact preferred role_id (or legacy role_key) from the source channel")
 			}
 			if in.TaskID != "" {
 				var worker superWorkerRow
@@ -183,6 +197,22 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 		row := superDecisionRow{ID: uid(), EventID: event.ID, PartKey: in.PartKey, Revision: 1, TaskID: in.TaskID, Action: in.Action, Reason: in.Reason, RequestHash: requestHash, Quote: in.Quote, Title: in.Title, RoleKey: in.RoleKey, At: time.Now().UTC()}
 		switch in.Action {
 		case "create":
+			role := selectedRole
+			if role.ID == "" {
+				roleID := hash(js([]any{b.ProjectID, in.RoleKey}))
+				lookup := tx.First(&role, "id = ? AND project_id = ?", roleID, b.ProjectID).Error
+				if errors.Is(lookup, gorm.ErrRecordNotFound) {
+					role = superRoleRow{ID: roleID, ProjectID: b.ProjectID, RoleKey: in.RoleKey, Name: in.RoleKey, Revision: 1}
+					if err := tx.Create(&role).Error; err != nil {
+						return err
+					}
+				} else if lookup != nil {
+					return lookup
+				}
+			}
+			if err := checkSuperRoleAvailableTx(tx, b.ProjectID, role.ID); err != nil {
+				return err
+			}
 			key := hash(js([]any{event.ID, in.PartKey}))[:32]
 			sessionID, taskID, workerID := "sw_"+key, "st_"+key, "worker_"+key
 			root := "super_" + key
@@ -195,22 +225,11 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 			if err := writeWorkGoalTx(tx, &native, &g, true); err != nil {
 				return err
 			}
-			roleID := hash(js([]any{b.ProjectID, in.RoleKey}))
-			var role superRoleRow
-			lookup := tx.First(&role, "id = ?", roleID).Error
-			if errors.Is(lookup, gorm.ErrRecordNotFound) {
-				role = superRoleRow{ID: roleID, ProjectID: b.ProjectID, RoleKey: in.RoleKey, Name: in.RoleKey, Revision: 1}
-				if err := tx.Create(&role).Error; err != nil {
-					return err
-				}
-			} else if lookup != nil {
-				return lookup
-			}
-			w := superWorkerRow{ID: workerID, TaskID: taskID, ProjectID: b.ProjectID, SessionID: sessionID, RoleID: roleID, SourceEventID: event.ID, OriginRootTurnID: root, Revision: 1, CreatedAt: row.At, ConversationMode: in.conversationMode}
+			w := superWorkerRow{ID: workerID, TaskID: taskID, ProjectID: b.ProjectID, SessionID: sessionID, RoleID: role.ID, RoleSnapshot: js(specialistRole(role)), SourceEventID: event.ID, OriginRootTurnID: root, Revision: 1, CreatedAt: row.At, ConversationMode: in.conversationMode}
 			if err := tx.Create(&w).Error; err != nil {
 				return err
 			}
-			if _, err := ensureSuperChannelTx(tx, b.ProjectID, roleID, row.At); err != nil {
+			if _, err := ensureSuperChannelTx(tx, b.ProjectID, role.ID, row.At); err != nil {
 				return err
 			}
 			if err := tx.Create(&superAssignmentRow{ID: "assignment_" + key, WorkerID: workerID, ProjectID: b.ProjectID, State: "queued", CreatedAt: row.At}).Error; err != nil {
@@ -247,10 +266,22 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 		out, err = superRouteResult(tx, row)
 		return err
 	})
+	if err == nil && (in.Action == "create" || in.Action == "followup") && e.SuperRolesChanged != nil {
+		// Publish after commit, before the Router's final prose/model round.
+		// A failed hint never changes the committed routing decision.
+		_ = e.SuperRolesChanged(ctx, b.ProjectID)
+	}
 	return out, err
 }
 
 func (e *Engine) RunPilotRouter(ctx context.Context, sessionID string, b SuperSourceBinding) error {
+	return e.runPilotRouter(ctx, sessionID, b, 90*time.Second)
+}
+
+// Keep the production invocation budget at the public entry point. Heavy
+// instrumented persistence fixtures can exercise this same implementation
+// without turning a bounded-context assertion into a wall-clock benchmark.
+func (e *Engine) runPilotRouter(ctx context.Context, sessionID string, b SuperSourceBinding, invocationBudget time.Duration) error {
 	if !b.valid() {
 		return errSuperBinding
 	}
@@ -316,6 +347,9 @@ func (e *Engine) RunPilotRouter(ctx context.Context, sessionID string, b SuperSo
 		if !succeeded {
 			_ = e.failSuperRouting(context.WithoutCancel(ctx), b.ProjectID, remaining)
 		}
+		if e.SuperRolesChanged != nil {
+			_ = e.SuperRolesChanged(context.WithoutCancel(ctx), b.ProjectID)
+		}
 	}()
 	run := &superRouterRun{projectID: b.ProjectID, binding: b, events: map[string]bool{}, remaining: 16, workerRoundLimit: c.MaxSteps, conversationMode: c.ConversationMode, readCursors: map[string]int{}, readComplete: map[string]bool{}}
 	run.bindings = map[string]SuperSourceBinding{}
@@ -378,7 +412,7 @@ func (e *Engine) RunPilotRouter(ctx context.Context, sessionID string, b SuperSo
 		return snapshotErr
 	}
 	run.firstCard = before.TotalCards
-	invoke, cancel := context.WithTimeout(ctx, 90*time.Second)
+	invoke, cancel := context.WithTimeout(ctx, invocationBudget)
 	defer cancel()
 	if err = e.ExecuteTurn(invoke, sessionID, input); err != nil {
 		return err

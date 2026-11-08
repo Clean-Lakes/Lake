@@ -6,7 +6,9 @@
 
 ## macOS 本地联调
 
-需要 macOS 13+、Apple Silicon、Go 1.26.6（以 `go.mod` 为准）、Node.js 24.14+、pnpm 10.33.4、Swift 5.9+ 和 Xcode Command Line Tools。第一次构建先配置持久代码签名身份：
+自 0.3.28 起，macOS 默认桌面构建使用当前 TypeScript 后端（用户已明确授权该发布范围），并非旧版全量等价验收已通过。`scripts/build_lake.sh --typescript` 构建签名 TS 二进制；无参数的 Go 构建保留给旧工具和平台，不是 macOS 正式包回退。日常 TS 联调使用下述完整 Dev 构建入口；旧 Go/React 快速运行仅适用于相应旧后端。
+
+需要 macOS 13.5+、Apple Silicon、Go 1.26.6（以 `go.mod` 为准）、Node.js 24.14+、pnpm 10.33.4、Swift 5.9+ 和 Xcode Command Line Tools。第一次构建先配置持久代码签名身份：
 
 ```sh
 scripts/setup_lake_signing.sh
@@ -23,6 +25,8 @@ open "$HOME/Applications/Lake Dev.app"
 构建脚本先调用 `scripts/build_lake.sh` 生成**已签名**的 `bin/lake`，再构建和签名 Dev 应用。缺少 `Lake Local Development Code Signing` 身份时应停止构建并运行一次签名设置脚本，不能改用未签名二进制。构建产物在 `dist/macos/<版本>/arm64/dev/`，安装位置为 `~/Applications/Lake Dev.app`。应用会启动自己的 Go 服务并选择本机空闲端口；不要另外启动一个服务来驱动这个窗口。
 
 已运行 Dev 时，安装前在 **Lake Dev** 选择“停止内核并退出”，确认后端退出后安装新包，再打开上面的应用路径，确保加载新进程。不要退出或重启正式版 Lake。Dev 标题旁有 `DEV` 标记；模型和项目配置从独立目录读取，首次启动为空是正常现象。
+
+Dev 安装和快速运行会核对已安装应用的源码来源。已安装版本来源干净且提交可核实时，也允许从最近历史证明相同构建输入基线，兼容 PR 合并造成的提交身份变化。仅 `docs/`、`plan/` 和 `runtime/typescript/README.md` 作为构建说明文档忽略；不泛化排除 Markdown，许可证、提示词、配置、构建脚本和执行源码继续核对。
 
 | 项目 | 本地联调 | 正式版 |
 | --- | --- | --- |

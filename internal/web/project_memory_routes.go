@@ -57,6 +57,14 @@ func (b *Server) projectMemoryRoute(w http.ResponseWriter, r *http.Request, name
 		return false
 	}
 	project := parts[2]
+	retiredEntry := parts[3] == "memory-classification" || parts[3] == "memory-candidates" ||
+		(parts[3] == "memory" && len(parts) >= 6 && parts[5] == "sources")
+	retiredWrite := b.Store.memoryV2 && parts[3] == "memory" && method != "GET" && method != "DELETE"
+	if retiredEntry || retiredWrite {
+		b.Store.Project(project)
+		reply(w, 410, Object{"error": "旧版运维记忆管理已停用", "code": retiredMemoryV2Code})
+		return true
+	}
 	negative := method == "DELETE" && len(parts) == 5 && parts[3] == "memory"
 	if !negative && (parts[3] == "memory" || strings.HasPrefix(parts[3], "memory-")) && parts[3] != "memory-settings" {
 		purpose := ai.SecurityMemoryRead
@@ -64,9 +72,6 @@ func (b *Server) projectMemoryRoute(w http.ResponseWriter, r *http.Request, name
 			purpose = ai.SecurityMemoryCapture
 		}
 		aiFailure(b.Engine.CheckSecurityMemoryEligibility(r.Context(), project, purpose))
-	}
-	if b.Store.memoryV2 && b.memoryV2Route(w, r, parts, method) {
-		return true
 	}
 	if len(parts) == 4 && parts[3] == "memory" {
 		if method != "GET" {

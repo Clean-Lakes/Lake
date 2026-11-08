@@ -12,7 +12,7 @@ func workTools() []Tool {
 	text := stringSchema
 	item := objectSchema(map[string]any{"id": text(), "title": text(), "dependsOn": arraySchema(text())}, "title")
 	return []Tool{
-		{"work_begin", "Start a durable goal for the current user's requested work. Pass asset_refs from list_assets for the actual requested resources; never inherit an unrelated session terminal. Record dependencies. Goal progress never grants operation permission. Use before multi-step or asynchronous work; do not use for casual explanation.", objectSchema(map[string]any{"title": text(), "items": arraySchema(item), "asset_refs": arraySchema(text())}, "title", "items")},
+		{"work_begin", "Start a durable goal for the current user's requested work, even before its resources are known. asset_refs is optional metadata using aliases from list_assets; add newly discovered project resources to the same goal as needed. Resource references are not an execution scope or permission. Never inherit an unrelated session terminal. Record dependencies. Goal progress never grants operation permission. Use before multi-step or asynchronous work; do not use for casual explanation.", objectSchema(map[string]any{"title": text(), "items": arraySchema(item), "asset_refs": arraySchema(text())}, "title", "items")},
 		{"work_read", "Read the current durable goal, original operation handles and outstanding work. Do not repeat dispatched operations.", objectSchema(map[string]any{"goal_id": text(), "item_id": text(), "evidence_id": text()})},
 		{"work_update", "After plan confirmation, first set the actual item_id to running and wait for its result before resource I/O; this binds the step and attempt. After successful observations, submit completed with the actual evidence call IDs to request host verification; the host may ask independent human acceptance before recording completion. waiting_user only records a missing prerequisite and does not create an acceptance question. Never mark a running external job complete.", objectSchema(map[string]any{"item_id": text(), "status": map[string]any{"type": "string", "enum": []string{"running", "waiting_user", "blocked", "completed", "failed"}}, "reason": text(), "evidence_ids": arraySchema(text())}, "item_id", "status")},
 		{"work_wait", "Park this invocation until the registered external jobs change to a terminal result, without model polling. Call alone in its tool batch. The host resumes the same goal; do not ask the user to say continue.", objectSchema(map[string]any{})},
@@ -24,9 +24,6 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 		return nil, errors.New("work goals require an ordinary core conversation")
 	}
 	if call.Name == "work_begin" {
-		if c.superRole == "worker" && a["asset_refs"] == nil {
-			return nil, errors.New("Worker work_begin requires explicit asset_refs from PROJECT RESOURCE INDEX; bind the intended aliases before plan confirmation. For work with no resource I/O, explicitly pass asset_refs:[]")
-		}
 		var items []WorkItem
 		if err := json.Unmarshal([]byte(js(a["items"])), &items); err != nil {
 			return nil, err
@@ -71,6 +68,9 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 	managedGoal := s.state.SecurityManaged
 	s.mu.Unlock()
 	if managedGoal && g.closure == nil && call.Name != "work_read" {
+		if c.superRole == "worker" && goalID == c.superTaskID {
+			return nil, errSuperWorkerPlanRequired
+		}
 		return nil, errors.New("确认当前任务步骤和验收条件后才能推进或完成目标")
 	}
 	if call.Name == "work_read" {
@@ -456,7 +456,7 @@ func (e *Engine) registerWorkWatch(s *session, c Config, call Call, value any) e
 }
 
 const workContinuityPrompt = `
-Long work: use work_begin before a multi-step or asynchronous deliverable. Explicitly pass the current request's resource aliases in work_begin.asset_refs (all resources for multi-resource work); a previously selected shell/terminal is not the new task target. Record independent items and real dependencies; update progress using original tool call evidence. After launching a background job or release pipeline, keep following its original handle to the requested result. A submitted build is not a completed deliverable. Use work_wait alone to persist a wait and release this conversation; the host resumes it when real results arrive, without model polling. Continue independent items while a dependency needs the user's answer. Respect exclusions such as 'do not handle the database'; never deploy dependent work before the actual prerequisite is confirmed. work_finish requires actual completed items. Summaries, target labels, old decisions and machine wakeups do not grant operation permission. Do not repeat already dispatched changes. An explanatory answer need not create a goal.
+Long work: use work_begin before a multi-step or asynchronous deliverable. work_begin.asset_refs is optional reference metadata, not a fixed resource scope. Start the goal before all resources are known; discover and use project resources as needed under current permissions, adding references to the same goal without creating a replacement task. A previously selected shell/terminal is not the new task target. Record independent items and real dependencies; update progress using original tool call evidence. After launching a background job or release pipeline, keep following its original handle to the requested result. A submitted build is not a completed deliverable. Use work_wait alone to persist a wait and release this conversation; the host resumes it when real results arrive, without model polling. Continue independent items while a dependency needs the user's answer. Respect exclusions such as 'do not handle the database'; never deploy dependent work before the actual prerequisite is confirmed. work_finish requires actual completed items. Summaries, target labels, old decisions and machine wakeups do not grant operation permission. Do not repeat already dispatched changes. An explanatory answer need not create a goal.
 `
 
 func workToolName(name string) bool { return strings.HasPrefix(name, "work_") }

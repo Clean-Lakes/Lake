@@ -21,17 +21,17 @@ test('plain answers and scope questions retain their own rows',()=>{
  const question={id:'question',at,message:{...user.message!,role:'assistant',text:'请确认范围'}};
  assert.ok(conversationGroups([card('reply','message'),question]).every(g=>!g.progress));
 });
-test('active prose stays above all progress rows without changing row keys or raw chronology',()=>{
+test('active and completed projections preserve the same chronology and row keys',()=>{
  const first=sessionOperation('workflow','list_workflows');
  const entries=[user,first,card('note','message'),sessionOperation('schedule','schedule_create'),card('stream','text','running'),sessionOperation('saved','save_workflow')];
  const chronological=conversationGroups(entries);
  const display=conversationDisplayGroups(entries,true);
- assert.deepEqual(display.map(group=>group.entries[0]!.id),['user','note','stream','workflow','schedule']);
+ assert.deepEqual(display.map(group=>group.entries[0]!.id),['user','workflow','note','schedule','stream']);
  assert.deepEqual(display.find(group=>group.entries[0]!.id==='workflow')!.entries.map(entry=>entry.id),['workflow','saved']);
  assert.deepEqual(conversationGroups(entries),chronological,'presentation must not mutate the source');
  assert.deepEqual(conversationDisplayGroups(entries,false),chronological,'completed history retains its timeline');
  const nextUser={...user,id:'next-user',message:{...user.message!,id:'next-user'}};
- assert.deepEqual(conversationDisplayGroups([...entries,nextUser,card('other-tool','operation'),card('other-note','message')],true).map(group=>group.entries[0]!.id),['user','note','stream','workflow','schedule','next-user','other-note','other-tool']);
+ assert.deepEqual(conversationDisplayGroups([...entries,nextUser,card('other-tool','operation'),card('other-note','message')],true).map(group=>group.entries[0]!.id),['user','workflow','note','schedule','stream','next-user','other-tool','other-note']);
 });
 test('active presentation preserves approvals, errors, questions and child controls',()=>{
  const approval={id:'approval',at,action:{id:'approval'} as SessionSnapshot['actions'][number]};
@@ -39,9 +39,9 @@ test('active presentation preserves approvals, errors, questions and child contr
  const entries=[card('tool','operation','pending'),approval,card('error','error','failed'),sessionOperation('question','ask_user_question'),run,card('reply','message')];
  const before=conversationGroups(entries),after=conversationDisplayGroups(entries,true);
  assert.deepEqual(after.filter(group=>group.entries[0]!.id!=='reply'),before.filter(group=>group.entries[0]!.id!=='reply'));
- assert.equal(after[0]!.entries[0]!.id,'reply');
+ assert.deepEqual(after,before,'public replies must not leap ahead of an earlier approval or error');
 });
-test('conversation keeps history folded and closes its process before presenting an answer',()=>{
+test('conversation keeps public replies visible and leaves process disclosure under reader control',()=>{
  const oldUser={...user.message!,id:'old-user',createdAt:'2026-10-18T07:00:00Z'};
  const oldTool={...card('old-tool','operation').card,at:'2026-10-18T07:00:01Z'};
  const oldReply={...card('old-reply','message').card,at:'2026-10-18T07:00:02Z'};
@@ -52,7 +52,7 @@ test('conversation keeps history folded and closes its process before presenting
   assert.ok(position('old-reply')<position('old-tool'),'recorded operations stay below the reply');
   assert.ok(html.includes('class="turn-execution-details" aria-hidden="true" inert=""'),status);
   const current=html.slice(html.indexOf('id="conversation-turn-s-user"'));
-  assert.equal(current.includes('class="turn-execution-details is-open"'),status==='waiting_approval',status);
+  assert.equal(current.includes('class="turn-execution-details is-open"'),false,status);
   assert.ok(!current.includes('thinking-steps'),'resource operations stay folded until requested');
   assert.ok(html.indexOf('aria-label="执行详细过程"')<position('tool'));
   assert.ok(position('reply')<position('tool'),'the gray process stays beneath the visible reply');
@@ -235,8 +235,8 @@ test('recorded process remains available while generated prose retires the live 
  const s={session:{id:'s'},messages:[user.message],actions:[],resources:[],ai:{session:'s',status:'running',cardsOffset:0,turns:1,cards:entries.flatMap(e=>e.card?[e.card]:[])}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
  assert.ok(html.includes('is-continuing'));
- assert.ok(html.includes('is-preview')&&!html.includes('reply-duration-spinner'),'elapsed preview precedes the reply without a trailing live status');
- assert.ok(html.indexOf('class="reply-duration ')<html.indexOf('正在汇总结果。'));
+ assert.ok(html.includes('is-preview')&&!html.includes('reply-duration-spinner'),'elapsed preview stays after public prose without a second live status');
+ assert.ok(html.indexOf('正在汇总结果。')<html.indexOf('class="reply-duration '));
  const done=renderToStaticMarkup(createElement(AITranscript,{snapshot:{...s,ai:{...s.ai!,status:'completed'}}}));
  assert.ok(!done.includes('is-continuing')&&!done.includes('status-text--active'));
  for(const status of ['failed','pending','unknown','not_executed','interrupted','cancelled','background_running']){

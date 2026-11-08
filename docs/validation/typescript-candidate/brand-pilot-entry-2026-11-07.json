@@ -1,0 +1,58 @@
+{
+  "date": "2026-11-07",
+  "sourceSHA": "81a14296b03a412568380f0a947f5065c994c9b9",
+  "frontend": {
+    "passed": 728,
+    "failed": 0,
+    "typecheck": true,
+    "built": true,
+    "newTests": 2
+  },
+  "backendUnchangedSince": "9f3073139d55318a53328ff38cd770252f99d5c5",
+  "backendTestsRerun": false,
+  "isolatedUI": {
+    "oneBrandPilotEntry": true,
+    "searchIndependent": true,
+    "draftPreserved": true,
+    "runningWaitingUnreadMutuallyExclusive": true,
+    "deletedSyntheticRoleReturnsFocusToBrand": true,
+    "sidebarCSSPixels": 200,
+    "horizontalOverflow": false,
+    "taskSpaceClosed": true,
+    "temporaryServerStopped": true
+  },
+  "nativeDev": {
+    "dirty": false,
+    "codesignDeepStrict": true,
+    "backendSHA256": "ca8b767f5aec2ed2b13508b2f2df34c9140883562e52fac13895f79a653cbc6e",
+    "clickBrandEntersPilot": true,
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "windowPhysicalPixels": [
+      [
+        2230,
+        1538
+      ],
+      [
+        1700,
+        1384
+      ]
+    ],
+    "sidebarWidthsCSSPixels": [
+      299.3477,
+      200.3438,
+      298.8438
+    ],
+    "restoredLightAndWindow": true,
+    "preservationBeforeInteractiveQA": {
+      "records": 2949,
+      "missing": [],
+      "changed": [],
+      "added": []
+    }
+  },
+  "windowsNativeNotClaimed": true,
+  "merged": false
+}

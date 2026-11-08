@@ -93,10 +93,12 @@ func (b *Server) sessionSnapshot(id string) Object {
 		aiFailure(err)
 		detail, err := b.Engine.SuperTaskDetail(id, worker.TaskID)
 		aiFailure(err)
+		detail.RoleID = worker.RoleID
 		snap["superagent"] = detail
 	}
 	if b.Engine != nil && object(snap["session"])["workspaceRole"] == "router" {
 		messages := objects(snap["messages"])
+		b.projectPilotReportMessages(b.Context, stringOf(object(snap["session"])["projectId"]), id, messages)
 		ids := []string{}
 		for _, message := range messages {
 			if message["role"] == "assistant" {
@@ -112,6 +114,19 @@ func (b *Server) sessionSnapshot(id string) Object {
 				}
 			}
 		}
+	}
+	if b.Engine != nil {
+		kind := object(snap["session"])["workspaceRole"]
+		if kind == "router" || kind == "worker" {
+			workerSessions := []string{}
+			if kind == "worker" {
+				workerSessions = append(workerSessions, id)
+			}
+			appendPilotDispatchMessages(snap, b.pilotDispatchMessages(b.Context, stringOf(object(snap["session"])["projectId"]), workerSessions...))
+		}
+	}
+	if b.Engine != nil && object(snap["session"])["workspaceRole"] == "role" {
+		b.projectPilotReportMessages(b.Context, stringOf(object(snap["session"])["projectId"]), id, objects(snap["messages"]))
 	}
 	return snap
 }

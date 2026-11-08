@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import plistlib
 import re
 import subprocess
 from pathlib import Path
@@ -23,15 +24,18 @@ def check(repo, manifest):
         # Squash/cherry-pick integration changes commit identities. An exact
         # preserved build-source tree in HEAD's recent first-parent history
         # proves the same baseline as ancestry: every installed path and mode
-        # outside docs/ must survive unchanged. Documentation is not a desktop
-        # build input; additional files do not remove the installed baseline.
+        # outside the explicit build-documentation paths must survive unchanged.
+        # Plans and the TS host overview are not desktop build inputs. Do not
+        # exclude Markdown generally: licenses, prompts and config may be inputs.
+        # Additional files do not remove the installed baseline.
         # Never infer equivalence for a dirty install or from an unknown commit.
         equivalent = False
         if data.get("dirty") is False and git(repo, "cat-file", "-e", installed + "^{commit}").returncode == 0:
             history = git(repo, "rev-list", "--first-parent", "--max-count=64", "HEAD")
             if history.returncode == 0:
                 for candidate in history.stdout.splitlines():
-                    diff = git(repo, "diff", "--no-ext-diff", "--quiet", "--no-renames", "--diff-filter=DMRTUXB", installed, candidate, "--", ".", ":(exclude)docs/**")
+                    diff = git(repo, "diff", "--no-ext-diff", "--quiet", "--no-renames", "--diff-filter=DMRTUXB", installed, candidate, "--", ".",
+                               ":(exclude)docs/**", ":(exclude)plan/**", ":(exclude)runtime/typescript/README.md")
                     if diff.returncode == 0:
                         equivalent = True
                         break
@@ -51,6 +55,8 @@ def write(repo, manifest):
         "sourceRoot": str(repo.resolve()), "version": (repo / "VERSION").read_text().strip(),
         "dirty": bool(git(repo, "status", "--porcelain").stdout),
     }
+    info = manifest.parent.parent / "Info.plist"
+    data["backendRuntime"] = plistlib.loads(info.read_bytes()).get("LakeBackendRuntime", "go") if info.exists() else "go"
     binary = manifest.parent / "lake"
     if binary.exists():
         data["backendSHA256"] = hashlib.sha256(binary.read_bytes()).hexdigest()

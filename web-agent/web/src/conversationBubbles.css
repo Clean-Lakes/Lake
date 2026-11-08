@@ -10,8 +10,8 @@
   color: var(--user-message-foreground);
 }
 
-/* One bubble per reply; the avatar owns a separate column beside it. */
-.ai-transcript { --reply-avatar-column:32px; --reply-bubble-inset:18px; }
+/* Assistant replies share a reading column; only human messages use bubbles. */
+.ai-transcript { --reply-avatar-size:24px; --reply-avatar-column:40px; --reply-body-width:720px; --reply-body-size:15px; }
 .ai-transcript[data-reply-avatar=hidden] { --reply-avatar-column:0px; }
 .ai-transcript[data-reply-avatar=hidden] :is(.response-avatar,.turn-thinking-avatar) { display:none; }
 .ai-chat-message.ai-role-assistant,
@@ -19,16 +19,18 @@
 .ai-response:has(> .ai-card:is(.ai-text, .ai-message)),
 .sre-role-message .sre-role-body,
 .message-assistant .timeline-content {
-  width: fit-content;
+  width: 100%;
   min-width: 0;
-  max-width: 100%;
-  padding: 14px 18px;
-  border-radius: var(--radius-window);
-  corner-shape: var(--corner-window);
-  background: var(--assistant-message-background);
+  max-width: var(--reply-body-width,720px);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .ai-response > .ai-card:is(.ai-text, .ai-message) {
-  width: auto;
+  width: 100%;
+  max-width: 100%;
   padding: 0;
   border-radius: 0;
   background: transparent;
@@ -39,71 +41,61 @@
 
 .response-avatar { display:inline-flex; align-items:center; justify-content:center; flex:none; }
 .ai-chat-message.ai-role-assistant,
-.ai-response:has(> .response-identity):has(> .ai-card:is(.ai-text, .ai-message)) {
+.ai-response:is(:has(> .response-identity),.is-reply-continuation):has(> .ai-card:is(.ai-text, .ai-message)) {
   position: relative;
-  isolation: isolate;
-  padding-inline-start: calc(var(--reply-bubble-inset) + var(--reply-avatar-column));
-  background: transparent;
-}
-.ai-chat-message.ai-role-assistant::before,
-.ai-response:has(> .response-identity):has(> .ai-card:is(.ai-text, .ai-message))::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 0 var(--reply-avatar-column);
-  z-index: -1;
-  pointer-events: none;
-  border-radius: var(--radius-window);
-  corner-shape: var(--corner-window);
-  background: var(--assistant-message-background);
+  max-width: calc(var(--reply-body-width,720px) + var(--reply-avatar-column,40px));
+  padding-inline-start: var(--reply-avatar-column,40px);
 }
 .ai-chat-message.ai-role-assistant > .response-identity .response-avatar,
 .ai-response:has(> .ai-card:is(.ai-text, .ai-message)) > .response-identity .response-avatar {
   position: absolute;
   inset-inline-start: 0;
-  top: 14px;
-  width: 20px;
-  height: 1.75em;
+  top: calc((22px - var(--reply-avatar-size)) / 2);
+  width: var(--reply-avatar-size);
+  height: var(--reply-avatar-size);
 }
+.response-avatar :is(svg,.super-role-avatar) { width:var(--reply-avatar-size,24px); height:var(--reply-avatar-size,24px); }
+.response-avatar svg { max-width:none; max-height:none; }
+.ai-transcript .response-identity { min-width:0; min-height:22px; line-height:22px; margin-bottom:8px; font-size:var(--font-size-ui); }
+.reply-continued-author { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+.ai-transcript :is(.ai-chat-message.ai-role-assistant,.ai-card.ai-text,.ai-card.ai-message,.sre-role-body) .ai-markdown.assistant-prose {
+  width:100%; min-width:0; max-width:var(--reply-body-width,720px);
+  font-size:var(--reply-body-size,15px); line-height:1.75;
+}
+.ai-transcript :is(.ai-chat-message.ai-role-assistant,.ai-card.ai-text,.ai-card.ai-message,.sre-role-body) .assistant-prose > p:not(:last-child) { margin-bottom:14px; }
+.ai-transcript[data-transcript-mode=conversation] .ai-role-user { font-size:var(--reply-body-size); line-height:1.55; }
+.settled-reply.is-reply-continuation:not(.is-archived):not(.is-awaiting-reply) { margin-block-start:calc(8px - var(--turn-entry-gap,12px)); }
 
-/* The caption follows the text; its divider starts at the painted bubble edge. */
-.ai-turn:has(.ai-response > .ai-card:is(.ai-text,.ai-message),.ai-chat-message.ai-role-assistant) > .turn-status:not(.is-thinking) {
+/* Activity stays on its own quiet row, aligned with the reading column. */
+.ai-turn > .turn-status {
   position:relative;
-  padding-inline-start:calc(var(--reply-avatar-column) + var(--reply-bubble-inset));
-  border-bottom:0;
+  min-width:0;
+  max-width:calc(var(--reply-body-width,720px) + var(--reply-avatar-column,40px));
+  padding-inline-start:var(--reply-avatar-column,40px);
+  border:0;
 }
-.ai-turn:has(.ai-response > .ai-card:is(.ai-text,.ai-message),.ai-chat-message.ai-role-assistant) > .turn-status:not(.is-live)::after {
-  content:"";
-  position:absolute;
-  inset-inline:var(--reply-avatar-column) 0;
-  bottom:0;
-  height:1px;
-  background:var(--surface-hover);
-  pointer-events:none;
-}
-.ai-turn:has(.ai-response > .ai-card:is(.ai-text,.ai-message),.ai-chat-message.ai-role-assistant) > .turn-status .turn-status-mark {
+.ai-turn > .turn-status:not(.is-thinking) .turn-status-mark {
   position:absolute;
   inset-inline-start:0;
 }
 
-/* A quiet typing bubble takes the same column as the next assistant reply. */
-.reply-duration.is-thinking { position:relative; min-height:44px; padding:0 0 0 var(--reply-avatar-column,32px); border:0; }
-.ai-turn > .turn-status.is-thinking { padding-inline-start:var(--reply-avatar-column,32px); }
+/* Original water animation stays transparent and independent from prose. */
+.reply-duration.is-thinking { position:relative; min-height:32px; padding:0 0 0 var(--reply-avatar-column,40px); border:0; }
+.ai-turn > .turn-status.is-thinking { padding-inline-start:var(--reply-avatar-column,40px); }
 .ai-turn > .turn-status.is-thinking.without-avatar,
 .reply-duration.is-thinking.without-avatar { padding-inline-start:0; }
-.turn-thinking-avatar { position:absolute; inset-inline-start:0; top:12px; width:20px; height:20px; }
+.turn-thinking-avatar { position:absolute; inset-inline-start:0; top:4px; width:var(--reply-avatar-size,24px); height:var(--reply-avatar-size,24px); }
 .turn-thinking-avatar .response-identity { margin:0; }
 .turn-thinking-avatar .response-identity > strong { display:none; }
-.turn-thinking-avatar .response-avatar { width:20px; height:20px; }
-.turn-thinking-bubble { display:inline-flex; align-items:center; justify-content:center; flex:none; width:76px; height:44px; padding:14px 18px; border:0; border-radius:var(--radius-window); corner-shape:var(--corner-window); background:var(--assistant-message-background); color:var(--foreground); }
-.turn-thinking-dots { display:inline-flex; align-items:center; gap:8px; }
-.turn-thinking-dots > i { width:7px; height:7px; border-radius:50%; background:currentColor; opacity:.32; animation:turn-thinking-dot 1.2s ease-in-out infinite; }
-.turn-thinking-dots > i:nth-child(2) { animation-delay:.16s; }
-.turn-thinking-dots > i:nth-child(3) { animation-delay:.32s; }
-.is-thinking > .turn-duration-disclosure { width:fit-content; max-width:100%; border-radius:var(--radius-window); corner-shape:var(--corner-window); }
+.turn-thinking-avatar .response-avatar { width:var(--reply-avatar-size,24px); height:var(--reply-avatar-size,24px); }
+.is-thinking > .turn-duration-disclosure { width:auto; max-width:100%; }
 .is-thinking .turn-current-step { flex:0 1 auto; }
-@keyframes turn-thinking-dot { 0%,60%,100% { opacity:.32; } 30% { opacity:1; } }
-@media(prefers-reduced-motion:reduce) {
- .turn-thinking-dots > i { animation:none; }
- .turn-thinking-dots > i:nth-child(2) { opacity:.6; }
- .turn-thinking-dots > i:nth-child(3) { opacity:.9; }
-}
+
+/* Older specialist report components share the same body geometry. */
+.ai-transcript .sre-role-message { width:100%; max-width:calc(var(--reply-body-width,720px) + 40px); }
+.ai-transcript .sre-role-message .sre-role-body { width:100%; max-width:var(--reply-body-width,720px); padding:0; font-size:var(--reply-body-size,15px); line-height:1.75; }
+.ai-transcript .sre-role-conversation .sre-role-content { padding-inline-start:40px; }
+.ai-transcript .sre-role-conversation .sre-role-content > header { padding-inline-start:0; margin-bottom:8px; }
+
+/* A different speaker gets a 24px boundary (12px turn gap + 12px inset). */
+.ai-transcript[data-transcript-mode=conversation] :is(.settled-reply,.ai-chat-message).is-role-break { margin-block-start:12px; }

@@ -1,0 +1,70 @@
+{
+  "date": "2026-11-07",
+  "sourceSHA": "09258e0e8be58fccd04d8b4486318a477a294e0d",
+  "frontend": {
+    "passed": 731,
+    "failed": 0,
+    "typecheck": true,
+    "built": true,
+    "newTests": 3
+  },
+  "backendUnchangedSince": "9f3073139d55318a53328ff38cd770252f99d5c5",
+  "backendTestsRerun": false,
+  "isolatedUI": {
+    "taskNodeStable": true,
+    "historyCollapsed": true,
+    "keyboardHistoryOpens": true,
+    "independentQuestionPreserved": true,
+    "overlappedRefreshDrained": true,
+    "initialAnimations": 0,
+    "replacementAnimations": 3,
+    "reducedMotionAnimations": 0,
+    "fixtureCursorToVisibleMilliseconds": 20.2,
+    "realSSELatencyClaimed": false,
+    "actualHiddenVerified": false,
+    "darkNarrowCSSPixels": 420,
+    "horizontalOverflow": false,
+    "taskSpaceClosed": true,
+    "temporaryServerStopped": true
+  },
+  "signedCandidate": {
+    "dirty": false,
+    "codesignDeepStrict": true,
+    "backendSHA256": "b536d3b7b69880ef249e9a9903b6f16171c5b208c24e2ca70727ab90c16b8b67",
+    "sourceSHA": "8f282f30f861785adbc232d2a1da8cf0bcec595a"
+  },
+  "nativeDev": {
+    "installed": true,
+    "dirty": false,
+    "codesignDeepStrict": true,
+    "backendSHA256": "3414a24f29b9e3a4e7450bbd67da78617dd67544c7c4b2ca59d02d0402141955",
+    "currentAndHistoricalReplyTimesVisible": true,
+    "frozenSpeakerVisible": true,
+    "historyOpensAndCollapses": true,
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "windowPhysicalPixels": [
+      [
+        2230,
+        1538
+      ],
+      [
+        1700,
+        1384
+      ]
+    ],
+    "restoredLightAndWindow": true,
+    "externalModelOrBusinessToolsReplayed": false,
+    "preservationBeforeInteractiveQA": {
+      "before": 2949,
+      "after": 2949,
+      "missing": 0,
+      "changed": 0,
+      "added": 0
+    }
+  },
+  "merged": false,
+  "initialSourceSHA": "8f282f30f861785adbc232d2a1da8cf0bcec595a"
+}

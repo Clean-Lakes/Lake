@@ -1,5 +1,6 @@
 .composer-mentions.mention-menu { width: 370px; min-width: 0; max-width: min(420px,calc(100vw - 40px)); max-height: min(52vh,420px); padding: 0; display: flex; flex-direction: column; overflow: hidden; border-radius:var(--radius-window); }
-.composer-mentions .mention-item { border-radius:var(--radius-window); }
+.composer-mentions .mention-item { display:grid; grid-template-columns:18px minmax(0,1fr) auto; border-radius:var(--radius-window); }
+.composer-mentions .mention-item>.super-role-avatar { width:18px; height:20px; justify-self:center; overflow:visible; }
 /* Pointer and keyboard share aria-selected; hover must not paint a second row. */
 .composer-mentions .mention-item:not([aria-selected="true"]):hover { background:transparent; }
 .composer-mentions .mention-item[aria-selected="true"] { background:var(--surface-hover); }

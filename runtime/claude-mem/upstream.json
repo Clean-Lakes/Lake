@@ -1,0 +1,13 @@
+{
+  "package": "claude-mem",
+  "version": "15.10.0",
+  "integrity": "sha512-b7oRi6+mm0S6fOtCwFXFRMFUm2sYhpSl8g1whbx2fhytYb+ISRZj1Avz6DnhFoU44l8fmvvmIwvASG41P5Ya1w==",
+  "sourceRevision": "f09068514365a7b6fa01bf7e3af2a20118f55df7",
+  "source": "https://github.com/thedotmack/claude-mem",
+  "license": "Apache-2.0",
+  "bunVersion": "1.4.4",
+  "mode": "private-local-sqlite-index",
+  "observer": false,
+  "cloudSync": false,
+  "chroma": false
+}

@@ -1,0 +1,155 @@
+{
+  "date": "2026-11-07",
+  "sourceSHA": "7487188545cc476f3b62e2bf45a6ac4c4fa9fc48",
+  "baseSHA": "72b0b018233c9f3acb24de251264462981f70d1d",
+  "build": {
+    "gitHead": "7487188545cc476f3b62e2bf45a6ac4c4fa9fc48",
+    "gitBranch": "codex/typescript-cutover-repair",
+    "dirty": false,
+    "backendSHA256": "5a09eeb87c2d7fbfd9cdfb9fe8357c84577ca46552ad40edf904169d2191b6da",
+    "uiSourceSHA256": {
+      "AIPanel.tsx": "ee809455cf220e04feb93b375a1252294f0648f2dd1c543ec87f0c02809cb64d",
+      "ThinkingTimeline.tsx": "1a4fe91242e6660a5473ece150994ca05a850cd5c918b08870649ba69c188840",
+      "ReplyDuration.tsx": "8cfa590d5d4a9822c5101e2f9462139f3059884bb08509f8d61c1c23242e7381",
+      "conversation-progress-model.ts": "e39d71bc040bf9caff47535baf7f7062b8f8f3e3177db0015db8825db6a41e89"
+    }
+  },
+  "nativeApp": "Lake Dev",
+  "codesignDeepStrict": true,
+  "tests": {
+    "runtimeCJS": {
+      "sha": "7487188545cc476f3b62e2bf45a6ac4c4fa9fc48",
+      "passed": 158,
+      "failed": 0
+    },
+    "source": {
+      "sha": "d1dc9e897784ec85207c377429aa424b73b1bf4d",
+      "total": 126,
+      "passed": 123,
+      "skippedExternalClaudeMem": 3,
+      "failed": 0
+    },
+    "frontend": {
+      "sha": "f1dd2f6a",
+      "passed": 726,
+      "failed": 0,
+      "typecheck": true
+    },
+    "devProvenancePreflightUnit": {
+      "passed": 9,
+      "failed": 0
+    },
+    "apiInventory": 128,
+    "backendNamingViolations": 0,
+    "adkBoundary": "passed",
+    "rawSyntheticCredentialOccurrences": 0
+  },
+  "memory": {
+    "sha": "cd48387b5d29f6a0e4410473c2cdbc0e8552c840",
+    "sourceForegroundTools": 0,
+    "automatic": {
+      "revision": 1,
+      "items": 1,
+      "markerPublished": true,
+      "jobs": [
+        {
+          "state": "completed",
+          "nativeExtraction": true,
+          "outcome": "published",
+          "modelAttempts": 4,
+          "noteCount": 1,
+          "publishedRevision": 1,
+          "error": null,
+          "inputTokens": 26676,
+          "outputTokens": 559
+        }
+      ]
+    },
+    "independentRecall": true,
+    "forgetThenFreshSessionMarkerAbsent": true,
+    "qaMemoryDisabled": true,
+    "originalBusinessAndGlobalSwitchesUnchanged": true
+  },
+  "mcp": {
+    "inheritedVisibleServices": 2,
+    "knowledgeActualTools": 19,
+    "knowledgeCatalogHash": "d8888b97bb913df0db401929e687164d443484989f1f5ddbf8c4487f572752ad",
+    "businessQueryNotClaimed": true
+  },
+  "queue": {
+    "uiSHA": "d1dc9e897784ec85207c377429aa424b73b1bf4d",
+    "sortedAndEditedReplyOrder": [
+      "QUEUE_B",
+      "QUEUE_A"
+    ],
+    "afterResume": {
+      "queueEmpty": true,
+      "reply": "UI_QUEUE_DONE",
+      "status": "completed"
+    },
+    "uiObserved": {
+      "runningPushButtonDisabled": true,
+      "disabledHelp": "请在本轮结束后继续发送队列",
+      "themes": [
+        "light",
+        "dark"
+      ],
+      "windowPhysicalPixels": [
+        [
+          2230,
+          1538
+        ],
+        [
+          1700,
+          1384
+        ]
+      ],
+      "restoredOriginalThemeAndWindow": true,
+      "originalProjectMcpPickerCount": 2,
+      "knowledgeMcpVisible": true
+    },
+    "pushSupported": false
+  },
+  "modelDiscovery": {
+    "sourceSHA": "d1dc9e897784ec85207c377429aa424b73b1bf4d",
+    "modelCount": 71,
+    "allNamesAreStrings": true,
+    "reportedReasoningMetadataCount": 0,
+    "savedProviderUnchanged": true
+  },
+  "preservation": {
+    "baselineOriginalRecords": 1519,
+    "missing": 0,
+    "changedKinds": {
+      "resources": 5
+    },
+    "restoredServiceConfigurations": {
+      "postgres": 4,
+      "redis": 1
+    },
+    "credentialRefsMatchOriginalGo": true,
+    "originalTaskAndMessageRowsChanged": false,
+    "restoredWorkflowTemplates": 1
+  },
+  "cutover": {
+    "allowed": false,
+    "parityGateExit": 1,
+    "pendingDomains": 20,
+    "verifiedFullParityOperations": 0,
+    "matrixUnchanged": true
+  },
+  "remaining": [
+    "attachments-and-images",
+    "same-root-queue-push",
+    "context-compact-rollback-clear-file-rewind",
+    "resource-import-and-key-picker",
+    "kubernetes-and-legacy-local-execution",
+    "direct-postgresql-redis-agent-query",
+    "workflow-runs-schedules-events",
+    "full-security-recovery-and-legacy-evidence",
+    "automatic-model-capability-detection",
+    "optional-sdk-host-ports",
+    "complete-watchdog",
+    "cli-magpie-and-non-macos-parity"
+  ]
+}

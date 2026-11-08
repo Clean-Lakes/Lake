@@ -24,3 +24,12 @@ test('narrow panes clamp their own controls without borrowing a sibling pane',()
  assert.equal(result.conversation.width,210);
  assert.equal(result.inspector!.width,138);assert.equal(result.terminal!.width,158);
 });
+
+test('fractional WebKit labels keep the last glyph without exceeding a narrow rail',()=>{
+ // Actual native text + status + task control + insets and gaps.
+ const conversationWidth=96.45526123046875+93.7821044921875+28+28+20+2;
+ const roomy=workbenchIslandLayout({conversation:{left:0,width:500,inset:0},...widths,conversationWidth});
+ assert.equal(roomy.conversation.width,269);
+ const narrow=workbenchIslandLayout({conversation:{left:0,width:268.25,inset:0},...widths,conversationWidth});
+ assert.equal(narrow.conversation.width,268.25);
+});

@@ -192,3 +192,12 @@
 @media (max-width:1000px) { .provider-preset-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width:700px) { .provider-preset-grid { grid-template-columns: minmax(0,1fr); } }
 .provider-add,.provider-text-button,.provider-row-icon { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+
+.watchdog-settings-project { display:flex; align-items:baseline; flex-wrap:wrap; gap:7px 12px; }
+.watchdog-settings-project>span { color:var(--text-muted); font-size:var(--font-size-ui); }
+.watchdog-settings-project>strong { min-width:0; overflow-wrap:anywhere; font-weight:var(--font-weight-medium); }
+.watchdog-settings-card { padding:18px; border:1px solid var(--border); border-radius:var(--radius-settings-panel); corner-shape:var(--corner-window); background:var(--surface); }
+.watchdog-settings-card .field-label { margin:0; }
+.watchdog-settings-card .settings-note { margin-bottom:0; }
+.watchdog-settings-error { display:flex; align-items:center; flex-wrap:wrap; gap:8px 16px; }
+.watchdog-settings-error .form-error { flex:1; min-width:0; }
