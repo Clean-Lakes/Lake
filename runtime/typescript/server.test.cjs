@@ -9,6 +9,12 @@ const { startLakeServer, previewLegacyMigration, rollbackMigration, sessionArchi
 
 function isIndependentWorkerRequest(request){return request.tools?.some(tool=>tool.function?.name==='work_finish')&&!request.tools?.some(tool=>tool.function?.name==='route_work');}
 
+test('the packaged TypeScript version matches the native updater contract without starting a Home',()=>{
+ const version=require('node:fs').readFileSync(join(__dirname,'../../VERSION'),'utf8').trim();
+ const output=require('node:child_process').execFileSync(process.execPath,[join(__dirname,'../../bin/lake-runtime/server.cjs'),'--version'],{encoding:'utf8',env:{...process.env,LAKE_TS_IMPORT_ONLY:'0'}});
+ assert.equal(output.trim(),`Lake ${version} TypeScript`);
+});
+
 async function fixture(t, mode = "text", legacyDev = false) {
   const home = await mkdtemp(join(tmpdir(), "lake-ts-test-"));
   const web = join(home, "web");
@@ -1518,6 +1524,38 @@ test("Dev opt-in never permits the production Home, and daily Dev still requires
   const userHome = require("node:os").homedir();
   await assert.rejects(startLakeServer({ ...f.options, home: join(userHome, ".lake"), development: true }), /独立 Home/);
   await assert.rejects(startLakeServer({ ...f.options, home: join(userHome, ".lake-dev"), development: false }), /独立 Home/);
+});
+
+test('production profile imports only its own legacy catalog, keeps originals and does not replay work',async t=>{
+ const f=await fixture(t),source=await seedLegacyCatalog(f),fs=require('node:fs/promises');
+ const old=await readFile(source.path),oldRuntime=await readFile(source.runtimePath),root=f.options.home;
+ await fs.mkdir(join(root,'secrets'),{recursive:true,mode:0o700});
+ const privateFile=join(root,'secrets','production-fixture');
+ await fs.writeFile(privateFile,'synthetic-production-private',{mode:0o600});
+ const publicFile=join(f.options.data,'providers.json');
+ await fs.writeFile(publicFile,JSON.stringify({version:1,providers:[{id:'production-fixture',name:'Production fixture',enabled:true,baseURL:f.gatewayURL,credentialRef:'production-fixture',models:[{id:'fixture',name:'fixture',enabled:true}]}],activeProviderId:'production-fixture',activeModelId:'fixture',activeSource:'native'}),{mode:0o600});
+ const publicBefore=await readFile(publicFile);
+ // Remove only the fixture's initial TS provider catalog, not any real data.
+ for(const provider of f.app.store.list('providers'))f.app.store.delete('providers',provider.id);
+ f.app.store.delete('settings','modelSelection');
+ f.options.production=true;f.options.importLegacy=true;
+ await f.restart();
+ assert.ok((await f.api('/api/settings/providers')).providers.some(row=>row.id==='production-fixture'));
+ assert.equal(f.app.store.get('settings','modelSelection').providerId,'production-fixture');
+ assert.equal(await readFile(privateFile,'utf8'),'synthetic-production-private');
+ assert.equal(f.app.store.get('projects','old-project').name,'已有项目');
+ assert.equal(f.calls,0);assert.equal(f.app.store.list('superOperations').length,0);
+ assert.deepEqual(await readFile(source.path),old);assert.deepEqual(await readFile(source.runtimePath),oldRuntime);assert.deepEqual(await readFile(publicFile),publicBefore);
+ const rows=f.app.store.list('sessions').length;await f.restart();
+ assert.equal(f.app.store.list('sessions').length,rows);assert.equal(f.calls,0);
+ assert.deepEqual(await readFile(source.path),old);
+});
+
+test('import-only preparation does not start task, queue or memory runtimes',async t=>{
+ const f=await fixture(t);await f.app.close();
+ const app=await startLakeServer({...f.options,production:true,importLegacy:true,importOnly:true});
+ try{assert.equal(app.superagent,undefined);assert.equal(app.memory,undefined);assert.equal(app.origin,'');assert.equal(f.calls,0);}
+ finally{await app.close();}
 });
 
 test('Dev provider import preserves declared modality and reasoning metadata without probing or importing arbitrary fields', async t => {

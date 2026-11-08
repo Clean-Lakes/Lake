@@ -1,6 +1,6 @@
 ## TypeScript 迁移候选
 
-用户已确认：后端直接使用 TypeScript，保留 Lake UI，**全部既有功能保留并验收后才进行完整切换**。当前不是完整替换版本。2026-11-05 用户进一步明确要求将 TypeScript Dev 覆盖现有 Dev，增加下面的显式 Dev 入口；普通默认构建、正式版和稳定渠道仍使用现有后端。
+用户已确认：后端直接使用 TypeScript，保留 Lake UI，**全部既有功能保留并验收后才进行完整切换**。当前不是完整替换版本。2026-11-05 用户进一步明确要求将 TypeScript Dev 覆盖现有 Dev，增加下面的显式 Dev 入口；2026-11-08 用户进一步明确选择当前 TS 用于本次 macOS 0.3.28 正式发布。默认 macOS 桌面包因此使用 TS，现有完整等价矩阵仍保持未通过。
 
 源码从 [v3.17.2 release](https://github.com/zai-org/ZCode/releases/tag/v3.17.2) 的 tar.gz 下载；标签提交 `a9fe401eede6e6e5e01be9048679c206fe6f02d9`。发布页另列的安装包构建提交为 `e6b675b40abb79e1d38d98d4e8750d0859cfedd9`，两者不混用。依赖来源、归档 SHA-256、Node 版本见 `upstream.json`；上游名称仅用于依赖归属，不作为 Lake 后端身份。
 
@@ -24,7 +24,7 @@ bin/lake-ts web --home "$HOME/.lake-ts-candidate" --port 0
 
 macOS 候选使用同一个持久开发签名身份；Node 24.14.0 通过官方归档固定摘要取得，打入 Node SEA，所以运行时不依赖系统 Node。仅默认构建入口处理用户二进制，不安装桌面应用。
 
-独立候选拒绝正式 `.lake`、日常 `.lake-dev` 及其符号链接目标。原生 TS Dev 通过显式 `--dev` 可以使用 `.lake-dev`，正式 `.lake` 始终拒绝。TS 使用单独的 `lake-typescript.sqlite` 和 `agent-sessions.sqlite`。显式 Dev 的 `--migrate-legacy` 一次性事务迁入旧项目、会话、专员与频道身份，保留只读历史；不修改旧 Go 数据库，不恢复旧审批、不重派历史任务。测试使用临时 Home。
+独立候选拒绝正式 `.lake`、日常 `.lake-dev` 及其符号链接目标。原生 TS Dev 通过显式 `--dev` 可以使用 `.lake-dev`，正式包通过显式 `--production` 才能使用 `.lake`，且禁止访问 Dev 目录；混合运行身份在写文件前拒绝。TS 使用单独的 `lake-typescript.sqlite` 和 `agent-sessions.sqlite`。明确 Dev 或生产身份的 `--migrate-legacy` 一次性事务迁入旧项目、会话、专员与频道身份，保留只读历史；不修改旧 Go 数据库，不恢复旧审批、不重派历史任务。测试使用临时 Home。
 
 ### 覆盖安装 TypeScript Dev（用户已明确授权）
 
@@ -35,7 +35,7 @@ scripts/build_lake_desktop.sh --dev --ts-candidate --install
 open "$HOME/Applications/Lake Dev.app"
 ```
 
-该选项只允许 Dev，使用相同 Dev Bundle ID 和安装路径，随包携带签名 Node SEA、React 和上游许可。原生客户端按包内元数据验证 `typescript` 与准确 Home/data，支持连接复用和正常停止。启动时一次性导入当前 Dev `providers.json` 中的公开模型配置，私有凭据保留原文件引用；不复制正式密钥，不改写旧配置。后续在 TS 中删除或修改配置不会在重启时被旧目录重新覆盖。
+该选项只允许 Dev，使用相同 Dev Bundle ID 和安装路径，随包携带签名 Node SEA、React 和上游许可。原生客户端按包内元数据验证 `typescript` 与准确 Home/data，支持连接复用和正常停止。启动时一次性导入当前所选 Home 的 `providers.json` 中的公开模型配置，私有凭据保留原文件引用；不复制正式密钥，不改写旧配置。后续在 TS 中删除或修改配置不会在重启时被旧目录重新覆盖。
 
 这是已授权的 Dev 预览覆盖，不表示所有功能已通过等价验收。回退使用备份应用；旧 Go 数据原样保留，TS 新会话不会自动反向同步。
 
@@ -69,7 +69,7 @@ Node 命令须使用准备好的 24.14.0。测试经过真实 Agent SDK 源码�
 
 `api-inventory.json` 从现有前端 TypeScript AST 提取完整 API 操作表；`parity.json` 记录逐项与领域验收。最后一个检查目前**必须失败**：候选测试不等于功能等价。资产/SSH/数据库/终端、Pilot/专员/频道、任务/权限账本、工作流/日程、记忆、附件、MCP/Skills、队列/补充/压缩、历史迁移、CLI/Magpie、macOS/Windows 与 Lake Dev 主题/窄窗均需补齐。候选 API 的 501、空只读目录或关闭的开关不能作为已迁移证据。
 
-全量契约与真实行为通过后，才在单独变更中切换普通默认/正式版后端，并执行最终 SHA 验收。上述显式 Dev 预览不作为该门槛通过。合并、生产安装和发布继续遵守仓库原有授权流程。
+完整等价验收继续逐项进行；0.3.28 macOS 正式分发是用户明确选择当前 TS 水位后的例外，不将缺口标为已完成。其发布仍需独立验证准确生产 SHA、迁移、签名包与更新回退。合并、生产安装和发布继续遵守仓库原有授权流程。
 
 本轮准确源码 SHA、签名进程检查、界面截图与未验证项见[阶段验证记录](../../docs/validation/typescript-candidate/README.md)。
 
@@ -137,3 +137,9 @@ Pilot、专员 Worker 与临时 child 共享公开 Agent SDK 文件、Bash、搜
 ## 六类服务资源连接配置
 
 TS Dev 支持 MySQL、PostgreSQL、Redis、APISIX、Prometheus 和 VictoriaMetrics 的新增、目录归属、私有凭据、版本化编辑及显式限时连接测试。保存不访问目标；测试使用固定协议读取，不代表业务健康或任务验收。旧 Go 页面保留注册格式，不展示尚未接入的测试／编辑 API。专用 Agent 查询适配器保持实际已连接范围。实现与限制见 [验收记录](../../docs/validation/typescript-candidate/service-resources.md)。
+
+### 0.3.28 macOS 正式分发
+
+`scripts/build_lake_desktop.sh` 默认生成 TS 正式 ZIP/DMG；`--dev --install` 只安装 Lake Dev。用户运行包时无需系统 Node。更新器在旧进程退出后，使用准确 Home/data 执行 `--production --migrate-legacy --import-only`，最多等待 120 秒；该准备阶段不启动 Worker、队列或 Memory 提取。失败恢复旧应用，保留原数据库；成功后才进入 45 秒 UI 就绪确认。命令行单独运行须显式传入正确身份及隔离目录。旧 Go 不包含 TS 新历史，回退后两边产生分支历史须核对，不能将其当成双向同步。
+
+从 0.3.27 或更早客户端自动更新时，执行的是旧客户端携带的安装器，仍受原 45 秒总就绪窗口约束，不能提前获得新版的 120 秒准备阶段。若首次迁移较大导致旧安装器回退，请保留备份并改用本版 ZIP/DMG 手动安装；本版安装器的单独准备与回退测试仅证明从本版开始的后续更新路径。

@@ -13,10 +13,18 @@ public struct DesktopProfile {
         isDevelopment = bundleIdentifier == "com.cleanlakes.lake.desktop.dev"
     }
 
-    /// Experimental backends are an explicit Dev distribution choice. A release
-    /// bundle cannot change its runtime by inheriting an environment variable.
+    /// The signed distribution metadata selects the runtime, never inherited
+    /// environment variables. Older bundles without metadata remain compatible.
     public func backendRuntime(requested: String?) -> String {
-        isDevelopment && requested == "typescript" ? "typescript" : "go"
+        requested == "typescript" ? "typescript" : "go"
+    }
+
+    public func backendArguments(runtime: String, home: URL, data: URL) -> [String] {
+        if runtime == "typescript" {
+            return ["web", "--port", "0", "--home", home.path, "--data", data.path,
+                    isDevelopment ? "--dev" : "--production", "--migrate-legacy"]
+        }
+        return ["web", "--port", "0"]
     }
 
     public func directories(userHome: String, environment: [String: String], arguments: [String]) -> (home: URL, data: URL) {

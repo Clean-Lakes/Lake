@@ -1,5 +1,5 @@
 #!/bin/sh
-# macOS client. TypeScript is an explicit Dev-only build choice.
+# macOS client. The authorized 0.3.28 distribution uses TypeScript.
 set -eu
 lake_repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$lake_repo_root"
@@ -15,12 +15,11 @@ for lake_argument in "$@"; do
   esac
 done
 [ "$typescript_candidate" -eq 0 ] || [ "$development_app" -eq 1 ] || {
-  echo 'TypeScript 候选只允许 --dev；正式版后端切换仍需完整功能验收' >&2; exit 2;
+  echo '--ts-candidate 是独立 Dev 产物选项；正式包请使用默认构建入口' >&2; exit 2;
 }
-lake_backend_runtime=go
+lake_backend_runtime=typescript
 lake_backend_binary=bin/lake
 if [ "$typescript_candidate" -eq 1 ]; then
-  lake_backend_runtime=typescript
   lake_backend_binary=bin/lake-ts
 fi
 lake_app_name=Lake
@@ -47,7 +46,7 @@ export CC="clang -arch $lake_arch"
 if [ "$typescript_candidate" -eq 1 ]; then
   scripts/build_lake.sh --ts-candidate
 else
-  scripts/build_lake.sh
+  scripts/build_lake.sh --typescript
 fi
 swift build --package-path client/macos --build-system native -c release --triple "$lake_arch-apple-macosx13.0"
 lake_swift_bin=$(swift build --package-path client/macos --build-system native -c release --triple "$lake_arch-apple-macosx13.0" --show-bin-path)
@@ -61,9 +60,7 @@ lake_app="$lake_stage/$lake_app_name.app"
 mkdir -p "$lake_app/Contents/MacOS" "$lake_app/Contents/Resources/licenses"
 cp "$lake_swift_bin/LakeDesktop" "$lake_app/Contents/MacOS/Lake"
 cp "$lake_backend_binary" "$lake_app/Contents/Resources/lake"
-if [ "$typescript_candidate" -eq 1 ]; then
-  ditto --norsrc bin/lake-runtime "$lake_app/Contents/Resources/lake-runtime"
-fi
+ditto --norsrc bin/lake-runtime "$lake_app/Contents/Resources/lake-runtime"
 cp client/macos/Resources/install-update.sh "$lake_app/Contents/Resources/"
 cp web-agent/web/src/workbenchLayout.js "$lake_app/Contents/Resources/workbench-layout.js"
 cp LICENSE-APACHE "$lake_app/Contents/Resources/licenses/Lake-APACHE"
@@ -87,9 +84,7 @@ cat > "$lake_app/Contents/Info.plist" <<EOF
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict></plist>
 EOF
-if [ "$development_app" -eq 1 ]; then
-  python3 scripts/dev_build_origin.py write "$lake_repo_root" "$lake_app/Contents/Resources/build-origin.json"
-fi
+python3 scripts/dev_build_origin.py write "$lake_repo_root" "$lake_app/Contents/Resources/build-origin.json"
 swift scripts/generate_lake_icon.swift "$lake_stage/icon.png"
 lake_iconset="$lake_stage/Lake.iconset"
 mkdir "$lake_iconset"
@@ -140,10 +135,13 @@ if [ "$install_app" -eq 1 ]; then
   ditto --norsrc "$lake_app" "$lake_install_stage"
   codesign --verify --deep --strict "$lake_install_stage"
   "$lake_install_stage/Contents/Resources/lake" --version >/dev/null
-  if [ "$typescript_candidate" -eq 1 ]; then
+  if [ "$lake_backend_runtime" = typescript ]; then
     # Run the bounded, transactional identity/history import before native
     # startup's readiness deadline. This never resumes an old Go operation.
-    "$lake_install_stage/Contents/Resources/lake" web --dev --migrate-legacy --import-only --home "$HOME/.lake-dev" --data "$HOME/.lake-dev/web-agent" --port 0
+    lake_profile=--production
+    lake_profile_home="$HOME/.lake"
+    if [ "$development_app" -eq 1 ]; then lake_profile=--dev; lake_profile_home="$HOME/.lake-dev"; fi
+    "$lake_install_stage/Contents/Resources/lake" web "$lake_profile" --migrate-legacy --import-only --home "$lake_profile_home" --data "$lake_profile_home/web-agent" --port 0
   fi
   if [ -e "$lake_install" ]; then mv "$lake_install" "$lake_install_backup"; fi
   if ! mv "$lake_install_stage" "$lake_install" || ! codesign --verify --deep --strict "$lake_install"; then

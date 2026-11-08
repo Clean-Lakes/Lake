@@ -27,6 +27,14 @@ jobs:
       - run: pnpm --dir web-agent install --frozen-lockfile
       - run: pnpm --dir web-agent test:frontend && pnpm --dir web-agent build:web
       - run: mkdir -p assets/web/dist && cp -R web-agent/web/dist/. assets/web/dist/
+      - name: Verify TypeScript production runtime
+        run: |
+          lake_node=$(python3 scripts/prepare_typescript_runtime.py)
+          export PATH="$(dirname "$lake_node"):$PATH"
+          "$lake_node" third_party/agent-sdk/node_modules/typescript/bin/tsc -p runtime/typescript/tsconfig.json
+          "$lake_node" runtime/typescript/build.mjs
+          web-agent/node_modules/.bin/tsx --tsconfig runtime/typescript/tsconfig.json --test runtime/typescript/*.test.ts
+          "$lake_node" --test runtime/typescript/*.test.cjs
       - run: python3 scripts/check_adk_runtime_boundary.py
       - run: python3 -m unittest discover -s scripts -p 'test_branch_policy.py'
       - run: python3 -m unittest discover -s scripts -p 'test_dev_*py'

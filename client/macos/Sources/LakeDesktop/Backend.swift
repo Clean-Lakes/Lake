@@ -58,10 +58,8 @@ struct RuntimeInfo: Decodable {
             let child = Process()
             child.executableURL = cli
             // Port 0 binds a free loopback port atomically.
-            child.arguments = ["web", "--port", "0"]
-            if backendRuntime == "typescript" {
-                child.arguments = ["web", "--port", "0", "--home", home.path, "--data", dataDirectory.path, "--dev", "--migrate-legacy"]
-            }
+            child.arguments = DesktopProfile(bundleIdentifier: Bundle.main.bundleIdentifier)
+                .backendArguments(runtime: backendRuntime, home: home, data: dataDirectory)
             var environment = ProcessInfo.processInfo.environment
             environment["LAKE_HOME"] = home.path
             environment["LAKE_WEB_DATA_DIR"] = dataDirectory.path
@@ -76,7 +74,8 @@ struct RuntimeInfo: Decodable {
             child.standardError = FileHandle.nullDevice
             try child.run()
             process = child
-            for _ in 0..<100 {
+            // A first manual TypeScript launch may need its bounded catalog import.
+            for _ in 0..<(backendRuntime == "typescript" ? 300 : 100) {
                 guard child.isRunning else { throw UpdateError.message("Lake 后端无法启动。数据目录可能已有服务，请先关闭旧服务。") }
                 if let info = readRuntime(), info.pid == child.processIdentifier, await healthy(info) {
                     runtime = info

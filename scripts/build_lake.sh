@@ -2,6 +2,10 @@
 set -eu
 lake_repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$lake_repo_root"
+if [ "${1:-}" = --typescript ]; then
+  shift
+  exec sh "$lake_repo_root/scripts/build_lake_typescript.sh" "$@"
+fi
 if [ "${1:-}" = --ts-candidate ]; then
   shift
   [ "$#" -eq 0 ] || { echo '用法: scripts/build_lake.sh [--ts-candidate]' >&2; exit 2; }

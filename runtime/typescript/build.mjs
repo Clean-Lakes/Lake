@@ -44,6 +44,7 @@ const bundled = await build({
   platform: "node",
   format: "cjs",
   target: "node24",
+  define:{__LAKE_VERSION__:JSON.stringify((await readFile(join(root,'VERSION'),'utf8')).trim())},
   sourcemap: false,
   legalComments: "eof",
   logLevel: "warning",

@@ -1,5 +1,7 @@
 # Lake Super-agent 内核与三模块协作约定
 
+2026-11-08 用户明确选择当前 TypeScript 后端用于本次 macOS 0.3.28 正式发布，允许发布当前功能水位；本条仅取代下文的 Dev-only 分发限制，不代表完整等价矩阵通过。macOS 默认包使用签名 TS SEA，正式身份明确传入 `--production`，Dev 使用 `--dev`，两者 Home 不混用。迁移只读取所选 Home 的原数据和凭据引用，旧 Go 账本保留、不重放历史。未完成能力、升级与回退边界见 [0.3.28 发布说明](client/macos/RELEASE_NOTES.md)。
+
 TypeScript Dev 的本机 Watchdog 周期性读取每个专员分工的进展，遇到持续停滞或到达复核间隔时使用独立模型上下文审阅。项目选择「允许纠偏」后，可以向原执行会话发送提示，或在模型暂时故障且成员尚未调过工具时有限重试。任务、证据、审批、权限、记忆及共同验收由各自的原账本管理。跨进程监督和实际工作负载的误报评估见 [Watchdog 实施方案](plan/feature-typescript-watchdog-1.md)。
 
 2026-11-07：TypeScript Dev 支持长期专员与任务多对多。同一公共 Task 在各参与角色的频道可见；每个分工有独立的 Worker、Session、attempt 和 Operation，按稳定 RoleID 投递。成员贡献回执不是目标验收：只有全部成员的真实证据复核通过，任务账本才生成一张统一验收回执。这个约定更新了下文早期阶段「每个目标只有一个专员」的假设；原任务期限、累计轮数、项目权限、未决操作、角色记忆范围及旧任务历史继续保留。见[多专员共同任务](docs/lake-pilot.md#多位专员共同处理一项任务typescript-dev)。

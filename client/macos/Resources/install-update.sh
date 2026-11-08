@@ -53,6 +53,25 @@ if ! mv "$target" "$backup"; then
   exit 1
 fi
 if ! mv "$staged" "$target"; then restore; exit 1; fi
+# The previous production updater can already pass the selected Home/data.
+# Prepare TypeScript's separate catalog before its 45-second UI readiness window.
+# This mode does not start Workers, queued inputs or background model work.
+lake_runtime=$(/usr/libexec/PlistBuddy -c 'Print LakeBackendRuntime' "$target/Contents/Info.plist" 2>/dev/null || true)
+if [ "$lake_runtime" = typescript ]; then
+  if [ -z "$lake_home" ] || [ -z "$lake_data" ]; then restore; exit 1; fi
+  "$target/Contents/Resources/lake" web --production --migrate-legacy --import-only --home "$lake_home" --data "$lake_data" --port 0 &
+  migration_pid=$!
+  printf '%s\n' "$migration_pid" > "$receipt.backend"
+  count=0
+  migration_limit=${12:-120}
+  while kill -0 "$migration_pid" 2>/dev/null; do
+    sleep 1
+    count=$((count + 1))
+    if [ "$count" -ge "$migration_limit" ] && kill -0 "$migration_pid" 2>/dev/null; then restore; exit 1; fi
+  done
+  if ! wait "$migration_pid"; then restore; exit 1; fi
+  rm -f "$receipt.backend"
+fi
 if [ -n "$lake_home" ]; then
   if ! "$opener" -n "$target" --args --lake-update-receipt "$receipt" --lake-home "$lake_home" --lake-data "$lake_data"; then restore; exit 1; fi
 else
