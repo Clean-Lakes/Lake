@@ -173,11 +173,12 @@ import LakeDesktopCore
         writeReceiptPID()
         Task {
             do {
-                let url = try await backend.start()
-                origin = backend.runtime?.url
-                if let receipt = receiptURL(), let child = backend.process {
-                    try? String(child.processIdentifier).data(using: .utf8)?.write(to: URL(fileURLWithPath: receipt.path + ".backend"), options: .atomic)
+                let url = try await backend.start { [weak self] pid in
+                    if let receipt = self?.receiptURL() {
+                        try? String(pid).data(using: .utf8)?.write(to: URL(fileURLWithPath: receipt.path + ".backend"), options: .atomic)
+                    }
                 }
+                origin = backend.runtime?.url
                 webView.load(URLRequest(url: url))
             } catch {
                 let alert = NSAlert()
