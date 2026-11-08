@@ -1,6 +1,7 @@
 import {createContext,useContext,useState,type ReactNode} from 'react';
 import type {AICard,AgentRun,SessionSnapshot,SuperWorker} from '../../shared/contracts';
 import {DisclosureSummary} from './DisclosureSummary';
+import {AssistantMarkdown,ReplyReferenceScope} from './AssistantMarkdown';
 import {Glyph,ResourceIcon} from './Icons';
 import {ToolStep} from './ThinkingTimeline';
 import {MiniBox} from './MiniBox';
@@ -94,8 +95,11 @@ export function WorkerExecutionResults({snapshot}:{snapshot:SessionSnapshot}){
  const cards=workerBusinessReceipts(snapshot);
  const member=task.collaboration?.participants.find(member=>member.sessionId===task.sessionId);
  return <section className="worker-execution-results" aria-label="任务结果与证据">
-  {member&&<h4 className="worker-contribution-label">{member.roleName}的执行结果</h4>}
-  {task.summary?<p className="worker-task-report">{task.summary}</p>:<p className="inspector-empty">{task.state==='cancelled'?'此任务已停止，未提交完成结果。':'任务结果尚未提交。'}</p>}
-  <Branch summary={<><Glyph name="document" size={15}/><span className="worker-execution-name">业务工具回执</span><small>{cards.length} 项</small></>}><Calls cards={cards} paths={model.resourcePaths}/></Branch>
+  <h3 className="worker-result-heading">{member?`${member.roleName}的执行结果`:'结果摘要'}</h3>
+  {task.summary?<ReplyReferenceScope cards={cards}><AssistantMarkdown className="worker-task-report" allowImages={false}>{task.summary}</AssistantMarkdown></ReplyReferenceScope>:<p className="inspector-empty">{task.state==='cancelled'?'此任务已停止，未提交完成结果。':'任务结果尚未提交。'}</p>}
+  <section className="worker-result-evidence" aria-label="核验依据">
+   <h3 className="worker-result-heading">核验依据</h3>
+   {cards.length?<Branch className="worker-receipts" summary={<><Glyph name="document" size={15}/><span className="worker-execution-name">业务工具回执</span><small>{cards.length} 项</small></>}><Calls cards={cards} paths={model.resourcePaths}/></Branch>:<p className="worker-execution-empty">暂无关联的业务工具回执。</p>}
+  </section>
  </section>;
 }

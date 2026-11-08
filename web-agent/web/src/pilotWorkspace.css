@@ -37,6 +37,24 @@
 .super-task-state [data-tone=attention] { color:var(--warning); }
 .super-task-state [data-tone=danger] { color:var(--danger); }
 .super-task-state [data-tone=success] { color:var(--success); }
+.super-task-verdict { display:inline-flex; align-items:center; gap:5px; }
+.super-task-updated { display:block; margin-top:8px; color:var(--text-muted); font-size:12px; font-variant-numeric:tabular-nums; }
+.super-task-overview { padding:0 0 20px; }
+.super-task-overview .super-task-heading { font-size:14px; line-height:1.65; gap:9px; }
+.super-task-overview .super-task-heading > strong { font-weight:var(--font-weight-semibold); }
+.super-task-overview .super-task-heading > svg { color:var(--text-muted); margin-top:3px; }
+.super-task-overview .super-task-state { align-items:center; padding:12px 0; }
+.super-task-overview .super-task-verdict { padding:3px 8px; border-radius:var(--radius-settings-badge); corner-shape:var(--corner-window); font-size:12px; background:var(--surface-muted); }
+.super-task-overview .super-task-verdict[data-tone=success] { background:var(--success-soft); }
+.super-task-overview .super-task-verdict[data-tone=attention] { background:var(--warning-soft); }
+.super-task-overview .super-task-verdict[data-tone=danger] { background:var(--danger-soft); }
+.super-task-overview .super-task-verdict[data-tone=active] { background:var(--info-soft); }
+.super-task-overview .super-task-state > small { font-size:12px; }
+.super-task-step-records { margin-top:16px; padding-top:14px; border-top:1px solid var(--border); }
+.super-task-step-records > summary { display:flex; align-items:center; gap:8px; width:100%; min-height:32px; color:var(--text-muted); }
+.super-task-step-records > summary > small { margin-left:auto; font-size:12px; }
+.super-task-step-records > summary:focus-visible { outline:2px solid var(--focus-outline); outline-offset:3px; border-radius:var(--radius-settings-control); }
+.super-task-step-records[open] > .super-task-steps { margin-top:18px; }
 /* A joint goal has one verdict. Each specialist retains a separate execution. */
 .joint-task-summary { margin-top:10px; }
 .joint-task-verdict,.joint-task-summary li { display:flex; gap:7px; align-items:center; }
