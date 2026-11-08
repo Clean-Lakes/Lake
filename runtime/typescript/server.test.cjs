@@ -1193,6 +1193,11 @@ async function readExecutionProjections(f, sessionId) {
 test("pure TS host authenticates, runs native, streams and restores history", async (t) => {
   const f = await fixture(t);
   assert.equal((await fetch(f.app.origin + "/api/catalog")).status, 401);
+  const reviewPath=`/api/sessions/${f.session.id}/operator-effect-review/unknown-operation`;
+  for(const method of ['GET','POST']) {
+    assert.equal((await fetch(f.app.origin+reviewPath,{method})).status,401);
+    assert.equal((await fetch(f.app.origin+reviewPath,{method,headers:{Authorization:`Bearer ${f.app.token}`,Origin:'https://untrusted.invalid'}})).status,403);
+  }
   assert.equal(
     (
       await fetch(f.app.origin + "/api/catalog", {

@@ -2,6 +2,7 @@ import {useEffect, useRef, useState, type FormEvent} from 'react';
 import type {OperationReview, OperationReviewConfirmation, SessionSnapshot} from '../../shared/contracts';
 import {AppSelect} from './AppSelect';
 import {api, readableError} from './api';
+import {OperatorEffectReconciliation} from './OperatorEffectReconciliation';
 
 export function reviewableCommandIds(snapshot: SessionSnapshot, executionId: string) {
   const task = snapshot.superagent?.task;
@@ -83,6 +84,7 @@ function CommandReview({sessionId, operationId, connected, onUpdated}: {sessionI
 export function OperationReconciliation({snapshot,executionId,connected,onUpdated}:{
   snapshot:SessionSnapshot;executionId:string;connected:boolean;onUpdated:()=>void;
 }) {
-  return <>{reviewableCommandIds(snapshot,executionId).map(id=><CommandReview key={id} sessionId={snapshot.session.id}
-    operationId={id} connected={connected} onUpdated={onUpdated}/>)}</>;
+  return <>{reviewableCommandIds(snapshot,executionId).map(id=><div key={id}><CommandReview sessionId={snapshot.session.id}
+    operationId={id} connected={connected} onUpdated={onUpdated}/><OperatorEffectReconciliation sessionId={snapshot.session.id}
+    operationId={id} connected={connected} onUpdated={onUpdated}/></div>)}</>;
 }

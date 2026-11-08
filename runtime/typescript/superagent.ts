@@ -1,4 +1,5 @@
 import { projectTaskProgress } from "./task-progress";
+import { requestedInspectionRoot } from "../../web-agent/shared/command-policy";
 import {authorizeNetworkProbe, networkProbe} from "./network-probe";
 import { boundResourceRevision, issueResourcePin } from "./resource-pin";
 import {conversationReadState} from "./conversation-reads";
@@ -29,6 +30,7 @@ import { toolActivityLabel } from "./activity";
 import {agentToolNames,nativeTool,agentCapabilityCatalog} from "./capabilities";
 import type {LakeExecution,ShellInput,ShellActor} from "./execution";
 import { ProgramDiscoveryRecovery } from "./discovery-recovery";
+import { OperatorEffectReviewService } from "./operator-effect-review";
 import { stoppedNotice, unresolvedNotice, stoppedReportProjection } from "./task-cancellation";
 import {TaskWatchdog, type WatchdogSample, type WatchdogRecord} from "./watchdog";
 import {prepareWatchdogEvidence, watchdogEvidence, transientModelFailure, type WatchdogRetry} from "./watchdog-observation";
@@ -86,6 +88,7 @@ export class LakeSuperagent implements AgentHost {
   readonly ledger: TaskLedger;
   readonly watchdog: TaskWatchdog;
   readonly discoveryRecovery: ProgramDiscoveryRecovery;
+  readonly operatorReviews: OperatorEffectReviewService;
   readonly owner = id();
   private batches = new Map<string, RouterBatch>();
   private routing = new Set<string>();
@@ -102,6 +105,20 @@ export class LakeSuperagent implements AgentHost {
   private watchdogTimer: ReturnType<typeof setInterval>;
   constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH,readonly mysql?:LakeMySQL,readonly execution?:LakeExecution, private readonly watchdogClock = Date.now) {
     this.discoveryRecovery = new ProgramDiscoveryRecovery(store, agents.sessions);
+    this.operatorReviews = new OperatorEffectReviewService(store, agents.sessions, operation => {
+      if (!ssh || !operation.resourceId || !operation.hostConfigurationHash)
+        throw new HttpError(409,"缺少原 SSH 连接和复核资格");
+      const resource=store.require<import('../../web-agent/shared/contracts').Resource>('resources',operation.resourceId);
+      if (resource.projectId!==operation.projectId || resource.kind!=='ssh' || resource.status!=='available' ||
+          (store.get<number>('resourceRevisions',resource.id)??1)!==operation.resourceRevision)
+        throw new HttpError(409,"原资源归属或版本已变化");
+      security?.host(operation.projectId,resource.id);
+      const run=operation.commandExecutionId && store.get<any>('commandExecutions',operation.commandExecutionId);
+      const target=run ? run.authenticatedTarget : (operation.output as any)?.authenticatedTarget;
+      if (!target?.hostKeys?.length || target.hostKeys.some((key:any)=>typeof key.fingerprint!=='string'))
+        throw new HttpError(409,"缺少实际认证对端，不能结清未知影响");
+      for (const key of target.hostKeys) ssh.revalidate(resource,operation.hostConfigurationHash,key.fingerprint);
+    }, operation => !!execution?.hasLiveCommand(operation.sessionId,operation.goalId,operation.commandExecutionId));
     this.ledger = new TaskLedger(store, (operation) => {
       if (operation.mcpServerId) {
         const project = store.require<SuperProject>("superProjects", operation.projectId);
@@ -137,7 +154,7 @@ export class LakeSuperagent implements AgentHost {
       if (resource.projectId !== operation.projectId || resource.status !== "available" ||
           (store.get<number>("resourceRevisions", resource.id) ?? 1) !== operation.resourceRevision)
         throw new HttpError(409, "Resource ownership, availability or connection revision changed");
-    }, operation => this.discoveryRecovery.resolution(operation), (id,expected) => {
+    }, operation => this.effectResolution(operation), (id,expected) => {
       const resource=store.get<import("../../web-agent/shared/contracts").Resource>("resources",id);
       try {
         if (!resource || resource.kind !== "ssh" || !this.ssh || (expected && this.ssh.revision(resource) !== expected)) return;
@@ -192,6 +209,9 @@ export class LakeSuperagent implements AgentHost {
     this.watchdogTimer=setInterval(()=>{void this.scanWatchdog().catch(()=>console.warn("Lake Watchdog 本次扫描失败，将在下一周期复查。"));},60_000);
     this.watchdogTimer.unref();
     queueMicrotask(() => this.deliverReports());
+  }
+  effectResolution(operation:Operation) {
+    return this.operatorReviews.resolution(operation) ?? this.discoveryRecovery.resolution(operation);
   }
   private notify(sessionId: string, type: "session" | "specialist" | "message" = "session") {
     this.agents.publish(this.store.event(sessionId, type));
@@ -1292,7 +1312,7 @@ export class LakeSuperagent implements AgentHost {
       actor.checkSSHTarget = target => {
         const binding={resourceId:plan.resource.id,commandExecutionId:this.execution!.executionId(actor,context.toolCallId)};
         this.ledger.checkMutationTarget(worker.projectId,binding,target??null);
-        this.ledger.protectReconciledMutation(worker.taskId,input,binding,target??null);
+        this.ledger.protectReconciledMutation(worker.taskId,input,binding,target??null,generation);
       };
     }
     await this.discoveryRecovery.verify(worker.projectId);
@@ -1373,7 +1393,12 @@ export class LakeSuperagent implements AgentHost {
     const networkSchema = objectSchema({hostname:str, ipv4:str, port:integer, path:str, negative_hostname:str}, ["hostname"]);
     const entry=this.entry("inspect_host",
       "Read a fixed profile on the selected SSH host. Copy asset_ref and use the short configuration_pin from list_assets as configuration_revision. For time-sensitive Linux processes use metric=processes with process_directory for two PID/CPU readings 2 seconds apart. For DNS use metric=dns_a and network_probe.hostname. For authorized public HTTPS use metric=https with network_probe {hostname, ipv4, port, path, negative_hostname?}; provide the exact target given in the user request. Returns route, DNS A, TCP source, certificate validation, status and body digest. A .invalid control tests TLS name rejection then repeats the verified request. Check each observation for errors.",
-      objectSchema({asset_ref:str,configuration_revision:str,metric:{type:"string",enum:["system","disks","processes","dns_a","https"]},process_directory:str,network_probe:networkSchema},["asset_ref","configuration_revision","metric"]),async(a,context)=>{
+      objectSchema({asset_ref:str,configuration_revision:str,metric:{type:"string",enum:["system","disks","processes","dns_a","https","directory_state"]},process_directory:str,observation_directory:str,network_probe:networkSchema},["asset_ref","configuration_revision","metric"]),async(a,context)=>{
+        if(a.metric==='directory_state') {
+          const inputs=worker.inputEventIds.map(id=>this.store.require<InputEvent>('superInputs',id)).filter(e=>e.projectId===worker.projectId);
+          if(typeof a.observation_directory!=='string' || !requestedInspectionRoot(a.observation_directory,inputs.map(e=>e.payload)))
+            throw new HttpError(403,'目录观察需要当前人类请求中明确给出的单一目录');
+        }
         const probe=networkProbe(a.metric,a.network_probe);
         if(probe) {
           const userInput=worker.inputEventIds.map(id=>this.store.require<InputEvent>("superInputs",id))
@@ -1386,7 +1411,7 @@ export class LakeSuperagent implements AgentHost {
           const current=this.store.require<import("../../web-agent/shared/contracts").Resource>("resources",a.asset_ref);
           if(!boundResourceRevision(this.store,current,a.configuration_revision,this.ssh!.revision(current)))
             throw new HttpError(409,"SSH 配置或凭据版本已变化，请重新读取资源目录");
-        },a.process_directory,a.network_probe);
+        },a.process_directory,a.network_probe,a.observation_directory);
       },false,131072);
     entry.resolvePermissionCapability=(input:any)=>{this.requireTarget(worker,input.asset_ref);const project=this.store.require<SuperProject>("superProjects",worker.projectId),options=this.store.session(project.routerSessionId).options,policy=this.security?.host(worker.projectId,input.asset_ref);const approval=(options.silentCommands??permissionDefaults.silentCommands)!==true||policy==='ask';return {needsApproval:approval,permission:{needsApproval:approval,sideEffectScope:"workspace"}};};
     return [entry];
@@ -1598,7 +1623,7 @@ export class LakeSuperagent implements AgentHost {
         const goal = this.ledger.get(worker.taskId);
         if (a.goal_id != null && a.goal_id !== goal.id && a.goal_id !== goal.sharedTaskId) throw new HttpError(404, "Task not found in this worker");
         await this.discoveryRecovery.verify(worker.projectId);
-        return { goal: this.publicGoal(goal), operations: this.store.list<Operation>("superOperations").filter((op) => op.goalId === worker.taskId).map(op => ({...op, effectReconciliation:this.discoveryRecovery.resolution(op)})) };
+        return { goal: this.publicGoal(goal), operations: this.store.list<Operation>("superOperations").filter((op) => op.goalId === worker.taskId).map(op => ({...op, effectReconciliation:this.effectResolution(op)})) };
       })),
       this.entry("work_update", "Start the returned actual item ID before resource I/O; completed requires real successful call IDs from this exact attempt. Metadata or prose is not evidence. For a blocker, reason describes the specific practical obstacle in the user's language, not internal bookkeeping.",
         objectSchema({ item_id: str, status: { type: "string", enum: ["running", "completed", "waiting_user", "blocked", "failed"] }, reason: str, evidence_ids: array(str) }, ["item_id", "status"]), run((a) => {

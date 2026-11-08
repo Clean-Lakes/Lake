@@ -588,6 +588,11 @@ export async function startLakeServer(options: ServerOptions) {
             note:typeof data.note==="string"?agents.redact(data.note):data.note},(executionId,goalId,generation)=>{execution!.evidence(executionId,goalId,generation);});
           else throw new HttpError(405,"不支持此核实请求");
         }
+        else if (path[3] === "operator-effect-review" && path.length===5) {
+          if (method==='GET') result=await superagent.operatorReviews.reviewInfo(sessionId,path[4]);
+          else if (method==='POST') result=await superagent.operatorReviews.confirm(sessionId,path[4],JSON.parse(agents.redact(JSON.stringify(data))));
+          else throw new HttpError(405,'不支持此人工影响复核请求');
+        }
         else if (path[3] === "host-key" && path.length===4 && method==="POST")result=ssh!.decide(sessionId,data);
         else if (path[3] === "terminals") {
           if (path.length === 4 && method === "POST") { await agents.prepareRedaction(); extensions!.servers(); result = await terminals!.open(sessionId, data); status = 201; }

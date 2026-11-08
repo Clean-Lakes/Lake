@@ -139,6 +139,15 @@
       ]
     },
     {
+      "name": "confirmOperatorEffectReview",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/sessions/${encodeURIComponent(sessionId)}/operator-effect-review/${encodeURIComponent(operationId)}`"
+        }
+      ]
+    },
+    {
       "name": "createProject",
       "routes": [
         {
@@ -513,6 +522,15 @@
         {
           "method": "GET",
           "path": "`/api/sessions/${encodeURIComponent(sessionId)}/operation-reconciliation/${encodeURIComponent(operationId)}`"
+        }
+      ]
+    },
+    {
+      "name": "operatorEffectReview",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "`/api/sessions/${encodeURIComponent(sessionId)}/operator-effect-review/${encodeURIComponent(operationId)}`"
         }
       ]
     },

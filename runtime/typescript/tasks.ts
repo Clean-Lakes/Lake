@@ -75,7 +75,7 @@ const businessReceiptTools = new Set(["Bash", "Glob", "Grep", "FindFiles", "Sear
 // Router replies, Worker prose and channel presentation never close a goal.
 export class TaskLedger {
   constructor(readonly store: LakeStore, readonly revalidate?: (operation: Operation) => void,
-    readonly effectResolution?: (operation: Operation) => { effects: "none" | "observed"; closureState?: "reconciled";closedAt?:string } | undefined,
+    readonly effectResolution?: (operation: Operation) => { effects: "none" | "observed"; closureState?: "reconciled";closedAt?:string;replayScopes?:string[] } | undefined,
     readonly sshTarget?: (resourceId:string, expectedRevision?:string) => SSHTarget | undefined) {}
   get(goalId: string) { return this.store.require<Goal>("superGoals", goalId); }
   jointTask(taskId: string) { return jointTask(this.store, taskId); }
@@ -345,9 +345,37 @@ export class TaskLedger {
       }
     }
   }
-  protectReconciledMutation(goalId:string, input:unknown, binding:{resourceId?:string;commandExecutionId?:string;remoteMcp?:boolean}, peer?:SSHTarget|null) {
+  private freshReconciliationAuthorization(goal:Goal,resourceId:string|undefined,closedAt:string|undefined,generation?:number) {
+    const admitted=(eventId:string,followup=false)=>{
+      const event=this.store.get<any>('superInputs',eventId),message=event&&this.store.get<any>('messages',event.messageId);
+      const input=event&&this.store.get<any>('messageInputs',event.messageId);
+      if(!event || event.projectId!==goal.projectId || message?.role!=='user' || message.sessionId!==event.sessionId ||
+        input?.projectId!==event.projectId || input.sessionId!==event.sessionId || input.messageId!==event.messageId ||
+        !(Date.parse(event.receivedAt)>Date.parse(closedAt??'')))return false;
+      if(!followup)return true;
+      return event.disposition==='routed' && message.text===event.payload && input.resourceIds?.includes(resourceId) &&
+        digest(event.selectedReferences)===digest({resourceIds:input.resourceIds,mentions:input.mentions,references:input.references});
+    };
+    if(admitted(goal.sourceEventId))return true;
+    const worker=this.store.get<any>('superWorkers',goal.workerId);
+    if(generation===undefined || !worker || worker.id!==goal.workerId || worker.projectId!==goal.projectId ||
+      worker.taskId!==goal.id || worker.sessionId!==goal.sessionId || worker.roleId!==goal.roleId ||
+      worker.generation!==generation || worker.state!=='active' || typeof worker.owner!=='string' || !worker.owner ||
+      !Number.isFinite(worker.leaseUntil) || worker.leaseUntil<=Date.now() ||
+      !Array.isArray(worker.invocationInputIds) || !Array.isArray(worker.inputEventIds))return false;
+    return worker.invocationInputIds.some((eventId:string)=>{
+      if(!worker.inputEventIds.includes(eventId)||!admitted(eventId,true))return false;
+      const decisions=this.store.db.prepare("SELECT value FROM records WHERE kind='superDecisions' AND json_extract(value,'$.projectId')=? AND json_extract(value,'$.eventId')=? AND json_extract(value,'$.action')='followup'").all(goal.projectId,eventId);
+      return decisions.some(row=>{const decision=JSON.parse(String(row.value));
+        return decision.taskId===(goal.sharedTaskId??goal.id) && decision.assignments?.some((a:any)=>
+          a.executionId===goal.id && a.workerId===goal.workerId && a.sessionId===goal.sessionId && a.roleId===goal.roleId);
+      });
+    });
+  }
+  protectReconciledMutation(goalId:string, input:unknown, binding:{resourceId?:string;commandExecutionId?:string;remoteMcp?:boolean}, peer?:SSHTarget|null,generation?:number) {
     const goal=this.get(goalId), shell=input as {command?:unknown;cwd?:unknown}|null;
-    for (const closure of this.store.list<{operationId:string}>("commandEffectClosures")) {
+    for (const closure of [...this.store.list<{operationId:string}>("commandEffectClosures"),
+      ...this.store.list<{operationId:string}>("commandOperatorEffectClosures")]) {
       const original=this.store.get<Operation>("superOperations",closure.operationId);
       const receipt=original && this.effectResolution?.(original);
       if (!original || receipt?.closureState!=="reconciled" || receipt.effects==="none") continue;
@@ -365,22 +393,20 @@ export class TaskLedger {
       const related=original.resourceId===binding.resourceId || sameSSHHost(prior,candidate) ||
         original.projectId===goal.projectId && !distinctSSHTargets(prior,candidate);
       if (!related && goal.id!==old.id) continue;
-      const event=this.store.get<{projectId:string;sessionId:string;messageId:string;receivedAt:string}>("superInputs",goal.sourceEventId);
-      const message=event && this.store.get<{role:string;sessionId:string}>("messages",event.messageId);
-      const admitted=event && this.store.get<{projectId:string;sessionId:string;messageId:string}>("messageInputs",event.messageId);
-      if (!event || event.projectId!==goal.projectId || message?.role!=="user" || message.sessionId!==event.sessionId ||
-          admitted?.projectId!==event.projectId || admitted.sessionId!==event.sessionId || admitted.messageId!==event.messageId ||
-          !(Date.parse(event.receivedAt)>Date.parse(receipt.closedAt??"")))
+      if (!this.freshReconciliationAuthorization(goal,binding.resourceId,receipt.closedAt,generation))
         throw new HttpError(409,"风险结清后的变更需要新的已接收用户请求");
       const command=shell?.command;
       if (typeof command!=="string") continue;
-      const scope=removalReviewScope(run.command);
-      if (!scope) throw new HttpError(409,"原变更范围已无法核对");
-      const escaped=scope.directory.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
-      const mentions=new RegExp("(?<![a-zA-Z0-9_./-])"+escaped+"(?![a-zA-Z0-9_.-])").test(command);
+      const removal=removalReviewScope(run.command);
+      const scopes=receipt.replayScopes ?? (removal ? [removal.directory] : []);
+      if (!scopes.length) throw new HttpError(409,"原变更范围已无法核对");
       const cwd=typeof shell?.cwd==="string" ? posix.normalize(shell.cwd) : undefined;
-      if (cwd && (cwd===scope.directory || cwd.startsWith(scope.directory+"/")) ||
-          mentions || digest(command.trim())===digest(run.command.trim()))
+      const overlaps=scopes.some(directory=>{
+        const escaped=directory.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+        return cwd && (cwd===directory || cwd.startsWith(directory+"/")) ||
+          new RegExp("(?<![a-zA-Z0-9_./-])"+escaped+"(?![a-zA-Z0-9_.-])").test(command);
+      });
+      if (overlaps || digest(command.trim())===digest(run.command.trim()))
         throw new HttpError(409,"原已核实调用的目标目录禁止重放，请保留原结果并执行新请求");
     }
   }
@@ -405,7 +431,7 @@ export class TaskLedger {
       if (previous.status === "succeeded") { this.revalidate?.(previous); return previous.output as T; }
       throw new HttpError(409, "The original operation must be reconciled; it cannot be replayed");
     }
-    if (binding.readOnly !== true) this.protectReconciledMutation(goalId,input,binding);
+    if (binding.readOnly !== true) this.protectReconciledMutation(goalId,input,binding,undefined,generation);
     if (this.isHostManaged(this.get(goalId))) this.prepareHostOperation(goalId, generation, policyHash, binding);
     const operation = this.store.transaction(() => {
       const { goal, step, attempt } = this.active(goalId, generation, policyHash);

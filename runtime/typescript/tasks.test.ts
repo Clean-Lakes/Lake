@@ -130,6 +130,45 @@ test("a confirmed no-effect inspection permits new work on its original task whi
   assert.deepEqual(done.items[0].evidenceIds,[digest(["session","repair"])]);
 });
 
+test("a settled change permits a consumed human followup to another task, never queued input or a sibling's route",async t=>{
+  const {store,create}=await fixture(t);
+  const original=create(),other=create({id:'other',sessionId:'other-session',workerId:'other-worker',sourceEventId:'old-event'});
+  const closedAt=new Date(Date.now()-1000).toISOString(),originalId=digest(['session','old-change']);
+  const op={id:originalId,goalId:original.id,projectId:original.projectId,sessionId:'session',commandExecutionId:'old-execution',
+    resourceId:'host',status:'unknown',readOnly:false} as Operation;
+  store.put('superOperations',originalId,op);store.put('commandExecutions','old-execution',{command:'change /tmp/retired'});
+  store.put('commandOperatorEffectClosures',originalId,{operationId:originalId});
+  store.put('resources','host',{kind:'ssh',projectId:original.projectId});
+  const ledger=new TaskLedger(store,undefined,o=>o.id===originalId?
+    {effects:'observed',closureState:'reconciled',closedAt,replayScopes:['/tmp/retired']}:undefined);
+  const event={id:'fresh',projectId:other.projectId,sessionId:'pilot',messageId:'human',payload:'继续另一个任务',
+    receivedAt:new Date().toISOString(),disposition:'routed',selectedReferences:{resourceIds:['host'],mentions:[],references:[]}};
+  store.put('superInputs',event.id,event);
+  store.put('messages','human',{id:'human',sessionId:'pilot',role:'user',text:event.payload});
+  store.put('messageInputs','human',{projectId:other.projectId,sessionId:'pilot',messageId:'human',...event.selectedReferences});
+  const worker={id:other.workerId,projectId:other.projectId,taskId:other.id,sessionId:other.sessionId,roleId:other.roleId,
+    generation:7,state:'active',owner:'current-owner',leaseUntil:Date.now()+60000,inputEventIds:['fresh'],invocationInputIds:[] as string[]};
+  store.put('superWorkers',worker.id,worker);
+  const assignment={executionId:other.id,workerId:worker.id,sessionId:worker.sessionId,roleId:worker.roleId};
+  const decision={projectId:other.projectId,eventId:'fresh',action:'followup',taskId:other.id,assignments:[assignment]};
+  store.put('superDecisions','route',decision);
+  let dispatches=0;
+  const run=(call:string,generation=7)=>ledger.operation(other.id,generation,'policy',call,'Bash',{command:'change /tmp/new-work'},
+    async()=>({exitCode:0,count:++dispatches}),v=>v,{readOnly:false,resourceId:'host',commandExecutionId:'execution-'+call});
+  await assert.rejects(run('queued'),/新的已接收用户请求/);
+  worker.invocationInputIds=['fresh'];store.put('superWorkers',worker.id,worker);
+  store.put('superDecisions','route',{...decision,assignments:[{...assignment,executionId:'sibling'}]});
+  await assert.rejects(run('sibling'),/新的已接收用户请求/);
+  store.put('superDecisions','route',{...decision,action:'respond'});
+  await assert.rejects(run('chat'),/新的已接收用户请求/);
+  store.put('superDecisions','route',decision);
+  await assert.rejects(run('old-generation',6),/新的已接收用户请求/);
+  await run('exact-followup');assert.equal(dispatches,1);
+  assert.deepEqual(store.require('superOperations',originalId),op);
+  assert.throws(()=>ledger.protectReconciledMutation(original.id,{command:'different'},
+    {resourceId:'host',commandExecutionId:'other'},undefined,7),/禁止重放/);
+});
+
 test("Plan and explicit contracts retain the existing model-driven acceptance path", async (t) => {
   const { ledger, create } = await fixture(t);
   create({ mode: "plan" });

@@ -203,6 +203,21 @@ export type OperationReview = {
   closureState?: "reconciled"; closureEligible?: boolean; effects?: "none" | "observed"; directory?: string; command?: string; evidence: OperationReviewEvidence[]; resolved?: boolean;
 };
 export type OperationReviewConfirmation = {revision: string; evidenceOperationId: string; note: string} & ({confirmNoWrite: true} | {confirmObservedEffects: true; reconcileRisk?:true});
+export type OperatorEffectEvidence = {
+  operationId:string; sessionId:string; taskId:string; at:string; directory:string; summary:string; output:string;
+};
+export type OperatorEffectReview = {
+  operationId:string; eligible:boolean; reason?:string; revision?:string; command?:string; output?:string;
+  executionStatus?:string; backgroundTaskId?:string; directories:string[]; evidence:OperatorEffectEvidence[];
+  recorded?:boolean; closureEligible?:boolean; closureState?:"reconciled";
+  judgment?:{effects:"none"|"observed";directory:string;evidenceOperationId:string;actualEffects:string;processDisposition:string;remainingWork:string;operatorName:string;note:string};
+};
+export type OperatorEffectConfirmation = {
+  revision:string; directory:string; evidenceOperationId:string; effects:"none"|"observed";
+  actualEffects:string; processDisposition:string; remainingWork:string; operatorName:string; note:string;
+  confirmSourceRead:true; confirmAllEffectsKnown:true; confirmRemoteProcessesAccounted:true;
+  reconcileRisk?:true;
+};
 export type HostCommandView = {id:string;operationId:string;operationState?: string;taskId:string;sessionId:string;generation:number;resourceId:string;command:string;output:string;exitCode:number|null;status:string;canStop:boolean;stopRequestedAt?:string;startedAt:string;finishedAt?:string};
 
 export type ConversationReadState = {cursor:string;seenCursor:string};

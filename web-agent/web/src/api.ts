@@ -42,6 +42,8 @@ import type {
   WatchdogMode,
   OperationReview,
   OperationReviewConfirmation,
+  OperatorEffectReview,
+  OperatorEffectConfirmation,
 } from "../../shared/contracts";
 
 export class ApiRequestError extends Error {
@@ -112,6 +114,10 @@ export const api = {
     request<OperationReview>(`/api/sessions/${encodeURIComponent(sessionId)}/operation-reconciliation/${encodeURIComponent(operationId)}`, {signal}),
   confirmOperationReview: (sessionId: string, operationId: string, confirmation: OperationReviewConfirmation) =>
     post<{operationId: string; resolved: true}>(`/api/sessions/${encodeURIComponent(sessionId)}/operation-reconciliation/${encodeURIComponent(operationId)}`, confirmation),
+  operatorEffectReview: (sessionId:string, operationId:string, signal?:AbortSignal) =>
+    request<OperatorEffectReview>(`/api/sessions/${encodeURIComponent(sessionId)}/operator-effect-review/${encodeURIComponent(operationId)}`,{signal}),
+  confirmOperatorEffectReview: (sessionId:string,operationId:string,confirmation:OperatorEffectConfirmation) =>
+    post<{operationId:string;recorded:true;closureState?:'reconciled'}>(`/api/sessions/${encodeURIComponent(sessionId)}/operator-effect-review/${encodeURIComponent(operationId)}`,confirmation),
   setWatchdogMode: (projectId: string, mode: WatchdogMode) => request<{mode: WatchdogMode}>(`/api/projects/${encodeURIComponent(projectId)}/watchdog`, {
     method: "PUT", body: JSON.stringify({mode}),
   }),
