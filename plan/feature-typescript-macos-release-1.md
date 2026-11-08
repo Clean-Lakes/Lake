@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-08
 last_updated: 2026-11-08
 owner: Lake maintainers
-status: 'In progress'
+status: 'Completed'
 tags: [release, typescript, macos, migration]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 The user explicitly requested merging all PRs into develop, a macOS-only production release, and then selected the current TypeScript backend after being informed of its incomplete parity. This supersedes the previous Dev-only distribution restriction for this release, without claiming that missing features or the parity matrix have passed. PRs #197–#199 are merged; the integration base is `b0802ba96bb87ff7c8b66427bd71b7158c9feea0`.
 
@@ -44,8 +44,9 @@ The user explicitly requested merging all PRs into develop, a macOS-only product
 |------|-------------|-----------|------|
 | TASK-005 | Add pure profile, isolated production migration and native distribution tests; run source/server/frontend suites, signing/package/installer checks and an isolated real packaged backend smoke test. | Yes | 2026-11-08 |
 | TASK-006 | Prepare VERSION 0.3.28, truthful macOS release notes and validation/rollback documentation; preserve parity diagnostic status and merge the preparation PR into develop. Depends on TASK-005. | Yes | 2026-11-08 |
-| TASK-007 | Create develop-to-master release PR, satisfy its checks/review requirements, merge with a merge commit, and verify final source. Depends on TASK-006. | No | 2026-11-08 |
-| TASK-008 | Build from clean master, verify ZIP/DMG/signatures/checksums and publish v0.3.28 with only four macOS assets. Verify downloaded assets and release target. Depends on TASK-007. | No | 2026-11-08 |
+| TASK-007 | Create develop-to-master release PR, satisfy its checks/review requirements, merge with a merge commit, and verify final source. Depends on TASK-006. | Yes | 2026-11-08 |
+| TASK-008 | Build from clean master, verify ZIP/DMG/signatures/checksums and publish v0.3.28 with only four macOS assets. Verify downloaded assets and release target. Depends on TASK-007. | Yes | 2026-11-08 |
+| TASK-009 | Correct first-publication tag creation, retain existing tags, and verify eight isolated publisher regressions. | Yes | 2026-11-08 |
 
 ## 3. Alternatives
 
@@ -80,3 +81,5 @@ The user explicitly requested merging all PRs into develop, a macOS-only product
 ## 8. Related Specifications / Further Reading
 
 [Contribution workflow](../docs/development-workflow.md), [architecture ownership](../agent.md), [TypeScript boundaries](../runtime/typescript/README.md), [security](../docs/design/lake-security-v1.md), [TS layered memory](../docs/design/typescript-layered-memory.md).
+
+Implementation and publication completed: master `e810ff3bde3a3ca9a9f7d3401aea127e2103fe69`, [v0.3.28](https://github.com/Clean-Lakes/Lake/releases/tag/v0.3.28). All required checks passed; the user explicitly directed direct publication and excluded Windows. Full legacy parity is still pending. The post-publication tooling/history maintenance uses a PR to develop and does not replace the published source or assets.

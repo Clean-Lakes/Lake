@@ -43,6 +43,7 @@ jobs:
       - run: swift run --package-path client/macos --build-system native LakeWindowTests
       - run: swift build --package-path client/macos --build-system native --product LakeDesktop
       - run: python3 scripts/test_lake_macos_installer.py
+      - run: python3 scripts/test_lake_macos_publisher.py
   legacy_go:
     if: >-
       github.event_name == 'workflow_dispatch' ||

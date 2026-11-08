@@ -7,7 +7,7 @@ Date: 2026-11-08. Functional source tested: `59f21211df215965ecadf7c56d4ae1a3d71
 | Check | Result |
 | --- | --- |
 | Pinned SDK TypeScript typecheck and runtime bundle | Passed |
-| TS source tests (`tsx --tsconfig runtime/typescript/tsconfig.json --test runtime/typescript/*.test.ts`) | 211 passed, 4 existing external integration skips |
+| TS source tests (`tsx --tsconfig runtime/typescript/tsconfig.json --test runtime/typescript/*.test.ts`) | 211 passed, 4 existing conditional skips (three Claude-Mem fixtures and one Linux-only scanner) |
 | Bundled runtime integration (`node --test runtime/typescript/*.test.cjs`) | 175 passed |
 | React tests (`pnpm --dir web-agent test:frontend`) | 762 passed |
 | Installer (`python3 scripts/test_lake_macos_installer.py`) | 9 passed, including production preparation, missing Home, migration failure/timeout and rollback |
@@ -57,3 +57,20 @@ Linux race run 42491719351 failed only `TestPilotActualProviderRequestStaysBound
 Follow-up functional source `ae4a0b4a` keeps public RunPilotRouter at exactly 90 seconds and delegates to the same private implementation. Only the heavy bounded-context fixture invokes that implementation with a five-minute budget; its 100 tasks, 256 KiB per archive, 128 KiB historical pages, two exact provider calls, 80 KiB request bound, restart, preserved archives and all assertions remain unchanged. It measures context projection, not latency under race instrumentation. The targeted real race test passed locally in 85.951 seconds; Go vet and the ADK production boundary check passed. Production latency parity is not inferred.
 
 Full Go verification is split across independent AI, Web and remaining-package runners with fail-fast disabled. Each derives groups from the actual complete go list, asserts a unique/exhaustive partition, and runs race plus vet for its group. Required workbench still requires the complete matrix and macOS success. YAML/gate/cache structure, the local complete package partition and branch policy were checked. No test is removed or skipped by this change.
+
+## Published production result
+
+Release PR [#201](https://github.com/Clean-Lakes/Lake/pull/201) merged with a merge commit. Production source: `e810ff3bde3a3ca9a9f7d3401aea127e2103fe69`; its two parents are the previous master and tested develop `583284092e119d5d8721db3f284f941e37632968`. The final tree equals tested PR merge tree `15461f9ec9bea00aed626896600ca2708f3de722`. Required branch-policy and [workbench run 42494252889](https://github.com/Clean-Lakes/Lake/actions/runs/42494252889) passed, including macOS and all three complete Go race/vet groups. Windows was explicitly excluded by the user; its failure is not a pass. Independent review was not claimed: the user expressly directed direct publication after the review requirement was explained.
+
+Built again from clean master using `scripts/build_lake_desktop.sh`. The actual signed production SEA passed isolated preparation/production bootstrap, exact Home/data identity, authenticated drain, restart and mixed-profile rejection before any Home write. ZIP extraction and read-only DMG mounting confirmed signatures, 0.3.28, TypeScript, exact source and macOS 13.5 minimum. Both executables are arm64; native PTY components declare minimum macOS 11.0, below the Node minimum. Backend SHA256: `5e8c206ade81981485afb9ad59bcf1801876d9fb2fb1a4a962769785d0fb307e`. No production Home or installed production application was modified.
+
+[Lake v0.3.28](https://github.com/Clean-Lakes/Lake/releases/tag/v0.3.28) published at `2026-11-08T15:50:04Z`, stable/latest, target_commitish master. The v0.3.28 Git tag resolves to the exact production commit. Downloaded all four public assets and verified their sizes, API digests and SHA-256 against the local signed packages. Exactly four macOS assets exist:
+
+| Asset | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Lake-0.3.28-macos-arm64.dmg | 79886870 | `d3e0f361136118cdafbfcaf312c04cd8e09ecd0ee1e85b7f0636083ddbea21e8` |
+| Lake-0.3.28-macos-arm64.dmg.sha256 | 94 | `f544025aeb5658ffd06cd94ed7ab18680875fb282f65f3f5bf5736aac242c15d` |
+| Lake-0.3.28-macos-arm64.zip | 67172781 | `ff4c788c10213265fb6f5c0e61e5f811cc94f2c95ff416d004e704f4802fc28e` |
+| Lake-0.3.28-macos-arm64.zip.sha256 | 94 | `4c81f5e521dcf8a58ddf61eeda699afbe3a9066bd1efaa2b5fb0cb7581ea6e2a` |
+
+The first publication attempt exposed an existing tooling defect: GitHub drafts do not create Git tags, so PATCH of the missing tag failed after upload. The authorized fix created the absent tag at the exact master commit, verified the draft by Release ID and published; no existing tag was moved. The maintenance follow-up creates a missing tag before draft creation, verifies existing lightweight/annotated tags, refuses a mismatched/noncommit target before upload, and uses --verify-tag. Eight isolated publisher regressions passed, including JSON error responses on failed lookup, failed creation, stale master and immutable-tag guards. The new check is included in future macOS verification. Released assets remain unchanged; maintenance and production history are synchronized through a topic PR to develop. Full parity remains pending as documented above.
