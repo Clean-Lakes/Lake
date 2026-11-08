@@ -206,7 +206,11 @@ func TestPilotActualProviderRequestStaysBoundedWithHundredArchivedTasks(t *testi
 		t.Fatal(err)
 	}
 	e.compactionTimeout = 1 // Any accidental summarization must fail, not hang.
-	if err := e.RunPilotRouter(ctx, "pilot", b); err != nil {
+	// This fixture deliberately retains 100 large archives through restart and
+	// real SDK/model/persistence calls. Race instrumentation on hosted runners
+	// can exceed the normal 90-second production budget; latency is not this
+	// test's contract. Preserve every archive, task and provider-size assertion.
+	if err := e.runPilotRouter(ctx, "pilot", b, 5*time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	if calls.Load() != 2 {

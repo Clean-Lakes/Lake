@@ -275,6 +275,13 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 }
 
 func (e *Engine) RunPilotRouter(ctx context.Context, sessionID string, b SuperSourceBinding) error {
+	return e.runPilotRouter(ctx, sessionID, b, 90*time.Second)
+}
+
+// Keep the production invocation budget at the public entry point. Heavy
+// instrumented persistence fixtures can exercise this same implementation
+// without turning a bounded-context assertion into a wall-clock benchmark.
+func (e *Engine) runPilotRouter(ctx context.Context, sessionID string, b SuperSourceBinding, invocationBudget time.Duration) error {
 	if !b.valid() {
 		return errSuperBinding
 	}
@@ -405,7 +412,7 @@ func (e *Engine) RunPilotRouter(ctx context.Context, sessionID string, b SuperSo
 		return snapshotErr
 	}
 	run.firstCard = before.TotalCards
-	invoke, cancel := context.WithTimeout(ctx, 90*time.Second)
+	invoke, cancel := context.WithTimeout(ctx, invocationBudget)
 	defer cancel()
 	if err = e.ExecuteTurn(invoke, sessionID, input); err != nil {
 		return err
