@@ -19,6 +19,7 @@ import type {
 } from "../../web-agent/shared/contracts";
 import { HttpError, id, LakeStore, now, privateDirectory } from "./store";
 import { canonical, digest, text, type Goal, type Operation } from "./tasks";
+import { hasAcceptedExecution } from "./joint-tasks";
 import type {TaskContextEntry} from './task-context';
 import type {ClaudeMemIndex,MemorySearchDocument} from './claude-mem';
 
@@ -79,6 +80,9 @@ export type MemoryJob = {
   finishedAt?: string;
   error?: string;
   nativeExtraction?: boolean;
+  outcome?: "published" | "unchanged";
+  publishedRevision?: number;
+  noteCount?: number;
   modelAttempts?: number;
   inputTokens?: number;
   outputTokens?: number;
@@ -483,19 +487,18 @@ export class LakeMemory {
     ]);
   }
   private providerFence() {
-    const selected = this.store.get<{ providerId: string; modelId: string }>(
-        "settings",
-        "modelSelection",
-      ),
+    const selected = this.store.modelSelection(),
       provider = selected
-        ? this.store.get<any>("providers", selected.providerId)
+        ? this.store.modelProvider(selected.providerId)
         : undefined;
     return digest([
+      this.store.get('settings', 'modelSelection'),
       selected,
       provider?.enabled,
       provider?.baseURL,
       provider?.protocol,
       provider?.models?.find((model: any) => model.id === selected?.modelId),
+      provider && this.store.modelConnectionVersion(provider),
     ]);
   }
   private source(
@@ -620,8 +623,7 @@ export class LakeMemory {
         )
       )
         return;
-      const accepted =
-        goal.acceptanceState === "pass" && goal.status === "completed";
+      const accepted = hasAcceptedExecution(this.store, goal);
       if (!accepted && !["paused", "failed", "blocked"].includes(goal.status))
         return;
       const business = operations
@@ -667,7 +669,7 @@ export class LakeMemory {
           taskId: goal.id,
           title: goal.title,
           state: goal.status,
-          acceptanceState: goal.acceptanceState,
+          acceptanceState: accepted ? "pass" : goal.acceptanceState,
           observedAt: goal.updatedAt,
           report: clip(goal.summary ?? "", 2000),
           observations: business.map((operation) => ({
@@ -749,7 +751,7 @@ export class LakeMemory {
         goal.sessionId !== source.sessionId ||
         goal.goalRevision !== source.taskRevision ||
         (source.taskEvidence === "accepted" &&
-          (goal.status !== "completed" || goal.acceptanceState !== "pass"))
+          !hasAcceptedExecution(this.store, goal))
       )
         return false;
     }
@@ -999,6 +1001,11 @@ export class LakeMemory {
       this.scope("project", actor.projectId),
       ...(actor.kind === "pilot" ? [this.scope("user")] : []),
     ];
+    const captureScope = actor.roleId ? this.scope('role', actor.projectId, actor.roleId) : this.scope('project', actor.projectId);
+    const captureNotice = this.settings(captureScope).extractionEnabled
+      ? "[LAKE MEMORY CAPTURE]\nEligible preferences are captured by the enabled scoped background Memory service after foreground work. Do not use ordinary filesystem Write/Edit just to remember them. Acknowledge the preference without claiming publication until a real published result exists. Never promote it to a broader scope."
+      : '';
+    if (captureNotice) projected = {...projected, messages: [{role: 'system', content: captureNotice}, ...(projected.messages ?? [])]};
     const query = JSON.stringify(
       projected.messages?.slice(-2) ?? [],
     ).toLowerCase();
@@ -1051,7 +1058,7 @@ export class LakeMemory {
           }),
           body: clip(body, 900),
         };
-        if (Buffer.byteLength(JSON.stringify([...parts, fragment])) <= 3500) {
+        if (Buffer.byteLength(JSON.stringify([...parts, fragment])) <= 3500 - Buffer.byteLength(captureNotice)) {
           parts.push(fragment);
           entry.sourceIds.forEach((id) => admittedSources.add(id));
         }
@@ -1508,6 +1515,9 @@ export class LakeMemory {
         );
       job.state = "completed";
       job.nativeExtraction = true;
+      job.outcome = changed ? "published" : "unchanged";
+      job.publishedRevision = this.store.require<Scope>("memoryScopes", scope.key).publishedRevision;
+      job.noteCount = files.size;
     } catch (error) {
       Object.assign(job, this.store.require<MemoryJob>("memoryJobs", job.id));
       job.state = controller.signal.aborted ? "withdrawn" : "failed";

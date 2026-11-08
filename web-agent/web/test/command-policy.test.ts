@@ -4,11 +4,15 @@ import {
   commandPolicy,
   isLiteralProgramDiscovery,
 } from "../../shared/command-policy";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   mkdtempSync,
   writeFileSync,
   chmodSync,
+  chownSync,
+  mkdirSync,
+  lstatSync,
+  symlinkSync,
   existsSync,
   rmSync,
 } from "node:fs";
@@ -147,4 +151,88 @@ test("vertical result formatting does not turn a metadata query into arbitrary e
     ).risk,
     "write",
   );
+});
+
+test("only explicitly scoped temporary paths and compiled unprivileged inventories are classified", async()=>{
+  const {compileNobodyInspection}=await import("../../shared/command-policy");
+  const dir="/tmp/release.verify-2026";
+  const raw="runuser -u nobody -- /bin/bash -c 'id; ls -la "+dir+"; find "+dir+' -maxdepth 4 -printf "%y %s %p\\n"'+String.fromCharCode(39);
+  const compiled=compileNobodyInspection(raw)!;
+  assert.equal(compiled.directory,dir); assert.equal(compiled.inventoryDepth,4);
+  assert.ok(compiled.command.includes("/usr/sbin/runuser -u nobody --"));
+  assert.ok(compiled.command.includes("cd / || exit 1; if test -x /usr/bin/python3"));
+  assert.notEqual(commandPolicy(raw).risk,"readonly");
+  for(const bad of [raw.replace("nobody","root"),raw.replace("runuser","/tmp/runuser"),raw.replace("id;","touch /tmp/file;"),
+      raw.replace("ls -la","ls -la > /tmp/bad"),raw.replace("-printf","-fprintf"),raw.replace("-printf","-delete -printf"),
+      raw.replace("id;","$(touch /tmp/bad);"),raw.replace(" -maxdepth","/../escape -maxdepth"),raw+"; touch /tmp/escape",
+      raw.replace("id;","id | touch /tmp/bad;"),raw.replace("ls -la","bash -lc"),raw.replace("find ","/tmp/find ")])
+    assert.equal(compileNobodyInspection(bad),undefined,bad);
+  for(const cmd of ["nl -ba "+dir+"/app.log","sha256sum -- "+dir+"/quota/app.log"]){
+    assert.notEqual(commandPolicy(cmd).risk,"readonly");
+    assert.equal(compileNobodyInspection("runuser -u nobody -- /bin/bash -c '"+cmd+"'"),undefined);
+  }
+  for(const cmd of ["nl -ba "+dir+"/../x","sha256sum -c "+dir+"/list","sha256sum /etc/passwd","nl --body-numbering=p "+dir+"/app.log","sha256sum "+dir+"/a > "+dir+"/f"])
+    assert.notEqual(commandPolicy(cmd).risk,"readonly",cmd);
+});
+
+test("only compiles a bounded nobody delay followed by literal one-line output", async () => {
+  const {compileNobodyDelay} = await import("../../shared/command-policy");
+  const shell = (script: string) => "runuser -u nobody -- /bin/sh -c '" + script.replaceAll("'", "'\"'\"'") + "'";
+  for (const script of ['sleep 5 && printf "%s\\n" "finished"', 'sleep 0; printf "finished\\n"']) {
+    const source = shell(script);
+    assert.match(compileNobodyDelay(source)!, /^\/usr\/bin\/env -i .*\/usr\/sbin\/runuser -u nobody -- \/usr\/bin\/env -i /);
+    assert.notEqual(commandPolicy(source).risk, "readonly");
+  }
+  const sample = shell('sleep 5 && printf "%s\\n" complete');
+  for (const source of [sample.replace("nobody", "root"), sample.replace("runuser", "/tmp/runuser"),
+    sample.replace("/bin/sh", "/tmp/sh"), sample + " > /tmp/destination", sample + "; touch /tmp/x",
+    ...['sleep 601 && printf "done\\n"', 'sleep -1 && printf "done\\n"', 'sleep 0 && printf "abc%n\\n"',
+      'sleep 0 || printf "done\\n"', 'sleep 0 && printf "%s\\n" "$(id)"', 'sleep 0 && printf "%s\\n" ok > file',
+      'sleep 0 && printf "done\\n" && rm -f file', 'sleep 0 && printf -v var done'].map(shell)]) {
+    assert.equal(compileNobodyDelay(source), undefined, source);
+  }
+});
+
+test("the inventory opens a private root and never follows a link or a raced subdirectory", {skip:process.platform==="win32"}, async t => {
+  const {directoryInventoryProgram}=await import("../../shared/command-policy");
+  const root=mkdtempSync("/tmp/lake-inventory-"), outside=mkdtempSync("/tmp/lake-outside-"), alias=root+"-link";
+  t.after(()=>{for(const path of [alias,root,outside]) rmSync(path,{force:true,recursive:true});});
+  chmodSync(root,0o700);
+  writeFileSync(join(outside,"external-marker"),"secret material");
+  mkdirSync(join(root,"pivot"));
+  symlinkSync(outside,join(root,"child-link"));
+  symlinkSync(join(outside,"external-marker"),join(root,"file-link"));
+  symlinkSync(outside,alias);
+  const options: {encoding:"utf8"; uid?:number; gid?:number}={encoding:"utf8"};
+  if(process.getuid?.()===0){
+    const rejected=spawnSync("python3",["-I","-S","-B","-c",directoryInventoryProgram,root,"4"],options);
+    assert.notEqual(rejected.status,0);
+    const uid=Number(execFileSync("id",["-u","nobody"]).toString().trim());
+    const gid=Number(execFileSync("id",["-g","nobody"]).toString().trim());
+    for(const path of [root,outside,join(root,"pivot")]) chownSync(path,uid,gid);
+    Object.assign(options,{uid,gid});
+  }
+  const run=(path: string, prefix="")=>spawnSync("python3",["-I","-S","-B","-c",prefix+directoryInventoryProgram,path,"4"],options);
+  const ok=run(root);
+  assert.equal(ok.status,0,ok.stderr);
+  assert.match(ok.stdout,/^l \d+ .*\/child-link$/m);
+  assert.match(ok.stdout,/^l \d+ .*\/file-link$/m);
+  assert.doesNotMatch(ok.stdout,/external-marker|secret material/);
+  assert.notEqual(run(alias).status,0);
+  chmodSync(root,0o755);
+  assert.notEqual(run(root).status,0);
+  chmodSync(root,0o700);
+  const race=String.raw`import os
+original_open = os.open
+def race(name, flags, *args, **kwargs):
+    if os.path.basename(name) == b"pivot":
+        os.rmdir(name)
+        os.symlink(`+JSON.stringify(outside)+String.raw`,name)
+    return original_open(name,flags,*args,**kwargs)
+os.open=race
+`;
+  const result=run(root,race);
+  assert.notEqual(result.status,0);
+  assert.equal(result.stdout,"");
+  assert.ok(lstatSync(join(root,"pivot")).isSymbolicLink());
 });

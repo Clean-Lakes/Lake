@@ -8,6 +8,9 @@ export { InMemorySessionEventStore, modelDescriptorOf, getCurrentModelInvocation
   type ExecutionPort, type ExecutionRequest, type ExecutionResult, type ExecutionRunOptions,
   type BackgroundExecutionSnapshot, type FileSystemPort, type HttpClientPort, type PermissionRuleset } from '@zcode/contracts';
 export { AiSdkModelAdapter } from '@zcode/adapters/model';
+// Public dependency pinned by the adapter manifest; used only through its
+// runtime injection port to prevent the library's raw default error logging.
+export {generateText as aiGenerateText, streamText as aiStreamText} from 'ai';
 export { createNodeExecutionAdapter } from '@zcode/adapters/exec';
 export { createNodeFileSystemAdapter } from '@zcode/adapters/fs';
 export { createJimpImageProcessorAdapter } from '@zcode/adapters/image';

@@ -63,6 +63,9 @@ const bundled = await build({
     {
       name: "pinned-agent-sdk-source",
       setup(builder) {
+        builder.onResolve({ filter: /^ai$/ }, () => ({
+          path: require.resolve('ai', {paths: [join(source, 'apps/zcode-cli/packages/adapters')]}),
+        }));
         builder.onResolve({ filter: /^ssh2$/ }, (args) => ({
           path: require.resolve(args.path),
         }));

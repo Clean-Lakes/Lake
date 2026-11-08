@@ -19,7 +19,7 @@ test('actual replies work despite old blocked goals; questions and operation app
  assert.equal(conversationAvatarMotion('idle','paused'),'still');
  assert.equal(conversationAvatarMotion('idle','completed'),'idle');
 });
-test('sidebar activity affects only the exact source channel or worker and never another role or Pilot',()=>{
+test('sidebar activity affects only the exact Pilot or specialist source identity',()=>{
  const channel=(id:string)=>({id,roleId:id,sessionId:'channel-'+id,roleName:'同名专员',projectId:'p',revision:1,createdAt:'',running:false});
  const workspace:SuperWorkspace={active:true,project:{projectId:'p',routerSessionId:'pilot',version:1},channels:[channel('a'),channel('b')],workers:[]};
  const motions=(sessionId:string,state:'running'|'waiting'|'idle')=>[...renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:sessionId,activity:{sessionId,state},onPilot(){},onWorker(){}})).matchAll(/data-motion="([^"]+)"/g)].map(match=>match[1]);

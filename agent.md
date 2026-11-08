@@ -1,5 +1,9 @@
 # Lake Super-agent 内核与三模块协作约定
 
+TypeScript Dev 的本机 Watchdog 周期性读取每个专员分工的进展，遇到持续停滞或到达复核间隔时使用独立模型上下文审阅。项目选择「允许纠偏」后，可以向原执行会话发送提示，或在模型暂时故障且成员尚未调过工具时有限重试。任务、证据、审批、权限、记忆及共同验收由各自的原账本管理。跨进程监督和实际工作负载的误报评估见 [Watchdog 实施方案](plan/feature-typescript-watchdog-1.md)。
+
+2026-11-07：TypeScript Dev 支持长期专员与任务多对多。同一公共 Task 在各参与角色的频道可见；每个分工有独立的 Worker、Session、attempt 和 Operation，按稳定 RoleID 投递。成员贡献回执不是目标验收：只有全部成员的真实证据复核通过，任务账本才生成一张统一验收回执。这个约定更新了下文早期阶段「每个目标只有一个专员」的假设；原任务期限、累计轮数、项目权限、未决操作、角色记忆范围及旧任务历史继续保留。见[多专员共同任务](docs/lake-pilot.md#多位专员共同处理一项任务typescript-dev)。
+
 更新日期：2026-11-06。本文记录用户确认的架构方向，供后续 Agent 和模块维护者共同遵循。它不代表所有能力已经实现，也不改变 `AGENTS.md`、`CONTRIBUTING.md` 和 `docs/development-workflow.md` 中的开发、合并、发布与数据隔离要求。
 
 ## 后端迁移方向（2026-11-05，Dev 预览）
@@ -11,6 +15,8 @@
 Items、Security、Memory、任务与证据的权威职责、bearqy 当前记忆方案、范围/同意/撤回及 unknown 不重放约束继续有效。不能将上游通用权限、会话或工具能力当作 Lake 对应安全与业务合同已经迁移。独立候选使用独立 Home；已授权的原生 Dev 预览可用 `.lake-dev`，正式 Home 始终拒绝，旧运行账本不改写。下面关于 ADK 的实现说明记录现有完整产品水位；目标 TS 对接按 [迁移计划](plan/refactor-typescript-backend-1.md)、[候选边界与验证](runtime/typescript/README.md) 和完整等价矩阵逐项推进，不提前开启未完成能力。
 
 ## 0. 统一 Super-agent 内核方向（实施中）
+
+2026-11-08 用户确认取消任务模型轮次硬上限。TypeScript 的 Pilot、专员 Worker、临时子智能体和共同任务继续记录实际调用量，不再由累计 modelRounds、旧 roundLimit 或旧 maxSteps 拒绝派单、续接、模型调用与恢复；详情不显示轮次用量/上限。历史计数与旧配置留作原始记录，既有轮次暂停须经当前输入或明确恢复后继续，不在升级时自动重跑。任务绝对期限、停止、权限、未决操作及业务验收继续有效；本条取代下文和旧计划中关于累计轮次门禁的约束。
 
 2026-11-06 用户进一步确认：Pilot、长期专员对应的 Task Worker 和临时 child 共享通用 Agent 执行能力，职责不用于裁剪 Shell、文件、搜索或工具使用。Pilot 默认协调和委派，也可直接调查与执行；首次实际执行按本轮受信输入建立原 Task/attempt/Operation，纯对话及派单不制造业务任务。直接任务在连续 Pilot 展示入口内保留独立的目标、操作、待办与有界请求工作集；专员 Worker 和 child 仍使用独立 SDK Session。SSH Bash 通过准确资源与当前配置版本接入已有凭据/指纹，模型可使用远端已安装的 kubectl、mysql 等工具自主调查；缺少专用适配器不等于没有通用执行能力。计划切换与工具延迟加载均经过同一权限包装，后台进程汇合和停止沿原 Task 记账。完整通用 Agent 接入及外部可选服务边界见[实施计划](plan/feature-typescript-agent-capabilities-1.md)和[验证记录](docs/validation/typescript-candidate/agent-capabilities.md)。此方向取代下面历史阶段的“Pilot 只路由/固定诊断”限制，既有资源、安全、记忆及未知操作职责继续有效。
 

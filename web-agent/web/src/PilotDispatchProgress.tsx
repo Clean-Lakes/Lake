@@ -18,7 +18,7 @@ export function pilotDispatchRows(workspace:SuperWorkspace|null|undefined,sessio
   const activity=worker.activity;
   if(!activity)return [];
   if(activity.sourceSessionId&&activity.sourceSessionId!==sessionId)return [];
-  const dispatch=newestMessages.find(message=>message.dispatch?.workerId===worker.id&&message.dispatch.taskId===worker.task.taskId)?.dispatch;
+  const dispatch=newestMessages.find(message=>message.dispatch?.workerId===worker.id&&message.dispatch.taskId===worker.task.taskId&&message.dispatch.roleId===worker.roleId&&message.dispatch.sessionId===worker.sessionId)?.dispatch;
   const source=activity.sourceSessionId===sessionId?activity.sourceMessageId:undefined;
   if(!source&&!dispatch)return [];
   const sourceMessageId=source??dispatch!.sourceMessageId;

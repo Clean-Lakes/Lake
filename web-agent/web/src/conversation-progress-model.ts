@@ -59,7 +59,7 @@ function backgroundResource(entry:TranscriptEntry,owners:Map<string,ProgressReso
 const sessionFamilies:Record<string,string>={
  list_workflows:'workflow',get_workflow_run:'workflow',run_workflow:'workflow',save_workflow:'workflow',
  schedule_create:'schedule',schedule_list:'schedule',schedule_update:'schedule',schedule_delete:'schedule',
- todo_read:'progress',todo_write:'progress',
+ TodoRead:'progress',TodoWrite:'progress',todo_read:'progress',todo_write:'progress',
  list_assets:'resource-catalog',list_resource_groups:'resource-catalog',
  load_skill:'skill',read_session_context:'history',read_tool_result:'tool-result',
  task_output:'task',task_stop:'task',
@@ -72,6 +72,7 @@ function operationGroupKey(entry:TranscriptEntry,targetRefs:Map<string,Set<strin
  const data=record(card.data),args=record(data.arguments),family=sessionFamilies[card.title??''];
  if(resource?.id)return JSON.stringify(['resource',resource.id]);
  if(family){
+  if(family==='progress')return JSON.stringify(['session-family',family,text(data.taskId),text(data.agentRunId),text(data.childSessionId)]);
   const scope=(familyScope[family]??[]).map(key=>text(args[key]));
   if(scope.some(value=>!value))return;
   return JSON.stringify(['session-family',family,...scope,...(family==='task'?[text(args.type)]:[])]);

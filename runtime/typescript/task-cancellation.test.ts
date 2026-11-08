@@ -233,3 +233,13 @@ for (const variant of [
       f.message,
     );
   });
+
+test("a joint task's stop notice resolves the author's execution, including when the public task ID names another worker", async t => {
+  const f = await fixture(t);
+  f.store.put('superGoals', 'goal', {...f.goal, sharedTaskId: 'public'});
+  f.store.put('superGoals', 'public', {...f.goal, id: 'public', workerId: 'other', status: 'running'});
+  f.message.author.taskId = 'public';
+  assert.equal(stoppedReportProjection(f.store, f.message, () => false).text, stoppedNotice);
+  f.message.author.taskId = 'unrelated';
+  assert.equal(stoppedReportProjection(f.store, f.message, () => false), f.message);
+});

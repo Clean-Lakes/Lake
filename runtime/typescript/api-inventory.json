@@ -130,6 +130,24 @@
       ]
     },
     {
+      "name": "confirmOperationReview",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/sessions/${encodeURIComponent(sessionId)}/operation-reconciliation/${encodeURIComponent(operationId)}`"
+        }
+      ]
+    },
+    {
+      "name": "confirmOperatorEffectReview",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/sessions/${encodeURIComponent(sessionId)}/operator-effect-review/${encodeURIComponent(operationId)}`"
+        }
+      ]
+    },
+    {
       "name": "createProject",
       "routes": [
         {
@@ -499,6 +517,24 @@
       ]
     },
     {
+      "name": "operationReview",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "`/api/sessions/${encodeURIComponent(sessionId)}/operation-reconciliation/${encodeURIComponent(operationId)}`"
+        }
+      ]
+    },
+    {
+      "name": "operatorEffectReview",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "`/api/sessions/${encodeURIComponent(sessionId)}/operator-effect-review/${encodeURIComponent(operationId)}`"
+        }
+      ]
+    },
+    {
       "name": "plans",
       "routes": [
         {
@@ -841,6 +877,15 @@
         {
           "method": "PUT",
           "path": "`/api/projects/${encodeURIComponent(project)}/sre`"
+        }
+      ]
+    },
+    {
+      "name": "setWatchdogMode",
+      "routes": [
+        {
+          "method": "PUT",
+          "path": "`/api/projects/${encodeURIComponent(projectId)}/watchdog`"
         }
       ]
     },

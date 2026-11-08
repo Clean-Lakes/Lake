@@ -63,14 +63,15 @@ export function stoppedReportProjection(
     !author.taskId
   )
     return message;
-  const goal = store.get<Goal>("superGoals", author.taskId),
-    worker = store.get<any>("superWorkers", author.workerId);
+  const worker = store.get<{id: string; taskId: string; sessionId: string; state: string; roleId: string; generation: number}>("superWorkers", author.workerId);
+  const goal = worker && store.get<Goal>("superGoals", worker.taskId);
   if (
     !goal ||
     !worker ||
     goal.status !== "cancelled" ||
     unresolved(goal.id) ||
     worker.state !== "stopped" ||
+    (goal.sharedTaskId ?? goal.id) !== author.taskId ||
     goal.workerId !== worker.id ||
     worker.taskId !== goal.id ||
     worker.sessionId !== goal.sessionId ||

@@ -11,7 +11,8 @@ import type { Operation } from "./tasks";
 
 type Server = MCPServerConfig & { headers?: Record<string, string>; env?: Record<string, string>; legacyCredentials?: boolean };
 type Config = { version: 1; servers: Server[]; skillRoots: string[]; disabledSkills: string[] };
-export type McpBinding = { ProjectID: string; ServerID?: string; Revision: number; Enabled: boolean; ToolNames?: string[] };
+export type McpBinding = { ProjectID: string; ServerID?: string; Revision: number; Enabled: boolean; ToolNames?: string[];
+  LegacyAuthority?: { storeID: string; recoveryEpoch: string } };
 export type ExtensionFence = { serverId: string; configurationHash: string; bindingHash: string; catalogHash?: string; local: boolean };
 type Connection = { hash: string; client: Client; transport: Transport; generation: string; connecting?: Promise<void> };
 const identifier = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,79}$/;
@@ -220,9 +221,15 @@ export class LakeExtensions {
   }
   private binding(projectId: string, serverId: string): McpBinding {
     this.store.project(projectId);
+    const current = (binding: McpBinding) => {
+      if (binding.LegacyAuthority && digest(binding.LegacyAuthority) !== digest(this.security.authority()))
+        throw new HttpError(409, "原 MCP 项目选择属于旧恢复纪元，请重新确认当前设置");
+      return binding;
+    };
     const binding = this.store.get<McpBinding>("mcpBindings", digest([projectId, serverId]));
-    if (binding) { if (!binding.Enabled) throw new HttpError(403, "此 MCP 服务在当前项目已明确停用"); return binding; }
+    if (binding) { current(binding); if (!binding.Enabled) throw new HttpError(403, "此 MCP 服务在当前项目已明确停用"); return binding; }
     const inherited = this.store.get<McpBinding>("mcpInheritance", projectId);
+    if (inherited) current(inherited);
     if (inherited?.Enabled) return { ...inherited, ServerID: serverId, Revision: 2 ** 50 + inherited.Revision };
     throw new HttpError(403, "此 MCP 服务未向当前项目启用");
   }

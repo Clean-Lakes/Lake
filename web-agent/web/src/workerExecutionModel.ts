@@ -25,6 +25,7 @@ export function workerExecutionModel(snapshot:SessionSnapshot):WorkerExecutionMo
  const task=snapshot.superagent?.task;
  const result:WorkerExecutionModel={resources:[],taskRuns:[],taskCards:[],runs:[],resourcePaths:new Map()};
  if(!task||task.sessionId!==snapshot.session.id)return result;
+ const executionId=task.executionGoalId??task.taskId;
  const catalog=snapshot.resources.filter(resource=>resource.projectId===snapshot.session.projectId);
  const byResource=new Map<string,Resource>();
  const ambiguous=new Set<string>();
@@ -37,7 +38,7 @@ export function workerExecutionModel(snapshot:SessionSnapshot):WorkerExecutionMo
  const taskCards=(snapshot.ai?.cards??[]).filter(card=>{
   if(!executionCard(card))return false;
   const data=record(card.data);
-  return (!data.taskId||data.taskId===task.taskId)&&!data.agentRunId&&(!nativeControlCard(card)||['failed','unknown'].includes(card.status));
+  return (!data.taskId||data.taskId===executionId)&&!data.agentRunId&&(!nativeControlCard(card)||['failed','unknown'].includes(card.status));
  });
  for(const card of taskCards){
   const resourceId=record(card.data).resource_id;
@@ -45,7 +46,7 @@ export function workerExecutionModel(snapshot:SessionSnapshot):WorkerExecutionMo
   else result.taskCards.push(card);
  }
  const unique=new Map<string,AgentRun>();
- for(const run of snapshot.ai?.agentRuns??[])if(isNativeAgentSource(run.source)&&run.taskId===task.taskId&&run.childSessionId&&run.id)unique.set(run.id,run);
+ for(const run of snapshot.ai?.agentRuns??[])if(isNativeAgentSource(run.source)&&run.taskId===executionId&&run.childSessionId&&run.id)unique.set(run.id,run);
  result.runs=[...unique.values()].sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
  for(const run of result.runs){
   const ids=[...new Set(run.resourceIds)];
@@ -71,6 +72,7 @@ export function workerExecutionModel(snapshot:SessionSnapshot):WorkerExecutionMo
 export function workerBusinessReceipts(snapshot:SessionSnapshot):AICard[]{
  const task=snapshot.superagent?.task;
  if(!task||task.sessionId!==snapshot.session.id)return [];
+ const executionId=task.executionGoalId??task.taskId;
  const model=workerExecutionModel(snapshot);
  const ownCards=(nodes:WorkerExecutionNode[]):AICard[]=>nodes.flatMap(node=>[...node.cards,...ownCards(node.children)]);
  const candidates=[...model.taskCards,...ownCards(model.resources),...model.runs.flatMap(run=>run.cards??[])];
@@ -78,7 +80,7 @@ export function workerBusinessReceipts(snapshot:SessionSnapshot):AICard[]{
  for(const card of candidates){
   if(!executionCard(card)||nativeControlCard(card))continue;
   const data=record(card.data),operationId=data.operation_id;
-  if(data.taskId!==task.taskId||typeof operationId!=='string'||!operationId.trim())continue;
+  if(data.taskId!==executionId||typeof operationId!=='string'||!operationId.trim())continue;
   const previous=receipts.get(operationId);
   if(!previous||card.status==='unknown'||previous.status!=='unknown')receipts.set(operationId,card);
  }

@@ -39,6 +39,12 @@ open "$HOME/Applications/Lake Dev.app"
 
 这是已授权的 Dev 预览覆盖，不表示所有功能已通过等价验收。回退使用备份应用；旧 Go 数据原样保留，TS 新会话不会自动反向同步。
 
+### Magpie 模型来源
+
+TS 后端动态读取当前显式 Home 下的 `secrets/magpie-agent.json`，使用插件的 `model`、`baseURL`、`key` 和 `catalog`，同步模型名称、上下文、输出限制、图片输入与明确的思考能力。启动时准备权限为 `0600` 的空配置，避免插件首次创建宽权限文件；后续读取拒绝非私有文件、符号链接、非法地址和不完整 JSON。只读取当前实例，Dev 不读取正式版的配置。
+
+Magpie 与手动供应商共存。明确选择手动模型后保持该选择；切到 Magpie 后保留按其默认模型绑定的本地选择，插件默认模型变化时自动跟随新默认。断开时回到之前有效的手动模型，没有手动配置则显示未配置；重新接入保留来源偏好。配置和密钥变化在下一轮重新绑定 SDK，运行中的任务保留原模型快照，不重放历史。插件独占连接配置和密钥，TS 仅保存非敏感的选择偏好；旧 `magpie-selection.json` 只读导入一次。此接入不表示 CLI 或非 macOS 平台已完成等价验收。
+
 ### Super-agent 增量
 
 `superagent.ts` 将真实 Pilot Router、长期专员管理、独立任务 Worker、连续频道、分页与当前权限接入公开 AgentRuntime。Pilot 与 Worker 共享通用 Agent 工具，Pilot 可直接执行并按需建立原 Task。Worker 可在本项目独立工作区使用 Read/Write/Edit、Glob/Grep、Bash、Todo、网页和真实文件清单及任务工具；Worker 已增量接入项目 MCP 目录/调用和 Skills 读取；本机手动 PTY 与 Worker 执行权限分开。SSH 手动 PTY、原 Dev 凭据/主机指纹和固定主机只读检查已增量接入；通用 SSH Bash 已通过原生执行端口接入，模型可使用实际远端 CLI；手动持续终端交接仍未接通；分层 Memory 的新入口见下文，不可绕过。职责按建单版本冻结，任务不受专员后续改名影响。
@@ -66,6 +72,12 @@ Node 命令须使用准备好的 24.14.0。测试经过真实 Agent SDK 源码�
 全量契约与真实行为通过后，才在单独变更中切换普通默认/正式版后端，并执行最终 SHA 验收。上述显式 Dev 预览不作为该门槛通过。合并、生产安装和发布继续遵守仓库原有授权流程。
 
 本轮准确源码 SHA、签名进程检查、界面截图与未验证项见[阶段验证记录](../../docs/validation/typescript-candidate/README.md)。
+
+### 2026-11-07 切换缺口修复
+
+已增量接通原安全 epoch 下的 MCP 继承/绑定迁移、原生自动记忆提取、准确资源引用、Plan 模式与原计划确认、持久消息队列、目录编辑/回收站、原 PostgreSQL/Redis 配置及工作流模板保留。模型思考能力优先使用供应商明确元数据，兼容旧版按准确模型版本匹配的 OpenAI/Claude/DeepSeek 注册表，可通过原 UI 选择，按供应商/地址/协议/模型身份校验，并冻结到任务及其子执行；默认不添加推理参数，未知模型不猜测能力。模型目录返回前端要求的名称数组，保留服务明确报告的上下文和思考能力；Gemini/Ollama 使用对应的 OpenAI 兼容入口。
+
+队列支持暂停、编辑、排序、移除及空闲后继续发送；重启暂停未发送输入，准入结果不明时保留且不重发。准确的同轮补充协议尚未接通，因此返回 `pushSupported=false` 并禁用队列推送按钮。附件/图片、上下文压缩/回退/文件恢复、资源导入、Kubernetes 与旧本机执行适配、直接 PostgreSQL/Redis 查询、工作流运行/日程、完整安全恢复、CLI/平台能力仍有缺口。现有 API 不以空成功伪装支持；已保存配置不等于实际连接成功。完整切换门禁继续关闭，后续验证和未完成条目须与[修复记录](../../docs/validation/typescript-candidate/cutover-repair-2026-11-07.md)一起评审。
 
 持续终端与 MCP/Skills 增量的实际范围、36 项隔离回归和 Dev 实测另见[验证记录](../../docs/validation/typescript-candidate/terminal-extensions.md)。本机 PTY 使用随包签名的 node-pty 1.1.0 原生 addon/启动程序，macOS 无需系统 Node；该记录保留当时的本机 PTY 水位；后续 SSH/确认入口修复见[SSH 增量记录](../../docs/validation/typescript-candidate/ssh-confirmation.md)，Agent 接管仍待移植。
 

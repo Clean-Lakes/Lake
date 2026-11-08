@@ -1,12 +1,13 @@
 import {hasUnreadMessages} from './ConversationReadMarker';
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useRef,useState,type RefObject} from 'react';
 import type {SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {greetRoleAvatar,SuperRoleAvatar} from './SuperRoleAvatar';
-import {conversationAvatarMotion,superAvatarMotion,superTaskPresentation,specialistTaskActivity,type ConversationAvatarActivity,type ConversationActivity} from './superAgentPresentation';
+import {conversationAvatarMotion,superAvatarMotion,channelTaskPresentation,specialistTaskActivity,type ConversationActivity,type ConversationAvatarActivity} from './superAgentPresentation';
 import {Glyph} from './Icons';
 import {NavigationMenu} from './NavigationDelete';
 import {SpecialistDelete} from './SpecialistDelete';
+import {SidebarPilotEntry} from './SidebarPilotEntry';
 
 export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
  const [workspace,setWorkspace]=useState<SuperWorkspace|null>(null),[error,setError]=useState('');
@@ -86,28 +87,30 @@ function useCompletionReads(workspace: SuperWorkspace | null, viewedRole: string
 
 type PilotWorkspaceProps = {
  workspace: SuperWorkspace | null; error: string; selectedId: string | null; selectedRoleId?: string;
- activity?:ConversationAvatarActivity; pilotActivity?:ConversationActivity;
+ activity?:ConversationAvatarActivity; pilotButton?:RefObject<HTMLButtonElement|null>;
+ pilotActivity?:ConversationActivity;pilotDisabled?:boolean;
  onPilot: () => void; onWorker: (worker: SuperWorker) => void; onChannel?: (channel: SpecialistChannelInfo) => void;
  disabled?:boolean; onDeleted?:(channel:SpecialistChannelInfo)=>void;
 };
 
-export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotActivity='idle',onPilot,onWorker,onChannel,disabled=false,onDeleted}: PilotWorkspaceProps) {
+export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted}: PilotWorkspaceProps) {
  const [context,setContext]=useState<{channel:SpecialistChannelInfo;x:number;y:number}|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null);
- const anchor=useRef<HTMLButtonElement|null>(null),pilotButton=useRef<HTMLButtonElement|null>(null);
+ const anchor=useRef<HTMLButtonElement|null>(null);
  useEffect(()=>{setContext(null);setDeleting(null);},[workspace?.project.projectId]);
- const roots = workspace?.workers?.filter(worker => !worker.parentWorkerId) ?? [];
- const channels = workspace?.channels;
+ const roots = workspace?.active?workspace.workers.filter(worker => !worker.parentWorkerId):[];
+ const channels = workspace?.active?workspace.channels:undefined;
  const viewedRole = selectedId ? selectedRoleId ?? channels?.find(channel => channel.sessionId === selectedId)?.roleId ??
   roots.find(worker => worker.sessionId === selectedId)?.roleId : undefined;
  const readMarks = useCompletionReads(workspace, viewedRole);
- if (!workspace?.active) return error ? <p className="pilot-workspace-error" role="status">{error}</p> : null;
+ const routerId=workspace?.active?workspace.project.routerSessionId:undefined;
  const entries = channels ? channels.map(channel => ({channel, workers: roots.filter(worker => worker.roleId === channel.roleId)})) :
   roots.map(worker => ({channel: undefined, workers: [worker]}));
- return <section className="pilot-workspace" aria-label="Pilot 与专员">
-  <button ref={pilotButton} type="button" className={`nav-row pilot-workspace-entry${selectedId===workspace.project.routerSessionId?' active':''}`} aria-current={selectedId===workspace.project.routerSessionId?'page':undefined} title="Pilot · 持续沟通，自动安排工作" onClick={event=>{greetRoleAvatar(event.currentTarget);onPilot();}}>
-   <SuperRoleAvatar pilot motion={conversationAvatarMotion(activity?.sessionId===workspace.project.routerSessionId?activity.state:pilotActivity)}/><span className="nav-row-text"><strong>Pilot</strong><span className="pilot-entry-caption" aria-hidden="true">对话与任务</span></span>{hasUnreadMessages(workspace.pilotMessageRead)&&<span className="pilot-worker-unread" role="img" aria-label="有新消息未读"/>}<Glyph name="next" size={12}/>
-  </button>
-  <div className="nav-heading"><span>专员</span><small>{entries.length}</small></div>
+ return <section className="pilot-workspace" aria-label="专员">
+  <div className="nav-heading"><span>专员</span><small>{entries.length+1}</small></div>
+  <SidebarPilotEntry buttonRef={pilotButton} selected={!!routerId&&selectedId===routerId}
+   activity={routerId&&activity?.sessionId===routerId?activity.state:pilotActivity} messageRead={workspace?.active?workspace.pilotMessageRead:undefined}
+   disabled={pilotDisabled} onPilot={onPilot}/>
+  {error&&<p className="pilot-workspace-error" role="status">{error}</p>}
   {entries.length ? entries.map(({channel, workers}) => {
    const aggregate=specialistTaskActivity(workers),worker = aggregate.worker, task = worker?.task;
    const name = channel?.roleName ?? worker!.roleName;
@@ -125,7 +128,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
     cursor > (read?.requested ?? '') && cursor > (read?.acknowledged ?? '');
    const showUnread = unread && !activityLabel;
    const status = [needsConfirmation && '需确认', activityLabel, showUnread && '有新消息未读'].filter(Boolean).join(' · ') ||
-    (task && task.state !== 'running' ? superTaskPresentation(task).label : task ? '暂无正在执行的任务' : '暂无任务');
+    (task && task.state !== 'running' ? channelTaskPresentation(task).label : task ? '暂无正在执行的任务' : '暂无任务');
    const detail=aggregate.detail??(channel?.duties||'持续沟通');
    const label = `${name} · ${detail}${detail.endsWith(status)?'':` · ${status}`}`;
    return <button type="button" key={channel?.id ?? worker!.id} className={`nav-row pilot-worker-row${selected ? ' active' : ''}`}
@@ -141,8 +144,8 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
      {activityLabel ? <span className="pilot-worker-running" role="img" aria-label={activityLabel}><Glyph name="loader" size={14} className="activity-indicator"/></span> : showUnread && <span className="pilot-worker-unread" role="img" aria-label="有新消息未读"/>}
     </span>
    </button>;
-  }) : <p className="pilot-workspace-empty">告诉 Pilot 你的目标，它会执行或安排专员协作。</p>}
+  }) : null}
   {context&&<NavigationMenu title={context.channel.roleName} x={context.x} y={context.y} anchor={anchor} onClose={()=>setContext(null)} actions={[{label:'删除专员',icon:'trash',danger:true,disabled:disabled||context.channel.roleRevision===undefined,run:()=>setDeleting(context.channel)}]}/>}
-  {deleting&&<SpecialistDelete channel={deleting} returnFocus={anchor} onClose={()=>setDeleting(null)} onDeleted={()=>{onDeleted?.(deleting);if(deleting.roleId===viewedRole){onPilot();anchor.current=pilotButton.current;}}}/>}
+  {deleting&&<SpecialistDelete channel={deleting} returnFocus={anchor} onClose={()=>setDeleting(null)} onDeleted={()=>{onDeleted?.(deleting);if(deleting.roleId===viewedRole){onPilot();anchor.current=pilotButton?.current??null;}}}/>}
  </section>;
 }

@@ -32,7 +32,7 @@ test('navigation keeps task and status accessible while completed workers have n
  const workspace={active:true,project:{projectId:'project',routerSessionId:'pilot',version:1},workers:[worker]} satisfies SuperWorkspace;
  const html=renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:'session',onPilot(){},onWorker(){}}));
  assert.match(html,/aria-current="page" aria-label="依赖审查专员 · 只读检查依赖 · 已验收"/);
- assert.match(html,/data-role="coordinator"/);assert.ok(html.includes(`data-role="${superWorkerIcon(worker)}"`));
+ assert.doesNotMatch(html,/pilot-workspace-entry/);assert.ok(html.includes(`data-role="${superWorkerIcon(worker)}"`));
  assert.doesNotMatch(html,/class="session-status-dot"/);
  const pending=renderToStaticMarkup(createElement(PilotWorkspace,{workspace:{...workspace,workers:[{...worker,task:{...task,state:'waiting_user',acceptanceState:'not_evaluated'}}]},error:'',selectedId:null,onPilot(){},onWorker(){}}));
  assert.doesNotMatch(pending,/需确认|pilot-worker-confirmation/,'a waiting task without host interaction metadata cannot invent an actionable confirmation');

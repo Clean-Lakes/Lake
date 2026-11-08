@@ -1,6 +1,27 @@
 import type {SessionSnapshot,SpecialistChannelEntry,SpecialistChannelPage} from '../../shared/contracts';
 import {liveSpecialistReplies} from '../../shared/specialist-replies';
 
+// Only exact task/source identities may share a current reply. Older SDK
+// invocations remain available as history; equal prose or titles never merge.
+export function currentChannelReplies(entries:SpecialistChannelEntry[]){
+ const groups=new Map<string,SpecialistChannelEntry[]>();
+ for(const entry of entries)if(entry.reply&&entry.taskId){
+  const key=JSON.stringify([entry.taskId,entry.sourceSessionId]);
+  const group=groups.get(key)??[];group.push(entry);groups.set(key,group);
+ }
+ const hidden=new Set<string>(),history=new Map<string,SpecialistChannelEntry[]>(),keys=new Map<string,string>();
+ for(const [key,group] of groups){
+  group.sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
+  const latest=group.at(-1)!;
+  // Pending/unknown controls are rendered separately with the original session.
+  // Never retire an actually working invocation merely because a later row exists.
+  const previous=group.slice(0,-1).filter(entry=>entry.reply?.state==='settled');
+  for(const entry of previous)hidden.add(entry.id);
+  history.set(latest.id,previous);keys.set(latest.id,key);
+ }
+ return {entries:entries.filter(entry=>!hidden.has(entry.id)),history,keys};
+}
+
 export function mergeChannelEntries(previous:SpecialistChannelEntry[],incoming:SpecialistChannelEntry[]){
  const entries=new Map(previous.map(entry=>[entry.id,entry]));
  for(const entry of incoming){

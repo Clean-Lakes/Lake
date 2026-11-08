@@ -1,3 +1,7 @@
+import {directoryStateCommand, directoryStateRoot, validateDirectoryState} from "./directory-state";
+import type {SSHTarget} from "./ssh-target";
+import {networkProbe, networkProbeProgram, networkProbeShell} from "./network-probe";
+import {directoryProcessSample} from "./process-sampling";
 import {Client, utils, type ClientChannel} from 'ssh2';
 import {EventEmitter} from 'node:events';
 import {createHash,createHmac,timingSafeEqual} from 'node:crypto';
@@ -74,6 +78,19 @@ export class LakeSSH {
  revision(resource:Resource) {
   const config=this.configuration(resource.ssh),files=[config.identityFile,config.credentialRef].filter(Boolean).map(value=>{const info=lstatSync(this.privateFile(value!));return [info.ino,info.size,info.mtimeMs,info.ctimeMs];});
   return digest([resource.id,resource.projectId,config,files,this.store.get('resourceRevisions',resource.id)??1]);
+ }
+ mutationTarget(resource:Resource, connection?:Client):SSHTarget|undefined {
+  if(resource.kind!=='ssh' || !resource.ssh) return;
+  const config = this.configuration(resource.ssh);
+  const raw = canonicalHost(config.host), family = isIP(raw);
+  if (raw.includes('%')) return; // A link-local zone is not a portable peer identity.
+  const canonical = family === 6 ? new URL('http://['+raw+']/').hostname : raw;
+  const peer = connection && this.peerKeys.get(connection);
+  if (connection && !peer) return;
+  const keys = this.pins(config).map(pin=>({algorithm:pin.algorithm,fingerprint:fingerprint(pin.key)}));
+  const hostKeys = peer ? keys.filter(pin=>pin.fingerprint===peer) : keys;
+  if (connection && !hostKeys.length) return;
+  return {hostHash:digest(canonical), endpointHash:digest([canonical,config.port]),addressFamily:family,hostKeys};
  }
  prompt(session:string){return this.prompts.get(session)?.public??null;}
  revalidate(resource:Resource,revision:string,peer?:string){if(this.revision(resource)!==revision||peer&&!this.pins(this.configuration(resource.ssh)).some(pin=>fingerprint(pin.key)===peer))throw new HttpError(409,'SSH 连接配置、凭据或已验证的服务器身份已变化');}
@@ -172,20 +189,44 @@ export class LakeSSH {
   return {get error(){return lastError;},write:data=>{if(!channel||ended)throw new HttpError(409,'SSH 终端尚未就绪');channel.write(data);},resize:(cols,rows)=>channel?.setWindow(rows,cols,0,0),
    kill:()=>{controller.abort();channel?.close();conn?.destroy();finish(1);},onData:callback=>events.on('data',callback),onExit:callback=>events.once('exit',callback)};
  }
- async inspect(session:string,resource:Resource,metric:string,signal:AbortSignal,guard:()=>void) {
-  if(!(metric in profiles))throw new HttpError(400,'不支持的主机读取指标');
+ async inspect(session:string,resource:Resource,metric:string,signal:AbortSignal,guard:()=>void,processDirectory?:unknown,networkInput?:unknown,observationDirectory?:unknown) {
+  const state=metric==="directory_state" ? directoryStateRoot(observationDirectory) : undefined;
+  if(observationDirectory!==undefined && !state) throw new HttpError(400,"目录状态参数只适用于 directory_state");
+  const network=networkProbe(metric,networkInput);
+  if(networkInput!==undefined && !network) throw new HttpError(400,"网络参数只适用于网络诊断");
+  if(!state && !network && !Object.hasOwn(profiles,metric))throw new HttpError(400,'不支持的主机读取指标');
+  if(processDirectory!==undefined && metric!=='processes') throw new HttpError(400,'进程目录只适用于 processes');
+  const scoped=processDirectory===undefined ? undefined : directoryProcessSample(processDirectory);
   const profile=metric as keyof typeof profiles,revision=this.revision(resource),conn=await this.connect(session,resource,signal);
   try{return await new Promise((resolve,reject)=>{
-   let channel:ClientChannel|undefined,output=Buffer.alloc(0),done=false;const timer=setTimeout(()=>finish(new HttpError(504,'SSH 只读检查超时')),20000);
+   let channel:ClientChannel|undefined,output=Buffer.alloc(0),done=false;const timer=setTimeout(()=>finish(new HttpError(504,'SSH 只读检查超时')),state?28000:network?27000:20000);
    const finish=(error?:unknown,result?:unknown)=>{if(done)return;done=true;clearTimeout(timer);signal.removeEventListener('abort',abort);channel?.close();error?reject(error):resolve(result);};
    const abort=()=>finish(new HttpError(409,'SSH 只读检查已取消'));signal.addEventListener('abort',abort,{once:true});
    try{guard();if(signal.aborted||this.revision(this.store.require<Resource>('resources',resource.id))!==revision)throw new HttpError(409,'SSH 连接配置或任务资格已变化');}
    catch(error){finish(error);return;}
-   const command='/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C /bin/sh -c '+quote(profiles[profile]);
+   const shell='/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C /bin/sh -c ';
+   const authenticatedTarget=state ? this.mutationTarget(resource,conn) : undefined;
+   if(state && !authenticatedTarget){ finish(new HttpError(409,"目录状态缺少已认证的 SSH 对端"));return; }
+   const command=state ? directoryStateCommand(state) : network ? shell+quote(networkProbeShell)+' lake-network-probe '+quote(networkProbeProgram)+' '+quote(JSON.stringify(network))
+     : shell+quote(scoped?.script ?? profiles[profile])+(scoped?' lake-process-sample '+quote(scoped.directory):'');
    conn.exec(command,(error,stream)=>{if(error){finish(new HttpError(502,'SSH 只读命令未启动'));return;}channel=stream;let code:number|undefined;
     const collect=(data:Buffer)=>{if(output.length+data.length>131072){finish(new HttpError(502,'SSH 只读结果超过上限'));return;}output=Buffer.concat([output,data]);};
     stream.on('data',collect);stream.stderr.on('data',collect);stream.on('exit',(value:number)=>{code=value;});
-    stream.once('close',()=>code===0?finish(undefined,{command,resourceId:resource.id,metric:profile,profileId:'lake.host.'+profile,profileVersion:1,configurationRevision:revision,hostFingerprint:this.peerKeys.get(conn),exitCode:code,output:this.scrub(output.toString('utf8')),observedAt:new Date().toISOString()}):finish(new HttpError(502,'SSH 只读检查未取得成功退出回执')));
+    stream.once('close',()=>{
+      if(code!==0){finish(new HttpError(502,'SSH 只读检查未取得成功退出回执'));return;}
+      try {
+        const raw=output.toString('utf8'),data=this.scrub(raw);
+        if(state) {
+          guard();
+          this.revalidate(this.store.require<Resource>('resources',resource.id),revision,this.peerKeys.get(conn));
+          if(data!==raw)throw new HttpError(409,'目录状态含需屏蔽的信息，无法取得完整复核回执');
+        }
+        finish(undefined,{command:state?'inspect_host directory_state '+state:network?'inspect_host '+JSON.stringify(network):command,
+          resourceId:resource.id,metric,profileId:state?'lake.host.directory-state':scoped?'lake.host.directory-processes':'lake.host.'+profile,
+          profileVersion:1,configurationRevision:revision,hostFingerprint:this.peerKeys.get(conn),...(state && {authenticatedTarget}),
+          exitCode:code,output:state?validateDirectoryState(data,state):data,observedAt:new Date().toISOString()});
+      } catch(error){finish(error);}
+    });
     stream.once('error',()=>finish(new HttpError(502,'SSH 只读检查连接中断')));
    });conn.once('close',()=>finish(new HttpError(502,'SSH 连接中断，读取结果未确认')));
   });}finally{conn.end();}

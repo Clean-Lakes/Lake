@@ -15,6 +15,7 @@ import {
 import {
   mergeChannelPage,
   mergeChannelEntries,
+  currentChannelReplies,
 } from "../src/specialistChannelProjection";
 import {
   SpecialistChannelEntries,
@@ -114,6 +115,52 @@ const render = (entries: SpecialistChannelEntry[], s?: SessionSnapshot) =>
       activeSnapshots: new Map(s ? [["source", s]] : []),
     }),
   );
+
+test('a Pilot followup updates the exact task’s current reply while retaining preceding invocation history',()=>{
+ const failed=specialistReplies([report('前次未连接，尚未完成。')],[{snapshot:snapshot([],'failed'),worker,active:false}]);
+ const nextAt='2026-11-06T09:00:00Z';
+ const running=snapshot([card('retry','已连接，正在重新查询','message','retry',nextAt)],'running','retry');
+ running.ai!.turnStartedAt=nextAt;
+ const live=mergeChannelPage(failed,{replyPresentation:'invocation',entries:failed,active:[running],workers:[worker]});
+ const current=currentChannelReplies(live);
+ assert.equal(current.entries.length,1);
+ assert.equal(current.entries[0].reply?.turnId,'retry');
+ assert.equal(current.history.get(current.entries[0].id)?.[0].message?.text,'前次未连接，尚未完成。');
+ const result=specialistReplies([report('查询成功，共 66 个文档。','retry','2026-11-06T09:01:00Z')],[{snapshot:running,worker,active:false}]);
+ const settled=mergeChannelPage(live,{replyPresentation:'invocation',entries:result,active:[],workers:[worker]});
+ const display=currentChannelReplies(settled);
+ assert.equal(display.entries.length,1);
+ assert.equal(display.keys.get(display.entries[0].id),current.keys.get(current.entries[0].id),'task slot retains its DOM identity through retry and completion');
+ const html=render(settled);
+ assert.match(html,/查询成功，共 66 个文档/);
+ assert.match(html,/<details class="specialist-reply-history"><summary>之前的 1 次执行/);
+ assert.doesNotMatch(html,/<details[^>]*open/);
+ assert.ok(html.indexOf('查询成功')<html.indexOf('前次未连接'),'the current answer precedes the collapsed historical failure');
+ assert.deepEqual(currentChannelReplies(mergeChannelEntries(settled,failed)).entries,display.entries,'paging old failures cannot restore them as the current answer');
+ assert.equal(failed[0].message?.text,'前次未连接，尚未完成。','saved reports remain unchanged');
+});
+
+test('latest reply grouping never absorbs another task, source, direct message or active invocation',()=>{
+ const base:SpecialistChannelEntry={id:'old',sourceSessionId:'source',taskId:'task',createdAt:at,reply:{turnId:'first',state:'settled'},message:{id:'old',sessionId:'source',role:'assistant',text:'同样的回复',createdAt:at}};
+ const entries=[base,{...base,id:'new',createdAt:'2026-11-06T10:00:00Z',reply:{turnId:'second',state:'settled' as const}},
+ {...base,id:'other-task',taskId:'other-task'}, {...base,id:'other-source',sourceSessionId:'other-source'},
+ {...base,id:'working',reply:{turnId:'still-running',state:'working' as const}},
+ {...base,id:'direct',reply:undefined,message:{...base.message!,role:'user' as const,text:'用户补充'}}];
+ const before=JSON.stringify(entries),display=currentChannelReplies(entries);
+ assert.deepEqual(display.entries.map(e=>e.id),['new','other-task','other-source','working','direct']);
+ assert.equal(JSON.stringify(entries),before);
+});
+
+test('task rounds show their exact start times and frozen speakers without inventing paginated round numbers',()=>{
+ const old=report('历史执行结果'),latest=report('本轮执行结果','new','2026-11-07T09:00:00Z');
+ old.message!.author!.name='原知识库专员';latest.message!.author!.name='当前知识库专员';
+ const entries=specialistReplies([old,latest],[{snapshot:snapshot([],'completed'),worker,active:false}]);
+ const html=render(entries);
+ assert.match(html,/最新一轮<\/span><span>当前知识库专员<\/span><time dateTime="2026-11-07T09:00:00Z"/);
+ assert.match(html,/历史轮次<\/span><span>原知识库专员<\/span><time dateTime="2026-11-06T08:01:00Z"/);
+ assert.doesNotMatch(html,/第[12]轮/);
+ assert.equal(entries[0].message?.author?.name,'原知识库专员');
+});
 
 test("one SDK invocation replaces progress in place and the final host report replaces all narration", () => {
   const first = card("first", "正在连接两端数据库"),
