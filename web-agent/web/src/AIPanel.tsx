@@ -12,6 +12,7 @@ import {MemoryAccessSummary} from "./MemoryAccessSummary";
 import type {MemoryAccess} from "../../shared/contracts";
 import {PlanReference,planMarkdown} from './PlanMode';
 import {conversationPlanEntry} from './planConversation';
+import {workerTranscriptCards,workerConversationTurns,isDeliveredWorkerInterim} from './workerTranscript';
 import {isAssistantProse,trailingTurnReplyId} from './completedTurnProse';
 import {SettledReply} from './SettledReply';
 import {pilotReplyContinuations,replyRoleBreaks} from './replyGrouping';
@@ -149,7 +150,8 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
   const loadOlder = async () => { onInspect?.(); setLoading(true); try { const page = await api.aiCards(snapshot.session.id, before); setOlder(current => [...page.cards, ...current]); setOffset(page.cardsOffset); } catch (error) { setError(readableError(error)); } finally { setLoading(false); } };
   // Native children are task execution records. Their independent sessions and
   // tool results belong in the task inspector, not another chat participant.
-  const entries = orderedTranscript(displaySnapshot, cards, before).filter(entry=>mode!=='conversation'||!isNativeAgentSource(entry.agentRun?.source)).map(entry=>mode==='conversation'?conversationPlanEntry(entry,{planMode:snapshot.conversationMode==='plan',live:snapshot.ai?.status==='running',currentPlanId:snapshot.ai?.proposedPlan?.id}):entry);
+  const projected=mode==='conversation'&&!proseInChannel?workerTranscriptCards(snapshot,cards,before):{cards,reported:new Map<string,AICard>()};
+  const entries = orderedTranscript(displaySnapshot, projected.cards, before).filter(entry=>mode!=='conversation'||!isNativeAgentSource(entry.agentRun?.source)).map(entry=>mode==='conversation'?conversationPlanEntry(entry,{planMode:snapshot.conversationMode==='plan',live:snapshot.ai?.status==='running',currentPlanId:snapshot.ai?.proposedPlan?.id}):entry);
   const loadOlderSRE=async()=>{onInspect?.();const session=snapshot.session.id;setLoadingSRE(true);try{const page=await api.sreTasks(session,sreCursor??snapshot.sre?.tasks.at(-1)?.id??'');if(selectedSession.current===session){setOlderSRE(old=>[...old,...page.items]);setSRECursor(page.nextCursor)}}catch(e){setError(readableError(e))}finally{setLoadingSRE(false)}};
   const visibleEntries = entries.filter(entry => !isFileChangeCard(entry.card));
   const lastBudgetCard=cards.filter(card=>!!card.content).at(-1);
@@ -158,7 +160,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
   const groups = transcriptGroups(visibleEntries);
   const activityEntry = (entry: (typeof entries)[number]) => !!(isCompactionFallbackEntry(entry)||entry.sre||entry.agentRun || entry.action || entry.card && ["thinking", "operation", "shell", "diff", "error", "strategy_correction"].includes(entry.card.type));
   const filteredEntries=mode==='activity'&&sreTaskFilter?entries.filter(entry=>entry.sre&&(entry.sre.task.id===sreTaskFilter||entry.sre.task.status==='waiting_approval'||entry.sre.task.attempts.some(a=>a.operations?.some(o=>['unknown','dispatched'].includes(o.status))))):entries;
-  const turns = transcriptTurns(filteredEntries).filter(turn => mode !== "activity" || turn.some(activityEntry));
+  const turns = workerConversationTurns(transcriptTurns(filteredEntries),projected.reported).filter(turn => mode !== "activity" || turn.some(activityEntry));
   const directoryItems = conversationDirectoryItems(snapshot.messages, new Set(turns.flatMap(turn => turn.filter(entry => entry.message?.role === "user").map(entry => entry.id))),new Map(turns.flatMap(turn=>{const user=turn.find(entry=>entry.message?.role==='user');return user?[[user.id,conversationPreview(turn)] as const]:[]})));
   function jumpTo(entryId?: string) {
     onInspect?.();
@@ -249,7 +251,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       };
       const pilotLive=miniScope.live&&turn.some(entry=>entry.sre?.task.pilot);
       // Public prose keeps its key and container throughout tool rounds and completion.
-      const interimGroups=groups.filter(group=>group.entries.every(entry=>handoffInterim.has(entry.id)));
+      const interimGroups=groups.filter(group=>group.entries.every(entry=>handoffInterim.has(entry.id)||isDeliveredWorkerInterim(entry,projected.reported)));
       const detailGroups=groups.filter(group=>processGroups.includes(group)||interimGroups.includes(group));
       const replyContent=<>{groups.filter(group=>!detailGroups.includes(group)&&!(proseInChannel&&group.entries.every(channelBody))).map(group=>mode==='conversation'&&group.entries.every(isAssistantProse)?<SettledReply key={group.entries[0]!.id} roleBreak={roleBreaks.has(group.entries[0]!.id)} continued={continuations.has(group.entries[0]!.id)}>{renderGroup(group)}</SettledReply>:renderGroup(group))}</>;
       return <ReplyReferenceScope key={turn[0]!.id} cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}><div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)}>

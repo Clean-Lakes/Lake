@@ -237,7 +237,7 @@ export type WatchdogView = {mode: WatchdogMode; findings: WatchdogFinding[]};
 export type SessionSnapshot = {
  commandExecutions?:HostCommandView[];
  messageRead?:ConversationReadState;
-	superagent?:{task:SuperTask;goal?:WorkGoal;roleId?:string;watchdog?:WatchdogView};
+	superagent?:{task:SuperTask;goal?:WorkGoal;roleId?:string;deliveredReplies?:Message[];watchdog?:WatchdogView};
  naturalMemoryNotices?:{changeId:string;scope:string;entryId:string;revision:number;batchId?:string}[];
   commandStopNotices?: CommandStopNotice[];
  conversationMode?: ConversationMode;

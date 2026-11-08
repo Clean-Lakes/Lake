@@ -1,3 +1,4 @@
+import {workerDeliveries} from "./worker-deliveries";
 import { projectTaskProgress } from "./task-progress";
 import { requestedInspectionRoot } from "../../web-agent/shared/command-policy";
 import {authorizeNetworkProbe, networkProbe} from "./network-probe";
@@ -1712,7 +1713,7 @@ export class LakeSuperagent implements AgentHost {
       (!input.cursor || op.id > input.cursor)).sort((a, b) => a.id.localeCompare(b.id));
     const limit = input.limit ?? 20; if (!Number.isInteger(limit) || limit < 1 || limit > 50) throw new HttpError(400, "Invalid evidence limit");
     return { items: rows.slice(0, limit).map(op => ({ id: op.id, evidenceId: op.id, referenceId: digest([worker.taskId, input.task_id, op.id, op.outputHash]),
-      taskId: input.task_id, roleId: members.get(op.goalId)!.roleId, operationId: op.id, state: op.status, at: op.completedAt, hash: op.outputHash })),
+      taskId: input.task_id, roleId: members.get(op.goalId)!.roleId, operationId: op.id, state: op.status, at: op.completedAt, completedAt: op.completedAt, hash: op.outputHash })),
       nextCursor: rows.length > limit ? rows[limit - 1].id : "" };
   }
   private readReferenced(worker: Worker, input: any) {
@@ -1722,7 +1723,8 @@ export class LakeSuperagent implements AgentHost {
       throw new HttpError(404, "Evidence not registered to this task");
     const content = canonical(operation.output), offset = input.offset ?? 0, limit = input.limit ?? 2048;
     if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 2048) throw new HttpError(400, "Invalid evidence page");
-    return { historical: true, state: operation.status, content: content.slice(offset, offset + limit), hash: operation.outputHash,
+    return { historical: true, state: operation.status, commandTiming: this.execution?.historicalTiming(operation),
+      content: content.slice(offset, offset + limit), hash: operation.outputHash,
       nextOffset: offset + limit < content.length ? offset + limit : undefined };
   }
   private async interaction(worker: Worker, kind: Interaction["kind"], revision: number, signal: AbortSignal, present: (interaction: Interaction) => void) {
@@ -1806,6 +1808,11 @@ export class LakeSuperagent implements AgentHost {
     if (worker) {
       const goal = this.ledger.get(worker.taskId);
       snapshot.superagent = { task: this.taskView(goal), goal: this.publicGoal(goal), roleId: worker.roleId };
+      if(!worker.inline && snapshot.session.workspaceRole==="worker"){
+        const channel=this.store.get<Channel>("superChannels",worker.roleId);
+        if(channel?.projectId===goal.projectId) snapshot.superagent.deliveredReplies=workerDeliveries(this.store,goal,channel.sessionId)
+          .map(message=>stoppedReportProjection(this.store,message,id=>this.ledger.unresolved(id)));
+      }
       if(!worker.inline) snapshot.superagent.watchdog={mode:this.watchdog.mode(worker.projectId),findings:this.watchdog.records(worker.projectId,goal.id)
         .filter(record=>record.workerId===worker.id && record.sessionId===worker.sessionId && record.state!=="reviewing" && record.state!=="guiding")
         .map(record=>this.watchdogFinding(record))};
@@ -1999,7 +2006,7 @@ export class LakeSuperagent implements AgentHost {
       }
       this.store.put("superReports", key, { key, workerId: worker.id, goalRevision: goal.revision, deliveredAt: now() });
       });
-      for (const target of [project.routerSessionId, channel.sessionId]) this.notify(target, "message");
+      for (const target of [project.routerSessionId, channel.sessionId,worker.sessionId]) this.notify(target, "message");
     }
     this.store.delete("superPendingReports", digest([pending.taskId, pending.revision]));
     }

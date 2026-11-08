@@ -220,13 +220,36 @@ export class LakeExecution {
     return false;
   }
 
+  private boundRecord(op: Operation) {
+    if (!op.commandExecutionId) return;
+    const record = this.store.get<CommandRecord>("commandExecutions",op.commandExecutionId);
+    if (record && record.sessionId === op.sessionId && record.taskId === op.goalId &&
+        record.generation === op.generation && record.resourceId === op.resourceId &&
+        record.resourceRevision === op.resourceRevision && record.configurationRevision === op.hostConfigurationHash) return record;
+  }
+
+  historicalTiming(op: Operation) {
+    const record = this.boundRecord(op);
+    const goal=this.store.get<{projectId:string;sessionId:string;workerId:string}>('superGoals',op.goalId);
+    if (!record || op.tool !== "Bash" || record.id !== op.commandExecutionId ||
+        !goal || goal.projectId!==op.projectId || goal.sessionId!==op.sessionId || goal.workerId!==record.workerId ||
+        record.status==='running' || op.status==='dispatched' ||
+        record.id !== digest([op.goalId,op.generation,op.callId]) ||
+        op.id !== digest([op.sessionId,op.callId]) || op.readOnly !== record.readOnly ||
+        this.store.session(op.sessionId).projectId !== op.projectId ||
+        !Number.isFinite(Date.parse(record.startedAt)) || !record.finishedAt ||
+        !Number.isFinite(Date.parse(record.finishedAt)) || Date.parse(record.finishedAt)<Date.parse(record.startedAt)) return;
+    this.revalidate(record);
+    return {startedAt:record.startedAt,finishedAt:record.finishedAt};
+  }
+
   /** UI projection uses both immutable operation ownership and command identity. */
   views(sessionId: string, taskId: string): HostCommandView[] {
     const projectId = this.store.session(sessionId).projectId;
     const operations = this.store.list<Operation>('superOperations').filter(op => op.projectId === projectId && op.sessionId === sessionId && op.goalId === taskId && op.commandExecutionId);
     return operations.flatMap(op => {
-      const record = this.store.get<CommandRecord>('commandExecutions', op.commandExecutionId!);
-      if (!record || record.sessionId !== sessionId || record.taskId !== taskId || record.generation !== op.generation || record.resourceId !== op.resourceId || record.resourceRevision !== op.resourceRevision || record.configurationRevision !== op.hostConfigurationHash) return [];
+      const record = this.boundRecord(op);
+      if (!record) return [];
       const live = this.lives.get(record.id);
       let canStop = false;
       if (live && record.status === 'running' && !record.stopRequestedAt) {

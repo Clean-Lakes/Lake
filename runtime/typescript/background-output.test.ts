@@ -77,3 +77,19 @@ test("current scope, original generation, authoritative operation output and liv
   store.put("legacyProjectPolicies",owner.projectId,{data:{Mode:"restricted"}});
   assert.throws(()=>entry.validateInput!(input,context),/原项目策略/);
 });
+
+test('historical timing uses the original bound command and current resource permission without changing its result',async t=>{
+  const {store,execution,owner,record,operation,resource}=await fixture(t);
+  const startedAt=new Date(Date.parse(record.finishedAt)-2500).toISOString();
+  store.put('commandExecutions',record.id,{...record,startedAt});
+  store.put('superGoals',owner.taskId,{projectId:owner.projectId,sessionId:owner.sessionId,workerId:owner.id});
+  assert.deepEqual(execution.historicalTiming(operation as any),{startedAt,finishedAt:record.finishedAt});
+  assert.deepEqual(store.require('superOperations',operation.id),operation);
+  for(const change of [{generation:3},{goalId:'another'},{resourceId:'another'},{readOnly:true},{status:'dispatched'}])
+    assert.equal(execution.historicalTiming({...operation,...change} as any),undefined);
+  store.put('commandExecutions',record.id,{...record,startedAt:record.finishedAt,finishedAt:startedAt});
+  assert.equal(execution.historicalTiming(operation as any),undefined);
+  store.put('commandExecutions',record.id,{...record,startedAt});
+  store.put('resourceRevisions',resource.id,2);
+  assert.throws(()=>execution.historicalTiming(operation as any),/已变化/);
+});
