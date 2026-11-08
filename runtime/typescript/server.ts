@@ -34,7 +34,8 @@ import {LakeMagpie} from './magpie';
 import {LakeMySQL} from "./mysql";
 import {LakeExecution} from "./execution";
 import {agentCapabilityCatalog,nativeSearchSupported} from "./capabilities";
-import { importDevModelSettings } from "./dev-settings";
+import { importLegacyModelSettings } from "./dev-settings";
+import {validateRuntimeProfile} from './runtime-profile';
 import { LakeSuperagent } from "./superagent";
 import { applyLegacyMigration, importLegacySSH, importLegacyMySQL, importLegacyMCP, importLegacyServices, importLegacyWorkflows, loadLegacyView } from "./migration";
 import { digest } from "./tasks";
@@ -50,7 +51,8 @@ export { previewLegacyMigration, rollbackMigration, importLegacyMySQL, importLeg
 export { LakeMemory } from "./memory";
 export {sessionArchiveName, legacySessionArchiveName} from "./session-archive";
 
-export type ServerOptions = { home: string; data: string; port: number; staticRoot: string; development?: boolean; importLegacy?: boolean };
+declare const __LAKE_VERSION__:string;
+export type ServerOptions = { home: string; data: string; port: number; staticRoot: string; development?: boolean; production?:boolean; importLegacy?: boolean; importOnly?:boolean };
 const encode = (value: unknown) => JSON.stringify(value);
 const equal = (left: string, right: string) => {
   const a = Buffer.from(left),
@@ -99,19 +101,8 @@ export async function startLakeServer(options: ServerOptions) {
   };
   options.home = await canonicalNewPath(options.home);
   options.data = await canonicalNewPath(options.data);
-  for (const name of [".lake", ".lake-dev"]) {
-    const protectedHome = await canonicalNewPath(resolve(homedir(), name));
-    // The user explicitly authorized replacing Lake Dev with the TS build.
-    // Only its explicit --dev launch can use daily Dev data; release is always denied.
-    if (name === ".lake-dev" && options.development && options.home === protectedHome &&
-        options.data.startsWith(protectedHome + sep)) continue;
-    if (
-      [options.home, options.data].some(
-        (path) => path === protectedHome || path.startsWith(protectedHome + sep),
-      )
-    )
-      throw new Error("TS 候选必须使用独立 Home；功能等价验收前不能接管 Lake 或 Lake Dev 数据");
-  }
+  validateRuntimeProfile(options,{production:await canonicalNewPath(resolve(homedir(),'.lake')),development:await canonicalNewPath(resolve(homedir(),'.lake-dev'))});
+  if(options.importOnly&&!options.importLegacy)throw new Error('仅导入模式必须同时指定 --migrate-legacy');
   if ([options.home, options.data].some((path) => path === homedir() || path === dirname(path)))
     throw new Error("请为候选指定专用子目录");
   await privateDirectory(options.home);
@@ -813,7 +804,7 @@ export async function startLakeServer(options: ServerOptions) {
   };
   try {
     store = await LakeStore.open(options.home, options.data);
-    if (options.development) await importDevModelSettings(store);
+    if (options.development||options.production) await importLegacyModelSettings(store);
     agents = await LakeAgents.open(store, broadcast);
     store.magpie = await LakeMagpie.connect(store, key => agents!.registerSecret(key));
     security = new LakeSecurity(store);
@@ -824,7 +815,7 @@ export async function startLakeServer(options: ServerOptions) {
     terminals = new LakeTerminals(store, security, (value, live) => live ? agents!.redactLive(ssh!.scrub(extensions!.scrubLive(value),true)) : ssh!.scrub(value), broadcast,ssh);
     agents.guard = () => security!.check();
     if (options.importLegacy) {
-      if (!options.development) throw new HttpError(403, "旧数据迁移仅允许明确指定的 Dev 环境");
+      if (!options.development&&!options.production) throw new HttpError(403, "旧数据迁移需要明确指定 Dev 或正式版运行身份");
       await agents.prepareRedaction();
       await applyLegacyMigration(store, (value) => agents!.redact(value));
       await importLegacySSH(store,ssh);
@@ -837,6 +828,9 @@ export async function startLakeServer(options: ServerOptions) {
         catch { store.put("settings", "legacyMcpMigrationError", {reason: "原项目 MCP 设置需核实；未扩大项目服务权限", at: now()}); }
       }
     }
+    // Preparation must not start Workers, Watchdog, queued inputs or Memory
+    // extraction. The actual application launch owns those runtime services.
+    if(options.importOnly)return {origin,token,store,agents,superagent,memory,mysql,services,execution,close};
     execution=new LakeExecution(store,security,ssh,value=>agents!.redact(ssh!.scrub(value)));
     superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql,execution);
     await superagent.discoveryRecovery.verify();
@@ -872,12 +866,12 @@ export async function startLakeServer(options: ServerOptions) {
 async function main() {
   const args = process.argv.slice(2);
   if (args.includes("--version")) {
-    console.log("Lake Dev · TypeScript");
+    console.log(`Lake ${typeof __LAKE_VERSION__==='undefined'?'development':__LAKE_VERSION__} TypeScript`);
     return;
   }
   if (args.includes("--help") || !args.length) {
     console.log(
-      "Lake TypeScript backend\n用法：lake web --home <目录> [--port 0] [--data <目录>] [--dev]",
+      "Lake TypeScript backend\n用法：lake web --home <目录> [--port 0] [--data <目录>] [--dev | --production]",
     );
     return;
   }
@@ -892,9 +886,9 @@ async function main() {
   const port = Number(option("--port") ?? 4182);
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error("无效的端口");
   const root = isSea() ? join(dirname(process.execPath), "lake-runtime") : __dirname;
-  const app = await startLakeServer({ home, data, port, staticRoot: join(root, "web"), development: args.includes("--dev"), importLegacy: args.includes("--migrate-legacy") });
+  const app = await startLakeServer({ home, data, port, staticRoot: join(root, "web"), development: args.includes("--dev"), production:args.includes('--production'), importLegacy: args.includes("--migrate-legacy"),importOnly:args.includes('--import-only') });
   if (args.includes("--import-only")) {
-    console.log("Dev legacy catalog migration completed; original Go databases and execution ledgers retained");
+    console.log("Lake legacy catalog migration completed; original Go databases and execution ledgers retained");
     await app.close(); return;
   }
   const shutdown = () => void app.close();

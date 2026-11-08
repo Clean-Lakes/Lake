@@ -387,12 +387,12 @@ export class LakeStore {
         const ref = this.get<string>("providerCredentialRefs", providerId);
         if (!ref) return "";
         if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,199}$/.test(ref))
-          throw new Error("Dev model credential reference is invalid");
+          throw new Error("Model credential reference is invalid");
         const legacyFile = join(directory, ref);
         const info = await lstat(legacyFile);
         if (!info.isFile() || info.isSymbolicLink() || (info.mode & 0o077) !== 0 ||
             (process.platform !== "win32" && info.uid !== process.getuid?.()) || info.size > 4096)
-          throw new Error("Dev model credential permissions are invalid");
+          throw new Error("Model credential permissions are invalid");
         return readFile(legacyFile, "utf8");
       }
       throw error;
