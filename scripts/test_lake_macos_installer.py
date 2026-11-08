@@ -47,6 +47,11 @@ class InstallerTests(unittest.TestCase):
             process = subprocess.Popen(arguments)
             child.wait()
             code = process.wait(timeout=15)
+            pending_backend = work / "ready.backend"
+            if pending_backend.exists():
+                pid = int(pending_backend.read_text())
+                status = subprocess.run(["/bin/ps", "-p", str(pid), "-o", "stat="], capture_output=True, text=True)
+                self.assertTrue(status.returncode != 0 or status.stdout.strip().startswith("Z"), "rollback left the unready backend running")
             if code == 0:
                 self.assertFalse(work.exists(), "successful update left its package cache")
             if typescript:
@@ -88,6 +93,11 @@ class InstallerTests(unittest.TestCase):
 
     def test_typescript_missing_home_never_guesses_a_production_directory(self):
         self.assertEqual(self.scenario('exit 0', typescript=True, missing_home=True), (1, "old", False, True))
+
+    def test_old_installer_stops_registered_backend_before_ui_readiness(self):
+        # An old installer already consumes ready.backend. The replacement
+        # registers its owned PID immediately, before migration has finished.
+        self.assertEqual(self.scenario('if [ "$#" -gt 2 ]; then /bin/sleep 30 & printf "%s\\n" "$!" > "$5.backend"; fi'), (1, "old", False, True))
 
 
 if __name__ == "__main__":

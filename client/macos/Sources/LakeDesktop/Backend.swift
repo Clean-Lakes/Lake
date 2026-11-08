@@ -47,7 +47,7 @@ struct RuntimeInfo: Decodable {
               json["backendRuntime"] as? String == backendRuntime else { return false }
         return await SuperagentConnection.matches(info, home: home, data: dataDirectory, backendRuntime: backendRuntime)
     }
-    func start() async throws -> URL {
+    func start(didLaunch: ((Int32) -> Void)? = nil) async throws -> URL {
         if let existing = readRuntime(), await healthy(existing) {
             runtime = existing
         } else {
@@ -74,6 +74,9 @@ struct RuntimeInfo: Decodable {
             child.standardError = FileHandle.nullDevice
             try child.run()
             process = child
+            // An older installer must be able to stop this owned process even
+            // if the first migration never reaches runtime/UI readiness.
+            didLaunch?(child.processIdentifier)
             // A first manual TypeScript launch may need its bounded catalog import.
             for _ in 0..<(backendRuntime == "typescript" ? 300 : 100) {
                 guard child.isRunning else { throw UpdateError.message("Lake 后端无法启动。数据目录可能已有服务，请先关闭旧服务。") }
