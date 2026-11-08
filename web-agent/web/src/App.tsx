@@ -23,7 +23,6 @@ import {ServiceConfigEdit} from "./ServiceConfigEdit";
 import {emptyServiceDraft, resourceTypeOptions, resourceTypeLabel, serviceResourceType, serviceResourceInput, type ResourceInputType} from "./serviceResourceModel";
 
 import {LakeLogo} from "./LakeLogo";
-import {SidebarPilotEntry} from './SidebarPilotEntry';
 import {WelcomePage,WelcomeSidebar} from "./WelcomePage";
 import {useSessionComposerDraft} from "./sessionComposerDrafts";
 import {ScheduledTasks} from "./ScheduledTasks";
@@ -1527,10 +1526,7 @@ function AppContent() {
     }}/>}
     <aside className={`sidebar workspace-navigation ${mobileMenu ? "sidebar-open" : ""} ${bulkMode ? "is-bulk-selecting" : ""}`} aria-label="项目导航" inert={compactNavigation && !mobileMenu} aria-hidden={compactNavigation && !mobileMenu}>
       <div className="sidebar-brand-row">
-        <SidebarPilotEntry buttonRef={sidebarPilotButton} selected={!!sessionHeader&&route.sessionId===pilotWorkspace.workspace?.project.routerSessionId}
-          activity={avatarActivity&&avatarActivity.sessionId===pilotWorkspace.workspace?.project.routerSessionId?avatarActivity.state:conversationActivity(undefined,catalog.sessions.find(row=>row.id===pilotWorkspace.workspace?.project.routerSessionId)?.status)}
-          messageRead={pilotWorkspace.workspace?.pilotMessageRead} disabled={!bootstrap?.authenticated||!sidebarProject}
-          onPilot={()=>{const domain=pilotWorkspace.workspace;if(domain?.active)navigate({sessionId:domain.project.routerSessionId,resourceId:null});else if(sidebarProject)void openProjectPilot(sidebarProject.id);}}/>
+        <span className="brand" aria-label="Lake"><strong>Lake</strong></span>
         <div className="sidebar-brand-actions">
           <button type="button" className="icon-button sidebar-search-trigger" aria-label="搜索会话和资源" aria-haspopup="dialog" aria-expanded={navigationSearchOpen} aria-controls={navigationSearchOpen ? "workspace-search-dialog" : undefined} aria-keyshortcuts="Meta+K Control+K" title={`搜索（${/Mac/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'}）`} onClick={() => setNavigationSearchOpen(true)}><Glyph name="search" size={18}/></button>
           <button className="icon-button mobile-only" title="关闭导航" aria-label="关闭导航" onClick={() => setMobileMenu(false)}><Glyph name="close"/></button>
@@ -1542,7 +1538,9 @@ function AppContent() {
           <button type="button" className="nav-section-toggle" aria-label={`${sidebarSessionsExpanded?"折叠":"展开"}${sidebarProject.name}的会话`} aria-expanded={sidebarSessionsExpanded} aria-controls={navigationProjects.length?`project-sessions-${sidebarProject.id}`:undefined} disabled={!navigationProjects.length} onClick={()=>setClosedSessionGroups(items=>sidebarSessionsExpanded?[...items,sidebarProject.id]:items.filter(id=>id!==sidebarProject.id))}><Glyph name="chevron" size={13} className={sidebarSessionsExpanded?"chevron-open":""}/><span>会话</span></button>
           <button type="button" ref={newSessionButton} className="sidebar-new-session" hidden={bulkMode} disabled={!connected||!!pendingOperation} aria-label="新对话" aria-keyshortcuts="Meta+N Control+N" title={`新对话（${/Mac/.test(navigator.platform)?'⌘ N':'Ctrl N'}）`} onClick={()=>{setClosedSessionGroups(items=>items.filter(id=>id!==sidebarProject.id));openSessionDialog(sidebarProject.id);}}><Glyph name="edit" size={14}/></button>
         </div>}
-        <PilotWorkspace activity={avatarActivity} pilotButton={sidebarPilotButton} disabled={!connected} onDeleted={channel=>pilotWorkspace.removeRole(channel.roleId)} workspace={pilotWorkspace.workspace} error={pilotWorkspace.error} selectedId={sessionHeader ? route.sessionId : null} selectedRoleId={sessionHeader && selectedSession.projectId===pilotWorkspace.workspace?.project.projectId ? selectedSuperChannel?.roleId??activeSnapshot?.superagent?.roleId??selectedSuperWorker?.roleId : undefined} onPilot={()=>{if(pilotWorkspace.workspace)navigate({sessionId:pilotWorkspace.workspace.project.routerSessionId,resourceId:null});}} onWorker={worker=>navigate({sessionId:worker.sessionId,resourceId:null})} onChannel={channel=>{void refreshCatalog().then(()=>navigate({sessionId:channel.sessionId,resourceId:null})).catch(handleFailure)}}/>
+        {sidebarProject&&<PilotWorkspace activity={avatarActivity} pilotButton={sidebarPilotButton}
+         pilotActivity={conversationActivity(undefined,catalog.sessions.find(row=>row.id===pilotWorkspace.workspace?.project.routerSessionId)?.status)} pilotDisabled={!bootstrap?.authenticated}
+         disabled={!connected} onDeleted={channel=>pilotWorkspace.removeRole(channel.roleId)} workspace={pilotWorkspace.workspace} error={pilotWorkspace.error} selectedId={sessionHeader ? route.sessionId : null} selectedRoleId={sessionHeader && selectedSession.projectId===pilotWorkspace.workspace?.project.projectId ? selectedSuperChannel?.roleId??activeSnapshot?.superagent?.roleId??selectedSuperWorker?.roleId : undefined} onPilot={()=>{const domain=pilotWorkspace.workspace;if(domain?.active)navigate({sessionId:domain.project.routerSessionId,resourceId:null});else void openProjectPilot(sidebarProject.id);}} onWorker={worker=>navigate({sessionId:worker.sessionId,resourceId:null})} onChannel={channel=>{void refreshCatalog().then(()=>navigate({sessionId:channel.sessionId,resourceId:null})).catch(handleFailure)}}/>}
         {navigationProjects.length ? navigationProjects.map(project => {
           const sessionsExpanded = !closedSessionGroups.includes(project.id);
           const sessions = catalog.sessions.filter(session => (!session.workspaceRole||session.workspaceRole==='legacy') && session.projectId === project.id && (!selectedTag || session.tags?.some(tag=>tag.id===selectedTag)));

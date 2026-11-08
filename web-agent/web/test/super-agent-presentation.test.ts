@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {createElement,Fragment} from 'react';
+import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {superTaskPresentation,superWorkerAppearance,superWorkerIcon,superAvatarMotion} from '../src/superAgentPresentation';
 import {PilotWorkspace} from '../src/PilotWorkspace';
-import {SidebarPilotEntry} from '../src/SidebarPilotEntry';
 import {SuperTaskInspector} from '../src/SuperTaskInspector';
 import type {SpecialistChannelInfo,SuperTask,SuperWorker,SuperWorkspace,WorkGoal} from '../../shared/contracts';
 
@@ -88,7 +87,7 @@ test('specialist sidebar prioritizes live execution, keeps confirmations and cle
 test('unread messages persist while running and preparing indicators take visual priority',()=>{
  const state={cursor:'00000000000000000002',seenCursor:'00000000000000000001'};
  const workspace:SuperWorkspace={active:true,project:{projectId:'project',routerSessionId:'pilot',version:1},pilotMessageRead:state,workers:[worker],channels:[{id:'channel',sessionId:'role-channel',projectId:'project',roleId:worker.roleId,roleName:worker.roleName,revision:1,createdAt:'',running:true,messageRead:state}]};
- const render=(next=workspace)=>renderToStaticMarkup(createElement(Fragment,null,createElement(SidebarPilotEntry,{selected:false,messageRead:next.pilotMessageRead,onPilot(){}}),createElement(PilotWorkspace,{workspace:next,selectedId:'role-channel',error:'',onPilot(){},onWorker(){}})));
+ const render=(next=workspace)=>renderToStaticMarkup(createElement(PilotWorkspace,{workspace:next,selectedId:'role-channel',error:'',onPilot(){},onWorker(){}}));
  assert.equal((render().match(/class="pilot-worker-unread"/g)??[]).length,1,'only Pilot has a green dot while the specialist spins');
  const preparing={...workspace,channels:workspace.channels!.map(channel=>({...channel,running:false,preparing:true}))};
  assert.equal((render(preparing).match(/class="pilot-worker-unread"/g)??[]).length,1);

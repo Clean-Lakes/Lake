@@ -1,20 +1,21 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createElement,Fragment} from 'react';
+import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {PilotWorkspace} from '../src/PilotWorkspace';
-import {SidebarPilotEntry} from '../src/SidebarPilotEntry';
 import type {SuperWorkspace} from '../../shared/contracts';
 
 test('Pilot and real specialist instances replace session creation',()=>{
  const workspace:SuperWorkspace={active:true,project:{projectId:'project',routerSessionId:'pilot',version:1},workers:[{id:'orders-worker',roleId:'orders',roleName:'订单专员',sessionId:'orders-context',assignmentState:'parked',task:{taskId:'orders',sessionId:'orders-context',projectId:'project',title:'排查订单超时',state:'blocked',acceptanceState:'insufficient',revision:7,originRootTurnId:'actual-root',deadlineAt:'2026-11-03T00:00:00Z'}}]};
- const html=renderToStaticMarkup(createElement(Fragment,null,createElement(SidebarPilotEntry,{selected:true,onPilot(){}}),createElement(PilotWorkspace,{workspace,error:'',selectedId:'pilot',onPilot(){},onWorker(){}})));
- assert.match(html,/持续沟通，自动安排工作/);
+ const html=renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:'pilot',onPilot(){},onWorker(){}}));
+ assert.match(html,/对话与任务统筹/);
  assert.match(html,/订单专员/);assert.match(html,/排查订单超时/);assert.match(html,/待核实/);
  assert.doesNotMatch(html,/新会话|新对话|已验收|项目执行范围|设置执行范围/);
  assert.match(html,/aria-current="page"/);
  assert.doesNotMatch(html,/brand\/lake-app-icon\.png/);
- assert.equal((html.match(/class="sidebar-pilot-entry/g)??[]).length,1);
+ assert.equal((html.match(/class="nav-row sidebar-pilot-entry/g)??[]).length,1);
+ assert.ok(html.indexOf('>专员<')<html.indexOf('>Pilot<')&&html.indexOf('>Pilot<')<html.indexOf('>订单专员<'));
+ assert.match(html,/<small>2<\/small>/);
  assert.doesNotMatch(html,/pilot-workspace-entry/);
 });
 
@@ -28,7 +29,7 @@ test('one durable role channel represents several independent task workers',()=>
  const workspace:SuperWorkspace={active:true,project:{projectId:'project',routerSessionId:'pilot',version:1},channels:[{id:'channel',projectId:'project',roleId:'ops',roleName:'运维专员',sessionId:'role-channel',revision:1,createdAt:'2026-11-03T00:00:00Z'}],workers:['a','b'].map(id=>({id,roleId:'ops',roleName:'运维专员',sessionId:`session-${id}`,task:task(id),assignmentState:'parked'}))};
  const html=renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:'role-channel',onPilot(){},onWorker(){},onChannel(){}}));
  assert.equal((html.match(/class="nav-row pilot-worker-row/g)??[]).length,1);
- assert.match(html,/<small>1<\/small>/);
+ assert.match(html,/<small>2<\/small>/);
  assert.match(html,/aria-current="page"/);
 });
 
@@ -44,6 +45,13 @@ test('a specialist created before any task is navigable with its persistent duti
  const workspace:SuperWorkspace={active:true,project:{projectId:'p',routerSessionId:'pilot',version:1},channels:[{id:'channel-ops',projectId:'p',roleId:'stable-ops',roleName:'可靠性专员',duties:'只读核实主机证据',roleRevision:2,sessionId:'role-session',revision:1,createdAt:''}],workers:[]};
  const html=renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:'role-session',onPilot(){},onWorker(){},onChannel(){}}));
  assert.equal((html.match(/class="nav-row pilot-worker-row/g)??[]).length,1);
- assert.match(html,/<small>1<\/small>/);assert.match(html,/可靠性专员/);assert.match(html,/只读核实主机证据/);assert.match(html,/aria-current="page"/);
+ assert.match(html,/<small>2<\/small>/);assert.match(html,/可靠性专员/);assert.match(html,/只读核实主机证据/);assert.match(html,/aria-current="page"/);
  assert.doesNotMatch(html,/session-status-dot|已验收|正在执行/);
+});
+
+test('the built-in Pilot remains available during initial workspace activation and preserves actual errors',()=>{
+ const html=renderToStaticMarkup(createElement(PilotWorkspace,{workspace:null,error:'仍在核对旧记录',selectedId:null,pilotDisabled:true,onPilot(){},onWorker(){}}));
+ assert.match(html,/Pilot · 话事人 · 内置专员/);assert.match(html,/<small>1<\/small>/);assert.match(html,/仍在核对旧记录/);
+ assert.match(html,/<button[^>]+class="nav-row sidebar-pilot-entry"[^>]+disabled/);
+ assert.doesNotMatch(html,/aria-current|删除专员|aria-haspopup/);
 });

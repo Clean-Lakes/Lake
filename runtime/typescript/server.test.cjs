@@ -1984,6 +1984,21 @@ test("a current Pilot permission change fences a previously presented Worker app
   assert.ok(!f.app.store.list("superAcceptance").some((receipt) => receipt.scope === "goal"));
 });
 
+test('built-in Pilot retains its original managed session and cannot be deleted as a session or specialist',async t=>{
+ const f=await fixture(t),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ const sessionId=project.routerSessionId,session=await f.api(`/api/sessions/${sessionId}`);
+ assert.equal(session.workspaceRole,'router');
+ const saved={id:'builtin-history',sessionId,role:'assistant',text:'Preserve the original Pilot history.',createdAt:'2026-11-08T00:00:00Z'};
+ f.app.store.put('messages',saved.id,saved);
+ await f.api(`/api/sessions/${sessionId}`,'DELETE',undefined,409);
+ for(const roleId of ['pilot:'+f.project.id,sessionId])await f.api(`/api/projects/${f.project.id}/superagent/specialists/${encodeURIComponent(roleId)}`,'DELETE',{revision:1},404);
+ assert.equal((await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{})).routerSessionId,sessionId);
+ assert.deepEqual(await f.api(`/api/sessions/${sessionId}`),session);
+ assert.deepEqual(f.app.store.messages(sessionId).find(message=>message.id===saved.id),saved);
+ assert.equal((await f.api(`/api/projects/${f.project.id}/superagent`)).channels.length,0);
+ assert.equal(f.requests.length,0,'listing or protecting Pilot must not start a model turn');
+});
+
 test("specialist retirement is scoped, revisioned, idempotent and preserves committed task history", async (t) => {
   const f = await fixture(t, "super-inspect");
   const project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});

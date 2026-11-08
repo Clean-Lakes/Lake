@@ -19,15 +19,15 @@ test('actual replies work despite old blocked goals; questions and operation app
  assert.equal(conversationAvatarMotion('idle','paused'),'still');
  assert.equal(conversationAvatarMotion('idle','completed'),'idle');
 });
-test('sidebar activity affects only the exact source channel or worker and never another role or Pilot',()=>{
+test('sidebar activity affects only the exact Pilot or specialist source identity',()=>{
  const channel=(id:string)=>({id,roleId:id,sessionId:'channel-'+id,roleName:'同名专员',projectId:'p',revision:1,createdAt:'',running:false});
  const workspace:SuperWorkspace={active:true,project:{projectId:'p',routerSessionId:'pilot',version:1},channels:[channel('a'),channel('b')],workers:[]};
  const motions=(sessionId:string,state:'running'|'waiting'|'idle')=>[...renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:sessionId,activity:{sessionId,state},onPilot(){},onWorker(){}})).matchAll(/data-motion="([^"]+)"/g)].map(match=>match[1]);
- assert.deepEqual(motions('channel-a','running'),['working','idle']);
- assert.deepEqual(motions('channel-a','waiting'),['still','idle']);
- assert.deepEqual(motions('pilot','running'),['idle','idle']);
- assert.deepEqual(motions('other-project-channel','running'),['idle','idle']);
- assert.deepEqual(motions('channel-a','idle'),['idle','idle']);
+ assert.deepEqual(motions('channel-a','running'),['idle','working','idle']);
+ assert.deepEqual(motions('channel-a','waiting'),['idle','still','idle']);
+ assert.deepEqual(motions('pilot','running'),['working','idle','idle']);
+ assert.deepEqual(motions('other-project-channel','running'),['idle','idle','idle']);
+ assert.deepEqual(motions('channel-a','idle'),['idle','idle','idle']);
 });
 test('thinking avatar and newest visible sender group animate; historical replies and reports keep idle motion',()=>{
  const start='2026-11-04T00:00:00Z';
