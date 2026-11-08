@@ -43,7 +43,7 @@ The user explicitly requested merging all PRs into develop, a macOS-only product
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-005 | Add pure profile, isolated production migration and native distribution tests; run source/server/frontend suites, signing/package/installer checks and an isolated real packaged backend smoke test. | Yes | 2026-11-08 |
-| TASK-006 | Prepare VERSION 0.3.28, truthful macOS release notes and validation/rollback documentation; preserve parity diagnostic status and merge the preparation PR into develop. Depends on TASK-005. | No | 2026-11-08 |
+| TASK-006 | Prepare VERSION 0.3.28, truthful macOS release notes and validation/rollback documentation; preserve parity diagnostic status and merge the preparation PR into develop. Depends on TASK-005. | Yes | 2026-11-08 |
 | TASK-007 | Create develop-to-master release PR, satisfy its checks/review requirements, merge with a merge commit, and verify final source. Depends on TASK-006. | No | 2026-11-08 |
 | TASK-008 | Build from clean master, verify ZIP/DMG/signatures/checksums and publish v0.3.28 with only four macOS assets. Verify downloaded assets and release target. Depends on TASK-007. | No | 2026-11-08 |
 

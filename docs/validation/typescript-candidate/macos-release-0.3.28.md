@@ -33,3 +33,7 @@ The parity report remains deliberately unchanged: 133 pending UI operations, 20 
 The new installer can prepare a TS replacement before its UI readiness deadline. Updates initiated by 0.3.27 or older run their old installer and retain the old 45-second total deadline; unusually large first imports may roll back and require manual ZIP/DMG installation. No legacy installer is retroactively upgraded.
 
 Production PR automatic checks, independent review, merge and exact-master rebuild/publication remain pending at this document's preparation point. No release/tag is published by this evidence commit. Final package provenance must identify the actual merged master SHA.
+
+## Production PR infrastructure follow-up
+
+Preparation PR #200 merged into develop as `b896c49288849ae3a7e964e944c6ffeb60dfc5d3`; its tree matches the recorded preparation head. Release PR #201 targets master from same-repository develop. The first macOS workbench run was cancelled before any step: GitHub reported `macos-14-arm64-us-default is not supported` (run 42488245003). The follow-up changes only its runner to the officially documented standard `macos-15`, retaining all checks and PR-only triggers. No cancellation is counted as a pass; production review and the new automatic checks remain required.
