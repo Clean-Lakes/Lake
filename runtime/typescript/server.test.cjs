@@ -1137,10 +1137,10 @@ test("Watchdog identifies a real provider 503 and retries the same SDK assignmen
   assert.equal(recovered.superagent.task.acceptanceState,"pass");
 });
 
-async function startSubagentTask(t, mode, memory = false) {
+async function startSubagentTask(t, mode, memory = false, legacyMaxSteps = 24) {
   const f = await fixture(t, mode);
   const project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
-  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`, "POST", { maxSteps: 24 });
+  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`, "POST", { maxSteps: legacyMaxSteps });
   if (memory) {
     const scope = f.app.memory.scope("project", f.project.id);
     f.app.memory.setSettings(scope, {useEnabled:true,extractionEnabled:true,expectedRevision:0});
@@ -2302,6 +2302,7 @@ test("current read and write switches apply to independent Worker tools and pers
 
 test("a failed proven read obtains a fresh attempt without replaying the failure or resetting the original task", async (t) => {
   const f = await fixture(t, "super-read-recovery"), project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
+  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`, "POST", {maxSteps: 1});
   await f.api(`/api/sessions/${project.routerSessionId}/messages`, "POST", { text: "检查这个项目，路径不可用时改用现有工作区诊断。" }, 202);
   await until(() => f.api(`/api/projects/${f.project.id}/superagent`), (result) => result.workers[0]?.task.state === "completed");
   const goals = f.app.store.list("superGoals"), operations = f.app.store.list("superOperations"), attempts = f.app.store.list("superAttempts");
@@ -2312,7 +2313,7 @@ test("a failed proven read obtains a fresh attempt without replaying the failure
   assert.equal(attempts[1].state, "succeeded");
   assert.deepEqual(operations.map((operation) => operation.status), ["failed", "succeeded"]);
   assert.equal(goals[0].acceptanceState, "pass");
-  assert.equal(goals[0].roundLimit, 500);
+  assert.equal(goals[0].roundLimit, undefined);
   assert.equal(f.app.store.list("superWorkers").length, 1);
 });
 
@@ -3313,4 +3314,13 @@ test('a real SDK specialist receives prior task clues for a short follow-on requ
  assert.equal(JSON.stringify(f.app.store.list('superOperations').filter(op=>op.goalId===old.task.taskId)),receipts);
  const workerRequests=f.requests.filter(isIndependentWorkerRequest).filter(r=>JSON.stringify(r.messages).includes('同步到k2'));
  assert.ok(workerRequests.some(r=>JSON.stringify(r.messages).includes('taskContext')&&JSON.stringify(r.messages).includes('db/mysql141-0')));
+});
+
+
+test('native Worker and child complete beyond a saved one-step setting without a replacement task',async t=>{
+ const {f,worker}=await startSubagentTask(t,'super-subagent-read',false,1);const state=await settledSubagentTask(f);
+ const goals=f.app.store.list('superGoals');assert.equal(goals.length,1);assert.equal(goals[0].roundLimit,undefined);
+ assert.ok(goals[0].modelRounds>1);assert.equal(goals[0].acceptanceState,'pass');
+ assert.equal(state.workers[0].id,worker.id);assert.equal(childRequests(f).length,2);
+ assert.ok(f.app.store.list('superOperations').some(op=>op.childSessionId&&op.status==='succeeded'));
 });

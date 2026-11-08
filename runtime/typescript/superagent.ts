@@ -250,8 +250,7 @@ export class LakeSuperagent implements AgentHost {
     const goal = this.ledger.get(worker.taskId);
     if (
       terminal(goal.status) ||
-      Date.parse(goal.deadlineAt) <= this.watchdogClock() ||
-      this.ledger.roundsRemaining(goal) <= 0
+      Date.parse(goal.deadlineAt) <= this.watchdogClock()
     )
       return;
     const view = this.store.view(worker.sessionId),
@@ -358,7 +357,6 @@ export class LakeSuperagent implements AgentHost {
       this.policy(worker.projectId) !== worker.policyHash ||
       this.active.has(worker.id) ||
       this.agents.isRunning(worker.sessionId) ||
-      this.ledger.roundsRemaining(goal) <= 0 ||
       Date.parse(goal.deadlineAt) <= this.watchdogClock() ||
       this.pendingInteraction(worker.sessionId) ||
       this.security?.readOnly()
@@ -518,7 +516,8 @@ export class LakeSuperagent implements AgentHost {
       }}),
       state: this.memberState(goal),
       acceptanceState: goal.acceptanceState, revision: goal.revision, originRootTurnId: goal.originRootTurnId,
-      deadlineAt: goal.deadlineAt, summary: goal.summary, updatedAt: goal.updatedAt };
+      deadlineAt: goal.deadlineAt, summary: goal.summary, updatedAt: goal.updatedAt,
+      ...(goal.status==="paused"&&goal.summary==="model_round_limit"&&{reason:"round_limit_removed",summary:"轮次限制已取消，可继续当前任务。"}) };
   }
   private workerView(worker: Worker): SuperWorker {
     return { id: worker.id, createdAt: worker.createdAt, roleId: worker.roleId, roleName: worker.roleSnapshot.name,
@@ -528,7 +527,7 @@ export class LakeSuperagent implements AgentHost {
   private workerActivity(worker: Worker): SuperWorker["activity"] {
     const goal = this.ledger.get(worker.taskId);
     if (terminal(goal.status) || worker.state === "stopped") return;
-    if (worker.state === "queued" && (this.ledger.roundsRemaining(goal) <= 0 || Date.parse(goal.deadlineAt) <= Date.now() ||
+    if (worker.state === "queued" && (Date.parse(goal.deadlineAt) <= Date.now() ||
       !this.dispatchReady(worker))) return;
     const acceptedIds = new Set([...(worker.invocationInputIds ?? []), ...(worker.deliveredInputIds ?? [])]);
     const source = [...worker.inputEventIds].reverse()
@@ -706,7 +705,7 @@ export class LakeSuperagent implements AgentHost {
     session.options = { ...session.options, conversationMode: original?.mode ?? source.options.conversationMode ?? router.options.conversationMode ?? "default",
       reasoningModelId: source.options.reasoningModelId ?? router.options.reasoningModelId,
       reasoningEffort: source.options.reasoningEffort ?? router.options.reasoningEffort,
-      maxSteps: source.options.maxSteps ?? router.options.maxSteps ?? 500, ignoreProjectMemory: true, ignoreNaturalMemory: true };
+      ignoreProjectMemory: true, ignoreNaturalMemory: true };
     this.store.put("sessions", session.id, session);
 
     if (original) {
@@ -726,7 +725,7 @@ export class LakeSuperagent implements AgentHost {
       this.store.put("superReferences", digest([taskId, sourceTaskId]), reference);
     }
     this.ledger.create({ id: taskId, sessionId: workerSession, projectId: event.projectId, workerId, roleId: role.id, sourceEventId: origin.id,
-      originRootTurnId: "super_" + suffix, userText: origin.payload, title, status: "running", roundLimit: original?.roundLimit ?? Math.max(1, Math.min(500, Number(session.options.maxSteps) || 500)),
+      originRootTurnId: "super_" + suffix, userText: origin.payload, title, status: "running",
       deadlineAt: original?.deadlineAt ?? new Date(Date.parse(event.receivedAt) + 86400000).toISOString(), mode: session.options.conversationMode === "plan" ? "plan" : "default",
       executionMode: session.options.conversationMode === "plan" ? "explicit_plan" : "host_managed" });
     if (predecessor) this.store.put("superTaskPredecessors", taskId, predecessor);
@@ -792,7 +791,7 @@ export class LakeSuperagent implements AgentHost {
           if (event.explicitTaskId && event.explicitTaskId !== root.id) throw new HttpError(409, "Input belongs to another explicit task");
           const members = (this.ledger.jointTask(root.id)?.memberIds ?? [root.id]).map(id => this.ledger.get(id));
           if (this.store.require<Worker>("superWorkers", root.workerId).inline || members.length + roles.length > 8 ||
-            members.some(goal => (terminal(goal.status) && !goal.contributionReceiptId) || this.ledger.roundsRemaining(goal) <= 0 || this.ledger.unresolved(goal.id)) || Date.parse(root.deadlineAt) <= Date.now())
+            members.some(goal => (terminal(goal.status) && !goal.contributionReceiptId) || this.ledger.unresolved(goal.id)) || Date.parse(root.deadlineAt) <= Date.now())
             throw new HttpError(409, "Only an open specialist task within its original limits can accept additional specialists");
           if (roles.some(role => members.some(member => member.roleId === role.id))) throw new HttpError(409, "Specialist already assigned to this task");
           targetResourceIds = this.store.require<Worker>("superWorkers",root.workerId).targetResourceIds;
@@ -855,11 +854,11 @@ export class LakeSuperagent implements AgentHost {
             if(this.store.get('superWorkers',actor.id)&&actor.id!==worker.id)throw new HttpError(409,'本轮 Pilot 已在执行另一个任务，请分配独立 Worker');
             const admittedRounds=actor.preTaskModelRounds??0;
             Object.assign(actor,worker,{preTaskModelRounds:0,generation:worker.generation+1,state:'active',owner:this.owner,leaseUntil:Date.now()+45000,policyHash:this.policy(worker.projectId),invocationInputIds:this.batches.get(sessionId)!.eventIds});
-            if(admittedRounds>this.ledger.roundsRemaining(goal)||Date.parse(goal.deadlineAt)<=Date.now())throw new HttpError(409,'原任务处理上限禁止继续');
+            if(Date.parse(goal.deadlineAt)<=Date.now())throw new HttpError(409,'原任务处理上限禁止继续');
             goal.modelRounds+=admittedRounds;
             goal.status='running';this.ledger.save(goal);this.store.put('superWorkers',actor.id,actor);this.active.add(actor.id);
           }else{
-            if (worker.state !== "active" && this.ledger.roundsRemaining(goal) > 0 && Date.parse(goal.deadlineAt) > Date.now()) {
+            if (worker.state !== "active" && Date.parse(goal.deadlineAt) > Date.now()) {
               worker.state = "queued"; goal.status = "running"; this.ledger.save(goal);
             }
             this.store.put("superWorkers", worker.id, worker);
@@ -894,10 +893,10 @@ export class LakeSuperagent implements AgentHost {
     const assignments = this.decisionAssignments(result).map(assignment => {
       const worker = this.store.require<Worker>("superWorkers", assignment.workerId), goal = this.ledger.get(worker.taskId);
       if (!worker.inline) this.notify(this.store.require<Channel>("superChannels", worker.roleId).sessionId, "specialist");
-      const state = this.pendingInteraction(worker.sessionId) ? "needs_input" : Date.parse(goal.deadlineAt) <= Date.now() || this.ledger.roundsRemaining(goal) <= 0 ? "limit_reached"
+      const state = this.pendingInteraction(worker.sessionId) ? "needs_input" : Date.parse(goal.deadlineAt) <= Date.now() ? "limit_reached"
         : worker.state === "active" ? "running" : worker.state === "queued" ? "queued" : "recorded";
       const {instruction: _instruction, ...recipient} = assignment;
-      return { ...recipient, dispatch: { state, observedAt, reason: state === "limit_reached" ? Date.parse(goal.deadlineAt) <= Date.now() ? "deadline_reached" : "model_round_limit" : undefined,
+      return { ...recipient, dispatch: { state, observedAt, reason: state === "limit_reached" ? "deadline_reached" : undefined,
         unresolvedOperations: this.ledger.unresolved(goal.id), observation: "Point-in-time scheduling snapshot. Live activity records progress; each operation checks current permissions." } };
     });
     return { ...routeReceipt, assignments, handoff: { recorded: true, observedAt, meaning: "The assignment was recorded. This does not grant permission, prove execution or accept the result." },
@@ -1036,7 +1035,7 @@ export class LakeSuperagent implements AgentHost {
       if (this.active.size >= 4) break;
       if ([...this.active].filter((id) => this.store.require<Worker>("superWorkers", id).projectId === worker.projectId).length >= 2) continue;
       const goal = this.ledger.get(worker.taskId), retry=retries.get(worker.id);
-      if (terminal(goal.status) || Date.parse(goal.deadlineAt) <= Date.now() || this.ledger.roundsRemaining(goal) <= 0) continue;
+      if (terminal(goal.status) || Date.parse(goal.deadlineAt) <= Date.now()) continue;
       try { this.role(worker.projectId, worker.roleId); } catch { continue; }
       if(retry) {
         // Earlier dispatches in this pump may have yielded control to the UI.
@@ -1108,7 +1107,7 @@ export class LakeSuperagent implements AgentHost {
     const source=this.store.require<InputEvent>('superInputs',batch.eventIds[0]);
     const explicit=source.explicitTaskId?this.store.get<Goal>('superGoals',source.explicitTaskId):undefined;
     const old=explicit?this.store.require<Worker>('superWorkers',explicit.workerId):undefined;
-    if(old?.inline&&(terminal(explicit!.status)||explicit!.modelRounds>=explicit!.roundLimit||Date.parse(explicit!.deadlineAt)<=Date.now()))throw new HttpError(409,'原 Pilot 任务已结清或达到处理上限');
+    if(old?.inline&&(terminal(explicit!.status)||Date.parse(explicit!.deadlineAt)<=Date.now()))throw new HttpError(409,'原 Pilot 任务已结清或达到处理上限');
     const worker:Worker=old?.inline?{...old,generation:old.generation+1,state:'active',owner:this.owner,leaseUntil:Date.now()+45000,policyHash:this.policy(project.projectId),inputEventIds:[...old.inputEventIds,...batch.eventIds],invocationInputIds:batch.eventIds}:
       {inline:true,id:'pilot_worker_'+key.slice(0,32),taskId:'pilot_task_'+key.slice(0,32),sessionId:project.routerSessionId,projectId:project.projectId,roleId:'pilot:'+project.projectId,
        roleSnapshot:{id:'pilot:'+project.projectId,projectId:project.projectId,roleKey:'pilot',name:'Pilot',duties:'按用户当前请求自主调查、执行与验证',revision:1},sourceEventId:source.id,generation:1,state:'active',owner:this.owner,leaseUntil:Date.now()+45000,policyHash:this.policy(project.projectId),createdAt:now(),inputEventIds:batch.eventIds,invocationInputIds:batch.eventIds};
@@ -1121,10 +1120,10 @@ export class LakeSuperagent implements AgentHost {
     if(batch.eventIds.some(id=>!!this.store.require<InputEvent>('superInputs',id).preferredRoleId))throw new HttpError(403,'专员频道的要求须在对应独立任务中执行');
     if(source.explicitTaskId&&!this.store.require<Worker>('superWorkers',this.ledger.get(source.explicitTaskId).workerId).inline)throw new HttpError(403,'此输入属于已有独立任务，请继续该任务');
     const existing=this.store.get<Goal>('superGoals',worker.taskId);
-    if(existing&&(terminal(existing.status)||existing.modelRounds>=existing.roundLimit||Date.parse(existing.deadlineAt)<=Date.now()))throw new HttpError(409,'原任务已结清或达到处理上限');
-    if(!this.store.get('superGoals',worker.taskId))this.ledger.create({id:worker.taskId,sessionId:worker.sessionId,projectId:worker.projectId,workerId:worker.id,roleId:worker.roleId,sourceEventId:source.id,originRootTurnId:this.store.view(worker.sessionId).rootTurnId??'super_'+worker.id,userText:source.payload,title:clip(source.payload,1000),status:'running',roundLimit:Math.max(1,Math.min(500,Number(session.options.maxSteps)||500)),deadlineAt:new Date(Date.parse(source.receivedAt)+86400000).toISOString(),mode:session.options.conversationMode==='plan'?'plan':'default',executionMode:session.options.conversationMode==='plan'?'explicit_plan':'host_managed'});
+    if(existing&&(terminal(existing.status)||Date.parse(existing.deadlineAt)<=Date.now()))throw new HttpError(409,'原任务已结清或达到处理上限');
+    if(!this.store.get('superGoals',worker.taskId))this.ledger.create({id:worker.taskId,sessionId:worker.sessionId,projectId:worker.projectId,workerId:worker.id,roleId:worker.roleId,sourceEventId:source.id,originRootTurnId:this.store.view(worker.sessionId).rootTurnId??'super_'+worker.id,userText:source.payload,title:clip(source.payload,1000),status:'running',deadlineAt:new Date(Date.parse(source.receivedAt)+86400000).toISOString(),mode:session.options.conversationMode==='plan'?'plan':'default',executionMode:session.options.conversationMode==='plan'?'explicit_plan':'host_managed'});
     else {const goal=this.ledger.get(worker.taskId);goal.status='running';this.ledger.save(goal);}
-    const goal=this.ledger.get(worker.taskId);if(worker.preTaskModelRounds){if(goal.modelRounds+worker.preTaskModelRounds>goal.roundLimit)throw new HttpError(409,'原任务处理上限禁止继续');goal.modelRounds+=worker.preTaskModelRounds;worker.preTaskModelRounds=0;this.ledger.save(goal);}
+    const goal=this.ledger.get(worker.taskId);if(worker.preTaskModelRounds){goal.modelRounds+=worker.preTaskModelRounds;worker.preTaskModelRounds=0;this.ledger.save(goal);}
     this.store.put('superWorkers',worker.id,worker);this.active.add(worker.id);
   }
   profile(sessionId:string):HostProfile|undefined {
@@ -1185,9 +1184,9 @@ export class LakeSuperagent implements AgentHost {
         for (const operation of this.store.list<Operation>("superOperations")) if (operation.goalId === worker.taskId && (operation.skillName||operation.databaseConfigurationHash) && operation.status === "succeeded") this.ledger.revalidate?.(operation);
         const goal = this.ledger.get(worker.taskId);
         if (terminal(goal.status)) throw new HttpError(409, "Canonical task is closed");
-        if (Date.parse(goal.deadlineAt) <= Date.now() || this.ledger.roundsRemaining(goal) <= 0) {
-          goal.status = "paused"; goal.summary = Date.parse(goal.deadlineAt) <= Date.now() ? "deadline_reached" : "model_round_limit";
-          this.ledger.save(goal); throw new HttpError(409, "Original task deadline or model round limit reached");
+        if (Date.parse(goal.deadlineAt) <= Date.now()) {
+          goal.status = "paused"; goal.summary = "deadline_reached";
+          this.ledger.save(goal); throw new HttpError(409, "Original task deadline reached");
         }
         goal.modelRounds++; this.ledger.save(goal);
       },
@@ -1787,10 +1786,10 @@ export class LakeSuperagent implements AgentHost {
     entry.resolve({ answers, unanswered: view.question?.questions.filter((question) => !answers[question.id]?.length).map((question) => question.id) }); this.interactions.delete(entry.id);
   }
   private publicGoal(goal: Goal) {
-    const { projectId, workerId, roleId, sourceEventId, goalRevision, planRevision, planHash, acceptanceState, confirmed, mode, activeItemId, ...publicGoal } = goal;
+    const { projectId, workerId, roleId, sourceEventId, goalRevision, planRevision, planHash, acceptanceState, confirmed, mode, activeItemId, roundLimit: _historicalRoundLimit, ...publicGoal } = goal;
     const owner = this.store.get<Worker>("superWorkers",goal.workerId);
     const items = projectTaskProgress(this.store,goal,owner,commandId => this.execution?.hasLiveCommand(goal.sessionId,goal.id,commandId) === true);
-    return {...publicGoal,items,...(goal.sharedTaskId && {modelRounds:goal.roundLimit-this.ledger.roundsRemaining(goal)})};
+    return {...publicGoal,items,modelRounds:this.ledger.totalModelRounds(goal),...(goal.status==="paused"&&goal.summary==="model_round_limit"&&{summary:"轮次限制已取消，可继续当前任务。"})};
   }
   /** A shared identifier is navigable in every assigned session. An execution
    * identifier never authorizes a different session, even in the same project. */
@@ -1939,8 +1938,8 @@ export class LakeSuperagent implements AgentHost {
     goal = this.ledger.get(worker.taskId);
     let deferredFailure: string | undefined;
     if (deferred && !error && !terminal(goal.status)) {
-      if (this.ledger.roundsRemaining(goal) <= 0 || Date.parse(goal.deadlineAt) <= Date.now()) {
-        goal.status = "paused"; goal.summary = Date.parse(goal.deadlineAt) <= Date.now() ? "deadline_reached" : "model_round_limit";
+      if (Date.parse(goal.deadlineAt) <= Date.now()) {
+        goal.status = "paused"; goal.summary = "deadline_reached";
         this.ledger.save(goal);
       } else if (!deferred.inputEventIds.some((eventId) => ["pending", "routed"].includes(this.store.require<InputEvent>("superInputs", eventId).disposition))) {
         deferredFailure = "这条消息没有处理成功，检查暂时停在这里。请重试这条消息。";
@@ -1949,7 +1948,7 @@ export class LakeSuperagent implements AgentHost {
     }
     // A new input is being handed to the same task, not an incomplete business
     // delivery. Limits, errors and explicit stop still need their real outcome.
-    if (deferred && !deferredFailure && !error && this.ledger.roundsRemaining(goal) > 0 && Date.parse(goal.deadlineAt) > Date.now()) {
+    if (deferred && !deferredFailure && !error && Date.parse(goal.deadlineAt) > Date.now()) {
       this.changed(sessionId); this.schedule(); return;
     }
     const reportKey = digest([goal.id, goal.revision]);
@@ -1969,8 +1968,8 @@ export class LakeSuperagent implements AgentHost {
     if (!this.routedInputs(worker).length) return false;
     const goal = this.ledger.get(worker.taskId);
     if (terminal(goal.status) || this.pendingInteraction(worker.sessionId)) return false;
-    if (this.ledger.roundsRemaining(goal) <= 0 || Date.parse(goal.deadlineAt) <= Date.now()) {
-      goal.status = "paused"; goal.summary = Date.parse(goal.deadlineAt) <= Date.now() ? "deadline_reached" : "model_round_limit";
+    if (Date.parse(goal.deadlineAt) <= Date.now()) {
+      goal.status = "paused"; goal.summary = "deadline_reached";
       this.ledger.save(goal); return false;
     }
     worker.state = "queued"; goal.status = "running";
@@ -2006,7 +2005,7 @@ export class LakeSuperagent implements AgentHost {
     const notice = goal.status === "cancelled" ? stoppedNotice
       : this.ledger.unresolved(goal.id) ? unresolvedNotice
       : goal.summary === "deadline_reached" ? "这次工作已到截止时间，剩余部分尚未完成。"
-      : goal.summary === "model_round_limit" ? "这次检查已达到单次任务的处理上限，剩余部分尚未完成。"
+      : goal.summary === "model_round_limit" ? "轮次限制已取消，当前任务仍处于暂停状态。"
       : error || this.store.view(goal.sessionId).status === "failed" ? "这次处理遇到错误，尚未完成。具体原因可在执行详情中查看。"
       : goal.status === "blocked" ? "这次检查尚未完成，暂时无法继续。"
       : goal.status === "waiting_user" && this.pendingInteraction(goal.sessionId) ? "需要你回答当前问题后继续。"
@@ -2122,7 +2121,7 @@ export class LakeSuperagent implements AgentHost {
     if (input.command === "cancel" || input.command === "pause") await this.stopTask(goal.id, input.command === "pause");
     else if (input.command === "resume") {
       const worker = this.store.require<Worker>("superWorkers", goal.workerId); if(!worker.inline)this.role(worker.projectId, worker.roleId);
-      if (terminal(goal.status) || worker.state === "active" || this.ledger.roundsRemaining(goal) <= 0 || Date.parse(goal.deadlineAt) <= Date.now())
+      if (terminal(goal.status) || worker.state === "active" || Date.parse(goal.deadlineAt) <= Date.now())
         throw new HttpError(409, "Original task limits prohibit resume");
       if(worker.inline){await this.send(sessionId,'继续当前任务：'+goal.title,goal.id);return this.publicGoal(goal);}
       this.store.transaction(() => {

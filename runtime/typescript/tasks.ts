@@ -83,12 +83,11 @@ export class TaskLedger {
     const task = this.jointTask(taskId);
     return task && jointTaskState(task, task.memberIds.map(id => this.get(id)));
   }
-  roundsRemaining(goal: Goal) {
-    if (!goal.sharedTaskId) return Math.max(0, goal.roundLimit - goal.modelRounds);
+  /** Usage accounting only. Legacy roundLimit values never gate execution. */
+  totalModelRounds(goal: Goal) {
+    if (!goal.sharedTaskId) return goal.modelRounds;
     const task = this.store.require<JointTask>('superJointTasks', goal.sharedTaskId);
-    const members = task.memberIds.map(memberId => this.get(memberId));
-    const sharedRemaining = members[0].roundLimit - members.reduce((sum, member) => sum + member.modelRounds, 0);
-    return Math.max(0, Math.min(sharedRemaining, goal.roundLimit - goal.modelRounds));
+    return task.memberIds.reduce((sum, memberId) => sum + this.get(memberId).modelRounds, 0);
   }
   joinTask(taskId: string, executionIds: string[]) {
     return joinExecutions(this.store, taskId, executionIds, id => this.unresolved(id));
@@ -99,7 +98,6 @@ export class TaskLedger {
     if (current?.sharedTaskId) {
       goal.sharedTaskId = current.sharedTaskId;
       if (Date.parse(goal.deadlineAt) > Date.parse(current.deadlineAt)) goal.deadlineAt = current.deadlineAt;
-      goal.roundLimit = Math.min(goal.roundLimit, current.roundLimit);
     }
     goal.revision++;
     goal.updatedAt = now();

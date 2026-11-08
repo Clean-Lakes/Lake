@@ -14,7 +14,7 @@ async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date
   const store = await LakeStore.open(home, join(home, "data"));
   const requests: { sessionId: string; input: any }[] = [];
   let steering = 0;
-  const agents = { redact: (value: string) => value, publish() {}, prepareRedaction: async () => {}, isRunning: () => false,
+  const agents = { executionView: (_sessionId:string,view:any)=>view, redact: (value: string) => value, publish() {}, prepareRedaction: async () => {}, isRunning: () => false,
     send: async (sessionId: string, _text: string, options: any) => { requests.push({ sessionId, input: JSON.parse(options.input) }); },
     steer: async () => { steering++; return true; }, abort: async () => {} };
   const host = new LakeSuperagent(store, agents as any, undefined, undefined, undefined, undefined, undefined, clock), internal = host as any;
@@ -257,18 +257,18 @@ test("cold restart and unrelated conversation never resume an interrupted worker
   } finally { await recovered.close(); }
 });
 
-for (const limit of ["rounds", "deadline"]) test(`deferred completion preserves the original ${limit} limit and reports it`, async (t) => {
+for (const limit of ["deadline"]) test(`deferred completion preserves the original ${limit} limit and reports it`, async (t) => {
   const f = await fixture(t), initial = await f.start();
   const event = await f.admit("继续检查"); f.route(event, { action: "followup", task_id: initial.taskId });
   await f.finish();
   const goal = f.host.ledger.get(initial.taskId);
-  if (limit === "rounds") goal.modelRounds = goal.roundLimit; else goal.deadlineAt = new Date(Date.now() - 1000).toISOString();
+  goal.deadlineAt = new Date(Date.now() - 1000).toISOString();
   f.host.ledger.save(goal); f.settleWorker(); f.settleRouter(); await f.activate();
   const after = f.host.ledger.get(goal.id);
-  assert.equal(after.status, "paused"); assert.equal(after.summary, limit === "rounds" ? "model_round_limit" : "deadline_reached");
+  assert.equal(after.status, "paused"); assert.equal(after.summary, "deadline_reached");
   assert.equal(after.deadlineAt, goal.deadlineAt); assert.equal(after.modelRounds, goal.modelRounds);
   assert.equal(f.worker().state, "parked"); assert.equal(f.store.list("superAcceptance").length, 0);
-  assert.ok(f.store.messages(f.router).some((message) => message.text.includes(limit === "rounds" ? "处理上限" : "截止时间")));
+  assert.ok(f.store.messages(f.router).some((message) => message.text.includes("截止时间")));
 });
 
 test('Pilot stop fences current queued/active work and late decisions without changing parked history or other projects',async t=>{
@@ -773,4 +773,55 @@ test("snapshot verifies a corrected missing recipient against the original durab
   assert.equal((project([success,failed])[1]!.data as any).routingRecovery,undefined);
   assert.equal((project([failed])[0]!.data as any).routingRecovery,undefined);
   assert.equal(JSON.stringify([failed,success]),before);assert.equal(JSON.stringify(f.store.list('superDecisions')),decisions);
+});
+
+
+test('a specialist passes 500 model calls and its stored legacy ceiling without resetting usage or acceptance',async t=>{
+ const f=await fixture(t),initial=await f.start(),goal=f.host.ledger.get(initial.taskId);
+ assert.equal(goal.roundLimit,undefined);
+ goal.roundLimit=2;f.host.ledger.save(goal);const deadline=goal.deadlineAt;
+ for(let i=0;i<503;i++)f.host.profile(f.worker().sessionId)!.beforeModel!();
+ const current=f.host.ledger.get(goal.id);assert.equal(current.modelRounds,503);assert.equal(current.status,'running');assert.equal(current.roundLimit,2);
+ assert.equal(current.deadlineAt,deadline);assert.equal(current.acceptanceState,'not_evaluated');
+ assert.equal(f.internal.publicGoal(current).roundLimit,undefined);
+ await f.finish();f.settleWorker();assert.equal(f.host.ledger.get(goal.id).acceptanceState,'pass');
+ assert.equal(f.host.ledger.get(goal.id).modelRounds,503);
+});
+
+test('joint contributors continue independently beyond their combined legacy round ceilings',async t=>{
+ const f=await fixture(t),other={...f.role,id:'other',roleKey:'other'};f.store.put('superRoles',other.id,other);
+ const event=await f.admit('共同检查当前文件');const result=f.route(event,{action:'create',title:'共同检查',role_ids:[f.role.id,other.id]});
+ f.settleRouter();await f.activate();const members=f.host.ledger.jointTask(result.taskId)!.memberIds;
+ for(const id of members){const goal=f.host.ledger.get(id);goal.roundLimit=1;goal.modelRounds=501;f.host.ledger.save(goal);
+  f.host.profile(goal.sessionId)!.beforeModel!();assert.equal(f.host.ledger.get(id).modelRounds,502);
+  await f.read(id);await f.finish(id);f.settleWorker(id);}
+ assert.equal(f.host.ledger.jointState(result.taskId)!.acceptanceState,'pass');
+ assert.equal(f.host.ledger.totalModelRounds(f.host.ledger.get(result.taskId)),1004);
+});
+
+test('a legacy round-paused task waits for explicit resume, retains its ledger and still obeys deadline and cancellation',async t=>{
+ const f=await fixture(t),initial=await f.start();f.settleWorker();const goal=f.host.ledger.get(initial.taskId);
+ goal.status='paused';goal.summary='model_round_limit';goal.roundLimit=1;goal.modelRounds=600;f.host.ledger.save(goal);
+ const before=JSON.stringify(f.host.ledger.get(goal.id)),view=f.host.decorate(f.store.snapshot(goal.sessionId));
+ assert.equal(view.superagent!.task.reason,'round_limit_removed');assert.match(view.superagent!.task.summary!,/限制已取消/);
+ assert.equal(JSON.stringify(f.host.ledger.get(goal.id)),before);await f.activate();assert.equal(f.worker().state,'parked');
+ await f.host.control(goal.sessionId,{command:'resume',goalId:goal.id,revision:f.host.ledger.get(goal.id).revision});await f.activate();
+ f.host.profile(goal.sessionId)!.beforeModel!();assert.equal(f.host.ledger.get(goal.id).modelRounds,601);
+ const expired=f.host.ledger.get(goal.id);expired.deadlineAt=new Date(Date.now()-1000).toISOString();f.host.ledger.save(expired);
+ assert.throws(()=>f.host.profile(goal.sessionId)!.beforeModel!(),/deadline/);
+ assert.equal(f.host.ledger.get(goal.id).summary,'deadline_reached');
+ await f.host.control(goal.sessionId,{command:'cancel',goalId:goal.id,revision:f.host.ledger.get(goal.id).revision});
+ assert.equal(f.host.ledger.get(goal.id).status,'cancelled');assert.equal(f.host.ledger.get(goal.id).modelRounds,601);
+});
+
+
+test('Pilot retains pre-task and task usage beyond 500 without imposing a model-call ceiling',async t=>{
+ const f=await fixture(t);await f.admit('直接检查当前项目文件');f.agents.isRunning=()=>true;
+ const profile=f.host.profile(f.router)!;
+ for(let i=0;i<501;i++)profile.beforeModel!();
+ const actor=f.internal.pilotActors.get(f.router);assert.equal(actor.preTaskModelRounds,501);assert.equal(f.store.list('superGoals').length,0);
+ f.internal.ensurePilotTask(actor);const goal=f.host.ledger.get(actor.taskId);
+ assert.equal(goal.modelRounds,501);assert.equal(goal.roundLimit,undefined);assert.equal(goal.status,'running');
+ for(let i=0;i<3;i++)profile.beforeModel!();
+ assert.equal(f.host.ledger.get(goal.id).modelRounds,504);assert.equal(f.host.ledger.get(goal.id).acceptanceState,'not_evaluated');
 });

@@ -257,7 +257,6 @@ export class LakeStore {
         contextBudgetMode: "auto",
         contextWindow: 128000,
         maxOutput: 8192,
-        maxSteps: 500,
       },
     };
     this.put("sessions", session.id, session);

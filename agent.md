@@ -16,6 +16,8 @@ Items、Security、Memory、任务与证据的权威职责、bearqy 当前记忆
 
 ## 0. 统一 Super-agent 内核方向（实施中）
 
+2026-11-08 用户确认取消任务模型轮次硬上限。TypeScript 的 Pilot、专员 Worker、临时子智能体和共同任务继续记录实际调用量，不再由累计 modelRounds、旧 roundLimit 或旧 maxSteps 拒绝派单、续接、模型调用与恢复；详情不显示轮次用量/上限。历史计数与旧配置留作原始记录，既有轮次暂停须经当前输入或明确恢复后继续，不在升级时自动重跑。任务绝对期限、停止、权限、未决操作及业务验收继续有效；本条取代下文和旧计划中关于累计轮次门禁的约束。
+
 2026-11-06 用户进一步确认：Pilot、长期专员对应的 Task Worker 和临时 child 共享通用 Agent 执行能力，职责不用于裁剪 Shell、文件、搜索或工具使用。Pilot 默认协调和委派，也可直接调查与执行；首次实际执行按本轮受信输入建立原 Task/attempt/Operation，纯对话及派单不制造业务任务。直接任务在连续 Pilot 展示入口内保留独立的目标、操作、待办与有界请求工作集；专员 Worker 和 child 仍使用独立 SDK Session。SSH Bash 通过准确资源与当前配置版本接入已有凭据/指纹，模型可使用远端已安装的 kubectl、mysql 等工具自主调查；缺少专用适配器不等于没有通用执行能力。计划切换与工具延迟加载均经过同一权限包装，后台进程汇合和停止沿原 Task 记账。完整通用 Agent 接入及外部可选服务边界见[实施计划](plan/feature-typescript-agent-capabilities-1.md)和[验证记录](docs/validation/typescript-candidate/agent-capabilities.md)。此方向取代下面历史阶段的“Pilot 只路由/固定诊断”限制，既有资源、安全、记忆及未知操作职责继续有效。
 
 

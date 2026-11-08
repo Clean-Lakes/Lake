@@ -32,7 +32,7 @@
 .super-task-heading>svg { flex:none; margin-top:2px; }
 .super-task-heading strong,.super-task-owner strong { min-width:0; overflow-wrap:anywhere; font-weight:var(--font-weight-ui); }
 .super-task-state { display:flex; gap:6px 10px; flex-wrap:wrap; padding:10px 0 18px; }
-.super-task-state small,.super-task-budget { color:var(--text-muted); font-size:inherit; }
+.super-task-state small { color:var(--text-muted); font-size:inherit; }
 .super-task-state [data-tone=active] { color:var(--info); }
 .super-task-state [data-tone=attention] { color:var(--warning); }
 .super-task-state [data-tone=danger] { color:var(--danger); }
@@ -64,7 +64,6 @@
 .super-task-steps p { color:var(--text-muted); margin:5px 0 0; }
 .super-step-attempts { margin-top:6px; font-size:var(--text-sm,13px); color:var(--text-muted); }
 .super-step-attempts summary { width:fit-content; cursor:pointer; }
-.super-task-budget { padding-top:12px; }
 .super-task-control-error { color:var(--danger); overflow-wrap:anywhere; }
 
 .pilot-history-notice { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:16px; color:var(--text-muted); border-top:1px solid var(--border); font-size:var(--font-size-ui); }

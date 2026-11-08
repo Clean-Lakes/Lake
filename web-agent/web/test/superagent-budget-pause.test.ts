@@ -33,7 +33,7 @@ test('budget pause is distinct from a recoverable context-size error and has an 
  const html=renderToStaticMarkup(createElement(SuperTaskInspector,{task,goal}));
  assert.match(html,/已暂停/);
  assert.match(html,/尚无新的检查结果/);
- assert.match(html,/模型调用轮数已达上限/);
+ assert.doesNotMatch(html,/模型调用轮数已达上限|super-task-budget|500/);
  assert.doesNotMatch(html,/13 \/ 500|已验收/);
 });
 
@@ -55,4 +55,14 @@ test('removing a legacy token ceiling supersedes its current pause notice withou
  assert.equal(snapshot.ai!.cards[0].content,refusal);
  assert.equal(superTaskHeaderPresentation(task)?.status,'failed');
  assert.match(displayAiError('superagent: task model round limit reached'),/模型调用轮数上限/);
+});
+
+
+test('round-limit removal supersedes stale budget errors without erasing their original diagnostics',()=>{
+ const at='2026-11-08T00:00:00Z';const error='superagent: task model round limit reached';
+ const snapshot={session:{id:'worker'},messages:[],resources:[],actions:[],ai:{session:'worker',status:'paused',cardsOffset:0,cards:[{id:'old',type:'error',status:'failed',at,content:error}]}} as unknown as SessionSnapshot;
+ const task={taskId:'task',sessionId:'worker',state:'paused',reason:'round_limit_removed',summary:'轮次限制已取消，可继续当前任务。'} as SuperTask;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,superTask:task}));
+ assert.match(html,/轮次限制已取消，可继续当前任务/);assert.doesNotMatch(html,/模型调用轮数上限，已暂停/);
+ assert.equal(snapshot.ai!.cards[0]!.content,error);
 });

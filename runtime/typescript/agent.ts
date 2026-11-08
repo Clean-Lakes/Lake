@@ -680,7 +680,6 @@ export class LakeAgents {
       subagentContext: { agentPrompt: request.systemPrompt ?? request.profile.systemPrompt ?? "" },
       parentSessionId: parentId as SessionId, taskType: "subagent_child", agentName: request.agentType,
       toolAllowlist: allowed, modelSelection: { providerId: provider.id, modelId: model.name },
-      maxTurns: Math.min(request.maxTurns ?? Number(parentSession.options.maxSteps ?? 500), Number(parentSession.options.maxSteps ?? 500)),
       mode: "build", modelStreaming: "on", streamingToolExecution: "off", toolConcurrency: { maxConcurrency: 1 },
       titleGeneration: { enabled: false }, targetCompletionVerification: { enabled: false },
       dynamicWorkflowEnabled: false, nativeSearchEnhancementsEnabled: true, toolSearch:{mode:"auto"}, subagents: { enabled: false }, mcp: { enabled: false },
@@ -875,7 +874,6 @@ export class LakeAgents {
         toolAllowlist: profile?.allowlist.filter(name=>name!=="WebSearch"||boundModel.properties.supportsNativeWebSearch),
         workingDirectory: workspace,
         modelSelection: { providerId: provider.id, modelId: model.name },
-        maxTurns: Number(session.options.maxSteps ?? 500),
         // Lake's versioned work_begin confirmation owns Worker plan execution.
         // The upstream mode must not become a second conflicting plan authority.
         mode: profile?.runtimeMode??(!profile && session.options.conversationMode === "plan" ? "plan" : "build"),
@@ -886,7 +884,7 @@ export class LakeAgents {
         targetCompletionVerification: { enabled: false },
         dynamicWorkflowEnabled: false,
         nativeSearchEnhancementsEnabled: true, toolSearch:{mode:"auto"},
-        subagents: { enabled: !profile || profile.subagents === true, maxTurns: Number(session.options.maxSteps ?? 500) },
+        subagents: { enabled: !profile || profile.subagents === true },
         mcp: { enabled: false },
       },
       {

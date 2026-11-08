@@ -341,7 +341,7 @@ test("independent assignments cannot replay one mutation with a different call I
   assert.equal(writes, 1);
 });
 
-test("adding a specialist preserves the task's spent model rounds", async t => {
+test("joint tasks retain per-member usage and sum it without a round ceiling", async t => {
   const {ledger, create} = await fixture(t);
   const a = create({roundLimit: 3});
   a.modelRounds = 2;
@@ -350,13 +350,13 @@ test("adding a specialist preserves the task's spent model rounds", async t => {
     deadlineAt: new Date(Date.parse(a.deadlineAt) + 60000).toISOString()});
   ledger.joinTask(a.id, [b.id]);
   assert.equal(ledger.get(b.id).deadlineAt, a.deadlineAt);
-  assert.equal(ledger.get(b.id).roundLimit, 3);
-  assert.equal(ledger.roundsRemaining(ledger.get(b.id)), 1);
+  assert.equal(ledger.get(b.id).roundLimit, 9); // Legacy metadata is preserved, not inherited.
+  assert.equal(ledger.totalModelRounds(ledger.get(b.id)), 2);
   const member = ledger.get(b.id);
-  member.modelRounds++;
+  member.modelRounds=1000;
   ledger.save(member);
-  assert.equal(ledger.roundsRemaining(ledger.get(a.id)), 0);
-  assert.equal(ledger.roundsRemaining(ledger.get(b.id)), 0);
+  assert.equal(ledger.totalModelRounds(ledger.get(a.id)), 1002);
+  assert.equal(ledger.totalModelRounds(ledger.get(b.id)), 1002);
 });
 
 test("recalling a shared task by public ID returns this specialist's own report and evidence reference", async t => {

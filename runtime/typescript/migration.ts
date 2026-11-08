@@ -241,7 +241,7 @@ export async function applyLegacyMigration(store: LakeStore, redact: (text: stri
       if (!safeId(session.id)) throw new HttpError(409, "旧会话身份无效，迁移已停止");
       const role: WorkSession["workspaceRole"] = domains.has(session.id) ? "router" : channels.has(session.id) ? "role" : "legacy";
       put("sessions", session.id, { id: session.id, projectId: session.projectId, title: session.title, status: "idle", resourceIds: [], createdAt: session.createdAt,
-        updatedAt: session.updatedAt, workspaceRole: role, options: { conversationMode: "default", agentRuntime: "typescript", profile: "core", maxSteps: 500, runtime: "local", ignoreNaturalMemory: true,
+        updatedAt: session.updatedAt, workspaceRole: role, options: { conversationMode: "default", agentRuntime: "typescript", profile: "core", runtime: "local", ignoreNaturalMemory: true,
           ...Object.fromEntries(["silentMCPCalls", "silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "blockUnreferencedAssets", "denyLocalExecution"]
             .filter((key) => typeof permissions.get(session.id)?.[key] === "boolean").map((key) => [key, permissions.get(session.id)[key]])) } } satisfies StoredSession);
       put("legacySessionSources", session.id, { batchId: batch.id, projectId: session.projectId, originalStatus: session.status,

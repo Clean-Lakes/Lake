@@ -68,7 +68,6 @@ export function joinExecutions(store: LakeStore, taskId: string, addedIds: strin
     for (const member of members) if (!member.sharedTaskId) {
       member.sharedTaskId = taskId;
       if (Date.parse(member.deadlineAt) > Date.parse(primary.deadlineAt)) member.deadlineAt = primary.deadlineAt;
-      member.roundLimit = Math.min(member.roundLimit, primary.roundLimit);
       // Registration is orthogonal to the member's running plan, interaction, and execution revision.
       store.put('superGoals', member.id, member);
     }

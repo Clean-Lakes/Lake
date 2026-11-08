@@ -43,7 +43,6 @@ export function SuperTaskInspector({task,goal,worker,plan=false,connected=false,
     {item.attempts && item.attempts.length > 1 && <details className="super-step-attempts"><summary>{item.attempts.length} 次执行</summary>
       {item.attempts.map(attempt=><p key={attempt.id}><time dateTime={attempt.createdAt}>{new Date(attempt.createdAt).toLocaleString()}</time> · {stepLabels[attempt.status]??'待核实'}</p>)}</details>}</div>
   </li>)}</ol>)}
-  {!plan&&!summaryOnly&&<p className="super-task-budget">{task.reason==='model_round_limit'?'模型调用轮数已达上限':<>{task.collaboration?'共同任务已用':'已用'} {goal.modelRounds} / {goal.roundLimit} 轮</>}</p>}
   {!plan&&!summaryOnly&&!['completed','failed','cancelled'].includes(task.state)&&<button type="button" className="button secondary" disabled={!connected||busy} aria-busy={busy} onClick={()=>void stop()} aria-label={task.collaboration?`停止${owner?.roleName??"当前专员"}参与「${task.title}」的执行`:`停止任务：${task.title}`} title={task.collaboration?"其他专员会继续执行":`仅停止「${task.title}」，不影响该专员的其他任务`}><Glyph name={busy?'loader':'stop'} size={13}/>{busy?'正在停止…':task.collaboration?'停止本专员的执行':'仅停止此任务'}</button>}
   {error&&<p role="alert" className="super-task-control-error">{error}</p>}
  </section>;
