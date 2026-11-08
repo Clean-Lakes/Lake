@@ -75,7 +75,7 @@ The user explicitly requested merging all PRs into develop, a macOS-only product
 
 - **RISK-001**: Current TypeScript does not implement every legacy API. Release notes must identify these limits; publishing does not mark parity verified.
 - **RISK-002**: Large legacy history can exceed the native startup deadline. Preparation must be bounded and rollback must preserve original databases and unresolved operations.
-- **ASSUMPTION-001**: This release targets Apple Silicon macOS 13+ using the existing persistent signing certificate; Windows is not published.
+- **ASSUMPTION-001**: This release targets Apple Silicon macOS 13.5+ using the existing persistent signing certificate; Windows is not published.
 
 ## 8. Related Specifications / Further Reading
 

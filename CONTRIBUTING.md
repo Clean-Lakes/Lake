@@ -8,7 +8,7 @@
 
 自 0.3.28 起，macOS 默认桌面构建使用当前 TypeScript 后端（用户已明确授权该发布范围），并非旧版全量等价验收已通过。`scripts/build_lake.sh --typescript` 构建签名 TS 二进制；无参数的 Go 构建保留给旧工具和平台，不是 macOS 正式包回退。日常 TS 联调使用下述完整 Dev 构建入口；旧 Go/React 快速运行仅适用于相应旧后端。
 
-需要 macOS 13+、Apple Silicon、Go 1.26.6（以 `go.mod` 为准）、Node.js 24.14+、pnpm 10.33.4、Swift 5.9+ 和 Xcode Command Line Tools。第一次构建先配置持久代码签名身份：
+需要 macOS 13.5+、Apple Silicon、Go 1.26.6（以 `go.mod` 为准）、Node.js 24.14+、pnpm 10.33.4、Swift 5.9+ 和 Xcode Command Line Tools。第一次构建先配置持久代码签名身份：
 
 ```sh
 scripts/setup_lake_signing.sh

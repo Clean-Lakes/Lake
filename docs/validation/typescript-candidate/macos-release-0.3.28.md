@@ -37,3 +37,5 @@ Production PR automatic checks, independent review, merge and exact-master rebui
 ## Production PR infrastructure follow-up
 
 Preparation PR #200 merged into develop as `b896c49288849ae3a7e964e944c6ffeb60dfc5d3`; its tree matches the recorded preparation head. Release PR #201 targets master from same-repository develop. The first macOS workbench run was cancelled before any step: GitHub reported `macos-14-arm64-us-default is not supported` (run 42488245003). The follow-up changes only its runner to the officially documented standard `macos-15`, retaining all checks and PR-only triggers. No cancellation is counted as a pass; production review and the new automatic checks remain required.
+
+The signed SEA Mach-O `LC_BUILD_VERSION` reports `minos 13.5` (`xcrun vtool -show-build bin/lake`). The follow-up also aligns the desktop deployment target, LSMinimumSystemVersion and current release documentation to macOS 13.5, replacing the previous inaccurate 13.0 package declaration. Native library tests remain independent of the packaged Node runtime.
