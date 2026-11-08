@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-08
 last_updated: 2026-11-08
 owner: Lake
-status: In progress
+status: Completed
 tags: [security, recovery, typescript, bug]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In_progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 The dual-cloud Ops exercise exposed a missing recovery path: an authorized service restart changed the remote machine, its SSH call was cancelled, and the new service remained alive. The original operation must remain unknown. An authenticated operator needs to record the independently checked effects and settle their risk before admitting new work. This is an explicit operator judgment, not a claim that arbitrary Shell is mechanically read-only or confined.
 
@@ -53,7 +53,7 @@ The dual-cloud Ops exercise exposed a missing recovery path: an authorized servi
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-006 | Test altered SDK/source/peer/configuration/evidence, live calls, unrelated observations, stale revisions, original-goal replay, a new post-closure request, other unknown operations, retained processes and immutable source/acceptance. Run TypeScript, frontend, bundled service and boundary checks appropriate to the implementation. | ✅ | 2026-11-08 |
-| TASK-007 | Sign and install Lake Dev from a clean commit with `scripts/build_lake_desktop.sh --dev --ts-candidate --install`; inspect the real failed operation and new review in native light/dark/narrow layouts. After independently settling the QA effects, rerun the failed scenario from a fresh authorized request and finish both 19-case matrices, including S12 and cleanup. Record QA assistance separately. | | |
+| TASK-007 | Sign and install Lake Dev from a clean commit with `scripts/build_lake_desktop.sh --dev --ts-candidate --install`; inspect real failed operations and the recorded review state in native light/dark/narrow layouts. Independently settle the QA effects, rerun failures from fresh authorized requests and finish both 19-case matrices, including S12 and cleanup. Record QA assistance separately. Completed with business execution at `7840fafa`, final CSS/build validation at `79550853`, 36 business passes plus 2 expected no-replay cases; all 13 new directories cleaned and all 28 registered paths independently absent. See the dual-cloud validation record for autonomous reruns and limits. | ✅ | 2026-11-08 |
 
 ## 3. Alternatives
 
