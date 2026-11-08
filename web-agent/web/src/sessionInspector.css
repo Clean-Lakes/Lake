@@ -70,7 +70,7 @@
 .inspector-inline-link { display:inline-flex; align-items:center; gap:7px; border:0; padding:4px 0; background:transparent; color:var(--text-muted); font-size:var(--font-size-ui); cursor:pointer; }
 .inspector-inline-link:hover { color:var(--foreground); }
 .inspector-inline-link { margin-top:8px; max-width:100%; text-align:left; line-height:1.6; }
-.inspector-empty { color:var(--text-muted); line-height:1.7; }
+.inspector-empty { color:var(--text-muted); line-height:1.7; overflow-wrap:anywhere; }
 .inspector-turn-details { min-width:0; }
 .session-inspector [hidden] { display:none!important; }
 .inspector-execution-title,.inspector-execution-steps h3 { display:flex; align-items:center; gap:9px; margin:0 0 22px; font-size:var(--font-size-ui); font-weight:var(--font-weight-semibold); }
