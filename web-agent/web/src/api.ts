@@ -118,6 +118,7 @@ export const api = {
     request<OperatorEffectReview>(`/api/sessions/${encodeURIComponent(sessionId)}/operator-effect-review/${encodeURIComponent(operationId)}`,{signal}),
   confirmOperatorEffectReview: (sessionId:string,operationId:string,confirmation:OperatorEffectConfirmation) =>
     post<{operationId:string;recorded:true;closureState?:'reconciled'}>(`/api/sessions/${encodeURIComponent(sessionId)}/operator-effect-review/${encodeURIComponent(operationId)}`,confirmation),
+  watchdogMode: (projectId:string,signal?:AbortSignal) => request<{mode:WatchdogMode}>(`/api/projects/${encodeURIComponent(projectId)}/watchdog`,{signal}),
   setWatchdogMode: (projectId: string, mode: WatchdogMode) => request<{mode: WatchdogMode}>(`/api/projects/${encodeURIComponent(projectId)}/watchdog`, {
     method: "PUT", body: JSON.stringify({mode}),
   }),

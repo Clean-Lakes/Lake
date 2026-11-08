@@ -1,7 +1,4 @@
-import {useEffect, useRef, useState} from 'react';
-import type {WatchdogFinding, WatchdogMode, WatchdogView} from '../../shared/contracts';
-import {api, readableError} from './api';
-import {AppSelect} from './AppSelect';
+import type {WatchdogFinding,WatchdogView} from '../../shared/contracts';
 import {DisclosureSummary} from './DisclosureSummary';
 
 const categories: Record<WatchdogFinding['kind'], string> = {
@@ -10,7 +7,6 @@ const categories: Record<WatchdogFinding['kind'], string> = {
 const actions: Record<WatchdogFinding['action'], string> = {
   observed: '已记录', guided: '已排队纠偏', recovered: '已观察到新进展', skipped: '已跳过', retry_queued: '已排队重试',
 };
-const modes: Record<WatchdogMode, string> = {off: '关闭', observe: '仅观察', guide: '允许纠偏'};
 
 function WatchdogRecord({finding}: {finding: WatchdogFinding}) {
   const date = new Date(finding.at);
@@ -31,39 +27,11 @@ function WatchdogRecord({finding}: {finding: WatchdogFinding}) {
   </li>;
 }
 
-export function TaskWatchdog({projectId, view, connected, onUpdated}: {
-  projectId: string; view: WatchdogView; connected: boolean; onUpdated: () => void;
-}) {
-  const [saving, setSaving] = useState<WatchdogMode>();
-  const [error, setError] = useState('');
-  const mounted = useRef(false);
-  useEffect(() => {
-    mounted.current = true;
-    return () => { mounted.current = false; };
-  }, []);
-  const changeMode = async (next: WatchdogMode) => {
-    if (!connected || saving || next === view.mode) return;
-    setSaving(next);
-    setError('');
-    try {
-      await api.setWatchdogMode(projectId, next);
-      if (mounted.current) onUpdated();
-    } catch (cause) {
-      if (mounted.current) setError(readableError(cause));
-    } finally {
-      if (mounted.current) setSaving(undefined);
-    }
-  };
+export function TaskWatchdog({view}:{view:WatchdogView}) {
   const [latest, ...earlier] = [...view.findings].sort((a, b) => b.at.localeCompare(a.at));
+  if(!latest)return null;
   return <section className="task-watchdog" aria-label="任务巡检">
-    <label className="watchdog-setting">
-      <span>项目巡检</span>
-      <AppSelect aria-label="项目巡检模式" value={saving ?? view.mode} disabled={!connected || !!saving}
-        aria-busy={!!saving} onChange={event => void changeMode(event.target.value as WatchdogMode)}>
-        {(Object.keys(modes) as WatchdogMode[]).map(mode => <option key={mode} value={mode}>{modes[mode]}</option>)}
-      </AppSelect>
-    </label>
-    {error && <p className="super-task-control-error" role="alert">{error}</p>}
+    <h3 className="inspector-execution-title">任务巡检记录</h3>
     {latest && <ol aria-label="本次执行的巡检记录"><WatchdogRecord finding={latest}/></ol>}
     {earlier.length > 0 && <details className="watchdog-history">
       <DisclosureSummary>更早的 {earlier.length} 条记录</DisclosureSummary>

@@ -108,9 +108,7 @@
 .execution-step-records > summary > .lake-disclosure-chevron { grid-column:3; }
 .execution-step-records[open] > summary { margin-bottom:18px; }
 .task-watchdog { border-top:1px solid var(--border); padding:14px 2px 4px; color:var(--foreground); line-height:1.55; }
-.watchdog-setting,.watchdog-record-heading { display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; }
-.watchdog-setting { justify-content:space-between; font-size:var(--font-size-ui); }
-.watchdog-setting .app-select { min-width:0; max-width:100%; }
+.watchdog-record-heading { display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; }
 .task-watchdog ol { list-style:none; padding:0; margin:12px 0 0; }
 .watchdog-record { min-width:0; margin:12px 0; overflow-wrap:anywhere; }
 .watchdog-record-heading { font-size:12px; color:var(--text-muted); }
