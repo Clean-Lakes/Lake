@@ -50,6 +50,10 @@ jobs:
        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [ai, web, remaining]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -61,12 +65,33 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.6'
+          cache-dependency-path: |
+            go.sum
+            internal/${{ matrix.group }}/**/*.go
       - run: pnpm --dir web-agent install --frozen-lockfile
       - run: pnpm --dir web-agent build:web
       - run: mkdir -p assets/web/dist && cp -R web-agent/web/dist/. assets/web/dist/
-      # Retain the full legacy Go race/vet checks. The macOS distribution now
-      # ships TypeScript; disk-heavy legacy fixtures run on the Linux runner.
-      - run: go test -race -timeout=30m ./... && go vet ./...
+      # Keep the complete package set, race instrumentation and vet. Heavy
+      # persistence suites get separate runners rather than competing for RAM.
+      - name: Verify complete legacy Go package partition
+        env:
+          GO_TEST_GROUP: ${{ matrix.group }}
+        run: |
+          python3 - <<'PY'
+          import os, subprocess
+          packages = subprocess.check_output(['go', 'list', './...'], text=True).splitlines()
+          module = subprocess.check_output(['go', 'list', '-m'], text=True).strip()
+          groups = {name: [module + '/internal/' + name] for name in ('ai', 'web')}
+          selected = groups['ai'] + groups['web']
+          assert set(selected) <= set(packages)
+          groups['remaining'] = [package for package in packages if package not in selected]
+          flattened = [package for group in groups.values() for package in group]
+          assert len(flattened) == len(set(flattened)) and set(flattened) == set(packages)
+          actual = groups[os.environ['GO_TEST_GROUP']]
+          assert actual
+          subprocess.run(['go', 'test', '-race', '-timeout=30m', *actual], check=True)
+          subprocess.run(['go', 'vet', *actual], check=True)
+          PY
   workbench:
     needs: [macos_runtime, legacy_go]
     if: >-
