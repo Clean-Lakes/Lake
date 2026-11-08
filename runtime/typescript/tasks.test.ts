@@ -101,6 +101,35 @@ test("legacy unresolved operations do not prevent proven reads and still block m
   assert.equal(ledger.finishHost("goal", { summary: "已完成独立只读检查。", outcome: "completed" }, 1, "policy").status, "completed");
 });
 
+test("a confirmed no-effect inspection permits new work on its original task while its exact operation remains immutable",async t=>{
+  const {store,create} = await fixture(t); create();
+  let effects: "none" | "observed" = "none";
+  const originalId = digest(["session","inspect"]);
+  const ledger = new TaskLedger(store,undefined,op=>op.id===originalId && store.get("commandOperatorEffectClosures",op.id)
+    ? {effects,closureState:"reconciled",closedAt:new Date().toISOString(),replayScopes:["/tmp/work"]} : undefined);
+  const command = (call:string,input:string,dispatch:()=>Promise<unknown>) =>
+    ledger.operation("goal",1,"policy",call,"Bash",{command:input},dispatch,v=>v,
+      {readOnly:false,resourceId:"host",commandExecutionId:digest(["goal",1,call])});
+  let inspections=0;
+  await assert.rejects(command("inspect","find /tmp/work",async()=>{inspections++;throw new Error("inaccessible cwd");}),/inaccessible cwd/);
+  const original = store.require<Operation>("superOperations",originalId);
+  store.put("commandExecutions",original.commandExecutionId!,{id:original.commandExecutionId,command:"find /tmp/work"});
+  store.put("commandOperatorEffectClosures",original.id,{operationId:original.id});
+  await assert.rejects(command("inspect","find /tmp/work",async()=>{inspections++;}),/cannot be replayed/);
+  assert.equal(inspections,1);
+  // Actual changes require a fresh user event. A verified read with no effects imposes no such fence.
+  let mutations=0;
+  effects="observed";
+  await assert.rejects(command("repair","fix /tmp/work/client.port",async()=>{mutations++;}),/禁止重放/);
+  effects="none";
+  await command("repair","fix /tmp/work/client.port",async()=>{mutations++;return {exitCode:0};});
+  assert.equal(mutations,1);
+  assert.deepEqual(store.require("superOperations",originalId),original);
+  const done=ledger.finishHost("goal",{summary:"已通过新的修复回执验收",outcome:"completed"},1,"policy");
+  assert.equal(done.acceptanceState,"pass");
+  assert.deepEqual(done.items[0].evidenceIds,[digest(["session","repair"])]);
+});
+
 test("Plan and explicit contracts retain the existing model-driven acceptance path", async (t) => {
   const { ledger, create } = await fixture(t);
   create({ mode: "plan" });

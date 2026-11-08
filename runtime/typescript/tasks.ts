@@ -350,7 +350,7 @@ export class TaskLedger {
     for (const closure of this.store.list<{operationId:string}>("commandEffectClosures")) {
       const original=this.store.get<Operation>("superOperations",closure.operationId);
       const receipt=original && this.effectResolution?.(original);
-      if (!original || receipt?.closureState!=="reconciled") continue;
+      if (!original || receipt?.closureState!=="reconciled" || receipt.effects==="none") continue;
       const old=this.get(original.goalId);
       const run=original.commandExecutionId && this.store.get<{command:string;authenticatedTarget?:SSHTarget}>("commandExecutions",original.commandExecutionId);
       if (!run) throw new HttpError(409,"原已核实变更的来源缺失");
