@@ -1,4 +1,5 @@
 import {workerDeliveries} from "./worker-deliveries";
+import {confirmsDispatch,correctedSpecialistRequestKey,record,routingCall} from "../../web-agent/shared/route-dispatch";
 import { projectTaskProgress } from "./task-progress";
 import { requestedInspectionRoot } from "../../web-agent/shared/command-policy";
 import {authorizeNetworkProbe, networkProbe} from "./network-probe";
@@ -469,8 +470,9 @@ export class LakeSuperagent implements AgentHost {
     });
   }
   private role(projectId: string, roleId: string, includeDeleted = false) {
-    const role = this.store.require<Role>("superRoles", roleId);
-    if (role.projectId !== projectId) throw new HttpError(404, "Specialist not found in project");
+    const role = this.store.get<Role>("superRoles", roleId);
+    if (!role || role.projectId !== projectId) throw new HttpError(404, "当前项目找不到该专员。" + canonical({code:"specialist_not_found",
+      recovery:{tool:"list_specialists",instruction:"读取当前项目目录并逐字复制准确的 id 作为 role_id；不要拼接、推断或按相似名称改派。"}}));
     if (role.deletedAt && !includeDeleted) throw new HttpError(410, "专员已删除，原任务和操作记录保留");
     return role;
   }
@@ -1004,6 +1006,7 @@ export class LakeSuperagent implements AgentHost {
             kind: message.author || message.jointAcceptance ? "report" as const : message.dispatch ? "dispatch" as const : undefined }];
         });
         const context = buildRouterContext({ projectId: project.projectId, now: now(),
+          specialists:this.store.list<Role>("superRoles"),
           events: events.map((event) => ({ ...event, hash: digest(this.eventObject(event)) })), messages,
           tasks: this.workers(project.projectId).map((worker) => {
             const goal = this.store.get<Goal>("superGoals", worker.task.executionGoalId ?? worker.task.taskId) ?? this.store.require<any>("legacyGoals", worker.task.taskId);
@@ -1513,7 +1516,7 @@ export class LakeSuperagent implements AgentHost {
       this.entry("list_specialists", "List stable project specialist role IDs and revisions. Metadata, not permissions.", objectSchema({ cursor: str, limit: integer }), (a) => this.listRoles(projectId, a.cursor, a.limit)),
       this.entry("manage_specialist", "Create/edit a long-lived specialist from an exact admitted human quote, independently of tasks. create requires immutable role_key; update exact role_id/expected_revision. Duties affect future assignments only.",
         objectSchema({ event_id: str, part_key: str, action: { enum: ["create", "update"], type: "string" }, role_id: str, role_key: str, name: str, duties: str, expected_revision: integer, quote: str }, ["event_id", "part_key", "action", "name", "duties", "quote"]), (a) => this.manage(sessionId, a)),
-      this.entry("route_work", "Commit one exact admitted event part. For an event selecting multiple resources, create must set resource_ids to its exact subset of selected IDs. Independent per-resource tasks may quote the same request if subsets are disjoint; for a single comparison include both IDs. Create requires title, quote and one recipient selector: role_id, new role_key, or role_ids for one shared task. Specify role_instructions for each contributor. Omit task_id for create; for assign supply the existing public task_id and additional roles. Followup, context_only and stop target the exact task and recipient role_id, using the public ID for a shared task. A fresh check of an accepted task can use predecessor_task_id for historical context. Inspect assignments in the receipt for the exact recipients. ask/respond omit task_id.",
+      this.entry("route_work", "Commit one exact admitted event part. Copy role_id verbatim from the current specialists catalog or list_specialists; never reconstruct IDs. If specialist_not_found, refresh the catalog and correct the same event/part, without changing its deliverable or scope. For an event selecting multiple resources, create must set resource_ids to its exact subset of selected IDs. Independent per-resource tasks may quote the same request if subsets are disjoint; for a single comparison include both IDs. Create requires title, quote and one recipient selector: role_id, new role_key, or role_ids for one shared task. Specify role_instructions for each contributor. Omit task_id for create; for assign supply the existing public task_id and additional roles. Followup, context_only and stop target the exact task and recipient role_id, using the public ID for a shared task. A fresh check of an accepted task can use predecessor_task_id for historical context. Inspect assignments in the receipt for the exact recipients. ask/respond omit task_id.",
         objectSchema({ event_id: str, part_key: str, action: { type: "string", enum: ["create", "assign", "followup", "context_only", "stop", "ask", "respond"] },
           task_id: str, predecessor_task_id: str, title: str, role_id: str, role_key: str, role_ids: array(str), resource_ids:array(str),
           role_instructions: array(objectSchema({role_id: str, instruction: str}, ["role_id", "instruction"])), quote: str, reason: str, evidence_task_ids: array(str) }, ["event_id", "part_key", "action", "reason"]), (a) => this.route(sessionId, a)),
@@ -1798,6 +1801,33 @@ export class LakeSuperagent implements AgentHost {
       throw new HttpError(404, "Task not found in this session");
     return goal;
   }
+  /** Snapshot annotation only: never rewrite SDK cards, decisions or acceptance.
+   * A recipient correction needs an absent exact ID and the durable successful
+   * decision for an otherwise identical request in the same SDK root. */
+  routingView(sessionId:string,view:NonNullable<SessionSnapshot['ai']>) {
+    const session=this.store.session(sessionId);
+    if(session.workspaceRole!=="router")return view;
+    const cards=view.cards, later=new Map<string,typeof cards[number]>(), recovered=new Map<string,string>();
+    for(let index=cards.length-1;index>=0;index--){
+      const card=cards[index]!, call=routingCall(card), key=correctedSpecialistRequestKey(card);
+      if(!call||!key)continue;
+      const args=record(record(card.data)?.arguments)!;
+      if(["completed","succeeded","success"].includes(card.status)&&confirmsDispatch(card,call)){
+        const receipt=record(card.content)!, decision=this.store.get<Decision>("superDecisions",digest([call.eventId,call.partKey]));
+        const event=this.store.get<InputEvent>("superInputs",call.eventId);
+        const role=this.store.get<Role>("superRoles",String(args.role_id));
+        if(event?.projectId!==session.projectId||!role||role.projectId!==event.projectId||
+          !decision||decision.projectId!==event.projectId||decision.hash!==digest(args)||receipt.id!==decision.id||receipt.taskId!==decision.taskId)continue;
+        const members=this.decisionAssignments(decision),actual=Array.isArray(receipt.assignments)?receipt.assignments.map(record):[receipt];
+        if(members.length!==1||actual.length!==1||!actual[0]||["roleId","workerId","sessionId"].some(field=>actual[0]![field]!==members[0]![field as keyof Assignment]))continue;
+        later.set(key,card);
+      }else if(card.status==="failed"&&later.has(key)&&!this.store.get<Role>("superRoles",String(args.role_id))&&
+        (card.content?.trim()==="记录不存在"||card.content?.includes('"code":"specialist_not_found"'))){
+        recovered.set(card.id,later.get(key)!.id);
+      }
+    }
+    return {...view,cards:cards.map(card=>recovered.has(card.id)?{...card,data:{...record(card.data),routingRecovery:{kind:"corrected_missing_specialist",recoveredBy:recovered.get(card.id)}}}:card)};
+  }
   decorate(snapshot: SessionSnapshot,taskId?:string): SessionSnapshot {
     snapshot.hostKeyTrust=this.ssh?.prompt(snapshot.session.id)??null;
     snapshot.messages = [...snapshot.messages, ...this.store.list<Message>("superDispatchMessages").filter((message) => message.sessionId === snapshot.session.id)]
@@ -1827,7 +1857,10 @@ export class LakeSuperagent implements AgentHost {
       const goal = legacy && this.store.get<any>("legacyGoals", legacy.task.taskId);
       if (goal) { snapshot.superagent = { task: legacy!.task, goal, roleId: legacy!.roleId }; if (snapshot.ai) snapshot.ai.workGoals = [goal]; }
     }
-    if(snapshot.session.workspaceRole === "router") snapshot.messageRead = conversationReadState(this.store, snapshot.session.id);
+    if(snapshot.session.workspaceRole === "router") {
+      snapshot.messageRead = conversationReadState(this.store, snapshot.session.id);
+      if(snapshot.ai)snapshot.ai=this.routingView(snapshot.session.id,snapshot.ai);
+    }
     return snapshot;
   }
   changed(sessionId: string) {

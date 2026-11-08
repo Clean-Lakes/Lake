@@ -161,3 +161,14 @@ test("provider projection removes only complete admitted history and keeps the n
   const missingResult = { messages: messages.filter((row) => row.role !== "tool" || row.tool_call_id) };
   assert.equal(projectRouterHistory(missingResult, archives, new Set(["old-event"]), input).messages.length, missingResult.messages.length);
 });
+
+test('current specialist catalog keeps exact IDs, filters scope/deletion and remains bounded',()=>{
+ const specialists=Array.from({length:60},(_,i)=>({id:`role-${i}-${'a'.repeat(64)}`,projectId:'project',name:'专员'.repeat(200),revision:2}));
+ specialists.unshift({id:'foreign',projectId:'other',name:'foreign',revision:1},{id:'deleted',projectId:'project',name:'old',revision:1,deletedAt:when(1)});
+ const original=source({specialists}),before=JSON.stringify(original),result=buildRouterContext(original),value=parse(result);
+ assert.ok(Buffer.byteLength(result.input)<=16384);assert.ok(value.context.specialists.hasMore);
+ assert.ok(value.context.specialists.items.length>0&&value.context.specialists.items.length<=20);
+ for(const item of value.context.specialists.items){assert.ok(specialists.some(role=>role.id===item.id&&role.projectId==='project'&&!role.deletedAt));assert.equal(item.revision,2);}
+ assert.match(value.context.specialists.meaning,/list_specialists/);assert.equal(JSON.stringify(original),before);
+ const small=buildRouterContext({...original,maxBytes:4200});assert.ok(Buffer.byteLength(small.input)<=4200);assert.ok(parse(small).context.specialists.hasMore);
+});

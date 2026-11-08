@@ -732,3 +732,45 @@ test("sample interval runs within the worker deadline, supports cancellation and
   await assert.rejects(wait(2), /原任务期限/);
   assert.deepEqual(f.store.list("superOperations"),before);
 });
+
+test("missing recipient returns a recoverable exact-ID error before creating any task", async t => {
+  const f=await fixture(t),event=await f.admit("检查当前项目文件");
+  for(const roleId of ["role-checker-typo","foreign-role"]){
+    if(roleId==='foreign-role')f.store.put('superRoles',roleId,{...f.role,id:roleId,projectId:'foreign'});
+    assert.throws(()=>f.route(event,{action:'create',title:'检查',role_id:roleId}),(error:any)=>{
+      assert.equal(error.status,404); assert.match(error.message,/specialist_not_found/);assert.match(error.message,/list_specialists/);return true;
+    });
+    assert.equal(f.store.list('superGoals').length,0);assert.equal(f.store.list('superDecisions').length,0);assert.equal(f.store.list('superWorkers').length,0);
+  }
+  f.store.put('superRoles','retired',{...f.role,id:'retired',deletedAt:'2026-11-01T00:00:00Z'});
+  assert.throws(()=>f.route(event,{action:'create',title:'检查',role_id:'retired'}),(error:any)=>error.status===410);
+  const result=f.route(event,{action:'create',title:'检查',role_id:f.role.id});
+  assert.equal(result.roleId,f.role.id);assert.equal(f.store.list('superGoals').length,1);
+});
+
+test("snapshot verifies a corrected missing recipient against the original durable decision without editing history",async t=>{
+  const f=await fixture(t),event=await f.admit("检查当前项目文件");
+  const args={event_id:event.id,part_key:'work',action:'create',title:'检查',role_id:f.role.id,quote:event.payload,reason:'current human instruction'};
+  const receipt=f.route(event,args),root='root-exact';
+  const failed={id:'failed',type:'operation',title:'route_work',status:'failed',at:'2026-11-08T00:00:01Z',content:'记录不存在',data:{root_turn_id:root,arguments:{...args,role_id:'missing-typo'}}};
+  const success={...failed,id:'success',status:'completed',at:'2026-11-08T00:00:02Z',data:{root_turn_id:root,arguments:args},content:JSON.stringify(receipt)};
+  const project=(cards:any[])=>f.host.decorate({...f.store.snapshot(f.router),ai:{...f.store.view(f.router),cards}}).ai!.cards;
+  const before=JSON.stringify([failed,success]),decisions=JSON.stringify(f.store.list('superDecisions'));
+  const proof={kind:'corrected_missing_specialist',recoveredBy:'success'};
+  assert.deepEqual((project([failed,success])[0]!.data as any).routingRecovery,proof);
+  assert.deepEqual((f.host.routingView(f.router,{...f.store.view(f.router),cards:[failed,success]}).cards[0]!.data as any).routingRecovery,proof);
+  assert.deepEqual((project([{...failed,content:'当前项目找不到该专员。{"code":"specialist_not_found"}'},success])[0]!.data as any).routingRecovery,proof);
+  const negative=(first:any,second=success)=>assert.equal((project([first,second])[0]!.data as any).routingRecovery,undefined);
+  negative({...failed,data:{...failed.data,arguments:{...args,role_id:f.role.id}}}); // Existing recipient is never inferred as a correction.
+  f.store.put('superRoles','missing-typo',{...f.role,id:'missing-typo',projectId:'foreign'});negative(failed);
+  f.store.delete('superRoles','missing-typo');
+  for(const changed of [{title:'different'}, {quote:'different'}, {resource_ids:['other']}, {predecessor_task_id:'other'}])
+    negative({...failed,data:{...failed.data,arguments:{...failed.data.arguments,...changed}}});
+  negative({...failed,data:{...failed.data,root_turn_id:'other-root'}});
+  negative({...failed,content:'Connection timeout'});
+  negative(failed,{...success,content:JSON.stringify({...receipt,id:'uncommitted'})});
+  negative(failed,{...success,data:{...success.data,arguments:{...args,reason:'not the committed decision'}}});
+  assert.equal((project([success,failed])[1]!.data as any).routingRecovery,undefined);
+  assert.equal((project([failed])[0]!.data as any).routingRecovery,undefined);
+  assert.equal(JSON.stringify([failed,success]),before);assert.equal(JSON.stringify(f.store.list('superDecisions')),decisions);
+});

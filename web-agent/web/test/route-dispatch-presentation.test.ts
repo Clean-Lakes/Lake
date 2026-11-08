@@ -6,7 +6,8 @@ import type {AICard,SessionSnapshot} from '../../shared/contracts';
 import {AITranscript} from '../src/AIPanel';
 import {pilotHandoffInterimIds,recoveredRouteFailures} from '../src/routeDispatchPresentation';
 import {orderedTranscript} from '../src/timeline';
-import {TurnExecutionDetails} from '../src/TurnExecutionDetails';
+import {ToolStep} from '../src/ThinkingTimeline';
+import {RoutingRecoveryContext,TurnExecutionDetails} from '../src/TurnExecutionDetails';
 
 const at=(n:number)=>`2026-11-06T02:00:${String(n).padStart(2,'0')}Z`;
 const receipt=(event='event',part='host')=>({eventId:event,partKey:part,action:'create',workerId:'worker',taskId:'task',dispatch:{state:'queued',unresolvedOperations:0}});
@@ -60,12 +61,12 @@ test('recovery requires an actual host dispatch receipt, not a successful conver
 test('the main failure caption excludes recovered routing only; raw process and other failures stay intact',()=>{
  const cards=[route('failed','failed',1),route('success','completed',2)];
  const before=JSON.stringify(cards),html=render(cards);
- assert.deepEqual(notices(html),[]);
- assert.ok(html.includes('data-conversation-entry="failed"')&&html.includes('执行失败'),'the original failed row remains in execution details');
+ assert.deepEqual(notices(html),[' · 1 项派单重试后已恢复']);
+ assert.ok(html.includes('data-conversation-entry="failed"')&&html.includes('重试后已恢复'),'the original failed row remains in execution details');
  const host={...route('host','failed',4),title:'inspect_host'};
- assert.deepEqual(notices(render([...cards,host])),[' · 1 项失败']);
+ assert.deepEqual(notices(render([...cards,host])),[' · 1 项派单重试后已恢复 · 1 项失败']);
  const other=route('other','failed',4,'other-event');
- assert.deepEqual(notices(render([...cards,other])),[' · 1 项失败']);
+ assert.deepEqual(notices(render([...cards,other])),[' · 1 项派单重试后已恢复 · 1 项失败']);
  assert.deepEqual(notices(render([cards[0]!,{...cards[1]!,at:at(4)}],true)),[' · 1 项失败'],'recovery cannot cross user turns');
  assert.equal(JSON.stringify(cards),before,'presentation must preserve the persisted failure status and body');
 });
@@ -192,4 +193,33 @@ test('joint handoff folds only with all requested members and each exact forward
  }
  const failed=bound({...cards[1]!,id:'earlier',status:'failed',data:{arguments:{...call,role_ids:['a']}}});
  assert.equal(recoveredRouteFailures([failed,cards[1]!]).size,0);
+});
+
+
+test('corrected recipient recovery requires the host proof and matching later receipt in the same root and request',()=>{
+ const failed=bound({...route('typo','failed',1),content:'记录不存在',data:{arguments:{event_id:'event',part_key:'host',action:'create',role_id:'mistyped',title:'检查',quote:'检查服务器',resource_ids:['host']},routingRecovery:{kind:'corrected_missing_specialist',recoveredBy:'corrected'}}});
+ const success=bound({...route('corrected','completed',2),data:{arguments:{...(failed.data as any).arguments,role_id:'ops'}},content:JSON.stringify({...receipt(),roleId:'ops'})});
+ assert.deepEqual([...recoveredRouteFailures([failed,success])],['typo']);
+ const html=render([failed,success]);assert.deepEqual(notices(html),[' · 1 项派单重试后已恢复']);
+ const detail=renderToStaticMarkup(createElement(RoutingRecoveryContext.Provider,{value:recoveredRouteFailures([failed,success])},createElement(ToolStep,{card:failed})));
+ assert.ok(detail.includes('首次失败 · 重试后已恢复'));assert.ok(!detail.includes('step-failed'));assert.ok(detail.includes('step-recovered'));
+ assert.ok(renderToStaticMarkup(createElement(ToolStep,{card:failed})).includes('step-failed'));
+ for(const data of [{...(failed.data as any),routingRecovery:undefined},{...(failed.data as any),routingRecovery:{kind:'corrected_missing_specialist',recoveredBy:'absent'}}])
+  assert.equal(recoveredRouteFailures([{...failed,data},success]).size,0);
+ for(const change of [{title:'other'},{quote:'other'},{resource_ids:['different']},{role_instructions:[{role_id:'ops',instruction:'other'}]}]){
+  const changed={...success,data:{...(success.data as any),arguments:{...(success.data as any).arguments,...change}}};
+  assert.equal(recoveredRouteFailures([failed,changed]).size,0);
+ }
+ assert.equal(recoveredRouteFailures([failed,bound(success,'other-root')]).size,0);
+ assert.equal(recoveredRouteFailures([failed,{...success,content:JSON.stringify({...receipt(),roleId:'other'})}]).size,0);
+ assert.equal(recoveredRouteFailures([failed,{...success,content:JSON.stringify({...receipt(),roleId:'ops',dispatch:{state:'needs_input'}})}]).size,0);
+ assert.equal(recoveredRouteFailures([success,failed]).size,0);
+ assert.deepEqual(notices(render([failed,{...success,at:at(4)}],true)),[' · 1 项失败']);
+});
+
+test('unchanged recipients cannot recover changed scope, instructions, deliverable or SDK root',()=>{
+ const failed=bound(route('failed','failed',1)),success=bound(route('success','completed',2));
+ for(const change of [{title:'other'},{resource_ids:['other']},{quote:'other'},{role_instructions:[{role_id:'ops',instruction:'other'}]}])
+  assert.equal(recoveredRouteFailures([failed,{...success,data:{...(success.data as any),arguments:{...(success.data as any).arguments,...change}}}]).size,0);
+ assert.equal(recoveredRouteFailures([failed,bound(success,'other-root')]).size,0);
 });

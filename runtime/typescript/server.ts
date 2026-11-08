@@ -682,7 +682,7 @@ export async function startLakeServer(options: ServerOptions) {
             }
             case undefined:
             case "snapshot":
-              result = agents.executionView(sessionId, store.viewPage(sessionId, url.searchParams.has("before") ? Number(url.searchParams.get("before")) : undefined));
+              result = superagent.routingView(sessionId,agents.executionView(sessionId, store.viewPage(sessionId, url.searchParams.has("before") ? Number(url.searchParams.get("before")) : undefined)));
               break;
             case "options":
               result = { ...session.options, agentRuntime: "typescript" };

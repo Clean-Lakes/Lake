@@ -1,59 +1,8 @@
 import type {AICard} from '../../shared/contracts';
 import type {TranscriptEntry} from './timeline';
 
-function record(value:unknown):Record<string,unknown>|undefined {
- if(typeof value==='string'){try{value=JSON.parse(value)}catch{return}}
- return value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:undefined;
-}
-const nonempty=(value:unknown):value is string=>typeof value==='string'&&!!value.trim();
-
-function routingCall(card:AICard) {
- if(card.type!=='operation'||card.title!=='route_work')return;
- const {event_id,part_key,action,role_ids,role_id,role_key,task_id}=record(record(card.data)?.arguments)??{};
- if(!nonempty(event_id)||!nonempty(part_key)||!['create','assign','followup'].includes(String(action)))return;
- if(role_ids!=null&&(!Array.isArray(role_ids)||!role_ids.length||!role_ids.every(nonempty)||new Set(role_ids).size!==role_ids.length))return;
- const roles=Array.isArray(role_ids)?[...role_ids].sort():nonempty(role_id)?[role_id]:[];
- return {identity:JSON.stringify([event_id,part_key,action,roles,role_key,task_id]),eventId:event_id,partKey:part_key,action,roles,taskId:task_id};
-}
-
-function dispatchReady(dispatch:Record<string,unknown>|undefined,recorded:boolean) {
- const state=dispatch?.state;
- if(state!==undefined&&state!=='queued'&&state!=='running')return false;
- if(dispatch?.unresolvedOperations===true||typeof dispatch?.unresolvedOperations==='number'&&dispatch.unresolvedOperations>0)return false;
- return recorded||state==='queued'||state==='running';
-}
-
-function confirmsDispatch(card:AICard,call:NonNullable<ReturnType<typeof routingCall>>):boolean {
- const result=record(card.content);
- if(!result||result.eventId!==call.eventId||result.partKey!==call.partKey||result.action!==call.action||!nonempty(result.taskId))return false;
- if(call.taskId&&call.taskId!==result.taskId)return false;
- const recorded=record(result.handoff)?.recorded===true;
- if(result.assignments!==undefined){
-  if(!Array.isArray(result.assignments)||!result.assignments.length)return false;
-  const members=result.assignments.map(record);
-  if(members.some(member=>!member||!nonempty(member.workerId)||!nonempty(member.sessionId)||!nonempty(member.roleId)||
-   !dispatchReady(record(member.dispatch),recorded)))return false;
-  for(const key of ['roleId','workerId','sessionId'])if(new Set(members.map(member=>member![key])).size!==members.length)return false;
-  const roles=members.map(member=>member!.roleId).sort();
-  return !call.roles.length||JSON.stringify(roles)===JSON.stringify(call.roles);
- }
- if(!nonempty(result.workerId)||call.roles.length&&(call.roles.length!==1||result.roleId!==call.roles[0]))return false;
- return dispatchReady(record(result.dispatch),recorded);
-}
-
-/** Main-flow presentation only. Input is one turn in original chronological order.
- * A later successful decision for the exact admitted event/part recovers its
- * earlier routing error; every original card remains available for inspection. */
-export function recoveredRouteFailures(cards:readonly AICard[]):Set<string> {
- const succeeded=new Set<string>(),recovered=new Set<string>();
- for(let index=cards.length-1;index>=0;index--){
-  const card=cards[index]!,call=routingCall(card);
-  if(!call)continue;
-  if(['completed','succeeded','success'].includes(card.status)&&confirmsDispatch(card,call))succeeded.add(call.identity);
-  else if(card.status==='failed'&&succeeded.has(call.identity))recovered.add(card.id);
- }
- return recovered;
-}
+import {record,routingCall,confirmsDispatch} from '../../shared/route-dispatch';
+export {recoveredRouteFailures} from '../../shared/route-dispatch';
 
 const normal=new Set(['running','completed','succeeded','success']);
 const settled=new Set(['completed','succeeded','success']);
