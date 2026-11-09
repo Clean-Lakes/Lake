@@ -42,8 +42,8 @@
  }
 }
 
-/* Compact badges retain their size and use the same curve at a smaller scale. */
-:root :is(.session-state-badge,.composer-reference-token,.message-reference-token) {
+/* Compact badges and composer actions retain their size and scale the same curve. */
+:root :is(.session-state-badge,.composer-reference-token,.message-reference-token,:where(.composer-input) .composer-attach-button,:where(.composer-input) .send-button) {
  --window-corner-radius:8px;
  --window-corner-stroke-image:url('/window-corner-stroke-small.svg');
  --window-corner-stroke-slice:8;
@@ -52,6 +52,7 @@
 }
 :root .composer-reference-token { --window-corner-radius:var(--radius-composer-reference); }
 :root .message-reference-token { --window-corner-radius:var(--radius-message-reference); }
+:root .composer-input :is(.composer-attach-button,.send-button) { --window-corner-radius:var(--radius-composer-action); }
 
 /* WKWebView versions without corner-shape use the same contour as local nine-slice
    masks. Background and border remain inherited so hover, focus and theme updates
@@ -79,7 +80,9 @@
  .composer-mentions .mention-item,
  .session-state-badge,
  .composer-reference-token,
- .message-reference-token
+ .message-reference-token,
+ .composer-input .composer-attach-button,
+ .composer-input .send-button
 ) {
  --window-corner-inset:0px;
  isolation:isolate;
@@ -138,7 +141,9 @@
  .composer-mentions .mention-item,
  .session-state-badge,
  .composer-reference-token,
- .message-reference-token
+ .message-reference-token,
+ .composer-input .composer-attach-button,
+ .composer-input .send-button
 ) { position:relative; }
 
 /* Keep human text out of WebKit's clipped background paint when switching

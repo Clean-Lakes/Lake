@@ -32,8 +32,10 @@ function dispatchReady(dispatch:Record<string,unknown>|undefined,recorded:boolea
 
 export function confirmsDispatch(card:AICard,call:NonNullable<ReturnType<typeof routingCall>>):boolean {
  const result=record(card.content);
- if(!result||result.eventId!==call.eventId||result.partKey!==call.partKey||result.action!==call.action||!nonempty(result.taskId))return false;
- if(call.taskId&&call.taskId!==result.taskId)return false;
+ if(!result||result.eventId!==call.eventId||result.partKey!==call.partKey||!nonempty(result.taskId))return false;
+ const recheck=call.action==='followup'&&nonempty(call.taskId)&&result.action==='create'&&result.recoveryOfTaskId===call.taskId&&result.taskId!==call.taskId&&
+   Array.isArray(result.assignments)&&result.assignments.length===1&&record(result.assignments[0])?.executionId===result.taskId;
+ if(!recheck&&(result.action!==call.action||call.taskId&&call.taskId!==result.taskId))return false;
  const recorded=record(result.handoff)?.recorded===true;
  if(result.assignments!==undefined){
   if(!Array.isArray(result.assignments)||!result.assignments.length)return false;

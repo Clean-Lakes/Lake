@@ -1,4 +1,5 @@
 import { existsSync, lstatSync, readFileSync } from "node:fs";
+import { memoryContextUnavailable } from "./memory-errors";
 import {
   chmod,
   mkdir,
@@ -285,8 +286,17 @@ export class LakeMemory {
     )
       throw new HttpError(
         409,
-        "本任务使用过已停用或撤回的记忆，请新建任务继续；原执行记录已保留",
+        memoryContextUnavailable,
       );
+  }
+  /** Detection only. A fresh diagnostic must use another Session; never erase
+   * the old read provenance to make its existing transcript eligible again. */
+  needsFreshContext(actor: LayeredMemoryActor) {
+    this.guard();
+    if (actor.roleId) this.role(actor.projectId, actor.roleId);
+    const usage = actor.sessionId ? this.store.get<ReadUsage>("memoryReads", actor.sessionId) : undefined;
+    return !!usage && (usage.sourceIds.length > 0 && (!this.ready || this.invalidSources(usage.sourceIds,
+      !!actor.sessionId && this.isIgnored(actor.sessionId)).length > 0) || this.contextRevoked(usage));
   }
   private taskUsesInvalidMemory(taskId: string, excluded: Set<string>) {
     const goal = this.store.get<Goal>("superGoals", taskId),
@@ -926,7 +936,7 @@ export class LakeMemory {
     )
       throw new HttpError(
         409,
-        "本任务使用过已停用或撤回的记忆，请新建任务继续；原执行记录已保留",
+        memoryContextUnavailable,
       );
     if (actor.kind === "pilot" && current >= 0) {
       for (const source of this.store

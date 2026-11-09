@@ -53,3 +53,18 @@ test('context follows the supplied current session status without replacing it w
   assert.doesNotMatch(html,/class="ai-context-fill near-limit/);
  }
 });
+
+test('quiet composer context stays hidden for ordinary, zero, unknown and stale-model usage',()=>{
+ for(const context of [undefined,{window:100,windowSource:'settings',used:40,usedKnown:true},{window:100,windowSource:'settings',used:0,usedKnown:true},{window:100,windowSource:'settings',used:99,usedKnown:false}] as AIView['context'][])
+  assert.equal(renderToStaticMarkup(createElement(ContextUsage,{view:view(context),presentation:'warning',compact:true})), '');
+ assert.equal(renderToStaticMarkup(createElement(ContextUsage,{view:view({modelId:'old',window:100,windowSource:'settings',used:99,usedKnown:true}),model:{modelId:'current'},presentation:'warning'})), '');
+});
+
+test('quiet context warns at the measured input threshold and menu details remain discoverable',()=>{
+ const sample=view({window:1000,windowSource:'settings',inputBudget:800,used:680,usedKnown:true});
+ const warning=renderToStaticMarkup(createElement(ContextUsage,{view:sample,presentation:'warning',compact:true}));
+ assert.match(warning,/上下文接近上限/);assert.doesNotMatch(warning,/ai-context-track/);
+ const menu=renderToStaticMarkup(createElement(ContextUsage,{view:sample,presentation:'menu'}));
+ assert.match(menu,/上下文用量/);assert.match(menu,/85.0%/);assert.match(menu,/aria-expanded="false"/);assert.doesNotMatch(menu,/ai-context-track|role="region"/);
+ const unknown=renderToStaticMarkup(createElement(ContextUsage,{view:view(undefined),presentation:'menu'}));assert.match(unknown,/暂无实测/);
+});

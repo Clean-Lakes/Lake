@@ -39,7 +39,6 @@ export type ShellActor = {
   workerId: string;
   generation: number;
   guard: () => void;
-  checkSSHTarget?: (target?: SSHTarget) => void;
 };
 export type ShellPlan = {
   resource: Resource;
@@ -58,6 +57,9 @@ type CommandRecord = {
   command?: string;
   authenticatedTarget?: SSHTarget;
   peerRejected?: true;
+  // Durable host evidence. Persist exec_requested before calling ssh2.exec;
+  // absence on an older record is never proof that a command was not sent.
+  sshDispatchPhase?: "not_sent" | "exec_requested" | "channel_open";
   stdoutTail?: string;
   stderrTail?: string;
   stopRequestedAt?: string;
@@ -529,6 +531,7 @@ export class LakeExecution {
         resourceRevision: plan.resourceRevision,
         configurationRevision: plan.revision,
         commandHash: digest(plan.command),
+        ...(plan.resource.kind === "ssh" && { sshDispatchPhase: "not_sent" as const }),
         ...(plan.serviceInspection && {serviceInspection:plan.serviceInspection}),
         ...(plan.delayedOutput && {delayedOutput: true}),
         ...(plan.nobodyInspection && {nobodyInspection:{directory:plan.nobodyInspection.directory, inventoryDepth:plan.nobodyInspection.inventoryDepth}}),
@@ -773,20 +776,6 @@ export class LakeExecution {
         record.authenticatedTarget=authenticated;
         this.store.put("commandExecutions",record.id,record);
       }
-      if (!plan.readOnly) {
-        // Recheck the actual peer after trust negotiation and before a channel is opened.
-        const identity = this.ssh.mutationTarget?.(plan.resource,connection);
-        try { actor.checkSSHTarget?.(identity); }
-        catch (error) {
-          record.peerRejected = true;
-          this.store.put("commandExecutions",record.id,record);
-          throw error;
-        }
-        if (identity) {
-          record.authenticatedTarget = identity;
-          this.store.put("commandExecutions",record.id,record);
-        }
-      }
       return await new Promise((resolve, reject) => {
         let channel: any,
           stdout = Buffer.alloc(0),
@@ -857,12 +846,16 @@ export class LakeExecution {
         const command = plan.nobodyInspection || plan.delayedOutput || plan.serviceInspection ? plan.command :
           (plan.cwd ? `cd -- ${quote(plan.cwd)} && ` : "") +
           `/bin/bash --noprofile --norc -c ${quote(plan.command)}`;
+        record.sshDispatchPhase = "exec_requested";
+        this.store.put("commandExecutions", record.id, record);
         connection.exec(command, (error: any, stream: any) => {
           if (error) {
             finish(new HttpError(502, "SSH 未能启动指定命令"));
             return;
           }
           channel = stream;
+          record.sshDispatchPhase = "channel_open";
+          this.store.put("commandExecutions", record.id, record);
           if (done) {
             stream.close();
             return;
