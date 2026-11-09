@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-09
 last_updated: 2026-11-09
 owner: Lake maintainers
-status: 'In progress'
+status: 'Completed'
 tags: [composer, frontend, macos]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
 Place the attachment plus inside the message surface. Keep normal context usage out of the footer and accessible through the existing model menu, including its native webview.
 
@@ -39,8 +39,8 @@ Place the attachment plus inside the message surface. Keep normal context usage 
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-004 | Run frontend type/checks and context/model regressions. Check attachment position, keyboard, light/dark and narrow layout in signed Lake Dev; record tested SHA and limitations. Depends on TASK-001 through TASK-003. | No | 2026-11-09 |
-| TASK-005 | Update ui-guidelines.md, validation notes and the open develop PR; do not merge or publish. Depends on TASK-004. | No | 2026-11-09 |
+| TASK-004 | Run frontend type/checks and context/model regressions. Check browser keyboard/light/dark/narrow layouts and signed Dev attachment, drafting and native-menu entry; record tested SHA and incomplete native expansion/theme/resize checks. Depends on TASK-001 through TASK-003. | Yes | 2026-11-09 |
+| TASK-005 | Update ui-guidelines.md, validation notes and the open develop PR; do not merge or publish. Depends on TASK-004. | Yes | 2026-11-09 |
 
 ## 3. Alternatives
 
@@ -72,3 +72,5 @@ Place the attachment plus inside the message surface. Keep normal context usage 
 ## 8. Related Specifications / Further Reading
 
 [UI guidelines](../docs/ui-guidelines.md), [workflow](../docs/development-workflow.md).
+
+Delivered source: `b7ffca2ebfcf819db8a644b4808ed77d689e5bf0`. See [validation and native-check limitations](../docs/validation/typescript-candidate/composer-tools-context-2026-11-09.md).
