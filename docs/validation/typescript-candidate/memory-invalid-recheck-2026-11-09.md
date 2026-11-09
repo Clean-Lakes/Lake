@@ -1,6 +1,6 @@
 # 记忆失效后的独立只读复查验证
 
-功能及签名 Lake Dev 提交：`7873b3b7b7160a2494d3210343859de3b837aba3`。后续只更新本验证说明和计划状态。
+当前功能及签名 Lake Dev 提交：`b91f81a383d4914999e9202e0c46f8efba58a460`，两个路由入口的补齐验证见下文最后一节。首批功能及签名 Dev 为 `7873b3b7b7160a2494d3210343859de3b837aba3`；下面首批记录保留其实际测试水位。
 
 ## 真实故障
 
@@ -48,3 +48,31 @@
 ## 回退与未验证项
 
 回退实现与提示词，保留新增可选字段、原始操作和读取依赖；不能通过清理账本回退。未对用户故障服务器执行实际日志续查；原 unknown 的执行效果仍需单独核实。Windows、外部 Claude-Mem 及 Linux 专属扫描本次未验证。不包含合并 PR 或正式发布。
+
+## 补齐“新建 + 关联旧任务”入口
+
+用户随后截图对应新的真实输入 `ea9bdf46-0296-4e11-a0e5-7eb9b1bd9810`。Pilot 调用的是 `route_work(action=create, predecessor_task_id=st_39bbd8864757f39c01831e28eba96189)`，不是上一批已验证的 followup。该入口仍要求来源任务 completed/pass 且无 unknown，返回 `Only an accepted completed task without unresolved operations can supply fresh-check context; original limits cannot be reset`。上一批没有覆盖这一条实际路由。
+
+现在由 `readonlyRecheck` 统一处理两个入口。未完成的普通单专员任务可以作为独立只读复查的关联来源，不再要求它先验收；原明确资源、期限、状态、记忆读取依赖与未知操作保持原样。关联来源本身不会向新上下文提供旧知识或执行证据。相同真实输入、原任务和资源范围使用同一复查执行身份，切换入口不会重置已有执行。显式计划、共同任务、活跃/到期/终结、身份与范围不符时继续拒绝；已验收任务的正常前驱上下文语义保留。
+
+当前提交验证：
+
+| 检查 | 结果 |
+| --- | --- |
+| TS 类型、bundle、ADK 边界 | 通过 |
+| TS 全部源码测试 | 245 项：241 通过，4 个原条件跳过 |
+| 打包运行时全部测试 | 181 项全部通过 |
+| 入口生命周期 | followup、新建关联、来源记忆仍有效三种情况；切换入口不重置；资源扩大/导入旧证据/共同复查与原范围/角色/期限门禁均覆盖 |
+| 真实 SDK 两种入口 | 原来源已被 Worker 读取后遗忘、原 unknown 保留；新上下文 Write 无 I/O 被拒绝，Read 成功，本次复查 pass |
+| 签名 Dev 安装及验证 | `scripts/build_lake_desktop.sh --dev --install`、`codesign --verify --deep --strict` 通过 |
+
+本批没有修改前端文件；沿用前一批同一前端源码的 765 项测试结果，完整桌面构建再次构建 Web。未将未重跑的前端测试计入本批新增验证。
+
+真实模型使用独立“路由入口只读复查 QA 1109”项目 `6773ee52-9277-48fa-acb9-480a07ecc7f1`：
+
+1. 第一轮专员实际读取一条合成记忆并列本地目录，按夹具要求 partial，任务 `st_c575690b445750a7a43a9204b95a432b` 保持 paused。
+2. 通过正常 API 遗忘该 QA 来源后，第二轮明确要求使用 create + predecessor_task_id，关联该未完成任务并只读取目录。真实模型提交该调用，宿主成功建立复查 `st_56c19d0e6b7357f8fe4fbfba05d013c1`，回执 `recoveryOfTaskId` 指向原任务。
+3. 同 RoleID、新 Session、相同原截止时间 `2026-11-10T05:27:11.802Z`。一笔当前 `list_project_files` 回执为 succeeded/readOnly=true，本次复查 completed/pass，报告 0 个条目且未截断，不再要求先验收旧任务。
+4. 原 QA Goal/Worker/Operation/Attempt/memoryReads 共 5 条记录哈希不变；原用户故障相关 9 条记录也继续不变。没有访问用户故障服务器、SSH、数据库或业务网络。
+
+新包通过原生应用启动，最终 QA 结果通过 Dev API 和原账本核对；用户操作期间保留其当前界面，未另外切换到 QA 截图。安装 `build-origin.json` 为当前功能提交、dirty=false、TypeScript；后端 SHA-256 `32cecff99bbfd173601376d449f96bed0d0e009534dacc51adad20a38c2a8a1d`。

@@ -4,20 +4,20 @@ version: 1
 date_created: 2026-11-09
 last_updated: 2026-11-09
 owner: Lake maintainers
-status: 'In progress'
+status: 'Completed'
 tags: [memory, recovery, tasks, reporting]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 The reported old reboot task failed before any new tool call because its prior memory dependency became unavailable. A generic unresolved-operation notice hid that error. Preserve the old context and execution ledger; a newly admitted human followup can instead receive an independent, tightly scoped read-only recheck by the same specialist in a fresh SDK Session.
 
 ## 1. Requirements & Constraints
 
 - **REQ-001**: Report invalid-memory failures accurately even when an older unknown operation also exists. Project only proven host-generated legacy notices; never rewrite stored reports or model prose.
-- **REQ-002**: For a fresh human followup to a nonterminal ordinary specialist task with invalid memory, automatically create one independent read-only recheck using the same RoleID, original explicit resource scope and original deadline. Preserve old Task/Worker/Session/attempts/operations.
+- **REQ-002**: For a fresh human followup to a nonterminal ordinary specialist task with invalid memory, or create + predecessor_task_id linking an unfinished ordinary specialist task, automatically create one independent read-only recheck using the same RoleID, original explicit resource scope and original deadline. Preserve old Task/Worker/Session/attempts/operations.
 - **SEC-001**: Do not clear memory provenance, revive unavailable knowledge, reuse the old SDK transcript, copy old task-context summaries or replay previous operations. New context starts from actual human requirements and current resource metadata.
 - **SEC-002**: Enforce read-only recovery in TaskLedger for every business operation and temporary child. Missing scope, explicit original plan, expired/closed task and role mismatch cannot use this recovery. Current project permissions remain enforced.
 - **CON-001**: The new recheck's receipt never closes or accepts its source task; no production host access or historical ledger mutation. Continue open PR #206 without merging or publishing.
@@ -50,9 +50,9 @@ The reported old reboot task failed before any new tool call because its prior m
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-007 | Extract superagent.ts readonlyRecheck and use it for invalid-memory followup and create with a nonterminal predecessor. Retain original role, explicit scope, deadline and all source ledgers; do not require successful source acceptance for independent reads. | No | 2026-11-09 |
-| TASK-008 | Update route_work metadata and super-prompts.ts to describe both entrances and operation-scoped unknown blocking. Add lifecycle tests for both entrances, scope/role/plan/deadline rejection and real SDK predecessor regression with old unknown retained. Depends on TASK-007. | No | 2026-11-09 |
-| TASK-009 | Build and install signed Dev; exercise the new-task-plus-predecessor entrance in isolated real-model QA, preserve original record hashes, document exact tested SHA and update PR206 without merging. Depends on TASK-008. | No | 2026-11-09 |
+| TASK-007 | Extract superagent.ts readonlyRecheck and use it for invalid-memory followup and create with a nonterminal predecessor. Retain original role, explicit scope, deadline and all source ledgers; do not require successful source acceptance for independent reads. | Yes | 2026-11-09 |
+| TASK-008 | Update route_work metadata and super-prompts.ts to describe both entrances and operation-scoped unknown blocking. Add lifecycle tests for both entrances, scope/role/plan/deadline rejection and real SDK predecessor regression with old unknown retained. Depends on TASK-007. | Yes | 2026-11-09 |
+| TASK-009 | Build and install signed Dev; exercise the new-task-plus-predecessor entrance in isolated real-model QA, preserve original record hashes, document exact tested SHA and update PR206 without merging. Depends on TASK-008. | Yes | 2026-11-09 |
 
 ## 3. Alternatives
 
@@ -86,4 +86,4 @@ The reported old reboot task failed before any new tool call because its prior m
 
 [Architecture](../agent.md), [Memory](../docs/design/typescript-layered-memory.md), [Security](../docs/security/task-confirmation.md), [previous SSH fix](refactor-ssh-readonly-recovery-1.md).
 
-Verified implementation: `7873b3b7b7160a2494d3210343859de3b837aba3`. Evidence: [validation](../docs/validation/typescript-candidate/memory-invalid-recheck-2026-11-09.md).
+Verified implementation: `b91f81a383d4914999e9202e0c46f8efba58a460` (both routing entrances). Initial implementation: `7873b3b7b7160a2494d3210343859de3b837aba3`. Evidence: [validation](../docs/validation/typescript-candidate/memory-invalid-recheck-2026-11-09.md).
