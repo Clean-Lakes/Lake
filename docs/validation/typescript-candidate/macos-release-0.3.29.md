@@ -40,3 +40,23 @@ The TS parity matrix remains unchanged. Attachment/image support, context compre
 Before upgrading, finish active work and back up the application's own Home. TS history does not synchronize backward into Go. The updated installer prepares a TS replacement before its readiness deadline and restores the previous application on preparation/readiness failure. Clients at 0.3.27 or earlier still use their old 45-second total installer window; large first imports can require manual ZIP/DMG installation. Stop the backend before restoring a compatible application/data backup; do not mix Dev and production data or delete safety records.
 
 At this preparation commit, production PR automatic branch-policy/workbench, independent review, production merge and exact-master rebuild/publication remain pending. No tag or Release is published by this evidence commit. Final published artifacts must identify the actual merged master commit. Repository branch protection is currently unavailable (GitHub returns 404 for both branches); documentation and local workflow do not substitute for server enforcement.
+
+
+## Published production result
+
+Release PR [#208](https://github.com/Clean-Lakes/Lake/pull/208) merged with a merge commit at `f9ada8211804d2411984245106b4390a87c22a48`. Its parents are previous production `e810ff3bde3a3ca9a9f7d3401aea127e2103fe69` and frozen develop `b87053c697e774c066b1d6451ce64f0dcb6b0c61`. The final tree equals tested PR merge `51bb4846244c6e6b0df217d3ad1a529b48d04d15` (tree `2bc1122f5b236ae3250c5ffcaf5304cfc22b9e0d`). Required branch-policy and [workbench run 42587143690](https://github.com/Clean-Lakes/Lake/actions/runs/42587143690) passed, including macOS and all three complete Linux Go race/vet groups. Windows failed and was explicitly outside the user's macOS-only release scope; it is not recorded as a pass or published asset.
+
+After the review requirement was explained and the concrete PR/candidate prepared, the user explicitly instructed “直接发布” for this release. That exception is recorded in PR #208 and does not count as an independent review. No admin bypass, direct protected-branch push or skipped required check was used.
+
+`scripts/build_lake_desktop.sh` rebuilt the formal application from clean, exact master. The actual signed SEA passed isolated production preparation with no listener/runtime record, authenticated bootstrap/catalog, exact Home/data/PID identity, drain, restart, preserved original marker and rejection of mixed profiles before Home creation. ZIP extraction and read-only DMG mounting confirmed signature, version, TypeScript, exact master and minimum macOS 13.5; both executables are arm64. Backend SHA256: `3d2df6cd5c0844eaa5737641bf44ae43edc638b9c5a7c9e3290d903f7e376819`. The production application was neither installed nor restarted, and its Home/secrets were not accessed by the validation fixtures.
+
+[Lake v0.3.29](https://github.com/Clean-Lakes/Lake/releases/tag/v0.3.29) published at `2026-11-09T09:09:15Z`, stable/latest with target_commitish master. The immutable Git tag resolves to the exact production commit. Downloaded all four public assets and checked their bytes, sizes, API digests and checksum-file contents against the local signed packages. Exactly four macOS assets are present:
+
+| Asset | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Lake-0.3.29-macos-arm64.dmg | 79897592 | `952429a188ed6ca0ea2195556488cad67b537f055c839270549a4d37f1346cc3` |
+| Lake-0.3.29-macos-arm64.dmg.sha256 | 94 | `3528b754d002c4a86a2a0d7b957973b2b044d39049c50da3e0991350da23d76f` |
+| Lake-0.3.29-macos-arm64.zip | 67178912 | `f0b44b0cb842ea8d43cbbad155d92cb3d441252f98397bb089361f81fe233a52` |
+| Lake-0.3.29-macos-arm64.zip.sha256 | 94 | `373ef91bfafe38477e40e93cfd5fe79cc89871e7785e61ea2a54cd5d6abbc20d` |
+
+Production history and this evidence are synchronized to develop through a `sync/v0.3.29 -> develop` PR with a merge commit. Published artifacts remain bound to the production commit above; full TS parity remains pending as documented.

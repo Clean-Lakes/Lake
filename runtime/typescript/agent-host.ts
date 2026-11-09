@@ -22,6 +22,8 @@ export type HostProfile = {
   memoryActor?: LayeredMemoryActor;
   recordModel?: (stage: "start" | "success" | "error", operation?: string, usage?: {inputTokens?:number;outputTokens?:number}) => void;
   beforeModel?: () => void;
+  /** Request one SDK-native, presentation-only continuation when business work lacks its public report. */
+  requestFinalReport?: () => boolean;
   configureTool?: (entry: ToolEntry) => ToolEntry;
   permissionRules?: PermissionRuleset;
   projectRequest?: <T>(request: T) => T;

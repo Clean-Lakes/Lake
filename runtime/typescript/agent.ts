@@ -1,4 +1,5 @@
 import {prepareSessionArchive} from "./session-archive";
+import {finalReportBoundary} from "./final-report";
 import type {MessageInput} from "./message-input";
 import {providerConnection} from './provider-connection';
 import {parseWatchdogReview, watchdogReviewData, watchdogReviewPrompt, type WatchdogReviewInput, type WatchdogReviewResult} from "./watchdog-review";
@@ -758,7 +759,9 @@ export class LakeAgents {
     }
     if (existingSession && profile?.permissionRules) await this.sessions.updateSession({ id: sessionId as SessionId, permission: profile.permissionRules });
     const memoryActor = { ...(profile?.memoryActor ?? { kind: "pilot" as const, projectId: session.projectId }), sessionId };
-    const boundModel = await this.model(provider, model, profile, memoryActor, undefined, session.options);
+    const report = finalReportBoundary(profile?.requestFinalReport);
+    const modelProfile = profile ? { ...profile, projectRequest: <T>(request: T) => report.project(profile.projectRequest?.(request) ?? request) } : undefined;
+    const boundModel = await this.model(provider, model, modelProfile, memoryActor, undefined, session.options);
     const broker = new ManualPermissionBroker({
       onRequest: (request) => {
         const view = this.store.view(sessionId);
@@ -816,6 +819,7 @@ export class LakeAgents {
       if(profile?.subagents&&nativeControlTools.has(name))entry={...entry,metadata:{...entry.metadata,needsApproval:false},permission:{...entry.permission,needsApproval:false},resolvePermissionCapability:()=>({needsApproval:false,permission:{needsApproval:false}})};
       return {...entry,handler:(input,context)=>{
         this.guard?.();
+        if (!report.allows(name)) throw new HttpError(409, "当前只需提交本轮结论，请使用已有结果调用 work_finish，不要重复执行或追加文件");
         if(name==='work_finish'&&runtimeTasks&&Object.values(runtimeTasks.all()).some(task=>!childTerminal.has(task.status)))throw new HttpError(409,'子智能体或后台命令仍在执行，请先使用 TaskOutput 汇合实际结果');
         this.memory?.validateContinuation(memoryActor);
         if(profile?.subagents&&nativeControlTools.has(name)){
@@ -889,6 +893,7 @@ export class LakeAgents {
       },
       {
         sessionStore,
+        hookRunner: report.hookRunner,
         ...(childPort ? { subagentPort: childPort, runtimeTaskRegistry: runtimeTasks } : {}),
         toolRegistry: registry,
         eventStore: new InMemorySessionEventStore({ retention: "unbounded" }),

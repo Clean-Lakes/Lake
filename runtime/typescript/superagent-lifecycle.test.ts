@@ -63,6 +63,53 @@ async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date
     steering: () => steering };
 }
 
+test("only current unfinished business work requests a final report, without changing acceptance", async t => {
+  const f = await fixture(t), { taskId } = await f.start(), worker = f.worker(taskId), profile = f.host.profile(worker.sessionId)!;
+  const goal = JSON.stringify(f.host.ledger.get(taskId)), operations = JSON.stringify(f.store.list("superOperations"));
+  assert.equal(profile.requestFinalReport!(), true);
+  assert.equal(JSON.stringify(f.host.ledger.get(taskId)), goal);
+  assert.equal(JSON.stringify(f.store.list("superOperations")), operations);
+  await f.finish(taskId);
+  assert.equal(profile.requestFinalReport!(), false);
+  assert.equal(f.host.ledger.get(taskId).acceptanceState, "pass");
+});
+
+test("old generations, explicit plans and a stopped worker cannot start report repair", async t => {
+  const f = await fixture(t), { taskId } = await f.start(), worker = f.worker(taskId), profile = f.host.profile(worker.sessionId)!;
+  const operation = f.store.list<any>("superOperations")[0];
+  operation.generation--; f.store.put("superOperations", operation.id, operation);
+  assert.equal(profile.requestFinalReport!(), false);
+  operation.generation++; f.store.put("superOperations", operation.id, operation);
+  const goal = f.host.ledger.get(taskId); goal.executionMode = "explicit_plan"; f.host.ledger.save(goal);
+  assert.equal(profile.requestFinalReport!(), false);
+  goal.executionMode = "host_managed"; f.host.ledger.save(goal);
+  worker.state = "stopped"; f.store.put("superWorkers", worker.id, worker);
+  assert.equal(profile.requestFinalReport!(), false);
+  assert.equal(f.store.list("superReportRepairs").length, 0);
+});
+
+test("pending human steering defers a partial submission instead of starting report repair", async t => {
+  const f = await fixture(t), { taskId } = await f.start(), worker = f.worker(taskId), profile = f.host.profile(worker.sessionId)!;
+  const next = await f.admit("还要说明缺失的平台事件。");
+  f.route(next, { action: "followup", task_id: taskId, role_id: f.role.id });
+  assert.equal(profile.requestFinalReport!(), false);
+  const finish = profile.tools.find(entry => entry.metadata.name === "work_finish")!;
+  await finish.handler({ summary: "现有发现已保留，仍缺平台事件。", outcome: "partial" }, {} as any);
+  assert.equal(profile.requestFinalReport!(), false);
+  assert.equal(f.store.list("superReportRepairs").length, 0);
+  assert.notEqual(f.host.ledger.get(taskId).acceptanceState, "pass");
+});
+
+test("an ordinary partial report is delivered without requesting another model step", async t => {
+  const f = await fixture(t), { taskId } = await f.start(), worker = f.worker(taskId), profile = f.host.profile(worker.sessionId)!;
+  const finish = profile.tools.find(entry => entry.metadata.name === "work_finish")!;
+  await finish.handler({ summary: "已读取记录，尚缺平台事件。", outcome: "partial" }, {} as any);
+  assert.equal(profile.requestFinalReport!(), false);
+  assert.equal(f.store.list("superReportRepairs").length, 0);
+  assert.equal(f.host.ledger.get(taskId).status, "paused");
+  assert.notEqual(f.host.ledger.get(taskId).acceptanceState, "pass");
+});
+
 test("recorded tool output is paged without local execution or new evidence, with exact task/generation/child ownership",async t=>{
   const f=await fixture(t),{taskId}=await f.start(),worker=f.worker(taskId),profile=f.host.profile(worker.sessionId)!;
   const tool=profile.tools.find(entry=>entry.metadata.name==="read_tool_output")!;

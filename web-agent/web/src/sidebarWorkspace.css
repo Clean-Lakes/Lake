@@ -5,10 +5,8 @@
   margin: 6px var(--sidebar-edge-inset);
   padding: 0 clamp(4px, calc(10% - 13px), 12px);
   gap: 8px;
-  border: 1px solid var(--pilot-header-border);
-  border-radius: 17px;
-  corner-shape: var(--corner-window);
-  background: var(--pilot-header-surface);
+  border: 0;
+  background: transparent;
 }
 .sidebar.workspace-navigation .sidebar-brand-row .brand { gap:6px; white-space:nowrap; }
 .sidebar.workspace-navigation .sidebar-brand-row .brand > strong {
