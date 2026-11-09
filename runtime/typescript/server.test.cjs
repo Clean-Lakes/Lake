@@ -739,6 +739,15 @@ function fullAgentReply(request,mode,home){
  const stamp=router?JSON.parse(content(messages[0]).split('\n')[1])[0].id:'worker';
  const call=(name,input,id=name)=>({tool_calls:[{index:0,id:'full-'+stamp+'-'+id,type:'function',function:{name,arguments:JSON.stringify(input)}}]});
  const result=name=>{const id=calls.findLast(call=>call.function.name===name)?.id;const message=messages.findLast(message=>message.role==='tool'&&message.tool_call_id===id);try{return JSON.parse(content(message));}catch{return content(message??{});}};
+ if(mode.includes('permissions')){
+  const child=!tools.some(tool=>tool.function.name==='work_finish')&&!router;
+  if(mode.includes('child')&&!child){
+   if(!names.includes('Agent'))return call('Agent',{subagent_type:'general-purpose',description:'核对脚本执行权限',prompt:'LAKE_PERMISSION_CHILD: 执行本次隔离测试脚本并报告结果。'});
+  }else if(!names.includes('Bash'))return call('Bash',{command:`python3 -I -c 'print("LAKE_AUTOMATIC_SCRIPT_RESULT")'`,description:'Read isolated Python fixture result'});
+  if(child)return {content:'已取得 LAKE_AUTOMATIC_SCRIPT_RESULT。'};
+  if(!names.includes('work_finish'))return call('work_finish',{summary:'本轮隔离脚本已执行，取得 LAKE_AUTOMATIC_SCRIPT_RESULT。',outcome:'completed'});
+  return {content:'脚本检查结束。'};
+ }
  if(mode.includes('pending-history')||mode.includes('pending-same-task')){
   if(!names.includes('list_assets'))return call('list_assets',{query:'SSH fixture'});
   const asset=result('list_assets').assets.find(asset=>asset.kind==='ssh'),count=names.filter(name=>name==='Bash').length;
@@ -1205,10 +1214,10 @@ test("Watchdog identifies a real provider 503 and retries the same SDK assignmen
   assert.equal(recovered.superagent.task.acceptanceState,"pass");
 });
 
-async function startSubagentTask(t, mode, memory = false, legacyMaxSteps = 24) {
+async function startSubagentTask(t, mode, memory = false, legacyMaxSteps = 24, permissions = {}) {
   const f = await fixture(t, mode);
   const project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
-  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`, "POST", { maxSteps: legacyMaxSteps });
+  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`, "POST", { maxSteps: legacyMaxSteps, ...permissions });
   if (memory) {
     const scope = f.app.memory.scope("project", f.project.id);
     f.app.memory.setSettings(scope, {useEnabled:true,extractionEnabled:true,expectedRevision:0});
@@ -2642,9 +2651,12 @@ test("independent Worker queries a real project MCP service only after its exact
   await f.api(`/api/sessions/${project.routerSessionId}/messages`, "POST", { text: "通过项目知识库 MCP 查询文档数量。" }, 202);
   const state = await until(() => f.api(`/api/projects/${f.project.id}/superagent`), (value) => value.channels[0]?.needsConfirmation);
   const worker = state.workers[0], pending = (await f.api(`/api/sessions/${worker.sessionId}/ai`)).pending;
-  assert.equal(pending.call.name, "call_mcp_tool");
-  assert.equal(mcp.requests.filter((request) => request.rpc.method === "tools/call").length, 0);
+  assert.equal(pending.call.name, "list_mcp_tools");
+  assert.equal(mcp.requests.length, 0);
   await f.api(`/api/sessions/${worker.sessionId}/ai/decision`, "POST", { id: pending.id, accept: true });
+  const next = await until(() => f.api(`/api/sessions/${worker.sessionId}/ai`), value => value.pending?.call.name === "call_mcp_tool");
+  assert.equal(mcp.requests.filter((request) => request.rpc.method === "tools/call").length, 0);
+  await f.api(`/api/sessions/${worker.sessionId}/ai/decision`, "POST", { id: next.pending.id, accept: true });
   await until(() => f.api(`/api/projects/${f.project.id}/superagent`), (value) => value.workers[0].task.state === "completed");
   const operations = f.app.store.list("superOperations");
   assert.deepEqual(operations.map((operation) => operation.tool), ["list_mcp_tools", "call_mcp_tool"]);
@@ -2776,7 +2788,10 @@ test('legacy unresolved MCP calls outside visible projects still fence a new app
  const project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'查询项目 MCP 文档数量'},202);
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),value=>value.channels[0]?.needsConfirmation);
- const worker=state.workers[0], pending=(await f.api(`/api/sessions/${worker.sessionId}/ai`)).pending;
+ const worker=state.workers[0], discovery=(await f.api(`/api/sessions/${worker.sessionId}/ai`)).pending;
+ assert.equal(discovery.call.name,'list_mcp_tools');
+ await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:discovery.id,accept:true});
+ const pending=(await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),v=>v.pending?.call.name==='call_mcp_tool')).pending;
  const fs=require('node:fs/promises'), path=join(f.options.data,'adk/sessions.sqlite');
  await fs.mkdir(join(f.options.data,'adk'),{recursive:true,mode:0o700});
  const db=new(require('node:sqlite').DatabaseSync)(path);
@@ -3353,8 +3368,8 @@ test('exact Pilot task snapshots preserve independent historical evidence across
  await f.api(`/api/sessions/${session.id}/snapshot?taskId=${first.task.taskId}`,'GET',undefined,404);
 });
 
-test('dangerous native Bash still asks despite ordinary command auto-approval',async t=>{
- const {f,project,send}=await fullAgentTask(t,'super-full-pilot-danger');await send();
+test('disabling Pilot automatic commands asks before even a dangerous-classified native Bash call',async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-danger');await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:false});await send();
  const view=await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),v=>v.pending?.call.name==='Bash');
  assert.equal(f.app.store.list('commandExecutions').length,0);
  await f.api(`/api/sessions/${project.routerSessionId}/ai/decision`,'POST',{id:view.pending.id,accept:false});
@@ -3623,4 +3638,129 @@ test('native Worker and child complete beyond a saved one-step setting without a
  assert.ok(goals[0].modelRounds>1);assert.equal(goals[0].acceptanceState,'pass');
  assert.equal(state.workers[0].id,worker.id);assert.equal(childRequests(f).length,2);
  assert.ok(f.app.store.list('superOperations').some(op=>op.childSessionId&&op.status==='succeeded'));
+});
+
+
+for (const actor of ['pilot','worker','worker-child']) for (const automatic of [true,false]) test(`Pilot command setting controls opaque Python in ${actor} (${automatic?'automatic':'approval'})`,{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-'+actor+'-permissions');
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:automatic});await send();
+ const worker=actor==='pilot'&&!automatic?{sessionId:project.routerSessionId}:(await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1)).workers[0];
+ if(!automatic){
+  const view=await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),v=>v.pending?.call.name==='Bash');
+  assert.equal(f.app.store.list('commandExecutions').length,0);
+  assert.equal(f.app.store.list('superOperations').filter(o=>o.tool==='Bash').length,0);
+  await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:view.pending.id,accept:true});
+ }
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const operations=f.app.store.list('superOperations').filter(o=>o.tool==='Bash');assert.equal(operations.length,1);assert.equal(operations[0].status,'succeeded');
+ assert.equal(operations[0].readOnly,false,'opaque Python is not promoted to a proven read');
+ assert.match(JSON.stringify(operations[0].output),/LAKE_AUTOMATIC_SCRIPT_RESULT/);assert.equal(state.workers[0].task.acceptanceState,'pass');
+ assert.equal(!!operations[0].childSessionId,actor==='worker-child');
+ assert.equal((await f.api(`/api/sessions/${worker.sessionId}/ai`)).pending,undefined);
+});
+
+test('automatic child Write follows Pilot and managed options cannot create separate grants',async t=>{
+ const {f,project,worker,workspace}=await startSubagentTask(t,'super-subagent-write',false,24,{silentWriteFiles:true,silentCommands:false});
+ const state=await settledSubagentTask(f);assert.equal(state.workers[0].task.state,'completed');
+ assert.equal(await readFile(join(workspace,'child-output.txt'),'utf8'),'actual child write receipt');
+ for(const sessionId of [worker.sessionId,state.channels[0].sessionId]){
+  const options=await f.api(`/api/sessions/${sessionId}/ai/options`);assert.equal(options.silentWriteFiles,true);assert.equal(options.silentCommands,false);
+  await f.api(`/api/sessions/${sessionId}/ai/configure`,'POST',{silentCommands:true},409);
+  assert.equal(f.app.store.session(sessionId).options.silentCommands,undefined);
+ }
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:true});
+ for(const sessionId of [worker.sessionId,state.channels[0].sessionId])assert.equal((await f.api(`/api/sessions/${sessionId}/ai/options`)).silentCommands,true);
+});
+
+for(const transport of ['http','stdio'])for(const automatic of [true,false])test(`Pilot MCP setting controls ${transport} discovery and invocation (${automatic?'automatic':'approval'})`,async t=>{
+ const f=await fixture(t,'super-mcp'),mcp=transport==='http'?await mcpFixture(t):undefined;
+ const log=join(f.home,'stdio-requests.txt'),script=join(f.home,'stdio-mcp.cjs');
+ if(!mcp)await writeFile(script,`const fs=require('node:fs');require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const r=JSON.parse(line);fs.appendFileSync(${JSON.stringify(log)},r.method+'\\n');if(r.id===undefined)return;const result=r.method==='initialize'?{protocolVersion:r.params.protocolVersion,capabilities:{tools:{}},serverInfo:{name:'isolated',version:'1'}}:r.method==='tools/list'?{tools:[{name:'count_documents',inputSchema:{type:'object',properties:{}}}]}:r.method==='tools/call'?{content:[{type:'text',text:'42 fixture documents'}],isError:false}:{};process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:r.id,result})+'\\n');});`);
+ await f.api('/api/settings/mcp','POST',{name:'Isolated '+transport,transport,enabled:true,...(mcp?{url:mcp.url}:{command:process.execPath,args:[script]})});
+ await f.api(`/api/projects/${f.project.id}/security/mcp-inheritance`,'PUT',{actionId:'inherit',expectedRevision:0,enabled:true});
+ const project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentMCPCalls:automatic});
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'读取隔离 MCP 的文档计数。'},202);
+ const initial=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=initial.workers[0];
+ if(!automatic){
+  const pending=await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),v=>v.pending?.call.name==='list_mcp_tools');
+  if(mcp)assert.equal(mcp.requests.length,0);else await assert.rejects(access(log));
+  await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:pending.pending.id,accept:true});
+  const next=await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),v=>v.pending?.call.name==='call_mcp_tool');
+  await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:next.pending.id,accept:true});
+ }
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const methods=mcp?mcp.requests.map(r=>r.rpc.method):(await readFile(log,'utf8')).trim().split('\n');
+ assert.equal(methods.filter(method=>method==='tools/call').length,1);assert.equal(state.workers[0].task.acceptanceState,'pass');
+ assert.equal(f.app.store.list('superOperations').filter(o=>o.tool==='call_mcp_tool'&&o.status==='succeeded').length,1);
+});
+
+
+test('file search/read auto-off gates every file operation while Pilot automatic writes stay independent',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-files'),workspace=await f.app.store.workspace(f.project.id);
+ await writeFile(join(f.home,'full-workspace.txt'),workspace);await writeFile(join(workspace,'sample.txt'),'ACTUAL_FILE_CONTENT');
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentReadFiles:false,silentWriteFiles:true});await send();
+ for(const tool of ['FindFiles','SearchText','Read']){
+  const view=await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),v=>v.pending?.call.name===tool);
+  assert.ok(!f.app.store.list('superOperations').some(o=>o.tool===tool),'waiting is not resource I/O');
+  await f.api(`/api/sessions/${project.routerSessionId}/ai/decision`,'POST',{id:view.pending.id,accept:true});
+ }
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ assert.equal(await readFile(join(workspace,'written.txt'),'utf8'),'ACTUAL_WRITTEN_CONTENT');
+ assert.equal(await readFile(join(workspace,'sample.txt'),'utf8'),'ACTUAL_EDITED_CONTENT');
+});
+
+test('changing the Pilot command switch does not silently approve an old pending Worker call',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-worker-permissions');
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:false});await send();
+ const initial=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=initial.workers[0];
+ const pending=await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),v=>v.pending?.call.name==='Bash');
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:true});
+ await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:pending.pending.id,accept:true});
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0].assignmentState==='parked');
+ assert.equal(f.app.store.list('commandExecutions').length,0);assert.equal(f.app.store.list('superOperations').length,0);
+ assert.ok(f.app.store.list('superGoals').every(g=>g.acceptanceState!=='pass'));
+});
+
+for(const policyCase of ['ask','deny','denyLocal'])test(`automatic Worker retains current Security capability (${policyCase})`,{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-worker-permissions');
+ const resource=(await f.api('/api/catalog')).resources.find(r=>r.projectId===f.project.id&&r.kind==='local');
+ const policy={SchemaVersion:1,Confirmed:true,ProjectID:f.project.id,Mode:'compatible',Revision:1,ResourceIDs:[resource.id],DenyLocal:policyCase==='denyLocal',Rules:['resource.resolve','local.execute','terminal.execute'].map(Capability=>({Capability,Effect:Capability==='terminal.execute'?policyCase==='deny'?'deny':'ask':'allow',Confirmation:'single'}))};
+ f.app.store.put('legacyProjectPolicies',f.project.id,{data:policy});await send();
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked');
+ if(policyCase==='ask'){
+  assert.equal(state.workers[0].task.state,'completed');assert.equal(f.app.store.list('commandExecutions').length,1);
+ }else{
+  assert.equal(f.app.store.list('commandExecutions').length,0);assert.ok(f.app.store.list('superGoals').every(g=>g.acceptanceState!=='pass'));
+ }
+});
+
+for(const automatic of [true,false])test(`native Skill follows Pilot file reads (${automatic?'automatic':'approval'})`,{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-skill');
+ await f.api('/api/settings/skills/fixture-skill','PUT',{create:true,content:'---\nname: fixture-skill\ndescription: Permission fixture\n---\nSKILL_PERMISSION_ACTUAL_CONTENT'});
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentReadFiles:automatic});await send();
+ if(!automatic){
+  const pending=await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),v=>v.pending?.call.name==='Skill');
+  assert.equal(f.app.store.list('superOperations').length,0);
+  assert.ok(f.requests.every(r=>!JSON.stringify(r.messages).includes('SKILL_PERMISSION_ACTUAL_CONTENT')));
+  await f.api(`/api/sessions/${project.routerSessionId}/ai/decision`,'POST',{id:pending.pending.id,accept:true});
+ }
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ assert.equal(f.app.store.list('superOperations').find(o=>o.tool==='load_skill')?.status,'succeeded');
+ assert.ok(f.requests.some(r=>JSON.stringify(r.messages).includes('SKILL_PERMISSION_ACTUAL_CONTENT')));
+});
+
+test('Pilot execution preferences reject nonboolean updates without changing existing values',async t=>{
+ const f=await fixture(t),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ const before=f.app.store.session(project.routerSessionId).options;
+ for(const value of ['true',1,null])await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:value},400);
+ assert.deepEqual(f.app.store.session(project.routerSessionId).options,before);
+});
+
+
+test('automatic Pilot command setting also admits a risk-classified file deletion in its isolated workspace',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-danger');const file=join(await f.app.store.workspace(f.project.id),'agent-capability-absent.txt');
+ await writeFile(file,'owned temporary fixture');await send();
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ await assert.rejects(access(file));const operations=f.app.store.list('superOperations').filter(o=>o.tool==='Bash');assert.equal(operations.length,1);assert.equal(operations[0].status,'succeeded');assert.equal(operations[0].readOnly,false);
 });

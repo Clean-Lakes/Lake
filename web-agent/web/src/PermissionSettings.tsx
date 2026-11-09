@@ -8,11 +8,11 @@ export {permissionDefaults} from '../../shared/execution-preferences';
 
 const groups: Array<{title: string; hint?: string; fields: Array<{key: keyof typeof permissionDefaults; label: string; description: string}>}> = [
   {title: "免确认操作", hint: "关闭后先询问", fields: [
-    {key: "silentReadFiles", label: "读取文件", description: "浏览目录、搜索和查看文件内容。"},
+    {key: "silentReadFiles", label: "读取文件", description: "浏览、搜索和读取文件、技能及网页内容。"},
     {key: "silentWriteFiles", label: "写入文件", description: "上传和编辑文件；删除、移动按命令规则。"},
     {key: "silentReadSQL", label: "查询数据库", description: "执行只读 SQL，查看表结构。"},
     {key: "silentMCPCalls", label: "调用 MCP 工具", description: "自动调用项目已启用的 MCP 工具，包括可能修改外部系统的工具。"},
-    {key: "silentCommands", label: "运行命令", description: "包括修改、指定文件的删除和移动；大范围删除等仍需确认。"},
+    {key: "silentCommands", label: "运行命令", description: "自动执行脚本和系统命令，包括修改、删除和移动；关闭后逐次确认。"},
     {key: "silentTerminalCreation", label: "建立终端连接", description: "新建或重连终端；首次 SSH 指纹仍需核对。"},
   ]},
   {title: "操作范围", fields: [
