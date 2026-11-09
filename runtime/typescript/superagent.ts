@@ -1141,9 +1141,15 @@ export class LakeSuperagent implements AgentHost {
     }
     const worker=this.workerFor(sessionId);return worker?this.taskProfile(worker):undefined;
   }
+  private hostManaged(worker: Worker) {
+    const goal = this.store.get<Goal>("superGoals", worker.taskId);
+    if (goal) return this.ledger.isHostManaged(goal);
+    // A Pilot request has no business goal until its first non-routing tool.
+    return !!worker.inline && this.store.session(worker.sessionId).options.conversationMode !== "plan";
+  }
   private taskProfile(worker:Worker):HostProfile {
-    const managed = worker.inline || this.ledger.isHostManaged(this.ledger.get(worker.taskId));
-    const entries = this.workerEntries(worker).filter((entry) => worker.inline || !managed || !["work_begin", "work_update"].includes(entry.metadata.name));
+    const managed = this.hostManaged(worker);
+    const entries = this.workerEntries(worker).filter((entry) => !managed || !["work_begin", "work_update"].includes(entry.metadata.name));
     const mode=worker.inline?(this.store.get<Goal>("superGoals",worker.taskId)?.mode??(this.store.session(worker.sessionId).options.conversationMode==='plan'?'plan':'default')):this.ledger.get(worker.taskId).mode;
     const router = this.store.require<SuperProject>("superProjects", worker.projectId), permissions = this.store.session(router.routerSessionId).options;
     const assignmentAllows=(name:string)=>{
@@ -1611,6 +1617,7 @@ export class LakeSuperagent implements AgentHost {
     return { id: input.id, revision: value.revision ?? value.canonicalRevision ?? 1, hash, content: bytes.subarray(offset, end).toString("utf8"), offset, nextOffset: end < bytes.length ? end : undefined, complete: end === bytes.length };
   }
   private workerEntries(worker: Worker) {
+    const managed = this.hostManaged(worker);
     const run = (fn: (a: any, context: ToolExecutionContext) => unknown) => (a: any, context: ToolExecutionContext) => {
       const current = this.validateWorker(worker.id, worker.generation);
       return fn(a, context);
@@ -1632,7 +1639,7 @@ export class LakeSuperagent implements AgentHost {
         objectSchema({ item_id: str, status: { type: "string", enum: ["running", "completed", "waiting_user", "blocked", "failed"] }, reason: str, evidence_ids: array(str) }, ["item_id", "status"]), run((a) => {
           const goal = this.ledger.update(worker.taskId, a, worker.generation, worker.policyHash); this.changed(worker.sessionId); return this.publicGoal(goal);
         })),
-      this.entry("work_finish", (worker.inline || this.ledger.isHostManaged(this.ledger.get(worker.taskId))) ? "Submit the business result. Use completed only when the user's requested deliverable is satisfied, partial for useful findings with remaining work or a blocker. Summary is the public reply. The host verifies actual current tool receipts; a report alone never proves success." : "Submit the final business report after every original plan item has accepted evidence. Use the existing plan tools for incomplete steps; summary does not create acceptance.", (worker.inline || this.ledger.isHostManaged(this.ledger.get(worker.taskId))) ? objectSchema({ summary: str, outcome: { type: "string", enum: ["completed", "partial"] } }, ["summary", "outcome"]) : objectSchema({ summary: str }, ["summary"]), run((a) => {
+      this.entry("work_finish", managed ? "Submit the business result. Use completed only when the user's requested deliverable is satisfied, partial for useful findings with remaining work or a blocker. Summary is the public reply. The host verifies actual current tool receipts; a report alone never proves success." : "Submit the final business report after every original plan item has accepted evidence. Use the existing plan tools for incomplete steps; summary does not create acceptance.", managed ? objectSchema({ summary: str, outcome: { type: "string", enum: ["completed", "partial"] } }, ["summary", "outcome"]) : objectSchema({ summary: str }, ["summary"]), run((a) => {
         const summary = this.agents.redact(text(a.summary, "summary", 32768));
         const current = this.store.require<Worker>("superWorkers", worker.id);
         const waiting = current.inputEventIds.filter((eventId) => !current.invocationInputIds?.includes(eventId) && !current.settledInputIds?.includes(eventId))

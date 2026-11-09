@@ -32,6 +32,53 @@ test("ordinary business tools create their own step and finish with current real
   assert.equal(store.require<any>("superDeliveries", digest(["goal", 1])).outcome, "completed");
 });
 
+async function acceptedHostStep(t: Parameters<typeof fixture>[0], tool = "inspect_host", revalidate?: (operation: Operation) => void) {
+  const f = await fixture(t, revalidate); f.create();
+  // Older inline Pilot profiles exposed the manual protocol on a host-managed goal.
+  f.ledger.begin("goal", { title: "检查服务器", items: [{ id: "check", title: "检查服务器" }] });
+  f.ledger.update("goal", { item_id: "check", status: "running" }, 1, "policy");
+  await f.invoke("actual-check", tool);
+  f.ledger.update("goal", { item_id: "check", status: "completed", evidence_ids: ["actual-check"] }, 1, "policy");
+  return f;
+}
+
+test("host completion closes an already accepted current step without replacing evidence or running I/O", async (t) => {
+  const { store, ledger } = await acceptedHostStep(t);
+  const attempts = store.list("superAttempts"), operations = store.list("superOperations"), receipt = store.list("superAcceptance")[0];
+  const result = ledger.finishHost("goal", { summary: "已核对真实启动时间。", outcome: "completed" }, 1, "policy");
+  assert.equal(result.status, "completed"); assert.equal(result.acceptanceState, "pass");
+  assert.deepEqual(store.list("superAttempts"), attempts); assert.deepEqual(store.list("superOperations"), operations);
+  assert.deepEqual(store.require("superAcceptance", (receipt as any).id), receipt);
+  assert.equal(store.list("superAcceptance").length, 2); assert.equal(store.list("superPendingReports").length, 1);
+  assert.throws(() => ledger.finishHost("goal", { summary: "再次完成。", outcome: "completed" }, 1, "policy"), /closed/);
+  assert.equal(store.list("superAcceptance").length, 2);
+});
+
+test("accepted host steps still reject stale generations, changed policies and modified evidence", async (t) => {
+  const { store, ledger } = await acceptedHostStep(t);
+  const finish = (generation = 1, policy = "policy") => ledger.finishHost("goal", { summary: "完成。", outcome: "completed" }, generation, policy);
+  assert.throws(() => finish(2), /binding changed/);
+  assert.throws(() => finish(1, "new-policy"), /permissions|binding changed/);
+  const operation = store.list<Operation>("superOperations")[0]; operation.output = { forged: true }; store.put("superOperations", operation.id, operation);
+  assert.throws(() => finish(), /evidence/);
+  assert.notEqual(ledger.get("goal").acceptanceState, "pass");
+  assert.equal(store.list("superDeliveries").length, 0); assert.equal(store.list("superPendingReports").length, 0);
+});
+
+test("accepted host steps revalidate resources and cannot complete from discovery alone or unresolved effects", async (t) => {
+  let revoked = false;
+  const { store, ledger } = await acceptedHostStep(t, "inspect_host", () => { if (revoked) throw new Error("resource revision changed"); });
+  revoked = true;
+  assert.throws(() => ledger.finishHost("goal", { summary: "完成。", outcome: "completed" }, 1, "policy"), /resource revision/);
+  revoked = false;
+  const original = store.list<Operation>("superOperations")[0];
+  store.put("superOperations", "unknown", { ...original, id: "unknown", status: "unknown", readOnly: false });
+  assert.throws(() => ledger.finishHost("goal", { summary: "完成。", outcome: "completed" }, 1, "policy"), /evidence/);
+  assert.equal(store.list("superDeliveries").length, 0);
+  const discovery = await acceptedHostStep(t, "list_mcp_tools");
+  assert.throws(() => discovery.ledger.finishHost("goal", { summary: "完成。", outcome: "completed" }, 1, "policy"), /discovery/);
+});
+
 test("discovery and failed observations cannot pass; a partial report preserves the actual business explanation", async (t) => {
   const { store, ledger, create, invoke } = await fixture(t); create();
   await invoke("catalog", "list_mcp_tools");

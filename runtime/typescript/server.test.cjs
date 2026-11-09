@@ -831,6 +831,13 @@ function superReply(request, mode, home) {
     const event = JSON.parse(raw.split("\n")[1])[0];
     const currentStart = request.messages.findLastIndex(message => message.role === "user" && content(message) === raw);
     names = request.messages.slice(currentStart).flatMap(message => (message.tool_calls ?? []).map(call => call.function.name));
+    if (mode === "super-full-worker-default-delegation-ssh") {
+      const context = JSON.parse(raw.split('[CURRENT CONVERSATION WORKING SET]\n')[1]);
+      if (!names.includes("route_work")) return call("route_work", {event_id:event.id, part_key:"host-check", action:"create",
+        title:"检查服务器启动状态", quote:event.text, reason:"资源检查默认交给稳定专员",
+        ...(context.specialists.items.length ? {role_id:context.specialists.items[0].id} : {role_key:"服务器运维专员"})});
+      return {content:"已安排服务器运维专员检查。"};
+    }
     if (!names.includes("manage_specialist")) return call("manage_specialist", { event_id: event.id, part_key: "specialist", action: "create", role_key: "project-inspector", name: "项目检查员", duties: "检查当前项目工作区，按实际证据报告", quote: event.text });
     if (mode === "super-meta") return { content: "已创建长期专员，没有创建执行任务。" };
     if (!names.includes("list_specialists")) return call("list_specialists", {});
@@ -3039,14 +3046,38 @@ test('changing saved MySQL credentials invalidates an already displayed Worker a
 async function fullAgentTask(t,mode){
  const f=await fixture(t,mode),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:true,maxSteps:30});
- return {f,project,send:()=>f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'请自主执行本次测试检查并核对实际结果。'},202)};
+ return {f,project,send:(text=mode.startsWith('super-full-pilot')?'请 Pilot 亲自执行本次测试检查并核对实际结果，不要委派专员。':'请自主执行本次测试检查并核对实际结果。')=>f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text},202)};
 }
+test('default resource delegation creates a missing specialist and reuses its stable role with independent accepted tasks',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-worker-default-delegation-ssh'),server=await sshFixture(t);
+ await sshResource(f,server);assert.equal(f.app.store.list('superRoles').length,0);await send('请检查服务器启动状态，并核对实际结果。');
+ const first=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=first.workers[0];
+ const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
+ await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ await f.app.agents.wait(project.routerSessionId);
+ await send('请检查服务器启动状态，并核对实际结果。');
+ const done=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===2&&s.workers.every(w=>w.task.state==='completed'));
+ assert.equal(f.app.store.list('superRoles').length,1);assert.equal(done.channels.length,1);
+ assert.equal(done.workers[0].roleId,done.workers[1].roleId);
+ assert.notEqual(done.workers[0].sessionId,done.workers[1].sessionId);
+ for(const row of done.workers){assert.notEqual(row.sessionId,project.routerSessionId);assert.equal(row.task.acceptanceState,'pass');}
+ assert.ok(f.app.store.list('superWorkers').every(w=>!w.inline));
+ const routerRequests=f.requests.filter(r=>r.tools.some(t=>t.function.name==='route_work'));
+ const contexts=routerRequests.map(r=>r.messages.findLast(m=>typeof m.content==='string'&&m.content.startsWith('[LAKE ADMITTED HUMAN EVENTS'))?.content)
+   .filter(Boolean).map(raw=>JSON.parse(raw.split('[CURRENT CONVERSATION WORKING SET]\n')[1]));
+ assert.ok(contexts.some(c=>!c.specialists.items.length));assert.ok(contexts.some(c=>c.specialists.items.length===1));
+ assert.ok(contexts.every(c=>c.coordinationPolicy.resourceWork==='delegate_by_default'));
+ assert.ok(f.requests.every(r=>!r.tools.some(t=>['work_begin','work_update'].includes(t.function.name))));
+ assert.equal(f.app.store.list('superOperations').filter(o=>o.tool==='Bash'&&o.status==='succeeded').length,2);
+});
 test('Pilot directly executes native Bash with its own canonical task and no specialist role', {skip:process.platform!=='darwin'},async t=>{
  const {f,project,send}=await fullAgentTask(t,'super-full-pilot-shell');await send();
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  assert.equal(state.channels.length,0);assert.equal(state.workers[0].roleName,'Pilot');
  const operation=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(operation.status,'succeeded');assert.match(operation.output.stdout,/ACTUAL_NATIVE_SHELL/);assert.ok(operation.commandExecutionId);
  assert.equal(state.workers[0].task.acceptanceState,'pass');assert.ok(f.requests[0].tools.some(tool=>tool.function.name==='Bash'));
+ assert.ok(f.requests.every(r=>!r.tools.some(t=>['work_begin','work_update'].includes(t.function.name))));
 });
 test('native Bash background work is joined before Pilot task acceptance',{skip:process.platform!=='darwin'},async t=>{
  const {f,project,send}=await fullAgentTask(t,'super-full-pilot-background');await send();

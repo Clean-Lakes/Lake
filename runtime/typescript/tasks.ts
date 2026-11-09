@@ -173,8 +173,16 @@ export class TaskLedger {
         this.store.put("superDeliveries", digest([goalId, generation]), { taskId: goalId, generation, outcome: input.outcome, summary, at: now() });
         return this.save(goal);
       }
-      const active = this.active(goalId, generation, policyHash);
+      this.runnable(goal);
+      // Older inline Pilot profiles exposed work_update on host-managed goals.
+      // Its accepted step is valid evidence, but must still belong to this
+      // invocation and pass the original receipt/resource checks below.
+      const accepted = goal.items.find((item) => item.id === goal.activeItemId && item.status === "completed" && item.acceptanceId);
+      const active = accepted ? { step: accepted, attempt: this.store.require<Attempt>("superAttempts", accepted.attemptId!) }
+        : this.active(goalId, generation, policyHash);
       const step = goal.items.find((item) => item.id === active.step.id)!, attempt = active.attempt;
+      if (attempt.generation !== generation || attempt.policyHash !== policyHash)
+        throw new HttpError(409, "Attempt or current permission binding changed");
       const operations = this.store.list<Operation>("superOperations").filter((operation) => operation.attemptId === attempt.id);
       if (this.unresolved(goalId) || !operations.some((operation) => businessReceiptTools.has(operation.tool)))
         throw new HttpError(409, "Current successful business evidence is required; discovery alone cannot complete the task");
@@ -184,13 +192,15 @@ export class TaskLedger {
           operation.policyHash !== policyHash || operation.goalRevision !== goal.goalRevision || operation.planRevision !== goal.planRevision ||
           !operation.outputHash || operation.outputHash !== digest(operation.output)))
         throw new HttpError(409, "Failed, stale or unrelated evidence cannot accept this task");
-      operations.forEach((operation) => this.revalidate?.(operation));
-      const receipt = { id: id(), goalId, sessionId: goal.sessionId, stepId: step.id, attemptId: attempt.id,
-        projectId: goal.projectId, goalRevision: goal.goalRevision, planRevision: goal.planRevision,
-        state: "pass", verifier: "host_tool_results/1", operationIds: operations.map((operation) => operation.id), at: now() };
-      this.store.put("superAcceptance", receipt.id, receipt);
-      attempt.state = "succeeded"; this.store.put("superAttempts", attempt.id, attempt);
-      step.status = "completed"; step.evidenceIds = receipt.operationIds; step.acceptanceId = receipt.id;
+      if (!accepted) {
+        const receipt = { id: id(), goalId, sessionId: goal.sessionId, stepId: step.id, attemptId: attempt.id,
+          projectId: goal.projectId, goalRevision: goal.goalRevision, planRevision: goal.planRevision,
+          state: "pass", verifier: "host_tool_results/1", operationIds: operations.map((operation) => operation.id), at: now() };
+        this.store.put("superAcceptance", receipt.id, receipt);
+        attempt.state = "succeeded"; this.store.put("superAttempts", attempt.id, attempt);
+        step.status = "completed"; step.evidenceIds = receipt.operationIds; step.acceptanceId = receipt.id;
+      }
+      this.verifySteps(goal, policyHash);
       this.recordCompletion(goal, summary, policyHash);
       this.store.put("superDeliveries", digest([goalId, generation]), { taskId: goalId, generation, outcome: input.outcome, summary, at: now() });
       this.store.put("superPendingReports", digest([goal.id, goal.revision]), { taskId: goal.id, revision: goal.revision, snapshot: structuredClone(goal), createdAt: now() });

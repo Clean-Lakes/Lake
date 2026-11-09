@@ -1,5 +1,13 @@
 import { createHash } from "node:crypto";
 
+// Coordination guidance, never an execution permission or a resource allowlist.
+const pilotCoordinationPolicy = {
+  resourceWork: "delegate_by_default",
+  missingSpecialist: "create_and_delegate",
+  existingSpecialist: "reuse_suitable_stable_role",
+  pilotDirectExecution: "explicit_user_request",
+} as const;
+
 export type RouterEvent = { id: string; projectId: string; sessionId: string; messageId: string; payload: string;
   selectedReferences?: import('./message-input').MessageInput;
   receivedAt: string; revision: number; hash: string; preferredRoleId?: string; explicitTaskId?: string };
@@ -78,7 +86,7 @@ export function buildRouterContext(source: RouterContextInput) {
         observedAt: blocker.observedAt ?? null, recordUpdatedAt: blocker.recordUpdatedAt ?? task.updatedAt,
         capabilityRevision: blocker.capabilityRevision ?? null,
         freshness: blocker.capabilityRevision && blocker.capabilityRevision !== capabilityRevision ? "stale_capability_revision" : "requires_current_check" })) }));
-    const context = { version: 1, sourceSessions: [...new Set(events.map((event) => event.sessionId))],
+    const context = { version: 1, coordinationPolicy: pilotCoordinationPolicy, sourceSessions: [...new Set(events.map((event) => event.sessionId))],
       specialists: { items: specialists.slice(0,specialistCount).map(({id,name,revision}) => ({id,name:clip(name,128),revision})),
         hasMore: specialists.length > specialistCount,
         meaning: "Copy the exact id as role_id; never reconstruct an ID from memory. If missing or stale, call list_specialists (follow nextCursor). Metadata is not permission." },

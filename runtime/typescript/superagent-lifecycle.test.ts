@@ -60,6 +60,30 @@ async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date
     steering: () => steering };
 }
 
+test("ordinary inline Pilot profiles use host-managed tools while explicit plans keep their original protocol", async (t) => {
+  const f = await fixture(t); await f.admit("请 Pilot 亲自执行检查。");
+  const names = (profile: any) => profile.tools.map((entry: any) => entry.metadata.name);
+  const finishSchema = (profile: any) => profile.tools.find((entry: any) => entry.metadata.name === "work_finish").inputSchema;
+  let profile = f.host.profile(f.router)!;
+  assert.ok(!names(profile).includes("work_begin")); assert.ok(!names(profile).includes("work_update"));
+  assert.ok(JSON.stringify(finishSchema(profile)).includes('"outcome"'));
+  assert.ok(profile.subagents); assert.ok(profile.allowlist.includes("Bash"));
+  // The unmaterialized Pilot task must honor Plan mode as well.
+  const session = f.store.session(f.router); session.options.conversationMode = "plan"; f.store.put("sessions", f.router, session);
+  profile = f.host.profile(f.router)!;
+  assert.ok(names(profile).includes("work_begin")); assert.ok(names(profile).includes("work_update"));
+  assert.ok(!JSON.stringify(finishSchema(profile)).includes('"outcome"'));
+  // Existing explicit contracts win over a later conversation-mode change.
+  const actor = f.internal.pilotActors.get(f.router);
+  f.host.ledger.create({ id: actor.taskId, projectId: f.project.id, sessionId: f.router, workerId: actor.id, roleId: actor.roleId,
+    sourceEventId: actor.sourceEventId, originRootTurnId: "root", title: "原计划", userText: "原计划", status: "running",
+    deadlineAt: new Date(Date.now() + 60000).toISOString(), mode: "default", executionMode: "explicit_plan" });
+  session.options.conversationMode = "default"; f.store.put("sessions", f.router, session);
+  profile = f.host.profile(f.router)!;
+  assert.ok(names(profile).includes("work_begin")); assert.ok(names(profile).includes("work_update"));
+  assert.ok(!JSON.stringify(finishSchema(profile)).includes('"outcome"'));
+});
+
 test("completed fresh checks preserve old acceptance, carry target context and use new current receipts", async (t) => {
   const f = await fixture(t), original = await f.start();
   assert.equal(original.handoff.handoff.recorded, true);
