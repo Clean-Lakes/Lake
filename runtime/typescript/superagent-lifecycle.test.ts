@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { LakeStore } from "./store";
 import { LakeSuperagent } from "./superagent";
 import type { MessageInput } from "./message-input";
+import { memoryContextUnavailable, memoryContextUnavailableNotice } from "./memory-errors";
 
 // Exercise the actual host and SQLite ledger with a controlled SDK boundary.
 // No model, credential, remote server or existing Dev data is accessed.
@@ -82,6 +83,57 @@ test("ordinary inline Pilot profiles use host-managed tools while explicit plans
   profile = f.host.profile(f.router)!;
   assert.ok(names(profile).includes("work_begin")); assert.ok(names(profile).includes("work_update"));
   assert.ok(!JSON.stringify(finishSchema(profile)).includes('"outcome"'));
+});
+
+test("invalid-memory followup creates one bounded read-only recheck without changing its source", async t => {
+  const f = await fixture(t), resource = f.store.catalog().resources.find(r => r.projectId === f.project.id)!;
+  const event = await f.admit("检查本机重启记录。", {resourceIds:[resource.id],mentions:[],references:[]});
+  const original = f.route(event,{action:"create",title:"重启检查",role_id:f.role.id});
+  f.settleRouter(); await f.activate();
+  const oldWorker = f.worker(original.taskId); oldWorker.state="parked"; f.store.put("superWorkers",oldWorker.id,oldWorker);
+  const source = f.host.ledger.get(original.taskId); source.status="blocked"; source.summary=memoryContextUnavailable; f.host.ledger.save(source);
+  const unknown={id:"unresolved-source",goalId:source.id,sessionId:source.sessionId,projectId:f.project.id,status:"unknown",readOnly:false};
+  f.store.put("superOperations",unknown.id,unknown);
+  (f.agents as any).memory={captureUser(){},captureTask(){},needsFreshContext:(actor:any)=>actor.sessionId===source.sessionId,projectTaskContext:(items:any)=>items};
+  const before={goal:f.host.ledger.get(source.id),worker:f.worker(source.id),operations:f.store.list("superOperations")};
+  const human = await f.admit("再查一下"), input={action:"followup",task_id:source.id,role_id:f.role.id};
+  const result = f.route(human,input);
+  assert.notEqual(result.taskId,source.id); assert.equal(result.recoveryOfTaskId,source.id); assert.equal(result.action,"create");
+  assert.equal(f.route(human,input).taskId,result.taskId);
+  assert.equal(f.route(human,{...input,part_key:"another"}).taskId,result.taskId);
+  const fresh = f.host.ledger.get(result.taskId);
+  assert.equal(fresh.readOnlyRecoveryOf,source.id); assert.equal(fresh.deadlineAt,source.deadlineAt);
+  assert.notEqual(fresh.sessionId,source.sessionId); assert.equal(fresh.roleId,source.roleId);
+  assert.deepEqual(f.worker(fresh.id).targetResourceIds,[resource.id]); assert.equal(f.store.list("superReferences").length,0);
+  f.settleRouter(); await f.activate();
+  const envelope=f.requests.at(-1)!.input;
+  assert.equal(envelope.originalRequirement,human.payload); assert.equal(envelope.readOnlyRecheck.originalHumanRequirement,event.payload);
+  assert.deepEqual(envelope.taskContext.items,[]); assert.equal(envelope.predecessor,undefined);
+  assert.deepEqual(f.internal.recallContext(f.worker(fresh.id),{task_id:source.id},true).items,[]);
+  assert.ok(!JSON.stringify(envelope).includes(memoryContextUnavailable));
+  await f.read(fresh.id); await f.finish(fresh.id); f.settleWorker(fresh.id);
+  assert.equal(f.host.ledger.get(fresh.id).acceptanceState,"pass");
+  assert.deepEqual(f.host.ledger.get(source.id),before.goal); assert.deepEqual(f.worker(source.id),before.worker);
+  assert.deepEqual(f.store.list<any>("superOperations").filter(op=>op.goalId===source.id),before.operations);
+  assert.equal(f.host.ledger.unresolved(source.id),true);
+  assert.equal(f.internal.reportPresentation(before.goal,undefined,memoryContextUnavailable).body,memoryContextUnavailableNotice);
+});
+
+for (const variant of ["scope", "plan", "expired", "active", "joint", "role"]) test(`invalid-memory recheck keeps ${variant} restrictions`, async t=>{
+  const f=await fixture(t),resource=f.store.catalog().resources.find(r=>r.projectId===f.project.id)!;
+  const event=await f.admit("检查主机。",variant==="scope"?undefined:{resourceIds:[resource.id],mentions:[],references:[]});
+  const result=f.route(event,{action:"create",title:"检查主机",role_id:f.role.id});f.settleRouter();await f.activate();
+  const worker=f.worker(result.taskId);worker.state=variant==="active"?"active":"parked";f.store.put("superWorkers",worker.id,worker);
+  const goal=f.host.ledger.get(result.taskId);goal.status="blocked";
+  if(variant==="plan")goal.executionMode="explicit_plan";
+  if(variant==="expired")goal.deadlineAt=new Date(Date.now()-1).toISOString();
+  if(variant==="joint")goal.sharedTaskId=goal.id;
+  f.host.ledger.save(goal);
+  (f.agents as any).memory={captureUser(){},captureTask(){},needsFreshContext:()=>true};
+  const human=await f.admit("继续");
+  const before=f.store.list("superGoals");
+  assert.throws(()=>f.route(human,{action:"followup",task_id:goal.id,...(variant==="role"?{role_id:"wrong-role"}:{})}));
+  assert.deepEqual(f.store.list("superGoals"),before);
 });
 
 test("completed fresh checks preserve old acceptance, carry target context and use new current receipts", async (t) => {

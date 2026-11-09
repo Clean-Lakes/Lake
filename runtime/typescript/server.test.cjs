@@ -797,6 +797,22 @@ function fullAgentReply(request,mode,home){
 }
 
 function superReply(request, mode, home) {
+  if (mode === "super-memory-recheck") {
+    if (request.tools.some(tool=>tool.function.name==="route_work")) return hostRetryReply(request);
+    const plain=m=>typeof m.content==="string"?m.content:(m.content??[]).map(p=>p.text??"").join("");
+    const assignment=JSON.parse(request.messages.filter(m=>m.role==="user").map(plain).findLast(s=>s.startsWith("{")&&s.includes('"assignment"')));
+    const names=request.messages.flatMap(m=>m.tool_calls??[]).map(c=>c.function.name);
+    const call=(name,input)=>({tool_calls:[{index:0,id:"recheck-"+name,type:"function",function:{name,arguments:JSON.stringify(input)}}]});
+    if(assignment.readOnlyRecheck){
+      if(!names.includes("Write"))return call("Write",{file_path:join(home,"workspaces",assignment.assignment.projectId,"must-not-write.txt"),content:"should be rejected"});
+      if(!names.includes("Read"))return call("Read",{file_path:join(home,"workspaces",assignment.assignment.projectId,"recheck-fixture.txt")});
+      if(!names.includes("work_finish"))return call("work_finish",{outcome:"completed",summary:"独立只读复查已取得 RECHECK_CURRENT_OBSERVATION；原任务未核实操作仍保留。"});
+    }else{
+      if(!names.includes("list_project_files"))return call("list_project_files",{path:"."});
+      if(!names.includes("work_finish"))return call("work_finish",{outcome:"partial",summary:"第一轮仅完成文件列表观察，后续检查尚未完成。"});
+    }
+    return {content:"本次结果已提交。"};
+  }
   if(mode.startsWith("super-full-")){const response=fullAgentReply(request,mode,home);if(response)return response;}
   if (mode === "super-host-retry") return hostRetryReply(request);
   let names = request.messages.flatMap((message) => (message.tool_calls ?? []).map((call) => call.function.name));
@@ -2383,6 +2399,42 @@ test("a failed proven read obtains a fresh attempt without replaying the failure
   assert.equal(goals[0].acceptanceState, "pass");
   assert.equal(goals[0].roundLimit, undefined);
   assert.equal(f.app.store.list("superWorkers").length, 1);
+});
+
+test("real SDK invalid-memory followup uses a fresh scoped readonly context, preserving source unknowns", async t=>{
+  const f=await fixture(t,"super-memory-recheck"),project=await f.api(`/api/projects/${f.project.id}/superagent`,"POST",{});
+  const resource=(await f.api("/api/catalog")).resources.find(r=>r.projectId===f.project.id);
+  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,"POST",{silentReadFiles:true,silentWriteFiles:true});
+  const scope=f.app.memory.scope("project",f.project.id);
+  f.app.memory.setSettings(scope,{useEnabled:true,extractionEnabled:false,expectedRevision:0});
+  await f.app.memory.remember(scope,{title:"检查文件",body:"WITHDRAWN_RECHECK_MARKER: 检查当前项目文件时的旧信息",expectedRevision:0});
+  const note=f.app.memory.view(scope).items[0];
+  await require("node:fs/promises").mkdir(join(f.home,"workspaces",f.project.id),{recursive:true});
+  await writeFile(join(f.home,"workspaces",f.project.id,"recheck-fixture.txt"),"RECHECK_CURRENT_OBSERVATION");
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`,"POST",{text:"只读检查这个项目的当前文件。",resourceIds:[resource.id]},202);
+  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==="paused");
+  await until(async()=>!f.app.agents.foregroundBusy(),Boolean);
+  const source=f.app.store.list("superGoals")[0],worker=f.app.store.require("superWorkers",source.workerId);
+  assert.ok(f.requests.some(request=>isIndependentWorkerRequest(request)&&JSON.stringify(request.messages).includes("WITHDRAWN_RECHECK_MARKER")));
+  const usage=f.app.store.require("memoryReads",worker.sessionId);
+  const receipt=f.app.store.list("superOperations").find(op=>op.goalId===source.id);
+  const unknown={...receipt,id:"fixture-old-unknown",callId:"fixture-old-call",status:"unknown",readOnly:false};
+  f.app.store.put("superOperations",unknown.id,unknown);
+  await f.app.memory.forget(scope,note.id,note.revision);
+  assert.equal(f.app.memory.needsFreshContext({kind:"worker",projectId:f.project.id,roleId:worker.roleId,sessionId:worker.sessionId}),true);
+  const before=JSON.stringify({goal:f.app.store.require("superGoals",source.id),worker:f.app.store.require("superWorkers",worker.id),usage,unknown});
+  const offset=f.requests.length;
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`,"POST",{text:"再查一下"},202);
+  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.some(w=>w.task.taskId!==source.id&&w.task.state==="completed"));
+  const fresh=f.app.store.list("superGoals").find(goal=>goal.id!==source.id);
+  assert.equal(fresh.readOnlyRecoveryOf,source.id);assert.equal(fresh.deadlineAt,source.deadlineAt);assert.notEqual(fresh.sessionId,worker.sessionId);assert.equal(fresh.roleId,worker.roleId);
+  assert.equal(state.channels.length,1);assert.equal(fresh.acceptanceState,"pass");
+  const requests=f.requests.slice(offset).filter(isIndependentWorkerRequest);
+  assert.ok(requests.length>2);assert.ok(requests.every(request=>!JSON.stringify(request.messages).includes("WITHDRAWN_RECHECK_MARKER")));
+  assert.match(JSON.stringify(requests),/仅允许独立只读/);assert.match(JSON.stringify(requests),/RECHECK_CURRENT_OBSERVATION/);
+  await assert.rejects(access(join(f.home,"workspaces",f.project.id,"must-not-write.txt")));
+  assert.ok(f.app.store.list("superOperations").filter(op=>op.goalId===fresh.id).every(op=>op.readOnly===true));
+  assert.equal(JSON.stringify({goal:f.app.store.require("superGoals",source.id),worker:f.app.store.require("superWorkers",worker.id),usage:f.app.store.require("memoryReads",worker.sessionId),unknown:f.app.store.require("superOperations",unknown.id)}),before);
 });
 
 async function mcpFixture(t) {

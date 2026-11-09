@@ -31,6 +31,7 @@ export type Goal = Omit<WorkGoal, "items"> & {
   executionMode?: "host_managed" | "explicit_plan";
   sharedTaskId?: string;
   contributionReceiptId?: string;
+  readOnlyRecoveryOf?: string;
 };
 export type Attempt = {
   id: string; goalId: string; sessionId: string; stepId: string; projectId: string;
@@ -95,6 +96,10 @@ export class TaskLedger {
   save(goal: Goal) {
     // A pending SDK callback may hold a snapshot from before a specialist joined.
     const current = this.store.get<Goal>('superGoals', goal.id);
+    if (current?.readOnlyRecoveryOf) {
+      goal.readOnlyRecoveryOf = current.readOnlyRecoveryOf;
+      if (Date.parse(goal.deadlineAt) > Date.parse(current.deadlineAt)) goal.deadlineAt = current.deadlineAt;
+    }
     if (current?.sharedTaskId) {
       goal.sharedTaskId = current.sharedTaskId;
       if (Date.parse(goal.deadlineAt) > Date.parse(current.deadlineAt)) goal.deadlineAt = current.deadlineAt;
@@ -441,7 +446,10 @@ export class TaskLedger {
   async operation<T>(goalId: string, generation: number, policyHash: string, callId: string, tool: string,
     input: unknown, dispatch: () => Promise<T>, redact: <V>(value: V) => V,
     binding: Pick<Operation, "resourceId" | "resourceRevision" | "readOnly" | "mcpServerId" | "mcpTool" | "remoteMcp" | "configurationHash" | "bindingHash" | "catalogHash" | "skillName" | "skillHash" | "hostConfigurationHash" | "commandExecutionId" | "networkURL" | "databaseConfigurationHash" | "databaseScope" | "agentRunId" | "childSessionId" | "originalCallId"> = {}): Promise<T> {
-    const key = digest([this.get(goalId).sessionId, callId]);
+    const current = this.get(goalId);
+    if (current.readOnlyRecoveryOf && binding.readOnly !== true)
+      throw new HttpError(409, "新的复查上下文仅允许独立只读检查；原任务的记录和未决操作仍保留");
+    const key = digest([current.sessionId, callId]);
     const previous = this.store.get<Operation>("superOperations", key);
     if (previous) {
       if (previous.goalId !== goalId || previous.tool !== tool || previous.argsHash !== digest(input))

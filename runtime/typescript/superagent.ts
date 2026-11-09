@@ -34,6 +34,7 @@ import type {LakeExecution,ShellInput,ShellActor} from "./execution";
 import { ProgramDiscoveryRecovery } from "./discovery-recovery";
 import { OperatorEffectReviewService } from "./operator-effect-review";
 import { stoppedNotice, unresolvedNotice, stoppedReportProjection } from "./task-cancellation";
+import { memoryContextUnavailable, memoryContextUnavailableNotice } from "./memory-errors";
 import {TaskWatchdog, type WatchdogSample, type WatchdogRecord} from "./watchdog";
 import {prepareWatchdogEvidence, watchdogEvidence, transientModelFailure, type WatchdogRetry} from "./watchdog-observation";
 import type {TurnFailure} from "./model-errors";
@@ -60,6 +61,7 @@ type EvidenceBinding = { taskId: string; sourceTaskId: string; projectId: string
 type RouterBatch = { eventIds: string[]; complete: Set<string>; input: string };
 type Assignment = { executionId: string; workerId: string; sessionId: string; roleId: string; instruction?: string; resourceIds?: string[] };
 type Decision = { id: string; projectId: string; eventId: string; partKey: string; action: string;
+  recoveryOfTaskId?: string;
   quote: string; hash: string; reason?: string; taskId?: string; workerId?: string; sessionId?: string; roleId?: string; assignments?: Assignment[] };
 type Interaction = { id: string; workerId: string; generation: number; kind: "plan" | "question";
   revision: number; resolve: (value: unknown) => void; reject: (error: Error) => void };
@@ -773,7 +775,7 @@ export class LakeSuperagent implements AgentHost {
       const decision: Decision = { id: key, projectId: event.projectId, eventId: event.id, partKey: part, action, quote, hash };
       // An exact retry under a fresh part key can reuse the original receipt.
       // The full input (including recipient, scope and instructions) must agree.
-      const alias = parts.find(old => old.action === action && old.quote === quote &&
+      const alias = parts.find(old => (old.action === action || action === "followup" && old.recoveryOfTaskId === input.task_id) && old.quote === quote &&
         old.hash === digest({ ...input, part_key: old.partKey, reason: old.reason ?? reason }));
       if (alias) return this.replayDecision(event.projectId, input, alias);
       if (parts.length >= 16) throw new HttpError(400, "Event decision limit exceeded");
@@ -834,7 +836,7 @@ export class LakeSuperagent implements AgentHost {
         if (event.preferredRoleId && input.role_id && event.preferredRoleId !== input.role_id) throw new HttpError(404, "Task not found in source specialist");
         if (event.explicitTaskId && event.explicitTaskId !== taskId) throw new HttpError(409, "Input belongs to another explicit task");
         const goal = this.routedGoal(event.projectId, taskId, input.role_id ?? event.preferredRoleId);
-        const worker = this.store.require<Worker>("superWorkers", goal.workerId);
+        let worker = this.store.require<Worker>("superWorkers", goal.workerId);
         if (parts.some(old => old.action === action && old.quote === quote && old.taskId === taskId && this.decisionAssignments(old).some(a => a.workerId === worker.id)))
           throw new HttpError(409, "Use the previously committed part_key for this specialist");
         if (action === "followup") {
@@ -845,34 +847,51 @@ export class LakeSuperagent implements AgentHost {
               ? { action: "create", predecessor_task_id: taskId, role_id: worker.roleId,
                 instruction: "Only if this admitted human event requests a fresh check: create a new task with its exact quote and a resolved title; omit task_id. Explanation-only questions need respond." }
               : { action: "respond", instruction: "Read the original outcome and limits. Do not create a replacement to bypass them." } }));
-          // Old parked invocations are already historical. New workers track
-          // actual invocation inputs separately from merely queued SDK steering.
-          worker.settledInputIds ??= worker.state === "parked" ? [...new Set([...(worker.deliveredInputIds ?? []), ...(worker.invocationInputIds ?? [])])] : [];
-          worker.inputEventIds.push(event.id);
-          if(worker.inline){
-            const actor=this.pilotActors.get(sessionId);if(!actor)throw new HttpError(409,'Pilot 当前请求缺少任务绑定');
-            if(this.store.get('superWorkers',actor.id)&&actor.id!==worker.id)throw new HttpError(409,'本轮 Pilot 已在执行另一个任务，请分配独立 Worker');
-            const admittedRounds=actor.preTaskModelRounds??0;
-            Object.assign(actor,worker,{preTaskModelRounds:0,generation:worker.generation+1,state:'active',owner:this.owner,leaseUntil:Date.now()+45000,policyHash:this.policy(worker.projectId),invocationInputIds:this.batches.get(sessionId)!.eventIds});
-            if(Date.parse(goal.deadlineAt)<=Date.now())throw new HttpError(409,'原任务处理上限禁止继续');
-            goal.modelRounds+=admittedRounds;
-            goal.status='running';this.ledger.save(goal);this.store.put('superWorkers',actor.id,actor);this.active.add(actor.id);
-          }else{
-            if (worker.state !== "active" && Date.parse(goal.deadlineAt) > Date.now()) {
-              worker.state = "queued"; goal.status = "running"; this.ledger.save(goal);
+          if (!worker.inline && this.agents.memory?.needsFreshContext({kind:"worker",projectId:worker.projectId,roleId:worker.roleId,sessionId:worker.sessionId})) {
+            if (!this.ledger.isHostManaged(goal) || goal.mode === "plan" || goal.sharedTaskId || this.ledger.jointTask(goal.id))
+              throw new HttpError(409, "原任务使用的记忆已失效；显式计划或共同任务需要保留原验收约定，不能自动替换上下文");
+            if (worker.state === "active" || event.id === goal.sourceEventId || Date.parse(goal.deadlineAt) <= Date.now())
+              throw new HttpError(409, "原任务仍在执行、没有新输入或已到截止时间，不能建立只读复查");
+            const origin = this.store.require<InputEvent>("superInputs", goal.sourceEventId);
+            const targets = worker.targetResourceIds ?? origin.selectedReferences?.resourceIds;
+            if (!targets?.length || targets.some(resourceId => this.store.get<{projectId:string}>("resources",resourceId)?.projectId !== goal.projectId))
+              throw new HttpError(409, "原任务使用的记忆已失效，且缺少可核验的明确资源范围；请指定要复查的资源");
+            const title = "只读复查：" + goal.title;
+            worker = this.newAssignment(event, sessionId, digest([event.id, part]).slice(0,32), this.role(event.projectId, worker.roleId), title, [], undefined, undefined, targets);
+            const fresh = this.ledger.get(worker.taskId);
+            if (!this.ledger.isHostManaged(fresh)) throw new HttpError(409, "当前输入处于显式计划模式，不能自动建立普通只读复查");
+            fresh.deadlineAt = goal.deadlineAt; fresh.readOnlyRecoveryOf = goal.id; this.ledger.save(fresh);
+            Object.assign(decision,{action:"create",recoveryOfTaskId:taskId});
+          } else {
+            // Old parked invocations are already historical. New workers track
+            // actual invocation inputs separately from merely queued SDK steering.
+            worker.settledInputIds ??= worker.state === "parked" ? [...new Set([...(worker.deliveredInputIds ?? []), ...(worker.invocationInputIds ?? [])])] : [];
+            worker.inputEventIds.push(event.id);
+            if(worker.inline){
+              const actor=this.pilotActors.get(sessionId);if(!actor)throw new HttpError(409,'Pilot 当前请求缺少任务绑定');
+              if(this.store.get('superWorkers',actor.id)&&actor.id!==worker.id)throw new HttpError(409,'本轮 Pilot 已在执行另一个任务，请分配独立 Worker');
+              const admittedRounds=actor.preTaskModelRounds??0;
+              Object.assign(actor,worker,{preTaskModelRounds:0,generation:worker.generation+1,state:'active',owner:this.owner,leaseUntil:Date.now()+45000,policyHash:this.policy(worker.projectId),invocationInputIds:this.batches.get(sessionId)!.eventIds});
+              if(Date.parse(goal.deadlineAt)<=Date.now())throw new HttpError(409,'原任务处理上限禁止继续');
+              goal.modelRounds+=admittedRounds;
+              goal.status='running';this.ledger.save(goal);this.store.put('superWorkers',actor.id,actor);this.active.add(actor.id);
+            }else{
+              if (worker.state !== "active" && Date.parse(goal.deadlineAt) > Date.now()) {
+                worker.state = "queued"; goal.status = "running"; this.ledger.save(goal);
+              }
+              this.store.put("superWorkers", worker.id, worker);
             }
-            this.store.put("superWorkers", worker.id, worker);
           }
         }
-        Object.assign(decision, { taskId, workerId: worker.id, sessionId: worker.sessionId, roleId: worker.roleId, assignments: [this.assignment(worker)] });
+        Object.assign(decision, { taskId: decision.recoveryOfTaskId ? worker.taskId : taskId, workerId: worker.id, sessionId: worker.sessionId, roleId: worker.roleId, assignments: [this.assignment(worker)] });
       }
       if (["create", "assign", "followup"].includes(action) && event.sessionId === sessionId) {
         for (const assignment of this.decisionAssignments(decision)) {
           const worker = this.store.require<Worker>("superWorkers", assignment.workerId);
           if (worker.inline) continue;
           const channel = this.store.require<Channel>("superChannels", worker.roleId);
-          const forward = action === "followup" ? "followup" : "create";
-          const instruction = assignment.instruction ?? (action === "create" ? String(input.title) : quote);
+          const forward = action === "followup" && !decision.recoveryOfTaskId ? "followup" : "create";
+          const instruction = decision.recoveryOfTaskId ? this.ledger.get(worker.taskId).title : assignment.instruction ?? (action === "create" ? String(input.title) : quote);
           const dispatch: Message = { id: "pilot_dispatch_" + digest([key, worker.id]), sessionId, role: "assistant", createdAt: now(),
             text: "@" + worker.roleSnapshot.name + (forward === "create" ? "，请去做一下：" : "，请继续处理：") + instruction,
             dispatch: { id: key, sourceMessageId: event.messageId, workerId: worker.id, sessionId: worker.sessionId, taskId: decision.taskId!,
@@ -1075,18 +1094,22 @@ export class LakeSuperagent implements AgentHost {
         taskId: publicTaskId, executionId: goal.id, workerId: worker.id, sessionId: worker.sessionId,
         joint: !!goal.sharedTaskId, ...(targets && {targetResourceIds:targets}) }, roleSnapshot: worker.roleSnapshot,
         originalRequirement: origin.payload, selectedReferences,
+        readOnlyRecheck: goal.readOnlyRecoveryOf ? {sourceTaskId:goal.readOnlyRecoveryOf,
+          originalHumanRequirement:this.store.require<InputEvent>("superInputs",this.ledger.get(goal.readOnlyRecoveryOf).sourceEventId).payload,
+          instruction:"Use this fresh context for independent read-only observations only. Do not replay old operations. The source task, its unresolved operations and acceptance remain unchanged; completing this recheck does not complete the source task."} : undefined,
         assignedDeliverable: instruction ?? (targets || decision.action === "assign" ? goal.title : decision.quote), goal: this.publicGoal(goal),
         predecessor: this.store.get<TaskPredecessor>("superTaskPredecessors", worker.taskId),
         taskContext:this.recallContext(worker),
         humanControl: resume ? { command: resume.command, at: resume.at } : undefined,
         followups: followups.map((event) => ({ id: event.id, text: event.payload })) });
       try { await this.agents.send(worker.sessionId, "[Task assignment] " + goal.title, { input, recordUser: false, recordAssistant: false,
-        ignoreMemory: worker.invocationInputIds.some(eventId => this.store.get<InputEvent>("superInputs", eventId)?.ignoreMemory === true) }); }
+        ignoreMemory: !!goal.readOnlyRecoveryOf || worker.invocationInputIds.some(eventId => this.store.get<InputEvent>("superInputs", eventId)?.ignoreMemory === true) }); }
       catch (error) { this.workerFinished(worker.sessionId, String(error)); }
     }
   }
   private contextActor(worker:Worker):TaskContextActor{return {projectId:worker.projectId,roleId:worker.roleId,taskId:worker.taskId,sessionId:worker.sessionId};}
   private recallContext(worker:Worker,input:Parameters<TaskContext['recall']>[1]={},track=false){
+    if (this.store.get<Goal>("superGoals",worker.taskId)?.readOnlyRecoveryOf) return {items:[],nextCursor:"",historicalContextOnly:true as const,meaning:"Independent read-only recheck: previous task context is not reused."};
     const result=new TaskContext(this.store,value=>this.agents.redact(value)).recall(this.contextActor(worker),input);
     const ignored=worker.invocationInputIds?.some(id=>this.store.get<InputEvent>('superInputs',id)?.ignoreMemory)??false;
     if(this.agents.memory)result.items=this.agents.memory.projectTaskContext(result.items,{kind:worker.inline?'pilot':'worker',projectId:worker.projectId,roleId:worker.inline?undefined:worker.roleId,sessionId:worker.sessionId},track,ignored);
@@ -2010,6 +2033,7 @@ export class LakeSuperagent implements AgentHost {
       return { body, channelBody: body };
     }
     const notice = goal.status === "cancelled" ? stoppedNotice
+      : error === memoryContextUnavailable || goal.summary === memoryContextUnavailable ? memoryContextUnavailableNotice
       : this.ledger.unresolved(goal.id) ? unresolvedNotice
       : goal.summary === "deadline_reached" ? "这次工作已到截止时间，剩余部分尚未完成。"
       : goal.summary === "model_round_limit" ? "轮次限制已取消，当前任务仍处于暂停状态。"

@@ -32,6 +32,16 @@ test("ordinary business tools create their own step and finish with current real
   assert.equal(store.require<any>("superDeliveries", digest(["goal", 1])).outcome, "completed");
 });
 
+test("fresh read-only recovery rejects mutations, opaque calls and children before dispatch",async t=>{
+  const f=await fixture(t);f.create({readOnlyRecoveryOf:"source-task"});let dispatched=0;
+  for(const binding of [{readOnly:false},{},{readOnly:false,agentRunId:"child",childSessionId:"child-session"}])
+    await assert.rejects(f.ledger.operation("goal",1,"policy","mutate-"+JSON.stringify(binding),"Write",{},async()=>{dispatched++;return {};},v=>v,binding),/仅允许独立只读/);
+  assert.equal(dispatched,0);assert.equal(f.store.list("superOperations").length,0);
+  const saved=f.ledger.get("goal"),deadline=saved.deadlineAt;delete saved.readOnlyRecoveryOf;saved.deadlineAt=new Date(Date.now()+86400000).toISOString();f.ledger.save(saved);
+  assert.equal(f.ledger.get("goal").readOnlyRecoveryOf,"source-task");assert.equal(f.ledger.get("goal").deadlineAt,deadline);
+  await f.invoke("new-observation");assert.equal(f.store.list("superOperations").length,1);
+});
+
 async function acceptedHostStep(t: Parameters<typeof fixture>[0], tool = "inspect_host", revalidate?: (operation: Operation) => void) {
   const f = await fixture(t, revalidate); f.create();
   // Older inline Pilot profiles exposed the manual protocol on a host-managed goal.

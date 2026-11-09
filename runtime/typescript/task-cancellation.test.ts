@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LakeStore } from "./store";
 import { digest, type Operation } from "./tasks";
+import { memoryContextUnavailable, memoryContextUnavailableNotice } from "./memory-errors";
+import { memoryFailureReportProjection } from "./task-cancellation";
 import {
   cancelledReadOperation,
   stoppedReportProjection,
@@ -124,6 +126,23 @@ test("an exact cancelled read has a stopped projection while all original record
       .all(),
     before,
   );
+});
+
+test("a matching host Memory failure corrects only its exact report and never the stored history",async t=>{
+  const f=await fixture(t),root="failed-memory-root";
+  f.store.put("superGoals",f.goal.id,{...f.goal,status:"blocked",roleId:f.worker.roleId});
+  const message={...f.message,author:{...f.message.author,rootTurnId:root}};
+  const view=f.store.view(f.worker.sessionId);view.status="failed";view.rootTurnId=root;
+  view.cards=[{id:"host-error",type:"error",title:"Error",content:memoryContextUnavailable,status:"failed",data:{taskId:f.goal.id,root_turn_id:root}} as any];
+  f.store.put("views",f.worker.sessionId,view);f.store.put("messages",message.id,message);
+  const before=f.store.db.prepare("select kind,id,value from records order by kind,id").all();
+  assert.equal(memoryFailureReportProjection(f.store,message).text,memoryContextUnavailableNotice);
+  for(const other of [{...message,id:"model-message"},{...message,sessionId:"foreign"},{...message,text:"Model: "+unresolvedNotice},
+    {...message,author:{...message.author,rootTurnId:"other-root"}},{...message,author:{...message.author,roleId:"other-role"}}])
+    assert.deepEqual(memoryFailureReportProjection(f.store,other),other);
+  assert.deepEqual(f.store.db.prepare("select kind,id,value from records order by kind,id").all(),before);
+  view.cards[0].data={taskId:"other-task",root_turn_id:root};f.store.put("views",f.worker.sessionId,view);
+  assert.equal(memoryFailureReportProjection(f.store,message).text,unresolvedNotice);
 });
 
 for (const variant of [

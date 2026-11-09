@@ -8,6 +8,7 @@ import {pilotHandoffInterimIds,recoveredRouteFailures} from '../src/routeDispatc
 import {orderedTranscript} from '../src/timeline';
 import {ToolStep} from '../src/ThinkingTimeline';
 import {RoutingRecoveryContext,TurnExecutionDetails} from '../src/TurnExecutionDetails';
+import {confirmsDispatch,routingCall} from '../../shared/route-dispatch';
 
 const at=(n:number)=>`2026-11-06T02:00:${String(n).padStart(2,'0')}Z`;
 const receipt=(event='event',part='host')=>({eventId:event,partKey:part,action:'create',workerId:'worker',taskId:'task',dispatch:{state:'queued',unresolvedOperations:0}});
@@ -18,6 +19,16 @@ function render(cards:AICard[],nextUser=false){
  return renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:'Pilot',pilot:true}}));
 }
 const notices=(html:string)=>[...html.matchAll(/class="turn-execution-notice">([^<]*)</g)].map(match=>match[1]);
+
+test('a followup handoff can explicitly create an independent readonly recheck for that exact source',()=>{
+ const card={...route('recheck','completed',1),data:{arguments:{event_id:'event',part_key:'host',action:'followup',task_id:'source',role_id:'role'}}};
+ const result={...receipt(),action:'create',taskId:'fresh',recoveryOfTaskId:'source',assignments:[{executionId:'fresh',workerId:'new-worker',sessionId:'new-session',roleId:'role',dispatch:{state:'queued',unresolvedOperations:0}}],handoff:{recorded:true}};
+ const call=routingCall(card)!;
+ assert.equal(confirmsDispatch({...card,content:JSON.stringify(result)},call),true);
+ for(const changed of [{...result,recoveryOfTaskId:'other'},{...result,taskId:'source'},{...result,assignments:[{...result.assignments[0],executionId:'other'}]},
+  {...result,assignments:[{...result.assignments[0],roleId:'other'}]},{...result,assignments:[{...result.assignments[0],dispatch:{state:'queued',unresolvedOperations:1}}]}])
+  assert.equal(confirmsDispatch({...card,content:JSON.stringify(changed)},call),false);
+});
 
 test('only a later successful route for the exact admitted event and part recovers a prior routing failure',()=>{
  const failed=route('failed','failed',1),success=route('success','completed',2);
