@@ -476,6 +476,7 @@ export function commandPolicy(command: string): CommandPolicy {
     if (program === "date") safe &&= args.every(arg => arg === "-u" || arg === "--utc" || arg.startsWith("+") || /^(?:-I(?:s|date|hours|minutes|seconds|ns)?|--iso-8601(?:=(?:date|hours|minutes|seconds|ns))?)$/.test(arg));
     if (program === "last") safe = systemPath && lastQuery(args);
     if (program === "journalctl") safe = systemPath && journalQuery(args);
+    if (program === "systemd-detect-virt") safe = systemPath && args.every(arg => ["--vm", "--container", "--chroot", "--private-users", "--quiet", "-q", "--version", "--help", "-h"].includes(arg));
     if (program === "hostname") safe &&= args.every(arg => ["-f", "-s", "-d", "-i", "-I", "-a", "--fqdn"].includes(arg));
     if (program === "file") safe &&= !args.some(arg => arg === "--compile" || /^-[^-]*C/.test(arg));
     if (program === "find") safe &&= !args.some(arg => /^-(?:fprint|fprint0|fprintf|fls)$/.test(arg));

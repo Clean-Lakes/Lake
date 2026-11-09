@@ -7,6 +7,8 @@ import { LakeStore } from "./store";
 import { LakeSuperagent } from "./superagent";
 import type { MessageInput } from "./message-input";
 import { memoryContextUnavailable, memoryContextUnavailableNotice } from "./memory-errors";
+import {digest} from "./tasks";
+import {HttpError} from "./store";
 
 // Exercise the actual host and SQLite ledger with a controlled SDK boundary.
 // No model, credential, remote server or existing Dev data is accessed.
@@ -60,6 +62,49 @@ async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date
   return { store, host, internal, agents, project, router, role, requests, admit, route, settleRouter, activate, worker, read, finish, settleWorker, start,
     steering: () => steering };
 }
+
+test("recorded tool output is paged without local execution or new evidence, with exact task/generation/child ownership",async t=>{
+  const f=await fixture(t),{taskId}=await f.start(),worker=f.worker(taskId),profile=f.host.profile(worker.sessionId)!;
+  const tool=profile.tools.find(entry=>entry.metadata.name==="read_tool_output")!;
+  const op=f.store.list<any>("superOperations")[0],output={stdout:"CURRENT_OUTPUT "+"中".repeat(16000)+" END_OF_RECEIPT"};
+  op.output=output;op.outputHash=digest(output);f.store.put("superOperations",op.id,op);
+  const before=JSON.stringify(f.store.list("superOperations")),goalBefore=JSON.stringify(f.host.ledger.get(taskId));
+  const read=(input:any,child?:any)=>profile.invoke!(tool,input,{toolCallId:"read-page",abortSignal:new AbortController().signal,...(child?{lakeSubagent:child}:{})} as any);
+  let content="",offset=0;do{const page:any=await read({tool_call_id:op.callId,offset,limit:8192});content+=page.content;offset=page.nextOffset;}while(offset!==undefined);
+  assert.match(content,/END_OF_RECEIPT/);assert.deepEqual(JSON.parse(content),output);
+  assert.equal(JSON.stringify(f.store.list("superOperations")),before);assert.equal(JSON.stringify(f.host.ledger.get(taskId)),goalBefore);
+  for(const fields of [{goalId:"other"},{projectId:"other"},{sessionId:"other"},{generation:worker.generation+1},{policyHash:"other"},{agentRunId:"child",childSessionId:"child-session"}]){
+    f.store.put("superOperations",op.id,{...op,...fields});await assert.rejects(read({tool_call_id:op.callId}),/没有这笔工具回执/);
+  }
+  f.store.put("superOperations",op.id,{...op,agentRunId:"child",childSessionId:"child-session",originalCallId:"child-original"});
+  const page:any=await read({tool_call_id:"child-original"},{id:"child",sessionId:"child-session",toolCallId:"new-read"});assert.match(page.content,/CURRENT_OUTPUT/);
+  await assert.rejects(read({tool_call_id:"child-original"},{id:"other-child",sessionId:"child-session"}),/没有这笔工具回执/);
+  f.store.put("superOperations",op.id,{...op,output:{stdout:"tampered"}});await assert.rejects(read({tool_call_id:op.callId}),/校验失败/);
+  f.store.put("superOperations",op.id,{...op,status:"dispatched"});await assert.rejects(read({tool_call_id:op.callId}),/仍在执行/);
+  f.store.put("superOperations",op.id,op);
+  await assert.rejects(read({tool_call_id:op.callId,limit:8193}),/分页范围/);
+  (f.host.ledger as any).revalidate=()=>{throw new HttpError(403,"current source permission revoked");};
+  await assert.rejects(read({tool_call_id:op.callId}),/permission revoked/);
+});
+
+test("Bash host preflight returns recoverable validation failure while the permission and dispatch guards remain enforced",async t=>{
+  const f=await fixture(t),{taskId}=await f.start(),worker=f.worker(taskId);
+  let dispatched=0;const native:any={metadata:{name:"Bash",description:"shell"},inputSchema:{properties:{}},validateInput:()=>({result:true}),handler:()=>{dispatched++;}};
+  f.internal.execution={plan:()=>{throw new HttpError(403,"原项目策略不允许此命令资源");}};
+  const entry=f.internal.configureBash(worker,native),input={command:"python3 -I -c 'print(1)'"};
+  assert.deepEqual(entry.validateInput(input,{}),{result:false,errorCode:403,message:"原项目策略不允许此命令资源"});
+  assert.throws(()=>entry.resolvePermissionCapability(input),/原项目策略/);
+  await assert.rejects(f.internal.invokeBash(worker,entry,input,{}),/原项目策略/);assert.equal(dispatched,0);
+  native.validateInput=()=>({result:false,errorCode:42,message:"native schema failure"});
+  assert.equal(f.internal.configureBash(worker,native).validateInput(input,{}).errorCode,42);
+  native.validateInput=()=>({result:true});
+  const local=f.store.catalog().resources.find(r=>r.projectId===worker.projectId&&r.kind==="local")!;
+  f.internal.execution={plan:()=>({resource:local,readOnly:false})};
+  const goal=f.host.ledger.get(taskId);goal.readOnlyRecoveryOf="original-with-unknown";f.store.put("superGoals",taskId,goal);
+  assert.match(f.internal.configureBash(worker,native).validateInput(input,{}).message,/仅允许独立只读检查/);
+  const report=f.internal.reportPresentation(f.host.ledger.get(taskId),undefined,"原项目策略不允许此命令资源");
+  assert.match(report.body,/策略未允许的资源/);assert.doesNotMatch(report.body,/需要.*提供.*权限/);
+});
 
 test("ordinary inline Pilot profiles use host-managed tools while explicit plans keep their original protocol", async (t) => {
   const f = await fixture(t); await f.admit("请 Pilot 亲自执行检查。");

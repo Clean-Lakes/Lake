@@ -68,7 +68,7 @@ type Interaction = { id: string; workerId: string; generation: number; kind: "pl
 const permissionKeys = ["silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "silentMCPCalls", "denyLocalExecution", "blockUnreferencedAssets", "permissions", "permissionRevision", "securityPolicyRevision"];
 const routerTools = ["list_specialists", "manage_specialist", "search_super_tasks", "route_work", "read_super_object", "inspect_watchdog"];
 const workTools = ["work_begin", "work_read", "work_update", "work_finish", "work_wait", "recall_task_context", "recall_memory", "ask_user_question", "list_assets", "list_project_files",
-  "list_referenced_task_evidence", "read_referenced_task_evidence"];
+  "list_referenced_task_evidence", "read_referenced_task_evidence", "read_tool_output"];
 const hostTools=["inspect_host"];
 const databaseTools=["list_db_objects","db_table_ddl","read_db_table"];
 const extensionTools = ["list_mcp_servers", "list_mcp_tools", "call_mcp_tool", "load_skill"];
@@ -1359,6 +1359,7 @@ export class LakeSuperagent implements AgentHost {
     if(plan.resource.kind==='local'&&options.denyLocalExecution===true)throw new HttpError(403,'当前 Pilot 权限禁止本机执行');
     if(options.blockUnreferencedAssets===true)this.requireReference(worker,plan.resource.id);
     const mode=this.store.get<Goal>('superGoals',worker.taskId)?.mode;
+    if(this.store.get<Goal>('superGoals',worker.taskId)?.readOnlyRecoveryOf&&!plan.readOnly)throw new HttpError(403,'新的复查上下文仅允许独立只读检查；原任务的记录和未决操作仍保留');
     if((mode==='plan'||this.store.get<any>('agentPlans',worker.taskId)?.active)&&!plan.readOnly)throw new HttpError(403,'计划阶段仅允许宿主可证明只读的命令');
     return {plan,options};
   }
@@ -1368,6 +1369,14 @@ export class LakeSuperagent implements AgentHost {
       permission:{...entry.permission,needsApproval:false},
       metadata:{...entry.metadata,needsApproval:false,description:entry.metadata.description+'\nLake resource execution: omit asset_ref for the assigned local workspace. For SSH copy the exact asset_ref and use the short configuration_pin from list_assets for the configuration_revision argument (the full revision is also supported); the host connects with saved credentials. Optional cwd is an absolute path on that target. Never supply passwords/private keys. Inspect the actual environment and use its installed kubectl/mysql/docker tools; do not stop at a missing specialized adapter. Background commands must finish or be stopped before work_finish.'},
       inputSchema:{...schema,properties:{...schema.properties,asset_ref:str,configuration_revision:str,cwd:str}},
+      validateInput:(input,context)=>{
+        const checked=entry.validateInput?.(input,context);if(checked?.result===false)return checked;
+        // Expected host preflight failures are model-correctable tool results.
+        // Do not throw from the SDK permission resolver before its handler boundary.
+        try {this.shellPlan(worker,input as ShellInput);}
+        catch(error){if(error instanceof HttpError)return {result:false,errorCode:error.status,message:this.agents.redact(error.message)};throw error;}
+        return {result:true};
+      },
       resolvePermissionCapability:(input:any)=>{const {plan,options}=this.shellPlan(worker,input);const ask=(options.silentCommands??permissionDefaults.silentCommands)!==true||plan.policy==='ask'||plan.risk==='dangerous';return {readOnly:plan.readOnly,needsApproval:ask,permission:{needsApproval:ask,...(ask?{alwaysAsk:true as const}:{}),riskLevel:plan.risk==='dangerous'?'high':plan.readOnly?'low':'medium',sideEffectScope:'system'}};},
       handler:(input:any,context)=>{const {asset_ref,configuration_revision,cwd,...native}=input;return entry.handler(native,context);}};
   }
@@ -1747,10 +1756,29 @@ export class LakeSuperagent implements AgentHost {
         const entries = await readdir(path, { withFileTypes: true });
         return { path, entries: entries.slice(0, 200).map((entry) => ({ name: entry.name, kind: entry.isSymbolicLink() ? "symlink" : entry.isDirectory() ? "directory" : "file" })), truncated: entries.length > 200 };
       })),
+      this.entry("read_tool_output", "Read a bounded page of an already recorded tool result from this task and execution generation. Copy tool_call_id from your actual tool call. Use this when a result is truncated; never run local Bash/Python or open SDK artifact paths to read remote receipts. offset/limit count string characters, limit defaults to 4096 (max 8192). Follow nextOffset. This observes the original receipt and creates no new execution or acceptance evidence.",
+        objectSchema({tool_call_id:str,offset:integer,limit:integer},["tool_call_id"]),run((a,context)=>this.readToolOutput(worker,a,context)),false,32768),
       this.entry("list_referenced_task_evidence", "List historical evidence only from tasks explicitly registered to this comparison. Never reads another worker transcript or imports permits.", objectSchema({ task_id: str, cursor: str, limit: integer }, ["task_id"]), run((a) => this.referencedEvidence(worker, a))),
       this.entry("read_referenced_task_evidence", "Read an exact registered historical operation, revalidating source revision and current project policy. Historical results do not prove current health.",
         objectSchema({ task_id: str, evidence_id: str, reference_id: str, offset: integer, limit: integer }, ["task_id", "evidence_id", "reference_id"]), run((a) => this.readReferenced(worker, a)), false, 131072),
     ];
+  }
+  private readToolOutput(worker:Worker,input:any,context:HostToolContext) {
+    const callId=text(input.tool_call_id,"tool_call_id",1024),offset=input.offset??0,limit=input.limit??4096;
+    if(!Number.isSafeInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>8192)throw new HttpError(400,"回执分页范围无效，limit 为 1 至 8192");
+    this.validateWorker(worker.id,worker.generation);
+    const child=this.childSource(context);
+    const operation=this.store.list<Operation>("superOperations").find(op=>op.goalId===worker.taskId&&op.sessionId===worker.sessionId&&
+      op.projectId===worker.projectId&&op.generation===worker.generation&&op.policyHash===worker.policyHash&&
+      op.agentRunId===child.agentRunId&&op.childSessionId===child.childSessionId&&(op.callId===callId||op.originalCallId===callId));
+    if(!operation)throw new HttpError(404,"当前任务执行中没有这笔工具回执，请使用本轮准确调用 ID");
+    if(operation.status==="dispatched")throw new HttpError(409,"这笔调用仍在执行，请用原后台句柄等待结果");
+    if(!operation.outputHash||operation.outputHash!==digest(operation.output))throw new HttpError(409,"原工具回执校验失败");
+    if(operation.resourceId)this.requireTarget(worker,operation.resourceId);
+    this.ledger.revalidate?.(operation);
+    const content=this.agents.redact(canonical(operation.output));
+    return {toolCallId:callId,tool:operation.tool,state:operation.status,hash:operation.outputHash,content:content.slice(offset,offset+limit),
+      nextOffset:offset+limit<content.length?offset+limit:undefined,totalCharacters:content.length};
   }
   private evidenceMembers(worker: Worker, taskId: string) {
     const reference = this.store.require<EvidenceBinding>("superReferences", digest([worker.taskId, taskId]));
@@ -2070,7 +2098,7 @@ export class LakeSuperagent implements AgentHost {
       : this.ledger.unresolved(goal.id) ? unresolvedNotice
       : goal.summary === "deadline_reached" ? "这次工作已到截止时间，剩余部分尚未完成。"
       : goal.summary === "model_round_limit" ? "轮次限制已取消，当前任务仍处于暂停状态。"
-      : error || this.store.view(goal.sessionId).status === "failed" ? "这次处理遇到错误，尚未完成。具体原因可在执行详情中查看。"
+      : error || this.store.view(goal.sessionId).status === "failed" ? this.failureNotice(error ?? goal.summary)
       : goal.status === "blocked" ? "这次检查尚未完成，暂时无法继续。"
       : goal.status === "waiting_user" && this.pendingInteraction(goal.sessionId) ? "需要你回答当前问题后继续。"
       : goal.status === "paused" ? "这次检查还没完成，已暂停。" : "这部分工作还没完成。";
@@ -2082,6 +2110,12 @@ export class LakeSuperagent implements AgentHost {
       return { body: delivery.summary, channelBody: delivery.summary };
     const body=reply ? `${notice}\n\n${reply}` : notice;
     return { body, channelBody: body };
+  }
+  private failureNotice(error?:string) {
+    // Known host failures only; arbitrary provider/tool payloads stay in details.
+    if(error==="原项目策略不允许此命令资源")return "这次检查尚未完成：命令选择了原项目策略未允许的资源。需要使用任务已授权的目标；读取长回执可使用任务内回执入口。";
+    if(error==="资源不属于本次专员分工，请使用该分工内的准确 asset_ref")return "这次检查尚未完成：命令目标不属于本次分工，需要使用分工内的准确资源。";
+    return "这次处理遇到错误，尚未完成。具体原因可在执行详情中查看。";
   }
   private deliverReports() {
     if (this.closed) return;

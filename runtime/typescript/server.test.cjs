@@ -739,6 +739,15 @@ function fullAgentReply(request,mode,home){
  const stamp=router?JSON.parse(content(messages[0]).split('\n')[1])[0].id:'worker';
  const call=(name,input,id=name)=>({tool_calls:[{index:0,id:'full-'+stamp+'-'+id,type:'function',function:{name,arguments:JSON.stringify(input)}}]});
  const result=name=>{const id=calls.findLast(call=>call.function.name===name)?.id;const message=messages.findLast(message=>message.role==='tool'&&message.tool_call_id===id);try{return JSON.parse(content(message));}catch{return content(message??{});}};
+ if(mode.includes('output-recovery')){
+  if(!names.includes('Bash'))return call('Bash',{command:"python3 -I -c 'print(1)'",description:'Wrong local resource must be rejected'},'rejected-local');
+  if(!names.includes('list_assets'))return call('list_assets',{query:'SSH fixture'});
+  const asset=result('list_assets').assets.find(asset=>asset.kind==='ssh');
+  if(!calls.some(c=>c.id==='full-worker-large-receipt'))return call('Bash',{asset_ref:asset.asset_ref,configuration_revision:asset.configuration_pin,command:"printf 'LAKE_LARGE_RECEIPT'",description:'Read remote receipt'},'large-receipt');
+  if(!names.includes('read_tool_output'))return call('read_tool_output',{tool_call_id:'full-worker-large-receipt',offset:60000,limit:8192});
+  if(!names.includes('work_finish'))return call('work_finish',{summary:'已读取远端长回执末尾 OUTPUT_RECOVERY_END，原待核实记录保留。',outcome:'completed'});
+  return {content:'已完成本次独立只读检查。'};
+ }
  if(mode.includes('connection-recovery')||mode.includes('journal-recovery')){
   if(!names.includes('list_assets'))return call('list_assets',{query:'SSH fixture'});
   const asset=result('list_assets').assets.find(asset=>asset.kind==='ssh'),count=names.filter(name=>name==='Bash').length;
@@ -866,7 +875,8 @@ function superReply(request, mode, home) {
     if (mode === "super-meta") return { content: "已创建长期专员，没有创建执行任务。" };
     if (!names.includes("list_specialists")) return call("list_specialists", {});
     const roleId = request.messages.slice(currentStart).filter((message) => message.role === "tool").map(content).join("\n").match(/"id"\s*:\s*"([a-f0-9]{64})"/)?.[1];
-    if (!names.includes("route_work")) return call("route_work", { event_id: event.id, part_key: "inspect", action: "create", title: "检查项目工作区", role_id: roleId, quote: event.text, reason: "用户明确要求检查本项目" });
+    if (!names.includes("route_work")) return call("route_work", { event_id: event.id, part_key: "inspect", action: "create", title: "检查项目工作区", role_id: roleId, quote: event.text, reason: "用户明确要求检查本项目",
+      ...(mode.includes('output-recovery')?{resource_ids:event.selectedReferences.resourceIds}:{}) });
     return { content: "已交给项目检查员处理，执行结果将从原任务回报。" };
   }
   if (mode.startsWith("super-subagent")) return subagentReply(request, mode, home);
@@ -3112,6 +3122,30 @@ async function fullAgentTask(t,mode){
  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:true,maxSteps:30});
  return {f,project,send:(text=mode.startsWith('super-full-pilot')?'请 Pilot 亲自执行本次测试检查并核对实际结果，不要委派专员。':'请自主执行本次测试检查并核对实际结果。')=>f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text},202)};
 }
+test('real SDK rejects a wrong local command then reads a scoped remote truncated receipt without abort or extra evidence',async t=>{
+ const {f,project}=await fullAgentTask(t,'super-full-worker-ssh-output-recovery');
+ const wire=await sshFixture(t,undefined,(command,stream)=>{
+  if(!command.includes('LAKE_LARGE_RECEIPT'))return false;
+  stream.write('CURRENT_READONLY_RECEIPT '+'.'.repeat(60000)+' OUTPUT_RECOVERY_END');stream.exit(0);stream.end();return true;
+ });
+ const resource=await sshResource(f,wire);
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:true,denyLocalExecution:true});
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'只读检查当前服务器，读取长回执并核对末尾。',resourceIds:[resource.id]},202);
+ const active=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=active.workers[0];
+ const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
+ assert.equal(trust.ai?.pending,undefined);
+ await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const view=await f.api(`/api/sessions/${worker.sessionId}/ai`),requests=f.requests.filter(isIndependentWorkerRequest);
+ assert.ok(view.cards.some(c=>c.id==='full-worker-rejected-local'&&c.status==='failed'));
+ assert.ok(!view.cards.some(c=>c.type==='error'));
+ assert.ok(requests.some(r=>r.messages.some(m=>m.role==='tool'&&m.tool_call_id==='full-worker-read_tool_output'&&JSON.stringify(m.content).includes('OUTPUT_RECOVERY_END'))));
+ const ops=f.app.store.list('superOperations').filter(o=>o.goalId===worker.task.taskId);
+ assert.equal(ops.length,1);assert.equal(ops[0].tool,'Bash');assert.equal(ops[0].readOnly,true);assert.equal(ops[0].resourceId,resource.id);assert.equal(ops[0].status,'succeeded');
+ assert.equal(wire.requests.length,1);assert.equal(f.app.store.list('commandExecutions').length,1);
+ assert.equal(f.app.store.require('superGoals',worker.task.taskId).acceptanceState,'pass');
+ assert.ok(requests.some(r=>r.messages.some(m=>m.role==='tool'&&m.tool_call_id==='full-worker-large-receipt'&&/truncat|artifact|persisted/i.test(JSON.stringify(m.content)))),'fixture must exercise SDK output truncation');
+});
 test('default resource delegation creates a missing specialist and reuses its stable role with independent accepted tasks',{skip:process.platform!=='darwin'},async t=>{
  const {f,project,send}=await fullAgentTask(t,'super-full-worker-default-delegation-ssh'),server=await sshFixture(t);
  await sshResource(f,server);assert.equal(f.app.store.list('superRoles').length,0);await send('请检查服务器启动状态，并核对实际结果。');

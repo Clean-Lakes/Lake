@@ -19,6 +19,15 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+test("virtualization and the actual reboot log pipeline are literal read-only diagnostics", () => {
+  const command = "journalctl -b -1 --since '2026-11-08 17:08:00' --no-pager -o short-iso -n 45; journalctl -b -1 -k --since '2026-11-08 00:00:00' --no-pager -o short-iso -p warning -n 60; journalctl -b -1 --since '2026-11-08 00:00:00' --no-pager -o short-iso | grep -iE 'kernel panic|out of memory|oom-kill|watchdog|hardware error|machine check|soft lockup|hard lockup|reboot|shutting down|power key|power failure' | tail -50; systemd-detect-virt; journalctl -b 0 -k --no-pager | grep -iE 'hypervisor|DMI:|crash|panic|reset|watchdog' | head -30";
+  for (const source of [command,"systemd-detect-virt", "/usr/bin/systemd-detect-virt --vm --quiet", "systemd-detect-virt --container"]) {
+    const policy=commandPolicy(source);assert.equal(policy.risk,"readonly",source);assert.ok(policy.safeCommand);
+  }
+  for(const source of ["/tmp/systemd-detect-virt", "systemd-detect-virt --unknown", "systemd-detect-virt --list", "systemd-detect-virt > /tmp/file", 'systemd-detect-virt $(touch /tmp/file)', "systemd-detect-virt; journalctl --rotate --no-pager", "python3 -I -c 'print(1)'"])
+    assert.notEqual(commandPolicy(source).risk,"readonly",source);
+});
+
 test("bounded reboot diagnostics are read-only, including the reported compound query", () => {
   for (const command of ["date -Is", "date --iso-8601=seconds --utc", "last -x -F -n 20", "last -x -F | head -35", "last reboot -F -n20", "last -xF shutdown -10",
     "journalctl --list-boots --no-pager", "journalctl -b -1 -n 100 --no-pager -o short-iso",
