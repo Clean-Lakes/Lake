@@ -890,6 +890,14 @@ function superReply(request, mode, home) {
       ...(mode.includes('output-recovery')?{resource_ids:event.selectedReferences.resourceIds}:{}) });
     return { content: "已交给项目检查员处理，执行结果将从原任务回报。" };
   }
+  if (mode.startsWith("super-report-file")) {
+    const file_path = join(require("node:fs").readFileSync(join(home, "report-workspace.txt"), "utf8"), "investigation.md");
+    if (!names.includes("Read")) return call("Read", { file_path });
+    if (!names.includes("Edit")) return call("Edit", { file_path, old_string: "ORIGINAL_RECORD", new_string: "ORIGINAL_RECORD\nVERIFIED_FINDING: replica is current" });
+    if (JSON.stringify(request.messages).includes("LAKE_FINAL_REPORT_REQUIRED") && mode !== "super-report-file-stubborn")
+      return call("work_finish", { summary: "已核对调查记录：副本当前已追平。" + (mode.endsWith("partial") ? "尚缺平台事件，重启原因仍未确定。" : "调查结果和记录已一并交付。"), outcome: mode.endsWith("partial") ? "partial" : "completed" });
+    return { content: "已追加 investigation.md。" };
+  }
   if (mode.startsWith("super-subagent")) return subagentReply(request, mode, home);
   if (mode === "super-watchdog-guide") {
     const checks=names.filter(name=>name==="list_project_files").length;
@@ -3133,6 +3141,33 @@ async function fullAgentTask(t,mode){
  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:true,maxSteps:30});
  return {f,project,send:(text=mode.startsWith('super-full-pilot')?'请 Pilot 亲自执行本次测试检查并核对实际结果，不要委派专员。':'请自主执行本次测试检查并核对实际结果。')=>f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text},202)};
 }
+for (const outcome of ["completed", "partial", "stubborn"]) test(`a file-only specialist reply produces a bounded chat conclusion (${outcome})`, async t => {
+  const { f, project, send } = await fullAgentTask(t, "super-report-file-" + outcome);
+  const file = join(await f.app.store.workspace(f.project.id), "investigation.md");
+  await writeFile(file, "ORIGINAL_RECORD\n");
+  await writeFile(join(f.home, "report-workspace.txt"), require("node:path").dirname(file));
+  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`, "POST", { silentWriteFiles: true });
+  await send("读取调查记录，追加副本已追平的观察，并在聊天中给出结论。");
+  const expected = outcome === "stubborn" ? "本轮尚未提交最终结论" : "已核对调查记录：副本当前已追平";
+  const page = await until(() => f.api(`/api/sessions/${project.routerSessionId}/snapshot`), value => value.messages.some(message => message.author?.kind === "specialist" && message.text.includes(expected)));
+  const reports = page.messages.filter(message => message.author?.kind === "specialist");
+  assert.equal(reports.length, 1);
+  assert.match(reports[0].text, new RegExp(expected));
+  const state = await f.api(`/api/projects/${f.project.id}/superagent`), worker = state.workers[0];
+  assert.equal(state.workers.length, 1);
+  assert.equal(worker.task.state, outcome === "completed" ? "completed" : "paused");
+  assert.equal(worker.task.acceptanceState, outcome === "completed" ? "pass" : "not_evaluated");
+  const channel = await f.api(`/api/sessions/${reports[0].author.channelSessionId}/snapshot`);
+  assert.ok(channel.messages.some(message => message.text === reports[0].text));
+  assert.equal(await readFile(file, "utf8"), "ORIGINAL_RECORD\nVERIFIED_FINDING: replica is current\n");
+  const operations = f.app.store.list("superOperations").filter(operation => operation.goalId === worker.task.taskId);
+  assert.equal(operations.filter(operation => operation.tool === "Edit").length, 1, "report repair never appends the file again");
+  const requests = f.requests.filter(request => isIndependentWorkerRequest(request) && JSON.stringify(request.messages).includes("LAKE_FINAL_REPORT_REQUIRED"));
+  assert.equal(requests.length, 1, "native Stop hook gets one extra model step, including a stubborn provider");
+  assert.ok(requests[0].tools.every(tool => !["Bash", "Write", "Edit", "Agent", "Task"].includes(tool.function.name)));
+  const rows = f.app.store.view(worker.sessionId).cards;
+  assert.equal(new Set(rows.map(card => card.data?.root_turn_id).filter(Boolean)).size, 1, "same SDK turn keeps the original execution details");
+});
 for(const automatic of [true,false])test(`new SSH history command ignores old project and legacy unknowns while current approval is ${automatic?'automatic':'required'}`,async t=>{
  const {f,project,send}=await fullAgentTask(t,'super-full-worker-ssh-pending-history');
  const wire=await sshFixture(t,undefined,(command,stream)=>{
