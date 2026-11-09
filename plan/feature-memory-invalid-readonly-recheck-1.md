@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-09
 last_updated: 2026-11-09
 owner: Lake maintainers
-status: 'Completed'
+status: 'In progress'
 tags: [memory, recovery, tasks, reporting]
 ---
 
 # Introduction
 
-![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
+![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
 
 The reported old reboot task failed before any new tool call because its prior memory dependency became unavailable. A generic unresolved-operation notice hid that error. Preserve the old context and execution ledger; a newly admitted human followup can instead receive an independent, tightly scoped read-only recheck by the same specialist in a fresh SDK Session.
 
@@ -43,6 +43,16 @@ The reported old reboot task failed before any new tool call because its prior m
 | --- | --- | --- | --- |
 | TASK-005 | Add lifecycle, ledger and real SDK regressions with a used memory source invalidated before a fresh human followup, including an original unknown operation. Assert fresh Session, same role, bounded scope/deadline, no stale knowledge in provider requests, read success, mutation rejection and unchanged source records. Depends on TASK-001 through TASK-004. | Yes | 2026-11-09 |
 | TASK-006 | Run pinned TS/runtime regressions, boundary check and signed Lake Dev validation using isolated QA data; update design/validation notes and PR #206 with exact tested SHA and remaining limitations. Depends on TASK-005. | Yes | 2026-11-09 |
+
+### Implementation Phase 3
+
+- **GOAL-003**: Make independent read-only recovery consistent across routing choices.
+
+| Task | Description | Completed | Date |
+| --- | --- | --- | --- |
+| TASK-007 | Extract superagent.ts readonlyRecheck and use it for invalid-memory followup and create with a nonterminal predecessor. Retain original role, explicit scope, deadline and all source ledgers; do not require successful source acceptance for independent reads. | No | 2026-11-09 |
+| TASK-008 | Update route_work metadata and super-prompts.ts to describe both entrances and operation-scoped unknown blocking. Add lifecycle tests for both entrances, scope/role/plan/deadline rejection and real SDK predecessor regression with old unknown retained. Depends on TASK-007. | No | 2026-11-09 |
+| TASK-009 | Build and install signed Dev; exercise the new-task-plus-predecessor entrance in isolated real-model QA, preserve original record hashes, document exact tested SHA and update PR206 without merging. Depends on TASK-008. | No | 2026-11-09 |
 
 ## 3. Alternatives
 

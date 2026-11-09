@@ -797,8 +797,8 @@ function fullAgentReply(request,mode,home){
 }
 
 function superReply(request, mode, home) {
-  if (mode === "super-memory-recheck") {
-    if (request.tools.some(tool=>tool.function.name==="route_work")) return hostRetryReply(request);
+  if (mode.startsWith("super-memory-recheck")) {
+    if (request.tools.some(tool=>tool.function.name==="route_work")) return hostRetryReply(request,mode.endsWith("predecessor")?"predecessor":"followup");
     const plain=m=>typeof m.content==="string"?m.content:(m.content??[]).map(p=>p.text??"").join("");
     const assignment=JSON.parse(request.messages.filter(m=>m.role==="user").map(plain).findLast(s=>s.startsWith("{")&&s.includes('"assignment"')));
     const names=request.messages.flatMap(m=>m.tool_calls??[]).map(c=>c.function.name);
@@ -1018,7 +1018,7 @@ function subagentReply(request, mode, home) {
 
 // A protocol fixture, not a language-model evaluation: choose only from the
 // latest host-provided context, then let real adapters and receipts decide work.
-function hostRetryReply(request) {
+function hostRetryReply(request, entrance = "followup") {
   const content = (message) => typeof message.content === "string" ? message.content : (message.content ?? []).map((part) => part.text ?? "").join("");
   const router = request.tools.some((tool) => tool.function.name === "route_work");
   const boundary = request.messages.findLastIndex((message) => message.role === "user" && (router
@@ -1041,7 +1041,9 @@ function hostRetryReply(request) {
     if (workingSet.focus.length) {
       const focus = workingSet.focus[0];
       if (!names.includes("route_work")) return call("route_work", {
-        event_id: event.id, part_key: "retry", action: "followup", task_id: focus.task.id,
+        event_id: event.id, part_key: "retry", ...(entrance === "predecessor"
+          ? {action:"create",predecessor_task_id:focus.task.id,role_id:focus.roleId,title:"继续只读复查"}
+          : {action:"followup",task_id:focus.task.id}),
         quote: event.text, reason: "继续最近对话中的同一主机检查，重新读取当前连接情况。",
       }, `retry-${event.id}`);
       return { content: "我再检查一下这台服务器。" };
@@ -2401,8 +2403,8 @@ test("a failed proven read obtains a fresh attempt without replaying the failure
   assert.equal(f.app.store.list("superWorkers").length, 1);
 });
 
-test("real SDK invalid-memory followup uses a fresh scoped readonly context, preserving source unknowns", async t=>{
-  const f=await fixture(t,"super-memory-recheck"),project=await f.api(`/api/projects/${f.project.id}/superagent`,"POST",{});
+for(const entrance of ["followup","predecessor"]) test(`real SDK invalid-memory ${entrance} uses a fresh scoped readonly context, preserving source unknowns`, async t=>{
+  const f=await fixture(t,"super-memory-recheck"+(entrance==="predecessor"?"-predecessor":"")),project=await f.api(`/api/projects/${f.project.id}/superagent`,"POST",{});
   const resource=(await f.api("/api/catalog")).resources.find(r=>r.projectId===f.project.id);
   await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,"POST",{silentReadFiles:true,silentWriteFiles:true});
   const scope=f.app.memory.scope("project",f.project.id);

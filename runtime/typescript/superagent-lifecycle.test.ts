@@ -85,7 +85,7 @@ test("ordinary inline Pilot profiles use host-managed tools while explicit plans
   assert.ok(!JSON.stringify(finishSchema(profile)).includes('"outcome"'));
 });
 
-test("invalid-memory followup creates one bounded read-only recheck without changing its source", async t => {
+for(const entrance of ["followup","predecessor","predecessor-current-memory"]) test(`invalid-memory ${entrance} creates one bounded read-only recheck without changing its source`, async t => {
   const f = await fixture(t), resource = f.store.catalog().resources.find(r => r.projectId === f.project.id)!;
   const event = await f.admit("检查本机重启记录。", {resourceIds:[resource.id],mentions:[],references:[]});
   const original = f.route(event,{action:"create",title:"重启检查",role_id:f.role.id});
@@ -94,9 +94,10 @@ test("invalid-memory followup creates one bounded read-only recheck without chan
   const source = f.host.ledger.get(original.taskId); source.status="blocked"; source.summary=memoryContextUnavailable; f.host.ledger.save(source);
   const unknown={id:"unresolved-source",goalId:source.id,sessionId:source.sessionId,projectId:f.project.id,status:"unknown",readOnly:false};
   f.store.put("superOperations",unknown.id,unknown);
-  (f.agents as any).memory={captureUser(){},captureTask(){},needsFreshContext:(actor:any)=>actor.sessionId===source.sessionId,projectTaskContext:(items:any)=>items};
+  (f.agents as any).memory={captureUser(){},captureTask(){},needsFreshContext:(actor:any)=>entrance!=="predecessor-current-memory"&&actor.sessionId===source.sessionId,projectTaskContext:(items:any)=>items};
   const before={goal:f.host.ledger.get(source.id),worker:f.worker(source.id),operations:f.store.list("superOperations")};
-  const human = await f.admit("再查一下"), input={action:"followup",task_id:source.id,role_id:f.role.id};
+  const human = await f.admit("再查一下"), input=entrance==="followup"?{action:"followup",task_id:source.id,role_id:f.role.id}
+    :{action:"create",predecessor_task_id:source.id,title:"继续排查重启",role_id:f.role.id};
   const result = f.route(human,input);
   assert.notEqual(result.taskId,source.id); assert.equal(result.recoveryOfTaskId,source.id); assert.equal(result.action,"create");
   assert.equal(f.route(human,input).taskId,result.taskId);
@@ -105,6 +106,11 @@ test("invalid-memory followup creates one bounded read-only recheck without chan
   assert.equal(fresh.readOnlyRecoveryOf,source.id); assert.equal(fresh.deadlineAt,source.deadlineAt);
   assert.notEqual(fresh.sessionId,source.sessionId); assert.equal(fresh.roleId,source.roleId);
   assert.deepEqual(f.worker(fresh.id).targetResourceIds,[resource.id]); assert.equal(f.store.list("superReferences").length,0);
+  if(entrance==="followup") {
+    const snapshot=f.host.ledger.get(fresh.id),invocation=f.worker(fresh.id);
+    const changedEntrance=f.route(human,{action:"create",predecessor_task_id:source.id,title:"继续排查",role_id:f.role.id,part_key:"different-entrance"});
+    assert.equal(changedEntrance.taskId,fresh.id);assert.deepEqual(f.host.ledger.get(fresh.id),snapshot);assert.deepEqual(f.worker(fresh.id),invocation);
+  }
   f.settleRouter(); await f.activate();
   const envelope=f.requests.at(-1)!.input;
   assert.equal(envelope.originalRequirement,human.payload); assert.equal(envelope.readOnlyRecheck.originalHumanRequirement,event.payload);
@@ -119,7 +125,7 @@ test("invalid-memory followup creates one bounded read-only recheck without chan
   assert.equal(f.internal.reportPresentation(before.goal,undefined,memoryContextUnavailable).body,memoryContextUnavailableNotice);
 });
 
-for (const variant of ["scope", "plan", "expired", "active", "joint", "role"]) test(`invalid-memory recheck keeps ${variant} restrictions`, async t=>{
+for (const entrance of ["followup","predecessor"]) for (const variant of ["scope", "plan", "expired", "active", "joint", "role"]) test(`invalid-memory ${entrance} recheck keeps ${variant} restrictions`, async t=>{
   const f=await fixture(t),resource=f.store.catalog().resources.find(r=>r.projectId===f.project.id)!;
   const event=await f.admit("检查主机。",variant==="scope"?undefined:{resourceIds:[resource.id],mentions:[],references:[]});
   const result=f.route(event,{action:"create",title:"检查主机",role_id:f.role.id});f.settleRouter();await f.activate();
@@ -132,8 +138,27 @@ for (const variant of ["scope", "plan", "expired", "active", "joint", "role"]) t
   (f.agents as any).memory={captureUser(){},captureTask(){},needsFreshContext:()=>true};
   const human=await f.admit("继续");
   const before=f.store.list("superGoals");
-  assert.throws(()=>f.route(human,{action:"followup",task_id:goal.id,...(variant==="role"?{role_id:"wrong-role"}:{})}));
+  const input=entrance==="followup"?{action:"followup",task_id:goal.id}:{action:"create",predecessor_task_id:goal.id,title:"再次检查",role_id:f.role.id};
+  assert.throws(()=>f.route(human,{...input,...(variant==="role"?{role_id:"wrong-role"}:{})}));
   assert.deepEqual(f.store.list("superGoals"),before);
+});
+
+test("an unfinished predecessor cannot expand resources, import old evidence or create joint recovery",async t=>{
+  const f=await fixture(t),resource=f.store.catalog().resources.find(r=>r.projectId===f.project.id)!;
+  const original=await f.admit("检查本机",{resourceIds:[resource.id],mentions:[],references:[]});
+  const first=f.route(original,{action:"create",title:"检查本机",role_id:f.role.id});f.settleRouter();await f.activate();
+  const worker=f.worker(first.taskId);worker.state="parked";f.store.put("superWorkers",worker.id,worker);
+  const goal=f.host.ledger.get(first.taskId);goal.status="blocked";f.host.ledger.save(goal);
+  const other={...resource,id:"outside-original-scope"};f.store.put("resources",other.id,other);
+  const otherRole={...f.role,id:"another-specialist",roleKey:"another"};f.store.put("superRoles",otherRole.id,otherRole);
+  const human=await f.admit("再次检查",{resourceIds:[other.id],mentions:[],references:[]});
+  const input={action:"create",predecessor_task_id:goal.id,title:"复查",role_id:f.role.id};
+  const before=f.store.list("superGoals");
+  assert.throws(()=>f.route(human,{...input,resource_ids:[other.id]}),/扩大范围/);
+  assert.throws(()=>f.route(human,{...input,evidence_task_ids:[goal.id]}),/不导入旧执行证据/);
+  const {role_id:_,...joint}=input;
+  assert.throws(()=>f.route(human,{...joint,role_ids:[f.role.id,otherRole.id]}),/共同验收/);
+  assert.deepEqual(f.store.list("superGoals"),before);assert.equal(f.store.list("superReferences").length,0);
 });
 
 test("completed fresh checks preserve old acceptance, carry target context and use new current receipts", async (t) => {
@@ -170,7 +195,7 @@ test("completed fresh checks preserve old acceptance, carry target context and u
 test("predecessor is context, cannot reuse an old event, cross scope, waive current policy or reset unfinished limits", async (t) => {
   const f = await fixture(t), initial = await f.start(), source = f.host.ledger.get(initial.taskId);
   let event = await f.admit("再检查一次");
-  assert.throws(() => f.route(event, { action: "create", title: "检查", role_id: f.role.id, predecessor_task_id: source.id }), /accepted completed/);
+  assert.throws(() => f.route(event, { action: "create", title: "检查", role_id: f.role.id, predecessor_task_id: source.id }), (error:any)=>error.status===409);
   f.settleRouter(); await f.finish(); f.settleWorker();
   f.internal.batches.set(f.router, { eventIds: [initial.event.id], complete: new Set([initial.event.id]), input: "old input" });
   assert.throws(() => f.route(initial.event, { action: "create", title: "检查", role_id: f.role.id, predecessor_task_id: source.id }), /disposition/);
