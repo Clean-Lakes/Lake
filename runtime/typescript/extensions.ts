@@ -239,7 +239,7 @@ export class LakeExtensions {
       try {
         const server = this.raw(item.id); if (!server.enabled || server.transport === "stdio" && options.denyLocalExecution === true) return [];
         const binding = this.binding(projectId, server.id);
-        if (this.security.mcp(projectId, "mcp.discover", server.transport === "stdio") !== "allow") return [];
+        this.security.mcp(projectId, "mcp.discover", server.transport === "stdio");
         return [{ id: server.id, name: server.name, transport: server.transport, configurationRevision: digest(server), bindingRevision: digest(binding) }];
       } catch { return []; }
     });
@@ -285,18 +285,6 @@ export class LakeExtensions {
   verifyPins(fence: ExtensionFence, input: any, call = false) {
     if (input.configuration_revision !== fence.configurationHash || input.binding_revision !== fence.bindingHash || call && input.catalog_revision !== fence.catalogHash)
       throw new HttpError(409, "MCP 配置、项目绑定或目录已变化，请重新读取实际目录");
-  }
-  automaticCalls(projectId: string, options: Record<string, unknown>) {
-    if (options.silentMCPCalls !== true) return false;
-    for (const server of this.projectServers(projectId, options).servers) {
-      try { if (this.security.mcp(projectId, "mcp.call", server.transport === "stdio") === "ask") return false; }
-      catch { return false; }
-    }
-    return true;
-  }
-  discoveryApproval(projectId: string, serverId: string) {
-    const server = this.raw(serverId);
-    return server.transport === "stdio" || this.security.mcp(projectId, "mcp.discover", false) === "ask";
   }
   revalidate(operation: Operation, options: Record<string, unknown>) {
     const fence = this.fence(operation.projectId, operation.mcpServerId!, options, operation.tool === "call_mcp_tool" ? operation.mcpTool : undefined);
