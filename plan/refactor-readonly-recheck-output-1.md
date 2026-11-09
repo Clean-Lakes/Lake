@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-09
 last_updated: 2026-11-09
 owner: Lake
-status: In progress
+status: Completed
 tags: [bug, runtime, security]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 真实 Dev 复查已取得只读回执，随后因 `systemd-detect-virt` 未识别及模型尝试本机 Python 读取 SDK 截断产物而失败。宿主应让模型修正错误参数，并直接分页读取本任务已经登记的回执。
 
@@ -42,7 +42,7 @@ tags: [bug, runtime, security]
 |------|-------------|-----------|------|
 | TASK-004 | 增加命令正反例、回执归属/篡改/撤权测试及真实 SDK 调用失败后继续读取并完成的回归。依赖 TASK-001 至 TASK-003。 | ✅ | 2026-11-09 |
 | TASK-005 | 运行源测试、打包后 SDK 测试、类型检查和 ADK 边界；保留真实原任务记录摘要并比较。依赖 TASK-004。 | ✅ | 2026-11-09 |
-| TASK-006 | 签名构建安装 Lake Dev，记录准确 SHA 和本机验证；更新开放的 develop PR。依赖 TASK-005。 | | |
+| TASK-006 | 签名构建安装 Lake Dev，记录准确 SHA 和本机验证；更新开放的 develop PR。依赖 TASK-005。 | ✅ | 2026-11-09 |
 
 ## 3. Alternatives
 
