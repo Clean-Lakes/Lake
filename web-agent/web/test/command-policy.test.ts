@@ -19,6 +19,29 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+test("bounded reboot diagnostics are read-only, including the reported compound query", () => {
+  for (const command of ["date -Is", "date --iso-8601=seconds --utc", "last -x -F -n 20", "last -x -F | head -35", "last reboot -F -n20", "last -xF shutdown -10",
+    "journalctl --list-boots --no-pager", "journalctl -b -1 -n 100 --no-pager -o short-iso",
+    "journalctl --no-pager --unit=nginx --since '2026-11-08 17:00' --until '2026-11-08 17:30' --lines=200 --output=json",
+    "journalctl --no-pager -b-1 -n100 _SYSTEMD_UNIT=nginx.service",
+    "date -Is; uptime -s; who -b; last -x -F -n 20; journalctl --list-boots --no-pager; uname -a"]) {
+    assert.equal(commandPolicy(command).risk, "readonly", command);
+    assert.ok(commandPolicy(command).safeCommand?.includes("command -p"));
+  }
+});
+
+test("log query recognition never admits time setting, journal mutation, paging or unknown options", () => {
+  for (const command of ["date -s '2026-01-01'", "date --set=now", "last --unknown", "last -f /tmp/arbitrary",
+    "journalctl -n 100", "journalctl --no-pager --vacuum-size=1M", "journalctl --no-pager --rotate", "journalctl --no-pager --flush",
+    "journalctl --no-pager --sync", "journalctl --no-pager --setup-keys", "journalctl --no-pager --update-catalog",
+    "journalctl --no-pager --unknown", "journalctl --no-pager --unit --rotate", "journalctl --no-pager --output=unknown",
+    "journalctl --no-pager -n 100001", "journalctl --no-pager | sh", "journalctl --no-pager > /tmp/saved.log",
+    'journalctl --no-pager --grep="$(touch /tmp/marker)"', "/tmp/journalctl --no-pager", "/tmp/last -n 2"]) {
+    assert.notEqual(commandPolicy(command).risk, "readonly", command);
+    assert.equal(commandPolicy(command).safeCommand, undefined, command);
+  }
+});
+
 for (const command of [
   "command -v kubectl",
   "command -V mysql mysqldump",

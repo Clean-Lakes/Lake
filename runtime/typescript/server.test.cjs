@@ -739,6 +739,14 @@ function fullAgentReply(request,mode,home){
  const stamp=router?JSON.parse(content(messages[0]).split('\n')[1])[0].id:'worker';
  const call=(name,input,id=name)=>({tool_calls:[{index:0,id:'full-'+stamp+'-'+id,type:'function',function:{name,arguments:JSON.stringify(input)}}]});
  const result=name=>{const id=calls.findLast(call=>call.function.name===name)?.id;const message=messages.findLast(message=>message.role==='tool'&&message.tool_call_id===id);try{return JSON.parse(content(message));}catch{return content(message??{});}};
+ if(mode.includes('connection-recovery')||mode.includes('journal-recovery')){
+  if(!names.includes('list_assets'))return call('list_assets',{query:'SSH fixture'});
+  const asset=result('list_assets').assets.find(asset=>asset.kind==='ssh'),count=names.filter(name=>name==='Bash').length;
+  if(count<2)return call('Bash',{asset_ref:asset.asset_ref,configuration_revision:asset.configuration_revision,
+   command:count&&mode.includes('journal-recovery')?'journalctl -b -1 -n 100 --no-pager -o short-iso':'kubectl config current-context',description:'Read current diagnostic evidence'},'recovery-'+count);
+  if(!names.includes('work_finish'))return call('work_finish',{summary:mode.includes('journal-recovery')?'已读取独立日志；先前命令仍待核实。':'重新连接后已取得当前查询结果。',outcome:mode.includes('journal-recovery')?'partial':'completed'});
+  return {content:'本轮诊断结束。'};
+ }
  if(mode.includes('child')&&!tools.some(tool=>tool.function.name==='work_finish')){
   if(!names.includes('Bash'))return call('Bash',{command:"printf 'CHILD_NATIVE_SHELL'",description:'Read child execution marker'});
   return {content:'子智能体已实际执行 Shell 检查。'};
@@ -2696,21 +2704,23 @@ test('legacy unresolved MCP calls outside visible projects still fence a new app
  assert.equal(f.app.store.list('superOperations').filter(operation=>operation.tool==='call_mcp_tool').length,0);
 });
 
-async function sshFixture(t, diagnosticsGate){
+async function sshFixture(t, diagnosticsGate, interceptCommand){
  const fs=require('node:fs/promises'),{generateKeyPairSync}=require('node:crypto'),{Server}=require('../../third_party/agent-sdk/node_modules/ssh2'),{spawn}=require('node:child_process');
  const pty=require('../../bin/lake-runtime/native/node-pty'),home=await mkdtemp(join(tmpdir(),'lake-ssh-server-')),clients=new Set();
- let server,port=0,key;const requests=[];let auths=0;
+ let server,port=0,key;const requests=[];let auths=0, rejectNextConnection=false;
  const password='synthetic-ssh-password-no-real-credential';
  const start=async()=>{
   key=generateKeyPairSync('rsa',{modulusLength:2048}).privateKey.export({type:'pkcs1',format:'pem'});
   server=new Server({hostKeys:[key]},client=>{
    clients.add(client);client.on('error',()=>{});client.once('close',()=>clients.delete(client));
+   if(rejectNextConnection){rejectNextConnection=false;client.end();return;}
    client.on('authentication',ctx=>{auths++;if(ctx.method==='password'&&ctx.username==='fixture'&&ctx.password===password)ctx.accept();else ctx.reject();});
    client.on('ready',()=>client.on('session',accept=>{
     const session=accept();let dimensions;
     session.on('pty',(accept,reject,info)=>{dimensions=info;accept();});
     session.on('exec',async(accept,reject,info)=>{
      const stream=accept();requests.push({command:info.command,pty:!!dimensions});
+     if(interceptCommand?.(info.command,stream,client))return;
      if(dimensions){
       const child=pty.spawn('/bin/sh',['-c',info.command],{cwd:home,env:{HOME:home,PATH:'/usr/bin:/bin:/usr/sbin:/sbin',LANG:'en_US.UTF-8'},cols:dimensions.cols,rows:dimensions.rows});
       child.onData(data=>{if(!stream.destroyed)stream.write(data);});stream.on('data',data=>child.write(data.toString()));
@@ -2729,7 +2739,7 @@ async function sshFixture(t, diagnosticsGate){
  };
  const stop=async()=>{for(const client of clients)client.end();await new Promise(resolve=>server.close(resolve));};
  await start();t.after(stop);
- return {home,get port(){return port;},password,requests,get auths(){return auths;},async rotate(){await stop();await start();}};
+ return {home,get port(){return port;},password,requests,get auths(){return auths;},rejectNext(){rejectNextConnection=true;},async rotate(){await stop();await start();}};
 }
 async function sshResource(f,server){return f.api(`/api/projects/${f.project.id}/resources`,'POST',{kind:'ssh',name:'SSH fixture',ssh:{host:'127.0.0.1',port:server.port,username:'fixture',authMethod:'password',password:server.password,shell:'bash'}});}
 async function trustTerminal(f,resource,sessionId=f.session.id){
@@ -3105,6 +3115,41 @@ test('a Worker uses saved SSH credentials for general Bash commands beyond fixed
  const done=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const operation=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(operation.resourceId,resource.id);assert.match(operation.output.stdout,/ACTUAL_NATIVE_SHELL/);assert.equal(done.workers[0].task.acceptanceState,'pass');assert.ok(server.requests.some(request=>request.command.includes('ACTUAL_NATIVE_SHELL')&&!request.pty));
  assert.doesNotMatch(JSON.stringify(f.requests)+JSON.stringify(operation),new RegExp(server.password));
+});
+
+test('a pre-command SSH connection failure can retry through the real SDK and accept only the fresh result',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-worker-ssh-connection-recovery'),server=await sshFixture(t);
+ const fs=require('node:fs/promises');await fs.mkdir(join(server.home,'bin'));await fs.writeFile(join(server.home,'bin/kubectl'),'#!/bin/sh\nprintf ACTUAL_CONNECTION_RECOVERY',{mode:0o700});
+ await sshResource(f,server);server.rejectNext();await send();
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=state.workers[0];
+ const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
+ await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
+ const done=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const ops=f.app.store.list('superOperations').filter(o=>o.tool==='Bash').sort((a,b)=>a.at.localeCompare(b.at));
+ assert.equal(ops.length,2);assert.equal(ops[0].status,'failed');assert.equal(ops[0].readOnly,false);
+ assert.equal(f.app.store.require('commandExecutions',ops[0].commandExecutionId).sshDispatchPhase,'not_sent');
+ assert.equal(ops[1].status,'succeeded');assert.match(ops[1].output.stdout,/ACTUAL_CONNECTION_RECOVERY/);
+ assert.equal(server.requests.length,1);assert.equal(done.workers[0].task.acceptanceState,'pass');
+ assert.equal(f.app.store.require('superAttempts',ops[0].attemptId).state,'failed');
+});
+
+test('a real SSH disconnect after exec preserves unknown while a new journal query succeeds through the same Worker',{skip:process.platform!=='darwin'},async t=>{
+ let requests=0;
+ const server=await sshFixture(t,undefined,(command,stream,client)=>{
+  requests++;
+  if(requests===1){client.end();return true;}
+  assert.match(command,/'journalctl'/);assert.match(command,/'--no-pager'/);
+  stream.write('SYNTHETIC_PREVIOUS_BOOT_LOG');stream.exit(0);stream.end();return true;
+ });
+ const {f,project,send}=await fullAgentTask(t,'super-full-worker-ssh-journal-recovery');await sshResource(f,server);await send();
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=state.workers[0];
+ const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
+ await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
+ const done=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked');
+ const ops=f.app.store.list('superOperations').filter(o=>o.tool==='Bash').sort((a,b)=>a.at.localeCompare(b.at));
+ assert.equal(ops.length,2);assert.equal(ops[0].status,'unknown');assert.notEqual(f.app.store.require('commandExecutions',ops[0].commandExecutionId).sshDispatchPhase,'not_sent');
+ assert.equal(ops[1].readOnly,true);assert.equal(ops[1].status,'succeeded');assert.match(ops[1].output.stdout,/SYNTHETIC_PREVIOUS_BOOT_LOG/);
+ assert.equal(requests,2);assert.equal(done.workers[0].task.state,'blocked');assert.notEqual(done.workers[0].task.acceptanceState,'pass');
 });
 
 test('native AskUserQuestion uses Lake answers and resumes the exact Pilot task',async t=>{

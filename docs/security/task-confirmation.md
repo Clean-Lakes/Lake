@@ -36,6 +36,10 @@
 
 ## 权限与恢复
 
+TypeScript SSH 命令记录持久化 `not_sent → exec_requested → channel_open` 阶段，在调用传输层 exec **之前**先写入 `exec_requested`。只在宿主记录与原 Task/Worker/Session、generation、调用 ID、资源和配置版本全部匹配，且终态明确保留 `not_sent` 时，才把失败记为无已派发命令的失败；可在原权限内创建新的尝试/调用，不能重放原调用 ID，也不把失败当业务成功。显式计划沿原步骤及契约重试。请求过 exec 后的断线、缺失阶段的旧记录及来源不完整的结果继续保留未知，不以 stderr 的文字判断未执行。
+
+字面量 `date -Is` 等 ISO 显示、`last` 重启记录和 `journalctl --no-pager` 的受支持查询选项按只读处理；设置时间、journal 维护、分页、动态执行、输出文件重定向及未知参数不因此获得只读证明。当前资源/策略检查仍逐次执行。原未知操作不阻断另外允许的只读查询，但仍阻断冲突变更和目标验收，不自动改写历史状态。
+
 原目标受阻后，实际当前执行上下文可以为原步骤激活一次重试，不要求模型先把整个目标伪装成 running。依赖、契约版本、当前 task/root、Super-agent assignment 和未决操作检查仍在同一派发屏障内生效。原 prepared 尝试只有在规范操作账本计数为零、契约一致且原 task 仍属于当前 store/epoch 时，才可记录为 not_executed/reconciled，并追加宿主审计后创建带 retryOf 的新尝试；这不产生业务验收。存在原操作时不能走空尝试路径；unknown 或不明派发状态仍须按原核实协议处理，不能借步骤重试清除风险、跨恢复纪元继承旧执行资格或重放操作。
 
 同一目标后续真实轮次可以继续取得新的只读观测：原尝试的所有操作必须已成功结束、具有可校验的非 opaque 只读 descriptor，且原资源连接、契约和 store/epoch 仍匹配。宿主只把该尝试的执行事实记为 succeeded/reconciled 并追加审计，为当前有效 task/root 建立带 retryOf 的新尝试；不复用旧 permit、不重放原操作、不生成业务 pass。原成功写入、未知结果、未结束操作及描述不完整的历史均不能借此刷新；权限、调用额度和绝对期限继续按当前状态检查。

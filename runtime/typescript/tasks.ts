@@ -146,9 +146,10 @@ export class TaskLedger {
       // New observations get a new attempt. An unresolved predecessor is kept
       // untouched; a read does not reconcile or replay its possible side effect.
       if (previous && previous.state !== "unknown" && operations.length &&
-          operations.every((operation) => operation.readOnly === true && ["succeeded", "failed"].includes(operation.status))) {
+          operations.every((operation) => operation.readOnly === true && ["succeeded", "failed"].includes(operation.status) ||
+            operation.status === "failed" && this.rejectedBeforeDispatch(operation))) {
         previous.state = operations.some((operation) => operation.status === "failed") ? "failed" : "succeeded";
-        previous.reconciledAt = now(); previous.reconciliation = "Settled proven read-only observations; fresh attempt without replay or goal acceptance";
+        previous.reconciledAt = now(); previous.reconciliation = "Settled proven read-only or not-dispatched observations; fresh attempt without replay or goal acceptance";
         this.store.put("superAttempts", previous.id, previous);
       }
       const attempt: Attempt = { id: id(), goalId, sessionId: goal.sessionId, projectId: goal.projectId, stepId: step.id,
@@ -272,10 +273,11 @@ export class TaskLedger {
         if (attempt.generation !== generation || attempt.policyHash !== policyHash) throw new HttpError(409, "Step belongs to an earlier invocation");
         const operations = this.store.list<Operation>("superOperations").filter((operation) => operation.attemptId === attempt.id);
         if (!operations.some((operation) => operation.status === "failed")) return goal;
-        if (operations.some((operation) => !operation.readOnly || !["succeeded", "failed"].includes(operation.status)))
-          throw new HttpError(409, "Only settled proven read-only attempts may obtain a fresh diagnostic sample");
+        if (operations.some((operation) => !(operation.readOnly && ["succeeded", "failed"].includes(operation.status) ||
+            operation.status === "failed" && this.rejectedBeforeDispatch(operation))))
+          throw new HttpError(409, "Only settled proven read-only or not-dispatched attempts may obtain a fresh diagnostic sample");
         operations.forEach((operation) => this.revalidate?.(operation));
-        attempt.state = "failed"; attempt.reconciledAt = now(); attempt.reconciliation = "Settled read-only observations; no side effect replay or acceptance";
+        attempt.state = "failed"; attempt.reconciledAt = now(); attempt.reconciliation = "Settled read-only or not-dispatched observations; no side effect replay or acceptance";
         this.store.put("superAttempts", attempt.id, attempt); retryOf = attempt.id;
       }
       const attempt: Attempt = { id: id(), goalId: goal.id, sessionId: goal.sessionId, projectId: goal.projectId,
@@ -288,14 +290,22 @@ export class TaskLedger {
   }
   private rejectedBeforeDispatch(op:Operation) {
     if (!op.commandExecutionId || op.commandExecutionId !== digest([op.goalId,op.generation,op.callId])) return false;
-    const run=this.store.get<{sessionId:string;taskId:string;generation:number;peerRejected?:boolean}>("commandExecutions",op.commandExecutionId);
-    return run?.peerRejected === true && run.taskId===op.goalId && run.sessionId===op.sessionId && run.generation===op.generation;
+    const run=this.store.get<{id?:string;sessionId:string;taskId:string;workerId?:string;generation:number;resourceId?:string;resourceRevision?:number;configurationRevision?:string;
+      peerRejected?:boolean;sshDispatchPhase?:string;status?:string;result?:{status?:string;stdout?:{text?:string}}}>("commandExecutions",op.commandExecutionId);
+    if (!run || run.taskId!==op.goalId || run.sessionId!==op.sessionId || run.generation!==op.generation) return false;
+    if (run.peerRejected === true) return true;
+    return op.tool === "Bash" && run.id === op.commandExecutionId && run.workerId === this.get(op.goalId).workerId &&
+      run.sshDispatchPhase === "not_sent" && !!op.resourceId && run.resourceId === op.resourceId &&
+      op.resourceRevision !== undefined && run.resourceRevision === op.resourceRevision &&
+      !!op.hostConfigurationHash && run.configurationRevision === op.hostConfigurationHash &&
+      ["spawn_error","cancelled","failed","timed_out"].includes(run.status ?? "") &&
+      run.result?.status === run.status && !run.result?.stdout?.text;
   }
   settleCommand(operationId:string,executionId:string,result:unknown,valid:boolean) {
     const operation=this.store.require<Operation>('superOperations',operationId);
     if(operation.commandExecutionId!==executionId||operation.status!=='dispatched')return;
     const output=JSON.parse(JSON.stringify(result)) as any;
-    operation.status=!valid?'unknown':output?.status==='completed'&&output.exitCode===0?'succeeded':(operation.readOnly||this.rejectedBeforeDispatch(operation))?'failed':'unknown';
+    operation.status=this.rejectedBeforeDispatch(operation)?'failed':!valid?'unknown':output?.status==='completed'&&output.exitCode===0?'succeeded':operation.readOnly?'failed':'unknown';
     operation.output=output;operation.outputHash=digest(output);operation.completedAt=now();
     if (operation.status === 'succeeded') operation.watchdogOutputHash = watchdogOutputHash(operation);
     this.store.put('superOperations',operation.id,operation);
@@ -459,7 +469,7 @@ export class TaskLedger {
         const operations = this.store.list<Operation>("superOperations").filter(operation => members.has(operation.goalId));
         if (operations.some(operation => operation.goalId !== goalId && this.requiresReconciliation(operation)))
           throw new HttpError(409, "A shared-task operation still requires reconciliation");
-        if (operations.some(operation => operation.tool === tool && operation.argsHash === digest(input) &&
+        if (operations.some(operation => !(operation.status === "failed" && this.rejectedBeforeDispatch(operation)) && operation.tool === tool && operation.argsHash === digest(input) &&
             operation.resourceId === binding.resourceId && (operation.goalId === goal.id || operation.mcpServerId === binding.mcpServerId)))
           throw new HttpError(409, "Identical mutation already recorded; inspect the original operation instead of dispatching another call ID");
       }
