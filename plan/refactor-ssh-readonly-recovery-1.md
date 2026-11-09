@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-09
 last_updated: 2026-11-09
 owner: Lake maintainers
-status: 'In progress'
+status: 'Completed'
 tags: [ssh, security, recovery, diagnostics]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 The reported reboot investigation was blocked because date -Is, last and journalctl queries fell into the opaque/write category, and a connection failure before command dispatch became unknown. Implement precise read classification and positive host dispatch evidence, retaining original failed/unknown records and all current resource permissions.
 
@@ -41,8 +41,8 @@ The reported reboot investigation was blocked because date -Is, last and journal
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
 | TASK-004 | Test connection rejection, cancellation before send, exec-request transport loss, background settlement, restart/missing phases and fresh read-only continuation against exact host and operation bindings. Add real SDK/loopback SSH recovery coverage in server.test.cjs. Depends on TASK-001 through TASK-003. | Yes | 2026-11-09 |
-| TASK-005 | Run TS/frontend checks, runtime suites, ADK boundary and signed Dev build; record tested functional SHA, actual native Dev observations and remaining historical limitations. Depends on TASK-004. | No | 2026-11-09 |
-| TASK-006 | Update agent.md, relevant security/Pilot documentation, validation notes and PR #206 with final scope and evidence. Depends on TASK-005. | No | 2026-11-09 |
+| TASK-005 | Run TS/frontend checks, runtime suites, ADK boundary and signed Dev build; record tested functional SHA, actual native Dev observations and remaining historical limitations. Depends on TASK-004. | Yes | 2026-11-09 |
+| TASK-006 | Update agent.md, relevant security/Pilot documentation, validation notes and PR #206 with final scope and evidence. Depends on TASK-005. | Yes | 2026-11-09 |
 
 ## 3. Alternatives
 
@@ -75,3 +75,5 @@ The reported reboot investigation was blocked because date -Is, last and journal
 ## 8. Related Specifications / Further Reading
 
 [Architecture](../agent.md), [task confirmation](../docs/security/task-confirmation.md), [Security](../docs/design/lake-security-v1.md), [workflow](../docs/development-workflow.md).
+
+Verification: [signed Dev and recovery results](../docs/validation/typescript-candidate/ssh-readonly-recovery-2026-11-09.md), tested functional SHA `21cf5990de41de998d817811a95029d14da6ed24`. Delivered through open PR #206 to develop; merge and production release are outside this task.
