@@ -47,3 +47,14 @@ Stopped the previous Dev kernel through “停止内核并退出”, installed t
 - Subsequent native input stopped responding during the review. Actual native expansion, native theme switching and resized-window clipping were not completed; those interactions are covered by the shared/native browser fixtures above, and are not claimed as native Dev passes.
 
 No real remote command, model message, file upload, production restart, permission change, merge or release was performed for this UI validation.
+
+## Follow-up: matching button curves
+
+The user's hover screenshot still exposed the old 5px action-button radius. Source and signed Dev SHA: `026c7360000bcb38e835779c80a5735b04f4c85e`, `dirty: false`; backend artifact SHA256: `9c4f862b6a76d4693a1495dc8fce6ccacb97f4c56b42d0304a15215d627165a9`.
+
+Attachment and send/stop controls now share `--corner-window`, scaled to `--radius-composer-action: 15px` within their existing 30 × 30px targets. The shared nine-slice fallback covers both controls. Selector specificity preserves editor/message reference radii at 12px/11px.
+
+- Frontend type check, signed Dev build/install, strict/deep codesign verification and whitespace check passed. This follow-up is CSS-only; no new behavior tests were added and the preceding 767-test run was not represented as a rerun.
+- Browser: inspected the actual App's light hover, dark 660px layout with forced WKWebView fallback, and keyboard-visible focus. Both controls measured 30 × 30px / 15px with `superellipse(1.5)`; fallback fill masks use the shared local SVG at 15px. Reference probes retained 12px/11px. Local screenshots: `/tmp/lake-composer-corner-light-hover.png`, `/tmp/lake-composer-corner-dark-fallback.png`, `/tmp/lake-composer-corner-focus.png`.
+- Signed Lake Dev: attachment chooser opens and Escape cancels; keyboard focus returns through the composer to the attachment control. Inspected the painted focus contour in light and dark themes, including the minimum-width desktop window. Controls and focus remain inside the input surface without clipping. Restored the original light theme and window size after review.
+- No message or attachment was sent and no live task was started. Active stop execution was not exercised for this style-only change. The preceding native context-menu expansion limitation is separate and remains recorded above.
