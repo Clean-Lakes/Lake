@@ -39,7 +39,6 @@ export type ShellActor = {
   workerId: string;
   generation: number;
   guard: () => void;
-  checkSSHTarget?: (target?: SSHTarget) => void;
 };
 export type ShellPlan = {
   resource: Resource;
@@ -776,20 +775,6 @@ export class LakeExecution {
       if (authenticated) {
         record.authenticatedTarget=authenticated;
         this.store.put("commandExecutions",record.id,record);
-      }
-      if (!plan.readOnly) {
-        // Recheck the actual peer after trust negotiation and before a channel is opened.
-        const identity = this.ssh.mutationTarget?.(plan.resource,connection);
-        try { actor.checkSSHTarget?.(identity); }
-        catch (error) {
-          record.peerRejected = true;
-          this.store.put("commandExecutions",record.id,record);
-          throw error;
-        }
-        if (identity) {
-          record.authenticatedTarget = identity;
-          this.store.put("commandExecutions",record.id,record);
-        }
       }
       return await new Promise((resolve, reject) => {
         let channel: any,

@@ -754,23 +754,16 @@ test("SSH dispatches the compiled identity inspection directly and retains origi
   assert.equal(done?.result?.stdout.text,"finished\n");
   assert.deepEqual(commands,[plan.nobodyInspection!.command,delay.command]);
   const change=host.plan("project",{...input,command:"touch marker"});
-  const denied=await host.bind(runtime,{...actor,checkSSHTarget:target=>{
-    assert.equal(target,negotiated);
-    throw new Error("unverified peer");
-  }},change,"wrong-peer").run({} as any);
-  assert.equal(denied.status,"spawn_error");
-  assert.equal(store.require<any>("commandExecutions",host.executionId(actor,"wrong-peer")).peerRejected,true);
-  assert.equal(commands.length,2,"refusal after handshake never opens the SSH command channel");
-  let checked=false;
-  await host.bind(runtime,{...actor,checkSSHTarget:target=>{assert.equal(target,negotiated);checked=true;}},change,"right-peer").run({} as any);
-  assert.equal(checked,true);
-  assert.deepEqual(store.require<any>("commandExecutions",host.executionId(actor,"right-peer")).authenticatedTarget,negotiated);
+  const changed=await host.bind(runtime,actor,change,"authorized-change").run({} as any);
+  assert.equal(changed.status,"completed");
+  assert.deepEqual(store.require<any>("commandExecutions",host.executionId(actor,"authorized-change")).authenticatedTarget,negotiated);
+  assert.equal(commands.length,3,"current SSH permission reaches the channel without a historical-conflict callback");
 
   assert.ok(permissionChecks.length >= 3);
   assert.ok(permissionChecks.every((readOnly) => readOnly === false));
 });
 
-test("a human may release distinct work after a verified removal; original failure and cross-task replay stay fenced", async t => {
+test("effect reviews remain truthful records while new commands no longer wait for historical effect closure", async t => {
   const f = await inventoryFixture(t);
   const {store, operation, execution, input, part, directory, verify, run, recovery, ledger} = f;
   const {compileNobodyInspection} = await import("../../web-agent/shared/command-policy");
@@ -815,63 +808,16 @@ test("a human may release distinct work after a verified removal; original failu
   assert.equal(store.list("superAcceptance").length,0);
   const originalGoal = ledger.get(operation.goalId);
   ledger.create({...originalGoal,id:"next",workerId:"other",sessionId:"worker-next",sourceEventId:"another-event"});
-  const originalRevision=operation.hostConfigurationHash;
-  let boundRevision=originalRevision;
-  const gated = new TaskLedger(store, undefined, op=>recovery.resolution(op), (id,expected)=>
-    expected && expected !== boundRevision ? undefined : peers.get(id));
-  const mutate=(resourceId:string|undefined,cmd:string,callId:string,goal="next") =>
-    gated.operation(goal,1,"policy",callId,"Bash",{command:cmd},async()=>({exitCode:0}),v=>v,
-      {resourceId,commandExecutionId:"exec-"+callId,readOnly:false});
-  let sequence=0;
-  for (const resource of [operation.resourceId, "other-port","alias","hostname","new-key-type",undefined]) {
-    for (const replay of [command,command+" ",command+"; :","a completely different mutation"])
-      await assert.rejects(mutate(resource,replay,"blocked-"+sequence++),/SSH 目标/);
-  }
-  gated.create({...originalGoal,id:"foreign",projectId:"foreign-project",workerId:"foreign-worker",sessionId:"foreign-session",sourceEventId:"another-human-event"});
-  await assert.rejects(mutate("alias",command,"new-project","foreign"),/SSH 目标/);
-  await gated.operation("foreign",1,"policy","independent-mcp","call_mcp_tool",{},async()=>({}),v=>v,{remoteMcp:true});
-  await gated.operation("foreign",1,"policy","unrelated-file","Write",{},async()=>({}),v=>v,{readOnly:false});
-  await mutate("separate","a distinct approved operation","disjoint");
-  assert.throws(()=>gated.checkMutationTarget("foreign-project",{resourceId:"separate",commandExecutionId:"new"},source),/SSH 目标/);
-  assert.throws(()=>gated.checkMutationTarget(originalGoal.projectId,{resourceId:"separate",commandExecutionId:"new"},null),/SSH 目标/);
-  assert.equal(store.require<Operation>("superOperations",operation.id).status,"unknown");
-  const closure = await recovery.reviewInfo(operation.sessionId,operation.id);
-  assert.equal(closure.closureEligible,true);
+  const current=new TaskLedger(store,undefined,op=>recovery.resolution(op));
+  const before=JSON.stringify(store.require("superOperations",operation.id));
+  let calls=0;
+  const mutate=(callId:string,goal="next")=>current.operation(goal,1,"policy",callId,"Bash",{command,cwd:directory},async()=>({exitCode:0,count:++calls}),v=>v,
+    {resourceId:operation.resourceId,commandExecutionId:"exec-"+callId,readOnly:false});
+  await mutate("before-closure");
   assert.equal(recovery.resolution(operation)?.closureState,undefined);
-  const retainedReview=store.require("commandObservedEffectReviews",operation.id);
-  await recovery.confirmInventoryReview(operation.sessionId,operation.id,{
-    ...req, revision:closure.revision, confirmObservedEffects:true,reconcileRisk:true,
-    note:"操作者已核实该单文件变更的全部影响和执行终态，同意新任务继续。"
-  },()=>{});
+  await recovery.confirmInventoryReview(operation.sessionId,operation.id,{...req,confirmObservedEffects:true,reconcileRisk:true},()=>{});
   assert.equal(recovery.resolution(operation)?.closureState,"reconciled");
-  assert.deepEqual(store.require("commandObservedEffectReviews",operation.id),retainedReview);
-  assert.equal(store.list("commandEffectClosures").length,1);
-  await assert.rejects(mutate(operation.resourceId,"another new action","before-new-request"),/新的已接收用户请求/);
-  const freshAt=new Date(Date.parse(recovery.resolution(operation)!.closedAt!)+1).toISOString();
-  store.put("superInputs","another-event",{projectId:operation.projectId,sessionId:"router",messageId:"fresh-user",receivedAt:freshAt});
-  store.put("messages","fresh-user",{role:"user",sessionId:"router"});
-  store.put("messageInputs","fresh-user",{projectId:operation.projectId,sessionId:"router",messageId:"fresh-user"});
-  for (const cwd of [directory,directory+"/nested",directory+"/nested/.."])
-    await assert.rejects(gated.operation("next",1,"policy","cwd-"+sequence++,"Bash",
-      {command:"rm -- maintenance",cwd},async()=>({exitCode:0}),v=>v,{resourceId:operation.resourceId,commandExecutionId:"cwd-"+sequence,readOnly:false}),/禁止重放/);
-  await mutate(operation.resourceId,"printf "+directory+"-new","prefix-is-different");
-  assert.equal(gated.unresolved(operation.goalId),true);
-  await mutate(operation.resourceId,"a fresh independently authorized action","after-closure");
-  for (const replay of [command,command+" ",command+"; :","cd "+directory+" && rm maintenance"])
-    await assert.rejects(mutate("alias",replay,"closed-replay-"+sequence++), /禁止重放/);
-  await assert.rejects(mutate(operation.resourceId,"another action","original-goal",operation.goalId),/禁止重放/);
-  assert.equal(store.list("superAcceptance").length,0);
-  store.put("commandExecutions",run.id,{...run,configurationRevision:"unrelated"});
-  assert.equal(recovery.resolution(operation),undefined);
-  await assert.rejects(mutate("separate","new action","revised-proof"), /requires reconciliation/);
-  store.put("commandExecutions",execution.id!,{...execution,authenticatedTarget:undefined});
-  store.put("superOperations","missing-history",{...operation,id:"missing-history",resourceId:"deleted-ssh",commandExecutionId:"missing-command",projectId:"other-old-project"});
-  await mutate("separate","independent foreign target","legacy","foreign");
-  await gated.operation("foreign",1,"policy","local-write-after-legacy","Write",{path:"another-report"},async()=>({}),v=>v,{readOnly:false});
-  peers.set(operation.resourceId!,source);
-  await assert.rejects(mutate("alias","positive legacy alias","legacy-alias","foreign"),/SSH 目标/);
-  boundRevision="changed-binding";
-  await mutate("alias","unproven historical alias","no-cross-contamination","foreign");
-  store.put("resources","local-only",{id:"local-only",kind:"local"});
-  await mutate("local-only","independent local command","allowed-local","foreign");
+  await mutate("after-closure");await mutate("same-command-new-id");
+  assert.equal(calls,3);assert.equal(JSON.stringify(store.require("superOperations",operation.id)),before);
+  assert.equal(store.list("superAcceptance").length,0);assert.equal(current.unresolved(operation.goalId),true);
 });

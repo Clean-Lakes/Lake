@@ -739,6 +739,17 @@ function fullAgentReply(request,mode,home){
  const stamp=router?JSON.parse(content(messages[0]).split('\n')[1])[0].id:'worker';
  const call=(name,input,id=name)=>({tool_calls:[{index:0,id:'full-'+stamp+'-'+id,type:'function',function:{name,arguments:JSON.stringify(input)}}]});
  const result=name=>{const id=calls.findLast(call=>call.function.name===name)?.id;const message=messages.findLast(message=>message.role==='tool'&&message.tool_call_id===id);try{return JSON.parse(content(message));}catch{return content(message??{});}};
+ if(mode.includes('pending-history')||mode.includes('pending-same-task')){
+  if(!names.includes('list_assets'))return call('list_assets',{query:'SSH fixture'});
+  const asset=result('list_assets').assets.find(asset=>asset.kind==='ssh'),count=names.filter(name=>name==='Bash').length;
+  const same=mode.includes('pending-same-task');
+  if(count<(same?2:1))return call('Bash',{asset_ref:asset.asset_ref,configuration_revision:asset.configuration_pin,
+    command:same?(count?"printf 'NEW_AUTHORIZED_RESULT' >> gate-probe.txt; cat gate-probe.txt":"printf 'PARTIAL_RESULT' > gate-probe.txt; false"):
+      "date '+%F %T %Z %z'; printf '\\n--- boot history ---\\n'; last -x -F reboot; printf '\\n--- journal boots ---\\n'; journalctl --list-boots --no-pager; printf '\\n--- log coverage ---\\n'; ls -l --time-style=long-iso /var/log/wtmp* /var/log/btmp* 2>/dev/null; printf '\\n--- current boot ---\\n'; uptime -s",
+    description:'Current authorized command independent of historical pending records'},'pending-'+count);
+  if(!names.includes('work_finish'))return call('work_finish',{summary:same?'新的命令已执行，原部分执行仍保留。':'已读取当前启动历史，原未知操作记录保留。',outcome:same?'partial':'completed'});
+  return {content:'本轮当前命令已结束。'};
+ }
  if(mode.includes('output-recovery')){
   if(!names.includes('Bash'))return call('Bash',{command:"python3 -I -c 'print(1)'",description:'Wrong local resource must be rejected'},'rejected-local');
   if(!names.includes('list_assets'))return call('list_assets',{query:'SSH fixture'});
@@ -3122,6 +3133,43 @@ async function fullAgentTask(t,mode){
  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:true,maxSteps:30});
  return {f,project,send:(text=mode.startsWith('super-full-pilot')?'请 Pilot 亲自执行本次测试检查并核对实际结果，不要委派专员。':'请自主执行本次测试检查并核对实际结果。')=>f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text},202)};
 }
+for(const automatic of [true,false])test(`new SSH history command ignores old project and legacy unknowns while current approval is ${automatic?'automatic':'required'}`,async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-worker-ssh-pending-history');
+ const wire=await sshFixture(t,undefined,(command,stream)=>{
+  if(!command.includes('boot history'))return false;
+  stream.write('BOOT_HISTORY_CURRENT_TWO_STARTS\n');stream.exit(0);stream.end();return true;
+ });
+ const resource=await sshResource(f,wire);
+ const prior={id:'old-project-unknown',projectId:f.project.id,goalId:'old-goal',sessionId:'old-session',tool:'Bash',callId:'old-call',status:'unknown',readOnly:false,resourceId:resource.id,at:new Date().toISOString()};
+ f.app.store.put('superOperations',prior.id,prior);f.app.store.put('legacyOperations','legacy-unknown',{projectId:f.project.id,status:'unknown'});
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:automatic});await send();
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=state.workers[0];
+ if(!automatic){
+  const pending=await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),s=>!!s.pending);
+  assert.equal(pending.pending.call.name,'Bash');assert.equal(wire.requests.length,0);
+  await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:pending.pending.id,accept:true});
+ }
+ const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
+ await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const op=f.app.store.list('superOperations').find(o=>o.goalId===worker.task.taskId&&o.tool==='Bash');
+ assert.equal(op.readOnly,false,'glob/redirection must remain unproven rather than gaining a forged read-only proof');assert.equal(op.status,'succeeded');
+ assert.equal(wire.requests.length,1);assert.match(op.output.stdout,/BOOT_HISTORY_CURRENT_TWO_STARTS/);
+ assert.deepEqual(f.app.store.require('superOperations',prior.id),prior);assert.equal(f.app.store.require('legacyOperations','legacy-unknown').status,'unknown');
+});
+
+test('real SSH partial failure does not gate the next write command in the same task',async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-worker-ssh-pending-same-task'),wire=await sshFixture(t);await sshResource(f,wire);await send();
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=state.workers[0];
+ const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
+ await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
+ await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),s=>s.status==='completed');
+ const ops=f.app.store.list('superOperations').filter(o=>o.goalId===worker.task.taskId&&o.tool==='Bash');
+ assert.equal(ops.length,2);assert.equal(ops[0].status,'unknown');assert.equal(ops[1].status,'succeeded');assert.equal(ops[1].readOnly,false);
+ assert.equal(wire.requests.length,2);assert.match(ops[1].output.stdout,/PARTIAL_RESULTNEW_AUTHORIZED_RESULT/);
+ assert.equal(await readFile(join(wire.home,'gate-probe.txt'),'utf8'),'PARTIAL_RESULTNEW_AUTHORIZED_RESULT');
+ assert.notEqual(f.app.store.require('superGoals',worker.task.taskId).acceptanceState,'pass');
+});
 test('real SDK rejects a wrong local command then reads a scoped remote truncated receipt without abort or extra evidence',async t=>{
  const {f,project}=await fullAgentTask(t,'super-full-worker-ssh-output-recovery');
  const wire=await sshFixture(t,undefined,(command,stream)=>{

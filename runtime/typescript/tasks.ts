@@ -1,6 +1,3 @@
-import {removalReviewScope} from "./removal-review";
-import {distinctSSHTargets, sameSSHHost, type SSHTarget} from "./ssh-target";
-import {posix} from "node:path";
 import { createHash } from "node:crypto";
 import type { WorkGoal } from "../../web-agent/shared/contracts";
 import { HttpError, id, LakeStore, now } from "./store";
@@ -76,8 +73,7 @@ const businessReceiptTools = new Set(["Bash", "Glob", "Grep", "FindFiles", "Sear
 // Router replies, Worker prose and channel presentation never close a goal.
 export class TaskLedger {
   constructor(readonly store: LakeStore, readonly revalidate?: (operation: Operation) => void,
-    readonly effectResolution?: (operation: Operation) => { effects: "none" | "observed"; closureState?: "reconciled";closedAt?:string;replayScopes?:string[] } | undefined,
-    readonly sshTarget?: (resourceId:string, expectedRevision?:string) => SSHTarget | undefined) {}
+    readonly effectResolution?: (operation: Operation) => { effects: "none" | "observed"; closureState?: "reconciled";closedAt?:string;replayScopes?:string[] } | undefined) {}
   get(goalId: string) { return this.store.require<Goal>("superGoals", goalId); }
   jointTask(taskId: string) { return jointTask(this.store, taskId); }
   jointState(taskId: string) {
@@ -122,13 +118,13 @@ export class TaskLedger {
       goal.items.every((step) => step.status !== "completed" && !step.acceptanceId) &&
       !this.store.list<any>("superAcceptance").some((receipt) => receipt.goalId === goal.id);
   }
-  prepareHostOperation(goalId: string, generation: number, policyHash: string, binding: { readOnly?: boolean } = {}) {
+  prepareHostOperation(goalId: string, generation: number, policyHash: string, binding: { readOnly?: boolean; commandExecutionId?: string } = {}) {
     return this.store.transaction(() => {
       const goal = this.get(goalId);
       if (!this.isHostManaged(goal)) throw new HttpError(409, "This task retains its explicit plan and acceptance contract");
       if (terminal(goal.status) || goal.status !== "running" || Date.parse(goal.deadlineAt) <= Date.now())
         throw new HttpError(409, "An active task within its deadline is required");
-      if (this.unresolved(goalId) && binding.readOnly !== true)
+      if (this.unresolved(goalId) && binding.readOnly !== true && !binding.commandExecutionId)
         throw new HttpError(409, "Original operation requires reconciliation before another mutation");
       if (goal.executionMode !== "host_managed") {
         this.store.put("superHostAdoptions", goal.id, { goalId, at: now(), originalPlanHash: goal.planHash, originalItems: goal.items });
@@ -269,21 +265,24 @@ export class TaskLedger {
       if (step.status === "completed") throw new HttpError(409, "A completed step cannot be replayed");
       if (step.dependsOn.some((dependency) => goal.items.find((item) => item.id === dependency)?.status !== "completed"))
         throw new HttpError(409, "Step prerequisite not accepted");
-      if (this.unresolved(goal.id)) throw new HttpError(409, "Original operation requires reconciliation");
       if (goal.activeItemId && goal.activeItemId !== stepId && goal.items.some((item) => item.id === goal.activeItemId && item.status === "running"))
         throw new HttpError(409, "Finish or explicitly block the active step first");
       let retryOf: string | undefined;
       if (step.status === "running" && step.attemptId) {
         const attempt = this.store.require<Attempt>("superAttempts", step.attemptId);
-        if (attempt.generation !== generation || attempt.policyHash !== policyHash) throw new HttpError(409, "Step belongs to an earlier invocation");
         const operations = this.store.list<Operation>("superOperations").filter((operation) => operation.attemptId === attempt.id);
-        if (!operations.some((operation) => operation.status === "failed")) return goal;
-        if (operations.some((operation) => !(operation.readOnly && ["succeeded", "failed"].includes(operation.status) ||
-            operation.status === "failed" && this.rejectedBeforeDispatch(operation))))
-          throw new HttpError(409, "Only settled proven read-only or not-dispatched attempts may obtain a fresh diagnostic sample");
-        operations.forEach((operation) => this.revalidate?.(operation));
-        attempt.state = "failed"; attempt.reconciledAt = now(); attempt.reconciliation = "Settled read-only or not-dispatched observations; no side effect replay or acceptance";
-        this.store.put("superAttempts", attempt.id, attempt); retryOf = attempt.id;
+        if (attempt.generation === generation && attempt.policyHash === policyHash && attempt.state === "running" &&
+            !operations.some(operation => ["failed", "unknown"].includes(operation.status))) return goal;
+        // Starting another attempt does not reconcile an uncertain predecessor.
+        // Non-command tools still enforce their own pending-effect contract.
+        if (operations.length && operations.every(operation => operation.readOnly && ["succeeded", "failed"].includes(operation.status) ||
+            operation.status === "failed" && this.rejectedBeforeDispatch(operation))) {
+          operations.forEach(operation => this.revalidate?.(operation));
+          attempt.state = "failed"; attempt.reconciledAt = now();
+          attempt.reconciliation = "Settled read-only or not-dispatched observations; no side effect replay or acceptance";
+          this.store.put("superAttempts", attempt.id, attempt);
+        }
+        retryOf = attempt.id;
       }
       const attempt: Attempt = { id: id(), goalId: goal.id, sessionId: goal.sessionId, projectId: goal.projectId,
         stepId, goalRevision: goal.goalRevision, planRevision: goal.planRevision, generation,
@@ -325,112 +324,26 @@ export class TaskLedger {
   requiresReconciliation(operation: Operation) {
     return ["unknown", "dispatched"].includes(operation.status) && this.effectResolution?.(operation)?.effects !== "none";
   }
-  checkMutationTarget(projectId:string, binding: {resourceId?:string; commandExecutionId?:string; remoteMcp?:boolean}, peer?:SSHTarget|null) {
-    const commandResource = binding.resourceId && binding.commandExecutionId && this.store.get<{kind:string}>("resources",binding.resourceId);
-    const checkAliases = !!binding.commandExecutionId && !!binding.resourceId && (!commandResource || commandResource.kind === "ssh");
-    const unknown = this.store.db.prepare(
-      "SELECT value FROM records WHERE kind='superOperations' AND json_extract(value,'$.status')='unknown' AND (? OR json_extract(value,'$.projectId')=?)"
-    ).all(Number(checkAliases),projectId);
-    for (const row of unknown) {
-      const original:Operation = JSON.parse(String(row.value));
-      const sameProject = original.projectId === projectId;
-      const record = original.commandExecutionId && this.store.get<{
-        id:string; taskId:string; sessionId:string; resourceId:string; generation:number; resourceRevision:number; configurationRevision:string; authenticatedTarget?:SSHTarget
-      }>("commandExecutions",original.commandExecutionId);
-      const archived = record && record.id === original.commandExecutionId && record.taskId === original.goalId &&
-        record.sessionId === original.sessionId && record.resourceId === original.resourceId && record.generation === original.generation &&
-        record.configurationRevision === original.hostConfigurationHash && record.resourceRevision === original.resourceRevision &&
-        record.id === digest([original.goalId,original.generation,original.callId]) ? record.authenticatedTarget : undefined;
-      const kind = original.resourceId && this.store.get<{kind:string}>("resources",original.resourceId)?.kind;
-      const unchangedLocal = !!original.resourceId && kind === "local" &&
-        (this.store.get<number>("resourceRevisions",original.resourceId) ?? 1) === original.resourceRevision;
-      const isSSH = !!archived || original.tool === "Bash" && !!original.commandExecutionId && !unchangedLocal;
-      if (!sameProject && !isSSH) continue;
-      const candidate = binding.resourceId && binding.commandExecutionId ? this.sshTarget?.(binding.resourceId) : undefined;
-      if (!sameProject) {
-        if (!binding.resourceId || !binding.commandExecutionId) continue;
-        // Historical bindings may establish a positive conflict when unchanged,
-        // but a missing record must not freeze an unrelated project.
-        const prior = archived ?? (original.resourceId && original.hostConfigurationHash ?
-          this.sshTarget?.(original.resourceId,original.hostConfigurationHash) : undefined);
-        if (original.resourceId !== binding.resourceId && !sameSSHHost(prior,candidate) && !sameSSHHost(prior,peer ?? undefined)) continue;
-      }
-      const receipt = this.effectResolution?.(original);
-      if (receipt?.effects === "none" || receipt?.closureState === "reconciled") continue;
-      if (isSSH && (!sameProject || receipt?.effects === "observed")) {
-        if (sameProject && original.resourceId !== binding.resourceId &&
-            distinctSSHTargets(archived,peer === undefined ? candidate : peer ?? undefined)) continue;
-        throw new HttpError(409,"SSH 目标有未决变更或缺少独立主机证明，禁止派发新的有副作用操作");
-      }
-      if (sameProject && (!binding.remoteMcp || isSSH)) {
-        const hint = binding.commandExecutionId ? " This command was not dispatched. Inspect the target with a relevant read-only inspect_host profile or a bounded read of the authorized directory; never retry the uncertain write." : "";
-        throw new HttpError(409,"A project operation still requires reconciliation ("+original.id+")."+hint);
-      }
+  /** Non-command tools retain their existing effect contract. Commands are
+   * dispatched solely through the current host permission/lease checks. */
+  private checkMutationTarget(projectId:string, binding:{remoteMcp?:boolean}) {
+    if(binding.remoteMcp)return;
+    for(const original of this.store.list<Operation>("superOperations")) {
+      if(original.projectId!==projectId||original.status!=="unknown")continue;
+      const receipt=this.effectResolution?.(original);
+      if(receipt?.effects!=="none"&&receipt?.closureState!=="reconciled")
+        throw new HttpError(409,"A project operation still requires reconciliation ("+original.id+").");
     }
   }
-  private freshReconciliationAuthorization(goal:Goal,resourceId:string|undefined,closedAt:string|undefined,generation?:number) {
-    const admitted=(eventId:string,followup=false)=>{
-      const event=this.store.get<any>('superInputs',eventId),message=event&&this.store.get<any>('messages',event.messageId);
-      const input=event&&this.store.get<any>('messageInputs',event.messageId);
-      if(!event || event.projectId!==goal.projectId || message?.role!=='user' || message.sessionId!==event.sessionId ||
-        input?.projectId!==event.projectId || input.sessionId!==event.sessionId || input.messageId!==event.messageId ||
-        !(Date.parse(event.receivedAt)>Date.parse(closedAt??'')))return false;
-      if(!followup)return true;
-      return event.disposition==='routed' && message.text===event.payload && input.resourceIds?.includes(resourceId) &&
-        digest(event.selectedReferences)===digest({resourceIds:input.resourceIds,mentions:input.mentions,references:input.references});
-    };
-    if(admitted(goal.sourceEventId))return true;
-    const worker=this.store.get<any>('superWorkers',goal.workerId);
-    if(generation===undefined || !worker || worker.id!==goal.workerId || worker.projectId!==goal.projectId ||
-      worker.taskId!==goal.id || worker.sessionId!==goal.sessionId || worker.roleId!==goal.roleId ||
-      worker.generation!==generation || worker.state!=='active' || typeof worker.owner!=='string' || !worker.owner ||
-      !Number.isFinite(worker.leaseUntil) || worker.leaseUntil<=Date.now() ||
-      !Array.isArray(worker.invocationInputIds) || !Array.isArray(worker.inputEventIds))return false;
-    return worker.invocationInputIds.some((eventId:string)=>{
-      if(!worker.inputEventIds.includes(eventId)||!admitted(eventId,true))return false;
-      const decisions=this.store.db.prepare("SELECT value FROM records WHERE kind='superDecisions' AND json_extract(value,'$.projectId')=? AND json_extract(value,'$.eventId')=? AND json_extract(value,'$.action')='followup'").all(goal.projectId,eventId);
-      return decisions.some(row=>{const decision=JSON.parse(String(row.value));
-        return decision.taskId===(goal.sharedTaskId??goal.id) && decision.assignments?.some((a:any)=>
-          a.executionId===goal.id && a.workerId===goal.workerId && a.sessionId===goal.sessionId && a.roleId===goal.roleId);
-      });
-    });
-  }
-  protectReconciledMutation(goalId:string, input:unknown, binding:{resourceId?:string;commandExecutionId?:string;remoteMcp?:boolean}, peer?:SSHTarget|null,generation?:number) {
-    const goal=this.get(goalId), shell=input as {command?:unknown;cwd?:unknown}|null;
-    for (const closure of [...this.store.list<{operationId:string}>("commandEffectClosures"),
-      ...this.store.list<{operationId:string}>("commandOperatorEffectClosures")]) {
-      const original=this.store.get<Operation>("superOperations",closure.operationId);
-      const receipt=original && this.effectResolution?.(original);
-      if (!original || receipt?.closureState!=="reconciled" || receipt.effects==="none") continue;
-      const old=this.get(original.goalId);
-      const run=original.commandExecutionId && this.store.get<{command:string;authenticatedTarget?:SSHTarget}>("commandExecutions",original.commandExecutionId);
-      if (!run) throw new HttpError(409,"原已核实变更的来源缺失");
-      if (goal.id===old.id || goal.sourceEventId===old.sourceEventId ||
-          goal.sharedTaskId && goal.sharedTaskId===old.sharedTaskId)
+  private protectReconciledMutation(goalId:string) {
+    const goal=this.get(goalId);
+    for(const original of this.store.list<Operation>("superOperations")) {
+      if(original.status!=="unknown")continue;
+      const receipt=this.effectResolution?.(original);
+      if(receipt?.closureState!=="reconciled"||receipt.effects==="none")continue;
+      const old=this.store.get<Goal>("superGoals",original.goalId);
+      if(old&&(goal.id===old.id||goal.sharedTaskId&&goal.sharedTaskId===old.sharedTaskId))
         throw new HttpError(409,"原已核实调用禁止重放，请使用新的授权请求");
-      const resource=binding.resourceId && this.store.get<{kind:string}>("resources",binding.resourceId);
-      if (!binding.commandExecutionId || binding.remoteMcp || resource && resource.kind!=="ssh") continue;
-      const prior=run.authenticatedTarget ?? (original.resourceId && original.hostConfigurationHash ?
-        this.sshTarget?.(original.resourceId,original.hostConfigurationHash) : undefined);
-      const candidate=peer===undefined && binding.resourceId ? this.sshTarget?.(binding.resourceId) : peer??undefined;
-      const related=original.resourceId===binding.resourceId || sameSSHHost(prior,candidate) ||
-        original.projectId===goal.projectId && !distinctSSHTargets(prior,candidate);
-      if (!related && goal.id!==old.id) continue;
-      if (!this.freshReconciliationAuthorization(goal,binding.resourceId,receipt.closedAt,generation))
-        throw new HttpError(409,"风险结清后的变更需要新的已接收用户请求");
-      const command=shell?.command;
-      if (typeof command!=="string") continue;
-      const removal=removalReviewScope(run.command);
-      const scopes=receipt.replayScopes ?? (removal ? [removal.directory] : []);
-      if (!scopes.length) throw new HttpError(409,"原变更范围已无法核对");
-      const cwd=typeof shell?.cwd==="string" ? posix.normalize(shell.cwd) : undefined;
-      const overlaps=scopes.some(directory=>{
-        const escaped=directory.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
-        return cwd && (cwd===directory || cwd.startsWith(directory+"/")) ||
-          new RegExp("(?<![a-zA-Z0-9_./-])"+escaped+"(?![a-zA-Z0-9_.-])").test(command);
-      });
-      if (overlaps || digest(command.trim())===digest(run.command.trim()))
-        throw new HttpError(409,"原已核实调用的目标目录禁止重放，请保留原结果并执行新请求");
     }
   }
   active(goalId: string, generation: number, policyHash: string) {
@@ -447,6 +360,9 @@ export class TaskLedger {
     input: unknown, dispatch: () => Promise<T>, redact: <V>(value: V) => V,
     binding: Pick<Operation, "resourceId" | "resourceRevision" | "readOnly" | "mcpServerId" | "mcpTool" | "remoteMcp" | "configurationHash" | "bindingHash" | "catalogHash" | "skillName" | "skillHash" | "hostConfigurationHash" | "commandExecutionId" | "networkURL" | "databaseConfigurationHash" | "databaseScope" | "agentRunId" | "childSessionId" | "originalCallId"> = {}): Promise<T> {
     const current = this.get(goalId);
+    // Host-issued Bash binding: historical pending effects are observations,
+    // never execution gates for a new command ID. Keep the old rows unchanged.
+    const command = tool === "Bash" && !!binding.commandExecutionId;
     if (current.readOnlyRecoveryOf && binding.readOnly !== true)
       throw new HttpError(409, "新的复查上下文仅允许独立只读检查；原任务的记录和未决操作仍保留");
     const key = digest([current.sessionId, callId]);
@@ -457,13 +373,13 @@ export class TaskLedger {
       if (previous.status === "succeeded") { this.revalidate?.(previous); return previous.output as T; }
       throw new HttpError(409, "The original operation must be reconciled; it cannot be replayed");
     }
-    if (binding.readOnly !== true) this.protectReconciledMutation(goalId,input,binding,undefined,generation);
-    if (this.isHostManaged(this.get(goalId))) this.prepareHostOperation(goalId, generation, policyHash, binding);
+    if (!command && binding.readOnly !== true) this.protectReconciledMutation(goalId);
+    if (this.isHostManaged(this.get(goalId))) this.prepareHostOperation(goalId, generation, policyHash, {...binding, commandExecutionId: command ? binding.commandExecutionId : undefined});
     const operation = this.store.transaction(() => {
       const { goal, step, attempt } = this.active(goalId, generation, policyHash);
-      if (binding.readOnly !== true && this.unresolved(goalId)) throw new HttpError(409, "Original operation requires reconciliation");
-      if (binding.readOnly !== true) this.checkMutationTarget(goal.projectId,binding);
-      if (binding.readOnly !== true && !binding.remoteMcp && this.store.list<any>("legacyOperations").some((operation) => operation.projectId === goal.projectId && !operation.riskResolvedAt &&
+      if (!command && binding.readOnly !== true && this.unresolved(goalId)) throw new HttpError(409, "Original operation requires reconciliation");
+      if (!command && binding.readOnly !== true) this.checkMutationTarget(goal.projectId,binding);
+      if (!command && binding.readOnly !== true && !binding.remoteMcp && this.store.list<any>("legacyOperations").some((operation) => operation.projectId === goal.projectId && !operation.riskResolvedAt &&
           (["running", "unknown", "dispatched"].includes(operation.status) || operation.orphanState === "unresolved")))
         throw new HttpError(409, "旧 Go 操作仍需核实；迁移不会解除原未决风险");
       if (tool === "call_mcp_tool") {
@@ -472,7 +388,7 @@ export class TaskLedger {
             this.store.list<any>("legacyOperations").some((operation) => operation.tool === tool && pending(operation) && (!operation.mcpServerId || operation.mcpServerId === binding.mcpServerId)))
           throw new HttpError(409, "同一 MCP 服务的原调用结果尚未核实，不能跨任务或项目重试");
       }
-      if (!binding.readOnly) {
+      if (!command && !binding.readOnly) {
         const members = new Set(goal.sharedTaskId ? this.store.require<JointTask>('superJointTasks', goal.sharedTaskId).memberIds : [goalId]);
         const operations = this.store.list<Operation>("superOperations").filter(operation => members.has(operation.goalId));
         if (operations.some(operation => operation.goalId !== goalId && this.requiresReconciliation(operation)))

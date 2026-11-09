@@ -83,13 +83,14 @@ test("an explicit plan can retry a proven unsent step without changing its accep
   assert.equal(f.op("explicit-connect-failed").status,"failed"); assert.equal(f.execCalls(),1);
 });
 
-for (const mode of ["exec-throw", "request-loss", "channel-loss"]) test(`uncertainty after ${mode} still blocks mutations while independent journal queries can continue`, async t => {
+for (const mode of ["exec-throw", "request-loss", "channel-loss"]) test(`uncertainty after ${mode} retains the original unknown while new commands and journal queries continue`, async t => {
   const f = await fixture(t); f.setMode(mode); await f.run("uncertain");
   const original = f.op("uncertain"), before = structuredClone(original), record = f.store.require<any>("commandExecutions", original.commandExecutionId!);
   assert.equal(original.status, "unknown"); assert.equal(f.ledger.unresolved("goal"), true);
   assert.equal(record.sshDispatchPhase, mode === "channel-loss" ? "channel_open" : "exec_requested");
   const count = f.execCalls(); f.setMode("success");
-  await assert.rejects(f.run("retry-write"), /reconciliation/); assert.equal(f.execCalls(), count);
+  await assert.rejects(f.run("uncertain"), /cannot be replayed/); assert.equal(f.execCalls(), count);
+  await f.run("retry-write"); assert.equal(f.execCalls(), count+1); assert.equal(f.op("retry-write").status,"succeeded");
   await f.run("independent-read", "journalctl -b -1 -n 100 --no-pager -o short-iso");
   assert.equal(f.op("independent-read").readOnly, true); assert.equal(f.op("independent-read").status, "succeeded");
   assert.deepEqual(f.op("uncertain"), before);
