@@ -12,7 +12,11 @@ The shared Pilot category switches govern files, commands, database reads, MCP a
 
 ## Release validation
 
-Final version/source candidate validation, automatic production-PR checks, exact master build/archive identity and public byte verification are recorded as they complete. This initial preparation does not claim they have already passed.
+Clean version/source candidate tested: `322ac3642c0844848cf0f917e752c8f107f1f77d`. `scripts/verify_lake_release.sh` completed successfully. TypeScript typecheck (pinned Node 24.14.0), 251 source tests / four existing conditional skips, all 208 SDK integrations, complete legacy Go compatibility and vet, Web typecheck / 768 tests / production build, signed formal desktop build, native update/window executables and all ten macOS installer tests passed. Additional Dev provenance / publisher / branch-policy / Memory tooling suites passed 19 / 8 / 4 / 6 tests. ADK boundary, backend naming (zero violations) and diff checks passed. Local Go here is non-race; automatic Linux race partitions are checked in the production PR.
+
+The candidate manifest records TypeScript, 0.3.31, clean source above and backend SHA256 `b997f1884811bf734298e397918f846615b0bcacee7a25ccbe8c35e64b641253`. The actual signed SEA passed isolated preparation-only (no runtime record/listener), authenticated bootstrap/catalog, exact PID/Home/data identity, graceful drain, two starts, preserved original marker and rejection of conflicting profile flags before writing. ZIP extraction and read-only DMG mounting independently passed deep/strict signing, version/runtime/source and minimum-macOS checks; checksums match.
+
+This update changes validation documentation only. Automatic production-PR branch-policy/workbench, the exact merged master build and public download verification are still pending at this stage; results are appended after completion. GitHub's master protection API reports “Branch not protected” (404); documentation/local rules are not server enforcement. Required release checks are still run and are not bypassed.
 
 ## Distribution and rollback
 
