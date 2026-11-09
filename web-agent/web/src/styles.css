@@ -793,6 +793,9 @@ a { color: inherit; }
 .image-drafts button { position: absolute; right: -4px; top: -4px; background: var(--surface); border: 1px solid var(--border); border-radius: 50%; width: 20px; height: 20px; }
 .image-attach-button { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 4px 5px; white-space: nowrap; background: none; border: 0; border-radius: var(--radius-control); font-size: var(--font-size-ui); color: var(--text-secondary); cursor: pointer; }
 .image-attach-button:disabled { opacity: .4; }
+.composer-body .composer-attach-button { flex:0 0 30px; align-self:flex-end; justify-content:center; width:30px; height:30px; min-height:30px; padding:0; }
+.composer-body .composer-attach-button:hover:not(:disabled) { background:var(--surface-hover); color:var(--foreground); }
+.composer-body .composer-attach-button:focus-visible { outline:2px solid var(--focus-outline); outline-offset:2px; }
 .ai-image { margin: 8px 0; }
 .ai-image img { display: block; max-width: 100%; max-height: 520px; object-fit: contain; border-radius: var(--radius-panel); }
 .ai-chat-message .ai-image { display: table; max-width: 100%; margin: 0; }
