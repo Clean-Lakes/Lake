@@ -42,4 +42,11 @@ An initial local invocation used ambient Node 22, incompatible with two existing
 
 ## Dev and delivery
 
-Signed clean Dev installation and real-model/native checks are pending at this initial validation commit. Record the exact installed SHA, checks and any limits after execution. This request does not authorize merging the new PR, changing production configuration, installing production or publishing a new version. Existing production pending approvals are not auto-approved or replayed by this work.
+Signed clean Dev source: `930eea08c455ad43ba9575aaf7d3c0bf0a5aa7f5`. `scripts/build_lake_desktop.sh --dev --install`, fresh Web production build and deep/strict bundle signature passed. The manifest declares TypeScript, clean source and backend SHA256 `1faf8388788b1447c140905c459d284ff716d5f6de8a93a00fa851f25794252a`. Subsequent edits change this validation record and the plan only.
+
+Using the existing configured real model (`gpt-6.1-terra`), the isolated project “Pilot 权限统一验证 2026-11-09” created one stable specialist and two independent tasks:
+
+- Automatic on: task `st_c40f029f3b414d1d0f19d7fac33c0dbc` ran Python once without any pending approval, produced `LAKE_DEV_AUTOMATIC_PERMISSION_OK` and finished with actual host acceptance pass.
+- Automatic off: task `st_aa442b072c8da8e4b1a87d1d2fafcfdb` displayed the exact Bash/Python command and “尚未执行”, with no Bash operation receipt. The native UI's “确认并继续” then executed it once and produced `LAKE_DEV_MANUAL_PERMISSION_OK`, also with host acceptance pass.
+
+The same stable RoleID handled both. Pilot and the specialist channel contain the identical corresponding summaries. Native inspection confirmed waiting -> processing -> ended, the actual printed result, and the sole Pilot permission panel with the new descriptions and command switch off. The original HexHub 服务器 / 发布专员 view was restored, and the named QA project is retained for review. No real SSH/database/MCP target or native child was used in this real-model case; their scope/transport/child behavior is established by the isolated real-SDK/protocol suite, not claimed as an external production exercise. No new dark/narrow-window styling claim is made for the text-only tooltip change. This request does not authorize merging the new PR, changing production configuration, installing production or publishing a new version. Existing production pending approvals are not auto-approved or replayed by this work.

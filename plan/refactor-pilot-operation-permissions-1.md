@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-09
 last_updated: 2026-11-09
 owner: Lake
-status: In progress
+status: Completed
 tags: [refactor, permissions, typescript]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 The user requires specialists and native children to follow Pilot's operation switches. Enabling automatic execution removes secondary risk/transport/SDK confirmation prompts. Operation risk remains recorded and is not a read-only proof.
 
@@ -44,7 +44,7 @@ Depends on TASK-002 and TASK-003.
 |------|-------------|-----------|------|
 | TASK-004 | Extend `runtime/typescript/server.test.cjs`: auto on/off for high-risk-classified Bash, child writes and file searches, HTTP/stdio MCP, current-policy changes and effective options; retain existing deny/trust/Plan/ledger regressions. | Yes | 2026-11-09 |
 | TASK-005 | Run TS typecheck/source and bundled tests, frontend typecheck/tests/build, ADK/naming/diff checks; record exact results. | Yes | 2026-11-09 |
-| TASK-006 | Build/install signed Lake Dev from a clean commit, verify automatic script execution without an approval and disabled-switch behavior in isolated Dev fixtures, open a develop PR with evidence. | No | 2026-11-09 |
+| TASK-006 | Build/install signed Lake Dev from a clean commit, verify automatic script execution without an approval and disabled-switch behavior in isolated Dev fixtures, open a develop PR with evidence. | Yes | 2026-11-09 |
 
 ## 3. Alternatives
 
@@ -58,7 +58,7 @@ Depends on TASK-002 and TASK-003.
 
 ## 5. Files
 
-- **FILE-001**: `runtime/typescript/operation-permissions.ts`, `superagent.ts`, `extensions.ts`, `server.ts` — authority, categories and native SDK projection.
+- **FILE-001**: `runtime/typescript/operation-permissions.ts`, `superagent.ts`, `extensions.ts`, `security.ts`, `server.ts` — authority, categories and native SDK projection.
 - **FILE-002**: `runtime/typescript/server.test.cjs` — real SDK/protocol regression fixtures.
 - **FILE-003**: `web-agent/web/src/PermissionSettings.tsx`, `agent.md`, `docs/security/task-confirmation.md` — user-visible and architecture semantics.
 - **FILE-004**: `docs/validation/typescript-candidate/pilot-operation-permissions-2026-11-09.md` — audit, tested SHAs and limits.
