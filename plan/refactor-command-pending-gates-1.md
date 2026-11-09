@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-09
 last_updated: 2026-11-09
 owner: Lake
-status: In progress
+status: Completed
 tags: [runtime, refactor]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 用户要求命令不再因旧操作的待核实状态被阻断。本批删除相关执行检查，不通过补充只读白名单修补单条命令。
 
@@ -40,8 +40,8 @@ tags: [runtime, refactor]
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-004 | 单测覆盖同任务、跨任务、共同任务、旧 Go 和原调用 ID；SDK/loopback SSH 覆盖分类为非只读的历史日志查询及实际非零/断线后继续。依赖 TASK-001 至 TASK-003。 | ✅ | 2026-11-09 |
-| TASK-005 | 运行 runtime 类型/源码/SDK、共享命令策略及 ADK 边界；签名安装 Dev 并复测截图任务，比较原未知行哈希。依赖 TASK-004。 | | |
-| TASK-006 | 更新验证记录和 develop PR；不自动合并或发布。依赖 TASK-005。 | | |
+| TASK-005 | 运行 runtime 类型/源码/SDK、共享命令策略及 ADK 边界；签名安装 Dev 并复测截图任务，比较原未知行哈希。依赖 TASK-004。 | ✅ | 2026-11-09 |
+| TASK-006 | 更新验证记录和 develop PR；不自动合并或发布。依赖 TASK-005。 | ✅ | 2026-11-09 |
 
 ## 3. Alternatives
 
