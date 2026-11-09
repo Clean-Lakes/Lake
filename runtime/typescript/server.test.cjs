@@ -739,6 +739,34 @@ function fullAgentReply(request,mode,home){
  const stamp=router?JSON.parse(content(messages[0]).split('\n')[1])[0].id:'worker';
  const call=(name,input,id=name)=>({tool_calls:[{index:0,id:'full-'+stamp+'-'+id,type:'function',function:{name,arguments:JSON.stringify(input)}}]});
  const result=name=>{const id=calls.findLast(call=>call.function.name===name)?.id;const message=messages.findLast(message=>message.role==='tool'&&message.tool_call_id===id);try{return JSON.parse(content(message));}catch{return content(message??{});}};
+ if(mode.includes('pending-history')||mode.includes('pending-same-task')){
+  if(!names.includes('list_assets'))return call('list_assets',{query:'SSH fixture'});
+  const asset=result('list_assets').assets.find(asset=>asset.kind==='ssh'),count=names.filter(name=>name==='Bash').length;
+  const same=mode.includes('pending-same-task');
+  if(count<(same?2:1))return call('Bash',{asset_ref:asset.asset_ref,configuration_revision:asset.configuration_pin,
+    command:same?(count?"printf 'NEW_AUTHORIZED_RESULT' >> gate-probe.txt; cat gate-probe.txt":"printf 'PARTIAL_RESULT' > gate-probe.txt; false"):
+      "date '+%F %T %Z %z'; printf '\\n--- boot history ---\\n'; last -x -F reboot; printf '\\n--- journal boots ---\\n'; journalctl --list-boots --no-pager; printf '\\n--- log coverage ---\\n'; ls -l --time-style=long-iso /var/log/wtmp* /var/log/btmp* 2>/dev/null; printf '\\n--- current boot ---\\n'; uptime -s",
+    description:'Current authorized command independent of historical pending records'},'pending-'+count);
+  if(!names.includes('work_finish'))return call('work_finish',{summary:same?'新的命令已执行，原部分执行仍保留。':'已读取当前启动历史，原未知操作记录保留。',outcome:same?'partial':'completed'});
+  return {content:'本轮当前命令已结束。'};
+ }
+ if(mode.includes('output-recovery')){
+  if(!names.includes('Bash'))return call('Bash',{command:"python3 -I -c 'print(1)'",description:'Wrong local resource must be rejected'},'rejected-local');
+  if(!names.includes('list_assets'))return call('list_assets',{query:'SSH fixture'});
+  const asset=result('list_assets').assets.find(asset=>asset.kind==='ssh');
+  if(!calls.some(c=>c.id==='full-worker-large-receipt'))return call('Bash',{asset_ref:asset.asset_ref,configuration_revision:asset.configuration_pin,command:"printf 'LAKE_LARGE_RECEIPT'",description:'Read remote receipt'},'large-receipt');
+  if(!names.includes('read_tool_output'))return call('read_tool_output',{tool_call_id:'full-worker-large-receipt',offset:60000,limit:8192});
+  if(!names.includes('work_finish'))return call('work_finish',{summary:'已读取远端长回执末尾 OUTPUT_RECOVERY_END，原待核实记录保留。',outcome:'completed'});
+  return {content:'已完成本次独立只读检查。'};
+ }
+ if(mode.includes('connection-recovery')||mode.includes('journal-recovery')){
+  if(!names.includes('list_assets'))return call('list_assets',{query:'SSH fixture'});
+  const asset=result('list_assets').assets.find(asset=>asset.kind==='ssh'),count=names.filter(name=>name==='Bash').length;
+  if(count<2)return call('Bash',{asset_ref:asset.asset_ref,configuration_revision:asset.configuration_revision,
+   command:count&&mode.includes('journal-recovery')?'journalctl -b -1 -n 100 --no-pager -o short-iso':'kubectl config current-context',description:'Read current diagnostic evidence'},'recovery-'+count);
+  if(!names.includes('work_finish'))return call('work_finish',{summary:mode.includes('journal-recovery')?'已读取独立日志；先前命令仍待核实。':'重新连接后已取得当前查询结果。',outcome:mode.includes('journal-recovery')?'partial':'completed'});
+  return {content:'本轮诊断结束。'};
+ }
  if(mode.includes('child')&&!tools.some(tool=>tool.function.name==='work_finish')){
   if(!names.includes('Bash'))return call('Bash',{command:"printf 'CHILD_NATIVE_SHELL'",description:'Read child execution marker'});
   return {content:'子智能体已实际执行 Shell 检查。'};
@@ -789,6 +817,22 @@ function fullAgentReply(request,mode,home){
 }
 
 function superReply(request, mode, home) {
+  if (mode.startsWith("super-memory-recheck")) {
+    if (request.tools.some(tool=>tool.function.name==="route_work")) return hostRetryReply(request,mode.endsWith("predecessor")?"predecessor":"followup");
+    const plain=m=>typeof m.content==="string"?m.content:(m.content??[]).map(p=>p.text??"").join("");
+    const assignment=JSON.parse(request.messages.filter(m=>m.role==="user").map(plain).findLast(s=>s.startsWith("{")&&s.includes('"assignment"')));
+    const names=request.messages.flatMap(m=>m.tool_calls??[]).map(c=>c.function.name);
+    const call=(name,input)=>({tool_calls:[{index:0,id:"recheck-"+name,type:"function",function:{name,arguments:JSON.stringify(input)}}]});
+    if(assignment.readOnlyRecheck){
+      if(!names.includes("Write"))return call("Write",{file_path:join(home,"workspaces",assignment.assignment.projectId,"must-not-write.txt"),content:"should be rejected"});
+      if(!names.includes("Read"))return call("Read",{file_path:join(home,"workspaces",assignment.assignment.projectId,"recheck-fixture.txt")});
+      if(!names.includes("work_finish"))return call("work_finish",{outcome:"completed",summary:"独立只读复查已取得 RECHECK_CURRENT_OBSERVATION；原任务未核实操作仍保留。"});
+    }else{
+      if(!names.includes("list_project_files"))return call("list_project_files",{path:"."});
+      if(!names.includes("work_finish"))return call("work_finish",{outcome:"partial",summary:"第一轮仅完成文件列表观察，后续检查尚未完成。"});
+    }
+    return {content:"本次结果已提交。"};
+  }
   if(mode.startsWith("super-full-")){const response=fullAgentReply(request,mode,home);if(response)return response;}
   if (mode === "super-host-retry") return hostRetryReply(request);
   let names = request.messages.flatMap((message) => (message.tool_calls ?? []).map((call) => call.function.name));
@@ -831,11 +875,19 @@ function superReply(request, mode, home) {
     const event = JSON.parse(raw.split("\n")[1])[0];
     const currentStart = request.messages.findLastIndex(message => message.role === "user" && content(message) === raw);
     names = request.messages.slice(currentStart).flatMap(message => (message.tool_calls ?? []).map(call => call.function.name));
+    if (mode === "super-full-worker-default-delegation-ssh") {
+      const context = JSON.parse(raw.split('[CURRENT CONVERSATION WORKING SET]\n')[1]);
+      if (!names.includes("route_work")) return call("route_work", {event_id:event.id, part_key:"host-check", action:"create",
+        title:"检查服务器启动状态", quote:event.text, reason:"资源检查默认交给稳定专员",
+        ...(context.specialists.items.length ? {role_id:context.specialists.items[0].id} : {role_key:"服务器运维专员"})});
+      return {content:"已安排服务器运维专员检查。"};
+    }
     if (!names.includes("manage_specialist")) return call("manage_specialist", { event_id: event.id, part_key: "specialist", action: "create", role_key: "project-inspector", name: "项目检查员", duties: "检查当前项目工作区，按实际证据报告", quote: event.text });
     if (mode === "super-meta") return { content: "已创建长期专员，没有创建执行任务。" };
     if (!names.includes("list_specialists")) return call("list_specialists", {});
     const roleId = request.messages.slice(currentStart).filter((message) => message.role === "tool").map(content).join("\n").match(/"id"\s*:\s*"([a-f0-9]{64})"/)?.[1];
-    if (!names.includes("route_work")) return call("route_work", { event_id: event.id, part_key: "inspect", action: "create", title: "检查项目工作区", role_id: roleId, quote: event.text, reason: "用户明确要求检查本项目" });
+    if (!names.includes("route_work")) return call("route_work", { event_id: event.id, part_key: "inspect", action: "create", title: "检查项目工作区", role_id: roleId, quote: event.text, reason: "用户明确要求检查本项目",
+      ...(mode.includes('output-recovery')?{resource_ids:event.selectedReferences.resourceIds}:{}) });
     return { content: "已交给项目检查员处理，执行结果将从原任务回报。" };
   }
   if (mode.startsWith("super-subagent")) return subagentReply(request, mode, home);
@@ -987,7 +1039,7 @@ function subagentReply(request, mode, home) {
 
 // A protocol fixture, not a language-model evaluation: choose only from the
 // latest host-provided context, then let real adapters and receipts decide work.
-function hostRetryReply(request) {
+function hostRetryReply(request, entrance = "followup") {
   const content = (message) => typeof message.content === "string" ? message.content : (message.content ?? []).map((part) => part.text ?? "").join("");
   const router = request.tools.some((tool) => tool.function.name === "route_work");
   const boundary = request.messages.findLastIndex((message) => message.role === "user" && (router
@@ -1010,7 +1062,9 @@ function hostRetryReply(request) {
     if (workingSet.focus.length) {
       const focus = workingSet.focus[0];
       if (!names.includes("route_work")) return call("route_work", {
-        event_id: event.id, part_key: "retry", action: "followup", task_id: focus.task.id,
+        event_id: event.id, part_key: "retry", ...(entrance === "predecessor"
+          ? {action:"create",predecessor_task_id:focus.task.id,role_id:focus.roleId,title:"继续只读复查"}
+          : {action:"followup",task_id:focus.task.id}),
         quote: event.text, reason: "继续最近对话中的同一主机检查，重新读取当前连接情况。",
       }, `retry-${event.id}`);
       return { content: "我再检查一下这台服务器。" };
@@ -2370,6 +2424,42 @@ test("a failed proven read obtains a fresh attempt without replaying the failure
   assert.equal(f.app.store.list("superWorkers").length, 1);
 });
 
+for(const entrance of ["followup","predecessor"]) test(`real SDK invalid-memory ${entrance} uses a fresh scoped readonly context, preserving source unknowns`, async t=>{
+  const f=await fixture(t,"super-memory-recheck"+(entrance==="predecessor"?"-predecessor":"")),project=await f.api(`/api/projects/${f.project.id}/superagent`,"POST",{});
+  const resource=(await f.api("/api/catalog")).resources.find(r=>r.projectId===f.project.id);
+  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,"POST",{silentReadFiles:true,silentWriteFiles:true});
+  const scope=f.app.memory.scope("project",f.project.id);
+  f.app.memory.setSettings(scope,{useEnabled:true,extractionEnabled:false,expectedRevision:0});
+  await f.app.memory.remember(scope,{title:"检查文件",body:"WITHDRAWN_RECHECK_MARKER: 检查当前项目文件时的旧信息",expectedRevision:0});
+  const note=f.app.memory.view(scope).items[0];
+  await require("node:fs/promises").mkdir(join(f.home,"workspaces",f.project.id),{recursive:true});
+  await writeFile(join(f.home,"workspaces",f.project.id,"recheck-fixture.txt"),"RECHECK_CURRENT_OBSERVATION");
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`,"POST",{text:"只读检查这个项目的当前文件。",resourceIds:[resource.id]},202);
+  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==="paused");
+  await until(async()=>!f.app.agents.foregroundBusy(),Boolean);
+  const source=f.app.store.list("superGoals")[0],worker=f.app.store.require("superWorkers",source.workerId);
+  assert.ok(f.requests.some(request=>isIndependentWorkerRequest(request)&&JSON.stringify(request.messages).includes("WITHDRAWN_RECHECK_MARKER")));
+  const usage=f.app.store.require("memoryReads",worker.sessionId);
+  const receipt=f.app.store.list("superOperations").find(op=>op.goalId===source.id);
+  const unknown={...receipt,id:"fixture-old-unknown",callId:"fixture-old-call",status:"unknown",readOnly:false};
+  f.app.store.put("superOperations",unknown.id,unknown);
+  await f.app.memory.forget(scope,note.id,note.revision);
+  assert.equal(f.app.memory.needsFreshContext({kind:"worker",projectId:f.project.id,roleId:worker.roleId,sessionId:worker.sessionId}),true);
+  const before=JSON.stringify({goal:f.app.store.require("superGoals",source.id),worker:f.app.store.require("superWorkers",worker.id),usage,unknown});
+  const offset=f.requests.length;
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`,"POST",{text:"再查一下"},202);
+  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.some(w=>w.task.taskId!==source.id&&w.task.state==="completed"));
+  const fresh=f.app.store.list("superGoals").find(goal=>goal.id!==source.id);
+  assert.equal(fresh.readOnlyRecoveryOf,source.id);assert.equal(fresh.deadlineAt,source.deadlineAt);assert.notEqual(fresh.sessionId,worker.sessionId);assert.equal(fresh.roleId,worker.roleId);
+  assert.equal(state.channels.length,1);assert.equal(fresh.acceptanceState,"pass");
+  const requests=f.requests.slice(offset).filter(isIndependentWorkerRequest);
+  assert.ok(requests.length>2);assert.ok(requests.every(request=>!JSON.stringify(request.messages).includes("WITHDRAWN_RECHECK_MARKER")));
+  assert.match(JSON.stringify(requests),/仅允许独立只读/);assert.match(JSON.stringify(requests),/RECHECK_CURRENT_OBSERVATION/);
+  await assert.rejects(access(join(f.home,"workspaces",f.project.id,"must-not-write.txt")));
+  assert.ok(f.app.store.list("superOperations").filter(op=>op.goalId===fresh.id).every(op=>op.readOnly===true));
+  assert.equal(JSON.stringify({goal:f.app.store.require("superGoals",source.id),worker:f.app.store.require("superWorkers",worker.id),usage:f.app.store.require("memoryReads",worker.sessionId),unknown:f.app.store.require("superOperations",unknown.id)}),before);
+});
+
 async function mcpFixture(t) {
   const requests = [], stolen = [];
   const sink = createServer((req, res) => { stolen.push(req.url); res.writeHead(200); res.end(); });
@@ -2689,21 +2779,23 @@ test('legacy unresolved MCP calls outside visible projects still fence a new app
  assert.equal(f.app.store.list('superOperations').filter(operation=>operation.tool==='call_mcp_tool').length,0);
 });
 
-async function sshFixture(t, diagnosticsGate){
+async function sshFixture(t, diagnosticsGate, interceptCommand){
  const fs=require('node:fs/promises'),{generateKeyPairSync}=require('node:crypto'),{Server}=require('../../third_party/agent-sdk/node_modules/ssh2'),{spawn}=require('node:child_process');
  const pty=require('../../bin/lake-runtime/native/node-pty'),home=await mkdtemp(join(tmpdir(),'lake-ssh-server-')),clients=new Set();
- let server,port=0,key;const requests=[];let auths=0;
+ let server,port=0,key;const requests=[];let auths=0, rejectNextConnection=false;
  const password='synthetic-ssh-password-no-real-credential';
  const start=async()=>{
   key=generateKeyPairSync('rsa',{modulusLength:2048}).privateKey.export({type:'pkcs1',format:'pem'});
   server=new Server({hostKeys:[key]},client=>{
    clients.add(client);client.on('error',()=>{});client.once('close',()=>clients.delete(client));
+   if(rejectNextConnection){rejectNextConnection=false;client.end();return;}
    client.on('authentication',ctx=>{auths++;if(ctx.method==='password'&&ctx.username==='fixture'&&ctx.password===password)ctx.accept();else ctx.reject();});
    client.on('ready',()=>client.on('session',accept=>{
     const session=accept();let dimensions;
     session.on('pty',(accept,reject,info)=>{dimensions=info;accept();});
     session.on('exec',async(accept,reject,info)=>{
      const stream=accept();requests.push({command:info.command,pty:!!dimensions});
+     if(interceptCommand?.(info.command,stream,client))return;
      if(dimensions){
       const child=pty.spawn('/bin/sh',['-c',info.command],{cwd:home,env:{HOME:home,PATH:'/usr/bin:/bin:/usr/sbin:/sbin',LANG:'en_US.UTF-8'},cols:dimensions.cols,rows:dimensions.rows});
       child.onData(data=>{if(!stream.destroyed)stream.write(data);});stream.on('data',data=>child.write(data.toString()));
@@ -2722,7 +2814,7 @@ async function sshFixture(t, diagnosticsGate){
  };
  const stop=async()=>{for(const client of clients)client.end();await new Promise(resolve=>server.close(resolve));};
  await start();t.after(stop);
- return {home,get port(){return port;},password,requests,get auths(){return auths;},async rotate(){await stop();await start();}};
+ return {home,get port(){return port;},password,requests,get auths(){return auths;},rejectNext(){rejectNextConnection=true;},async rotate(){await stop();await start();}};
 }
 async function sshResource(f,server){return f.api(`/api/projects/${f.project.id}/resources`,'POST',{kind:'ssh',name:'SSH fixture',ssh:{host:'127.0.0.1',port:server.port,username:'fixture',authMethod:'password',password:server.password,shell:'bash'}});}
 async function trustTerminal(f,resource,sessionId=f.session.id){
@@ -3039,14 +3131,99 @@ test('changing saved MySQL credentials invalidates an already displayed Worker a
 async function fullAgentTask(t,mode){
  const f=await fixture(t,mode),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:true,maxSteps:30});
- return {f,project,send:()=>f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'请自主执行本次测试检查并核对实际结果。'},202)};
+ return {f,project,send:(text=mode.startsWith('super-full-pilot')?'请 Pilot 亲自执行本次测试检查并核对实际结果，不要委派专员。':'请自主执行本次测试检查并核对实际结果。')=>f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text},202)};
 }
+for(const automatic of [true,false])test(`new SSH history command ignores old project and legacy unknowns while current approval is ${automatic?'automatic':'required'}`,async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-worker-ssh-pending-history');
+ const wire=await sshFixture(t,undefined,(command,stream)=>{
+  if(!command.includes('boot history'))return false;
+  stream.write('BOOT_HISTORY_CURRENT_TWO_STARTS\n');stream.exit(0);stream.end();return true;
+ });
+ const resource=await sshResource(f,wire);
+ const prior={id:'old-project-unknown',projectId:f.project.id,goalId:'old-goal',sessionId:'old-session',tool:'Bash',callId:'old-call',status:'unknown',readOnly:false,resourceId:resource.id,at:new Date().toISOString()};
+ f.app.store.put('superOperations',prior.id,prior);f.app.store.put('legacyOperations','legacy-unknown',{projectId:f.project.id,status:'unknown'});
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:automatic});await send();
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=state.workers[0];
+ if(!automatic){
+  const pending=await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),s=>!!s.pending);
+  assert.equal(pending.pending.call.name,'Bash');assert.equal(wire.requests.length,0);
+  await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:pending.pending.id,accept:true});
+ }
+ const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
+ await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const op=f.app.store.list('superOperations').find(o=>o.goalId===worker.task.taskId&&o.tool==='Bash');
+ assert.equal(op.readOnly,false,'glob/redirection must remain unproven rather than gaining a forged read-only proof');assert.equal(op.status,'succeeded');
+ assert.equal(wire.requests.length,1);assert.match(op.output.stdout,/BOOT_HISTORY_CURRENT_TWO_STARTS/);
+ assert.deepEqual(f.app.store.require('superOperations',prior.id),prior);assert.equal(f.app.store.require('legacyOperations','legacy-unknown').status,'unknown');
+});
+
+test('real SSH partial failure does not gate the next write command in the same task',async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-worker-ssh-pending-same-task'),wire=await sshFixture(t);await sshResource(f,wire);await send();
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=state.workers[0];
+ const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
+ await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
+ await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),s=>s.status==='completed');
+ const ops=f.app.store.list('superOperations').filter(o=>o.goalId===worker.task.taskId&&o.tool==='Bash');
+ assert.equal(ops.length,2);assert.equal(ops[0].status,'unknown');assert.equal(ops[1].status,'succeeded');assert.equal(ops[1].readOnly,false);
+ assert.equal(wire.requests.length,2);assert.match(ops[1].output.stdout,/PARTIAL_RESULTNEW_AUTHORIZED_RESULT/);
+ assert.equal(await readFile(join(wire.home,'gate-probe.txt'),'utf8'),'PARTIAL_RESULTNEW_AUTHORIZED_RESULT');
+ assert.notEqual(f.app.store.require('superGoals',worker.task.taskId).acceptanceState,'pass');
+});
+test('real SDK rejects a wrong local command then reads a scoped remote truncated receipt without abort or extra evidence',async t=>{
+ const {f,project}=await fullAgentTask(t,'super-full-worker-ssh-output-recovery');
+ const wire=await sshFixture(t,undefined,(command,stream)=>{
+  if(!command.includes('LAKE_LARGE_RECEIPT'))return false;
+  stream.write('CURRENT_READONLY_RECEIPT '+'.'.repeat(60000)+' OUTPUT_RECOVERY_END');stream.exit(0);stream.end();return true;
+ });
+ const resource=await sshResource(f,wire);
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:true,denyLocalExecution:true});
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'只读检查当前服务器，读取长回执并核对末尾。',resourceIds:[resource.id]},202);
+ const active=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=active.workers[0];
+ const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
+ assert.equal(trust.ai?.pending,undefined);
+ await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const view=await f.api(`/api/sessions/${worker.sessionId}/ai`),requests=f.requests.filter(isIndependentWorkerRequest);
+ assert.ok(view.cards.some(c=>c.id==='full-worker-rejected-local'&&c.status==='failed'));
+ assert.ok(!view.cards.some(c=>c.type==='error'));
+ assert.ok(requests.some(r=>r.messages.some(m=>m.role==='tool'&&m.tool_call_id==='full-worker-read_tool_output'&&JSON.stringify(m.content).includes('OUTPUT_RECOVERY_END'))));
+ const ops=f.app.store.list('superOperations').filter(o=>o.goalId===worker.task.taskId);
+ assert.equal(ops.length,1);assert.equal(ops[0].tool,'Bash');assert.equal(ops[0].readOnly,true);assert.equal(ops[0].resourceId,resource.id);assert.equal(ops[0].status,'succeeded');
+ assert.equal(wire.requests.length,1);assert.equal(f.app.store.list('commandExecutions').length,1);
+ assert.equal(f.app.store.require('superGoals',worker.task.taskId).acceptanceState,'pass');
+ assert.ok(requests.some(r=>r.messages.some(m=>m.role==='tool'&&m.tool_call_id==='full-worker-large-receipt'&&/truncat|artifact|persisted/i.test(JSON.stringify(m.content)))),'fixture must exercise SDK output truncation');
+});
+test('default resource delegation creates a missing specialist and reuses its stable role with independent accepted tasks',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-worker-default-delegation-ssh'),server=await sshFixture(t);
+ await sshResource(f,server);assert.equal(f.app.store.list('superRoles').length,0);await send('请检查服务器启动状态，并核对实际结果。');
+ const first=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=first.workers[0];
+ const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
+ await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ await f.app.agents.wait(project.routerSessionId);
+ await send('请检查服务器启动状态，并核对实际结果。');
+ const done=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===2&&s.workers.every(w=>w.task.state==='completed'));
+ assert.equal(f.app.store.list('superRoles').length,1);assert.equal(done.channels.length,1);
+ assert.equal(done.workers[0].roleId,done.workers[1].roleId);
+ assert.notEqual(done.workers[0].sessionId,done.workers[1].sessionId);
+ for(const row of done.workers){assert.notEqual(row.sessionId,project.routerSessionId);assert.equal(row.task.acceptanceState,'pass');}
+ assert.ok(f.app.store.list('superWorkers').every(w=>!w.inline));
+ const routerRequests=f.requests.filter(r=>r.tools.some(t=>t.function.name==='route_work'));
+ const contexts=routerRequests.map(r=>r.messages.findLast(m=>typeof m.content==='string'&&m.content.startsWith('[LAKE ADMITTED HUMAN EVENTS'))?.content)
+   .filter(Boolean).map(raw=>JSON.parse(raw.split('[CURRENT CONVERSATION WORKING SET]\n')[1]));
+ assert.ok(contexts.some(c=>!c.specialists.items.length));assert.ok(contexts.some(c=>c.specialists.items.length===1));
+ assert.ok(contexts.every(c=>c.coordinationPolicy.resourceWork==='delegate_by_default'));
+ assert.ok(f.requests.every(r=>!r.tools.some(t=>['work_begin','work_update'].includes(t.function.name))));
+ assert.equal(f.app.store.list('superOperations').filter(o=>o.tool==='Bash'&&o.status==='succeeded').length,2);
+});
 test('Pilot directly executes native Bash with its own canonical task and no specialist role', {skip:process.platform!=='darwin'},async t=>{
  const {f,project,send}=await fullAgentTask(t,'super-full-pilot-shell');await send();
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  assert.equal(state.channels.length,0);assert.equal(state.workers[0].roleName,'Pilot');
  const operation=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(operation.status,'succeeded');assert.match(operation.output.stdout,/ACTUAL_NATIVE_SHELL/);assert.ok(operation.commandExecutionId);
  assert.equal(state.workers[0].task.acceptanceState,'pass');assert.ok(f.requests[0].tools.some(tool=>tool.function.name==='Bash'));
+ assert.ok(f.requests.every(r=>!r.tools.some(t=>['work_begin','work_update'].includes(t.function.name))));
 });
 test('native Bash background work is joined before Pilot task acceptance',{skip:process.platform!=='darwin'},async t=>{
  const {f,project,send}=await fullAgentTask(t,'super-full-pilot-background');await send();
@@ -3074,6 +3251,41 @@ test('a Worker uses saved SSH credentials for general Bash commands beyond fixed
  const done=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const operation=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(operation.resourceId,resource.id);assert.match(operation.output.stdout,/ACTUAL_NATIVE_SHELL/);assert.equal(done.workers[0].task.acceptanceState,'pass');assert.ok(server.requests.some(request=>request.command.includes('ACTUAL_NATIVE_SHELL')&&!request.pty));
  assert.doesNotMatch(JSON.stringify(f.requests)+JSON.stringify(operation),new RegExp(server.password));
+});
+
+test('a pre-command SSH connection failure can retry through the real SDK and accept only the fresh result',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-worker-ssh-connection-recovery'),server=await sshFixture(t);
+ const fs=require('node:fs/promises');await fs.mkdir(join(server.home,'bin'));await fs.writeFile(join(server.home,'bin/kubectl'),'#!/bin/sh\nprintf ACTUAL_CONNECTION_RECOVERY',{mode:0o700});
+ await sshResource(f,server);server.rejectNext();await send();
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=state.workers[0];
+ const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
+ await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
+ const done=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const ops=f.app.store.list('superOperations').filter(o=>o.tool==='Bash').sort((a,b)=>a.at.localeCompare(b.at));
+ assert.equal(ops.length,2);assert.equal(ops[0].status,'failed');assert.equal(ops[0].readOnly,false);
+ assert.equal(f.app.store.require('commandExecutions',ops[0].commandExecutionId).sshDispatchPhase,'not_sent');
+ assert.equal(ops[1].status,'succeeded');assert.match(ops[1].output.stdout,/ACTUAL_CONNECTION_RECOVERY/);
+ assert.equal(server.requests.length,1);assert.equal(done.workers[0].task.acceptanceState,'pass');
+ assert.equal(f.app.store.require('superAttempts',ops[0].attemptId).state,'failed');
+});
+
+test('a real SSH disconnect after exec preserves unknown while a new journal query succeeds through the same Worker',{skip:process.platform!=='darwin'},async t=>{
+ let requests=0;
+ const server=await sshFixture(t,undefined,(command,stream,client)=>{
+  requests++;
+  if(requests===1){client.end();return true;}
+  assert.match(command,/'journalctl'/);assert.match(command,/'--no-pager'/);
+  stream.write('SYNTHETIC_PREVIOUS_BOOT_LOG');stream.exit(0);stream.end();return true;
+ });
+ const {f,project,send}=await fullAgentTask(t,'super-full-worker-ssh-journal-recovery');await sshResource(f,server);await send();
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=state.workers[0];
+ const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
+ await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
+ const done=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked');
+ const ops=f.app.store.list('superOperations').filter(o=>o.tool==='Bash').sort((a,b)=>a.at.localeCompare(b.at));
+ assert.equal(ops.length,2);assert.equal(ops[0].status,'unknown');assert.notEqual(f.app.store.require('commandExecutions',ops[0].commandExecutionId).sshDispatchPhase,'not_sent');
+ assert.equal(ops[1].readOnly,true);assert.equal(ops[1].status,'succeeded');assert.match(ops[1].output.stdout,/SYNTHETIC_PREVIOUS_BOOT_LOG/);
+ assert.equal(requests,2);assert.equal(done.workers[0].task.state,'blocked');assert.notEqual(done.workers[0].task.acceptanceState,'pass');
 });
 
 test('native AskUserQuestion uses Lake answers and resumes the exact Pilot task',async t=>{

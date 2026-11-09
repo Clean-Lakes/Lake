@@ -6,14 +6,15 @@ import type { AIView, WorkSession } from "../../shared/contracts";
 const tokenCount = new Intl.NumberFormat("zh-CN", {notation: "compact", maximumFractionDigits: 1});
 const count = (n?: number | null) => n === undefined || n === null ? "--" : tokenCount.format(n);
 
-export function ContextUsage({view, model, status = "completed", compact = false}: {view: AIView; model?: {modelId?: string | null}; status?: WorkSession["status"]; compact?: boolean}) {
+export type ContextUsageProps = {view: Pick<AIView,"session"|"context"|"usage">; model?: {modelId?: string | null}; status?: WorkSession["status"]; compact?: boolean; presentation?: "indicator"|"menu"|"warning"};
+export function ContextUsage({view, model, status = "completed", compact = false, presentation = "indicator"}: ContextUsageProps) {
   const [capacity, setCapacity] = useState<{modelId?: string; limit: number; source?: string} | null>(null);
   const [open, setOpen] = useState(false); const [pinned, setPinned] = useState(false);
   const root = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null), panel = useRef<HTMLDivElement>(null); const panelId = useId();
   const [position, setPosition] = useState<{left: number; top: number} | null>(null);
   useEffect(() => {setOpen(false); setPinned(false);}, [view.session]);
   useLayoutEffect(() => {
-    if (!open) return;
+    if (!open || presentation === "menu") return;
     const place = () => {
       if (!trigger.current || !panel.current) return;
       const anchor = trigger.current.getBoundingClientRect(), box = panel.current.getBoundingClientRect();
@@ -25,7 +26,7 @@ export function ContextUsage({view, model, status = "completed", compact = false
     const observer = new ResizeObserver(place); if (panel.current) observer.observe(panel.current);
     window.addEventListener("resize", place); window.addEventListener("scroll", place, true);
     return () => {observer.disconnect(); window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true);};
-  }, [open]);
+  }, [open,presentation]);
   useEffect(() => {
     if (!open) return;
     const outside = (event: PointerEvent) => {if (!root.current?.contains(event.target as Node)) {setOpen(false); setPinned(false);}};
@@ -51,14 +52,9 @@ export function ContextUsage({view, model, status = "completed", compact = false
   const cached = last?.cachedInput;
   const cachePercent = cached !== undefined && cached !== null && cached >= 0 && last && last.inputKnown !== false && last.input > 0 && cached <= last.input ? cached / last.input * 100 : undefined;
   const nearLimit = percent !== undefined && percent >= 85;
+  const warningLabel = percent !== undefined && percent >= 100 ? "上下文需整理" : "上下文接近上限";
   const warningId = `${panelId}-warning`;
-  return <div className="ai-context-usage" data-session-status={status} ref={root} onMouseEnter={() => setOpen(true)} onMouseLeave={() => {if (!pinned) setOpen(false);}} onFocus={() => setOpen(true)} onBlur={event => {if (!pinned && !event.currentTarget.contains(event.relatedTarget)) setOpen(false);}} onKeyDown={event => {if (event.key === "Escape") {event.preventDefault(); event.stopPropagation(); trigger.current?.focus({preventScroll:true}); setOpen(false); setPinned(false);}}}>
-    <button ref={trigger} type="button" className="ai-context-trigger" aria-label="上下文用量" aria-expanded={open} aria-controls={panelId} aria-describedby={nearLimit ? warningId : undefined} onClick={() => {setPinned(!pinned); setOpen(!pinned);}}>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle className="ai-context-track" cx="12" cy="12" r="9"/><circle className="ai-context-fill" cx="12" cy="12" r="9" pathLength="100" strokeDasharray={`${Math.min(100, Math.max(0, percent ?? 0))} 100`}/></svg>
-      <span className={compact ? "visually-hidden" : undefined}>上下文 {percent === undefined ? "--" : `${percent.toFixed(percent < 1 ? 2 : 1)}%`}</span>
-    </button>
-    {nearLimit && <span id={warningId} className="visually-hidden">上下文输入预算接近或超过上限</span>}
-    {open && <div ref={panel} className="ai-context-popover" style={{left:position?.left, top:position?.top, visibility:position ? undefined : "hidden"}}><section className="ai-context-panel" id={panelId} role="region" aria-label="上下文用量详情">
+  const details = <section className="ai-context-panel" id={panelId} role="region" aria-label="上下文用量详情">
       <header className="ai-context-heading"><strong>上下文用量</strong><span>{percent === undefined ? "--" : `${percent.toFixed(1)}%`}</span></header>
       <div className="ai-context-budget"><span>输入预算</span><span>{count(used)} / {count(effectiveInputBudget)} <small>tokens</small></span></div>
       <div className="ai-context-meter" role="progressbar" aria-label="上下文输入预算使用率" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent === undefined ? undefined : Math.min(100, Math.max(0, percent))} aria-valuetext={percent === undefined ? "暂无实测用量" : `已用 ${percent.toFixed(1)}%`}><span style={{width:`${Math.min(100, Math.max(0, percent ?? 0))}%`}}/></div>
@@ -69,6 +65,18 @@ export function ContextUsage({view, model, status = "completed", compact = false
         <div><dt>其中缓存命中</dt><dd>{last?.cachedInput === undefined || last.cachedInput === null ? (last ? "服务商未返回" : "暂无数据") : `${count(last.cachedInput)} tokens`}</dd></div>
         <div className="ai-context-total"><dt>会话累计</dt><dd>{totalKnown ? `${count(view.usage.total)} tokens` : "--"}</dd></div>
       </dl><p>占用按最近请求的实测输入更新，比例以扣除输出预留后的输入预算为准。缓存命中率按该次请求的输入计算，缓存仍占上下文。</p></details>
-    </section></div>}
+    </section>;
+  if (presentation === "menu") return <div className="ai-context-menu" data-session-status={status} ref={root} onKeyDown={event=>{if(event.key!=="Escape"&&event.key!=="Tab")event.stopPropagation();}}>
+    <button type="button" className="ai-context-menu-trigger" aria-expanded={open} aria-controls={panelId} onClick={()=>setOpen(value=>!value)}><span>上下文用量</span><span>{percent===undefined?"暂无实测":`${percent.toFixed(1)}%`}</span><Glyph name="chevron" size={12}/></button>
+    {open&&details}
+  </div>;
+  if (presentation === "warning" && !nearLimit) return null;
+  return <div className="ai-context-usage" data-session-status={status} ref={root} onMouseEnter={() => setOpen(true)} onMouseLeave={() => {if (!pinned) setOpen(false);}} onFocus={() => setOpen(true)} onBlur={event => {if (!pinned && !event.currentTarget.contains(event.relatedTarget)) setOpen(false);}} onKeyDown={event => {if (event.key === "Escape") {event.preventDefault(); event.stopPropagation(); trigger.current?.focus({preventScroll:true}); setOpen(false); setPinned(false);}}}>
+    <button ref={trigger} type="button" className={`ai-context-trigger${presentation==="warning"?" ai-context-warning-trigger":""}`} aria-label={presentation==="warning"?`${warningLabel}，查看用量`:"上下文用量"} title={presentation==="warning"?`${warningLabel}，查看用量`:undefined} aria-expanded={open} aria-controls={panelId} aria-describedby={nearLimit ? warningId : undefined} onClick={() => {setPinned(!pinned); setOpen(!pinned);}}>
+      {presentation==="warning"?<><Glyph name="alert" size={14}/><span className="ai-context-warning-label">{warningLabel}</span></>:<svg viewBox="0 0 24 24" aria-hidden="true"><circle className="ai-context-track" cx="12" cy="12" r="9"/><circle className="ai-context-fill" cx="12" cy="12" r="9" pathLength="100" strokeDasharray={`${Math.min(100, Math.max(0, percent ?? 0))} 100`}/></svg>}
+      <span className={compact ? "visually-hidden" : undefined}>上下文 {percent === undefined ? "--" : `${percent.toFixed(percent < 1 ? 2 : 1)}%`}</span>
+    </button>
+    {nearLimit && <span id={warningId} className="visually-hidden">上下文输入预算接近或超过上限</span>}
+    {open && <div ref={panel} className="ai-context-popover" style={{left:position?.left, top:position?.top, visibility:position ? undefined : "hidden"}}>{details}</div>}
   </div>;
 }

@@ -1,6 +1,7 @@
 import type { Message } from "../../web-agent/shared/contracts";
 import type { LakeStore } from "./store";
 import { digest, type Goal, type Operation } from "./tasks";
+import { memoryContextUnavailable, memoryContextUnavailableNotice } from "./memory-errors";
 
 export const stoppedNotice = "已停止这次工作。";
 export const unresolvedNotice =
@@ -55,6 +56,7 @@ export function stoppedReportProjection(
   message: Message,
   unresolved: (goalId: string) => boolean,
 ): Message {
+  message = memoryFailureReportProjection(store, message);
   const author = message.author;
   if (
     message.role !== "assistant" ||
@@ -111,4 +113,23 @@ export function stoppedReportProjection(
   )
     return message;
   return { ...message, text: stoppedNotice };
+}
+
+/** Read-time correction of a proven host report. Never rewrite historical rows
+ * or infer a Memory failure from model prose or from an unrelated later turn. */
+export function memoryFailureReportProjection(store: LakeStore, message: Message): Message {
+  const author = message.author;
+  if (message.role !== "assistant" || message.text !== unresolvedNotice || author?.kind !== "specialist" || !author.taskId || !author.rootTurnId) return message;
+  const worker = store.get<{id:string;projectId:string;roleId:string;sessionId:string;taskId:string}>("superWorkers",author.workerId);
+  const goal = worker && store.get<Goal>("superGoals",worker.taskId);
+  if (!worker || !goal || goal.projectId !== worker.projectId || goal.workerId !== worker.id || goal.sessionId !== worker.sessionId ||
+    goal.roleId !== worker.roleId || author.roleId !== worker.roleId || author.sessionId !== worker.sessionId || (goal.sharedTaskId ?? goal.id) !== author.taskId) return message;
+  const project = store.get<any>("superProjects",goal.projectId), channel = store.get<any>("superChannels",worker.roleId);
+  if (!channel || channel.projectId !== goal.projectId || ![project?.routerSessionId,channel.sessionId].includes(message.sessionId)) return message;
+  const report = store.list<any>("superReports").find(row => row.workerId === worker.id && Number.isSafeInteger(row.goalRevision) && row.goalRevision <= goal.revision &&
+    row.key === digest([goal.id,row.goalRevision]) && message.id === "report_" + digest([row.key,message.sessionId]));
+  const view = store.view(worker.sessionId);
+  if (!report || view.status !== "failed" || view.rootTurnId !== author.rootTurnId || !view.cards.some(card => card.type === "error" &&
+    card.content === memoryContextUnavailable && (card.data as any)?.taskId === goal.id && (card.data as any)?.root_turn_id === author.rootTurnId)) return message;
+  return {...message,text:memoryContextUnavailableNotice};
 }

@@ -363,7 +363,7 @@ a { color: inherit; }
 .command-form p { margin: 7px 0 0; color: var(--text-secondary); font-size: var(--font-size-ui); line-height: 1.5; }
 .command-button { align-self: flex-start; white-space: nowrap; background: var(--surface-hover); color: var(--foreground); border: 1px solid var(--border); }
 .command-button:hover:not(:disabled) { background: var(--surface-selected); }
-.composer-dock { position: relative; z-index: 2; flex: 0 0 auto; width: 100%; padding: 8px var(--session-gutter, 24px) 16px; background: var(--background); }
+.composer-dock { position: relative; z-index: 2; flex: 0 0 auto; width: 100%; padding: 8px var(--session-gutter, 24px) var(--workbench-bottom-inset); background: var(--background); }
 .composer-dock::before { content: ""; position: absolute; bottom: 100%; left: 0; right: 0; height: 40px; background: linear-gradient(to bottom, transparent, var(--background)); pointer-events: none; }
 /* Approval and question surfaces share the composer's responsive content rail. */
 .composer-session-controls { width:min(960px,100%); min-width:0; margin-inline:auto; }
@@ -377,7 +377,7 @@ a { color: inherit; }
 .send-button { flex: 0 0 auto; display: grid; place-items: center; border: 0; width: 32px; height: 32px; border-radius: var(--radius-control); background: var(--primary); color: var(--on-primary); }
 .send-button:hover:not(:disabled) { background: var(--primary-hover); }
 .send-button:disabled { background: var(--surface-selected); color: var(--text-disabled); }
-.composer-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; color: var(--text-muted); font-size: var(--font-size-toolbar); margin-top: 8px; padding: 0 6px; gap: 4px 8px; min-width: 0; }
+.composer-foot { display: flex; align-items: center; flex-wrap: nowrap; color: var(--text-muted); font-size: var(--font-size-toolbar); margin-top: 8px; padding: 0; gap: 6px; min-width: 0; }
 .composer-input .send-button { width: 30px; height: 30px; background: transparent; color: var(--text-secondary); border-radius: var(--radius-control); }
 .composer-input .send-button:hover:not(:disabled), .composer-input .send-button.stop-button { background: var(--surface-hover); color: var(--foreground); }
 .composer-input .send-button.stop-button, .composer-input .send-button.queued-stop-button { border-radius: 50%; }
@@ -558,7 +558,7 @@ a { color: inherit; }
   .session-overview { padding: 22px 0 17px; }
   .session-heading h1 { font-size: 23px; }
   .timeline-list { padding-top: 25px; }
-  .composer-dock { padding: 12px var(--session-gutter, 19px) 15px; }
+  .composer-dock { padding: 12px var(--session-gutter, 19px) var(--workbench-bottom-inset); }
   .resource-detail { width: calc(100% - 38px); }
   .resource-detail-grid { grid-template-columns: 1fr; gap: 28px; }
 }
@@ -593,7 +593,7 @@ a { color: inherit; }
   .terminal-toolbar { align-items: flex-start; flex-direction: column; padding: 10px 12px; }
   .command-input-row { flex-direction: column; }
   .command-button { align-self: flex-end; }
-  .composer-dock { padding: 9px var(--session-gutter, 13px) 12px; }
+  .composer-dock { padding: 9px var(--session-gutter, 13px) var(--workbench-bottom-inset); }
   .composer-input { padding: 8px 12px; border-radius: var(--radius-window); }
   .composer-foot { gap: 6px; }
   .resource-detail { width: calc(100% - 26px); padding-top: 19px; }
@@ -793,6 +793,9 @@ a { color: inherit; }
 .image-drafts button { position: absolute; right: -4px; top: -4px; background: var(--surface); border: 1px solid var(--border); border-radius: 50%; width: 20px; height: 20px; }
 .image-attach-button { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 4px 5px; white-space: nowrap; background: none; border: 0; border-radius: var(--radius-control); font-size: var(--font-size-ui); color: var(--text-secondary); cursor: pointer; }
 .image-attach-button:disabled { opacity: .4; }
+.composer-input .composer-attach-button { flex:0 0 30px; justify-content:center; width:30px; height:30px; min-height:30px; padding:0; }
+.composer-input .composer-attach-button:hover:not(:disabled) { background:var(--surface-hover); color:var(--foreground); }
+.composer-input .composer-attach-button:focus-visible { outline:2px solid var(--focus-outline); outline-offset:2px; }
 .ai-image { margin: 8px 0; }
 .ai-image img { display: block; max-width: 100%; max-height: 520px; object-fit: contain; border-radius: var(--radius-panel); }
 .ai-chat-message .ai-image { display: table; max-width: 100%; margin: 0; }
@@ -1165,7 +1168,8 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 }
 @container lake-composer (max-width: 480px) {
  .composer-foot .composer-tool-label { display:none; }
- .composer-foot > .composer-permission-button { justify-content:center; width:28px; padding:0; }
+ .composer-foot > .composer-permission-button:not(.sre-mode-toggle) { justify-content:center; width:28px; padding:0; }
+ .composer-foot .composer-stop-scope { display:none; }
 }
 @container lake-composer (max-width: 360px) {
  .composer-foot .composer-model-effort { display:none; }

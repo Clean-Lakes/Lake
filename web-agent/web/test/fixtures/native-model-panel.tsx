@@ -13,6 +13,7 @@ const entries=[
  {providerId:'deepseek',providerName:'DeepSeek',modelId:'deepseek-v4-pro',name:'deepseek-v4-pro',displayName:'deepseek-v4-pro'},
 ];
 const state:NativeModelPanelState={id:'fixture',presentation:1,available:{models:entries.map(entry=>entry.name),entries,loading:false},modelName:'deepseek-flash',selection:entries[2],disabled:false,theme:new URLSearchParams(location.search).has('dark')?'dark':'light',anchor:{left:500,top:600,width:150,height:28},reasoning:{session:'demo',modelId:'deepseek-flash',disabled:false}};
+state.contextUsage={view:{session:'demo',context:{modelId:'deepseek-flash',window:100000,windowSource:'settings',inputBudget:80000,used:18000,usedKnown:true,maxOutput:8000,estimated:false},usage:{input:18000,output:100,total:18100,known:true}},model:{modelId:'deepseek-flash'},status:'completed'};
 const proof=document.createElement('output');proof.id='native-panel-proof';proof.hidden=true;document.body.appendChild(proof);
 const events:Record<string,unknown>[]=[],posts:unknown[]=[];
 const record=()=>{proof.textContent=JSON.stringify({events,posts});};record();

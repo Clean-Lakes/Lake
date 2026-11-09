@@ -5,6 +5,55 @@ const quote = (value: string) => `'${value.replace(/'/g, `'"'"'`)}'`;
 const dangerPrograms = new Set(["sudo", "su", "doas", "rm", "rmdir", "shred", "dd", "mkfs", "wipefs", "fdisk", "parted", "shutdown", "reboot", "halt", "poweroff", "kill", "killall", "pkill", "chmod", "chown", "chgrp", "chattr"]);
 const readPrograms = new Set(["pwd", "uname", "uptime", "df", "du", "ls", "cat", "head", "tail", "wc", "grep", "egrep", "fgrep", "find", "ps", "free", "vmstat", "vm_stat", "iostat", "top", "date", "hostname", "whoami", "id", "who", "w", "stat", "file", "readlink", "printf", "echo", "true", "false", "sleep"]);
 
+const queryCount = (value: string) => /^\d{1,5}$/.test(value) && Number(value) <= 10000;
+const queryValue = (value: string) => !!value && value.length <= 1024 && !value.startsWith("-");
+const bootValue = (value: string) => /^(?:[+-]?\d{1,5}|[a-fA-F0-9]{32})$/.test(value);
+
+function lastQuery(args: string[]) {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (/^-[xFwRi]+$/.test(arg) || ["--system", "--fulltimes", "--wide", "--nohostname", "--ip", "reboot", "shutdown", "runlevel"].includes(arg)) continue;
+    if (/^-\d+$/.test(arg) && queryCount(arg.slice(1))) continue;
+    if (/^-n\d+$/.test(arg) && queryCount(arg.slice(2))) continue;
+    const equal = arg.indexOf("="), key = equal < 0 ? arg : arg.slice(0, equal);
+    if (["-n", "--limit", "--since", "--until", "--time-format"].includes(key)) {
+      const value = equal < 0 ? args[++i] ?? "" : arg.slice(equal + 1);
+      if (["-n", "--limit"].includes(key) ? queryCount(value) : key === "--time-format" ?
+        ["notime", "short", "full", "iso"].includes(value) : queryValue(value)) continue;
+    }
+    return false;
+  }
+  return true;
+}
+
+// journalctl also rotates/vacuums journals and launches pagers. Only literal
+// query options with paging disabled establish read-only evidence.
+function journalQuery(args: string[]) {
+  if (!args.includes("--no-pager")) return false;
+  const flags = new Set(["--no-pager", "--list-boots", "--disk-usage", "-k", "--dmesg", "-r", "--reverse", "-q", "--quiet",
+    "-x", "--catalog", "-a", "--all", "--utc", "--no-hostname", "-l", "--full", "--no-full"]);
+  const outputs = new Set(["short", "short-iso", "short-iso-precise", "short-precise", "short-unix", "short-monotonic", "short-full", "json", "json-pretty", "json-seq", "cat", "export", "verbose"]);
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (flags.has(arg)) continue;
+    const attached = arg.match(/^(-[bnoutpSU])(.+)$/), equal = arg.indexOf("=");
+    const key = attached ? attached[1]! : equal < 0 ? arg : arg.slice(0, equal);
+    let value = attached ? attached[2] : equal < 0 ? undefined : arg.slice(equal + 1);
+    if (["-b", "--boot"].includes(key)) {
+      if (value === undefined && bootValue(args[i + 1] ?? "")) value = args[++i];
+      if (value === undefined || bootValue(value)) continue;
+    } else if (["-n", "--lines"].includes(key)) {
+      if (value === undefined && queryCount(args[i + 1] ?? "")) value = args[++i];
+      if (value === undefined || queryCount(value)) continue;
+    } else if (["-u", "--unit", "-t", "--identifier", "-p", "--priority", "-S", "--since", "-U", "--until", "-o", "--output", "--grep"].includes(key)) {
+      value ??= args[++i] ?? "";
+      if (key === "-o" || key === "--output" ? outputs.has(value) : queryValue(value)) continue;
+    } else if (arg === "+" || /^[A-Z_][A-Z0-9_]*=.{1,1024}$/.test(arg)) continue;
+    return false;
+  }
+  return true;
+}
+
 /** Parse only literal POSIX words and simple command chains. Unsupported syntax never auto-runs. */
 function tokenize(command: string): { words: Array<{ word: string; operator: boolean }>; dynamic: boolean; substitution: boolean } {
   const words: Array<{ word: string; operator: boolean }> = [];
@@ -422,8 +471,12 @@ export function commandPolicy(command: string): CommandPolicy {
   for (const group of groups) {
     const path = group[0]!, program = path.split("/").at(-1)!;
     const args = group.slice(1);
-    let safe = (readPrograms.has(program) && (!path.includes("/") || /^\/(?:usr\/)?s?bin\/[^/]+$/.test(path))) || programLookup(group);
-    if (program === "date") safe &&= args.every(arg => arg === "-u" || arg === "--utc" || arg.startsWith("+"));
+    const systemPath = !path.includes("/") || /^\/(?:usr\/)?s?bin\/[^/]+$/.test(path);
+    let safe = (readPrograms.has(program) && systemPath) || programLookup(group);
+    if (program === "date") safe &&= args.every(arg => arg === "-u" || arg === "--utc" || arg.startsWith("+") || /^(?:-I(?:s|date|hours|minutes|seconds|ns)?|--iso-8601(?:=(?:date|hours|minutes|seconds|ns))?)$/.test(arg));
+    if (program === "last") safe = systemPath && lastQuery(args);
+    if (program === "journalctl") safe = systemPath && journalQuery(args);
+    if (program === "systemd-detect-virt") safe = systemPath && args.every(arg => ["--vm", "--container", "--chroot", "--private-users", "--quiet", "-q", "--version", "--help", "-h"].includes(arg));
     if (program === "hostname") safe &&= args.every(arg => ["-f", "-s", "-d", "-i", "-I", "-a", "--fqdn"].includes(arg));
     if (program === "file") safe &&= !args.some(arg => arg === "--compile" || /^-[^-]*C/.test(arg));
     if (program === "find") safe &&= !args.some(arg => /^-(?:fprint|fprint0|fprintf|fls)$/.test(arg));

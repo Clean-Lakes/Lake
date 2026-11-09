@@ -28,6 +28,11 @@ const sourceProof=document.createElement('output');sourceProof.id='model-source-
 window.fetch=async(input,init)=>{
  const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href);
  const json=(value:unknown)=>new Response(JSON.stringify(value),{headers:{'Content-Type':'application/json'}});
+ if(url.pathname.endsWith('/snapshot')){
+  const value=await (await inheritedFetch(input,init)).json();
+  if(value.ai)value.ai={...value.ai,context:{modelId:selected.modelId,window:100000,windowSource:'settings',inputBudget:80000,used:new URLSearchParams(location.search).has('near-limit')?72000:18000,usedKnown:true,maxOutput:8000,estimated:false}};
+  return json(value);
+ }
  if(url.pathname==='/api/bootstrap')return json({...await (await inheritedFetch(input,init)).json(),modelName:selected.name,modelId:selected.modelId,modelSelection:selected,supportsImageInput:true});
  if(url.pathname==='/api/settings/model/available'){if(slowMenu)await new Promise<void>(resolve=>menuGates.push(resolve));if(menuFail)return new Response(JSON.stringify({error:'演示模型列表暂时不可用'}),{status:503,headers:{'Content-Type':'application/json'}});return json({models:entries.map(m=>m.name),entries,activeProviderId:selected.providerId,activeModelId:selected.modelId,imageInputCapabilities:{'deepseek-flash':true}});}
  if(url.pathname==='/api/settings/model/select'){

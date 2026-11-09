@@ -32,6 +32,63 @@ test("ordinary business tools create their own step and finish with current real
   assert.equal(store.require<any>("superDeliveries", digest(["goal", 1])).outcome, "completed");
 });
 
+test("fresh read-only recovery rejects mutations, opaque calls and children before dispatch",async t=>{
+  const f=await fixture(t);f.create({readOnlyRecoveryOf:"source-task"});let dispatched=0;
+  for(const binding of [{readOnly:false},{},{readOnly:false,agentRunId:"child",childSessionId:"child-session"}])
+    await assert.rejects(f.ledger.operation("goal",1,"policy","mutate-"+JSON.stringify(binding),"Write",{},async()=>{dispatched++;return {};},v=>v,binding),/仅允许独立只读/);
+  assert.equal(dispatched,0);assert.equal(f.store.list("superOperations").length,0);
+  const saved=f.ledger.get("goal"),deadline=saved.deadlineAt;delete saved.readOnlyRecoveryOf;saved.deadlineAt=new Date(Date.now()+86400000).toISOString();f.ledger.save(saved);
+  assert.equal(f.ledger.get("goal").readOnlyRecoveryOf,"source-task");assert.equal(f.ledger.get("goal").deadlineAt,deadline);
+  await f.invoke("new-observation");assert.equal(f.store.list("superOperations").length,1);
+});
+
+async function acceptedHostStep(t: Parameters<typeof fixture>[0], tool = "inspect_host", revalidate?: (operation: Operation) => void) {
+  const f = await fixture(t, revalidate); f.create();
+  // Older inline Pilot profiles exposed the manual protocol on a host-managed goal.
+  f.ledger.begin("goal", { title: "检查服务器", items: [{ id: "check", title: "检查服务器" }] });
+  f.ledger.update("goal", { item_id: "check", status: "running" }, 1, "policy");
+  await f.invoke("actual-check", tool);
+  f.ledger.update("goal", { item_id: "check", status: "completed", evidence_ids: ["actual-check"] }, 1, "policy");
+  return f;
+}
+
+test("host completion closes an already accepted current step without replacing evidence or running I/O", async (t) => {
+  const { store, ledger } = await acceptedHostStep(t);
+  const attempts = store.list("superAttempts"), operations = store.list("superOperations"), receipt = store.list("superAcceptance")[0];
+  const result = ledger.finishHost("goal", { summary: "已核对真实启动时间。", outcome: "completed" }, 1, "policy");
+  assert.equal(result.status, "completed"); assert.equal(result.acceptanceState, "pass");
+  assert.deepEqual(store.list("superAttempts"), attempts); assert.deepEqual(store.list("superOperations"), operations);
+  assert.deepEqual(store.require("superAcceptance", (receipt as any).id), receipt);
+  assert.equal(store.list("superAcceptance").length, 2); assert.equal(store.list("superPendingReports").length, 1);
+  assert.throws(() => ledger.finishHost("goal", { summary: "再次完成。", outcome: "completed" }, 1, "policy"), /closed/);
+  assert.equal(store.list("superAcceptance").length, 2);
+});
+
+test("accepted host steps still reject stale generations, changed policies and modified evidence", async (t) => {
+  const { store, ledger } = await acceptedHostStep(t);
+  const finish = (generation = 1, policy = "policy") => ledger.finishHost("goal", { summary: "完成。", outcome: "completed" }, generation, policy);
+  assert.throws(() => finish(2), /binding changed/);
+  assert.throws(() => finish(1, "new-policy"), /permissions|binding changed/);
+  const operation = store.list<Operation>("superOperations")[0]; operation.output = { forged: true }; store.put("superOperations", operation.id, operation);
+  assert.throws(() => finish(), /evidence/);
+  assert.notEqual(ledger.get("goal").acceptanceState, "pass");
+  assert.equal(store.list("superDeliveries").length, 0); assert.equal(store.list("superPendingReports").length, 0);
+});
+
+test("accepted host steps revalidate resources and cannot complete from discovery alone or unresolved effects", async (t) => {
+  let revoked = false;
+  const { store, ledger } = await acceptedHostStep(t, "inspect_host", () => { if (revoked) throw new Error("resource revision changed"); });
+  revoked = true;
+  assert.throws(() => ledger.finishHost("goal", { summary: "完成。", outcome: "completed" }, 1, "policy"), /resource revision/);
+  revoked = false;
+  const original = store.list<Operation>("superOperations")[0];
+  store.put("superOperations", "unknown", { ...original, id: "unknown", status: "unknown", readOnly: false });
+  assert.throws(() => ledger.finishHost("goal", { summary: "完成。", outcome: "completed" }, 1, "policy"), /evidence/);
+  assert.equal(store.list("superDeliveries").length, 0);
+  const discovery = await acceptedHostStep(t, "list_mcp_tools");
+  assert.throws(() => discovery.ledger.finishHost("goal", { summary: "完成。", outcome: "completed" }, 1, "policy"), /discovery/);
+});
+
 test("discovery and failed observations cannot pass; a partial report preserves the actual business explanation", async (t) => {
   const { store, ledger, create, invoke } = await fixture(t); create();
   await invoke("catalog", "list_mcp_tools");
@@ -101,72 +158,58 @@ test("legacy unresolved operations do not prevent proven reads and still block m
   assert.equal(ledger.finishHost("goal", { summary: "已完成独立只读检查。", outcome: "completed" }, 1, "policy").status, "completed");
 });
 
-test("a confirmed no-effect inspection permits new work on its original task while its exact operation remains immutable",async t=>{
-  const {store,create} = await fixture(t); create();
-  let effects: "none" | "observed" = "none";
-  const originalId = digest(["session","inspect"]);
-  const ledger = new TaskLedger(store,undefined,op=>op.id===originalId && store.get("commandOperatorEffectClosures",op.id)
-    ? {effects,closureState:"reconciled",closedAt:new Date().toISOString(),replayScopes:["/tmp/work"]} : undefined);
-  const command = (call:string,input:string,dispatch:()=>Promise<unknown>) =>
-    ledger.operation("goal",1,"policy",call,"Bash",{command:input},dispatch,v=>v,
-      {readOnly:false,resourceId:"host",commandExecutionId:digest(["goal",1,call])});
-  let inspections=0;
-  await assert.rejects(command("inspect","find /tmp/work",async()=>{inspections++;throw new Error("inaccessible cwd");}),/inaccessible cwd/);
-  const original = store.require<Operation>("superOperations",originalId);
-  store.put("commandExecutions",original.commandExecutionId!,{id:original.commandExecutionId,command:"find /tmp/work"});
-  store.put("commandOperatorEffectClosures",original.id,{operationId:original.id});
-  await assert.rejects(command("inspect","find /tmp/work",async()=>{inspections++;}),/cannot be replayed/);
-  assert.equal(inspections,1);
-  // Actual changes require a fresh user event. A verified read with no effects imposes no such fence.
-  let mutations=0;
-  effects="observed";
-  await assert.rejects(command("repair","fix /tmp/work/client.port",async()=>{mutations++;}),/禁止重放/);
-  effects="none";
-  await command("repair","fix /tmp/work/client.port",async()=>{mutations++;return {exitCode:0};});
-  assert.equal(mutations,1);
-  assert.deepEqual(store.require("superOperations",originalId),original);
-  const done=ledger.finishHost("goal",{summary:"已通过新的修复回执验收",outcome:"completed"},1,"policy");
-  assert.equal(done.acceptanceState,"pass");
-  assert.deepEqual(done.items[0].evidenceIds,[digest(["session","repair"])]);
+test("new commands continue after unknown results without changing their original attempt or replaying an old call ID",async t=>{
+  const f=await fixture(t);f.create();let dispatched=0;
+  const run=(call:string,goal="goal",generation=1)=>f.ledger.operation(goal,generation,"policy",call,"Bash",{command:"same authorized command"},
+    async()=>{dispatched++;if(call==="lost")throw new Error("lost response");return {exitCode:0};},v=>v,
+    {readOnly:false,resourceId:"host",commandExecutionId:digest([goal,generation,call])});
+  await assert.rejects(run("lost"),/lost response/);
+  const old=f.store.list<Operation>("superOperations")[0],before=JSON.stringify(old),attempt=JSON.stringify(f.store.require("superAttempts",old.attemptId));
+  f.store.put("legacyOperations","legacy-unknown",{projectId:"project",status:"unknown"});
+  await run("new-call");await run("same-parameters-new-call");
+  await assert.rejects(run("lost"),/cannot be replayed/);
+  assert.equal(dispatched,3);assert.equal(JSON.stringify(f.store.require("superOperations",old.id)),before);
+  assert.equal(JSON.stringify(f.store.require("superAttempts",old.attemptId)),attempt);
+  assert.equal(f.ledger.unresolved("goal"),true);
+  assert.throws(()=>f.ledger.finishHost("goal",{summary:"不能抹掉原未知结果",outcome:"completed"},1,"policy"),/evidence/);
+  f.create({id:"next",workerId:"next-worker",sessionId:"next-session"});await run("next-task","next");
+  assert.equal(f.ledger.finishHost("next",{summary:"新任务已实际执行",outcome:"completed"},1,"policy").status,"completed");
+  // The original non-command contract remains independent of command dispatch.
+  await assert.rejects(f.ledger.operation("goal",1,"policy","file-write","Write",{},async()=>({}),v=>v,{readOnly:false}),/reconciliation/);
+  await assert.rejects(f.ledger.operation("goal",1,"policy","not-a-command","Write",{},async()=>({}),v=>v,{readOnly:false,commandExecutionId:"not-a-host-bash"}),/reconciliation/);
+  await assert.rejects(f.ledger.operation("goal",1,"policy","missing-command-binding","Bash",{},async()=>({}),v=>v,{readOnly:false}),/reconciliation/);
 });
 
-test("a settled change permits a consumed human followup to another task, never queued input or a sibling's route",async t=>{
-  const {store,create}=await fixture(t);
-  const original=create(),other=create({id:'other',sessionId:'other-session',workerId:'other-worker',sourceEventId:'old-event'});
-  const closedAt=new Date(Date.now()-1000).toISOString(),originalId=digest(['session','old-change']);
-  const op={id:originalId,goalId:original.id,projectId:original.projectId,sessionId:'session',commandExecutionId:'old-execution',
-    resourceId:'host',status:'unknown',readOnly:false} as Operation;
-  store.put('superOperations',originalId,op);store.put('commandExecutions','old-execution',{command:'change /tmp/retired'});
-  store.put('commandOperatorEffectClosures',originalId,{operationId:originalId});
-  store.put('resources','host',{kind:'ssh',projectId:original.projectId});
-  const ledger=new TaskLedger(store,undefined,o=>o.id===originalId?
-    {effects:'observed',closureState:'reconciled',closedAt,replayScopes:['/tmp/retired']}:undefined);
-  const event={id:'fresh',projectId:other.projectId,sessionId:'pilot',messageId:'human',payload:'继续另一个任务',
-    receivedAt:new Date().toISOString(),disposition:'routed',selectedReferences:{resourceIds:['host'],mentions:[],references:[]}};
-  store.put('superInputs',event.id,event);
-  store.put('messages','human',{id:'human',sessionId:'pilot',role:'user',text:event.payload});
-  store.put('messageInputs','human',{projectId:other.projectId,sessionId:'pilot',messageId:'human',...event.selectedReferences});
-  const worker={id:other.workerId,projectId:other.projectId,taskId:other.id,sessionId:other.sessionId,roleId:other.roleId,
-    generation:7,state:'active',owner:'current-owner',leaseUntil:Date.now()+60000,inputEventIds:['fresh'],invocationInputIds:[] as string[]};
-  store.put('superWorkers',worker.id,worker);
-  const assignment={executionId:other.id,workerId:worker.id,sessionId:worker.sessionId,roleId:worker.roleId};
-  const decision={projectId:other.projectId,eventId:'fresh',action:'followup',taskId:other.id,assignments:[assignment]};
-  store.put('superDecisions','route',decision);
-  let dispatches=0;
-  const run=(call:string,generation=7)=>ledger.operation(other.id,generation,'policy',call,'Bash',{command:'change /tmp/new-work'},
-    async()=>({exitCode:0,count:++dispatches}),v=>v,{readOnly:false,resourceId:'host',commandExecutionId:'execution-'+call});
-  await assert.rejects(run('queued'),/新的已接收用户请求/);
-  worker.invocationInputIds=['fresh'];store.put('superWorkers',worker.id,worker);
-  store.put('superDecisions','route',{...decision,assignments:[{...assignment,executionId:'sibling'}]});
-  await assert.rejects(run('sibling'),/新的已接收用户请求/);
-  store.put('superDecisions','route',{...decision,action:'respond'});
-  await assert.rejects(run('chat'),/新的已接收用户请求/);
-  store.put('superDecisions','route',decision);
-  await assert.rejects(run('old-generation',6),/新的已接收用户请求/);
-  await run('exact-followup');assert.equal(dispatches,1);
-  assert.deepEqual(store.require('superOperations',originalId),op);
-  assert.throws(()=>ledger.protectReconciledMutation(original.id,{command:'different'},
-    {resourceId:'host',commandExecutionId:'other'},undefined,7),/禁止重放/);
+test("reviewed change directories and closed historical failures impose no second authorization or replay-scope gate on new commands",async t=>{
+  const f=await fixture(t);f.create();
+  const old={id:"old",goalId:"goal",projectId:"project",sessionId:"session",callId:"old-call",tool:"Bash",status:"unknown",readOnly:false,
+    commandExecutionId:"old-execution",at:new Date().toISOString()} as Operation;
+  f.store.put("superOperations",old.id,old);
+  const ledger=new TaskLedger(f.store,undefined,op=>op.id===old.id?{effects:"observed",closureState:"reconciled",closedAt:new Date().toISOString(),replayScopes:["/tmp/old"]}:undefined);
+  for(const [index,command] of ["rm -- /tmp/old/maintenance","printf different","rm -- /tmp/old/maintenance"].entries())
+    await ledger.operation("goal",1,"policy","fresh-"+index,"Bash",{command,cwd:"/tmp/old"},async()=>({exitCode:0}),v=>v,{readOnly:false,resourceId:"host",commandExecutionId:"new-"+index});
+  assert.deepEqual(f.store.require("superOperations",old.id),old);assert.equal(f.store.list("superAcceptance").length,0);
+});
+
+test("a shared member's unknown command cannot block another member's authorized command",async t=>{
+  const f=await fixture(t);const first=f.create(),second=f.create({id:"b",sessionId:"b-session",workerId:"b-worker",roleId:"b-role"});
+  f.ledger.joinTask(first.id,[first.id,second.id]);
+  f.store.put("superOperations","sibling-pending",{id:"sibling-pending",goalId:first.id,projectId:first.projectId,status:"unknown",tool:"Bash"});
+  await f.ledger.operation(second.id,1,"policy","current-command","Bash",{command:"echo checked"},async()=>({exitCode:0}),v=>v,{readOnly:false,commandExecutionId:"current"});
+  assert.equal(f.store.list<Operation>("superOperations").at(-1)?.status,"succeeded");
+  assert.equal(f.store.require<any>("superOperations","sibling-pending").status,"unknown");
+  assert.notEqual(f.ledger.jointState(first.id)?.acceptanceState,"pass");
+});
+
+test("explicit steps can start a fresh command attempt without reconciling the unknown predecessor",async t=>{
+  const f=await fixture(t);f.create({executionMode:"explicit_plan"});
+  f.ledger.begin("goal",{title:"check",items:[{id:"logs",title:"check logs"}]});f.ledger.start("goal","logs",1,"policy");
+  await assert.rejects(f.ledger.operation("goal",1,"policy","lost","Bash",{},async()=>{throw new Error("lost");},v=>v,{commandExecutionId:"lost",readOnly:false}),/lost/);
+  const old=f.store.list<Operation>("superOperations")[0],attempt=JSON.stringify(f.store.require("superAttempts",old.attemptId));
+  f.ledger.start("goal","logs",2,"new-policy");
+  await f.ledger.operation("goal",2,"new-policy","new","Bash",{},async()=>({exitCode:0}),v=>v,{commandExecutionId:"new",readOnly:false});
+  assert.equal(JSON.stringify(f.store.require("superAttempts",old.attemptId)),attempt);assert.equal(f.ledger.unresolved("goal"),true);
+  assert.equal(f.ledger.get("goal").acceptanceState,"not_evaluated");
 });
 
 test("Plan and explicit contracts retain the existing model-driven acceptance path", async (t) => {

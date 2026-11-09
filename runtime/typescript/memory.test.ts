@@ -643,7 +643,12 @@ test('task context inherits withdrawal provenance and fences dependent provider/
  const actor={kind:'worker' as const,projectId:f.project.id,roleId:f.role.id,sessionId:target.goal.sessionId};
  const shown=f.memory.projectTaskContext([row as any],actor,true);assert.match(shown[0].summary,/192\.0\.2\.75/);
  const before=JSON.stringify(f.store.get('superGoals',source.goal.id));
+ assert.equal(f.memory.needsFreshContext(actor),false);
  await f.memory.forget(f.scope,note.id,note.revision);
+ const reads=JSON.stringify(f.store.get('memoryReads',actor.sessionId));
+ assert.equal(f.memory.needsFreshContext(actor),true);
+ assert.equal(f.memory.needsFreshContext({...actor,sessionId:'fresh-recheck'}),false);
+ assert.equal(JSON.stringify(f.store.get('memoryReads',actor.sessionId)),reads);
  assert.throws(()=>f.memory.validateContinuation(actor),/停用或撤回/);
  assert.throws(()=>f.memory.projectRequest(f.request,actor),/停用或撤回/);
  const fresh=f.memory.projectTaskContext([row as any],{...actor,sessionId:'new-context-reader'});

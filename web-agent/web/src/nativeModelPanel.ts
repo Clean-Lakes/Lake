@@ -4,7 +4,7 @@ import type {ReasoningSelectorProps} from "./ReasoningSelector";
 
 type Bridge={role:"workbench"|"panel";command:(message:Record<string,unknown>)=>Promise<unknown>};
 declare global {interface Window {lakeNativeModelPanel?:Bridge;}}
-export type NativeModelPanelState=Pick<ComposerModelSelectProps,"available"|"modelName"|"selection"|"disabled">&{
+export type NativeModelPanelState=Pick<ComposerModelSelectProps,"available"|"modelName"|"selection"|"disabled"|"contextUsage">&{
   id:string;presentation:number;theme:"light"|"dark";reasoning?:Omit<ReasoningSelectorProps,"onSaving">;
   anchor:{left:number;top:number;width:number;height:number};
 };
@@ -55,7 +55,7 @@ export function useNativeModelPanel(props:ComposerModelSelectProps,anchor:RefObj
     if(!rect) return;
     const {onSaving:_,...reasoning}=props.reasoning||{} as ReasoningSelectorProps;
     if(!sent.current) presentation.current++;
-    const state:NativeModelPanelState={id,presentation:presentation.current,available:props.available,modelName:props.modelName,selection:props.selection,disabled:props.disabled,theme:theme==="dark"?"dark":"light",reasoning:props.reasoning?reasoning:undefined,anchor:{left:rect.left,top:rect.top,width:rect.width,height:rect.height}};
+    const state:NativeModelPanelState={id,presentation:presentation.current,available:props.available,modelName:props.modelName,selection:props.selection,disabled:props.disabled,contextUsage:props.contextUsage,theme:theme==="dark"?"dark":"light",reasoning:props.reasoning?reasoning:undefined,anchor:{left:rect.left,top:rect.top,width:rect.width,height:rect.height}};
     const json=JSON.stringify(state);
     if(sent.current===json) return;
     sent.current=json;

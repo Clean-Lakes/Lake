@@ -19,6 +19,38 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+test("virtualization and the actual reboot log pipeline are literal read-only diagnostics", () => {
+  const command = "journalctl -b -1 --since '2026-11-08 17:08:00' --no-pager -o short-iso -n 45; journalctl -b -1 -k --since '2026-11-08 00:00:00' --no-pager -o short-iso -p warning -n 60; journalctl -b -1 --since '2026-11-08 00:00:00' --no-pager -o short-iso | grep -iE 'kernel panic|out of memory|oom-kill|watchdog|hardware error|machine check|soft lockup|hard lockup|reboot|shutting down|power key|power failure' | tail -50; systemd-detect-virt; journalctl -b 0 -k --no-pager | grep -iE 'hypervisor|DMI:|crash|panic|reset|watchdog' | head -30";
+  for (const source of [command,"systemd-detect-virt", "/usr/bin/systemd-detect-virt --vm --quiet", "systemd-detect-virt --container"]) {
+    const policy=commandPolicy(source);assert.equal(policy.risk,"readonly",source);assert.ok(policy.safeCommand);
+  }
+  for(const source of ["/tmp/systemd-detect-virt", "systemd-detect-virt --unknown", "systemd-detect-virt --list", "systemd-detect-virt > /tmp/file", 'systemd-detect-virt $(touch /tmp/file)', "systemd-detect-virt; journalctl --rotate --no-pager", "python3 -I -c 'print(1)'"])
+    assert.notEqual(commandPolicy(source).risk,"readonly",source);
+});
+
+test("bounded reboot diagnostics are read-only, including the reported compound query", () => {
+  for (const command of ["date -Is", "date --iso-8601=seconds --utc", "last -x -F -n 20", "last -x -F | head -35", "last reboot -F -n20", "last -xF shutdown -10",
+    "journalctl --list-boots --no-pager", "journalctl -b -1 -n 100 --no-pager -o short-iso",
+    "journalctl --no-pager --unit=nginx --since '2026-11-08 17:00' --until '2026-11-08 17:30' --lines=200 --output=json",
+    "journalctl --no-pager -b-1 -n100 _SYSTEMD_UNIT=nginx.service",
+    "date -Is; uptime -s; who -b; last -x -F -n 20; journalctl --list-boots --no-pager; uname -a"]) {
+    assert.equal(commandPolicy(command).risk, "readonly", command);
+    assert.ok(commandPolicy(command).safeCommand?.includes("command -p"));
+  }
+});
+
+test("log query recognition never admits time setting, journal mutation, paging or unknown options", () => {
+  for (const command of ["date -s '2026-01-01'", "date --set=now", "last --unknown", "last -f /tmp/arbitrary",
+    "journalctl -n 100", "journalctl --no-pager --vacuum-size=1M", "journalctl --no-pager --rotate", "journalctl --no-pager --flush",
+    "journalctl --no-pager --sync", "journalctl --no-pager --setup-keys", "journalctl --no-pager --update-catalog",
+    "journalctl --no-pager --unknown", "journalctl --no-pager --unit --rotate", "journalctl --no-pager --output=unknown",
+    "journalctl --no-pager -n 100001", "journalctl --no-pager | sh", "journalctl --no-pager > /tmp/saved.log",
+    'journalctl --no-pager --grep="$(touch /tmp/marker)"', "/tmp/journalctl --no-pager", "/tmp/last -n 2"]) {
+    assert.notEqual(commandPolicy(command).risk, "readonly", command);
+    assert.equal(commandPolicy(command).safeCommand, undefined, command);
+  }
+});
+
 for (const command of [
   "command -v kubectl",
   "command -V mysql mysqldump",

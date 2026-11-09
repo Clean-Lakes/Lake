@@ -15,6 +15,20 @@ function parse(result) {
   return { events: JSON.parse(lines[1]), tasks: JSON.parse(lines[3]), context: JSON.parse(lines[5]) };
 }
 
+test("an empty specialist catalog still carries default delegation without removing shared capabilities", () => {
+  const result = buildRouterContext(source({ specialists: [], agentTools: ["Bash", "Agent"] }));
+  const value = parse(result).context;
+  assert.deepEqual(value.specialists.items, []);
+  assert.deepEqual(value.coordinationPolicy, {
+    resourceWork: "delegate_by_default", missingSpecialist: "create_and_delegate",
+    existingSpecialist: "reuse_suitable_stable_role", pilotDirectExecution: "explicit_user_request",
+  });
+  assert.equal(value.capabilities.rolesShareTools, true);
+  assert.ok(value.capabilities.workerTools.includes("Bash"));
+  assert.ok(value.capabilities.workerTools.includes("Agent"));
+  assert.ok(Buffer.byteLength(result.input) <= 16384);
+});
+
 test("current MySQL capability names real fixed tools and counts only configured MySQL resources", () => {
   const value=parse(buildRouterContext(source({adapters:{ssh:true,extensions:false,mysql:true},resources:[
     {id:'mysql',projectId:'project',name:'MySQL',kind:'database',driver:'mysql',status:'available',revision:1},

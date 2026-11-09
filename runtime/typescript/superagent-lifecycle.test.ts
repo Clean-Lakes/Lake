@@ -6,6 +6,9 @@ import { join } from "node:path";
 import { LakeStore } from "./store";
 import { LakeSuperagent } from "./superagent";
 import type { MessageInput } from "./message-input";
+import { memoryContextUnavailable, memoryContextUnavailableNotice } from "./memory-errors";
+import {digest} from "./tasks";
+import {HttpError} from "./store";
 
 // Exercise the actual host and SQLite ledger with a controlled SDK boundary.
 // No model, credential, remote server or existing Dev data is accessed.
@@ -60,6 +63,149 @@ async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date
     steering: () => steering };
 }
 
+test("recorded tool output is paged without local execution or new evidence, with exact task/generation/child ownership",async t=>{
+  const f=await fixture(t),{taskId}=await f.start(),worker=f.worker(taskId),profile=f.host.profile(worker.sessionId)!;
+  const tool=profile.tools.find(entry=>entry.metadata.name==="read_tool_output")!;
+  const op=f.store.list<any>("superOperations")[0],output={stdout:"CURRENT_OUTPUT "+"中".repeat(16000)+" END_OF_RECEIPT"};
+  op.output=output;op.outputHash=digest(output);f.store.put("superOperations",op.id,op);
+  const before=JSON.stringify(f.store.list("superOperations")),goalBefore=JSON.stringify(f.host.ledger.get(taskId));
+  const read=(input:any,child?:any)=>profile.invoke!(tool,input,{toolCallId:"read-page",abortSignal:new AbortController().signal,...(child?{lakeSubagent:child}:{})} as any);
+  let content="",offset=0;do{const page:any=await read({tool_call_id:op.callId,offset,limit:8192});content+=page.content;offset=page.nextOffset;}while(offset!==undefined);
+  assert.match(content,/END_OF_RECEIPT/);assert.deepEqual(JSON.parse(content),output);
+  assert.equal(JSON.stringify(f.store.list("superOperations")),before);assert.equal(JSON.stringify(f.host.ledger.get(taskId)),goalBefore);
+  for(const fields of [{goalId:"other"},{projectId:"other"},{sessionId:"other"},{generation:worker.generation+1},{policyHash:"other"},{agentRunId:"child",childSessionId:"child-session"}]){
+    f.store.put("superOperations",op.id,{...op,...fields});await assert.rejects(read({tool_call_id:op.callId}),/没有这笔工具回执/);
+  }
+  f.store.put("superOperations",op.id,{...op,agentRunId:"child",childSessionId:"child-session",originalCallId:"child-original"});
+  const page:any=await read({tool_call_id:"child-original"},{id:"child",sessionId:"child-session",toolCallId:"new-read"});assert.match(page.content,/CURRENT_OUTPUT/);
+  await assert.rejects(read({tool_call_id:"child-original"},{id:"other-child",sessionId:"child-session"}),/没有这笔工具回执/);
+  f.store.put("superOperations",op.id,{...op,output:{stdout:"tampered"}});await assert.rejects(read({tool_call_id:op.callId}),/校验失败/);
+  f.store.put("superOperations",op.id,{...op,status:"dispatched"});await assert.rejects(read({tool_call_id:op.callId}),/仍在执行/);
+  f.store.put("superOperations",op.id,op);
+  await assert.rejects(read({tool_call_id:op.callId,limit:8193}),/分页范围/);
+  (f.host.ledger as any).revalidate=()=>{throw new HttpError(403,"current source permission revoked");};
+  await assert.rejects(read({tool_call_id:op.callId}),/permission revoked/);
+});
+
+test("Bash host preflight returns recoverable validation failure while the permission and dispatch guards remain enforced",async t=>{
+  const f=await fixture(t),{taskId}=await f.start(),worker=f.worker(taskId);
+  let dispatched=0;const native:any={metadata:{name:"Bash",description:"shell"},inputSchema:{properties:{}},validateInput:()=>({result:true}),handler:()=>{dispatched++;}};
+  f.internal.execution={plan:()=>{throw new HttpError(403,"原项目策略不允许此命令资源");}};
+  const entry=f.internal.configureBash(worker,native),input={command:"python3 -I -c 'print(1)'"};
+  assert.deepEqual(entry.validateInput(input,{}),{result:false,errorCode:403,message:"原项目策略不允许此命令资源"});
+  assert.throws(()=>entry.resolvePermissionCapability(input),/原项目策略/);
+  await assert.rejects(f.internal.invokeBash(worker,entry,input,{}),/原项目策略/);assert.equal(dispatched,0);
+  native.validateInput=()=>({result:false,errorCode:42,message:"native schema failure"});
+  assert.equal(f.internal.configureBash(worker,native).validateInput(input,{}).errorCode,42);
+  native.validateInput=()=>({result:true});
+  const local=f.store.catalog().resources.find(r=>r.projectId===worker.projectId&&r.kind==="local")!;
+  f.internal.execution={plan:()=>({resource:local,readOnly:false})};
+  const goal=f.host.ledger.get(taskId);goal.readOnlyRecoveryOf="original-with-unknown";f.store.put("superGoals",taskId,goal);
+  assert.match(f.internal.configureBash(worker,native).validateInput(input,{}).message,/仅允许独立只读检查/);
+  const report=f.internal.reportPresentation(f.host.ledger.get(taskId),undefined,"原项目策略不允许此命令资源");
+  assert.match(report.body,/策略未允许的资源/);assert.doesNotMatch(report.body,/需要.*提供.*权限/);
+});
+
+test("ordinary inline Pilot profiles use host-managed tools while explicit plans keep their original protocol", async (t) => {
+  const f = await fixture(t); await f.admit("请 Pilot 亲自执行检查。");
+  const names = (profile: any) => profile.tools.map((entry: any) => entry.metadata.name);
+  const finishSchema = (profile: any) => profile.tools.find((entry: any) => entry.metadata.name === "work_finish").inputSchema;
+  let profile = f.host.profile(f.router)!;
+  assert.ok(!names(profile).includes("work_begin")); assert.ok(!names(profile).includes("work_update"));
+  assert.ok(JSON.stringify(finishSchema(profile)).includes('"outcome"'));
+  assert.ok(profile.subagents); assert.ok(profile.allowlist.includes("Bash"));
+  // The unmaterialized Pilot task must honor Plan mode as well.
+  const session = f.store.session(f.router); session.options.conversationMode = "plan"; f.store.put("sessions", f.router, session);
+  profile = f.host.profile(f.router)!;
+  assert.ok(names(profile).includes("work_begin")); assert.ok(names(profile).includes("work_update"));
+  assert.ok(!JSON.stringify(finishSchema(profile)).includes('"outcome"'));
+  // Existing explicit contracts win over a later conversation-mode change.
+  const actor = f.internal.pilotActors.get(f.router);
+  f.host.ledger.create({ id: actor.taskId, projectId: f.project.id, sessionId: f.router, workerId: actor.id, roleId: actor.roleId,
+    sourceEventId: actor.sourceEventId, originRootTurnId: "root", title: "原计划", userText: "原计划", status: "running",
+    deadlineAt: new Date(Date.now() + 60000).toISOString(), mode: "default", executionMode: "explicit_plan" });
+  session.options.conversationMode = "default"; f.store.put("sessions", f.router, session);
+  profile = f.host.profile(f.router)!;
+  assert.ok(names(profile).includes("work_begin")); assert.ok(names(profile).includes("work_update"));
+  assert.ok(!JSON.stringify(finishSchema(profile)).includes('"outcome"'));
+});
+
+for(const entrance of ["followup","predecessor","predecessor-current-memory"]) test(`invalid-memory ${entrance} creates one bounded read-only recheck without changing its source`, async t => {
+  const f = await fixture(t), resource = f.store.catalog().resources.find(r => r.projectId === f.project.id)!;
+  const event = await f.admit("检查本机重启记录。", {resourceIds:[resource.id],mentions:[],references:[]});
+  const original = f.route(event,{action:"create",title:"重启检查",role_id:f.role.id});
+  f.settleRouter(); await f.activate();
+  const oldWorker = f.worker(original.taskId); oldWorker.state="parked"; f.store.put("superWorkers",oldWorker.id,oldWorker);
+  const source = f.host.ledger.get(original.taskId); source.status="blocked"; source.summary=memoryContextUnavailable; f.host.ledger.save(source);
+  const unknown={id:"unresolved-source",goalId:source.id,sessionId:source.sessionId,projectId:f.project.id,status:"unknown",readOnly:false};
+  f.store.put("superOperations",unknown.id,unknown);
+  (f.agents as any).memory={captureUser(){},captureTask(){},needsFreshContext:(actor:any)=>entrance!=="predecessor-current-memory"&&actor.sessionId===source.sessionId,projectTaskContext:(items:any)=>items};
+  const before={goal:f.host.ledger.get(source.id),worker:f.worker(source.id),operations:f.store.list("superOperations")};
+  const human = await f.admit("再查一下"), input=entrance==="followup"?{action:"followup",task_id:source.id,role_id:f.role.id}
+    :{action:"create",predecessor_task_id:source.id,title:"继续排查重启",role_id:f.role.id};
+  const result = f.route(human,input);
+  assert.notEqual(result.taskId,source.id); assert.equal(result.recoveryOfTaskId,source.id); assert.equal(result.action,"create");
+  assert.equal(f.route(human,input).taskId,result.taskId);
+  assert.equal(f.route(human,{...input,part_key:"another"}).taskId,result.taskId);
+  const fresh = f.host.ledger.get(result.taskId);
+  assert.equal(fresh.readOnlyRecoveryOf,source.id); assert.equal(fresh.deadlineAt,source.deadlineAt);
+  assert.notEqual(fresh.sessionId,source.sessionId); assert.equal(fresh.roleId,source.roleId);
+  assert.deepEqual(f.worker(fresh.id).targetResourceIds,[resource.id]); assert.equal(f.store.list("superReferences").length,0);
+  if(entrance==="followup") {
+    const snapshot=f.host.ledger.get(fresh.id),invocation=f.worker(fresh.id);
+    const changedEntrance=f.route(human,{action:"create",predecessor_task_id:source.id,title:"继续排查",role_id:f.role.id,part_key:"different-entrance"});
+    assert.equal(changedEntrance.taskId,fresh.id);assert.deepEqual(f.host.ledger.get(fresh.id),snapshot);assert.deepEqual(f.worker(fresh.id),invocation);
+  }
+  f.settleRouter(); await f.activate();
+  const envelope=f.requests.at(-1)!.input;
+  assert.equal(envelope.originalRequirement,human.payload); assert.equal(envelope.readOnlyRecheck.originalHumanRequirement,event.payload);
+  assert.deepEqual(envelope.taskContext.items,[]); assert.equal(envelope.predecessor,undefined);
+  assert.deepEqual(f.internal.recallContext(f.worker(fresh.id),{task_id:source.id},true).items,[]);
+  assert.ok(!JSON.stringify(envelope).includes(memoryContextUnavailable));
+  await f.read(fresh.id); await f.finish(fresh.id); f.settleWorker(fresh.id);
+  assert.equal(f.host.ledger.get(fresh.id).acceptanceState,"pass");
+  assert.deepEqual(f.host.ledger.get(source.id),before.goal); assert.deepEqual(f.worker(source.id),before.worker);
+  assert.deepEqual(f.store.list<any>("superOperations").filter(op=>op.goalId===source.id),before.operations);
+  assert.equal(f.host.ledger.unresolved(source.id),true);
+  assert.equal(f.internal.reportPresentation(before.goal,undefined,memoryContextUnavailable).body,memoryContextUnavailableNotice);
+});
+
+for (const entrance of ["followup","predecessor"]) for (const variant of ["scope", "plan", "expired", "active", "joint", "role"]) test(`invalid-memory ${entrance} recheck keeps ${variant} restrictions`, async t=>{
+  const f=await fixture(t),resource=f.store.catalog().resources.find(r=>r.projectId===f.project.id)!;
+  const event=await f.admit("检查主机。",variant==="scope"?undefined:{resourceIds:[resource.id],mentions:[],references:[]});
+  const result=f.route(event,{action:"create",title:"检查主机",role_id:f.role.id});f.settleRouter();await f.activate();
+  const worker=f.worker(result.taskId);worker.state=variant==="active"?"active":"parked";f.store.put("superWorkers",worker.id,worker);
+  const goal=f.host.ledger.get(result.taskId);goal.status="blocked";
+  if(variant==="plan")goal.executionMode="explicit_plan";
+  if(variant==="expired")goal.deadlineAt=new Date(Date.now()-1).toISOString();
+  if(variant==="joint")goal.sharedTaskId=goal.id;
+  f.host.ledger.save(goal);
+  (f.agents as any).memory={captureUser(){},captureTask(){},needsFreshContext:()=>true};
+  const human=await f.admit("继续");
+  const before=f.store.list("superGoals");
+  const input=entrance==="followup"?{action:"followup",task_id:goal.id}:{action:"create",predecessor_task_id:goal.id,title:"再次检查",role_id:f.role.id};
+  assert.throws(()=>f.route(human,{...input,...(variant==="role"?{role_id:"wrong-role"}:{})}));
+  assert.deepEqual(f.store.list("superGoals"),before);
+});
+
+test("an unfinished predecessor cannot expand resources, import old evidence or create joint recovery",async t=>{
+  const f=await fixture(t),resource=f.store.catalog().resources.find(r=>r.projectId===f.project.id)!;
+  const original=await f.admit("检查本机",{resourceIds:[resource.id],mentions:[],references:[]});
+  const first=f.route(original,{action:"create",title:"检查本机",role_id:f.role.id});f.settleRouter();await f.activate();
+  const worker=f.worker(first.taskId);worker.state="parked";f.store.put("superWorkers",worker.id,worker);
+  const goal=f.host.ledger.get(first.taskId);goal.status="blocked";f.host.ledger.save(goal);
+  const other={...resource,id:"outside-original-scope"};f.store.put("resources",other.id,other);
+  const otherRole={...f.role,id:"another-specialist",roleKey:"another"};f.store.put("superRoles",otherRole.id,otherRole);
+  const human=await f.admit("再次检查",{resourceIds:[other.id],mentions:[],references:[]});
+  const input={action:"create",predecessor_task_id:goal.id,title:"复查",role_id:f.role.id};
+  const before=f.store.list("superGoals");
+  assert.throws(()=>f.route(human,{...input,resource_ids:[other.id]}),/扩大范围/);
+  assert.throws(()=>f.route(human,{...input,evidence_task_ids:[goal.id]}),/不导入旧执行证据/);
+  const {role_id:_,...joint}=input;
+  assert.throws(()=>f.route(human,{...joint,role_ids:[f.role.id,otherRole.id]}),/共同验收/);
+  assert.deepEqual(f.store.list("superGoals"),before);assert.equal(f.store.list("superReferences").length,0);
+});
+
 test("completed fresh checks preserve old acceptance, carry target context and use new current receipts", async (t) => {
   const f = await fixture(t), original = await f.start();
   assert.equal(original.handoff.handoff.recorded, true);
@@ -94,7 +240,7 @@ test("completed fresh checks preserve old acceptance, carry target context and u
 test("predecessor is context, cannot reuse an old event, cross scope, waive current policy or reset unfinished limits", async (t) => {
   const f = await fixture(t), initial = await f.start(), source = f.host.ledger.get(initial.taskId);
   let event = await f.admit("再检查一次");
-  assert.throws(() => f.route(event, { action: "create", title: "检查", role_id: f.role.id, predecessor_task_id: source.id }), /accepted completed/);
+  assert.throws(() => f.route(event, { action: "create", title: "检查", role_id: f.role.id, predecessor_task_id: source.id }), (error:any)=>error.status===409);
   f.settleRouter(); await f.finish(); f.settleWorker();
   f.internal.batches.set(f.router, { eventIds: [initial.event.id], complete: new Set([initial.event.id]), input: "old input" });
   assert.throws(() => f.route(initial.event, { action: "create", title: "检查", role_id: f.role.id, predecessor_task_id: source.id }), /disposition/);
