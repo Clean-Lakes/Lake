@@ -19,7 +19,7 @@ import type { AgentHost, HostProfile, HostToolContext } from "./agent-host";
 import { LakeAgents } from "./agent";
 import { HttpError, id, LakeStore, now, type StoredSession } from "./store";
 import { canonical, digest, TaskLedger, terminal, text, type Goal, type Operation } from "./tasks";
-import { superRouterPrompt, superWorkerPrompt } from "./super-prompts";
+import { finalSummaryGuidance, superRouterPrompt, superWorkerPrompt } from "./super-prompts";
 import { buildRouterContext, projectRouterHistory, type RouterMessage } from "./router-context";
 import type {MessageInput} from './message-input';
 import { listProjectAssets } from "./assets";
@@ -1715,7 +1715,7 @@ export class LakeSuperagent implements AgentHost {
         objectSchema({ item_id: str, status: { type: "string", enum: ["running", "completed", "waiting_user", "blocked", "failed"] }, reason: str, evidence_ids: array(str) }, ["item_id", "status"]), run((a) => {
           const goal = this.ledger.update(worker.taskId, a, worker.generation, worker.policyHash); this.changed(worker.sessionId); return this.publicGoal(goal);
         })),
-      this.entry("work_finish", managed ? "Submit the business result. Use completed only when the user's requested deliverable is satisfied, partial for useful findings with remaining work or a blocker. Summary is the public reply. The host verifies actual current tool receipts; a report alone never proves success." : "Submit the final business report after every original plan item has accepted evidence. Use the existing plan tools for incomplete steps; summary does not create acceptance.", managed ? objectSchema({ summary: str, outcome: { type: "string", enum: ["completed", "partial"] } }, ["summary", "outcome"]) : objectSchema({ summary: str }, ["summary"]), run((a) => {
+      this.entry("work_finish", managed ? "Submit the business result. Use completed only when the user's requested deliverable is satisfied, partial for useful findings with remaining work or a blocker. Summary is the concise public conclusion; detailed observations remain in execution receipts. The host verifies actual current tool receipts; a report alone never proves success." : "Submit the final business report after every original plan item has accepted evidence. Use the existing plan tools for incomplete steps; summary does not create acceptance.", managed ? objectSchema({ summary: { ...str, description: finalSummaryGuidance }, outcome: { type: "string", enum: ["completed", "partial"] } }, ["summary", "outcome"]) : objectSchema({ summary: { ...str, description: finalSummaryGuidance } }, ["summary"]), run((a) => {
         const summary = this.agents.redact(text(a.summary, "summary", 32768));
         const current = this.store.require<Worker>("superWorkers", worker.id);
         const waiting = current.inputEventIds.filter((eventId) => !current.invocationInputIds?.includes(eventId) && !current.settledInputIds?.includes(eventId))
