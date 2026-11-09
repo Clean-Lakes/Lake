@@ -1,4 +1,4 @@
-.sidebar-utilities { position: relative; flex:0 0 auto; margin:0 13px 8px; z-index:4; pointer-events:none; }
+.sidebar-utilities { position: relative; flex:0 0 auto; margin:0 13px var(--workbench-bottom-inset); z-index:4; pointer-events:none; }
 .workspace-utilities-trigger { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 38px; padding: 9px 12px; border: 1px solid transparent; border-radius: var(--sidebar-row-radius,var(--radius-window)); color: var(--text-secondary); position:relative; isolation:isolate; background:transparent; pointer-events: auto; box-shadow:none; transition:background-color 120ms ease,color 120ms ease; text-align:left; font-size: var(--font-size-ui); }
 .workspace-utilities-trigger:is(:hover,:focus-visible,[aria-expanded="true"]) { background:var(--surface-hover); color:var(--foreground); }
 .workspace-utilities-trigger[aria-expanded="true"] { background:var(--surface-selected); }
