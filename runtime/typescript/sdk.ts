@@ -2,7 +2,7 @@
 export { builtInTools, AgentRuntime, ManualPermissionBroker, createToolRegistry,
   createExploreSubagentPort, InMemoryRuntimeTaskRegistry, createBuiltInGeneralPurposeAgentProfile,
   createBuiltInExploreAgentProfile, resolveProjectMemoryRoot,
-  type ExploreSubagentRuntimeRequest, type ToolEntry, type ToolExecutionContext } from '@zcode/core';
+  type ExploreSubagentRuntimeRequest, type ToolEntry, type ToolExecutionContext, type HookRunner } from '@zcode/core';
 export { InMemorySessionEventStore, modelDescriptorOf, getCurrentModelInvocationContext,
   type SessionStorePort, type Model, type SessionEvent as NativeSessionEvent, type SessionId, type ProjectId,
   type ExecutionPort, type ExecutionRequest, type ExecutionResult, type ExecutionRunOptions,

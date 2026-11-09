@@ -1197,6 +1197,21 @@ export class LakeSuperagent implements AgentHost {
     // A Pilot request has no business goal until its first non-routing tool.
     return !!worker.inline && this.store.session(worker.sessionId).options.conversationMode !== "plan";
   }
+  private requestFinalReport(worker: Worker) {
+    const current = this.store.get<Worker>("superWorkers", worker.id), goal = this.store.get<Goal>("superGoals", worker.taskId);
+    if (!goal || !current || current.generation !== worker.generation || current.state !== "active" ||
+        !this.ledger.isHostManaged(goal) || goal.status !== "running" ||
+        this.store.get<any>("agentPlans", worker.taskId)?.active || this.pendingInteraction(worker.sessionId)) return false;
+    const key = digest([goal.id, worker.generation]);
+    if (this.store.get("superDeliveries", key) || this.store.get("superDeferredFinishes", digest([worker.id, worker.generation]))) return false;
+    // A new human input belongs to its next invocation, not a summary of the old one.
+    if (current.inputEventIds.some(eventId => !current.invocationInputIds?.includes(eventId) && !current.settledInputIds?.includes(eventId) &&
+        ["pending", "routed"].includes(this.store.require<InputEvent>("superInputs", eventId).disposition))) return false;
+    if (!this.store.list<Operation>("superOperations").some(operation => operation.goalId === goal.id && operation.generation === worker.generation)) return false;
+    this.validateWorker(worker.id, worker.generation);
+    this.store.put("superReportRepairs", key, { taskId: goal.id, workerId: worker.id, generation: worker.generation, at: now() });
+    return true;
+  }
   private taskProfile(worker:Worker):HostProfile {
     const managed = this.hostManaged(worker);
     const entries = this.workerEntries(worker).filter((entry) => !managed || !["work_begin", "work_update"].includes(entry.metadata.name));
@@ -1213,6 +1228,7 @@ export class LakeSuperagent implements AgentHost {
       return !["WebFetch","WebSearch","call_mcp_tool","list_mcp_tools"].includes(name);
     };
     return { runtimeMode:this.store.get<any>("agentPlans",worker.taskId)?.active?"plan":"build",version: `${worker.id}:${worker.generation}:host-v3:${managed}`, systemPrompt: superWorkerPrompt,
+      requestFinalReport: () => this.requestFinalReport(worker),
       wrapHTTP:base=>this.httpPort(worker,base),
       wrapFilesystem:base=>this.filePort(worker,base),
       wrapExecution:this.execution?(base)=>this.execution!.runtime(base,worker.sessionId):undefined,
@@ -2095,6 +2111,10 @@ export class LakeSuperagent implements AgentHost {
     // Natural prose alone cannot turn an unaccepted task into a successful report.
     if (!error && goal.status !== "cancelled" && delivery?.outcome === "partial")
       return { body: delivery.summary, channelBody: delivery.summary };
+    if (!error && goal.status !== "cancelled" && !delivery && this.store.get("superReportRepairs", digest([goal.id, worker.generation]))) {
+      const body = `本轮尚未提交最终结论，任务仍未完成。${this.ledger.unresolved(goal.id) ? "有操作结果仍待核实。" : ""}${reply ? `\n\n${reply}` : ""}`;
+      return { body, channelBody: body };
+    }
     const body=reply ? `${notice}\n\n${reply}` : notice;
     return { body, channelBody: body };
   }
