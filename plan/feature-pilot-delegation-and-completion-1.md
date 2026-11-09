@@ -30,9 +30,9 @@ The 0.3.28 production diagnostic showed an inline Pilot SSH task and no speciali
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-001 | Update superRouterPrompt in runtime/typescript/super-prompts.ts and the bounded request context in router-context.ts to state default resource delegation, role reuse/creation and the explicit direct-work exception. | No | 2026-11-09 |
-| TASK-002 | Derive host-managed tools from the effective goal/mode in superagent.ts, omitting manual step tools for ordinary inline work while retaining explicit-plan controls. | No | 2026-11-09 |
-| TASK-003 | Extend TaskLedger.finishHost in tasks.ts to finalize already accepted current steps through original receipt verification without starting a new attempt or dispatching tools. | No | 2026-11-09 |
+| TASK-001 | Update superRouterPrompt in runtime/typescript/super-prompts.ts and the bounded request context in router-context.ts to state default resource delegation, role reuse/creation and the explicit direct-work exception. | Yes | 2026-11-09 |
+| TASK-002 | Derive host-managed tools from the effective goal/mode in superagent.ts, omitting manual step tools for ordinary inline work while retaining explicit-plan controls. | Yes | 2026-11-09 |
+| TASK-003 | Extend TaskLedger.finishHost in tasks.ts to finalize already accepted current steps through original receipt verification without starting a new attempt or dispatching tools. | Yes | 2026-11-09 |
 
 ### Implementation Phase 2
 
@@ -40,8 +40,8 @@ The 0.3.28 production diagnostic showed an inline Pilot SSH task and no speciali
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-004 | Add ledger regressions for accepted steps, stale generation/policy, tampered evidence and discovery-only results; add SDK routing/default-context and explicit direct-capability cases. Depends on TASK-001 through TASK-003. | No | 2026-11-09 |
-| TASK-005 | Run pinned TS typecheck, source/runtime suites and appropriate signed Lake Dev validation; record exact SHA and conditional skips without contacting production resources. Depends on TASK-004. | No | 2026-11-09 |
+| TASK-004 | Add ledger regressions for accepted steps, stale generation/policy, tampered evidence and discovery-only results; add SDK routing/default-context and explicit direct-capability cases. Depends on TASK-001 through TASK-003. | Yes | 2026-11-09 |
+| TASK-005 | Run pinned TS typecheck, source/runtime suites and appropriate signed Lake Dev validation; record exact SHA and conditional skips without contacting production resources. Depends on TASK-004. | Yes | 2026-11-09 |
 | TASK-006 | Update agent.md, docs/lake-pilot.md and validation notes; commit and open a topic PR to develop with actual verification and current limitations. Depends on TASK-005. | No | 2026-11-09 |
 
 ## 3. Alternatives
@@ -74,3 +74,5 @@ The 0.3.28 production diagnostic showed an inline Pilot SSH task and no speciali
 ## 8. Related Specifications / Further Reading
 
 [Architecture ownership](../agent.md), [task confirmation](../docs/security/task-confirmation.md), [Pilot contracts](../docs/lake-pilot.md), [contribution workflow](../CONTRIBUTING.md).
+
+Verification: [2026-11-09 validation](../docs/validation/typescript-candidate/pilot-delegation-2026-11-09.md), tested functional commit `83c77a3b4282c91bccc633d80b25ee68201b5f3e`. PR preparation remains until TASK-006 is recorded.
