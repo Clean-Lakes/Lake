@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-09
 last_updated: 2026-11-09
 owner: Lake maintainers
-status: 'In progress'
+status: 'Completed'
 tags: [pilot, routing, tasks, acceptance]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
 The 0.3.28 production diagnostic showed an inline Pilot SSH task and no specialist routing calls. Its SSH operation succeeded; manual work_update accepted the step, then work_finish incorrectly required a running step and left the goal paused. Fix default coordination and task closure while preserving shared Agent capability and all original execution authorities.
 
@@ -42,7 +42,7 @@ The 0.3.28 production diagnostic showed an inline Pilot SSH task and no speciali
 |------|-------------|-----------|------|
 | TASK-004 | Add ledger regressions for accepted steps, stale generation/policy, tampered evidence and discovery-only results; add SDK routing/default-context and explicit direct-capability cases. Depends on TASK-001 through TASK-003. | Yes | 2026-11-09 |
 | TASK-005 | Run pinned TS typecheck, source/runtime suites and appropriate signed Lake Dev validation; record exact SHA and conditional skips without contacting production resources. Depends on TASK-004. | Yes | 2026-11-09 |
-| TASK-006 | Update agent.md, docs/lake-pilot.md and validation notes; commit and open a topic PR to develop with actual verification and current limitations. Depends on TASK-005. | No | 2026-11-09 |
+| TASK-006 | Update agent.md, docs/lake-pilot.md and validation notes; commit and open a topic PR to develop with actual verification and current limitations. Depends on TASK-005. | Yes | 2026-11-09 |
 
 ## 3. Alternatives
 
@@ -75,4 +75,4 @@ The 0.3.28 production diagnostic showed an inline Pilot SSH task and no speciali
 
 [Architecture ownership](../agent.md), [task confirmation](../docs/security/task-confirmation.md), [Pilot contracts](../docs/lake-pilot.md), [contribution workflow](../CONTRIBUTING.md).
 
-Verification: [2026-11-09 validation](../docs/validation/typescript-candidate/pilot-delegation-2026-11-09.md), tested functional commit `83c77a3b4282c91bccc633d80b25ee68201b5f3e`. PR preparation remains until TASK-006 is recorded.
+Verification: [2026-11-09 validation](../docs/validation/typescript-candidate/pilot-delegation-2026-11-09.md), tested functional commit `83c77a3b4282c91bccc633d80b25ee68201b5f3e`. [PR #206](https://github.com/Clean-Lakes/Lake/pull/206) targets develop and remains open for review; no merge or production publication was performed.
