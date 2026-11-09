@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-09
 last_updated: 2026-11-09
 owner: Lake maintainers
-status: 'In progress'
+status: 'Completed'
 tags: [memory, recovery, tasks, reporting]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 The reported old reboot task failed before any new tool call because its prior memory dependency became unavailable. A generic unresolved-operation notice hid that error. Preserve the old context and execution ledger; a newly admitted human followup can instead receive an independent, tightly scoped read-only recheck by the same specialist in a fresh SDK Session.
 
@@ -30,10 +30,10 @@ The reported old reboot task failed before any new tool call because its prior m
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-001 | Expose a read-only LakeMemory continuation-needs-fresh-context predicate in runtime/typescript/memory.ts; keep validateContinuation and old read provenance intact. | No | 2026-11-09 |
-| TASK-002 | In superagent.ts route(followup), create an idempotent independent read-only Worker for eligible invalid-memory contexts; copy only original human requirement, exact target IDs and deadline. Omit task-context recall in the recheck and explain its relation in the trusted assignment. Depends on TASK-001. | No | 2026-11-09 |
-| TASK-003 | Add canonical readOnlyRecoveryOf metadata to Goal and enforce it before TaskLedger.operation dispatch; reject opaque/write operations regardless of normal permission switches. Depends on TASK-002. | No | 2026-11-09 |
-| TASK-004 | Prioritize actual memory-context failure in new reportPresentation and project exact old generic notices only with matching report ID, worker, root turn and host error card. Original stored messages stay immutable. | No | 2026-11-09 |
+| TASK-001 | Expose a read-only LakeMemory continuation-needs-fresh-context predicate in runtime/typescript/memory.ts; keep validateContinuation and old read provenance intact. | Yes | 2026-11-09 |
+| TASK-002 | In superagent.ts route(followup), create an idempotent independent read-only Worker for eligible invalid-memory contexts; copy only original human requirement, exact target IDs and deadline. Omit task-context recall in the recheck and explain its relation in the trusted assignment. Depends on TASK-001. | Yes | 2026-11-09 |
+| TASK-003 | Add canonical readOnlyRecoveryOf metadata to Goal and enforce it before TaskLedger.operation dispatch; reject opaque/write operations regardless of normal permission switches. Depends on TASK-002. | Yes | 2026-11-09 |
+| TASK-004 | Prioritize actual memory-context failure in new reportPresentation and project exact old generic notices only with matching report ID, worker, root turn and host error card. Original stored messages stay immutable. | Yes | 2026-11-09 |
 
 ### Implementation Phase 2
 
@@ -41,8 +41,8 @@ The reported old reboot task failed before any new tool call because its prior m
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-005 | Add lifecycle, ledger and real SDK regressions with a used memory source invalidated before a fresh human followup, including an original unknown operation. Assert fresh Session, same role, bounded scope/deadline, no stale knowledge in provider requests, read success, mutation rejection and unchanged source records. Depends on TASK-001 through TASK-004. | No | 2026-11-09 |
-| TASK-006 | Run pinned TS/runtime regressions, boundary check and signed Lake Dev validation using isolated QA data; update design/validation notes and PR #206 with exact tested SHA and remaining limitations. Depends on TASK-005. | No | 2026-11-09 |
+| TASK-005 | Add lifecycle, ledger and real SDK regressions with a used memory source invalidated before a fresh human followup, including an original unknown operation. Assert fresh Session, same role, bounded scope/deadline, no stale knowledge in provider requests, read success, mutation rejection and unchanged source records. Depends on TASK-001 through TASK-004. | Yes | 2026-11-09 |
+| TASK-006 | Run pinned TS/runtime regressions, boundary check and signed Lake Dev validation using isolated QA data; update design/validation notes and PR #206 with exact tested SHA and remaining limitations. Depends on TASK-005. | Yes | 2026-11-09 |
 
 ## 3. Alternatives
 
@@ -56,7 +56,7 @@ The reported old reboot task failed before any new tool call because its prior m
 
 ## 5. Files
 
-- **FILE-001**: runtime/typescript/memory.ts, superagent.ts, tasks.ts and their tests.
+- **FILE-001**: runtime/typescript/memory.ts, memory-errors.ts, superagent.ts, tasks.ts and their tests.
 - **FILE-002**: runtime/typescript/task-cancellation.ts or a dedicated report projection module plus tests.
 - **FILE-003**: agent.md, docs/design/typescript-layered-memory.md and docs/validation/typescript-candidate/memory-invalid-recheck-2026-11-09.md.
 
@@ -75,3 +75,5 @@ The reported old reboot task failed before any new tool call because its prior m
 ## 8. Related Specifications / Further Reading
 
 [Architecture](../agent.md), [Memory](../docs/design/typescript-layered-memory.md), [Security](../docs/security/task-confirmation.md), [previous SSH fix](refactor-ssh-readonly-recovery-1.md).
+
+Verified implementation: `7873b3b7b7160a2494d3210343859de3b837aba3`. Evidence: [validation](../docs/validation/typescript-candidate/memory-invalid-recheck-2026-11-09.md).
