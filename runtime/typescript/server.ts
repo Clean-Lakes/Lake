@@ -1,3 +1,4 @@
+import { permissionDefaults } from "../../web-agent/shared/execution-preferences";
 import {acknowledgeConversation} from "./conversation-reads";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -676,14 +677,19 @@ export async function startLakeServer(options: ServerOptions) {
               result = superagent.routingView(sessionId,agents.executionView(sessionId, store.viewPage(sessionId, url.searchParams.has("before") ? Number(url.searchParams.get("before")) : undefined)));
               break;
             case "options":
-              result = { ...session.options, agentRuntime: "typescript" };
+              result = { ...session.options, ...superagent.inheritedExecutionPreferences(sessionId), agentRuntime: "typescript" };
               break;
             case "configure":
+              if (superagent.inheritedExecutionPreferences(sessionId) && Object.keys(data).some(key => Object.hasOwn(permissionDefaults, key)))
+                throw new HttpError(409, "专员统一使用 Pilot 的执行偏好，请在 Pilot 中修改权限");
+              for (const [key, value] of Object.entries(data))
+                if (Object.hasOwn(permissionDefaults, key) && typeof value !== 'boolean')
+                  throw new HttpError(400, "执行偏好必须是开启或关闭");
               if (agents.isRunning(sessionId))
                 throw new HttpError(409, "请先停止当前任务再修改配置");
               session.options = { ...session.options, ...data, agentRuntime: "typescript" };
               store.put("sessions", sessionId, session);
-              result = { ...session.options, agentRuntime: "typescript" };
+              result = { ...session.options, ...superagent.inheritedExecutionPreferences(sessionId), agentRuntime: "typescript" };
               break;
             case "abort":
               messageQueue!.pause(sessionId);

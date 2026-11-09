@@ -89,6 +89,7 @@ export class LakeSecurity {
     const policy=legacy.data;
     if(!policy||policy.SchemaVersion!==1||!policy.Confirmed||policy.ProjectID!==projectId||!['legacy','restricted','compatible'].includes(policy.Mode)||!Number.isSafeInteger(policy.Revision)||policy.Revision<1||!Array.isArray(policy.Rules)||!policy.ResourceIDs?.includes(resourceId))throw new HttpError(403,'原项目策略不允许此命令资源');
     const path=join(this.store.home,'security/control.json');if(existsSync(path)){const control=JSON.parse(readFileSync(path,'utf8'));if(policy.StoreID!==control.storeID||policy.RecoveryEpoch!==control.recoveryEpoch)throw new HttpError(409,'原项目安全身份已失效');}
+    if(resource.kind==='local'&&policy.DenyLocal)throw new HttpError(403,'原项目策略禁止本机命令执行');
     let decision:'allow'|'ask'='allow';
     for(const capability of ['resource.resolve',...(resource.kind==='local'?['local.execute']:[]),provenReadOnly?'command.diagnostics':'terminal.execute']){
       const rules=policy.Rules.filter((rule:any)=>rule.Capability===capability&&(!rule.ResourceIDs?.length||rule.ResourceIDs.includes(resourceId)));
