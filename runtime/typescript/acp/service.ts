@@ -15,39 +15,56 @@ import type { ExternalActor,ExternalAgentProfile,ExternalEvent,ExternalResult,Ex
 function ownLauncher(flag:string,args:string[]=[]){return {executable:process.execPath,args:isSea()?[flag,...args]:[__filename,flag,...args]};}
 export class LakeExternalAgents {
   readonly registry:ExternalAgentRegistry;
+  private probes=new Map<string,{controller:AbortController;work:Promise<unknown>}>();
   private live=new Map<string,{process?:AcpProcess;controller:AbortController;scopeHash:string}>();
-  constructor(readonly store:LakeStore,readonly redact:(text:string,live?:boolean)=>string,readonly registerSecret:(value:string)=>void){
-    this.registry=new ExternalAgentRegistry(store);
+  constructor(readonly store:LakeStore,readonly redact:(text:string,live?:boolean)=>string,readonly registerSecret:(value:string)=>void,codexHome?:string){
+    this.registry=new ExternalAgentRegistry(store,{codexHome,registerSecret});
     for(const run of store.list<ExternalRun>('acpRuns'))if(run.schemaVersion===1&&['starting','running'].includes(run.state)){
       run.state=run.dispatchPhase==='not_sent'?'interrupted':'unknown';run.updatedAt=now();store.put('acpRuns',run.id,run);
     }
   }
-  private async launch(profile:ExternalAgentProfile,directory:string):Promise<AcpLaunch>{
-    const env:NodeJS.ProcessEnv={PATH:process.env.PATH,LANG:process.env.LANG??'en_US.UTF-8',TMPDIR:directory,LAKE_TS_IMPORT_ONLY:'0'};
+  private async launch(profile:ExternalAgentProfile,directory:string,signal:AbortSignal,mcp?:{command:string;args:string[]}):Promise<AcpLaunch>{
     if(process.platform!=='darwin')throw new HttpError(409,'当前平台的 Codex 工具隔离尚未验证');
     if(!profile.nodePath)throw new HttpError(409,'请先配置 Codex ACP 使用的 Node 运行时');
     const manifest=JSON.parse(await readFile(join(dirname(this.registry.adapterEntry()),'../package.json'),'utf8'));
     if(manifest.version!=='2.2.2')throw new HttpError(409,'Codex ACP 适配器版本不匹配，请重新安装固定版本');
     const engine=JSON.parse(await readFile(join(this.registry.adapterRoot(),'node_modules/@openai/codex/package.json'),'utf8'));
     if(engine.version!=='0.160.1')throw new HttpError(409,'Codex 引擎版本不匹配，请重新安装固定版本');
-    const home=await this.registry.prepareHome(profile);
-    const key=await this.store.secret('external-agent-'+profile.projectId+'-codex');if(key)this.registerSecret(key);
     await this.registry.validateNode(profile.nodePath);
-    return {executable:profile.nodePath,args:[this.registry.adapterEntry()],cwd:directory,env:{...env,HOME:home,CODEX_HOME:home,
-      INITIAL_AGENT_MODE:'read-only',CODEX_CONFIG:JSON.stringify(codexConfig(home,profile.model))}};
+    const prepared=await this.registry.prepareLaunch(profile,signal);
+    return {executable:profile.nodePath,args:[this.registry.adapterEntry()],cwd:directory,observed:prepared.observed,
+      env:{...prepared.environment,TMPDIR:directory,CODEX_PATH:prepared.launcher,
+        INITIAL_AGENT_MODE:'read-only',CODEX_CONFIG:JSON.stringify({...codexConfig(prepared.home),mcp_servers:{...prepared.disabledMcp,...(mcp?{lake:mcp}:{})}})}};
   }
   async probe(projectId:string,agent:unknown,signal:AbortSignal){
     const profile=this.registry.get(projectId,agent),directory=await privatePath(this.store.data,'external-agents','probe',projectId,profile.id);
     let transport:AcpProcess|undefined;
     try{
-      transport=new AcpProcess(await this.launch(profile,directory),{request:async()=>{throw new Error('连接测试不执行工具或模型');},update:()=>{}});
+      const launch=await this.launch(profile,directory,signal);
+      if(!launch.observed)throw new Error('未能确认本机 Codex 配置与登录状态');
+      transport=new AcpProcess(launch,{request:async()=>{throw new Error('连接测试不执行工具或模型');},update:()=>{}});
       const result=await transport.request('initialize',{protocolVersion:1,clientCapabilities:{},clientInfo:{name:'lake',version:'1'}},signal);
       if(result.protocolVersion!==1)throw new Error('外部 Agent 未协商稳定 ACP v1');
+      if(this.registry.get(projectId,profile.id).revision!==profile.revision)throw new Error('本机 Codex 配置或账号已变化，请重新连接');
       const capabilities={agentInfo:result.agentInfo,agentCapabilities:result.agentCapabilities};
-      this.store.put('acpProbes',projectId+':'+profile.id,{revision:profile.revision,ready:true,credentialConfigured:!!await this.store.secret('external-agent-'+projectId+'-codex'),capabilities,message:'ACP 连接已就绪；任务执行时另行检查模型认证与当前任务权限'});
+      const message=launch.observed.authenticated?'已连接本机 Codex，复用已有登录与配置':'本机 Codex 尚未登录，请先在 Codex 中完成登录后重新连接';
+      this.store.put('acpProbes',projectId+':'+profile.id,{revision:profile.revision,authentication:'codex-local',ready:true,...launch.observed,capabilities,message});
       return {ok:true,capabilities};
-    }catch(error){const message=this.redact(error instanceof Error?error.message:'ACP 连接失败');this.store.put('acpProbes',projectId+':'+profile.id,{revision:profile.revision,ready:false,message});throw new HttpError(409,message);}
+    }catch(error){const message=this.redact(error instanceof Error?error.message:'ACP 连接失败');this.store.put('acpProbes',projectId+':'+profile.id,{revision:profile.revision,authentication:'codex-local',ready:false,message});throw new HttpError(409,message);}
     finally{await transport?.close();}
+  }
+  async status(projectId:string){
+    const agents=await this.registry.list(projectId);
+    await Promise.all(agents.map(async agent=>{
+      const probe=this.registry.probe(projectId,agent.id);
+      if(!agent.enabled||!agent.installed||probe?.revision===agent.revision&&probe.authentication==='codex-local')return;
+      const key=projectId+':'+agent.id;
+      const previous=this.probes.get(key);if(previous){await previous.work;return;}
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(new Error('读取本机 Codex 配置超时')),90000);
+      const work=this.probe(projectId,agent.id,controller.signal).catch(()=>{}).finally(()=>{clearTimeout(timer);this.probes.delete(key);});
+      this.probes.set(key,{controller,work});await work;
+    }));
+    return this.registry.list(projectId);
   }
   async prepare(projectId:string,agent:unknown,input:Record<string,unknown>,signal:AbortSignal){
     if(input.enabled===true&&process.platform!=='darwin')throw new HttpError(409,'当前平台的 Codex 执行尚未开放');
@@ -103,7 +120,9 @@ export class LakeExternalAgents {
     try{
       const directory=await privatePath(this.store.data,'external-agents','runs',run.contextId);
       if(agentId==='codex')bridge=await openToolBridge(tools.map(tool=>({name:tool.metadata.name,description:tool.metadata.description??tool.metadata.name,inputSchema:tool.inputSchema as Record<string,unknown>})),invoke);
-      const transport=new AcpProcess(await this.launch(profile,directory),{
+      const launcher=ownLauncher('--internal-acp-mcp');
+      const mcp=bridge?{command:'/usr/bin/env',args:['-i','PATH='+process.env.PATH,'HOME='+directory,'TMPDIR='+directory,'LANG='+(process.env.LANG??'en_US.UTF-8'),'LAKE_TS_IMPORT_ONLY=0',launcher.executable,...launcher.args,bridge.socket]}:undefined;
+      const transport=new AcpProcess(await this.launch(profile,directory,controller.signal,mcp),{
         request:async(method,params,callId)=>{
           guard();
           if(method==='session/request_permission'){
@@ -128,7 +147,10 @@ export class LakeExternalAgents {
       const cancel=()=>{void transport.cancel(run.externalSessionId).finally(()=>transport.close());};controller.signal.addEventListener('abort',cancel,{once:true});
       const hello=await transport.request('initialize',{protocolVersion:1,clientCapabilities:{},clientInfo:{name:'lake',version:'1'}},controller.signal,Math.min(120000,deadline));
       if(hello.protocolVersion!==1)throw new Error('外部 Agent 的 ACP 版本不兼容');
-      const mcpServers=bridge?[{name:'lake',command:ownLauncher('--internal-acp-mcp').executable,args:[...ownLauncher('--internal-acp-mcp').args,bridge.socket],env:[]}]:[];
+      // The adapter replaces startup MCP overrides when ACP supplies servers.
+      // Configure our complete managed table per thread instead, so inherited
+      // disabled entries cannot be restored by session/new or session/load.
+      const mcpServers:unknown[]=[];
       if(prior){if(!hello.agentCapabilities?.loadSession)throw new HttpError(409,'该 Agent 没有声明会话载入能力');run.externalSessionId=prior.externalSessionId;
         await transport.request('session/load',{sessionId:prior.externalSessionId,cwd:directory,mcpServers},controller.signal);
       }else{const session=await transport.request('session/new',{cwd:directory,mcpServers},controller.signal);run.externalSessionId=session.sessionId;}
@@ -148,5 +170,5 @@ export class LakeExternalAgents {
   }
   active(sessionId:string){return [...this.live.keys()].some(id=>this.store.get<ExternalRun>('acpRuns',id)?.sessionId===sessionId);}
   async steer(_sessionId:string,_input:string,_inputId:string,_agentRunId?:string){return {kind:'rejected'};}
-  async close(){await Promise.allSettled([...this.live.values()].map(async live=>{live.controller.abort();await live.process?.close();}));}
+  async close(){for(const probe of this.probes.values())probe.controller.abort();await Promise.allSettled([...this.probes.values()].map(probe=>probe.work));await Promise.allSettled([...this.live.values()].map(async live=>{live.controller.abort();await live.process?.close();}));}
 }

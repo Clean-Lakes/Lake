@@ -27,7 +27,7 @@ async function handle(message){
   let result;
   if(message.method==='initialize')result={protocolVersion:1,agentInfo:{name:'codex-protocol-fixture',version:'1'},agentCapabilities:{loadSession:true}};
   else if(['session/new','session/load'].includes(message.method)){
-   sessionId=message.params.sessionId??randomUUID();socket=message.params.mcpServers[0].args.at(-1);result=message.method==='session/new'?{sessionId}:{};
+   sessionId=message.params.sessionId??randomUUID();socket=process.env.LAKE_TEST_ACP_SOCKET??message.params.mcpServers[0]?.args.at(-1);result=message.method==='session/new'?{sessionId}:{};
   }else if(message.method==='session/prompt'){
    const tools=await bridge('/tools'),worker=tools.some(tool=>tool.name==='work_finish');let report;
    if(!worker){

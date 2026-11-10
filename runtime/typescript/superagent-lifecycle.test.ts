@@ -74,13 +74,13 @@ test("only current unfinished business work requests a final report, without cha
   assert.equal(f.host.ledger.get(taskId).acceptanceState, "pass");
 });
 
-test('Pilot delegation reports a missing Codex key after a successful connection without creating a task',async t=>{
+test('Pilot delegation reports a missing local Codex login after a successful connection without creating a task',async t=>{
   const f=await fixture(t);
   (f.agents as any).external={registry:{get:()=>({id:'codex',projectId:f.project.id,revision:1,enabled:true})}};
   f.store.put('superRoles',f.role.id,{...f.role,execution:{kind:'acp',agent:'codex'}});
-  f.store.put('acpProbes',f.project.id+':codex',{revision:1,ready:true,credentialConfigured:false});
+  f.store.put('acpProbes',f.project.id+':codex',{revision:1,ready:true,authentication:'codex-local',authenticated:false});
   const event=await f.admit('检查当前服务器状态');
-  assert.throws(()=>f.route(event,{action:'create',role_id:f.role.id,title:'检查服务器'}),/尚未配置 Codex 独立 API Key/);
+  assert.throws(()=>f.route(event,{action:'create',role_id:f.role.id,title:'检查服务器'}),/本机 Codex 尚未登录/);
   assert.equal(f.store.list('superWorkers').length,0);
   assert.equal(f.store.list('superGoals').length,0);
 });

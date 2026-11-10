@@ -3,14 +3,15 @@ import type { ToolEntry } from '../sdk';
 import type {ExternalAgentId,StoredExternalAgentId} from '../../../web-agent/shared/external-agents';
 export type {ExternalAgentId,AgentBackendRef} from '../../../web-agent/shared/external-agents';
 export type ExternalAgentProfile = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   id: ExternalAgentId; projectId: string; revision: number; enabled: boolean;
-  nodePath?: string; npmPath?:string; model?: string; updatedAt: string;
+  nodePath?: string; npmPath?:string; authentication:'codex-local';sourceFingerprint:string;updatedAt: string;
 };
 export type ExternalAgentStatus = ExternalAgentProfile & {
   name: string; installed: boolean; transportReady: boolean; message?: string;
   assignmentReady?:boolean;assignmentBlocker?:string;
   capabilities?: Record<string, unknown>;
+  model?:string;modelProvider?:string;reasoningEffort?:string;configPath?:string;authMode?:'chatgpt'|'api_key'|'provider'|'none';
 };
 export type ExternalRunState = 'starting' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted' | 'unknown';
 export type ExternalRun = {

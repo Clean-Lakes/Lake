@@ -4,7 +4,7 @@ export type StoredExternalAgentId = ExternalAgentId | 'runtime-acp';
 export const externalAgentNames:Record<ExternalAgentId,string>={codex:'Codex'};
 export function externalAgentName(agent:StoredExternalAgentId){return agent==='codex'?'Codex':'已移除的 Agent';}
 export type AgentBackendRef = {kind:'native'} | {kind:'acp';agent:StoredExternalAgentId;revision?:number};
-export type ExternalAgentStatus = {id:ExternalAgentId;projectId:string;revision:number;enabled:boolean;name:string;installed:boolean;transportReady:boolean;assignmentReady?:boolean;assignmentBlocker?:string;nodePath?:string;npmPath?:string;model?:string;message?:string;updatedAt:string};
+export type ExternalAgentStatus = {id:ExternalAgentId;projectId:string;revision:number;enabled:boolean;name:string;installed:boolean;transportReady:boolean;assignmentReady?:boolean;assignmentBlocker?:string;nodePath?:string;npmPath?:string;model?:string;modelProvider?:string;reasoningEffort?:string;configPath?:string;authMode?:'chatgpt'|'api_key'|'provider'|'none';message?:string;updatedAt:string};
 
 /** Operator input for a new task in one exact specialist channel. Never a tool permission. */
 export type SpecialistAgentAssignment = {requestId:string;roleRevision:number;execution:AgentBackendRef};

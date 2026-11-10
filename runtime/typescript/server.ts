@@ -53,7 +53,7 @@ export { LakeMemory } from "./memory";
 export {sessionArchiveName, legacySessionArchiveName} from "./session-archive";
 
 declare const __LAKE_VERSION__:string;
-export type ServerOptions = { home: string; data: string; port: number; staticRoot: string; development?: boolean; production?:boolean; importLegacy?: boolean; importOnly?:boolean };
+export type ServerOptions = { codexHome?:string; home: string; data: string; port: number; staticRoot: string; development?: boolean; production?:boolean; importLegacy?: boolean; importOnly?:boolean };
 const encode = (value: unknown) => JSON.stringify(value);
 const equal = (left: string, right: string) => {
   const a = Buffer.from(left),
@@ -502,11 +502,11 @@ export async function startLakeServer(options: ServerOptions) {
       } else if (path[1] === 'projects' && path[3] === 'external-agents') {
         store.project(path[2]);
         const registry=agents.external.registry;
-        if(path.length===4&&method==='GET')result={agents:await registry.list(path[2])};
+        if(path.length===4&&method==='GET')result={agents:await agents.external.status(path[2])};
         else if(path.length===5&&method==='PUT')result=await registry.save(path[2],path[4],data);
         else if(path.length===6&&method==='POST'&&['probe','install','prepare'].includes(path[5])){
           const cancel=new AbortController(),abort=()=>cancel.abort();response.on('close',abort);
-          const timeout=setTimeout(abort,path[5]==='probe'?30000:300000);
+          const timeout=setTimeout(abort,path[5]==='probe'?90000:300000);
           try{result=path[5]==='prepare'?await agents.external.prepare(path[2],path[4],data,cancel.signal):path[5]==='probe'?await agents.external.probe(path[2],path[4],cancel.signal):await registry.install(path[2],path[4],data.npmPath,cancel.signal);}
           finally{clearTimeout(timeout);response.off('close',abort);}
         }else throw new HttpError(405,'不支持此外部 Agent 请求');
@@ -828,7 +828,7 @@ export async function startLakeServer(options: ServerOptions) {
   try {
     store = await LakeStore.open(options.home, options.data);
     if (options.development||options.production) await importLegacyModelSettings(store);
-    agents = await LakeAgents.open(store, broadcast);
+    agents = await LakeAgents.open(store, broadcast,options.codexHome);
     store.magpie = await LakeMagpie.connect(store, key => agents!.registerSecret(key));
     security = new LakeSecurity(store);
     extensions = new LakeExtensions(store, security, (value) => agents!.redact(value));

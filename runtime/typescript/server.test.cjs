@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { mkdtemp, writeFile, readFile, access } = require("node:fs/promises");
+const { mkdtemp, mkdir, writeFile, readFile, access } = require("node:fs/promises");
 const { tmpdir } = require("node:os");
 const { join } = require("node:path");
 const { createServer } = require("node:http");
@@ -122,7 +122,10 @@ async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = 
     res.end("data: [DONE]\n\n");
   });
   await new Promise((resolve) => provider.listen(0, "127.0.0.1", resolve));
-  const options = { home, data: join(home, "data"), port: 0, staticRoot: web, development: legacyDev };
+  const codexHome=join(home,'local-codex');await mkdir(codexHome,{recursive:true});
+  await writeFile(join(codexHome,'config.toml'),'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "max"\n');
+  await writeFile(join(codexHome,'auth.json'),JSON.stringify({auth_mode:'chatgpt',tokens:{account_id:'fixture-account',access_token:'synthetic-local-codex-token'}}));
+  const options = { home, codexHome, data: join(home, "data"), port: 0, staticRoot: web, development: legacyDev };
   if (legacyDev) {
     const fs = require("node:fs/promises");
     await fs.mkdir(options.data, { mode: 0o700 });
@@ -1240,12 +1243,16 @@ async function prepareCodexProtocolFixture(app,mode){
  await fs.writeFile(registry.adapterEntry(),'// owned protocol fixture; launch is overridden below');
  await fs.mkdir(join(root,'node_modules/@openai/codex'),{recursive:true});
  await fs.writeFile(join(root,'node_modules/@openai/codex/package.json'),JSON.stringify({version:'0.160.1'}));
- app.agents.external.launch=async(_profile,directory)=>({executable:process.execPath,args:[join(__dirname,'test-fixtures/codex-acp.cjs')],cwd:directory,env:{LAKE_TEST_ACP_SCENARIO:mode}});
+ app.agents.external.launch=async(_profile,directory,_signal,mcp)=>{
+  const source=registry.local.current(),auth=JSON.parse(await fs.readFile(join(source.home,'auth.json'),'utf8'));
+  return {executable:process.execPath,args:[join(__dirname,'test-fixtures/codex-acp.cjs')],cwd:directory,env:{LAKE_TEST_ACP_SCENARIO:mode,LAKE_TEST_ACP_SOCKET:mcp?.args.at(-1)},
+    observed:{model:'gpt-6.1-sol',modelProvider:'openai',reasoningEffort:'max',authenticated:!!auth.tokens?.access_token,authMode:auth.tokens?.access_token?'chatgpt':'none'}};
+ };
 }
 
 async function startSubagentTask(t, mode, memory = false, legacyMaxSteps = 24, permissions = {}) {
   const f = await fixture(t, mode);
-  if(mode.includes('acp')){await f.enableCodexFixture();await f.api(`/api/projects/${f.project.id}/external-agents/codex`,'PUT',{enabled:true,expectedRevision:0,apiKey:'synthetic-codex-fixture-key'});await f.api(`/api/projects/${f.project.id}/external-agents/codex/probe`,'POST',{});}
+  if(mode.includes('acp')){await f.enableCodexFixture();await f.api(`/api/projects/${f.project.id}/external-agents/codex`,'PUT',{enabled:true,expectedRevision:0});await f.api(`/api/projects/${f.project.id}/external-agents/codex/probe`,'POST',{});}
   const project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
   await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`, "POST", { maxSteps: legacyMaxSteps, ...permissions });
   if (memory) {
@@ -3815,23 +3822,24 @@ for(const entrance of ['child','segment'])test(`Codex ACP ${entrance} returns re
  const calls=f.calls;await f.restart();await new Promise(resolve=>setTimeout(resolve,50));assert.equal(f.calls,calls,'restart does not replay ACP work');
 });
 
-test('Codex settings use revisions, auto-discovered paths, isolated credentials and a model-free probe',async t=>{
+test('Codex settings reuse local login without storing credentials and probe without inference',async t=>{
  const f=await fixture(t),path=`/api/projects/${f.project.id}/external-agents`;
  const initial=await f.api(path);assert.deepEqual(initial.agents.map(agent=>agent.id),['codex']);assert.equal(initial.agents[0].enabled,false);
  await f.enableCodexFixture();
- await f.api(path+'/codex','PUT',{expectedRevision:0,enabled:true,apiKey:'synthetic-independent-codex-key'});
+ await f.api(path+'/codex','PUT',{expectedRevision:0,enabled:true});
  await f.api(path+'/codex','PUT',{expectedRevision:0,enabled:false},409);
  const profile=f.app.agents.external.registry.get(f.project.id,'codex');assert.ok(profile.nodePath);assert.ok(profile.npmPath);
  const result=await f.api(path+'/codex/probe','POST',{});assert.equal(result.ok,true);assert.equal(f.calls,0);
  assert.equal((await f.api(path)).agents[0].assignmentReady,true);
- assert.ok(!JSON.stringify(await f.api(path)).includes('synthetic-independent-codex-key'));
- assert.ok(!JSON.stringify(f.app.store.list('acpProfiles')).includes('synthetic-independent-codex-key'));
+ const status=(await f.api(path)).agents[0];assert.equal(status.authMode,'chatgpt');assert.equal(status.reasoningEffort,'max');
+ assert.ok(!JSON.stringify(status).includes('synthetic-local-codex-token'));
+ assert.ok(!JSON.stringify(f.app.store.list('acpProfiles')).includes('synthetic-local-codex-token'));
+ await f.api(path+'/codex','PUT',{expectedRevision:1,enabled:true,apiKey:'rejected-synthetic-key'},400);
  const home=await f.app.agents.external.registry.prepareHome(profile);
  assert.ok(home.startsWith(f.app.store.home+'/external-agents/'));
- assert.equal(JSON.parse(await readFile(join(home,'auth.json'),'utf8')).OPENAI_API_KEY,'synthetic-independent-codex-key');
- await f.api(path+'/codex','PUT',{expectedRevision:1,enabled:false,apiKey:''});
- await f.app.agents.external.registry.prepareHome(f.app.agents.external.registry.get(f.project.id,'codex'));
- await assert.rejects(access(join(home,'auth.json')));
+ await assert.rejects(access(join(home,'auth.json')));await assert.rejects(access(join(home,'config.toml')));
+ await f.api(path+'/codex','PUT',{expectedRevision:1,enabled:false});
+ assert.equal(JSON.parse(await readFile(join(f.options.codexHome,'auth.json'),'utf8')).tokens.access_token,'synthetic-local-codex-token');
 });
 
 test('enabling Codex prepares its runtime, installs only when missing and probes without inference',{skip:process.platform!=='darwin'},async t=>{
@@ -3843,7 +3851,7 @@ test('enabling Codex prepares its runtime, installs only when missing and probes
    assert.ok(profile.nodePath);assert.equal(npmPath,profile.npmPath);
    await f.enableCodexFixture();
  };
- const prepared=await f.api(path,'POST',{expectedRevision:0,enabled:true,apiKey:'synthetic-prepare-codex-key'});
+ const prepared=await f.api(path,'POST',{expectedRevision:0,enabled:true});
  assert.equal(prepared.agents[0].assignmentReady,true);assert.equal(installations,1);assert.equal(f.calls,0);
  assert.ok(!JSON.stringify(prepared).includes('synthetic-prepare-codex-key'));
  const again=await f.api(path,'POST',{expectedRevision:1,enabled:true});
@@ -3869,7 +3877,7 @@ async function specialistAssignmentFixture(t,permissions={}){
 test('explicit specialist assignment dispatches the chosen ACP Worker without a routing model and collects its real report',{timeout:30000},async t=>{
  const {f,path,channel,body}=await specialistAssignmentFixture(t);
  await f.enableCodexFixture();
- await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0,apiKey:'synthetic-codex-fixture-key'});
+ await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0});
  await f.api(path+'/external-agents/codex/probe','POST',{});
  const receipt=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
  assert.ok(receipt.assignment?.workerId);assert.equal(receipt.pilotSessionId,channel.sessionId);
@@ -3903,11 +3911,12 @@ test('explicit assignment rejects missing setup, stale revisions and wrong entra
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',body,409);
  await f.api(messages,'POST',{...body,assignment:{...body.assignment,roleRevision:1}},409);
  await f.api(messages,'POST',{...body,assignment:{...body.assignment,execution:{kind:'acp',agent:'codex'}}},400);
- await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0,apiKey:'synthetic-codex-fixture-key'});
+ await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0});
+ const launch=f.app.agents.external.launch;f.app.agents.external.launch=async()=>{throw Error('协议夹具连接不可用');};
  const untested=(await f.api(path+'/external-agents')).agents.find(agent=>agent.id==='codex');
- assert.equal(untested.assignmentReady,false);assert.match(untested.assignmentBlocker,/测试连接/);
+ assert.equal(untested.assignmentReady,false);assert.match(untested.assignmentBlocker,/连接不可用/);
  await f.api(messages,'POST',body,409);
- await f.api(path+'/external-agents/codex/probe','POST',{});
+ f.app.agents.external.launch=launch;await f.api(path+'/external-agents/codex/probe','POST',{});
  assert.equal((await f.api(path+'/external-agents')).agents.find(agent=>agent.id==='codex').assignmentReady,true);
  await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:1});
  await f.api(messages,'POST',body,409);
@@ -3918,7 +3927,7 @@ test('explicit assignment rejects missing setup, stale revisions and wrong entra
 test('an explicitly assigned ACP Worker retains original read approval and stopped assignments never replay',{timeout:30000},async t=>{
  const {f,path,channel,body}=await specialistAssignmentFixture(t,{silentReadFiles:false});
  await f.enableCodexFixture();
- await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0,apiKey:'synthetic-codex-fixture-key'});await f.api(path+'/external-agents/codex/probe','POST',{});
+ await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0});await f.api(path+'/external-agents/codex/probe','POST',{});
  const receipt=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202),session=receipt.assignment.sessionId;
  const pending=await until(()=>f.api(`/api/sessions/${session}/ai`),view=>!!view.pending);
  assert.equal(pending.pending.call.name,'list_project_files');assert.equal(f.app.store.list('superOperations').length,0);
@@ -3933,7 +3942,7 @@ test('an explicitly assigned ACP Worker retains original read approval and stopp
 test('an explicit native assignment overrides only this task and external run projection checks exact ownership',{timeout:30000},async t=>{
  const {f,path,channel,body}=await specialistAssignmentFixture(t);
  await f.enableCodexFixture();
- await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0,apiKey:'synthetic-codex-fixture-key'});
+ await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0});
  await f.api(path+`/superagent/specialists/${channel.roleId}/execution`,'PUT',{expectedRevision:2,execution:{kind:'acp',agent:'codex'}});
  body.assignment.roleRevision=3;body.assignment.execution={kind:'native'};
  const receipt=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
@@ -3950,7 +3959,7 @@ test('a specialist freezes its ACP backend into a new Worker and task acceptance
  const f=await fixture(t,'super-acp-worker'),path=`/api/projects/${f.project.id}`;
  const project=await f.api(path+'/superagent','POST',{});
  await f.enableCodexFixture();
- await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0,apiKey:'synthetic-codex-fixture-key'});
+ await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0});
  await f.api(path+'/external-agents/codex/probe','POST',{});
  const role={id:'e'.repeat(64),projectId:f.project.id,roleKey:'project-inspector',name:'项目检查员',duties:'检查当前项目工作区，按实际证据报告',revision:1};
  f.app.store.put('superRoles',role.id,role);
@@ -3996,7 +4005,7 @@ test('an ACP Worker delegates an ACP child through the original public task coor
  const f=await fixture(t,'super-acp-worker-child'),path=`/api/projects/${f.project.id}`;
  const project=await f.api(path+'/superagent','POST',{});
  await f.enableCodexFixture();
- await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0,apiKey:'synthetic-codex-fixture-key'});
+ await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0});
  await f.api(path+'/external-agents/codex/probe','POST',{});
  const role={id:'e'.repeat(64),projectId:f.project.id,roleKey:'project-inspector',name:'项目检查员',duties:'检查当前项目工作区，按实际证据报告',revision:1};
  f.app.store.put('superRoles',role.id,role);
@@ -4040,7 +4049,7 @@ test('specialists without an override default to Codex and never silently create
  const channel=(await f.api(path+'/superagent')).channels[0];assert.equal(channel.execution.agent,'codex');
  await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',{text:'检查项目',assignment:{requestId:'default-codex-unready',roleRevision:1,execution:channel.execution}},409);
  assert.equal(f.app.store.list('superWorkers').length,0);
- await f.enableCodexFixture();await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0,apiKey:'synthetic-default-codex'});await f.api(path+'/external-agents/codex/probe','POST',{});
+ await f.enableCodexFixture();await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0});await f.api(path+'/external-agents/codex/probe','POST',{});
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'请让项目检查员读取实际项目工作区。'},202);
  const result=await settledSubagentTask(f);assert.equal(result.workers[0].execution.backend.agent,'codex');assert.equal(result.workers[0].task.acceptanceState,'pass');
  await f.api(path+'/external-agents/codex','PUT',{enabled:false,expectedRevision:1});
@@ -4058,4 +4067,19 @@ test('removed external backend rejects new configuration and preserves historica
  const snapshot=await f.api(`/api/sessions/${receipt.assignment.sessionId}/snapshot`);
  assert.equal(snapshot.superagent.execution.backend.agent,'runtime-acp');assert.equal(snapshot.superagent.execution.runs[0].state,'unknown');
  await assert.rejects(f.app.agents.runtime(worker.sessionId),/已移除/);assert.deepEqual(f.app.store.get('acpRuns',old.id),old);
+});
+
+test('local login auto-detection refreshes on account changes and no login blocks a new task',async t=>{
+ const f=await fixture(t,'super-acp-worker',false,false),path=`/api/projects/${f.project.id}`;
+ await f.enableCodexFixture();await f.api(path+'/external-agents/codex','PUT',{expectedRevision:0,enabled:true});
+ let status=(await f.api(path+'/external-agents')).agents[0];assert.equal(status.assignmentReady,true);assert.equal(status.authMode,'chatgpt');assert.equal(f.calls,0);
+ const project=await f.api(path+'/superagent','POST',{}),role={id:'f'.repeat(64),projectId:f.project.id,roleKey:'local-login',name:'本机登录检查专员',duties:'检查项目',revision:1};
+ f.app.store.put('superRoles',role.id,role);f.app.superagent.ensureChannel(role);
+ await writeFile(join(f.options.codexHome,'auth.json'),'{}');
+ status=(await f.api(path+'/external-agents')).agents[0];assert.equal(status.revision,2);assert.equal(status.assignmentReady,false);assert.match(status.assignmentBlocker,/本机 Codex 尚未登录/);
+ const channel=(await f.api(path+'/superagent')).channels[0];
+ await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',{text:'读取项目证据',assignment:{requestId:'local-login-missing',roleRevision:1,execution:channel.execution}},409);
+ assert.equal(f.app.store.list('superWorkers').length,0);assert.equal(f.app.store.list('superGoals').length,0);
+ await writeFile(join(f.options.codexHome,'auth.json'),JSON.stringify({auth_mode:'chatgpt',tokens:{account_id:'new-fixture-account',access_token:'synthetic-new-account-token'}}));
+ status=(await f.api(path+'/external-agents')).agents[0];assert.equal(status.revision,3);assert.equal(status.assignmentReady,true);assert.equal(f.calls,0);
 });

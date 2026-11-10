@@ -2,7 +2,8 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { Readable, Writable } from 'node:stream';
 import { client, ndJsonStream, type ClientConnection } from '@agentclientprotocol/sdk';
 
-export type AcpLaunch = { executable: string; args: string[]; cwd: string; env: NodeJS.ProcessEnv };
+export type AcpLaunch = { executable: string; args: string[]; cwd: string; env: NodeJS.ProcessEnv;
+  observed?:{model:string;modelProvider:string;reasoningEffort?:string;authenticated:boolean;authMode:'chatgpt'|'api_key'|'provider'|'none'} };
 export type AcpHandlers = {
   request: (method: string, params: any, callId: string) => Promise<unknown>;
   update: (params: any) => void;

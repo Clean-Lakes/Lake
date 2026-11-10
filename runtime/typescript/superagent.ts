@@ -639,10 +639,10 @@ export class LakeSuperagent implements AgentHost {
     const execution=this.roleExecution(role);
     if(execution.kind==='acp'){
       const profile=this.agents.external.registry.get(role.projectId,execution.agent);
-      const probe=this.store.get<{revision:number;ready:boolean;credentialConfigured?:boolean}>('acpProbes',role.projectId+':codex');
+      const probe=this.store.get<{revision:number;ready:boolean;authentication?:string;authenticated?:boolean;message?:string}>('acpProbes',role.projectId+':codex');
       const blocker=!profile.enabled?'Codex 尚未启用':probe?.revision!==profile.revision?'Codex 当前连接配置尚未验证':
-        !probe.ready?'Codex 连接测试尚未通过':probe.credentialConfigured===false?'尚未配置 Codex 独立 API Key':
-        !probe.credentialConfigured?'Codex 当前凭据状态需要重新验证':undefined;
+        probe.authentication!=='codex-local'?'本机 Codex 登录状态需要重新验证':!probe.ready?probe.message??'Codex 连接测试尚未通过':
+        !probe.authenticated?'本机 Codex 尚未登录，请先在 Codex 中完成登录':undefined;
       if(blocker)throw new HttpError(409,blocker+'。请在聊天框模型菜单的“配置 Codex”中完成设置；未创建任务。');
     }
     return {...role,execution};
@@ -1043,7 +1043,7 @@ export class LakeSuperagent implements AgentHost {
       if(!Number.isSafeInteger(requested.revision)||(requested.revision??-1)<0)throw new HttpError(400,'缺少准确的 Agent 连接版本');
       const profile=this.agents.external.registry.get(channel.projectId,requested.agent);
       if(profile.revision!==requested.revision)throw new HttpError(409,'Agent 连接配置已变化，请刷新分配入口后重试');
-      const status=(await this.agents.external.registry.list(channel.projectId)).find(agent=>agent.id===profile.id)!;
+      const status=(await this.agents.external.status(channel.projectId)).find(agent=>agent.id===profile.id)!;
       if(status.revision!==profile.revision||!status.assignmentReady)throw new HttpError(409,status.assignmentBlocker??'外部 Agent 配置已变化');
       execution={kind:'acp',agent:profile.id,revision:profile.revision};
     }
@@ -1716,7 +1716,7 @@ export class LakeSuperagent implements AgentHost {
       this.entry("route_work", "Commit one exact admitted event part. Copy role_id verbatim from the current specialists catalog or list_specialists; never reconstruct IDs. If specialist_not_found, refresh the catalog and correct the same event/part, without changing its deliverable or scope. For an event selecting multiple resources, create must set resource_ids to its exact subset of selected IDs. Independent per-resource tasks may quote the same request if subsets are disjoint; for a single comparison include both IDs. Create requires title, quote and one recipient selector: role_id, new role_key, or role_ids for one shared task. Specify role_instructions for each contributor. Omit task_id for create; for assign supply the existing public task_id and additional roles. Followup, context_only and stop target the exact task and recipient role_id, using the public ID for a shared task. Use predecessor_task_id to link an earlier task. An accepted completed source supplies qualified historical context. An unfinished ordinary source creates an independent read-only recheck for the same specialist, original explicit resource scope and deadline; it does not require or change source acceptance and cannot replay unknown operations. Invalid-memory followup uses the same safe recheck path. Inspect assignments in the receipt for the exact recipients. ask/respond omit task_id.",
         objectSchema({ event_id: str, part_key: str, action: { type: "string", enum: ["create", "assign", "followup", "context_only", "stop", "ask", "respond"] },
           task_id: str, predecessor_task_id: str, title: str, role_id: str, role_key: str, role_ids: array(str), resource_ids:array(str),
-          role_instructions: array(objectSchema({role_id: str, instruction: str}, ["role_id", "instruction"])), quote: str, reason: str, evidence_task_ids: array(str) }, ["event_id", "part_key", "action", "reason"]), (a) => this.route(sessionId, a)),
+          role_instructions: array(objectSchema({role_id: str, instruction: str}, ["role_id", "instruction"])), quote: str, reason: str, evidence_task_ids: array(str) }, ["event_id", "part_key", "action", "reason"]), async (a) => {if(['create','assign','followup'].includes(a.action))await this.agents.external?.status(projectId);return this.route(sessionId,a);}),
       this.entry("inspect_watchdog","Explain recent Watchdog findings for the current event. Supply a task_id to inspect all contributors, or include role_id for one. Each action has its own timing and evidence.",
         objectSchema({event_id:str,task_id:str,role_id:str},["event_id"]), a=>{
           const event=this.admitted(sessionId,a.event_id);

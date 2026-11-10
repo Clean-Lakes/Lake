@@ -1,6 +1,6 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {mkdtemp,mkdir,writeFile,readFile,cp,access}=require('node:fs/promises');
+const {mkdtemp,mkdir,writeFile,readFile,cp,access,rm}=require('node:fs/promises');
 const {tmpdir}=require('node:os');
 const {join}=require('node:path');
 const {createServer}=require('node:http');
@@ -8,15 +8,19 @@ process.env.LAKE_TS_IMPORT_ONLY='1';
 const {startLakeServer}=require('../../bin/lake-runtime/server.cjs');
 const adapter=process.env.LAKE_CODEX_ACP_TEST_ADAPTER;
 
-function localCodexProvider(registry,url){
+async function localCodexProvider(registry,url){
+ const source=registry.local.home;await mkdir(source,{recursive:true});
+ const trap=join(source,'MCP_TRAP_EXECUTED'),notify=join(source,'NOTIFY_TRAP_EXECUTED'),hook=join(source,'HOOK_TRAP_EXECUTED'),command=[process.execPath,'-e',"require('fs').writeFileSync("+JSON.stringify(trap)+",'unexpected')"];
+ await writeFile(join(source,'config.toml'),'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "max"\nmodel_provider = "fixture"\nnotify = '+JSON.stringify([process.execPath,'-e',"require('fs').writeFileSync("+JSON.stringify(notify)+",'unexpected')"])+ '\n[model_providers.fixture]\nname = "Isolated Responses fixture"\nbase_url = "'+url+'"\nwire_api = "responses"\nrequires_openai_auth = false\n[mcp_servers.inherited_trap]\ncommand = '+JSON.stringify(process.execPath)+'\nargs = '+JSON.stringify(command.slice(1))+'\nenabled = true\n[hooks]\nSessionStart = [{hooks = [{type = "command", command = "touch '+hook+'"}]}]\n',{mode:0o600});
+ await writeFile(join(source,'auth.json'),'{}',{mode:0o600});
+ const before=await readFile(join(source,'config.toml'),'utf8'),auth=await readFile(join(source,'auth.json'),'utf8');
  const prepare=registry.prepareHome.bind(registry);
  registry.prepareHome=async profile=>{
-  const root=await prepare(profile),path=join(root,'config.toml'),config=await readFile(path,'utf8');
-  await writeFile(path,'model_provider = "fixture"\n'+config+'\n[model_providers.fixture]\nname = "Isolated Responses fixture"\nbase_url = "'+url+'"\nwire_api = "responses"\nrequires_openai_auth = false\n',{mode:0o600});
-  const models=JSON.parse(await readFile(join(root,'models.json'),'utf8'));
+  const root=await prepare(profile),models=JSON.parse(await readFile(join(root,'models.json'),'utf8'));
   for(const model of models.models){model.prefer_websockets=false;model.use_responses_lite=false;}
   await writeFile(join(root,'models.json'),JSON.stringify(models),{mode:0o600});return root;
  };
+ return async()=>{assert.equal(await readFile(join(source,'config.toml'),'utf8'),before);assert.equal(await readFile(join(source,'auth.json'),'utf8'),auth);for(const file of [trap,notify,hook])await assert.rejects(access(file),'inherited extension must not execute: '+file);};
 }
 
 // Opt-in integration: real pinned Codex + ACP, a local Responses fixture, and no real credentials.
@@ -46,14 +50,15 @@ test('real Codex exposes only managed tools and returns a result through the tas
   event('response.output_item.done',{output_index:0,item});event('response.completed',{response});res.end();
  });
  await new Promise(resolve=>provider.listen(0,'127.0.0.1',resolve));
- const app=await startLakeServer({home,data:join(home,'data'),port:0,staticRoot:web});
+ const app=await startLakeServer({home,codexHome:join(home,'local-codex'),data:join(home,'data'),port:0,staticRoot:web});
  t.after(async()=>{await app.close();provider.closeAllConnections();await new Promise(resolve=>provider.close(resolve));});
  const response=await fetch(app.origin+'/api/projects',{method:'POST',headers:{Authorization:'Bearer '+app.token,'Content-Type':'application/json'},body:JSON.stringify({name:'Codex isolated validation'})});
  const project=await response.json();assert.equal(response.status,200);
  const external=app.agents.external,registry=external.registry;
  await cp(adapter,registry.adapterRoot(),{recursive:true});
- await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_ACP_TEST_NODE??process.execPath,apiKey:'synthetic-codex-local-fixture'});
- localCodexProvider(registry,'http://127.0.0.1:'+provider.address().port+'/v1');
+ const unchanged=await localCodexProvider(registry,'http://127.0.0.1:'+provider.address().port+'/v1');
+ await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_ACP_TEST_NODE??process.execPath});
+ await external.probe(project.id,'codex',AbortSignal.timeout(30000));await unchanged();
  const signal=AbortSignal.timeout(45000),events=[];
  const actor={projectId:project.id,taskId:'fixture-task',workerId:'fixture-worker',sessionId:'fixture-session',generation:1,deadlineAt:new Date(Date.now()+60000).toISOString(),scopeHash:'fixture-scope',workspace:home,signal,guard:()=>signal.throwIfAborted(),model:null,
   tools:[{metadata:{name:'Read',description:'Read the assigned fixture evidence'},inputSchema:{type:'object',properties:{file_path:{type:'string'}},required:['file_path'],additionalProperties:false}}],
@@ -70,7 +75,8 @@ test('real Codex exposes only managed tools and returns a result through the tas
  const resumed=await external.run('codex','Report the previously observed fixture result.','fixture-two',actor,result.run_id);
  assert.equal(resumed.state,'completed',JSON.stringify(resumed));
  assert.equal(resumed.summary.split('ACP_CODEX_REPORT').length,2,'session/load replay is history, not a new report chunk');
- assert.equal(reads,1,'loading a completed session must not replay its old tool');
+ assert.equal(reads,1,'loading a completed session must not replay its old tool');await unchanged();
+ assert.ok(requests.every(request=>request.model==='gpt-6.1-sol'&&request.reasoning?.effort==='max'),'source model and reasoning must be inherited');
 });
 
 test('a specialist explicitly assigns a real Codex Worker and collects original task receipts and acceptance',{skip:!adapter,timeout:90000},async t=>{
@@ -100,7 +106,7 @@ test('a specialist explicitly assigns a real Codex Worker and collects original 
   }catch(error){fixtureError=error;res.writeHead(500);res.end('Isolated fixture rejected request');}
  });
  await new Promise(resolve=>provider.listen(0,'127.0.0.1',resolve));
- const app=await startLakeServer({home,data:join(home,'data'),port:0,staticRoot:web});
+ const app=await startLakeServer({home,codexHome:join(home,'local-codex'),data:join(home,'data'),port:0,staticRoot:web});
  t.after(async()=>{await app.close();provider.closeAllConnections();await new Promise(resolve=>provider.close(resolve));});
  const api=async(path,method='GET',data,expected=200)=>{
   const res=await fetch(app.origin+path,{method,headers:{Authorization:'Bearer '+app.token,'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)});
@@ -116,8 +122,9 @@ test('a specialist explicitly assigns a real Codex Worker and collects original 
  app.store.put('superRoles',role.id,role);await api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:1,execution:{kind:'native'}});
  const channel=(await api(path+'/superagent')).channels[0],registry=app.agents.external.registry;
  await cp(adapter,registry.adapterRoot(),{recursive:true});
- await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_ACP_TEST_NODE??process.execPath,apiKey:'synthetic-codex-assigned-fixture'});
- localCodexProvider(registry,url);await api(path+'/external-agents/codex/probe','POST',{});
+ const unchanged=await localCodexProvider(registry,url);
+ await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_ACP_TEST_NODE??process.execPath});
+ await api(path+'/external-agents/codex/probe','POST',{});
  const body={text:'请读取 CODEX_ASSIGNED_EVIDENCE.txt 并报告实际内容。',assignment:{requestId:'codex-assignment-0001',roleRevision:2,execution:{kind:'acp',agent:'codex',revision:1}}};
  const receipt=await api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
  let result;
@@ -133,5 +140,18 @@ test('a specialist explicitly assigns a real Codex Worker and collects original 
  const page=await api(`/api/sessions/${channel.sessionId}/channel`);assert.equal(page.workers[0].execution.runs[0].id,run.id);
  assert.ok(page.workers[0].execution.runs[0].summary.includes('ACP_CODEX_ASSIGNED_REPORT'));
  const count=requests.length,again=await api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
- assert.equal(again.assignment.workerId,receipt.assignment.workerId);assert.equal(requests.length,count);assert.equal(app.store.list('superWorkers').length,1);
+ assert.equal(again.assignment.workerId,receipt.assignment.workerId);assert.equal(requests.length,count);assert.equal(app.store.list('superWorkers').length,1);await unchanged();
+ assert.ok(requests.every(request=>request.model==='gpt-6.1-sol'&&request.reasoning?.effort==='max'));
+});
+
+test('real Codex reads a cached API login and detects logout without a Lake key or model request',{skip:!adapter,timeout:90000},async t=>{
+ const home=await mkdtemp(join(tmpdir(),'lake-codex-auth-')),web=join(home,'web'),codexHome=join(home,'local-codex');await mkdir(web);await mkdir(codexHome);await writeFile(join(web,'index.html'),'fixture');
+ await writeFile(join(codexHome,'config.toml'),'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "max"\n');
+ await writeFile(join(codexHome,'auth.json'),JSON.stringify({auth_mode:'apikey',OPENAI_API_KEY:'synthetic-cached-native-api-login'}),{mode:0o600});
+ const app=await startLakeServer({home,codexHome,data:join(home,'data'),port:0,staticRoot:web});t.after(()=>app.close());
+ const project=app.store.createProject('cached native auth'),registry=app.agents.external.registry;await cp(adapter,registry.adapterRoot(),{recursive:true});
+ await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_ACP_TEST_NODE??process.execPath});
+ let status=(await app.agents.external.status(project.id))[0];assert.equal(status.authMode,'api_key');assert.equal(status.assignmentReady,true);assert.equal(app.store.list('acpRuns').length,0);
+ const serialized=JSON.stringify([status,app.store.list('acpProfiles'),app.store.list('acpProbes')]);assert.ok(!serialized.includes('synthetic-cached-native-api-login'));assert.equal(await app.store.secret('external-agent-'+project.id+'-codex'),'');
+ await rm(join(codexHome,'auth.json'));status=(await app.agents.external.status(project.id))[0];assert.equal(status.revision,2);assert.equal(status.assignmentReady,false);assert.match(status.assignmentBlocker,/本机 Codex 尚未登录/);
 });

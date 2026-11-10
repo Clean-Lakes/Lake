@@ -24,7 +24,7 @@ test('a native model choice retains its actual model without labeling it an inde
  assert.match(html,/composer-model-name">gpt-6.1-terra<\/span>/);assert.doesNotMatch(html,/aria-label="选择模型：Codex · 独立 Agent"/);
 });
 test('Pilot Codex configuration keeps its native model and cannot select the specialist executor',()=>{
- const html=renderToStaticMarkup(createElement(ComposerModelSelect,{...props,externalAgent:{selected:false,ready:false,message:'尚未配置 Codex 独立 API Key',configurationOnly:true}}));
+ const html=renderToStaticMarkup(createElement(ComposerModelSelect,{...props,externalAgent:{selected:false,ready:false,message:'本机 Codex 尚未登录',configurationOnly:true}}));
  assert.match(html,/composer-model-name">gpt-6.1-terra<\/span>/);
  assert.doesNotMatch(html,/独立 Agent|value="__lake_codex_agent__"/);
 });

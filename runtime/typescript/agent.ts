@@ -98,12 +98,13 @@ export class LakeAgents {
     readonly store: LakeStore,
     readonly sessions: Awaited<ReturnType<typeof createSqliteSessionStore>>,
     readonly publish: (event: SessionEvent) => void,
-  ) { this.external = new LakeExternalAgents(store,(value,live)=>live?this.redactLive(value):this.redact(value),value=>this.registerSecret(value)); }
-  static async open(store: LakeStore, publish: (event: SessionEvent) => void) {
+    codexHome?:string,
+  ) { this.external = new LakeExternalAgents(store,(value,live)=>live?this.redactLive(value):this.redact(value),value=>this.registerSecret(value),codexHome); }
+  static async open(store: LakeStore, publish: (event: SessionEvent) => void,codexHome?:string) {
     const sessions = await createSqliteSessionStore({
       dbPath: await prepareSessionArchive(store.data),
     });
-    return new LakeAgents(store, sessions, publish);
+    return new LakeAgents(store, sessions, publish,codexHome);
   }
   private externalEvent(sessionId:string,run:ExternalRun,event:ExternalEvent){
     const worker=this.store.get<any>('superWorkers',run.workerId);
@@ -917,7 +918,7 @@ export class LakeAgents {
       }};
     });
     for (const tool of profile?.tools ?? []) registry.register(tool);
-    const externalAgents=(await this.external.registry.list(session.projectId)).filter(agent=>agent.assignmentReady);
+    const externalAgents=(await this.external.status(session.projectId)).filter(agent=>agent.assignmentReady);
     const hasExternal=!!profile?.taskId&&externalAgents.length>0;
     if(hasExternal&&profile){
       const externalTool=this.externalTool(sessionId,profile,()=>runtime,externalAgents.map(agent=>agent.id));
