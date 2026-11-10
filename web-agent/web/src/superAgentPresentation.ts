@@ -1,4 +1,4 @@
-import type {AIView,SuperTask,SuperWorker,TaskParticipant} from '../../shared/contracts';
+import type {AIView,SessionSnapshot,SuperTask,SuperWorker,TaskParticipant} from '../../shared/contracts';
 import type {AgentIconName} from './AgentIcon';
 import {lakeAvatarGroups} from './lakeAvatarCatalog';
 
@@ -48,8 +48,20 @@ export function channelTaskPresentation(task:SuperTask) {
  return member?participantPresentation(member):superTaskPresentation(task);
 }
 
-// A restored invocation can have ended while its canonical task is paused.
-export function superTaskHeaderPresentation(task?:SuperTask) {
+// Live replies own the badge; canonical task state only applies to its exact
+// conversation. A Router can still carry an older inline task after delegating.
+export function superTaskHeaderPresentation(task:SuperTask|undefined,snapshot:Pick<SessionSnapshot,'session'|'ai'>|null|undefined) {
+ if(!snapshot)return;
+ const {session,ai}=snapshot;
+ if(['router','role','worker'].includes(session.workspaceRole??'')) {
+  const activity=conversationActivity(ai,session.status);
+  if(activity==='running')return {status:'investigating' as const,label:'处理中'};
+  if(activity==='waiting')return {status:'waiting_approval' as const,label:ai?.question?'等待你的选择':'等待确认'};
+ }
+ if(!task||task.projectId&&task.projectId!==session.projectId)return;
+ if(session.workspaceRole==='router') {
+  if(task.sessionId!==session.id||!ai?.rootTurnId||task.originRootTurnId!==ai.rootTurnId)return;
+ } else if(session.workspaceRole!=='role'&&task.sessionId!==session.id)return;
  if(task?.state==='blocked'&&task.reason==='token_limit_removed')return {status:'failed' as const,label:'等待后续核对'};
  return task?.state==='paused'?{status:'completed' as const,label:'任务已暂停'}:undefined;
 }

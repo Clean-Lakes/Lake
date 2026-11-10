@@ -1,6 +1,8 @@
 import type {SessionSnapshot,WorkSession} from '../../shared/contracts';
 export function workGoalPresentation(snapshot?:SessionSnapshot|null):{label?:string;status?:WorkSession['status']}|undefined{
- const goal=snapshot?.ai?.workGoals?.find(g=>g.originRootTurnId===snapshot.ai?.rootTurnId);
+ const root=snapshot?.ai?.rootTurnId;
+ if(!root)return;
+ const goal=snapshot.ai?.workGoals?.find(g=>g.originRootTurnId===root);
  if(!goal)return;
  switch(goal.status){
   case 'running':return {label:'正在处理',status:'investigating'};
