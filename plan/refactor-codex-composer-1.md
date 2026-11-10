@@ -56,7 +56,7 @@ tags: [refactor, acp, codex, composer, typescript]
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-007 | 用 Codex ACP 协议进程夹具替换已移除后端的生命周期测试，保留桥接权限/停止/child/幂等/验收回归；真实固定 Codex 验证 Node 22 与 Node 24 路径。 | true | 2026-11-10 |
-| TASK-008 | 前端覆盖默认 Codex、统一菜单、未就绪与普通模型切换；执行类型、构建、回归和边界检查，签名安装 Lake Dev 并验证实际界面。 | | |
+| TASK-008 | 前端覆盖默认 Codex、统一菜单、未就绪与普通模型切换；执行类型、构建、回归和边界检查，签名安装 Lake Dev 并验证实际界面。 | true | 2026-11-10 |
 | TASK-009 | 更新 docs/lake-pilot.md、ACP 验证记录及草稿 PR #222，记录准确 tested SHA、已知限制与历史兼容行为。 | | |
 
 ## 3. Alternatives

@@ -1,4 +1,35 @@
-## 首批 ACP 执行后端兼容记录
+## 当前：Codex 与统一模型入口（2026-11-10）
+
+已测试源码与签名 Lake Dev：`98140ef9ce6ffbc7f83f9f75c09baacc37586099`。本节取代下方历史版本中的 runtime-acp、独立分配面板、手工路径及原生默认行为；完整长期路线图仍有未完成项。见[本次实施计划](../../../plan/refactor-codex-composer-1.md)。
+
+- 外部产品目录、设置、工具与新任务入口仅支持 Codex。已删除 runtime-acp 生产启动器及私有模型 RPC，Lake 原生运行仍使用原公开 SDK。退休后端的原 Worker/child、运行记录与 unknown 操作保留，禁止续跑、切换或重放。
+- 未保存执行偏好的专员默认 Codex；明确的原生偏好继续有效。聊天框只保留原模型入口，Codex 以 Agent / ACP 标识，与普通模型分组选择。选择普通模型保存原生偏好，选择 Codex 保存 Codex 偏好；浏览分类不改变实际执行者。旧任务维持原快照。
+- Codex 发送继续使用原显式新任务准入、角色/连接 CAS 及 requestId 去重，宿主直接派发，不调用 Router 模型。发送后保持 Codex 选择并更换下一次请求 nonce；继续旧任务使用准确任务入口。配置未就绪时保留草稿并打开当前项目 Agent 设置。
+- 启用 Codex 会自动识别本机 Node 22.22+ / 24.14+ 及配套 npm，在当前 Home 的私有目录安装缺失或版本不匹配的固定 adapter 2.2.2 / engine 0.160.1，再握手。主 Lake 后端继续使用 Node 24.14.0。路径输入折叠到高级设置；自动识别只检查绝对 PATH、常见安装目录和宿主 Node，不执行 shell 启动脚本或扫描项目。
+- 独立 Codex 只需当前项目自己的 API Key。没有普通模型时，原 SDK 仍托管工具和权限，但其 Model 端口拒绝推理；需要普通模型的原生 child 会明确失败。真实 Codex Worker 已在没有普通模型配置的环境完成 Read、work_finish、报告回传及原任务验收。
+
+| 检查 | 本次结果 |
+| --- | --- |
+| 后端 TypeScript、前端类型与 Web 构建 | 通过；保留原有 Vite 大 chunk 提示 |
+| 完整后端集成 | 191/191；含自动准备、精确版本修复、默认 Codex、退休后端历史、原审批/停止/child/幂等与回传验收 |
+| 完整前端 | 784/784 |
+| 后端单元 | 253 通过，4 个原有可选测试跳过 |
+| 真实固定 Codex + Node 22.22.0 | 2/2；独立临时 Home、本地 Responses 夹具、合成凭据 |
+| 真实固定 Codex + Node 24.14.0 | 2/2；同一完整用例，分别串行执行 |
+| ADK runtime boundary / 命名 / 命名单测 | 通过 / 0 违规 / 5 项通过 |
+| 签名桌面 Dev | `scripts/build_lake_desktop.sh --dev --install` 成功；深度签名校验、安装来源与运行中后端 hash 均核对通过，dirty=false |
+| 实际 macOS 原生模型浮层 | 专员主入口显示 Codex；原生浮层显示 Codex · Agent 与 ACP 行；配置入口正确返回项目 Agent 页；五位现有专员默认 Codex，页面仅 Codex，路径高级设置默认折叠 |
+| 签名 SEA 自动安装与握手 | 全新隔离 Home、PATH 仅系统目录，自动找到 Homebrew Node 22.22.0 与 npm；真实 npm 安装两个精确版本后 ACP 握手成功；未配置普通模型 |
+
+`server.test.cjs` 的宿主生命周期用例使用明确标注的 Codex ACP 协议夹具，不将它当作真实 Codex 推理。真实进程证明另由 `acp.integration.test.cjs` 提供：设置 `LAKE_CODEX_ACP_TEST_ADAPTER` 指向固定安装目录，`LAKE_CODEX_ACP_TEST_NODE` 分别选择 Node 22 / 24，由 Node 24 运行测试。真实固定引擎仍须提供受管理工具目录，原生补丁不能旁路执行，Read 和 work_finish 生成原宿主业务回执；不放宽原工具断言。
+
+隔离 Web 联调通过模型菜单完成 Codex 启用、自动路径、保留草稿、真实 Codex 读取工作区及已验收报告。普通模型与 Codex 互切并重载后持久化，旧 Task 执行绑定保持；浅/深色、620px 窄窗、键盘选择与 Escape 返回入口通过，无横向溢出。macOS Dev 使用实际原生浮层检查 Codex 及配置跳转；普通模型互切的持久化验证在隔离 Web 完成，没有向用户项目发送推理任务。
+
+用户项目原 Codex profile 仍未启用；未导入普通模型或全局 Codex 登录凭据，未使用真实外部 API Key 进行付费推理。使用时在聊天框模型菜单进入“配置 Codex”，填写独立凭据并启用。旧 ACP 只读验证 Task 保持原生绑定与暂停状态。正式版未安装或重启，PR 未合并。
+
+本次没有 Go 源码变化，未重跑旧 Go/race/vet；下方原 Web 整包超时继续作为历史结果保留。历史并行压力下 Codex 工具目录缺少 Read 的一次失败仍未定位，本轮两种 Node 的最终串行用例均通过，不能据此宣称高负载问题已修复。macOS 以外平台、Claude Code、图片输入、运行中补充输入、完整 Watchdog 主动指导及独立推理的逐轮计费控制仍未开放。
+
+## 首批 ACP 执行后端兼容记录（历史）
 
 2026-11-10，macOS arm64，Node 24.14.0。用户已授权先接入 runtime-acp 与 Codex。本记录区分协议贯通、宿主业务回执和模型服务认证；未使用真实外部 API Key 进行付费推理。
 
