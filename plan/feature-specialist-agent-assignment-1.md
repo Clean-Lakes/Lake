@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-10
 last_updated: 2026-11-10
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [feature, acp, specialist, typescript, ui]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 专员是持续的任务负责人，Task Worker 保留独立任务与执行上下文，Codex / runtime-acp 是可以分配的执行 Agent。将此前只在设置中提供的执行配置接入专员对话、任务派发、实际进度和报告收集。模型供应商名称不代表外部 Agent 已执行。
 
@@ -54,7 +54,7 @@ tags: [feature, acp, specialist, typescript, ui]
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-006 | 在 runtime/typescript/server.test.cjs 验证直接派发、未就绪拒绝、角色/配置 CAS、重复请求、真实 ACP 工具回执与回传；在 web-agent/web/test 验证 UI 状态投影不虚构调用或验收。 | ✅ | 2026-11-10 |
-| TASK-007 | 执行 TS/前端检查与相关回归；用签名脚本构建安装 Lake Dev，验证明暗/窄窗口/配置入口与真实执行，更新 docs/validation/acp-agent-execution/compatibility.md 和 draft PR #222。 | | |
+| TASK-007 | 执行 TS/前端检查与相关回归；用签名脚本构建安装 Lake Dev，验证明暗/窄窗口/配置入口与真实执行，更新 docs/validation/acp-agent-execution/compatibility.md 和 draft PR #222。 | ✅ | 2026-11-10 |
 
 ## 3. Alternatives
 
