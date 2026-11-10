@@ -1,4 +1,27 @@
-## Codex 认证缺项与 Pilot 配置入口（2026-11-10）
+## 当前：复用本机 Codex 登录与配置（2026-11-10）
+
+已测试源码与签名 Lake Dev：`219636df81270129a1a47279e86ee2b29ead33e4`。本节按用户后续明确要求，取代历史版本的项目独立 Key 方案。实现与任务状态见[本机登录计划](../../../plan/refactor-codex-local-login-1.md)。
+
+- 直接使用宿主 CODEX_HOME（默认 ~/.codex）的已有登录、默认模型、provider/服务地址与思考参数。删除项目独立 Key 输入和保存入口；不复制 auth.json、不修改本机 config.toml，不调用登录/注销 RPC。Codex 自己读取和续签其登录，符合[官方认证机制](https://learn.chatgpt.com/docs/auth?surface=cli)。
+- 通过固定 Codex app-server 的 config/read 和 account/read 读取有效配置与认证状态，再验证 ACP v1；该检查不创建线程或发送业务 prompt。旧 authentication/status 会将内置 openai 当作 gateway，未将其单独作为认证证据。本机首次初始化超过原 15 秒限制，现 initialize 上限 60 秒、整体状态检查 90 秒；实际本机与签名 Dev 已通过。
+- profile 升级 schema2 并增加 revision；配置、auth.json 中账号身份或选定 provider 环境凭据变化使原验证失效。同账号正常 token 刷新不改变执行身份；原 Worker/run 不改写或重放。状态读取自动检查当前连接，缺登录时明确要求先在本机 Codex 登录。
+- 仍固定 adapter 2.2.2 / engine 0.160.1 和已验证的模型工具目录。目录通过无秘密的私有启动器在 app-server 启动时注入；SQLite 与日志使用 Lake 私有目录。继承的 MCP、hooks 和 notify 同时在启动与线程层关闭。空 MCP 表不会清除继承项，逐个 enabled=false；适配器收到 ACP mcpServers 又会重建表，因此 Lake 私有 MCP 桥与禁用项合并进完整线程配置，ACP mcpServers 留空。桥子进程通过 env -i 启动，不继承 Codex 凭据环境。实际业务工具仍经原 ToolExecutor、审批、任务账本和验收。
+
+| 检查 | 本次结果 |
+| --- | --- |
+| 后端 TypeScript / Web 类型与构建 | 通过；Vite 原有大 chunk 提示保留 |
+| 后端集成 / 后端单元 / 前端 | 192/192；259 通过、4 个既有可选跳过；786/786 |
+| 真实固定 Codex + Node 22.22.0 | 3/3，最终串行完整运行；本地 Responses 证明默认模型、provider 与 max 继承、原 Read/work_finish 与验收、会话续接/幂等、原生补丁拒绝、继承 MCP/hook/notify 陷阱未执行；另验证已有 API 登录和实际删除登录文件后的未就绪状态，无推理请求 |
+| 用户现有 ChatGPT 登录 | 独立临时 Lake Home，真实 Codex 读取指定测试文件并 work_finish，原任务 completed / acceptance pass，回传测试标记；未填写独立 Key。UI 用合成普通模型配置展示协调菜单，Codex 直接使用实际 ChatGPT 登录，未调用该普通模型做协调推理 |
+| Web 与 macOS 原生界面 | 浅/深色、620px 窄窗、键盘模型入口、配置跳转与 Escape 草稿保留通过；设置无密码框或可见原生 select。原生 Pilot 模型保持 gpt-6.1-terra，浮层显示已连接本机 Codex；项目设置显示 ChatGPT 登录、gpt-6.1-sol、max |
+| ADK boundary / 命名 / 命名单测 | 通过 / 0 违规 / 5 项通过 |
+| Lake Dev 安装与数据 | 签名脚本构建/安装成功；来源 SHA、dirty=false、深度签名、运行进程路径与后端 hash 均核对。当前用户项目 enabled / transportReady / assignmentReady 均为 true，5 位专员默认 Codex；148 个旧 Worker 状态和执行绑定完全不变，原 ACP 验证 Worker 保持 native / paused |
+
+截图均来自隔离测试工作区，仅有指定的本地测试证据：[实际回传](local-login-report-light.png)、[本机登录设置](local-login-settings-light.png)、[深色窄窗](local-login-settings-narrow-dark.png)。本机 config.toml 哈希未变；测试工作区、访问令牌文件及进程均已清理。未访问或重试业务服务器，正式版未安装或重启，PR 未合并。
+
+API 登录检查使用专用 Codex Home 的合成凭据，真实 ChatGPT 登录只用于上述本地只读任务。没有验证 OS Keychain-only 登录的跨进程账号切换、Node 24 下本次新增配置加载流程、macOS 以外平台、Claude Code、图片输入、运行中补充输入、完整 Watchdog 主动指导及独立推理的逐轮计费控制。旧并行压力下工具目录偶发缺少 Read 的问题未定位，本轮串行通过不能证明其已修复。未改 Go 源码，未将旧 Go/race/vet 结果改写为本轮通过。
+
+## Codex 认证缺项与 Pilot 配置入口（历史，已由本机登录替代）
 
 已测试源码与签名 Lake Dev：`7b7ef9fef9c0e2712a1898be1b3e51bf7dd3b932`。本次只补齐就绪原因及配置入口，仍采用项目独立 API Key 认证。
 
@@ -23,7 +46,7 @@
 
 用户项目当前仍缺独立 Key，本次没有导入其他凭据、执行付费推理或重试真实服务器任务。认证补齐前请求仍会按原准入规则拒绝，不伪造任务或服务器状态。Node 24、签名自动安装及旧 Go 的先前实测保留其原源码 SHA，未将旧结果标为本次重跑。正式版与 PR 合并状态保持不变。
 
-## 当前：Codex 与统一模型入口（2026-11-10）
+## Codex 与统一模型入口（历史，2026-11-10）
 
 已测试源码与签名 Lake Dev：`98140ef9ce6ffbc7f83f9f75c09baacc37586099`。本节取代下方历史版本中的 runtime-acp、独立分配面板、手工路径及原生默认行为；完整长期路线图仍有未完成项。见[本次实施计划](../../../plan/refactor-codex-composer-1.md)。
 

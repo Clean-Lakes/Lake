@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-10
 last_updated: 2026-11-10
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [refactor, codex, acp, authentication, typescript]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 按用户明确要求，Codex ACP 直接使用宿主 CODEX_HOME（未设置时为 ~/.codex）的既有登录与模型/服务配置，删除 Lake 项目独立 Key 表单和准入要求。Codex 自己读取与续签登录；Lake 不复制登录文件、不修改本机 config.toml。任务仍使用原权限、私有工具桥、执行绑定与真实业务验收。
 
@@ -56,8 +56,8 @@ tags: [refactor, codex, acp, authentication, typescript]
 |------|-------------|-----------|------|
 | TASK-006 | 更新 server.test.cjs、acp.integration.test.cjs 和协议夹具，所有普通测试显式使用隔离 Codex Home；新增来源变化、账号刷新、旧 profile、无登录以及拒绝旧 Key 输入用例。 | Yes | 2026-11-10 |
 | TASK-007 | 真实固定 Codex 通过本地 Responses 验证 provider/模型/思考继承、仅受管理工具及全局 MCP/hook/notify 不执行；按用户授权在独立任务用本机既有登录完成一次小型只读回传验证，不访问业务服务器。 | Yes | 2026-11-10 |
-| TASK-008 | 执行类型、构建、前后端回归与边界；验证 Web 明暗/窄窗和原生模型菜单，提交干净源码后签名安装 Lake Dev，确认当前项目无需 Key 即可就绪。 | | |
-| TASK-009 | 更新 agent.md、runtime/typescript/README.md、docs/lake-pilot.md、ACP 验证记录和 PR #222，记录准确源码 SHA、认证来源、回归结果及未验证范围。 | | |
+| TASK-008 | 执行类型、构建、前后端回归与边界；验证 Web 明暗/窄窗和原生模型菜单，提交干净源码后签名安装 Lake Dev，确认当前项目无需 Key 即可就绪。 | Yes | 2026-11-10 |
+| TASK-009 | 更新 agent.md、runtime/typescript/README.md、docs/lake-pilot.md、ACP 验证记录和 PR #222，记录准确源码 SHA、认证来源、回归结果及未验证范围。 | Yes | 2026-11-10 |
 
 ## 3. Alternatives
 
@@ -98,3 +98,5 @@ tags: [refactor, codex, acp, authentication, typescript]
 - [ACP 兼容记录](../docs/validation/acp-agent-execution/compatibility.md)
 - [官方认证说明](https://learn.chatgpt.com/docs/auth)
 - [官方配置覆盖与目录](https://learn.chatgpt.com/docs/config-file/config-advanced)
+
+验证源码与签名安装：`219636df81270129a1a47279e86ee2b29ead33e4`。后端集成 192、后端单元 259（4 个既有可选跳过）、前端 786、真实固定 Codex 3 项通过；实际 ChatGPT 登录独立只读任务已验收，当前 Dev 项目就绪，148 个旧 Worker 保持。当前证据与未验证范围见 [兼容记录](../docs/validation/acp-agent-execution/compatibility.md)。

@@ -1,9 +1,9 @@
 {
   "date": "2026-11-10",
-  "sourceCommit": "7b7ef9fef9c0e2712a1898be1b3e51bf7dd3b932",
-  "backendCodeCommit": "7b7ef9fef9c0e2712a1898be1b3e51bf7dd3b932",
+  "sourceCommit": "219636df81270129a1a47279e86ee2b29ead33e4",
+  "backendCodeCommit": "219636df81270129a1a47279e86ee2b29ead33e4",
   "platform": "macOS arm64",
-  "runtime": "Node 24.14.0 / signed Lake SEA; real Codex Node 22.22.0",
+  "runtime": "Node 24.14.0 / signed Lake SEA; Codex Node 22.22.0",
   "dev": {
     "installed": true,
     "signatureVerified": true,
@@ -14,21 +14,27 @@
     "home": "~/.lake-dev",
     "guiLoaded": true,
     "nativePilotCodexConfiguration": true,
-    "nativeMissingKeyVisible": true,
+    "nativeLocalLoginVisible": true,
     "pilotModelUnchanged": true,
     "userProjectCodexEnabled": true,
     "userProjectTransportReady": true,
-    "userProjectAssignmentReady": false,
-    "userProjectBlocker": "尚未配置 Codex 独立 API Key"
+    "userProjectAssignmentReady": true,
+    "authMode": "chatgpt",
+    "model": "gpt-6.1-sol",
+    "reasoningEffort": "max",
+    "defaultCodexSpecialists": 5,
+    "existingWorkersUnchanged": 148,
+    "originalTaskBackend": "native",
+    "originalTaskState": "paused"
   },
   "checks": {
     "backendTypes": "passed",
     "frontendTypesAndBuild": "passed",
     "backendIntegration": {
-      "passed": 191
+      "passed": 192
     },
     "backendUnit": {
-      "passed": 254,
+      "passed": 259,
       "skipped": 4
     },
     "frontend": {
@@ -38,10 +44,17 @@
       "adapter": "2.2.2",
       "engine": "0.160.1",
       "node": "22.22.0",
-      "passed": 2,
-      "sourceCommit": "7b7ef9fef9c0e2712a1898be1b3e51bf7dd3b932",
+      "passed": 3,
+      "sourceCommit": "219636df81270129a1a47279e86ee2b29ead33e4",
       "ordinaryModelConfigured": false,
-      "paidCredentialsUsed": false
+      "modelAndProviderInherited": true,
+      "reasoningEffortInherited": "max",
+      "inheritedMcpHookNotifyTrapsExecuted": false,
+      "nativePatchRejected": true,
+      "sourceConfigAuthUnchanged": true,
+      "cachedApiLoginVerified": true,
+      "logoutDetected": true,
+      "requestsReplayed": false
     },
     "boundary": "passed",
     "naming": "passed",
@@ -50,26 +63,120 @@
     },
     "legacyGoRerun": false
   },
-  "readinessRecovery": {
-    "specificMissingKeyError": true,
-    "noTaskCreatedWithoutKey": true,
-    "noNativeFallback": true,
-    "pilotSetupEntry": true,
-    "pilotCannotSelectSpecialistExecutor": true,
-    "settingsShowsMissingCredential": true,
+  "localLogin": {
+    "localChatgptLogin": true,
+    "independentApiKeyProvided": false,
+    "model": "gpt-6.1-sol",
+    "reasoningEffort": "max",
+    "worker": "completed",
+    "acceptance": "pass",
+    "externalRun": "completed",
+    "actualReadAndWorkFinish": true,
+    "businessServersAccessed": false,
+    "schemaVersion": 2,
+    "loginFilesCopied": false,
+    "localConfigUnchanged": true,
+    "ordinaryModelInferenceUsed": false,
+    "taskHome": "isolated temporary Lake Home",
+    "inheritedCodexHome": "existing user Codex Home",
     "browser": {
       "light": true,
       "dark": true,
       "narrowWidth": 620,
       "horizontalOverflow": false,
+      "passwordFields": 0,
+      "visibleNativeSelects": 0,
       "settingsPreservesDraft": true,
       "specialistCodexDefaultPreserved": true
-    }
+    },
+    "temporaryProcessAndAccessFilesCleaned": true
   },
+  "notValidated": [
+    "OS Keychain-only cross-process account switching",
+    "new local-config flow on Codex Node 24",
+    "non-macOS execution",
+    "Claude Code",
+    "images",
+    "running-turn steering",
+    "full Watchdog guidance",
+    "independent inference per-turn budgets"
+  ],
   "actualServerTaskRetried": false,
   "productionChanged": false,
   "merged": false,
   "previousValidations": [
+    {
+      "date": "2026-11-10",
+      "sourceCommit": "7b7ef9fef9c0e2712a1898be1b3e51bf7dd3b932",
+      "backendCodeCommit": "7b7ef9fef9c0e2712a1898be1b3e51bf7dd3b932",
+      "platform": "macOS arm64",
+      "runtime": "Node 24.14.0 / signed Lake SEA; real Codex Node 22.22.0",
+      "dev": {
+        "installed": true,
+        "signatureVerified": true,
+        "buildOriginDirty": false,
+        "backendHashVerified": true,
+        "actualProcessVerified": true,
+        "bundleId": "com.cleanlakes.lake.desktop.dev",
+        "home": "~/.lake-dev",
+        "guiLoaded": true,
+        "nativePilotCodexConfiguration": true,
+        "nativeMissingKeyVisible": true,
+        "pilotModelUnchanged": true,
+        "userProjectCodexEnabled": true,
+        "userProjectTransportReady": true,
+        "userProjectAssignmentReady": false,
+        "userProjectBlocker": "尚未配置 Codex 独立 API Key"
+      },
+      "checks": {
+        "backendTypes": "passed",
+        "frontendTypesAndBuild": "passed",
+        "backendIntegration": {
+          "passed": 191
+        },
+        "backendUnit": {
+          "passed": 254,
+          "skipped": 4
+        },
+        "frontend": {
+          "passed": 786
+        },
+        "realCodex": {
+          "adapter": "2.2.2",
+          "engine": "0.160.1",
+          "node": "22.22.0",
+          "passed": 2,
+          "sourceCommit": "7b7ef9fef9c0e2712a1898be1b3e51bf7dd3b932",
+          "ordinaryModelConfigured": false,
+          "paidCredentialsUsed": false
+        },
+        "boundary": "passed",
+        "naming": "passed",
+        "namingBoundaryUnit": {
+          "passed": 5
+        },
+        "legacyGoRerun": false
+      },
+      "readinessRecovery": {
+        "specificMissingKeyError": true,
+        "noTaskCreatedWithoutKey": true,
+        "noNativeFallback": true,
+        "pilotSetupEntry": true,
+        "pilotCannotSelectSpecialistExecutor": true,
+        "settingsShowsMissingCredential": true,
+        "browser": {
+          "light": true,
+          "dark": true,
+          "narrowWidth": 620,
+          "horizontalOverflow": false,
+          "settingsPreservesDraft": true,
+          "specialistCodexDefaultPreserved": true
+        }
+      },
+      "actualServerTaskRetried": false,
+      "productionChanged": false,
+      "merged": false
+    },
     {
       "date": "2026-11-10",
       "sourceCommit": "98140ef9ce6ffbc7f83f9f75c09baacc37586099",
