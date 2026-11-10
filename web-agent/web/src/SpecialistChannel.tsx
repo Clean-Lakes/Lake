@@ -163,7 +163,7 @@ export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,
   {!!cursor.current&&<button type="button" className="button secondary" disabled={loading} onClick={()=>void loadOlder()}>{loading?'正在加载…':'加载更早记录'}</button>}
   {error&&<p className="pilot-workspace-error" role="alert">{error}</p>}
   <SpecialistChannelEntries entries={entries} resources={snapshot.resources} workers={page?.workers} connected={connected} onTask={onTask} activeSources={new Set(connected?page?.active.map(active=>active.session.id)??[]:[])} activeSnapshots={new Map(page?.active.map(active=>[active.session.id,active])??[])}/>
-  {page?.workers.filter(worker=>worker.execution&&!entries.some(entry=>entry.taskId===worker.task.taskId)).map(worker=><section key={worker.id} className="agent-assignment-pending"><div className="specialist-task-divider"><span>{worker.task.title}</span></div><AgentExecution execution={worker.execution} roleName={worker.roleName} onInspect={()=>onTask(worker.sessionId)} compact/></section>)}
+  {page?.workers.filter(worker=>worker.execution&&!entries.some(entry=>entry.taskId===worker.task.taskId)).map(worker=><section key={worker.id} className="agent-execution-pending"><div className="specialist-task-divider"><span>{worker.task.title}</span></div><AgentExecution execution={worker.execution} roleName={worker.roleName} onInspect={()=>onTask(worker.sessionId)} compact/></section>)}
   {(page?.routing||admitting||!!page?.queued)&&!page?.active.length&&<div className="reply-duration turn-status is-live is-thinking without-avatar" role="status" aria-label="专员正在处理消息"><LoadingWaves/><StatusText active={connected}>正在安排工作</StatusText></div>}
   {page?.active.map(active=>{
    const task=active.superagent?.task;

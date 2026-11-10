@@ -52,7 +52,7 @@ test('real Codex exposes only managed tools and returns a result through the tas
  const project=await response.json();assert.equal(response.status,200);
  const external=app.agents.external,registry=external.registry;
  await cp(adapter,registry.adapterRoot(),{recursive:true});
- await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.execPath,apiKey:'synthetic-codex-local-fixture'});
+ await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_ACP_TEST_NODE??process.execPath,apiKey:'synthetic-codex-local-fixture'});
  localCodexProvider(registry,'http://127.0.0.1:'+provider.address().port+'/v1');
  const signal=AbortSignal.timeout(45000),events=[];
  const actor={projectId:project.id,taskId:'fixture-task',workerId:'fixture-worker',sessionId:'fixture-session',generation:1,deadlineAt:new Date(Date.now()+60000).toISOString(),scopeHash:'fixture-scope',workspace:home,signal,guard:()=>signal.throwIfAborted(),model:null,
@@ -107,7 +107,7 @@ test('a specialist explicitly assigns a real Codex Worker and collects original 
   const body=await res.json();assert.equal(res.status,expected,JSON.stringify(body));return body;
  };
  const url='http://127.0.0.1:'+provider.address().port+'/v1';
- await api('/api/settings/model','PUT',{url:url+'/chat/completions',name:'fixture',apiKey:'synthetic-unused-lake-key'});
+ assert.equal((await api('/api/bootstrap')).modelConfigured,false,'Codex needs no Lake inference credential');
  const project=await api('/api/projects','POST',{name:'Codex explicit assignment'}),path=`/api/projects/${project.id}`;
  const workspace=await app.store.workspace(project.id);await writeFile(join(workspace,'CODEX_ASSIGNED_EVIDENCE.txt'),'ACTUAL_ASSIGNED_CODEX_EVIDENCE');
  const superproject=await api(path+'/superagent','POST',{});
@@ -116,7 +116,7 @@ test('a specialist explicitly assigns a real Codex Worker and collects original 
  app.store.put('superRoles',role.id,role);await api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:1,execution:{kind:'native'}});
  const channel=(await api(path+'/superagent')).channels[0],registry=app.agents.external.registry;
  await cp(adapter,registry.adapterRoot(),{recursive:true});
- await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.execPath,apiKey:'synthetic-codex-assigned-fixture'});
+ await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_ACP_TEST_NODE??process.execPath,apiKey:'synthetic-codex-assigned-fixture'});
  localCodexProvider(registry,url);await api(path+'/external-agents/codex/probe','POST',{});
  const body={text:'请读取 CODEX_ASSIGNED_EVIDENCE.txt 并报告实际内容。',assignment:{requestId:'codex-assignment-0001',roleRevision:2,execution:{kind:'acp',agent:'codex',revision:1}}};
  const receipt=await api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);

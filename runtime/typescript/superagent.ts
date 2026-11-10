@@ -563,7 +563,7 @@ export class LakeSuperagent implements AgentHost {
     const role = this.role(channel.projectId, channel.roleId, true);
     const workers = projectWorkers.filter((worker) => worker.roleId === role.id);
     const accepted = workers.filter(({task}) => (task.collaboration?.acceptanceState ?? task.acceptanceState) === "pass" && task.state === "completed").length;
-    return { ...channel, roleName: role.name, duties: role.duties, roleRevision: role.revision,execution:role.execution??{kind:'native'},
+    return { ...channel, roleName: role.name, duties: role.duties, roleRevision: role.revision,execution:this.roleExecution(role),
       running: workers.some((worker) => this.active.has(worker.id) && this.agents.isRunning(worker.sessionId)),
       preparing: workers.some((worker) => worker.assignmentState === "queued") || this.store.list<InputEvent>("superInputs").some((event) => event.preferredRoleId === role.id && event.disposition === "pending"),
       needsConfirmation: workers.some((worker) => this.pendingInteraction(worker.sessionId)),
@@ -624,12 +624,26 @@ export class LakeSuperagent implements AgentHost {
     let execution:import('./acp/types').AgentBackendRef={kind:'native'};
     if(backend.kind==='acp'){
       const profile=this.agents.external.registry.get(projectId,backend.agent);
-      if(!profile.enabled)throw new HttpError(409,'请先在项目设置中启用该外部 Agent');
-      execution={kind:'acp',agent:profile.id,revision:profile.revision};
+      execution={kind:'acp',agent:profile.id};
     }
     const updated={...role,execution,revision:role.revision+1};
     this.store.put('superRoles',role.id,updated);this.notify(this.ensureChannel(updated).sessionId,'specialist');
     return updated;
+  }
+  private roleExecution(role:Role):AgentBackendRef {
+    if(role.execution?.kind==='native')return {kind:'native'};
+    const profile=this.agents.external.registry.get(role.projectId,'codex');
+    return {kind:'acp',agent:'codex',revision:profile.revision};
+  }
+  private freezeRoleExecution(role:Role):Role {
+    const execution=this.roleExecution(role);
+    if(execution.kind==='acp'){
+      const profile=this.agents.external.registry.get(role.projectId,execution.agent);
+      const probe=this.store.get<{revision:number;ready:boolean;credentialConfigured?:boolean}>('acpProbes',role.projectId+':codex');
+      if(!profile.enabled||probe?.revision!==profile.revision||!probe.ready||!probe.credentialConfigured)
+        throw new HttpError(409,'Codex 尚未就绪，请在聊天框模型菜单中完成 Codex 配置；未创建替代原生任务');
+    }
+    return {...role,execution};
   }
   private manage(sessionId: string, input: Record<string, any>) {
     const event = this.admitted(sessionId, input.event_id, text(input.quote, "quote", 16384));
@@ -725,6 +739,7 @@ export class LakeSuperagent implements AgentHost {
   }
   private newAssignment(event: InputEvent, routerSessionId: string, suffix: string, role: Role, title: string,
     refs: string[], predecessor?: TaskPredecessor, original?: Goal, targetResourceIds?: string[]): Worker {
+    role=this.freezeRoleExecution(role);
     const origin = original ? this.store.require<InputEvent>("superInputs", original.sourceEventId) : event;
     this.ensureChannel(role);
     const workerId = "worker_" + suffix, taskId = "st_" + suffix, workerSession = "sw_" + suffix;

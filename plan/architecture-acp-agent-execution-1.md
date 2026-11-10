@@ -18,7 +18,9 @@ tags: [architecture, typescript, acp, worker, subagent]
 
 参考 Raven 的 registry、ACP client、session、事件回流分层。Lake 的任务、权限和验收按自身现行合同接入。ACP 的权限请求是 advisory，协议本身不提供进程沙箱；握手、工具通知、最终回答均不能单独证明 Lake 业务操作成功。
 
-## 首批实施记录（2026-11-10）
+2026-11-10 最新修订优先于下面首批记录：仅保留 Codex 外部后端，删除 runtime-acp 启动与私有模型代理；专员默认 Codex，选择并入聊天模型菜单，启用时自动准备运行路径及固定适配器。历史 Worker 维持原绑定，退休后端不能续跑。详见[统一模型入口实施](refactor-codex-composer-1.md)。下文未完成的长期能力继续保留为路线图。
+
+## 首批实施记录（历史，2026-11-10）
 
 - 已实现 `acp/{types,catalog,registry,client,private,service,bridge,runtime-server,codex-profile}.ts`：项目配置 CAS、独立子进程、稳定 ACP v1、独立凭据、宿主工具桥及持久运行/事件。
 - 专员默认后端冻结到新 Worker；原生 Worker 可创建 ACP child，已有原生 child 可委派外部段；ACP Worker 也通过原公开任务协调端口创建 child。原 TaskLedger/审批/业务回执继续拥有验收。

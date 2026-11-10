@@ -1,11 +1,11 @@
-import type { Model, ToolEntry } from '../sdk';
+import type { ToolEntry } from '../sdk';
 
-import type {ExternalAgentId} from '../../../web-agent/shared/external-agents';
+import type {ExternalAgentId,StoredExternalAgentId} from '../../../web-agent/shared/external-agents';
 export type {ExternalAgentId,AgentBackendRef} from '../../../web-agent/shared/external-agents';
 export type ExternalAgentProfile = {
   schemaVersion: 1;
   id: ExternalAgentId; projectId: string; revision: number; enabled: boolean;
-  nodePath?: string; model?: string; updatedAt: string;
+  nodePath?: string; npmPath?:string; model?: string; updatedAt: string;
 };
 export type ExternalAgentStatus = ExternalAgentProfile & {
   name: string; installed: boolean; transportReady: boolean; message?: string;
@@ -15,7 +15,7 @@ export type ExternalAgentStatus = ExternalAgentProfile & {
 export type ExternalRunState = 'starting' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted' | 'unknown';
 export type ExternalRun = {
   schemaVersion: 1;
-  id: string; agent: ExternalAgentId; profileRevision: number; projectId: string;
+  id: string; agent: StoredExternalAgentId; profileRevision: number; projectId: string;
   purpose?:'worker'|'child'|'segment';
   taskId: string; workerId: string; sessionId: string; childSessionId?: string; agentRunId?: string;
   generation: number; scopeHash: string; contextId: string; requestKey: string; inputHash: string; state: ExternalRunState;
@@ -35,7 +35,7 @@ export type ExternalActor = {
   deadlineAt: string; scopeHash: string; workspace: string; signal: AbortSignal;
   purpose?: 'worker' | 'child' | 'segment';
   systemPrompt?: string;
-  guard: () => void; model: Model; tools: ToolEntry[];
+  guard: () => void; tools: ToolEntry[];
   executeTool: (name: string, input: unknown, callId: string, signal: AbortSignal) => Promise<unknown>;
   event: (run: ExternalRun, event: ExternalEvent) => void;
 };

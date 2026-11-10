@@ -146,8 +146,8 @@ TS Dev 支持 MySQL、PostgreSQL、Redis、APISIX、Prometheus 和 VictoriaMetri
 
 ### 项目 ACP 执行后端
 
-设置 → Agent 按项目启用外部执行后端，并选择专员新任务的默认后端。省略配置的专员与历史任务继续用原生运行时；新 Worker 冻结所选引用。原生 Worker 的 `Agent` 可选择 `runtime-acp` / `codex-acp`，Worker 或已有原生 child 也可用 `run_external_agent` 委派一段工作。外部 leaf 不再递归委派；任务仍最多 7 个逻辑 child。
+专员聊天框的原模型菜单默认选择独立 Codex Agent，普通模型选择保存为该专员的原生偏好。Codex 发送沿原显式新任务准入直接派发，不依赖 Router 推理；新 Worker 冻结当前执行配置，已有任务及原生偏好保持。原生 Worker 的 `Agent` 可选择 `codex-acp`，Worker 或已有原生 child 也可用 `run_external_agent(agent='codex')` 委派一段工作。外部 leaf 不再递归委派；任务仍最多 7 个逻辑 child。runtime-acp 生产启动与私有模型代理已删除，仅保留历史绑定的读取与明确拒绝，Lake 自身仍使用原公开 SDK。
 
-固定 SDK 的 ACP 服务由 Lake 通过公开 AgentRuntime 托管；Codex 使用固定 ACP adapter 2.2.2 与引擎 0.160.1，需要单独配置 Node 24.14+ 和独立 API Key，并由操作者点击安装。连接测试只握手，不发送模型任务。Codex 原生执行工具关闭，业务调用走每次执行的私有 MCP 桥及原 Lake 审批/账本。具体支持、版本、认证和平台限制见 [兼容记录](../../docs/validation/acp-agent-execution/compatibility.md)。
+在模型菜单选择“配置 Codex”后启用，自动识别 Node 22.22+ / 24.14+ 和配套 npm，在当前 Home 的私有目录安装固定 ACP adapter 2.2.2 与引擎 0.160.1，并完成模型无关的 ACP 握手。路径覆盖折叠在高级设置；主 TS 后端仍使用 Node 24.14.0。Codex 使用项目独立 API Key，不读取全局 Codex 登录或普通模型密钥，也不要求配置普通模型。用于工具托管的 SDK 在没有普通模型时采用不可推理的 Model 端口，原生 child 若需要推理会明确要求普通模型。Codex 原生执行工具关闭，业务调用走每次执行的私有 MCP 桥及原 Lake 审批/账本。具体支持、版本、认证和平台限制见 [兼容记录](../../docs/validation/acp-agent-execution/compatibility.md)。
 
 修改 Agent 连接配置会终止使用旧 revision 的调用。停止或断线后已发送但未明确回答的 prompt 保留 unknown，不自动重放或回退其他引擎。外部完成报告不等于任务验收；只有原任务实际业务回执可以支撑验收。

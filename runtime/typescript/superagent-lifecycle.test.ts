@@ -24,7 +24,7 @@ async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date
   internal.schedule = () => {};
   t.after(async () => { await host.close(); store.db.close(); await rm(home, { recursive: true, force: true }); });
   const project = store.createProject("isolated lifecycle"), router = host.ensure(project.id).routerSessionId;
-  const role = { id: "role-checker", projectId: project.id, roleKey: "checker", name: "项目检查员", duties: "检查当前项目", revision: 1 };
+  const role = { id: "role-checker", projectId: project.id, roleKey: "checker", name: "项目检查员", duties: "检查当前项目", revision: 1, execution:{kind:'native' as const} };
   store.put("superRoles", role.id, role);
   const admit = async (value: string, selected?: MessageInput) => {
     const message = await host.send(router, value, undefined, false, selected) as { id: string };
@@ -897,6 +897,7 @@ test("a cross-resource comparison can include both selected endpoints and newly 
   const result=f.route(event,{action:"create",role_id:f.role.id,resource_ids:["one","two"],title:"比较两端"});
   f.settleRouter();
   const add=await f.admit("另一位专员也加入此任务");
+  f.store.put("superRoles","role-second",{...f.role,id:"role-second",roleKey:"second",name:"另一位专员"});
   const member=f.route(add,{action:"assign",task_id:result.taskId,role_key:"second"});
   assert.deepEqual(f.worker(member.assignments[0].executionId).targetResourceIds,["one","two"]);
   assert.throws(()=>f.route(add,{action:"followup",task_id:result.taskId,role_id:f.role.id,part_key:"widen",resource_ids:["third"]}),/Only create/);

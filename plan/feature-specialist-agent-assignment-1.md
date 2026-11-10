@@ -14,6 +14,8 @@ tags: [feature, acp, specialist, typescript, ui]
 
 专员是持续的任务负责人，Task Worker 保留独立任务与执行上下文，Codex / runtime-acp 是可以分配的执行 Agent。将此前只在设置中提供的执行配置接入专员对话、任务派发、实际进度和报告收集。模型供应商名称不代表外部 Agent 已执行。
 
+2026-11-10 后续修订：本计划记录上一版独立分配面板。当前仅保留 Codex，执行选择合并到聊天模型菜单；默认值、自动路径及替代入口见[统一模型入口实施](refactor-codex-composer-1.md)。原显式接单、幂等与实际回传继续复用。
+
 ## 1. Requirements & Constraints
 
 - **REQ-001**: 专员输入区提供普通对话及分配新任务给 Lake Worker、runtime-acp、Codex 的明确入口；显示专员、Task Worker、执行 Agent 的关系。

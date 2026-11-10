@@ -12,8 +12,6 @@ AUDIT_FILES = {"scripts/check_backend_naming.py", "scripts/test_check_backend_na
 
 
 def exception(path, line):
-    if path == 'web-agent/shared/external-agents.ts' and line.strip() == "export const externalAgentNames:Record<ExternalAgentId,string>={'runtime-acp':'ZCode',codex:'Codex'};":
-        return 'external ACP product branding'
     if path.startswith("docs/licenses/"):
         return "original licenses"
     if path in AUDIT_FILES:

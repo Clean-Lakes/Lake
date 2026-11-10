@@ -15,7 +15,7 @@ test('the packaged TypeScript version matches the native updater contract withou
  assert.equal(output.trim(),`Lake ${version} TypeScript`);
 });
 
-async function fixture(t, mode = "text", legacyDev = false) {
+async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = true) {
   const home = await mkdtemp(join(tmpdir(), "lake-ts-test-"));
   const web = join(home, "web");
   await require("node:fs/promises").mkdir(web);
@@ -143,7 +143,15 @@ async function fixture(t, mode = "text", legacyDev = false) {
     await writeFile(join(options.data, "lake-web.sqlite"), "legacy database sentinel", { mode: 0o600 });
     if (mode === 'legacy-magpie-source') await writeFile(join(home, 'secrets/magpie-agent.json'), JSON.stringify({model: 'legacy-magpie', baseURL: `http://127.0.0.1:${provider.address().port}/v1`, key: 'synthetic-legacy-magpie-key'}), {mode: 0o600});
   }
-  let app = await startLakeServer(options);
+  let app = await startLakeServer(options),usesCodexFixture=false;
+  const explicitNativeRoles=()=>{
+    if(!nativeSpecialists)return;
+    // These existing regression scenarios explicitly exercise native Workers.
+    // Dedicated default-Codex scenarios opt out and verify production defaults.
+    const put=app.store.put.bind(app.store);
+    app.store.put=(kind,key,value)=>put(kind,key,kind==='superRoles'&&value.execution===undefined?{...value,execution:{kind:'native'}}:value);
+  };
+  explicitNativeRoles();
   t.after(async () => {
     releaseBackgroundChild();
     releaseWatchdogWorker();
@@ -188,6 +196,7 @@ async function fixture(t, mode = "text", legacyDev = false) {
     api,
     wait,
     requests,
+    enableCodexFixture:async()=>{usesCodexFixture=true;await prepareCodexProtocolFixture(app,mode);},
     get holdingWatchdogWorker(){return holdingWatchdogWorker;},
     releaseWatchdogWorker,
     requestAuthorizations,
@@ -208,7 +217,7 @@ async function fixture(t, mode = "text", legacyDev = false) {
     async restart(beforeStart) {
       await app.close();
       if (beforeStart) await beforeStart();
-      app = await startLakeServer(options);
+      app = await startLakeServer(options);explicitNativeRoles();if(usesCodexFixture)await prepareCodexProtocolFixture(app,mode);
     },
   };
 }
@@ -1021,7 +1030,7 @@ function subagentReply(request, mode, home) {
       return call("Agent", {
         description: sibling ? "核对另一份证据" : "读取独立任务证据",
         prompt: `LAKE_SUBAGENT_FIXTURE:${JSON.stringify({ mode, path, sibling })}\nUse only the assigned resource tool and report its actual result.`,
-        subagent_type: mode.includes('acp-child') ? 'runtime-acp' : "general-purpose",
+        subagent_type: mode.includes('acp-child') ? 'codex-acp' : "general-purpose",
         run_in_background: mode.startsWith("super-subagent-background"),
       }, `delegate-${sibling}`);
     }
@@ -1052,7 +1061,7 @@ function subagentReply(request, mode, home) {
   assert.ok(raw, "native child must receive its explicit task prompt");
   const input = JSON.parse(raw.match(/LAKE_SUBAGENT_FIXTURE:(\{[^\n]+\})/)[1]);
   if(mode.includes('acp-segment')&&exposes('run_external_agent')){
-    if(!calls.some(call=>call.function.name==='run_external_agent'))return call('run_external_agent',{agent:'runtime-acp',instruction:raw},'external-segment');
+    if(!calls.some(call=>call.function.name==='run_external_agent'))return call('run_external_agent',{agent:'codex',instruction:raw},'external-segment');
     return {content:'外部执行段已回报：'+request.messages.filter(message=>message.role==='tool').map(content).at(-1)};
   }
   if (mode.includes('prose') || mode === 'super-subagent-cap')
@@ -1224,9 +1233,19 @@ test("Watchdog identifies a real provider 503 and retries the same SDK assignmen
   assert.equal(recovered.superagent.task.acceptanceState,"pass");
 });
 
+async function prepareCodexProtocolFixture(app,mode){
+ const fs=require('node:fs/promises'),registry=app.agents.external.registry;
+ const root=registry.adapterRoot();await fs.mkdir(join(root,'node_modules/@agentclientprotocol/codex-acp/dist'),{recursive:true});
+ await fs.writeFile(join(root,'node_modules/@agentclientprotocol/codex-acp/package.json'),JSON.stringify({version:'2.2.2'}));
+ await fs.writeFile(registry.adapterEntry(),'// owned protocol fixture; launch is overridden below');
+ await fs.mkdir(join(root,'node_modules/@openai/codex'),{recursive:true});
+ await fs.writeFile(join(root,'node_modules/@openai/codex/package.json'),JSON.stringify({version:'0.160.1'}));
+ app.agents.external.launch=async(_profile,directory)=>({executable:process.execPath,args:[join(__dirname,'test-fixtures/codex-acp.cjs')],cwd:directory,env:{LAKE_TEST_ACP_SCENARIO:mode}});
+}
+
 async function startSubagentTask(t, mode, memory = false, legacyMaxSteps = 24, permissions = {}) {
   const f = await fixture(t, mode);
-  if(mode.includes('acp'))await f.api(`/api/projects/${f.project.id}/external-agents/runtime-acp`,'PUT',{enabled:true,expectedRevision:0});
+  if(mode.includes('acp')){await f.enableCodexFixture();await f.api(`/api/projects/${f.project.id}/external-agents/codex`,'PUT',{enabled:true,expectedRevision:0,apiKey:'synthetic-codex-fixture-key'});await f.api(`/api/projects/${f.project.id}/external-agents/codex/probe`,'POST',{});}
   const project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
   await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`, "POST", { maxSteps: legacyMaxSteps, ...permissions });
   if (memory) {
@@ -3776,7 +3795,7 @@ test('automatic Pilot command setting also admits a risk-classified file deletio
  await assert.rejects(access(file));const operations=f.app.store.list('superOperations').filter(o=>o.tool==='Bash');assert.equal(operations.length,1);assert.equal(operations[0].status,'succeeded');assert.equal(operations[0].readOnly,false);
 });
 
-for(const entrance of ['child','segment'])test(`ACP ${entrance} uses the independent pinned runtime and returns real scoped receipts`,{timeout:30000},async t=>{
+for(const entrance of ['child','segment'])test(`Codex ACP ${entrance} returns real scoped receipts through its private task bridge`,{timeout:30000},async t=>{
  const {f,worker}=await startSubagentTask(t,'super-subagent-acp-'+entrance);
  const state=await settledSubagentTask(f),goal=f.app.store.list('superGoals')[0];
  assert.equal(state.workers[0].task.state,'completed',JSON.stringify({runs:f.app.store.list('acpRuns'),view:await f.api(`/api/sessions/${worker.sessionId}/ai`)}));
@@ -3792,29 +3811,48 @@ for(const entrance of ['child','segment'])test(`ACP ${entrance} uses the indepen
  assert.equal(child.source,entrance==='child'?'acp_subagent':'native_subagent');
  assert.equal(child.childSessionId,runs[0].childSessionId);assert.equal(operations[0].agentRunId,child.id);
  assert.ok(child.cards.some(card=>card.data?.source==='external_agent'));
- const remote=f.requests.filter(request=>request.tools.some(tool=>tool.function.name==='Read')&&!request.tools.some(tool=>['work_finish','run_external_agent'].includes(tool.function.name)));
- assert.ok(remote.length>=2,'the independent runtime requests a tool and consumes its actual result');
- for(const request of remote)assert.ok(!request.tools.some(tool=>['Agent','work_finish','run_external_agent'].includes(tool.function.name)));
+ assert.ok(runs[0].events.some(event=>event.kind==='tool'&&event.title==='Read'),'the ACP process must request its actual scoped Read');
  const calls=f.calls;await f.restart();await new Promise(resolve=>setTimeout(resolve,50));assert.equal(f.calls,calls,'restart does not replay ACP work');
 });
 
-test('external Agent settings use revisions, isolated credentials, and a model-free ACP probe',async t=>{
+test('Codex settings use revisions, auto-discovered paths, isolated credentials and a model-free probe',async t=>{
  const f=await fixture(t),path=`/api/projects/${f.project.id}/external-agents`;
- const initial=await f.api(path);assert.equal(initial.agents.length,2);assert.ok(initial.agents.every(agent=>!agent.enabled));
- await f.api(path+'/runtime-acp','PUT',{expectedRevision:0,enabled:true});
- await f.api(path+'/runtime-acp','PUT',{expectedRevision:0,enabled:false},409);
- const result=await f.api(path+'/runtime-acp/probe','POST',{});assert.equal(result.ok,true);assert.equal(f.calls,0);
- assert.equal((await f.api(path)).agents.find(agent=>agent.id==='runtime-acp').transportReady,true);
- await f.api(path+'/codex','PUT',{expectedRevision:0,enabled:false,apiKey:'synthetic-independent-codex-key'});
+ const initial=await f.api(path);assert.deepEqual(initial.agents.map(agent=>agent.id),['codex']);assert.equal(initial.agents[0].enabled,false);
+ await f.enableCodexFixture();
+ await f.api(path+'/codex','PUT',{expectedRevision:0,enabled:true,apiKey:'synthetic-independent-codex-key'});
+ await f.api(path+'/codex','PUT',{expectedRevision:0,enabled:false},409);
+ const profile=f.app.agents.external.registry.get(f.project.id,'codex');assert.ok(profile.nodePath);assert.ok(profile.npmPath);
+ const result=await f.api(path+'/codex/probe','POST',{});assert.equal(result.ok,true);assert.equal(f.calls,0);
+ assert.equal((await f.api(path)).agents[0].assignmentReady,true);
  assert.ok(!JSON.stringify(await f.api(path)).includes('synthetic-independent-codex-key'));
  assert.ok(!JSON.stringify(f.app.store.list('acpProfiles')).includes('synthetic-independent-codex-key'));
- const profile=f.app.agents.external.registry.get(f.project.id,'codex');
  const home=await f.app.agents.external.registry.prepareHome(profile);
  assert.ok(home.startsWith(f.app.store.home+'/external-agents/'));
  assert.equal(JSON.parse(await readFile(join(home,'auth.json'),'utf8')).OPENAI_API_KEY,'synthetic-independent-codex-key');
  await f.api(path+'/codex','PUT',{expectedRevision:1,enabled:false,apiKey:''});
  await f.app.agents.external.registry.prepareHome(f.app.agents.external.registry.get(f.project.id,'codex'));
  await assert.rejects(access(join(home,'auth.json')));
+});
+
+test('enabling Codex prepares its runtime, installs only when missing and probes without inference',{skip:process.platform!=='darwin'},async t=>{
+ const f=await fixture(t),path=`/api/projects/${f.project.id}/external-agents/codex/prepare`;
+ let installations=0;
+ f.app.agents.external.registry.install=async(projectId,agent,npmPath,signal)=>{
+   signal.throwIfAborted();installations++;
+   const profile=f.app.agents.external.registry.get(projectId,agent);
+   assert.ok(profile.nodePath);assert.equal(npmPath,profile.npmPath);
+   await f.enableCodexFixture();
+ };
+ const prepared=await f.api(path,'POST',{expectedRevision:0,enabled:true,apiKey:'synthetic-prepare-codex-key'});
+ assert.equal(prepared.agents[0].assignmentReady,true);assert.equal(installations,1);assert.equal(f.calls,0);
+ assert.ok(!JSON.stringify(prepared).includes('synthetic-prepare-codex-key'));
+ const again=await f.api(path,'POST',{expectedRevision:1,enabled:true});
+ assert.equal(again.agents[0].revision,2);assert.equal(again.agents[0].assignmentReady,true);
+ assert.equal(installations,1);assert.equal(f.calls,0);
+ await writeFile(join(f.app.agents.external.registry.adapterRoot(),'node_modules/@openai/codex/package.json'),JSON.stringify({version:'0.1.0'}));
+ const repaired=await f.api(path,'POST',{expectedRevision:2,enabled:true});
+ assert.equal(repaired.agents[0].assignmentReady,true);assert.equal(installations,2);assert.equal(f.calls,0);
+ await f.api(path,'POST',{expectedRevision:0,enabled:true},409);
 });
 
 async function specialistAssignmentFixture(t,permissions={}){
@@ -3825,20 +3863,21 @@ async function specialistAssignmentFixture(t,permissions={}){
  await f.api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:1,execution:{kind:'native'}});
  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{maxSteps:24,silentReadFiles:true,...permissions});
  const channel=(await f.api(path+'/superagent')).channels.find(channel=>channel.roleId===role.id);
- return {f,path,project,channel,body:{text:'读取当前项目工作区，按真实结果报告。',assignment:{requestId:'assignment-fixture-0001',roleRevision:2,execution:{kind:'acp',agent:'runtime-acp',revision:1}}}};
+ return {f,path,project,channel,body:{text:'读取当前项目工作区，按真实结果报告。',assignment:{requestId:'assignment-fixture-0001',roleRevision:2,execution:{kind:'acp',agent:'codex',revision:1}}}};
 }
 
 test('explicit specialist assignment dispatches the chosen ACP Worker without a routing model and collects its real report',{timeout:30000},async t=>{
  const {f,path,channel,body}=await specialistAssignmentFixture(t);
- await f.api(path+'/external-agents/runtime-acp','PUT',{enabled:true,expectedRevision:0});
- await f.api(path+'/external-agents/runtime-acp/probe','POST',{});
+ await f.enableCodexFixture();
+ await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0,apiKey:'synthetic-codex-fixture-key'});
+ await f.api(path+'/external-agents/codex/probe','POST',{});
  const receipt=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
  assert.ok(receipt.assignment?.workerId);assert.equal(receipt.pilotSessionId,channel.sessionId);
  const result=await settledSubagentTask(f),worker=result.workers[0],run=f.app.store.list('acpRuns')[0];
  assert.equal(worker.task.state,'completed',JSON.stringify(worker));assert.equal(worker.task.acceptanceState,'pass');
- assert.ok(f.requests.length>0);assert.ok(f.requests.every(request=>!request.tools.some(tool=>tool.function.name==='route_work')),'an explicit assignment must not ask a Router model to select an executor');
+ assert.equal(f.requests.length,0,'Codex dispatch and inference never call the Lake routing model');
  assert.equal(run.purpose,'worker');assert.equal(run.state,'completed');assert.equal(run.dispatchPhase,'answered');
- assert.equal(worker.execution.backend.agent,'runtime-acp');assert.equal(worker.execution.source,'task_assignment');
+ assert.equal(worker.execution.backend.agent,'codex');assert.equal(worker.execution.source,'task_assignment');
  assert.equal(worker.execution.runs[0].id,run.id);assert.ok(worker.execution.runs[0].summary.includes('独立 ACP Worker'));
  const page=await f.api(`/api/sessions/${channel.sessionId}/channel`),snapshot=await f.api(`/api/sessions/${worker.sessionId}/snapshot`);
  assert.deepEqual(page.workers[0].execution,worker.execution);assert.deepEqual(snapshot.superagent.execution,worker.execution);
@@ -3855,20 +3894,22 @@ test('explicit specialist assignment dispatches the chosen ACP Worker without a 
 });
 
 test('explicit assignment rejects missing setup, stale revisions and wrong entrances before recording a message or task',async t=>{
- const {f,path,project,channel,body}=await specialistAssignmentFixture(t),messages=`/api/sessions/${channel.sessionId}/messages`;
+ const {f,path,project,channel,body}=await specialistAssignmentFixture(t);
+ await f.enableCodexFixture();
+ const messages=`/api/sessions/${channel.sessionId}/messages`;
  const initialMessages=f.app.store.snapshot(channel.sessionId).messages.length;
  await f.api(messages,'POST',body,409);
  await f.api(messages,'POST',{...body,enqueue:true},400);
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',body,409);
  await f.api(messages,'POST',{...body,assignment:{...body.assignment,roleRevision:1}},409);
- await f.api(messages,'POST',{...body,assignment:{...body.assignment,execution:{kind:'acp',agent:'runtime-acp'}}},400);
- await f.api(path+'/external-agents/runtime-acp','PUT',{enabled:true,expectedRevision:0});
- const untested=(await f.api(path+'/external-agents')).agents.find(agent=>agent.id==='runtime-acp');
+ await f.api(messages,'POST',{...body,assignment:{...body.assignment,execution:{kind:'acp',agent:'codex'}}},400);
+ await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0,apiKey:'synthetic-codex-fixture-key'});
+ const untested=(await f.api(path+'/external-agents')).agents.find(agent=>agent.id==='codex');
  assert.equal(untested.assignmentReady,false);assert.match(untested.assignmentBlocker,/测试连接/);
  await f.api(messages,'POST',body,409);
- await f.api(path+'/external-agents/runtime-acp/probe','POST',{});
- assert.equal((await f.api(path+'/external-agents')).agents.find(agent=>agent.id==='runtime-acp').assignmentReady,true);
- await f.api(path+'/external-agents/runtime-acp','PUT',{enabled:true,expectedRevision:1});
+ await f.api(path+'/external-agents/codex/probe','POST',{});
+ assert.equal((await f.api(path+'/external-agents')).agents.find(agent=>agent.id==='codex').assignmentReady,true);
+ await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:1});
  await f.api(messages,'POST',body,409);
  assert.equal(f.app.store.list('superWorkers').length,0);assert.equal(f.app.store.list('superGoals').length,0);
  assert.equal(f.app.store.snapshot(channel.sessionId).messages.length,initialMessages);assert.equal(f.calls,0);
@@ -3876,7 +3917,8 @@ test('explicit assignment rejects missing setup, stale revisions and wrong entra
 
 test('an explicitly assigned ACP Worker retains original read approval and stopped assignments never replay',{timeout:30000},async t=>{
  const {f,path,channel,body}=await specialistAssignmentFixture(t,{silentReadFiles:false});
- await f.api(path+'/external-agents/runtime-acp','PUT',{enabled:true,expectedRevision:0});await f.api(path+'/external-agents/runtime-acp/probe','POST',{});
+ await f.enableCodexFixture();
+ await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0,apiKey:'synthetic-codex-fixture-key'});await f.api(path+'/external-agents/codex/probe','POST',{});
  const receipt=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202),session=receipt.assignment.sessionId;
  const pending=await until(()=>f.api(`/api/sessions/${session}/ai`),view=>!!view.pending);
  assert.equal(pending.pending.call.name,'list_project_files');assert.equal(f.app.store.list('superOperations').length,0);
@@ -3890,13 +3932,14 @@ test('an explicitly assigned ACP Worker retains original read approval and stopp
 
 test('an explicit native assignment overrides only this task and external run projection checks exact ownership',{timeout:30000},async t=>{
  const {f,path,channel,body}=await specialistAssignmentFixture(t);
- await f.api(path+'/external-agents/runtime-acp','PUT',{enabled:true,expectedRevision:0});
- await f.api(path+`/superagent/specialists/${channel.roleId}/execution`,'PUT',{expectedRevision:2,execution:{kind:'acp',agent:'runtime-acp'}});
+ await f.enableCodexFixture();
+ await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0,apiKey:'synthetic-codex-fixture-key'});
+ await f.api(path+`/superagent/specialists/${channel.roleId}/execution`,'PUT',{expectedRevision:2,execution:{kind:'acp',agent:'codex'}});
  body.assignment.roleRevision=3;body.assignment.execution={kind:'native'};
  const receipt=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
  const result=await settledSubagentTask(f);assert.equal(result.workers[0].task.state,'completed');assert.equal(f.app.store.list('acpRuns').length,0);
  const worker=f.app.store.list('superWorkers')[0];assert.equal(worker.roleSnapshot.execution.kind,'native');
- assert.equal((await f.api(path+'/superagent')).channels[0].execution.agent,'runtime-acp');
+ assert.equal((await f.api(path+'/superagent')).channels[0].execution.agent,'codex');
  const base={schemaVersion:1,id:'wrong-owner',agent:'codex',profileRevision:1,projectId:worker.projectId,taskId:worker.taskId,workerId:worker.id,sessionId:'different-session',generation:1,state:'completed',dispatchPhase:'answered',createdAt:worker.createdAt,updatedAt:worker.createdAt,usage:null,events:[],summary:'FORGED_UNRELATED_REPORT'};
  f.app.store.put('acpRuns',base.id,base);
  const snapshot=await f.api(`/api/sessions/${receipt.assignment.sessionId}/snapshot`);
@@ -3906,19 +3949,21 @@ test('an explicit native assignment overrides only this task and external run pr
 test('a specialist freezes its ACP backend into a new Worker and task acceptance still uses Lake receipts',{timeout:30000},async t=>{
  const f=await fixture(t,'super-acp-worker'),path=`/api/projects/${f.project.id}`;
  const project=await f.api(path+'/superagent','POST',{});
- await f.api(path+'/external-agents/runtime-acp','PUT',{enabled:true,expectedRevision:0});
+ await f.enableCodexFixture();
+ await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0,apiKey:'synthetic-codex-fixture-key'});
+ await f.api(path+'/external-agents/codex/probe','POST',{});
  const role={id:'e'.repeat(64),projectId:f.project.id,roleKey:'project-inspector',name:'项目检查员',duties:'检查当前项目工作区，按实际证据报告',revision:1};
  f.app.store.put('superRoles',role.id,role);
- await f.api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:1,execution:{kind:'acp',agent:'runtime-acp'}});
+ await f.api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:1,execution:{kind:'acp',agent:'codex'}});
  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{maxSteps:24});
  const workspace=await f.app.store.workspace(f.project.id);await writeFile(join(workspace,'ACP_ROOT_EVIDENCE.txt'),'root fixture');
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'请让项目检查员检查实际项目工作区。'},202);
  const result=await settledSubagentTask(f),worker=result.workers[0],runs=f.app.store.list('acpRuns');
  assert.equal(worker.task.state,'completed',JSON.stringify({worker,runs}));assert.equal(worker.task.acceptanceState,'pass');
  assert.equal(runs.length,1);assert.equal(runs[0].state,'completed',JSON.stringify(runs));assert.equal(runs[0].childSessionId,undefined);
- const actual=f.app.store.list('superWorkers')[0];assert.equal(actual.roleSnapshot.execution.agent,'runtime-acp');
+ const actual=f.app.store.list('superWorkers')[0];assert.equal(actual.roleSnapshot.execution.agent,'codex');
  await f.api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:2,execution:{kind:'native'}});
- assert.equal(f.app.store.list('superWorkers')[0].roleSnapshot.execution.agent,'runtime-acp');
+ assert.equal(f.app.store.list('superWorkers')[0].roleSnapshot.execution.agent,'codex');
  assert.deepEqual(f.app.store.list('superOperations').map(row=>[row.tool,row.status]),[['list_project_files','succeeded']]);
  assert.equal(f.app.store.list('superAcceptance').filter(row=>row.scope==='goal').length,1);
 });
@@ -3950,19 +3995,21 @@ test('stopping an ACP child with pending approval fences its tool and restart ne
 test('an ACP Worker delegates an ACP child through the original public task coordinator',{timeout:30000},async t=>{
  const f=await fixture(t,'super-acp-worker-child'),path=`/api/projects/${f.project.id}`;
  const project=await f.api(path+'/superagent','POST',{});
- await f.api(path+'/external-agents/runtime-acp','PUT',{enabled:true,expectedRevision:0});
+ await f.enableCodexFixture();
+ await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0,apiKey:'synthetic-codex-fixture-key'});
+ await f.api(path+'/external-agents/codex/probe','POST',{});
  const role={id:'e'.repeat(64),projectId:f.project.id,roleKey:'project-inspector',name:'项目检查员',duties:'检查当前项目工作区，按实际证据报告',revision:1};
  f.app.store.put('superRoles',role.id,role);
- await f.api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:1,execution:{kind:'acp',agent:'runtime-acp'}});
+ await f.api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:1,execution:{kind:'acp',agent:'codex'}});
  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{maxSteps:24});
  const workspace=await f.app.store.workspace(f.project.id);await writeFile(join(workspace,'child-evidence-a.txt'),'ACTUAL_CHILD_EVIDENCE_A');
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'请让项目检查员检查实际项目工作区。'},202);
  const result=await settledSubagentTask(f),worker=result.workers[0],runs=f.app.store.list('acpRuns');
  assert.equal(worker.task.state,'completed',JSON.stringify({worker,runs}));assert.equal(worker.task.acceptanceState,'pass');
  assert.equal(runs.length,2,JSON.stringify(runs));assert.ok(runs.every(run=>run.state==='completed'));assert.ok(runs.some(run=>run.childSessionId));
- const actual=f.app.store.list('superWorkers')[0];assert.equal(actual.roleSnapshot.execution.agent,'runtime-acp');
+ const actual=f.app.store.list('superWorkers')[0];assert.equal(actual.roleSnapshot.execution.agent,'codex');
  await f.api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:2,execution:{kind:'native'}});
- assert.equal(f.app.store.list('superWorkers')[0].roleSnapshot.execution.agent,'runtime-acp');
+ assert.equal(f.app.store.list('superWorkers')[0].roleSnapshot.execution.agent,'codex');
  assert.deepEqual(f.app.store.list('superOperations').map(row=>[row.tool,row.status]),[['Read','succeeded']]);
  assert.equal(f.app.store.list('superAcceptance').filter(row=>row.scope==='goal').length,1);
 });
@@ -3978,9 +4025,37 @@ test('a completed ACP report without real business receipts cannot accept the or
 test('disabling the project ACP profile revokes a pending bridge write without accepting stale approval',{timeout:30000},async t=>{
  const {f,worker,workspace}=await startSubagentTask(t,'super-subagent-acp-child-write',false,24,{silentWriteFiles:false});
  const pending=await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),view=>!!view.pending);
- await f.api(`/api/projects/${f.project.id}/external-agents/runtime-acp`,'PUT',{expectedRevision:1,enabled:false});
+ await f.api(`/api/projects/${f.project.id}/external-agents/codex`,'PUT',{expectedRevision:1,enabled:false});
  await settledSubagentTask(f);await assert.rejects(access(join(workspace,'child-output.txt')));
  await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:pending.pending.id,accept:true},409);
  assert.equal(f.app.store.list('acpRuns')[0].state,'unknown');
  assert.equal(f.app.store.list('superAcceptance').length,0);
+});
+
+test('specialists without an override default to Codex and never silently create an unconfigured native task',{timeout:30000},async t=>{
+ const f=await fixture(t,'super-acp-worker',false,false),path=`/api/projects/${f.project.id}`;
+ const project=await f.api(path+'/superagent','POST',{});
+ const role={id:'e'.repeat(64),projectId:f.project.id,roleKey:'project-inspector',name:'项目检查员',duties:'检查实际项目',revision:1};
+ f.app.store.put('superRoles',role.id,role);f.app.superagent.ensureChannel(role);
+ const channel=(await f.api(path+'/superagent')).channels[0];assert.equal(channel.execution.agent,'codex');
+ await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',{text:'检查项目',assignment:{requestId:'default-codex-unready',roleRevision:1,execution:channel.execution}},409);
+ assert.equal(f.app.store.list('superWorkers').length,0);
+ await f.enableCodexFixture();await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0,apiKey:'synthetic-default-codex'});await f.api(path+'/external-agents/codex/probe','POST',{});
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'请让项目检查员读取实际项目工作区。'},202);
+ const result=await settledSubagentTask(f);assert.equal(result.workers[0].execution.backend.agent,'codex');assert.equal(result.workers[0].task.acceptanceState,'pass');
+ await f.api(path+'/external-agents/codex','PUT',{enabled:false,expectedRevision:1});
+ assert.equal(f.app.store.list('superWorkers')[0].roleSnapshot.execution.revision,1,'new defaults cannot modify an existing frozen Worker');
+});
+
+test('removed external backend rejects new configuration and preserves historical run and Worker bindings',async t=>{
+ const {f,path,channel,body}=await specialistAssignmentFixture(t);body.assignment.execution={kind:'native'};
+ const receipt=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);await settledSubagentTask(f);
+ for(const action of ['prepare','probe'])await f.api(path+'/external-agents/runtime-acp/'+action,'POST',{enabled:true,expectedRevision:0},409);
+ await f.api(path+'/external-agents/runtime-acp','PUT',{enabled:true,expectedRevision:0},409);
+ const worker=f.app.store.list('superWorkers')[0];worker.roleSnapshot.execution={kind:'acp',agent:'runtime-acp',revision:3};f.app.store.put('superWorkers',worker.id,worker);
+ const old={schemaVersion:1,id:'retired-actual-run',agent:'runtime-acp',profileRevision:3,projectId:f.project.id,taskId:worker.taskId,workerId:worker.id,sessionId:worker.sessionId,generation:worker.generation,scopeHash:'historical',contextId:'historical',requestKey:'historical',inputHash:'historical',state:'unknown',dispatchPhase:'sent',createdAt:worker.createdAt,updatedAt:worker.createdAt,events:[],usage:null};
+ f.app.store.put('acpRuns',old.id,old);await f.restart();
+ const snapshot=await f.api(`/api/sessions/${receipt.assignment.sessionId}/snapshot`);
+ assert.equal(snapshot.superagent.execution.backend.agent,'runtime-acp');assert.equal(snapshot.superagent.execution.runs[0].state,'unknown');
+ await assert.rejects(f.app.agents.runtime(worker.sessionId),/已移除/);assert.deepEqual(f.app.store.get('acpRuns',old.id),old);
 });

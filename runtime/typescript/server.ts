@@ -504,10 +504,10 @@ export async function startLakeServer(options: ServerOptions) {
         const registry=agents.external.registry;
         if(path.length===4&&method==='GET')result={agents:await registry.list(path[2])};
         else if(path.length===5&&method==='PUT')result=await registry.save(path[2],path[4],data);
-        else if(path.length===6&&method==='POST'&&['probe','install'].includes(path[5])){
+        else if(path.length===6&&method==='POST'&&['probe','install','prepare'].includes(path[5])){
           const cancel=new AbortController(),abort=()=>cancel.abort();response.on('close',abort);
-          const timeout=setTimeout(abort,path[5]==='install'?300000:30000);
-          try{result=path[5]==='probe'?await agents.external.probe(path[2],path[4],cancel.signal):await registry.install(path[2],path[4],data.npmPath,cancel.signal);}
+          const timeout=setTimeout(abort,path[5]==='probe'?30000:300000);
+          try{result=path[5]==='prepare'?await agents.external.prepare(path[2],path[4],data,cancel.signal):path[5]==='probe'?await agents.external.probe(path[2],path[4],cancel.signal):await registry.install(path[2],path[4],data.npmPath,cancel.signal);}
           finally{clearTimeout(timeout);response.off('close',abort);}
         }else throw new HttpError(405,'不支持此外部 Agent 请求');
       } else if (path[1] === "projects" && path[3] === "watchdog" && path.length === 4) {
@@ -888,10 +888,6 @@ export async function startLakeServer(options: ServerOptions) {
 
 async function main() {
   const args = process.argv.slice(2);
-  if(args[0]==='--internal-acp-runtime'){
-    if(!args[1])throw new Error('ACP 运行时缺少独立状态目录');
-    const {runRuntimeAgent}=await import('./acp/runtime-server');await runRuntimeAgent(args[1]);return;
-  }
   if(args[0]==='--internal-acp-mcp'){
     if(!args[1])throw new Error('ACP 工具桥缺少原任务端点');
     const {runToolBridge}=await import('./acp/bridge');await runToolBridge(args[1]);return;
