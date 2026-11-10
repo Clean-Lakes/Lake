@@ -38,3 +38,30 @@ Go 补充回归：`go test -race ./internal/ai ./internal/web` 中 AI 包通过�
 运行桥生命周期修正源码 SHA：`70b883538dab06866643efc7c3121faf84758533`。真实 Codex 固定版已复验握手、无原生工具、伪造补丁拒绝、MCP Read、requestKey 去重与 session/load 重放隔离；后端 ACP 重点用例 9 项复验通过。
 
 最终 Dev 安装与复验源码：`0cd7e116f087db33b7a437dc5c94afa200b626d6`（相对 70b88353 仅有文档变化）。签名与 build-origin 核对通过，dirty=false；最终完整后端集成测试 184/184 再次通过。Dev 窗口重新打开正常，原生与既有任务未切换后端。
+
+## 专员显式分配与执行回传（2026-11-10）
+
+本批源码与实际 Dev 安装：`b508be56dda27866c2283045a661cfadf7dcd473`。这是前述首批后端的交互与接单补充，具体任务见 [实施计划](../../../plan/feature-specialist-agent-assignment-1.md)。
+
+- 专员输入区提供普通对话及分配新任务给 Lake Worker / runtime-acp / Codex。显式分配由认证后的宿主直接创建原 Task/Worker，不调用 Router 模型猜测执行者；职责版本、连接版本和准确频道在接单时校验。相同 requestId/输入读取原回执，冲突输入拒绝，重启与重复点击不重放外部 prompt。
+- 独立分配不改专员默认配置；新 Worker 冻结执行后端，已有任务不切换。未启用、未安装、缺少独立凭据或未通过当前 ACP 握手时，不写用户消息或任务，草稿保留，可跳到当前项目的 Agent 设置。连接测试不证明推理认证可用。
+- 频道和详情按准确 project/task/worker/session 读取实际外部运行，显示执行者、派发、审批、已回传、失败与结果未知。没有运行记录不显示已调用；报告不产生业务 Operation 或独立验收。逻辑 ACP child 显示实际执行 Agent，原生 child 委派外部段保留原 child 身份。
+- 整个 ACP Worker 的实际宿主调用使用独立 `acp_turn_` 身份聚合进度与最终报告；不伪造 SDK 事件。已验证同一执行只形成一条频道回复，原始记录与业务回执保留。
+- 外部产品显示名集中在共享目录，命名检查仍只允许该准确常量行，不泛化允许旧后端名称出现在业务实现或正文中；新增命名边界回归通过。
+
+| 检查 | 结果 |
+| --- | --- |
+| 后端 TypeScript、前端类型及 Web 构建 | 通过；Vite 保留已有大 chunk 提示 |
+| 完整后端集成（提交后复验） | 188/188 |
+| 完整前端（提交后复验） | 779/779 |
+| 后端单元 | 251 通过，4 个现有可选测试跳过 |
+| 真实 Codex 进程 | 2/2；固定 adapter 2.2.2 / engine 0.160.1，独立临时 Home、本地 Responses 夹具与合成凭据 |
+| 命名与命名边界单测、ADK runtime boundary | 通过；命名单测 5 项 |
+| 签名 Lake Dev | `scripts/build_lake_desktop.sh --dev --install` 成功；签名核验通过，build-origin 为上述 SHA、dirty=false |
+| Lake Dev 实际界面与签名 SEA 握手 | 专员分配、Codex 未就绪提示、协调模型标签可见；runtime-acp 握手成功，既有两个外部 profile 均保持未启用 |
+
+隔离 Web 联调通过键盘直接分配 runtime-acp，实际独立进程读取项目目录、提交原 work_finish 并回到频道；配置跳转保留输入，执行报告可展开并查看原任务。浅/深色、620px 窄窗、焦点与 Escape 返回入口实际检查，无横向溢出。截图：[浅色回传](assignment-light.png)、[深色](assignment-dark.png)、[窄窗口与未就绪提示](assignment-narrow-dark.png)、[窄窗口菜单](assignment-menu-narrow-dark.png)。
+
+本批未使用用户的真实 Codex 推理凭据执行任务，未启用用户项目的外部后端，也未修改正式版。Codex 测试曾在并行完整回归期间遇到一次请求目录未包含 Read 的失败，原因尚未定位；未放宽工具断言，原用例单独复验及最终两项串行复验均通过，高负载初始化稳定性继续观察。未提供真实工具回执时，原任务不能被报告验收成功。
+
+本批没有 Go 源码变化；上述 Go 补充结果属于前批记录，没有把旧 Web 整包超时改写为通过。原 ACP 首批的并发、平台、认证、附件、Claude Code 与主动指导限制继续适用。

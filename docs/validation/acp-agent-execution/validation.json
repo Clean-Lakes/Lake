@@ -1,7 +1,7 @@
 {
   "date": "2026-11-10",
-  "sourceCommit": "0cd7e116f087db33b7a437dc5c94afa200b626d6",
-  "backendCodeCommit": "70b883538dab06866643efc7c3121faf84758533",
+  "sourceCommit": "b508be56dda27866c2283045a661cfadf7dcd473",
+  "backendCodeCommit": "b508be56dda27866c2283045a661cfadf7dcd473",
   "platform": "macOS arm64",
   "runtime": "Node 24.14.0 / signed Lake SEA",
   "dev": {
@@ -11,14 +11,18 @@
     "bundleId": "com.cleanlakes.lake.desktop.dev",
     "home": "~/.lake-dev",
     "guiLoaded": true,
-    "runtimeACPHandshake": true
+    "runtimeACPHandshake": true,
+    "specialistAssignmentUI": true,
+    "codexNotReadyVisible": true,
+    "coordinatorModelLabel": true,
+    "existingProfilesEnabled": false
   },
   "checks": {
     "backendIntegration": {
-      "passed": 184
+      "passed": 188
     },
     "frontend": {
-      "passed": 774
+      "passed": 779
     },
     "backendUnit": {
       "passed": 251,
@@ -31,7 +35,12 @@
       "nativePatchRejected": true,
       "mcpRead": true,
       "duplicatePromptNotReplayed": true,
-      "sessionLoadReplayExcluded": true
+      "sessionLoadReplayExcluded": true,
+      "passed": 2,
+      "explicitSpecialistAssignment": true,
+      "originalTaskAcceptedFromHostReceipt": true,
+      "parallelMissingToolObserved": true,
+      "finalSerialRun": "passed"
     },
     "boundary": "passed",
     "naming": "passed",
@@ -44,8 +53,34 @@
     "goRaceWebSREVerifier": {
       "status": "passed",
       "seconds": 18.113
-    }
+    },
+    "namingBoundaryUnit": {
+      "passed": 5
+    },
+    "legacyGoChecksSourceCommit": "70b883538dab06866643efc7c3121faf84758533"
   },
   "productionChanged": false,
-  "merged": false
+  "merged": false,
+  "previousDevSourceCommit": "0cd7e116f087db33b7a437dc5c94afa200b626d6",
+  "specialistAssignment": {
+    "operatorInputCAS": true,
+    "requestDeduplication": true,
+    "explicitNativeOverride": true,
+    "sameChannelAndRole": true,
+    "frozenTaskExecutor": true,
+    "nativeDefaultUnchanged": true,
+    "actualRunProjection": true,
+    "originalApproval": true,
+    "stopDoesNotReplay": true,
+    "oneACPInvocationReply": true,
+    "browser": {
+      "light": true,
+      "dark": true,
+      "narrowWidth": 620,
+      "horizontalOverflow": false,
+      "keyboardAndEscape": true,
+      "settingsPreserveDraft": true,
+      "actualRuntimeACPDispatch": true
+    }
+  }
 }
