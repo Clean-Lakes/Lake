@@ -1,3 +1,28 @@
+## Codex 认证缺项与 Pilot 配置入口（2026-11-10）
+
+已测试源码与签名 Lake Dev：`7b7ef9fef9c0e2712a1898be1b3e51bf7dd3b932`。本次只补齐就绪原因及配置入口，仍采用项目独立 API Key 认证。
+
+用户启用 Codex 后，实际 Node/npm 自动识别、固定适配器安装和 ACP 握手均已成功；当前阻塞是项目没有独立 API Key。原 Pilot 只得到泛化的“尚未就绪”，且其模型菜单缺少提示所指的 Codex 配置入口，因此重复请求仍无法建单。
+
+- 后端分别报告未启用、当前连接未验证、连接失败、缺少独立 Key 与旧凭据状态需复验；缺 Key 不创建 Task/Worker，也不改变旧任务。
+- Pilot 原模型菜单新增“专员 Codex”的具体状态及“配置 Codex”，跳转当前项目 Agent 设置并保留草稿。此入口仅用于配置，Pilot 继续使用原协调模型，不能在此误选为独立 Codex 执行。
+- 专员仍可从同一菜单选择独立 Codex。设置页在已启用且 ACP 连接正常时明确显示缺少独立 Key，避免将握手成功当作认证完成。
+
+| 本次检查 | 结果 |
+| --- | --- |
+| 后端 TypeScript / Web 类型与构建 | 通过 |
+| 完整后端集成 / 后端单元 | 191/191；254 通过、4 个原有可选跳过；新增 Pilot 缺 Key 拒绝派发且不建任务回归 |
+| 完整前端 | 786/786；新增 Pilot 配置元数据不改变协调模型、无普通模型时保持连接入口回归 |
+| 真实 Codex（Node 22.22.0） | 2/2；本地 Responses 夹具和合成凭据，包含无普通模型配置的成功 Worker 路径 |
+| ADK boundary / 命名 / 命名单测 | 通过 / 0 违规 / 5 项通过 |
+| Web 交互 | Pilot 缺 Key 状态、项目配置跳转及草稿保留、切到专员仍默认 Codex、浅/深色与 620px 窄窗通过，无横向溢出 |
+| 签名 Lake Dev | `scripts/build_lake_desktop.sh --dev --install` 成功；来源 SHA、dirty=false、深度签名、进程路径与后端 hash 核验通过 |
+| macOS 原生浮层 | Pilot 模型保持 gpt-6.1-terra，浮层显示专员 Codex 缺 Key 及配置按钮；原生跳转到启用状态为 on 的项目 Agent 页，明确显示缺项 |
+
+隔离交互截图：[Pilot 配置入口](readiness-pilot-light.png)、[深色窄窗](readiness-pilot-narrow-dark.png)。截图仅使用独立测试 Home 和合成模型配置，没有用户业务内容或真实凭据。
+
+用户项目当前仍缺独立 Key，本次没有导入其他凭据、执行付费推理或重试真实服务器任务。认证补齐前请求仍会按原准入规则拒绝，不伪造任务或服务器状态。Node 24、签名自动安装及旧 Go 的先前实测保留其原源码 SHA，未将旧结果标为本次重跑。正式版与 PR 合并状态保持不变。
+
 ## 当前：Codex 与统一模型入口（2026-11-10）
 
 已测试源码与签名 Lake Dev：`98140ef9ce6ffbc7f83f9f75c09baacc37586099`。本节取代下方历史版本中的 runtime-acp、独立分配面板、手工路径及原生默认行为；完整长期路线图仍有未完成项。见[本次实施计划](../../../plan/refactor-codex-composer-1.md)。

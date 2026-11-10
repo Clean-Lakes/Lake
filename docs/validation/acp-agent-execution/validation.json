@@ -1,9 +1,9 @@
 {
   "date": "2026-11-10",
-  "sourceCommit": "98140ef9ce6ffbc7f83f9f75c09baacc37586099",
-  "backendCodeCommit": "98140ef9ce6ffbc7f83f9f75c09baacc37586099",
+  "sourceCommit": "7b7ef9fef9c0e2712a1898be1b3e51bf7dd3b932",
+  "backendCodeCommit": "7b7ef9fef9c0e2712a1898be1b3e51bf7dd3b932",
   "platform": "macOS arm64",
-  "runtime": "Node 24.14.0 / signed Lake SEA; Codex adapter Node 22.22.0 and 24.14.0",
+  "runtime": "Node 24.14.0 / signed Lake SEA; real Codex Node 22.22.0",
   "dev": {
     "installed": true,
     "signatureVerified": true,
@@ -13,14 +13,13 @@
     "bundleId": "com.cleanlakes.lake.desktop.dev",
     "home": "~/.lake-dev",
     "guiLoaded": true,
-    "nativeCodexModelMenu": true,
-    "nativeCodexSettingsRelay": true,
-    "settingsOnlyCodex": true,
-    "advancedPathsCollapsed": true,
-    "separateAssignmentPanel": false,
-    "defaultCodexSpecialists": 5,
-    "userProjectCodexEnabled": false,
-    "originalTaskBackend": "native"
+    "nativePilotCodexConfiguration": true,
+    "nativeMissingKeyVisible": true,
+    "pilotModelUnchanged": true,
+    "userProjectCodexEnabled": true,
+    "userProjectTransportReady": true,
+    "userProjectAssignmentReady": false,
+    "userProjectBlocker": "尚未配置 Codex 独立 API Key"
   },
   "checks": {
     "backendTypes": "passed",
@@ -28,45 +27,19 @@
     "backendIntegration": {
       "passed": 191
     },
-    "frontend": {
-      "passed": 784
-    },
     "backendUnit": {
-      "passed": 253,
+      "passed": 254,
       "skipped": 4
+    },
+    "frontend": {
+      "passed": 786
     },
     "realCodex": {
       "adapter": "2.2.2",
       "engine": "0.160.1",
-      "node22": {
-        "version": "22.22.0",
-        "passed": 2
-      },
-      "node24": {
-        "version": "24.14.0",
-        "passed": 2
-      },
-      "ordinaryModelConfigured": false,
-      "paidModelCredentialsUsed": false,
-      "nativePatchRejected": true,
-      "mcpRead": true,
-      "originalTaskAcceptedFromHostReceipt": true,
-      "duplicatePromptNotReplayed": true,
-      "sessionLoadReplayExcluded": true,
-      "finalRunsSerial": true,
-      "historicalParallelMissingToolUnresolved": true
-    },
-    "signedAutomaticSetup": {
-      "signedSEA": true,
-      "isolatedHome": true,
-      "restrictedGUIPath": true,
-      "nodeVersion": "v22.22.0",
-      "nodePath": "/opt/homebrew/Cellar/node@22/22.22.0/bin/node",
-      "npmPath": "/opt/homebrew/Cellar/node@22/22.22.0/lib/node_modules/npm/bin/npm-cli.js",
-      "adapter": "2.2.2",
-      "engine": "0.160.1",
-      "installedAutomatically": true,
-      "transportReady": true,
+      "node": "22.22.0",
+      "passed": 2,
+      "sourceCommit": "7b7ef9fef9c0e2712a1898be1b3e51bf7dd3b932",
       "ordinaryModelConfigured": false,
       "paidCredentialsUsed": false
     },
@@ -77,33 +50,132 @@
     },
     "legacyGoRerun": false
   },
-  "specialistComposer": {
-    "defaultCodexWithoutOverride": true,
-    "explicitNativePreferencePreserved": true,
-    "roleSelectionCAS": true,
-    "requestDeduplication": true,
-    "frozenTaskExecutor": true,
-    "retiredBackendNewRunsRejected": true,
-    "retiredHistoryPreserved": true,
-    "codexWithoutNativeModelCredential": true,
-    "actualRunProjection": true,
-    "originalApproval": true,
-    "stopDoesNotReplay": true,
+  "readinessRecovery": {
+    "specificMissingKeyError": true,
+    "noTaskCreatedWithoutKey": true,
+    "noNativeFallback": true,
+    "pilotSetupEntry": true,
+    "pilotCannotSelectSpecialistExecutor": true,
+    "settingsShowsMissingCredential": true,
     "browser": {
       "light": true,
       "dark": true,
       "narrowWidth": 620,
       "horizontalOverflow": false,
-      "keyboardAndEscape": true,
-      "settingsPreserveDraft": true,
-      "enableAutomaticallyDetectsPaths": true,
-      "actualCodexDispatch": true,
-      "ordinaryModelAndCodexSelectionPersist": true
+      "settingsPreservesDraft": true,
+      "specialistCodexDefaultPreserved": true
     }
   },
+  "actualServerTaskRetried": false,
   "productionChanged": false,
   "merged": false,
   "previousValidations": [
+    {
+      "date": "2026-11-10",
+      "sourceCommit": "98140ef9ce6ffbc7f83f9f75c09baacc37586099",
+      "backendCodeCommit": "98140ef9ce6ffbc7f83f9f75c09baacc37586099",
+      "platform": "macOS arm64",
+      "runtime": "Node 24.14.0 / signed Lake SEA; Codex adapter Node 22.22.0 and 24.14.0",
+      "dev": {
+        "installed": true,
+        "signatureVerified": true,
+        "buildOriginDirty": false,
+        "backendHashVerified": true,
+        "actualProcessVerified": true,
+        "bundleId": "com.cleanlakes.lake.desktop.dev",
+        "home": "~/.lake-dev",
+        "guiLoaded": true,
+        "nativeCodexModelMenu": true,
+        "nativeCodexSettingsRelay": true,
+        "settingsOnlyCodex": true,
+        "advancedPathsCollapsed": true,
+        "separateAssignmentPanel": false,
+        "defaultCodexSpecialists": 5,
+        "userProjectCodexEnabled": false,
+        "originalTaskBackend": "native"
+      },
+      "checks": {
+        "backendTypes": "passed",
+        "frontendTypesAndBuild": "passed",
+        "backendIntegration": {
+          "passed": 191
+        },
+        "frontend": {
+          "passed": 784
+        },
+        "backendUnit": {
+          "passed": 253,
+          "skipped": 4
+        },
+        "realCodex": {
+          "adapter": "2.2.2",
+          "engine": "0.160.1",
+          "node22": {
+            "version": "22.22.0",
+            "passed": 2
+          },
+          "node24": {
+            "version": "24.14.0",
+            "passed": 2
+          },
+          "ordinaryModelConfigured": false,
+          "paidModelCredentialsUsed": false,
+          "nativePatchRejected": true,
+          "mcpRead": true,
+          "originalTaskAcceptedFromHostReceipt": true,
+          "duplicatePromptNotReplayed": true,
+          "sessionLoadReplayExcluded": true,
+          "finalRunsSerial": true,
+          "historicalParallelMissingToolUnresolved": true
+        },
+        "signedAutomaticSetup": {
+          "signedSEA": true,
+          "isolatedHome": true,
+          "restrictedGUIPath": true,
+          "nodeVersion": "v22.22.0",
+          "nodePath": "/opt/homebrew/Cellar/node@22/22.22.0/bin/node",
+          "npmPath": "/opt/homebrew/Cellar/node@22/22.22.0/lib/node_modules/npm/bin/npm-cli.js",
+          "adapter": "2.2.2",
+          "engine": "0.160.1",
+          "installedAutomatically": true,
+          "transportReady": true,
+          "ordinaryModelConfigured": false,
+          "paidCredentialsUsed": false
+        },
+        "boundary": "passed",
+        "naming": "passed",
+        "namingBoundaryUnit": {
+          "passed": 5
+        },
+        "legacyGoRerun": false
+      },
+      "specialistComposer": {
+        "defaultCodexWithoutOverride": true,
+        "explicitNativePreferencePreserved": true,
+        "roleSelectionCAS": true,
+        "requestDeduplication": true,
+        "frozenTaskExecutor": true,
+        "retiredBackendNewRunsRejected": true,
+        "retiredHistoryPreserved": true,
+        "codexWithoutNativeModelCredential": true,
+        "actualRunProjection": true,
+        "originalApproval": true,
+        "stopDoesNotReplay": true,
+        "browser": {
+          "light": true,
+          "dark": true,
+          "narrowWidth": 620,
+          "horizontalOverflow": false,
+          "keyboardAndEscape": true,
+          "settingsPreserveDraft": true,
+          "enableAutomaticallyDetectsPaths": true,
+          "actualCodexDispatch": true,
+          "ordinaryModelAndCodexSelectionPersist": true
+        }
+      },
+      "productionChanged": false,
+      "merged": false
+    },
     {
       "date": "2026-11-10",
       "sourceCommit": "b508be56dda27866c2283045a661cfadf7dcd473",
