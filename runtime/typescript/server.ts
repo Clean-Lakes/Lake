@@ -661,7 +661,11 @@ export async function startLakeServer(options: ServerOptions) {
           if (data.terminalReuse) throw new HttpError(501, '终端交接尚未接入，未发送此消息');
           await agents.prepareRedaction();
           const input = messageInput(store, sessionId, agents.redact(String(data.text ?? '')), data);
-          if (data.enqueue === true || messageQueue!.get(sessionId).items.length) result = messageQueue!.enqueue(sessionId, agents.redact(String(data.text ?? '')), {...data, ...input});
+          if(data.assignment!==undefined){
+            if(data.enqueue===true)throw new HttpError(400,'分配新任务须直接接单，不能作为普通待发送消息入队');
+            result=await superagent.send(sessionId,String(data.text??''),data.taskId,data.ignoreProjectMemory===true,input,data.assignment);
+          }
+          else if (data.enqueue === true || messageQueue!.get(sessionId).items.length) result = messageQueue!.enqueue(sessionId, agents.redact(String(data.text ?? '')), {...data, ...input});
           else result = await superagent.send(sessionId, String(data.text ?? ""), data.taskId, data.ignoreProjectMemory === true, input);
           status = 202;
         } else if (path[3] === "message-queue") {

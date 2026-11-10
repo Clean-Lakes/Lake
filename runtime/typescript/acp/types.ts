@@ -9,12 +9,14 @@ export type ExternalAgentProfile = {
 };
 export type ExternalAgentStatus = ExternalAgentProfile & {
   name: string; installed: boolean; transportReady: boolean; message?: string;
+  assignmentReady?:boolean;assignmentBlocker?:string;
   capabilities?: Record<string, unknown>;
 };
 export type ExternalRunState = 'starting' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted' | 'unknown';
 export type ExternalRun = {
   schemaVersion: 1;
   id: string; agent: ExternalAgentId; profileRevision: number; projectId: string;
+  purpose?:'worker'|'child'|'segment';
   taskId: string; workerId: string; sessionId: string; childSessionId?: string; agentRunId?: string;
   generation: number; scopeHash: string; contextId: string; requestKey: string; inputHash: string; state: ExternalRunState;
   dispatchPhase: 'not_sent' | 'dispatching' | 'sent' | 'answered';

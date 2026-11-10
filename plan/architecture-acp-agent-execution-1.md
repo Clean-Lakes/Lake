@@ -25,7 +25,7 @@ tags: [architecture, typescript, acp, worker, subagent]
 - 固定 SDK v3.17.2 没有原生 ACP CLI，使用公开 AgentRuntime 的薄 ACP 宿主，未修改上游、未重写模型循环。模型经宿主公开 Model 端口调用，API Key 不进入子进程。
 - Codex 固定适配器 2.2.2、引擎 0.160.1；以独立 Home 和静态模型目录禁用原生执行工具，仅暴露任务私有 MCP。仅匹配本轮实际 Lake MCP 调用的 transport permission 才允许进入桥；业务审批仍由原 ToolExecutor 完成。
 - 当前外部并发上限为 4 个外部运行（包含等待 child 的父进程），满额直接返回 busy，不排队互等；每次调用最多 15 分钟且不超过原任务期限。计划中的让槽调度、8 进程分离、Codex 运行中补充输入及 Watchdog 主动指导不作为本批完成项。
-- 配置界面位于设置的 Agent 页，集中管理专员新任务默认后端；未新增专员菜单的重复配置入口。工具原生记录和外部报告在现有执行详情汇合，报告本身不生成成功 Operation。
+- 配置界面位于设置的 Agent 页，集中管理连接与专员新任务默认后端。专员对话另提供“执行分配”，显式选择执行 Agent 后由宿主接单并冻结新 Worker；频道和详情从实际运行记录展示分配与回传。见 [专员分配交互实施](feature-specialist-agent-assignment-1.md)。报告本身不生成成功 Operation。
 - 连接测试不发送业务 prompt；适配器安装由本机操作者显式触发，不自动安装或复用 Pilot 凭据。启动后 sent/dispatching 的未结执行保留 unknown，不自动重放或切换后端。
 - 验证证据、兼容范围和剩余项见 [首批兼容记录](../docs/validation/acp-agent-execution/compatibility.md)。下方 TASK 表保留完整分期，部分实现不等于完整任务验收。
 

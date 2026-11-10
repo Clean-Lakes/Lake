@@ -12,8 +12,8 @@ import {modelBrand} from "./modelBrand";
 import {ContextUsage,type ContextUsageProps} from "./ContextUsage";
 
 export type ProviderMenuRequest={providers:{id:string;name:string}[];value:string;anchor:{left:number;top:number;width:number;height:number}};
-export type ComposerModelSelectProps={available:AvailableModels&{loading:boolean};modelName:string|null;selection?:AvailableModelEntry;configured:boolean;open:boolean;disabled:boolean;onOpenChange:(open:boolean)=>void;onSelect:(model:AvailableModelEntry|string)=>void;onSettings:()=>void;reasoning?:ReasoningSelectorProps;contextUsage?:Pick<ContextUsageProps,"view"|"model"|"status">;presentation?:number;onProviderMenu?:(request:ProviderMenuRequest)=>Promise<string|null>};
-export function ComposerModelSelect({available,modelName,selection,configured,open,disabled,onOpenChange,onSelect,onSettings,reasoning,contextUsage,presentation,onProviderMenu}:ComposerModelSelectProps) {
+export type ComposerModelSelectProps={purpose?:"coordinator";available:AvailableModels&{loading:boolean};modelName:string|null;selection?:AvailableModelEntry;configured:boolean;open:boolean;disabled:boolean;onOpenChange:(open:boolean)=>void;onSelect:(model:AvailableModelEntry|string)=>void;onSettings:()=>void;reasoning?:ReasoningSelectorProps;contextUsage?:Pick<ContextUsageProps,"view"|"model"|"status">;presentation?:number;onProviderMenu?:(request:ProviderMenuRequest)=>Promise<string|null>};
+export function ComposerModelSelect({purpose,available,modelName,selection,configured,open,disabled,onOpenChange,onSelect,onSettings,reasoning,contextUsage,presentation,onProviderMenu}:ComposerModelSelectProps) {
   const anchor=useRef<HTMLSpanElement>(null);
   const providerAnchor=useRef<HTMLDivElement>(null);
   const [level,setLevel]=useState<{session:string;providerId?:string;settings:ReasoningSettings}|null>(null);
@@ -53,7 +53,7 @@ export function ComposerModelSelect({available,modelName,selection,configured,op
   const label=configured?(current?composerModelLabel(current.displayName,current.name):modelName?.split("/").pop()||"已配置"):"选择模型";
   const levelLabel=level&&level.session===session&&level.providerId===providerId?currentReasoningLabel(level.settings,modelId):undefined;
   const triggerLabel=<span className="composer-model-current"><span className="composer-model-name">{label}</span>{levelLabel&&<span className="composer-model-effort" title={`思考强度：${levelLabel}`}>{levelLabel}</span>}</span>;
-  return <span ref={anchor} className="composer-model-anchor"><AppSelect nativePopup={native} selectionLocked={disabled} className={`composer-model-select ${configured?"":"model-missing"}`} popupClassName="composer-model-popup" popupMinWidth={240} popupAlign="end" popupMaxHeight={420}
+  return <span ref={anchor} className="composer-model-anchor">{purpose==='coordinator'&&<span className="composer-model-purpose" title="专员对话与任务协调使用的模型；执行 Agent 在上方分配">协调模型</span>}<AppSelect nativePopup={native} selectionLocked={disabled} className={`composer-model-select ${configured?"":"model-missing"}`} popupClassName="composer-model-popup" popupMinWidth={240} popupAlign="end" popupMaxHeight={420}
     label={configured?`选择模型：${label}${levelLabel?` · 思考强度：${levelLabel}`:""}${current?.providerName?` · ${current.providerName}`:""}`:"选择模型"} title={modelName&&label!==modelName?`${label}\n${modelName}`:label} value={current?JSON.stringify([current.providerId,current.modelId]):modelName||""} renderValue={triggerLabel}
     icon={<ProviderIcon brand={modelBrand(modelName||"",current?.displayName,current?.providerName)} size={16}/>}
     open={open} aria-busy={disabled} onOpenChange={next=>{if(next&&disabled) return;if(next) {setSearch("");setSource(current?.providerId??null);}onOpenChange(next);}}

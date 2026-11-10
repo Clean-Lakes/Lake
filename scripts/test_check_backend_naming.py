@@ -25,6 +25,13 @@ class NamingBoundaryTest(unittest.TestCase):
         self.assertIsNone(exception("docs/third-party-notices.md", "Lake uses the ZCode backend"))
         self.assertIsNone(exception(".gitignore", "/new-zcode-runtime/"))
 
+    def test_external_product_name_has_one_shared_catalog_boundary(self):
+        line = "export const externalAgentNames:Record<ExternalAgentId,string>={'runtime-acp':'ZCode',codex:'Codex'};"
+        self.assertEqual(exception("web-agent/shared/external-agents.ts", line), "external ACP product branding")
+        self.assertIsNone(exception("web-agent/web/src/AgentAssignmentControl.tsx", line))
+        self.assertIsNone(exception("web-agent/shared/external-agents.ts", line + " // ZCode backend"))
+        self.assertIsNone(exception("runtime/typescript/acp/catalog.ts", "'runtime-acp': { name: 'ZCode', version: '3.17.2' },"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,6 +4,9 @@ import {DisclosureSummary} from './DisclosureSummary';
 import {AssistantMarkdown,ReplyReferenceScope} from './AssistantMarkdown';
 import {Glyph,ResourceIcon} from './Icons';
 import {ProviderIcon} from './ProviderIcon';
+import {AgentExecution} from './AgentExecution';
+import {ExecutionAgentIcon} from './ExecutionAgentIcon';
+import {agentBackendName} from '../../shared/external-agents';
 import {ToolStep} from './ThinkingTimeline';
 import {MiniBox} from './MiniBox';
 import {isTerminalCommand,type MiniBoxScope} from './miniBoxModel';
@@ -49,7 +52,8 @@ function Calls({cards,paths}:{cards:AICard[];paths:Map<string,string>}){
 }
 function Child({run,paths}:{run:AgentRun;paths:Map<string,string>}){
  const calls=(run.cards??[]).filter(executionCard),elapsed=duration(run),status=nativeRunState(run);
- return <Branch active={needsExecutionAttention(status)} className="worker-child-run" summary={<><Glyph name="layers" size={15}/><span className="worker-execution-name" title={run.task}>{run.name||run.task||'临时子智能体'}</span><small className="worker-execution-meta">{elapsed||`${run.toolCount??calls.length} 次调用`}</small><State status={status}/></>}>
+ const executor=run.execution?.kind==='acp'?run.execution:undefined;
+ return <Branch active={needsExecutionAttention(status)} className="worker-child-run" summary={<>{executor?<ExecutionAgentIcon agent={executor.agent} size={15}/>:<Glyph name="layers" size={15}/>}<span className="worker-execution-name" title={run.task}>{run.name||run.task||'临时子智能体'}</span>{executor&&<small className="worker-child-executor">{agentBackendName(executor)} · ACP</small>}<small className="worker-execution-meta">{elapsed||`${run.toolCount??calls.length} 次调用`}</small><State status={status}/></>}>
   <div className="worker-child-detail">
    <p className="worker-child-created"><Glyph name="clock" size={12}/><time dateTime={run.createdAt}>{time(run.createdAt)}</time>创建子智能体</p>
    {run.task&&run.task!==run.name&&<p className="worker-child-assignment">{run.task}</p>}
@@ -81,6 +85,7 @@ export function WorkerExecutionTree({snapshot,worker,connected=false,onUpdated}:
  const scope:MiniBoxScope={session:snapshot.session.id,taskId:executionId,terminals:snapshot.terminals??[],executions:snapshot.commandExecutions,startedAt:owner?.createdAt??snapshot.ai?.cards[0]?.at??snapshot.session.createdAt,live:['running','waiting_user','waiting_external','queued'].includes(task.state),waiting:snapshot.ai?.status==='waiting_approval',connected,multiResource:resourceIds.size>1};
  return <ExecutionMiniContext.Provider value={{snapshot,scope,onUpdated}}><section className="worker-execution-tree" aria-label="任务执行过程" data-worker-id={owner?.id}>
   <header className="worker-execution-root"><Glyph name="lakeWorkflow" size={19}/><strong>{task.collaboration&&owner?owner.roleName:'任务 Worker'}</strong><small>{task.collaboration?'本次执行':'由 Lake 分配'}</small><State status={status}/></header>
+  <AgentExecution execution={snapshot.superagent?.execution??owner?.execution} waiting={snapshot.ai?.status==='waiting_approval'}/>
   {model.runs.length>0&&<p className="worker-execution-caption">临时子智能体 · {model.runs.length}{active>0&&<span>{active} 个需要跟进</span>}</p>}
   <div className="worker-execution-trunk">
    {model.resources.map(node=><ResourceBranch key={node.id} node={node} paths={model.resourcePaths}/>)}

@@ -1,10 +1,11 @@
 import type { ExternalAgentId } from './types';
 import {HttpError} from '../store';
+import {externalAgentNames} from '../../../web-agent/shared/external-agents';
 
 /** External product names, not names of Lake's embedded backend. */
 export const externalProducts: Record<ExternalAgentId, { name: string; version: string }> = {
-  'runtime-acp': { name: 'ZCode', version: '3.17.2' },
-  codex: { name: 'Codex', version: '2.2.2' },
+  'runtime-acp': { name: externalAgentNames['runtime-acp'], version: '3.17.2' },
+  codex: { name: externalAgentNames.codex, version: '2.2.2' },
 };
 export const externalAgentIds = Object.keys(externalProducts) as ExternalAgentId[];
 export function externalAgentId(value: unknown): ExternalAgentId {

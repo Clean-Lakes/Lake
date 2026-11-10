@@ -31,8 +31,15 @@ export class ExternalAgentRegistry {
         await access(profile.nodePath!); installed = manifest.version === externalProducts.codex.version;
       } catch { /* unavailable */ }
       const probe = this.store.get<{ revision: number; ready: boolean; message?: string; capabilities?: Record<string, unknown> }>('acpProbes', this.key(projectId,id));
+      const transportReady=installed && probe?.revision===profile.revision && probe.ready===true;
+      const authenticated=id!=='codex'||!!await this.store.secret('external-agent-'+projectId+'-codex');
+      const assignmentBlocker=!profile.enabled?'尚未启用，请在 Agent 设置中启用并保存':
+        id==='codex'&&process.platform!=='darwin'?'当前平台的 Codex 执行尚未开放':
+        !installed?'尚未安装，请配置 Node 并安装适配器':
+        !authenticated?'尚未配置 Codex 独立 API Key':
+        !transportReady?'尚未验证当前连接，请在 Agent 设置中测试连接':undefined;
       return { ...profile, name: externalProducts[id].name, installed,
-        transportReady: installed && probe?.revision === profile.revision && probe.ready === true,
+        transportReady,assignmentReady:!assignmentBlocker,assignmentBlocker,
         message: !installed ? '请配置独立 Node 运行时并安装 ACP 适配器' : probe?.revision === profile.revision ? probe.message : undefined,
         capabilities: probe?.revision === profile.revision ? probe.capabilities : undefined };
     }));

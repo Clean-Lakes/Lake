@@ -1003,6 +1003,11 @@ export class LakeAgents {
       const selected=profile.execution,configuration=this.external.registry.get(session.projectId,selected.agent);
       if(selected.revision!==undefined&&selected.revision!==configuration.revision)throw new HttpError(409,'专员冻结的外部 Agent 配置已变化，请重新选择专员的新任务后端');
       activeRuntime={close:()=>runtime.close(),steerTurn:input=>this.external.steer(sessionId,input.input,input.pendingInputId),executeTurn:async(input,_unused,options)=>{
+        // ACP has no local SDK turn_started event. Give this actual invocation
+        // its own host identity so its progress and delivered report share one
+        // channel reply, without manufacturing an SDK event or task evidence.
+        const view=this.store.view(sessionId);view.rootTurnId='acp_turn_'+id();
+        this.toolActivity.clear(sessionId);this.update(sessionId,view);
         const actor=this.externalActor(sessionId,profile,runtime,boundModel,{toolCallId:id(),abortSignal:options?.abortSignal??new AbortController().signal},'worker');
         const prior=this.store.list<ExternalRun>('acpRuns').filter(run=>run.taskId===actor.taskId&&run.workerId===actor.workerId&&run.generation===actor.generation&&!run.childSessionId&&run.state==='completed').at(-1);
         const result=await this.external.run(selected.agent,input,digest([actor.workerId,actor.generation,id()]),actor,prior?.id);

@@ -3817,6 +3817,92 @@ test('external Agent settings use revisions, isolated credentials, and a model-f
  await assert.rejects(access(join(home,'auth.json')));
 });
 
+async function specialistAssignmentFixture(t,permissions={}){
+ const f=await fixture(t,'super-acp-worker'),path=`/api/projects/${f.project.id}`;
+ const project=await f.api(path+'/superagent','POST',{});
+ const role={id:'e'.repeat(64),projectId:f.project.id,roleKey:'project-inspector',name:'项目检查员',duties:'检查项目并收集实际结果',revision:1};
+ f.app.store.put('superRoles',role.id,role);
+ await f.api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:1,execution:{kind:'native'}});
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{maxSteps:24,silentReadFiles:true,...permissions});
+ const channel=(await f.api(path+'/superagent')).channels.find(channel=>channel.roleId===role.id);
+ return {f,path,project,channel,body:{text:'读取当前项目工作区，按真实结果报告。',assignment:{requestId:'assignment-fixture-0001',roleRevision:2,execution:{kind:'acp',agent:'runtime-acp',revision:1}}}};
+}
+
+test('explicit specialist assignment dispatches the chosen ACP Worker without a routing model and collects its real report',{timeout:30000},async t=>{
+ const {f,path,channel,body}=await specialistAssignmentFixture(t);
+ await f.api(path+'/external-agents/runtime-acp','PUT',{enabled:true,expectedRevision:0});
+ await f.api(path+'/external-agents/runtime-acp/probe','POST',{});
+ const receipt=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
+ assert.ok(receipt.assignment?.workerId);assert.equal(receipt.pilotSessionId,channel.sessionId);
+ const result=await settledSubagentTask(f),worker=result.workers[0],run=f.app.store.list('acpRuns')[0];
+ assert.equal(worker.task.state,'completed',JSON.stringify(worker));assert.equal(worker.task.acceptanceState,'pass');
+ assert.ok(f.requests.length>0);assert.ok(f.requests.every(request=>!request.tools.some(tool=>tool.function.name==='route_work')),'an explicit assignment must not ask a Router model to select an executor');
+ assert.equal(run.purpose,'worker');assert.equal(run.state,'completed');assert.equal(run.dispatchPhase,'answered');
+ assert.equal(worker.execution.backend.agent,'runtime-acp');assert.equal(worker.execution.source,'task_assignment');
+ assert.equal(worker.execution.runs[0].id,run.id);assert.ok(worker.execution.runs[0].summary.includes('独立 ACP Worker'));
+ const page=await f.api(`/api/sessions/${channel.sessionId}/channel`),snapshot=await f.api(`/api/sessions/${worker.sessionId}/snapshot`);
+ assert.deepEqual(page.workers[0].execution,worker.execution);assert.deepEqual(snapshot.superagent.execution,worker.execution);
+ const replies=page.entries.filter(entry=>entry.reply?.state==='settled');
+ assert.equal(replies.length,1,'ACP progress and the delivered report are one exact invocation reply');
+ assert.match(replies[0].reply.turnId,/^acp_turn_/);assert.equal(page.entries.filter(entry=>entry.card?.type==='message'||entry.message?.role==='assistant').length,1);
+ assert.equal(page.channel.execution.kind,'native','one task assignment does not change the specialist default');
+ const operation=f.app.store.list('superOperations')[0];assert.equal(operation.externalRunId,run.id);assert.equal(operation.status,'succeeded');
+ const count=f.calls,again=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
+ assert.equal(again.assignment.workerId,receipt.assignment.workerId);assert.equal(f.calls,count);assert.equal(f.app.store.list('superWorkers').length,1);
+ await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',{...body,text:'不同的交付内容'},409);
+ await f.restart();const replay=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
+ assert.equal(replay.assignment.workerId,receipt.assignment.workerId);assert.equal(f.calls,count);assert.equal(f.app.store.list('acpRuns').length,1);
+});
+
+test('explicit assignment rejects missing setup, stale revisions and wrong entrances before recording a message or task',async t=>{
+ const {f,path,project,channel,body}=await specialistAssignmentFixture(t),messages=`/api/sessions/${channel.sessionId}/messages`;
+ const initialMessages=f.app.store.snapshot(channel.sessionId).messages.length;
+ await f.api(messages,'POST',body,409);
+ await f.api(messages,'POST',{...body,enqueue:true},400);
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',body,409);
+ await f.api(messages,'POST',{...body,assignment:{...body.assignment,roleRevision:1}},409);
+ await f.api(messages,'POST',{...body,assignment:{...body.assignment,execution:{kind:'acp',agent:'runtime-acp'}}},400);
+ await f.api(path+'/external-agents/runtime-acp','PUT',{enabled:true,expectedRevision:0});
+ const untested=(await f.api(path+'/external-agents')).agents.find(agent=>agent.id==='runtime-acp');
+ assert.equal(untested.assignmentReady,false);assert.match(untested.assignmentBlocker,/测试连接/);
+ await f.api(messages,'POST',body,409);
+ await f.api(path+'/external-agents/runtime-acp/probe','POST',{});
+ assert.equal((await f.api(path+'/external-agents')).agents.find(agent=>agent.id==='runtime-acp').assignmentReady,true);
+ await f.api(path+'/external-agents/runtime-acp','PUT',{enabled:true,expectedRevision:1});
+ await f.api(messages,'POST',body,409);
+ assert.equal(f.app.store.list('superWorkers').length,0);assert.equal(f.app.store.list('superGoals').length,0);
+ assert.equal(f.app.store.snapshot(channel.sessionId).messages.length,initialMessages);assert.equal(f.calls,0);
+});
+
+test('an explicitly assigned ACP Worker retains original read approval and stopped assignments never replay',{timeout:30000},async t=>{
+ const {f,path,channel,body}=await specialistAssignmentFixture(t,{silentReadFiles:false});
+ await f.api(path+'/external-agents/runtime-acp','PUT',{enabled:true,expectedRevision:0});await f.api(path+'/external-agents/runtime-acp/probe','POST',{});
+ const receipt=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202),session=receipt.assignment.sessionId;
+ const pending=await until(()=>f.api(`/api/sessions/${session}/ai`),view=>!!view.pending);
+ assert.equal(pending.pending.call.name,'list_project_files');assert.equal(f.app.store.list('superOperations').length,0);
+ const worker=(await f.api(`/api/sessions/${channel.sessionId}/channel`)).workers[0];
+ assert.equal(worker.activity.phase,'waiting_approval');assert.equal(worker.execution.runs[0].state,'running');
+ await f.api(`/api/sessions/${channel.sessionId}/channel`,'POST',{action:'stop'});await f.app.agents.wait(session);
+ assert.equal(f.app.store.list('acpRuns')[0].state,'unknown');assert.equal(f.app.store.list('superAcceptance').length,0);
+ const count=f.calls;await f.restart();await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
+ assert.equal(f.calls,count);assert.equal(f.app.store.list('acpRuns').length,1);assert.equal(f.app.store.list('superOperations').length,0);
+});
+
+test('an explicit native assignment overrides only this task and external run projection checks exact ownership',{timeout:30000},async t=>{
+ const {f,path,channel,body}=await specialistAssignmentFixture(t);
+ await f.api(path+'/external-agents/runtime-acp','PUT',{enabled:true,expectedRevision:0});
+ await f.api(path+`/superagent/specialists/${channel.roleId}/execution`,'PUT',{expectedRevision:2,execution:{kind:'acp',agent:'runtime-acp'}});
+ body.assignment.roleRevision=3;body.assignment.execution={kind:'native'};
+ const receipt=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
+ const result=await settledSubagentTask(f);assert.equal(result.workers[0].task.state,'completed');assert.equal(f.app.store.list('acpRuns').length,0);
+ const worker=f.app.store.list('superWorkers')[0];assert.equal(worker.roleSnapshot.execution.kind,'native');
+ assert.equal((await f.api(path+'/superagent')).channels[0].execution.agent,'runtime-acp');
+ const base={schemaVersion:1,id:'wrong-owner',agent:'codex',profileRevision:1,projectId:worker.projectId,taskId:worker.taskId,workerId:worker.id,sessionId:'different-session',generation:1,state:'completed',dispatchPhase:'answered',createdAt:worker.createdAt,updatedAt:worker.createdAt,usage:null,events:[],summary:'FORGED_UNRELATED_REPORT'};
+ f.app.store.put('acpRuns',base.id,base);
+ const snapshot=await f.api(`/api/sessions/${receipt.assignment.sessionId}/snapshot`);
+ assert.equal(snapshot.superagent.execution.runs.length,0);assert.ok(!JSON.stringify(snapshot.superagent.execution).includes('FORGED_UNRELATED_REPORT'));
+});
+
 test('a specialist freezes its ACP backend into a new Worker and task acceptance still uses Lake receipts',{timeout:30000},async t=>{
  const f=await fixture(t,'super-acp-worker'),path=`/api/projects/${f.project.id}`;
  const project=await f.api(path+'/superagent','POST',{});

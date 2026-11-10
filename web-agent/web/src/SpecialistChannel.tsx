@@ -1,5 +1,6 @@
 import {hasCurrentTaskProgress,TaskProgress} from './TaskProgress';
 import {ConversationReadMarker} from './ConversationReadMarker';
+import {AgentExecution} from './AgentExecution';
 import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 import type {SessionSnapshot,SpecialistChannelEntry,SpecialistChannelPage,SuperWorker} from '../../shared/contracts';
 import {api,readableError} from './api';
@@ -68,7 +69,7 @@ function SpecialistReplyMeta({entry,worker,previous=false,latest=true}:{entry:Sp
  return <div className="specialist-reply-meta"><span>{previous?'历史轮次':latest?'最新一轮':'执行记录'}</span>{name&&<span>{name}</span>}{valid&&<time dateTime={entry.createdAt} title="本轮记录时间">{time.toLocaleString('zh-CN',{hour12:false})}</time>}</div>;
 }
 
-export function SpecialistChannelEntries({entries,resources,workers=[],activeSources,activeSnapshots,connected=true}:{entries:SpecialistChannelEntry[];resources:SessionSnapshot['resources'];workers?:SuperWorker[];activeSources?:ReadonlySet<string>;activeSnapshots?:ReadonlyMap<string,SessionSnapshot>;connected?:boolean}){
+export function SpecialistChannelEntries({entries,resources,workers=[],activeSources,activeSnapshots,connected=true,onTask}:{entries:SpecialistChannelEntry[];resources:SessionSnapshot['resources'];workers?:SuperWorker[];activeSources?:ReadonlySet<string>;activeSnapshots?:ReadonlyMap<string,SessionSnapshot>;connected?:boolean;onTask?:(sessionId:string)=>void}){
  const forwarded=new Set(entries.flatMap(entry=>entry.message?.dispatch?[`${entry.sourceSessionId}\0${entry.message.dispatch.sourceMessageId}`]:[]));
  const byTask=new Map(workers.map(worker=>[worker.task.taskId,worker])),bySession=new Map(workers.map(worker=>[worker.sessionId,worker]));
  const current=currentChannelReplies(entries);
@@ -86,6 +87,7 @@ export function SpecialistChannelEntries({entries,resources,workers=[],activeSou
   const history=current.history.get(entry.id)??[];
   return <div className="specialist-channel-entry" key={current.keys.get(entry.id)??entry.id} data-channel-entry={entry.id} data-source-session={entry.sourceSessionId} data-task-id={taskId}>
    {startsTask&&<div className="specialist-task-divider" role="separator" aria-label={`任务：${taskTitle}`} data-task-divider={taskId}><span title={taskTitle}>{taskTitle}{task?.collaboration&&` · ${task.collaboration.participants.length} 位专员协作`}</span></div>}
+   {startsTask&&<AgentExecution execution={byTask.get(taskId!)?.execution} roleName={byTask.get(taskId!)?.roleName} waiting={byTask.get(taskId!)?.activity?.phase==='waiting_approval'} compact onInspect={onTask&&byTask.get(taskId!)?()=>onTask(byTask.get(taskId!)!.sessionId):undefined}/>}
    <div className="specialist-reply-content" data-reply-state={entry.reply?.state}>
    {entry.reply&&<SpecialistReplyMeta entry={entry} worker={bySession.get(entry.sourceSessionId)} latest={current.keys.has(entry.id)}/>}
    <SpecialistReplyTransition revision={`${entry.reply?.turnId??entry.id}:${entry.reply?.state??''}`} text={entry.reply?.state==='working'?'':entry.message?.text??entry.card?.content} enabled={connected&&!['failed','cancelled','blocked','paused','waiting_user','waiting_external'].includes(bySession.get(entry.sourceSessionId)?.task.state??'')}>
@@ -160,7 +162,8 @@ export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,
  return <ObjectReferencesProvider resources={snapshot.resources}><div className="ai-transcript specialist-channel" data-reply-avatar="hidden">
   {!!cursor.current&&<button type="button" className="button secondary" disabled={loading} onClick={()=>void loadOlder()}>{loading?'正在加载…':'加载更早记录'}</button>}
   {error&&<p className="pilot-workspace-error" role="alert">{error}</p>}
-  <SpecialistChannelEntries entries={entries} resources={snapshot.resources} workers={page?.workers} connected={connected} activeSources={new Set(connected?page?.active.map(active=>active.session.id)??[]:[])} activeSnapshots={new Map(page?.active.map(active=>[active.session.id,active])??[])}/>
+  <SpecialistChannelEntries entries={entries} resources={snapshot.resources} workers={page?.workers} connected={connected} onTask={onTask} activeSources={new Set(connected?page?.active.map(active=>active.session.id)??[]:[])} activeSnapshots={new Map(page?.active.map(active=>[active.session.id,active])??[])}/>
+  {page?.workers.filter(worker=>worker.execution&&!entries.some(entry=>entry.taskId===worker.task.taskId)).map(worker=><section key={worker.id} className="agent-assignment-pending"><div className="specialist-task-divider"><span>{worker.task.title}</span></div><AgentExecution execution={worker.execution} roleName={worker.roleName} onInspect={()=>onTask(worker.sessionId)} compact/></section>)}
   {(page?.routing||admitting||!!page?.queued)&&!page?.active.length&&<div className="reply-duration turn-status is-live is-thinking without-avatar" role="status" aria-label="专员正在处理消息"><LoadingWaves/><StatusText active={connected}>正在安排工作</StatusText></div>}
   {page?.active.map(active=>{
    const task=active.superagent?.task;

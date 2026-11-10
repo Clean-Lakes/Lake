@@ -39,6 +39,8 @@ import {TaskWatchdog, type WatchdogSample, type WatchdogRecord} from "./watchdog
 import {prepareWatchdogEvidence, watchdogEvidence, transientModelFailure, type WatchdogRetry} from "./watchdog-observation";
 import type {TurnFailure} from "./model-errors";
 import type {WatchdogFinding, WatchdogMode} from "../../web-agent/shared/contracts";
+import type {AgentBackendRef,AgentExecutionSummary,SpecialistAgentAssignment} from '../../web-agent/shared/external-agents';
+import type {ExternalRun} from './acp/types';
 
 type Role = { id: string; projectId: string; roleKey: string; name: string; duties: string; revision: number; deletedAt?: string; execution?: import('./acp/types').AgentBackendRef };
 type Channel = { id: string; projectId: string; roleId: string; sessionId: string; revision: number; createdAt: string };
@@ -48,6 +50,7 @@ type InputEvent = { id: string; projectId: string; sessionId: string; messageId:
   preferredRoleId?: string; explicitTaskId?: string; disposition: "pending" | "routed" | "blocked" | "stopped";
   receivedAt: string; revision: number; error?: string };
 type Worker = { inline?:boolean; preTaskModelRounds?:number; id: string; projectId: string; roleId: string; roleSnapshot: Role; sessionId: string; taskId: string;
+  explicitAgentAssignment?:string;
   targetResourceIds?: string[];
   sourceEventId: string; generation: number; state: "queued" | "active" | "parked" | "stopped";
   owner?: string; leaseUntil?: number; policyHash: string; createdAt: string; inputEventIds: string[]; deliveredInputIds?: string[]; invocationInputIds?: string[];
@@ -515,10 +518,22 @@ export class LakeSuperagent implements AgentHost {
       deadlineAt: goal.deadlineAt, summary: goal.summary, updatedAt: goal.updatedAt,
       ...(goal.status==="paused"&&goal.summary==="model_round_limit"&&{reason:"round_limit_removed",summary:"轮次限制已取消，可继续当前任务。"}) };
   }
-  private workerView(worker: Worker): SuperWorker {
+  private workerView(worker: Worker,runs?:ExternalRun[]): SuperWorker {
     return { id: worker.id, createdAt: worker.createdAt, roleId: worker.roleId, roleName: worker.roleSnapshot.name,
       sessionId: worker.sessionId, task: this.taskView(this.ledger.get(worker.taskId)), assignmentState: worker.state,
-      activity: this.workerActivity(worker) };
+      activity: this.workerActivity(worker),execution:this.workerExecution(worker,runs) };
+  }
+  private workerExecution(worker:Worker,externalRuns=this.store.list<ExternalRun>('acpRuns')):AgentExecutionSummary {
+    const backend=worker.roleSnapshot.execution??{kind:'native'};
+    const runs=externalRuns.filter(run=>run.schemaVersion===1&&run.projectId===worker.projectId&&
+      run.workerId===worker.id&&run.taskId===worker.taskId&&run.sessionId===worker.sessionId)
+      .sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
+    return {backend,source:worker.explicitAgentAssignment?'task_assignment':'specialist_default',assignedAt:worker.createdAt,totalRuns:runs.length,
+      runs:runs.slice(-12).map(run=>({id:run.id,agent:run.agent,state:run.state,dispatchPhase:run.dispatchPhase,
+        externalSessionId:run.externalSessionId,childSessionId:run.childSessionId,
+        scope:run.purpose??(run.childSessionId?'child':backend.kind==='acp'&&run.agent===backend.agent?'worker':'segment'),
+        createdAt:run.createdAt,updatedAt:run.updatedAt,summary:run.summary&&this.agents.redact(run.summary).slice(0,32768),
+        error:run.error&&this.agents.redact(run.error).slice(0,4096),usage:run.usage}))};
   }
   private workerActivity(worker: Worker): SuperWorker["activity"] {
     const goal = this.ledger.get(worker.taskId);
@@ -568,7 +583,10 @@ export class LakeSuperagent implements AgentHost {
           originRootTurnId: goal.originRootTurnId, summary: terminal(goal.status) ? goal.summary : "旧 Go 任务只读保留；未恢复执行。" } } as SuperWorker];
     });
   }
-  workers(projectId: string) { return [...this.legacyWorkerViews(projectId), ...this.store.list<Worker>("superWorkers").filter((worker) => worker.projectId === projectId).map((worker) => this.workerView(worker))]; }
+  workers(projectId: string) {
+    const runs=this.store.list<ExternalRun>('acpRuns').filter(run=>run.projectId===projectId);
+    return [...this.legacyWorkerViews(projectId), ...this.store.list<Worker>("superWorkers").filter((worker) => worker.projectId === projectId).map((worker) => this.workerView(worker,runs))];
+  }
   workspace(projectId: string): SuperWorkspace {
     this.store.project(projectId);
     const project = this.store.get<SuperProject>("superProjects", projectId);
@@ -981,12 +999,77 @@ export class LakeSuperagent implements AgentHost {
       originalDeliverable: prior?.originalDeliverable ?? this.decisionAssignments(decision).find(a => a.workerId === source.workerId)?.instruction ?? decision.quote, summary: clip(this.agents.redact(source.summary ?? ""), 4096),
       resourceIds, historicalContextOnly: true };
   }
-  async send(sessionId: string, value: string, explicitTaskId?: string, ignoreMemory = false, selectedReferences?: MessageInput) {
+  private async assignAgent(sessionId:string,value:string,raw:unknown,ignoreMemory:boolean,selectedReferences?:MessageInput){
+    this.security?.check();
+    const channel=this.channelFor(sessionId);
+    if(!channel)throw new HttpError(409,'请在专员对话中分配新任务');
+    const input=raw as SpecialistAgentAssignment;
+    if(!input||typeof input!=='object'||Array.isArray(input)||typeof input.requestId!=='string'||
+      !/^[A-Za-z0-9_-]{16,128}$/.test(input.requestId)||!Number.isSafeInteger(input.roleRevision)||input.roleRevision<1||
+      Object.keys(input).some(key=>!['requestId','roleRevision','execution'].includes(key)))throw new HttpError(400,'分配任务的请求身份或专员版本无效');
+    const requested=input.execution;
+    if(!requested||typeof requested!=='object'||Array.isArray(requested)||!['native','acp'].includes(requested.kind)||
+      Object.keys(requested).some(key=>!(requested.kind==='native'?['kind']:['kind','agent','revision']).includes(key)))throw new HttpError(400,'请选择实际执行 Agent');
+    const key=digest([channel.projectId,channel.id,input.requestId]),hash=digest({input,value,ignoreMemory,selectedReferences});
+    const receipt=()=>{
+      const prior=this.store.get<{hash:string;messageId:string;workerId:string}>('superAgentAssignments',key);
+      if(!prior)return;
+      if(prior.hash!==hash)throw new HttpError(409,'同一分配请求的内容已变化，请重新选择执行 Agent 后发送');
+      const message=this.store.require<Message>('messages',prior.messageId),worker=this.store.require<Worker>('superWorkers',prior.workerId);
+      return {...message,pilotSessionId:channel.sessionId,assignment:{workerId:worker.id,sessionId:worker.sessionId,taskId:worker.taskId}};
+    };
+    const duplicate=receipt();if(duplicate)return duplicate;
+    const role=this.role(channel.projectId,channel.roleId);
+    if(role.revision!==input.roleRevision)throw new HttpError(409,'专员配置已变化，请刷新分配入口后重试');
+    let execution:AgentBackendRef={kind:'native'};
+    if(requested.kind==='acp'){
+      if(!Number.isSafeInteger(requested.revision)||(requested.revision??-1)<0)throw new HttpError(400,'缺少准确的 Agent 连接版本');
+      const profile=this.agents.external.registry.get(channel.projectId,requested.agent);
+      if(profile.revision!==requested.revision)throw new HttpError(409,'Agent 连接配置已变化，请刷新分配入口后重试');
+      const status=(await this.agents.external.registry.list(channel.projectId)).find(agent=>agent.id===profile.id)!;
+      if(status.revision!==profile.revision||!status.assignmentReady)throw new HttpError(409,status.assignmentBlocker??'外部 Agent 配置已变化');
+      execution={kind:'acp',agent:profile.id,revision:profile.revision};
+    }
+    // Recheck after asynchronous readiness reads. The transaction never yields
+    // between validating current revisions and freezing the original Worker.
+    const accepted=this.store.transaction(()=>{
+      const duplicate=receipt();if(duplicate)return duplicate;
+      this.security?.check();this.store.project(channel.projectId);
+      if(this.stoppingProjects.has(channel.projectId))throw new HttpError(409,'项目正在停止任务，请稍后分配');
+      if(this.role(channel.projectId,channel.roleId).revision!==input.roleRevision)throw new HttpError(409,'专员配置已变化，请刷新分配入口后重试');
+      if(execution.kind==='acp'){
+        const current=this.agents.external.registry.get(channel.projectId,execution.agent);
+        if(!current.enabled||current.revision!==execution.revision)throw new HttpError(409,'Agent 连接配置已变化，请刷新分配入口后重试');
+      }
+      const message=this.store.addMessage(sessionId,'user',this.agents.redact(value),{mentions:selectedReferences?.mentions});
+      if(selectedReferences)this.store.put('messageInputs',message.id,{messageId:message.id,projectId:channel.projectId,sessionId,...selectedReferences});
+      if(selectedReferences?.resourceIds.length)this.store.put('sessionResourceReferences',sessionId,{resourceIds:selectedReferences.resourceIds,sourceMessageId:message.id});
+      const event:InputEvent={id:id(),projectId:channel.projectId,sessionId,messageId:message.id,payload:message.text,
+        preferredRoleId:channel.roleId,disposition:'routed',receivedAt:message.createdAt,revision:1,ignoreMemory,selectedReferences};
+      this.store.put('superInputs',event.id,event);
+      const project=this.store.require<SuperProject>('superProjects',channel.projectId),suffix=key.slice(0,32);
+      const worker=this.newAssignment(event,project.routerSessionId,suffix,{...role,execution},clip(value.replace(/\s+/g,' '),100),[],undefined,undefined,
+        selectedReferences?.resourceIds.length?[...selectedReferences.resourceIds]:undefined);
+      worker.explicitAgentAssignment=input.requestId;this.store.put('superWorkers',worker.id,worker);
+      const decision:Decision={id:key,projectId:channel.projectId,eventId:event.id,partKey:'agent_assignment',action:'create',quote:event.payload,hash,
+        reason:'explicit_agent_assignment',taskId:worker.taskId,workerId:worker.id,sessionId:worker.sessionId,roleId:worker.roleId,assignments:[this.assignment(worker)]};
+      this.store.put('superDecisions',key,decision);
+      this.store.put('superAgentAssignments',key,{hash,messageId:message.id,workerId:worker.id});
+      return {...message,pilotSessionId:channel.sessionId,assignment:{workerId:worker.id,sessionId:worker.sessionId,taskId:worker.taskId}};
+    });
+    this.agents.memory?.captureUser(sessionId,accepted.id,channel.roleId,ignoreMemory);
+    this.notify(sessionId,'specialist');this.schedule();return accepted;
+  }
+  async send(sessionId: string, value: string, explicitTaskId?: string, ignoreMemory = false, selectedReferences?: MessageInput, assignment?:unknown) {
     text(value, "message", 256000);
     await this.agents.prepareRedaction();
     const source = this.store.session(sessionId), project = this.store.get<SuperProject>("superProjects", source.projectId);
     this.store.project(source.projectId);
     if(this.stoppingProjects.has(source.projectId))throw new HttpError(409,"当前项目正在停止活动任务，请稍后发送");
+    if(assignment!==undefined){
+      if(explicitTaskId)throw new HttpError(400,'分配执行 Agent 只用于新任务，不能切换已有任务');
+      return this.assignAgent(sessionId,value,assignment,ignoreMemory,selectedReferences);
+    }
     if (!project) return this.agents.send(sessionId, value, { ignoreMemory, messageInput: selectedReferences });
     const channel = this.channelFor(sessionId), worker = this.workerFor(sessionId);
     const preferredRoleId = channel?.roleId ?? (worker?.inline?undefined:worker?.roleId);
@@ -1954,7 +2037,7 @@ export class LakeSuperagent implements AgentHost {
     const worker = exact?this.store.require<Worker>('superWorkers',exact.workerId):this.workerFor(snapshot.session.id);
     if (worker) {
       const goal = this.ledger.get(worker.taskId);
-      snapshot.superagent = { task: this.taskView(goal), goal: this.publicGoal(goal), roleId: worker.roleId };
+      snapshot.superagent = { task: this.taskView(goal), goal: this.publicGoal(goal), roleId: worker.roleId,execution:this.workerExecution(worker) };
       if(!worker.inline && snapshot.session.workspaceRole==="worker"){
         const channel=this.store.get<Channel>("superChannels",worker.roleId);
         if(channel?.projectId===goal.projectId) snapshot.superagent.deliveredReplies=workerDeliveries(this.store,goal,channel.sessionId)
