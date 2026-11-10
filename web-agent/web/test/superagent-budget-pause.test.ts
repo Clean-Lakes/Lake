@@ -38,11 +38,12 @@ test('budget pause is distinct from a recoverable context-size error and has an 
 });
 
 test('a restored ended invocation does not label its budget-paused task as ended',()=>{
- const task={state:'paused',reason:'model_round_limit'} as SuperTask;
- const html=renderToStaticMarkup(createElement(SessionStateBadge,{session:{status:'completed'} as SessionSnapshot['session'],...superTaskHeaderPresentation(task)}));
+ const task={sessionId:'worker',state:'paused',reason:'model_round_limit'} as SuperTask;
+ const snapshot={session:{id:'worker',workspaceRole:'worker',status:'completed'}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(SessionStateBadge,{session:snapshot.session,...superTaskHeaderPresentation(task,snapshot)}));
  assert.match(html,/已暂停/);
  assert.doesNotMatch(html,/已结束/);
- assert.equal(superTaskHeaderPresentation({...task,state:'running'}),undefined);
+ assert.equal(superTaskHeaderPresentation({...task,state:'running'},snapshot),undefined);
 });
 
 test('removing a legacy token ceiling supersedes its current pause notice without deleting diagnostics',()=>{
@@ -53,7 +54,7 @@ test('removing a legacy token ceiling supersedes its current pause notice withou
  assert.match(html,/累计 token 上限已取消/);
  assert.doesNotMatch(html,/剩余执行额度不足/);
  assert.equal(snapshot.ai!.cards[0].content,refusal);
- assert.equal(superTaskHeaderPresentation(task)?.status,'failed');
+ assert.equal(superTaskHeaderPresentation(task,snapshot)?.status,'failed');
  assert.match(displayAiError('superagent: task model round limit reached'),/模型调用轮数上限/);
 });
 
