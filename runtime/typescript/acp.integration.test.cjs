@@ -64,4 +64,8 @@ test('real Codex exposes only managed tools and returns a result through the tas
  await assert.rejects(access(join(home,'forged.txt')),'an unadvertised native write cannot execute');
  assert.equal((await external.run('codex','Read evidence.txt with the supplied Lake tool, then report the result.','fixture-one',actor)).run_id,result.run_id);
  assert.equal(reads,1,'duplicate control request must not execute the tool twice');
+ const resumed=await external.run('codex','Report the previously observed fixture result.','fixture-two',actor,result.run_id);
+ assert.equal(resumed.state,'completed',JSON.stringify(resumed));
+ assert.equal(resumed.summary.split('ACP_CODEX_REPORT').length,2,'session/load replay is history, not a new report chunk');
+ assert.equal(reads,1,'loading a completed session must not replay its old tool');
 });
