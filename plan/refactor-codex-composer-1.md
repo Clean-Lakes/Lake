@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-10
 last_updated: 2026-11-10
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [refactor, acp, codex, composer, typescript]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 按用户四项修订移除 runtime-acp 外部后端，启用 Codex 时自动识别本机运行路径，专员新任务默认 Codex，将执行选择并入聊天框原模型菜单。原生 SDK 仍支撑 Lake 自身执行；历史 Task/Worker/Operation 保留原执行身份。
 
@@ -57,7 +57,7 @@ tags: [refactor, acp, codex, composer, typescript]
 |------|-------------|-----------|------|
 | TASK-007 | 用 Codex ACP 协议进程夹具替换已移除后端的生命周期测试，保留桥接权限/停止/child/幂等/验收回归；真实固定 Codex 验证 Node 22 与 Node 24 路径。 | true | 2026-11-10 |
 | TASK-008 | 前端覆盖默认 Codex、统一菜单、未就绪与普通模型切换；执行类型、构建、回归和边界检查，签名安装 Lake Dev 并验证实际界面。 | true | 2026-11-10 |
-| TASK-009 | 更新 docs/lake-pilot.md、ACP 验证记录及草稿 PR #222，记录准确 tested SHA、已知限制与历史兼容行为。 | | |
+| TASK-009 | 更新 docs/lake-pilot.md、ACP 验证记录及草稿 PR #222，记录准确 tested SHA、已知限制与历史兼容行为。 | true | 2026-11-10 |
 
 ## 3. Alternatives
 
@@ -94,3 +94,5 @@ tags: [refactor, acp, codex, composer, typescript]
 - [ACP 兼容记录](../docs/validation/acp-agent-execution/compatibility.md)
 - [前端规范](../docs/ui-guidelines.md)
 - [架构所有权](../agent.md)
+
+实际交付源码与签名 Dev 为 `98140ef9ce6ffbc7f83f9f75c09baacc37586099`。后端集成 191、前端 784、后端单元 253 通过（原有 4 项可选跳过）；真实 Codex 在 Node 22.22.0 / 24.14.0 分别 2/2，签名 SEA 自动发现、固定安装及握手通过。原生 Codex 菜单及配置跳转已验证；草稿 [PR #222](https://github.com/Clean-Lakes/Lake/pull/222) 已更新，目标 develop，未合并。实际账户认证、平台及历史压力问题等限制见[兼容记录](../docs/validation/acp-agent-execution/compatibility.md)。
