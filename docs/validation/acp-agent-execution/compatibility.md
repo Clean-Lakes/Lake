@@ -36,3 +36,5 @@ Go 补充回归：`go test -race ./internal/ai ./internal/web` 中 AI 包通过�
 后续修正将 session/load 的重放事件排除在本轮报告之外，并在执行结束时撤销工具信号；真实 Codex load/resume 已复验，旧工具不重放、旧报告不重复累计。
 
 运行桥生命周期修正源码 SHA：`70b883538dab06866643efc7c3121faf84758533`。真实 Codex 固定版已复验握手、无原生工具、伪造补丁拒绝、MCP Read、requestKey 去重与 session/load 重放隔离；后端 ACP 重点用例 9 项复验通过。
+
+最终 Dev 安装与复验源码：`0cd7e116f087db33b7a437dc5c94afa200b626d6`（相对 70b88353 仅有文档变化）。签名与 build-origin 核对通过，dirty=false；最终完整后端集成测试 184/184 再次通过。Dev 窗口重新打开正常，原生与既有任务未切换后端。

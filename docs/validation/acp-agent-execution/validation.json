@@ -1,0 +1,51 @@
+{
+  "date": "2026-11-10",
+  "sourceCommit": "0cd7e116f087db33b7a437dc5c94afa200b626d6",
+  "backendCodeCommit": "70b883538dab06866643efc7c3121faf84758533",
+  "platform": "macOS arm64",
+  "runtime": "Node 24.14.0 / signed Lake SEA",
+  "dev": {
+    "installed": true,
+    "signatureVerified": true,
+    "buildOriginDirty": false,
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "home": "~/.lake-dev",
+    "guiLoaded": true,
+    "runtimeACPHandshake": true
+  },
+  "checks": {
+    "backendIntegration": {
+      "passed": 184
+    },
+    "frontend": {
+      "passed": 774
+    },
+    "backendUnit": {
+      "passed": 251,
+      "skipped": 4
+    },
+    "realCodex": {
+      "adapter": "2.2.2",
+      "engine": "0.160.1",
+      "paidModelCredentialsUsed": false,
+      "nativePatchRejected": true,
+      "mcpRead": true,
+      "duplicatePromptNotReplayed": true,
+      "sessionLoadReplayExcluded": true
+    },
+    "boundary": "passed",
+    "naming": "passed",
+    "goVet": "passed",
+    "goRaceAI": "passed",
+    "goRaceWebFull": {
+      "status": "timeout",
+      "limitSeconds": 600
+    },
+    "goRaceWebSREVerifier": {
+      "status": "passed",
+      "seconds": 18.113
+    }
+  },
+  "productionChanged": false,
+  "merged": false
+}
