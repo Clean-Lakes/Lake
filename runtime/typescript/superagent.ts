@@ -640,8 +640,10 @@ export class LakeSuperagent implements AgentHost {
     if(execution.kind==='acp'){
       const profile=this.agents.external.registry.get(role.projectId,execution.agent);
       const probe=this.store.get<{revision:number;ready:boolean;credentialConfigured?:boolean}>('acpProbes',role.projectId+':codex');
-      if(!profile.enabled||probe?.revision!==profile.revision||!probe.ready||!probe.credentialConfigured)
-        throw new HttpError(409,'Codex 尚未就绪，请在聊天框模型菜单中完成 Codex 配置；未创建替代原生任务');
+      const blocker=!profile.enabled?'Codex 尚未启用':probe?.revision!==profile.revision?'Codex 当前连接配置尚未验证':
+        !probe.ready?'Codex 连接测试尚未通过':probe.credentialConfigured===false?'尚未配置 Codex 独立 API Key':
+        !probe.credentialConfigured?'Codex 当前凭据状态需要重新验证':undefined;
+      if(blocker)throw new HttpError(409,blocker+'。请在聊天框模型菜单的“配置 Codex”中完成设置；未创建任务。');
     }
     return {...role,execution};
   }

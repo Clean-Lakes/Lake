@@ -3,15 +3,15 @@ import type {SpecialistChannelInfo} from '../../shared/contracts';
 import type {AgentBackendRef,ExternalAgentStatus,SpecialistAgentAssignment} from '../../shared/external-agents';
 import {api,readableError} from './api';
 
-export function useSpecialistModel(channel:SpecialistChannelInfo|undefined,settingsOpen:boolean,menuOpen=false){
+export function useSpecialistModel(channel:SpecialistChannelInfo|undefined,settingsOpen:boolean,menuOpen=false,settingsProjectId?:string){
  const [agent,setAgent]=useState<ExternalAgentStatus>(),[loading,setLoading]=useState(false),[error,setError]=useState(''),[saving,setSaving]=useState(false);
  const [override,setOverride]=useState<{sessionId:string;roleRevision:number;execution:AgentBackendRef}>();
  const request=useRef({sessionId:'',id:crypto.randomUUID()}),flight=useRef(false);
- const sessionId=channel?.sessionId,projectId=channel?.projectId;
+ const sessionId=channel?.sessionId,projectId=channel?.projectId??settingsProjectId;
  if(request.current.sessionId!==sessionId)request.current={sessionId:sessionId??'',id:crypto.randomUUID()};
  useEffect(()=>{
   const controller=new AbortController();setAgent(undefined);setError('');
-  if(!projectId)return;
+  if(!projectId){setLoading(false);return;}
   setLoading(true);
   void api.externalAgents(projectId,controller.signal).then(result=>{if(!controller.signal.aborted)setAgent(result.agents.find(agent=>agent.id==='codex'));})
    .catch(cause=>{if(!controller.signal.aborted)setError(readableError(cause));})
@@ -30,7 +30,8 @@ export function useSpecialistModel(channel:SpecialistChannelInfo|undefined,setti
    request.current={sessionId:current.sessionId,id:crypto.randomUUID()};
   }finally{flight.current=false;setSaving(false);}
  },[current?.sessionId,current?.projectId,current?.roleId,current?.roleRevision]);
- const blocker=selected?(loading?'正在读取 Codex 配置':error||agent?.assignmentBlocker||(!agent?.assignmentReady?'请先配置 Codex':undefined)):undefined;
+ const message=loading?'正在读取 Codex 配置':error||agent?.assignmentBlocker||(!agent?.assignmentReady?'请先配置 Codex':undefined);
+ const blocker=selected?message:undefined;
  const assignment=():SpecialistAgentAssignment|undefined=>selected&&current?{requestId:request.current.id,roleRevision:current.roleRevision!,execution:{kind:'acp',agent:'codex',revision:agent?.revision}}:undefined;
- return {selected,agent,loading,saving,blocker,select,assignment,accepted:()=>{request.current.id=crypto.randomUUID();}};
+ return {selected,agent,loading,saving,blocker,message,select,assignment,accepted:()=>{request.current.id=crypto.randomUUID();}};
 }

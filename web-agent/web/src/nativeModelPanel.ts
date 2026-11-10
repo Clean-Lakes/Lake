@@ -37,7 +37,7 @@ export function useNativeModelPanel(props:ComposerModelSelectProps,anchor:RefObj
       if(detail.kind==="settings") current.onSettings();
       if(detail.kind==="close") {current.onOpenChange(false);if(detail.restoreFocus) anchor.current?.querySelector("button")?.focus({preventScroll:true});}
       if(detail.kind==="select"&&!current.disabled) {
-        if(detail.value===codexModelValue&&current.externalAgent){current.onExternalAgentSelect?.();current.onOpenChange(false);return;}
+        if(detail.value===codexModelValue&&current.externalAgent&&!current.externalAgent.configurationOnly){current.onExternalAgentSelect?.();current.onOpenChange(false);return;}
         if(detail.value===codexSettingsValue&&current.externalAgent){current.onExternalAgentSettings?.();current.onOpenChange(false);return;}
         const row=current.available.entries?.find(entry=>JSON.stringify([entry.providerId,entry.modelId])===detail.value);
         if(row) current.onSelect(row);
