@@ -908,6 +908,12 @@ function superReply(request, mode, home) {
     return { content: "已追加 investigation.md。" };
   }
   if (mode.startsWith("super-subagent")) return subagentReply(request, mode, home);
+  if(mode==='super-acp-worker-child')return subagentReply(request,'super-subagent-acp-child',home);
+  if(mode==='super-acp-worker'){
+    if(!names.includes('list_project_files'))return call('list_project_files',{path:'.'},'external-worker-files');
+    if(!names.includes('work_finish'))return finish('已由独立 ACP Worker 读取实际项目文件。','external-worker-finish');
+    return {content:'独立 ACP Worker 已按实际回执报告。'};
+  }
   if (mode === "super-watchdog-guide") {
     const checks=names.filter(name=>name==="list_project_files").length;
     if(checks<2) return call("list_project_files",{path:"."},"directory-"+checks);
@@ -1015,7 +1021,7 @@ function subagentReply(request, mode, home) {
       return call("Agent", {
         description: sibling ? "核对另一份证据" : "读取独立任务证据",
         prompt: `LAKE_SUBAGENT_FIXTURE:${JSON.stringify({ mode, path, sibling })}\nUse only the assigned resource tool and report its actual result.`,
-        subagent_type: "general-purpose",
+        subagent_type: mode.includes('acp-child') ? 'runtime-acp' : "general-purpose",
         run_in_background: mode.startsWith("super-subagent-background"),
       }, `delegate-${sibling}`);
     }
@@ -1045,7 +1051,11 @@ function subagentReply(request, mode, home) {
   const raw = request.messages.filter((message) => message.role === "user").map(content).findLast((value) => value.includes("LAKE_SUBAGENT_FIXTURE:"));
   assert.ok(raw, "native child must receive its explicit task prompt");
   const input = JSON.parse(raw.match(/LAKE_SUBAGENT_FIXTURE:(\{[^\n]+\})/)[1]);
-  if (["super-subagent-prose", "super-subagent-cap"].includes(mode))
+  if(mode.includes('acp-segment')&&exposes('run_external_agent')){
+    if(!calls.some(call=>call.function.name==='run_external_agent'))return call('run_external_agent',{agent:'runtime-acp',instruction:raw},'external-segment');
+    return {content:'外部执行段已回报：'+request.messages.filter(message=>message.role==='tool').map(content).at(-1)};
+  }
+  if (mode.includes('prose') || mode === 'super-subagent-cap')
     return { content: "我宣称完成了检查，但没有调用任何实际资源工具。" };
   const tool = mode.includes("write") ? "Write" : "Read";
   if (!calls.some((entry) => entry.function.name === tool))
@@ -1216,6 +1226,7 @@ test("Watchdog identifies a real provider 503 and retries the same SDK assignmen
 
 async function startSubagentTask(t, mode, memory = false, legacyMaxSteps = 24, permissions = {}) {
   const f = await fixture(t, mode);
+  if(mode.includes('acp'))await f.api(`/api/projects/${f.project.id}/external-agents/runtime-acp`,'PUT',{enabled:true,expectedRevision:0});
   const project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
   await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`, "POST", { maxSteps: legacyMaxSteps, ...permissions });
   if (memory) {
@@ -3763,4 +3774,127 @@ test('automatic Pilot command setting also admits a risk-classified file deletio
  await writeFile(file,'owned temporary fixture');await send();
  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  await assert.rejects(access(file));const operations=f.app.store.list('superOperations').filter(o=>o.tool==='Bash');assert.equal(operations.length,1);assert.equal(operations[0].status,'succeeded');assert.equal(operations[0].readOnly,false);
+});
+
+for(const entrance of ['child','segment'])test(`ACP ${entrance} uses the independent pinned runtime and returns real scoped receipts`,{timeout:30000},async t=>{
+ const {f,worker}=await startSubagentTask(t,'super-subagent-acp-'+entrance);
+ const state=await settledSubagentTask(f),goal=f.app.store.list('superGoals')[0];
+ assert.equal(state.workers[0].task.state,'completed',JSON.stringify({runs:f.app.store.list('acpRuns'),view:await f.api(`/api/sessions/${worker.sessionId}/ai`)}));
+ assert.equal(goal.acceptanceState,'pass');
+ const runs=f.app.store.list('acpRuns');assert.equal(runs.length,1,JSON.stringify(runs));
+ assert.equal(runs[0].state,'completed',JSON.stringify(runs[0]));assert.equal(runs[0].dispatchPhase,'answered');
+ assert.equal(runs[0].taskId,goal.id);assert.equal(runs[0].workerId,worker.id);assert.ok(runs[0].externalSessionId);
+ const operations=f.app.store.list('superOperations');assert.equal(operations.length,1,JSON.stringify(operations));
+ assert.equal(operations[0].tool,'Read');assert.equal(operations[0].goalId,goal.id);assert.equal(operations[0].status,'succeeded');
+ assert.equal(operations[0].externalRunId,runs[0].id);assert.equal(operations[0].externalSessionId,runs[0].externalSessionId);
+ assert.ok(JSON.stringify(operations[0].output).includes('ACTUAL_CHILD_EVIDENCE_A'));
+ const view=await f.api(`/api/sessions/${worker.sessionId}/ai`),child=view.agentRuns[0];
+ assert.equal(child.source,entrance==='child'?'acp_subagent':'native_subagent');
+ assert.equal(child.childSessionId,runs[0].childSessionId);assert.equal(operations[0].agentRunId,child.id);
+ assert.ok(child.cards.some(card=>card.data?.source==='external_agent'));
+ const remote=f.requests.filter(request=>request.tools.some(tool=>tool.function.name==='Read')&&!request.tools.some(tool=>['work_finish','run_external_agent'].includes(tool.function.name)));
+ assert.ok(remote.length>=2,'the independent runtime requests a tool and consumes its actual result');
+ for(const request of remote)assert.ok(!request.tools.some(tool=>['Agent','work_finish','run_external_agent'].includes(tool.function.name)));
+ const calls=f.calls;await f.restart();await new Promise(resolve=>setTimeout(resolve,50));assert.equal(f.calls,calls,'restart does not replay ACP work');
+});
+
+test('external Agent settings use revisions, isolated credentials, and a model-free ACP probe',async t=>{
+ const f=await fixture(t),path=`/api/projects/${f.project.id}/external-agents`;
+ const initial=await f.api(path);assert.equal(initial.agents.length,2);assert.ok(initial.agents.every(agent=>!agent.enabled));
+ await f.api(path+'/runtime-acp','PUT',{expectedRevision:0,enabled:true});
+ await f.api(path+'/runtime-acp','PUT',{expectedRevision:0,enabled:false},409);
+ const result=await f.api(path+'/runtime-acp/probe','POST',{});assert.equal(result.ok,true);assert.equal(f.calls,0);
+ assert.equal((await f.api(path)).agents.find(agent=>agent.id==='runtime-acp').transportReady,true);
+ await f.api(path+'/codex','PUT',{expectedRevision:0,enabled:false,apiKey:'synthetic-independent-codex-key'});
+ assert.ok(!JSON.stringify(await f.api(path)).includes('synthetic-independent-codex-key'));
+ assert.ok(!JSON.stringify(f.app.store.list('acpProfiles')).includes('synthetic-independent-codex-key'));
+ const profile=f.app.agents.external.registry.get(f.project.id,'codex');
+ const home=await f.app.agents.external.registry.prepareHome(profile);
+ assert.ok(home.startsWith(f.app.store.home+'/external-agents/'));
+ assert.equal(JSON.parse(await readFile(join(home,'auth.json'),'utf8')).OPENAI_API_KEY,'synthetic-independent-codex-key');
+ await f.api(path+'/codex','PUT',{expectedRevision:1,enabled:false,apiKey:''});
+ await f.app.agents.external.registry.prepareHome(f.app.agents.external.registry.get(f.project.id,'codex'));
+ await assert.rejects(access(join(home,'auth.json')));
+});
+
+test('a specialist freezes its ACP backend into a new Worker and task acceptance still uses Lake receipts',{timeout:30000},async t=>{
+ const f=await fixture(t,'super-acp-worker'),path=`/api/projects/${f.project.id}`;
+ const project=await f.api(path+'/superagent','POST',{});
+ await f.api(path+'/external-agents/runtime-acp','PUT',{enabled:true,expectedRevision:0});
+ const role={id:'e'.repeat(64),projectId:f.project.id,roleKey:'project-inspector',name:'项目检查员',duties:'检查当前项目工作区，按实际证据报告',revision:1};
+ f.app.store.put('superRoles',role.id,role);
+ await f.api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:1,execution:{kind:'acp',agent:'runtime-acp'}});
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{maxSteps:24});
+ const workspace=await f.app.store.workspace(f.project.id);await writeFile(join(workspace,'ACP_ROOT_EVIDENCE.txt'),'root fixture');
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'请让项目检查员检查实际项目工作区。'},202);
+ const result=await settledSubagentTask(f),worker=result.workers[0],runs=f.app.store.list('acpRuns');
+ assert.equal(worker.task.state,'completed',JSON.stringify({worker,runs}));assert.equal(worker.task.acceptanceState,'pass');
+ assert.equal(runs.length,1);assert.equal(runs[0].state,'completed',JSON.stringify(runs));assert.equal(runs[0].childSessionId,undefined);
+ const actual=f.app.store.list('superWorkers')[0];assert.equal(actual.roleSnapshot.execution.agent,'runtime-acp');
+ await f.api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:2,execution:{kind:'native'}});
+ assert.equal(f.app.store.list('superWorkers')[0].roleSnapshot.execution.agent,'runtime-acp');
+ assert.deepEqual(f.app.store.list('superOperations').map(row=>[row.tool,row.status]),[['list_project_files','succeeded']]);
+ assert.equal(f.app.store.list('superAcceptance').filter(row=>row.scope==='goal').length,1);
+});
+
+test('an ACP child Write waits for the original Lake approval and preserves the actual write receipt',{timeout:30000},async t=>{
+ const {f,worker,workspace}=await startSubagentTask(t,'super-subagent-acp-child-write',false,24,{silentWriteFiles:false});
+ const view=await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),view=>!!view.pending);
+ const file=join(workspace,'child-output.txt');await assert.rejects(access(file));
+ const child=view.agentRuns[0];assert.equal(child.source,'acp_subagent');assert.ok(child.pending);
+ await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:view.pending.id,accept:true});
+ const state=await settledSubagentTask(f);assert.equal(state.workers[0].task.acceptanceState,'pass');
+ assert.equal(await readFile(file,'utf8'),'actual child write receipt');
+ const operation=f.app.store.list('superOperations')[0];assert.equal(operation.status,'succeeded');assert.equal(operation.agentRunId,child.id);
+});
+
+test('stopping an ACP child with pending approval fences its tool and restart never replays the external prompt',{timeout:30000},async t=>{
+ const {f,worker,workspace}=await startSubagentTask(t,'super-subagent-acp-child-write',false,24,{silentWriteFiles:false});
+ await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),view=>!!view.pending);
+ const state=await f.api(`/api/projects/${f.project.id}/superagent`);
+ await f.api(`/api/sessions/${state.channels[0].sessionId}/channel`,'POST',{action:'stop'});
+ await f.app.agents.wait(worker.sessionId);
+ await assert.rejects(access(join(workspace,'child-output.txt')));
+ const run=f.app.store.list('acpRuns')[0];assert.equal(run.state,'unknown');assert.equal(run.dispatchPhase,'sent');
+ const calls=f.calls;await f.restart();await new Promise(resolve=>setTimeout(resolve,60));
+ assert.equal(f.calls,calls);await assert.rejects(access(join(workspace,'child-output.txt')));
+ assert.equal(f.app.store.list('acpRuns')[0].state,'unknown');
+});
+
+test('an ACP Worker delegates an ACP child through the original public task coordinator',{timeout:30000},async t=>{
+ const f=await fixture(t,'super-acp-worker-child'),path=`/api/projects/${f.project.id}`;
+ const project=await f.api(path+'/superagent','POST',{});
+ await f.api(path+'/external-agents/runtime-acp','PUT',{enabled:true,expectedRevision:0});
+ const role={id:'e'.repeat(64),projectId:f.project.id,roleKey:'project-inspector',name:'项目检查员',duties:'检查当前项目工作区，按实际证据报告',revision:1};
+ f.app.store.put('superRoles',role.id,role);
+ await f.api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:1,execution:{kind:'acp',agent:'runtime-acp'}});
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{maxSteps:24});
+ const workspace=await f.app.store.workspace(f.project.id);await writeFile(join(workspace,'child-evidence-a.txt'),'ACTUAL_CHILD_EVIDENCE_A');
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'请让项目检查员检查实际项目工作区。'},202);
+ const result=await settledSubagentTask(f),worker=result.workers[0],runs=f.app.store.list('acpRuns');
+ assert.equal(worker.task.state,'completed',JSON.stringify({worker,runs}));assert.equal(worker.task.acceptanceState,'pass');
+ assert.equal(runs.length,2,JSON.stringify(runs));assert.ok(runs.every(run=>run.state==='completed'));assert.ok(runs.some(run=>run.childSessionId));
+ const actual=f.app.store.list('superWorkers')[0];assert.equal(actual.roleSnapshot.execution.agent,'runtime-acp');
+ await f.api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:2,execution:{kind:'native'}});
+ assert.equal(f.app.store.list('superWorkers')[0].roleSnapshot.execution.agent,'runtime-acp');
+ assert.deepEqual(f.app.store.list('superOperations').map(row=>[row.tool,row.status]),[['Read','succeeded']]);
+ assert.equal(f.app.store.list('superAcceptance').filter(row=>row.scope==='goal').length,1);
+});
+
+test('a completed ACP report without real business receipts cannot accept the original task',{timeout:30000},async t=>{
+ const {f}=await startSubagentTask(t,'super-subagent-acp-child-prose');
+ const state=await settledSubagentTask(f);
+ assert.equal(f.app.store.list('acpRuns')[0].state,'completed');
+ assert.notEqual(state.workers[0].task.acceptanceState,'pass');
+ assert.equal(f.app.store.list('superOperations').length,0);assert.equal(f.app.store.list('superAcceptance').length,0);
+});
+
+test('disabling the project ACP profile revokes a pending bridge write without accepting stale approval',{timeout:30000},async t=>{
+ const {f,worker,workspace}=await startSubagentTask(t,'super-subagent-acp-child-write',false,24,{silentWriteFiles:false});
+ const pending=await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),view=>!!view.pending);
+ await f.api(`/api/projects/${f.project.id}/external-agents/runtime-acp`,'PUT',{expectedRevision:1,enabled:false});
+ await settledSubagentTask(f);await assert.rejects(access(join(workspace,'child-output.txt')));
+ await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:pending.pending.id,accept:true},409);
+ assert.equal(f.app.store.list('acpRuns')[0].state,'unknown');
+ assert.equal(f.app.store.list('superAcceptance').length,0);
 });

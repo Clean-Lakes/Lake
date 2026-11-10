@@ -50,6 +50,7 @@ export type Operation = {
   commandExecutionId?:string;networkURL?:string;
   databaseConfigurationHash?:string;databaseScope?:{database:string;schema:string;maxRows:number;maxDurationMS:number};
   agentRunId?: string; childSessionId?: string; originalCallId?: string;
+  externalRunId?: string; externalSessionId?: string;
 };
 
 /** Derived observation metadata only. Acceptance still verifies the exact original outputHash. */
@@ -358,7 +359,7 @@ export class TaskLedger {
   }
   async operation<T>(goalId: string, generation: number, policyHash: string, callId: string, tool: string,
     input: unknown, dispatch: () => Promise<T>, redact: <V>(value: V) => V,
-    binding: Pick<Operation, "resourceId" | "resourceRevision" | "readOnly" | "mcpServerId" | "mcpTool" | "remoteMcp" | "configurationHash" | "bindingHash" | "catalogHash" | "skillName" | "skillHash" | "hostConfigurationHash" | "commandExecutionId" | "networkURL" | "databaseConfigurationHash" | "databaseScope" | "agentRunId" | "childSessionId" | "originalCallId"> = {}): Promise<T> {
+    binding: Pick<Operation, "resourceId" | "resourceRevision" | "readOnly" | "mcpServerId" | "mcpTool" | "remoteMcp" | "configurationHash" | "bindingHash" | "catalogHash" | "skillName" | "skillHash" | "hostConfigurationHash" | "commandExecutionId" | "networkURL" | "databaseConfigurationHash" | "databaseScope" | "agentRunId" | "childSessionId" | "originalCallId" | "externalRunId" | "externalSessionId"> = {}): Promise<T> {
     const current = this.get(goalId);
     // Host-issued Bash binding: historical pending effects are observations,
     // never execution gates for a new command ID. Keep the old rows unchanged.

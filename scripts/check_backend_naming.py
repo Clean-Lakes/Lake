@@ -12,6 +12,8 @@ AUDIT_FILES = {"scripts/check_backend_naming.py", "scripts/test_check_backend_na
 
 
 def exception(path, line):
+    if path == 'runtime/typescript/acp/catalog.ts' and line.strip() == "'runtime-acp': { name: 'ZCode', version: '3.17.2' },":
+        return 'external ACP product branding'
     if path.startswith("docs/licenses/"):
         return "original licenses"
     if path in AUDIT_FILES:

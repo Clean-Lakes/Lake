@@ -64,6 +64,7 @@ const bundled = await build({
     {
       name: "pinned-agent-sdk-source",
       setup(builder) {
+        builder.onResolve({filter:/^@modelcontextprotocol\/server\/stdio$/},()=>({path:createRequire(join(root,'web-agent/package.json')).resolve('@modelcontextprotocol/server/stdio')}));
         builder.onResolve({ filter: /^ai$/ }, () => ({
           path: require.resolve('ai', {paths: [join(source, 'apps/zcode-cli/packages/adapters')]}),
         }));
@@ -241,6 +242,11 @@ await writeFile(
   join(output, "licenses/image-dependencies.json"),
   JSON.stringify(dependencyNotices, null, 2),
 );
+dependencyNotices.length = 0;
+noticePrefix = 'acp';
+for(const name of ['@agentclientprotocol/sdk','@modelcontextprotocol/server','zod'])await copyDependencyNotices(createRequire(join(root,'web-agent/package.json')).resolve(name));
+await copyFile(join(root,'runtime/typescript/licenses/codex-0.160.1-LICENSE'),join(output,'licenses/codex-0.160.1-LICENSE'));
+await writeFile(join(output,'licenses/acp-dependencies.json'),JSON.stringify(dependencyNotices,null,2));
 // Native PTY stays outside the SEA bundle so Node can dlopen the pinned addon.
 const ptySource = dirname(require.resolve("node-pty/package.json"));
 const ptyOutput = join(output, "native/node-pty");

@@ -143,3 +143,11 @@ TS Dev 支持 MySQL、PostgreSQL、Redis、APISIX、Prometheus 和 VictoriaMetri
 `scripts/build_lake_desktop.sh` 默认生成 TS 正式 ZIP/DMG；`--dev --install` 只安装 Lake Dev。用户运行包时无需系统 Node。更新器在旧进程退出后，使用准确 Home/data 执行 `--production --migrate-legacy --import-only`，最多等待 120 秒；该准备阶段不启动 Worker、队列或 Memory 提取。失败恢复旧应用，保留原数据库；成功后才进入 45 秒 UI 就绪确认。命令行单独运行须显式传入正确身份及隔离目录。旧 Go 不包含 TS 新历史，回退后两边产生分支历史须核对，不能将其当成双向同步。
 
 从 0.3.27 或更早客户端自动更新时，执行的是旧客户端携带的安装器，仍受原 45 秒总就绪窗口约束，不能提前获得新版的 120 秒准备阶段。若首次迁移较大导致旧安装器回退，请保留备份并改用本版 ZIP/DMG 手动安装；本版安装器的单独准备与回退测试仅证明从本版开始的后续更新路径。
+
+### 项目 ACP 执行后端
+
+设置 → Agent 按项目启用外部执行后端，并选择专员新任务的默认后端。省略配置的专员与历史任务继续用原生运行时；新 Worker 冻结所选引用。原生 Worker 的 `Agent` 可选择 `runtime-acp` / `codex-acp`，Worker 或已有原生 child 也可用 `run_external_agent` 委派一段工作。外部 leaf 不再递归委派；任务仍最多 7 个逻辑 child。
+
+固定 SDK 的 ACP 服务由 Lake 通过公开 AgentRuntime 托管；Codex 使用固定 ACP adapter 2.2.2 与引擎 0.160.1，需要单独配置 Node 24.14+ 和独立 API Key，并由操作者点击安装。连接测试只握手，不发送模型任务。Codex 原生执行工具关闭，业务调用走每次执行的私有 MCP 桥及原 Lake 审批/账本。具体支持、版本、认证和平台限制见 [兼容记录](../../docs/validation/acp-agent-execution/compatibility.md)。
+
+修改 Agent 连接配置会终止使用旧 revision 的调用。停止或断线后已发送但未明确回答的 prompt 保留 unknown，不自动重放或回退其他引擎。外部完成报告不等于任务验收；只有原任务实际业务回执可以支撑验收。

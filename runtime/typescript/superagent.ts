@@ -40,7 +40,7 @@ import {prepareWatchdogEvidence, watchdogEvidence, transientModelFailure, type W
 import type {TurnFailure} from "./model-errors";
 import type {WatchdogFinding, WatchdogMode} from "../../web-agent/shared/contracts";
 
-type Role = { id: string; projectId: string; roleKey: string; name: string; duties: string; revision: number; deletedAt?: string };
+type Role = { id: string; projectId: string; roleKey: string; name: string; duties: string; revision: number; deletedAt?: string; execution?: import('./acp/types').AgentBackendRef };
 type Channel = { id: string; projectId: string; roleId: string; sessionId: string; revision: number; createdAt: string };
 type InputEvent = { id: string; projectId: string; sessionId: string; messageId: string; payload: string;
   selectedReferences?: MessageInput;
@@ -548,7 +548,7 @@ export class LakeSuperagent implements AgentHost {
     const role = this.role(channel.projectId, channel.roleId, true);
     const workers = projectWorkers.filter((worker) => worker.roleId === role.id);
     const accepted = workers.filter(({task}) => (task.collaboration?.acceptanceState ?? task.acceptanceState) === "pass" && task.state === "completed").length;
-    return { ...channel, roleName: role.name, duties: role.duties, roleRevision: role.revision,
+    return { ...channel, roleName: role.name, duties: role.duties, roleRevision: role.revision,execution:role.execution??{kind:'native'},
       running: workers.some((worker) => this.active.has(worker.id) && this.agents.isRunning(worker.sessionId)),
       preparing: workers.some((worker) => worker.assignmentState === "queued") || this.store.list<InputEvent>("superInputs").some((event) => event.preferredRoleId === role.id && event.disposition === "pending"),
       needsConfirmation: workers.some((worker) => this.pendingInteraction(worker.sessionId)),
@@ -598,6 +598,20 @@ export class LakeSuperagent implements AgentHost {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) throw new HttpError(400, "limit must be 1 to 50");
     const rows = this.store.list<Role>("superRoles").filter((role) => role.projectId === projectId && !role.deletedAt && role.id > cursor).sort((a, b) => a.id.localeCompare(b.id));
     return { items: rows.slice(0, limit), nextCursor: rows.length > limit ? rows[limit - 1].id : "" };
+  }
+  setRoleExecution(projectId:string,roleId:string,input:Record<string,any>){
+    const role=this.role(projectId,roleId),backend=input.execution;
+    if(input.expectedRevision!==role.revision)throw new HttpError(409,'专员配置已变化，请刷新后重试');
+    if(!backend||!['native','acp'].includes(backend.kind))throw new HttpError(400,'请选择执行后端');
+    let execution:import('./acp/types').AgentBackendRef={kind:'native'};
+    if(backend.kind==='acp'){
+      const profile=this.agents.external.registry.get(projectId,backend.agent);
+      if(!profile.enabled)throw new HttpError(409,'请先在项目设置中启用该外部 Agent');
+      execution={kind:'acp',agent:profile.id,revision:profile.revision};
+    }
+    const updated={...role,execution,revision:role.revision+1};
+    this.store.put('superRoles',role.id,updated);this.notify(this.ensureChannel(updated).sessionId,'specialist');
+    return updated;
   }
   private manage(sessionId: string, input: Record<string, any>) {
     const event = this.admitted(sessionId, input.event_id, text(input.quote, "quote", 16384));
@@ -1234,6 +1248,8 @@ export class LakeSuperagent implements AgentHost {
       return !["WebFetch","WebSearch","call_mcp_tool","list_mcp_tools"].includes(name);
     };
     return { runtimeMode:this.store.get<any>("agentPlans",worker.taskId)?.active?"plan":"build",version: `${worker.id}:${worker.generation}:host-v3:${managed}`, systemPrompt: superWorkerPrompt,
+      validateExecution:()=>this.validateWorker(worker.id,worker.generation),
+      execution:worker.roleSnapshot.execution??{kind:'native'},
       requestFinalReport: () => this.requestFinalReport(worker),
       wrapHTTP:base=>this.httpPort(worker,base),
       wrapFilesystem:base=>this.filePort(worker,base),
@@ -1455,9 +1471,9 @@ export class LakeSuperagent implements AgentHost {
     try { return await dispatch(); }
     finally { release(); if (this.businessQueues.get(workerId) === next) this.businessQueues.delete(workerId); }
   }
-  private childSource(context: ToolExecutionContext): Pick<Operation, "agentRunId" | "childSessionId" | "originalCallId"> {
-    const child = (context as HostToolContext).lakeSubagent;
-    return child ? { agentRunId: child.id, childSessionId: child.sessionId, originalCallId: child.toolCallId } : {};
+  private childSource(context: ToolExecutionContext): Pick<Operation, "agentRunId" | "childSessionId" | "originalCallId" | "externalRunId" | "externalSessionId"> {
+    const child = (context as HostToolContext).lakeSubagent,external=(context as HostToolContext).lakeExternal;
+    return {...(child ? { agentRunId: child.id, childSessionId: child.sessionId, originalCallId: child.toolCallId } : {}),...external};
   }
   private async scopedPath(workspace: string, path: string): Promise<string> {
     const candidate = resolve(workspace, path);

@@ -499,6 +499,17 @@ export async function startLakeServer(options: ServerOptions) {
           store.transaction(() => { store!.put("resources", resource.id, resource); resourceNavigation.attach(resource, parentId); });
           result = resource;
         }
+      } else if (path[1] === 'projects' && path[3] === 'external-agents') {
+        store.project(path[2]);
+        const registry=agents.external.registry;
+        if(path.length===4&&method==='GET')result={agents:await registry.list(path[2])};
+        else if(path.length===5&&method==='PUT')result=await registry.save(path[2],path[4],data);
+        else if(path.length===6&&method==='POST'&&['probe','install'].includes(path[5])){
+          const cancel=new AbortController(),abort=()=>cancel.abort();response.on('close',abort);
+          const timeout=setTimeout(abort,path[5]==='install'?300000:30000);
+          try{result=path[5]==='probe'?await agents.external.probe(path[2],path[4],cancel.signal):await registry.install(path[2],path[4],data.npmPath,cancel.signal);}
+          finally{clearTimeout(timeout);response.off('close',abort);}
+        }else throw new HttpError(405,'不支持此外部 Agent 请求');
       } else if (path[1] === "projects" && path[3] === "watchdog" && path.length === 4) {
         store.project(path[2]);
         if (method === "GET") result = {mode:superagent.watchdog.mode(path[2])};
@@ -512,6 +523,8 @@ export async function startLakeServer(options: ServerOptions) {
         }
         else if (path.length === 6 && path[4] === "specialists" && method === "DELETE")
           result = await superagent.deleteRole(path[2], path[5], data.revision);
+        else if (path.length === 7 && path[4] === 'specialists' && path[6] === 'execution' && method === 'PUT')
+          result = superagent.setRoleExecution(path[2],path[5],data);
         else if (path.length !== 4) throw new HttpError(404, "Super-agent 接口不存在");
         else if (method === "GET") result = superagent.workspace(path[2]);
         else if (method === "POST") result = superagent.ensure(path[2]);
@@ -871,6 +884,14 @@ export async function startLakeServer(options: ServerOptions) {
 
 async function main() {
   const args = process.argv.slice(2);
+  if(args[0]==='--internal-acp-runtime'){
+    if(!args[1])throw new Error('ACP 运行时缺少独立状态目录');
+    const {runRuntimeAgent}=await import('./acp/runtime-server');await runRuntimeAgent(args[1]);return;
+  }
+  if(args[0]==='--internal-acp-mcp'){
+    if(!args[1])throw new Error('ACP 工具桥缺少原任务端点');
+    const {runToolBridge}=await import('./acp/bridge');await runToolBridge(args[1]);return;
+  }
   if (args.includes("--version")) {
     console.log(`Lake ${typeof __LAKE_VERSION__==='undefined'?'development':__LAKE_VERSION__} TypeScript`);
     return;

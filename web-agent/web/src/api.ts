@@ -104,6 +104,11 @@ export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"model
 };
 
 export const api = {
+  externalAgents:(project:string,signal?:AbortSignal)=>request<{agents:import('../../shared/external-agents').ExternalAgentStatus[]}>(`/api/projects/${encodeURIComponent(project)}/external-agents`,{signal}),
+  saveExternalAgent:(project:string,agent:string,data:Record<string,unknown>)=>request(`/api/projects/${encodeURIComponent(project)}/external-agents/${encodeURIComponent(agent)}`,{method:'PUT',body:JSON.stringify(data)}),
+  probeExternalAgent:(project:string,agent:string)=>post(`/api/projects/${encodeURIComponent(project)}/external-agents/${encodeURIComponent(agent)}/probe`,{}),
+  installExternalAgent:(project:string,agent:string,npmPath:string)=>post(`/api/projects/${encodeURIComponent(project)}/external-agents/${encodeURIComponent(agent)}/install`,{npmPath}),
+  setRoleExecution:(project:string,role:string,expectedRevision:number,execution:import('../../shared/external-agents').AgentBackendRef)=>request(`/api/projects/${encodeURIComponent(project)}/superagent/specialists/${encodeURIComponent(role)}/execution`,{method:'PUT',body:JSON.stringify({expectedRevision,execution})}),
   memoryScopes: (projectId = "", signal?: AbortSignal) => request<{engine: "typescript"; scopes: LayeredMemoryScope[]}>(`/api/memory?projectId=${encodeURIComponent(projectId)}`, {signal}),
   memoryView: (key: string, projectId = "", signal?: AbortSignal) => request<LayeredMemoryView>(`/api/memory/scopes/${encodeURIComponent(key)}?projectId=${encodeURIComponent(projectId)}`, {signal}),
   memorySettings: (key: string, projectId: string, data: LayeredMemorySettings) => request<LayeredMemorySettings>(`/api/memory/scopes/${encodeURIComponent(key)}/settings?projectId=${encodeURIComponent(projectId)}`, {method: "PATCH", body: JSON.stringify({useEnabled: data.useEnabled, extractionEnabled: data.extractionEnabled, expectedRevision: data.revision})}),

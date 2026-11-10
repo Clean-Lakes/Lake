@@ -21,6 +21,13 @@ test('historical native child keeps its exact resource and identity after the ru
  assert.equal(model.resources[0]?.resource?.id,'a');
  assert.equal(model.resources[0]?.runs[0]?.childSessionId,'child-old-child');
 });
+test('ACP child keeps its original task and only actual Lake operations count as business receipts',()=>{
+ const report={...call('external-report'),title:'Codex · ACP',data:{taskId:'task',source:'external_agent',external_run_id:'external-one'}};
+ const receipt={...call('actual-read','a'),title:'Read',data:{taskId:'task',resource_id:'a',operation_id:'actual-operation'}};
+ const child={...run('acp-child',['a'],[report,receipt]),source:'acp_subagent' as const,execution:{kind:'acp' as const,agent:'codex' as const}};
+ const model=workerExecutionModel(snapshot([child]));assert.equal(model.runs.length,1);assert.equal(model.runs[0].id,'acp-child');
+ assert.deepEqual(workerBusinessReceipts(snapshot([child])).map(card=>card.id),['actual-read']);
+});
 
 test('native child appears under its resource without directory levels',()=>{
  const model=workerExecutionModel(snapshot([run('one',['a'],[call('c','a')])]));

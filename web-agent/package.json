@@ -20,6 +20,8 @@
     "package": "../scripts/build_lake.sh"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "2.5.0",
+    "@modelcontextprotocol/server": "2.4.0",
     "@redis/client": "6.3.1",
     "@xterm/addon-fit": "0.10.0",
     "@xterm/xterm": "5.5.0",
@@ -30,7 +32,8 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-markdown": "10.1.0",
-    "remark-gfm": "4.0.1"
+    "remark-gfm": "4.0.1",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/node": "24.10.0",

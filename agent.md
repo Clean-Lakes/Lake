@@ -1,5 +1,7 @@
 # Lake Super-agent 内核与三模块协作约定
 
+2026-11-10 用户提出让专员、任务 Worker 及任务内 subagent 通过 ACP 驱动 Codex、Claude Code 等独立 Agent。方向为统一可选执行后端：长期专员保存新任务默认配置，Worker 与逻辑 child 使用独立任务会话，原生 Worker/child 也可调用外部执行段；Task、权限、Memory 和验收仍归原模块。ACP 通知与外部回答只提供过程和结果线索，真实业务证据来自 Lake 工具桥或宿主独立验证。协议本身不提供沙箱，外部工具约束须按适配器版本和平台实测；不能以全量自动批准替代当前 Pilot 权限。详见 [ACP 外部 Agent 执行设计](plan/architecture-acp-agent-execution-1.md)。用户已授权首批 runtime-acp 与 Codex 实施。项目设置按需启用，现有任务及一层逻辑 child 约定保持；实际验证与剩余范围见 [兼容记录](docs/validation/acp-agent-execution/compatibility.md)。
+
 2026-11-09 用户要求专员统一跟随 Pilot 的执行偏好，开启相应自动执行后不再额外确认。TypeScript 的 Pilot、独立 Worker 和原生 child 共用当前项目 Pilot 的分类开关及共享默认值；Python/动态脚本的风险等级、SDK build 模式、MCP stdio 发现、旧策略可用能力的单次 ask 不再形成第二套操作审批。关闭开关时，实际工具调用在 I/O 前等待原生审批。文件/搜索/技能/网页读取、写入、命令/主机检查、数据库只读查询及 MCP 发现/调用分别使用对应开关。风险和只读证明保持原样；自动执行不改变资源归属、明确 deny、连接/凭据/SSH 指纹、Plan/明确只读范围、停止/代次/期限、Memory 与结果验收。原待确认调用不自动批准或重放；人的终端接管与任务计划确认保留原协议。专员频道与 Worker 只投影 Pilot 的有效权限，不维护独立权限配置。见[实施计划](plan/refactor-pilot-operation-permissions-1.md)。
 
 2026-11-09 调查文件与聊天结论分别交付：普通任务已有本轮实际操作却未提交 `work_finish` 时，通过 SDK 原生 Stop hook 在同一轮内请求一次结论补报，不创建新的任务、执行上下文或自定义模型循环。补报只使用已有结果、原后台任务汇合和结果提交，不重复调查命令或追加文件。正常提交的完整/部分总结直接沿原频道投递；仍未提交时明确显示未完成。显式计划、正在等待的人工输入、停止、原操作结果及任务/共同验收仍由原账本负责，不从调查文件推断成功。实现与验证见[结论补报记录](docs/validation/typescript-candidate/final-report-2026-11-09.md)。
@@ -159,3 +161,5 @@ CM 的 Pilot 工作集/摘要可在 FM 新流水线启用前独立交付；角�
 - [旧运维 V2 门控与历史验收](docs/validation/lake-operational-memory-v2.md)
 
 变更前重新核对实际代码、已合入 PR 与维护者当前方案。发现旧草稿或历史阶段记录与本文职责约定不一致时，明确记录差异并更新对应规格，不把未交付能力写成现状；用户后续明确调整架构时同步维护本文件与详细说明。
+
+2026-11-10 已授权首批 ACP 执行后端实施：runtime-acp 与 Codex，保留 Task/Security/Memory 既有职责。见 [架构与实施进度](plan/architecture-acp-agent-execution-1.md) 和 [兼容记录](docs/validation/acp-agent-execution/compatibility.md)。

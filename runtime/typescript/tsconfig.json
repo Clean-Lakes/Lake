@@ -6,6 +6,7 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
+    "resolveJsonModule": true,
     "types": [
       "node"
     ],
@@ -13,6 +14,10 @@
       "../../third_party/agent-sdk/node_modules/@types"
     ],
     "paths": {
+      "@agentclientprotocol/sdk": ["../../web-agent/node_modules/@agentclientprotocol/sdk"],
+      "@modelcontextprotocol/server": ["../../web-agent/node_modules/@modelcontextprotocol/server"],
+      "@modelcontextprotocol/server/stdio": ["../../web-agent/node_modules/@modelcontextprotocol/server/dist/stdio.d.mts"],
+      "zod": ["../../web-agent/node_modules/zod"],
       "ai": ["../../third_party/agent-sdk/apps/zcode-cli/packages/adapters/node_modules/ai/dist/index.d.ts"],
       "pg": [
         "../../web-agent/node_modules/@types/pg/index.d.ts"
@@ -50,6 +55,6 @@
     }
   },
   "include": [
-    "./*.ts"
+    "./**/*.ts"
   ]
 }
