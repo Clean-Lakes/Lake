@@ -1,0 +1,54 @@
+// The real App with fictional in-memory API data; never calls a model or host.
+import './readme-workbench';
+import type {Resource,ResourceTreeNode,SessionSnapshot,SpecialistChannelInfo,SpecialistChannelPage,SuperWorker,WorkSession} from '../../../shared/contracts';
+const base=window.fetch.bind(window),query=new URLSearchParams(location.search),projectId='demo-project',at='2026-11-11T01:20:00Z';
+const roleId='fixture-ops-33';
+const channel:SpecialistChannelInfo={id:'fixture-channel',sessionId:'demo-session-1',projectId,roleId,roleName:'服务器运维排查专员',duties:'负责服务器、集群巡检与故障排查',revision:1,roleRevision:1,createdAt:at,execution:{kind:'acp',agent:'codex',revision:2},messageRead:{cursor:'latest',seenCursor:''}};
+const resources:Resource[]=['k8s-master','app-server','server-01'].map(id=>({id,projectId,name:id,kind:'ssh',status:'available',description:'虚构展示资源'}));
+const tree:ResourceTreeNode[]=[{id:'zmy',projectId,parentId:null,kind:'folder',name:'zmy',resourceId:null,position:0},{id:'cluster',projectId,parentId:'zmy',kind:'folder',name:'韦二',resourceId:null,position:0},{id:'company',projectId,parentId:'zmy',kind:'folder',name:'南京公司',resourceId:null,position:1},...resources.map((r,i)=>({id:`node-${r.id}`,projectId,parentId:i===2?'company':'cluster',kind:'resource' as const,name:r.name,resourceId:r.id,position:i}))];
+const titles=['检查韦二 Kubernetes 集群状态','检查服务器资源状态','核实集群节点告警','检查主机运行状态','汇总服务器巡检报告','检查磁盘空间与日志','检查主机运行状态','检查数据库连接'];
+const states:SuperWorker['task']['state'][]=['running','running','waiting_user','completed','completed','cancelled','completed','failed'];
+const workers:SuperWorker[]=query.has('empty')?[]:titles.map((title,i)=>({id:`fixture-worker-${i}`,sessionId:`fixture-session-${i}`,roleId,roleName:channel.roleName,createdAt:new Date(Date.parse(at)-i*600_000).toISOString(),assignmentState:i<2?'active':i===2?'waiting_user':'parked',...(i<2?{activity:{phase:'tool' as const,label:i===0?'正在核对节点就绪状态与工作负载异常。':'正在读取主机资源指标。',updatedAt:at}}:{}),task:{taskId:`fixture-task-${i}`,sessionId:`fixture-session-${i}`,projectId,title,state:states[i],acceptanceState:states[i]==='completed'?'pass':'not_evaluated',revision:1,originRootTurnId:`fixture-root-${i}`,deadlineAt:'2027-01-01T00:00:00Z',updatedAt:at,resources:[{runtime:'ssh',assetRef:resources[i%resources.length].id}],summary:i>2?'展示数据：已读取系统指标，未执行真实检查。':undefined},execution:{backend:i===6?{kind:'native'}:{kind:'acp',agent:'codex',revision:2},assignedAt:at,source:'task_assignment',totalRuns:i===6?0:1,runs:i===6?[]:[{id:`fixture-run-${i}`,agent:'codex',scope:'worker',state:i<3?'running':'completed',dispatchPhase:i<3?'sent':'answered',createdAt:at,updatedAt:at,usage:null}]}}));
+let revision=1,offline=false;
+const writes:{path:string;body:unknown}[]=[],requests:string[]=[];
+const json=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
+const snapshots=new Map(workers.map((worker,i)=>{
+ const todos=['读取资源目录','连接集群入口','检查节点与工作负载','汇总检查结果'].map((content,n)=>({content,status:i>2?'completed':n<(i===0?2:1)?'completed':n===(i===0?2:1)?'in_progress':'pending'}));
+ const goal={id:worker.task.taskId,sessionId:worker.sessionId,originRootTurnId:worker.task.originRootTurnId,title:worker.task.title,status:worker.task.state,revision:1,items:todos.map((todo,n)=>({id:`step-${n}`,title:todo.content,status:todo.status==='in_progress'?'running':todo.status})),modelRounds:0,deadlineAt:worker.task.deadlineAt,updatedAt:at};
+ const snapshot={session:{id:worker.sessionId,projectId,title:worker.task.title,workspaceRole:'worker',status:i<2?'investigating':i===2?'waiting_approval':'completed'},resources,resourceTree:tree,messages:[],actions:[],terminals:[],specialists:[],evidence:[],cursor:revision,superagent:{task:worker.task,roleId:worker.roleId,goal,execution:worker.execution},sre:{enabled:false,tasks:[]},messageQueue:{paused:false,revision:0,lastError:'',items:[]},ai:{session:worker.sessionId,profile:'core',status:i<2?'running':i===2?'waiting_approval':'completed',cards:[{id:`todo-${i}`,type:'operation',title:'TodoWrite',status:'completed',at,content:JSON.stringify({todos}),data:{taskId:worker.task.taskId}},{id:`read-${i}`,type:'operation',title:'list_assets',status:'completed',at,content:'展示数据：已定位准确资源目录。',data:{taskId:worker.task.taskId,resource_id:resources[i%3].id}}],cardsOffset:0,totalCards:2,agentRuns:[],usage:{known:false},...(i===2?{question:{id:'fixture-question',questions:[{id:'scope',title:'确认本次检查范围',reason:'展示数据，不操作真实服务器。',options:[{label:'只读检查当前集群'},{label:'补充范围说明'}]}]}}:{})}} as unknown as SessionSnapshot;
+ return [worker.sessionId,snapshot];
+}));
+const channelSnapshot={session:{id:channel.sessionId,projectId,title:channel.roleName,workspaceRole:'role',status:'completed'},messages:[],resources,resourceTree:tree,actions:[],terminals:[],specialists:[],evidence:[],cursor:revision,messageQueue:{paused:false,revision:0,lastError:'',items:[]},sre:{enabled:false,tasks:[]},ai:{session:channel.sessionId,profile:'core',status:'idle',cards:[],cardsOffset:0,totalCards:0,agentRuns:[],usage:{known:false}}} as unknown as SessionSnapshot;
+const channels=[channel,...['发布专员','数据库专员','知识库专员','ACP 测试专员'].map((roleName,i)=>({...channel,id:`other-channel-${i}`,sessionId:`other-session-${i}`,roleId:`other-role-${i}`,roleName,duties:'查看任务进展、执行过程与结果'}))];
+Object.assign(window,{lakeTaskListQA:{writes,requests,offline(value:boolean){offline=value;},pulse(){revision++;},many(){for(let i=0;i<35;i++){const worker={...workers[0],id:`extra-${i}`,sessionId:`extra-session-${i}`,createdAt:new Date(Date.parse(at)-i*50_000).toISOString(),task:{...workers[0].task,taskId:`extra-task-${i}`,title:`演示历史任务 ${i+1}`}};workers.push(worker);}},finish(){workers[0].task={...workers[0].task,state:'completed',acceptanceState:'pass'};workers[0].assignmentState='parked';revision++;}}});
+window.fetch=async(input,init)=>{
+ const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href),path=url.pathname;
+ if(!path.startsWith('/api/'))return base(input,init);
+ requests.push(path);
+ if(offline&&path.endsWith('/channel'))return json({error:'演示连接暂时断开'},503);
+ if(init?.method&&init.method!=='GET'){
+  const body=init.body?JSON.parse(String(init.body)):{};writes.push({path,body});
+  if(path.endsWith('/questionReply')){const snap=snapshots.get(path.split('/')[3]);if(snap)delete snap.ai!.question;}
+  if(path.endsWith('/workControl')){const worker=workers.find(item=>path.includes('/'+item.sessionId+'/'));if(worker){worker.task.state='cancelled';worker.assignmentState='parked';}}
+  return json({});
+ }
+ if(path.endsWith('/superagent'))return json({active:true,project:{projectId,routerSessionId:'demo-session-0',version:1},channels,workers,cursor:revision});
+ if(path.endsWith('/external-agents'))return json({agents:[{id:'codex',name:'Codex',projectId,revision:2,enabled:true,installed:true,transportReady:true,assignmentReady:true,model:'本机 Codex 配置',authMode:'chatgpt',updatedAt:at}]});
+ if(path.endsWith('/channel')){
+  const current=channels.find(item=>path.includes('/'+item.sessionId+'/'))??channel,own=current===channel?workers:[];
+  const page:SpecialistChannelPage={channel:current,workers:own,entries:own.flatMap(worker=>{const snap=snapshots.get(worker.sessionId);return snap?snap.ai!.cards.map(card=>({id:card.id,sourceSessionId:worker.sessionId,taskId:worker.task.taskId,createdAt:at,card})):[];}),active:own.filter(worker=>['running','waiting_user'].includes(worker.task.state)).flatMap(worker=>{const snapshot=snapshots.get(worker.sessionId);return snapshot?[snapshot]:[];}),routing:false,queued:0,nextCursor:'',replyPresentation:'invocation'};
+  return json(page);
+ }
+ if(path.endsWith('/snapshot')){
+  const id=path.split('/')[3],own=snapshots.get(id);if(own)return json({...own,cursor:revision});
+  if(channels.some(item=>item.sessionId===id)){const ch=channels.find(item=>item.sessionId===id)!;return json({...channelSnapshot,session:{...channelSnapshot.session,id,title:ch.roleName},cursor:revision});}
+ }
+ const response=await base(input,init);
+ if(path==='/api/bootstrap'){const info=await response.json();return json({...info,backendRuntime:'typescript',aiRuntime:'typescript'});}
+ if(path==='/api/catalog'){
+  const value=await response.json();value.projects[0].name='默认工作区';value.resources=resources;value.resourceTree=tree;
+  value.sessions=[{...value.sessions[0],id:'demo-session-0',title:'Pilot',workspaceRole:'router'},...channels.map(ch=>({...value.sessions[0],id:ch.sessionId,title:ch.roleName,workspaceRole:'role'}))] as WorkSession[];
+  return json(value);
+ }
+ return response;
+};

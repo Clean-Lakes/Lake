@@ -1,23 +1,21 @@
-import {hasCurrentTaskProgress,TaskProgress} from './TaskProgress';
-import {ConversationReadMarker} from './ConversationReadMarker';
 import {AgentExecution} from './AgentExecution';
 import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 import type {SessionSnapshot,SpecialistChannelEntry,SpecialistChannelPage,SuperWorker} from '../../shared/contracts';
 import {api,readableError} from './api';
-import {AIPending,AITranscript,Card,TranscriptMessage} from './AIPanel';
-import {AgentQuestion} from './AgentQuestion';
-import {HostKeyTrust} from './HostKeyTrust';
-import {ObjectReferencesProvider} from './AssistantMarkdown';
+import {Card,TranscriptMessage} from './AIPanel';
 import {conversationActivity,channelTaskPresentation} from './superAgentPresentation';
 import {isCompactionFallbackEntry} from './timeline';
 import {AppSelect} from './AppSelect';
 import {LoadingWaves} from './LoadingWaves';
 import {StatusText} from './StatusText';
-import {channelExecutionTimeline,currentChannelReplies,mergeChannelEntries,mergeChannelPage} from './specialistChannelProjection';
+import {channelExecutionTimeline,currentChannelReplies,mergeChannelPage} from './specialistChannelProjection';
 import {conversationPlanEntry} from './planConversation';
 import {useSmoothText} from './useSmoothText';
 import {usePageVisible} from './usePageVisible';
+import {SpecialistTaskList} from './SpecialistTaskList';
+import {specialistTaskRows} from './specialistTaskListModel';
 export {mergeChannelEntries} from './specialistChannelProjection';
+export {SpecialistTaskControls} from './SpecialistTaskControls';
 
 export function preferredChannelTask(workers:SuperWorker[]){
  return workers.find(worker=>worker.task.state==='waiting_user')??workers.find(worker=>['running','queued','waiting_external'].includes(worker.task.state))??workers[0];
@@ -111,30 +109,18 @@ export function SpecialistChannelEntries({entries,resources,workers=[],activeSou
  })}</>;
 }
 
-// Questions, approvals and host trust always use their original task session.
-// A display channel must never become the execution/SDK identity.
-export function SpecialistTaskControls({snapshot,connected}:{snapshot:SessionSnapshot;connected:boolean}){
- const session=snapshot.session.id,view=snapshot.ai;
- const refresh=()=>api.snapshot(session);
- return <fieldset className="specialist-task-controls" disabled={!connected} aria-label={`任务确认：${snapshot.superagent?.task.title??snapshot.session.title}`}>
-  {view?.question&&<AgentQuestion session={session} request={view.question} refresh={refresh}/>}
-  {view?.pending&&<AIPending session={session} view={view} attachments={snapshot.messages.flatMap(message=>message.files??[])} refresh={refresh}/>}
-  {snapshot.hostKeyTrust&&<HostKeyTrust session={session} prompt={snapshot.hostKeyTrust} disabled={!connected} refresh={refresh}/>}
- </fieldset>;
-}
-
-export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,onReady}:{snapshot:SessionSnapshot;connected:boolean;onTask:(sessionId:string)=>void;onTasks?:(sessionId:string,workers:SuperWorker[])=>void;onActivity?:(sessionId:string,state:"running"|"waiting"|"idle")=>void;onReady?:(sessionId:string,ready:boolean)=>void}){
+export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,onReady,selectedSessionId,onNewTask}:{snapshot:SessionSnapshot;connected:boolean;onTask:(sessionId:string)=>void;onTasks?:(sessionId:string,workers:SuperWorker[],page:SpecialistChannelPage)=>void;onActivity?:(sessionId:string,state:"running"|"waiting"|"idle")=>void;onReady?:(sessionId:string,ready:boolean)=>void;selectedSessionId?:string;onNewTask?:()=>void}){
  const session=snapshot.session.id;
- const [page,setPage]=useState<SpecialistChannelPage|null>(null),[entries,setEntries]=useState<SpecialistChannelEntry[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(false);
- const cursor=useRef(''),hasOlder=useRef(false),generation=useRef(0);
+ const [page,setPage]=useState<SpecialistChannelPage|null>(null),[entries,setEntries]=useState<SpecialistChannelEntry[]>([]),[error,setError]=useState('');
+ const generation=useRef(0);
  const refreshCurrent=useRef<()=>void>(()=>{});
  const observed=useRef({session,cursor:snapshot.cursor});
  useLayoutEffect(()=>{onReady?.(session,!!page||!!error);},[!!page,!!error,session,onReady]);
- useEffect(()=>{if(page?.channel.sessionId===session)onTasks?.(session,channelTasksByRecentRecord(page.workers,entries));},[page,entries,session,onTasks]);
+ useEffect(()=>{if(page?.channel.sessionId===session)onTasks?.(session,channelTasksByRecentRecord(page.workers,entries),page);},[page,entries,session,onTasks]);
  useEffect(()=>{
   // A hidden window / reconnect suspends transport, not the conversation.
   // Clearing history there repeatedly collapses the scroll height and island.
-  setPage(null);setEntries([]);setError('');cursor.current='';hasOlder.current=false;
+  setPage(null);setEntries([]);setError('');
  },[session]);
  useEffect(()=>{
   const current=++generation.current,controller=new AbortController();let busy=false,queued=false;
@@ -142,7 +128,7 @@ export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,
   const refresh=async()=>{
    if(busy){queued=true;return;}busy=true;
    try{const next=await api.specialistChannel(session,'',controller.signal);if(current!==generation.current)return;
-    setPage(next);setEntries(old=>mergeChannelPage(old,next));setError('');if(!hasOlder.current)cursor.current=next.nextCursor;
+    setPage(next);setEntries(old=>mergeChannelPage(old,next));setError('');
    }catch(reason){if(!controller.signal.aborted&&current===generation.current)setError(readableError(reason));}finally{busy=false;if(queued&&!controller.signal.aborted){queued=false;void refresh();}}
   };
   refreshCurrent.current=()=>void refresh();
@@ -155,34 +141,11 @@ export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,
   const previous=observed.current;observed.current={session,cursor:snapshot.cursor};
   if(previous.session===session&&previous.cursor!==snapshot.cursor)refreshCurrent.current();
  },[session,snapshot.cursor]);
- const loadOlder=async()=>{
-  if(!cursor.current||loading)return;
-  const current=generation.current,container=document.querySelector<HTMLElement>('.conversation'),height=container?.scrollHeight??0,top=container?.scrollTop??0;
-  setLoading(true);
-  try{const older=await api.specialistChannel(session,cursor.current);if(current!==generation.current)return;
-   hasOlder.current=true;cursor.current=older.nextCursor;setEntries(old=>mergeChannelEntries(old,older.entries));setError('');
-   requestAnimationFrame(()=>{if(container&&current===generation.current)container.scrollTop=top+container.scrollHeight-height;});
-  }catch(reason){if(current===generation.current)setError(readableError(reason));}finally{if(current===generation.current)setLoading(false);}
- };
  const latestOwn=snapshot.messages.at(-1);
  const admitting=latestOwn?.role==='user'&&(!page||!entries.length||Date.parse(latestOwn.createdAt)>Date.parse(entries.at(-1)!.createdAt));
  const activity=page?.routing||admitting||!!page?.queued||page?.active.some(active=>conversationActivity(active.ai)==='running')?'running':page?.active.length?'waiting':'idle';
  useEffect(()=>{onActivity?.(session,activity)},[session,activity,onActivity]);
- return <ObjectReferencesProvider resources={snapshot.resources}><div className="ai-transcript specialist-channel" data-reply-avatar="hidden">
-  {!!cursor.current&&<button type="button" className="button secondary" disabled={loading} onClick={()=>void loadOlder()}>{loading?'正在加载…':'加载更早记录'}</button>}
-  {error&&<p className="pilot-workspace-error" role="alert">{error}</p>}
-  <SpecialistChannelEntries entries={entries} resources={snapshot.resources} workers={page?.workers} connected={connected} onTask={onTask} hasOlder={!!cursor.current} activeSources={new Set(connected?page?.active.map(active=>active.session.id)??[]:[])} activeSnapshots={new Map(page?.active.map(active=>[active.session.id,active])??[])}/>
-  {(page?.routing||admitting||!!page?.queued)&&!page?.active.length&&<div className="reply-duration turn-status is-live is-thinking without-avatar" role="status" aria-label="专员正在处理消息"><LoadingWaves/><StatusText active={connected}>正在安排工作</StatusText></div>}
-  {page?.active.map(active=>{
-   const task=active.superagent?.task;
-   const cards=active.ai?.cards.filter(card=>!!active.ai?.turnStartedAt&&card.at>=active.ai.turnStartedAt)??[];
-   const live={...active,messages:[],ai:active.ai?{...active.ai,cards,cardsOffset:0,totalCards:cards.length}:undefined};
-   return <section className="specialist-channel-active" key={active.session.id} aria-label={task?.title??'当前任务'}>
-    {page.replyPresentation==='invocation'&&task&&<TaskProgress cards={cards} executionId={task.executionGoalId??task.taskId} historical={!hasCurrentTaskProgress(task.state)}/>}
-    {page.replyPresentation!=='invocation'&&<AITranscript snapshot={live} proseInChannel superTask={task} assistantIdentity={{name:page.channel.roleName}} disabled={!connected} refresh={()=>api.snapshot(active.session.id)} onInspect={()=>onTask(active.session.id)}/>}
-    <SpecialistTaskControls snapshot={active} connected={connected}/>
-   </section>;
-  })}
-  <ConversationReadMarker session={session} state={page?.channel.messageRead} enabled={connected&&!error}/>
- </div></ObjectReferencesProvider>;
+ const rows=specialistTaskRows({workers:page?.workers??[],entries,active:page?.active,projectId:snapshot.session.projectId,resources:snapshot.resources,resourceTree:snapshot.resourceTree});
+ const channel=page?.channel??{id:session,sessionId:session,projectId:snapshot.session.projectId,roleId:'',roleName:snapshot.session.title,revision:0,createdAt:''};
+ return <SpecialistTaskList channel={channel} rows={rows} selectedSessionId={selectedSessionId} onTask={onTask} onNewTask={onNewTask} connected={connected} loading={!page&&!error} routing={!!page?.routing||admitting} queued={page?.queued} error={error} onRetry={()=>refreshCurrent.current()}/>;
 }
