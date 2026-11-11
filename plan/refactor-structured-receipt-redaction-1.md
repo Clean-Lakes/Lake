@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-11
 last_updated: 2026-11-11
 owner: Codex
-status: In progress
+status: Completed
 tags: [backend, security, receipts, bug]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 用户指出实际报告以“完成结果的提交校验仍失败”结尾。只读审计发现真实 Bash 回执报 JSON 解析错误：整段 JSON 文本脱敏误替换了数值字段的一部分。finish 在解析失败后没有结束命令的内部 promise，留下 running 命令并阻碍退出。本轮修复共享回执和清理链路，不重跑用户服务器或改写旧结果。
 
@@ -41,9 +41,9 @@ tags: [backend, security, receipts, bug]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-004 | 运行后端类型、全部单元、宿主、固定 Codex、运行时边界与命名检查；记录真实失败证据的匿名原因及测试准确结果。 | | |
-| TASK-005 | 干净提交后通过 scripts/build_lake_desktop.sh --dev --install 安装，核对签名、来源、既有账本与本机 Codex 配置；不发送业务任务。依赖 TASK-004。 | | |
-| TASK-006 | 更新 agent.md、运行说明、验证记录及原 develop 草稿 PR，保留未合并及历史状态不追溯改写的限制。依赖 TASK-005。 | | |
+| TASK-004 | 运行后端类型、全部单元、宿主、固定 Codex、运行时边界与命名检查；记录真实失败证据的匿名原因及测试准确结果。 | Yes | 2026-11-11 |
+| TASK-005 | 干净提交后通过 scripts/build_lake_desktop.sh --dev --install 安装，核对签名、来源、既有账本与本机 Codex 配置；不发送业务任务。依赖 TASK-004。 | Yes | 2026-11-11 |
+| TASK-006 | 更新 agent.md、运行说明、验证记录及原 develop 草稿 PR，保留未合并及历史状态不追溯改写的限制。依赖 TASK-005。 | Yes | 2026-11-11 |
 
 ## 3. Alternatives
 
