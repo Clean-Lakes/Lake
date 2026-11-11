@@ -1,8 +1,8 @@
 {
   "date": "2026-11-11",
-  "sourceCommit": "d389ca7847ddcfb9537a14fb32bffa018ccb0c97",
-  "backendCodeCommit": "219636df81270129a1a47279e86ee2b29ead33e4",
-  "scope": "frontend specialist task page and loading motion",
+  "sourceCommit": "f93cd200f14ba2bbf3f244698bb9d64cc5041594",
+  "backendCodeCommit": "f93cd200f14ba2bbf3f244698bb9d64cc5041594",
+  "scope": "shared backend resource directory discovery",
   "platform": "macOS arm64",
   "runtime": "Node 24.14.0 / signed Lake SEA",
   "dev": {
@@ -14,105 +14,191 @@
     "bundleId": "com.cleanlakes.lake.desktop.dev",
     "home": "~/.lake-dev",
     "guiLoaded": true,
-    "nativeSpecialistTaskListVisible": true,
-    "nativeOriginalTaskDetailVerified": true,
-    "originalTaskProgressReadable": true,
-    "composerCodexSelected": true,
-    "projects": 19,
+    "nativeSpecialistTaskPagePreserved": true,
     "existingWorkerCount": 150,
-    "existingWorkersUnchanged": true
+    "existingWorkersUnchanged": true,
+    "oldExecutionRecords": {
+      "oldTaskOperations": 28,
+      "oldTaskUnknown": 6,
+      "externalRuns": 3,
+      "operationIdentityStatusHashUnchanged": true,
+      "externalRunsUnchanged": true
+    }
   },
   "checks": {
-    "frontend": {
-      "passed": 797,
-      "newRegressionTests": 6
+    "assetUnit": {
+      "passed": 20,
+      "includedInBackendUnit": true
     },
-    "frontendTypesAndBuild": "passed",
+    "backendTypes": "passed",
+    "backendBuild": "passed",
+    "backendUnit": {
+      "passed": 267,
+      "skipped": 4
+    },
+    "backendIntegration": {
+      "passed": 192
+    },
+    "realCodexACP": {
+      "passed": 3,
+      "adapter": "2.2.2",
+      "engine": "0.160.1",
+      "provider": "local synthetic Responses fixture",
+      "realCredentialsUsed": false,
+      "externalInferenceUsed": false
+    },
     "boundary": "passed",
-    "backendRuntimeSourceChanged": false,
-    "backendIntegrationRerun": false,
-    "backendUnitRerun": false,
-    "realModelInferenceRerun": false,
+    "naming": "0 violations",
+    "namingUnit": {
+      "passed": 5
+    },
+    "frontendTypesAndBuild": "passed by signed desktop build",
+    "frontendSourceChanged": false,
+    "frontendTestsRerun": false,
     "legacyGoRerun": false
   },
-  "specialistTaskPage": {
-    "sharedLakeAvatarsAndTheme": true,
-    "originalTaskIdentityPreserved": true,
-    "frozenExecutorShown": true,
-    "unknownProgressNotInvented": true,
-    "selectedDetailReusedWithoutNewRequests": true,
-    "browser": {
-      "initialWrites": 0,
-      "rowSurvivesPoll": true,
-      "animationSurvivesPoll": true,
-      "selectedAfterPoll": "fixture-session-0",
-      "activeRows": 2,
-      "keyboardFilter": "需关注2",
-      "keyboardFocus": "需关注2",
-      "directoryMatches": 6,
-      "emptySearch": "没有匹配的任务",
-      "newTaskFocus": "message-input",
-      "draft": "保留这份派发草稿，不发送",
-      "questionAndStop": [
-        {
-          "path": "/api/sessions/fixture-session-2/ai/questionReply",
-          "body": {
-            "id": "fixture-question",
-            "answers": {
-              "scope": [
-                "只读检查当前集群"
-              ]
-            }
-          }
-        },
-        {
-          "path": "/api/sessions/fixture-session-0/ai/workControl",
-          "body": {
-            "goalId": "fixture-task-0",
-            "command": "cancel",
-            "revision": 1
-          }
-        }
-      ],
-      "scrolling": {
-        "before": 574,
-        "after": 600,
-        "rows": 43
-      },
-      "escapeRestoresOriginalRow": true,
-      "emptyPage": {
-        "title": "还没有任务",
-        "newTaskEnabled": true
-      },
-      "viewportWidths": [
-        1680,
-        1280,
-        900,
-        560
-      ],
-      "noHorizontalOverflow": true,
-      "reducedMotionLoaders": "none"
-    },
-    "screenshots": [
-      "task-list-light.png",
-      "task-list-dark.png",
-      "task-list-narrow-dark.png",
-      "task-list-mobile-dark.png"
-    ]
+  "resourceDirectory": {
+    "fullPathMetadata": true,
+    "ancestorAndPathQuery": true,
+    "exactIdsAndPinsPreserved": true,
+    "renameAndMoveInvalidateCursor": true,
+    "pathJSONBytes": 2048,
+    "pageJSONBytes": 8192,
+    "brokenAncestryExplicitlyUnavailable": true,
+    "projectAndTaskScopePreserved": true,
+    "gatewayAliasesRemainDistinct": true,
+    "realCodexReceivesDirectoryThroughHostBridge": true,
+    "unrelatedDirectoryExcludedInCodexTest": true,
+    "actualCatalogProjection": {
+      "oldFlatQueryCount": 0,
+      "directoryQueryCount": 27,
+      "returnedCount": 27,
+      "hasMore": false,
+      "allPathsInRequestedDirectory": true,
+      "jenkinsIncluded": false,
+      "serverOperationsExecuted": 0
+    }
   },
-  "loadingMotion": {
-    "sharedGlyphClass": "activity-indicator",
-    "fiveRunningContextsVerified": true,
-    "sameNodeAndAnimationAcrossPoll": true,
-    "reducedMotionRespected": true,
-    "completedHasNoLoaders": true,
-    "proof": "loading-motion.json"
-  },
-  "backendInvestigationDeferred": true,
   "actualServerTaskRetried": false,
+  "originalUnknownReconciled": false,
   "productionChanged": false,
   "merged": false,
   "previousValidations": [
+    {
+      "date": "2026-11-11",
+      "sourceCommit": "d389ca7847ddcfb9537a14fb32bffa018ccb0c97",
+      "backendCodeCommit": "219636df81270129a1a47279e86ee2b29ead33e4",
+      "scope": "frontend specialist task page and loading motion",
+      "platform": "macOS arm64",
+      "runtime": "Node 24.14.0 / signed Lake SEA",
+      "dev": {
+        "installed": true,
+        "signatureVerified": true,
+        "buildOriginDirty": false,
+        "backendHashVerified": true,
+        "actualProcessVerified": true,
+        "bundleId": "com.cleanlakes.lake.desktop.dev",
+        "home": "~/.lake-dev",
+        "guiLoaded": true,
+        "nativeSpecialistTaskListVisible": true,
+        "nativeOriginalTaskDetailVerified": true,
+        "originalTaskProgressReadable": true,
+        "composerCodexSelected": true,
+        "projects": 19,
+        "existingWorkerCount": 150,
+        "existingWorkersUnchanged": true
+      },
+      "checks": {
+        "frontend": {
+          "passed": 797,
+          "newRegressionTests": 6
+        },
+        "frontendTypesAndBuild": "passed",
+        "boundary": "passed",
+        "backendRuntimeSourceChanged": false,
+        "backendIntegrationRerun": false,
+        "backendUnitRerun": false,
+        "realModelInferenceRerun": false,
+        "legacyGoRerun": false
+      },
+      "specialistTaskPage": {
+        "sharedLakeAvatarsAndTheme": true,
+        "originalTaskIdentityPreserved": true,
+        "frozenExecutorShown": true,
+        "unknownProgressNotInvented": true,
+        "selectedDetailReusedWithoutNewRequests": true,
+        "browser": {
+          "initialWrites": 0,
+          "rowSurvivesPoll": true,
+          "animationSurvivesPoll": true,
+          "selectedAfterPoll": "fixture-session-0",
+          "activeRows": 2,
+          "keyboardFilter": "需关注2",
+          "keyboardFocus": "需关注2",
+          "directoryMatches": 6,
+          "emptySearch": "没有匹配的任务",
+          "newTaskFocus": "message-input",
+          "draft": "保留这份派发草稿，不发送",
+          "questionAndStop": [
+            {
+              "path": "/api/sessions/fixture-session-2/ai/questionReply",
+              "body": {
+                "id": "fixture-question",
+                "answers": {
+                  "scope": [
+                    "只读检查当前集群"
+                  ]
+                }
+              }
+            },
+            {
+              "path": "/api/sessions/fixture-session-0/ai/workControl",
+              "body": {
+                "goalId": "fixture-task-0",
+                "command": "cancel",
+                "revision": 1
+              }
+            }
+          ],
+          "scrolling": {
+            "before": 574,
+            "after": 600,
+            "rows": 43
+          },
+          "escapeRestoresOriginalRow": true,
+          "emptyPage": {
+            "title": "还没有任务",
+            "newTaskEnabled": true
+          },
+          "viewportWidths": [
+            1680,
+            1280,
+            900,
+            560
+          ],
+          "noHorizontalOverflow": true,
+          "reducedMotionLoaders": "none"
+        },
+        "screenshots": [
+          "task-list-light.png",
+          "task-list-dark.png",
+          "task-list-narrow-dark.png",
+          "task-list-mobile-dark.png"
+        ]
+      },
+      "loadingMotion": {
+        "sharedGlyphClass": "activity-indicator",
+        "fiveRunningContextsVerified": true,
+        "sameNodeAndAnimationAcrossPoll": true,
+        "reducedMotionRespected": true,
+        "completedHasNoLoaders": true,
+        "proof": "loading-motion.json"
+      },
+      "backendInvestigationDeferred": true,
+      "actualServerTaskRetried": false,
+      "productionChanged": false,
+      "merged": false
+    },
     {
       "date": "2026-11-11",
       "sourceCommit": "9bb1deab7296000e030a7c39b9c54cd97ab32d37",

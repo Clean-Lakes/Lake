@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-11
 last_updated: 2026-11-11
 owner: Codex
-status: In progress
+status: Completed
 tags: [backend, assets, acp, bug]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In_progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 用户要求调查 Codex 为何将集群检查指向 Jenkins。已只读核对真实调用：目录名查询为空，IP 查询返回另一目录的 Jenkins；list_assets 只包含资源名/ID，未提供资源树路径。本计划修复共享的元数据检索，不重试旧任务或服务器。
 
@@ -42,8 +42,8 @@ tags: [backend, assets, acp, bug]
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-004 | 运行后端类型、资产及全套后端单元、server.test.cjs、固定 Codex ACP 集成和边界/命名检查；每项记录准确结果及来源。 | ✅ | 2026-11-11 |
-| TASK-005 | 干净提交经 scripts/build_lake_desktop.sh --dev --install 安装；只读核对目录查询的真实配置投影，比较旧 Worker/运行记录，保存 tested SHA。依赖 TASK-004。 | | |
-| TASK-006 | 更新 agent.md、runtime/typescript/README.md、验证记录与原 develop 草稿 PR，记录未验证及回退，保持未合并。依赖 TASK-005。 | | |
+| TASK-005 | 干净提交经 scripts/build_lake_desktop.sh --dev --install 安装；只读核对目录查询的真实配置投影，比较旧 Worker/运行记录，保存 tested SHA。依赖 TASK-004。 | ✅ | 2026-11-11 |
+| TASK-006 | 更新 agent.md、runtime/typescript/README.md、验证记录与原 develop 草稿 PR，记录未验证及回退，保持未合并。依赖 TASK-005。 | ✅ | 2026-11-11 |
 
 ## 3. Alternatives
 
@@ -82,3 +82,5 @@ tags: [backend, assets, acp, bug]
 - [三模块职责](../agent.md)
 - [Items 与安全身份](../docs/design/items-security-memory-integration.md)
 - [ACP 验证记录](../docs/validation/acp-agent-execution/compatibility.md)
+
+已验证代码与签名 Dev：`f93cd200f14ba2bbf3f244698bb9d64cc5041594`。资产 20 项、后端单元 267 通过/4 项既有可选跳过、宿主集成 192 项、固定真实 Codex ACP 3 项通过；实际目录快照由 0 项变为 27 项且排除另一目录主机。150 个 Worker 与旧操作/外部运行记录保持。详见[验收](../docs/validation/acp-agent-execution/compatibility.md)，草稿 PR [#222](https://github.com/Clean-Lakes/Lake/pull/222) 已更新，未合并。
