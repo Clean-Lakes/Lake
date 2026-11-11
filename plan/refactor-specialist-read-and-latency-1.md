@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-11
 last_updated: 2026-11-11
 owner: Codex
-status: In progress
+status: Completed
 tags: [frontend, backend, specialist, acp, bug]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 用户确认未读小圆点无法清除，并要求缩短任务流程；明确保留本机 Codex 的 max 思考配置。实际最近一次运行约 454 秒，ACP 启动约 4.5 秒，根 Worker 工具墙钟约 22 秒，包含两次因旧未决操作而失败的完成提交。本轮处理可见读取、后台汇合指引与准确完成诊断，不承诺模型服务延迟下降。
 
@@ -42,8 +42,8 @@ tags: [frontend, backend, specialist, acp, bug]
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-004 | 运行前后端类型、相关回归、构建、宿主及固定 Codex 集成，使用 ego-browser 在虚构页面验证浅/深色、窄窗和键盘；记录实际结果。 | ✅ | 2026-11-11 |
-| TASK-005 | 干净提交后用 scripts/build_lake_desktop.sh --dev --install；仅空闲时重启 Dev，验证来源与业务记录保留。依赖 TASK-004。 | | |
-| TASK-006 | 更新 UI/运行说明、验证材料及原 develop 草稿 PR，保留未合并与模型延迟未实测的限制。依赖 TASK-005。 | | |
+| TASK-005 | 干净提交后用 scripts/build_lake_desktop.sh --dev --install；仅空闲时重启 Dev，验证来源与业务记录保留。依赖 TASK-004。 | ✅ | 2026-11-11 |
+| TASK-006 | 更新 UI/运行说明、验证材料及原 develop 草稿 PR，保留未合并与模型延迟未实测的限制。依赖 TASK-005。 | ✅ | 2026-11-11 |
 
 ## 3. Alternatives
 
@@ -80,3 +80,5 @@ tags: [frontend, backend, specialist, acp, bug]
 - [UI 读取规则](../docs/ui-guidelines.md#专员任务页2026-11-11)
 - [任务验收合同](../docs/security/task-confirmation.md)
 - [ACP 兼容记录](../docs/validation/acp-agent-execution/compatibility.md)
+
+已测试并安装的代码提交：`b77ab66b6664a9fe78dced26e90fd3a1f841e8f7`。前端 798、后端 268 / 4 既有可选跳过、宿主 192、固定真实 Codex + 合成模型 4 项通过。实际 Dev 未读点已清除，本机 max 配置哈希不变。旧内核退出挂起经私有快照及准确闲置进程清理完成安装，其根因仍未定位；1 条原遗留 running 命令按原启动恢复转为 unknown，规范操作未改变。验证与限制见 [本轮记录](../docs/validation/acp-agent-execution/specialist-read-latency.md)。[develop 草稿 PR #222](https://github.com/Clean-Lakes/Lake/pull/222) 已更新，未合并。

@@ -1,4 +1,8 @@
-## 当前：Agent 可按 Lake 资源目录检索（2026-11-11）
+## 当前：专员未读与任务流程（2026-11-11）
+
+签名 Lake Dev 已测试源码：`b77ab66b6664a9fe78dced26e90fd3a1f841e8f7`。未读显式确认、报告可见性及调用流程验证见 [本轮记录](specialist-read-latency.md)。按用户选择保留本机 max；真实模型加速未测量，原未决结果不清除。目录检索等本 PR 功能继续保留。
+
+## Agent 按 Lake 资源目录检索（2026-11-11）
 
 已测试后端与签名 Lake Dev：`f93cd200f14ba2bbf3f244698bb9d64cc5041594`。实施见[目录修复计划](../../../plan/refactor-agent-resource-directory-1.md)。
 
