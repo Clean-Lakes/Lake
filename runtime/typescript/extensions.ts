@@ -11,7 +11,7 @@ import type { LakeSecurity } from "./security";
 import type { Operation } from "./tasks";
 
 type Server = MCPServerConfig & { headers?: Record<string, string>; env?: Record<string, string>; legacyCredentials?: boolean };
-type Config = { version: 1; servers: Server[]; skillRoots: string[]; disabledSkills: string[] };
+type Config = { version: 1; servers: Server[]; skillRoots: string[]; disabledSkills: string[]; removedSkillPaths?:string[]; removedSkills?:string[] };
 export type McpBinding = { ProjectID: string; ServerID?: string; Revision: number; Enabled: boolean; ToolNames?: string[];
   LegacyAuthority?: { storeID: string; recoveryEpoch: string } };
 export type ExtensionFence = { serverId: string; configurationHash: string; bindingHash: string; catalogHash?: string; local: boolean };
@@ -33,6 +33,7 @@ function readConfig(path: string): Config {
   if (value && value.version === 1) { value.servers ??= []; value.skillRoots ??= []; value.disabledSkills ??= []; }
   if (value.version !== 1 || !Array.isArray(value.servers) || !Array.isArray(value.skillRoots) || !Array.isArray(value.disabledSkills))
     throw new HttpError(409, "扩展配置版本或目录无效");
+  for(const key of ['removedSkills','removedSkillPaths'] as const)if(value[key]!==undefined&&(!Array.isArray(value[key])||value[key]!.some(item=>typeof item!=='string')))throw new HttpError(409,'Skill 删除记录格式无效');
   return value;
 }
 function dictionary(value: unknown, maximum: number, headers = false): Record<string, string> {
@@ -114,6 +115,8 @@ export class LakeExtensions {
     return { ...publicServer, headersConfigured: Object.keys(headers ?? {}).length > 0, envConfigured: Object.keys(env ?? {}).length > 0 };
   }
   servers() { return { servers: this.config().servers.map((server) => this.public(this.raw(server.id))) }; }
+  serverRevision(serverId:string){return digest(this.raw(serverId));}
+  patch(serverId:string,input:Record<string,any>){return this.save(serverId,{...this.raw(serverId),...input});}
   save(serverId: string | undefined, input: Record<string, any>) {
     this.security.check();
     const config = this.config(), previous = serverId && config.servers.find((server) => server.id === serverId);
@@ -327,10 +330,10 @@ export class LakeExtensions {
       try { candidates = existsSync(join(actual, "SKILL.md")) ? [actual] : readdirSync(actual).slice(0, 1000).filter((name) => identifier.test(name)).map((name) => join(actual, name)); }
       catch { continue; }
       for (const directory of candidates) {
-        const name = basename(directory); if (!identifier.test(name) || seen.has(name)) continue;
+        const name = basename(directory); if (!identifier.test(name) || seen.has(name)||config.removedSkills?.includes(name)) continue;
         try {
           const path = realpathSync(join(directory, "SKILL.md")), info = lstatSync(path);
-          if (!inside(actual, path) || !this.safeSkillPath(path) || !info.isFile() || info.size > 100000) continue;
+          if (!inside(actual, path) || !this.safeSkillPath(path) || config.removedSkillPaths?.includes(path) || !info.isFile() || info.size > 100000) continue;
           const bytes = readFileSync(path), content = bytes.toString("utf8"); if (!Buffer.from(content).equals(bytes)) continue;
           const description = content.split("\n").map((line) => line.trim()).find((line) => line.startsWith("description:"))?.slice(12).trim().replace(/^["']|["']$/g, "") ?? "";
           const managed = path === join(this.store.home, "skills", name, "SKILL.md");
@@ -350,11 +353,13 @@ export class LakeExtensions {
   }
   saveSkill(name: string, input: Record<string, any>) {
     this.security.check(); if (!identifier.test(name)) throw new HttpError(400, "Skill 名称无效");
+    if(input.enabled!==undefined&&typeof input.enabled!=='boolean')throw new HttpError(400,'enabled 须为布尔值');
     if (input.content !== undefined) {
       const content = text(input.content, "content", 100000), catalog = this.skills().skills;
       if (input.create === true ? catalog.some((skill) => skill.name.toLowerCase() === name.toLowerCase()) : !catalog.some((skill) => skill.name === name && skill.managed))
         throw new HttpError(409, "仅可编辑 Lake 管理的 Skill，创建时不能覆盖同名项");
       const root = join(this.store.home, "skills"), directory = join(root, name), target = join(directory, "SKILL.md");
+      if(input.create===true&&existsSync(target))throw new HttpError(409,'同名 Skill 文件仍存在，不能覆盖保留文件');
       for (const path of [root, directory]) {
         mkdirSync(path, { mode: 0o700, recursive: true }); const info = lstatSync(path);
         if (!info.isDirectory() || info.isSymbolicLink() || process.platform !== "win32" && info.uid !== process.getuid?.()) throw new HttpError(409, "Skill 目录不能是符号链接或其他用户的目录");
@@ -364,11 +369,33 @@ export class LakeExtensions {
       try { writeFileSync(file, content); fsyncSync(file); } finally { closeSync(file); }
       renameSync(temporary, target);
     } else this.skill(name);
-    if (input.enabled !== undefined) {
-      if (typeof input.enabled !== "boolean") throw new HttpError(400, "enabled 须为布尔值");
-      const config = this.config(); config.disabledSkills = config.disabledSkills.filter((item) => item !== name); if (!input.enabled) config.disabledSkills.push(name); this.write(config);
+    if (input.enabled !== undefined||input.create===true) {
+      const config = this.config(); config.disabledSkills = config.disabledSkills.filter((item) => item !== name); if (input.enabled===false) config.disabledSkills.push(name);
+      if(input.create===true)config.removedSkills=config.removedSkills?.filter(item=>item!==name);
+      this.write(config);
     }
     return { ok: true };
+  }
+  skillRevision(name:string){const {skill}=this.skill(name);return digest([skill,readFileSync(skill.path,'utf8')]);}
+  removeSkill(name:string){
+    this.security.check();const {skill}=this.skill(name),config=this.config();
+    config.removedSkills=[...new Set([...(config.removedSkills??[]),name])];
+    // Older compatible readers ignore tombstones but still honor disabled names.
+    config.disabledSkills=[...new Set([...config.disabledSkills,name])];
+    if(!skill.managed){
+      config.removedSkillPaths=[...new Set([...(config.removedSkillPaths??[]),skill.path])];this.write(config);
+      return {name,removed:true,filesDeleted:false,scope:'global',disposition:'unregistered'};
+    }
+    const root=join(this.store.home,'skills'),directory=join(root,name),trash=join(root,'.trash');
+    for(const path of [root,directory]){
+      const info=lstatSync(path);if(!info.isDirectory()||info.isSymbolicLink()||process.platform!=='win32'&&info.uid!==process.getuid?.())throw new HttpError(409,'Skill 目录身份已变化');
+    }
+    mkdirSync(trash,{recursive:true,mode:0o700});const info=lstatSync(trash);
+    if(!info.isDirectory()||info.isSymbolicLink()||info.mode&0o077||process.platform!=='win32'&&info.uid!==process.getuid?.())throw new HttpError(409,'Skill 回收目录必须私有');
+    // Persist hiding first so a crash cannot activate a same-named imported Skill.
+    this.write(config);const key=id();renameSync(directory,join(trash,key));
+    this.store.put('skillTrash',key,{name,at:now()});
+    return {name,removed:true,filesDeleted:false,scope:'global',disposition:'archived'};
   }
   skillRoot(path: unknown, remove: boolean) {
     this.security.check(); text(path, "path", 4000);

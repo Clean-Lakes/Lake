@@ -165,3 +165,15 @@ TS Dev 支持 MySQL、PostgreSQL、Redis、APISIX、Prometheus 和 VictoriaMetri
 Router 的 `list_specialists` 返回准确角色、当前 revision 及后续任务默认后端；`list_specialist_avatars(query?)` 从共享 100 项 Lake 本地目录按名称、别名或 ID 查询。`manage_specialist` 创建仍要求 name/duties，更新支持 name、duties、avatar_id、execution 的局部 patch；省略字段保留，auto 清除显式头像。头像通过 SpecialistChannelInfo.avatarId 和共享 Provider 显示，不依赖职责文本。
 
 保存沿原已接纳人工 event/quote、项目 RoleID、expected_revision、事件/part 幂等事务；未知字段、非法头像和失效版本拒绝。execution 只选择 native 或 Codex，复用原 registry 校验，已有 Worker 的职责与执行快照不变，不改本机 Codex 配置、凭据或权限。无需新增业务任务来完成角色配置。
+
+## Pilot 资源、Skills 与 MCP 配置
+
+`pilot-configuration.ts` 仅向准确 Pilot Router 注册三组查询/管理工具及显式 MCP 测试。资源/文件夹限当前项目；Skills/注册目录与服务配置明确为 global，MCP 绑定明确为 project。查询返回准确 ID、对象 revision 和有界分页，模型只能提交局部公开字段，不接收凭据、信任或策略字段。`manage_resource` 新建使用 `create_revision`；Skills/MCP 新建使用 `catalog_revision`，后续修改用对象 revision；注册目录使用 `roots_revision`。
+
+`resource-management.ts` 与 HTTP 资源 API 复用 SSH、服务及目录写入器。缺凭据 SSH 可保存为 unavailable 草稿，执行侧 `configuration/revision` 验证仍拒绝未就绪连接；同项目凭据复用只在宿主内部完成。删除走原回收站，忽略占用时仅排除当前准确配置事件/Router，其他 Worker、输入和终端继续阻止删除。改名和同目录更新保留原排序。
+
+Skill 删除将管理目录移到 `skills/.trash`；导入路径只解除注册。私有扩展配置保存删除标记并同时保留旧格式的停用名称，避免同名来源和旧 reader 误启用。新建可明确恢复该名称，不能覆盖仍存在的保留文件。全部 Skill patch 先校验 enabled 再写正文。
+
+MCP 保存只改变配置，省略 headers/env/公开字段保持；`test_mcp_config` 单独测试当前连接，返回有界工具名，`list_mcp_config(tools_for=...)` 可分页读取已测试目录；绑定沿原 `setBinding` 的版本及目录检查。省略 tool_names 保留原绑定，首次启用须明确列表；空数组明确表示全部。Skills 目录可用 `list_skill_config(entity=root)` 分页读取。查询与 CRUD 不连接服务或执行进程。
+
+控制动作按当前完整人工 event/quote 与稳定 part 保存 `pilotConfigMutations`；持久 pending 在文件/网络 I/O 前写入，成功后记录脱敏回执。重启或中断后 pending/unknown 不自动重放；SQLite、私有扩展文件和 Skill 目录不是跨域原子事务。工具不授予业务权限、不修改任务验收，不开放给 Worker、child 或 ACP。实际 SDK 仍分别使用 Pilot 的 silentReadFiles、silentWriteFiles、silentMCPCalls；Plan 禁止写入。验证见[配置 CRUD](../../docs/validation/acp-agent-execution/pilot-configuration-crud.md)。

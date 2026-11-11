@@ -908,6 +908,38 @@ function superReply(request, mode, home) {
     const event = JSON.parse(raw.split("\n")[1])[0];
     const currentStart = request.messages.findLastIndex(message => message.role === "user" && content(message) === raw);
     names = request.messages.slice(currentStart).flatMap(message => (message.tool_calls ?? []).map(call => call.function.name));
+    if(mode==='super-config-mcp-connect'){
+      const messages=request.messages.slice(currentStart),calls=messages.flatMap(m=>m.tool_calls??[]);
+      const result=name=>{const id=calls.findLast(c=>c.function.name===name)?.id;const value=messages.findLast(m=>m.role==='tool'&&m.tool_call_id===id);return value?JSON.parse(content(value)):undefined;};
+      if(!names.includes('list_mcp_config'))return call('list_mcp_config',{});
+      const server=result('list_mcp_config').items[0],base={event_id:event.id,quote:event.text,id:server.id,expected_revision:server.revision};
+      if(!names.includes('test_mcp_config'))return call('test_mcp_config',{...base,part_key:'test'});
+      if(!names.includes('manage_mcp'))return call('manage_mcp',{...base,part_key:'bind',scope:'project',action:'bind',enabled:true,tool_names:['count_documents'],binding_revision:server.project_binding_revision});
+      if(names.filter(n=>n==='list_mcp_config').length<2)return call('list_mcp_config',{});
+      return {content:'演示服务连接测试通过，已在当前项目启用指定工具。'};
+    }
+    if(mode==='super-config-crud'){
+      const messages=request.messages.slice(currentStart),calls=messages.flatMap(m=>m.tool_calls??[]);
+      const result=name=>{const id=calls.findLast(c=>c.function.name===name)?.id;const value=messages.findLast(m=>m.role==='tool'&&m.tool_call_id===id);return value?JSON.parse(content(value)):undefined;};
+      const skill=event.text.includes('Skill'),mcp=event.text.includes('MCP'),folder=event.text.includes('文件夹')||event.text.includes('环境');
+      const read=skill?'list_skill_config':mcp?'list_mcp_config':'list_resource_config',write=skill?'manage_skill':mcp?'manage_mcp':'manage_resource';
+      const readArgs=read==='list_resource_config'?{include_deleted:true}:{};
+      if(!names.includes(read))return call(read,readArgs);
+      if(!names.includes(write)){
+        const catalog=result(read),action=event.text.startsWith('新建')?'create':event.text.startsWith('删除')?'delete':event.text.startsWith('恢复')?'restore':'update';
+        const base={event_id:event.id,part_key:'configuration',quote:event.text,action};
+        if(skill){const item=catalog.items.find(s=>s.name==='note');return call(write,{...base,scope:'global',entity:'skill',name:'note',expected_revision:action==='create'?catalog.catalog_revision:item.revision,
+          ...(action==='delete'?{}:{content:'---\nname: note\ndescription: 测试指引\n---\n'+(action==='create'?'原内容':'更新后的内容')})});}
+        if(mcp){const item=catalog.items.find(s=>s.name==='演示服务');return call(write,{...base,scope:'global',...(item?{id:item.id}:{}),expected_revision:action==='create'?catalog.catalog_revision:item.revision,
+          ...(action==='delete'?{}:{config:action==='create'?{name:'演示服务',transport:'http',url:'https://example.invalid/mcp'}:{url:'https://example.invalid/updated'}})});}
+        const entity=folder?'folder':'resource',item=catalog.items.find(i=>i.entity===entity&&(action==='restore'?i.deleted:!i.deleted));
+        if(action==='create')return call(write,{...base,entity,expected_revision:catalog.create_revision,...(folder?{name:'测试环境'}:{name:'测试入口',kind:'local',parent_id:catalog.items.find(i=>i.entity==='folder').id,settings:{shell:'zsh'}})});
+        const selected=entity==='folder'?item:catalog.items.find(i=>i.entity==='resource'&&i.name!=='本机'&&(action==='restore'?i.deleted:!i.deleted));
+        return call(write,{...base,entity,id:selected.id,expected_revision:selected.revision,...(action==='update'?(event.text.includes('根目录')?{parent_id:null}:{name:folder?'归档环境':'新入口'}):{})});
+      }
+      if(names.filter(n=>n===read).length<2)return call(read,readArgs);
+      return {content:'配置已按保存回执更新。'};
+    }
     if(mode==='super-meta-config'){
       const messages=request.messages.slice(currentStart),calls=messages.flatMap(message=>message.tool_calls??[]);
       const result=name=>{const id=calls.findLast(item=>item.function.name===name)?.id;const message=messages.findLast(item=>item.role==='tool'&&item.tool_call_id===id);return message?JSON.parse(content(message)):undefined;};
@@ -1763,7 +1795,7 @@ test("native subagent reads real evidence under its original Worker task and pre
   assert.equal(children.length, 2, "a real native child must request a tool and consume its actual result");
   for (const request of children) {
     assert.ok(request.tools.some((tool) => tool.function.name === "Read"));
-    assert.ok(!request.tools.some((tool) => ["Agent", "route_work", "manage_specialist", "work_begin", "work_update", "work_finish"].includes(tool.function.name)), "child has business tools without routing or task completion authority");
+    assert.ok(!request.tools.some((tool) => ["Agent", "route_work", "manage_specialist", "work_begin", "work_update", "work_finish", "list_resource_config", "manage_resource", "list_skill_config", "manage_skill", "list_mcp_config", "manage_mcp", "test_mcp_config"].includes(tool.function.name)), "child has business tools without routing or task completion authority");
   }
   const operations = f.app.store.list("superOperations");
   assert.equal(operations.length, 1, "parent delegation itself must not become a business observation");
@@ -4166,4 +4198,57 @@ test('local login auto-detection refreshes on account changes and no login block
  assert.equal(f.app.store.list('superWorkers').length,0);assert.equal(f.app.store.list('superGoals').length,0);
  await writeFile(join(f.options.codexHome,'auth.json'),JSON.stringify({auth_mode:'chatgpt',tokens:{account_id:'new-fixture-account',access_token:'synthetic-new-account-token'}}));
  status=(await f.api(path+'/external-agents')).agents[0];assert.equal(status.revision,3);assert.equal(status.assignmentReady,true);assert.equal(f.calls,0);
+});
+
+
+test('Pilot natural-language CRUD saves resource folders, resources, Skills and MCP through actual SDK tools and survives restart',async t=>{
+ const f=await fixture(t,'super-config-crud'),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentReadFiles:true,silentWriteFiles:true,silentMCPCalls:true});
+ const send=async text=>{const before=f.app.store.list('pilotConfigMutations').length;await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text},202);await until(async()=>f.app.store.list('pilotConfigMutations'),rows=>rows.length>before&&rows.at(-1).state==='committed');await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),view=>view.status==='completed');};
+ await send('新建资源文件夹 测试环境');
+ await send('新建本机资源 测试入口 放入目录');
+ let catalog=await f.api('/api/catalog'),resource=catalog.resources.find(r=>r.name==='测试入口');assert.ok(resource);
+ const folder=catalog.resourceTree.find(n=>n.name==='测试环境');assert.equal(catalog.resourceTree.find(n=>n.resourceId===resource.id).parentId,folder.id);
+ await send('把测试入口改名新入口');assert.equal((await f.api(`/api/resources/${resource.id}`)).settings.shell,'zsh');
+ await send('把新入口移到根目录');assert.equal((await f.api('/api/catalog')).resourceTree.find(n=>n.resourceId===resource.id).parentId,null);
+ await send('把测试环境改名归档环境');
+ await send('删除新入口');assert.ok(!(await f.api('/api/catalog')).resources.some(r=>r.id===resource.id));
+ await send('恢复新入口');assert.ok((await f.api('/api/catalog')).resources.some(r=>r.id===resource.id));
+ await send('删除归档环境');assert.ok(f.app.store.list('navigationTrash').some(i=>i.id===folder.id));
+ await send('新建Skill note');await send('修改Skill note 内容');assert.match((await f.api('/api/settings/skills/note')).content,/更新后的内容/);
+ await send('新建MCP 演示服务');await send('修改MCP 演示服务 地址');assert.equal((await f.api('/api/settings/mcp')).servers[0].url,'https://example.invalid/updated');
+ assert.equal(f.app.superagent.configuration.extensions.adapters.size,0,'CRUD never connects or spawns MCP');
+ const mutations=f.app.store.list('pilotConfigMutations');await f.restart();assert.deepEqual(f.app.store.list('pilotConfigMutations'),mutations);
+ assert.equal((await f.api('/api/settings/skills')).skills[0].name,'note');assert.equal((await f.api('/api/settings/mcp')).servers[0].name,'演示服务');
+ await send('删除Skill note');await send('删除MCP 演示服务');
+ assert.equal((await f.api('/api/settings/skills')).skills.length,0);assert.equal((await f.api('/api/settings/mcp')).servers.length,0);
+ assert.equal(f.app.store.list('superGoals').length,0);assert.equal(f.app.store.list('superWorkers').length,0);assert.equal(f.app.store.list('superOperations').length,0);
+ assert.ok(f.requests.some(r=>r.tools.some(t=>t.function.name==='manage_resource')));assert.ok(f.requests.some(r=>r.tools.some(t=>t.function.name==='manage_skill')));assert.ok(f.requests.some(r=>r.tools.some(t=>t.function.name==='manage_mcp')));
+});
+
+for(const accept of [true,false])test(`Pilot configuration honors write approval before persistence (${accept?'accept':'reject'})`,async t=>{
+ const f=await fixture(t,'super-config-crud'),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentReadFiles:true,silentWriteFiles:false});
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'新建资源文件夹 测试环境'},202);
+ const view=await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),view=>!!view.pending);assert.equal(view.pending.call.name,'manage_resource');
+ assert.equal(f.app.store.list('pilotConfigMutations').length,0);assert.ok(!(await f.api('/api/catalog')).resourceTree.some(n=>n.name==='测试环境'));
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/decision`,'POST',{id:view.pending.id,accept});
+ await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),view=>view.status==='completed');
+ assert.equal((await f.api('/api/catalog')).resourceTree.some(n=>n.name==='测试环境'),accept);
+ assert.equal(f.app.store.list('pilotConfigMutations').length,accept?1:0);
+});
+
+
+for(const automatic of [true,false])test(`Pilot explicitly tests and binds a saved MCP through real protocol with current MCP preference (${automatic?'automatic':'approval'})`,async t=>{
+ const f=await fixture(t,'super-config-mcp-connect'),mcp=await mcpFixture(t),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ const server=await f.api('/api/settings/mcp','POST',{name:'演示服务',transport:'http',url:mcp.url,enabled:true,headers:{'X-Fixture-Key':'synthetic-mcp-token'}});
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentReadFiles:true,silentWriteFiles:true,silentMCPCalls:automatic});
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'测试演示 MCP，并只在当前项目启用 count_documents 工具。'},202);
+ if(!automatic){const pending=await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),v=>!!v.pending);assert.equal(pending.pending.call.name,'test_mcp_config');assert.deepEqual(mcp.requests,[]);await f.api(`/api/sessions/${project.routerSessionId}/ai/decision`,'POST',{id:pending.pending.id,accept:true});}
+ await until(async()=>f.app.store.list('pilotConfigMutations'),rows=>rows.length===2&&rows.every(r=>r.state==='committed'));
+ await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),v=>v.status==='completed');
+ const methods=mcp.requests.map(r=>r.rpc.method);assert.ok(methods.includes('initialize'));assert.equal(methods.filter(m=>m==='tools/list').length,2);assert.ok(!methods.includes('tools/call'));
+ const binding=(await f.api(`/api/projects/${f.project.id}/security/mcp-bindings`)).bindings.find(b=>b.ServerID===server.id);assert.equal(binding.Enabled,true);assert.deepEqual(binding.ToolNames,['count_documents']);
+ assert.ok(!JSON.stringify(f.requests).includes('synthetic-mcp-token'));assert.equal(f.app.store.list('superGoals').length,0);assert.equal(f.app.store.list('superOperations').length,0);
+ const records=f.app.store.list('pilotConfigMutations');await f.restart();assert.deepEqual(f.app.store.list('pilotConfigMutations'),records);assert.equal(mcp.requests.filter(r=>r.rpc.method==='initialize').length,1,'restart does not reconnect automatically');
 });

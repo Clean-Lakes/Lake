@@ -43,15 +43,15 @@ export class LakeSSH {
    throw new HttpError(409,'SSH 凭据或主机记录须为此 Dev Home 内的私有文件');
   return path;
  }
- configuration(value:any):SSHConnection {
+ configuration(value:any,allowIncomplete=false):SSHConnection {
   if(!value||typeof value!=='object'||Array.isArray(value))throw new HttpError(400,'SSH 配置无效');
   const config:SSHConnection={host:String(value.host??''),port:value.port??22,username:String(value.username??''),authMethod:value.authMethod??'key',shell:value.shell??'bash'};
   if(!config.host||config.host.length>253||!isIP(config.host)&&!/^(?:[a-zA-Z0-9_][a-zA-Z0-9_.-]*)$/.test(config.host)||
    !Number.isSafeInteger(config.port)||config.port<1||config.port>65535||!/^[a-zA-Z0-9_.@-]{1,128}$/.test(config.username)||
    !['key','password'].includes(config.authMethod!)||!['sh','bash','zsh','fish'].includes(config.shell!))throw new HttpError(400,'SSH 地址、端口、用户名或 Shell 无效');
   if(value.credentialRef){config.credentialRef=String(value.credentialRef);this.privateFile(config.credentialRef,4096);}
-  if(config.authMethod==='key'){config.identityFile=String(value.identityFile??'');if(!config.identityFile)throw new HttpError(409,'SSH 私钥引用缺失');this.privateFile(config.identityFile);}
-  else if(!config.credentialRef)throw new HttpError(409,'SSH 密码引用缺失');
+  if(config.authMethod==='key'){config.identityFile=String(value.identityFile??'');if(!config.identityFile){if(!allowIncomplete)throw new HttpError(409,'SSH 私钥引用缺失');delete config.identityFile;}else this.privateFile(config.identityFile);}
+  else if(!config.credentialRef&&!allowIncomplete)throw new HttpError(409,'SSH 密码引用缺失');
   return config;
  }
  private atomic(path:string,value:string|Buffer) {
@@ -61,7 +61,7 @@ export class LakeSSH {
   const temporary=join(root,'.ssh-'+id()),file=openSync(temporary,'wx',0o600);
   try{writeFileSync(file,value);fsyncSync(file);}finally{closeSync(file);}renameSync(temporary,path);
  }
- prepare(input:any,previous?:SSHConnection) {
+ prepare(input:any,previous?:SSHConnection,allowIncomplete=false) {
   const value={...previous,...input};
   if(input?.privateKey!==undefined){
    if(typeof input.privateKey!=='string'||Buffer.byteLength(input.privateKey)>1024*1024||!/^-----BEGIN .*PRIVATE KEY-----/.test(input.privateKey))throw new HttpError(400,'请选择有效的 SSH 私钥');
@@ -73,7 +73,7 @@ export class LakeSSH {
    if(typeof secret!=='string'||secret.length>4096||/[\0\r\n]/.test(secret))throw new HttpError(400,'SSH 密码或口令格式无效');
    value.credentialRef='ssh-secret-'+id();this.atomic(join(this.store.home,'secrets',value.credentialRef),secret);this.secrets.add(secret);
   }
-  return this.configuration(value);
+  return this.configuration(value,allowIncomplete);
  }
  revision(resource:Resource) {
   const config=this.configuration(resource.ssh),files=[config.identityFile,config.credentialRef].filter(Boolean).map(value=>{const info=lstatSync(this.privateFile(value!));return [info.ino,info.size,info.mtimeMs,info.ctimeMs];});

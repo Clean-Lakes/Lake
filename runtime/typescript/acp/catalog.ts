@@ -1,3 +1,4 @@
+import {pilotConfigurationToolNames} from '../configuration-tool-names';
 import type { ExternalAgentId } from './types';
 import {HttpError} from '../store';
 import {externalAgentNames} from '../../../web-agent/shared/external-agents';
@@ -12,5 +13,5 @@ export function externalAgentId(value: unknown): ExternalAgentId {
   if (typeof value !== 'string' || !Object.hasOwn(externalProducts, value)) throw new HttpError(400,'请选择当前支持的外部 Agent');
   return value as ExternalAgentId;
 }
-export const externalControlTools = new Set(['run_external_agent', 'Agent', 'Task', 'TaskOutput', 'TaskStop', 'SendMessage',
+export const externalControlTools = new Set([...pilotConfigurationToolNames,'run_external_agent', 'Agent', 'Task', 'TaskOutput', 'TaskStop', 'SendMessage',
   'route_work', 'manage_specialist', 'EnterPlanMode', 'ExitPlanMode', 'AskUserQuestion']);

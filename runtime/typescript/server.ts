@@ -27,6 +27,8 @@ import { LakeStore, HttpError, id, now, privateDirectory } from "./store";
 import { LakeAgents } from "./agent";
 import { LakeNavigation } from "./navigation";
 import { LakeResourceNavigation } from "./resource-navigation";
+import {LakeResourceManagement} from "./resource-management";
+import {PilotConfiguration} from "./pilot-configuration";
 import {messageInput} from './message-input';
 import {LakeMessageQueue} from './message-queue';
 import {LakeWorkflowCatalog} from './workflow-catalog';
@@ -44,7 +46,7 @@ import { digest } from "./tasks";
 import { LakeSecurity } from "./security";
 import { LakeMemory } from "./memory";
 import {openClaudeMemIndex} from './claude-mem';
-import {LakeServiceResources,isServiceKind} from './service-resources';
+import {LakeServiceResources} from './service-resources';
 import { LakeExtensions } from "./extensions";
 import {LakeSSH} from "./ssh";
 import { LakeTerminals } from "./terminal";
@@ -160,6 +162,7 @@ export async function startLakeServer(options: ServerOptions) {
   let ssh:LakeSSH|undefined;
   let mysql:LakeMySQL|undefined;
   let services:LakeServiceResources|undefined;
+  let resourceManagement:LakeResourceManagement|undefined;
   let execution:LakeExecution|undefined;
   let messageQueue: LakeMessageQueue | undefined;
   let draining = false;
@@ -482,24 +485,8 @@ export async function startLakeServer(options: ServerOptions) {
         else if(path.length!==4)throw new HttpError(404,'资源接口不存在');
         else if (method === "GET")
           result = store.catalog().resources.filter((resource) => resource.projectId === path[2]);
-        else if(method==='POST'&&isServiceKind(data.kind,data.settings))result=services!.create(path[2],data);
-        else {
-          if (!["local","ssh"].includes(data.kind)&&!(data.kind==="database"&&data.settings?.driver==="mysql")) throw new HttpError(501, "此资源类型的连接仍在迁移中");
-          if(method!=="POST")throw new HttpError(405,"不支持此资源请求");
-          const parentId = resourceNavigation.parent(path[2], data.parentId);
-          const resource: Resource = {
-            id: id(),
-            projectId: path[2],
-            name: String(data.name ?? "本机"),
-            kind: data.kind,
-            ...(data.kind==="ssh"?{ssh:ssh!.prepare(data.ssh)}:{}),
-            description: "",
-            status: "available",
-            settings: data.kind==="database"&&data.settings?.driver==="mysql"?mysql!.prepare(data.settings):data.settings ?? {},
-          };
-          store.transaction(() => { store!.put("resources", resource.id, resource); resourceNavigation.attach(resource, parentId); });
-          result = resource;
-        }
+        else if(method==='POST')result=resourceManagement!.create(path[2],data);
+        else throw new HttpError(405,'不支持此资源请求');
       } else if (path[1] === 'projects' && path[3] === 'external-agents') {
         store.project(path[2]);
         const registry=agents.external.registry;
@@ -566,16 +553,8 @@ export async function startLakeServer(options: ServerOptions) {
           for (const terminal of entries) await terminals!.disconnect(terminal.sessionId, terminal.id);
           result = { closed: entries.length };
         }
-        else if (method === 'PATCH'&&path.length===3&&isServiceKind(resource.kind,resource.settings))result=services!.update(resource,data);
-        else if (method === "PATCH"&&path.length===3) {
-          resource.name = String(data.name ?? resource.name);
-          if (data.settings && digest(data.settings) !== digest(resource.settings)) store.put("resourceRevisions", resource.id, (store.get<number>("resourceRevisions", resource.id) ?? 1) + 1);
-          resource.settings = resource.kind==="database"&&data.settings?mysql!.prepare(data.settings,resource.settings):data.settings ?? resource.settings;
-          if(resource.kind==="database"&&resource.settings?.driver==="mysql")resource.status="available";
-          if(data.ssh!==undefined){resource.ssh=ssh!.prepare(data.ssh,resource.ssh);resource.status="available";store.put("resourceRevisions",resource.id,(store.get<number>("resourceRevisions",resource.id)??1)+1);}
-          store.put("resources", resource.id, resource);
-          result = resource;
-        } else if (method === "GET" && path.length === 3) result = {...resource,configurationRevision:store.get<number>('resourceRevisions',resource.id)??1};
+        else if(method==='PATCH'&&path.length===3)result=resourceManagement!.update(resource,data);
+        else if (method === "GET" && path.length === 3) result = {...resource,configurationRevision:store.get<number>('resourceRevisions',resource.id)??1};
         else throw new HttpError(path.length === 3 ? 405 : 404, "资源接口不存在或不支持此请求方法");
       } else if (path[1] === "sessions") {
         const sessionId = path[2];
@@ -781,6 +760,7 @@ export async function startLakeServer(options: ServerOptions) {
         else if (path.length === 4 && path[3] === "roots" && ["POST", "DELETE"].includes(method)) result = extensions!.skillRoot(data.path, method === "DELETE");
         else if (path.length === 4 && method === "GET") result = extensions!.skill(path[3]);
         else if (path.length === 4 && method === "PUT") result = extensions!.saveSkill(path[3], data);
+        else if (path.length === 4 && method === "DELETE") result = extensions!.removeSkill(path[3]);
         else throw new HttpError(405, "不支持此 Skill 配置操作");
       } else if (path[1] === "ai" && path[2] === "presets" && path.length === 3) {
         if (method === "GET") result = store.list("aiPresets");
@@ -856,7 +836,10 @@ export async function startLakeServer(options: ServerOptions) {
     // extraction. The actual application launch owns those runtime services.
     if(options.importOnly)return {origin,token,store,agents,superagent,memory,mysql,services,execution,close};
     execution=new LakeExecution(store,security,ssh,value=>agents!.redact(ssh!.scrub(value)));
-    superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql,execution);
+    const resourceNavigation=new LakeResourceNavigation(store,(projectId,actorSessionId)=>store!.list<any>('sessions').some(session=>session.projectId===projectId&&session.id!==actorSessionId&&agents!.isRunning(session.id)));
+    resourceManagement=new LakeResourceManagement(store,security,ssh,services,resourceNavigation);
+    const configuration=new PilotConfiguration(store,security,extensions,resourceManagement,value=>agents!.redact(ssh!.scrub(extensions!.scrub(value))));
+    superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql,execution,Date.now,configuration);
     await superagent.discoveryRecovery.verify();
     memory = new LakeMemory(store, () => security!.check(), value => agents!.redact(ssh!.scrub(extensions!.scrub(value))));
     try { await memory.initialize(); } catch { memory.disable("记忆文件需要核实，当前暂停记忆功能；原记录保留，普通新任务仍可运行"); }

@@ -1,3 +1,4 @@
+import {pilotConfigurationToolNames} from './configuration-tool-names';
 import {agentBackendName} from '../../web-agent/shared/external-agents';
 import {prepareSessionArchive} from "./session-archive";
 import {finalReportBoundary} from "./final-report";
@@ -59,7 +60,7 @@ type Live = {
   children?: { registry: InMemoryRuntimeTaskRegistry; active: () => boolean; cancel: () => Promise<void> };
 };
 const nativeControlTools = new Set(["Agent", "Task", "TaskOutput", "TaskStop", "SendMessage"]);
-const childForbiddenTools = new Set([...nativeControlTools, "work_begin", "work_update", "work_finish", "work_wait", "recall_task_context", "recall_memory", "route_work", "manage_specialist", "ask_user_question", "EnterPlanMode", "ExitPlanMode"]);
+const childForbiddenTools = new Set([...pilotConfigurationToolNames,...nativeControlTools, "work_begin", "work_update", "work_finish", "work_wait", "recall_task_context", "recall_memory", "route_work", "manage_specialist", "ask_user_question", "EnterPlanMode", "ExitPlanMode"]);
 function guardedRegistry(transform:(entry:ToolEntry)=>ToolEntry){
   const base=createToolRegistry(),wrapped=new WeakSet<ToolEntry>();
   return new Proxy(base,{get(target,key){

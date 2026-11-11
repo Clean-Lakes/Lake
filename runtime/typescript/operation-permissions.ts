@@ -6,11 +6,11 @@ type AutomaticOperation = Extract<keyof typeof permissionDefaults, `silent${stri
 // The SDK's build-mode risk/side-effect fallback must not introduce a second
 // confirmation authority after the user selected automatic operation in Pilot.
 const toolCategories: Partial<Record<AutomaticOperation, readonly string[]>> = {
-  silentReadFiles: ['Read', 'Glob', 'Grep', 'FindFiles', 'SearchText', 'list_project_files', 'Skill', 'load_skill', 'WebFetch'],
-  silentWriteFiles: ['Write', 'Edit'],
+  silentReadFiles: ['list_resource_config','list_skill_config','list_mcp_config','Read', 'Glob', 'Grep', 'FindFiles', 'SearchText', 'list_project_files', 'Skill', 'load_skill', 'WebFetch'],
+  silentWriteFiles: ['manage_resource','manage_skill','manage_mcp','Write', 'Edit'],
   silentReadSQL: ['list_db_objects', 'db_table_ddl', 'read_db_table'],
   silentCommands: ['Bash', 'inspect_host'],
-  silentMCPCalls: ['list_mcp_tools', 'call_mcp_tool'],
+  silentMCPCalls: ['test_mcp_config','list_mcp_tools', 'call_mcp_tool'],
 };
 
 export function operationApproval(options: Record<string, unknown>, category: AutomaticOperation) {
