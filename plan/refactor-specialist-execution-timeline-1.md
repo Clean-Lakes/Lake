@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-11
 last_updated: 2026-11-11
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [fix, frontend, acp, timeline]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 用户截图中的旧原生任务卡被追加到今天 Codex 回复之后，造成新任务仍用原生的误解。实际 2026-11-11 09:14（Asia/Shanghai）的新任务已有 completed Codex 运行。仅修正前端的任务卡投影顺序，保留真实执行者及原任务记录。
 
@@ -42,8 +42,8 @@ tags: [fix, frontend, acp, timeline]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-004 | 用独立浏览器夹具验证旧卡在历史位置、Codex 结果在底部、明暗与窄窗；空闲后经签名脚本安装 Lake Dev，核对真实频道最新 Codex 卡与旧 Worker 绑定。 | | |
-| TASK-005 | 在 docs/validation/acp-agent-execution 记录修复、准确 SHA 与检查，更新草稿 PR #222；保持 develop/master 和正式版不变。依赖 TASK-004。 | | |
+| TASK-004 | 用独立浏览器夹具验证旧卡在历史位置、Codex 结果在底部、明暗与窄窗；空闲后经签名脚本安装 Lake Dev，核对真实频道最新 Codex 卡与旧 Worker 绑定。 | Yes | 2026-11-11 |
+| TASK-005 | 在 docs/validation/acp-agent-execution 记录修复、准确 SHA 与检查，更新草稿 PR #222；保持 develop/master 和正式版不变。依赖 TASK-004。 | Yes | 2026-11-11 |
 
 ## 3. Alternatives
 
@@ -74,3 +74,5 @@ tags: [fix, frontend, acp, timeline]
 
 - [前端规范](../docs/ui-guidelines.md)
 - [ACP 当前验证](../docs/validation/acp-agent-execution/compatibility.md)
+
+验证与签名安装源码：`9bb1deab7296000e030a7c39b9c54cd97ab32d37`。前端 791 项、类型/构建和边界检查通过；真实频道最新 Codex 卡位置已核对，149 个旧 Worker 状态与绑定保持。后端未改变，原执行与认证验证保留其原 SHA。

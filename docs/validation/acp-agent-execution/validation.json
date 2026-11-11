@@ -1,9 +1,10 @@
 {
-  "date": "2026-11-10",
-  "sourceCommit": "219636df81270129a1a47279e86ee2b29ead33e4",
+  "date": "2026-11-11",
+  "sourceCommit": "9bb1deab7296000e030a7c39b9c54cd97ab32d37",
   "backendCodeCommit": "219636df81270129a1a47279e86ee2b29ead33e4",
+  "scope": "frontend specialist execution timeline",
   "platform": "macOS arm64",
-  "runtime": "Node 24.14.0 / signed Lake SEA; Codex Node 22.22.0",
+  "runtime": "Node 24.14.0 / signed Lake SEA",
   "dev": {
     "installed": true,
     "signatureVerified": true,
@@ -13,98 +14,172 @@
     "bundleId": "com.cleanlakes.lake.desktop.dev",
     "home": "~/.lake-dev",
     "guiLoaded": true,
-    "nativePilotCodexConfiguration": true,
-    "nativeLocalLoginVisible": true,
-    "pilotModelUnchanged": true,
-    "userProjectCodexEnabled": true,
-    "userProjectTransportReady": true,
-    "userProjectAssignmentReady": true,
-    "authMode": "chatgpt",
-    "model": "gpt-6.1-sol",
-    "reasoningEffort": "max",
-    "defaultCodexSpecialists": 5,
-    "existingWorkersUnchanged": 148,
-    "originalTaskBackend": "native",
-    "originalTaskState": "paused"
+    "nativeLatestTaskCodexVisible": true,
+    "historicalNativeCardsNotTrailingLatestReply": true,
+    "composerCodexSelected": true,
+    "existingWorkerCount": 149,
+    "existingWorkersUnchanged": true
   },
   "checks": {
-    "backendTypes": "passed",
-    "frontendTypesAndBuild": "passed",
-    "backendIntegration": {
-      "passed": 192
-    },
-    "backendUnit": {
-      "passed": 259,
-      "skipped": 4
-    },
     "frontend": {
-      "passed": 786
+      "passed": 791,
+      "newRegressionTests": 5
     },
-    "realCodex": {
-      "adapter": "2.2.2",
-      "engine": "0.160.1",
-      "node": "22.22.0",
-      "passed": 3,
-      "sourceCommit": "219636df81270129a1a47279e86ee2b29ead33e4",
-      "ordinaryModelConfigured": false,
-      "modelAndProviderInherited": true,
-      "reasoningEffortInherited": "max",
-      "inheritedMcpHookNotifyTrapsExecuted": false,
-      "nativePatchRejected": true,
-      "sourceConfigAuthUnchanged": true,
-      "cachedApiLoginVerified": true,
-      "logoutDetected": true,
-      "requestsReplayed": false
-    },
+    "frontendTypesAndBuild": "passed",
+    "backendTypes": "passed",
     "boundary": "passed",
     "naming": "passed",
     "namingBoundaryUnit": {
       "passed": 5
     },
+    "backendIntegrationRerun": false,
+    "backendUnitRerun": false,
+    "realModelInferenceRerun": false,
     "legacyGoRerun": false
   },
-  "localLogin": {
-    "localChatgptLogin": true,
-    "independentApiKeyProvided": false,
-    "model": "gpt-6.1-sol",
-    "reasoningEffort": "max",
-    "worker": "completed",
-    "acceptance": "pass",
-    "externalRun": "completed",
-    "actualReadAndWorkFinish": true,
-    "businessServersAccessed": false,
-    "schemaVersion": 2,
-    "loginFilesCopied": false,
-    "localConfigUnchanged": true,
-    "ordinaryModelInferenceUsed": false,
-    "taskHome": "isolated temporary Lake Home",
-    "inheritedCodexHome": "existing user Codex Home",
+  "executionTimeline": {
+    "historicalAssignmentTimeRespected": true,
+    "historicalAssignmentDateShown": true,
+    "paginationRangeRespected": true,
+    "queuedExecutorVisible": true,
+    "queuedCardReplacedByActualReply": true,
+    "identityDeduplication": true,
+    "originalTaskLinksVerified": true,
+    "sourceRecordsMutated": false,
     "browser": {
       "light": true,
       "dark": true,
       "narrowWidth": 620,
       "horizontalOverflow": false,
-      "passwordFields": 0,
-      "visibleNativeSelects": 0,
-      "settingsPreservesDraft": true,
-      "specialistCodexDefaultPreserved": true
+      "taskCardOverflow": false,
+      "fictionalFixtureOnly": true,
+      "closed": true
     },
-    "temporaryProcessAndAccessFilesCleaned": true
+    "existingLatestCodexEvidence": {
+      "createdAt": "2026-11-11T01:14:24.814Z",
+      "backend": {
+        "kind": "acp",
+        "agent": "codex",
+        "revision": 2
+      },
+      "runState": "completed",
+      "taskState": "completed",
+      "acceptanceState": "pass",
+      "existingRecordReadOnly": true
+    },
+    "temporaryViteStopped": true
   },
-  "notValidated": [
-    "OS Keychain-only cross-process account switching",
-    "new local-config flow on Codex Node 24",
-    "non-macOS execution",
-    "Claude Code",
-    "images",
-    "running-turn steering",
-    "full Watchdog guidance",
-    "independent inference per-turn budgets"
-  ],
   "actualServerTaskRetried": false,
   "productionChanged": false,
   "merged": false,
   "previousValidations": [
+    {
+      "date": "2026-11-10",
+      "sourceCommit": "219636df81270129a1a47279e86ee2b29ead33e4",
+      "backendCodeCommit": "219636df81270129a1a47279e86ee2b29ead33e4",
+      "platform": "macOS arm64",
+      "runtime": "Node 24.14.0 / signed Lake SEA; Codex Node 22.22.0",
+      "dev": {
+        "installed": true,
+        "signatureVerified": true,
+        "buildOriginDirty": false,
+        "backendHashVerified": true,
+        "actualProcessVerified": true,
+        "bundleId": "com.cleanlakes.lake.desktop.dev",
+        "home": "~/.lake-dev",
+        "guiLoaded": true,
+        "nativePilotCodexConfiguration": true,
+        "nativeLocalLoginVisible": true,
+        "pilotModelUnchanged": true,
+        "userProjectCodexEnabled": true,
+        "userProjectTransportReady": true,
+        "userProjectAssignmentReady": true,
+        "authMode": "chatgpt",
+        "model": "gpt-6.1-sol",
+        "reasoningEffort": "max",
+        "defaultCodexSpecialists": 5,
+        "existingWorkersUnchanged": 148,
+        "originalTaskBackend": "native",
+        "originalTaskState": "paused"
+      },
+      "checks": {
+        "backendTypes": "passed",
+        "frontendTypesAndBuild": "passed",
+        "backendIntegration": {
+          "passed": 192
+        },
+        "backendUnit": {
+          "passed": 259,
+          "skipped": 4
+        },
+        "frontend": {
+          "passed": 786
+        },
+        "realCodex": {
+          "adapter": "2.2.2",
+          "engine": "0.160.1",
+          "node": "22.22.0",
+          "passed": 3,
+          "sourceCommit": "219636df81270129a1a47279e86ee2b29ead33e4",
+          "ordinaryModelConfigured": false,
+          "modelAndProviderInherited": true,
+          "reasoningEffortInherited": "max",
+          "inheritedMcpHookNotifyTrapsExecuted": false,
+          "nativePatchRejected": true,
+          "sourceConfigAuthUnchanged": true,
+          "cachedApiLoginVerified": true,
+          "logoutDetected": true,
+          "requestsReplayed": false
+        },
+        "boundary": "passed",
+        "naming": "passed",
+        "namingBoundaryUnit": {
+          "passed": 5
+        },
+        "legacyGoRerun": false
+      },
+      "localLogin": {
+        "localChatgptLogin": true,
+        "independentApiKeyProvided": false,
+        "model": "gpt-6.1-sol",
+        "reasoningEffort": "max",
+        "worker": "completed",
+        "acceptance": "pass",
+        "externalRun": "completed",
+        "actualReadAndWorkFinish": true,
+        "businessServersAccessed": false,
+        "schemaVersion": 2,
+        "loginFilesCopied": false,
+        "localConfigUnchanged": true,
+        "ordinaryModelInferenceUsed": false,
+        "taskHome": "isolated temporary Lake Home",
+        "inheritedCodexHome": "existing user Codex Home",
+        "browser": {
+          "light": true,
+          "dark": true,
+          "narrowWidth": 620,
+          "horizontalOverflow": false,
+          "passwordFields": 0,
+          "visibleNativeSelects": 0,
+          "settingsPreservesDraft": true,
+          "specialistCodexDefaultPreserved": true
+        },
+        "temporaryProcessAndAccessFilesCleaned": true
+      },
+      "notValidated": [
+        "OS Keychain-only cross-process account switching",
+        "new local-config flow on Codex Node 24",
+        "non-macOS execution",
+        "Claude Code",
+        "images",
+        "running-turn steering",
+        "full Watchdog guidance",
+        "independent inference per-turn budgets"
+      ],
+      "actualServerTaskRetried": false,
+      "productionChanged": false,
+      "merged": false
+    },
     {
       "date": "2026-11-10",
       "sourceCommit": "7b7ef9fef9c0e2712a1898be1b3e51bf7dd3b932",
