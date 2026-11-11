@@ -109,7 +109,7 @@ export function SpecialistChannelEntries({entries,resources,workers=[],activeSou
  })}</>;
 }
 
-export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,onReady,selectedSessionId,onNewTask}:{snapshot:SessionSnapshot;connected:boolean;onTask:(sessionId:string)=>void;onTasks?:(sessionId:string,workers:SuperWorker[],page:SpecialistChannelPage)=>void;onActivity?:(sessionId:string,state:"running"|"waiting"|"idle")=>void;onReady?:(sessionId:string,ready:boolean)=>void;selectedSessionId?:string;onNewTask?:()=>void}){
+export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,onReady,selectedSessionId,onNewTask,inspectedSnapshot}:{snapshot:SessionSnapshot;connected:boolean;onTask:(sessionId:string)=>void;onTasks?:(sessionId:string,workers:SuperWorker[],page:SpecialistChannelPage)=>void;onActivity?:(sessionId:string,state:"running"|"waiting"|"idle")=>void;onReady?:(sessionId:string,ready:boolean)=>void;selectedSessionId?:string;onNewTask?:()=>void;inspectedSnapshot?:SessionSnapshot}){
  const session=snapshot.session.id;
  const [page,setPage]=useState<SpecialistChannelPage|null>(null),[entries,setEntries]=useState<SpecialistChannelEntry[]>([]),[error,setError]=useState('');
  const generation=useRef(0);
@@ -145,7 +145,9 @@ export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,
  const admitting=latestOwn?.role==='user'&&(!page||!entries.length||Date.parse(latestOwn.createdAt)>Date.parse(entries.at(-1)!.createdAt));
  const activity=page?.routing||admitting||!!page?.queued||page?.active.some(active=>conversationActivity(active.ai)==='running')?'running':page?.active.length?'waiting':'idle';
  useEffect(()=>{onActivity?.(session,activity)},[session,activity,onActivity]);
- const rows=specialistTaskRows({workers:page?.workers??[],entries,active:page?.active,projectId:snapshot.session.projectId,resources:snapshot.resources,resourceTree:snapshot.resourceTree});
+ // Reuse the detail read for a parked task; never fetch one snapshot per row.
+ const available=[...(page?.active??[]),...(inspectedSnapshot?[inspectedSnapshot]:[])];
+ const rows=specialistTaskRows({workers:page?.workers??[],entries,active:available,projectId:snapshot.session.projectId,resources:snapshot.resources,resourceTree:snapshot.resourceTree});
  const channel=page?.channel??{id:session,sessionId:session,projectId:snapshot.session.projectId,roleId:'',roleName:snapshot.session.title,revision:0,createdAt:''};
  return <SpecialistTaskList channel={channel} rows={rows} selectedSessionId={selectedSessionId} onTask={onTask} onNewTask={onNewTask} connected={connected} loading={!page&&!error} routing={!!page?.routing||admitting} queued={page?.queued} error={error} onRetry={()=>refreshCurrent.current()}/>;
 }

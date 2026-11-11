@@ -31,9 +31,9 @@ tags: [frontend, specialist, tasks]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-001 | 在 web-agent/web/src/specialistTaskListModel.ts 投影过滤、准确资源路径、时间、已知进度与状态；未知进度保持未报告。 ✅ | 2026-11-11 |
-| TASK-002 | 在 web-agent/web/src/SpecialistTaskList.tsx 和 specialistTaskList.css 实现角色头部、共享头像、筛选搜索、任务行与空状态。依赖 TASK-001。 ✅ | 2026-11-11 |
-| TASK-003 | SpecialistChannel.tsx 复用原频道轮询接入列表；App.tsx 对角色页关闭聊天末尾跟随并保留原派发输入；SessionInspector.tsx 保留原任务确认入口。依赖 TASK-002。 ✅ | 2026-11-11 |
+| TASK-001 | 在 web-agent/web/src/specialistTaskListModel.ts 投影过滤、准确资源路径、时间、已知进度与状态；未知进度保持未报告。 | ✅ | 2026-11-11 |
+| TASK-002 | 在 web-agent/web/src/SpecialistTaskList.tsx 和 specialistTaskList.css 实现角色头部、共享头像、筛选搜索、任务行与空状态。依赖 TASK-001。 | ✅ | 2026-11-11 |
+| TASK-003 | SpecialistChannel.tsx 复用原频道轮询接入列表；App.tsx 对角色页关闭聊天末尾跟随并保留原派发输入；SessionInspector.tsx 保留原任务确认入口。依赖 TASK-002。 | ✅ | 2026-11-11 |
 
 ### Implementation Phase 2
 
@@ -41,8 +41,8 @@ tags: [frontend, specialist, tasks]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-004 | 使用虚构数据测试任务状态、准确身份、路径及未知进度；真实 App fixture 验证筛选、搜索、详情、确认与断线；保留原有前端回归。 ✅ | 2026-11-11 |
-| TASK-005 | 执行 pnpm --dir web-agent check、test:frontend、build:web；浏览器验证明暗/窄窗/键盘，记录截图及结果。依赖 TASK-004。 ✅ | 2026-11-11 |
+| TASK-004 | 使用虚构数据测试任务状态、准确身份、路径及未知进度；真实 App fixture 验证筛选、搜索、详情、确认与断线；保留原有前端回归。 | ✅ | 2026-11-11 |
+| TASK-005 | 执行 pnpm --dir web-agent check、test:frontend、build:web；浏览器验证明暗/窄窗/键盘，记录截图及结果。依赖 TASK-004。 | ✅ | 2026-11-11 |
 | TASK-006 | 从干净提交执行 scripts/build_lake_desktop.sh --dev --install，避免中断正在运行的任务；验证 Dev 及来源 SHA，更新现有 develop 草稿 PR，不合并。依赖 TASK-005。 | | |
 
 ## 3. Alternatives

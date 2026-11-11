@@ -40,7 +40,7 @@ test('attention and execution reflect the actual task instead of an external ans
 });
 
 test('progress only consumes the exact task snapshot or its recorded successful TodoWrite',()=>{
- const a=worker('a'),b=worker('b');
+ const a=worker('a','blocked'),b=worker('b');
  const snapshot={session:{id:a.sessionId,projectId:'project'},superagent:{task:a.task,goal:{items:[{status:'completed'},{status:'running'}]}},ai:{cards:[]}} as unknown as SessionSnapshot;
  const entry=(id:string,taskId:string,status='completed'):SpecialistChannelEntry=>({id,sourceSessionId:b.sessionId,taskId:b.task.taskId,createdAt:at,card:{id,type:'operation',title:'TodoWrite',at,status,content:JSON.stringify({todos:[{content:'步骤一',status:'completed'},{content:'步骤二',status:'in_progress'},{content:'步骤三',status:'pending'}]}),data:{taskId}}});
  let rows=specialistTaskRows({...source,workers:[a,b],active:[snapshot],entries:[entry('valid',b.task.taskId),entry('wrong','other-task'),entry('failed',b.task.taskId,'failed')]});
