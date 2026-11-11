@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-11",
+  "testedSource": "9dd23954be16411acbed3b55d4665dd9968f2f9d",
+  "platform": "darwin-arm64",
+  "node": "24.14.0",
+  "behavior": {
+    "resources": "current-project read/create/partial update/rename/move/archive/restore; existing supported connection adapters",
+    "folders": "same project; existing resource tree/trash and stable IDs",
+    "skills": "global managed content CRUD, enabled state, imported path unregister and root register/unregister; managed directories archived",
+    "mcp": "global public settings CRUD; separate explicit connection test and current-project exact catalog binding",
+    "credentials": "omitted values retained privately; secret inputs/credential paths absent from management schemas; explicitly selected same-project SSH source only",
+    "incompleteSSH": "saved unavailable, execution validation stays strict",
+    "partialBindings": "omitted tool_names retained, first enable requires explicit names or [] for all",
+    "source": "current complete admitted human event, exact quote, exact scope/revision, stable event/part journal",
+    "interruptedSubmission": "pending/unknown never automatically replayed",
+    "permissions": "current read/write/MCP preferences; Plan read-only; control tools absent from Worker/child/ACP business catalogs"
+  },
+  "checks": {
+    "backendTypes": "pass",
+    "runtimeBuild": "pass",
+    "backendUnit": {
+      "tests": 279,
+      "pass": 275,
+      "fail": 0,
+      "skipped": 4
+    },
+    "hostAndConfiguration": {
+      "tests": 225,
+      "pass": 225,
+      "fail": 0,
+      "skipped": 0
+    },
+    "hostBreakdown": {
+      "originalHost": 199,
+      "newSDKScenarios": 5,
+      "serviceRegressions": 11,
+      "configurationGuards": 10
+    },
+    "realCodexACP": {
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "adapter": "2.2.2",
+      "engine": "0.160.1",
+      "service": "loopback synthetic Responses",
+      "realExternalInference": false,
+      "ownedTemporaryHomesRemoved": true
+    },
+    "frontendUnit": {
+      "tests": 800,
+      "pass": 800,
+      "fail": 0,
+      "skipped": 0
+    },
+    "frontendTypesAndWebBuild": "pass in signed desktop build",
+    "runtimeBoundary": "pass",
+    "backendNamingViolations": 0,
+    "namingUnitPassed": 5
+  },
+  "sdkScenarios": {
+    "configurationCRUD": "14 committed resource/folder/Skill/MCP edits across separate Chinese test inputs, standard API readback and restart",
+    "writeApproval": [
+      "accept before persistence",
+      "reject without persistence"
+    ],
+    "mcpProtocol": [
+      "automatic preference",
+      "explicit approval before connection"
+    ],
+    "mcpCatalogPages": 2,
+    "mcpBusinessCalls": 0,
+    "businessWorkersGoalsOperations": 0,
+    "realExternalModelIntentReliability": "not established by synthetic model"
+  },
+  "dev": {
+    "gitHead": "9dd23954be16411acbed3b55d4665dd9968f2f9d",
+    "dirty": false,
+    "backendSHA256": "4a605b6cbdbdf9fb13d84f71c2516a40c43ad35e9358cbf857ea455cff8b6d8b",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "command": "scripts/build_lake_desktop.sh --dev --install",
+    "home": "~/.lake-dev",
+    "deepStrictSignatureVerified": true,
+    "buildOriginVerified": true,
+    "nativePilotLoadedWithComposer": true,
+    "nativeVisibleResourceCount": 136,
+    "actualBusinessOrConfigurationPromptSent": false,
+    "fullHomeOrDatabaseBackupsCreated": false,
+    "deletedBackupRootsRecreated": false
+  },
+  "preservation": {
+    "projects": 19,
+    "visibleWorkers": 151,
+    "recordCounts": {
+      "resources": 161,
+      "tree": 154,
+      "navigationTrash": 0,
+      "navigationTrashGroups": 0,
+      "mcpBindings": 0,
+      "mcpInheritance": 1,
+      "mcpBindingActions": 1,
+      "pilotConfigMutations": 0,
+      "skillTrash": 0,
+      "superRoles": 21,
+      "superChannels": 18,
+      "superRoleMutations": 5,
+      "superWorkers": 129,
+      "superGoals": 129,
+      "superAttempts": 183,
+      "superOperations": 400,
+      "superAcceptance": 162,
+      "superReports": 175,
+      "acpRuns": 5,
+      "commandExecutions": 287,
+      "legacyChannelReads": 3,
+      "legacyChannelTimeline": 190,
+      "legacyGoals": 46,
+      "legacyLoadedViews": 17,
+      "legacyMigrationBatches": 1,
+      "legacyMySQLConnections": 5,
+      "legacyOperations": 53,
+      "legacyProjectPolicies": 2,
+      "legacyResources": 139,
+      "legacySSHConnections": 123,
+      "legacyServiceConnections": 5,
+      "legacySessionSources": 82,
+      "legacyWorkers": 22,
+      "legacyWorkflowTemplates": 1
+    },
+    "protectedConfigurationPaths": 2,
+    "protectedRecordsUnchanged": true,
+    "originalExtensionAndSkillFilesUnchanged": true,
+    "localCodexConfigurationUnchanged": true
+  },
+  "limitations": [
+    "Global Skill/MCP configuration can affect projects using existing global inheritance; project binding remains separate",
+    "Files and SQLite are separate transaction domains; unknown submission must be inspected, not replayed",
+    "Imported Skill content is read-only; no remote repository download/install or code execution during CRUD",
+    "SSH credentials are completed through existing settings or explicit existing same-project source; no inline secrets to model",
+    "Unsupported runtime resource adapters are not enabled by CRUD",
+    "No arbitrary real-model intent reliability, real SSH/MCP business systems, other-platform, full migration parity or Go/race/vet validation",
+    "No merge, release, production installation or manual CI"
+  ]
+}

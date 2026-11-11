@@ -3,13 +3,13 @@ goal: Pilot natural-language CRUD for resources, folders, Skills and MCP
 version: 1
 date_created: 2026-11-11
 last_updated: 2026-11-11
-status: In progress
+status: Completed
 tags: [feature, pilot, configuration, typescript]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 Expose existing Lake configuration ownership through Pilot tools. Persist configuration through shared host services, with exact admitted human sources, current object revisions and durable mutation receipts. Resource configuration remains project-scoped; Skills and MCP server settings remain Lake-global. Configuration does not constitute a connection observation or task acceptance.
 
@@ -50,7 +50,7 @@ Expose existing Lake configuration ownership through Pilot tools. Persist config
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-005 | Add `pilot-configuration.test.cjs` and SDK-host scenarios in `server.test.cjs`: CRUD, folder nesting/archive, restart, partial patches, secrets, imported Skills, stale/cross-project/source/replay rejection, interrupted writes, permissions, Plan mode and non-Pilot catalogs. | ✅ | 2026-11-11 |
-| TASK-006 | Run backend types/build/unit/host and applicable frontend/boundary/naming checks. Record tested SHA and isolated outcomes in `docs/validation/acp-agent-execution/pilot-configuration-crud.md`; update runtime/product/architecture documentation. Install signed Lake Dev only when idle, verify source/signature/record hashes, and update draft PR #222. | | |
+| TASK-006 | Run backend types/build/unit/host and applicable frontend/boundary/naming checks. Record tested SHA and isolated outcomes in `docs/validation/acp-agent-execution/pilot-configuration-crud.md`; update runtime/product/architecture documentation. Install signed Lake Dev only when idle, verify source/signature/record hashes, and update draft PR #222. | ✅ | 2026-11-11 |
 
 ## 3. Alternatives
 
