@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-11
 last_updated: 2026-11-11
 owner: Codex
-status: In progress
+status: Completed
 tags: [pilot, specialist, configuration, avatar]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 Pilot 当前只能保存专员名称和职责，头像由 RoleID 自动分配。补齐可发现的 Lake 头像目录与局部配置更新，将明确的头像要求保存为角色配置，并在共享头像组件显示。
 
@@ -45,8 +45,8 @@ Pilot 当前只能保存专员名称和职责，头像由 RoleID 自动分配。
 |------|-------------|-----------|------|
 | TASK-004 | 在 superagent-lifecycle.test.ts/server.test.cjs 覆盖局部更新、非法/过期/跨项目/来源/幂等、重启和旧快照保留；specialist-avatars.test.ts 覆盖同角色多处显示及默认兼容。依赖 TASK-002、TASK-003。 | Yes | 2026-11-11 |
 | TASK-005 | 更新 docs/lake-pilot.md、docs/ui-guidelines.md、runtime/typescript/README.md；运行类型、前后端单元、宿主、ACP、边界/命名及明暗窄窗夹具验证。依赖 TASK-004。 | Yes | 2026-11-11 |
-| TASK-006 | 从干净代码提交签名安装 Lake Dev，核对来源、实际页面及原业务记录/本机配置哈希，不向真实 Pilot 伪造测试用人工输入。依赖 TASK-005。 | | |
-| TASK-007 | 写入 docs/validation/acp-agent-execution/pilot-specialist-config.md/json，更新兼容记录及原草稿 PR并推送，不合并。依赖 TASK-006。 | | |
+| TASK-006 | 从干净代码提交签名安装 Lake Dev，核对来源、实际页面及原业务记录/本机配置哈希，对话写入回归仅在隔离测试中进行。依赖 TASK-005。 | Yes | 2026-11-11 |
+| TASK-007 | 写入 docs/validation/acp-agent-execution/pilot-specialist-config.md/json，更新兼容记录及原草稿 PR并推送，不合并。依赖 TASK-006。 | Yes | 2026-11-11 |
 
 ## 3. Alternatives
 
