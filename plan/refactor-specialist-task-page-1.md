@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-11
 last_updated: 2026-11-11
 owner: Codex
-status: In progress
+status: Completed
 tags: [frontend, specialist, tasks]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In_progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 用户已确认带角色头像的任务列表渲染图，要求先完成前端，后端问题另行处理。专员入口展示角色信息、可检索/筛选的任务列表和原任务详情；Pilot 保持现有对话。
 
@@ -43,7 +43,7 @@ tags: [frontend, specialist, tasks]
 |------|-------------|-----------|------|
 | TASK-004 | 使用虚构数据测试任务状态、准确身份、路径及未知进度；真实 App fixture 验证筛选、搜索、详情、确认与断线；保留原有前端回归。 | ✅ | 2026-11-11 |
 | TASK-005 | 执行 pnpm --dir web-agent check、test:frontend、build:web；浏览器验证明暗/窄窗/键盘，记录截图及结果。依赖 TASK-004。 | ✅ | 2026-11-11 |
-| TASK-006 | 从干净提交执行 scripts/build_lake_desktop.sh --dev --install，避免中断正在运行的任务；验证 Dev 及来源 SHA，更新现有 develop 草稿 PR，不合并。依赖 TASK-005。 | | |
+| TASK-006 | 从干净提交执行 scripts/build_lake_desktop.sh --dev --install，避免中断正在运行的任务；验证 Dev 及来源 SHA，更新现有 develop 草稿 PR，不合并。依赖 TASK-005。 | ✅ | 2026-11-11 |
 
 ## 3. Alternatives
 
@@ -81,3 +81,5 @@ tags: [frontend, specialist, tasks]
 - [开发流程](../docs/development-workflow.md)
 - [UI 规范](../docs/ui-guidelines.md)
 - [ACP 兼容记录](../docs/validation/acp-agent-execution/compatibility.md)
+
+已验证签名 Lake Dev 源码：`d389ca7847ddcfb9537a14fb32bffa018ccb0c97`。797 项前端测试、类型/构建、ADK 边界与真实 App 展示验证通过；19 个项目的 150 个旧 Worker 状态/执行绑定保持。记录见 [兼容与验收](../docs/validation/acp-agent-execution/compatibility.md)。草稿 PR [#222](https://github.com/Clean-Lakes/Lake/pull/222) 已更新，未合并。
