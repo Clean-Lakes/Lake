@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-11
 last_updated: 2026-11-11
 owner: Codex
-status: In progress
+status: Completed
 tags: [ssh, security, frontend, ux]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 用户进一步要求已有 SSH 指纹变化时也默认后台信任并连接，同时删除专员任务页的聊天输入及新建任务按钮。新策略取代上一轮仅自动首次信任的限制；专员任务由 Pilot 派发，页面保留角色任务及原详情和控制协议。
 
@@ -44,8 +44,8 @@ tags: [ssh, security, frontend, ux]
 |------|-------------|-----------|------|
 | TASK-004 | 更新 agent.md、docs/security/task-confirmation.md、docs/ui-guidelines.md、runtime/typescript/README.md，明确当前换钥策略和专员只展示任务的入口。 | Yes | 2026-11-11 |
 | TASK-005 | 运行前后端类型与完整测试、固定 Codex ACP、边界/命名和构建；使用真实 App 的虚构数据夹具验证明暗、窄窗、任务详情/确认、Pilot 输入、筛选和未读。依赖 TASK-003。 | Yes | 2026-11-11 |
-| TASK-006 | 干净提交后签名构建安装 Dev，核对来源、签名、原记录/配置及实际页面，保留源码 SHA；不触发真实服务器或新业务任务。依赖 TASK-005。 | | |
-| TASK-007 | 更新 docs/validation/acp-agent-execution/ 验证文档和兼容记录，更新原草稿 PR，保留未合并状态。依赖 TASK-006。 | | |
+| TASK-006 | 干净提交后签名构建安装 Dev，核对来源、签名、原记录/配置及实际页面，保留源码 SHA；不触发真实服务器或新业务任务。依赖 TASK-005。 | Yes | 2026-11-11 |
+| TASK-007 | 更新 docs/validation/acp-agent-execution/ 验证文档和兼容记录，更新原草稿 PR，保留未合并状态。依赖 TASK-006。 | Yes | 2026-11-11 |
 
 ## 3. Alternatives
 

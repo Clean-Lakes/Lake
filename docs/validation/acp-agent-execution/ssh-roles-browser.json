@@ -1,0 +1,62 @@
+{
+  "spaceId": 79,
+  "overviewHasNoComposerOrNewTask": true,
+  "resourceAddAbsentOnOverview": true,
+  "filterSearchKeyboardAndRead": true,
+  "taskQuestionReplyAndFocusReturn": true,
+  "pilotDraftPreserved": true,
+  "pilotFileInputPresent": true,
+  "syntheticWrites": [
+    {
+      "path": "/api/sessions/demo-session-1/messages-read",
+      "body": {
+        "cursor": "00000000000000000001"
+      }
+    },
+    {
+      "path": "/api/sessions/fixture-session-2/ai/questionReply",
+      "body": {
+        "id": "fixture-question",
+        "answers": {
+          "scope": [
+            "只读检查当前集群"
+          ]
+        }
+      }
+    }
+  ],
+  "screenshots": [
+    "role-overview-light.png",
+    "role-overview-dark-narrow.png",
+    "role-inspector-dark-narrow.png"
+  ],
+  "darkNarrow": {
+    "width": 620,
+    "overflow": false,
+    "removed": 0,
+    "dropPrevented": [
+      true,
+      true
+    ],
+    "writes": []
+  },
+  "taskInspectorNarrow": true,
+  "emptyRole": {
+    "text": "还没有任务由 Pilot 派发任务，进展和结果会显示在这里。",
+    "removed": 0,
+    "overflow": false
+  },
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "viewportWidths": [
+    1440,
+    620
+  ],
+  "pilotModelSelectorPresent": true,
+  "fixture": "full App with fictional local API; no business backend or model",
+  "explicitReadInteraction": "keyboard focus and Enter",
+  "browserTaskFinished": true,
+  "viteStopped": true
+}

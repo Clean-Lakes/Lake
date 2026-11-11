@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-11",
+  "testedSource": "cf444aa0618a6e063588e0cef0369d27f53c15c7",
+  "platform": "darwin-arm64",
+  "node": "24.14.0",
+  "behavior": {
+    "firstUse": "persist observed key through existing fenced accept path before authentication without host-key prompt",
+    "changedStoredKey": "automatically replace saved key through the same path, including RSA to Ed25519 rotation",
+    "matchingStoredKey": "reuse",
+    "changedKeySaveFailure": "no new authentication; old persisted trust remains",
+    "historicalPeerEvidence": "old fingerprint remains invalid after rotation",
+    "independentHostIdentityVerification": false,
+    "specialistOverview": "task list only; composer, new-task button and add-resource-to-chat are not mounted",
+    "dispatch": "Pilot",
+    "taskQuestionsAndApprovals": "existing inspector paths retained"
+  },
+  "checks": {
+    "backendTypes": "pass",
+    "runtimeBuild": "pass",
+    "backendUnit": {
+      "passed": 272,
+      "skipped": 4,
+      "failed": 0
+    },
+    "hostIntegration": {
+      "passed": 198,
+      "skipped": 0,
+      "failed": 0
+    },
+    "realCodexACP": {
+      "passed": 4,
+      "failed": 0,
+      "adapter": "2.2.2",
+      "engine": "0.160.1",
+      "service": "loopback synthetic Responses",
+      "realExternalInference": false
+    },
+    "frontendTypes": "pass",
+    "frontendUnit": {
+      "passed": 798,
+      "failed": 0
+    },
+    "webBuild": "pass via signed desktop build",
+    "runtimeBoundary": "pass",
+    "backendNamingViolations": 0,
+    "namingUnit": {
+      "passed": 5,
+      "failed": 0
+    },
+    "browserProof": "ssh-roles-browser.json"
+  },
+  "dev": {
+    "command": "scripts/build_lake_desktop.sh --dev --install",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "home": "~/.lake-dev",
+    "dirty": false,
+    "backendSHA256": "ee263a3b57c274ce591a46ee555d53722d8e2fe729be449efcb99961cdd232a8",
+    "deepSignatureVerified": true,
+    "buildOriginVerified": true,
+    "normalExitBeforeInstall": true,
+    "runningBackendPathVerified": true,
+    "visibleSpecialistTasks": 34,
+    "nativeOverviewHasNoComposerOrNewTask": true,
+    "fullHomeOrDatabaseBackupsCreated": false,
+    "deletedBackupRootsRecreated": false
+  },
+  "preservation": {
+    "projects": 19,
+    "visibleWorkers": 151,
+    "recordsUnchanged": {
+      "superWorkers": 129,
+      "superGoals": 129,
+      "superAttempts": 183,
+      "superOperations": 400,
+      "superAcceptance": 162,
+      "superReports": 175,
+      "acpRuns": 5,
+      "commandExecutions": 287
+    },
+    "legacyKinds": 14,
+    "legacyRecordsUnchanged": 689,
+    "protectedRecordsUnchanged": true,
+    "localCodexConfigurationUnchanged": true,
+    "reasoning": "unchanged local max",
+    "historicalTasksReplayed": false
+  },
+  "limitations": [
+    "No real server connection or business-task retry",
+    "No external model inference or latency benchmark",
+    "Other platforms and Go/race/vet not retested",
+    "No complete migration parity claim",
+    "No merge, release, production install or automatic CI"
+  ]
+}

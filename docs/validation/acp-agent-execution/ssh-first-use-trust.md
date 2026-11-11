@@ -1,5 +1,7 @@
 # SSH 首次后台信任验证（2026-11-11）
 
+本文件保留该 SHA 的历史证据。随后用户要求已存指纹变化也自动信任，当前实现与验证以[自动换钥与专员总览](ssh-roles-overview.md)为准。
+
 已测试源码与签名 Lake Dev：`603d4491f7f9083112537e3154e48d7aadcb9187`，macOS arm64，固定 Node 24.14.0。实施见[计划](../../../plan/refactor-ssh-first-use-trust-1.md)，结构化结果见[验证 JSON](ssh-first-use-trust.json)。
 
 ## 行为与范围
