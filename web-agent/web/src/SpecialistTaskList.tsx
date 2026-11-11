@@ -6,6 +6,7 @@ import {ExecutionAgentIcon} from './ExecutionAgentIcon';
 import {filterSpecialistTasks,specialistTaskRows,specialistTaskSteps,specialistTaskTime,type SpecialistTaskFilter,type SpecialistTaskRow} from './specialistTaskListModel';
 import type {SuperWorker} from '../../shared/contracts';
 import {usePageVisible} from './usePageVisible';
+import {ConversationReadButton} from './ConversationReadMarker';
 
 const filters:{id:SpecialistTaskFilter;label:string}[]=[{id:'all',label:'全部任务'},{id:'active',label:'进行中'},{id:'attention',label:'需关注'},{id:'completed',label:'已完成'}];
 export function SpecialistTaskSteps({snapshot,worker,connected}:{snapshot:SessionSnapshot;worker?:SuperWorker;connected:boolean}){
@@ -36,7 +37,7 @@ export function SpecialistTaskList({channel,rows,selectedSessionId,onTask,onNewT
  return <div className="specialist-task-page" aria-label={`${channel.roleName}的任务`} data-hidden={!pageVisible||undefined}>
   <header className="specialist-page-heading">
    <div className="specialist-page-identity"><SuperRoleAvatar name={channel.roleName} roleId={channel.roleId} motion={moving?'working':attention?'still':'idle'}/><div><div className="specialist-page-title"><h1>{channel.roleName}</h1><span className="specialist-page-state" data-active={moving||undefined}>{moving&&<Glyph name="loader" size={12}/>} {status}</span></div><p>{channel.duties||'查看任务进展、执行过程与结果'}</p></div></div>
-   {onNewTask&&<button type="button" className="button primary specialist-new-task" disabled={!connected} onClick={onNewTask}><Glyph name="plus" size={15}/>新建任务</button>}
+   <div className="specialist-page-actions"><ConversationReadButton key={channel.sessionId} session={channel.sessionId} state={channel.messageRead} disabled={!connected}/>{onNewTask&&<button type="button" className="button primary specialist-new-task" disabled={!connected} onClick={onNewTask}><Glyph name="plus" size={15}/>新建任务</button>}</div>
   </header>
   <p className="specialist-page-counts">{active} 项进行中<span>·</span>{attention} 项需关注<span>·</span>{completed} 项已完成</p>
   <div className="specialist-task-toolbar">

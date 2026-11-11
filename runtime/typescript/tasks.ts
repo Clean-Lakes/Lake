@@ -187,7 +187,9 @@ export class TaskLedger {
       if (attempt.generation !== generation || attempt.policyHash !== policyHash)
         throw new HttpError(409, "Attempt or current permission binding changed");
       const operations = this.store.list<Operation>("superOperations").filter((operation) => operation.attemptId === attempt.id);
-      if (this.unresolved(goalId) || !operations.some((operation) => businessReceiptTools.has(operation.tool)))
+      if (this.unresolved(goalId))
+        throw new HttpError(409, "unresolved_operations: Completion evidence still contains original unknown or dispatched operations. New successful checks cannot settle those original results. Do not repeat inspection just to retry completion; submit the findings with work_finish(outcome=partial), stating the unresolved limitation. Existing permissions still allow relevant new work; original operation IDs must never be replayed.");
+      if (!operations.some((operation) => businessReceiptTools.has(operation.tool)))
         throw new HttpError(409, "Current successful business evidence is required; discovery alone cannot complete the task");
       if (goal.items.some((item) => item.id !== step.id && (item.status !== "completed" || !item.acceptanceId)))
         throw new HttpError(409, "Other original plan items still need their own acceptance");

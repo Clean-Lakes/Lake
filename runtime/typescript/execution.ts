@@ -322,6 +322,7 @@ export class LakeExecution {
     if (entry.metadata.name !== "TaskOutput") return entry;
     return {
       ...entry,
+      metadata:{...entry.metadata,description:'Join an existing background command or child task using its exact task_id. When its result is required and no independent work remains, use block=true with a bounded timeout (normally 30000 ms) instead of repeatedly checking block=false. A timeout or not_ready is not failure and never authorizes relaunch. Reuse the original handle. Read the returned task result, not the child conversation transcript. TaskOutput does not accept or reconcile business evidence.'},
       validateInput: (input, context) => {
         const checked = entry.validateInput?.(input, context) ?? {result: true as const};
         // The SDK validates the schema first; error 2 means the runtime registry lost the handle.

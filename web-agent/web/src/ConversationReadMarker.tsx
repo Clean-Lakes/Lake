@@ -1,6 +1,7 @@
-import {useEffect,useRef} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import type {ConversationReadState} from '../../shared/contracts';
-import {api} from './api';
+import {api,readableError} from './api';
+import {Glyph} from './Icons';
 
 declare global {interface Window {lakeWindowAttention?:{isReading:()=>Promise<boolean>};}}
 
@@ -34,3 +35,24 @@ export function ConversationReadMarker({session,state,enabled=true}:{session:str
 }
 
 export const hasUnreadMessages=(state:ConversationReadState|undefined)=>!!state?.cursor&&state.cursor>state.seenCursor;
+
+/** Explicit acknowledgement is independent of scrolling. A delayed response can
+ * only acknowledge the exact cursor clicked, never newer content or a sibling. */
+export function ConversationReadButton({session,state,disabled=false}:{session:string;state?:ConversationReadState;disabled?:boolean}){
+ const [saved,setSaved]=useState<{session:string;cursor:string}>(),[pending,setPending]=useState(false),[error,setError]=useState('');
+ const current=useRef(session);current.current=session;
+ const seen=saved?.session===session&&saved.cursor>(state?.seenCursor??'')?saved.cursor:state?.seenCursor??'';
+ useEffect(()=>{setError('');},[session,state?.cursor]);
+ if(!state?.cursor||state.cursor<=seen)return null;
+ const acknowledge=async()=>{
+  if(pending||disabled)return;
+  const target=session,cursor=state.cursor;setPending(true);setError('');
+  try{
+   await api.readConversation(target,cursor);
+   setSaved(previous=>previous?.session===target&&previous.cursor>cursor?previous:{session:target,cursor});
+   window.dispatchEvent(new Event('lake:conversation-read'));
+  }catch(cause){if(current.current===target)setError(readableError(cause));}
+  finally{setPending(false);}
+ };
+ return <div className="conversation-read-action"><button type="button" className="button secondary" disabled={disabled||pending} onClick={()=>void acknowledge()} title="将这位专员当前的消息标记为已读"><Glyph name={pending?'loader':'check'} size={14}/>{pending?'标记中…':'标记已读'}</button>{error&&<span role="alert">{error}</span>}</div>;
+}

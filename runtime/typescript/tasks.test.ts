@@ -103,6 +103,23 @@ test("discovery and failed observations cannot pass; a partial report preserves 
   assert.equal(store.require<any>("superDeliveries", digest(["goal", 1])).outcome, "partial");
 });
 
+test("completion identifies unresolved original results without suggesting more inspection or altering evidence",async t=>{
+ const f=await fixture(t);f.create();let calls=0;
+ await assert.rejects(f.invoke('uncertain-command','Bash',1,async()=>{calls++;throw new Error('connection lost after dispatch');},{readOnly:false}),/connection lost/);
+ await f.invoke('current-observation','inspect_host',1,async()=>{calls++;return {load:0.4};});
+ const original=f.store.list<Operation>('superOperations'),attempts=f.store.list('superAttempts');
+ assert.throws(()=>f.ledger.finishHost('goal',{summary:'当前负载为 0.4。',outcome:'completed'},1,'policy'),error=>{
+  assert.match((error as Error).message,/unresolved_operations/);
+  assert.match((error as Error).message,/work_finish\(outcome=partial\)/);
+  assert.doesNotMatch((error as Error).message,/discovery alone/);return true;
+ });
+ assert.equal(calls,2);assert.deepEqual(f.store.list('superOperations'),original);assert.deepEqual(f.store.list('superAttempts'),attempts);
+ assert.equal(f.store.list('superAcceptance').length,0);assert.equal(f.store.list('superDeliveries').length,0);
+ const partial=f.ledger.finishHost('goal',{summary:'当前负载为 0.4；早先命令结果尚未核实。',outcome:'partial'},1,'policy');
+ assert.equal(partial.status,'blocked');assert.equal(partial.acceptanceState,'not_evaluated');
+ assert.deepEqual(f.store.list('superOperations'),original);assert.equal(calls,2);assert.equal(f.store.list('superAcceptance').length,0);
+});
+
 test("a settled read failure can obtain a fresh sample without model bookkeeping", async (t) => {
   const { store, ledger, create, invoke } = await fixture(t); create();
   await assert.rejects(invoke("read-failed", "inspect_host", 1, async () => { throw new Error("connection timed out"); }), /timed out/);

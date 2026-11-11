@@ -3,13 +3,14 @@ import './readme-workbench';
 import type {Resource,ResourceTreeNode,SessionSnapshot,SpecialistChannelInfo,SpecialistChannelPage,SuperWorker,WorkSession} from '../../../shared/contracts';
 const base=window.fetch.bind(window),query=new URLSearchParams(location.search),projectId='demo-project',at='2026-11-11T01:20:00Z';
 const roleId='fixture-ops-33';
-const channel:SpecialistChannelInfo={id:'fixture-channel',sessionId:'demo-session-1',projectId,roleId,roleName:'服务器运维排查专员',duties:'负责服务器、集群巡检与故障排查',revision:1,roleRevision:1,createdAt:at,execution:{kind:'acp',agent:'codex',revision:2},messageRead:{cursor:'latest',seenCursor:''}};
+const channel:SpecialistChannelInfo={id:'fixture-channel',sessionId:'demo-session-1',projectId,roleId,roleName:'服务器运维排查专员',duties:'负责服务器、集群巡检与故障排查',revision:1,roleRevision:1,createdAt:at,execution:{kind:'acp',agent:'codex',revision:2},messageRead:{cursor:'00000000000000000001',seenCursor:''}};
 const resources:Resource[]=['k8s-master','app-server','server-01'].map(id=>({id,projectId,name:id,kind:'ssh',status:'available',description:'虚构展示资源'}));
 const tree:ResourceTreeNode[]=[{id:'zmy',projectId,parentId:null,kind:'folder',name:'zmy',resourceId:null,position:0},{id:'cluster',projectId,parentId:'zmy',kind:'folder',name:'韦二',resourceId:null,position:0},{id:'company',projectId,parentId:'zmy',kind:'folder',name:'南京公司',resourceId:null,position:1},...resources.map((r,i)=>({id:`node-${r.id}`,projectId,parentId:i===2?'company':'cluster',kind:'resource' as const,name:r.name,resourceId:r.id,position:i}))];
 const titles=['检查韦二 Kubernetes 集群状态','检查服务器资源状态','核实集群节点告警','检查主机运行状态','汇总服务器巡检报告','检查磁盘空间与日志','检查主机运行状态','检查数据库连接'];
 const states:SuperWorker['task']['state'][]=['running','running','waiting_user','completed','completed','cancelled','completed','failed'];
 const workers:SuperWorker[]=query.has('empty')?[]:titles.map((title,i)=>({id:`fixture-worker-${i}`,sessionId:`fixture-session-${i}`,roleId,roleName:channel.roleName,createdAt:new Date(Date.parse(at)-i*600_000).toISOString(),assignmentState:i<2?'active':i===2?'waiting_user':'parked',...(i<2?{activity:{phase:'tool' as const,label:i===0?'正在核对节点就绪状态与工作负载异常。':'正在读取主机资源指标。',updatedAt:at}}:{}),task:{taskId:`fixture-task-${i}`,sessionId:`fixture-session-${i}`,projectId,title,state:states[i],acceptanceState:states[i]==='completed'?'pass':'not_evaluated',revision:1,originRootTurnId:`fixture-root-${i}`,deadlineAt:'2027-01-01T00:00:00Z',updatedAt:at,resources:[{runtime:'ssh',assetRef:resources[i%resources.length].id}],summary:i>2?'展示数据：已读取系统指标，未执行真实检查。':undefined},execution:{backend:i===6?{kind:'native'}:{kind:'acp',agent:'codex',revision:2},assignedAt:at,source:'task_assignment',totalRuns:i===6?0:1,runs:i===6?[]:[{id:`fixture-run-${i}`,agent:'codex',scope:'worker',state:i<3?'running':'completed',dispatchPhase:i<3?'sent':'answered',createdAt:at,updatedAt:at,usage:null}]}}));
 let revision=1,offline=false;
+let readFailure=false,readGate:Promise<void>|undefined,releaseRead:(()=>void)|undefined;
 const writes:{path:string;body:unknown}[]=[],requests:string[]=[];
 const json=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
 const snapshots=new Map(workers.map((worker,i)=>{
@@ -19,7 +20,15 @@ const snapshots=new Map(workers.map((worker,i)=>{
  return [worker.sessionId,snapshot];
 }));
 const channelSnapshot={session:{id:channel.sessionId,projectId,title:channel.roleName,workspaceRole:'role',status:'completed'},messages:[],resources,resourceTree:tree,actions:[],terminals:[],specialists:[],evidence:[],cursor:revision,messageQueue:{paused:false,revision:0,lastError:'',items:[]},sre:{enabled:false,tasks:[]},ai:{session:channel.sessionId,profile:'core',status:'idle',cards:[],cardsOffset:0,totalCards:0,agentRuns:[],usage:{known:false}}} as unknown as SessionSnapshot;
-const channels=[channel,...['发布专员','数据库专员','知识库专员','ACP 测试专员'].map((roleName,i)=>({...channel,id:`other-channel-${i}`,sessionId:`other-session-${i}`,roleId:`other-role-${i}`,roleName,duties:'查看任务进展、执行过程与结果'}))];
+const channels=[channel,...['发布专员','数据库专员','知识库专员','ACP 测试专员'].map((roleName,i)=>({...channel,messageRead:{...channel.messageRead!},id:`other-channel-${i}`,sessionId:`other-session-${i}`,roleId:`other-role-${i}`,roleName,duties:'查看任务进展、执行过程与结果'}))];
+Object.assign(window,{lakeReadQA:{
+ state(session=channel.sessionId){return {...channels.find(item=>item.sessionId===session)?.messageRead};},
+ fail(value:boolean){readFailure=value;},
+ hold(){readGate=new Promise<void>(resolve=>{releaseRead=resolve;});},
+ release(){releaseRead?.();releaseRead=undefined;readGate=undefined;},
+ message(session=channel.sessionId){const state=channels.find(item=>item.sessionId===session)!.messageRead!;state.cursor=String(Number(state.cursor)+1).padStart(20,'0');revision++;},
+ settle(){for(const worker of workers){worker.assignmentState='parked';if(worker.task.state==='running')worker.task.state='completed';const snap=snapshots.get(worker.sessionId);if(snap)snap.ai!.status='completed';}revision++;},
+}});
 Object.assign(window,{lakeTaskListQA:{writes,requests,offline(value:boolean){offline=value;},pulse(){revision++;},many(){for(let i=0;i<35;i++){const worker={...workers[0],id:`extra-${i}`,sessionId:`extra-session-${i}`,createdAt:new Date(Date.parse(at)-i*50_000).toISOString(),task:{...workers[0].task,taskId:`extra-task-${i}`,title:`演示历史任务 ${i+1}`}};workers.push(worker);}},finish(){workers[0].task={...workers[0].task,state:'completed',acceptanceState:'pass'};workers[0].assignmentState='parked';revision++;}}});
 window.fetch=async(input,init)=>{
  const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href),path=url.pathname;
@@ -28,6 +37,13 @@ window.fetch=async(input,init)=>{
  if(offline&&path.endsWith('/channel'))return json({error:'演示连接暂时断开'},503);
  if(init?.method&&init.method!=='GET'){
   const body=init.body?JSON.parse(String(init.body)):{};writes.push({path,body});
+  if(path.endsWith('/messages-read')){
+   const current=channels.find(item=>item.sessionId===path.split('/')[3]),state=current?.messageRead;
+   if(readFailure)return json({error:'模拟已读保存失败，请重试'},503);
+   if(!state||!/^\d{20}$/.test(body.cursor)||body.cursor>state.cursor)return json({error:'无效读取位置'},409);
+   if(readGate)await readGate;
+   state.seenCursor=state.seenCursor>body.cursor?state.seenCursor:body.cursor;return json({cursor:state.seenCursor});
+  }
   if(path.endsWith('/questionReply')){const snap=snapshots.get(path.split('/')[3]);if(snap)delete snap.ai!.question;}
   if(path.endsWith('/workControl')){const worker=workers.find(item=>path.includes('/'+item.sessionId+'/'));if(worker){worker.task.state='cancelled';worker.assignmentState='parked';}}
   return json({});
@@ -37,6 +53,8 @@ window.fetch=async(input,init)=>{
  if(path.endsWith('/channel')){
   const current=channels.find(item=>path.includes('/'+item.sessionId+'/'))??channel,own=current===channel?workers:[];
   const page:SpecialistChannelPage={channel:current,workers:own,entries:own.flatMap(worker=>{const snap=snapshots.get(worker.sessionId);return snap?snap.ai!.cards.map(card=>({id:card.id,sourceSessionId:worker.sessionId,taskId:worker.task.taskId,createdAt:at,card})):[];}),active:own.filter(worker=>['running','waiting_user'].includes(worker.task.state)).flatMap(worker=>{const snapshot=snapshots.get(worker.sessionId);return snapshot?[snapshot]:[];}),routing:false,queued:0,nextCursor:'',replyPresentation:'invocation'};
+  const reported=own.find(worker=>worker.id==='fixture-worker-3');
+  if(reported)page.entries.push({id:'fixture-delivered-report',sourceSessionId:reported.sessionId,taskId:reported.task.taskId,createdAt:at,message:{id:'fixture-report-message',sessionId:current.sessionId,role:'assistant',text:reported.task.summary!,createdAt:at}});
   return json(page);
  }
  if(path.endsWith('/snapshot')){

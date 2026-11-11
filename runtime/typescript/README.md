@@ -148,6 +148,8 @@ TS Dev 支持 MySQL、PostgreSQL、Redis、APISIX、Prometheus 和 VictoriaMetri
 
 ### 项目 ACP 执行后端
 
+常规 Worker 检查先采集有界概况，按异常及用户范围深入；复用已交付的目录、任务上下文和工具结果，避免无收益拆分或每次工具前更新待办。后台结果通过原 TaskOutput 句柄有界等待。完成校验若发现旧 unknown/dispatched，会明确返回 unresolved_operations 并指向部分结果提交；新成功检查不结清旧记录，不以额外巡检强行取得完成。本机 Codex 的模型和思考强度继续原样继承，本轮不降低 max；流程指引不构成真实模型延迟下降的测量。
+
 专员聊天框的原模型菜单默认选择独立 Codex Agent，普通模型选择保存为该专员的原生偏好。Codex 发送沿原显式新任务准入直接派发，不依赖 Router 推理；新 Worker 冻结当前执行配置，已有任务及原生偏好保持。原生 Worker 的 `Agent` 可选择 `codex-acp`，Worker 或已有原生 child 也可用 `run_external_agent(agent='codex')` 委派一段工作。外部 leaf 不再递归委派；任务仍最多 7 个逻辑 child。runtime-acp 生产启动与私有模型代理已删除，仅保留历史绑定的读取与明确拒绝，Lake 自身仍使用原公开 SDK。
 
 在模型菜单选择“配置 Codex”后启用，自动识别 Node 22.22+ / 24.14+ 和配套 npm，在当前 Home 的私有目录安装固定 ACP adapter 2.2.2 与引擎 0.160.1，并完成模型无关的 ACP 握手。路径覆盖折叠在高级设置；主 TS 后端仍使用 Node 24.14.0。Codex 直接复用宿主 CODEX_HOME（默认 ~/.codex）的登录、默认模型、服务地址与思考强度；不再填写或保存项目独立 Key，也不依赖普通模型配置。登录文件由 Codex 原机制读取和刷新；Lake 不复制凭据、不修改本机 config.toml。用于工具托管的 SDK 在没有普通模型时采用不可推理的 Model 端口，原生 child 若需要推理会明确要求普通模型。Codex 原生执行工具关闭，继承的 MCP、hooks 与 notify 在启动和线程配置中关闭；私有模型目录在启动时注入。SQLite 与日志使用 Lake 私有目录。业务调用走每次执行的私有 MCP 桥及原 Lake 审批/账本。具体支持、版本、认证和平台限制见 [兼容记录](../../docs/validation/acp-agent-execution/compatibility.md)。

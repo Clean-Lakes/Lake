@@ -5,6 +5,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import type {SessionSnapshot,SpecialistChannelEntry,SuperWorker,Resource,ResourceTreeNode} from '../../shared/contracts';
 import {filterSpecialistTasks,specialistResourcePaths,specialistTaskRows,specialistTaskTime} from '../src/specialistTaskListModel';
 import {SpecialistTaskList} from '../src/SpecialistTaskList';
+import {ConversationReadButton} from '../src/ConversationReadMarker';
 
 const at='2026-11-11T01:00:00Z';
 const worker=(id:string,state:SuperWorker['task']['state']='running'):SuperWorker=>({id,sessionId:`session-${id}`,roleId:'ops',roleName:'服务器专员',createdAt:at,assignmentState:state==='running'?'active':'parked',task:{taskId:`task-${id}`,sessionId:`session-${id}`,projectId:'project',title:'同名检查任务',state,acceptanceState:state==='completed'?'pass':'not_evaluated',revision:1,originRootTurnId:'root',deadlineAt:'',updatedAt:at,resources:[{runtime:'ssh',assetRef:'host'}]},execution:{backend:{kind:'acp',agent:'codex',revision:2},assignedAt:at,source:'task_assignment',runs:[],totalRuns:0}});
@@ -67,6 +68,15 @@ test('invalid or future timestamps never claim a fresh update',()=>{
  const now=Date.parse(at);
  assert.equal(specialistTaskTime(undefined,now),'—');assert.equal(specialistTaskTime('bad',now),'—');assert.equal(specialistTaskTime(at,now),'刚刚');
  assert.equal(specialistTaskTime(at,now+120_000),'2 分钟前');assert.notEqual(specialistTaskTime('2027-01-01T01:00:00Z',now),'刚刚');
+});
+
+test('explicit read controls follow the exact unread cursor and stay disabled offline',()=>{
+ const state={cursor:'00000000000000000002',seenCursor:'00000000000000000001'};
+ const render=(seenCursor=state.seenCursor,disabled=false)=>renderToStaticMarkup(createElement(ConversationReadButton,{session:'role-channel',state:{...state,seenCursor},disabled}));
+ assert.match(render(),/标记已读/);assert.match(render(undefined,true),/disabled=""/);
+ assert.equal(render(state.cursor),'');assert.equal(renderToStaticMarkup(createElement(ConversationReadButton,{session:'other-channel'})),'');
+ const html=renderToStaticMarkup(createElement(SpecialistTaskList,{channel:{id:'channel',sessionId:'role-channel',projectId:'project',roleId:'ops',roleName:'服务器专员',revision:1,createdAt:at,messageRead:state},rows:[],onTask(){}}));
+ assert.match(html,/标记已读/);assert.match(html,/还没有任务/,'a channel with an earlier reply and no task rows still has an acknowledgement entry');
 });
 
 test('a disconnected task page keeps its rows while disabling new dispatch and moving indicators',()=>{

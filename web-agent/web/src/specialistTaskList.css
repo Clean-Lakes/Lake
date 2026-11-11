@@ -1,5 +1,9 @@
 .specialist-task-page { container-type:inline-size; width:100%; min-width:0; padding:14px 0 28px; font-size:var(--font-size-ui); }
 .specialist-page-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; }
+.specialist-page-actions { display:flex; align-items:flex-start; justify-content:flex-end; flex-wrap:wrap; gap:8px; flex:none; }
+.conversation-read-action { display:flex; flex-direction:column; align-items:flex-end; gap:6px; max-width:200px; }
+.conversation-read-action > button { display:flex; align-items:center; gap:6px; white-space:nowrap; border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); padding:7px 11px; font-size:13px; }
+.conversation-read-action > [role=alert] { color:var(--danger); font-size:12px; line-height:1.5; overflow-wrap:anywhere; }
 .specialist-page-identity { display:flex; align-items:center; gap:14px; min-width:0; }
 .specialist-page-identity > .super-role-avatar { flex:none; width:44px; height:44px; }
 .specialist-page-identity > .super-role-avatar > svg { width:40px; height:40px; }
@@ -113,6 +117,9 @@
  .specialist-task-filters { flex:1 1 100%; justify-content:space-between; gap:12px; }
  .specialist-task-search { width:100%; max-width:100%; margin-bottom:10px; }
  .specialist-page-heading { gap:10px; }
+ .specialist-page-heading { flex-wrap:wrap; }
+ .specialist-page-actions { margin-left:auto; }
+ .conversation-read-action > button { font-size:12px; padding:7px 8px; }
  .specialist-page-identity { gap:9px; }
  .specialist-page-identity > .super-role-avatar { width:30px; height:34px; }
  .specialist-page-identity > .super-role-avatar > svg { width:30px; height:30px; }
