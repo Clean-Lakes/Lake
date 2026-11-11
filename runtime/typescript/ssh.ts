@@ -120,7 +120,14 @@ export class LakeSSH {
    const timer=setTimeout(()=>finish(false,new HttpError(409,'SSH 指纹确认已超时，请重新连接')),120000);
    const prompt:Prompt={resourceId:resource.id,revision:this.revision(resource),pinHash:digest(this.pinText(config)),key,
     public:{id:id(),resourceId:resource.id,host:config.host,port:config.port,algorithm:parsed.type,fingerprint:fingerprint(key),previousFingerprints:pins.map(pin=>fingerprint(pin.key)),changed:pins.length>0,scope:'lake'},resolve:accept=>finish(accept)};
-   this.prompts.set(session,prompt);signal.addEventListener('abort',abort,{once:true});this.notify(session);if(signal.aborted)abort();
+   this.prompts.set(session,prompt);signal.addEventListener('abort',abort,{once:true});
+   if(signal.aborted)abort();
+   else if(!pins.length){
+    // First use follows the same durable, fenced accept path without publishing
+    // a user prompt. A changed stored key still requires explicit confirmation.
+    try{this.decide(session,{id:prompt.public.id,fingerprint:prompt.public.fingerprint,accept:true});}
+    catch(error){finish(false,error as Error);}
+   }else this.notify(session);
   });
  }
  decide(session:string,data:Record<string,any>) {
@@ -169,10 +176,11 @@ export class LakeSSH {
     authHandler:config.authMethod==='password'?['password']:['publickey'],password:config.authMethod==='password'?secret:undefined,
     privateKey,passphrase:config.authMethod==='key'?secret:undefined,
     hostVerifier:(key:Buffer,callback:(accepted:boolean)=>void)=>{clearTimeout(timer);void Promise.resolve().then(()=>this.authorize(session,resource,key,verificationSignal)).then(accepted=>{
+     if(ended)return; // Cancellation already closed this protocol and invalidated its callback.
      if(!accepted){fail(new HttpError(403,'已取消 SSH 服务器指纹确认'));callback(false);return;}
      if(signal.aborted||this.revision(this.store.require<Resource>('resources',resource.id))!==revision){fail(new HttpError(409,'SSH 配置已变化'));callback(false);return;}
      this.security.check();peer=fingerprint(key);timer=setTimeout(()=>fail(new HttpError(504,'SSH 身份认证超时')),15000);callback(true);
-    }).catch(error=>{fail(error);callback(false);});},
+    }).catch(error=>{if(ended)return;fail(error);callback(false);});},
    });
   });
  }

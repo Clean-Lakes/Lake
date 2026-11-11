@@ -8,6 +8,8 @@
 
 ### 项目命名与兼容
 
+SSH 首次使用信任按用户要求默认为后台接受：没有已存主机公钥时，沿原 `LakeSSH.decide` 校验及私有文件原子写入，在认证前保存公钥，不发布首次弹窗；匹配记录直接复用，已有不同公钥仍需确认。终端与 Agent 工具桥共享这一路径，操作权限和任务验收保持。见[实施计划](../../plan/refactor-ssh-first-use-trust-1.md)。
+
 结构化回执使用 `redactModelValue` 按字符串字段脱敏，保留数字、布尔、固定 schema 键和 Date；审批中的 JSON 参数先解析值再脱敏和序列化，不对整段 JSON 替换后重新解析。命令回执处理失败保留 unknown，并结束内部 promise、等待者及定时器；关闭运行时仍完成原底层清理。历史未知结果不因升级获得验收，也不自动重跑。见[回执修复计划](../../plan/refactor-structured-receipt-redaction-1.md)。
 
 Lake 自身的目录、UI、提示词、构建产物与公开元数据使用 TypeScript / 原生 Agent 命名。`sdk.ts` 集中绑定上游公开 API；实际依赖命名、原始许可证、固定来源和源码引用保留真实名称。`python3 scripts/check_backend_naming.py` 扫描所有纳入版本控制和待加入的文件，报告例外分类并拒绝新的产品语义；候选构建先执行该检查。

@@ -2851,7 +2851,7 @@ test('legacy unresolved MCP calls outside visible projects still fence a new app
  assert.equal(f.app.store.list('superOperations').filter(operation=>operation.tool==='call_mcp_tool').length,0);
 });
 
-async function sshFixture(t, diagnosticsGate, interceptCommand){
+async function sshFixture(t, diagnosticsGate, interceptCommand, onAuthenticate){
  const fs=require('node:fs/promises'),{generateKeyPairSync}=require('node:crypto'),{Server}=require('../../third_party/agent-sdk/node_modules/ssh2'),{spawn}=require('node:child_process');
  const pty=require('../../bin/lake-runtime/native/node-pty'),home=await mkdtemp(join(tmpdir(),'lake-ssh-server-')),clients=new Set();
  let server,port=0,key;const requests=[];let auths=0, rejectNextConnection=false;
@@ -2861,7 +2861,7 @@ async function sshFixture(t, diagnosticsGate, interceptCommand){
   server=new Server({hostKeys:[key]},client=>{
    clients.add(client);client.on('error',()=>{});client.once('close',()=>clients.delete(client));
    if(rejectNextConnection){rejectNextConnection=false;client.end();return;}
-   client.on('authentication',ctx=>{auths++;if(ctx.method==='password'&&ctx.username==='fixture'&&ctx.password===password)ctx.accept();else ctx.reject();});
+   client.on('authentication',ctx=>{auths++;onAuthenticate?.();if(ctx.method==='password'&&ctx.username==='fixture'&&ctx.password===password)ctx.accept();else ctx.reject();});
    client.on('ready',()=>client.on('session',accept=>{
     const session=accept();let dimensions;
     session.on('pty',(accept,reject,info)=>{dimensions=info;accept();});
@@ -2889,22 +2889,31 @@ async function sshFixture(t, diagnosticsGate, interceptCommand){
  return {home,get port(){return port;},password,requests,get auths(){return auths;},rejectNext(){rejectNextConnection=true;},async rotate(){await stop();await start();}};
 }
 async function sshResource(f,server){return f.api(`/api/projects/${f.project.id}/resources`,'POST',{kind:'ssh',name:'SSH fixture',ssh:{host:'127.0.0.1',port:server.port,username:'fixture',authMethod:'password',password:server.password,shell:'bash'}});}
-async function trustTerminal(f,resource,sessionId=f.session.id){
+async function openSSHTerminal(f,resource,sessionId=f.session.id){
  const term=await f.api(`/api/sessions/${sessionId}/terminals`,'POST',{resourceId:resource.id,interactive:true},201);
- const base=`/api/sessions/${sessionId}/terminals/${term.id}`;
+ return {term,base:`/api/sessions/${sessionId}/terminals/${term.id}`};
+}
+async function trustTerminal(f,resource,sessionId=f.session.id){
+ const {term,base}=await openSSHTerminal(f,resource,sessionId);
  const snapshot=await until(()=>f.api(`/api/sessions/${sessionId}/snapshot`),s=>!!s.hostKeyTrust);
+ assert.equal(snapshot.hostKeyTrust.changed,true,'only changed stored keys require a manual decision');
  return {term,base,prompt:snapshot.hostKeyTrust,approve:()=>f.api(`/api/sessions/${sessionId}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint})};
 }
 
-test('SSH host trust blocks authentication, then opens a real remote PTY with saved private credentials', {skip:process.platform!=='darwin'},async(t)=>{
- const f=await fixture(t),server=await sshFixture(t),resource=await sshResource(f,server);
+test('SSH first use saves private trust before authentication without a prompt and opens a real remote PTY', {skip:process.platform!=='darwin'},async(t)=>{
+ const f=await fixture(t),ssh=f.app.superagent.ssh;let resource,persistedBeforeAuth=false;
+ const server=await sshFixture(t,undefined,undefined,()=>{
+  const saved=f.app.store.require('resources',resource.id);persistedBeforeAuth=require('node:fs').existsSync(ssh.pinPath(saved.ssh));
+ });resource=await sshResource(f,server);
+ const published=[],notify=ssh.notify;ssh.notify=session=>{if(ssh.prompt(session))published.push(ssh.prompt(session));notify(session);};
  assert.ok(!JSON.stringify(resource).includes(server.password));
  const {sessionId}=await f.api(`/api/resources/${resource.id}/terminal-context`,'POST',{});
- const terminal=await trustTerminal(f,resource,sessionId);
- assert.equal(server.auths,0,'host confirmation must precede all authentication');
- assert.equal(terminal.prompt.changed,false);
- await terminal.approve();
+ const terminal=await openSSHTerminal(f,resource,sessionId);
  const history=()=>f.api(terminal.base+'/history');await until(history,h=>h.terminal.status==='ready');
+ assert.equal(persistedBeforeAuth,true);assert.equal(published.length,0,'first use must never publish a host-key dialog');
+ assert.equal((await f.api(`/api/sessions/${sessionId}/snapshot`)).hostKeyTrust,null);
+ const pin=ssh.pinPath(f.app.store.require('resources',resource.id).ssh);
+ assert.equal(require('node:fs').statSync(pin).mode&0o777,0o600);
  await f.api(terminal.base+'/input','POST',{data:"test -t 0 && printf 'REMOTE_TTY_OK\\n'; export SAVED_SSH_STATE=retained\r"},202);
  await until(history,h=>h.output.includes('REMOTE_TTY_OK')&&h.terminal.status==='ready');
  await f.api(terminal.base+'/input','POST',{data:"printf 'SSH_STATE_%s\\n' \"$SAVED_SSH_STATE\"\r"},202);
@@ -2917,9 +2926,45 @@ test('SSH host trust blocks authentication, then opens a real remote PTY with sa
  assert.equal((await f.api(`/api/sessions/${sessionId}/snapshot`)).hostKeyTrust,null,'confirmed host pin is reusable after restart');
 });
 
+test('SSH first-use persistence failure cannot authenticate or leave a host-key prompt', {skip:process.platform!=='darwin'},async t=>{
+ const f=await fixture(t),server=await sshFixture(t),resource=await sshResource(f,server),ssh=f.app.superagent.ssh;
+ const atomic=ssh.atomic.bind(ssh);ssh.atomic=(path,value)=>{if(path.endsWith('.known_hosts'))throw Error('synthetic trust persistence failure');return atomic(path,value);};
+ const terminal=await openSSHTerminal(f,resource);
+ await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='disconnected');
+ assert.equal(server.auths,0);assert.equal(server.requests.length,0);assert.equal(ssh.prompt(f.session.id),null);
+ const pin=ssh.pinPath(f.app.store.require('resources',resource.id).ssh);await assert.rejects(access(pin));
+ ssh.atomic=atomic;
+ const retry=await openSSHTerminal(f,resource);await until(()=>f.api(retry.base+'/history'),h=>h.terminal.status==='ready');
+ assert.ok(server.auths>0);assert.equal(ssh.prompt(f.session.id),null);
+});
+
+test('concurrent first-use SSH sessions share one persisted key without a prompt', {skip:process.platform!=='darwin'},async t=>{
+ const f=await fixture(t),server=await sshFixture(t),resource=await sshResource(f,server);
+ const second=await f.api(`/api/projects/${f.project.id}/sessions`,'POST',{}),sessions=[f.session.id,second.id];
+ const terminals=await Promise.all(sessions.map(session=>openSSHTerminal(f,resource,session)));
+ await Promise.all(terminals.map(terminal=>until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='ready')));
+ const ssh=f.app.superagent.ssh,pin=ssh.pinPath(f.app.store.require('resources',resource.id).ssh);
+ assert.equal((await readFile(pin,'utf8')).trim().split('\n').length,1);
+ for(const session of sessions)assert.equal((await f.api(`/api/sessions/${session}/snapshot`)).hostKeyTrust,null);
+ assert.equal(server.requests.length,2);
+});
+
+test('cancelling first-use SSH verification saves no key and sends no authentication', {skip:process.platform!=='darwin'},async t=>{
+ const f=await fixture(t),server=await sshFixture(t),resource=await sshResource(f,server),ssh=f.app.superagent.ssh;
+ let entered,release;const started=new Promise(resolve=>entered=resolve),gate=new Promise(resolve=>release=resolve);
+ const authorize=ssh.authorize.bind(ssh);ssh.authorize=async(...args)=>{entered();await gate;return authorize(...args);};
+ try{
+  const terminal=await openSSHTerminal(f,resource);await started;
+  await f.api(terminal.base+'/disconnect','POST',{});release();
+  await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='disconnected');
+  assert.equal(server.auths,0);assert.equal(server.requests.length,0);assert.equal(ssh.prompt(f.session.id),null);
+  await assert.rejects(access(ssh.pinPath(f.app.store.require('resources',resource.id).ssh)));
+ }finally{release();}
+});
+
 test('SSH key changes prompt before authentication; cancellation and stale fingerprints cannot silently change trust', {skip:process.platform!=='darwin'},async(t)=>{
  const f=await fixture(t),server=await sshFixture(t),resource=await sshResource(f,server);
- let terminal=await trustTerminal(f,resource);await terminal.approve();await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='ready');await f.api(terminal.base+'/disconnect','POST',{});
+ let terminal=await openSSHTerminal(f,resource);await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='ready');await f.api(terminal.base+'/disconnect','POST',{});
  const authenticated=server.auths;await server.rotate();terminal=await trustTerminal(f,resource);
  assert.equal(terminal.prompt.changed,true);assert.equal(terminal.prompt.previousFingerprints.length,1);assert.equal(server.auths,authenticated);
  await f.api(`/api/sessions/${f.session.id}/host-key`,'POST',{id:terminal.prompt.id,accept:true,fingerprint:'SHA256:stale'},409);
@@ -2932,7 +2977,7 @@ test('SSH key changes prompt before authentication; cancellation and stale finge
 test('independent Worker uses an exact approved SSH diagnostic profile and accepts only its real receipt', {skip:process.platform!=='darwin'},async(t)=>{
  let releaseDiagnostic;const diagnosticsGate=new Promise(resolve=>{releaseDiagnostic=resolve;});t.after(()=>releaseDiagnostic());
  const f=await fixture(t,'super-host'),server=await sshFixture(t,diagnosticsGate),resource=await sshResource(f,server);
- const terminal=await trustTerminal(f,resource);await terminal.approve();await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='ready');await f.api(terminal.base+'/disconnect','POST',{});
+ const terminal=await openSSHTerminal(f,resource);await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='ready');await f.api(terminal.base+'/disconnect','POST',{});
  const authenticated=server.auths,project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:false});
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'读取该 SSH 主机当前系统指标。'},202);
@@ -2967,7 +3012,7 @@ test('independent Worker uses an exact approved SSH diagnostic profile and accep
 
 test('a short retry uses recent dialogue and current SSH capabilities, resumes the same task and accepts only the new host receipt', {skip:process.platform!=='darwin'}, async(t)=>{
  const f=await fixture(t,'super-host-retry'),server=await sshFixture(t),resource=await sshResource(f,server);
- const terminal=await trustTerminal(f,resource);await terminal.approve();await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='ready');await f.api(terminal.base+'/disconnect','POST',{});
+ const terminal=await openSSHTerminal(f,resource);await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='ready');await f.api(terminal.base+'/disconnect','POST',{});
  const authenticated=server.auths;
  // Simulate a previously unavailable imported resource. Credentials remain in
  // the private fixture home, and no user server or user task is involved.
@@ -3063,7 +3108,7 @@ test('an explicit project host deny cannot be replaced by SDK readonly defaults'
 test('SSH authentication failure is distinct from availability and never exposes the saved password', {skip:process.platform!=='darwin'},async(t)=>{
  const f=await fixture(t),server=await sshFixture(t),resource=await sshResource(f,server);
  await f.api(`/api/resources/${resource.id}`,'PATCH',{ssh:{password:'synthetic-wrong-ssh-password'}});
- const terminal=await trustTerminal(f,resource);await terminal.approve();const history=await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='disconnected');
+ const terminal=await openSSHTerminal(f,resource);const history=await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='disconnected');
  assert.match(history.output,/身份认证失败/);assert.ok(!JSON.stringify(history).includes('synthetic-wrong-ssh-password'));assert.equal(server.requests.length,0);
 });
 
@@ -3248,8 +3293,6 @@ for(const automatic of [true,false])test(`new SSH history command ignores old pr
   assert.equal(pending.pending.call.name,'Bash');assert.equal(wire.requests.length,0);
   await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:pending.pending.id,accept:true});
  }
- const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
- await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const op=f.app.store.list('superOperations').find(o=>o.goalId===worker.task.taskId&&o.tool==='Bash');
  assert.equal(op.readOnly,false,'glob/redirection must remain unproven rather than gaining a forged read-only proof');assert.equal(op.status,'succeeded');
@@ -3260,8 +3303,6 @@ for(const automatic of [true,false])test(`new SSH history command ignores old pr
 test('real SSH partial failure does not gate the next write command in the same task',async t=>{
  const {f,project,send}=await fullAgentTask(t,'super-full-worker-ssh-pending-same-task'),wire=await sshFixture(t);await sshResource(f,wire);await send();
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=state.workers[0];
- const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
- await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
  await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),s=>s.status==='completed');
  const ops=f.app.store.list('superOperations').filter(o=>o.goalId===worker.task.taskId&&o.tool==='Bash');
  assert.equal(ops.length,2);assert.equal(ops[0].status,'unknown');assert.equal(ops[1].status,'succeeded');assert.equal(ops[1].readOnly,false);
@@ -3279,9 +3320,6 @@ test('real SDK rejects a wrong local command then reads a scoped remote truncate
  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:true,denyLocalExecution:true});
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'只读检查当前服务器，读取长回执并核对末尾。',resourceIds:[resource.id]},202);
  const active=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=active.workers[0];
- const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
- assert.equal(trust.ai?.pending,undefined);
- await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const view=await f.api(`/api/sessions/${worker.sessionId}/ai`),requests=f.requests.filter(isIndependentWorkerRequest);
  assert.ok(view.cards.some(c=>c.id==='full-worker-rejected-local'&&c.status==='failed'));
@@ -3297,8 +3335,6 @@ test('default resource delegation creates a missing specialist and reuses its st
  const {f,project,send}=await fullAgentTask(t,'super-full-worker-default-delegation-ssh'),server=await sshFixture(t);
  await sshResource(f,server);assert.equal(f.app.store.list('superRoles').length,0);await send('请检查服务器启动状态，并核对实际结果。');
  const first=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=first.workers[0];
- const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
- await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  await f.app.agents.wait(project.routerSessionId);
  await send('请检查服务器启动状态，并核对实际结果。');
@@ -3345,8 +3381,6 @@ test('a Worker uses saved SSH credentials for general Bash commands beyond fixed
  const {f,project,send}=await fullAgentTask(t,'super-full-worker-ssh'),server=await sshFixture(t),resource=await sshResource(f,server);
  await send();
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=state.workers[0];
- const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
- assert.equal(server.auths,0);await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
  const done=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const operation=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(operation.resourceId,resource.id);assert.match(operation.output.stdout,/ACTUAL_NATIVE_SHELL/);assert.equal(done.workers[0].task.acceptanceState,'pass');assert.ok(server.requests.some(request=>request.command.includes('ACTUAL_NATIVE_SHELL')&&!request.pty));
  assert.doesNotMatch(JSON.stringify(f.requests)+JSON.stringify(operation),new RegExp(server.password));
@@ -3357,8 +3391,6 @@ test('a pre-command SSH connection failure can retry through the real SDK and ac
  const fs=require('node:fs/promises');await fs.mkdir(join(server.home,'bin'));await fs.writeFile(join(server.home,'bin/kubectl'),'#!/bin/sh\nprintf ACTUAL_CONNECTION_RECOVERY',{mode:0o700});
  await sshResource(f,server);server.rejectNext();await send();
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=state.workers[0];
- const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
- await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
  const done=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const ops=f.app.store.list('superOperations').filter(o=>o.tool==='Bash').sort((a,b)=>a.at.localeCompare(b.at));
  assert.equal(ops.length,2);assert.equal(ops[0].status,'failed');assert.equal(ops[0].readOnly,false);
@@ -3378,8 +3410,6 @@ test('a real SSH disconnect after exec preserves unknown while a new journal que
  });
  const {f,project,send}=await fullAgentTask(t,'super-full-worker-ssh-journal-recovery');await sshResource(f,server);await send();
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=state.workers[0];
- const trust=await until(()=>f.api(`/api/sessions/${worker.sessionId}/snapshot`),s=>!!s.hostKeyTrust);
- await f.api(`/api/sessions/${worker.sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
  const done=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked');
  const ops=f.app.store.list('superOperations').filter(o=>o.tool==='Bash').sort((a,b)=>a.at.localeCompare(b.at));
  assert.equal(ops.length,2);assert.equal(ops[0].status,'unknown');assert.notEqual(f.app.store.require('commandExecutions',ops[0].commandExecutionId).sshDispatchPhase,'not_sent');
@@ -3496,7 +3526,6 @@ test('a changed SSH resource invalidates an approved general command before auth
 test('SSH background Bash joins its actual remote exit result',{skip:process.platform!=='darwin'},async t=>{
  const {f,project,send}=await fullAgentTask(t,'super-full-worker-ssh-background'),server=await sshFixture(t);await sshResource(f,server);await send();
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),sessionId=state.workers[0].sessionId;
- const trust=await until(()=>f.api(`/api/sessions/${sessionId}/snapshot`),s=>!!s.hostKeyTrust);await f.api(`/api/sessions/${sessionId}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});
  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const operation=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(operation.status,'succeeded');assert.match(operation.output.stdout.text,/ACTUAL_BACKGROUND_SHELL/);assert.equal(f.app.store.list('commandExecutions')[0].status,'completed');
 });
@@ -3512,7 +3541,6 @@ test('a mutating command with a nonzero exit retains its possible partial effect
 for(const remote of [false,true])test(`native Bash foreground timeout promotes ${remote?'SSH':'local'} execution without killing or redispatching`,{skip:process.platform!=='darwin'},async t=>{
  const {f,project,send}=await fullAgentTask(t,remote?'super-full-worker-ssh-background-auto':'super-full-pilot-background-auto');
  const wire=remote?await sshFixture(t):undefined;if(wire)await sshResource(f,wire);await send();
- if(remote){const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),session=state.workers[0].sessionId;const trust=await until(()=>f.api(`/api/sessions/${session}/snapshot`),s=>!!s.hostKeyTrust);await f.api(`/api/sessions/${session}/host-key`,'POST',{id:trust.hostKeyTrust.id,accept:true,fingerprint:trust.hostKeyTrust.fingerprint});}
  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(op.status,'succeeded');assert.match(op.output.stdout.text,/ACTUAL_BACKGROUND_SHELL/);assert.equal(f.app.store.list('commandExecutions').length,1);
  if(wire)assert.equal(wire.requests.length,1);
@@ -3532,18 +3560,12 @@ async function lookupCommandTask(t,automatic,mode='super-full-worker-ssh-lookup'
 
 test('a specialist inherits Pilot command auto-approval for actual SSH program discovery',async t=>{
  const {f,project,wire,worker}=await lookupCommandTask(t,true),session=worker.sessionId;
- const snapshot=await until(()=>f.api(`/api/sessions/${session}/snapshot`),s=>!!s.hostKeyTrust||s.ai?.pending?.call.name==='Bash');
- assert.ok(snapshot.hostKeyTrust,'lookup must reach host trust rather than an unnecessary Bash confirmation');
- assert.equal(snapshot.ai?.pending,undefined);assert.equal(wire.auths,0);
- await f.api(`/api/sessions/${session}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint});
  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(op.status,'succeeded');assert.match(op.output.stdout,/FIXTURE_CONTEXT/);assert.match(op.output.stdout,/FIXTURE_POD_READY/);assert.equal(wire.requests.length,1);assert.equal(op.readOnly,false,'CLI discovery is not an unrestricted readonly proof');
 });
 
 test('a missing optional program cannot lock the next ordinary SSH command or accept stale failure evidence',async t=>{
  const {f,wire,worker}=await lookupCommandTask(t,true,'super-full-worker-ssh-missing-discovery'),session=worker.sessionId;
- const snapshot=await until(()=>f.api(`/api/sessions/${session}/snapshot`),s=>!!s.hostKeyTrust);
- await f.api(`/api/sessions/${session}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint});
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const ops=f.app.store.list('superOperations').filter(o=>o.tool==='Bash').sort((a,b)=>a.at.localeCompare(b.at));
  assert.equal(ops.length,2);assert.equal(ops[0].status,'failed');assert.equal(ops[0].readOnly,true);assert.equal(ops[0].output.exitCode,1);
@@ -3554,8 +3576,6 @@ test('a missing optional program cannot lock the next ordinary SSH command or ac
 
 test('startup verifies an exact legacy discovery from the real SDK archive without changing its original rows or dispatching again',async t=>{
  const {f,wire,worker}=await lookupCommandTask(t,true,'super-full-worker-ssh-missing-discovery-only'),session=worker.sessionId;
- const snapshot=await until(()=>f.api(`/api/sessions/${session}/snapshot`),s=>!!s.hostKeyTrust);
- await f.api(`/api/sessions/${session}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint});
  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked');
  const crypto=require('node:crypto'),canonical=v=>Array.isArray(v)?'['+v.map(canonical).join(',')+']':v&&typeof v==='object'?'{'+Object.entries(v).filter(([,x])=>x!==undefined).sort(([a],[b])=>a<b?-1:a>b?1:0).map(([k,x])=>JSON.stringify(k)+':'+canonical(x)).join(',')+'}':JSON.stringify(v)??'null',digest=v=>crypto.createHash('sha256').update(canonical(v)).digest('hex');
  const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash'),execution=f.app.store.require('commandExecutions',op.commandExecutionId);
@@ -3573,8 +3593,6 @@ test('startup verifies an exact legacy discovery from the real SDK archive witho
 
 test('stopping an actual SDK SSH read reports stopped after settlement and projects cancelled command cards without rewriting evidence',async t=>{
  const {f,wire,worker}=await lookupCommandTask(t,true,'super-full-worker-ssh-read-stop'),session=worker.sessionId;
- const snapshot=await until(()=>f.api(`/api/sessions/${session}/snapshot`),s=>!!s.hostKeyTrust);
- await f.api(`/api/sessions/${session}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint});
  await until(async()=>({executions:f.app.store.list('commandExecutions'),requests:wire.requests.length}),v=>v.requests===1&&v.executions.some(e=>e.status==='running'));
  const goal=f.app.store.require('superGoals',worker.task.taskId);
  await f.api(`/api/sessions/${session}/ai/workControl`,'POST',{goalId:goal.id,command:'cancel',revision:goal.revision});
@@ -3610,9 +3628,6 @@ test('the same program discovery still asks when Pilot command auto-approval is 
 for(const variant of ['default','container-kube','container-docker'])test(`Pilot ordinary command permission is honored for ${variant}`,async t=>{
  const {f,project,wire,worker}=await lookupCommandTask(t,variant==='default'?undefined:true,'super-full-worker-ssh-'+(variant==='default'?'lookup':variant)),session=worker.sessionId;
  if(variant==='default')assert.equal(f.app.store.session(project.routerSessionId).options.silentCommands,undefined,'leave the stored option absent as in an untouched preferences popup');
- const snapshot=await until(()=>f.api(`/api/sessions/${session}/snapshot`),s=>!!s.hostKeyTrust||s.ai?.pending?.call.name==='Bash');
- assert.ok(snapshot.hostKeyTrust,'ordinary execution must not require a redundant command confirmation');
- await f.api(`/api/sessions/${session}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint});
  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(op.status,'succeeded');assert.equal(op.readOnly,false);
  if(variant!=='default')assert.match(op.output.stdout,/ACTUAL_CONTAINER_QUERY_42/);

@@ -1,5 +1,7 @@
 # Lake Super-agent 内核与三模块协作约定
 
+2026-11-11 用户明确要求 SSH 首次连接默认后台信任并连接。TypeScript 的 LakeSSH 在没有已存主机公钥时复用原接受校验及私有文件原子保存，在认证前登记首次观察到的公钥，不发布首次确认弹窗；已有不同公钥仍须准确确认。此条取代历史“首次指纹必须人工确认”的要求，当前权限、资源/凭据版本、取消、任务资格及业务验收保持。Pilot、Worker、child、ACP 工具桥和终端共用此规则。见[实施计划](plan/refactor-ssh-first-use-trust-1.md)。
+
 2026-11-11 回执脱敏修复：工具结果、进展、展示及审批参数复用结构化脱敏，只处理字符串值，保留数值、布尔、固定 schema 键及 Date；禁止在整段序列化 JSON 中替换再解析。回执处理异常时清理内部执行、定时器与等待者并记录 unknown，退出仍完成底层 runtime 清理；后台账本不把缺失回执当成功。原任务、历史 unknown、资源权限及验收不追溯修改，不自动重派。见[实施计划](plan/refactor-structured-receipt-redaction-1.md)。
 
 2026-11-11 资源发现修复：原生 Worker、任务内 child 与 ACP 共用的 `list_assets` 读取当前项目的真实资源树，返回有界 `path` 并按祖先目录名/完整路径检索。相关目录改名或移动使旧分页游标失效；异常目录明确不可解析。目录路径仅为显示与发现元数据，不签发权限，不按相同 IP 或跳板入口合并资源；准确资源 ID、连接版本、原任务范围和验收继续生效。旧 Worker/run/unknown 不改写、不重放。见[实施计划](plan/refactor-agent-resource-directory-1.md)。
