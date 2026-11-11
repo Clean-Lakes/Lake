@@ -3,13 +3,15 @@ import './readme-workbench';
 import type {Resource,ResourceTreeNode,SessionSnapshot,SpecialistChannelInfo,SpecialistChannelPage,SuperWorker,WorkSession} from '../../../shared/contracts';
 const base=window.fetch.bind(window),query=new URLSearchParams(location.search),projectId='demo-project',at='2026-11-11T01:20:00Z';
 const roleId='fixture-ops-33';
-const channel:SpecialistChannelInfo={id:'fixture-channel',sessionId:'demo-session-1',projectId,roleId,roleName:'服务器运维排查专员',duties:'负责服务器、集群巡检与故障排查',revision:1,roleRevision:1,createdAt:at,execution:{kind:'acp',agent:'codex',revision:2},messageRead:{cursor:'00000000000000000001',seenCursor:''}};
+const channel:SpecialistChannelInfo={id:'fixture-channel',sessionId:'demo-session-1',projectId,roleId,roleName:'服务器运维排查专员',duties:query.has('plain')?undefined:'负责服务器、集群巡检与故障排查',revision:1,roleRevision:1,createdAt:at,execution:{kind:'acp',agent:'codex',revision:2},messageRead:{cursor:'00000000000000000001',seenCursor:''}};
 const resources:Resource[]=['k8s-master','app-server','server-01'].map(id=>({id,projectId,name:id,kind:'ssh',status:'available',description:'虚构展示资源'}));
 const tree:ResourceTreeNode[]=[{id:'zmy',projectId,parentId:null,kind:'folder',name:'zmy',resourceId:null,position:0},{id:'cluster',projectId,parentId:'zmy',kind:'folder',name:'韦二',resourceId:null,position:0},{id:'company',projectId,parentId:'zmy',kind:'folder',name:'南京公司',resourceId:null,position:1},...resources.map((r,i)=>({id:`node-${r.id}`,projectId,parentId:i===2?'company':'cluster',kind:'resource' as const,name:r.name,resourceId:r.id,position:i}))];
 const titles=['检查韦二 Kubernetes 集群状态','检查服务器资源状态','核实集群节点告警','检查主机运行状态','汇总服务器巡检报告','检查磁盘空间与日志','检查主机运行状态','检查数据库连接'];
 const states:SuperWorker['task']['state'][]=['running','running','waiting_user','completed','completed','cancelled','completed','failed'];
 const workers:SuperWorker[]=query.has('empty')?[]:titles.map((title,i)=>({id:`fixture-worker-${i}`,sessionId:`fixture-session-${i}`,roleId,roleName:channel.roleName,createdAt:new Date(Date.parse(at)-i*600_000).toISOString(),assignmentState:i<2?'active':i===2?'waiting_user':'parked',...(i<2?{activity:{phase:'tool' as const,label:i===0?'正在核对节点就绪状态与工作负载异常。':'正在读取主机资源指标。',updatedAt:at}}:{}),task:{taskId:`fixture-task-${i}`,sessionId:`fixture-session-${i}`,projectId,title,state:states[i],acceptanceState:states[i]==='completed'?'pass':'not_evaluated',revision:1,originRootTurnId:`fixture-root-${i}`,deadlineAt:'2027-01-01T00:00:00Z',updatedAt:at,resources:[{runtime:'ssh',assetRef:resources[i%resources.length].id}],summary:i>2?'展示数据：已读取系统指标，未执行真实检查。':undefined},execution:{backend:i===6?{kind:'native'}:{kind:'acp',agent:'codex',revision:2},assignedAt:at,source:'task_assignment',totalRuns:i===6?0:1,runs:i===6?[]:[{id:`fixture-run-${i}`,agent:'codex',scope:'worker',state:i<3?'running':'completed',dispatchPhase:i<3?'sent':'answered',createdAt:at,updatedAt:at,usage:null}]}}));
-let revision=1,offline=false;
+if(query.has('plain'))for(const worker of workers)if(!worker.activity)worker.task.resources=[];
+let revision=1,offline=false,reading=true;
+window.lakeWindowAttention={isReading:async()=>reading};
 let readFailure=false,readGate:Promise<void>|undefined,releaseRead:(()=>void)|undefined;
 const writes:{path:string;body:unknown}[]=[],requests:string[]=[];
 const json=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
@@ -23,6 +25,7 @@ const channelSnapshot={session:{id:channel.sessionId,projectId,title:channel.rol
 const channels=[channel,...['发布专员','数据库专员','知识库专员','ACP 测试专员'].map((roleName,i)=>({...channel,messageRead:{...channel.messageRead!},id:`other-channel-${i}`,sessionId:`other-session-${i}`,roleId:`other-role-${i}`,roleName,duties:'查看任务进展、执行过程与结果'}))];
 Object.assign(window,{lakeReadQA:{
  state(session=channel.sessionId){return {...channels.find(item=>item.sessionId===session)?.messageRead};},
+ attention(value:boolean){reading=value;},
  fail(value:boolean){readFailure=value;},
  hold(){readGate=new Promise<void>(resolve=>{releaseRead=resolve;});},
  release(){releaseRead?.();releaseRead=undefined;readGate=undefined;},

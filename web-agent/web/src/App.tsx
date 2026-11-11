@@ -1442,7 +1442,8 @@ function AppContent() {
 
   const projectList = [...catalog.projects].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const sidebarProject = projectList.find(project => project.id === (sidebarProjectId ?? selectedProjectId)) ?? projectList[0];
-  const sessionHeader=!!selectedSession&&!selectedResource&&!isPlansPage&&!isSpecialistTasks;
+  const sessionSelected=!!selectedSession&&!selectedResource&&!isPlansPage;
+  const sessionHeader=sessionSelected&&!isSpecialistTasks;
   const selectedSuperWorker=pilotWorkspace.workspace?.active&&selectedSession?.workspaceRole==='worker'?pilotWorkspace.workspace.workers.find(worker=>worker.sessionId===selectedSession?.id):undefined;
   const selectedSuperPilot=pilotWorkspace.workspace?.active&&pilotWorkspace.workspace.project.projectId===selectedSession?.projectId&&pilotWorkspace.workspace.project.routerSessionId===selectedSession?.id;
   const pilotActivityConnected=sessionConnected&&!pilotWorkspace.error;
@@ -1555,7 +1556,7 @@ function AppContent() {
         </div>}
         {sidebarProject&&<PilotWorkspace activity={avatarActivity} pilotButton={sidebarPilotButton}
          pilotActivity={conversationActivity(undefined,catalog.sessions.find(row=>row.id===pilotWorkspace.workspace?.project.routerSessionId)?.status)} pilotDisabled={!bootstrap?.authenticated}
-         disabled={!connected} onDeleted={channel=>pilotWorkspace.removeRole(channel.roleId)} workspace={pilotWorkspace.workspace} error={pilotWorkspace.error} selectedId={sessionHeader ? route.sessionId : null} selectedRoleId={sessionHeader && selectedSession.projectId===pilotWorkspace.workspace?.project.projectId ? selectedSuperChannel?.roleId??activeSnapshot?.superagent?.roleId??selectedSuperWorker?.roleId : undefined} onPilot={()=>{const domain=pilotWorkspace.workspace;if(domain?.active)navigate({sessionId:domain.project.routerSessionId,resourceId:null});else void openProjectPilot(sidebarProject.id);}} onWorker={worker=>navigate({sessionId:worker.sessionId,resourceId:null})} onChannel={channel=>{void refreshCatalog().then(()=>navigate({sessionId:channel.sessionId,resourceId:null})).catch(handleFailure)}}/>}
+         disabled={!connected} onDeleted={channel=>pilotWorkspace.removeRole(channel.roleId)} workspace={pilotWorkspace.workspace} error={pilotWorkspace.error} selectedId={sessionSelected ? route.sessionId : null} selectedRoleId={sessionSelected && selectedSession.projectId===pilotWorkspace.workspace?.project.projectId ? selectedSuperChannel?.roleId??activeSnapshot?.superagent?.roleId??selectedSuperWorker?.roleId : undefined} onPilot={()=>{const domain=pilotWorkspace.workspace;if(domain?.active)navigate({sessionId:domain.project.routerSessionId,resourceId:null});else void openProjectPilot(sidebarProject.id);}} onWorker={worker=>navigate({sessionId:worker.sessionId,resourceId:null})} onChannel={channel=>{void refreshCatalog().then(()=>navigate({sessionId:channel.sessionId,resourceId:null})).catch(handleFailure)}}/>}
         {navigationProjects.length ? navigationProjects.map(project => {
           const sessionsExpanded = !closedSessionGroups.includes(project.id);
           const sessions = catalog.sessions.filter(session => (!session.workspaceRole||session.workspaceRole==='legacy') && session.projectId === project.id && (!selectedTag || session.tags?.some(tag=>tag.id===selectedTag)));

@@ -1,4 +1,4 @@
-import {useId,useState} from 'react';
+import {useId,useRef,useState} from 'react';
 import type {SpecialistChannelInfo,SessionSnapshot} from '../../shared/contracts';
 import {Glyph} from './Icons';
 import {SuperRoleAvatar} from './SuperRoleAvatar';
@@ -6,7 +6,7 @@ import {ExecutionAgentIcon} from './ExecutionAgentIcon';
 import {filterSpecialistTasks,specialistTaskRows,specialistTaskSteps,specialistTaskTime,type SpecialistTaskFilter,type SpecialistTaskRow} from './specialistTaskListModel';
 import type {SuperWorker} from '../../shared/contracts';
 import {usePageVisible} from './usePageVisible';
-import {ConversationReadButton} from './ConversationReadMarker';
+import {ConversationReadButton,ConversationReadMarker} from './ConversationReadMarker';
 
 const filters:{id:SpecialistTaskFilter;label:string}[]=[{id:'all',label:'全部任务'},{id:'active',label:'进行中'},{id:'attention',label:'需关注'},{id:'completed',label:'已完成'}];
 export function SpecialistTaskSteps({snapshot,worker,connected}:{snapshot:SessionSnapshot;worker?:SuperWorker;connected:boolean}){
@@ -28,18 +28,19 @@ export function SpecialistTaskMetadata({snapshot,worker}:{snapshot:SessionSnapsh
 }
 export function SpecialistTaskList({channel,rows,selectedSessionId,onTask,connected=true,loading=false,routing=false,queued=0,error='',onRetry}:{channel:SpecialistChannelInfo;rows:SpecialistTaskRow[];selectedSessionId?:string;onTask:(sessionId:string)=>void;connected?:boolean;loading?:boolean;routing?:boolean;queued?:number;error?:string;onRetry?:()=>void}){
  const pageVisible=usePageVisible();
+ const surface=useRef<HTMLDivElement>(null);
  const [filter,setFilter]=useState<SpecialistTaskFilter>('all'),[query,setQuery]=useState('');
  const id=useId(),visible=filterSpecialistTasks(rows,filter,query);
  const count=(kind:SpecialistTaskFilter)=>kind==='all'?rows.length:rows.filter(row=>row.filter===kind).length;
- const active=count('active'),attention=count('attention'),completed=count('completed');
+ const attention=count('attention');
  const moving=connected&&(routing||rows.some(row=>row.moving));
  const status=!connected?'正在重连':moving?'处理中':attention?'需关注':'待命';
- return <div className="specialist-task-page" aria-label={`${channel.roleName}的任务`} data-hidden={!pageVisible||undefined}>
+ return <div ref={surface} className="specialist-task-page" aria-label={`${channel.roleName}的任务`} data-hidden={!pageVisible||undefined}>
   <header className="specialist-page-heading">
-   <div className="specialist-page-identity"><SuperRoleAvatar name={channel.roleName} roleId={channel.roleId} motion={moving?'working':attention?'still':'idle'}/><div><div className="specialist-page-title"><h1>{channel.roleName}</h1><span className="specialist-page-state" data-active={moving||undefined}>{moving&&<Glyph name="loader" size={12}/>} {status}</span></div><p>{channel.duties||'查看任务进展、执行过程与结果'}</p></div></div>
+   <div className="specialist-page-identity"><SuperRoleAvatar name={channel.roleName} roleId={channel.roleId} motion={moving?'working':attention?'still':'idle'}/><div><div className="specialist-page-title"><h1>{channel.roleName}</h1><span className="specialist-page-state" data-active={moving||undefined}>{moving&&<Glyph name="loader" size={12}/>} {status}</span></div>{channel.duties&&<p>{channel.duties}</p>}</div></div>
    <div className="specialist-page-actions"><ConversationReadButton key={channel.sessionId} session={channel.sessionId} state={channel.messageRead} disabled={!connected}/></div>
   </header>
-  <p className="specialist-page-counts">{active} 项进行中<span>·</span>{attention} 项需关注<span>·</span>{completed} 项已完成</p>
+  <ConversationReadMarker session={channel.sessionId} state={channel.messageRead} enabled={connected&&!loading&&!error} surface={surface}/>
   <div className="specialist-task-toolbar">
    <div className="specialist-task-filters" role="tablist" aria-label="筛选专员任务" onKeyDown={event=>{
     const index=filters.findIndex(item=>item.id===filter);
@@ -53,18 +54,18 @@ export function SpecialistTaskList({channel,rows,selectedSessionId,onTask,connec
   <div id={`${id}-tasks`} role="tabpanel" aria-labelledby={`${id}-${filter}`} className="specialist-task-panel" aria-busy={loading}>
    {visible.length>0?<div className="specialist-task-table-wrap"><table className="specialist-task-table" aria-label="专员任务列表"><thead><tr><th scope="col">任务</th><th scope="col">状态</th><th scope="col">执行 Agent</th><th scope="col" className="specialist-task-progress-column">进度</th><th scope="col" className="specialist-task-time-column">更新</th><th scope="col"><span className="visually-hidden">详情</span></th></tr></thead><tbody>{visible.map(row=>{
     const {worker,state,progress}=row,selected=selectedSessionId===worker.sessionId;
-    const context=row.paths.join('、')||worker.activity?.label||'资源由任务执行时确定';
+    const context=row.paths.join('、')||worker.activity?.label;
     const icon=connected&&row.moving?'loader':state.tone==='success'?'check':state.tone==='attention'||state.tone==='danger'?'alert':worker.task.state==='cancelled'?'stop':'clock';
     return <tr key={worker.id} data-task-id={worker.task.taskId} data-session-id={worker.sessionId} data-selected={selected||undefined} onClick={()=>onTask(worker.sessionId)}>
-     <td><button type="button" className="specialist-task-open" aria-label={`查看任务：${worker.task.title}`} aria-current={selected?'true':undefined}><SuperRoleAvatar name={worker.roleName} roleId={worker.roleId} motion={connected&&row.moving?'working':'still'}/><span><strong title={worker.task.title}>{worker.task.title}</strong><small title={context}>{context}</small></span></button></td>
+     <td><button type="button" className="specialist-task-open" aria-label={`查看任务：${worker.task.title}`} aria-current={selected?'true':undefined}><SuperRoleAvatar name={worker.roleName} roleId={worker.roleId} motion={connected&&row.moving?'working':'still'}/><span><strong title={worker.task.title}>{worker.task.title}</strong>{context&&<small title={context}>{context}</small>}</span></button></td>
      <td><span className="specialist-task-state" data-tone={state.tone}><Glyph name={icon} size={13}/><span>{state.label}</span></span></td>
-     <td><span className="specialist-task-agent"><ExecutionAgentIcon agent={worker.execution?.backend.kind==='acp'?worker.execution.backend.agent:undefined} size={15}/>{row.agent}</span></td>
+     <td><span className="specialist-task-agent"><ExecutionAgentIcon agent={worker.execution?.backend.kind==='acp'?worker.execution.backend.agent:undefined} size={15}/><span title={row.agent}>{row.agent}</span></span></td>
      <td className="specialist-task-progress-column">{progress?<span className="specialist-task-progress"><span role="progressbar" aria-label={`${worker.task.title}步骤进度`} aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.completed}><i style={{width:`${100*progress.completed/progress.total}%`}}/></span><small>{progress.completed} / {progress.total}</small></span>:<span className="specialist-task-unknown" title="尚无已记录的步骤进度">未报告</span>}</td>
      <td className="specialist-task-time-column"><time dateTime={row.updatedAt} title={row.updatedAt?new Date(row.updatedAt).toLocaleString('zh-CN',{hour12:false}):'暂无更新时间'}>{specialistTaskTime(row.updatedAt)}</time></td>
      <td className="specialist-task-chevron"><Glyph name="next" size={13}/></td>
     </tr>;
    })}</tbody></table></div>:<div className="specialist-tasks-empty"><Glyph name={query?'search':'layers'} size={26}/><h2>{loading?'正在读取任务…':query?'没有匹配的任务':rows.length?'此分类暂无任务':'还没有任务'}</h2><p>{loading?'正在获取这位专员的任务记录。':query?'试试任务名称、资源目录或执行 Agent。':rows.length?'切换分类查看其他任务。':'由 Pilot 派发任务，进展和结果会显示在这里。'}</p>{(query||filter!=='all')&&<button type="button" className="button secondary" onClick={()=>{setQuery('');setFilter('all');}}>查看全部任务</button>}</div>}
   </div>
-  {visible.length>0&&<p className="specialist-task-list-count" role="status">已显示 {visible.length} 项任务{visible.length<rows.length&&`，共 ${rows.length} 项`}</p>}
+  {visible.length>0&&(filter!=='all'||query.trim())&&<p className="specialist-task-list-count" role="status">已显示 {visible.length} 项任务{visible.length<rows.length&&`，共 ${rows.length} 项`}</p>}
  </div>;
 }

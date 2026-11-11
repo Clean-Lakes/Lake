@@ -1,36 +1,36 @@
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useRef,useState,type RefObject} from 'react';
 import type {ConversationReadState} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {Glyph} from './Icons';
 
 declare global {interface Window {lakeWindowAttention?:{isReading:()=>Promise<boolean>};}}
 
-/** A route selection alone is not a read. Acknowledge the cursor delivered
- * with rendered content only after its end is visible in a foreground window. */
-export function ConversationReadMarker({session,state,enabled=true}:{session:string;state?:ConversationReadState;enabled?:boolean}) {
+/** Acknowledge only delivered content visible in a foreground window. Messages
+ * use their end marker; a task overview can acknowledge its visible surface. */
+export function ConversationReadMarker({session,state,enabled=true,surface}:{session:string;state?:ConversationReadState;enabled?:boolean;surface?:RefObject<HTMLElement|null>}) {
  const marker=useRef<HTMLSpanElement>(null);
  useEffect(()=>{
-  const element=marker.current,cursor=state?.cursor;
+  const element=surface?.current??marker.current,cursor=state?.cursor;
   if(!element||!enabled||!cursor||cursor<=(state?.seenCursor??'')||typeof IntersectionObserver==='undefined')return;
   let disposed=false,visible=false,pending=false,saved=false;
   const acknowledge=async()=>{
-   if(disposed||!visible||document.hidden||!document.hasFocus()||pending||saved)return;
+   if(disposed||!visible||document.hidden||!document.hasFocus()||element.closest('[inert]')||pending||saved)return;
    pending=true;
    try{
     const attention=window.lakeWindowAttention?await window.lakeWindowAttention.isReading():true;
-    if(!attention||disposed||!visible||document.hidden||!document.hasFocus())return;
+    if(!attention||disposed||!visible||document.hidden||!document.hasFocus()||element.closest('[inert]'))return;
     await api.readConversation(session,cursor);saved=true;if(!disposed)window.dispatchEvent(new Event('lake:conversation-read'));
    }
    catch{/* Retain the unread dot; retry while this content remains visible. */}
    finally{pending=false;}
   };
-  const observer=new IntersectionObserver(entries=>{visible=entries.some(entry=>entry.isIntersecting);void acknowledge();},{root:element.closest('.conversation'),threshold:1});
+  const observer=new IntersectionObserver(entries=>{visible=entries.some(entry=>entry.isIntersecting);void acknowledge();},{root:element.closest('.conversation'),threshold:surface?0:1});
   observer.observe(element);
   document.addEventListener('visibilitychange',acknowledge);
   window.addEventListener('focus',acknowledge);
   const retry=window.setInterval(()=>void acknowledge(),2500);
   return()=>{disposed=true;observer.disconnect();document.removeEventListener('visibilitychange',acknowledge);window.removeEventListener('focus',acknowledge);window.clearInterval(retry);};
- },[session,state?.cursor,state?.seenCursor,enabled]);
+ },[session,state?.cursor,state?.seenCursor,enabled,surface]);
  return <span ref={marker} className="conversation-read-marker" aria-hidden="true" style={{display:'block',height:1,width:1}}/>;
 }
 
