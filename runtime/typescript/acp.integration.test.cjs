@@ -79,7 +79,7 @@ test('real Codex exposes only managed tools and returns a result through the tas
  assert.ok(requests.every(request=>request.model==='gpt-6.1-sol'&&request.reasoning?.effort==='max'),'source model and reasoning must be inherited');
 });
 
-test('a specialist explicitly assigns a real Codex Worker and collects original task receipts and acceptance',{skip:!adapter,timeout:90000},async t=>{
+test('a specialist assigns real Codex, discovers the exact Lake directory and collects original task receipts',{skip:!adapter,timeout:90000},async t=>{
  const home=await mkdtemp(join(tmpdir(),'lake-codex-assignment-')),web=join(home,'web');await mkdir(web);await writeFile(join(web,'index.html'),'fixture');
  const requests=[];let fixtureError;
  const provider=createServer(async(req,res)=>{
@@ -89,12 +89,17 @@ test('a specialist explicitly assigns a real Codex Worker and collects original 
    const tools=(body.tools??[]).flatMap(tool=>tool.type==='namespace'?(tool.tools??[]).map(item=>({...item,namespace:tool.name})):[tool]);
    const names=tools.map(tool=>tool.name).filter(Boolean);
    assert.ok(!names.some(name=>/apply_patch|exec_command|shell_command|spawn_agent|js_repl/.test(name)),JSON.stringify(names));
-   const name=requests.length===1?'Read':'work_finish',chosen=tools.find(tool=>tool.name===name||tool.name?.endsWith('__'+name));
-   const done=requests.length>2;
+   const name=requests.length===1?'list_assets':requests.length===2?'Read':'work_finish',chosen=tools.find(tool=>tool.name===name||tool.name?.endsWith('__'+name));
+   const done=requests.length>3;
    if(!done)assert.ok(chosen,'the Codex Worker needs its original Lake tool: '+name);
-   if(requests.length===2)assert.ok(JSON.stringify(body.input).includes('ACTUAL_ASSIGNED_CODEX_EVIDENCE'));
+   if(requests.length===2){
+    const output=JSON.stringify(body.input.filter(item=>item.type==='function_call_output'));
+    assert.ok(output.includes('实验组织 / 实验集群 / 10.0.0.10'),'Codex must receive the full Lake path through its managed MCP tool');
+    assert.ok(output.includes('fixture-cluster-node'));assert.ok(!output.includes('fixture-jenkins-node'),'another directory cannot be substituted for the requested cluster');
+   }
+   if(requests.length===3)assert.ok(JSON.stringify(body.input).includes('ACTUAL_ASSIGNED_CODEX_EVIDENCE'));
    const item=done?{id:'msg_assigned',type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:'ACP_CODEX_ASSIGNED_REPORT：已读取实际工作区证据并回传。',annotations:[]}]}:
-    {id:'fc_assigned_'+requests.length,type:'function_call',call_id:'assigned_'+requests.length,name:chosen.name,...(chosen.namespace?{namespace:chosen.namespace}:{}),arguments:JSON.stringify(name==='Read'?{file_path:'CODEX_ASSIGNED_EVIDENCE.txt'}:{summary:'已通过 Codex 实际读取工作区证据，内容为 ACTUAL_ASSIGNED_CODEX_EVIDENCE。',outcome:'completed'}),status:'completed'};
+    {id:'fc_assigned_'+requests.length,type:'function_call',call_id:'assigned_'+requests.length,name:chosen.name,...(chosen.namespace?{namespace:chosen.namespace}:{}),arguments:JSON.stringify(name==='list_assets'?{query:'实验集群'}:name==='Read'?{file_path:'CODEX_ASSIGNED_EVIDENCE.txt'}:{summary:'已通过 Codex 实际读取工作区证据，内容为 ACTUAL_ASSIGNED_CODEX_EVIDENCE。',outcome:'completed'}),status:'completed'};
    const response={id:'resp_assigned_'+requests.length,object:'response',status:'completed',output:[item],usage:{input_tokens:10,output_tokens:5,total_tokens:15}};
    res.writeHead(200,{'Content-Type':'text/event-stream'});
    const event=(type,data)=>res.write('event: '+type+'\ndata: '+JSON.stringify({type,...data})+'\n\n');
@@ -115,6 +120,12 @@ test('a specialist explicitly assigns a real Codex Worker and collects original 
  const url='http://127.0.0.1:'+provider.address().port+'/v1';
  assert.equal((await api('/api/bootstrap')).modelConfigured,false,'Codex needs no Lake inference credential');
  const project=await api('/api/projects','POST',{name:'Codex explicit assignment'}),path=`/api/projects/${project.id}`;
+ for(const [id,name,parentId] of [['fixture-jenkins-node','192.0.2.50 (Jenkins)','fixture-build'],['fixture-cluster-node','10.0.0.10','fixture-cluster']]){
+  app.store.put('resources',id,{id,name,projectId:project.id,kind:'ssh',status:'available',description:'Fictional directory metadata; never connect'});
+  app.store.put('tree',id,{id,projectId:project.id,parentId,kind:'resource',resourceId:id,name,position:0});
+ }
+ for(const [id,name,parentId] of [['fixture-root','实验组织',null],['fixture-build','构建环境','fixture-root'],['fixture-cluster','实验集群','fixture-root']])
+  app.store.put('tree',id,{id,name,parentId,projectId:project.id,kind:'folder',resourceId:null,position:0});
  const workspace=await app.store.workspace(project.id);await writeFile(join(workspace,'CODEX_ASSIGNED_EVIDENCE.txt'),'ACTUAL_ASSIGNED_CODEX_EVIDENCE');
  const superproject=await api(path+'/superagent','POST',{});
  await api(`/api/sessions/${superproject.routerSessionId}/ai/configure`,'POST',{silentReadFiles:true});

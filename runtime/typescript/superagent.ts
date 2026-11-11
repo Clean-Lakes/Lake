@@ -1872,12 +1872,16 @@ export class LakeSuperagent implements AgentHost {
         })),
       this.entry("ask_user_question", "Ask a bounded human prerequisite question for this exact task. Answers are not operation approval or goal acceptance.",
         objectSchema({ questions: array(objectSchema({ id: str, title: str, reason: str, options: array(str), multi_select: { type: "boolean" } }, ["id", "title"])) }, ["questions"]), run((a, context) => this.questionInteraction(worker, a, context.abortSignal))),
-      this.entry("list_assets", "Find current project resource metadata: use asset_ref for an exact resource ID, or query for its name/ID (Chinese names supported). Same-name matches remain separate resources. Otherwise browse bounded pages (default 20, max 50); follow nextCursor with the same query until hasMore is false. Use the exact returned asset_ref and configuration_revision for inspect_host. Metadata and cursor are not execution permission.",
-        objectSchema({ asset_ref: str, query: str, cursor: str, limit: integer }), run((a) => listProjectAssets({ projectId: worker.projectId, configurationPin:(resource,revision)=>issueResourcePin(this.store,resource,revision),
-          resources: this.store.catalog().resources.filter(resource=>!worker.targetResourceIds || worker.targetResourceIds.includes(resource.id)), resourceRevision: (resource) => this.store.get<number>("resourceRevisions", resource.id) ?? 1,
+      this.entry("list_assets", "Find current project resource metadata: use asset_ref for an exact resource ID, or query for its name, ID or Lake directory path (Chinese names supported). Each result includes path; ancestor folder names are searchable. For a named directory/environment, search that folder and confirm the returned path before choosing a host. A shared IP/gateway does not identify the same target or cluster. Same-name matches remain separate resources. pathTruncated marks a shortened display; path_state=unavailable means ancestry could not be resolved. Otherwise browse bounded pages (default 20, max 50); follow nextCursor with the same query until hasMore is false. Use the exact returned asset_ref and configuration_revision for inspect_host. Metadata and cursor are not execution permission.",
+        objectSchema({ asset_ref: str, query: str, cursor: str, limit: integer }), run((a) => {
+          const catalog = this.store.catalog();
+          return listProjectAssets({ projectId: worker.projectId, configurationPin:(resource,revision)=>issueResourcePin(this.store,resource,revision),
+          resources: catalog.resources.filter(resource=>!worker.targetResourceIds || worker.targetResourceIds.includes(resource.id)), resourceTree: catalog.resourceTree,
+          resourceRevision: (resource) => this.store.get<number>("resourceRevisions", resource.id) ?? 1,
           executionRevision:this.execution?(resource)=>this.execution!.revision(resource):undefined,
           databaseRevision:this.mysql?(resource)=>this.mysql!.revision(resource):undefined,
-          sshRevision: this.ssh ? (resource) => this.ssh!.revision(resource) : undefined }, a))),
+          sshRevision: this.ssh ? (resource) => this.ssh!.revision(resource) : undefined }, a);
+        })),
       this.entry("list_project_files", "List at most 200 immediate entries in the assigned project workspace. Symlink targets are never followed.", objectSchema({ path: str }), run(async (a) => {
         const workspace = await this.store.workspace(worker.projectId), path = await this.scopedPath(workspace, a.path ?? ".");
         const entries = await readdir(path, { withFileTypes: true });
