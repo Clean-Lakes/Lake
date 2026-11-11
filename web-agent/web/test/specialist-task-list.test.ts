@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {SessionSnapshot,SpecialistChannelEntry,SuperWorker,Resource,ResourceTreeNode} from '../../shared/contracts';
-import {filterSpecialistTasks,specialistResourcePaths,specialistTaskRows,specialistTaskTime} from '../src/specialistTaskListModel';
+import {filterSpecialistTasks,groupSpecialistTasks,specialistResourcePaths,specialistTaskRows,specialistTaskTime} from '../src/specialistTaskListModel';
 import {SpecialistTaskList} from '../src/SpecialistTaskList';
 import {ConversationReadButton} from '../src/ConversationReadMarker';
 
@@ -68,6 +68,18 @@ test('invalid or future timestamps never claim a fresh update',()=>{
  const now=Date.parse(at);
  assert.equal(specialistTaskTime(undefined,now),'—');assert.equal(specialistTaskTime('bad',now),'—');assert.equal(specialistTaskTime(at,now),'刚刚');
  assert.equal(specialistTaskTime(at,now+120_000),'2 分钟前');assert.notEqual(specialistTaskTime('2027-01-01T01:00:00Z',now),'刚刚');
+});
+
+test('status groups retain every exact task and its recent order without changing task state',()=>{
+ const active=worker('active'),attention=worker('attention','blocked'),completed=worker('completed','completed'),stopped=worker('stopped','cancelled');
+ const rows=specialistTaskRows({...source,workers:[completed,attention,stopped,active]}),before=JSON.stringify(rows);
+ const groups=groupSpecialistTasks(rows);
+ assert.deepEqual(groups.map(group=>group.id),['active','attention','completed','all']);
+ const displayed=groups.flatMap(group=>group.rows);
+ assert.equal(displayed.length,rows.length);assert.equal(new Set(displayed.map(row=>row.worker.id)).size,rows.length);
+ for(const group of groups)assert.deepEqual(group.rows,rows.filter(row=>row.filter===group.id));
+ assert.deepEqual(groupSpecialistTasks(rows,false),[{id:'results',label:'',rows}]);
+ assert.equal(JSON.stringify(rows),before);assert.ok(displayed.every(row=>rows.includes(row)));
 });
 
 test('explicit read controls follow the exact unread cursor and stay disabled offline',()=>{

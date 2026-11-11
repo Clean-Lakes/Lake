@@ -62,6 +62,13 @@ export function filterSpecialistTasks(rows:SpecialistTaskRow[],filter:Specialist
  return rows.filter(row=>(filter==='all'||row.filter===filter)&&(!search||[row.worker.task.title,...row.paths,row.agent,row.state.label].some(value=>normalized(value).includes(search))));
 }
 
+/** Only a display grouping; preserve each row and its existing recent order. */
+export function groupSpecialistTasks(rows:SpecialistTaskRow[],grouped=true){
+ if(!grouped)return [{id:'results',label:'',rows}];
+ const groups=[{id:'active',label:'进行中'},{id:'attention',label:'需关注'},{id:'completed',label:'已完成'},{id:'all',label:'其他任务'}] as const;
+ return groups.map(group=>({...group,rows:rows.filter(row=>row.filter===group.id)})).filter(group=>group.rows.length>0);
+}
+
 export function specialistTaskTime(value?:string,now=Date.now()){
  const at=time(value);if(!at)return '—';
  const age=now-at;

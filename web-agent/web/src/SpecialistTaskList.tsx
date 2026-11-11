@@ -3,7 +3,7 @@ import type {SpecialistChannelInfo,SessionSnapshot} from '../../shared/contracts
 import {Glyph} from './Icons';
 import {SuperRoleAvatar} from './SuperRoleAvatar';
 import {ExecutionAgentIcon} from './ExecutionAgentIcon';
-import {filterSpecialistTasks,specialistTaskRows,specialistTaskSteps,specialistTaskTime,type SpecialistTaskFilter,type SpecialistTaskRow} from './specialistTaskListModel';
+import {filterSpecialistTasks,groupSpecialistTasks,specialistTaskRows,specialistTaskSteps,specialistTaskTime,type SpecialistTaskFilter,type SpecialistTaskRow} from './specialistTaskListModel';
 import type {SuperWorker} from '../../shared/contracts';
 import {usePageVisible} from './usePageVisible';
 import {ConversationReadButton,ConversationReadMarker} from './ConversationReadMarker';
@@ -31,6 +31,7 @@ export function SpecialistTaskList({channel,rows,selectedSessionId,onTask,connec
  const surface=useRef<HTMLDivElement>(null);
  const [filter,setFilter]=useState<SpecialistTaskFilter>('all'),[query,setQuery]=useState('');
  const id=useId(),visible=filterSpecialistTasks(rows,filter,query);
+ const groups=groupSpecialistTasks(visible,filter==='all'&&!query.trim());
  const count=(kind:SpecialistTaskFilter)=>kind==='all'?rows.length:rows.filter(row=>row.filter===kind).length;
  const attention=count('attention');
  const moving=connected&&(routing||rows.some(row=>row.moving));
@@ -52,19 +53,29 @@ export function SpecialistTaskList({channel,rows,selectedSessionId,onTask,connec
   {error&&<div className="specialist-page-error" role="alert"><Glyph name="alert" size={14}/><span>{error}</span>{onRetry&&<button type="button" onClick={onRetry}>重新获取</button>}</div>}
   {(routing||queued>0)&&<p className="specialist-task-admitting" role="status"><Glyph name={connected?'loader':'clock'} size={13}/>{routing?'正在分配新任务…':`${queued} 项请求等待分配`}</p>}
   <div id={`${id}-tasks`} role="tabpanel" aria-labelledby={`${id}-${filter}`} className="specialist-task-panel" aria-busy={loading}>
-   {visible.length>0?<div className="specialist-task-table-wrap"><table className="specialist-task-table" aria-label="专员任务列表"><thead><tr><th scope="col">任务</th><th scope="col">状态</th><th scope="col">执行 Agent</th><th scope="col" className="specialist-task-progress-column">进度</th><th scope="col" className="specialist-task-time-column">更新</th><th scope="col"><span className="visually-hidden">详情</span></th></tr></thead><tbody>{visible.map(row=>{
+   {visible.length>0?<ul className="specialist-task-rows" aria-label="专员任务列表">{groups.flatMap(group=>[
+    ...(group.label?[<li key={`group:${group.id}`} role="presentation" className="specialist-task-group-heading"><h2>{group.label}</h2></li>]:[]),
+    ...group.rows.map(row=>{
     const {worker,state,progress}=row,selected=selectedSessionId===worker.sessionId;
     const context=row.paths.join('、')||worker.activity?.label;
     const icon=connected&&row.moving?'loader':state.tone==='success'?'check':state.tone==='attention'||state.tone==='danger'?'alert':worker.task.state==='cancelled'?'stop':'clock';
-    return <tr key={worker.id} data-task-id={worker.task.taskId} data-session-id={worker.sessionId} data-selected={selected||undefined} onClick={()=>onTask(worker.sessionId)}>
-     <td><button type="button" className="specialist-task-open" aria-label={`查看任务：${worker.task.title}`} aria-current={selected?'true':undefined}><SuperRoleAvatar name={worker.roleName} roleId={worker.roleId} motion={connected&&row.moving?'working':'still'}/><span><strong title={worker.task.title}>{worker.task.title}</strong>{context&&<small title={context}>{context}</small>}</span></button></td>
-     <td><span className="specialist-task-state" data-tone={state.tone}><Glyph name={icon} size={13}/><span>{state.label}</span></span></td>
-     <td><span className="specialist-task-agent"><ExecutionAgentIcon agent={worker.execution?.backend.kind==='acp'?worker.execution.backend.agent:undefined} size={15}/><span title={row.agent}>{row.agent}</span></span></td>
-     <td className="specialist-task-progress-column">{progress?<span className="specialist-task-progress"><span role="progressbar" aria-label={`${worker.task.title}步骤进度`} aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.completed}><i style={{width:`${100*progress.completed/progress.total}%`}}/></span><small>{progress.completed} / {progress.total}</small></span>:<span className="specialist-task-unknown" title="尚无已记录的步骤进度">未报告</span>}</td>
-     <td className="specialist-task-time-column"><time dateTime={row.updatedAt} title={row.updatedAt?new Date(row.updatedAt).toLocaleString('zh-CN',{hour12:false}):'暂无更新时间'}>{specialistTaskTime(row.updatedAt)}</time></td>
-     <td className="specialist-task-chevron"><Glyph name="next" size={13}/></td>
-    </tr>;
-   })}</tbody></table></div>:<div className="specialist-tasks-empty"><Glyph name={query?'search':'layers'} size={26}/><h2>{loading?'正在读取任务…':query?'没有匹配的任务':rows.length?'此分类暂无任务':'还没有任务'}</h2><p>{loading?'正在获取这位专员的任务记录。':query?'试试任务名称、资源目录或执行 Agent。':rows.length?'切换分类查看其他任务。':'由 Pilot 派发任务，进展和结果会显示在这里。'}</p>{(query||filter!=='all')&&<button type="button" className="button secondary" onClick={()=>{setQuery('');setFilter('all');}}>查看全部任务</button>}</div>}
+    const updated=specialistTaskTime(row.updatedAt);
+    return <li key={`task:${worker.id}`} data-task-id={worker.task.taskId} data-session-id={worker.sessionId} data-selected={selected||undefined}>
+     <button type="button" className="specialist-task-open" aria-label={`查看任务：${worker.task.title}`} aria-current={selected?'true':undefined} onClick={()=>onTask(worker.sessionId)}>
+      <SuperRoleAvatar name={worker.roleName} roleId={worker.roleId} motion={connected&&row.moving?'working':'still'}/>
+      <span className="specialist-task-copy">
+       <span className="specialist-task-topline"><strong title={worker.task.title}>{worker.task.title}</strong>{updated!=='—'&&<time dateTime={row.updatedAt} title={new Date(row.updatedAt!).toLocaleString('zh-CN',{hour12:false})}>{updated}</time>}</span>
+       <span className="specialist-task-meta">
+        <span className="specialist-task-state" data-tone={state.tone}><Glyph name={icon} size={11}/><span>{state.label}</span></span>
+        <span className="specialist-task-agent"><ExecutionAgentIcon agent={worker.execution?.backend.kind==='acp'?worker.execution.backend.agent:undefined} size={12}/><span>{row.agent}</span></span>
+        {context&&<span className="specialist-task-context" title={context}>{context}</span>}
+        {progress?<span className="specialist-task-progress"><span role="progressbar" aria-label={`${worker.task.title}步骤进度`} aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.completed}><i style={{width:`${100*progress.completed/progress.total}%`}}/></span><small>{progress.completed} / {progress.total}</small></span>:<span className="visually-hidden">步骤进度未报告</span>}
+       </span>
+      </span>
+      <span className="specialist-task-chevron"><Glyph name="next" size={13}/></span>
+     </button>
+    </li>;
+   })])}</ul>:<div className="specialist-tasks-empty"><Glyph name={query?'search':'layers'} size={26}/><h2>{loading?'正在读取任务…':query?'没有匹配的任务':rows.length?'此分类暂无任务':'还没有任务'}</h2><p>{loading?'正在获取这位专员的任务记录。':query?'试试任务名称、资源目录或执行 Agent。':rows.length?'切换分类查看其他任务。':'由 Pilot 派发任务，进展和结果会显示在这里。'}</p>{(query||filter!=='all')&&<button type="button" className="button secondary" onClick={()=>{setQuery('');setFilter('all');}}>查看全部任务</button>}</div>}
   </div>
   {visible.length>0&&(filter!=='all'||query.trim())&&<p className="specialist-task-list-count" role="status">已显示 {visible.length} 项任务{visible.length<rows.length&&`，共 ${rows.length} 项`}</p>}
  </div>;
