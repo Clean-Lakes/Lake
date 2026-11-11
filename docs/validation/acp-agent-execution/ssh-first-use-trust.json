@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-11",
+  "testedSource": "603d4491f7f9083112537e3154e48d7aadcb9187",
+  "platform": "darwin-arm64",
+  "node": "24.14.0",
+  "behavior": {
+    "firstUse": "persist the observed public key through the existing fenced accept path before authentication, without publishing a host-key prompt",
+    "matchingStoredKey": "reuse",
+    "changedStoredKey": "explicit exact-fingerprint confirmation required",
+    "trustWriteFailure": "no authentication or persisted trust",
+    "cancelledVerification": "no authentication; ignore stale protocol callbacks",
+    "independentFirstConnectionIdentityVerification": false
+  },
+  "checks": {
+    "backendTypes": "pass",
+    "runtimeBuild": "pass",
+    "backendUnit": {"passed": 272, "skipped": 4, "failed": 0},
+    "hostIntegration": {"passed": 196, "skipped": 0, "failed": 0},
+    "realCodexACP": {"passed": 4, "failed": 0, "adapter": "2.2.2", "engine": "0.160.1", "service": "loopback synthetic Responses", "realExternalInference": false},
+    "runtimeBoundary": "pass",
+    "backendNamingViolations": 0,
+    "namingUnit": {"passed": 5, "failed": 0},
+    "webTypesAndBuild": "pass via signed desktop build",
+    "frontendUnitsRerun": false
+  },
+  "dev": {
+    "command": "scripts/build_lake_desktop.sh --dev --install",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "home": "~/.lake-dev",
+    "dirty": false,
+    "backendSHA256": "9cdcc89d4cb47a59c5c25a4b2acc054bf302bdd85a13a540241ef4444906dab6",
+    "deepSignatureVerified": true,
+    "buildOriginVerified": true,
+    "normalExit": true,
+    "visibleSpecialistTasks": 34,
+    "fullHomeOrDatabaseBackupsCreated": false,
+    "deletedBackupRootsRecreated": false
+  },
+  "preservation": {
+    "projects": 19,
+    "visibleWorkers": 151,
+    "recordsUnchanged": {"superWorkers": 129, "superGoals": 129, "superAttempts": 183, "superOperations": 400, "superAcceptance": 162, "superReports": 175, "acpRuns": 5, "commandExecutions": 287},
+    "legacyKinds": 14,
+    "legacyRecordsUnchanged": 689,
+    "localCodexConfigurationUnchanged": true,
+    "historicalTasksReplayed": false
+  },
+  "limitations": ["No real server connection or business-task retry", "Other platforms and Go backend not retested", "No frontend unit rerun", "No complete migration parity claim", "No merge, release, production install or automatic CI"]
+}

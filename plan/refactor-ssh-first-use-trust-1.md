@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-11
 last_updated: 2026-11-11
 owner: Codex
-status: In progress
+status: Completed
 tags: [ssh, security, backend, ux]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 用户明确要求把首次 SSH 指纹弹窗改为默认在后台信任并连接。复用 LakeSSH 现有校验及原子私有信任文件，首次没有已存公钥时自动完成同一接受路径，不发布需用户确认的状态；已有公钥发生变化仍沿原确认协议。
 
@@ -43,8 +43,8 @@ tags: [ssh, security, backend, ux]
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-004 | 运行 TypeScript 类型、全部后端单元、宿主集成、固定 Codex ACP、运行时边界和命名检查，记录准确结果。依赖 TASK-002。 | Yes | 2026-11-11 |
-| TASK-005 | 干净提交后使用 scripts/build_lake_desktop.sh --dev --install，核对签名、来源、原任务及本机配置；安装前等待实际 Dev 空闲并正常退出。依赖 TASK-004。 | | |
-| TASK-006 | 写入 docs/validation/acp-agent-execution/ssh-first-use-trust.md 及 JSON，更新兼容记录和现有草稿 PR，保留未合并状态。依赖 TASK-005。 | | |
+| TASK-005 | 干净提交后使用 scripts/build_lake_desktop.sh --dev --install，核对签名、来源、原任务及本机配置；安装前等待实际 Dev 空闲并正常退出。依赖 TASK-004。 | Yes | 2026-11-11 |
+| TASK-006 | 写入 docs/validation/acp-agent-execution/ssh-first-use-trust.md 及 JSON，更新兼容记录和现有草稿 PR，保留未合并状态。依赖 TASK-005。 | Yes | 2026-11-11 |
 
 ## 3. Alternatives
 
