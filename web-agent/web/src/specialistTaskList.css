@@ -28,7 +28,7 @@
 .specialist-task-table { width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; text-align:left; font-size:12px; }
 .specialist-task-table th { padding:10px; color:var(--text-muted); font-weight:var(--font-weight-normal); background:var(--sidebar); white-space:nowrap; }
 .specialist-task-table th:first-child { width:auto; padding-left:16px; }
-.specialist-task-table th:nth-child(2) { width:96px; }
+.specialist-task-table th:nth-child(2) { width:108px; }
 .specialist-task-table th:nth-child(3) { width:128px; }
 .specialist-task-table th:nth-child(4) { width:108px; }
 .specialist-task-table th:nth-child(5) { width:80px; }
@@ -51,7 +51,8 @@
 .specialist-task-state > svg,.specialist-task-agent > :first-child { flex:none; }
 .specialist-task-agent { white-space:nowrap; }
 .specialist-task-agent > span:last-child { min-width:0; overflow:hidden; text-overflow:ellipsis; }
-.specialist-task-state { color:var(--text-secondary); }
+.specialist-task-state { color:var(--text-secondary); white-space:nowrap; }
+.specialist-task-state > span { min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .specialist-task-state[data-tone=active] { color:var(--info); }
 .specialist-task-state[data-tone=success] { color:var(--success); }
 .specialist-task-state[data-tone=attention] { color:var(--warning); }
@@ -103,7 +104,7 @@
 @container (max-width:760px) {
  .specialist-task-filters { gap:16px; }
  .specialist-task-progress-column { display:none; }
- .specialist-task-table th:nth-child(2) { width:94px; }
+ .specialist-task-table th:nth-child(2) { width:104px; }
  .specialist-task-table th:nth-child(3) { width:120px; }
  .specialist-task-table th:nth-child(5) { width:65px; }
 }
@@ -121,7 +122,7 @@
  .specialist-page-title h1 { font-size:17px; }
  .specialist-page-identity p { font-size:12px; }
  .specialist-task-table th { font-size:11px; }
- .specialist-task-table th:nth-child(2) { width:80px; }
+ .specialist-task-table th:nth-child(2) { width:94px; }
  .specialist-task-table th:nth-child(3) { width:108px; }
  .specialist-task-table th:last-child { width:16px; }
  .specialist-task-table tbody td { padding:12px 7px; }

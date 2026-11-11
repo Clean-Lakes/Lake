@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-11",
+  "testedFrontendSource": "5fc12ec15399a9d5c7449c6fb35d2c08a862ee06",
+  "unchangedBackendTestSource": "cf444aa0618a6e063588e0cef0369d27f53c15c7",
+  "platform": "darwin-arm64",
+  "node": "24.14.0",
+  "changes": [
+    "Auto acknowledge delivered notification cursor when a loaded specialist overview is visible and foreground",
+    "Retain focus, native attention, inert, connectivity and load-error gates; failures retry without clearing unread",
+    "Restore exact sidebar role selection; preserve sibling and new cursors",
+    "Single filter counts; compact heading and rows; no repetitive unknown resource context; single-line Agent"
+  ],
+  "checks": {
+    "frontendTypes": "pass",
+    "frontendUnit": {
+      "passed": 798,
+      "failed": 0,
+      "skipped": 0
+    },
+    "webBuild": "pass via signed Dev build",
+    "runtimeBoundary": "pass",
+    "browserProof": "specialist-unread-layout-browser.json",
+    "backendSuitesRerun": false
+  },
+  "dev": {
+    "command": "scripts/build_lake_desktop.sh --dev --install",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "home": "~/.lake-dev",
+    "dirty": false,
+    "backendSHA256": "a3f758c78d373666066e709245fc2cd92f7d3aeee8ed1dd414aad437e1dd20ef",
+    "deepSignatureVerified": true,
+    "buildOriginVerified": true,
+    "visibleSpecialistTasks": 34,
+    "unreadAbsentAfterRestart": true,
+    "selectedRoleHighlighted": true,
+    "noComposerOrNewTask": true,
+    "singleStatistics": true,
+    "agentsOnOneLine": true,
+    "businessTasksReplayed": false,
+    "fullHomeOrDatabaseBackupsCreated": false,
+    "deletedBackupRootsRecreated": false
+  },
+  "preservation": {
+    "projects": 19,
+    "visibleWorkers": 151,
+    "protectedRecordsUnchanged": true,
+    "recordCounts": {
+      "superWorkers": 129,
+      "superGoals": 129,
+      "superAttempts": 183,
+      "superOperations": 400,
+      "superAcceptance": 162,
+      "superReports": 175,
+      "acpRuns": 5,
+      "commandExecutions": 287,
+      "legacyChannelReads": 3,
+      "legacyChannelTimeline": 190,
+      "legacyGoals": 46,
+      "legacyLoadedViews": 17,
+      "legacyMigrationBatches": 1,
+      "legacyMySQLConnections": 5,
+      "legacyOperations": 53,
+      "legacyProjectPolicies": 2,
+      "legacyResources": 139,
+      "legacySSHConnections": 123,
+      "legacyServiceConnections": 5,
+      "legacySessionSources": 82,
+      "legacyWorkers": 22,
+      "legacyWorkflowTemplates": 1
+    },
+    "localCodexConfigurationUnchanged": true
+  },
+  "limitations": [
+    "Native pre-update explicit read was verified through pointer input; automatic new-notification cases use the full App fixture",
+    "No real server commands, new business tasks, external inference or latency benchmark",
+    "No backend, Go/race/vet or other-platform suite rerun",
+    "No merge, release, production installation or automatic CI"
+  ]
+}
