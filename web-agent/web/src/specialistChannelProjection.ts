@@ -1,5 +1,24 @@
-import type {SessionSnapshot,SpecialistChannelEntry,SpecialistChannelPage} from '../../shared/contracts';
+import type {SessionSnapshot,SpecialistChannelEntry,SpecialistChannelPage,SuperWorker} from '../../shared/contracts';
 import {liveSpecialistReplies} from '../../shared/specialist-replies';
+
+type ChannelExecutionItem={kind:'entry';key:string;createdAt:string;entry:SpecialistChannelEntry}|
+ {kind:'assignment';key:string;createdAt:string;worker:SuperWorker};
+
+/** Assignment-only cards share the original timeline, never a trailing list of
+ * all Workers. These are presentation items, not messages or execution events. */
+export function channelExecutionTimeline(entries:SpecialistChannelEntry[],workers:SuperWorker[],hasOlder=false):ChannelExecutionItem[]{
+ const tasks=new Set(entries.flatMap(entry=>entry.taskId?[entry.taskId]:[])),sources=new Set(entries.map(entry=>entry.sourceSessionId));
+ const items:ChannelExecutionItem[]=entries.map(entry=>({kind:'entry',key:entry.id,createdAt:entry.createdAt,entry}));
+ const first=entries[0]?.createdAt;
+ for(const worker of workers){
+  if(!worker.execution||tasks.has(worker.task.taskId)||sources.has(worker.sessionId))continue;
+  const assigned=worker.execution.assignedAt||worker.createdAt||'',createdAt=Number.isFinite(Date.parse(assigned))?new Date(assigned).toISOString():'';
+  const active=['queued','active'].includes(worker.assignmentState)||['running','queued','waiting_user','waiting_external'].includes(worker.task.state);
+  if(hasOlder&&(!first||!createdAt||createdAt<first)&&!active)continue;
+  items.push({kind:'assignment',key:JSON.stringify(['assignment',worker.id]),createdAt,worker});
+ }
+ return items.sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.key.localeCompare(b.key));
+}
 
 // Only exact task/source identities may share a current reply. Older SDK
 // invocations remain available as history; equal prose or titles never merge.

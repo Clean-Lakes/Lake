@@ -127,3 +127,26 @@ test('task recency uses the frozen report time while its stable reply anchor sta
  assert.deepEqual(channelTasksByRecentRecord(workers,entries).map(row=>row.id),['a','b']);
  assert.equal(entries[0].createdAt,'2026-11-06T08:00:00Z');
 });
+
+test('old native metadata stays in history and cannot become the last card after an actual Codex report',()=>{
+ const assigned=(id:string,time:string,backend:'native'|'codex'):SuperWorker=>({id,createdAt:time,roleId:'ops',roleName:'运维专员',sessionId:`session-${id}`,assignmentState:'parked',task:{taskId:`task-${id}`,sessionId:`session-${id}`,title:`检查服务器 ${id}`,state:'completed',acceptanceState:'pass',revision:1,originRootTurnId:`root-${id}`,deadlineAt:''},execution:{backend:backend==='native'?{kind:'native'}:{kind:'acp',agent:'codex',revision:2},source:'specialist_default',assignedAt:time,runs:[],totalRuns:0}});
+ const old=assigned('old','2026-11-05T08:00:00Z','native'),current=assigned('new','2026-11-11T01:14:24Z','codex');
+ current.execution!.runs=[{id:'run-new',agent:'codex',state:'completed',dispatchPhase:'answered',scope:'worker',createdAt:'2026-11-11T01:14:35Z',updatedAt:'2026-11-11T01:15:28Z',summary:'FICTIONAL_CODEX_RUN_RESULT',usage:null}];current.execution!.totalRuns=1;
+ const entries:SpecialistChannelEntry[]=[{id:'current-report',sourceSessionId:current.sessionId,taskId:current.task.taskId,createdAt:'2026-11-11T01:14:35Z',message:{id:'report',sessionId:current.sessionId,role:'assistant',createdAt:'2026-11-11T01:15:28Z',text:'CODEX_CURRENT_REPORT'}}];
+ const original=JSON.stringify([entries,old,current]),html=renderToStaticMarkup(createElement(SpecialistChannelEntries,{entries,workers:[current,old],resources:[],onTask:()=>{}}));
+ assert.ok(html.indexOf('data-execution-assignment="old"')<html.indexOf('data-execution-agent="codex"'));
+ assert.ok(html.indexOf('Lake 原生执行')<html.indexOf('CODEX_CURRENT_REPORT'));
+ assert.equal((html.match(/data-execution-agent="codex"/g)??[]).length,1);assert.equal((html.match(/data-execution-assignment=/g)??[]).length,1);
+ assert.match(html,/dateTime="2026-11-05T08:00:00.000Z"/);assert.equal((html.match(/>查看任务/g)??[]).length,2);
+ assert.equal(JSON.stringify([entries,old,current]),original);
+});
+
+test('an internal handoff still shows the queued executor until its first public reply replaces the assignment card',()=>{
+ const time='2026-11-11T01:14:24Z',worker={id:'queued',roleId:'ops',roleName:'运维专员',sessionId:'worker-queued',assignmentState:'queued',task:{taskId:'task-queued',title:'新 Codex 任务',state:'queued'},execution:{backend:{kind:'acp',agent:'codex',revision:2},source:'specialist_default',assignedAt:time,runs:[],totalRuns:0}} as SuperWorker;
+ const handoff:SpecialistChannelEntry={id:'handoff',taskId:worker.task.taskId,sourceSessionId:'pilot',createdAt:time,message:{id:'dispatch',sessionId:'pilot',createdAt:time,role:'assistant',text:'INTERNAL_HANDOFF_ONLY',dispatch:{id:'decision',sourceMessageId:'original',workerId:worker.id,sessionId:worker.sessionId,taskId:worker.task.taskId,roleId:'ops',roleName:worker.roleName,channelSessionId:'channel',instruction:'INTERNAL_HANDOFF_ONLY',action:'create'}}};
+ const before=renderToStaticMarkup(createElement(SpecialistChannelEntries,{entries:[handoff],workers:[worker],resources:[]}));
+ assert.match(before,/data-execution-assignment="queued"/);assert.match(before,/Codex 尚未派发/);assert.doesNotMatch(before,/INTERNAL_HANDOFF_ONLY/);
+ const reply:SpecialistChannelEntry={id:'reply',sourceSessionId:worker.sessionId,taskId:worker.task.taskId,createdAt:time,message:{id:'answer',sessionId:worker.sessionId,createdAt:time,role:'assistant',text:'PUBLIC_CODEX_REPLY'}};
+ const after=renderToStaticMarkup(createElement(SpecialistChannelEntries,{entries:[handoff,reply],workers:[worker],resources:[]}));
+ assert.doesNotMatch(after,/data-execution-assignment=/);assert.match(after,/PUBLIC_CODEX_REPLY/);assert.equal((after.match(/data-execution-agent="codex"/g)??[]).length,1);
+});
