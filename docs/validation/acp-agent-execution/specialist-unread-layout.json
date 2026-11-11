@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "date": "2026-11-11",
-  "testedFrontendSource": "5fc12ec15399a9d5c7449c6fb35d2c08a862ee06",
+  "testedFrontendSource": "ea863e7016bffbe67226e4ba7180a80e8e1f88cf",
   "unchangedBackendTestSource": "cf444aa0618a6e063588e0cef0369d27f53c15c7",
   "platform": "darwin-arm64",
   "node": "24.14.0",
@@ -28,7 +28,7 @@
     "bundleId": "com.cleanlakes.lake.desktop.dev",
     "home": "~/.lake-dev",
     "dirty": false,
-    "backendSHA256": "a3f758c78d373666066e709245fc2cd92f7d3aeee8ed1dd414aad437e1dd20ef",
+    "backendSHA256": "2fcedd637ba11d775d4663ad1b108571535f84aa3c22887f638a12076506a8f8",
     "deepSignatureVerified": true,
     "buildOriginVerified": true,
     "visibleSpecialistTasks": 34,
@@ -76,5 +76,7 @@
     "No real server commands, new business tasks, external inference or latency benchmark",
     "No backend, Go/race/vet or other-platform suite rerun",
     "No merge, release, production installation or automatic CI"
-  ]
+  ],
+  "browserEvidenceSource": "5fc12ec15399a9d5c7449c6fb35d2c08a862ee06",
+  "finalCSSFollowup": "status column widths and nowrap; frontend suites, signed build and native overview rerun; no second browser run"
 }

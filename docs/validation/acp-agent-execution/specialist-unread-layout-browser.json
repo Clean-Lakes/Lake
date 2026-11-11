@@ -36,5 +36,7 @@
   "explicitRetryInteraction": "keyboard focus and Enter",
   "taskQuestionInteraction": "keyboard radio selection and Enter",
   "browserTaskFinished": true,
-  "viteStopped": true
+  "viteStopped": true,
+  "testedSource": "5fc12ec15399a9d5c7449c6fb35d2c08a862ee06",
+  "statusColumnFollowupNotIncluded": "ea863e7016bffbe67226e4ba7180a80e8e1f88cf"
 }

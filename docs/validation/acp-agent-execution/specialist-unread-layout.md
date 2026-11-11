@@ -1,6 +1,6 @@
 # 专员未读与布局修复（2026-11-11）
 
-已测试前端与签名 Lake Dev：`5fc12ec15399a9d5c7449c6fb35d2c08a862ee06`，macOS arm64、固定 Node 24.14.0。本轮仅修改前端；后端执行源保持 `cf444aa0618a6e063588e0cef0369d27f53c15c7`，不将旧后端测试标为本轮重跑。结构化证据见[验证 JSON](specialist-unread-layout.json)和[浏览器记录](specialist-unread-layout-browser.json)。
+已测试前端与签名 Lake Dev：`ea863e7016bffbe67226e4ba7180a80e8e1f88cf`，macOS arm64、固定 Node 24.14.0。本轮仅修改前端；后端执行源保持 `cf444aa0618a6e063588e0cef0369d27f53c15c7`，不将旧后端测试标为本轮重跑。浏览器交互与截图使用源码 `5fc12ec15399a9d5c7449c6fb35d2c08a862ee06`；最后发现长状态换行后，仅补充状态列宽与单行规则，完整前端单元、Web 类型/构建及签名实机在上述最新源码再次通过，没有重开浏览器验证。结构化证据见[验证 JSON](specialist-unread-layout.json)和[浏览器记录](specialist-unread-layout-browser.json)。
 
 ## 原因与行为
 
@@ -8,7 +8,7 @@
 
 按用户反馈，现由共享读取标记观察已成功加载的任务总览，页面确实可见、文档聚焦且原生窗口 attention 允许后，确认该频道已交付的通知 cursor。路由选择、后台预取、inert 过渡、列表失败和断线不触发；保存失败保留未读并重试。旧请求只确认其原 cursor，不确认新消息或其他专员。显式入口和原报告读取标记继续保留。通知确认不代表读完所有报告、核实结果或完成任务验收。
 
-布局保留 Lake 角色头像、主题和曲线，只留筛选标签中的一套统计；移除通用副标题、无资源时重复的占位说明和全部任务底部重复计数。页头及行距收紧，恢复侧栏选中背景，执行 Agent 保持单行。筛选搜索、原任务详情及确认仍可用，专员输入和新增入口继续不挂载。
+布局保留 Lake 角色头像、主题和曲线，只留筛选标签中的一套统计；移除通用副标题、无资源时重复的占位说明和全部任务底部重复计数。页头及行距收紧，恢复侧栏选中背景，执行 Agent 及状态保持单行。筛选搜索、原任务详情及确认仍可用，专员输入和新增入口继续不挂载。
 
 ## 验证
 
@@ -23,7 +23,7 @@
 | 签名 Dev | 正常停止旧内核后安装；准确源码 SHA、dirty=false、Dev bundle ID、后端哈希与深度签名通过 |
 | 实机 | 重启后绿点仍无；从侧栏进入准确专员，总览保留 34 项任务、选中高亮和原执行状态，无输入/新增、重复统计或重复占位说明 |
 
-浏览器采用完整 App 和虚构 API，未调用业务后端或模型。显式重试与任务问题使用键盘验证；Ego 的部分鼠标包装器报告 disabled，但 DOM 实际未禁用，原生已读按钮鼠标验证正常。没有把包装器失败记录为鼠标通过。截图：[浅色总览](unread-layout-compact-light.png)、[深色窄窗](unread-layout-dark-narrow.png)、[任务详情](unread-layout-inspector-dark.png)、[返回焦点](unread-layout-focus-dark.png)。空间和 Vite 已关闭，无 `/messages` 或 `/uploads` 写入。
+浏览器采用完整 App 和虚构 API，未调用业务后端或模型。显式重试与任务问题使用键盘验证；Ego 的部分鼠标包装器报告 disabled，但 DOM 实际未禁用，原生已读按钮鼠标验证正常。没有把包装器失败记录为鼠标通过。截图：[浅色总览](unread-layout-compact-light.png)、[深色窄窗](unread-layout-dark-narrow.png)、[任务详情](unread-layout-inspector-dark.png)、[返回焦点（状态列修订前）](unread-layout-focus-dark.png)。空间和 Vite 已关闭，无 `/messages` 或 `/uploads` 写入。
 
 ## 数据与范围
 
