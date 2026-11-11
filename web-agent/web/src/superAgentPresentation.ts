@@ -1,15 +1,15 @@
 import type {AIView,SessionSnapshot,SuperTask,SuperWorker,TaskParticipant} from '../../shared/contracts';
 import type {AgentIconName} from './AgentIcon';
-import {lakeAvatarGroups} from './lakeAvatarCatalog';
+import {isLakeAvatarName,lakeAvatarGroups} from './lakeAvatarCatalog';
 
 const specialistPalettes=['river','moss','reed','clay'] as const;
-export function superWorkerAppearance(worker:Pick<SuperWorker,'roleName'>&{roleId?:string}) {
- // RoleID owns the appearance. Names only support older servers without IDs.
+export function superWorkerAppearance(worker:Pick<SuperWorker,'roleName'>&{roleId?:string;avatarId?:string}) {
+ // RoleID owns the default; an explicit local avatar changes only its shape.
  const identity=worker.roleId||worker.roleName.normalize('NFKC').trim().toLowerCase();
  let seed=2166136261;
  for(const char of identity)seed=Math.imul(seed^char.codePointAt(0)!,16777619)>>>0;
  const group=lakeAvatarGroups[seed%lakeAvatarGroups.length];
- return {icon:group.avatars[(seed>>>16)%group.avatars.length].id,palette:specialistPalettes[(seed>>>8)%4],variant:(seed>>>12)%3,phase:-(seed%7600)};
+ return {icon:worker.avatarId&&isLakeAvatarName(worker.avatarId)?worker.avatarId:group.avatars[(seed>>>16)%group.avatars.length].id,palette:specialistPalettes[(seed>>>8)%4],variant:(seed>>>12)%3,phase:-(seed%7600)};
 }
 export function superWorkerIcon(worker:Pick<SuperWorker,'roleName'>&{roleId?:string}):AgentIconName {return superWorkerAppearance(worker).icon;}
 

@@ -159,3 +159,9 @@ TS Dev 支持 MySQL、PostgreSQL、Redis、APISIX、Prometheus 和 VictoriaMetri
 在模型菜单选择“配置 Codex”后启用，自动识别 Node 22.22+ / 24.14+ 和配套 npm，在当前 Home 的私有目录安装固定 ACP adapter 2.2.2 与引擎 0.160.1，并完成模型无关的 ACP 握手。路径覆盖折叠在高级设置；主 TS 后端仍使用 Node 24.14.0。Codex 直接复用宿主 CODEX_HOME（默认 ~/.codex）的登录、默认模型、服务地址与思考强度；不再填写或保存项目独立 Key，也不依赖普通模型配置。登录文件由 Codex 原机制读取和刷新；Lake 不复制凭据、不修改本机 config.toml。用于工具托管的 SDK 在没有普通模型时采用不可推理的 Model 端口，原生 child 若需要推理会明确要求普通模型。Codex 原生执行工具关闭，继承的 MCP、hooks 与 notify 在启动和线程配置中关闭；私有模型目录在启动时注入。SQLite 与日志使用 Lake 私有目录。业务调用走每次执行的私有 MCP 桥及原 Lake 审批/账本。具体支持、版本、认证和平台限制见 [兼容记录](../../docs/validation/acp-agent-execution/compatibility.md)。
 
 项目 profile 采用 schema2；旧 schema1 自动递增 revision 迁移，旧 Worker/run 不转用本机认证。修改 Agent 连接配置、本机 config 或登录账号会终止使用旧 revision 的调用，同账号正常令牌刷新保持身份。状态查询自动执行无模型的连接检查；缺登录时提示先在本机 Codex 登录。停止或断线后已发送但未明确回答的 prompt 保留 unknown，不自动重放或回退其他引擎。外部完成报告不等于任务验收；只有原任务实际业务回执可以支撑验收。
+
+## Pilot 自然语言专员配置
+
+Router 的 `list_specialists` 返回准确角色、当前 revision 及后续任务默认后端；`list_specialist_avatars(query?)` 从共享 100 项 Lake 本地目录按名称、别名或 ID 查询。`manage_specialist` 创建仍要求 name/duties，更新支持 name、duties、avatar_id、execution 的局部 patch；省略字段保留，auto 清除显式头像。头像通过 SpecialistChannelInfo.avatarId 和共享 Provider 显示，不依赖职责文本。
+
+保存沿原已接纳人工 event/quote、项目 RoleID、expected_revision、事件/part 幂等事务；未知字段、非法头像和失效版本拒绝。execution 只选择 native 或 Codex，复用原 registry 校验，已有 Worker 的职责与执行快照不变，不改本机 Codex 配置、凭据或权限。无需新增业务任务来完成角色配置。

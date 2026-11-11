@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {SuperRoleAvatar} from '../src/SuperRoleAvatar';
+import {SpecialistAvatarProvider,SuperRoleAvatar} from '../src/SuperRoleAvatar';
+import {superWorkerAppearance} from '../src/superAgentPresentation';
 import {PilotWorkspace} from '../src/PilotWorkspace';
 import {ReplyIdentity} from '../src/ReplyIdentity';
 import {SuperTaskInspector} from '../src/SuperTaskInspector';
@@ -42,4 +43,25 @@ test('all 100 local avatars have unique geometry at existing dimensions, indepen
   assert.doesNotMatch(html,/NaN|undefined|Infinity/);
  }
  assert.equal(silhouettes.size,100);
+});
+
+test('an explicit project avatar reaches navigation, reports and task details without changing role identity',()=>{
+ const channel={id:'channel',projectId:'p',roleId:'stable-role',roleName:'牛马专员',sessionId:'channel-session',revision:1,createdAt:'',avatarId:'beaver' as const};
+ const task={taskId:'task',sessionId:'worker-session',title:'原任务',state:'completed' as const,acceptanceState:'pass' as const,revision:1,originRootTurnId:'turn',deadlineAt:''};
+ const worker:SuperWorker={id:'worker',roleId:channel.roleId,roleName:channel.roleName,sessionId:task.sessionId,assignmentState:'parked',task};
+ const workspace:SuperWorkspace={active:true,project:{projectId:'p',routerSessionId:'pilot',version:1},channels:[channel],workers:[worker]};
+ const content=createElement('div',null,
+  createElement(PilotWorkspace,{workspace,error:'',selectedId:channel.sessionId,onPilot(){},onWorker(){}}),
+  createElement(ReplyIdentity,{identity:{name:'Pilot',pilot:true},author:{kind:'specialist',name:channel.roleName,roleId:channel.roleId,workerId:worker.id,sessionId:worker.sessionId,taskId:task.taskId}}),
+  createElement(SuperTaskInspector,{task,worker,goal:{items:[],modelRounds:1} as unknown as WorkGoal}),
+  createElement(SuperRoleAvatar,{pilot:true,roleId:channel.roleId}));
+ const render=(channels:typeof workspace.channels)=>renderToStaticMarkup(createElement(SpecialistAvatarProvider,{channels,children:content}));
+ const before=JSON.stringify(worker),html=render([channel]),looks=appearance(html);
+ assert.ok(looks.length>=3);assert.ok(looks.every(look=>look[0]==='beaver'));
+ assert.match(html,/data-role="coordinator"/);assert.equal(JSON.stringify(worker),before);
+ const defaultLook=superWorkerAppearance(worker);
+ assert.ok(appearance(render([])).every(look=>look[0]===defaultLook.icon),'switching projects cannot leak a previous avatar override');
+ assert.ok(appearance(render([{...channel,avatarId:'https://invalid.example' as any}])).every(look=>look[0]===defaultLook.icon));
+ assert.equal(superWorkerAppearance({...worker,avatarId:'unknown'}).icon,defaultLook.icon);
+ assert.deepEqual({...superWorkerAppearance({...worker,avatarId:'beaver'}),icon:defaultLook.icon},defaultLook,'explicit selection preserves the stable phase, palette and variant');
 });

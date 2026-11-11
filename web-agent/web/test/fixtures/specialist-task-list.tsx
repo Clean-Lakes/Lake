@@ -1,6 +1,7 @@
 // The real App with fictional in-memory API data; never calls a model or host.
 import './readme-workbench';
 import type {Resource,ResourceTreeNode,SessionSnapshot,SpecialistChannelInfo,SpecialistChannelPage,SuperWorker,WorkSession} from '../../../shared/contracts';
+import {isLakeAvatarName} from '../../../shared/specialist-avatars';
 const base=window.fetch.bind(window),query=new URLSearchParams(location.search),projectId='demo-project',at='2026-11-11T01:20:00Z';
 const roleId='fixture-ops-33';
 const channel:SpecialistChannelInfo={id:'fixture-channel',sessionId:'demo-session-1',projectId,roleId,roleName:'服务器运维排查专员',duties:query.has('plain')?undefined:'负责服务器、集群巡检与故障排查',revision:1,roleRevision:1,createdAt:at,execution:{kind:'acp',agent:'codex',revision:2},messageRead:{cursor:'00000000000000000001',seenCursor:''}};
@@ -31,6 +32,9 @@ Object.assign(window,{lakeReadQA:{
  release(){releaseRead?.();releaseRead=undefined;readGate=undefined;},
  message(session=channel.sessionId){const state=channels.find(item=>item.sessionId===session)!.messageRead!;state.cursor=String(Number(state.cursor)+1).padStart(20,'0');revision++;},
  settle(){for(const worker of workers){worker.assignmentState='parked';if(worker.task.state==='running')worker.task.state='completed';const snap=snapshots.get(worker.sessionId);if(snap)snap.ai!.status='completed';}revision++;},
+}});
+Object.assign(window,{lakeRoleConfigQA:{
+ avatar(value:string){if(value!=='auto'&&!isLakeAvatarName(value))throw Error('Unknown fixture avatar');channel.avatarId=value==='auto'?undefined:value;channel.roleRevision=(channel.roleRevision??1)+1;revision++;},
 }});
 Object.assign(window,{lakeTaskListQA:{writes,requests,offline(value:boolean){offline=value;},pulse(){revision++;},many(){for(let i=0;i<35;i++){const worker={...workers[0],id:`extra-${i}`,sessionId:`extra-session-${i}`,createdAt:new Date(Date.parse(at)-i*50_000).toISOString(),task:{...workers[0].task,taskId:`extra-task-${i}`,title:`演示历史任务 ${i+1}`}};workers.push(worker);}},finish(){workers[0].task={...workers[0].task,state:'completed',acceptanceState:'pass'};workers[0].assignmentState='parked';revision++;}}});
 window.fetch=async(input,init)=>{

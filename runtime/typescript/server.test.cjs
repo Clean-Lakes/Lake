@@ -908,6 +908,23 @@ function superReply(request, mode, home) {
     const event = JSON.parse(raw.split("\n")[1])[0];
     const currentStart = request.messages.findLastIndex(message => message.role === "user" && content(message) === raw);
     names = request.messages.slice(currentStart).flatMap(message => (message.tool_calls ?? []).map(call => call.function.name));
+    if(mode==='super-meta-config'){
+      const messages=request.messages.slice(currentStart),calls=messages.flatMap(message=>message.tool_calls??[]);
+      const result=name=>{const id=calls.findLast(item=>item.function.name===name)?.id;const message=messages.findLast(item=>item.role==='tool'&&item.tool_call_id===id);return message?JSON.parse(content(message)):undefined;};
+      if(!names.includes('list_specialists'))return call('list_specialists',{});
+      const create=event.text.includes('创建'),reset=event.text.includes('恢复自动'),avatar=event.text.includes('狐狸')?'狐狸':'河狸';
+      if(!reset&&!names.includes('list_specialist_avatars'))return call('list_specialist_avatars',{query:avatar});
+      if(!names.includes('manage_specialist')){
+        const schema=request.tools.find(tool=>tool.function.name==='manage_specialist').function.parameters;
+        assert.ok(!schema.required.includes('name')&&!schema.required.includes('duties'),'an avatar-only update must not force resubmission of other configuration');
+        const role=result('list_specialists').items.find(role=>role.name==='牛马专员');
+        return call('manage_specialist',{event_id:event.id,part_key:'configuration',action:create?'create':'update',quote:event.text,
+          ...(create?{role_key:'beaver-specialist',name:'牛马专员',duties:'核实当前项目证据',execution:{kind:'native'}}:{role_id:role.id,expected_revision:role.revision}),
+          avatar_id:reset?'auto':result('list_specialist_avatars').items[0].id,
+          ...(event.text.includes('Codex')?{execution:{kind:'acp',agent:'codex'}}:{})});
+      }
+      return {content:'专员配置已按实际回执保存。'};
+    }
     if (mode === "super-full-worker-default-delegation-ssh") {
       const context = JSON.parse(raw.split('[CURRENT CONVERSATION WORKING SET]\n')[1]);
       if (!names.includes("route_work")) return call("route_work", {event_id:event.id, part_key:"host-check", action:"create",
@@ -2103,6 +2120,33 @@ test("specialist metadata management creates a channel without a task or Worker 
   const sessions = await f.api("/api/catalog");
   assert.ok(!sessions.sessions.some((session) => session.workspaceRole === "worker"));
   assert.equal((await f.app.agents.sessions.listSessions({})).length, 1);
+});
+
+test('Pilot uses actual SDK tools to discover, save and partially update specialist appearance with restart persistence',async t=>{
+ const f=await fixture(t,'super-meta-config'),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ const send=async text=>{
+  const previous=f.calls;
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text},202);
+  await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),view=>f.calls>previous&&view.status==='completed');
+  return f.api(`/api/projects/${f.project.id}/superagent`);
+ };
+ const created=await send('创建牛马专员，负责核实当前项目证据，头像用河狸，暂时不派任务。'),channel=created.channels[0];
+ assert.equal(channel.roleName,'牛马专员');assert.equal(channel.avatarId,'beaver');assert.equal(channel.duties,'核实当前项目证据');
+ assert.equal(created.workers.length,0);assert.equal(f.app.store.list('superGoals').length,0);
+ const roleId=channel.roleId,sessionId=channel.sessionId;
+ const updated=await send('把牛马专员的头像改成狐狸，后续任务默认用 Codex。'),next=updated.channels[0];
+ assert.equal(next.avatarId,'fox');assert.equal(next.roleId,roleId);assert.equal(next.sessionId,sessionId);
+ assert.equal(next.roleName,channel.roleName);assert.equal(next.duties,channel.duties);assert.equal(next.roleRevision,2);
+ assert.equal(next.execution.kind,'acp');assert.equal(next.execution.agent,'codex');assert.equal(updated.workers.length,0);
+ assert.ok(f.requests.some(request=>request.tools.some(tool=>tool.function.name==='list_specialist_avatars')));
+ const mutations=f.app.store.list('superRoleMutations');assert.equal(mutations.length,2);
+ await f.restart();
+ const restored=await f.api(`/api/projects/${f.project.id}/superagent`);
+ assert.equal(restored.channels[0].avatarId,'fox');assert.equal(restored.channels[0].roleId,roleId);assert.equal(restored.channels[0].roleRevision,2);
+ assert.deepEqual(f.app.store.list('superRoleMutations'),mutations);
+ const reset=await send('把牛马专员恢复自动头像。');
+ assert.equal(reset.channels[0].avatarId,undefined);assert.equal(reset.channels[0].execution.agent,'codex');assert.equal(reset.channels[0].roleRevision,3);
+ assert.equal(reset.workers.length,0);assert.equal(f.app.store.list('superGoals').length,0);
 });
 
 test("stopping a real specialist invalidates its pending Write approval without dispatch or restart replay", async (t) => {

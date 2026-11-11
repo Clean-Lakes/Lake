@@ -74,6 +74,76 @@ test("only current unfinished business work requests a final report, without cha
   assert.equal(f.host.ledger.get(taskId).acceptanceState, "pass");
 });
 
+test('Pilot partially updates appearance and future defaults without changing existing task snapshots',async t=>{
+ const f=await fixture(t),source=await f.admit('检查本项目文件。');
+ const handoff=f.route(source,{action:'create',title:'原检查任务',role_id:f.role.id});f.settleRouter();
+ const before=JSON.stringify(f.store.list('superWorkers')),goals=JSON.stringify(f.store.list('superGoals'));
+ const channel=f.host.workspace(f.project.id).channels![0];
+ const event=await f.admit('把项目检查员的头像改成河狸。');
+ const change={event_id:event.id,part_key:'appearance',action:'update',role_id:f.role.id,expected_revision:1,avatar_id:'beaver',quote:event.payload};
+ const saved=f.internal.manage(f.router,change);
+ assert.equal(saved.name,f.role.name);assert.equal(saved.duties,f.role.duties);assert.deepEqual(saved.execution,{kind:'native'});
+ assert.equal(saved.avatarId,'beaver');assert.equal(saved.revision,2);
+ assert.deepEqual(f.internal.manage(f.router,change),saved,'exact decision replay does not increment the role');
+ assert.throws(()=>f.internal.manage(f.router,{...change,avatar_id:'fox'}),/decision conflict/);
+ const updated=f.host.workspace(f.project.id).channels![0];
+ assert.equal(updated.sessionId,channel.sessionId);assert.equal(updated.roleId,channel.roleId);assert.equal(updated.avatarId,'beaver');
+ assert.equal(JSON.stringify(f.store.list('superWorkers')),before);assert.equal(JSON.stringify(f.store.list('superGoals')),goals);
+ assert.equal(f.worker(handoff.taskId).roleSnapshot.avatarId,undefined);
+ (f.agents as any).external={registry:{get:()=>({id:'codex',projectId:f.project.id,revision:7,enabled:true})}};
+ const defaults=await f.admit('更名为复核专员，职责改为核实证据，以后默认用 Codex。');
+ const configured=f.internal.manage(f.router,{event_id:defaults.id,part_key:'defaults',action:'update',role_id:f.role.id,expected_revision:2,name:'复核专员',duties:'核实证据',execution:{kind:'acp',agent:'codex'},quote:defaults.payload});
+ assert.equal(configured.avatarId,'beaver');assert.equal(configured.name,'复核专员');assert.equal(configured.duties,'核实证据');
+ assert.deepEqual(configured.execution,{kind:'acp',agent:'codex'});
+ assert.equal(f.store.session(channel.sessionId).title,'复核专员');
+ assert.equal(JSON.stringify(f.store.list('superWorkers')),before);assert.equal(JSON.stringify(f.store.list('superGoals')),goals);
+ assert.deepEqual(f.worker(handoff.taskId).roleSnapshot.execution,{kind:'native'});
+ const reset=await f.admit('恢复默认头像。');
+ f.internal.manage(f.router,{event_id:reset.id,part_key:'reset',action:'update',role_id:f.role.id,expected_revision:3,avatar_id:'auto',quote:reset.payload});
+ assert.equal(Object.hasOwn(f.store.require<any>('superRoles',f.role.id),'avatarId'),false);
+ assert.equal(f.store.require<any>('superRoles',f.role.id).name,'复核专员');
+ const api=f.host.setRoleExecution(f.project.id,f.role.id,{expectedRevision:4,execution:{kind:'acp',agent:'codex',revision:7}});
+ assert.deepEqual(api.execution,{kind:'acp',agent:'codex'},'the existing API accepts a profile revision without persisting a task binding');
+});
+
+test('specialist configuration rejects stale, foreign, unsupported and unadmitted edits atomically',async t=>{
+ const f=await fixture(t),event=await f.admit('调整项目检查员的配置。');
+ const base={event_id:event.id,part_key:'edit',action:'update',role_id:f.role.id,expected_revision:1,avatar_id:'beaver',quote:event.payload};
+ const before=JSON.stringify(f.store.require('superRoles',f.role.id));
+ const reject=(patch:Record<string,unknown>)=>{
+  assert.throws(()=>f.internal.manage(f.router,{...base,...patch}));
+  assert.equal(JSON.stringify(f.store.require('superRoles',f.role.id)),before);
+  assert.deepEqual(f.store.list('superRoleMutations'),[]);
+ };
+ reject({expected_revision:0});reject({avatar_id:'https://invalid.example/avatar.svg'});reject({avatar_id:null});
+ reject({duties:42});reject({name:''});reject({permissions:{silentCommands:true}});
+ reject({execution:{kind:'acp',agent:'claude'}});reject({execution:{kind:'native',agent:'codex'}});
+ reject({execution:{kind:'native',extra:true}});reject({quote:'not admitted'});reject({event_id:'missing-event'});
+ const foreign=f.store.createProject('other project');
+ f.store.put('superRoles','foreign-role',{...f.role,id:'foreign-role',projectId:foreign.id});
+ reject({role_id:'foreign-role'});
+ assert.throws(()=>f.internal.manage(f.router,{event_id:event.id,part_key:'create',action:'create',role_key:'incomplete',avatar_id:'beaver',quote:event.payload}),/name and duties/);
+ assert.equal(f.store.list<any>('superRoles').length,2);
+});
+
+test('the shared avatar catalog is discoverable by Chinese name, alias and exact ID only as metadata',async t=>{
+ const f=await fixture(t),entry=f.internal.routerEntries(f.router).find((item:any)=>item.metadata.name==='list_specialist_avatars');
+ assert.ok(entry);assert.equal(entry.metadata.readOnly,true);
+ const lookup=async(query?:string)=>entry.handler(query===undefined?{}:{query},{});
+ assert.equal((await lookup()).items.length,100);
+ for(const query of ['河狸','海狸','🦫','BEAVER'])assert.deepEqual((await lookup(query)).items.map((item:any)=>item.id),['beaver']);
+ assert.deepEqual((await lookup('https://invalid.example')).items,[]);
+ assert.equal((await lookup('河狸')).reset,'auto');
+ const event=await f.admit('创建牛马专员，头像河狸，负责核实证据。');
+ const saved=f.internal.manage(f.router,{event_id:event.id,part_key:'create',action:'create',role_key:'beaver-reviewer',name:'牛马专员',duties:'核实证据',avatar_id:'beaver',execution:{kind:'native'},quote:event.payload});
+ assert.equal(saved.avatarId,'beaver');assert.equal(saved.revision,1);
+ assert.equal(f.host.workspace(f.project.id).channels!.find(item=>item.roleId===saved.id)?.avatarId,'beaver');
+ const appearance=await f.admit('创建一个只有名称和河狸头像的专员，不指定职责。');
+ const empty=f.internal.manage(f.router,{event_id:appearance.id,part_key:'appearance-only',action:'create',role_key:'appearance-only',name:'河狸伙伴',duties:'',avatar_id:'beaver',execution:{kind:'native'},quote:appearance.payload});
+ assert.equal(empty.duties,'');assert.equal(empty.avatarId,'beaver');
+ assert.deepEqual(f.store.list('superWorkers'),[]);assert.deepEqual(f.store.list('superGoals'),[]);
+});
+
 test('Pilot delegation reports a missing local Codex login after a successful connection without creating a task',async t=>{
   const f=await fixture(t);
   (f.agents as any).external={registry:{get:()=>({id:'codex',projectId:f.project.id,revision:1,enabled:true})}};
