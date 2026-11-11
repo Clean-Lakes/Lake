@@ -79,8 +79,8 @@ test('explicit read controls follow the exact unread cursor and stay disabled of
  assert.match(html,/标记已读/);assert.match(html,/还没有任务/,'a channel with an earlier reply and no task rows still has an acknowledgement entry');
 });
 
-test('a disconnected task page keeps its rows while disabling new dispatch and moving indicators',()=>{
+test('a disconnected specialist overview keeps its rows and suspends moving indicators',()=>{
  const rows=specialistTaskRows({...source,workers:[worker('a')]});
- const html=renderToStaticMarkup(createElement(SpecialistTaskList,{channel:{id:'channel',sessionId:'channel',projectId:'project',roleId:'ops',roleName:'服务器专员',revision:1,createdAt:at},rows,onTask:()=>{},onNewTask:()=>{},connected:false}));
- assert.match(html,/正在重连/);assert.match(html,/specialist-new-task" disabled=""/);assert.match(html,/data-session-id="session-a"/);assert.doesNotMatch(html,/activity-indicator/);
+ const html=renderToStaticMarkup(createElement(SpecialistTaskList,{channel:{id:'channel',sessionId:'channel',projectId:'project',roleId:'ops',roleName:'服务器专员',revision:1,createdAt:at},rows,onTask:()=>{},connected:false}));
+ assert.match(html,/正在重连/);assert.match(html,/data-session-id="session-a"/);assert.doesNotMatch(html,/activity-indicator/);
 });

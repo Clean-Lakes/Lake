@@ -26,7 +26,7 @@ export function SpecialistTaskMetadata({snapshot,worker}:{snapshot:SessionSnapsh
  if(!row)return null;
  return <dl className="specialist-inspector-meta"><div><dt>执行 Agent</dt><dd><ExecutionAgentIcon agent={worker.execution?.backend.kind==='acp'?worker.execution.backend.agent:undefined} size={15}/>{row.agent}</dd></div>{row.paths.length>0&&<div><dt>资源目录</dt><dd>{row.paths.join('、')}</dd></div>}</dl>;
 }
-export function SpecialistTaskList({channel,rows,selectedSessionId,onTask,onNewTask,connected=true,loading=false,routing=false,queued=0,error='',onRetry}:{channel:SpecialistChannelInfo;rows:SpecialistTaskRow[];selectedSessionId?:string;onTask:(sessionId:string)=>void;onNewTask?:()=>void;connected?:boolean;loading?:boolean;routing?:boolean;queued?:number;error?:string;onRetry?:()=>void}){
+export function SpecialistTaskList({channel,rows,selectedSessionId,onTask,connected=true,loading=false,routing=false,queued=0,error='',onRetry}:{channel:SpecialistChannelInfo;rows:SpecialistTaskRow[];selectedSessionId?:string;onTask:(sessionId:string)=>void;connected?:boolean;loading?:boolean;routing?:boolean;queued?:number;error?:string;onRetry?:()=>void}){
  const pageVisible=usePageVisible();
  const [filter,setFilter]=useState<SpecialistTaskFilter>('all'),[query,setQuery]=useState('');
  const id=useId(),visible=filterSpecialistTasks(rows,filter,query);
@@ -37,7 +37,7 @@ export function SpecialistTaskList({channel,rows,selectedSessionId,onTask,onNewT
  return <div className="specialist-task-page" aria-label={`${channel.roleName}的任务`} data-hidden={!pageVisible||undefined}>
   <header className="specialist-page-heading">
    <div className="specialist-page-identity"><SuperRoleAvatar name={channel.roleName} roleId={channel.roleId} motion={moving?'working':attention?'still':'idle'}/><div><div className="specialist-page-title"><h1>{channel.roleName}</h1><span className="specialist-page-state" data-active={moving||undefined}>{moving&&<Glyph name="loader" size={12}/>} {status}</span></div><p>{channel.duties||'查看任务进展、执行过程与结果'}</p></div></div>
-   <div className="specialist-page-actions"><ConversationReadButton key={channel.sessionId} session={channel.sessionId} state={channel.messageRead} disabled={!connected}/>{onNewTask&&<button type="button" className="button primary specialist-new-task" disabled={!connected} onClick={onNewTask}><Glyph name="plus" size={15}/>新建任务</button>}</div>
+   <div className="specialist-page-actions"><ConversationReadButton key={channel.sessionId} session={channel.sessionId} state={channel.messageRead} disabled={!connected}/></div>
   </header>
   <p className="specialist-page-counts">{active} 项进行中<span>·</span>{attention} 项需关注<span>·</span>{completed} 项已完成</p>
   <div className="specialist-task-toolbar">
@@ -63,7 +63,7 @@ export function SpecialistTaskList({channel,rows,selectedSessionId,onTask,onNewT
      <td className="specialist-task-time-column"><time dateTime={row.updatedAt} title={row.updatedAt?new Date(row.updatedAt).toLocaleString('zh-CN',{hour12:false}):'暂无更新时间'}>{specialistTaskTime(row.updatedAt)}</time></td>
      <td className="specialist-task-chevron"><Glyph name="next" size={13}/></td>
     </tr>;
-   })}</tbody></table></div>:<div className="specialist-tasks-empty"><Glyph name={query?'search':'layers'} size={26}/><h2>{loading?'正在读取任务…':query?'没有匹配的任务':rows.length?'此分类暂无任务':'还没有任务'}</h2><p>{loading?'正在获取这位专员的任务记录。':query?'试试任务名称、资源目录或执行 Agent。':rows.length?'切换分类查看其他任务。':'从下方派发第一项任务，进展和结果会保留在这里。'}</p>{(query||filter!=='all')&&<button type="button" className="button secondary" onClick={()=>{setQuery('');setFilter('all');}}>查看全部任务</button>}</div>}
+   })}</tbody></table></div>:<div className="specialist-tasks-empty"><Glyph name={query?'search':'layers'} size={26}/><h2>{loading?'正在读取任务…':query?'没有匹配的任务':rows.length?'此分类暂无任务':'还没有任务'}</h2><p>{loading?'正在获取这位专员的任务记录。':query?'试试任务名称、资源目录或执行 Agent。':rows.length?'切换分类查看其他任务。':'由 Pilot 派发任务，进展和结果会显示在这里。'}</p>{(query||filter!=='all')&&<button type="button" className="button secondary" onClick={()=>{setQuery('');setFilter('all');}}>查看全部任务</button>}</div>}
   </div>
   {visible.length>0&&<p className="specialist-task-list-count" role="status">已显示 {visible.length} 项任务{visible.length<rows.length&&`，共 ${rows.length} 项`}</p>}
  </div>;

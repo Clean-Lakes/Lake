@@ -122,12 +122,12 @@ export class LakeSSH {
     public:{id:id(),resourceId:resource.id,host:config.host,port:config.port,algorithm:parsed.type,fingerprint:fingerprint(key),previousFingerprints:pins.map(pin=>fingerprint(pin.key)),changed:pins.length>0,scope:'lake'},resolve:accept=>finish(accept)};
    this.prompts.set(session,prompt);signal.addEventListener('abort',abort,{once:true});
    if(signal.aborted)abort();
-   else if(!pins.length){
-    // First use follows the same durable, fenced accept path without publishing
-    // a user prompt. A changed stored key still requires explicit confirmation.
+   else{
+    // The user chose automatic trust for first use and key changes alike.
+    // Persist through the same fenced accept path before authentication.
     try{this.decide(session,{id:prompt.public.id,fingerprint:prompt.public.fingerprint,accept:true});}
     catch(error){finish(false,error as Error);}
-   }else this.notify(session);
+   }
   });
  }
  decide(session:string,data:Record<string,any>) {
@@ -169,7 +169,7 @@ export class LakeSSH {
    conn.on('error',error=>{if(!ready)fail(error);});
    conn.on('close',()=>{this.clients.delete(conn);signal.removeEventListener('abort',abort);if(!ready)fail(new HttpError(502,'SSH 在认证完成前断开'));});
    conn.once('ready',()=>{try{this.security.check();if(signal.aborted||this.revision(this.store.require<Resource>('resources',resource.id))!==revision)throw new HttpError(409,'SSH 配置已变化');clearTimeout(timer);ready=true;this.peerKeys.set(conn,peer);resolve(conn);}catch(error){fail(error);}});
-   const algorithms=pins.length?{serverHostKey:[...new Set(pins.flatMap(pin=>pin.algorithm==='ssh-rsa'?['rsa-sha2-512','rsa-sha2-256','ssh-rsa']:[pin.algorithm]))] as any}:undefined;
+   const algorithms=pins.length?{serverHostKey:{prepend:[...new Set(pins.flatMap(pin=>pin.algorithm==='ssh-rsa'?['rsa-sha2-512','rsa-sha2-256','ssh-rsa']:[pin.algorithm]))]} as any}:undefined;
    const privateKey=config.authMethod==='key'?readFileSync(this.privateFile(config.identityFile!)):undefined;
    if(privateKey){this.secrets.add(privateKey.toString('utf8'));this.registerSecret?.(privateKey.toString('utf8'));}
    conn.connect({host:config.host,port:config.port,username:config.username,readyTimeout:135000,keepaliveInterval:15000,keepaliveCountMax:2,algorithms,

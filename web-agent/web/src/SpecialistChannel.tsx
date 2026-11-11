@@ -109,7 +109,7 @@ export function SpecialistChannelEntries({entries,resources,workers=[],activeSou
  })}</>;
 }
 
-export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,onReady,selectedSessionId,onNewTask,inspectedSnapshot}:{snapshot:SessionSnapshot;connected:boolean;onTask:(sessionId:string)=>void;onTasks?:(sessionId:string,workers:SuperWorker[],page:SpecialistChannelPage)=>void;onActivity?:(sessionId:string,state:"running"|"waiting"|"idle")=>void;onReady?:(sessionId:string,ready:boolean)=>void;selectedSessionId?:string;onNewTask?:()=>void;inspectedSnapshot?:SessionSnapshot}){
+export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,onReady,selectedSessionId,inspectedSnapshot}:{snapshot:SessionSnapshot;connected:boolean;onTask:(sessionId:string)=>void;onTasks?:(sessionId:string,workers:SuperWorker[],page:SpecialistChannelPage)=>void;onActivity?:(sessionId:string,state:"running"|"waiting"|"idle")=>void;onReady?:(sessionId:string,ready:boolean)=>void;selectedSessionId?:string;inspectedSnapshot?:SessionSnapshot}){
  const session=snapshot.session.id;
  const [page,setPage]=useState<SpecialistChannelPage|null>(null),[entries,setEntries]=useState<SpecialistChannelEntry[]>([]),[error,setError]=useState('');
  const generation=useRef(0);
@@ -149,5 +149,5 @@ export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,
  const available=[...(page?.active??[]),...(inspectedSnapshot?[inspectedSnapshot]:[])];
  const rows=specialistTaskRows({workers:page?.workers??[],entries,active:available,projectId:snapshot.session.projectId,resources:snapshot.resources,resourceTree:snapshot.resourceTree});
  const channel=page?.channel??{id:session,sessionId:session,projectId:snapshot.session.projectId,roleId:'',roleName:snapshot.session.title,revision:0,createdAt:''};
- return <SpecialistTaskList channel={channel} rows={rows} selectedSessionId={selectedSessionId} onTask={onTask} onNewTask={onNewTask} connected={connected} loading={!page&&!error} routing={!!page?.routing||admitting} queued={page?.queued} error={error} onRetry={()=>refreshCurrent.current()}/>;
+ return <SpecialistTaskList channel={channel} rows={rows} selectedSessionId={selectedSessionId} onTask={onTask} connected={connected} loading={!page&&!error} routing={!!page?.routing||admitting} queued={page?.queued} error={error} onRetry={()=>refreshCurrent.current()}/>;
 }

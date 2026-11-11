@@ -2852,12 +2852,12 @@ test('legacy unresolved MCP calls outside visible projects still fence a new app
 });
 
 async function sshFixture(t, diagnosticsGate, interceptCommand, onAuthenticate){
- const fs=require('node:fs/promises'),{generateKeyPairSync}=require('node:crypto'),{Server}=require('../../third_party/agent-sdk/node_modules/ssh2'),{spawn}=require('node:child_process');
+ const fs=require('node:fs/promises'),{generateKeyPairSync}=require('node:crypto'),{Server,utils}=require('../../third_party/agent-sdk/node_modules/ssh2'),{spawn}=require('node:child_process');
  const pty=require('../../bin/lake-runtime/native/node-pty'),home=await mkdtemp(join(tmpdir(),'lake-ssh-server-')),clients=new Set();
- let server,port=0,key;const requests=[];let auths=0, rejectNextConnection=false;
+ let server,port=0,key,keyAlgorithm='rsa';const requests=[];let auths=0, rejectNextConnection=false;
  const password='synthetic-ssh-password-no-real-credential';
  const start=async()=>{
-  key=generateKeyPairSync('rsa',{modulusLength:2048}).privateKey.export({type:'pkcs1',format:'pem'});
+  key=keyAlgorithm==='rsa'?generateKeyPairSync('rsa',{modulusLength:2048}).privateKey.export({type:'pkcs1',format:'pem'}):utils.generateKeyPairSync('ed25519').private;
   server=new Server({hostKeys:[key]},client=>{
    clients.add(client);client.on('error',()=>{});client.once('close',()=>clients.delete(client));
    if(rejectNextConnection){rejectNextConnection=false;client.end();return;}
@@ -2886,18 +2886,12 @@ async function sshFixture(t, diagnosticsGate, interceptCommand, onAuthenticate){
  };
  const stop=async()=>{for(const client of clients)client.end();await new Promise(resolve=>server.close(resolve));};
  await start();t.after(stop);
- return {home,get port(){return port;},password,requests,get auths(){return auths;},rejectNext(){rejectNextConnection=true;},async rotate(){await stop();await start();}};
+ return {home,get port(){return port;},password,requests,get auths(){return auths;},rejectNext(){rejectNextConnection=true;},async rotate(algorithm='rsa'){await stop();keyAlgorithm=algorithm;await start();}};
 }
 async function sshResource(f,server){return f.api(`/api/projects/${f.project.id}/resources`,'POST',{kind:'ssh',name:'SSH fixture',ssh:{host:'127.0.0.1',port:server.port,username:'fixture',authMethod:'password',password:server.password,shell:'bash'}});}
 async function openSSHTerminal(f,resource,sessionId=f.session.id){
  const term=await f.api(`/api/sessions/${sessionId}/terminals`,'POST',{resourceId:resource.id,interactive:true},201);
  return {term,base:`/api/sessions/${sessionId}/terminals/${term.id}`};
-}
-async function trustTerminal(f,resource,sessionId=f.session.id){
- const {term,base}=await openSSHTerminal(f,resource,sessionId);
- const snapshot=await until(()=>f.api(`/api/sessions/${sessionId}/snapshot`),s=>!!s.hostKeyTrust);
- assert.equal(snapshot.hostKeyTrust.changed,true,'only changed stored keys require a manual decision');
- return {term,base,prompt:snapshot.hostKeyTrust,approve:()=>f.api(`/api/sessions/${sessionId}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint})};
 }
 
 test('SSH first use saves private trust before authentication without a prompt and opens a real remote PTY', {skip:process.platform!=='darwin'},async(t)=>{
@@ -2962,16 +2956,35 @@ test('cancelling first-use SSH verification saves no key and sends no authentica
  }finally{release();}
 });
 
-test('SSH key changes prompt before authentication; cancellation and stale fingerprints cannot silently change trust', {skip:process.platform!=='darwin'},async(t)=>{
- const f=await fixture(t),server=await sshFixture(t),resource=await sshResource(f,server);
- let terminal=await openSSHTerminal(f,resource);await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='ready');await f.api(terminal.base+'/disconnect','POST',{});
- const authenticated=server.auths;await server.rotate();terminal=await trustTerminal(f,resource);
- assert.equal(terminal.prompt.changed,true);assert.equal(terminal.prompt.previousFingerprints.length,1);assert.equal(server.auths,authenticated);
- await f.api(`/api/sessions/${f.session.id}/host-key`,'POST',{id:terminal.prompt.id,accept:true,fingerprint:'SHA256:stale'},409);
- await f.api(`/api/sessions/${f.session.id}/host-key`,'POST',{id:terminal.prompt.id,accept:false,fingerprint:terminal.prompt.fingerprint});
- await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='disconnected');assert.equal(server.auths,authenticated);
- terminal=await trustTerminal(f,resource);await terminal.approve();await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='ready');
- assert.ok(server.auths>authenticated);
+for(const algorithm of ['rsa','ed25519'])test(`SSH changed ${algorithm} keys are saved automatically before authentication without a prompt`,{skip:process.platform!=='darwin'},async t=>{
+ const f=await fixture(t);let resource,pinnedAtAuthentication=[];
+ const ssh=f.app.superagent.ssh,server=await sshFixture(t,undefined,undefined,()=>{pinnedAtAuthentication.push(ssh.mutationTarget(f.app.store.require('resources',resource.id))?.hostKeys[0]?.fingerprint);});
+ resource=await sshResource(f,server);const published=[],notify=ssh.notify;
+ ssh.notify=session=>{if(ssh.prompt(session))published.push(ssh.prompt(session));notify(session);};
+ let terminal=await openSSHTerminal(f,resource);await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='ready');
+ await f.api(terminal.base+'/disconnect','POST',{});
+ const saved=f.app.store.require('resources',resource.id),oldFingerprint=ssh.mutationTarget(saved).hostKeys[0].fingerprint;
+ await server.rotate(algorithm);terminal=await openSSHTerminal(f,resource);
+ await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='ready');
+ const fingerprint=ssh.mutationTarget(saved).hostKeys[0].fingerprint,pin=ssh.pinPath(saved.ssh),content=await readFile(pin,'utf8');
+ assert.notEqual(fingerprint,oldFingerprint);assert.equal(pinnedAtAuthentication.at(-1),fingerprint,'new key must be durable before sending credentials');
+ assert.equal(published.length,0);assert.equal((await f.api(`/api/sessions/${f.session.id}/snapshot`)).hostKeyTrust,null);
+ assert.equal(content.trim().split('\n').length,1);assert.match(content,algorithm==='ed25519'?/ssh-ed25519/:/ssh-rsa/);
+ assert.throws(()=>ssh.revalidate(saved,ssh.revision(saved),oldFingerprint),/身份已变化/,'rotation cannot make old peer evidence current');
+ await f.api(`/api/sessions/${f.session.id}/host-key`,'POST',{id:'stale-decision',accept:true,fingerprint:oldFingerprint},409);
+ assert.equal(await readFile(pin,'utf8'),content);
+ await f.api(terminal.base+'/disconnect','POST',{});await f.restart();
+ const reused=await openSSHTerminal(f,resource);await until(()=>f.api(reused.base+'/history'),h=>h.terminal.status==='ready');
+ assert.equal(await readFile(pin,'utf8'),content);assert.equal(f.app.superagent.ssh.prompt(f.session.id),null);
+});
+
+test('SSH changed-key persistence failure retains the old trust and sends no authentication',{skip:process.platform!=='darwin'},async t=>{
+ const f=await fixture(t),server=await sshFixture(t),resource=await sshResource(f,server),ssh=f.app.superagent.ssh;
+ const original=await openSSHTerminal(f,resource);await until(()=>f.api(original.base+'/history'),h=>h.terminal.status==='ready');await f.api(original.base+'/disconnect','POST',{});
+ const pin=ssh.pinPath(f.app.store.require('resources',resource.id).ssh),before=await readFile(pin,'utf8'),auths=server.auths;
+ await server.rotate();const atomic=ssh.atomic.bind(ssh);ssh.atomic=(path,value)=>{if(path.endsWith('.known_hosts'))throw Error('synthetic changed-key persistence failure');return atomic(path,value);};
+ const failed=await openSSHTerminal(f,resource);await until(()=>f.api(failed.base+'/history'),h=>h.terminal.status==='disconnected');
+ assert.equal(server.auths,auths);assert.equal(await readFile(pin,'utf8'),before);assert.equal(ssh.prompt(f.session.id),null);
 });
 
 test('independent Worker uses an exact approved SSH diagnostic profile and accepts only its real receipt', {skip:process.platform!=='darwin'},async(t)=>{
