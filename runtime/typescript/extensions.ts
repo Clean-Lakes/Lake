@@ -1,3 +1,4 @@
+import {redactModelValue} from "./model-errors";
 import { Client, SSEClientTransport, StreamableHTTPClientTransport, type Transport } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { lstatSync, readFileSync, realpathSync, existsSync, mkdirSync, openSync, writeFileSync, fsyncSync, closeSync, renameSync, readdirSync } from "node:fs";
@@ -309,7 +310,7 @@ export class LakeExtensions {
     // Exactly one SDK tools/call: no reconnect/reauthorization replay after a
     // dispatched opaque operation. Any transport failure remains unknown.
     const result = await record.client.callTool({ name: input.tool, arguments: input.arguments }, { signal, timeout: server.timeoutMs });
-    return JSON.parse(this.scrub(JSON.stringify(result)));
+    return redactModelValue(result,text=>this.scrub(text));
   }
   private safeSkillPath(path: string) {
     const value = path.replaceAll("\\", "/").toLowerCase();

@@ -5,7 +5,7 @@ import type {MessageInput} from "./message-input";
 import {providerConnection} from './provider-connection';
 import {parseWatchdogReview, watchdogReviewData, watchdogReviewPrompt, type WatchdogReviewInput, type WatchdogReviewResult} from "./watchdog-review";
 import {reasoningBinding} from './reasoning';
-import {redactModelValue,describeTurnFailure} from "./model-errors";
+import {redactModelValue,redactJSONText,describeTurnFailure} from "./model-errors";
 import { join } from "node:path";
 import { builtInTools, AgentRuntime, ManualPermissionBroker, createToolRegistry, createExploreSubagentPort, InMemoryRuntimeTaskRegistry,
   createBuiltInGeneralPurposeAgentProfile, createBuiltInExploreAgentProfile, type ExploreSubagentRuntimeRequest, type ToolEntry } from "./sdk";
@@ -463,17 +463,21 @@ export class LakeAgents {
     };
   }
   private redactView(view: AIView) {
+    const approval=(source:AIApproval)=>{
+      const argumentsText=redactJSONText(source.call.arguments,text=>this.redact(text)),clean=this.scrub(source);
+      clean.call.arguments=argumentsText;return clean;
+    };
     for (const card of view.cards) {
       card.content = this.redact(card.content ?? "");
-      if (card.data) card.data = JSON.parse(this.redact(JSON.stringify(card.data)));
+      if (card.data) card.data = this.scrub(card.data);
     }
     for (const run of view.agentRuns ?? []) {
       if (run.summary) run.summary = this.redact(run.summary);
       for (const card of run.cards ?? []) { card.content = this.redact(card.content ?? ""); if (card.data) card.data = this.scrub(card.data); }
     }
-    if (view.pending) view.pending = JSON.parse(this.redact(JSON.stringify(view.pending)));
+    if (view.pending) view.pending = approval(view.pending);
     if (view.pendingApprovals)
-      view.pendingApprovals = JSON.parse(this.redact(JSON.stringify(view.pendingApprovals)));
+      view.pendingApprovals = view.pendingApprovals.map(approval);
   }
   private async model(provider: ModelProvider, model: ProviderModel, profile?: HostProfile, memoryActor?: LayeredMemoryActor, testKey?: string, options: Record<string, unknown> = {}, maxAttempts = 2): Promise<Model> {
     const key = testKey ?? await this.store.modelCredential(provider);
@@ -856,7 +860,7 @@ export class LakeAgents {
           call: {
             id: request.toolCallId,
             name: request.toolName,
-            arguments: this.redact(JSON.stringify(request.input)),
+            arguments: JSON.stringify(this.scrub(request.input)),
           },
           target: request.toolName,
           risk: request.riskLevel,

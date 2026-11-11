@@ -1,5 +1,7 @@
 # Lake Super-agent 内核与三模块协作约定
 
+2026-11-11 回执脱敏修复：工具结果、进展、展示及审批参数复用结构化脱敏，只处理字符串值，保留数值、布尔、固定 schema 键及 Date；禁止在整段序列化 JSON 中替换再解析。回执处理异常时清理内部执行、定时器与等待者并记录 unknown，退出仍完成底层 runtime 清理；后台账本不把缺失回执当成功。原任务、历史 unknown、资源权限及验收不追溯修改，不自动重派。见[实施计划](plan/refactor-structured-receipt-redaction-1.md)。
+
 2026-11-11 资源发现修复：原生 Worker、任务内 child 与 ACP 共用的 `list_assets` 读取当前项目的真实资源树，返回有界 `path` 并按祖先目录名/完整路径检索。相关目录改名或移动使旧分页游标失效；异常目录明确不可解析。目录路径仅为显示与发现元数据，不签发权限，不按相同 IP 或跳板入口合并资源；准确资源 ID、连接版本、原任务范围和验收继续生效。旧 Worker/run/unknown 不改写、不重放。见[实施计划](plan/refactor-agent-resource-directory-1.md)。
 
 2026-11-10 用户提出让专员、任务 Worker 及任务内 subagent 通过 ACP 驱动 Codex、Claude Code 等独立 Agent。方向为统一可选执行后端：长期专员保存新任务默认配置，Worker 与逻辑 child 使用独立任务会话，原生 Worker/child 也可调用外部执行段；Task、权限、Memory 和验收仍归原模块。ACP 通知与外部回答只提供过程和结果线索，真实业务证据来自 Lake 工具桥或宿主独立验证。协议本身不提供沙箱，外部工具约束须按适配器版本和平台实测；不能以全量自动批准替代当前 Pilot 权限。详见 [ACP 外部 Agent 执行设计](plan/architecture-acp-agent-execution-1.md)。用户最新修订仅保留 Codex 外部后端：移除 runtime-acp 启动与私有模型代理，历史绑定只读且禁止改派或重放；Lake 自身的公开 SDK 保留。未设置偏好的专员默认 Codex，执行选择统一在聊天框模型菜单；启用时自动识别本机 Node/npm 并准备固定连接，独立 Codex 不依赖普通模型 Key。按用户后续明确要求，直接复用宿主 CODEX_HOME（默认 ~/.codex）已有登录和模型/服务配置，取消 Lake 项目独立 Key；不复制凭据或改写本机配置。新 profile 升级 schema2，账号/配置变化递增 revision，同账号令牌刷新保持身份；旧 Worker/run 不改写。仍固定已验证引擎与模型工具目录，启动及线程层逐个禁用继承 MCP、hooks、notify，业务工具走私有 Lake MCP/ToolExecutor；SQLite 与日志保留在 Lake 私有目录。详见[本机登录实施](plan/refactor-codex-local-login-1.md)。详见[统一模型入口实施](plan/refactor-codex-composer-1.md)。项目设置按需启用，现有任务及一层逻辑 child 约定保持；实际验证与剩余范围见 [兼容记录](docs/validation/acp-agent-execution/compatibility.md)。

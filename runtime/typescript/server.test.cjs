@@ -340,6 +340,18 @@ test('a fresh Dev import preserves an explicit old Magpie source and its exact n
   await f.restart(); assert.equal((await f.api('/api/bootstrap')).modelSelection.providerId, 'legacy.fixture');
 });
 
+test('structured session views retain numeric metadata and valid approval JSON after secret redaction',async t=>{
+ const f=await fixture(t);f.app.agents.registerSecret('7319');
+ const view=f.app.store.view(f.session.id),stamp=new Date().toISOString();
+ view.cards.push({id:'numeric-result',type:'operation',title:'fixture',status:'completed',at:stamp,data:{durationMs:73192,exitCode:0,stdout:{text:'private=7319'}}});
+ const approval={id:'numeric-approval',call:{id:'numeric-call',name:'Read',arguments:JSON.stringify({timeout:73192,text:'private=7319'})},target:'Read',risk:'low',fingerprint:'synthetic-approval'};
+ view.pending=approval;view.pendingApprovals=[approval];f.app.agents.update(f.session.id,view);
+ const snapshot=await f.api(`/api/sessions/${f.session.id}/ai`),card=snapshot.cards.find(card=>card.id==='numeric-result');
+ assert.equal(card.data.durationMs,73192);assert.equal(card.data.exitCode,0);assert.equal(card.data.stdout.text,'private=[REDACTED]');
+ for(const pending of [snapshot.pending,...snapshot.pendingApprovals])assert.deepEqual(JSON.parse(pending.call.arguments),{timeout:73192,text:'private=[REDACTED]'});
+ assert.equal(f.calls,0,'redaction and reading a view must not call a model or execute the pending tool');
+});
+
 test('Magpie credentials split across model chunks stay out of public views and the native session archive', async t => {
   const f = await fixture(t, 'magpie-secret'), config = await writeMagpie(f);
   await f.api('/api/settings/model/select', 'POST', {providerId: 'magpie', modelId: config.model});

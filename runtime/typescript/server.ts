@@ -1,3 +1,4 @@
+import {redactModelValue} from "./model-errors";
 import { permissionDefaults } from "../../web-agent/shared/execution-preferences";
 import {acknowledgeConversation} from "./conversation-reads";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -595,7 +596,7 @@ export async function startLakeServer(options: ServerOptions) {
         }
         else if (path[3] === "operator-effect-review" && path.length===5) {
           if (method==='GET') result=await superagent.operatorReviews.reviewInfo(sessionId,path[4]);
-          else if (method==='POST') result=await superagent.operatorReviews.confirm(sessionId,path[4],JSON.parse(agents.redact(JSON.stringify(data))));
+          else if (method==='POST') result=await superagent.operatorReviews.confirm(sessionId,path[4],redactModelValue(data,text=>agents!.redact(text)) as Parameters<typeof superagent.operatorReviews.confirm>[2]);
           else throw new HttpError(405,'不支持此人工影响复核请求');
         }
         else if (path[3] === "host-key" && path.length===4 && method==="POST")result=ssh!.decide(sessionId,data);

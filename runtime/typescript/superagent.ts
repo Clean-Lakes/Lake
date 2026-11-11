@@ -1,3 +1,4 @@
+import {redactModelValue} from "./model-errors";
 import {workerDeliveries} from "./worker-deliveries";
 import {confirmsDispatch,correctedSpecialistRequestKey,record,routingCall} from "../../web-agent/shared/route-dispatch";
 import { projectTaskProgress } from "./task-progress";
@@ -1427,7 +1428,7 @@ export class LakeSuperagent implements AgentHost {
         if (!resource && entry.metadata.name !== "read_referenced_task_evidence") throw new HttpError(409, "Project local resource is unavailable");
         if (resource && this.store.session(project.routerSessionId).options.blockUnreferencedAssets === true) this.requireReference(worker, resource.id);
         return this.ledger.operation(worker.taskId, worker.generation, worker.policyHash, context.toolCallId, entry.metadata.name, input,
-          () => entry.handler(input, context), (value) => JSON.parse(this.agents.redact(JSON.stringify(value ?? null))) as typeof value,
+          () => entry.handler(input, context), (value) => redactModelValue(value ?? null,text=>this.agents.redact(text)) as typeof value,
           { ...this.childSource(context), readOnly: entry.metadata.readOnly, resourceId: resource?.id, resourceRevision: resource ? this.store.get<number>("resourceRevisions", resource.id) ?? 1 : undefined });
       }) };
   }
@@ -1453,7 +1454,7 @@ export class LakeSuperagent implements AgentHost {
   }
   private invokeWebFetch(worker:Worker,entry:ToolEntry,input:any,context:ToolExecutionContext){
     this.security?.network(worker.projectId,input.url);
-    return this.ledger.operation(worker.taskId,worker.generation,worker.policyHash,context.toolCallId,'WebFetch',input,()=>entry.handler(input,context),value=>JSON.parse(this.agents.redact(JSON.stringify(value??null))),{...this.childSource(context),readOnly:true,networkURL:input.url});
+    return this.ledger.operation(worker.taskId,worker.generation,worker.policyHash,context.toolCallId,'WebFetch',input,()=>entry.handler(input,context),value=>redactModelValue(value??null,text=>this.agents.redact(text)) as typeof value,{...this.childSource(context),readOnly:true,networkURL:input.url});
   }
   private shellActor(worker:Worker):ShellActor{return {sessionId:worker.sessionId,taskId:worker.taskId,workerId:worker.id,generation:worker.generation,guard:()=>this.validateWorker(worker.id,worker.generation)};}
   private eventReferences(event: InputEvent, resourceId: string) {
@@ -1521,13 +1522,15 @@ export class LakeSuperagent implements AgentHost {
     const executionId=this.execution!.executionId(actor,context.toolCallId),port=this.execution!.bind(context.executionPort,actor,plan,context.toolCallId);
     const result:any=await this.ledger.operation(worker.taskId,generation,worker.policyHash,context.toolCallId,'Bash',input,
       ()=>entry.handler(input,{...context,executionPort:port,...(plan.resource.kind==='ssh'?{workingDirectory:input.cwd??'/',workspaceRoot:input.cwd??'/',setWorkingDirectory:undefined,fileSystemPort:undefined}:{} )}),
-      value=>JSON.parse(this.agents.redact(this.ssh!.scrub(JSON.stringify(value??null)))),
+      value=>redactModelValue(value??null,text=>this.agents.redact(this.ssh!.scrub(text))) as typeof value,
       {...this.childSource(context),resourceId:plan.resource.id,resourceRevision:plan.resourceRevision,hostConfigurationHash:plan.revision,commandExecutionId:executionId,readOnly:plan.readOnly});
     if(result?.status==='backgrounded'){
       const operationId=digest([worker.sessionId,context.toolCallId]);
       void this.execution!.whenSettled(executionId).then(record=>{
-        let valid=true;try{this.validateWorker(worker.id,generation);this.execution!.revalidate(record);}catch{valid=false;}
-        this.ledger.settleCommand(operationId,executionId,record.result,valid);this.changed(worker.sessionId);
+        let valid=record.status!=='unknown'&&record.result!==undefined;try{this.validateWorker(worker.id,generation);this.execution!.revalidate(record);}catch{valid=false;}
+        this.ledger.settleCommand(operationId,executionId,record.result??null,valid);this.changed(worker.sessionId);
+      },()=>{
+        this.ledger.settleCommand(operationId,executionId,null,false);this.changed(worker.sessionId);
       });
     }
     return result;
@@ -1635,7 +1638,7 @@ export class LakeSuperagent implements AgentHost {
     const plan=this.mysql.plan(resource,entry.metadata.name,input),revision=this.mysql.revision(resource);
     if(!boundResourceRevision(this.store,resource,input.configuration_revision,revision))throw new HttpError(409,'MySQL 配置或凭据版本已变化');
     this.validateWorker(worker.id,generation);
-    return this.ledger.operation(worker.taskId,generation,worker.policyHash,context.toolCallId,entry.metadata.name,input,()=>entry.handler(input,context),value=>JSON.parse(this.agents.redact(JSON.stringify(value??null))),{...this.childSource(context),resourceId:resource.id,resourceRevision:this.store.get<number>('resourceRevisions',resource.id)??1,readOnly:plan.provenReadOnly,databaseConfigurationHash:revision,databaseScope:plan.scope});
+    return this.ledger.operation(worker.taskId,generation,worker.policyHash,context.toolCallId,entry.metadata.name,input,()=>entry.handler(input,context),value=>redactModelValue(value??null,text=>this.agents.redact(text)) as typeof value,{...this.childSource(context),resourceId:resource.id,resourceRevision:this.store.get<number>('resourceRevisions',resource.id)??1,readOnly:plan.provenReadOnly,databaseConfigurationHash:revision,databaseScope:plan.scope});
   }
   private async invokeHost(worker:Worker,generation:number,entry:ToolEntry,input:any,context:ToolExecutionContext){
     if(!this.ssh)throw new HttpError(409,"SSH 适配器未接入");
@@ -1644,7 +1647,7 @@ export class LakeSuperagent implements AgentHost {
     if(options.blockUnreferencedAssets===true)this.requireReference(worker,resource.id);
     this.security?.host(worker.projectId,resource.id);const revision=this.ssh.revision(resource);if(!boundResourceRevision(this.store,resource,input.configuration_revision,revision))throw new HttpError(409,"SSH 配置或凭据版本已变化，请重新读取资源目录");
     this.validateWorker(worker.id,generation);
-    return this.ledger.operation(worker.taskId,generation,worker.policyHash,context.toolCallId,entry.metadata.name,input,()=>entry.handler(input,context),value=>JSON.parse(this.ssh!.scrub(JSON.stringify(value??null))),{...this.childSource(context),resourceId:resource.id,resourceRevision:this.store.get<number>("resourceRevisions",resource.id)??1,readOnly:true,hostConfigurationHash:revision});
+    return this.ledger.operation(worker.taskId,generation,worker.policyHash,context.toolCallId,entry.metadata.name,input,()=>entry.handler(input,context),value=>redactModelValue(value??null,text=>this.ssh!.scrub(text)) as typeof value,{...this.childSource(context),resourceId:resource.id,resourceRevision:this.store.get<number>("resourceRevisions",resource.id)??1,readOnly:true,hostConfigurationHash:revision});
   }
   private async invokeExtension(worker: Worker, generation: number, entry: ToolEntry, input: any, context: ToolExecutionContext) {
     if (!this.extensions) throw new HttpError(409, "扩展宿主未接入");
@@ -1666,7 +1669,7 @@ export class LakeSuperagent implements AgentHost {
     }
     this.validateWorker(worker.id, generation);
     return this.ledger.operation(worker.taskId, generation, worker.policyHash, context.toolCallId, name, input,
-      () => entry.handler(input, context), (value) => JSON.parse(this.extensions!.scrub(JSON.stringify(value ?? null))) as typeof value, { ...binding, ...this.childSource(context) });
+      () => entry.handler(input, context), (value) => redactModelValue(value ?? null,text=>this.extensions!.scrub(text)) as typeof value, { ...binding, ...this.childSource(context) });
   }
   private extensionEntries(worker: Worker): ToolEntry[] {
     if (!this.extensions) return [];
