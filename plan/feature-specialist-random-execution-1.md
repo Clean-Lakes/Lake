@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-12
 last_updated: 2026-11-12
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [feature, specialist, model, acp]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
 Pilot creates each specialist with one saved execution/model selection. Omitted choices are randomized by the host from configured native models and the ready Codex adapter's compatible model, rather than chosen by the routing model or rerolled on execution.
 
@@ -42,7 +42,7 @@ Pilot creates each specialist with one saved execution/model selection. Omitted 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-004 | Add meaningful eligibility/partial-selection/replay/update/freeze tests in `specialist-execution.test.ts` and `superagent-lifecycle.test.ts`; extend real SDK and pinned real ACP integrations for actual native/Codex model requests and immutable launch configuration. Run complete affected regression, types, bundle, boundary and naming checks. Depends on TASK-002 and TASK-003. | ✅ | 2026-11-12 |
-| TASK-005 | Update current architecture/README and validation evidence. Capture fresh private hashes; normally stop Dev, commit clean source, sign/build/install `scripts/build_lake_desktop.sh --dev --install`, verify provenance/signatures, actual UI and original records. Update draft PR #222 against develop, without merging. Depends on TASK-004. | | |
+| TASK-005 | Update current architecture/README and validation evidence. Capture fresh private hashes; normally stop Dev, commit clean source, sign/build/install `scripts/build_lake_desktop.sh --dev --install`, verify provenance/signatures, actual UI and original records. Update draft PR #222 against develop, without merging. Depends on TASK-004. | ✅ | 2026-11-12 |
 
 ## 3. Alternatives
 
