@@ -34,6 +34,13 @@ const snapshots=new Map(workers.map((worker,i)=>{
 }));
 const channelSnapshot={session:{id:channel.sessionId,projectId,title:channel.roleName,workspaceRole:'role',status:'completed'},messages:[],resources,resourceTree:tree,actions:[],terminals:[],specialists:[],evidence:[],cursor:revision,messageQueue:{paused:false,revision:0,lastError:'',items:[]},sre:{enabled:false,tasks:[]},ai:{session:channel.sessionId,profile:'core',status:'idle',cards:[],cardsOffset:0,totalCards:0,agentRuns:[],usage:{known:false}}} as unknown as SessionSnapshot;
 const channels=[channel,...['发布专员','数据库专员','知识库专员','ACP 测试专员'].map((roleName,i)=>({...channel,messageRead:{...channel.messageRead!},id:`other-channel-${i}`,sessionId:`other-session-${i}`,roleId:`other-role-${i}`,roleName,duties:'查看任务进展、执行过程与结果'}))];
+// Real App QA: current defaults may change, while each report keeps its Agent.
+if(query.has('agent-logos'))channels.forEach((item,index)=>{item.execution=index%2?{kind:'native'}:{kind:'acp',agent:'codex'};});
+const agentLogoMessages=[{id:'logo-human',sessionId:'demo-session-0',role:'user',text:'请各位专员汇报本轮进展。',createdAt:at},...channels.slice(0,3).map((member,index)=>({
+    id:`logo-report-${index}`,sessionId:'demo-session-0',role:'assistant',text:['已核对当前任务，保留原执行记录。','已整理发布记录，等待你的后续安排。','增量迁移方案已准备，尚未执行。'][index],createdAt:new Date(Date.parse(at)+(index+1)*1000).toISOString(),
+    author:{kind:'specialist',name:member.roleName,roleId:member.roleId,workerId:index===0?workers[0]?.id:`logo-worker-${index}`,sessionId:index===0?workers[0]?.sessionId:`logo-session-${index}`,taskId:index===0?workers[0]?.task.taskId:`logo-task-${index}`,channelSessionId:member.sessionId,execution:structuredClone(member.execution)},
+   }))];
+Object.assign(window,{lakeAgentLogoQA:{native(){channel.execution={kind:'native'};revision++;}}});
 function collaborate(worker:SuperWorker,count:number){
  if(count<2){delete worker.task.collaboration;return;}
  worker.task.collaboration={state:'running',acceptanceState:'not_evaluated',participants:channels.slice(0,count).map((member,i)=>({workerId:i===0?worker.id:`${worker.id}-member-${i}`,sessionId:i===0?worker.sessionId:`${worker.sessionId}-member-${i}`,roleId:member.roleId,roleName:member.roleName,state:i===0?worker.task.state:i===1?'running':i===2?'completed':'waiting_user',contributed:i===2}))};
@@ -87,6 +94,10 @@ window.fetch=async(input,init)=>{
  if(path.endsWith('/snapshot')){
   const id=path.split('/')[3],own=snapshots.get(id);if(own)return json({...own,cursor:revision});
   if(channels.some(item=>item.sessionId===id)){const ch=channels.find(item=>item.sessionId===id)!;return json({...channelSnapshot,session:{...channelSnapshot.session,id,title:ch.roleName},cursor:revision});}
+  if(query.has('agent-logos')&&id==='demo-session-0'){
+   const source=await(await base(input,init)).json(),pilot='demo-session-0';
+   return json({...source,session:{...source.session,id:pilot,title:'Pilot',workspaceRole:'router'},messages:agentLogoMessages,resources,resourceTree:tree,cursor:revision,sre:{enabled:false,tasks:[]},ai:{...source.ai,status:'completed',cards:[],cardsOffset:0,totalCards:0}});
+  }
  }
  const response=await base(input,init);
  if(path==='/api/bootstrap'){const info=await response.json();return json({...info,backendRuntime:'typescript',aiRuntime:'typescript'});}

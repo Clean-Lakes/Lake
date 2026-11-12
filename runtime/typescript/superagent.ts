@@ -2148,11 +2148,21 @@ export class LakeSuperagent implements AgentHost {
     }
     return {...view,cards:cards.map(card=>recovered.has(card.id)?{...card,data:{...record(card.data),routingRecovery:{kind:"corrected_missing_specialist",recoveredBy:recovered.get(card.id)}}}:card)};
   }
+  /** Enrich old report display from its frozen Worker, without rewriting history. */
+  private reportMessage(original:Message):Message {
+    const message=stoppedReportProjection(this.store,original,id=>this.ledger.unresolved(id)),author=message.author;
+    if(!author||author.execution)return message;
+    const worker=this.store.get<Worker>('superWorkers',author.workerId);
+    const target=this.store.get<StoredSession>('sessions',message.sessionId);
+    if(!worker||!target||worker.projectId!==target.projectId||worker.sessionId!==author.sessionId||worker.roleId!==author.roleId||
+      (worker.taskId!==author.taskId&&!this.ledger.jointTask(author.taskId)?.memberIds.includes(worker.taskId)))return message;
+    return {...message,author:{...author,execution:worker.roleSnapshot.execution??{kind:'native'}}};
+  }
   decorate(snapshot: SessionSnapshot,taskId?:string): SessionSnapshot {
     snapshot.hostKeyTrust=this.ssh?.prompt(snapshot.session.id)??null;
     snapshot.messages = [...snapshot.messages, ...this.store.list<Message>("superDispatchMessages").filter((message) => message.sessionId === snapshot.session.id)]
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
-      .map(message => stoppedReportProjection(this.store, message, id => this.ledger.unresolved(id)));
+      .map(message => this.reportMessage(message));
     const exact=taskId?this.sessionGoal(snapshot.session.id,taskId):undefined;
     const worker = exact?this.store.require<Worker>('superWorkers',exact.workerId):this.workerFor(snapshot.session.id);
     if (worker) {
@@ -2161,7 +2171,7 @@ export class LakeSuperagent implements AgentHost {
       if(!worker.inline && snapshot.session.workspaceRole==="worker"){
         const channel=this.store.get<Channel>("superChannels",worker.roleId);
         if(channel?.projectId===goal.projectId) snapshot.superagent.deliveredReplies=workerDeliveries(this.store,goal,channel.sessionId)
-          .map(message=>stoppedReportProjection(this.store,message,id=>this.ledger.unresolved(id)));
+          .map(message=>this.reportMessage(message));
       }
       if(!worker.inline) snapshot.superagent.watchdog={mode:this.watchdog.mode(worker.projectId),findings:this.watchdog.records(worker.projectId,goal.id)
         .filter(record=>record.workerId===worker.id && record.sessionId===worker.sessionId && record.state!=="reviewing" && record.state!=="guiding")
@@ -2364,7 +2374,8 @@ export class LakeSuperagent implements AgentHost {
         if (body === null) continue;
         const message: Message = { id: "report_" + digest([key, target]), sessionId: target, role: "assistant", text: this.agents.redact(body), createdAt: pending.createdAt,
           author: { kind: "specialist", name: worker.roleSnapshot.name, roleId: worker.roleId, workerId: worker.id,
-            sessionId: worker.sessionId, taskId: goal.sharedTaskId ?? goal.id, channelSessionId: channel.sessionId,rootTurnId:pending.rootTurnId } };
+            sessionId: worker.sessionId, taskId: goal.sharedTaskId ?? goal.id, channelSessionId: channel.sessionId,rootTurnId:pending.rootTurnId,
+            execution:worker.roleSnapshot.execution??{kind:'native'} } };
         if (!this.store.get("messages", message.id)) this.store.put("messages", message.id, message);
       }
       this.store.put("superReports", key, { key, workerId: worker.id, goalRevision: goal.revision, deliveredAt: now() });
@@ -2532,7 +2543,7 @@ export class LakeSuperagent implements AgentHost {
       if(worker&&snapshot.session.workspaceRole!=='legacy')sources.push({snapshot,worker,active:this.active.has(worker.id)||!!this.pendingInteraction(source)});
       for (const original of snapshot.messages){
         const sibling=source===sessionId&&!original.author?.rootTurnId?reportBodies.get(original.id):undefined;
-        const message=sibling?{...original,text:sibling.text}:stoppedReportProjection(this.store,original,id=>this.ledger.unresolved(id));
+        const message=this.reportMessage(sibling?{...original,text:sibling.text}:original);
         entries.push({ id: canonical(["message", source, message.id]), sourceSessionId: source,
           taskId: worker?.task.taskId ?? message.jointReport?.taskId ?? message.jointAcceptance?.taskId ?? message.author?.taskId, workerId: worker?.id ?? message.author?.workerId, createdAt: message.createdAt, message });
       }

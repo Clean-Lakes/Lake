@@ -65,6 +65,25 @@ async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date
     steering: () => steering };
 }
 
+test('specialist report Agent identity stays frozen and legacy projection never rewrites history or crosses bindings',async t=>{
+ const f=await fixture(t),work=await f.start(),worker=f.worker(work.taskId);
+ await f.finish(work.taskId);f.settleWorker(work.taskId);
+ const report=f.store.messages(f.router).find(message=>message.author?.taskId===work.taskId)!;
+ assert.ok(report?.author);assert.deepEqual(report.author.execution,worker.roleSnapshot.execution);
+ const legacy=structuredClone(report);delete legacy.author!.execution;f.store.put('messages',legacy.id,legacy);
+ const current=f.store.require<any>('superRoles',worker.roleId);current.execution={kind:'acp',agent:'codex'};current.revision++;f.store.put('superRoles',current.id,current);
+ const before=JSON.stringify(f.store.messages(f.router));
+ const shown=f.host.decorate(f.store.snapshot(f.router)).messages.find(message=>message.id===report.id)!;
+ assert.deepEqual(shown.author!.execution,worker.roleSnapshot.execution);
+ assert.equal(JSON.stringify(f.store.messages(f.router)),before,'reading history does not persist a migration');
+ for(const field of ['roleId','workerId','sessionId','taskId']){
+  const wrong=structuredClone(legacy);(wrong.author as any)[field]='unrelated';
+  assert.equal(f.internal.reportMessage(wrong).author.execution,undefined,field);
+ }
+ const other=f.store.createProject('other project'),otherRouter=f.host.ensure(other.id).routerSessionId;
+ assert.equal(f.internal.reportMessage({...legacy,sessionId:otherRouter}).author.execution,undefined);
+});
+
 test("only current unfinished business work requests a final report, without changing acceptance", async t => {
   const f = await fixture(t), { taskId } = await f.start(), worker = f.worker(taskId), profile = f.host.profile(worker.sessionId)!;
   const goal = JSON.stringify(f.host.ledger.get(taskId)), operations = JSON.stringify(f.store.list("superOperations"));
