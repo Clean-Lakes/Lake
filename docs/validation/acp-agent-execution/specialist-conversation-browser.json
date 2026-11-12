@@ -1,0 +1,45 @@
+{
+  "browser_source_sha": "00cd76a6676e35b0046a2e272d2ba386ccff0f26",
+  "final_source_sha": "71af70b8441da1c1e39fba68505a97cab6baf766",
+  "streaming": {
+    "additional_worker_snapshot_reads": 0,
+    "same_reply_node": true,
+    "focus_kept": true,
+    "private_thinking_in_dom": false,
+    "old_progress_rows": 0
+  },
+  "offline": {
+    "public_body_kept": true,
+    "moving_avatars": 0,
+    "reconnected": true
+  },
+  "partial_completion": {
+    "other_live_reply_count": 1,
+    "completed_worker_live_count": 0,
+    "formal_report_count": 1
+  },
+  "viewports": [
+    {
+      "theme": "light",
+      "width": 1280,
+      "height": 900,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 1280,
+      "height": 900,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 380,
+      "height": 820,
+      "reply_right_edges": [
+        348,
+        348
+      ],
+      "overflow": false
+    }
+  ]
+}
