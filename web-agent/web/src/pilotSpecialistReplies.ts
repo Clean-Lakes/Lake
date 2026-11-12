@@ -35,7 +35,19 @@ export function specialistSnapshotMatches(row:PilotSpecialistRow,snapshot:Sessio
 /** Public current-invocation prose only; thinking, tools and old replies stay private. */
 export function pilotSpecialistReply(row:PilotSpecialistRow,snapshot?:SessionSnapshot){
  if(!snapshot||!specialistSnapshotMatches(row,snapshot)||row.activity.phase==='queued')return undefined;
- const started=Date.parse(snapshot.ai?.turnStartedAt??''),source=Date.parse(row.sourceCreatedAt);
+ const view=snapshot.ai;
+ if(!view?.turnStartedAt||!view.rootTurnId)return undefined;
+ const started=Date.parse(view.turnStartedAt),source=Date.parse(row.sourceCreatedAt);
  if(!Number.isFinite(started)||!Number.isFinite(source)||started<source)return undefined;
- return liveSpecialistReplies([snapshot],[row.worker]).find(entry=>entry.reply?.turnId===snapshot.ai?.rootTurnId);
+ const backend=row.worker.execution?.backend,execution=snapshot.superagent?.execution;
+ const runs=backend?.kind==='acp'&&execution?.backend.kind==='acp'&&execution.backend.agent===backend.agent?
+  new Set(execution.runs.filter(run=>run.scope==='worker'&&run.agent===backend.agent).map(run=>run.id)):new Set<string>();
+ const cards=view.cards.map(card=>{
+  const data=card.data as Record<string,unknown>|undefined;
+  const direct=card.type==='operation'&&runs.has(card.id)&&data?.source==='external_agent'&&data.external_run_id===card.id&&
+   data.taskId===(row.worker.task.executionGoalId??row.worker.task.taskId)&&data.root_turn_id===view.rootTurnId&&!data.agentRunId&&!data.childSessionId;
+  return direct?{...card,type:'message',at:card.at<view.turnStartedAt!?view.turnStartedAt!:card.at}:card;
+ });
+ const projectedSnapshot={...snapshot,ai:{...view,cards}};
+ return liveSpecialistReplies([projectedSnapshot],[row.worker]).find(entry=>entry.reply?.turnId===view.rootTurnId);
 }

@@ -48,8 +48,10 @@ if(query.has('live-specialists')){
   worker.roleId=member.roleId;worker.roleName=member.roleName;worker.execution!.backend=member.execution!;worker.task.originRootTurnId=root;
   worker.activity={phase:'thinking',label:'正在分析',updatedAt:started,sourceMessageId:'logo-human',sourceSessionId:'demo-session-0'};
   snapshot.superagent!.roleId=member.roleId;snapshot.ai!.rootTurnId=root;snapshot.ai!.turnStartedAt=started;
+  const external=worker.execution!.backend.kind==='acp';
+  if(external)worker.execution!.runs=[{id:`live-text-${index}`,agent:'codex',scope:'worker',state:'running',dispatchPhase:'sent',createdAt:started,updatedAt:started,usage:null}];
   snapshot.ai!.cards=[{id:`private-${index}`,type:'thinking',status:'running',at:started,content:'PRIVATE_THINKING_NOT_FOR_CHAT',data:{root_turn_id:root}},
-   {id:`live-text-${index}`,type:'message',status:'running',at:started,content:index===0?'我先检查服务器当前的负载和内存。':'我正在读取 GOS 的项目目录，并核对统计范围。',data:{root_turn_id:root}}];
+   {id:`live-text-${index}`,type:external?'operation':'message',status:'running',at:started,content:index===0?'我先检查服务器当前的负载和内存。':'我正在读取 GOS 的项目目录，并核对统计范围。',data:{root_turn_id:root,...(external?{source:'external_agent',external_run_id:`live-text-${index}`,taskId:worker.task.taskId,external_agent:'codex'}:{})}}];
  });
  const streams=new Set<LiveFixtureEvents>();
  class LiveFixtureEvents extends EventTarget{
@@ -59,7 +61,7 @@ if(query.has('live-specialists')){
  }
  window.EventSource=LiveFixtureEvents as unknown as typeof EventSource;
  const emit=(sessionId:string,text?:string)=>{revision++;const worker=workers.find(item=>item.sessionId===sessionId),snapshot=worker&&snapshots.get(sessionId);
-  const payload={seq:revision,sessionId,type:'message',createdAt:at,...(text!==undefined?{textUpdate:{target:'card',id:`live-text-${workers.indexOf(worker!)}`,content:text,cardType:'message',at:snapshot!.ai!.turnStartedAt,rootTurnId:snapshot!.ai!.rootTurnId}}:{})};
+  const payload={seq:revision,sessionId,type:'message',createdAt:at,...(text!==undefined?{textUpdate:{target:'card',id:`live-text-${workers.indexOf(worker!)}`,content:text,cardType:worker!.execution!.backend.kind==='acp'?'operation':'message',at:snapshot!.ai!.turnStartedAt,rootTurnId:snapshot!.ai!.rootTurnId}}:{})};
   for(const stream of streams)if(stream.url.includes(`/sessions/${sessionId}/`)){const event=new MessageEvent('message',{data:JSON.stringify(payload)});stream.onmessage?.(event);stream.dispatchEvent(event);}
  };
  Object.assign(window,{lakeSpecialistConversationQA:{

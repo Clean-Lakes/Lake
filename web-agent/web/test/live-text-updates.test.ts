@@ -6,6 +6,17 @@ import type {SessionEvent,SessionSnapshot} from '../../shared/contracts';
 const snapshot=()=>({session:{id:'s'},cursor:10,messages:[{id:'history'}],sre:{tasks:[]},resources:[],ai:{status:'running',rootTurnId:'turn',cards:[{id:'history',content:'历史',status:'completed'}],totalCards:1,agentRuns:[{id:'role',status:'running'}]}} as unknown as SessionSnapshot);
 const event=(textUpdate:SessionEvent['textUpdate'],seq=11)=>({sessionId:'s',seq,type:'message',createdAt:'now',textUpdate} as SessionEvent);
 const card=(content:string)=>({target:'card' as const,id:'reply',cardType:'message',content,at:'2026-10-18T10:00:00Z',rootTurnId:'turn'});
+test('ACP public text prefixes update only an existing exact root execution card',()=>{
+ const before=snapshot();before.ai!.cards.push({id:'acp',type:'operation',status:'running',at:'now',content:'',data:{source:'external_agent',external_run_id:'acp',root_turn_id:'turn'}});
+ const prefix={target:'card' as const,id:'acp',cardType:'operation',content:'公开的 Codex 回复',rootTurnId:'turn'};
+ const next=applyLiveText(before,event(prefix))!;
+ assert.equal(next.ai!.cards.at(-1)!.content,prefix.content);assert.equal(next.ai!.cards.at(-1)!.type,'operation');
+ assert.equal(applyLiveText(snapshot(),event(prefix)),null,'an unknown operation never becomes a public message');
+ for(const data of [{source:'tool'},{source:'external_agent',external_run_id:'wrong',root_turn_id:'turn'},{source:'external_agent',external_run_id:'acp',root_turn_id:'turn',childSessionId:'child'}]){
+  const wrong={...before,ai:{...before.ai!,cards:[{...before.ai!.cards.at(-1)!,data}]}};
+  assert.equal(applyLiveText(wrong,event(prefix)),null);
+ }
+});
 test('live card events create once and update only the addressed item without a snapshot',()=>{
  const before=snapshot(),first=applyLiveText(before,event(card('中文👩🏽‍💻')))!;
  assert.equal(first.ai!.cards.at(-1)!.content,'中文👩🏽‍💻');

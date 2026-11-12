@@ -75,6 +75,20 @@ test('live authors use the original execution and only exact delivered roots ret
  assert.deepEqual(pilotDispatchRows(state,'pilot',[user]),[],'native children are not additional conversation participants');
 });
 
+test('Codex public root-worker text is projected from its exact ACP run, without exposing ordinary operations or child output',()=>{
+ const item=worker();item.execution={backend:{kind:'acp',agent:'codex'},source:'task_assignment',assignedAt:at,totalRuns:1,runs:[{id:'acp-run',agent:'codex',scope:'worker',state:'running',dispatchPhase:'sent',createdAt:at,updatedAt:at,usage:null}]};
+ const row=pilotDispatchRows(workspace([item]),'pilot',[user])[0]!;
+ const card={id:'acp-run',type:'operation',status:'running',at,content:'Codex 正在核对项目目录。',data:{source:'external_agent',external_run_id:'acp-run',taskId:item.task.taskId,root_turn_id:'current'}};
+ const snapshot={session:{id:item.sessionId,projectId:'project'},superagent:{roleId:item.roleId,task:item.task,execution:item.execution},cursor:1,ai:{session:item.sessionId,status:'running',rootTurnId:'current',turnStartedAt:at,cards:[card],cardsOffset:0,totalCards:1}} as SessionSnapshot;
+ assert.equal(pilotSpecialistReply(row,snapshot)?.card?.content,card.content);
+ for(const wrong of [{...card,data:{...card.data,source:'tool'}},{...card,data:{...card.data,taskId:'another-task'}},{...card,data:{...card.data,childSessionId:'child'}},{...card,data:{...card.data,root_turn_id:'old'}}]){
+  assert.equal(pilotSpecialistReply(row,{...snapshot,ai:{...snapshot.ai!,cards:[wrong]}})?.card,undefined);
+ }
+ item.execution.runs[0].scope='segment';
+ assert.equal(pilotSpecialistReply(row,snapshot)?.card,undefined);
+ assert.equal(snapshot.ai!.cards[0].type,'operation','projection does not rewrite the original execution card');
+});
+
 test('settled workers disappear independently, while stale business states and unrelated channels never invent progress',()=>{
  const a=worker(),b=worker('database'),state=workspace([a,b]);
  a.task.state='completed';a.task.acceptanceState='pass';

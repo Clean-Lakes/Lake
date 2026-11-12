@@ -1,5 +1,6 @@
 import {pilotConfigurationToolNames} from './configuration-tool-names';
 import {agentBackendName} from '../../web-agent/shared/external-agents';
+import {externalReplyTextUpdate} from './external-reply-events';
 import {prepareSessionArchive} from "./session-archive";
 import {finalReportBoundary} from "./final-report";
 import type {MessageInput} from "./message-input";
@@ -119,7 +120,7 @@ export class LakeAgents {
     if(event.kind==='text')card.content=event.text??'';
     if(event.kind==='status'){card.status=event.status==='completed'?'completed':['failed','cancelled','unknown','interrupted'].includes(event.status??'')?event.status!:'running';if(run.summary||run.error)card.content=run.summary||run.error||'';}
     card.data={...(card.data??{}),external_agent:run.agent,external_state:run.state,external_usage:run.usage,external_events:run.events.filter(item=>item.kind==='tool'||item.kind==='tool_update').slice(-16)};
-    this.update(sessionId,view);
+    this.update(sessionId,view,externalReplyTextUpdate(run,event,{...card,content:this.redact(card.content??'')},view.rootTurnId));
   }
   private externalActor(sessionId:string,profile:HostProfile,runtime:AgentRuntime,context:Pick<HostToolContext,'toolCallId'|'abortSignal'|'lakeSubagent'>,purpose:ExternalActor['purpose']='segment'):ExternalActor{
     const worker=this.store.require<any>('superWorkers',profile.workerId!);
