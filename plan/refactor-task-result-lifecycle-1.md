@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-12
 last_updated: 2026-11-12
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [refactor, tasks, typescript, acp]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
 The user explicitly requested removal of both the specialist status UI and backend pending-result/acceptance mechanism. A submitted report ends an execution; it is not an independent business verification. Historical operations and acceptance records remain unchanged.
 
@@ -46,7 +46,7 @@ The user explicitly requested removal of both the specialist status UI and backe
 | TASK-005 | Update `SpecialistTaskList.tsx`, `specialistTaskListModel.ts`, `specialistTaskList.css`, `SpecialistChannel.tsx`, `SessionInspector.tsx`, `SuperTaskInspector.tsx` and shared task presentation: flat chronological task records, title-only task selector, no acceptance verdict UI or reconciliation forms. | ✅ | 2026-11-12 |
 | TASK-006 | Adapt affected runtime and frontend regressions to the new report contract. Verify unknown/failed history remains unchanged, new calls proceed, stale ownership/permissions still reject, partial/shared reports deliver once and old reconciliation writes return 410. Depends on TASK-001 through TASK-005. | ✅ | 2026-11-12 |
 | TASK-007 | Update `agent.md`, task/security/UI specifications and compatibility evidence. Run type/build, runtime/host/ACP and frontend suites plus boundary/naming checks; inspect fixture light/dark/narrow layouts. Depends on TASK-006. | ✅ | 2026-11-12 |
-| TASK-008 | Capture a fresh private hash baseline, normally stop Lake Dev, sign/build/install with `scripts/build_lake_desktop.sh --dev --install`, verify exact clean source SHA/signatures/provenance, inspect actual task results and compare original records. Update draft PR #222 targeting develop without merging. Depends on TASK-007. | | |
+| TASK-008 | Capture a fresh private hash baseline, normally stop Lake Dev, sign/build/install with `scripts/build_lake_desktop.sh --dev --install`, verify exact clean source SHA/signatures/provenance, inspect actual task results and compare original records. Update draft PR #222 targeting develop without merging. Depends on TASK-007. | ✅ | 2026-11-12 |
 
 ## 3. Alternatives
 
