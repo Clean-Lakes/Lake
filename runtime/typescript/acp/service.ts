@@ -23,7 +23,7 @@ export class LakeExternalAgents {
       run.state=run.dispatchPhase==='not_sent'?'interrupted':'unknown';run.updatedAt=now();store.put('acpRuns',run.id,run);
     }
   }
-  private async launch(profile:ExternalAgentProfile,directory:string,signal:AbortSignal,mcp?:{command:string;args:string[]}):Promise<AcpLaunch>{
+  private async launch(profile:ExternalAgentProfile,directory:string,signal:AbortSignal,mcp?:{command:string;args:string[]},model?:string):Promise<AcpLaunch>{
     if(process.platform!=='darwin')throw new HttpError(409,'当前平台的 Codex 工具隔离尚未验证');
     if(!profile.nodePath)throw new HttpError(409,'请先配置 Codex ACP 使用的 Node 运行时');
     const manifest=JSON.parse(await readFile(join(dirname(this.registry.adapterEntry()),'../package.json'),'utf8'));
@@ -31,10 +31,10 @@ export class LakeExternalAgents {
     const engine=JSON.parse(await readFile(join(this.registry.adapterRoot(),'node_modules/@openai/codex/package.json'),'utf8'));
     if(engine.version!=='0.160.1')throw new HttpError(409,'Codex 引擎版本不匹配，请重新安装固定版本');
     await this.registry.validateNode(profile.nodePath);
-    const prepared=await this.registry.prepareLaunch(profile,signal);
+    const prepared=await this.registry.prepareLaunch(profile,signal,model);
     return {executable:profile.nodePath,args:[this.registry.adapterEntry()],cwd:directory,observed:prepared.observed,
       env:{...prepared.environment,TMPDIR:directory,CODEX_PATH:prepared.launcher,
-        INITIAL_AGENT_MODE:'read-only',CODEX_CONFIG:JSON.stringify({...codexConfig(prepared.home),mcp_servers:{...prepared.disabledMcp,...(mcp?{lake:mcp}:{})}})}};
+        INITIAL_AGENT_MODE:'read-only',CODEX_CONFIG:JSON.stringify({...codexConfig(prepared.home),...(model?{model}:{}),mcp_servers:{...prepared.disabledMcp,...(mcp?{lake:mcp}:{})}})}};
   }
   async probe(projectId:string,agent:unknown,signal:AbortSignal){
     const profile=this.registry.get(projectId,agent),directory=await privatePath(this.store.data,'external-agents','probe',projectId,profile.id);
@@ -81,16 +81,16 @@ export class LakeExternalAgents {
     const agentId=externalAgentId(agent);actor.guard();actor.signal.throwIfAborted();
     if(!instruction.trim()||Buffer.byteLength(instruction)>65536)throw new HttpError(400,'外部任务说明需要 1–65536 字节');
     const profile=this.registry.get(actor.projectId,agentId);if(!profile.enabled)throw new HttpError(409,'请先启用该项目的外部 Agent');
-    const inputHash=digest({agent:agentId,instruction,resumeRunId:resumeRunId??null});
+    const inputHash=digest({agent:agentId,instruction,resumeRunId:resumeRunId??null,...(actor.model?{model:actor.model}:{})});
     const duplicate=this.store.list<ExternalRun>('acpRuns').find(run=>run.requestKey===requestKey);
     if(duplicate){if(duplicate.schemaVersion!==1||duplicate.inputHash!==inputHash||duplicate.agent!==agentId||duplicate.profileRevision!==profile.revision||duplicate.scopeHash!==actor.scopeHash||duplicate.projectId!==actor.projectId||duplicate.taskId!==actor.taskId||duplicate.workerId!==actor.workerId||duplicate.generation!==actor.generation||duplicate.sessionId!==actor.sessionId||duplicate.childSessionId!==actor.childSessionId)throw new HttpError(409,'原外部调用的身份或输入不匹配');return this.result(duplicate);}
     const prior=resumeRunId?this.store.require<ExternalRun>('acpRuns',resumeRunId):undefined;
-    if(prior&&(prior.schemaVersion!==1||prior.projectId!==actor.projectId||prior.taskId!==actor.taskId||prior.workerId!==actor.workerId||prior.generation!==actor.generation||prior.scopeHash!==actor.scopeHash||prior.sessionId!==actor.sessionId||prior.childSessionId!==actor.childSessionId||prior.agent!==agentId||prior.profileRevision!==profile.revision||prior.dispatchPhase!=='answered'||prior.state!=='completed'||!prior.contextId))throw new HttpError(409,'只能继续同一执行身份下已明确结束的外部会话');
+    if(prior&&(prior.schemaVersion!==1||prior.projectId!==actor.projectId||prior.taskId!==actor.taskId||prior.workerId!==actor.workerId||prior.generation!==actor.generation||prior.scopeHash!==actor.scopeHash||prior.sessionId!==actor.sessionId||prior.childSessionId!==actor.childSessionId||prior.agent!==agentId||prior.requestedModel!==actor.model||prior.profileRevision!==profile.revision||prior.dispatchPhase!=='answered'||prior.state!=='completed'||!prior.contextId))throw new HttpError(409,'只能继续同一执行身份与模型下已明确结束的外部会话');
     if(prior&&[...this.live.keys()].some(key=>this.store.get<ExternalRun>('acpRuns',key)?.contextId===prior.contextId))throw new HttpError(409,'该外部会话仍在运行');
     if(this.live.size>=4)throw new HttpError(409,'外部 Agent 正在处理其他工作，请稍后继续原任务');
     const runId=id();
     const run:ExternalRun={schemaVersion:1,id:runId,purpose:actor.purpose??'segment',contextId:prior?.contextId??runId,scopeHash:actor.scopeHash,agent:agentId,profileRevision:profile.revision,projectId:actor.projectId,taskId:actor.taskId,workerId:actor.workerId,sessionId:actor.sessionId,
-      childSessionId:actor.childSessionId,agentRunId:actor.agentRunId,generation:actor.generation,requestKey,inputHash,state:'starting',dispatchPhase:'not_sent',createdAt:now(),updatedAt:now(),events:[],usage:null};
+      childSessionId:actor.childSessionId,agentRunId:actor.agentRunId,generation:actor.generation,requestKey,inputHash,...(actor.model?{requestedModel:actor.model}:{}),state:'starting',dispatchPhase:'not_sent',createdAt:now(),updatedAt:now(),events:[],usage:null};
     const controller=new AbortController(),stop=()=>controller.abort(actor.signal.reason);
     actor.signal.addEventListener('abort',stop,{once:true});
     const live:{process?:AcpProcess;controller:AbortController;scopeHash:string}={controller,scopeHash:actor.scopeHash};this.live.set(run.id,live);
@@ -122,7 +122,9 @@ export class LakeExternalAgents {
       if(agentId==='codex')bridge=await openToolBridge(tools.map(tool=>({name:tool.metadata.name,description:tool.metadata.description??tool.metadata.name,inputSchema:tool.inputSchema as Record<string,unknown>})),invoke);
       const launcher=ownLauncher('--internal-acp-mcp');
       const mcp=bridge?{command:'/usr/bin/env',args:['-i','PATH='+process.env.PATH,'HOME='+directory,'TMPDIR='+directory,'LANG='+(process.env.LANG??'en_US.UTF-8'),'LAKE_TS_IMPORT_ONLY=0',launcher.executable,...launcher.args,bridge.socket]}:undefined;
-      const transport=new AcpProcess(await this.launch(profile,directory,controller.signal,mcp),{
+      const launch=await this.launch(profile,directory,controller.signal,mcp,actor.model);
+      if(launch.observed){run.model=launch.observed.model;run.modelProvider=launch.observed.modelProvider;run.reasoningEffort=launch.observed.reasoningEffort;persist();}
+      const transport=new AcpProcess(launch,{
         request:async(method,params,callId)=>{
           guard();
           if(method==='session/request_permission'){

@@ -150,7 +150,7 @@ async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = 
   const explicitNativeRoles=()=>{
     if(!nativeSpecialists)return;
     // These existing regression scenarios explicitly exercise native Workers.
-    // Dedicated default-Codex scenarios opt out and verify production defaults.
+    // Dedicated legacy-Codex scenarios opt out and verify compatibility defaults.
     const put=app.store.put.bind(app.store);
     app.store.put=(kind,key,value)=>put(kind,key,kind==='superRoles'&&value.execution===undefined?{...value,execution:{kind:'native'}}:value);
   };
@@ -877,6 +877,17 @@ function superReply(request, mode, home) {
     return call("work_finish", { summary, ...(schema?.properties?.outcome ? { outcome: "completed" } : {}) }, id);
   };
   const router = request.tools?.some((tool) => tool.function?.name === "route_work");
+  if(mode==='super-specialist-random-model'&&router){
+    const start=request.messages.findLastIndex(m=>m.role==='user'&&content(m).startsWith('[LAKE ADMITTED HUMAN EVENTS'));
+    const event=JSON.parse(content(request.messages[start]).split('\n')[1])[0],called=request.messages.slice(start+1).flatMap(m=>m.tool_calls??[]).map(tool=>tool.function.name);
+    if(event.text.includes('创建')){
+      if(!called.includes('list_specialist_execution_options'))return call('list_specialist_execution_options',{},'available-role-models');
+      if(!called.includes('manage_specialist'))return call('manage_specialist',{event_id:event.id,part_key:'role',action:'create',role_key:'random-checker',name:'巡检专员',duties:'检查项目工作区',quote:event.text},'create-random-role');
+      return {content:'已创建巡检专员，沿用本次保存的 Agent 和模型。'};
+    }
+    if(!called.includes('route_work'))return call('route_work',{event_id:event.id,part_key:'inspect',action:'create',role_key:'random-checker',title:'检查项目工作区',quote:event.text,reason:'用户请求检查工作区'},'assign-random-role');
+    return {content:'已派发给巡检专员。'};
+  }
   if (mode === "super-joint-contribution") {
     if (router) {
       const start = request.messages.findLastIndex(m => m.role === "user" && content(m).startsWith("[LAKE ADMITTED HUMAN EVENTS"));
@@ -964,7 +975,10 @@ function superReply(request, mode, home) {
         ...(context.specialists.items.length ? {role_id:context.specialists.items[0].id} : {role_key:"服务器运维专员"})});
       return {content:"已安排服务器运维专员检查。"};
     }
-    if (!names.includes("manage_specialist")) return call("manage_specialist", { event_id: event.id, part_key: "specialist", action: "create", role_key: "project-inspector", name: "项目检查员", duties: "检查当前项目工作区，按实际证据报告", quote: event.text });
+    // Subagent regression scenarios require a native parent, even when their
+    // separate Codex child is enabled in the random specialist pool.
+    if (!names.includes("manage_specialist")) return call("manage_specialist", { event_id: event.id, part_key: "specialist", action: "create", role_key: "project-inspector", name: "项目检查员", duties: "检查当前项目工作区，按实际证据报告", quote: event.text,
+      ...(mode.startsWith('super-subagent')?{execution:{kind:'native'}}:{}) });
     if (mode === "super-meta") return { content: "已创建长期专员，没有创建执行任务。" };
     if (!names.includes("list_specialists")) return call("list_specialists", {});
     const roleId = request.messages.slice(currentStart).filter((message) => message.role === "tool").map(content).join("\n").match(/"id"\s*:\s*"([a-f0-9]{64})"/)?.[1];
@@ -3396,6 +3410,35 @@ test('real SDK rejects a wrong local command then reads a scoped remote truncate
  assert.equal(f.app.store.require('superGoals',worker.task.taskId).acceptanceState,"not_evaluated");
  assert.ok(requests.some(r=>r.messages.some(m=>m.role==='tool'&&m.tool_call_id==='full-worker-large-receipt'&&/truncat|artifact|persisted/i.test(JSON.stringify(m.content)))),'fixture must exercise SDK output truncation');
 });
+test('Pilot saves a random role model and real native Worker requests keep it after global changes and restart',async t=>{
+ const f=await fixture(t,'super-specialist-random-model'),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ const provider=f.app.store.modelProviders()[0];provider.models.push({...provider.models[0],id:'second-fixture-model',name:'fixture-second'});f.app.store.put('providers',provider.id,provider);
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'创建巡检专员，负责检查项目工作区。'},202);
+ await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),view=>view.status==='completed');
+ const role=f.app.store.list('superRoles')[0],saved=JSON.stringify(role.execution);assert.equal(role.execution.kind,'native');assert.equal(role.execution.model.providerId,provider.id);
+ assert.equal(f.app.store.list('superWorkers').length,0,'configuration creates no business task');
+ const actualModel=provider.models.find(model=>model.id===role.execution.model.modelId),other=provider.models.find(model=>model.id!==actualModel.id);assert.ok(actualModel&&other);
+ f.app.store.selectModel(provider.id,other.id);
+ for(let attempt=1;attempt<=2;attempt++){
+  const before=f.requests.length;
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'让巡检专员检查项目工作区。'},202);
+  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===attempt&&s.workers.every(w=>w.task.state==='completed'));
+  await f.app.agents.wait(project.routerSessionId);
+  const requests=f.requests.slice(before).filter(isIndependentWorkerRequest);assert.ok(requests.length);assert.ok(requests.every(request=>request.model===actualModel.name));
+  assert.ok(f.requests.slice(before).filter(request=>request.tools.some(tool=>tool.function.name==='route_work')).every(request=>request.model===other.name));
+  assert.equal(JSON.stringify(f.app.store.require('superRoles',role.id).execution),saved);
+  assert.ok(state.workers.every(worker=>JSON.stringify(worker.execution.backend)===saved));
+  assert.deepEqual(f.app.store.modelSelection(),{providerId:provider.id,modelId:other.id});
+  if(attempt===1)await f.restart();
+ }
+ const channel=(await f.api(`/api/projects/${f.project.id}/superagent`)).channels[0],before=f.requests.length;
+ await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',{text:'再检查一次项目工作区。',assignment:{requestId:'saved-role-model-assignment',roleRevision:role.revision,execution:{kind:'native'}}},202);
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===3&&s.workers.every(worker=>worker.task.state==='completed'));
+ const assignedRequests=f.requests.slice(before).filter(isIndependentWorkerRequest);assert.ok(assignedRequests.length);assert.ok(assignedRequests.every(request=>request.model===actualModel.name));
+ assert.equal(JSON.stringify(f.app.store.require('superRoles',role.id).execution),saved);
+ assert.equal(f.app.store.list('superRoleMutations').length,1);assert.equal(f.app.store.list('superAcceptance').length,0);
+});
+
 test('default resource delegation creates a missing specialist and reuses its stable role with independent reported tasks',{skip:process.platform!=='darwin'},async t=>{
  const {f,project,send}=await fullAgentTask(t,'super-full-worker-default-delegation-ssh'),server=await sshFixture(t);
  await sshResource(f,server);assert.equal(f.app.store.list('superRoles').length,0);await send('请检查服务器启动状态，并核对实际结果。');
@@ -4136,7 +4179,7 @@ test('disabling the project ACP profile revokes a pending bridge write without a
  assert.equal(f.app.store.list('superAcceptance').length,0);
 });
 
-test('specialists without an override default to Codex and never silently create an unconfigured native task',{timeout:30000},async t=>{
+test('legacy specialists without an override retain Codex and never silently create an unconfigured native task',{timeout:30000},async t=>{
  const f=await fixture(t,'super-acp-worker',false,false),path=`/api/projects/${f.project.id}`;
  const project=await f.api(path+'/superagent','POST',{});
  const role={id:'e'.repeat(64),projectId:f.project.id,roleKey:'project-inspector',name:'项目检查员',duties:'检查实际项目',revision:1};

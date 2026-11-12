@@ -20,6 +20,7 @@ import type { ToolEntry, ToolExecutionContext } from "./sdk";
 import type { AIApproval, AIQuestionRequest, Message, SessionSnapshot, SpecialistChannelInfo,
   SpecialistChannelPage, SuperProject, SuperTask, SuperWorker, SuperWorkspace } from "../../web-agent/shared/contracts";
 import type { AgentHost, HostProfile, HostToolContext } from "./agent-host";
+import {chooseSpecialistExecution,specialistExecutionOptions,type SpecialistExecutionOption} from './specialist-execution';
 import { LakeAgents } from "./agent";
 import { HttpError, id, LakeStore, now, type StoredSession } from "./store";
 import { canonical, digest, TaskLedger, terminal, text, type Goal, type Operation } from "./tasks";
@@ -45,6 +46,7 @@ import type {TurnFailure} from "./model-errors";
 import type {WatchdogFinding, WatchdogMode} from "../../web-agent/shared/contracts";
 import type {AgentBackendRef,AgentExecutionSummary,SpecialistAgentAssignment} from '../../web-agent/shared/external-agents';
 import type {ExternalRun} from './acp/types';
+import {codexModels} from './acp/codex-profile';
 
 type Role = { id: string; projectId: string; roleKey: string; name: string; duties: string; revision: number; avatarId?:LakeAvatarName; deletedAt?: string; execution?: import('./acp/types').AgentBackendRef };
 type Channel = { id: string; projectId: string; roleId: string; sessionId: string; revision: number; createdAt: string };
@@ -73,7 +75,7 @@ type Decision = { id: string; projectId: string; eventId: string; partKey: strin
 type Interaction = { id: string; workerId: string; generation: number; kind: "plan" | "question";
   revision: number; resolve: (value: unknown) => void; reject: (error: Error) => void };
 const permissionKeys = ["silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "silentMCPCalls", "denyLocalExecution", "blockUnreferencedAssets", "permissions", "permissionRevision", "securityPolicyRevision"];
-const routerTools = [...pilotConfigurationToolNames,"list_specialists", "list_specialist_avatars", "manage_specialist", "search_super_tasks", "route_work", "read_super_object", "inspect_watchdog"];
+const routerTools = [...pilotConfigurationToolNames,"list_specialists", "list_specialist_avatars", "list_specialist_execution_options", "manage_specialist", "search_super_tasks", "route_work", "read_super_object", "inspect_watchdog"];
 const workTools = ["work_begin", "work_read", "work_update", "work_finish", "work_wait", "recall_task_context", "recall_memory", "ask_user_question", "list_assets", "list_project_files",
   "list_referenced_task_evidence", "read_referenced_task_evidence", "read_tool_output"];
 const hostTools=["inspect_host"];
@@ -621,34 +623,72 @@ export class LakeSuperagent implements AgentHost {
     const rows = this.store.list<Role>("superRoles").filter((role) => role.projectId === projectId && !role.deletedAt && role.id > cursor).sort((a, b) => a.id.localeCompare(b.id));
     return { items: rows.slice(0, limit).map(role=>{
       const backend=this.roleExecution(role);
-      return {...role,execution:backend.kind==='native'?backend:{kind:'acp',agent:backend.agent}};
+      return {...role,execution:backend.kind==='native'?backend:{kind:'acp',agent:backend.agent,...(backend.model?{model:backend.model}:{})}};
     }), nextCursor: rows.length > limit ? rows[limit - 1].id : "" };
   }
   private roleBackend(projectId:string,backend:unknown,allowRevision=false):AgentBackendRef {
-    if(!backend||typeof backend!=='object'||Array.isArray(backend)||Object.keys(backend).some(key=>!['kind','agent',...(allowRevision?['revision']:[])].includes(key)))
+    if(!backend||typeof backend!=='object'||Array.isArray(backend)||Object.keys(backend).some(key=>!['kind','agent','model',...(allowRevision?['revision']:[])].includes(key)))
       throw new HttpError(400,'请选择当前支持的专员执行后端');
     const value=backend as Record<string,unknown>;
     if(value.revision!==undefined&&(!Number.isSafeInteger(value.revision)||(value.revision as number)<1))throw new HttpError(400,'执行后端版本无效');
-    if(value.kind==='native'&&value.agent===undefined&&value.revision===undefined)return {kind:'native'};
+    let model:AgentBackendRef['model'];
+    if(value.model!==undefined){
+      if(!value.model||typeof value.model!=='object'||Array.isArray(value.model)||Object.keys(value.model).some(key=>!['modelId','providerId'].includes(key)))throw new HttpError(400,'模型引用无效');
+      const ref=value.model as Record<string,unknown>;
+      model={modelId:text(ref.modelId,'modelId',256),...(ref.providerId!==undefined?{providerId:text(ref.providerId,'providerId',256)}:{})};
+      if(value.kind==='native'){
+        const provider=model.providerId&&this.store.modelProvider(model.providerId);
+        if(!provider||!specialistExecutionOptions([provider]).some(option=>option.execution.model?.modelId===model!.modelId))throw new HttpError(409,'专员保存的 Lake 模型当前不可用，请更新专员配置');
+      }else if(model.providerId!==undefined||!codexModels.includes(model.modelId))throw new HttpError(400,'该模型不在当前 Codex 兼容目录中');
+    }
+    if(value.kind==='native'&&value.agent===undefined&&value.revision===undefined)return {kind:'native',...(model?{model}:{})};
     if(value.kind!=='acp'||value.agent!=='codex')throw new HttpError(400,'当前专员仅支持 Lake 原生或 Codex');
     const profile=this.agents.external.registry.get(projectId,'codex');
-    return {kind:'acp',agent:profile.id};
+    return {kind:'acp',agent:profile.id,...(model?{model}:{})};
+  }
+  private executionOptions(projectId:string){
+    const registry=this.agents.external?.registry,profile=registry?.get(projectId,'codex');
+    const probe=profile&&this.store.get<any>('acpProbes',projectId+':codex');
+    const ready=process.platform==='darwin'&&!!profile?.enabled&&probe?.revision===profile.revision&&probe.authentication==='codex-local'&&probe.ready===true&&probe.authenticated===true;
+    return specialistExecutionOptions(this.store.modelProviders(),profile?[{...profile,name:'Codex',installed:ready,transportReady:ready,assignmentReady:ready,model:probe?.model}]:[]);
+  }
+  private async refreshedExecutionOptions(projectId:string){
+    await this.store.refreshModels();const external=await this.agents.external?.status(projectId)??[];
+    return specialistExecutionOptions(this.store.modelProviders(),external);
+  }
+  private creationExecution(projectId:string,input:Record<string,any>,available?:SpecialistExecutionOption[]):AgentBackendRef{
+    const backend=input.execution===undefined?undefined:this.roleBackend(projectId,input.execution);
+    let options=available??this.executionOptions(projectId);
+    if(backend?.model)options=options.filter(option=>canonical(option.execution.model)===canonical(backend.model));
+    return chooseSpecialistExecution(options,{kind:backend?.kind,agent:backend?.kind==='acp'?'codex':undefined,
+      modelId:input.model_id,providerId:input.provider_id});
+  }
+  private updatedExecution(role:Role,input:Record<string,any>,available?:SpecialistExecutionOption[]):AgentBackendRef|undefined{
+    const backend=input.execution===undefined?role.execution:this.roleBackend(role.projectId,input.execution);
+    if(input.model_id!==undefined||input.provider_id!==undefined){
+      const current=backend??this.roleExecution(role);
+      return chooseSpecialistExecution(available??this.executionOptions(role.projectId),{kind:current.kind,agent:current.kind==='acp'?'codex':undefined,
+        modelId:input.model_id,providerId:input.provider_id??(current.kind==='native'?current.model?.providerId:undefined)});
+    }
+    const same=backend?.kind===role.execution?.kind&&(backend?.kind!=='acp'||role.execution?.kind==='acp'&&backend.agent===role.execution.agent);
+    return backend&&!backend.model&&same&&role.execution?.model?{...backend,model:role.execution.model}:backend;
   }
   setRoleExecution(projectId:string,roleId:string,input:Record<string,any>){
     const role=this.role(projectId,roleId),backend=input.execution;
     if(input.expectedRevision!==role.revision)throw new HttpError(409,'专员配置已变化，请刷新后重试');
-    const execution=this.roleBackend(projectId,backend,true);
+    const execution=this.updatedExecution(role,{execution:this.roleBackend(projectId,backend,true)});
     const updated={...role,execution,revision:role.revision+1};
     this.store.put('superRoles',role.id,updated);this.notify(this.ensureChannel(updated).sessionId,'specialist');
     return updated;
   }
   private roleExecution(role:Role):AgentBackendRef {
-    if(role.execution?.kind==='native')return {kind:'native'};
+    if(role.execution?.kind==='native')return structuredClone(role.execution);
     const profile=this.agents.external.registry.get(role.projectId,'codex');
-    return {kind:'acp',agent:'codex',revision:profile.revision};
+    return {kind:'acp',agent:'codex',revision:profile.revision,...(role.execution?.model?{model:structuredClone(role.execution.model)}:{})};
   }
   private freezeRoleExecution(role:Role):Role {
     const execution=this.roleExecution(role);
+    if(execution.kind==='native'&&execution.model)this.roleBackend(role.projectId,execution);
     if(execution.kind==='acp'){
       const profile=this.agents.external.registry.get(role.projectId,execution.agent);
       const probe=this.store.get<{revision:number;ready:boolean;authentication?:string;authenticated?:boolean;message?:string}>('acpProbes',role.projectId+':codex');
@@ -659,22 +699,25 @@ export class LakeSuperagent implements AgentHost {
     }
     return {...role,execution};
   }
-  private manage(sessionId: string, input: Record<string, any>) {
+  private manage(sessionId: string, input: Record<string, any>,available?:SpecialistExecutionOption[]) {
     const event = this.admitted(sessionId, input.event_id, text(input.quote, "quote", 16384));
-    if(Object.keys(input).some(key=>!['event_id','part_key','action','role_id','role_key','name','duties','avatar_id','execution','expected_revision','quote'].includes(key)))
+    if(Object.keys(input).some(key=>!['event_id','part_key','action','role_id','role_key','name','duties','avatar_id','execution','model_id','provider_id','expected_revision','quote'].includes(key)))
       throw new HttpError(400,'Unsupported specialist configuration field');
     const part = text(input.part_key, "part_key", 128), has=(key:string)=>Object.hasOwn(input,key);
     const name=has('name')?text(input.name,'name',128):undefined;
     if(has('duties')&&(typeof input.duties!=="string"||Buffer.byteLength(input.duties)>4096||input.duties.includes("\0")))throw new HttpError(400,"Invalid specialist duties");
     if(has('avatar_id')&&input.avatar_id!=='auto'&&(typeof input.avatar_id!=='string'||!isLakeAvatarName(input.avatar_id)))
       throw new HttpError(400,'请选择 list_specialist_avatars 返回的头像 ID，或 auto');
-    if(!['name','duties','avatar_id','execution'].some(has))throw new HttpError(400,'No specialist configuration changes supplied');
+    for(const field of ['model_id','provider_id'])if(has(field))text(input[field],field,256);
+    if(has('provider_id')&&!has('model_id'))throw new HttpError(400,'provider_id 需要同时指定 model_id');
+    if(!['name','duties','avatar_id','execution','model_id'].some(has))throw new HttpError(400,'No specialist configuration changes supplied');
     const key = digest([event.id, part]), hash = digest(input);
     const result = this.store.transaction(() => {
       const prior = this.store.get<{ hash: string; result: Role }>("superRoleMutations", key);
       if (prior) { if (prior.hash !== hash) throw new HttpError(409, "Specialist decision conflict"); return prior.result; }
       if (this.store.list<{ eventId?: string }>("superRoleMutations").filter((mutation) => mutation.eventId === event.id).length >= 16)
         throw new HttpError(409, "Specialist mutation limit exceeded");
+      const requested=has('execution')?this.roleBackend(event.projectId,input.execution):undefined;
       let role: Role;
       if (input.action === "create") {
         if(name===undefined||!has('duties'))throw new HttpError(400,'Create requires specialist name and duties');
@@ -685,18 +728,19 @@ export class LakeSuperagent implements AgentHost {
         if (existing) {
           this.role(event.projectId, roleId);
           if (existing.name !== name || existing.duties !== input.duties || has('avatar_id')&&existing.avatarId!==(input.avatar_id==='auto'?undefined:input.avatar_id) ||
-            has('execution')&&canonical(existing.execution)!==canonical(this.roleBackend(event.projectId,input.execution)))throw new HttpError(409,"role_key exists; update the exact role_id and revision");
+            requested&&(existing.execution?.kind!==requested.kind||requested.kind==='acp'&&(existing.execution?.kind!=='acp'||existing.execution.agent!==requested.agent)||requested.model!==undefined&&canonical(existing.execution?.model)!==canonical(requested.model)) ||
+            has('model_id')&&!this.executionOptions(event.projectId).some(option=>canonical(option.execution)===canonical(existing.execution)&&(option.execution.model?.modelId===input.model_id||option.modelName===input.model_id)&&(!input.provider_id||option.execution.model?.providerId===input.provider_id)))throw new HttpError(409,"role_key exists; update the exact role_id and revision");
           role = existing;
         } else role = { id: roleId, projectId: event.projectId, roleKey, name, duties: input.duties, revision: 1,
           ...(has('avatar_id')&&input.avatar_id!=='auto'?{avatarId:input.avatar_id}:{}),
-          ...(has('execution')?{execution:this.roleBackend(event.projectId,input.execution)}:{}) };
+          execution:this.creationExecution(event.projectId,input,available) };
       } else if (input.action === "update") {
         role = this.role(event.projectId, text(input.role_id, "role_id", 128));
         if (input.role_key || !Number.isSafeInteger(input.expected_revision) || role.revision !== input.expected_revision)
           throw new HttpError(409, "Stale specialist revision");
         role = { ...role, ...(name!==undefined?{name}:{}), ...(has('duties')?{duties:input.duties}:{}),
           ...(has('avatar_id')?{avatarId:input.avatar_id==='auto'?undefined:input.avatar_id}:{}),
-          ...(has('execution')?{execution:this.roleBackend(event.projectId,input.execution)}:{}),revision:role.revision+1 };
+          ...(['execution','model_id'].some(has)?{execution:this.updatedExecution(role,input,available)}:{}),revision:role.revision+1 };
       } else throw new HttpError(400, "Specialist action must be create or update");
       this.store.put("superRoles", role.id, role);
       const channel = this.ensureChannel(role);
@@ -737,7 +781,7 @@ export class LakeSuperagent implements AgentHost {
     return this.store.list<Decision>("superDecisions").find(decision => ["create", "assign"].includes(decision.action) &&
       this.decisionAssignments(decision).some(assignment => assignment.workerId === worker.id));
   }
-  private assignmentRoles(projectId: string, input: Record<string, any>) {
+  private assignmentRoles(projectId: string, input: Record<string, any>,available?:SpecialistExecutionOption[]) {
     if ([input.role_ids, input.role_id, input.role_key].filter(value => value != null).length !== 1)
       throw new HttpError(400, "Provide exactly one of role_id, role_ids or role_key");
     if (input.role_ids != null) {
@@ -748,7 +792,7 @@ export class LakeSuperagent implements AgentHost {
     if (input.role_id != null) return [this.role(projectId, text(input.role_id, "role_id", 128))];
     const roleKey = text(input.role_key, "role_key", 128);
     const roleId = this.store.list<Role>("superRoles").find(role => role.projectId === projectId && role.roleKey === roleKey)?.id ?? digest([projectId, roleKey]);
-    const role = this.store.get<Role>("superRoles", roleId) ?? { id: roleId, projectId, roleKey, name: roleKey, duties: "", revision: 1 };
+    const role = this.store.get<Role>("superRoles", roleId) ?? { id: roleId, projectId, roleKey, name: roleKey, duties: "", revision: 1,execution:this.creationExecution(projectId,{},available) };
     if (role.deletedAt) throw new HttpError(410, "Specialist is retired");
     return [this.store.put("superRoles", role.id, role)];
   }
@@ -851,7 +895,7 @@ export class LakeSuperagent implements AgentHost {
     fresh.deadlineAt = goal.deadlineAt; fresh.readOnlyRecoveryOf = goal.id; this.ledger.save(fresh);
     return freshWorker;
   }
-  private route(sessionId: string, input: Record<string, any>) {
+  private route(sessionId: string, input: Record<string, any>,available?:SpecialistExecutionOption[]) {
     const action = text(input.action, "action", 32), reason = text(input.reason, "reason", 2048);
     if (!["create", "assign", "followup", "context_only", "stop", "ask", "respond"].includes(action)) throw new HttpError(400, "Invalid routing action");
     const assigning = action === "create" || action === "assign";
@@ -880,7 +924,7 @@ export class LakeSuperagent implements AgentHost {
       if (alias) return this.replayDecision(event.projectId, input, alias);
       if (parts.length >= 16) throw new HttpError(400, "Event decision limit exceeded");
       if (assigning) {
-        const roles = this.assignmentRoles(event.projectId, input);
+        const roles = this.assignmentRoles(event.projectId, input,available);
         if (event.preferredRoleId && (roles.length !== 1 || event.preferredRoleId !== roles[0]!.id || action === "assign"))
           throw new HttpError(409, "Use the exact source channel role_id; additional specialists must be assigned by Pilot");
         const instructions = this.roleInstructions(input.role_instructions, roles);
@@ -1054,7 +1098,7 @@ export class LakeSuperagent implements AgentHost {
       Object.keys(input).some(key=>!['requestId','roleRevision','execution'].includes(key)))throw new HttpError(400,'分配任务的请求身份或专员版本无效');
     const requested=input.execution;
     if(!requested||typeof requested!=='object'||Array.isArray(requested)||!['native','acp'].includes(requested.kind)||
-      Object.keys(requested).some(key=>!(requested.kind==='native'?['kind']:['kind','agent','revision']).includes(key)))throw new HttpError(400,'请选择实际执行 Agent');
+      Object.keys(requested).some(key=>!(requested.kind==='native'?['kind','model']:['kind','agent','revision','model']).includes(key)))throw new HttpError(400,'请选择实际执行 Agent');
     const key=digest([channel.projectId,channel.id,input.requestId]),hash=digest({input,value,ignoreMemory,selectedReferences});
     const receipt=()=>{
       const prior=this.store.get<{hash:string;messageId:string;workerId:string}>('superAgentAssignments',key);
@@ -1066,6 +1110,8 @@ export class LakeSuperagent implements AgentHost {
     const duplicate=receipt();if(duplicate)return duplicate;
     const role=this.role(channel.projectId,channel.roleId);
     if(role.revision!==input.roleRevision)throw new HttpError(409,'专员配置已变化，请刷新分配入口后重试');
+    const candidate={...requested};if(candidate.kind==='acp')delete candidate.revision;
+    const selected=this.updatedExecution(role,{execution:candidate})!;
     let execution:AgentBackendRef={kind:'native'};
     if(requested.kind==='acp'){
       if(!Number.isSafeInteger(requested.revision)||(requested.revision??-1)<0)throw new HttpError(400,'缺少准确的 Agent 连接版本');
@@ -1075,6 +1121,7 @@ export class LakeSuperagent implements AgentHost {
       if(status.revision!==profile.revision||!status.assignmentReady)throw new HttpError(409,status.assignmentBlocker??'外部 Agent 配置已变化');
       execution={kind:'acp',agent:profile.id,revision:profile.revision};
     }
+    if(selected.model)execution={...execution,model:structuredClone(selected.model)};
     // Recheck after asynchronous readiness reads. The transaction never yields
     // between validating current revisions and freezing the original Worker.
     const accepted=this.store.transaction(()=>{
@@ -1741,6 +1788,14 @@ export class LakeSuperagent implements AgentHost {
     return [
       ...(this.configuration?.entries(sessionId,(eventId,quote)=>this.admitted(sessionId,eventId,quote),()=>this.notify(sessionId,"session"))??[]),
       this.entry("list_specialists", "List stable project specialist IDs, revisions, name, duties, optional avatarId and effective future-task execution. Metadata, not permissions.", objectSchema({ cursor: str, limit: integer }), (a) => this.listRoles(projectId, a.cursor, a.limit)),
+      this.entry('list_specialist_execution_options','List configured available specialist Agent/model combinations. Copy execution for an exact choice; model_id may use modelName for a model-only choice. On creation omit every Agent/model field not explicitly requested by the human: the host randomly selects and saves missing choices once. Metadata never grants resource permissions.',objectSchema({cursor:str,limit:integer}),async(a,context)=>{
+        const available=await this.refreshedExecutionOptions(projectId);context.abortSignal.throwIfAborted();
+        const limit=a.limit??20;if(!Number.isSafeInteger(limit)||limit<1||limit>50)throw new HttpError(400,'limit must be 1 to 50');
+        if(a.cursor!==undefined&&(typeof a.cursor!=='string'||a.cursor!==''&&!/^[a-f0-9]{64}$/.test(a.cursor)))throw new HttpError(400,'Invalid execution options cursor');
+        const rows=available.filter(option=>option.id>(a.cursor??'')),items=rows.slice(0,limit);
+        while(items.length>1&&Buffer.byteLength(canonical(items))>8192)items.pop();
+        return {items,nextCursor:rows.length>items.length?items.at(-1)!.id:'',selection:'Choose missing Agent and model randomly once, then persist the specialist selection.'};
+      }),
       this.entry('list_specialist_avatars','List Lake local avatar IDs and Chinese names; optional query matches a name, alias or ID. Copy an exact ID to manage_specialist avatar_id; auto restores stable RoleID selection. No images, files or URLs are loaded.',objectSchema({query:str}),a=>{
         if(a.query!==undefined&&(typeof a.query!=='string'||a.query.length>128))throw new HttpError(400,'Invalid avatar query');
         const query=(a.query??'').normalize('NFKC').trim().toLowerCase();
@@ -1748,13 +1803,20 @@ export class LakeSuperagent implements AgentHost {
         const exact=query?lakeAvatarCatalog.filter(avatar=>names(avatar).includes(query)):[];
         return {items:exact.length?exact:lakeAvatarCatalog.filter(avatar=>names(avatar).some(value=>value.includes(query))),reset:'auto'};
       }),
-      this.entry("manage_specialist", "Create or partially update a long-lived specialist from an exact admitted human quote, without creating work. Create requires immutable role_key, name and duties. Update requires exact role_id/expected_revision; omit unchanged fields. avatar_id is an exact list_specialist_avatars ID or auto. execution is the future-task backend (native, or acp with agent codex); it does not edit Codex login/model settings. Name/duties/execution changes preserve existing Worker snapshots. Only announce changes after a successful saved receipt.",
+      this.entry("manage_specialist", "Create or partially update a long-lived specialist from an exact admitted human quote, without creating work. Create requires immutable role_key, name and duties. Omit unrequested execution/model_id: the host randomly chooses available missing Agent/model choices once and persists them. A specified Agent restricts the random model; a specified model restricts compatible Agents. list_specialist_execution_options returns exact choices. Update requires exact role_id/expected_revision and preserves omitted fields. avatar_id is an exact list_specialist_avatars ID or auto. Model bindings affect future Workers, not global/Pilot model selection, local Codex files or existing Workers. Only announce saved choices after a successful receipt.",
         objectSchema({ event_id: str, part_key: str, action: { enum: ["create", "update"], type: "string" }, role_id: str, role_key: str, name: str, duties: str,avatar_id:str,
-          execution:objectSchema({kind:{type:'string',enum:['native','acp']},agent:{type:'string',enum:['codex']}},['kind']),expected_revision: integer, quote: str }, ["event_id", "part_key", "action", "quote"]), (a) => this.manage(sessionId, a)),
+          execution:objectSchema({kind:{type:'string',enum:['native','acp']},agent:{type:'string',enum:['codex']},model:objectSchema({modelId:str,providerId:str},['modelId'])},['kind']),model_id:str,provider_id:str,expected_revision: integer, quote: str }, ["event_id", "part_key", "action", "quote"]), async(a,context)=>{
+            this.admitted(sessionId,a.event_id,text(a.quote,'quote',16384));context.abortSignal.throwIfAborted();
+            const available=a.action==='create'||a.model_id!==undefined||a.execution!==undefined?await this.refreshedExecutionOptions(projectId):undefined;
+            context.abortSignal.throwIfAborted();return this.manage(sessionId,a,available);
+          }),
       this.entry("route_work", "Commit one exact admitted event part. Copy role_id verbatim from the current specialists catalog or list_specialists; never reconstruct IDs. If specialist_not_found, refresh the catalog and correct the same event/part, without changing its deliverable or scope. For an event selecting multiple resources, create must set resource_ids to its exact subset of selected IDs. Independent per-resource tasks may quote the same request if subsets are disjoint; for a single comparison include both IDs. Create requires title, quote and one recipient selector: role_id, new role_key, or role_ids for one shared task. Specify role_instructions for each contributor. Omit task_id for create; for assign supply the existing public task_id and additional roles. Followup, context_only and stop target the exact task and recipient role_id, using the public ID for a shared task. Use predecessor_task_id to link an earlier task. A finished source supplies historical context, including any partial findings. An unfinished ordinary source creates an independent read-only recheck for the same specialist, original explicit resource scope and deadline; it preserves original records and cannot replay original operation IDs. Invalid-memory followup uses the same safe recheck path. Inspect assignments in the receipt for the exact recipients. ask/respond omit task_id.",
         objectSchema({ event_id: str, part_key: str, action: { type: "string", enum: ["create", "assign", "followup", "context_only", "stop", "ask", "respond"] },
           task_id: str, predecessor_task_id: str, title: str, role_id: str, role_key: str, role_ids: array(str), resource_ids:array(str),
-          role_instructions: array(objectSchema({role_id: str, instruction: str}, ["role_id", "instruction"])), quote: str, reason: str, evidence_task_ids: array(str) }, ["event_id", "part_key", "action", "reason"]), async (a) => {if(['create','assign','followup'].includes(a.action))await this.agents.external?.status(projectId);return this.route(sessionId,a);}),
+          role_instructions: array(objectSchema({role_id: str, instruction: str}, ["role_id", "instruction"])), quote: str, reason: str, evidence_task_ids: array(str) }, ["event_id", "part_key", "action", "reason"]), async (a,context) => {
+            const available=['create','assign','followup'].includes(a.action)?await this.refreshedExecutionOptions(projectId):undefined;
+            context.abortSignal.throwIfAborted();return this.route(sessionId,a,available);
+          }),
       this.entry("inspect_watchdog","Explain recent Watchdog findings for the current event. Supply a task_id to inspect all contributors, or include role_id for one. Each action has its own timing and evidence.",
         objectSchema({event_id:str,task_id:str,role_id:str},["event_id"]), a=>{
           const event=this.admitted(sessionId,a.event_id);

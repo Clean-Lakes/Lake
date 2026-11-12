@@ -24,6 +24,8 @@ async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date
   internal.schedule = () => {};
   t.after(async () => { await host.close(); store.db.close(); await rm(home, { recursive: true, force: true }); });
   const project = store.createProject("isolated lifecycle"), router = host.ensure(project.id).routerSessionId;
+  store.put('providers','fixture-models',{id:'fixture-models',name:'Synthetic configured models',enabled:true,keyConfigured:true,protocol:'openai',baseURL:'http://127.0.0.1:9/v1',
+    models:['model-a','model-b'].map(name=>({id:name,name,enabled:true,supportsImageInput:false,supportsImageOutput:false}))});
   const role = { id: "role-checker", projectId: project.id, roleKey: "checker", name: "项目检查员", duties: "检查当前项目", revision: 1, execution:{kind:'native' as const} };
   store.put("superRoles", role.id, role);
   const admit = async (value: string, selected?: MessageInput) => {
@@ -72,6 +74,52 @@ test("only current unfinished business work requests a final report, without cha
   await f.finish(taskId);
   assert.equal(profile.requestFinalReport!(), false);
   assert.equal(f.host.ledger.get(taskId).acceptanceState, "not_evaluated");
+});
+
+test('specialist creation persists a random available model, replays once and preserves frozen Workers on later edits',async t=>{
+ const f=await fixture(t),event=await f.admit('创建一个巡检专员，负责检查项目。');
+ const input={event_id:event.id,part_key:'create',action:'create',role_key:'new-checker',name:'巡检专员',duties:'检查项目',quote:event.payload};
+ const saved=f.internal.manage(f.router,input),binding=saved.execution;
+ assert.equal(binding.kind,'native');assert.equal(binding.model.providerId,'fixture-models');assert.ok(['model-a','model-b'].includes(binding.model.modelId));
+ const provider=f.store.modelProvider('fixture-models')!;provider.enabled=false;f.store.put('providers',provider.id,provider);
+ assert.deepEqual(f.internal.manage(f.router,input),saved,'the same creation returns its receipt even if the available pool changes');
+ assert.equal(f.store.list('superRoleMutations').length,1);
+ const reopened=await LakeStore.open(f.store.home,f.store.data);try{assert.deepEqual(reopened.require<any>('superRoles',saved.id).execution,binding);}finally{reopened.db.close();}
+ provider.enabled=true;f.store.put('providers',provider.id,provider);
+ const taskEvent=await f.admit('让巡检专员检查项目。'),task=f.route(taskEvent,{action:'create',title:'检查项目',role_id:saved.id});f.settleRouter();
+ const worker=f.worker(task.taskId),before=JSON.stringify(worker.roleSnapshot);
+ const appearance=await f.admit('把巡检专员头像改为河狸。');
+ const changed=f.internal.manage(f.router,{event_id:appearance.id,part_key:'avatar',action:'update',role_id:saved.id,expected_revision:1,avatar_id:'beaver',quote:appearance.payload});
+ assert.deepEqual(changed.execution,binding);assert.equal(JSON.stringify(f.worker(task.taskId).roleSnapshot),before);
+ const same=f.host.setRoleExecution(f.project.id,saved.id,{expectedRevision:2,execution:{kind:'native'}});assert.deepEqual(same.execution,binding);
+ const other=binding.model.modelId==='model-a'?'model-b':'model-a',modelEvent=await f.admit('以后巡检专员使用 '+other+'。');
+ const updated=f.internal.manage(f.router,{event_id:modelEvent.id,part_key:'model',action:'update',role_id:saved.id,expected_revision:3,model_id:other,quote:modelEvent.payload});
+ assert.equal(updated.execution.model.modelId,other);assert.equal(JSON.stringify(f.worker(task.taskId).roleSnapshot),before);
+ assert.equal(f.store.modelSelection(),undefined,'role configuration never changes Pilot selection');
+});
+
+test('model-only specialist creation keeps the requested model and freezes its compatible Codex Agent',async t=>{
+ const f=await fixture(t),profile={id:'codex',projectId:f.project.id,revision:7,enabled:true};
+ (f.agents as any).external={registry:{get:()=>profile}};
+ f.store.put('acpProbes',f.project.id+':codex',{revision:7,authentication:'codex-local',ready:true,authenticated:true,model:'gpt-6.1-sol'});
+ const event=await f.admit('创建专员，使用 gpt-6.1-sol。');
+ const saved=f.internal.manage(f.router,{event_id:event.id,part_key:'create',action:'create',role_key:'sol-checker',name:'Sol 检查员',duties:'检查项目',model_id:'gpt-6.1-sol',quote:event.payload});
+ assert.deepEqual(saved.execution,{kind:'acp',agent:'codex',model:{modelId:'gpt-6.1-sol'}});
+ const work=await f.admit('检查项目。'),task=f.route(work,{action:'create',title:'检查项目',role_id:saved.id});
+ assert.deepEqual(f.worker(task.taskId).roleSnapshot.execution,{...saved.execution,revision:7});
+ assert.deepEqual(f.internal.listRoles(f.project.id).items.find((role:any)=>role.id===saved.id).execution,saved.execution);
+});
+
+test('implicit specialist creation saves its default once and an empty model pool cannot create a role',async t=>{
+ const f=await fixture(t),event=await f.admit('创建一个新专员检查项目。');
+ const input={action:'create',title:'检查项目',role_key:'implicit-checker'},task=f.route(event,input),role=f.store.require<any>('superRoles',task.roleId);
+ assert.ok(role.execution.model);assert.deepEqual(f.worker(task.taskId).roleSnapshot.execution,role.execution);
+ const replay=f.route(event,input);assert.equal(replay.taskId,task.taskId);assert.equal(replay.roleId,task.roleId);
+ assert.deepEqual(f.store.require<any>('superRoles',role.id).execution,role.execution);assert.equal(f.store.list('superWorkers').length,1);
+ f.settleRouter();for(const provider of f.store.modelProviders())f.store.delete('providers',provider.id);
+ const next=await f.admit('创建另一个专员。'),before=JSON.stringify([f.store.list('superRoles'),f.store.list('superChannels'),f.store.list('superRoleMutations')]);
+ assert.throws(()=>f.internal.manage(f.router,{event_id:next.id,part_key:'create',action:'create',role_key:'unavailable',name:'新专员',duties:'',quote:next.payload}),/没有符合要求/);
+ assert.equal(JSON.stringify([f.store.list('superRoles'),f.store.list('superChannels'),f.store.list('superRoleMutations')]),before);
 });
 
 test('Pilot partially updates appearance and future defaults without changing existing task snapshots',async t=>{

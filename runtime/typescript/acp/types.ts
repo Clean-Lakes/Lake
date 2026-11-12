@@ -18,6 +18,7 @@ export type ExternalRun = {
   schemaVersion: 1;
   id: string; agent: StoredExternalAgentId; profileRevision: number; projectId: string;
   purpose?:'worker'|'child'|'segment';
+  requestedModel?:string;model?:string;modelProvider?:string;reasoningEffort?:string;
   taskId: string; workerId: string; sessionId: string; childSessionId?: string; agentRunId?: string;
   generation: number; scopeHash: string; contextId: string; requestKey: string; inputHash: string; state: ExternalRunState;
   dispatchPhase: 'not_sent' | 'dispatching' | 'sent' | 'answered';
@@ -36,6 +37,7 @@ export type ExternalActor = {
   deadlineAt: string; scopeHash: string; workspace: string; signal: AbortSignal;
   purpose?: 'worker' | 'child' | 'segment';
   systemPrompt?: string;
+  model?:string;
   guard: () => void; tools: ToolEntry[];
   executeTool: (name: string, input: unknown, callId: string, signal: AbortSignal) => Promise<unknown>;
   event: (run: ExternalRun, event: ExternalEvent) => void;

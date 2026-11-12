@@ -8,10 +8,11 @@ process.env.LAKE_TS_IMPORT_ONLY='1';
 const {startLakeServer}=require('../../bin/lake-runtime/server.cjs');
 const adapter=process.env.LAKE_CODEX_ACP_TEST_ADAPTER;
 
-async function localCodexProvider(registry,url){
+async function localCodexProvider(registry,url,model){
  const source=registry.local.home;await mkdir(source,{recursive:true});
  const trap=join(source,'MCP_TRAP_EXECUTED'),notify=join(source,'NOTIFY_TRAP_EXECUTED'),hook=join(source,'HOOK_TRAP_EXECUTED'),command=[process.execPath,'-e',"require('fs').writeFileSync("+JSON.stringify(trap)+",'unexpected')"];
  await writeFile(join(source,'config.toml'),'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "max"\nmodel_provider = "fixture"\nnotify = '+JSON.stringify([process.execPath,'-e',"require('fs').writeFileSync("+JSON.stringify(notify)+",'unexpected')"])+ '\n[model_providers.fixture]\nname = "Isolated Responses fixture"\nbase_url = "'+url+'"\nwire_api = "responses"\nrequires_openai_auth = false\n[mcp_servers.inherited_trap]\ncommand = '+JSON.stringify(process.execPath)+'\nargs = '+JSON.stringify(command.slice(1))+'\nenabled = true\n[hooks]\nSessionStart = [{hooks = [{type = "command", command = "touch '+hook+'"}]}]\n',{mode:0o600});
+ if(model!==undefined){const path=join(source,'config.toml');await writeFile(path,(await readFile(path,'utf8')).replace('model = "gpt-6.1-sol"','model = '+JSON.stringify(model)),{mode:0o600});}
  await writeFile(join(source,'auth.json'),'{}',{mode:0o600});
  const before=await readFile(join(source,'config.toml'),'utf8'),auth=await readFile(join(source,'auth.json'),'utf8');
  const prepare=registry.prepareHome.bind(registry);
@@ -60,7 +61,7 @@ test('real Codex exposes only managed tools and returns a result through the tas
  await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_ACP_TEST_NODE??process.execPath});
  await external.probe(project.id,'codex',AbortSignal.timeout(30000));await unchanged();
  const signal=AbortSignal.timeout(45000),events=[];
- const actor={projectId:project.id,taskId:'fixture-task',workerId:'fixture-worker',sessionId:'fixture-session',generation:1,deadlineAt:new Date(Date.now()+60000).toISOString(),scopeHash:'fixture-scope',workspace:home,signal,guard:()=>signal.throwIfAborted(),model:null,
+ const actor={projectId:project.id,taskId:'fixture-task',workerId:'fixture-worker',sessionId:'fixture-session',generation:1,deadlineAt:new Date(Date.now()+60000).toISOString(),scopeHash:'fixture-scope',workspace:home,signal,guard:()=>signal.throwIfAborted(),
   tools:[{metadata:{name:'Read',description:'Read the assigned fixture evidence'},inputSchema:{type:'object',properties:{file_path:{type:'string'}},required:['file_path'],additionalProperties:false}}],
   executeTool:async(name,input)=>{assert.equal(name,'Read');assert.equal(input.file_path,'evidence.txt');reads++;return {content:await readFile(join(home,'evidence.txt'),'utf8')};},event:(run,event)=>events.push(event)};
  let result;try{result=await external.run('codex','Read evidence.txt with the supplied Lake tool, then report the result.','fixture-one',actor);}
@@ -145,7 +146,7 @@ for(const pending of [false,true])test(pending?'real Codex submits partial findi
  const unchanged=await localCodexProvider(registry,url);
  await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_ACP_TEST_NODE??process.execPath});
  await api(path+'/external-agents/codex/probe','POST',{});
- const body={text:'请读取 CODEX_ASSIGNED_EVIDENCE.txt 并报告实际内容。',assignment:{requestId:'codex-assignment-0001',roleRevision:2,execution:{kind:'acp',agent:'codex',revision:1}}};
+ const body={text:'请读取 CODEX_ASSIGNED_EVIDENCE.txt 并报告实际内容。',assignment:{requestId:'codex-assignment-0001',roleRevision:2,execution:{kind:'acp',agent:'codex',revision:1,model:{modelId:'gpt-6.1-sol'}}}};
  const receipt=await api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
  let result;
  for(let attempt=0;attempt<400;attempt++){
@@ -156,6 +157,7 @@ for(const pending of [false,true])test(pending?'real Codex submits partial findi
  const worker=result.workers[0],run=app.store.list('acpRuns')[0];
  assert.equal(worker?.task.state,'completed',JSON.stringify({worker,run}));assert.equal(worker.task.acceptanceState,'not_evaluated');
  assert.equal(worker.execution.backend.agent,'codex');assert.equal(worker.execution.runs[0].state,'completed');assert.equal(run.purpose,'worker');
+ assert.equal(worker.execution.backend.model.modelId,'gpt-6.1-sol');assert.equal(run.requestedModel,'gpt-6.1-sol');assert.equal(run.model,'gpt-6.1-sol');
  const observed=app.store.list('superOperations').find(operation=>operation.tool==='Read');assert.equal(observed.externalRunId,run.id);assert.equal(observed.status,'succeeded');
  if(pending){assert.deepEqual(app.store.get('superOperations',originalUnknown.id),originalUnknown);assert.equal(app.store.list('superOperations').length,2);assert.equal(app.store.list('superAcceptance').length,0);assert.equal(requests.length,4);}
  const page=await api(`/api/sessions/${channel.sessionId}/channel`);assert.equal(page.workers[0].execution.runs[0].id,run.id);
@@ -175,4 +177,39 @@ test('real Codex reads a cached API login and detects logout without a Lake key 
  let status=(await app.agents.external.status(project.id))[0];assert.equal(status.authMode,'api_key');assert.equal(status.assignmentReady,true);assert.equal(app.store.list('acpRuns').length,0);
  const serialized=JSON.stringify([status,app.store.list('acpProfiles'),app.store.list('acpProbes')]);assert.ok(!serialized.includes('synthetic-cached-native-api-login'));assert.equal(await app.store.secret('external-agent-'+project.id+'-codex'),'');
  await rm(join(codexHome,'auth.json'));status=(await app.agents.external.status(project.id))[0];assert.equal(status.revision,2);assert.equal(status.assignmentReady,false);assert.match(status.assignmentBlocker,/本机 Codex 尚未登录/);
+});
+
+test('real Codex uses a frozen role model over a different local default without changing login or max',{skip:!adapter,timeout:90000},async t=>{
+ const home=await mkdtemp(join(tmpdir(),'lake-codex-role-model-')),web=join(home,'web');await mkdir(web);await writeFile(join(web,'index.html'),'fixture');
+ const requests=[];let providerError;
+ const provider=createServer(async(req,res)=>{
+  try{
+   const chunks=[];for await(const chunk of req)chunks.push(chunk);const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
+   assert.equal(body.model,'gpt-6.1-sol');assert.equal(body.reasoning?.effort,'max');
+   const item={id:'role_model_report',type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:'ROLE_MODEL_REPORT: configuration fixture only',annotations:[]}]};
+   const response={id:'role_model_response',object:'response',status:'completed',output:[item],usage:{input_tokens:10,output_tokens:5,total_tokens:15}};
+   res.writeHead(200,{'Content-Type':'text/event-stream'});
+   const event=(type,data)=>res.write('event: '+type+'\ndata: '+JSON.stringify({type,...data})+'\n\n');
+   event('response.created',{response:{...response,status:'in_progress',output:[]}});
+   event('response.output_item.added',{output_index:0,item:{...item,content:[]}});
+   event('response.output_text.delta',{item_id:item.id,output_index:0,content_index:0,delta:item.content[0].text});
+   event('response.output_item.done',{output_index:0,item});event('response.completed',{response});res.end();
+  }catch(error){providerError=error;res.writeHead(500);res.end('synthetic model binding failure');}
+ });
+ await new Promise(resolve=>provider.listen(0,'127.0.0.1',resolve));
+ const app=await startLakeServer({home,codexHome:join(home,'local-codex'),data:join(home,'data'),port:0,staticRoot:web});
+ t.after(async()=>{await app.close();provider.closeAllConnections();await new Promise(resolve=>provider.close(resolve));await rm(home,{recursive:true,force:true});});
+ const project=app.store.createProject('frozen role model'),external=app.agents.external,registry=external.registry;await cp(adapter,registry.adapterRoot(),{recursive:true});
+ const unchanged=await localCodexProvider(registry,'http://127.0.0.1:'+provider.address().port+'/v1','unverified-local-default');
+ const profile=await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_ACP_TEST_NODE??process.execPath});
+ const signal=AbortSignal.timeout(45000);
+ await assert.rejects(registry.prepareLaunch(profile,signal),/未通过当前 ACP 工具兼容验证/,'the local default cannot pass accidentally');
+ const actor={projectId:project.id,taskId:'role-model-task',workerId:'role-model-worker',sessionId:'role-model-session',generation:1,deadlineAt:new Date(Date.now()+60000).toISOString(),scopeHash:'role-model-scope',workspace:home,model:'gpt-6.1-sol',signal,guard:()=>signal.throwIfAborted(),tools:[],executeTool:async()=>{throw Error('configuration fixture has no business tools');},event:()=>{}};
+ const result=await external.run('codex','Report ROLE_MODEL_REPORT without using tools.','role-model-request',actor);
+ if(providerError)throw providerError;
+ assert.equal(result.state,'completed',result.summary);assert.ok(result.summary.includes('ROLE_MODEL_REPORT'));assert.ok(requests.length);
+ const run=app.store.list('acpRuns')[0];assert.equal(run.requestedModel,'gpt-6.1-sol');assert.equal(run.model,'gpt-6.1-sol');assert.equal(run.reasoningEffort,'max');
+ await assert.rejects(external.run('codex','Report ROLE_MODEL_REPORT without using tools.','role-model-request',{...actor,model:'different-model'}),/身份或输入不匹配/);
+ await assert.rejects(external.run('codex','Continue this report.','role-model-resume',{...actor,model:'different-model'},result.run_id),/同一执行身份与模型/);
+ assert.equal(app.store.list('acpRuns').length,1);await unchanged();
 });

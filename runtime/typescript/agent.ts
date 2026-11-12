@@ -137,6 +137,7 @@ export class LakeAgents {
     const tools=names.map(name=>caller.getToolRegistry().get(name)).filter((entry):entry is ToolEntry=>!!entry);
     return {projectId:worker.projectId,taskId:goal.id,workerId:worker.id,sessionId,childSessionId:child?.sessionId,agentRunId:child?.id,
       generation:worker.generation,deadlineAt:goal.deadlineAt,scopeHash:digest([worker.id,worker.generation,worker.policyHash,child?.sessionId]),workspace:'',
+      ...(profile.execution?.kind==='acp'&&profile.execution.model?{model:profile.execution.model.modelId}:{}),
       signal:AbortSignal.any([controller.signal,context.abortSignal]),guard,tools,purpose,systemPrompt:purpose==='worker'?profile.systemPrompt+'\n'+lakeCommunicationPrompt:undefined,
       executeTool:async(name,input,callId,signal)=>{
         guard();const run=this.store.require<ExternalRun>('acpRuns',callId.split(':',1)[0]);
@@ -815,7 +816,8 @@ export class LakeAgents {
     const profile = this.host?.profile(sessionId);
     if(profile?.execution?.kind==='acp'&&profile.execution.agent!=='codex')throw new HttpError(409,'该任务的外部 Agent 已移除，不能切换或重放旧执行');
     await this.store.refreshModels();
-    const selection = this.store.modelSelection();
+    const selection = profile?.execution?.kind==='native'&&profile.execution.model
+      ? {providerId:profile.execution.model.providerId!,modelId:profile.execution.model.modelId}:this.store.modelSelection();
     const externalWorker=profile?.execution?.kind==='acp'&&profile.execution.agent==='codex';
     if (!selection&&!externalWorker) throw new HttpError(409, "请先配置模型");
     const selectedProvider = selection&&this.store.modelProvider(selection.providerId);

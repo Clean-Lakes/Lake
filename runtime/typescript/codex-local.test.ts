@@ -66,3 +66,23 @@ test('startup overrides disable inherited services with literal IDs and preserve
  assert.equal(config.model,undefined);assert.equal(config.model_provider,undefined);assert.equal(config.model_reasoning_effort,undefined);
  assert.equal(config.sqlite_home,'/private/lake/state');assert.equal(shellQuote("one'two"),"'one'\\''two'");
 });
+
+test('role model overrides keep local login and max intact and concurrent launch configurations use distinct immutable files',async t=>{
+ const f=await fixture(t),store=await LakeStore.open(join(f.home,'lake'),join(f.home,'data'));t.after(async()=>{store.db.close();});
+ const project=store.createProject('parallel model launch'),registry=new ExternalAgentRegistry(store,{codexHome:f.source});
+ const profile={...registry.get(project.id,'codex'),enabled:true,nodePath:process.execPath};store.put('acpProfiles',project.id+':codex',profile);
+ const before=[await readFile(f.config,'utf8'),await readFile(f.auth,'utf8')];
+ registry.local.inspect=async(_node,_engine,_directory,overrides)=>{
+  const model=overrides.find(value=>value.startsWith('model='));
+  return {model:model?parse('value = '+model.slice('model='.length)).value as string:'gpt-6.1-sol',provider:'openai',reasoningEffort:'max',authenticated:true,authMode:'chatgpt',mcpIds:[],hooks:{},environment:f.local.current().environment};
+ };
+ const signal=new AbortController().signal;
+ const [inherited,selected]=await Promise.all([registry.prepareLaunch(profile,signal),registry.prepareLaunch(profile,signal,'gpt-6.1-sol')]);
+ assert.notEqual(inherited.launcher,selected.launcher);
+ const original=await readFile(inherited.launcher,'utf8'),overridden=await readFile(selected.launcher,'utf8');
+ assert.ok(!original.includes('model='));assert.ok(overridden.includes('model='));assert.ok(overridden.includes('gpt-6.1-sol'));
+ assert.equal(selected.observed.reasoningEffort,'max');assert.equal(selected.observed.authenticated,true);
+ await registry.prepareLaunch(profile,signal,'gpt-6.1-sol');assert.equal(await readFile(inherited.launcher,'utf8'),original);
+ assert.deepEqual([await readFile(f.config,'utf8'),await readFile(f.auth,'utf8')],before);
+ await assert.rejects(registry.prepareLaunch(profile,signal,'unverified-model'),/兼容目录/);
+});
