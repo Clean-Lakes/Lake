@@ -1,3 +1,11 @@
+## 当前：移除聊天框 Plan 按钮（2026-11-12）
+
+源码与签名 Lake Dev 已测试：`90bd0cbdfe71133724a37352fbbb43d50fce00ec`。移除输入工具栏的 Plan 按钮、专用组件和样式；计划列表的空提示改为 Pilot `/plan` 指令。指令解析、已有模式／计划和执行／修改计划操作保留；没有更改后端或会话配置。删除了一项仅对应已移除按钮的旧渲染测试，其余测试保留。
+
+前端类型、全部 804 单元、ADK 边界和规定的签名 Dev 构建安装通过。演示工作台浅色 1280px／深色 380px 验证无 Plan 按钮、无横向溢出、其他工具均在栏内；Tab 从附件正确进入权限。实机 Pilot 的可访问树确认 Plan 入口已消失，附件／权限／模型／发送入口正常。签名严格校验、clean 来源与实际后端 hash 一致：`3ccf137c0bf1a65d5d9be427ec1e5cef8dbcdcf7ff2b3c1467a042a8eee4a809`。本轮新 hash 基线确认原配置、全部业务记录、扩展／Skills 及本机 Codex 配置不变；没有模型调用、业务命令或完整备份，四处已删除备份根目录仍不存在。演示浏览器与专用 Vite 已关闭，Dev 保持运行。
+
+本机日志为 `/tmp/lake-no-plan-button-{types,front,boundary,signed-build,preserved-before,preserved-after}.log`，截图为 `/tmp/lake-no-plan-button-{light,dark-380}.png`；未重跑后端、Go／race／vet、其他平台或真实业务操作。原后端与协作头像验证继续对应下方各自源码 SHA；回退通过源码回退与签名 Dev 重建，保留原数据，不重放旧操作。PR 仍为 develop 草稿，没有合并或生产发布。
+
 ## 当前：任务行预留协作专员头像组（2026-11-12）
 
 源码与签名 Lake Dev 已测试：`be01b280a0e805133533bab3011da3ed25a56aaf`。单人任务保留原头像与身份列，多人直接读取原 collaboration.participants，按准确专员身份展示紧凑头像组及 +N，完整姓名保留提示和无障碍描述。列表统一对齐，每位成员独立运动；轮询、成员增减／排序及头像配置变化保留原节点与焦点。不更改后端协作调度或日常任务数据。
