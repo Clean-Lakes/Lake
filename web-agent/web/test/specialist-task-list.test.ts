@@ -2,10 +2,12 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import type {SessionSnapshot,SpecialistChannelEntry,SuperWorker,Resource,ResourceTreeNode} from '../../shared/contracts';
-import {filterSpecialistTasks,specialistResourcePaths,specialistTaskRows,specialistTaskTime} from '../src/specialistTaskListModel';
+import type {SessionSnapshot,SpecialistChannelEntry,SuperWorker,Resource,ResourceTreeNode,TaskCollaboration,TaskParticipant} from '../../shared/contracts';
+import {filterSpecialistTasks,specialistResourcePaths,specialistTaskMembers,specialistTaskRows,specialistTaskTime} from '../src/specialistTaskListModel';
 import {SpecialistTaskList} from '../src/SpecialistTaskList';
 import {ConversationReadButton} from '../src/ConversationReadMarker';
+import {TaskSpecialistAvatars} from '../src/TaskSpecialistAvatars';
+import {SpecialistAvatarProvider} from '../src/SuperRoleAvatar';
 
 const at='2026-11-11T01:00:00Z';
 const worker=(id:string,state:SuperWorker['task']['state']='running'):SuperWorker=>({id,sessionId:`session-${id}`,roleId:'ops',roleName:'服务器专员',createdAt:at,assignmentState:state==='running'?'active':'parked',task:{taskId:`task-${id}`,sessionId:`session-${id}`,projectId:'project',title:'同名检查任务',state,acceptanceState:state==='completed'?'pass':'not_evaluated',revision:1,originRootTurnId:'root',deadlineAt:'',updatedAt:at,resources:[{runtime:'ssh',assetRef:'host'}]},execution:{backend:{kind:'acp',agent:'codex',revision:2},assignedAt:at,source:'task_assignment',runs:[],totalRuns:0}});
@@ -13,6 +15,62 @@ const resource={id:'host',projectId:'project',name:'应用节点',kind:'ssh',sta
 const node=(id:string,name:string,parentId:string|null=null,resourceId:string|null=null):ResourceTreeNode=>({id,name,parentId,resourceId,projectId:'project',kind:resourceId?'resource':'folder',position:0});
 const tree=[node('root','演示环境'),node('cluster','业务集群','root'),node('leaf','应用节点','cluster','host')];
 const source={projectId:'project',resources:[resource],resourceTree:tree};
+const participant=(roleId:string,state:TaskParticipant['state']='running'):TaskParticipant=>({roleId,roleName:'同名专员',workerId:`worker-${roleId}`,sessionId:`session-${roleId}`,state,contributed:false});
+const collaboration=(participants:TaskParticipant[]):TaskCollaboration=>({participants,state:'running',acceptanceState:'not_evaluated'});
+
+test('single tasks reserve one stable identity without inventing collaborators',()=>{
+ const own=worker('solo'),before=JSON.stringify(own),members=specialistTaskMembers(own,true);
+ assert.deepEqual(members,[{key:'role:ops',roleId:'ops',name:own.roleName,moving:true}]);
+ assert.equal(JSON.stringify(own),before);
+ const html=renderToStaticMarkup(createElement(TaskSpecialistAvatars,{members,descriptionId:'solo-members'}));
+ assert.equal((html.match(/class="super-role-avatar"/g)??[]).length,1);
+ assert.doesNotMatch(html,/data-multiple|task-specialist-overflow/);
+ assert.match(html,/id="solo-members">参与专员：服务器专员/);
+});
+
+test('collaboration avatars use exact role identities, not names or participant ordering',()=>{
+ const own=worker('own'),a=participant('a','completed'),b=participant('b'),before=JSON.stringify([own,a,b]);
+ const members=specialistTaskMembers(own,false,collaboration([b,a,{...b,workerId:'second-b',sessionId:'second-b',state:'paused'},{...participant('ops'),workerId:own.id,sessionId:own.sessionId}]));
+ assert.deepEqual(members.map(member=>member.key),['role:ops','role:a','role:b']);
+ assert.deepEqual(members.map(member=>member.moving),[false,false,true]);
+ assert.equal(members[1].name,members[2].name,'same-name specialists stay separate');
+ assert.deepEqual(specialistTaskMembers(own,false,collaboration([a,b])),members);
+ assert.equal(JSON.stringify([own,a,b]),before);
+ const legacy={...own,roleId:''},legacyA={...a,roleId:''},legacyB={...b,roleId:''};
+ assert.deepEqual(specialistTaskMembers(legacy,false,collaboration([legacyA,legacyB])).map(member=>member.key),['worker:own','worker:worker-a','worker:worker-b']);
+});
+
+test('a shared task keeps each specialist animation independent after the owner stops',()=>{
+ const own=worker('owner','completed');
+ own.task.collaboration=collaboration([participant('running'),participant('waiting','waiting_user'),{...participant('submitted'),contributed:true}]);
+ const row=specialistTaskRows({...source,workers:[own]})[0];
+ assert.equal(row.moving,false);
+ assert.deepEqual(row.members.filter(member=>member.moving).map(member=>member.roleId),['running']);
+});
+
+test('only a snapshot bound to this project, task and execution can supply newer members',()=>{
+ const own=worker('owner');own.task.collaboration=collaboration([participant('old')]);
+ const snapshot={session:{id:own.sessionId,projectId:'project'},superagent:{task:{...own.task,collaboration:collaboration([participant('new')])}}} as SessionSnapshot;
+ const members=(active:SessionSnapshot[])=>specialistTaskRows({...source,workers:[own],active})[0].members.map(member=>member.roleId);
+ assert.deepEqual(members([snapshot]),['ops','new']);
+ assert.deepEqual(members([{...snapshot,session:{...snapshot.session,projectId:'other'}}]),['ops','old']);
+ assert.deepEqual(members([{...snapshot,session:{...snapshot.session,id:'other'}}]),['ops','old']);
+ assert.deepEqual(members([{...snapshot,superagent:{...snapshot.superagent!,task:{...snapshot.superagent!.task,taskId:'other'}}}]),['ops','old']);
+});
+
+test('compact avatar groups cap visible portraits and keep every name accessible offline',()=>{
+ const own=worker('owner');own.task.collaboration=collaboration(['a','b','c','d','e'].map(id=>participant(id)));
+ const members=specialistTaskMembers(own,true);
+ const channels=[{id:'a-channel',sessionId:'a-channel',projectId:'project',roleId:'a',roleName:'同名专员',revision:1,createdAt:at,avatarId:'beaver' as const}];
+ const html=renderToStaticMarkup(createElement(SpecialistAvatarProvider,{channels,children:createElement(TaskSpecialistAvatars,{members,descriptionId:'team-members',connected:false})}));
+ assert.equal((html.match(/class="super-role-avatar"/g)??[]).length,3);
+ assert.match(html,/task-specialist-overflow">\+3</);assert.match(html,/data-role="beaver"/);
+ assert.doesNotMatch(html,/data-motion="working"|<button/);
+ assert.match(html,/id="team-members">参与专员：服务器专员、同名专员、同名专员、同名专员、同名专员、同名专员/);
+ const list=renderToStaticMarkup(createElement(SpecialistTaskList,{channel:channels[0],rows:specialistTaskRows({...source,workers:[own]}),onTask(){}}));
+ assert.match(list,/data-collaborative="true"/);assert.match(list,/aria-describedby="[^"]+-owner"/);
+ assert.match(list,/aria-label="查看任务：同名检查任务"/);
+});
 
 test('task rows retain exact identities, Lake role avatars and frozen executor bindings',()=>{
  const a=worker('a'),b=worker('b','completed');b.execution=undefined;b.createdAt='2026-11-10T01:00:00Z';

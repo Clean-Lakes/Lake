@@ -34,6 +34,16 @@ const snapshots=new Map(workers.map((worker,i)=>{
 }));
 const channelSnapshot={session:{id:channel.sessionId,projectId,title:channel.roleName,workspaceRole:'role',status:'completed'},messages:[],resources,resourceTree:tree,actions:[],terminals:[],specialists:[],evidence:[],cursor:revision,messageQueue:{paused:false,revision:0,lastError:'',items:[]},sre:{enabled:false,tasks:[]},ai:{session:channel.sessionId,profile:'core',status:'idle',cards:[],cardsOffset:0,totalCards:0,agentRuns:[],usage:{known:false}}} as unknown as SessionSnapshot;
 const channels=[channel,...['发布专员','数据库专员','知识库专员','ACP 测试专员'].map((roleName,i)=>({...channel,messageRead:{...channel.messageRead!},id:`other-channel-${i}`,sessionId:`other-session-${i}`,roleId:`other-role-${i}`,roleName,duties:'查看任务进展、执行过程与结果'}))];
+function collaborate(worker:SuperWorker,count:number){
+ if(count<2){delete worker.task.collaboration;return;}
+ worker.task.collaboration={state:'running',acceptanceState:'not_evaluated',participants:channels.slice(0,count).map((member,i)=>({workerId:i===0?worker.id:`${worker.id}-member-${i}`,sessionId:i===0?worker.sessionId:`${worker.sessionId}-member-${i}`,roleId:member.roleId,roleName:member.roleName,state:i===0?worker.task.state:i===1?'running':i===2?'completed':'waiting_user',contributed:i===2}))};
+}
+if(query.has('collaboration')){
+ channels.push({...channel,id:'sixth-channel',sessionId:'sixth-session',roleId:'other-role-4',roleName:'负责跨区域业务服务稳定性的协作专员'});
+ const avatars=['heron','kingfisher','otter','beaver','turtle','dragonfly'] as const;
+ channels.forEach((item,i)=>{item.avatarId=avatars[i];});
+ workers.slice(0,3).forEach((worker,i)=>collaborate(worker,[2,3,6][i]));
+}
 Object.assign(window,{lakeReadQA:{
  state(session=channel.sessionId){return {...channels.find(item=>item.sessionId===session)?.messageRead};},
  attention(value:boolean){reading=value;},
@@ -46,7 +56,7 @@ Object.assign(window,{lakeReadQA:{
 Object.assign(window,{lakeRoleConfigQA:{
  avatar(value:string){if(value!=='auto'&&!isLakeAvatarName(value))throw Error('Unknown fixture avatar');channel.avatarId=value==='auto'?undefined:value;channel.roleRevision=(channel.roleRevision??1)+1;revision++;},
 }});
-Object.assign(window,{lakeTaskListQA:{writes,requests,offline(value:boolean){offline=value;},pulse(){revision++;},many(){for(let i=0;i<35;i++){const worker={...workers[0],id:`extra-${i}`,sessionId:`extra-session-${i}`,createdAt:new Date(Date.parse(at)-i*50_000).toISOString(),task:{...workers[0].task,taskId:`extra-task-${i}`,title:`演示历史任务 ${i+1}`}};workers.push(worker);}},finish(){workers[0].task={...workers[0].task,state:'completed',acceptanceState:'pass'};workers[0].assignmentState='parked';revision++;}}});
+Object.assign(window,{lakeTaskListQA:{writes,requests,offline(value:boolean){offline=value;},pulse(){revision++;},collaborate(count:number){collaborate(workers[0],count);revision++;},reverseMembers(){workers[0].task.collaboration?.participants.reverse();revision++;},many(){for(let i=0;i<35;i++){const worker={...workers[0],id:`extra-${i}`,sessionId:`extra-session-${i}`,createdAt:new Date(Date.parse(at)-i*50_000).toISOString(),task:{...workers[0].task,taskId:`extra-task-${i}`,title:`演示历史任务 ${i+1}`}};workers.push(worker);}},finish(){workers[0].task={...workers[0].task,state:'completed',acceptanceState:'pass'};workers[0].assignmentState='parked';revision++;}}});
 window.fetch=async(input,init)=>{
  const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href),path=url.pathname;
  if(!path.startsWith('/api/'))return base(input,init);

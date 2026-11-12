@@ -1,4 +1,4 @@
-import {useRef,useState} from 'react';
+import {useId,useRef,useState} from 'react';
 import type {SpecialistChannelInfo,SessionSnapshot} from '../../shared/contracts';
 import {Glyph} from './Icons';
 import {SuperRoleAvatar} from './SuperRoleAvatar';
@@ -7,6 +7,7 @@ import {filterSpecialistTasks,specialistTaskRows,specialistTaskSteps,specialistT
 import type {SuperWorker} from '../../shared/contracts';
 import {usePageVisible} from './usePageVisible';
 import {ConversationReadButton,ConversationReadMarker} from './ConversationReadMarker';
+import {TaskSpecialistAvatars} from './TaskSpecialistAvatars';
 
 export function SpecialistTaskSteps({snapshot,worker,connected}:{snapshot:SessionSnapshot;worker?:SuperWorker;connected:boolean}){
  const visible=usePageVisible();
@@ -28,6 +29,7 @@ export function SpecialistTaskMetadata({snapshot,worker}:{snapshot:SessionSnapsh
 export function SpecialistTaskList({channel,rows,selectedSessionId,onTask,connected=true,loading=false,routing=false,queued=0,error='',onRetry}:{channel:SpecialistChannelInfo;rows:SpecialistTaskRow[];selectedSessionId?:string;onTask:(sessionId:string)=>void;connected?:boolean;loading?:boolean;routing?:boolean;queued?:number;error?:string;onRetry?:()=>void}){
  const pageVisible=usePageVisible();
  const surface=useRef<HTMLDivElement>(null);
+ const memberDescription=useId();
  const [query,setQuery]=useState('');
  const visible=filterSpecialistTasks(rows,query);
  const moving=connected&&(routing||rows.some(row=>row.moving));
@@ -45,13 +47,13 @@ export function SpecialistTaskList({channel,rows,selectedSessionId,onTask,connec
   {!connected&&!error&&<p className="specialist-page-error" role="status">连接已断开，正在重连…</p>}
   {(routing||queued>0)&&<p className="specialist-task-admitting" role="status"><Glyph name={connected?'loader':'clock'} size={13}/>{routing?'正在分配新任务…':`${queued} 项请求等待分配`}</p>}
   <div className="specialist-task-panel" aria-busy={loading}>
-   {visible.length>0?<ul className="specialist-task-rows" aria-label="专员任务列表">{visible.map(row=>{
+   {visible.length>0?<ul className="specialist-task-rows" data-collaborative={rows.some(row=>row.members.length>1)||undefined} aria-label="专员任务列表">{visible.map(row=>{
     const {worker,progress}=row,selected=selectedSessionId===worker.sessionId;
     const context=worker.activity?.label;
     const updated=specialistTaskTime(row.updatedAt);
     return <li key={`task:${worker.id}`} data-task-id={worker.task.taskId} data-session-id={worker.sessionId} data-selected={selected||undefined}>
-     <button type="button" className="specialist-task-open" aria-label={`查看任务：${worker.task.title}`} aria-current={selected?'true':undefined} onClick={()=>onTask(worker.sessionId)}>
-      <SuperRoleAvatar name={worker.roleName} roleId={worker.roleId} motion={connected&&row.moving?'working':'still'}/>
+     <button type="button" className="specialist-task-open" aria-label={`查看任务：${worker.task.title}`} aria-describedby={`${memberDescription}-${worker.id}`} aria-current={selected?'true':undefined} onClick={()=>onTask(worker.sessionId)}>
+      <TaskSpecialistAvatars members={row.members} descriptionId={`${memberDescription}-${worker.id}`} connected={connected}/>
       <span className="specialist-task-copy">
        <span className="specialist-task-topline"><strong title={worker.task.title}>{worker.task.title}</strong>{updated!=='—'&&<time dateTime={row.updatedAt} title={new Date(row.updatedAt!).toLocaleString('zh-CN',{hour12:false})}>{updated}</time>}</span>
        <span className="specialist-task-meta">
