@@ -24,7 +24,7 @@ export function SpecialistTaskMetadata({snapshot,worker}:{snapshot:SessionSnapsh
  if(!worker||worker.sessionId!==snapshot.session.id||worker.task.taskId!==snapshot.superagent?.task.taskId)return null;
  const row=specialistTaskRows({workers:[worker],active:[snapshot],projectId:snapshot.session.projectId,resources:snapshot.resources,resourceTree:snapshot.resourceTree})[0];
  if(!row)return null;
- return <dl className="specialist-inspector-meta"><div><dt>执行 Agent</dt><dd><ExecutionAgentIcon agent={worker.execution?.backend.kind==='acp'?worker.execution.backend.agent:undefined} size={15}/>{row.agent}</dd></div>{row.paths.length>0&&<div><dt>资源目录</dt><dd>{row.paths.join('、')}</dd></div>}</dl>;
+ return <dl className="specialist-inspector-meta"><div><dt>执行 Agent</dt><dd><ExecutionAgentIcon agent={worker.execution?.backend.kind==='acp'?worker.execution.backend.agent:undefined} size={15}/>{row.agent}</dd></div></dl>;
 }
 export function SpecialistTaskList({channel,rows,selectedSessionId,onTask,connected=true,loading=false,routing=false,queued=0,error='',onRetry}:{channel:SpecialistChannelInfo;rows:SpecialistTaskRow[];selectedSessionId?:string;onTask:(sessionId:string)=>void;connected?:boolean;loading?:boolean;routing?:boolean;queued?:number;error?:string;onRetry?:()=>void}){
  const pageVisible=usePageVisible();
@@ -57,7 +57,7 @@ export function SpecialistTaskList({channel,rows,selectedSessionId,onTask,connec
     ...(group.label?[<li key={`group:${group.id}`} role="presentation" className="specialist-task-group-heading"><h2>{group.label}</h2></li>]:[]),
     ...group.rows.map(row=>{
     const {worker,state,progress}=row,selected=selectedSessionId===worker.sessionId;
-    const context=row.paths.join('、')||worker.activity?.label;
+    const context=worker.activity?.label;
     const icon=connected&&row.moving?'loader':state.tone==='success'?'check':state.tone==='attention'||state.tone==='danger'?'alert':worker.task.state==='cancelled'?'stop':'clock';
     const updated=specialistTaskTime(row.updatedAt);
     return <li key={`task:${worker.id}`} data-task-id={worker.task.taskId} data-session-id={worker.sessionId} data-selected={selected||undefined}>
