@@ -1,6 +1,6 @@
 // The real App with fictional in-memory API data; never calls a model or host.
 import './readme-workbench';
-import type {Resource,ResourceTreeNode,SessionSnapshot,SpecialistChannelInfo,SpecialistChannelPage,SuperWorker,WorkSession} from '../../../shared/contracts';
+import type {Message,Resource,ResourceTreeNode,SessionSnapshot,SpecialistChannelInfo,SpecialistChannelPage,SuperWorker,WorkSession} from '../../../shared/contracts';
 import {isLakeAvatarName} from '../../../shared/specialist-avatars';
 const base=window.fetch.bind(window),query=new URLSearchParams(location.search),projectId='demo-project',at='2026-11-11T01:20:00Z';
 const roleId='fixture-ops-33';
@@ -36,10 +36,42 @@ const channelSnapshot={session:{id:channel.sessionId,projectId,title:channel.rol
 const channels=[channel,...['发布专员','数据库专员','知识库专员','ACP 测试专员'].map((roleName,i)=>({...channel,messageRead:{...channel.messageRead!},id:`other-channel-${i}`,sessionId:`other-session-${i}`,roleId:`other-role-${i}`,roleName,duties:'查看任务进展、执行过程与结果'}))];
 // Real App QA: current defaults may change, while each report keeps its Agent.
 if(query.has('agent-logos'))channels.forEach((item,index)=>{item.execution=index%2?{kind:'native'}:{kind:'acp',agent:'codex'};});
-const agentLogoMessages=[{id:'logo-human',sessionId:'demo-session-0',role:'user',text:'请各位专员汇报本轮进展。',createdAt:at},...channels.slice(0,3).map((member,index)=>({
-    id:`logo-report-${index}`,sessionId:'demo-session-0',role:'assistant',text:['已核对当前任务，保留原执行记录。','已整理发布记录，等待你的后续安排。','增量迁移方案已准备，尚未执行。'][index],createdAt:new Date(Date.parse(at)+(index+1)*1000).toISOString(),
-    author:{kind:'specialist',name:member.roleName,roleId:member.roleId,workerId:index===0?workers[0]?.id:`logo-worker-${index}`,sessionId:index===0?workers[0]?.sessionId:`logo-session-${index}`,taskId:index===0?workers[0]?.task.taskId:`logo-task-${index}`,channelSessionId:member.sessionId,execution:structuredClone(member.execution)},
+const agentLogoMessages:Message[]=[{id:'logo-human',sessionId:'demo-session-0',role:'user' as const,text:'请各位专员汇报本轮进展。',createdAt:at},...channels.slice(0,3).map((member,index)=>({
+    id:`logo-report-${index}`,sessionId:'demo-session-0',role:'assistant' as const,text:['已核对当前任务，保留原执行记录。','已整理发布记录，等待你的后续安排。','增量迁移方案已准备，尚未执行。'][index],createdAt:new Date(Date.parse(at)+(index+1)*1000).toISOString(),
+    author:{kind:'specialist' as const,name:member.roleName,roleId:member.roleId,workerId:index===0?workers[0]?.id:`logo-worker-${index}`,sessionId:index===0?workers[0]?.sessionId:`logo-session-${index}`,taskId:index===0?workers[0]?.task.taskId:`logo-task-${index}`,channelSessionId:member.sessionId,execution:structuredClone(member.execution)},
    }))];
+let liveUnavailable=false;
+if(query.has('live-specialists')){
+ agentLogoMessages.splice(1);agentLogoMessages[0].text='检查服务器，并查询 GOS 当前项目数量。';
+ workers.forEach((worker,index)=>{if(index>1){worker.task.state='completed';worker.assignmentState='parked';worker.activity=undefined;return;}
+  const member=channels[index],snapshot=snapshots.get(worker.sessionId)!,root=`live-root-${index}`,started=new Date(Date.parse(at)+1000).toISOString();
+  worker.roleId=member.roleId;worker.roleName=member.roleName;worker.execution!.backend=member.execution!;worker.task.originRootTurnId=root;
+  worker.activity={phase:'thinking',label:'正在分析',updatedAt:started,sourceMessageId:'logo-human',sourceSessionId:'demo-session-0'};
+  snapshot.superagent!.roleId=member.roleId;snapshot.ai!.rootTurnId=root;snapshot.ai!.turnStartedAt=started;
+  snapshot.ai!.cards=[{id:`private-${index}`,type:'thinking',status:'running',at:started,content:'PRIVATE_THINKING_NOT_FOR_CHAT',data:{root_turn_id:root}},
+   {id:`live-text-${index}`,type:'message',status:'running',at:started,content:index===0?'我先检查服务器当前的负载和内存。':'我正在读取 GOS 的项目目录，并核对统计范围。',data:{root_turn_id:root}}];
+ });
+ const streams=new Set<LiveFixtureEvents>();
+ class LiveFixtureEvents extends EventTarget{
+  url:string;readyState=1;onmessage:((event:MessageEvent<string>)=>void)|null=null;onopen:((event:Event)=>void)|null=null;onerror:((event:Event)=>void)|null=null;
+  constructor(url:string){super();this.url=String(url);streams.add(this);queueMicrotask(()=>this.onopen?.(new Event('open')));}
+  close(){this.readyState=2;streams.delete(this);}
+ }
+ window.EventSource=LiveFixtureEvents as unknown as typeof EventSource;
+ const emit=(sessionId:string,text?:string)=>{revision++;const worker=workers.find(item=>item.sessionId===sessionId),snapshot=worker&&snapshots.get(sessionId);
+  const payload={seq:revision,sessionId,type:'message',createdAt:at,...(text!==undefined?{textUpdate:{target:'card',id:`live-text-${workers.indexOf(worker!)}`,content:text,cardType:'message',at:snapshot!.ai!.turnStartedAt,rootTurnId:snapshot!.ai!.rootTurnId}}:{})};
+  for(const stream of streams)if(stream.url.includes(`/sessions/${sessionId}/`)){const event=new MessageEvent('message',{data:JSON.stringify(payload)});stream.onmessage?.(event);stream.dispatchEvent(event);}
+ };
+ Object.assign(window,{lakeSpecialistConversationQA:{
+  text(index:number,text:string){const worker=workers[index],snapshot=snapshots.get(worker.sessionId)!;snapshot.ai!.cards.find(card=>card.id===`live-text-${index}`)!.content=text;emit(worker.sessionId,text);},
+  offline(value:boolean){liveUnavailable=value;for(const stream of streams)if(stream.url.includes('fixture-session')){if(value)stream.onerror?.(new Event('error'));else stream.onopen?.(new Event('open'));}},
+  finish(index:number){const worker=workers[index],snapshot=snapshots.get(worker.sessionId)!;
+   worker.task.state='completed';worker.assignmentState='parked';worker.activity=undefined;snapshot.ai!.status='completed';
+   agentLogoMessages.push({id:`live-report-${index}`,sessionId:'demo-session-0',role:'assistant',text:index===0?'服务器检查已完成，负载和内存正常。':'GOS 当前共有 12 个项目，统计范围已核对。',createdAt:new Date(Date.parse(at)+10000+index).toISOString(),author:{kind:'specialist',name:worker.roleName,roleId:worker.roleId,workerId:worker.id,sessionId:worker.sessionId,taskId:worker.task.taskId,channelSessionId:channels[index].sessionId,rootTurnId:snapshot.ai!.rootTurnId,execution:worker.execution!.backend}});
+   emit(worker.sessionId);emit('demo-session-0');
+  },
+ }});
+}
 Object.assign(window,{lakeAgentLogoQA:{native(){channel.execution={kind:'native'};revision++;}}});
 function collaborate(worker:SuperWorker,count:number){
  if(count<2){delete worker.task.collaboration;return;}
@@ -92,6 +124,7 @@ window.fetch=async(input,init)=>{
   return json(page);
  }
  if(path.endsWith('/snapshot')){
+  if(liveUnavailable&&path.includes('fixture-session'))return json({error:'Fixture offline'},503);
   const id=path.split('/')[3],own=snapshots.get(id);if(own)return json({...own,cursor:revision});
   if(channels.some(item=>item.sessionId===id)){const ch=channels.find(item=>item.sessionId===id)!;return json({...channelSnapshot,session:{...channelSnapshot.session,id,title:ch.roleName},cursor:revision});}
   if(query.has('agent-logos')&&id==='demo-session-0'){
