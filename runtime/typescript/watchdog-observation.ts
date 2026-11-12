@@ -128,8 +128,8 @@ export function watchdogEvidence(store: LakeStore, goal: Goal, redact?: (value: 
   );
   const progressKey = digest([
     goal.items
-      .filter((step) => step.status === "completed" && step.acceptanceId)
-      .map((step) => [step.id, step.acceptanceId]),
+      .filter((step) => step.status === "completed")
+      .map((step) => [step.id, step.attemptId]),
     [...signatures].sort(),
   ]);
   const recent = rows.slice(-5).map((row) => {

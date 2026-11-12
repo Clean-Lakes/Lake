@@ -1,10 +1,8 @@
 import type {AICard,Resource,ResourceTreeNode,SessionSnapshot,SpecialistChannelEntry,SuperWorker} from '../../shared/contracts';
 import {agentBackendName} from '../../shared/external-agents';
-import {channelTaskPresentation} from './superAgentPresentation';
 import {turnTodos} from './TaskProgress';
 
-export type SpecialistTaskFilter='all'|'active'|'attention'|'completed';
-export type SpecialistTaskRow={worker:SuperWorker;state:ReturnType<typeof channelTaskPresentation>;filter:SpecialistTaskFilter;moving:boolean;paths:string[];agent:string;updatedAt?:string;progress?:{completed:number;total:number}};
+export type SpecialistTaskRow={worker:SuperWorker;moving:boolean;paths:string[];agent:string;updatedAt?:string;progress?:{completed:number;total:number}};
 const time=(value?:string)=>Date.parse(value??'')||0;
 
 export function specialistTaskSteps(snapshot:SessionSnapshot){
@@ -42,31 +40,21 @@ export function specialistTaskRows({workers,entries=[],active=[],resources,resou
   const progress=todos.length?{completed:todos.filter(todo=>todo.status==='completed').length,total:todos.length}:items.length?{completed:items.filter(item=>item.status==='completed').length,total:items.length}:undefined;
   const terminal=['completed','failed','cancelled'].includes(worker.task.state);
   const waiting=!terminal&&(!!snapshot?.ai?.question||!!snapshot?.ai?.pending||!!snapshot?.hostKeyTrust||['waiting_approval','waiting_input'].includes(worker.activity?.phase??''));
-  const state=waiting?{label:'待确认',tone:'attention' as const}:channelTaskPresentation(worker.task);
   const moving=!waiting&&!terminal&&(snapshot?.ai?.status==='running'||worker.task.state==='running');
-  const filter:SpecialistTaskFilter=waiting||['waiting_user','blocked','paused','failed'].includes(worker.task.state)||state.tone==='attention'?'attention':state.tone==='success'||state.label==='已提交'?'completed':['running','queued','waiting_external'].includes(worker.task.state)?'active':'all';
   const ids=new Set((worker.task.resources??[]).flatMap(resource=>resource.assetRef?[resource.assetRef]:[]));
   for(const card of recorded){const data=card.data as {resource_id?:string;taskId?:string}|undefined;if(data?.resource_id&&data.taskId===(worker.task.executionGoalId??worker.task.taskId))ids.add(data.resource_id);}
   const updated=[worker.task.updatedAt,worker.createdAt,...history.map(entry=>entry.createdAt),...(worker.execution?.runs??[]).map(run=>run.updatedAt)].filter((value):value is string=>!!value&&!!time(value)).sort((a,b)=>time(b)-time(a))[0];
-  return {worker,state,filter,moving,paths:[...ids].flatMap(id=>paths.has(id)?[paths.get(id)!]:[]),agent:agentBackendName(worker.execution?.backend??{kind:'native'}),updatedAt:updated,progress};
+  return {worker,moving,paths:[...ids].flatMap(id=>paths.has(id)?[paths.get(id)!]:[]),agent:agentBackendName(worker.execution?.backend??{kind:'native'}),updatedAt:updated,progress};
  }).sort((a,b)=>{
   // Keep task positions stable during streaming; new assignments enter first.
-  const rank=(row:SpecialistTaskRow)=>['active','attention'].includes(row.filter)?0:1;
-  return rank(a)-rank(b)||time(b.worker.createdAt)-time(a.worker.createdAt)||b.worker.id.localeCompare(a.worker.id);
+  return time(b.worker.createdAt)-time(a.worker.createdAt)||b.worker.id.localeCompare(a.worker.id);
  });
 }
 
-export function filterSpecialistTasks(rows:SpecialistTaskRow[],filter:SpecialistTaskFilter,query:string){
+export function filterSpecialistTasks(rows:SpecialistTaskRow[],query:string){
  const normalized=(value:string)=>value.normalize('NFKC').toLowerCase().replace(/\s*\/\s*/g,'/');
  const search=normalized(query.trim());
- return rows.filter(row=>(filter==='all'||row.filter===filter)&&(!search||[row.worker.task.title,...row.paths,row.agent,row.state.label].some(value=>normalized(value).includes(search))));
-}
-
-/** Only a display grouping; preserve each row and its existing recent order. */
-export function groupSpecialistTasks(rows:SpecialistTaskRow[],grouped=true){
- if(!grouped)return [{id:'results',label:'',rows}];
- const groups=[{id:'active',label:'进行中'},{id:'attention',label:'需关注'},{id:'completed',label:'已完成'},{id:'all',label:'其他任务'}] as const;
- return groups.map(group=>({...group,rows:rows.filter(row=>row.filter===group.id)})).filter(group=>group.rows.length>0);
+ return rows.filter(row=>!search||[row.worker.task.title,...row.paths,row.agent].some(value=>normalized(value).includes(search)));
 }
 
 export function specialistTaskTime(value?:string,now=Date.now()){

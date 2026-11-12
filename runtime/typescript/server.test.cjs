@@ -380,7 +380,7 @@ function nativeMemoryReply(request) {
     ...(messages.join("\n").includes("native-method.md") ? [call("Read", {file_path:join(root,"native-method.md")}, "memory-read-method",1)] : []),
   ] };
   if (!calls.some(call => call.function.name === "Write")) {
-    const role = messages.join("\n").includes('"kind":"accepted_task"');
+    const role = ['"kind":"accepted_task"','"kind":"reported_task_observations"'].some(kind=>messages.join("\n").includes(kind));
     const body = "---\nname: native-method\ndescription: 按证据报告的方法\nmetadata:\n  type: feedback\n---\n" + (role ? "NATIVE_ROLE_MEMORY：子智能体发现由父任务汇合，重新检查当前状态。" : "NATIVE_PROJECT_MEMORY：报告先给结论，再列证据；历史数值需要重新查询。");
     return { tool_calls: [call("Write", {file_path:join(root,"native-method.md"),content:body},"memory-write-fact"),
       call("Write",{file_path:join(root,"MEMORY.md"),content:"- [按证据报告的方法](native-method.md)"},"memory-write-index",1)] };
@@ -806,7 +806,7 @@ function fullAgentReply(request,mode,home){
  }
  if(mode.includes('followup')&&router){
   const tasks=JSON.parse(content(messages[0]).split('[CURRENT TASK INDEX]\n')[1].split('\n')[0]);
-  if(tasks.length&&!names.includes('route_work')){const event=JSON.parse(content(messages[0]).split('\n')[1])[0];return call('route_work',{event_id:event.id,part_key:'continue',action:'followup',task_id:tasks[0].taskId,quote:event.text,reason:'继续原检查'});}
+  if(tasks.length&&tasks[0].state!=='completed'&&!names.includes('route_work')){const event=JSON.parse(content(messages[0]).split('\n')[1])[0];return call('route_work',{event_id:event.id,part_key:'continue',action:'followup',task_id:tasks[0].taskId,quote:event.text,reason:'继续原检查'});}
  }
  if(mode.includes('files')){
   if(!names.some(name=>['ToolSearch','LocalToolSearch'].includes(name)))return call(tools.some(t=>t.function.name==='LocalToolSearch')?'LocalToolSearch':'ToolSearch',{query:'select:TodoRead,TodoWrite',max_results:10});
@@ -851,7 +851,7 @@ function fullAgentReply(request,mode,home){
 
 function superReply(request, mode, home) {
   if (mode.startsWith("super-memory-recheck")) {
-    if (request.tools.some(tool=>tool.function.name==="route_work")) return hostRetryReply(request,mode.endsWith("predecessor")?"predecessor":"followup");
+    if (request.tools.some(tool=>tool.function.name==="route_work")) return hostRetryReply(request,mode.endsWith("predecessor")?"predecessor":"followup",true);
     const plain=m=>typeof m.content==="string"?m.content:(m.content??[]).map(p=>p.text??"").join("");
     const assignment=JSON.parse(request.messages.filter(m=>m.role==="user").map(plain).findLast(s=>s.startsWith("{")&&s.includes('"assignment"')));
     const names=request.messages.flatMap(m=>m.tool_calls??[]).map(c=>c.function.name);
@@ -1139,7 +1139,7 @@ function subagentReply(request, mode, home) {
 
 // A protocol fixture, not a language-model evaluation: choose only from the
 // latest host-provided context, then let real adapters and receipts decide work.
-function hostRetryReply(request, entrance = "followup") {
+function hostRetryReply(request, entrance = "followup", withdrawnContext = false) {
   const content = (message) => typeof message.content === "string" ? message.content : (message.content ?? []).map((part) => part.text ?? "").join("");
   const router = request.tools.some((tool) => tool.function.name === "route_work");
   const boundary = request.messages.findLastIndex((message) => message.role === "user" && (router
@@ -1162,7 +1162,7 @@ function hostRetryReply(request, entrance = "followup") {
     if (workingSet.focus.length) {
       const focus = workingSet.focus[0];
       if (!names.includes("route_work")) return call("route_work", {
-        event_id: event.id, part_key: "retry", ...(entrance === "predecessor"
+        event_id: event.id, part_key: "retry", ...(entrance === "predecessor" || focus.state === "completed" && !withdrawnContext
           ? {action:"create",predecessor_task_id:focus.task.id,role_id:focus.roleId,title:"继续只读复查"}
           : {action:"followup",task_id:focus.task.id}),
         quote: event.text, reason: "继续最近对话中的同一主机检查，重新读取当前连接情况。",
@@ -1209,13 +1209,13 @@ async function until(read, predicate, milliseconds = 15000) {
   assert.fail("Timed out waiting for actual host state: " + JSON.stringify(value));
 }
 
-test("two specialist channels share one task, retain their own evidence and receive exactly one final verdict after restart", async t => {
+test("two specialist channels share one task, retain their own evidence and receive exactly one combined report after restart", async t => {
   const f=await fixture(t,"super-joint-contribution"), api=f.api, path="/api/projects/"+f.project.id+"/superagent";
   const {routerSessionId:pilot}=await api(path,"POST",{});
   await api("/api/sessions/"+pilot+"/ai/configure","POST",{maxSteps:30});
   const workspace=await f.app.store.workspace(f.project.id);
   for(const name of ["甲","乙"]) await require("node:fs/promises").mkdir(join(workspace,name));
-  await api("/api/sessions/"+pilot+"/messages","POST",{text:"让目录专员和文件专员共同检查工作区，甲检查目录，乙复核，最后统一验收。"},202);
+  await api("/api/sessions/"+pilot+"/messages","POST",{text:"让目录专员和文件专员共同检查工作区，甲检查目录，乙复核，最后汇总报告。"},202);
   const ws=await until(()=>api(path), s=>s.workers.some(w=>w.task.state==="completed")&&s.channels.some(c=>c.needsConfirmation));
   const [a,b]=["目录专员","文件专员"].map(name=>ws.workers.find(w=>w.roleName===name));
   assert.equal(a.task.taskId,b.task.taskId);
@@ -1232,21 +1232,21 @@ test("two specialist channels share one task, retain their own evidence and rece
   const question=(await api("/api/sessions/"+b.sessionId+"/ai")).question;
   await api("/api/sessions/"+a.sessionId+"/ai/answer","POST",{id:question.id,answers:{review:["提交"]}},409);
   await api("/api/sessions/"+b.sessionId+"/ai/answer","POST",{id:question.id,answers:{review:["提交"]}});
-  const completed=await until(()=>api(path), s=>s.workers.every(w=>w.task.collaboration?.acceptanceState==="pass" && w.assignmentState==="parked"));
-  const receipt=completed.workers[0].task.collaboration.acceptanceId;
+  const completed=await until(()=>api(path), s=>s.workers.every(w=>w.task.collaboration?.state==="completed" && w.assignmentState==="parked"));
+  const receipt=completed.workers[0].task.collaboration.reportId;
   assert.ok(receipt);
   const goalReceipts=f.app.store.list("superAcceptance").filter(row=>row.scope==="goal");
-  assert.deepEqual(goalReceipts.map(row=>row.id),[receipt]);
+  assert.deepEqual(goalReceipts,[]);
   const ops=f.app.store.list("superOperations").filter(op=>op.tool==="list_project_files");
   assert.deepEqual(new Set(ops.map(op=>op.goalId)),new Set([a.task.executionGoalId,b.task.executionGoalId]));
   await f.restart();
   for(const channel of ws.channels) {
     const page=await api("/api/sessions/"+channel.sessionId+"/channel");
-    assert.deepEqual(page.entries.filter(e=>e.message?.jointAcceptance).map(e=>[e.taskId,e.message.jointAcceptance.receiptId]),[[a.task.taskId,receipt]]);
+    assert.deepEqual(page.entries.filter(e=>e.message?.jointReport).map(e=>[e.taskId,e.message.jointReport.reportId]),[[a.task.taskId,receipt]]);
     assert.deepEqual([...new Set(page.entries.flatMap(e=>e.message?.author?[e.message.author.roleId]:[]))],[channel.roleId]);
   }
   const pilotHistory=(await api("/api/sessions/"+pilot+"/snapshot")).messages;
-  assert.deepEqual(pilotHistory.filter(m=>m.jointAcceptance).map(m=>m.jointAcceptance.receiptId),[receipt]);
+  assert.deepEqual(pilotHistory.filter(m=>m.jointReport).map(m=>m.jointReport.reportId),[receipt]);
   assert.deepEqual(new Set(pilotHistory.filter(m=>m.author?.taskId===a.task.taskId).map(m=>m.author.roleId)),new Set([a.roleId,b.roleId]));
 });
 
@@ -1271,7 +1271,7 @@ test("timed Watchdog reviews a live SDK Worker and queues one guide; an actual r
     assert.equal(findings[0].action,"guided");
     assert.equal(current.superagent.task.acceptanceState,"not_evaluated");
     f.releaseWatchdogWorker();
-    await until(snapshot,s=>s.superagent.watchdog.findings[0]?.action==="recovered" && s.superagent.task.acceptanceState==="pass");
+    await until(snapshot,s=>s.superagent.watchdog.findings[0]?.action==="recovered" && s.superagent.task.state==="completed");
     await f.restart();
     assert.equal((await snapshot()).superagent.watchdog.findings.length,1);
   } finally {f.releaseWatchdogWorker();}
@@ -1294,7 +1294,7 @@ test("Watchdog identifies a real provider 503 and retries the same SDK assignmen
   await f.app.superagent.scanWatchdog();
   const recovered=await until(snapshot,s=>s.superagent.watchdog.findings.some(record=>record.action==="recovered"));
   assert.equal(recovered.superagent.task.taskId,worker.task.taskId);
-  assert.equal(recovered.superagent.task.acceptanceState,"pass");
+  assert.equal(recovered.superagent.task.acceptanceState,"not_evaluated");
 });
 
 async function prepareCodexProtocolFixture(app,mode){
@@ -1369,6 +1369,8 @@ test("pure TS host authenticates, runs native, streams and restores history", as
   const f = await fixture(t);
   assert.equal((await fetch(f.app.origin + "/api/catalog")).status, 401);
   const reviewPath=`/api/sessions/${f.session.id}/operator-effect-review/unknown-operation`;
+  for(const route of ['operator-effect-review','operation-reconciliation']) for(const method of ['GET','POST'])
+    await f.api(`/api/sessions/${f.session.id}/${route}/unknown-operation`,method,method==='POST'?{}:undefined,410);
   for(const method of ['GET','POST']) {
     assert.equal((await fetch(f.app.origin+reviewPath,{method})).status,401);
     assert.equal((await fetch(f.app.origin+reviewPath,{method,headers:{Authorization:`Bearer ${f.app.token}`,Origin:'https://untrusted.invalid'}})).status,403);
@@ -1750,7 +1752,7 @@ test("native Pilot creates a stable specialist and independent Worker, with evid
   assert.equal(result.active, true);
   assert.equal(result.workers.length, 1);
   const worker = result.workers[0];
-  assert.equal(worker.task.acceptanceState, "pass");
+  assert.equal(worker.task.acceptanceState, "not_evaluated");
   assert.notEqual(worker.sessionId, project.routerSessionId);
   assert.equal(f.app.store.session(worker.sessionId).options.reasoningEffort, 'high');
   assert.equal(f.requests.find(isIndependentWorkerRequest).reasoning_effort, 'high', 'the frozen source choice reaches the independent Worker model');
@@ -1764,7 +1766,7 @@ test("native Pilot creates a stable specialist and independent Worker, with evid
   assert.equal(operations.length, 1);
   assert.equal(operations[0].status, "succeeded");
   assert.ok(JSON.stringify(operations[0].output).includes("actual-evidence.txt"));
-  assert.equal(f.app.store.list("superAcceptance").filter((receipt) => receipt.scope === "goal").length, 1);
+  assert.equal(f.app.store.list("superAcceptance").filter((receipt) => receipt.scope === "goal").length, 0);
   const routerRequest = f.requests.find((request) => request.tools?.some((tool) => tool.function.name === "route_work"));
   for(const name of ["Bash","Read","Write","Agent"])assert.ok(routerRequest.tools.some(tool=>tool.function.name===name), "Pilot shares general agent capabilities");
   const channel = await f.api(`/api/sessions/${result.channels[0].sessionId}/channel`);
@@ -1784,7 +1786,7 @@ test("native subagent reads real evidence under its original Worker task and pre
   const state = await settledSubagentTask(f);
   const goal = f.app.store.list("superGoals")[0];
   assert.equal(state.workers[0].task.state, "completed", JSON.stringify(state.workers[0]));
-  assert.equal(goal.acceptanceState, "pass");
+  assert.equal(goal.acceptanceState, "not_evaluated");
   assert.equal(state.workers.length, 1);
   assert.equal(state.channels.length, 1, "temporary child must not create a permanent specialist channel");
   const routerRequest = f.requests.find((request) => request.tools?.some((tool) => tool.function.name === "route_work"));
@@ -1924,7 +1926,7 @@ test("native subagent prose and a successful Agent return cannot accept a task w
   const { f, worker } = await startSubagentTask(t, "super-subagent-prose");
   const state = await settledSubagentTask(f);
   const goal = f.app.store.list("superGoals")[0];
-  assert.notEqual(state.workers[0].task.state, "completed");
+  assert.equal(state.workers[0].task.state, "completed");
   assert.notEqual(goal.acceptanceState, "pass");
   assert.equal(f.app.store.list("superOperations").length, 0);
   assert.equal(f.app.store.list("superAcceptance").length, 0);
@@ -1939,7 +1941,7 @@ test("native subagent prose and a successful Agent return cannot accept a task w
 test("native child Read cannot escape its parent task workspace or use rejected access as acceptance evidence", async (t) => {
   const { f, worker } = await startSubagentTask(t, "super-subagent-outside");
   const state = await settledSubagentTask(f);
-  assert.notEqual(state.workers[0].task.state, "completed");
+  assert.equal(state.workers[0].task.state, "completed");
   assert.notEqual(f.app.store.list("superGoals")[0].acceptanceState, "pass");
   assert.equal(f.app.store.list("superOperations").length, 0, "scope rejection occurs before a business operation is dispatched");
   const view = await f.api(`/api/sessions/${worker.sessionId}/ai`);
@@ -1972,7 +1974,7 @@ test("two native subagents using the same raw tool call ID keep distinct evidenc
 test("one canonical task cannot create an eighth native child or erase its existing child identities on restart", async (t) => {
   const { f, worker } = await startSubagentTask(t, "super-subagent-cap");
   const state = await settledSubagentTask(f);
-  assert.notEqual(state.workers[0].task.state, "completed", "control results and child prose remain insufficient evidence");
+  assert.equal(state.workers[0].task.state, "completed", "the submitted parent report ends execution without certifying child prose");
   const view = await f.api(`/api/sessions/${worker.sessionId}/ai`);
   assert.equal(view.agentRuns.length, 7);
   assert.equal(new Set(view.agentRuns.map((run) => run.childSessionId)).size, 7);
@@ -2062,7 +2064,7 @@ test("native background subagents join through TaskOutput and cannot accept thei
   const view = await f.api(`/api/sessions/${worker.sessionId}/ai`);
   const goal = f.app.store.list("superGoals")[0];
   assert.equal(state.workers[0].task.state, "completed", JSON.stringify(state.workers[0]));
-  assert.equal(goal.acceptanceState, "pass");
+  assert.equal(goal.acceptanceState, "not_evaluated");
   assert.equal(f.backgroundJoinRequested, true, "the parent must explicitly join the actual native task");
   assert.equal(view.agentRuns.length, 1);
   assertNativeRun(view.agentRuns[0], worker, goal);
@@ -2105,7 +2107,7 @@ test("a Worker can launch two native background children before joining their di
 test("an early parent reply cancels and settles native background children without pretending the task completed", async (t) => {
   const { f, worker } = await startSubagentTask(t, "super-subagent-background-early");
   const state = await settledSubagentTask(f);
-  assert.notEqual(state.workers[0].task.state, "completed");
+  assert.equal(state.workers[0].task.state, "paused", "ending prose without a report does not submit the task");
   assert.notEqual(f.app.store.list("superGoals")[0].acceptanceState, "pass");
   assert.equal(f.app.store.list("superOperations").length, 0);
   const view = await f.api(`/api/sessions/${worker.sessionId}/ai`);
@@ -2386,18 +2388,19 @@ test("rejecting a Plan confirmation has no resource effects and cannot be approv
   assert.equal(f.calls, calls);
 });
 
-test("Worker prose and invented evidence cannot accept or complete a canonical goal", async (t) => {
+test("an agent report ends execution without certifying prose or invented evidence", async (t) => {
   const f = await fixture(t, "super-forged"), project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
   await f.api(`/api/sessions/${project.routerSessionId}/messages`, "POST", { text: "检查项目，必须按实际结果交付。" }, 202);
   await until(() => f.api(`/api/projects/${f.project.id}/superagent`), (result) => result.workers.length === 1 && result.workers[0].assignmentState !== "active" && result.workers[0].assignmentState !== "queued");
   const goal = f.app.store.list("superGoals")[0];
-  assert.notEqual(goal.status, "completed");
+  assert.equal(goal.status, "completed");
   assert.notEqual(goal.acceptanceState, "pass");
   assert.equal(f.app.store.list("superAcceptance").length, 0);
   assert.equal(f.app.store.list("superOperations").length, 0);
   const reports = f.app.store.messages(project.routerSessionId).filter((message) => message.author?.taskId === goal.id);
   assert.equal(reports.length, 1);
-  assert.match(reports[0].text, /未完成|还没完成/);
+  assert.equal(goal.reportedOutcome,"completed");
+  assert.equal(f.app.store.list("superDeliveries").length,1);
 });
 
 test("an incomplete Worker reports its current explanation once without claiming task acceptance", async (t) => {
@@ -2406,7 +2409,7 @@ test("an incomplete Worker reports its current explanation once without claiming
   const state = await until(() => f.api(`/api/projects/${f.project.id}/superagent`), (result) => result.workers[0]?.assignmentState === "parked");
   const worker = state.workers[0], goal = f.app.store.list("superGoals")[0];
   const explanation = "这次还没连上服务器，暂时查不到 CPU 和内存的实际使用情况。";
-  assert.equal(goal.status, "paused");
+  assert.equal(goal.status, "paused", "this provider never submits work_finish");
   assert.notEqual(goal.acceptanceState, "pass");
   assert.equal(f.app.store.list("superAcceptance").length, 0);
   const reports = () => f.app.store.messages(project.routerSessionId).filter((message) => message.author?.taskId === goal.id);
@@ -2470,7 +2473,7 @@ test("accepted Worker reports survive the closed-goal model fence without invent
   await f.api(`/api/sessions/${project.routerSessionId}/messages`, "POST", { text: "检查项目工作区。" }, 202);
   const state = await until(() => f.api(`/api/projects/${f.project.id}/superagent`), (result) => result.workers[0]?.assignmentState === "parked" && result.workers[0].task.state === "completed");
   const goal = f.app.store.list("superGoals")[0], reports = f.app.store.messages(project.routerSessionId).filter((message) => message.author?.taskId === goal.id);
-  assert.equal(goal.acceptanceState, "pass");
+  assert.equal(goal.acceptanceState, "not_evaluated");
   assert.equal(reports.length, 1);
   assert.equal(reports[0].text, goal.summary);
   assert.ok(!reports[0].text.includes("本次真实检查已结束"), "later model prose cannot replace the accepted work_finish report");
@@ -2561,7 +2564,7 @@ test("a failed proven read obtains a fresh attempt without replaying the failure
   assert.equal(attempts[1].retryOf, attempts[0].id);
   assert.equal(attempts[1].state, "succeeded");
   assert.deepEqual(operations.map((operation) => operation.status), ["failed", "succeeded"]);
-  assert.equal(goals[0].acceptanceState, "pass");
+  assert.equal(goals[0].acceptanceState, "not_evaluated");
   assert.equal(goals[0].roundLimit, undefined);
   assert.equal(f.app.store.list("superWorkers").length, 1);
 });
@@ -2577,7 +2580,7 @@ for(const entrance of ["followup","predecessor"]) test(`real SDK invalid-memory 
   await require("node:fs/promises").mkdir(join(f.home,"workspaces",f.project.id),{recursive:true});
   await writeFile(join(f.home,"workspaces",f.project.id,"recheck-fixture.txt"),"RECHECK_CURRENT_OBSERVATION");
   await f.api(`/api/sessions/${project.routerSessionId}/messages`,"POST",{text:"只读检查这个项目的当前文件。",resourceIds:[resource.id]},202);
-  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==="paused");
+  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==="completed");
   await until(async()=>!f.app.agents.foregroundBusy(),Boolean);
   const source=f.app.store.list("superGoals")[0],worker=f.app.store.require("superWorkers",source.workerId);
   assert.ok(f.requests.some(request=>isIndependentWorkerRequest(request)&&JSON.stringify(request.messages).includes("WITHDRAWN_RECHECK_MARKER")));
@@ -2593,7 +2596,7 @@ for(const entrance of ["followup","predecessor"]) test(`real SDK invalid-memory 
   const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.some(w=>w.task.taskId!==source.id&&w.task.state==="completed"));
   const fresh=f.app.store.list("superGoals").find(goal=>goal.id!==source.id);
   assert.equal(fresh.readOnlyRecoveryOf,source.id);assert.equal(fresh.deadlineAt,source.deadlineAt);assert.notEqual(fresh.sessionId,worker.sessionId);assert.equal(fresh.roleId,worker.roleId);
-  assert.equal(state.channels.length,1);assert.equal(fresh.acceptanceState,"pass");
+  assert.equal(state.channels.length,1);assert.equal(fresh.acceptanceState,"not_evaluated");
   const requests=f.requests.slice(offset).filter(isIndependentWorkerRequest);
   assert.ok(requests.length>2);assert.ok(requests.every(request=>!JSON.stringify(request.messages).includes("WITHDRAWN_RECHECK_MARKER")));
   assert.match(JSON.stringify(requests),/仅允许独立只读/);assert.match(JSON.stringify(requests),/RECHECK_CURRENT_OBSERVATION/);
@@ -2787,7 +2790,7 @@ test("independent Worker queries a real project MCP service only after its exact
   assert.deepEqual(operations.map((operation) => operation.tool), ["list_mcp_tools", "call_mcp_tool"]);
   assert.ok(operations.every((operation) => operation.status === "succeeded" && operation.mcpServerId && operation.configurationHash && operation.bindingHash));
   assert.equal(mcp.requests.filter((request) => request.rpc.method === "tools/call").length, 1);
-  assert.equal(f.app.store.list("superGoals")[0].acceptanceState, "pass");
+  assert.equal(f.app.store.list("superGoals")[0].acceptanceState, "not_evaluated");
 });
 
 test("explicit MCP service opt-out overrides global inheritance and a stale inheritance edit cannot widen scope", async (t) => {
@@ -2906,7 +2909,7 @@ test('PTY partial input blocks managed dispatch and output reads do not produce 
  assert.equal((await f.api(`/api/sessions/${f.session.id}/snapshot`)).cursor,before);
 });
 
-test('legacy unresolved MCP calls outside visible projects still fence a new approved remote call', async(t)=>{
+test('legacy unknown MCP records no longer fence a new approved remote call', async(t)=>{
  const f=await fixture(t,'super-mcp'), mcp=await mcpFixture(t);
  await f.api('/api/settings/mcp','POST',{name:'fixture',transport:'http',enabled:true,url:mcp.url});
  await f.api(`/api/projects/${f.project.id}/security/mcp-inheritance`,'PUT',{actionId:'inherit',expectedRevision:0,enabled:true});
@@ -2923,8 +2926,8 @@ test('legacy unresolved MCP calls outside visible projects still fence a new app
  db.exec("CREATE TABLE native_operations(project_id TEXT,tool TEXT,status TEXT,orphan_state TEXT,risk_resolved_at TEXT,closure_state TEXT); INSERT INTO native_operations VALUES('archived-not-imported','call_mcp_tool','unknown','',NULL,NULL)"); db.close(); await fs.chmod(path,0o600);
  await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:pending.id,accept:true});
  await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),view=>!['running','waiting_approval'].includes(view.status));
- assert.equal(mcp.requests.filter(request=>request.rpc.method==='tools/call').length,0);
- assert.equal(f.app.store.list('superOperations').filter(operation=>operation.tool==='call_mcp_tool').length,0);
+ assert.equal(mcp.requests.filter(request=>request.rpc.method==='tools/call').length,1);
+ assert.equal(f.app.store.list('superOperations').filter(operation=>operation.tool==='call_mcp_tool').length,1);
 });
 
 async function sshFixture(t, diagnosticsGate, interceptCommand, onAuthenticate){
@@ -3099,12 +3102,10 @@ test('independent Worker uses an exact approved SSH diagnostic profile and accep
  const operation=f.app.store.list('superOperations').find(o=>o.tool==='inspect_host');assert.equal(operation.status,'succeeded');assert.equal(operation.resourceId,resource.id);assert.equal(operation.output.exitCode,0);assert.ok(operation.output.hostFingerprint);assert.equal(operation.readOnly,true);
 });
 
-test('a short retry uses recent dialogue and current SSH capabilities, resumes the same task and accepts only the new host receipt', {skip:process.platform!=='darwin'}, async(t)=>{
+test('a short retry after a partial report opens one fresh check with current SSH approval and keeps original history',{skip:process.platform!=='darwin'},async t=>{
  const f=await fixture(t,'super-host-retry'),server=await sshFixture(t),resource=await sshResource(f,server);
  const terminal=await openSSHTerminal(f,resource);await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='ready');await f.api(terminal.base+'/disconnect','POST',{});
  const authenticated=server.auths;
- // Simulate a previously unavailable imported resource. Credentials remain in
- // the private fixture home, and no user server or user task is involved.
  f.app.store.put('resources',resource.id,{...f.app.store.get('resources',resource.id),status:'unavailable'});
  const project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:false});
@@ -3112,53 +3113,28 @@ test('a short retry uses recent dialogue and current SSH capabilities, resumes t
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:original},202);
  const first=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked');
  const worker=first.workers[0],goalBefore=structuredClone(f.app.store.list('superGoals')[0]);
- assert.notEqual(goalBefore.status,'completed');assert.notEqual(goalBefore.acceptanceState,'pass');
- assert.equal(first.channels[0].needsConfirmation,false,'an unavailable connection is not an unanswered user interaction');
- assert.equal(first.workers[0].activity,undefined,'a parked task does not pretend to be running');
- assert.equal(f.app.store.list('superAcceptance').length,0);assert.equal(server.auths,authenticated);
- assert.equal(f.app.store.list('superOperations').filter(o=>o.tool==='inspect_host').length,0);
- const oldReport=f.app.store.messages(project.routerSessionId).find(m=>m.author?.taskId===goalBefore.id);
- assert.match(oldReport.text,/SSH 连接还不可用/);
- await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),view=>view.status==='completed');
-
- // Restoring the current configuration changes its revision; the preceding
- // report remains historical and must not fence this newly authorized retry.
- await f.api(`/api/resources/${resource.id}`,'PATCH',{ssh:{shell:'sh'}});
- const beforeRetry=f.requests.length;
+ assert.equal(goalBefore.status,'completed');assert.equal(goalBefore.reportedOutcome,'partial');assert.notEqual(goalBefore.acceptanceState,'pass');
+ assert.equal(first.channels[0].needsConfirmation,false);assert.equal(worker.activity,undefined);assert.equal(server.auths,authenticated);
+ const oldReport=f.app.store.messages(project.routerSessionId).find(m=>m.author?.taskId===goalBefore.id);assert.match(oldReport.text,/SSH 连接还不可用/);
+ await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),v=>v.status==='completed');
+ await f.api(`/api/resources/${resource.id}`,'PATCH',{ssh:{shell:'sh'}});const offset=f.requests.length;
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'再试试'},202);
- const pendingState=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.channels[0]?.needsConfirmation);
- assert.equal(pendingState.workers.length,1);assert.equal(pendingState.workers[0].id,worker.id);
- assert.equal(pendingState.workers[0].task.taskId,goalBefore.id);assert.equal(pendingState.workers[0].roleId,worker.roleId);
- const retryEvent=f.app.store.list('superInputs').find(event=>event.payload==='再试试');
- assert.equal(pendingState.workers[0].activity.phase,'waiting_approval');assert.equal(pendingState.workers[0].activity.sourceMessageId,retryEvent.messageId);
- const decisions=f.app.store.list('superDecisions').filter(decision=>decision.eventId===retryEvent.id);
- assert.equal(decisions.length,1);assert.equal(decisions[0].action,'followup');assert.equal(decisions[0].taskId,goalBefore.id);assert.equal(decisions[0].quote,'再试试');
- const textOf=(message)=>typeof message.content==='string'?message.content:(message.content??[]).map(part=>part.text??'').join('');
- const retryRequests=f.requests.slice(beforeRetry);
- const routerRequest=retryRequests.find(request=>request.tools.some(tool=>tool.function.name==='route_work'));
- const raw=routerRequest.messages.filter(m=>m.role==='user').map(textOf).findLast(text=>text.startsWith('[LAKE ADMITTED HUMAN EVENTS'));
+ const waiting=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===2&&s.channels[0]?.needsConfirmation);
+ const fresh=waiting.workers.find(w=>w.id!==worker.id);assert.ok(fresh);assert.equal(fresh.roleId,worker.roleId);assert.notEqual(fresh.sessionId,worker.sessionId);
+ const event=f.app.store.list('superInputs').find(e=>e.payload==='再试试'),decision=f.app.store.list('superDecisions').find(d=>d.eventId===event.id);
+ assert.equal(decision.action,'create');assert.equal(decision.quote,'再试试');assert.equal(f.app.store.require('superTaskPredecessors',fresh.task.taskId).taskRef.id,goalBefore.id);
+ const plain=m=>typeof m.content==='string'?m.content:(m.content??[]).map(p=>p.text??'').join('');
+ const router=f.requests.slice(offset).find(r=>r.tools.some(tool=>tool.function.name==='route_work'));
+ const raw=router.messages.filter(m=>m.role==='user').map(plain).findLast(text=>text.startsWith('[LAKE ADMITTED HUMAN EVENTS'));
  const context=JSON.parse(raw.split('[CURRENT CONVERSATION WORKING SET]\n')[1]);
- assert.equal(context.focus[0].task.id,goalBefore.id);assert.equal(context.focus[0].roleId,worker.roleId);assert.equal(context.focus[0].basis,'recent_dialogue');
- assert.ok(context.dialogue.some(message=>message.role==='user'&&message.text===original));
- assert.ok(context.dialogue.some(message=>message.taskId===goalBefore.id&&message.text.includes('SSH 连接还不可用')&&message.historical));
- assert.ok(context.capabilities.workerTools.includes('inspect_host'));assert.equal(context.capabilities.ssh.adapterRegistered,true);
- assert.equal(context.capabilities.relevantResources.find(item=>item.id===resource.id).configurationStatus,'available');
- const workerRequest=retryRequests.find(request=>isIndependentWorkerRequest(request));
- const assignment=JSON.parse(workerRequest.messages.filter(m=>m.role==='user').map(textOf).findLast(text=>text.startsWith('{')&&text.includes('"assignment"')));
- assert.equal(assignment.assignment.taskId,goalBefore.id);assert.equal(assignment.followups.at(-1).text,'再试试');
- const pending=(await f.api(`/api/sessions/${worker.sessionId}/ai`)).pending;
- assert.equal(pending.call.name,'inspect_host');assert.equal(JSON.parse(pending.call.arguments).asset_ref,resource.id);
- assert.equal(server.auths,authenticated,'the retry still requires its exact real-operation approval');
- await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:pending.id,accept:true});
- const completed=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0].task.state==='completed');
- assert.equal(completed.channels[0].needsConfirmation,false);assert.equal(f.app.store.list('superGoals').length,1);
- const goal=f.app.store.list('superGoals')[0],operation=f.app.store.list('superOperations').find(o=>o.tool==='inspect_host');
- assert.equal(goal.id,goalBefore.id);assert.equal(goal.executionMode,'host_managed');assert.equal(goal.acceptanceState,'pass');
- assert.equal(goal.deadlineAt,goalBefore.deadlineAt);assert.equal(goal.roundLimit,goalBefore.roundLimit);assert.ok(goal.modelRounds>goalBefore.modelRounds);
- assert.equal(operation.status,'succeeded');assert.equal(operation.resourceId,resource.id);assert.equal(operation.output.exitCode,0);assert.ok(operation.output.hostFingerprint);
- assert.ok(server.auths>authenticated);assert.ok(server.requests.some(request=>!request.pty));
- assert.ok(f.app.store.list('superAcceptance').some(receipt=>receipt.goalId===goal.id&&receipt.operationIds?.includes(operation.id)));
- assert.equal(f.app.store.messages(project.routerSessionId).filter(m=>m.author?.taskId===goal.id&&m.text.includes('已重新连上服务器')).length,1);
+ assert.equal(context.focus[0].task.id,goalBefore.id);assert.ok(context.dialogue.some(m=>m.text===original));
+ assert.ok(context.capabilities.workerTools.includes('inspect_host'));assert.equal(context.capabilities.relevantResources.find(r=>r.id===resource.id).configurationStatus,'available');
+ const pending=(await f.api(`/api/sessions/${fresh.sessionId}/ai`)).pending;assert.equal(pending.call.name,'inspect_host');assert.equal(JSON.parse(pending.call.arguments).asset_ref,resource.id);assert.equal(server.auths,authenticated);
+ await f.api(`/api/sessions/${fresh.sessionId}/ai/decision`,'POST',{id:pending.id,accept:true});
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.find(w=>w.id===fresh.id)?.task.state==='completed');
+ assert.deepEqual(f.app.store.require('superGoals',goalBefore.id),goalBefore);
+ const op=f.app.store.list('superOperations').find(o=>o.goalId===fresh.task.taskId&&o.tool==='inspect_host');assert.equal(op.status,'succeeded');assert.equal(op.resourceId,resource.id);assert.ok(op.output.hostFingerprint);assert.ok(server.auths>authenticated);
+ assert.equal(f.app.store.list('superAcceptance').length,0);assert.equal(f.app.store.messages(project.routerSessionId).filter(m=>m.author?.taskId===fresh.task.taskId&&m.text.includes('已重新连上服务器')).length,1);
 });
 
 test('legacy SSH references supplement an already imported v1 catalog without touching source data or replaying work',async(t)=>{
@@ -3309,7 +3285,7 @@ test('native Worker executes scoped MySQL metadata and table count with actual p
  for(const name of ['list_db_objects','db_table_ddl','read_db_table'])assert.ok(operations.some(o=>o.tool===name&&o.status==='succeeded'&&o.databaseConfigurationHash));
  assert.ok(wire.queries.includes('START TRANSACTION READ ONLY')&&wire.queries.filter(sql=>sql==='ROLLBACK').length===3);
  assert.doesNotMatch(JSON.stringify(f.requests)+JSON.stringify(operations),/private-fixture-mysql/);
- assert.equal(state.workers[0].task.acceptanceState,'pass');
+ assert.equal(state.workers[0].task.acceptanceState,"not_evaluated");
  const receipt=operations.find(o=>o.tool==='read_db_table');
  assert.doesNotThrow(()=>f.app.superagent.ledger.revalidate(receipt));
  await writeFile(join(f.home,'secrets',asset.settings.credentialRef),JSON.stringify({password:'rotated-private-fixture-mysql'}),{mode:0o600});
@@ -3353,8 +3329,8 @@ for (const outcome of ["completed", "partial", "stubborn"]) test(`a file-only sp
   assert.match(reports[0].text, new RegExp(expected));
   const state = await f.api(`/api/projects/${f.project.id}/superagent`), worker = state.workers[0];
   assert.equal(state.workers.length, 1);
-  assert.equal(worker.task.state, outcome === "completed" ? "completed" : "paused");
-  assert.equal(worker.task.acceptanceState, outcome === "completed" ? "pass" : "not_evaluated");
+  assert.equal(worker.task.state, outcome === "stubborn" ? "paused" : "completed");
+  assert.equal(worker.task.acceptanceState, "not_evaluated");
   const channel = await f.api(`/api/sessions/${reports[0].author.channelSessionId}/snapshot`);
   assert.ok(channel.messages.some(message => message.text === reports[0].text));
   assert.equal(await readFile(file, "utf8"), "ORIGINAL_RECORD\nVERIFIED_FINDING: replica is current\n");
@@ -3417,10 +3393,10 @@ test('real SDK rejects a wrong local command then reads a scoped remote truncate
  const ops=f.app.store.list('superOperations').filter(o=>o.goalId===worker.task.taskId);
  assert.equal(ops.length,1);assert.equal(ops[0].tool,'Bash');assert.equal(ops[0].readOnly,true);assert.equal(ops[0].resourceId,resource.id);assert.equal(ops[0].status,'succeeded');
  assert.equal(wire.requests.length,1);assert.equal(f.app.store.list('commandExecutions').length,1);
- assert.equal(f.app.store.require('superGoals',worker.task.taskId).acceptanceState,'pass');
+ assert.equal(f.app.store.require('superGoals',worker.task.taskId).acceptanceState,"not_evaluated");
  assert.ok(requests.some(r=>r.messages.some(m=>m.role==='tool'&&m.tool_call_id==='full-worker-large-receipt'&&/truncat|artifact|persisted/i.test(JSON.stringify(m.content)))),'fixture must exercise SDK output truncation');
 });
-test('default resource delegation creates a missing specialist and reuses its stable role with independent accepted tasks',{skip:process.platform!=='darwin'},async t=>{
+test('default resource delegation creates a missing specialist and reuses its stable role with independent reported tasks',{skip:process.platform!=='darwin'},async t=>{
  const {f,project,send}=await fullAgentTask(t,'super-full-worker-default-delegation-ssh'),server=await sshFixture(t);
  await sshResource(f,server);assert.equal(f.app.store.list('superRoles').length,0);await send('请检查服务器启动状态，并核对实际结果。');
  const first=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=first.workers[0];
@@ -3431,7 +3407,8 @@ test('default resource delegation creates a missing specialist and reuses its st
  assert.equal(f.app.store.list('superRoles').length,1);assert.equal(done.channels.length,1);
  assert.equal(done.workers[0].roleId,done.workers[1].roleId);
  assert.notEqual(done.workers[0].sessionId,done.workers[1].sessionId);
- for(const row of done.workers){assert.notEqual(row.sessionId,project.routerSessionId);assert.equal(row.task.acceptanceState,'pass');}
+ for(const row of done.workers){assert.notEqual(row.sessionId,project.routerSessionId);assert.equal(row.task.acceptanceState,"not_evaluated");assert.equal(row.task.reportedOutcome,"completed");}
+ assert.equal(f.app.store.list('superAcceptance').length,0);
  assert.ok(f.app.store.list('superWorkers').every(w=>!w.inline));
  const routerRequests=f.requests.filter(r=>r.tools.some(t=>t.function.name==='route_work'));
  const contexts=routerRequests.map(r=>r.messages.findLast(m=>typeof m.content==='string'&&m.content.startsWith('[LAKE ADMITTED HUMAN EVENTS'))?.content)
@@ -3446,20 +3423,20 @@ test('Pilot directly executes native Bash with its own canonical task and no spe
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  assert.equal(state.channels.length,0);assert.equal(state.workers[0].roleName,'Pilot');
  const operation=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(operation.status,'succeeded');assert.match(operation.output.stdout,/ACTUAL_NATIVE_SHELL/);assert.ok(operation.commandExecutionId);
- assert.equal(state.workers[0].task.acceptanceState,'pass');assert.ok(f.requests[0].tools.some(tool=>tool.function.name==='Bash'));
+ assert.equal(state.workers[0].task.acceptanceState,"not_evaluated");assert.ok(f.requests[0].tools.some(tool=>tool.function.name==='Bash'));
  assert.ok(f.requests.every(r=>!r.tools.some(t=>['work_begin','work_update'].includes(t.function.name))));
 });
 test('native Bash background work is joined before Pilot task acceptance',{skip:process.platform!=='darwin'},async t=>{
  const {f,project,send}=await fullAgentTask(t,'super-full-pilot-background');await send();
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(op.status,'succeeded');assert.equal(op.output.status,'completed');assert.match(op.output.stdout.text,/ACTUAL_BACKGROUND_SHELL/);
- assert.ok(f.requests.some(request=>request.messages.some(message=>message.tool_calls?.some(call=>call.function.name==='TaskOutput'))));assert.equal(state.workers[0].task.acceptanceState,'pass');
+ assert.ok(f.requests.some(request=>request.messages.some(message=>message.tool_calls?.some(call=>call.function.name==='TaskOutput'))));assert.equal(state.workers[0].task.acceptanceState,"not_evaluated");
 });
 test('Pilot can create a native general-purpose subagent with the same Bash execution capability',{skip:process.platform!=='darwin'},async t=>{
  const {f,project,send}=await fullAgentTask(t,'super-full-pilot-child');await send();
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const operation=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(operation.status,'succeeded');assert.ok(operation.agentRunId&&operation.childSessionId);assert.match(operation.output.stdout,/CHILD_NATIVE_SHELL/);
- assert.equal(state.workers[0].task.acceptanceState,'pass');
+ assert.equal(state.workers[0].task.acceptanceState,"not_evaluated");
 });
 test('local Bash cannot read private Lake data even through a valid read command',{skip:process.platform!=='darwin'},async t=>{
  const {f,project,send}=await fullAgentTask(t,'super-full-pilot-protected');await require('node:fs/promises').mkdir(join(f.home,'secrets'),{recursive:true,mode:0o700});await writeFile(join(f.home,'secrets/hidden-fixture.txt'),'NEVER_MODEL_PRIVATE_SENTINEL',{mode:0o600});await send();
@@ -3471,7 +3448,7 @@ test('a Worker uses saved SSH credentials for general Bash commands beyond fixed
  await send();
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1),worker=state.workers[0];
  const done=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
- const operation=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(operation.resourceId,resource.id);assert.match(operation.output.stdout,/ACTUAL_NATIVE_SHELL/);assert.equal(done.workers[0].task.acceptanceState,'pass');assert.ok(server.requests.some(request=>request.command.includes('ACTUAL_NATIVE_SHELL')&&!request.pty));
+ const operation=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(operation.resourceId,resource.id);assert.match(operation.output.stdout,/ACTUAL_NATIVE_SHELL/);assert.equal(done.workers[0].task.acceptanceState,"not_evaluated");assert.ok(server.requests.some(request=>request.command.includes('ACTUAL_NATIVE_SHELL')&&!request.pty));
  assert.doesNotMatch(JSON.stringify(f.requests)+JSON.stringify(operation),new RegExp(server.password));
 });
 
@@ -3485,7 +3462,7 @@ test('a pre-command SSH connection failure can retry through the real SDK and ac
  assert.equal(ops.length,2);assert.equal(ops[0].status,'failed');assert.equal(ops[0].readOnly,false);
  assert.equal(f.app.store.require('commandExecutions',ops[0].commandExecutionId).sshDispatchPhase,'not_sent');
  assert.equal(ops[1].status,'succeeded');assert.match(ops[1].output.stdout,/ACTUAL_CONNECTION_RECOVERY/);
- assert.equal(server.requests.length,1);assert.equal(done.workers[0].task.acceptanceState,'pass');
+ assert.equal(server.requests.length,1);assert.equal(done.workers[0].task.acceptanceState,"not_evaluated");
  assert.equal(f.app.store.require('superAttempts',ops[0].attemptId).state,'failed');
 });
 
@@ -3503,7 +3480,7 @@ test('a real SSH disconnect after exec preserves unknown while a new journal que
  const ops=f.app.store.list('superOperations').filter(o=>o.tool==='Bash').sort((a,b)=>a.at.localeCompare(b.at));
  assert.equal(ops.length,2);assert.equal(ops[0].status,'unknown');assert.notEqual(f.app.store.require('commandExecutions',ops[0].commandExecutionId).sshDispatchPhase,'not_sent');
  assert.equal(ops[1].readOnly,true);assert.equal(ops[1].status,'succeeded');assert.match(ops[1].output.stdout,/SYNTHETIC_PREVIOUS_BOOT_LOG/);
- assert.equal(requests,2);assert.equal(done.workers[0].task.state,'blocked');assert.notEqual(done.workers[0].task.acceptanceState,'pass');
+ assert.equal(requests,2);assert.equal(done.workers[0].task.state,'completed');assert.notEqual(done.workers[0].task.acceptanceState,"pass");
 });
 
 test('native AskUserQuestion uses Lake answers and resumes the exact Pilot task',async t=>{
@@ -3580,19 +3557,21 @@ test('native Read projects real image bytes for an image-capable model',async t=
  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  assert.equal(f.app.store.list('superOperations').find(o=>o.tool==='Read')?.output.type,'image',JSON.stringify(f.app.store.view(project.routerSessionId).cards));assert.ok(f.requests.some(r=>JSON.stringify(r.messages).includes('data:image/png;base64,')));
 });
-test('continuing a direct Pilot task preserves its goal, deadline and cumulative rounds',{skip:process.platform!=='darwin'},async t=>{
+test('a later direct Pilot request keeps the earlier report and opens a separate execution',{skip:process.platform!=='darwin'},async t=>{
  const {f,project,send}=await fullAgentTask(t,'super-full-pilot-followup');await send();
- const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked'),original=f.app.store.require('superGoals',state.workers[0].task.taskId);
- assert.ok(original.modelRounds>=2);await send();
- const done=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
- const goal=f.app.store.require('superGoals',original.id);assert.equal(done.workers.length,1);assert.equal(goal.deadlineAt,original.deadlineAt);assert.equal(goal.roundLimit,original.roundLimit);assert.ok(goal.modelRounds>original.modelRounds);
+ const first=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked');
+ const original=f.app.store.require('superGoals',first.workers[0].task.taskId);assert.equal(original.status,'completed');assert.equal(original.reportedOutcome,'partial');
+ await send();const done=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===2&&s.workers.every(w=>w.task.state==='completed'&&w.assignmentState==='parked'));
+ assert.deepEqual(f.app.store.require('superGoals',original.id),original);
+ const next=done.workers.find(w=>w.task.taskId!==original.id);assert.ok(next);assert.equal(f.app.store.list('commandExecutions').length,2);
+ assert.ok(f.app.store.require('superGoals',next.task.taskId).modelRounds>=2);assert.equal(f.app.store.list('superAcceptance').length,0);
 });
 test('stopping a native mutating command preserves unknown effects and cancels the actual process',{skip:process.platform!=='darwin'},async t=>{
  const {f,project,send}=await fullAgentTask(t,'super-full-pilot-stop');await send();
  await until(async()=>f.app.store.list('commandExecutions'),rows=>rows.some(r=>r.status==='running'));
  await f.api(`/api/projects/${f.project.id}/superagent/stop`,'POST',{routerSessionId:project.routerSessionId});
  await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),s=>!s.running);
- const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(op.status,'unknown');assert.equal(f.app.store.list('commandExecutions')[0].status,'cancelled');assert.notEqual(f.app.store.require('superGoals',op.goalId).acceptanceState,'pass');
+ const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(op.status,'unknown');assert.equal(f.app.store.list('commandExecutions')[0].status,'cancelled');assert.notEqual(f.app.store.require('superGoals',op.goalId).acceptanceState,"pass");
 });
 test('capability inventory distinguishes connected tools from optional services and unsupported native search',async t=>{
  const f=await fixture(t),catalog=await f.api('/api/agent-capabilities');
@@ -3624,7 +3603,7 @@ test('a mutating command with a nonzero exit retains its possible partial effect
  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked');
  const operation=f.app.store.list('superOperations').find(o=>o.tool==='Bash');
  assert.equal(operation.status,'unknown');assert.equal(operation.output.exitCode,1);
- assert.equal(f.app.store.list('commandExecutions').length,1);assert.notEqual(f.app.store.require('superGoals',operation.goalId).acceptanceState,'pass');
+ assert.equal(f.app.store.list('commandExecutions').length,1);assert.notEqual(f.app.store.require('superGoals',operation.goalId).acceptanceState,"pass");
 });
 
 for(const remote of [false,true])test(`native Bash foreground timeout promotes ${remote?'SSH':'local'} execution without killing or redispatching`,{skip:process.platform!=='darwin'},async t=>{
@@ -3659,11 +3638,11 @@ test('a missing optional program cannot lock the next ordinary SSH command or ac
  const ops=f.app.store.list('superOperations').filter(o=>o.tool==='Bash').sort((a,b)=>a.at.localeCompare(b.at));
  assert.equal(ops.length,2);assert.equal(ops[0].status,'failed');assert.equal(ops[0].readOnly,true);assert.equal(ops[0].output.exitCode,1);
  assert.equal(ops[1].status,'succeeded');assert.equal(ops[1].readOnly,false);assert.match(ops[1].output.stdout,/FIXTURE_CONTEXT/);
- assert.equal(wire.requests.length,2);assert.equal(state.workers[0].task.acceptanceState,'pass');
+ assert.equal(wire.requests.length,2);assert.equal(state.workers[0].task.acceptanceState,"not_evaluated");
  const receipts=f.app.store.list('superAcceptance');assert.ok(receipts.every(r=>!r.evidenceIds?.includes(ops[0].id)));
 });
 
-test('startup verifies an exact legacy discovery from the real SDK archive without changing its original rows or dispatching again',async t=>{
+test('startup retains original discovery history without starting a reconciliation or dispatching again',async t=>{
  const {f,wire,worker}=await lookupCommandTask(t,true,'super-full-worker-ssh-missing-discovery-only'),session=worker.sessionId;
  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked');
  const crypto=require('node:crypto'),canonical=v=>Array.isArray(v)?'['+v.map(canonical).join(',')+']':v&&typeof v==='object'?'{'+Object.entries(v).filter(([,x])=>x!==undefined).sort(([a],[b])=>a<b?-1:a>b?1:0).map(([k,x])=>JSON.stringify(k)+':'+canonical(x)).join(',')+'}':JSON.stringify(v)??'null',digest=v=>crypto.createHash('sha256').update(canonical(v)).digest('hex');
@@ -3676,8 +3655,8 @@ test('startup verifies an exact legacy discovery from the real SDK archive witho
  const calls=f.calls;await f.restart();
  assert.equal(wire.requests.length,1);assert.equal(f.calls,calls);
  assert.deepEqual(['superOperations','commandExecutions','superGoals','superAttempts','superAcceptance'].map(kind=>f.app.store.list(kind)),before);
- const receipt=f.app.store.require('commandReadReconciliations',op.id);assert.equal(receipt.effects,'none');assert.equal(receipt.operationHash,digest(op));assert.ok(receipt.sourcePartId);assert.ok(receipt.sourceMessageId);
- await f.restart();assert.equal(f.app.store.list('commandReadReconciliations').length,1);assert.equal(wire.requests.length,1);
+ assert.equal(f.app.store.list('commandReadReconciliations').length,0);
+ await f.restart();assert.equal(f.app.store.list('commandReadReconciliations').length,0);assert.equal(wire.requests.length,1);
 });
 
 test('stopping an actual SDK SSH read reports stopped after settlement and projects cancelled command cards without rewriting evidence',async t=>{
@@ -3777,7 +3756,7 @@ test('a real SDK specialist receives prior task clues for a short follow-on requ
  const snapshot=await f.api(`/api/sessions/${current.sessionId}/snapshot`);
  assert.ok(snapshot.ai.cards.some(c=>c.title==='recall_task_context'));
  assert.ok(!snapshot.ai.cards.some(c=>['ask_user_question','AskUserQuestion'].includes(c.title)));
- assert.notEqual(current.task.acceptanceState,'pass');assert.notEqual(current.task.state,'completed');
+ assert.notEqual(current.task.acceptanceState,'pass');assert.equal(current.task.state,'completed');
  assert.deepEqual(f.app.superagent.ledger.get(old.task.taskId),oldGoal);
  assert.equal(JSON.stringify(f.app.store.list('superOperations').filter(op=>op.goalId===old.task.taskId)),receipts);
  const workerRequests=f.requests.filter(isIndependentWorkerRequest).filter(r=>JSON.stringify(r.messages).includes('同步到k2'));
@@ -3788,7 +3767,7 @@ test('a real SDK specialist receives prior task clues for a short follow-on requ
 test('native Worker and child complete beyond a saved one-step setting without a replacement task',async t=>{
  const {f,worker}=await startSubagentTask(t,'super-subagent-read',false,1);const state=await settledSubagentTask(f);
  const goals=f.app.store.list('superGoals');assert.equal(goals.length,1);assert.equal(goals[0].roundLimit,undefined);
- assert.ok(goals[0].modelRounds>1);assert.equal(goals[0].acceptanceState,'pass');
+ assert.ok(goals[0].modelRounds>1);assert.equal(goals[0].acceptanceState,"not_evaluated");
  assert.equal(state.workers[0].id,worker.id);assert.equal(childRequests(f).length,2);
  assert.ok(f.app.store.list('superOperations').some(op=>op.childSessionId&&op.status==='succeeded'));
 });
@@ -3807,7 +3786,7 @@ for (const actor of ['pilot','worker','worker-child']) for (const automatic of [
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const operations=f.app.store.list('superOperations').filter(o=>o.tool==='Bash');assert.equal(operations.length,1);assert.equal(operations[0].status,'succeeded');
  assert.equal(operations[0].readOnly,false,'opaque Python is not promoted to a proven read');
- assert.match(JSON.stringify(operations[0].output),/LAKE_AUTOMATIC_SCRIPT_RESULT/);assert.equal(state.workers[0].task.acceptanceState,'pass');
+ assert.match(JSON.stringify(operations[0].output),/LAKE_AUTOMATIC_SCRIPT_RESULT/);assert.equal(state.workers[0].task.acceptanceState,"not_evaluated");
  assert.equal(!!operations[0].childSessionId,actor==='worker-child');
  assert.equal((await f.api(`/api/sessions/${worker.sessionId}/ai`)).pending,undefined);
 });
@@ -3844,7 +3823,7 @@ for(const transport of ['http','stdio'])for(const automatic of [true,false])test
  }
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const methods=mcp?mcp.requests.map(r=>r.rpc.method):(await readFile(log,'utf8')).trim().split('\n');
- assert.equal(methods.filter(method=>method==='tools/call').length,1);assert.equal(state.workers[0].task.acceptanceState,'pass');
+ assert.equal(methods.filter(method=>method==='tools/call').length,1);assert.equal(state.workers[0].task.acceptanceState,"not_evaluated");
  assert.equal(f.app.store.list('superOperations').filter(o=>o.tool==='call_mcp_tool'&&o.status==='succeeded').length,1);
 });
 
@@ -3922,7 +3901,7 @@ for(const entrance of ['child','segment'])test(`Codex ACP ${entrance} returns re
  const {f,worker}=await startSubagentTask(t,'super-subagent-acp-'+entrance);
  const state=await settledSubagentTask(f),goal=f.app.store.list('superGoals')[0];
  assert.equal(state.workers[0].task.state,'completed',JSON.stringify({runs:f.app.store.list('acpRuns'),view:await f.api(`/api/sessions/${worker.sessionId}/ai`)}));
- assert.equal(goal.acceptanceState,'pass');
+ assert.equal(goal.acceptanceState,"not_evaluated");
  const runs=f.app.store.list('acpRuns');assert.equal(runs.length,1,JSON.stringify(runs));
  assert.equal(runs[0].state,'completed',JSON.stringify(runs[0]));assert.equal(runs[0].dispatchPhase,'answered');
  assert.equal(runs[0].taskId,goal.id);assert.equal(runs[0].workerId,worker.id);assert.ok(runs[0].externalSessionId);
@@ -3998,7 +3977,7 @@ test('explicit specialist assignment dispatches the chosen ACP Worker without a 
  const receipt=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
  assert.ok(receipt.assignment?.workerId);assert.equal(receipt.pilotSessionId,channel.sessionId);
  const result=await settledSubagentTask(f),worker=result.workers[0],run=f.app.store.list('acpRuns')[0];
- assert.equal(worker.task.state,'completed',JSON.stringify(worker));assert.equal(worker.task.acceptanceState,'pass');
+ assert.equal(worker.task.state,'completed',JSON.stringify(worker));assert.equal(worker.task.acceptanceState,"not_evaluated");
  assert.equal(f.requests.length,0,'Codex dispatch and inference never call the Lake routing model');
  assert.equal(run.purpose,'worker');assert.equal(run.state,'completed');assert.equal(run.dispatchPhase,'answered');
  assert.equal(worker.execution.backend.agent,'codex');assert.equal(worker.execution.source,'task_assignment');
@@ -4084,13 +4063,13 @@ test('a specialist freezes its ACP backend into a new Worker and task acceptance
  const workspace=await f.app.store.workspace(f.project.id);await writeFile(join(workspace,'ACP_ROOT_EVIDENCE.txt'),'root fixture');
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'请让项目检查员检查实际项目工作区。'},202);
  const result=await settledSubagentTask(f),worker=result.workers[0],runs=f.app.store.list('acpRuns');
- assert.equal(worker.task.state,'completed',JSON.stringify({worker,runs}));assert.equal(worker.task.acceptanceState,'pass');
+ assert.equal(worker.task.state,'completed',JSON.stringify({worker,runs}));assert.equal(worker.task.acceptanceState,"not_evaluated");
  assert.equal(runs.length,1);assert.equal(runs[0].state,'completed',JSON.stringify(runs));assert.equal(runs[0].childSessionId,undefined);
  const actual=f.app.store.list('superWorkers')[0];assert.equal(actual.roleSnapshot.execution.agent,'codex');
  await f.api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:2,execution:{kind:'native'}});
  assert.equal(f.app.store.list('superWorkers')[0].roleSnapshot.execution.agent,'codex');
  assert.deepEqual(f.app.store.list('superOperations').map(row=>[row.tool,row.status]),[['list_project_files','succeeded']]);
- assert.equal(f.app.store.list('superAcceptance').filter(row=>row.scope==='goal').length,1);
+ assert.equal(f.app.store.list('superAcceptance').filter(row=>row.scope==='goal').length,0);
 });
 
 test('an ACP child Write waits for the original Lake approval and preserves the actual write receipt',{timeout:30000},async t=>{
@@ -4099,7 +4078,7 @@ test('an ACP child Write waits for the original Lake approval and preserves the 
  const file=join(workspace,'child-output.txt');await assert.rejects(access(file));
  const child=view.agentRuns[0];assert.equal(child.source,'acp_subagent');assert.ok(child.pending);
  await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:view.pending.id,accept:true});
- const state=await settledSubagentTask(f);assert.equal(state.workers[0].task.acceptanceState,'pass');
+ const state=await settledSubagentTask(f);assert.equal(state.workers[0].task.acceptanceState,"not_evaluated");
  assert.equal(await readFile(file,'utf8'),'actual child write receipt');
  const operation=f.app.store.list('superOperations')[0];assert.equal(operation.status,'succeeded');assert.equal(operation.agentRunId,child.id);
 });
@@ -4130,13 +4109,13 @@ test('an ACP Worker delegates an ACP child through the original public task coor
  const workspace=await f.app.store.workspace(f.project.id);await writeFile(join(workspace,'child-evidence-a.txt'),'ACTUAL_CHILD_EVIDENCE_A');
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'请让项目检查员检查实际项目工作区。'},202);
  const result=await settledSubagentTask(f),worker=result.workers[0],runs=f.app.store.list('acpRuns');
- assert.equal(worker.task.state,'completed',JSON.stringify({worker,runs}));assert.equal(worker.task.acceptanceState,'pass');
+ assert.equal(worker.task.state,'completed',JSON.stringify({worker,runs}));assert.equal(worker.task.acceptanceState,"not_evaluated");
  assert.equal(runs.length,2,JSON.stringify(runs));assert.ok(runs.every(run=>run.state==='completed'));assert.ok(runs.some(run=>run.childSessionId));
  const actual=f.app.store.list('superWorkers')[0];assert.equal(actual.roleSnapshot.execution.agent,'codex');
  await f.api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:2,execution:{kind:'native'}});
  assert.equal(f.app.store.list('superWorkers')[0].roleSnapshot.execution.agent,'codex');
  assert.deepEqual(f.app.store.list('superOperations').map(row=>[row.tool,row.status]),[['Read','succeeded']]);
- assert.equal(f.app.store.list('superAcceptance').filter(row=>row.scope==='goal').length,1);
+ assert.equal(f.app.store.list('superAcceptance').filter(row=>row.scope==='goal').length,0);
 });
 
 test('a completed ACP report without real business receipts cannot accept the original task',{timeout:30000},async t=>{
@@ -4167,7 +4146,7 @@ test('specialists without an override default to Codex and never silently create
  assert.equal(f.app.store.list('superWorkers').length,0);
  await f.enableCodexFixture();await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0});await f.api(path+'/external-agents/codex/probe','POST',{});
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'请让项目检查员读取实际项目工作区。'},202);
- const result=await settledSubagentTask(f);assert.equal(result.workers[0].execution.backend.agent,'codex');assert.equal(result.workers[0].task.acceptanceState,'pass');
+ const result=await settledSubagentTask(f);assert.equal(result.workers[0].execution.backend.agent,'codex');assert.equal(result.workers[0].task.acceptanceState,"not_evaluated");
  await f.api(path+'/external-agents/codex','PUT',{enabled:false,expectedRevision:1});
  assert.equal(f.app.store.list('superWorkers')[0].roleSnapshot.execution.revision,1,'new defaults cannot modify an existing frozen Worker');
 });

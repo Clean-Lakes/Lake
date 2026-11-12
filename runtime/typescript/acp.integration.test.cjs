@@ -79,7 +79,7 @@ test('real Codex exposes only managed tools and returns a result through the tas
  assert.ok(requests.every(request=>request.model==='gpt-6.1-sol'&&request.reasoning?.effort==='max'),'source model and reasoning must be inherited');
 });
 
-for(const pending of [false,true])test(pending?'real Codex receives an exact unresolved blocker and returns partial findings without extra inspection':'a specialist assigns real Codex, discovers the exact Lake directory and collects original task receipts',{skip:!adapter,timeout:90000},async t=>{
+for(const pending of [false,true])test(pending?'real Codex submits partial findings despite an original unknown result without another inspection':'a specialist assigns real Codex, discovers the exact Lake directory and collects original task receipts',{skip:!adapter,timeout:90000},async t=>{
  const home=await mkdtemp(join(tmpdir(),'lake-codex-assignment-')),web=join(home,'web');await mkdir(web);await writeFile(join(web,'index.html'),'fixture');
  const requests=[];let fixtureError,originalUnknown;
  const provider=createServer(async(req,res)=>{
@@ -90,7 +90,7 @@ for(const pending of [false,true])test(pending?'real Codex receives an exact unr
    const names=tools.map(tool=>tool.name).filter(Boolean);
    assert.ok(!names.some(name=>/apply_patch|exec_command|shell_command|spawn_agent|js_repl/.test(name)),JSON.stringify(names));
    const name=requests.length===1?'list_assets':requests.length===2?'Read':'work_finish',chosen=tools.find(tool=>tool.name===name||tool.name?.endsWith('__'+name));
-   const done=requests.length>(pending?4:3);
+   const done=requests.length>3;
    if(!done)assert.ok(chosen,'the Codex Worker needs its original Lake tool: '+name);
    if(requests.length===2){
     const output=JSON.stringify(body.input.filter(item=>item.type==='function_call_output'));
@@ -106,9 +106,9 @@ for(const pending of [false,true])test(pending?'real Codex receives an exact unr
      app.store.put('superOperations',originalUnknown.id,originalUnknown);originalUnknown=app.store.get('superOperations',originalUnknown.id);
     }
    }
-   if(pending&&requests.length===4){const output=JSON.stringify(body.input);assert.ok(output.includes('unresolved_operations'));assert.ok(output.includes('work_finish(outcome=partial)'));}
+   if(pending&&requests.length===4){const output=JSON.stringify(body.input);assert.ok(output.includes('partial'));assert.ok(!output.includes('unresolved_operations'));}
    const item=done?{id:'msg_assigned',type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:'ACP_CODEX_ASSIGNED_REPORT：已读取实际工作区证据并回传。',annotations:[]}]}:
-    {id:'fc_assigned_'+requests.length,type:'function_call',call_id:'assigned_'+requests.length,name:chosen.name,...(chosen.namespace?{namespace:chosen.namespace}:{}),arguments:JSON.stringify(name==='list_assets'?{query:'实验集群'}:name==='Read'?{file_path:'CODEX_ASSIGNED_EVIDENCE.txt'}:{summary:'已通过 Codex 实际读取工作区证据，内容为 ACTUAL_ASSIGNED_CODEX_EVIDENCE。'+(pending&&requests.length===4?' 原有命令结果尚未核实。':''),outcome:pending&&requests.length===4?'partial':'completed'}),status:'completed'};
+    {id:'fc_assigned_'+requests.length,type:'function_call',call_id:'assigned_'+requests.length,name:chosen.name,...(chosen.namespace?{namespace:chosen.namespace}:{}),arguments:JSON.stringify(name==='list_assets'?{query:'实验集群'}:name==='Read'?{file_path:'CODEX_ASSIGNED_EVIDENCE.txt'}:{summary:'已通过 Codex 实际读取工作区证据，内容为 ACTUAL_ASSIGNED_CODEX_EVIDENCE。'+(pending?' 原有命令结果不确定。':''),outcome:pending?'partial':'completed'}),status:'completed'};
    const response={id:'resp_assigned_'+requests.length,object:'response',status:'completed',output:[item],usage:{input_tokens:10,output_tokens:5,total_tokens:15}};
    res.writeHead(200,{'Content-Type':'text/event-stream'});
    const event=(type,data)=>res.write('event: '+type+'\ndata: '+JSON.stringify({type,...data})+'\n\n');
@@ -154,10 +154,10 @@ for(const pending of [false,true])test(pending?'real Codex receives an exact unr
  }
  if(fixtureError)throw fixtureError;
  const worker=result.workers[0],run=app.store.list('acpRuns')[0];
- assert.equal(worker?.task.state,pending?'blocked':'completed',JSON.stringify({worker,run}));assert.equal(worker.task.acceptanceState,pending?'not_evaluated':'pass');
+ assert.equal(worker?.task.state,'completed',JSON.stringify({worker,run}));assert.equal(worker.task.acceptanceState,'not_evaluated');
  assert.equal(worker.execution.backend.agent,'codex');assert.equal(worker.execution.runs[0].state,'completed');assert.equal(run.purpose,'worker');
  const observed=app.store.list('superOperations').find(operation=>operation.tool==='Read');assert.equal(observed.externalRunId,run.id);assert.equal(observed.status,'succeeded');
- if(pending){assert.deepEqual(app.store.get('superOperations',originalUnknown.id),originalUnknown);assert.equal(app.store.list('superOperations').length,2);assert.equal(app.store.list('superAcceptance').length,0);assert.equal(requests.length,5);}
+ if(pending){assert.deepEqual(app.store.get('superOperations',originalUnknown.id),originalUnknown);assert.equal(app.store.list('superOperations').length,2);assert.equal(app.store.list('superAcceptance').length,0);assert.equal(requests.length,4);}
  const page=await api(`/api/sessions/${channel.sessionId}/channel`);assert.equal(page.workers[0].execution.runs[0].id,run.id);
  assert.ok(page.workers[0].execution.runs[0].summary.includes('ACP_CODEX_ASSIGNED_REPORT'));
  const count=requests.length,again=await api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);

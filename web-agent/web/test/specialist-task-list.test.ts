@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {SessionSnapshot,SpecialistChannelEntry,SuperWorker,Resource,ResourceTreeNode} from '../../shared/contracts';
-import {filterSpecialistTasks,groupSpecialistTasks,specialistResourcePaths,specialistTaskRows,specialistTaskTime} from '../src/specialistTaskListModel';
+import {filterSpecialistTasks,specialistResourcePaths,specialistTaskRows,specialistTaskTime} from '../src/specialistTaskListModel';
 import {SpecialistTaskList} from '../src/SpecialistTaskList';
 import {ConversationReadButton} from '../src/ConversationReadMarker';
 
@@ -15,11 +15,11 @@ const tree=[node('root','演示环境'),node('cluster','业务集群','root'),no
 const source={projectId:'project',resources:[resource],resourceTree:tree};
 
 test('task rows retain exact identities, Lake role avatars and frozen executor bindings',()=>{
- const a=worker('a'),b=worker('b','completed');b.execution=undefined;
+ const a=worker('a'),b=worker('b','completed');b.execution=undefined;b.createdAt='2026-11-10T01:00:00Z';
  const before=JSON.stringify([a,b]);
  const rows=specialistTaskRows({...source,workers:[a,b]});
  assert.equal(rows.length,2);assert.equal(rows[0].worker.sessionId,'session-a');assert.equal(rows[1].worker.sessionId,'session-b');
- assert.equal(rows[0].agent,'Codex');assert.equal(rows[1].agent,'Lake Worker');assert.equal(rows[1].state.label,'已验收');
+ assert.equal(rows[0].agent,'Codex');assert.equal(rows[1].agent,'Lake Worker');
  assert.equal(rows[0].progress,undefined,'missing progress cannot become an invented percentage');
  assert.deepEqual(rows[0].paths,['演示环境 / 业务集群 / 应用节点']);
  const html=renderToStaticMarkup(createElement(SpecialistTaskList,{channel:{id:'channel',sessionId:'channel',projectId:'project',roleId:'ops',roleName:'服务器专员',revision:1,createdAt:at},rows,selectedSessionId:'session-b',onTask:()=>{}}));
@@ -28,16 +28,14 @@ test('task rows retain exact identities, Lake role avatars and frozen executor b
  assert.equal(JSON.stringify([a,b]),before);
 });
 
-test('attention and execution reflect the actual task instead of an external answer or sibling question',()=>{
+test('live animation follows the exact task instead of an external answer or sibling question',()=>{
  const done=worker('done','completed');done.task.acceptanceState='insufficient';
  const stopped=worker('stopped','cancelled'),waiting=worker('waiting','running'),active=worker('active');waiting.activity={phase:'waiting_approval',label:'等待确认',updatedAt:at};
  active.execution!.runs=[{id:'answered',agent:'codex',scope:'worker',state:'completed',dispatchPhase:'answered',createdAt:at,updatedAt:at,usage:null,summary:'外部自报完成'}];
  const rows=specialistTaskRows({...source,workers:[done,stopped,waiting,active]});
  const byId=(id:string)=>rows.find(row=>row.worker.id===id)!;
- assert.equal(byId('done').filter,'attention');assert.equal(byId('done').state.label,'待验收');
- assert.equal(byId('waiting').state.label,'待确认');assert.equal(byId('waiting').moving,false);assert.equal(byId('active').moving,true);assert.equal(byId('active').filter,'active');
- assert.equal(byId('stopped').state.label,'已停止');assert.equal(byId('stopped').moving,false);
- assert.deepEqual(filterSpecialistTasks(rows,'attention','').map(row=>row.worker.id).sort(),['done','waiting']);
+ assert.equal(byId('done').moving,false);assert.equal(byId('waiting').moving,false);assert.equal(byId('active').moving,true);
+ assert.equal(byId('stopped').moving,false);
 });
 
 test('progress only consumes the exact task snapshot or its recorded successful TodoWrite',()=>{
@@ -56,9 +54,9 @@ test('directory search uses only visible project metadata and tolerates broken l
  const paths=specialistResourcePaths('project',[resource,foreign],[...tree,{...node('foreign-folder','secret'),projectId:'foreign'}]);
  assert.equal(paths.has('foreign'),false);assert.equal(paths.get('host'),'演示环境 / 业务集群 / 应用节点');
  const rows=specialistTaskRows({...source,workers:[worker('a')]});
- assert.equal(filterSpecialistTasks(rows,'all','业务集群').length,1);assert.equal(filterSpecialistTasks(rows,'active','ＣＯＤＥＸ').length,1);
- assert.equal(filterSpecialistTasks(rows,'all','演示环境/业务集群').length,1);
- assert.equal(filterSpecialistTasks(rows,'all','other-project').length,0);assert.equal(filterSpecialistTasks(rows,'completed','业务集群').length,0);
+ assert.equal(filterSpecialistTasks(rows,'业务集群').length,1);assert.equal(filterSpecialistTasks(rows,'ＣＯＤＥＸ').length,1);
+ assert.equal(filterSpecialistTasks(rows,'演示环境/业务集群').length,1);
+ assert.equal(filterSpecialistTasks(rows,'other-project').length,0);
  const broken=[node('cluster','循环','cluster'),node('leaf','应用节点','cluster','host')];
  assert.equal(specialistResourcePaths('project',[resource],broken).get('host'),'应用节点');
  assert.equal(specialistTaskRows({...source,workers:[{...worker('foreign'),task:{...worker('foreign').task,projectId:'foreign'}}]}).length,0);
@@ -70,16 +68,15 @@ test('invalid or future timestamps never claim a fresh update',()=>{
  assert.equal(specialistTaskTime(at,now+120_000),'2 分钟前');assert.notEqual(specialistTaskTime('2027-01-01T01:00:00Z',now),'刚刚');
 });
 
-test('status groups retain every exact task and its recent order without changing task state',()=>{
+test('chronological rows retain every exact task without reordering when task state changes',()=>{
  const active=worker('active'),attention=worker('attention','blocked'),completed=worker('completed','completed'),stopped=worker('stopped','cancelled');
- const rows=specialistTaskRows({...source,workers:[completed,attention,stopped,active]}),before=JSON.stringify(rows);
- const groups=groupSpecialistTasks(rows);
- assert.deepEqual(groups.map(group=>group.id),['active','attention','completed','all']);
- const displayed=groups.flatMap(group=>group.rows);
- assert.equal(displayed.length,rows.length);assert.equal(new Set(displayed.map(row=>row.worker.id)).size,rows.length);
- for(const group of groups)assert.deepEqual(group.rows,rows.filter(row=>row.filter===group.id));
- assert.deepEqual(groupSpecialistTasks(rows,false),[{id:'results',label:'',rows}]);
- assert.equal(JSON.stringify(rows),before);assert.ok(displayed.every(row=>rows.includes(row)));
+ const workers=[completed,attention,stopped,active];
+ workers.forEach((worker,index)=>{worker.createdAt=new Date(Date.parse(at)-index*60_000).toISOString();});
+ const before=JSON.stringify(workers),rows=specialistTaskRows({...source,workers});
+ assert.deepEqual(rows.map(row=>row.worker.id),workers.map(worker=>worker.id));
+ assert.equal(new Set(rows.map(row=>row.worker.id)).size,workers.length);assert.equal(JSON.stringify(workers),before);
+ const updated=workers.map(worker=>({...worker,task:{...worker.task,state:'completed' as const,acceptanceState:'pass' as const}}));
+ assert.deepEqual(specialistTaskRows({...source,workers:updated}).map(row=>row.worker.id),rows.map(row=>row.worker.id));
 });
 
 test('explicit read controls follow the exact unread cursor and stay disabled offline',()=>{

@@ -62,6 +62,7 @@ export type MessageMention = {kind: "resource" | "skill" | "mcp" | "role"; id: s
 export type SpecialistReplyAuthor = {kind:'specialist';name:string;roleId?:string;workerId:string;sessionId:string;taskId:string;channelSessionId?:string;rootTurnId?:string};
 export type Message = {
   jointAcceptance?: {taskId:string;receiptId:string};
+  jointReport?: {taskId:string;reportId:string};
   author?: SpecialistReplyAuthor;
   dispatch?: {id:string;sourceMessageId:string;workerId:string;sessionId:string;taskId:string;roleId:string;roleName:string;channelSessionId:string;instruction:string;action:'create'|'followup'};
   id: string;
@@ -377,9 +378,9 @@ export type TaskParticipant = {
   state: SuperTaskState; contributed: boolean;
 };
 export type TaskCollaboration = {
-  participants: TaskParticipant[]; state: SuperTaskState; acceptanceState: SuperTaskAcceptance; acceptanceId?: string;
+  participants: TaskParticipant[]; state: SuperTaskState; acceptanceState: SuperTaskAcceptance; acceptanceId?: string; reportId?: string;
 };
-export type SuperTask = {taskId:string;executionGoalId?:string;collaboration?:TaskCollaboration;sessionId:string;projectId?:string;title:string;state:SuperTaskState;acceptanceState:SuperTaskAcceptance;revision:number;originRootTurnId:string;deadlineAt:string;updatedAt?:string;reason?:string;summary?:string;resources?:{runtime:string;assetRef?:string;terminalId?:string}[]};
+export type SuperTask = {taskId:string;executionGoalId?:string;collaboration?:TaskCollaboration;sessionId:string;projectId?:string;title:string;state:SuperTaskState;acceptanceState:SuperTaskAcceptance;reportedOutcome?:'completed'|'partial';revision:number;originRootTurnId:string;deadlineAt:string;updatedAt?:string;reason?:string;summary?:string;resources?:{runtime:string;assetRef?:string;terminalId?:string}[]};
 export type SuperProject = {projectId:string;routerSessionId:string;version:number};
 export type SuperWorkerActivity = {phase:'queued'|'thinking'|'tool'|'waiting_approval'|'waiting_input'|'waiting_external';label:string;toolName?:string;updatedAt:string;sourceMessageId?:string;sourceSessionId?:string};
 export type SuperWorker = {id:string;createdAt?:string;roleId:string;roleName:string;sessionId:string;task:SuperTask;assignmentState:string;parentWorkerId?:string;activity?:SuperWorkerActivity;execution?:import('./external-agents').AgentExecutionSummary};

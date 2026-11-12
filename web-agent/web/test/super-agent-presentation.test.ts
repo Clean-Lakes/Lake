@@ -18,9 +18,9 @@ test('specialist appearances follow stable RoleID rather than mutable names or t
  assert.equal(superAvatarMotion(false,'completed'),'idle');assert.equal(superAvatarMotion(false),'idle');
 });
 
-test('task success requires acceptance and distinct waiting/failure states stay visible',()=>{
- assert.deepEqual(superTaskPresentation({state:'completed',acceptanceState:'pass'}),{label:'已验收',tone:'success'});
- for(const acceptanceState of ['not_evaluated','insufficient','fail'] as const)assert.equal(superTaskPresentation({state:'completed',acceptanceState}).tone,'attention');
+test('execution lifecycle stays distinct while completion no longer depends on acceptance',()=>{
+ assert.deepEqual(superTaskPresentation({state:'completed',acceptanceState:'pass'}),{label:'执行结束',tone:'neutral'});
+ for(const acceptanceState of ['not_evaluated','insufficient','fail'] as const)assert.equal(superTaskPresentation({state:'completed',acceptanceState}).tone,'neutral');
  for(const [state,tone] of [['waiting_user','attention'],['waiting_external','active'],['running','active'],['paused','neutral'],['failed','danger']] as const)assert.equal(superTaskPresentation({state,acceptanceState:'not_evaluated'}).tone,tone);
 });
 
@@ -31,7 +31,7 @@ const worker={id:'worker',roleId:'opaque-role-id',roleName:'依赖审查专员',
 test('navigation keeps task and status accessible while completed workers have no attention dot',()=>{
  const workspace={active:true,project:{projectId:'project',routerSessionId:'pilot',version:1},workers:[worker]} satisfies SuperWorkspace;
  const html=renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:'session',onPilot(){},onWorker(){}}));
- assert.match(html,/aria-current="page" aria-label="依赖审查专员 · 只读检查依赖 · 已验收"/);
+ assert.match(html,/aria-current="page" aria-label="依赖审查专员 · 只读检查依赖 · 执行结束"/);
  assert.doesNotMatch(html,/pilot-workspace-entry/);assert.ok(html.includes(`data-role="${superWorkerIcon(worker)}"`));
  assert.doesNotMatch(html,/class="session-status-dot"/);
  const pending=renderToStaticMarkup(createElement(PilotWorkspace,{workspace:{...workspace,workers:[{...worker,task:{...task,state:'waiting_user',acceptanceState:'not_evaluated'}}]},error:'',selectedId:null,onPilot(){},onWorker(){}}));

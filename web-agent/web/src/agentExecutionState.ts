@@ -3,7 +3,7 @@ import {agentBackendName,type AgentExecutionSummary,type ExternalAgentRunSummary
 export function externalRunPresentation(run:ExternalAgentRunSummary,waiting=false){
  const name=agentBackendName({kind:'acp',agent:run.agent});
  if(run.state==='completed')return {label:`${name} 已回传`,tone:'returned',icon:'check'};
- if(run.state==='unknown')return {label:`${name} 结果待核实`,tone:'attention',icon:'alert'};
+ if(run.state==='unknown')return {label:`${name} 结果不确定`,tone:'attention',icon:'alert'};
  if(run.state==='failed')return {label:`${name} 执行失败`,tone:'attention',icon:'alert'};
  if(run.state==='cancelled'||run.state==='interrupted')return {label:`${name} 已停止`,tone:'stopped',icon:'stop'};
  if(waiting)return {label:`${name} 等待确认`,tone:'attention',icon:'clock'};

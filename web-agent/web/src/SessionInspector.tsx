@@ -1,7 +1,6 @@
 import {hasCurrentTaskProgress,TaskProgress} from './TaskProgress';
 import {SuperTaskInspector} from './SuperTaskInspector';
 import {TaskWatchdog} from './TaskWatchdog';
-import {OperationReconciliation} from './OperationReconciliation';
 import {WorkerExecutionTree,WorkerExecutionResults} from './WorkerExecutionTree';
 import {InspectorTaskSummary} from './InspectorTaskSummary';
 import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
@@ -57,14 +56,11 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
   <ObjectReferencesProvider resources={snapshot.resources} tasks={snapshot.ai?.agentRuns}>
    <div className="session-inspector-scroll">
     {taskNavigation}
-    {goal&&canonical&&<><SuperTaskInspector task={canonical} goal={goal} worker={worker} summaryOnly/>{taskMetadata}{taskControls}{tabs}</>}
+    {goal&&canonical&&<><SuperTaskInspector task={canonical} goal={goal} worker={worker} summaryOnly hideStatus={taskPage}/>{taskMetadata}{taskControls}{tabs}</>}
     {(!goal||!canonical)&&taskControls}
     {task&&activeTab==='plan'&&<InspectorTaskSummary task={task} title={snapshot.session.title} runs={snapshot.ai?.agentRuns}/>}
     <div role="tabpanel" id="inspector-plan-panel" aria-labelledby="inspector-plan-tab" hidden={activeTab!=='plan'}>
      {task&&plan?<SREPlanCard task={task} resources={snapshot.resources} agentRuns={snapshot.ai?.agentRuns} enabled={connected&&!readOnly&&snapshot.sre?.enabled===true} onUpdated={onUpdated} inspector onInspectStep={stepId=>{const attempt=inspectorAttempts(task).find(item=>item.step.id===stepId)?.attempt;if(attempt)choose('execution',attempt.id,true);}}/>:goal&&canonical?<><WorkerExecutionResults key={canonical.executionGoalId??canonical.taskId} snapshot={snapshot} readMarker={activeTab==='plan'?resultsFooter:undefined}/><SuperTaskInspector key={goal.id} task={canonical} goal={goal} worker={worker} plan hideHeading foldSteps/></>:<p className="inspector-empty">计划生成后会显示在这里。</p>}
-     {activeTab==='plan'&&goal&&canonical&&!readOnly&&<OperationReconciliation
-       key={JSON.stringify([snapshot.session.projectId,snapshot.session.id,goal.id])}
-       snapshot={snapshot} executionId={goal.id} connected={connected} onUpdated={onUpdated}/>}
      {activeTab==='plan'&&(!goal||!canonical)&&resultsFooter}
     </div>
     <div role="tabpanel" id="inspector-execution-panel" aria-labelledby="inspector-execution-tab" hidden={activeTab!=='execution'}>

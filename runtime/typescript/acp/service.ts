@@ -76,7 +76,7 @@ export class LakeExternalAgents {
     return {agents:await this.registry.list(projectId)};
   }
   private result(run:ExternalRun):ExternalResult{return {run_id:run.id,agent:externalAgentName(run.agent),state:run.state,summary:run.summary??run.error??'',verification:'insufficient',
-    limitations:['外部运行结束不等于任务验收；请根据原任务实际业务回执核对交付结果。']};}
+    limitations:['外部运行返回本次报告；请结合实际工具结果汇总原任务结论，如实说明失败或未知结果。']};}
   async run(agent:unknown,instruction:string,requestKey:string,actor:ExternalActor,resumeRunId?:string):Promise<ExternalResult>{
     const agentId=externalAgentId(agent);actor.guard();actor.signal.throwIfAborted();
     if(!instruction.trim()||Buffer.byteLength(instruction)>65536)throw new HttpError(400,'外部任务说明需要 1–65536 字节');

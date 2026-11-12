@@ -55,7 +55,7 @@ Magpie 与手动供应商共存。明确选择手动模型后保持该选择；�
 
 `list_assets` 以当前项目资源树补全 `path`，支持资源名、ID、祖先目录名与完整目录路径检索；斜线两侧空格不影响路径匹配。路径 JSON 显示最多 2048 字节，截断带 `pathTruncated`，异常目录带 `path_state=unavailable`，总页预算仍为 8192 字节。目录改名/移动使旧游标失效。原生与 ACP 使用同一实现；任务已有限定范围仍先过滤资源，只解析这些资源的祖先。目录与共享入口 IP 不能签发权限或证明集群身份，执行仍使用准确 `asset_ref` 与当前配置 revision/pin。
 
-`tasks.ts` 保存原目标、步骤、独立尝试、实际派发操作及验收。普通任务自动注册计划；Plan 必须确认且始终只读。步骤验收和最终汇总核对真实操作回执、项目/任务/尝试、原修订、当前权限、资源连接修订与输出 hash。模型文字不能验收；只读失败可以在原目标建立带 retryOf 的新诊断尝试，写入不明仍为 unknown。停止和重启使原 owner/审批失效，旧操作不重放；报告使用事务 outbox 幂等进入 Pilot 与专员频道。
+`tasks.ts` 保存原目标、步骤、独立尝试、实际派发操作及执行报告。按用户 2026-11-12 要求，提交 completed 或 partial 报告后结束本次执行，不再要求步骤验收、最终验收或待核实结清；历史未知结果也不阻止新的 Bash/MCP 调用。每次实际 I/O 仍核对当前权限、准确资源配置和执行 owner/generation；Plan 必须确认且始终只读。原 unknown/失败操作及历史验收记录不改写，原调用 ID 不重放；报告使用事务 outbox 幂等进入 Pilot 与专员频道。报告结束不表示业务结果已独立核验；Memory 仅在原授权和来源 hash 有效时提取实际已返回的观察。
 
 迁移优先读取旧 ADK state 指向的准确 artifact 版本并核验 hash；不选择最大 artifact 版本，旧 UI JSON 仅作前 ADK 兼容缓存。历史卡片分页保留，旧任务不成为新执行权威。原项目明确 Security 策略尚未完成 TS 适配时阻止资源执行；原安全 gate/epoch/reader 不兼容时只允许查看，不能改成 Agent SDK 默认放行。`security.ts` 是迁移屏障，完整 Security/grant/恢复合同仍待移植。
 
@@ -136,9 +136,9 @@ Pilot、专员 Worker 与临时 child 共享公开 Agent SDK 文件、Bash、搜
 
 `GET /api/agent-capabilities` 列出固定上游完整工具清单及实际连接状态。Cron/OffPeak、动态工作流、浏览器插件和跨会话上下文读取等还需要相应 Lake 宿主服务及范围适配，不注册成可成功调用的假工具。未连接项不被称为已完成，完整 TS 产品等价门禁保持原状态。准确检查、签名 Dev 来源和未验证项见[本批记录](../../docs/validation/typescript-candidate/agent-capabilities.md)。
 
-普通命令/只读数据库免确认的缺省值与现有 Web 设置共用 shared/execution-preferences.ts，显式关闭仍询问。程序发现和有限容器查询包装按实际内部命令判断，不因 command 或 exec 这几个字一律升级；危险动作、动态或未识别脚本保留确认。此判定只影响追加确认，不构成 readonly 证据或 TaskGrant，仍受原策略和 unknown 约束。验证见上面的本批记录。
+普通命令/只读数据库免确认的缺省值与现有 Web 设置共用 shared/execution-preferences.ts，显式关闭仍询问。程序发现和有限容器查询包装按实际内部命令判断，不因 command 或 exec 这几个字一律升级；危险动作、动态或未识别脚本保留确认。此判定只影响追加确认，不构成 readonly 证据或 TaskGrant，仍受当前权限策略约束；历史 unknown 不阻止新调用。验证见上面的本批记录。
 
-后续程序查找误锁修复单独将字面量 `command -v/-V` 识别为只读；可选程序不存在不会锁住后续普通执行。准确旧 SDK 调用及宿主失败回执可为有限的 hostname/程序查找链另存无写入核验凭证，原记录不改写、原调用不重放，不放行其他未知副作用或生成业务成功。范围和签名 Dev 验收见[程序发现误锁修复](../../docs/validation/typescript-candidate/program-discovery-recovery.md)。
+后续程序查找误锁修复单独将字面量 `command -v/-V` 识别为只读；可选程序不存在不会锁住后续普通执行。准确旧 SDK 调用及宿主失败回执可为有限的 hostname/程序查找链另存无写入核验凭证，原记录不改写、原调用不重放，不放行其他未知副作用或生成业务成功。该自动核实机制已在 2026-11-12 移除，原记录只保留为历史；旧范围和签名 Dev 验收见[程序发现误锁修复](../../docs/validation/typescript-candidate/program-discovery-recovery.md)。
 
 ## 六类服务资源连接配置
 
@@ -158,7 +158,7 @@ TS Dev 支持 MySQL、PostgreSQL、Redis、APISIX、Prometheus 和 VictoriaMetri
 
 在模型菜单选择“配置 Codex”后启用，自动识别 Node 22.22+ / 24.14+ 和配套 npm，在当前 Home 的私有目录安装固定 ACP adapter 2.2.2 与引擎 0.160.1，并完成模型无关的 ACP 握手。路径覆盖折叠在高级设置；主 TS 后端仍使用 Node 24.14.0。Codex 直接复用宿主 CODEX_HOME（默认 ~/.codex）的登录、默认模型、服务地址与思考强度；不再填写或保存项目独立 Key，也不依赖普通模型配置。登录文件由 Codex 原机制读取和刷新；Lake 不复制凭据、不修改本机 config.toml。用于工具托管的 SDK 在没有普通模型时采用不可推理的 Model 端口，原生 child 若需要推理会明确要求普通模型。Codex 原生执行工具关闭，继承的 MCP、hooks 与 notify 在启动和线程配置中关闭；私有模型目录在启动时注入。SQLite 与日志使用 Lake 私有目录。业务调用走每次执行的私有 MCP 桥及原 Lake 审批/账本。具体支持、版本、认证和平台限制见 [兼容记录](../../docs/validation/acp-agent-execution/compatibility.md)。
 
-项目 profile 采用 schema2；旧 schema1 自动递增 revision 迁移，旧 Worker/run 不转用本机认证。修改 Agent 连接配置、本机 config 或登录账号会终止使用旧 revision 的调用，同账号正常令牌刷新保持身份。状态查询自动执行无模型的连接检查；缺登录时提示先在本机 Codex 登录。停止或断线后已发送但未明确回答的 prompt 保留 unknown，不自动重放或回退其他引擎。外部完成报告不等于任务验收；只有原任务实际业务回执可以支撑验收。
+项目 profile 采用 schema2；旧 schema1 自动递增 revision 迁移，旧 Worker/run 不转用本机认证。修改 Agent 连接配置、本机 config 或登录账号会终止使用旧 revision 的调用，同账号正常令牌刷新保持身份。状态查询自动执行无模型的连接检查；缺登录时提示先在本机 Codex 登录。停止或断线后已发送但未明确回答的 prompt 保留 unknown，不自动重放或回退其他引擎。外部报告交回原任务；原任务提交最终报告后结束执行，不再独立验收，真实业务观察仍以原工具回执为准。
 
 ## Pilot 自然语言专员配置
 

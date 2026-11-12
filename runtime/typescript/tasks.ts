@@ -27,7 +27,9 @@ export type Goal = Omit<WorkGoal, "items"> & {
   activeItemId?: string; confirmed: boolean; mode: "default" | "plan";
   executionMode?: "host_managed" | "explicit_plan";
   sharedTaskId?: string;
-  contributionReceiptId?: string;
+  contributionReceiptId?: string; // Historical acceptance, never written by report submission.
+  completionReportId?: string;
+  reportedOutcome?: "completed" | "partial";
   readOnlyRecoveryOf?: string;
 };
 export type Attempt = {
@@ -53,7 +55,7 @@ export type Operation = {
   externalRunId?: string; externalSessionId?: string;
 };
 
-/** Derived observation metadata only. Acceptance still verifies the exact original outputHash. */
+/** Derived observation metadata only; the original outputHash remains unchanged. */
 export function watchdogOutputHash(operation: Pick<Operation,"tool"|"commandExecutionId"|"output"|"outputHash">) {
   const output = operation.output as Record<string,unknown> | null;
   if (!output || typeof output !== "object") return operation.outputHash;
@@ -68,10 +70,7 @@ export function watchdogOutputHash(operation: Pick<Operation,"tool"|"commandExec
   return operation.outputHash;
 }
 
-const businessReceiptTools = new Set(["Bash", "Glob", "Grep", "FindFiles", "SearchText", "WebFetch", "inspect_host", "list_db_objects","db_table_ddl","read_db_table", "Read", "Write", "Edit", "list_project_files", "call_mcp_tool", "read_referenced_task_evidence"]);
-
-// The goal and immutable acceptance receipts are the only completion authority.
-// Router replies, Worker prose and channel presentation never close a goal.
+// The execution ledger owns actual calls; reports end tasks without business acceptance.
 export class TaskLedger {
   constructor(readonly store: LakeStore, readonly revalidate?: (operation: Operation) => void,
     readonly effectResolution?: (operation: Operation) => { effects: "none" | "observed"; closureState?: "reconciled";closedAt?:string;replayScopes?:string[] } | undefined) {}
@@ -88,7 +87,7 @@ export class TaskLedger {
     return task.memberIds.reduce((sum, memberId) => sum + this.get(memberId).modelRounds, 0);
   }
   joinTask(taskId: string, executionIds: string[]) {
-    return joinExecutions(this.store, taskId, executionIds, id => this.unresolved(id));
+    return joinExecutions(this.store, taskId, executionIds);
   }
   save(goal: Goal) {
     // A pending SDK callback may hold a snapshot from before a specialist joined.
@@ -122,11 +121,9 @@ export class TaskLedger {
   prepareHostOperation(goalId: string, generation: number, policyHash: string, binding: { readOnly?: boolean; commandExecutionId?: string } = {}) {
     return this.store.transaction(() => {
       const goal = this.get(goalId);
-      if (!this.isHostManaged(goal)) throw new HttpError(409, "This task retains its explicit plan and acceptance contract");
+      if (!this.isHostManaged(goal)) throw new HttpError(409, "This task retains its explicit plan");
       if (terminal(goal.status) || goal.status !== "running" || Date.parse(goal.deadlineAt) <= Date.now())
         throw new HttpError(409, "An active task within its deadline is required");
-      if (this.unresolved(goalId) && binding.readOnly !== true && !binding.commandExecutionId)
-        throw new HttpError(409, "Original operation requires reconciliation before another mutation");
       if (goal.executionMode !== "host_managed") {
         this.store.put("superHostAdoptions", goal.id, { goalId, at: now(), originalPlanHash: goal.planHash, originalItems: goal.items });
         goal.executionMode = "host_managed";
@@ -137,8 +134,11 @@ export class TaskLedger {
         goal.planRevision = 1;
       }
       goal.confirmed = true;
-      const step = goal.items.find((item) => item.status !== "completed" && !item.acceptanceId);
-      if (!step) throw new HttpError(409, "No unfinished host-managed work remains");
+      let step = goal.items.find(item => item.status !== "completed");
+      if (!step) {
+        step = { id: "host_work_" + (goal.items.length + 1), title: goal.title, status: "pending", dependsOn: [], evidenceIds: [] };
+        goal.items.push(step);
+      }
       const previous = step.attemptId ? this.store.require<Attempt>("superAttempts", step.attemptId) : undefined;
       const operations = previous ? this.store.list<Operation>("superOperations").filter((operation) => operation.attemptId === previous.id) : [];
       if (previous?.state === "running" && previous.generation === generation && previous.policyHash === policyHash &&
@@ -164,53 +164,8 @@ export class TaskLedger {
     });
   }
   finishHost(goalId: string, input: { summary: string; outcome: "completed" | "partial" }, generation: number, policyHash: string) {
-    const summary = text(input.summary, "summary", 32768);
-    if (!["completed", "partial"].includes(input.outcome)) throw new HttpError(400, "A completed or partial business outcome is required");
-    return this.store.transaction(() => {
-      const goal = this.get(goalId);
-      if (!this.isHostManaged(goal) || terminal(goal.status)) throw new HttpError(409, "Task is closed or retains its explicit acceptance contract");
-      if (input.outcome === "partial") {
-        goal.status = this.unresolved(goalId) ? "blocked" : "paused"; goal.summary = summary;
-        // Presentation provenance only: this records an explicit business report,
-        // while task completion remains owned by the acceptance receipts below.
-        this.store.put("superDeliveries", digest([goalId, generation]), { taskId: goalId, generation, outcome: input.outcome, summary, at: now() });
-        return this.save(goal);
-      }
-      this.runnable(goal);
-      // Older inline Pilot profiles exposed work_update on host-managed goals.
-      // Its accepted step is valid evidence, but must still belong to this
-      // invocation and pass the original receipt/resource checks below.
-      const accepted = goal.items.find((item) => item.id === goal.activeItemId && item.status === "completed" && item.acceptanceId);
-      const active = accepted ? { step: accepted, attempt: this.store.require<Attempt>("superAttempts", accepted.attemptId!) }
-        : this.active(goalId, generation, policyHash);
-      const step = goal.items.find((item) => item.id === active.step.id)!, attempt = active.attempt;
-      if (attempt.generation !== generation || attempt.policyHash !== policyHash)
-        throw new HttpError(409, "Attempt or current permission binding changed");
-      const operations = this.store.list<Operation>("superOperations").filter((operation) => operation.attemptId === attempt.id);
-      if (this.unresolved(goalId))
-        throw new HttpError(409, "unresolved_operations: Completion evidence still contains original unknown or dispatched operations. New successful checks cannot settle those original results. Do not repeat inspection just to retry completion; submit the findings with work_finish(outcome=partial), stating the unresolved limitation. Existing permissions still allow relevant new work; original operation IDs must never be replayed.");
-      if (!operations.some((operation) => businessReceiptTools.has(operation.tool)))
-        throw new HttpError(409, "Current successful business evidence is required; discovery alone cannot complete the task");
-      if (goal.items.some((item) => item.id !== step.id && (item.status !== "completed" || !item.acceptanceId)))
-        throw new HttpError(409, "Other original plan items still need their own acceptance");
-      if (operations.some((operation) => operation.status !== "succeeded" || operation.generation !== generation ||
-          operation.policyHash !== policyHash || operation.goalRevision !== goal.goalRevision || operation.planRevision !== goal.planRevision ||
-          !operation.outputHash || operation.outputHash !== digest(operation.output)))
-        throw new HttpError(409, "Failed, stale or unrelated evidence cannot accept this task");
-      if (!accepted) {
-        const receipt = { id: id(), goalId, sessionId: goal.sessionId, stepId: step.id, attemptId: attempt.id,
-          projectId: goal.projectId, goalRevision: goal.goalRevision, planRevision: goal.planRevision,
-          state: "pass", verifier: "host_tool_results/1", operationIds: operations.map((operation) => operation.id), at: now() };
-        this.store.put("superAcceptance", receipt.id, receipt);
-        attempt.state = "succeeded"; this.store.put("superAttempts", attempt.id, attempt);
-        step.status = "completed"; step.evidenceIds = receipt.operationIds; step.acceptanceId = receipt.id;
-      }
-      this.verifySteps(goal, policyHash);
-      this.recordCompletion(goal, summary, policyHash);
-      this.store.put("superDeliveries", digest([goalId, generation]), { taskId: goalId, generation, outcome: input.outcome, summary, at: now() });
-      this.store.put("superPendingReports", digest([goal.id, goal.revision]), { taskId: goal.id, revision: goal.revision, snapshot: structuredClone(goal), createdAt: now() });
-      return goal;
-    });
+    if (!this.isHostManaged(this.get(goalId))) throw new HttpError(409, "This task retains its explicit plan");
+    return this.submitReport(goalId, input, generation, policyHash);
   }
   begin(goalId: string, input: Record<string, any>) {
     const title = text(input.title, "title", 1000);
@@ -267,7 +222,7 @@ export class TaskLedger {
       if (!step) throw new HttpError(404, "Plan item not found");
       if (step.status === "completed") throw new HttpError(409, "A completed step cannot be replayed");
       if (step.dependsOn.some((dependency) => goal.items.find((item) => item.id === dependency)?.status !== "completed"))
-        throw new HttpError(409, "Step prerequisite not accepted");
+        throw new HttpError(409, "Step prerequisite is not completed");
       if (goal.activeItemId && goal.activeItemId !== stepId && goal.items.some((item) => item.id === goal.activeItemId && item.status === "running"))
         throw new HttpError(409, "Finish or explicitly block the active step first");
       let retryOf: string | undefined;
@@ -327,28 +282,6 @@ export class TaskLedger {
   requiresReconciliation(operation: Operation) {
     return ["unknown", "dispatched"].includes(operation.status) && this.effectResolution?.(operation)?.effects !== "none";
   }
-  /** Non-command tools retain their existing effect contract. Commands are
-   * dispatched solely through the current host permission/lease checks. */
-  private checkMutationTarget(projectId:string, binding:{remoteMcp?:boolean}) {
-    if(binding.remoteMcp)return;
-    for(const original of this.store.list<Operation>("superOperations")) {
-      if(original.projectId!==projectId||original.status!=="unknown")continue;
-      const receipt=this.effectResolution?.(original);
-      if(receipt?.effects!=="none"&&receipt?.closureState!=="reconciled")
-        throw new HttpError(409,"A project operation still requires reconciliation ("+original.id+").");
-    }
-  }
-  private protectReconciledMutation(goalId:string) {
-    const goal=this.get(goalId);
-    for(const original of this.store.list<Operation>("superOperations")) {
-      if(original.status!=="unknown")continue;
-      const receipt=this.effectResolution?.(original);
-      if(receipt?.closureState!=="reconciled"||receipt.effects==="none")continue;
-      const old=this.store.get<Goal>("superGoals",original.goalId);
-      if(old&&(goal.id===old.id||goal.sharedTaskId&&goal.sharedTaskId===old.sharedTaskId))
-        throw new HttpError(409,"原已核实调用禁止重放，请使用新的授权请求");
-    }
-  }
   active(goalId: string, generation: number, policyHash: string) {
     const goal = this.get(goalId); this.runnable(goal);
     const step = goal.items.find((step) => step.id === goal.activeItemId && step.status === "running");
@@ -363,9 +296,7 @@ export class TaskLedger {
     input: unknown, dispatch: () => Promise<T>, redact: <V>(value: V) => V,
     binding: Pick<Operation, "resourceId" | "resourceRevision" | "readOnly" | "mcpServerId" | "mcpTool" | "remoteMcp" | "configurationHash" | "bindingHash" | "catalogHash" | "skillName" | "skillHash" | "hostConfigurationHash" | "commandExecutionId" | "networkURL" | "databaseConfigurationHash" | "databaseScope" | "agentRunId" | "childSessionId" | "originalCallId" | "externalRunId" | "externalSessionId"> = {}): Promise<T> {
     const current = this.get(goalId);
-    // Host-issued Bash binding: historical pending effects are observations,
-    // never execution gates for a new command ID. Keep the old rows unchanged.
-    const command = tool === "Bash" && !!binding.commandExecutionId;
+    // Historical results never gate a new call. Exact call identities remain idempotent.
     if (current.readOnlyRecoveryOf && binding.readOnly !== true)
       throw new HttpError(409, "新的复查上下文仅允许独立只读检查；原任务的记录和未决操作仍保留");
     const key = digest([current.sessionId, callId]);
@@ -374,32 +305,11 @@ export class TaskLedger {
       if (previous.goalId !== goalId || previous.tool !== tool || previous.argsHash !== digest(input))
         throw new HttpError(409, "Operation identity reused with different arguments");
       if (previous.status === "succeeded") { this.revalidate?.(previous); return previous.output as T; }
-      throw new HttpError(409, "The original operation must be reconciled; it cannot be replayed");
+      throw new HttpError(409, "The original operation is already recorded and cannot be replayed; use a new call for new work");
     }
-    if (!command && binding.readOnly !== true) this.protectReconciledMutation(goalId);
-    if (this.isHostManaged(this.get(goalId))) this.prepareHostOperation(goalId, generation, policyHash, {...binding, commandExecutionId: command ? binding.commandExecutionId : undefined});
+    if (this.isHostManaged(this.get(goalId))) this.prepareHostOperation(goalId, generation, policyHash, binding);
     const operation = this.store.transaction(() => {
       const { goal, step, attempt } = this.active(goalId, generation, policyHash);
-      if (!command && binding.readOnly !== true && this.unresolved(goalId)) throw new HttpError(409, "Original operation requires reconciliation");
-      if (!command && binding.readOnly !== true) this.checkMutationTarget(goal.projectId,binding);
-      if (!command && binding.readOnly !== true && !binding.remoteMcp && this.store.list<any>("legacyOperations").some((operation) => operation.projectId === goal.projectId && !operation.riskResolvedAt &&
-          (["running", "unknown", "dispatched"].includes(operation.status) || operation.orphanState === "unresolved")))
-        throw new HttpError(409, "旧 Go 操作仍需核实；迁移不会解除原未决风险");
-      if (tool === "call_mcp_tool") {
-        const pending = (operation: any) => ["unknown", "dispatched", "running"].includes(operation.status) || operation.orphanState && !operation.riskResolvedAt;
-        if (this.store.list<Operation>("superOperations").some((operation) => operation.tool === tool && pending(operation) && (!operation.mcpServerId || operation.mcpServerId === binding.mcpServerId)) ||
-            this.store.list<any>("legacyOperations").some((operation) => operation.tool === tool && pending(operation) && (!operation.mcpServerId || operation.mcpServerId === binding.mcpServerId)))
-          throw new HttpError(409, "同一 MCP 服务的原调用结果尚未核实，不能跨任务或项目重试");
-      }
-      if (!command && !binding.readOnly) {
-        const members = new Set(goal.sharedTaskId ? this.store.require<JointTask>('superJointTasks', goal.sharedTaskId).memberIds : [goalId]);
-        const operations = this.store.list<Operation>("superOperations").filter(operation => members.has(operation.goalId));
-        if (operations.some(operation => operation.goalId !== goalId && this.requiresReconciliation(operation)))
-          throw new HttpError(409, "A shared-task operation still requires reconciliation");
-        if (operations.some(operation => !(operation.status === "failed" && this.rejectedBeforeDispatch(operation)) && operation.tool === tool && operation.argsHash === digest(input) &&
-            operation.resourceId === binding.resourceId && (operation.goalId === goal.id || operation.mcpServerId === binding.mcpServerId)))
-          throw new HttpError(409, "Identical mutation already recorded; inspect the original operation instead of dispatching another call ID");
-      }
       const operation: Operation = { id: key, callId, tool, argsHash: digest(input), projectId: goal.projectId,
         goalId, sessionId: goal.sessionId, stepId: step.id, attemptId: attempt.id, goalRevision: goal.goalRevision,
         planRevision: goal.planRevision, generation, policyHash, status: "dispatched", at: now(), ...binding };
@@ -439,20 +349,15 @@ export class TaskLedger {
       const { goal, step, attempt } = this.active(goalId, generation, policyHash);
       if (step.id !== stepId) throw new HttpError(409, "Only the active attempt may update this step");
       if (input.status === "completed") {
-        const operations = this.store.list<Operation>("superOperations").filter((operation) => operation.attemptId === attempt.id);
-        const refs: string[] = Array.isArray(input.evidence_ids) ? input.evidence_ids : [];
-        if (!operations.length || this.unresolved(goal.id) || !refs.length || new Set(refs).size !== refs.length)
-          throw new HttpError(409, "Actual committed evidence from this attempt is required");
-        if (refs.some((ref) => !operations.some((operation) => operation.callId === ref || operation.id === ref)) ||
-            operations.some((operation) => operation.status !== "succeeded" || operation.policyHash !== policyHash ||
-              operation.goalRevision !== goal.goalRevision || operation.planRevision !== goal.planRevision || !operation.outputHash || operation.outputHash !== digest(operation.output)))
-          throw new HttpError(409, "Failed, stale or unrelated evidence cannot accept this step");
-        operations.forEach((operation) => this.revalidate?.(operation));
-        const receipt = { id: id(), goalId, sessionId: goal.sessionId, stepId, attemptId: attempt.id,
-          projectId: goal.projectId, goalRevision: goal.goalRevision, planRevision: goal.planRevision,
-          state: "pass", verifier: "tool_results/1", operationIds: operations.map((op) => op.id), at: now() };
-        this.store.put("superAcceptance", receipt.id, receipt);
-        attempt.state = "succeeded"; step.evidenceIds = operations.map((op) => op.id); step.acceptanceId = receipt.id;
+        const operations = this.store.list<Operation>("superOperations").filter(operation => operation.attemptId === attempt.id);
+        const refs: unknown[] = input.evidence_ids ?? [];
+        if (!Array.isArray(refs) || new Set(refs).size !== refs.length ||
+            refs.some(ref => typeof ref !== "string" || !operations.some(operation => operation.callId === ref || operation.id === ref)))
+          throw new HttpError(400, "Evidence references must belong to this exact attempt");
+        step.evidenceIds = operations.map(operation => operation.id);
+        this.settleAttempt(attempt, operations);
+        // Stage completion is the agent's progress report. It does not verify
+        // or rewrite any operation/attempt result, including failed or unknown.
       }
       step.status = input.status; step.reason = typeof input.reason === "string" ? input.reason.slice(0, 4096) : undefined;
       if (input.status === "failed") attempt.state = "failed";
@@ -460,90 +365,75 @@ export class TaskLedger {
       return this.save(goal);
     });
   }
-  private verifySteps(goal: Goal, policyHash: string) {
-    if (!goal.confirmed || !goal.items.length || this.unresolved(goal.id))
-      throw new HttpError(409, "The execution still lacks verified evidence");
-    for (const step of goal.items) {
-      if (step.status !== "completed" || !step.acceptanceId || !step.attemptId)
-        throw new HttpError(409, "All original plan items need accepted evidence before work_finish");
-      const attempt = this.store.require<Attempt>("superAttempts", step.attemptId);
-      const receipt = this.store.require<{id: string; goalId: string; sessionId: string; projectId: string; stepId: string;
-        attemptId: string; state: string; goalRevision: number; planRevision: number; operationIds: string[]}>("superAcceptance", step.acceptanceId);
-      if (attempt.policyHash !== policyHash || attempt.state !== "succeeded" || attempt.projectId !== goal.projectId ||
-          attempt.goalId !== goal.id || attempt.sessionId !== goal.sessionId || attempt.stepId !== step.id ||
-          attempt.goalRevision !== goal.goalRevision || attempt.planRevision !== goal.planRevision)
-        throw new HttpError(409, "Current permissions or original attempt changed; acceptance requires revalidation");
-      const operations = this.store.list<Operation>("superOperations").filter(operation => operation.attemptId === attempt.id);
-      if (receipt.id !== step.acceptanceId || receipt.goalId !== goal.id || receipt.sessionId !== goal.sessionId ||
-          receipt.projectId !== goal.projectId || receipt.stepId !== step.id || receipt.attemptId !== attempt.id ||
-          receipt.state !== "pass" || receipt.goalRevision !== goal.goalRevision || receipt.planRevision !== goal.planRevision ||
-          digest(receipt.operationIds) !== digest(operations.map(operation => operation.id)) ||
-          digest(step.evidenceIds) !== digest(receipt.operationIds) || !operations.length)
-        throw new HttpError(409, "Original step acceptance receipt no longer matches its evidence");
-      for (const operation of operations) {
-        if (operation.status !== "succeeded" || operation.goalId !== goal.id || operation.stepId !== step.id ||
-            operation.sessionId !== goal.sessionId || operation.projectId !== goal.projectId ||
-            operation.generation !== attempt.generation || operation.policyHash !== policyHash ||
-            operation.goalRevision !== goal.goalRevision || operation.planRevision !== goal.planRevision ||
-            !operation.outputHash || operation.outputHash !== digest(operation.output))
-          throw new HttpError(409, "Original operation evidence cannot accept the goal");
-        this.revalidate?.(operation);
-      }
-    }
+  private settleAttempt(attempt: Attempt, operations: Operation[]) {
+    // Close this live execution from its actual settled calls. This supplies
+    // no business verdict and never changes an earlier uncertain attempt.
+    if (attempt.state !== "running" || !operations.length || operations.some(operation => !["succeeded", "failed"].includes(operation.status))) return;
+    attempt.state = operations.every(operation => operation.status === "succeeded") ? "succeeded" : "failed";
+    this.store.put("superAttempts", attempt.id, attempt);
   }
-
-  // Called inside the same write transaction as the contributor's final step.
-  private recordCompletion(goal: Goal, summary: string, policyHash: string) {
-    const task = goal.sharedTaskId ? this.store.require<JointTask>("superJointTasks", goal.sharedTaskId) : undefined;
-    const receipt = {id: id(), goalId: goal.id, sessionId: goal.sessionId, projectId: goal.projectId, roleId: goal.roleId,
-      workerId: goal.workerId, sharedTaskId: task?.id, scope: task ? "contribution" : "goal", state: "pass",
-      goalRevision: goal.goalRevision, planRevision: goal.planRevision, stepReceipts: goal.items.map(step => step.acceptanceId), at: now()};
-    this.store.put("superAcceptance", receipt.id, receipt);
-    goal.status = "completed";
-    goal.acceptanceState = task ? "not_evaluated" : "pass";
-    goal.summary = summary;
-    if (task) goal.contributionReceiptId = receipt.id;
-    this.save(goal);
-    if (!task) return;
+  private submitReport(goalId: string, input: { summary: string; outcome: "completed" | "partial" }, generation: number, policyHash: string) {
+    const summary = text(input.summary, "summary", 32768);
+    if (!["completed", "partial"].includes(input.outcome)) throw new HttpError(400, "A completed or partial report outcome is required");
+    return this.store.transaction(() => {
+      const goal = this.get(goalId);
+      if (terminal(goal.status)) throw new HttpError(409, "Task is closed");
+      if (this.isHostManaged(goal)) goal.confirmed = true;
+      this.runnable(goal);
+      const worker = this.store.get<{taskId: string; sessionId: string; projectId: string; state: string; generation: number; policyHash: string; leaseUntil?: number}>("superWorkers", goal.workerId);
+      if (worker) {
+        if (worker.taskId !== goal.id || worker.sessionId !== goal.sessionId || worker.projectId !== goal.projectId ||
+            worker.state !== "active" || worker.generation !== generation || worker.policyHash !== policyHash ||
+            !worker.leaseUntil || worker.leaseUntil <= Date.now()) throw new HttpError(409, "Current execution or permission binding changed");
+      } else {
+        const step = goal.items.find(item => item.id === goal.activeItemId);
+        const attempt = step?.attemptId ? this.store.require<Attempt>("superAttempts", step.attemptId) : undefined;
+        if (attempt && (attempt.generation !== generation || attempt.policyHash !== policyHash))
+          throw new HttpError(409, "Attempt or current permission binding changed");
+      }
+      const reportId = digest([goal.id, generation]);
+      const report = { taskId: goal.id, sessionId: goal.sessionId, workerId: goal.workerId,
+        projectId: goal.projectId, generation, outcome: input.outcome, summary, at: now() };
+      const step = goal.items.find(item => item.id === goal.activeItemId);
+      const attempt = step?.attemptId ? this.store.require<Attempt>("superAttempts", step.attemptId) : undefined;
+      if (attempt?.generation === generation && attempt.policyHash === policyHash) {
+        const operations = this.store.list<Operation>("superOperations").filter(operation => operation.attemptId === attempt.id);
+        this.settleAttempt(attempt, operations);
+        if (step && this.isHostManaged(goal) && input.outcome === "completed") {
+          step.status = "completed"; step.evidenceIds = operations.map(operation => operation.id);
+        }
+      }
+      this.store.put("superDeliveries", reportId, report);
+      goal.completionReportId = reportId; goal.reportedOutcome = input.outcome;
+      goal.status = "completed"; goal.summary = summary;
+      // Old acceptance fields and receipts are compatibility history. This
+      // execution ends because it submitted a report, never because it passed.
+      this.save(goal);
+      if (goal.sharedTaskId) this.aggregateReports(goal);
+      this.store.put("superPendingReports", digest([goal.id, goal.revision]), {
+        taskId: goal.id, revision: goal.revision, snapshot: structuredClone(goal), createdAt: report.at });
+      return goal;
+    });
+  }
+  private aggregateReports(goal: Goal) {
+    const task = this.store.require<JointTask>("superJointTasks", goal.sharedTaskId!);
+    if (task.projectId !== goal.projectId || !task.memberIds.includes(goal.id)) throw new HttpError(409, "Shared task membership is stale");
     const members = task.memberIds.map(memberId => this.get(memberId));
-    if (task.acceptanceId || !task.memberIds.includes(goal.id)) throw new HttpError(409, "Shared task membership is stale");
-    if (members.some(member => member.status !== "completed" || !member.contributionReceiptId)) return;
-    for (const member of members) {
-      const contribution = this.store.require<typeof receipt>("superAcceptance", member.contributionReceiptId!);
-      if (member.projectId !== task.projectId || member.sharedTaskId !== task.id ||
-          contribution.id !== member.contributionReceiptId || contribution.scope !== "contribution" || contribution.state !== "pass" ||
-          contribution.sharedTaskId !== task.id || contribution.goalId !== member.id || contribution.projectId !== task.projectId ||
-          contribution.sessionId !== member.sessionId || contribution.roleId !== member.roleId || contribution.workerId !== member.workerId ||
-          contribution.goalRevision !== member.goalRevision || contribution.planRevision !== member.planRevision ||
-          digest(contribution.stepReceipts) !== digest(member.items.map(step => step.acceptanceId)))
-        throw new HttpError(409, "Specialist contribution does not match its original assignment");
-      if (Date.parse(member.deadlineAt) <= Date.now()) throw new HttpError(409, "Shared task deadline reached");
-      this.verifySteps(member, policyHash);
-    }
-    const contributionReceipts = members.map(member => member.contributionReceiptId!);
-    const groupReceipt = {id: digest(["joint_goal", task.id, task.revision, contributionReceipts]), scope: "goal",
-      goalId: task.id, projectId: task.projectId, membershipRevision: task.revision, state: "pass", contributionReceipts, at: now()};
-    this.store.put("superAcceptance", groupReceipt.id, groupReceipt);
-    task.acceptanceId = groupReceipt.id;
-    task.revision++;
+    if (members.some(member => member.projectId !== task.projectId || member.sharedTaskId !== task.id))
+      throw new HttpError(409, "Shared task assignment changed");
+    if (members.some(member => member.status !== "completed" || !member.completionReportId && !member.contributionReceiptId)) return;
+    const reports = members.map(member => member.completionReportId ?? member.contributionReceiptId!);
+    const reportId = digest(["joint_report", task.id, task.revision, reports]);
+    if (task.reportId === reportId) return;
+    task.reportId = reportId;
     task.summary = members.map(member => {
       const worker = this.store.get<{roleSnapshot?: {name: string}}>("superWorkers", member.workerId);
       return (worker?.roleSnapshot?.name ?? member.roleId) + "：" + member.summary;
     }).join("\n\n");
     this.store.put("superJointTasks", task.id, task);
-    this.store.put("superPendingJointReports", task.id, {taskId: task.id, acceptanceId: groupReceipt.id, createdAt: groupReceipt.at});
+    this.store.put("superPendingJointReports", task.id, { taskId: task.id, reportId, createdAt: now() });
   }
-
-  finish(goalId: string, summary: string, policyHash: string) {
-    text(summary, "summary", 32768);
-    return this.store.transaction(() => {
-      const goal = this.get(goalId); this.runnable(goal);
-      if (!goal.items.length || this.unresolved(goal.id) || goal.items.some((step) => step.status !== "completed" || !step.acceptanceId))
-        throw new HttpError(409, "All original plan items need accepted evidence before work_finish");
-      this.verifySteps(goal, policyHash);
-      this.recordCompletion(goal, summary, policyHash);
-      this.store.put("superPendingReports", digest([goal.id, goal.revision]), { taskId: goal.id, revision: goal.revision, snapshot: structuredClone(goal), createdAt: now() });
-      return goal;
-    });
+  finish(goalId: string, summary: string, policyHash: string, generation: number, outcome: "completed" | "partial" = "completed") {
+    return this.submitReport(goalId, {summary, outcome}, generation, policyHash);
   }
 }

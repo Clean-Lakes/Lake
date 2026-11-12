@@ -270,6 +270,31 @@ test("原任务验收、工具 hash 与连接版本控制知识资格，unknown 
   assert.doesNotMatch(f.projected(), /历史方法/);
 });
 
+for (const outcome of ['completed','partial'] as const) test(`submitted ${outcome} report supplies settled observations without business acceptance`,async t=>{
+ const f=await fixture(t);f.enable();const {goal,operation}=f.task();
+ goal.acceptanceState='not_evaluated';goal.reportedOutcome=outcome;goal.completionReportId=digest([goal.id,1]);
+ const report={taskId:goal.id,sessionId:goal.sessionId,projectId:goal.projectId,workerId:goal.workerId,generation:1,outcome,summary:goal.summary};
+ f.store.put('superGoals',goal.id,goal);f.store.put('superDeliveries',goal.completionReportId,report);
+ f.memory.captureTask(goal.id);
+ const source=f.store.list<any>('memorySources').find(source=>source.taskId===goal.id)!;
+ assert.ok(source);assert.equal(source.taskEvidence,'reported');assert.equal(source.taskReportId,goal.completionReportId);
+ assert.match(source.payload,/reported_task_observations/);assert.doesNotMatch(source.payload,/"kind":"accepted_task"|"acceptanceState":"pass"/);
+ f.memory.runNative=async work=>{work.guard();await writeFile(join(work.root,'report-observation.md'),'HISTORICAL_REPORTED_OBSERVATION',{mode:0o600});};
+ await f.memory.wait();assert.match(f.projected(),/HISTORICAL_REPORTED_OBSERVATION/);
+ f.store.put('superDeliveries',goal.completionReportId,{...report,summary:'changed report'});
+ assert.doesNotMatch(f.projected(),/HISTORICAL_REPORTED_OBSERVATION/);
+ assert.deepEqual(f.store.require('superOperations',operation.id),operation);assert.equal(f.store.list('superAcceptance').length,0);
+});
+
+test('a submitted report cannot turn an unknown operation into a successful Memory source',async t=>{
+ const f=await fixture(t);f.enable();const {goal,operation}=f.task();
+ goal.acceptanceState='not_evaluated';goal.reportedOutcome='completed';goal.completionReportId=digest([goal.id,1]);
+ f.store.put('superGoals',goal.id,goal);f.store.put('superDeliveries',goal.completionReportId,{taskId:goal.id,sessionId:goal.sessionId,projectId:goal.projectId,workerId:goal.workerId,outcome:'completed',summary:goal.summary});
+ const unknown={...operation,status:'unknown'};f.store.put('superOperations',operation.id,unknown);
+ f.memory.captureTask(goal.id);assert.equal(f.store.list('memoryJobs').length,0);
+ assert.deepEqual(f.store.require('superOperations',operation.id),unknown);assert.equal(f.store.list('superAcceptance').length,0);
+});
+
 test("Pilot 直接任务的合格经验归项目，原始任务与操作变更仍使知识失效", async (t) => {
   const f=await fixture(t);f.enable(f.shared);
   const {goal,operation}=f.task();goal.roleId='pilot:'+f.project.id;f.store.put('superGoals',goal.id,goal);

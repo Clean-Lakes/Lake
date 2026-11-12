@@ -66,7 +66,7 @@ test('numeric secret overlap cannot corrupt a command receipt, ledger acceptance
  await f.run('numeric-receipt');const operation=f.op('numeric-receipt'),record=f.store.require<any>('commandExecutions',operation.commandExecutionId!);
  assert.equal(dispatched,1);assert.equal(operation.status,'succeeded');assert.equal(record.status,'completed');assert.equal(record.result.durationMs,73192);assert.equal(record.result.stdout.bytes,73190);
  assert.equal(record.result.stdout.text,'private=[REDACTED]');assert.equal(record.stdoutTail,'private=[REDACTED]');assert.ok(Number.isFinite(Date.parse(record.result.completedAt)));
- assert.equal(f.ledger.finishHost('goal',{summary:'已取得本轮实际检查结果。',outcome:'completed'},1,'policy').acceptanceState,'pass');
+ assert.equal(f.ledger.finishHost('goal',{summary:'已取得本轮实际检查结果。',outcome:'completed'},1,'policy').acceptanceState,"not_evaluated");
  assert.equal(f.execution.hasLiveCommand(f.actor.sessionId,f.actor.taskId),false);await f.execution.close();
 });
 
@@ -98,7 +98,7 @@ test("a proven connection failure remains failed and permits a fresh call, never
   assert.equal(f.op("fresh-connect").status, "succeeded"); assert.equal(f.execCalls(), 1);
   assert.equal(f.store.require<any>("superAttempts", original.attemptId).state, "failed");
   assert.deepEqual(f.op("failed-connect"), original); assert.deepEqual(f.store.require("commandExecutions", originalRun.id), originalRun);
-  assert.equal(f.ledger.finishHost("goal", {summary:"已取得新的查询结果。", outcome:"completed"}, 1, "policy").acceptanceState, "pass");
+  assert.equal(f.ledger.finishHost("goal", {summary:"已取得新的查询结果。", outcome:"completed"}, 1, "policy").acceptanceState, "not_evaluated");
 });
 
 test("an explicit plan can retry a proven unsent step without changing its acceptance contract", async t => {
@@ -108,8 +108,8 @@ test("an explicit plan can retry a proven unsent step without changing its accep
   const plan = structuredClone(f.ledger.get("goal")); await f.run("explicit-connect-failed");
   f.ledger.start("goal","logs",1,"policy"); f.setMode("success"); await f.run("explicit-connect-retry");
   f.ledger.update("goal", {item_id:"logs",status:"completed",evidence_ids:["explicit-connect-retry"]},1,"policy");
-  const finished = f.ledger.finish("goal","已取得实际日志。","policy");
-  assert.equal(finished.acceptanceState,"pass"); assert.equal(finished.executionMode,"explicit_plan");
+  const finished = f.ledger.finish("goal","已取得实际日志。","policy",1);
+  assert.equal(finished.acceptanceState,"not_evaluated"); assert.equal(finished.executionMode,"explicit_plan");
   assert.equal(finished.planHash,plan.planHash); assert.equal(finished.planRevision,plan.planRevision);
   assert.equal(f.op("explicit-connect-failed").status,"failed"); assert.equal(f.execCalls(),1);
 });
@@ -125,8 +125,7 @@ for (const mode of ["exec-throw", "request-loss", "channel-loss"]) test(`uncerta
   await f.run("independent-read", "journalctl -b -1 -n 100 --no-pager -o short-iso");
   assert.equal(f.op("independent-read").readOnly, true); assert.equal(f.op("independent-read").status, "succeeded");
   assert.deepEqual(f.op("uncertain"), before);
-  assert.throws(() => f.ledger.finishHost("goal", {summary:"完成。", outcome:"completed"}, 1, "policy"), /evidence/);
-  assert.equal(f.ledger.finishHost("goal", {summary:"已取得日志；原命令结果仍待核实。", outcome:"partial"}, 1, "policy").status, "blocked");
+  assert.equal(f.ledger.finishHost("goal", {summary:"已取得日志；原命令结果仍待核实。", outcome:"partial"}, 1, "policy").status, "completed");
   // Reopen exactly the original ledger; the phase and unknown do not disappear.
   const reopened = await LakeStore.open(f.home, f.data);
   try { assert.equal(new TaskLedger(reopened).unresolved("goal"), true); assert.deepEqual(reopened.require("commandExecutions",record.id),record); }

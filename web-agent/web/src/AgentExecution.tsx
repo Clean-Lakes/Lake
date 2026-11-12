@@ -19,6 +19,6 @@ export function AgentExecution({execution,roleName,waiting=false,onInspect,compa
     <footer><time dateTime={run.updatedAt}>{new Date(run.updatedAt).toLocaleString('zh-CN',{hour12:false})}</time><span>{run.usage?`输入 ${run.usage.inputTokens} · 输出 ${run.usage.outputTokens} token`:'外部用量未报告'}</span></footer>
    </article>;
   })}{execution.totalRuns>runs.length&&<p className="agent-execution-empty">显示最近 {runs.length} 次，完整记录保留在任务执行过程中。</p>}</div></details>}
-  <div className="agent-execution-foot"><small>{runs.length?'进度与回传来自实际运行记录；任务按工具回执验收。':backend.kind==='acp'?'分配已记录，尚无外部执行记录。':'当前任务使用 Lake 原生执行上下文。'}</small>{onInspect&&<button type="button" onClick={onInspect}>查看任务<Glyph name="chevron" size={12}/></button>}</div>
+  <div className="agent-execution-foot"><small>{runs.length?'进度与回传来自实际运行记录。':backend.kind==='acp'?'分配已记录，尚无外部执行记录。':'当前任务使用 Lake 原生执行上下文。'}</small>{onInspect&&<button type="button" onClick={onInspect}>查看任务<Glyph name="chevron" size={12}/></button>}</div>
  </section>;
 }

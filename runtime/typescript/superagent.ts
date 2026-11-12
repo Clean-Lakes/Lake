@@ -37,7 +37,7 @@ import {agentToolNames,nativeTool,agentCapabilityCatalog} from "./capabilities";
 import type {LakeExecution,ShellInput,ShellActor} from "./execution";
 import { ProgramDiscoveryRecovery } from "./discovery-recovery";
 import { OperatorEffectReviewService } from "./operator-effect-review";
-import { stoppedNotice, unresolvedNotice, stoppedReportProjection } from "./task-cancellation";
+import { stoppedNotice, stoppedReportProjection } from "./task-cancellation";
 import { memoryContextUnavailable, memoryContextUnavailableNotice } from "./memory-errors";
 import {TaskWatchdog, type WatchdogSample, type WatchdogRecord} from "./watchdog";
 import {prepareWatchdogEvidence, watchdogEvidence, transientModelFailure, type WatchdogRetry} from "./watchdog-observation";
@@ -193,7 +193,7 @@ export class LakeSuperagent implements AgentHost {
         worker.state = "parked"; worker.owner = undefined; worker.leaseUntil = undefined;
         worker.generation++; store.put("superWorkers", worker.id, worker);
         const goal = this.ledger.get(worker.taskId);
-        if (!terminal(goal.status)) { goal.status = this.ledger.unresolved(goal.id) ? "blocked" : "paused";
+        if (!terminal(goal.status)) { goal.status = "paused";
           goal.summary = "运行已中断；原任务、审批和操作保留，需要核对后继续。"; this.ledger.save(goal);
           if(!worker.inline) this.watchdog.recordIncident(interrupted,"后端重启中断了原执行，请核对该次执行的记录。"); }
       }
@@ -366,7 +366,7 @@ export class LakeSuperagent implements AgentHost {
     )
       return false;
     const executions = goal.sharedTaskId ? this.ledger.jointTask(goal.sharedTaskId)?.memberIds : [goal.id];
-    if (!executions || executions.some((id) => this.ledger.unresolved(id))) return false;
+    if (!executions) return false;
     // Automatic recovery is limited to a model transport failure before any
     // business invocation or interaction in this member's execution.
     if (
@@ -394,13 +394,13 @@ export class LakeSuperagent implements AgentHost {
   }
   private recordWorkerOutcome(worker: Worker, goal: Goal, error?: string, failure?: TurnFailure) {
     const identity = this.watchdogIdentity(worker, goal);
-    if (goal.contributionReceiptId || goal.acceptanceState === "pass") this.watchdog.completed(identity);
+    if (goal.status === "completed") this.watchdog.completed(identity);
     const prior = this.store.get<WatchdogRetry>("superWatchdogLastRetry", worker.id);
     if (
       prior &&
       prior.generation + 1 === worker.generation &&
       !error &&
-      (goal.contributionReceiptId || goal.acceptanceState === "pass")
+      (goal.status === "completed")
     ) {
       this.watchdog.recordIncident({ ...identity, generation: prior.generation }, prior.reason, "recovered");
     }
@@ -510,15 +510,15 @@ export class LakeSuperagent implements AgentHost {
     const aggregate = joint && this.ledger.jointState(joint.id);
     return { taskId: joint?.id ?? goal.id, sessionId: goal.sessionId, projectId: goal.projectId, title: joint?.title ?? goal.title,
       ...(joint && aggregate && {executionGoalId:goal.id, collaboration:{
-        state:aggregate.status, acceptanceState:aggregate.acceptanceState, acceptanceId:joint.acceptanceId,
+        state:aggregate.status, acceptanceState:aggregate.acceptanceState, acceptanceId:joint.acceptanceId, reportId:joint.reportId,
         participants:joint.memberIds.map(id=>{
           const member=this.ledger.get(id), worker=this.store.require<Worker>("superWorkers",member.workerId);
           return {workerId:worker.id, roleId:worker.roleId, roleName:worker.roleSnapshot.name,
-            sessionId:worker.sessionId, state:this.memberState(member), contributed:!!member.contributionReceiptId};
+            sessionId:worker.sessionId, state:this.memberState(member), contributed:!!(member.completionReportId || member.contributionReceiptId)};
         }),
       }}),
       state: this.memberState(goal),
-      acceptanceState: goal.acceptanceState, revision: goal.revision, originRootTurnId: goal.originRootTurnId,
+      acceptanceState: goal.acceptanceState, reportedOutcome: goal.reportedOutcome, revision: goal.revision, originRootTurnId: goal.originRootTurnId,
       deadlineAt: goal.deadlineAt, summary: goal.summary, updatedAt: goal.updatedAt,
       ...(goal.status==="paused"&&goal.summary==="model_round_limit"&&{reason:"round_limit_removed",summary:"轮次限制已取消，可继续当前任务。"}) };
   }
@@ -566,13 +566,13 @@ export class LakeSuperagent implements AgentHost {
   private channelView(channel: Channel, projectWorkers = this.workers(channel.projectId)): SpecialistChannelInfo {
     const role = this.role(channel.projectId, channel.roleId, true);
     const workers = projectWorkers.filter((worker) => worker.roleId === role.id);
-    const accepted = workers.filter(({task}) => (task.collaboration?.acceptanceState ?? task.acceptanceState) === "pass" && task.state === "completed").length;
+    const completed = workers.filter(({task}) => task.state === "completed").length;
     return { ...channel, roleName: role.name, duties: role.duties, roleRevision: role.revision,avatarId:role.avatarId,execution:this.roleExecution(role),
       running: workers.some((worker) => this.active.has(worker.id) && this.agents.isRunning(worker.sessionId)),
       preparing: workers.some((worker) => worker.assignmentState === "queued") || this.store.list<InputEvent>("superInputs").some((event) => event.preferredRoleId === role.id && event.disposition === "pending"),
       needsConfirmation: workers.some((worker) => this.pendingInteraction(worker.sessionId)),
       messageRead: conversationReadState(this.store, channel.sessionId, [channel.sessionId, ...workers.map(worker => worker.sessionId)]),
-      completionCursor: accepted ? String(accepted).padStart(20, "0") : "",
+      completionCursor: completed ? String(completed).padStart(20, "0") : "",
       seenCompletionCursor: this.store.get<string>("superChannelReads", channel.id) ?? "" };
   }
   private legacyWorkerViews(projectId: string): SuperWorker[] {
@@ -823,8 +823,9 @@ export class LakeSuperagent implements AgentHost {
   private readonlyRecheck(event: InputEvent, routerSessionId: string, goal: Goal, targetsOverride?: string[]) {
     const worker = this.store.require<Worker>("superWorkers",goal.workerId);
     if (worker.inline || !this.ledger.isHostManaged(goal) || goal.mode === "plan" || goal.sharedTaskId || this.ledger.jointTask(goal.id))
-      throw new HttpError(409, "显式计划、Pilot 直接任务或共同任务需要保留原验收约定，不能自动替换上下文");
-    if (terminal(goal.status) || worker.state === "active" || event.id === goal.sourceEventId || Date.parse(goal.deadlineAt) <= Date.now())
+      throw new HttpError(409, "显式计划、Pilot 直接任务或共同任务需保留原分工与执行范围，不能自动替换上下文");
+    const withdrawnContext = this.agents.memory?.needsFreshContext({kind:"worker",projectId:worker.projectId,roleId:worker.roleId,sessionId:worker.sessionId}) === true;
+    if (terminal(goal.status) && !(goal.status === "completed" && withdrawnContext) || worker.state === "active" || event.id === goal.sourceEventId || Date.parse(goal.deadlineAt) <= Date.now())
       throw new HttpError(409, "原任务仍在执行、没有新输入、已结束或已到截止时间，不能建立只读复查");
     if (worker.projectId !== event.projectId || goal.projectId !== event.projectId || worker.taskId !== goal.id || worker.sessionId !== goal.sessionId || worker.roleId !== goal.roleId ||
       event.explicitTaskId && event.explicitTaskId !== goal.id || event.preferredRoleId && event.preferredRoleId !== worker.roleId || !this.sourceDecision(worker))
@@ -892,7 +893,7 @@ export class LakeSuperagent implements AgentHost {
           if (event.explicitTaskId && event.explicitTaskId !== root.id) throw new HttpError(409, "Input belongs to another explicit task");
           const members = (this.ledger.jointTask(root.id)?.memberIds ?? [root.id]).map(id => this.ledger.get(id));
           if (this.store.require<Worker>("superWorkers", root.workerId).inline || members.length + roles.length > 8 ||
-            members.some(goal => (terminal(goal.status) && !goal.contributionReceiptId) || this.ledger.unresolved(goal.id)) || Date.parse(root.deadlineAt) <= Date.now())
+            members.some(goal => terminal(goal.status) && !goal.completionReportId && !goal.contributionReceiptId) || Date.parse(root.deadlineAt) <= Date.now())
             throw new HttpError(409, "Only an open specialist task within its original limits can accept additional specialists");
           if (roles.some(role => members.some(member => member.roleId === role.id))) throw new HttpError(409, "Specialist already assigned to this task");
           targetResourceIds = this.store.require<Worker>("superWorkers",root.workerId).targetResourceIds;
@@ -921,8 +922,10 @@ export class LakeSuperagent implements AgentHost {
         const assignments = roles.map((role, i) => {
           const suffix = digest(i === 0 ? [event.id, part] : [event.id, part, role.id]).slice(0, 32);
           const linked = input.predecessor_task_id == null ? undefined : this.predecessorSource(event,role,input.predecessor_task_id);
-          if (linked && !terminal(linked.status)) {
-            if (roles.length !== 1 || refs.length) throw new HttpError(409,"独立只读复查仅关联原专员，不导入旧执行证据或创建共同验收");
+          const linkedWorker = linked && this.store.require<Worker>("superWorkers", linked.workerId);
+          const withdrawnContext = linkedWorker && !linkedWorker.inline && this.agents.memory?.needsFreshContext({kind:"worker",projectId:linkedWorker.projectId,roleId:linkedWorker.roleId,sessionId:linkedWorker.sessionId});
+          if (linked && (!terminal(linked.status) || withdrawnContext)) {
+            if (roles.length !== 1 || refs.length) throw new HttpError(409,"独立只读复查仅关联原专员，不导入旧执行证据或创建共同任务");
             const worker = this.readonlyRecheck(event,sessionId,linked,targetResourceIds);
             decision.recoveryOfTaskId = linked.id;
             return this.assignment(worker);
@@ -948,14 +951,15 @@ export class LakeSuperagent implements AgentHost {
         if (parts.some(old => old.action === action && old.quote === quote && old.taskId === taskId && this.decisionAssignments(old).some(a => a.workerId === worker.id)))
           throw new HttpError(409, "Use the previously committed part_key for this specialist");
         if (action === "followup") {
-          if (terminal(goal.status)) throw new HttpError(409, "Closed tasks remain unchanged. " + canonical({ code: "task_closed",
+          const withdrawnContext = !worker.inline && this.agents.memory?.needsFreshContext({kind:"worker",projectId:worker.projectId,roleId:worker.roleId,sessionId:worker.sessionId});
+          if (terminal(goal.status) && !withdrawnContext) throw new HttpError(409, "Closed tasks remain unchanged. " + canonical({ code: "task_closed",
             taskRef: { id: taskId, role_id: worker.roleId, revision: goal.revision, hash: digest(goal) }, role_id: worker.roleId,
             state: goal.status, acceptanceState: goal.acceptanceState,
-            recovery: goal.status === "completed" && (this.ledger.jointState(taskId)?.acceptanceState ?? goal.acceptanceState) === "pass" && !this.ledger.unresolved(goal.id)
+            recovery: goal.status === "completed"
               ? { action: "create", predecessor_task_id: taskId, role_id: worker.roleId,
                 instruction: "Only if this admitted human event requests a fresh check: create a new task with its exact quote and a resolved title; omit task_id. Explanation-only questions need respond." }
               : { action: "respond", instruction: "Read the original outcome and limits. Do not create a replacement to bypass them." } }));
-          if (!worker.inline && this.agents.memory?.needsFreshContext({kind:"worker",projectId:worker.projectId,roleId:worker.roleId,sessionId:worker.sessionId})) {
+          if (withdrawnContext) {
             worker = this.readonlyRecheck(event,sessionId,goal);
             Object.assign(decision,{action:"create",recoveryOfTaskId:taskId});
           } else {
@@ -1028,8 +1032,8 @@ export class LakeSuperagent implements AgentHost {
   private predecessor(event: InputEvent, role: Role, taskId: unknown): TaskPredecessor {
     const source = this.predecessorSource(event,role,taskId), publicId = text(taskId,"predecessor_task_id",128);
     if (source.sourceEventId === event.id) throw new HttpError(409, "A fresh check requires a new admitted human event");
-    if (source.status !== "completed" || (this.ledger.jointState(publicId)?.acceptanceState ?? source.acceptanceState) !== "pass" || this.ledger.unresolved(source.id))
-      throw new HttpError(409, "Only an accepted completed task without unresolved operations can supply fresh-check context; original limits cannot be reset");
+    if (source.status !== "completed")
+      throw new HttpError(409, "A finished task is required for fresh-check context; an unfinished task must be continued within its original limits");
     const decision = this.sourceDecision(this.store.require<Worker>("superWorkers", source.workerId));
     if (!decision) throw new HttpError(409, "Predecessor has no canonical assignment source");
     const prior = this.store.get<TaskPredecessor>("superTaskPredecessors", source.id);
@@ -1185,8 +1189,8 @@ export class LakeSuperagent implements AgentHost {
           if (message.author && message.sessionId !== project.routerSessionId && allMessages.some((other) => other.sessionId === project.routerSessionId &&
             other.author?.taskId === message.author?.taskId && other.author?.workerId === message.author?.workerId && other.createdAt === message.createdAt)) return [];
           return [{ ...message, projectId: project.projectId, sessionId: sources.has(message.sessionId) ? message.sessionId : reportChannel!,
-            sourceSessionId: message.sessionId, text: this.agents.redact(message.text), taskId: message.author?.taskId ?? message.jointAcceptance?.taskId,
-            kind: message.author || message.jointAcceptance ? "report" as const : message.dispatch ? "dispatch" as const : undefined }];
+            sourceSessionId: message.sessionId, text: this.agents.redact(message.text), taskId: message.author?.taskId ?? message.jointReport?.taskId ?? message.jointAcceptance?.taskId,
+            kind: message.author || message.jointReport || message.jointAcceptance ? "report" as const : message.dispatch ? "dispatch" as const : undefined }];
         });
         const context = buildRouterContext({ projectId: project.projectId, now: now(),
           specialists:this.store.list<Role>("superRoles"),
@@ -1261,7 +1265,7 @@ export class LakeSuperagent implements AgentHost {
         originalRequirement: origin.payload, selectedReferences,
         readOnlyRecheck: goal.readOnlyRecoveryOf ? {sourceTaskId:goal.readOnlyRecoveryOf,
           originalHumanRequirement:this.store.require<InputEvent>("superInputs",this.ledger.get(goal.readOnlyRecoveryOf).sourceEventId).payload,
-          instruction:"Use this fresh context for independent read-only observations only. Do not replay old operations. The source task, its unresolved operations and acceptance remain unchanged; completing this recheck does not complete the source task."} : undefined,
+          instruction:"Use this fresh context for independent read-only observations only. Do not replay old operations. The source task and its operation records remain unchanged; completing this recheck does not complete the source task."} : undefined,
         assignedDeliverable: instruction ?? (targets || decision.action === "assign" ? goal.title : decision.quote), goal: this.publicGoal(goal),
         predecessor: this.store.get<TaskPredecessor>("superTaskPredecessors", worker.taskId),
         taskContext:this.recallContext(worker),
@@ -1539,7 +1543,6 @@ export class LakeSuperagent implements AgentHost {
   }
   private async invokeBash(worker:Worker,entry:ToolEntry,input:ShellInput,context:HostToolContext){
     const {plan}=this.shellPlan(worker,input),actor=this.shellActor(worker),generation=worker.generation;
-    await this.discoveryRecovery.verify(worker.projectId);
     if(context.lakeSubagent?.agentType==='explore'&&!plan.readOnly)throw new HttpError(403,'Explore 子智能体仅允许只读调查命令');
     if(!context.executionPort)throw new HttpError(409,'原生执行端口 未连接');
     const executionId=this.execution!.executionId(actor,context.toolCallId),port=this.execution!.bind(context.executionPort,actor,plan,context.toolCallId);
@@ -1748,7 +1751,7 @@ export class LakeSuperagent implements AgentHost {
       this.entry("manage_specialist", "Create or partially update a long-lived specialist from an exact admitted human quote, without creating work. Create requires immutable role_key, name and duties. Update requires exact role_id/expected_revision; omit unchanged fields. avatar_id is an exact list_specialist_avatars ID or auto. execution is the future-task backend (native, or acp with agent codex); it does not edit Codex login/model settings. Name/duties/execution changes preserve existing Worker snapshots. Only announce changes after a successful saved receipt.",
         objectSchema({ event_id: str, part_key: str, action: { enum: ["create", "update"], type: "string" }, role_id: str, role_key: str, name: str, duties: str,avatar_id:str,
           execution:objectSchema({kind:{type:'string',enum:['native','acp']},agent:{type:'string',enum:['codex']}},['kind']),expected_revision: integer, quote: str }, ["event_id", "part_key", "action", "quote"]), (a) => this.manage(sessionId, a)),
-      this.entry("route_work", "Commit one exact admitted event part. Copy role_id verbatim from the current specialists catalog or list_specialists; never reconstruct IDs. If specialist_not_found, refresh the catalog and correct the same event/part, without changing its deliverable or scope. For an event selecting multiple resources, create must set resource_ids to its exact subset of selected IDs. Independent per-resource tasks may quote the same request if subsets are disjoint; for a single comparison include both IDs. Create requires title, quote and one recipient selector: role_id, new role_key, or role_ids for one shared task. Specify role_instructions for each contributor. Omit task_id for create; for assign supply the existing public task_id and additional roles. Followup, context_only and stop target the exact task and recipient role_id, using the public ID for a shared task. Use predecessor_task_id to link an earlier task. An accepted completed source supplies qualified historical context. An unfinished ordinary source creates an independent read-only recheck for the same specialist, original explicit resource scope and deadline; it does not require or change source acceptance and cannot replay unknown operations. Invalid-memory followup uses the same safe recheck path. Inspect assignments in the receipt for the exact recipients. ask/respond omit task_id.",
+      this.entry("route_work", "Commit one exact admitted event part. Copy role_id verbatim from the current specialists catalog or list_specialists; never reconstruct IDs. If specialist_not_found, refresh the catalog and correct the same event/part, without changing its deliverable or scope. For an event selecting multiple resources, create must set resource_ids to its exact subset of selected IDs. Independent per-resource tasks may quote the same request if subsets are disjoint; for a single comparison include both IDs. Create requires title, quote and one recipient selector: role_id, new role_key, or role_ids for one shared task. Specify role_instructions for each contributor. Omit task_id for create; for assign supply the existing public task_id and additional roles. Followup, context_only and stop target the exact task and recipient role_id, using the public ID for a shared task. Use predecessor_task_id to link an earlier task. A finished source supplies historical context, including any partial findings. An unfinished ordinary source creates an independent read-only recheck for the same specialist, original explicit resource scope and deadline; it preserves original records and cannot replay original operation IDs. Invalid-memory followup uses the same safe recheck path. Inspect assignments in the receipt for the exact recipients. ask/respond omit task_id.",
         objectSchema({ event_id: str, part_key: str, action: { type: "string", enum: ["create", "assign", "followup", "context_only", "stop", "ask", "respond"] },
           task_id: str, predecessor_task_id: str, title: str, role_id: str, role_key: str, role_ids: array(str), resource_ids:array(str),
           role_instructions: array(objectSchema({role_id: str, instruction: str}, ["role_id", "instruction"])), quote: str, reason: str, evidence_task_ids: array(str) }, ["event_id", "part_key", "action", "reason"]), async (a) => {if(['create','assign','followup'].includes(a.action))await this.agents.external?.status(projectId);return this.route(sessionId,a);}),
@@ -1856,17 +1859,16 @@ export class LakeSuperagent implements AgentHost {
           if (!goal.confirmed) await this.planInteraction(worker, goal, context.abortSignal);
           return this.publicGoal(this.ledger.get(goal.id));
         })),
-      this.entry("work_read", "Read only this canonical task, original attempts and operation handles. Never retry unknown effects. An effectReconciliation may record a verified no-write lookup or separately reviewed observed effects. The original failed result is never business success.", objectSchema({ goal_id: str, item_id: str, evidence_id: str }), run(async (a) => {
+      this.entry("work_read", "Read this task, original operation handles and actual results. Historical failed or unknown results are observations, not execution or completion locks. Never replay an original call ID or describe unknown as success.", objectSchema({ goal_id: str, item_id: str, evidence_id: str }), run(async (a) => {
         const goal = this.ledger.get(worker.taskId);
         if (a.goal_id != null && a.goal_id !== goal.id && a.goal_id !== goal.sharedTaskId) throw new HttpError(404, "Task not found in this worker");
-        await this.discoveryRecovery.verify(worker.projectId);
         return { goal: this.publicGoal(goal), operations: this.store.list<Operation>("superOperations").filter((op) => op.goalId === worker.taskId).map(op => ({...op, effectReconciliation:this.effectResolution(op)})) };
       })),
-      this.entry("work_update", "Start the returned actual item ID before resource I/O; completed requires real successful call IDs from this exact attempt. Metadata or prose is not evidence. For a blocker, reason describes the specific practical obstacle in the user's language, not internal bookkeeping.",
+      this.entry("work_update", "Start the returned actual item ID before resource I/O. Report stage progress without an acceptance step. Optional evidence_ids only reference calls from this exact attempt. For a blocker, reason describes the specific practical obstacle in the user's language, not internal bookkeeping.",
         objectSchema({ item_id: str, status: { type: "string", enum: ["running", "completed", "waiting_user", "blocked", "failed"] }, reason: str, evidence_ids: array(str) }, ["item_id", "status"]), run((a) => {
           const goal = this.ledger.update(worker.taskId, a, worker.generation, worker.policyHash); this.changed(worker.sessionId); return this.publicGoal(goal);
         })),
-      this.entry("work_finish", managed ? "Submit the business result. Use completed only when the user's requested deliverable is satisfied, partial for useful findings with remaining work or a blocker. Summary is the concise public conclusion; detailed observations remain in execution receipts. The host verifies actual current tool receipts; a report alone never proves success." : "Submit the final business report after every original plan item has accepted evidence. Use the existing plan tools for incomplete steps; summary does not create acceptance.", managed ? objectSchema({ summary: { ...str, description: finalSummaryGuidance }, outcome: { type: "string", enum: ["completed", "partial"] } }, ["summary", "outcome"]) : objectSchema({ summary: { ...str, description: finalSummaryGuidance } }, ["summary"]), run((a) => {
+      this.entry("work_finish", "Submit the final user-facing report and end this execution. Use completed when the requested deliverable is satisfied, partial when findings have limitations or remaining work. Report actual findings and errors truthfully. There is no separate reconciliation or acceptance step; historical unknown or failed results never prevent submitting the report. A submitted report is not independently verified business success.", managed ? objectSchema({ summary: { ...str, description: finalSummaryGuidance }, outcome: { type: "string", enum: ["completed", "partial"] } }, ["summary", "outcome"]) : objectSchema({ summary: { ...str, description: finalSummaryGuidance }, outcome: { type: "string", enum: ["completed", "partial"] } }, ["summary"]), run((a) => {
         const summary = this.agents.redact(text(a.summary, "summary", 32768));
         const current = this.store.require<Worker>("superWorkers", worker.id);
         const waiting = current.inputEventIds.filter((eventId) => !current.invocationInputIds?.includes(eventId) && !current.settledInputIds?.includes(eventId))
@@ -1878,11 +1880,11 @@ export class LakeSuperagent implements AgentHost {
           this.store.put("superDeferredFinishes", digest([current.id, current.generation]), { taskId: current.taskId,
             generation: current.generation, inputEventIds: waiting, summary, outcome: a.outcome, at: now() });
           return { taskId: current.taskId, completionDeferred: true, inputEventIds: waiting,
-            reason: "New human input will be included in the next invocation of this same task; no completion or acceptance was recorded." };
+            reason: "New human input will be included in the next invocation of this same task; no final report was recorded." };
         }
         const goal = this.ledger.isHostManaged(this.ledger.get(worker.taskId))
           ? this.ledger.finishHost(worker.taskId, { summary, outcome: a.outcome }, worker.generation, worker.policyHash)
-          : this.ledger.finish(worker.taskId, summary, worker.policyHash);
+          : this.ledger.finish(worker.taskId, summary, worker.policyHash, worker.generation, a.outcome ?? "completed");
         const reportKey=digest([goal.id,goal.revision]),pending=this.store.get<Record<string,unknown>>('superPendingReports',reportKey);
         if(pending)this.store.put('superPendingReports',reportKey,{...pending,rootTurnId:this.store.view(worker.sessionId).rootTurnId});
         this.changed(worker.sessionId); return this.publicGoal(goal);
@@ -1905,7 +1907,7 @@ export class LakeSuperagent implements AgentHost {
           if (Date.now() >= deadline()) throw new HttpError(409, "原任务期限已到");
           return {waitedMs: Date.now() - started};
         })),
-      this.entry("ask_user_question", "Ask a bounded human prerequisite question for this exact task. Answers are not operation approval or goal acceptance.",
+      this.entry("ask_user_question", "Ask a bounded human prerequisite question for this exact task. Answers do not grant operation approval.",
         objectSchema({ questions: array(objectSchema({ id: str, title: str, reason: str, options: array(str), multi_select: { type: "boolean" } }, ["id", "title"])) }, ["questions"]), run((a, context) => this.questionInteraction(worker, a, context.abortSignal))),
       this.entry("list_assets", "Find current project resource metadata: use asset_ref for an exact resource ID, or query for its name, ID or Lake directory path (Chinese names supported). Each result includes path; ancestor folder names are searchable. For a named directory/environment, search that folder and confirm the returned path before choosing a host. A shared IP/gateway does not identify the same target or cluster. Same-name matches remain separate resources. pathTruncated marks a shortened display; path_state=unavailable means ancestry could not be resolved. Otherwise browse bounded pages (default 20, max 50); follow nextCursor with the same query until hasMore is false. Use the exact returned asset_ref and configuration_revision for inspect_host. Metadata and cursor are not execution permission.",
         objectSchema({ asset_ref: str, query: str, cursor: str, limit: integer }), run((a) => {
@@ -1922,7 +1924,7 @@ export class LakeSuperagent implements AgentHost {
         const entries = await readdir(path, { withFileTypes: true });
         return { path, entries: entries.slice(0, 200).map((entry) => ({ name: entry.name, kind: entry.isSymbolicLink() ? "symlink" : entry.isDirectory() ? "directory" : "file" })), truncated: entries.length > 200 };
       })),
-      this.entry("read_tool_output", "Read a bounded page of an already recorded tool result from this task and execution generation. Copy tool_call_id from your actual tool call. Use this when a result is truncated; never run local Bash/Python or open SDK artifact paths to read remote receipts. offset/limit count string characters, limit defaults to 4096 (max 8192). Follow nextOffset. This observes the original receipt and creates no new execution or acceptance evidence.",
+      this.entry("read_tool_output", "Read a bounded page of an already recorded tool result from this task and execution generation. Copy tool_call_id from your actual tool call. Use this when a result is truncated; never run local Bash/Python or open SDK artifact paths to read remote receipts. offset/limit count string characters, limit defaults to 4096 (max 8192). Follow nextOffset. This observes the original receipt and creates no new execution or business result.",
         objectSchema({tool_call_id:str,offset:integer,limit:integer},["tool_call_id"]),run((a,context)=>this.readToolOutput(worker,a,context)),false,32768),
       this.entry("list_referenced_task_evidence", "List historical evidence only from tasks explicitly registered to this comparison. Never reads another worker transcript or imports permits.", objectSchema({ task_id: str, cursor: str, limit: integer }, ["task_id"]), run((a) => this.referencedEvidence(worker, a))),
       this.entry("read_referenced_task_evidence", "Read an exact registered historical operation, revalidating source revision and current project policy. Historical results do not prove current health.",
@@ -2161,7 +2163,7 @@ export class LakeSuperagent implements AgentHost {
           worker.inputEventIds.some((eventId) => this.store.require<InputEvent>("superInputs", eventId).disposition === "pending")) continue;
       const goal = this.ledger.get(worker.taskId); if (terminal(goal.status)) continue;
       worker.state = "parked"; this.store.put("superWorkers", worker.id, worker);
-      goal.status = this.ledger.unresolved(goal.id) ? "blocked" : "paused";
+      goal.status = "paused";
       goal.summary = "这条消息没有处理成功，检查暂时停在这里。请重试这条消息。"; this.ledger.save(goal);
       this.store.put("superPendingReports", digest([goal.id, goal.revision]), { taskId: goal.id, revision: goal.revision,
         snapshot: structuredClone(goal), presentation: { body: goal.summary, channelBody: goal.summary }, createdAt: now() });
@@ -2182,7 +2184,7 @@ export class LakeSuperagent implements AgentHost {
     if (worker.state === "stopped") { this.changed(sessionId); this.schedule(); return; }
     const deferred = this.store.get<{ inputEventIds: string[] }>("superDeferredFinishes", digest([worker.id, worker.generation]));
     if (!terminal(goal.status) && goal.status === "running") {
-      goal.status = this.ledger.unresolved(goal.id) ? "blocked" : "paused";
+      goal.status = "paused";
       goal.summary = error ? this.agents.redact(error) : deferred ? goal.summary : response?.trim() ? this.agents.redact(response.trim()).slice(0, 32768) : goal.summary || "这次检查还没完成。";
       this.ledger.save(goal);
     }
@@ -2200,7 +2202,7 @@ export class LakeSuperagent implements AgentHost {
         this.ledger.save(goal);
       } else if (!deferred.inputEventIds.some((eventId) => ["pending", "routed"].includes(this.store.require<InputEvent>("superInputs", eventId).disposition))) {
         deferredFailure = "这条消息没有处理成功，检查暂时停在这里。请重试这条消息。";
-        goal.status = this.ledger.unresolved(goal.id) ? "blocked" : "paused"; goal.summary = deferredFailure; this.ledger.save(goal);
+        goal.status = "paused"; goal.summary = deferredFailure; this.ledger.save(goal);
       }
     }
     // A new input is being handed to the same task, not an incomplete business
@@ -2255,13 +2257,12 @@ export class LakeSuperagent implements AgentHost {
       !control.consumedAt && !control.revokedAt ? control : undefined;
   }
   private reportPresentation(goal: Goal, reply?: string, error?: string) {
-    if (goal.status === "completed" && (goal.acceptanceState === "pass" || goal.contributionReceiptId)) {
+    if (goal.status === "completed") {
       const body = goal.summary?.trim() || "检查已完成。";
       return { body, channelBody: body };
     }
     const notice = goal.status === "cancelled" ? stoppedNotice
       : error === memoryContextUnavailable || goal.summary === memoryContextUnavailable ? memoryContextUnavailableNotice
-      : this.ledger.unresolved(goal.id) ? unresolvedNotice
       : goal.summary === "deadline_reached" ? "这次工作已到截止时间，剩余部分尚未完成。"
       : goal.summary === "model_round_limit" ? "轮次限制已取消，当前任务仍处于暂停状态。"
       : error || this.store.view(goal.sessionId).status === "failed" ? this.failureNotice(error ?? goal.summary)
@@ -2271,11 +2272,11 @@ export class LakeSuperagent implements AgentHost {
     const worker = this.store.require<Worker>("superWorkers", goal.workerId);
     const delivery = this.store.get<{ outcome: string; summary: string }>("superDeliveries", digest([goal.id, worker.generation]));
     // An explicit partial business report is already truthful about what remains.
-    // Natural prose alone cannot turn an unaccepted task into a successful report.
+    // The explicit delivery preserves the agent's reported limitation, without verification.
     if (!error && goal.status !== "cancelled" && delivery?.outcome === "partial")
       return { body: delivery.summary, channelBody: delivery.summary };
     if (!error && goal.status !== "cancelled" && !delivery && this.store.get("superReportRepairs", digest([goal.id, worker.generation]))) {
-      const body = `本轮尚未提交最终结论，任务仍未完成。${this.ledger.unresolved(goal.id) ? "有操作结果仍待核实。" : ""}${reply ? `\n\n${reply}` : ""}`;
+      const body = `本轮尚未提交最终结论，任务仍未完成。${reply ? `\n\n${reply}` : ""}`;
       return { body, channelBody: body };
     }
     const body=reply ? `${notice}\n\n${reply}` : notice;
@@ -2310,22 +2311,23 @@ export class LakeSuperagent implements AgentHost {
     }
     this.store.delete("superPendingReports", digest([pending.taskId, pending.revision]));
     }
-    for (const item of this.store.list<{taskId:string;acceptanceId:string;createdAt:string}>("superPendingJointReports")) {
+    for (const item of this.store.list<{taskId:string;reportId?:string;acceptanceId?:string;createdAt:string}>("superPendingJointReports")) {
       const joint=this.ledger.jointTask(item.taskId);
-      if (!joint || joint.acceptanceId!==item.acceptanceId) continue;
+      const reportId = item.reportId ?? item.acceptanceId;
+      if (!joint || !reportId || (joint.reportId ?? joint.acceptanceId)!==reportId) continue;
       const members=joint.memberIds.map(id=>this.ledger.get(id));
       const pilot=this.store.require<SuperProject>("superProjects",joint.projectId).routerSessionId;
       const targets=[pilot,...members.map(member=>this.store.require<Channel>("superChannels",member.roleId).sessionId)];
       // Stable receipt + destination makes delivery restart-safe. Member
-      // findings already have an attributed report; announce the verdict once.
+      // findings already have an attributed report; deliver the combined report once.
       const deliveredAt=now();
       this.store.transaction(()=>{
         for(const target of targets){
-          const key="task_acceptance_"+digest([item.acceptanceId,target]);
+          const key="task_report_"+digest([reportId,target]);
           if(!this.store.get("messages",key))this.store.put<Message>("messages",key,{
             id:key,sessionId:target,role:"assistant",createdAt:deliveredAt,
-            jointAcceptance:{taskId:joint.id,receiptId:item.acceptanceId},
-            text:`「${joint.title}」已统一验收通过，${members.length} 位专员的结果均已核验。`,
+            jointReport:{taskId:joint.id,reportId},
+            text:`「${joint.title}」的 ${members.length} 位专员均已提交报告。\n\n${joint.summary ?? ""}`,
           });
         }
         this.store.delete("superPendingJointReports",item.taskId);
@@ -2362,7 +2364,7 @@ export class LakeSuperagent implements AgentHost {
     worker.resumeControlId = undefined;
     worker.generation++; worker.state = "stopped"; worker.owner = undefined; worker.leaseUntil = undefined;
     this.store.put("superWorkers", worker.id, worker);
-    if (!terminal(goal.status)) { goal.status = this.ledger.unresolved(taskId) ? "blocked" : pause ? "paused" : "cancelled"; this.ledger.save(goal); }
+    if (!terminal(goal.status)) { goal.status = pause ? "paused" : "cancelled"; this.ledger.save(goal); }
     for (const interaction of this.interactions.values()) if (interaction.workerId === worker.id) interaction.reject(new HttpError(409, "Task stopped"));
     if(!worker.inline||this.pilotActors.get(worker.sessionId)?.id===worker.id)await this.agents.abort(worker.sessionId);
     // SDK cancellation can settle its turn before the dispatched host call has
@@ -2370,7 +2372,7 @@ export class LakeSuperagent implements AgentHost {
     // foreground effects have been classified in the canonical operation ledger.
     await this.businessQueues.get(worker.id);
     const stopped=this.ledger.get(taskId);
-    const state=this.ledger.unresolved(taskId)?'blocked':pause?'paused':'cancelled';
+    const state=pause?'paused':'cancelled';
     if(!alreadyTerminal&&stopped.status!==state){stopped.status=state;this.ledger.save(stopped);}
     if(!alreadyTerminal&&!worker.inline){
       const key=digest([stopped.id,stopped.revision]);
@@ -2470,7 +2472,7 @@ export class LakeSuperagent implements AgentHost {
         const sibling=source===sessionId&&!original.author?.rootTurnId?reportBodies.get(original.id):undefined;
         const message=sibling?{...original,text:sibling.text}:stoppedReportProjection(this.store,original,id=>this.ledger.unresolved(id));
         entries.push({ id: canonical(["message", source, message.id]), sourceSessionId: source,
-          taskId: worker?.task.taskId ?? message.jointAcceptance?.taskId ?? message.author?.taskId, workerId: worker?.id ?? message.author?.workerId, createdAt: message.createdAt, message });
+          taskId: worker?.task.taskId ?? message.jointReport?.taskId ?? message.jointAcceptance?.taskId ?? message.author?.taskId, workerId: worker?.id ?? message.author?.workerId, createdAt: message.createdAt, message });
       }
       // Projection retires intermediate prose; the original task keeps every
       // card for the inspector. Legacy records without SDK roots stay intact.

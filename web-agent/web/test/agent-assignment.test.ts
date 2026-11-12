@@ -24,11 +24,11 @@ test('actual dispatch stages, approvals, return and unknown results remain disti
  assert.equal(externalRunPresentation(run).label,'Codex 执行中');
  assert.equal(externalRunPresentation(run,true).label,'Codex 等待确认');
  assert.equal(externalRunPresentation({...run,state:'completed',dispatchPhase:'answered'}).label,'Codex 已回传');
- assert.equal(externalRunPresentation({...run,state:'unknown'}).label,'Codex 结果待核实');
+ assert.equal(externalRunPresentation({...run,state:'unknown'}).label,'Codex 结果不确定');
 });
 test('the actual external report is collected with its identity without fabricating usage or task acceptance',()=>{
  const html=renderToStaticMarkup(createElement(AgentExecution,{execution:{...execution,runs:[{...run,state:'completed',summary:'ACTUAL_CODEX_REPORT <script>unsafe()</script>'}],totalRuns:1}}));
- assert.match(html,/data-run-id="actual-run"/);assert.match(html,/ACTUAL_CODEX_REPORT/);assert.match(html,/外部用量未报告/);assert.match(html,/任务按工具回执验收/);
+ assert.match(html,/data-run-id="actual-run"/);assert.match(html,/ACTUAL_CODEX_REPORT/);assert.match(html,/外部用量未报告/);assert.match(html,/进度与回传来自实际运行记录/);
  assert.doesNotMatch(html,/<script>|验收通过|任务已完成/);
 });
 test('native Worker delegation still reveals the actual external segment without relabeling the Worker',()=>{

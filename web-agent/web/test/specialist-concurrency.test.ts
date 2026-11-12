@@ -89,7 +89,7 @@ test("an idle specialist shows the most recently updated task rather than the ne
   b.task.acceptanceState = "pass";
   const html = render([a, b]);
   assert.match(html, /任务 B/);
-  assert.match(html, /已验收/);
+  assert.match(html, /执行结束/);
   assert.doesNotMatch(html, /任务 A|pilot-worker-running/);
 });
 test("queued and actual waiting tasks remain distinct and old parked waiting states do not count", () => {

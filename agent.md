@@ -1,5 +1,7 @@
 # Lake Super-agent 内核与三模块协作约定
 
+2026-11-12 用户明确要求移除 TypeScript 的“待核实／验收”系统，包含前端和后台。`work_finish` 提交 completed/partial 报告均结束本次执行；completed 表示报告已提交，不是宿主独立核验业务成功。不再生成步骤、目标或共同任务的 `superAcceptance`，旧 unknown/dispatched 不阻断新调用、报告、后续重查或停止，核实 API 返回 410。多人任务汇总各自报告，不发布“统一验收通过”。专员页按原分配时间展示任务记录，取消状态标签、分类与分组。旧操作、已结算尝试、验收和报告原样保留，不重放原调用或将 unknown 改为成功；兼容 acceptance 字段只供旧数据读取。当前权限、明确 deny、资源/连接版本、审批偏好、Plan 确认、owner/代次/期限、取消和实际后台执行汇合仍独立生效。Memory 保留同意与来源检查，新报告只有已结算观测，没有业务验收；失败/未知不能成为成功经验。原上下文引用已撤回知识时，已结束报告也可沿原明确范围和原期限建立独立只读复查。此条替代下文历史 TS 验收和待核实门禁，不改旧 Go 档案或生产安装。见[实施计划](plan/refactor-task-result-lifecycle-1.md)及[当前合同](docs/security/task-confirmation.md)。
+
 2026-11-11 Pilot 支持自然语言管理当前项目的资源/资源文件夹，以及 Lake 全局 Skills/注册目录和 MCP 服务配置。控制工具仅注册给 Pilot，校验当前完整人工事件/原文、准确对象与版本、权限偏好和持久幂等回执；Worker、child 与 ACP 业务目录不接收管理权。资源沿共享 Items 写入及回收站；导入 Skill 的内容不覆盖、删除只解除注册，Lake 管理的目录可回收且旧读取器仍保持停用。MCP 全局服务保存与当前项目工具绑定分开，连接测试需单独执行并受 MCP/本机权限约束。省略字段保留凭据和原工具范围；配置成功不代表连接可用或任务验收。新 SSH 缺少凭据时保存 unavailable，执行验证继续严格；只有用户明确选定的同项目来源可在宿主内部复用已有凭据。文件与 SQLite 间未确认提交不自动重放，不经 Shell 直接修改配置，不改变 Memory 及业务账本职责。见[实施计划](plan/feature-pilot-configuration-crud-1.md)及[验证](docs/validation/acp-agent-execution/pilot-configuration-crud.md)。
 
 2026-11-11 用户进一步要求 SSH 首次连接及已存公钥变化均默认后台信任并连接。TypeScript LakeSSH 在认证前沿原校验和私有文件原子保存路径更新观察到的公钥，不发布指纹弹窗；已存算法仅作为偏好，允许默认支持的新算法。原配置/凭据版本、权限、取消与业务验收继续生效；旧身份回执不因更新公钥变成当前有效证据。专员页面改为纯角色任务概览，移除聊天输入、新建任务及隐藏上传入口，派单统一从 Pilot 完成，原任务详情、问题、确认、停止及未读保持。此条取代上一轮仅自动首次信任的限制。见[实施计划](plan/refactor-ssh-trust-specialist-view-1.md)。

@@ -71,7 +71,7 @@ test("only current unfinished business work requests a final report, without cha
   assert.equal(JSON.stringify(f.store.list("superOperations")), operations);
   await f.finish(taskId);
   assert.equal(profile.requestFinalReport!(), false);
-  assert.equal(f.host.ledger.get(taskId).acceptanceState, "pass");
+  assert.equal(f.host.ledger.get(taskId).acceptanceState, "not_evaluated");
 });
 
 test('Pilot partially updates appearance and future defaults without changing existing task snapshots',async t=>{
@@ -187,7 +187,7 @@ test("an ordinary partial report is delivered without requesting another model s
   await finish.handler({ summary: "已读取记录，尚缺平台事件。", outcome: "partial" }, {} as any);
   assert.equal(profile.requestFinalReport!(), false);
   assert.equal(f.store.list("superReportRepairs").length, 0);
-  assert.equal(f.host.ledger.get(taskId).status, "paused");
+  assert.equal(f.host.ledger.get(taskId).status, "completed");
   assert.notEqual(f.host.ledger.get(taskId).acceptanceState, "pass");
 });
 
@@ -246,7 +246,7 @@ test("ordinary inline Pilot profiles use host-managed tools while explicit plans
   const session = f.store.session(f.router); session.options.conversationMode = "plan"; f.store.put("sessions", f.router, session);
   profile = f.host.profile(f.router)!;
   assert.ok(names(profile).includes("work_begin")); assert.ok(names(profile).includes("work_update"));
-  assert.ok(!JSON.stringify(finishSchema(profile)).includes('"outcome"'));
+  assert.ok(JSON.stringify(finishSchema(profile)).includes('"outcome"'));
   // Existing explicit contracts win over a later conversation-mode change.
   const actor = f.internal.pilotActors.get(f.router);
   f.host.ledger.create({ id: actor.taskId, projectId: f.project.id, sessionId: f.router, workerId: actor.id, roleId: actor.roleId,
@@ -255,7 +255,7 @@ test("ordinary inline Pilot profiles use host-managed tools while explicit plans
   session.options.conversationMode = "default"; f.store.put("sessions", f.router, session);
   profile = f.host.profile(f.router)!;
   assert.ok(names(profile).includes("work_begin")); assert.ok(names(profile).includes("work_update"));
-  assert.ok(!JSON.stringify(finishSchema(profile)).includes('"outcome"'));
+  assert.ok(JSON.stringify(finishSchema(profile)).includes('"outcome"'));
 });
 
 for(const entrance of ["followup","predecessor","predecessor-current-memory"]) test(`invalid-memory ${entrance} creates one bounded read-only recheck without changing its source`, async t => {
@@ -291,7 +291,7 @@ for(const entrance of ["followup","predecessor","predecessor-current-memory"]) t
   assert.deepEqual(f.internal.recallContext(f.worker(fresh.id),{task_id:source.id},true).items,[]);
   assert.ok(!JSON.stringify(envelope).includes(memoryContextUnavailable));
   await f.read(fresh.id); await f.finish(fresh.id); f.settleWorker(fresh.id);
-  assert.equal(f.host.ledger.get(fresh.id).acceptanceState,"pass");
+  assert.equal(f.host.ledger.get(fresh.id).acceptanceState,"not_evaluated");
   assert.deepEqual(f.host.ledger.get(source.id),before.goal); assert.deepEqual(f.worker(source.id),before.worker);
   assert.deepEqual(f.store.list<any>("superOperations").filter(op=>op.goalId===source.id),before.operations);
   assert.equal(f.host.ledger.unresolved(source.id),true);
@@ -330,7 +330,7 @@ test("an unfinished predecessor cannot expand resources, import old evidence or 
   assert.throws(()=>f.route(human,{...input,resource_ids:[other.id]}),/扩大范围/);
   assert.throws(()=>f.route(human,{...input,evidence_task_ids:[goal.id]}),/不导入旧执行证据/);
   const {role_id:_,...joint}=input;
-  assert.throws(()=>f.route(human,{...joint,role_ids:[f.role.id,otherRole.id]}),/共同验收/);
+  assert.throws(()=>f.route(human,{...joint,role_ids:[f.role.id,otherRole.id]}),/共同任务/);
   assert.deepEqual(f.store.list("superGoals"),before);assert.equal(f.store.list("superReferences").length,0);
 });
 
@@ -358,9 +358,9 @@ test("completed fresh checks preserve old acceptance, carry target context and u
   assert.equal(assignment.originalRequirement, "再试试"); assert.equal(assignment.predecessor.originalDeliverable, original.event.payload);
   assert.equal(assignment.predecessor.historicalContextOnly, true); assert.equal(assignment.predecessor.taskRef.id, source.id);
   assert.equal(f.host.ledger.get(next.taskId).modelRounds, 0); assert.equal(f.host.ledger.get(next.taskId).acceptanceState, "not_evaluated");
-  await assert.rejects(f.finish(next.taskId), /confirmed|binding|work_begin|active/i);
+  assert.equal(f.host.ledger.get(next.taskId).status,"running");
   await f.read(next.taskId); await f.finish(next.taskId); f.settleWorker(next.taskId);
-  assert.equal(f.host.ledger.get(next.taskId).acceptanceState, "pass");
+  assert.equal(f.host.ledger.get(next.taskId).acceptanceState, "not_evaluated");
   assert.deepEqual(f.host.ledger.get(source.id), source);
   assert.equal(f.store.list<any>("superOperations").filter((operation) => operation.goalId === next.taskId).length, 1);
 });
@@ -463,11 +463,11 @@ for(const readOnly of [true,false])test(`stop waits for ${readOnly?'read':'opaqu
  assert.equal(JSON.stringify(f.worker(b.taskId)),sibling);
  release();await settled;await Promise.all([stopping,duplicate]);
  const report=f.store.messages(f.router).filter(m=>m.author?.taskId===a.taskId);
- assert.equal(report.length,1);assert.equal(report[0]!.text,readOnly?'已停止这次工作。':'有一项操作的结果还需核实，暂时不能重复该操作。');
- assert.equal(f.host.ledger.get(a.taskId).status,readOnly?'cancelled':'blocked');
+ assert.equal(report.length,1);assert.equal(report[0]!.text,'已停止这次工作。');
+ assert.equal(f.host.ledger.get(a.taskId).status,'cancelled');
  const op=f.store.list<any>('superOperations').find(o=>o.callId==='in-flight');assert.equal(op.status,readOnly?'failed':'unknown');
  f.settleWorker(a.taskId);assert.equal(f.store.messages(f.router).filter(m=>m.author?.taskId===a.taskId).length,1,'late completion cannot add another stop report');
- await f.finish(b.taskId);f.settleWorker(b.taskId);assert.equal(f.host.ledger.get(b.taskId).acceptanceState,'pass');
+ await f.finish(b.taskId);f.settleWorker(b.taskId);assert.equal(f.host.ledger.get(b.taskId).acceptanceState,"not_evaluated");
 });
 
 test('stopping the remaining reply after business acceptance preserves the accepted goal and receipts',async t=>{
@@ -556,7 +556,7 @@ test('Pilot stop fences current queued/active work and late decisions without ch
  await assert.rejects(()=>f.host.stopWorkspace(f.project.id,'wrong-router'),/不属于/);
  const count=f.requests.length,result=await f.host.stopWorkspace(f.project.id,f.router);
  assert.equal(result.tasks,2);assert.equal(f.worker(current.taskId).state,'stopped');
- assert.equal(f.host.ledger.get(current.taskId).status,'blocked');assert.equal(f.store.get<any>('superOperations','uncertain')!.status,'unknown');
+ assert.equal(f.host.ledger.get(current.taskId).status,'cancelled');assert.equal(f.store.get<any>('superOperations','uncertain')!.status,'unknown');
  assert.equal(f.host.ledger.get(queued.taskId).status,'cancelled');assert.equal(f.store.get<any>('superInputs',pending.id)!.disposition,'stopped');
  assert.equal(JSON.stringify(f.host.ledger.get(old.taskId)),oldGoal);assert.equal(f.store.get<any>('superWorkers','other-worker')!.state,'active');
  assert.throws(()=>f.route(pending,{action:'create',title:'迟到任务',role_id:f.role.id}));
@@ -754,9 +754,9 @@ for (const recovery of ["followup", "resume"] as const) test(`a failed additiona
   const snapshot = await read.handler({ goal_id: first.taskId }, { abortSignal: new AbortController().signal } as any) as any;
   assert.equal(snapshot.goal.id, member.taskId);
   assert.ok(snapshot.operations.length && snapshot.operations.every((op: any) => op.goalId === member.taskId));
-  await assert.rejects(f.host.ledger.operation(member.taskId, member.generation, member.policyHash, "write-B", "Write",
-    mutation, async () => { dispatches++; return {}; }, x => x, { readOnly: false }), /reconcil|unresolved|mutation/i);
-  assert.equal(dispatches, 1);
+  await f.host.ledger.operation(member.taskId, member.generation, member.policyHash, "write-B", "Write",
+    mutation, async () => { dispatches++; return {}; }, x => x, { readOnly: false });
+  assert.equal(dispatches, 2);
   assert.deepEqual(f.store.require("superOperations", prior.id), prior);
 });
 
@@ -790,7 +790,7 @@ async function watchdogFixture(t: Parameters<typeof fixture>[0], joint = false) 
   return {...f, member, fail, event, handoff, advance:(ms:number)=>{time+=ms;}};
 }
 
-test("watchdog retries a scoped pre-execution outage once due and marks recovery only after original acceptance", async t => {
+test("watchdog retries a scoped pre-execution outage once due and marks recovery after the original execution submits its report", async t => {
   const f = await watchdogFixture(t), before = f.host.ledger.get(f.member.taskId);
   f.host.setWatchdogMode(f.project.id,"guide");
   f.fail();
@@ -810,7 +810,7 @@ test("watchdog retries a scoped pre-execution outage once due and marks recovery
   assert.equal(f.host.watchdog.records(f.project.id,f.member.taskId)[0]?.state,"retry_queued");
   await f.read(f.member.taskId); await f.finish(f.member.taskId); f.settleWorker(f.member.taskId);
   assert.equal(f.host.watchdog.records(f.project.id,f.member.taskId)[0]?.state,"recovered");
-  assert.equal(f.host.ledger.get(f.member.taskId).acceptanceState,"pass");
+  assert.equal(f.host.ledger.get(f.member.taskId).acceptanceState,"not_evaluated");
   assert.equal(f.store.list("superGoals").length,1);
 });
 
@@ -855,8 +855,8 @@ for (const intervention of ["stop","disable","permission","unresolved sibling","
       await f.host.scanWatchdog();
       await f.activate();
     }
-    assert.equal(f.requests.length,before);
-    assert.equal(f.store.get("superWatchdogLastRetry",f.member.id),undefined);
+    assert.equal(f.requests.length,before+(intervention==="unresolved sibling"?1:0));
+    assert.equal(!!f.store.get("superWatchdogLastRetry",f.member.id),intervention==="unresolved sibling");
     assert.equal(f.store.get("superWatchdogRetry",f.member.id),undefined);
     assert.equal(f.store.list("superAcceptance").length,0);
   });
@@ -1059,7 +1059,7 @@ test('a specialist passes 500 model calls and its stored legacy ceiling without 
  const current=f.host.ledger.get(goal.id);assert.equal(current.modelRounds,503);assert.equal(current.status,'running');assert.equal(current.roundLimit,2);
  assert.equal(current.deadlineAt,deadline);assert.equal(current.acceptanceState,'not_evaluated');
  assert.equal(f.internal.publicGoal(current).roundLimit,undefined);
- await f.finish();f.settleWorker();assert.equal(f.host.ledger.get(goal.id).acceptanceState,'pass');
+ await f.finish();f.settleWorker();assert.equal(f.host.ledger.get(goal.id).acceptanceState,"not_evaluated");
  assert.equal(f.host.ledger.get(goal.id).modelRounds,503);
 });
 
@@ -1070,7 +1070,7 @@ test('joint contributors continue independently beyond their combined legacy rou
  for(const id of members){const goal=f.host.ledger.get(id);goal.roundLimit=1;goal.modelRounds=501;f.host.ledger.save(goal);
   f.host.profile(goal.sessionId)!.beforeModel!();assert.equal(f.host.ledger.get(id).modelRounds,502);
   await f.read(id);await f.finish(id);f.settleWorker(id);}
- assert.equal(f.host.ledger.jointState(result.taskId)!.acceptanceState,'pass');
+ assert.equal(f.host.ledger.jointState(result.taskId)!.acceptanceState,"not_evaluated");
  assert.equal(f.host.ledger.totalModelRounds(f.host.ledger.get(result.taskId)),1004);
 });
 

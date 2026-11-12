@@ -149,7 +149,7 @@ export class LakeAgents {
   }
   private externalTool(sessionId:string,profile:HostProfile,runtime:()=>AgentRuntime,available:string[]):ToolEntry{
     const base=profile.tools[0];
-    return {...base,metadata:{...base.metadata,name:'run_external_agent',description:'Delegate a bounded segment of this task to an enabled external ACP agent. The host supplies task identity, tools and scope. Use agent codex. External completion is not task acceptance; inspect real tool receipts and submit the original work_finish report.',readOnly:true,needsApproval:false,stopTurnOnSuccess:false},
+    return {...base,metadata:{...base.metadata,name:'run_external_agent',description:'Delegate a bounded segment of this task to an enabled external ACP agent. The host supplies task identity, tools and scope. Use agent codex. Review the external findings and actual tool results, then submit the original work_finish report. No separate acceptance or reconciliation is required.',readOnly:true,needsApproval:false,stopTurnOnSuccess:false},
       permission:{...base.permission,needsApproval:false},resolvePermissionCapability:()=>({needsApproval:false}),
       inputSchema:{type:'object',properties:{agent:{type:'string',enum:available},instruction:{type:'string',minLength:1,maxLength:65536},resume_run_id:{type:'string'}},required:['agent','instruction'],additionalProperties:false},
       handler:async(input:any,context)=>{const actor=this.externalActor(sessionId,profile,runtime(),context);return this.external.run(input.agent,input.instruction,digest([actor.taskId,actor.generation,actor.childSessionId,context.toolCallId]),actor,input.resume_run_id);}};

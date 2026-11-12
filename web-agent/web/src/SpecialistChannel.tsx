@@ -3,7 +3,7 @@ import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 import type {SessionSnapshot,SpecialistChannelEntry,SpecialistChannelPage,SuperWorker} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {Card,TranscriptMessage} from './AIPanel';
-import {conversationActivity,channelTaskPresentation} from './superAgentPresentation';
+import {conversationActivity} from './superAgentPresentation';
 import {isCompactionFallbackEntry} from './timeline';
 import {AppSelect} from './AppSelect';
 import {LoadingWaves} from './LoadingWaves';
@@ -28,7 +28,7 @@ export function channelTasksByRecentRecord(workers:SuperWorker[],entries:Special
 }
 
 export function SpecialistTaskSelect({workers,sessionId,onTask}:{workers:SuperWorker[];sessionId:string;onTask:(sessionId:string)=>void}){
- return <label className="specialist-task-select"><span>任务记录</span><AppSelect aria-label="查看专员任务" value={sessionId} title={workers.find(worker=>worker.sessionId===sessionId)?.task.title} onChange={event=>onTask(event.target.value)}>{workers.map(worker=><option key={worker.id} value={worker.sessionId}>{worker.task.title} · {channelTaskPresentation(worker.task).label}</option>)}</AppSelect></label>;
+ return <label className="specialist-task-select"><span>任务记录</span><AppSelect aria-label="查看专员任务" value={sessionId} title={workers.find(worker=>worker.sessionId===sessionId)?.task.title} onChange={event=>onTask(event.target.value)}>{workers.map(worker=><option key={worker.id} value={worker.sessionId}>{worker.task.title}</option>)}</AppSelect></label>;
 }
 
 export function SpecialistLiveReply({text,worker,snapshot,connected=true}:{text?:string;worker?:SuperWorker;snapshot?:SessionSnapshot;connected?:boolean}){

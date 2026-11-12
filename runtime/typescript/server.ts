@@ -567,16 +567,8 @@ export async function startLakeServer(options: ServerOptions) {
         }
         if (path[3] === "messages-read" && path.length === 4 && method === "PUT") result = acknowledgeConversation(store, sessionId, data.cursor);
         else if (path[3] === "executions" && path.length === 6 && path[5] === "interrupt" && method === "POST") { result = execution!.interrupt(sessionId, path[4], data.generation); status = 202; }
-        else if (path[3] === "operation-reconciliation" && path.length===5) {
-          if (method==="GET") result=await superagent.discoveryRecovery.reviewInfo(sessionId,path[4]);
-          else if (method==="POST") result=await superagent.discoveryRecovery.confirmInventoryReview(sessionId,path[4],{...data,
-            note:typeof data.note==="string"?agents.redact(data.note):data.note},(executionId,goalId,generation)=>{execution!.evidence(executionId,goalId,generation);});
-          else throw new HttpError(405,"不支持此核实请求");
-        }
-        else if (path[3] === "operator-effect-review" && path.length===5) {
-          if (method==='GET') result=await superagent.operatorReviews.reviewInfo(sessionId,path[4]);
-          else if (method==='POST') result=await superagent.operatorReviews.confirm(sessionId,path[4],redactModelValue(data,text=>agents!.redact(text)) as Parameters<typeof superagent.operatorReviews.confirm>[2]);
-          else throw new HttpError(405,'不支持此人工影响复核请求');
+        else if (["operation-reconciliation", "operator-effect-review"].includes(path[3]) && path.length===5) {
+          throw new HttpError(410, "任务核实与验收流程已移除；原操作记录保留，无需提交核实结果");
         }
         else if (path[3] === "host-key" && path.length===4 && method==="POST")result=ssh!.decide(sessionId,data);
         else if (path[3] === "terminals") {
@@ -840,7 +832,6 @@ export async function startLakeServer(options: ServerOptions) {
     resourceManagement=new LakeResourceManagement(store,security,ssh,services,resourceNavigation);
     const configuration=new PilotConfiguration(store,security,extensions,resourceManagement,value=>agents!.redact(ssh!.scrub(extensions!.scrub(value))));
     superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql,execution,Date.now,configuration);
-    await superagent.discoveryRecovery.verify();
     memory = new LakeMemory(store, () => security!.check(), value => agents!.redact(ssh!.scrub(extensions!.scrub(value))));
     try { await memory.initialize(); } catch { memory.disable("记忆文件需要核实，当前暂停记忆功能；原记录保留，普通新任务仍可运行"); }
     agents.memory = memory;
