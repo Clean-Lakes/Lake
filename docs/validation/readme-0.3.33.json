@@ -1,0 +1,162 @@
+{
+  "date": "2026-11-13",
+  "timezone": "Asia/Shanghai",
+  "version": "0.3.33",
+  "applicationSourceCommit": "4fe9c9a3017f4867eae9b36cf685b95289930d3f",
+  "branchBaseCommit": "1cd1aaefc7560ab0407c3fbc34319ff163ddb143",
+  "fixture": "web-agent/web/test/fixtures/readme-macos.tsx",
+  "fixtureSHA256": "3133b217794f9c68a45d7f1a3466d62bf074af48bde47fa6581a91401d59830d",
+  "capture": "Chromium Page.captureScreenshot, JPEG quality 90, device scale 1, reduced motion; actual React App with a presentation-only macOS frame and fictional read-only API records. Not a native OS capture.",
+  "assets": [
+    {
+      "scene": "workbench",
+      "theme": "light",
+      "width": 1200,
+      "height": 840,
+      "contentWidth": 1200,
+      "specialists": 4,
+      "taskRows": 0,
+      "composer": true,
+      "alerts": [],
+      "pageErrors": [],
+      "externalRequests": [],
+      "rejectedWrites": [],
+      "agentKinds": [
+        "codex",
+        "native",
+        "codex",
+        "native"
+      ],
+      "path": "docs/images/lake-workbench-light.jpg",
+      "bytes": 87255,
+      "sha256": "740b1fe369de9b244ebff1768750bb389ea1d9c55c54cfbaeb05a480a485f177"
+    },
+    {
+      "scene": "specialist-tasks",
+      "theme": "light",
+      "width": 1200,
+      "height": 780,
+      "contentWidth": 1200,
+      "specialists": 4,
+      "taskRows": 4,
+      "composer": false,
+      "alerts": [],
+      "pageErrors": [],
+      "externalRequests": [],
+      "rejectedWrites": [],
+      "agentKinds": [
+        "codex",
+        "native",
+        "codex",
+        "native"
+      ],
+      "path": "docs/images/lake-specialist-tasks-light.jpg",
+      "bytes": 58319,
+      "sha256": "feb9f01a2e303e7f59b43845f4b3fc0c463553e0754d72aa0daae7662c331fe0"
+    },
+    {
+      "scene": "workbench",
+      "theme": "dark",
+      "width": 1200,
+      "height": 840,
+      "contentWidth": 1200,
+      "specialists": 4,
+      "taskRows": 0,
+      "composer": true,
+      "alerts": [],
+      "pageErrors": [],
+      "externalRequests": [],
+      "rejectedWrites": [],
+      "agentKinds": [
+        "codex",
+        "native",
+        "codex",
+        "native"
+      ],
+      "path": "docs/images/lake-workbench-dark.jpg",
+      "bytes": 83346,
+      "sha256": "de19cd53a68e4a85586aad0cf5e93fdef38a6c05f8cb869ae8c947859c9b2a0f"
+    },
+    {
+      "scene": "specialist-tasks",
+      "theme": "dark",
+      "width": 1200,
+      "height": 780,
+      "contentWidth": 1200,
+      "specialists": 4,
+      "taskRows": 4,
+      "composer": false,
+      "alerts": [],
+      "pageErrors": [],
+      "externalRequests": [],
+      "rejectedWrites": [],
+      "agentKinds": [
+        "codex",
+        "native",
+        "codex",
+        "native"
+      ],
+      "path": "docs/images/lake-specialist-tasks-dark.jpg",
+      "bytes": 56673,
+      "sha256": "1225d8842c4ea82082d686f47e3a7425e740610818a42f798e0d23c6f6d003ff"
+    }
+  ],
+  "checks": {
+    "applicationTypecheck": "passed",
+    "captureFixtureTypecheck": "passed, extended existing web tsconfig to include this fixture",
+    "taskSearch": "four rows to one matching disk task and back",
+    "taskInspector": "opened and closed",
+    "returnToPilot": "passed",
+    "writeRejectionHTTP": 405,
+    "imageVisualReview": "all four captures inspected",
+    "productionSourceChanged": false,
+    "markdownRender": {
+      "source": "GitHub Markdown API; browser preview uses a local document layout",
+      "languages": [
+        "English",
+        "简体中文"
+      ],
+      "desktopViewport": [
+        1040,
+        1100
+      ],
+      "themes": [
+        "light",
+        "dark"
+      ],
+      "loadedPicturesPerDocument": 2,
+      "correctThemeSelection": true,
+      "quickStartHeadingsAndFragments": true,
+      "narrow": {
+        "width": 390,
+        "contentWidth": 375,
+        "imageWidths": [
+          327,
+          327
+        ]
+      },
+      "visualReview": "desktop dark and Chinese narrow previews inspected"
+    },
+    "localLinks": "Both root READMEs, image provenance and new guide-entry links checked",
+    "historicalNotes": "Old Go/SRE implementation notes retained in collapsed sections",
+    "githubBranchPreview": {
+      "sourceCommit": "716ef5a913c18fbd9dd20e0e8ca3a2fde7d5f051",
+      "englishAndChineseImagesLoaded": true,
+      "actualImageDimensions": [
+        [
+          1200,
+          840
+        ],
+        [
+          1200,
+          780
+        ]
+      ],
+      "englishDarkPictureSelection": true,
+      "englishQuickStartJump": true,
+      "chineseQuickStartJump": true
+    }
+  },
+  "scope": "README text, documentation assets and capture fixture only. No backend/model/resource calls or application home. Functional release tests are retained at their original SHAs; they are not claimed as rerun for this documentation update.",
+  "cleanup": "Screenshot/preview TaskSpace finished; both temporary loopback web hosts stopped. Dev and production apps, homes and system theme were not modified."
+}

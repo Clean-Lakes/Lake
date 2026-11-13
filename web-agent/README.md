@@ -1,5 +1,40 @@
 # Lake React 工作台
 
+当前 macOS **v0.3.33** 使用 Lake React 界面、TypeScript HTTP/SSE 宿主与签名的内置运行时。应用运行时无需另装 Node.js；本机 Codex 的登录与 Agent 配置另见 [Pilot 使用说明](../docs/lake-pilot.md)。当前分发范围与未完成的兼容项见 [macOS 发布说明](../client/macos/RELEASE_NOTES.md) 和 [TypeScript 状态](../runtime/typescript/README.md)。
+
+## 当前工作区
+
+- Pilot 是侧栏固定的内置话事人，专员与资源通过页签切换。专员页面展示任务记录，派工和共同对话从 Pilot 发起。
+- 原生 Lake 与 Codex ACP 专员使用各自身份回复；实际执行 Agent 和记录保留在对应任务中。普通报到完成后直接结束，明确要求综合时才汇总。
+- 项目资源、Skills 和 MCP 可以在请求中引用；操作沿用 Pilot 的当前权限与项目限制。使用 `/plan` 进入只读规划，计划确认后再按会话权限执行。
+- completed 或 partial 报告结束本次执行，历史 failed/unknown 操作与验收记录保留，不自动重放；报告不代表业务结果经过独立核验。
+
+界面预览和入门见 [英文 README](../README.md) / [中文 README](../README.zh-CN.md)，图片来源和重现方式见 [README images](../docs/images/README.md)。
+
+## 构建与本地开发
+
+先阅读 [贡献指南](../CONTRIBUTING.md) 和 [分支与发布规范](../docs/development-workflow.md)。使用 Node.js 24.14.0、pnpm 10.33.4 及仓库规定的 Go/Swift 工具链；macOS 首次构建先运行 `scripts/setup_lake_signing.sh`。
+
+```sh
+pnpm --dir web-agent install --frozen-lockfile
+pnpm --dir web-agent check
+pnpm --dir web-agent test:frontend
+pnpm --dir web-agent build:web
+scripts/build_lake_desktop.sh --dev --install
+open "$HOME/Applications/Lake Dev.app"
+```
+
+安装前在已运行的 Lake Dev 中选择“停止内核并退出”，并按贡献指南核对后端已结束。Dev 使用 `~/.lake-dev`，正式版使用 `~/.lake`；不能让第二个后端同时打开同一 Home，也不跨目录复制凭据。常规凭据由各自私有 `secrets/` 管理。
+
+只做 README 界面演示时可使用独立的 Vite 只读夹具，不启动后端或打开 Lake Home，见 [截图流程](../docs/images/README.md)。正式包从经过发布 PR 的干净 master 构建，日常开发保持在独立工作分支并通过 PR 进入 develop。
+
+## 历史实现资料
+
+下面保留旧 Go 工作台的开发与功能记录。它们描述当时实现；当前 macOS TypeScript 能力以本页开头、当前发布说明和兼容状态为准。
+
+<details>
+<summary>展开历史 Go 工作台说明</summary>
+
 Web 服务、SQLite 会话存储、SSH 和 PTY 终端管理、AI 工具循环全部由 Go 实现。`bin/lake` 内嵌 React 静态资源，运行和分发不需要 Node.js、pnpm、node_modules 或 AI 子进程。
 
 ```sh
@@ -126,3 +161,5 @@ Lake 的核心身份与权限规则由系统策略定义。用户可以要求音
 SRE 分流依据主模型的工具决策，不检查“再试试”“？”或“只出计划”等文字来选择流程。不预设缺少 `@` 就停止：目标可由上下文和目录发现解析，但模型推断不构成显式引用授权。交接在父循环释放会话后消费一次，服务端重新校验当前权限；重启不会自动重放未消费的交接。
 
 普通聊天已停用旧 Scout/Trace/Deep/Beacon 委派与历史 auto 配置。SRE 专员继承普通工具目录（Shell、终端、文件、SQL、Redis、Docker、MCP、Skills）及父会话实时权限；实际工具结果形成证据，操作审批与结果不明禁止重放保持有效。保存工作流也通过 SRE 执行，项目关闭 SRE 时不可启动。
+
+</details>
