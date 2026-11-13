@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-13
 last_updated: 2026-11-13
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [feature, pilot, conversation]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
 为“全部干员报数”和指定多人讨论提供独立的对话轮次。使用现有 SDK、AgentHost、调度容量及角色频道；每人真实回应，超时和失败可见，最后由独立 Pilot 上下文汇总。本轮不产生业务目标，不恢复 ACP 分支已移除的业务验收。
 
@@ -43,7 +43,7 @@ tags: [feature, pilot, conversation]
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-003 | 扩展 `contracts.ts`、`AIPanel.tsx`、`superPilotActivity.ts` 及对话状态组件，按来源轮次显示每人状态与汇总状态。 | ✅ | 2026-11-13 |
-| TASK-004 | 增加宿主生命周期、真实 HTTP/SDK 与前端回归，验证完整成功、缺席、停止、重启、重试、隔离和业务验收不变；运行签名 Lake Dev 验证并记录 SHA。依赖 TASK-003。 | 自动回归、独立 Home 签名模型与宽窗 UI 已完成；原生覆盖被 ACP 来源保护阻止，完整窄窗目视待验证，见验收记录。 | 2026-11-13 |
+| TASK-004 | 增加宿主生命周期、真实 HTTP/SDK 与前端回归，验证完整成功、缺席、停止、重启、重试、隔离和业务记录不变；运行签名 Lake Dev 验证并记录 SHA。依赖 TASK-003。 | ✅；原来源限制已由 TASK-005～008 的完整集成与安装解决。 | 2026-11-13 |
 
 ### Implementation Phase 3
 
@@ -53,8 +53,8 @@ tags: [feature, pilot, conversation]
 |------|-------------|-----------|------|
 | TASK-005 | 从当前 origin/develop 建立集成分支，保留 ACP f62a1158 与对话 b8115453 的完整历史，解决调度、角色身份和对话展示冲突。 | ✅ | 2026-11-13 |
 | TASK-006 | 在 AgentHost/ACP 添加无业务 Task 的 conversation 来源，按冻结角色配置运行原生或 Codex，禁止工具和重放，保留实际 Agent Logo 及头像；补充回归。依赖 TASK-005。 | ✅ | 2026-11-13 |
-| TASK-007 | 运行组合源码/SDK/ACP/前端检查，备份并停止现有 Dev，使用标准签名桌面入口安装，核对已安装源码和进程。依赖 TASK-006。 | | |
-| TASK-008 | 在安装的 Lake Dev 验证真实召集、缺席/停止、角色配置、明暗及完整窄窗布局；保留 tested SHA 并让用户可直接试用。依赖 TASK-007。 | | |
+| TASK-007 | 运行组合源码/SDK/ACP/前端检查，备份并停止现有 Dev，使用标准签名桌面入口安装，核对已安装源码和进程。依赖 TASK-006。 | ✅；已安装干净来源 c270f6c8，严格签名及隔离路径验证通过。 | 2026-11-13 |
+| TASK-008 | 在安装的 Lake Dev 验证真实召集、缺席/停止、角色配置、明暗及完整窄窗布局；保留 tested SHA 并让用户可直接试用。依赖 TASK-007。 | ✅；原项目真实六人 Codex 报到及 Pilot 汇总、独立 QA 缺席与停止、明暗宽/窄窗、焦点与输入光标通过。 | 2026-11-13 |
 
 ## 3. Alternatives
 
@@ -72,6 +72,7 @@ tags: [feature, pilot, conversation]
 - **FILE-002**: `web-agent/shared/contracts.ts`、`web-agent/web/src/PilotConversationProgress.tsx`、`AIPanel.tsx`、`superPilotActivity.ts`：公开投影和 UI。
 - **FILE-003**: `runtime/typescript/super-prompts.ts`、`agent.md`、`docs/lake-pilot.md`：行为及架构说明。
 - **FILE-004**: `docs/validation/typescript-candidate/pilot-conversation-2026-11-13.md`：最终测试记录。
+- **FILE-005**: `docs/validation/acp-agent-execution/pilot-conversation-integration-2026-11-13.md` 及相邻证据目录：本次组合构建、真实 Lake Dev 和补齐的界面验收。
 
 ## 6. Testing
 
@@ -94,3 +95,4 @@ tags: [feature, pilot, conversation]
 - [贡献规范](../CONTRIBUTING.md)
 - [分支与发布规范](../docs/development-workflow.md)
 - [本次验收与安装限制](../docs/validation/typescript-candidate/pilot-conversation-2026-11-13.md)
+- [ACP 集成与已安装 Dev 验收](../docs/validation/acp-agent-execution/pilot-conversation-integration-2026-11-13.md)
