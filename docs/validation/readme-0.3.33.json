@@ -158,5 +158,35 @@
     }
   },
   "scope": "README text, documentation assets and capture fixture only. No backend/model/resource calls or application home. Functional release tests are retained at their original SHAs; they are not claimed as rerun for this documentation update.",
-  "cleanup": "Screenshot/preview TaskSpace finished; both temporary loopback web hosts stopped. Dev and production apps, homes and system theme were not modified."
+  "cleanup": "Screenshot/preview TaskSpace finished; both temporary loopback web hosts stopped. Dev and production apps, homes and system theme were not modified.",
+  "formalHomepage": {
+    "pullRequest": 229,
+    "headSHA": "4f05c63cf119608c9e1ad9a48656b6c835013e2d",
+    "baseSHA": "4fe9c9a3017f4867eae9b36cf685b95289930d3f",
+    "masterSHA": "18650007c246468ee14a59bbc49311528035b120",
+    "ciRun": 43404806208,
+    "ciMergeSHA": "9a559b40722060fc03fc0c5f7a78c6d4579cc555",
+    "ciTree": "1fb6343dd22dff189483c3ec0b71c6460e80a14a",
+    "requiredChecksPassed": true,
+    "masterFileBlobsVerified": [
+      "README.md",
+      "README.zh-CN.md",
+      "docs/images/lake-workbench-light.jpg",
+      "docs/images/lake-workbench-dark.jpg",
+      "docs/images/lake-specialist-tasks-light.jpg",
+      "docs/images/lake-specialist-tasks-dark.jpg"
+    ],
+    "productionSourceUnchanged": true,
+    "releaseTagUnchanged": true,
+    "releaseAssetsUnchanged": true,
+    "independentReview": "Current user explicitly selected: 本次豁免独立评审，全部检查通过后直接发布. Release-specific exception, not an independent approval.",
+    "optionalChecks": [
+      {
+        "name": "windows-amd64",
+        "status": "COMPLETED",
+        "conclusion": "FAILURE"
+      }
+    ],
+    "publicRawImageBytesVerified": true
+  }
 }
