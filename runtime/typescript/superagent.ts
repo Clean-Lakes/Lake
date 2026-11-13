@@ -182,8 +182,8 @@ export class LakeSuperagent implements AgentHost {
       },
       validate:role=>{
         const snapshot=role as Role;
-        if(snapshot.execution?.kind==='acp'&&snapshot.execution.agent!=='codex')throw new HttpError(409,'该干员绑定的外部后端已退役，请先更新配置');
-        if(snapshot.execution?.kind==='acp'&&digest(this.roleExecution(snapshot))!==digest(snapshot.execution))throw new HttpError(409,'干员冻结的 Agent 配置已变化');
+        if(snapshot.execution?.kind==='acp'&&snapshot.execution.agent!=='codex')throw new HttpError(409,'该专员绑定的外部后端已退役，请先更新配置');
+        if(snapshot.execution?.kind==='acp'&&digest(this.roleExecution(snapshot))!==digest(snapshot.execution))throw new HttpError(409,'专员冻结的 Agent 配置已变化');
         this.freezeRoleExecution(snapshot);
       },
       notify:(session,message)=>{this.notify(session,'specialist');if(message)this.notify(session,'message');},schedule:()=>this.schedule(),
@@ -1177,7 +1177,7 @@ export class LakeSuperagent implements AgentHost {
     text(value, "message", 256000);
     await this.agents.prepareRedaction();
     const source = this.store.session(sessionId), project = this.store.get<SuperProject>("superProjects", source.projectId);
-    if(source.workspaceRole==='conversation')throw new HttpError(409,'请在 Pilot 或干员频道继续对话');
+    if(source.workspaceRole==='conversation')throw new HttpError(409,'请在 Pilot 或专员频道继续对话');
     this.store.project(source.projectId);
     if(this.stoppingProjects.has(source.projectId))throw new HttpError(409,"当前项目正在停止活动任务，请稍后发送");
     if(assignment!==undefined){
@@ -1816,7 +1816,7 @@ export class LakeSuperagent implements AgentHost {
           const project=this.store.require<SuperProject>('superProjects',projectId);
           if(sessionId!==project.routerSessionId||event.sessionId!==sessionId||event.preferredRoleId||event.explicitTaskId)throw new HttpError(409,'多人召集须来自当前 Pilot 的独立人工要求');
           if(this.stoppingProjects.has(projectId))throw new HttpError(409,'当前项目正在停止');
-          if((a.audience==='all')===(a.role_ids!==undefined))throw new HttpError(400,'请选择全部干员或准确 role_ids');
+          if((a.audience==='all')===(a.role_ids!==undefined))throw new HttpError(400,'请选择全部专员或准确 role_ids');
           const ids=a.role_ids===undefined?undefined:strings(a.role_ids,64);
           if(ids&&!ids.length)throw new HttpError(400,'role_ids 不能为空');
           const roles=ids?ids.map(id=>this.role(projectId,id)):this.store.list<Role>('superRoles').filter(role=>role.projectId===projectId&&!role.deletedAt).sort((a,b)=>a.id.localeCompare(b.id));

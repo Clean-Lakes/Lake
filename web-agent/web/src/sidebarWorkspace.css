@@ -40,6 +40,23 @@
 .sidebar-brand-actions { display:flex; align-items:center; gap:2px; margin-left:auto; flex:none; }
 .sidebar.workspace-navigation .sidebar-search-trigger { width:32px; height:32px; padding:0; color:var(--pilot-header-muted); }
 .sidebar-navigation-gap { flex:0 0 0; margin:8px 13px 16px; }
+.sidebar-workspace-navigation { display:flex; flex:1 1 auto; min-height:0; flex-direction:column; }
+.sidebar-pinned-pilot { flex:none; margin:4px var(--sidebar-edge-inset) 12px; }
+.sidebar.workspace-navigation .sidebar-pinned-pilot .sidebar-pilot-entry { width:100%; padding:8px var(--sidebar-row-inset); gap:var(--sidebar-icon-gap); border-radius:var(--sidebar-row-radius); corner-shape:var(--corner-window); }
+.sidebar-pinned-pilot .super-role-avatar { flex:0 0 var(--sidebar-icon-column); width:var(--sidebar-icon-column); }
+.sidebar-content-tabs { display:flex; flex:none; gap:4px; padding:0 4px 8px; margin:0 var(--sidebar-edge-inset); }
+.sidebar-content-tab { display:flex; align-items:center; justify-content:center; gap:7px; flex:1; min-width:0; min-height:32px; padding:6px 8px; border:0; border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); background:transparent; color:var(--text-secondary); font:inherit; cursor:pointer; }
+.sidebar-content-tab[aria-selected="true"] { background:var(--surface-hover); color:var(--foreground); font-weight:var(--font-weight-medium); }
+.sidebar-content-tab:hover { background:var(--surface-hover); }
+.sidebar-content-tab:focus-visible { outline:2px solid var(--focus-outline); outline-offset:-2px; }
+.sidebar-content-tab small { color:var(--text-muted); font-size:var(--font-size-ui); font-weight:var(--font-weight-ui); }
+.sidebar-specialist-attention { width:6px; height:6px; border-radius:50%; background:var(--success); flex:none; }
+.sidebar-navigation-panel { display:flex; flex:1 1 auto; min-height:0; }
+.sidebar-navigation-panel[hidden] { display:none; }
+.sidebar.workspace-navigation .sidebar-navigation-panel .pilot-workspace { padding-top:0; }
+.sidebar.workspace-navigation .resource-panel-actions { justify-content:flex-end; min-height:28px; margin:0 0 3px; padding:0 var(--sidebar-row-inset); }
+.sidebar.workspace-navigation .resource-panel-actions .resource-add-control { margin-left:auto; }
+@media(pointer:coarse) { .sidebar-content-tab { min-height:44px; } }
 @media(pointer:coarse) { .sidebar.workspace-navigation .sidebar-search-trigger { width: 44px; height: 44px; } }
 .sidebar.workspace-navigation .navigation-search-key { font-size: var(--font-size-ui); }
 html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { height:48px; min-height:48px; margin-block:0; padding-block:0; }

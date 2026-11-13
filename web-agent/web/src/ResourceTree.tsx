@@ -28,7 +28,8 @@ function ResourceFolderDialog({editor,location,busy,blocked,error,returnFocus,on
   </dialog>,document.body);
 }
 function FolderIcon() { return <Glyph name="folder" size={16} className="resource-tree-folder-icon"/>; }
-export function ResourceTree({project, resources, nodes, disabled, renderResource, refresh, onAddResource, onImport, onDelete, selection, onSelectAll, filtering = false}: {
+export function ResourceTree({project, resources, nodes, disabled, renderResource, refresh, onAddResource, onImport, onDelete, selection, onSelectAll, filtering = false, navigationPanel = false}: {
+  navigationPanel?: boolean;
   filtering?: boolean;
   selection?: BulkSelection; onSelectAll?: () => void;
   project: Project; resources: Resource[]; nodes: ResourceTreeNode[]; disabled: boolean;
@@ -247,7 +248,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
    ] : []),
    {label:"移动到…",icon:"arrow",run:()=>setMoving(contextNode.id)},
    {label:contextNode.kind==="folder"?"删除目录":"删除资源",icon:"trash",separatorBefore:true,danger:true,run:()=>onDelete({kind:contextNode.kind,id:contextResource?.id || contextNode.id,projectId:project.id,name:contextResource?.name || contextNode.name})}
-  ]}/>}<div className="nav-heading resources-heading"><button type="button" className="nav-section-toggle" aria-label={`${sectionExpanded ? "折叠" : "展开"}${project.name}的资源`} aria-expanded={sectionExpanded} aria-controls={`project-resources-${project.id}`} onClick={() => setSectionExpanded(value => !value)}><Glyph name="chevron" size={13} className={`resource-section-chevron ${sectionExpanded ? "chevron-open" : ""}`}/><span className="resource-section-label">资源 <small>{resources.length}</small></span></button>{selection && <button type="button" className="bulk-group-toggle" disabled={blocked || selection.disabled || !resources.length && !tree.length} aria-label={`全选 ${project.name} 的资源和文件夹`} onClick={onSelectAll}>全选</button>}<div hidden={!!selection} className="resource-add-control" ref={addControl} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setAddOpen(false); }}>
+  ]}/>}<div className={`nav-heading resources-heading${navigationPanel?" resource-panel-actions":""}`}>{!navigationPanel&&<button type="button" className="nav-section-toggle" aria-label={`${sectionExpanded ? "折叠" : "展开"}${project.name}的资源`} aria-expanded={sectionExpanded} aria-controls={`project-resources-${project.id}`} onClick={() => setSectionExpanded(value => !value)}><Glyph name="chevron" size={13} className={`resource-section-chevron ${sectionExpanded ? "chevron-open" : ""}`}/><span className="resource-section-label">资源 <small>{resources.length}</small></span></button>}{selection && <button type="button" className="bulk-group-toggle" disabled={blocked || selection.disabled || !resources.length && !tree.length} aria-label={`全选 ${project.name} 的资源和文件夹`} onClick={onSelectAll}>全选</button>}<div hidden={!!selection} className="resource-add-control" ref={addControl} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setAddOpen(false); }}>
     <button type="button" ref={addButton} className="nav-add resource-create-trigger" aria-label={`在${project.name}新建资源或目录`} title="新建资源或目录" aria-haspopup="menu" aria-expanded={addOpen} aria-controls={`resource-add-${project.id}`} disabled={blocked} onPointerDown={() => { addFocusTarget.current = null; }} onKeyDown={event => {
       // Enter/Space 交给按钮原生激活（随后触发 onClick），避免再手动切换造成双重开关。
       if (event.key === "Enter" || event.key === " ") { addFocusTarget.current = "first"; return; }
@@ -271,7 +272,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
       <button type="button" role="menuitem" onClick={() => { setAddOpen(false); onImport(); }}><FolderIcon/><span>导入资源</span></button>
       <button type="button" role="menuitem" onClick={() => { setAddOpen(false); openEditor({parentId:null,name:""},addButton.current); }}><FolderIcon/>新建目录</button>
     </div>}
-  </div></div>{(sectionExpanded || filtering) && <div id={`project-resources-${project.id}`} className="resource-tree" ref={root} aria-label={`${project.name} 资源目录`}>
+  </div></div>{(sectionExpanded || filtering || navigationPanel) && <div id={`project-resources-${project.id}`} className="resource-tree" ref={root} aria-label={`${project.name} 资源目录`}>
     {error&&!editor&&<p className="form-error" role="alert">{error}</p>}
     {dragging && <div className="resource-drag-status" role="status">{drop ? `${drop.zone==='inside'?'移入':drop.zone==='before'?'排在前面：':'排在后面：'}${drop.id==='root'?'资源根层':resourceMap.get(nodeMap.get(drop.id)?.resourceId??'')?.name??nodeMap.get(drop.id)?.name??''}` : '上下拖动排序，向右拖入目录'} · Esc 取消</div>}
     {render(null)}

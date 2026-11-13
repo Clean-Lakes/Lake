@@ -12,13 +12,13 @@ export function conversationNeedsStatus(round:SpecialistConversation){
 export function PilotConversationProgress({rounds,connected=true,onSpecialist}:{rounds:SpecialistConversation[];connected?:boolean;onSpecialist?:(author:SpecialistReplyAuthor)=>void}){
  const visible=rounds.filter(conversationNeedsStatus);
  if(!visible.length)return null;
- return <div className="pilot-conversation-progress" role="status" aria-live="polite" aria-label="干员回应进展">
+ return <div className="pilot-conversation-progress" role="status" aria-live="polite" aria-label="专员回应进展">
   {visible.map(round=>{
    const count=round.members.filter(member=>member.state==='replied').length;
    const active=connected&&['queued','running','summarizing'].includes(round.state);
    const label=connected?roundLabels[round.state]:'正在重连';
    return <div key={round.id} data-conversation-id={round.id} data-state={round.state}>
-    <ReplyProcessStatus active={active} mark={active?'loading':round.state==='completed'&&count===round.members.length?'check':round.members.some(member=>['failed','timed_out','interrupted'].includes(member.state))?'alert':'clock'} className="pilot-conversation-status">{count} / {round.members.length} 位干员已回应{label&&` · ${label}`}</ReplyProcessStatus>
+    <ReplyProcessStatus active={active} mark={active?'loading':round.state==='completed'&&count===round.members.length?'check':round.members.some(member=>['failed','timed_out','interrupted'].includes(member.state))?'alert':'clock'} className="pilot-conversation-status">{count} / {round.members.length} 位专员已回应{label&&` · ${label}`}</ReplyProcessStatus>
     {round.members.filter(member=>member.state!=='replied').map(member=>{
      const author:SpecialistReplyAuthor={kind:'specialist',name:member.roleName,roleId:member.roleId,workerId:member.id,sessionId:member.sessionId,channelSessionId:member.channelSessionId,conversationId:round.id,execution:member.execution,avatarId:member.avatarId};
      return <section className="ai-chat-message ai-role-assistant pilot-specialist-reply" key={member.id} data-role-id={member.roleId} data-state={member.state} title={member.reason}>

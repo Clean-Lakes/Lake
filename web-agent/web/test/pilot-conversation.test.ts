@@ -15,7 +15,7 @@ const workspace:SuperWorkspace={active:true,project:{projectId:'project',routerS
 
 test('real replied counts and every outstanding specialist remain visible, including failures after summary',()=>{
  const html=renderToStaticMarkup(createElement(PilotConversationProgress,{rounds:[round]}));
- assert.match(html,/1 \/ 3 位干员已回应/);assert.match(html,/正在回复…/);assert.match(html,/等待回应/);
+ assert.match(html,/1 \/ 3 位专员已回应/);assert.match(html,/正在回复…/);assert.match(html,/等待回应/);
  assert.doesNotMatch(html,/数据库专员 ·|发布专员 ·/);assert.match(html,/reply-process-status reply-process-text/);
  const failed={...round,state:'completed' as const,members:round.members.map(member=>member.state==='running'?{...member,state:'timed_out' as const}:member)};
  const settled=renderToStaticMarkup(createElement(PilotConversationProgress,{rounds:[failed]}));
@@ -27,8 +27,8 @@ test('real replied counts and every outstanding specialist remain visible, inclu
 test('Lake Island follows dialogue even after the routing response, and stops when the round settles',()=>{
  const session={id:'pilot',projectId:'project'};
  assert.equal(superPilotActivity(workspace,session)?.status,'investigating');
- assert.equal(superPilotActivity(workspace,session)?.label,'2 位干员尚未回应');
- assert.equal(superPilotActivity({...workspace,conversations:[{...round,state:'summarizing'}]},session)?.label,'Pilot 正在汇总干员回应');
+ assert.equal(superPilotActivity(workspace,session)?.label,'2 位专员尚未回应');
+ assert.equal(superPilotActivity({...workspace,conversations:[{...round,state:'summarizing'}]},session)?.label,'Pilot 正在汇总专员回应');
  assert.equal(superPilotActivity({...workspace,conversations:[{...round,state:'completed'}]},session),null);
  assert.equal(superPilotActivity(workspace,session,false)?.animated,false);
  assert.equal(superPilotActivity(workspace,{id:'other',projectId:'project'}),null);

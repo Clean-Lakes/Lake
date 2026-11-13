@@ -64,7 +64,7 @@ export class SpecialistConversations {
       project.routerSessionId!==round.sessionId||source.disposition!=='routed')throw new HttpError(409,'本次召集的人工来源已失效');
     if(member){
       const role=this.store.require<ConversationRole>('superRoles',member.roleId);
-      if(role.projectId!==round.projectId||role.deletedAt)throw new HttpError(409,'该干员已不可用');
+      if(role.projectId!==round.projectId||role.deletedAt)throw new HttpError(409,'该专员已不可用');
       this.ports.validate?.(member.roleSnapshot);
     }
   }
@@ -90,7 +90,7 @@ export class SpecialistConversations {
     const timeout=input.timeoutSeconds??120;
     if(input.summaryRequested!==undefined&&typeof input.summaryRequested!=='boolean')throw new HttpError(400,'是否综合回应必须为布尔值');
     if(!Number.isSafeInteger(timeout)||timeout<15||timeout>300)throw new HttpError(400,'回应等待时间必须为 15–300 秒');
-    if(input.roles.length>64||new Set(input.roles.map(role=>role.id)).size!==input.roles.length)throw new HttpError(400,'一次召集最多 64 位不同干员');
+    if(input.roles.length>64||new Set(input.roles.map(role=>role.id)).size!==input.roles.length)throw new HttpError(400,'一次召集最多 64 位不同专员');
     if(this.rounds().filter(round=>round.projectId===input.projectId&&open(round)).length>=4)throw new HttpError(409,'请等待当前召集结束');
     text(input.instruction,'instruction',4096);text(input.quote,'quote',16384);
     const round:Round={id:roundId,eventId:input.eventId,projectId:input.projectId,sessionId:input.sessionId,sourceMessageId:input.sourceMessageId,
@@ -100,7 +100,7 @@ export class SpecialistConversations {
     this.store.transaction(()=>{
       round.members=input.roles.map(role=>{
         const current=this.store.require<ConversationRole>('superRoles',role.id);
-        if(role.projectId!==input.projectId||role.deletedAt||current.projectId!==input.projectId||current.deletedAt||digest(current)!==digest(role))throw new HttpError(404,'干员不属于当前项目或版本已变化');
+        if(role.projectId!==input.projectId||role.deletedAt||current.projectId!==input.projectId||current.deletedAt||digest(current)!==digest(role))throw new HttpError(404,'专员不属于当前项目或版本已变化');
         const key=digest([roundId,role.id]).slice(0,32),sessionId='speaker_'+key;
         const channelSessionId=this.ports.channel(role);
         this.session(round,sessionId,role.name+' · 对话回应');
@@ -167,7 +167,7 @@ export class SpecialistConversations {
           round=this.store.require<Round>('superConversations',round.id);if(!open(round))break;
           const member=round.members.find(member=>member.id===candidate.id)!;
           if(member.state!=='queued')continue;
-          try{this.check(round,member);}catch(error){member.state='failed';member.reason=error instanceof HttpError?this.agents.redact(bounded(error.message,512)):'当前项目或干员不可用';this.save(round);this.changed(round);continue;}
+          try{this.check(round,member);}catch(error){member.state='failed';member.reason=error instanceof HttpError?this.agents.redact(bounded(error.message,512)):'当前项目或专员不可用';this.save(round);this.changed(round);continue;}
           member.state='running';round.state='running';this.save(round);this.changed(round);
           const input=canonical({conversationId:round.id,originalHumanRequest:round.quote,instruction:round.instruction,dialogue:round.dialogue,
             self:{roleId:member.roleId,name:member.roleName,number:round.members.findIndex(item=>item.id===member.id)+1},
@@ -219,7 +219,7 @@ export class SpecialistConversations {
         round.state=success?'completed':'failed';
         const key='conversation_summary_'+digest(round.id).slice(0,32);round.summaryMessageId=key;
         this.store.put<Message>('messages',key,{id:key,sessionId:round.sessionId,role:'assistant',createdAt:now(),
-          text:success?this.agents.redact(bounded(reply!,32768)):'Pilot 本次汇总未完成；各干员的实际回应和缺席状态已保留。',
+          text:success?this.agents.redact(bounded(reply!,32768)):'Pilot 本次汇总未完成；各专员的实际回应和缺席状态已保留。',
           conversation:{id:round.id,sourceMessageId:round.sourceMessageId,kind:success?'summary':'notice',summaryRequested:round.summaryRequested}});
       }
       this.save(round);
@@ -237,7 +237,7 @@ export class SpecialistConversations {
       if(round.state==='summarizing'&&this.time()>=Date.parse(round.summaryDeadlineAt!)){
         aborts.push(round.summarySessionId);round.state='failed';changed=true;notice=true;
         const key='conversation_summary_'+digest(round.id).slice(0,32);round.summaryMessageId=key;
-        this.store.put<Message>('messages',key,{id:key,sessionId:round.sessionId,role:'assistant',createdAt:now(),text:'Pilot 汇总等待超时；各干员的实际回应和缺席状态已保留。',conversation:{id:round.id,sourceMessageId:round.sourceMessageId,kind:'notice'}});
+        this.store.put<Message>('messages',key,{id:key,sessionId:round.sessionId,role:'assistant',createdAt:now(),text:'Pilot 汇总等待超时；各专员的实际回应和缺席状态已保留。',conversation:{id:round.id,sourceMessageId:round.sourceMessageId,kind:'notice'}});
       }
       if(changed){this.save(round);this.changed(round,notice);}
       await Promise.allSettled(aborts.map(session=>this.agents.abort(session)));
