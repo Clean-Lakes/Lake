@@ -43,7 +43,7 @@ tags: [feature, pilot, conversation]
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-003 | 扩展 `contracts.ts`、`AIPanel.tsx`、`superPilotActivity.ts` 及对话状态组件，按来源轮次显示每人状态与汇总状态。 | ✅ | 2026-11-13 |
-| TASK-004 | 增加宿主生命周期、真实 HTTP/SDK 与前端回归，验证完整成功、缺席、停止、重启、重试、隔离和业务验收不变；运行签名 Lake Dev 验证并记录 SHA。依赖 TASK-003。 | | |
+| TASK-004 | 增加宿主生命周期、真实 HTTP/SDK 与前端回归，验证完整成功、缺席、停止、重启、重试、隔离和业务验收不变；运行签名 Lake Dev 验证并记录 SHA。依赖 TASK-003。 | 自动回归、独立 Home 签名模型与宽窗 UI 已完成；原生覆盖被 ACP 来源保护阻止，完整窄窗目视待验证，见验收记录。 | 2026-11-13 |
 
 ## 3. Alternatives
 
@@ -81,3 +81,4 @@ tags: [feature, pilot, conversation]
 - [Lake Pilot](../docs/lake-pilot.md)
 - [贡献规范](../CONTRIBUTING.md)
 - [分支与发布规范](../docs/development-workflow.md)
+- [本次验收与安装限制](../docs/validation/typescript-candidate/pilot-conversation-2026-11-13.md)
