@@ -143,20 +143,22 @@ export class SpecialistConversations {
     return {running:members.some(member=>member.state==='running'),queued:members.some(member=>member.state==='queued')};
   }
   /** Called by the existing host scheduler; shares its global/project capacity. */
-  async pump(capacity:number,projectCapacity:(projectId:string)=>number){
+  async pump(capacity:number|(()=>number),projectCapacity:(projectId:string)=>number){
     if(this.closed||this.pumping)return;this.pumping=true;
+    const globalCapacity=()=>typeof capacity==='function'?capacity():capacity;
     try {
       await this.expire();
       for(const snapshot of this.rounds().filter(open).sort((a,b)=>a.createdAt.localeCompare(b.createdAt))){
-        if(capacity-this.running()<=0)break;
+        if(globalCapacity()-this.running()<=0)break;
         let round=this.store.require<Round>('superConversations',snapshot.id);
         const source=this.store.require<any>('superInputs',round.eventId);
         if(source.disposition==='pending')continue;
         if(source.disposition!=='routed'){await this.stopRound(round,'cancelled');continue;}
         for(const candidate of round.members.filter(member=>member.state==='queued')){
-          if(capacity-this.running()<=0||projectCapacity(round.projectId)-this.running(round.projectId)<=0)break;
+          if(globalCapacity()-this.running()<=0||projectCapacity(round.projectId)-this.running(round.projectId)<=0)break;
           round=this.store.require<Round>('superConversations',round.id);if(!open(round))break;
           const member=round.members.find(member=>member.id===candidate.id)!;
+          if(member.state!=='queued')continue;
           try{this.check(round,member);}catch{member.state='failed';member.reason='当前项目或干员不可用';this.save(round);this.changed(round);continue;}
           member.state='running';round.state='running';this.save(round);this.changed(round);
           const input=canonical({conversationId:round.id,originalHumanRequest:round.quote,instruction:round.instruction,dialogue:round.dialogue,
@@ -166,7 +168,7 @@ export class SpecialistConversations {
         }
         round=this.store.require<Round>('superConversations',round.id);
         if(!open(round)||round.state==='summarizing'||round.members.some(waiting))continue;
-        if(capacity-this.running()<=0||projectCapacity(round.projectId)-this.running(round.projectId)<=0)continue;
+        if(globalCapacity()-this.running()<=0||projectCapacity(round.projectId)-this.running(round.projectId)<=0)continue;
         try{this.check(round);}catch{await this.stopRound(round,'interrupted');continue;}
         round.state='summarizing';round.summaryDeadlineAt=new Date(this.time()+120000).toISOString();this.save(round);this.changed(round);
         const input=canonical({conversationId:round.id,originalHumanRequest:round.quote,instruction:round.instruction,
@@ -216,7 +218,8 @@ export class SpecialistConversations {
     this.changed(round,true);this.ports.schedule();return true;
   }
   async expire(){
-    for(const round of this.rounds().filter(open)){
+    for(const snapshot of this.rounds().filter(open)){
+      const round=this.store.require<Round>('superConversations',snapshot.id);if(!open(round))continue;
       const aborts:string[]=[];let changed=false,notice=false;
       if(this.time()>=Date.parse(round.deadlineAt))for(const member of round.members)if(waiting(member)){
         if(member.state==='running')aborts.push(member.sessionId);
@@ -231,7 +234,8 @@ export class SpecialistConversations {
       await Promise.allSettled(aborts.map(session=>this.agents.abort(session)));
     }
   }
-  private async stopRound(round:Round,state:'cancelled'|'interrupted',roleId?:string){
+  private async stopRound(snapshot:Round,state:'cancelled'|'interrupted',roleId?:string){
+    const round=this.store.require<Round>('superConversations',snapshot.id);if(!open(round))return;
     const aborts:string[]=[];
     for(const member of round.members)if(waiting(member)&&(!roleId||member.roleId===roleId)){
       if(member.state==='running')aborts.push(member.sessionId);

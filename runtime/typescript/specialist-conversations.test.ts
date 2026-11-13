@@ -13,8 +13,8 @@ async function fixture(t:{after(fn:()=>Promise<void>):void},count=3){
  const roles:ConversationRole[]=Array.from({length:count},(_,i)=>({id:`role-${i}`,projectId:project.id,name:`干员${i+1}`,duties:'回应本人的讨论',revision:1}));
  for(const role of roles)store.put('superRoles',role.id,role);
  const requests:{sessionId:string;input:any}[]=[],aborts:string[]=[],notices:string[]=[];
- let clock=Date.now(),denied=false;
- const agents={redact:(v:string)=>v,publish(){},send:async(sessionId:string,_text:string,options:any)=>{requests.push({sessionId,input:JSON.parse(options.input)});},abort:async(sessionId:string)=>{aborts.push(sessionId);}};
+ let clock=Date.now(),denied=false,sendGate:Promise<void>|undefined,abortGate:Promise<void>|undefined;
+ const agents={redact:(v:string)=>v,publish(){},send:async(sessionId:string,_text:string,options:any)=>{requests.push({sessionId,input:JSON.parse(options.input)});const gate=sendGate;sendGate=undefined;await gate;},abort:async(sessionId:string)=>{aborts.push(sessionId);const gate=abortGate;abortGate=undefined;await gate;}};
  const ports={clock:()=>clock,check:()=>{if(denied)throw new HttpError(403,'denied');},channel:(role:ConversationRole)=>{
   const id='channel-'+role.id;if(!store.get('sessions',id))store.put('sessions',id,{...store.createSession(project.id),id});return id;
  },notify:(session:string)=>notices.push(session),schedule(){}};
@@ -28,7 +28,9 @@ async function fixture(t:{after(fn:()=>Promise<void>):void},count=3){
  const settle=(sessionId:string,response?:string,error?:string)=>{store.put('views',sessionId,{...store.view(sessionId),status:error?'failed':'completed'});host.settled(sessionId,{response,error});};
  t.after(async()=>{await host.close();store.db.close();await rm(home,{recursive:true,force:true});});
  return {store,project,pilot,roles,event,input,requests,aborts,notices,get host(){return host;},start,admit,pump,settle,
-  tick:(ms:number)=>{clock+=ms;},deny:()=>{denied=true;},restart:()=>{host=new SpecialistConversations(store,agents as any,ports);}};
+  tick:(ms:number)=>{clock+=ms;},deny:()=>{denied=true;},restart:()=>{host=new SpecialistConversations(store,agents as any,ports);},
+  holdSend:()=>{let release!:()=>void;sendGate=new Promise<void>(resolve=>{release=resolve;});return release;},
+  holdAbort:()=>{let release!:()=>void;abortGate=new Promise<void>(resolve=>{release=resolve;});return release;}};
 }
 
 test('a frozen invitation wakes independent speakers within shared capacity, delivers real replies and then asks Pilot to summarize',async t=>{
@@ -118,4 +120,33 @@ test('an empty roster is summarized as empty and forged sources cannot create an
  assert.throws(()=>f.host.start({...f.input,sourceMessageId:'forged'}),/准确人工来源/);
  const round=f.start();f.admit();await f.pump();assert.equal(f.requests[0].input.total,0);
  f.settle(f.requests[0].sessionId,'当前没有可召集的专员。');assert.equal(f.host.read(f.project.id,round.id).state,'completed');
+});
+
+test('cancelling a queued specialist while another model starts cannot wake that cancelled recipient',async t=>{
+ const f=await fixture(t,2),round=f.start();f.admit();const release=f.holdSend(),pumping=f.pump();
+ await new Promise<void>(resolve=>setImmediate(resolve));assert.equal(f.requests.length,1);
+ await f.host.stop(f.project.id,f.roles[1].id);release();await pumping;
+ assert.equal(f.requests.length,1);assert.equal(f.host.read(f.project.id,round.id).members[1].state,'cancelled');
+ f.settle(round.members[0].sessionId,'到！');await f.pump();assert.equal(f.requests.at(-1)!.input.members[1].state,'cancelled');
+});
+
+test('stopping several rounds retains a reply received while another model cancellation is settling',async t=>{
+ const f=await fixture(t,1),first=f.start();f.admit();
+ const event={...f.event,id:'second-event',messageId:'second-message'};f.store.put('superInputs',event.id,event);
+ const second=f.host.start({...f.input,eventId:event.id,sourceMessageId:event.messageId});
+ f.store.put('superInputs',event.id,{...event,disposition:'routed'});await f.pump();
+ const release=f.holdAbort(),stopping=f.host.stop(f.project.id);
+ await new Promise<void>(resolve=>setImmediate(resolve));
+ f.settle(second.members[0].sessionId,'已经收到的真实回复');release();await stopping;
+ assert.equal(f.host.read(f.project.id,first.id).members[0].state,'cancelled');
+ assert.equal(f.host.read(f.project.id,second.id).members[0].state,'replied');
+ assert.equal(f.store.messages(f.pilot.id).at(-1)!.text,'已经收到的真实回复');
+});
+
+test('shared global capacity is reread after asynchronous SDK startup before waking another specialist',async t=>{
+ const f=await fixture(t,2),round=f.start();f.admit();let capacity=4;
+ const release=f.holdSend(),pumping=f.host.pump(()=>capacity,()=>2);
+ await new Promise<void>(resolve=>setImmediate(resolve));assert.equal(f.requests.length,1);
+ capacity=1;release();await pumping;
+ assert.equal(f.requests.length,1);assert.equal(f.host.read(f.project.id,round.id).members[1].state,'queued');
 });

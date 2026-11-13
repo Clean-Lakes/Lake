@@ -1082,7 +1082,7 @@ export class LakeSuperagent implements AgentHost {
         catch (error) { this.routerFinished(project.routerSessionId, String(error)); }
       }
     }
-    await this.conversations.pump(4-this.active.size,projectId=>2-[...this.active].filter(id=>this.store.require<Worker>('superWorkers',id).projectId===projectId).length);
+    await this.conversations.pump(()=>4-this.active.size,projectId=>2-[...this.active].filter(id=>this.store.require<Worker>('superWorkers',id).projectId===projectId).length);
     const retries=this.dueWatchdogRetries();
     const queued = this.store.list<Worker>("superWorkers").filter((worker) => !worker.inline&&!this.stoppingProjects.has(worker.projectId)&& !this.active.has(worker.id) &&
       (worker.state === "queued" && this.dispatchReady(worker) || retries.has(worker.id)));
