@@ -1,0 +1,17 @@
+/* External agent gateway (MCP) settings. Reuses the external-agent panel and
+ * settings tokens; only the token rows need their own layout. */
+.gateway-create { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-top:14px; }
+.gateway-create .field-label { flex:1; min-width:220px; }
+.gateway-created { margin-top:14px; border:1px solid var(--border); border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); padding:12px 14px; background:var(--surface); }
+.gateway-created p { margin:0 0 8px; }
+.gateway-created code { font-size:12px; word-break:break-all; }
+.gateway-snippet { display:flex; align-items:center; gap:10px; min-width:0; }
+.gateway-snippet code { flex:1; min-width:0; font-size:12px; line-height:1.5; word-break:break-all; color:var(--text-secondary); }
+.gateway-snippet .provider-text-button { flex-shrink:0; display:inline-flex; align-items:center; gap:6px; }
+.gateway-tokens { list-style:none; margin:14px 0 0; padding:0; display:flex; flex-direction:column; gap:10px; }
+.gateway-token-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; border:1px solid var(--border); border-radius:var(--radius-settings-panel); corner-shape:var(--corner-window); padding:12px 14px; background:var(--surface); }
+.gateway-token-meta { display:flex; flex-direction:column; gap:2px; min-width:180px; }
+.gateway-token-meta span, .gateway-token-meta time { font-size:var(--font-size-badge); color:var(--text-secondary); }
+.gateway-token-row .gateway-snippet { flex:1; min-width:240px; }
+.gateway-token-delete { color:var(--text-secondary); flex-shrink:0; display:inline-flex; align-items:center; gap:6px; }
+.external-origin-badge { display:inline-flex; align-items:center; gap:4px; font-size:var(--font-size-badge); line-height:1; padding:3px 7px; border-radius:var(--radius-settings-badge); corner-shape:var(--corner-window); border:1px solid var(--border); color:var(--text-secondary); margin:2px 6px 2px 0; vertical-align:middle; }
