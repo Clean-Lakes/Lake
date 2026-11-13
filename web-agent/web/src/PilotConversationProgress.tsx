@@ -5,10 +5,15 @@ import {ReplyIdentity} from './ReplyIdentity';
 const labels={queued:'等待回应',running:'正在回复…',replied:'已回应',failed:'回应失败',timed_out:'回应超时',cancelled:'已停止',interrupted:'回应中断'} as const;
 const roundLabels={queued:'正在召集',running:'等待回应',summarizing:'正在综合意见',completed:'',cancelled:'召集已停止',interrupted:'召集已中断',failed:'综合意见未完成'} as const;
 
+export function conversationNeedsStatus(round:SpecialistConversation){
+ return round.state!=='completed'||round.members.some(member=>member.state!=='replied');
+}
+
 export function PilotConversationProgress({rounds,connected=true,onSpecialist}:{rounds:SpecialistConversation[];connected?:boolean;onSpecialist?:(author:SpecialistReplyAuthor)=>void}){
- if(!rounds.length)return null;
+ const visible=rounds.filter(conversationNeedsStatus);
+ if(!visible.length)return null;
  return <div className="pilot-conversation-progress" role="status" aria-live="polite" aria-label="干员回应进展">
-  {rounds.map(round=>{
+  {visible.map(round=>{
    const count=round.members.filter(member=>member.state==='replied').length;
    const active=connected&&['queued','running','summarizing'].includes(round.state);
    const label=connected?roundLabels[round.state]:'正在重连';

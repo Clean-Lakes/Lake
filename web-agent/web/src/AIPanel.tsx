@@ -4,7 +4,7 @@ import {ReplyIdentity,type AssistantIdentity} from './ReplyIdentity';
 import type {SpecialistReplyAuthor,SuperTask,SuperWorkspace} from '../../shared/contracts';
 import {PilotSpecialistConversation} from './PilotSpecialistConversation';
 import {pilotDispatchRows} from './pilotSpecialistReplies';
-import {PilotConversationProgress} from './PilotConversationProgress';
+import {PilotConversationProgress,conversationNeedsStatus} from './PilotConversationProgress';
 import {pendingUserSupplements} from "./messageQueue";
 import {latestInspectorSelection,canonicalGoalForExecution} from './sessionInspectorModel';
 import {MiniBoxCompletionNotice} from './MiniBox';
@@ -256,11 +256,13 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       // Public prose keeps its key and container throughout tool rounds and completion.
       const interimGroups=groups.filter(group=>group.entries.every(entry=>handoffInterim.has(entry.id)||isDeliveredWorkerInterim(entry,projected.reported)));
       const detailGroups=groups.filter(group=>processGroups.includes(group)||interimGroups.includes(group));
+      const canonicalGoalId=canonicalGoalForExecution(snapshot,timingProps.cards,pilotWorkspace?.workers.map(worker=>worker.task));
+      const hideConversationStatus=turnConversations.length>0&&!turnConversations.some(conversationNeedsStatus)&&!turnDispatchRows.length&&!canonicalGoalId;
       const replyContent=<>{groups.filter(group=>!detailGroups.includes(group)&&!(proseInChannel&&group.entries.every(channelBody))).map(group=>mode==='conversation'&&group.entries.every(isAssistantProse)?<SettledReply key={group.entries[0]!.id} roleBreak={roleBreaks.has(group.entries[0]!.id)} continued={continuations.has(group.entries[0]!.id)}>{renderGroup(group)}</SettledReply>:renderGroup(group))}</>;
       return <ReplyReferenceScope key={turn[0]!.id} cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}><div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)}>
       {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources} arrive={entry.message!.id===latestUser?.id&&!restoredMessageIds.current.has(entry.message!.id)}/>)}
       {mode==='activity'&&<ReplyDuration assistantIdentity={assistantIdentity} {...timingProps}/>}
-      {mode==='conversation'?<TurnExecutionDetails processOnly={turnConversations.length>0} assistantIdentity={assistantIdentity} hideIdentity={hideReplyIdentity} latest={latestUser?turn===currentTurn:turn===turns.at(-1)} latestTaskId={latestInspectorTaskId} canonicalGoalId={canonicalGoalForExecution(snapshot,timingProps.cards,pilotWorkspace?.workers.map(worker=>worker.task))} sessionId={snapshot.session.id} {...timingProps} presentingReply={presentingReply} hideLive={turn.some(entry=>entry.sre?.task.pilot)} detailNotice={pilotLive?undefined:notices} details={pilotLive?[]:[...detailGroups.map(renderGroup),...compactionDiagnostics]} onInspect={onInspect}>{replyContent}</TurnExecutionDetails>:replyContent}
+      {mode==='conversation'?<TurnExecutionDetails hideStatus={hideConversationStatus} processOnly={turnConversations.length>0} assistantIdentity={assistantIdentity} hideIdentity={hideReplyIdentity} latest={latestUser?turn===currentTurn:turn===turns.at(-1)} latestTaskId={latestInspectorTaskId} canonicalGoalId={canonicalGoalId} sessionId={snapshot.session.id} {...timingProps} presentingReply={presentingReply} hideLive={turn.some(entry=>entry.sre?.task.pilot)} detailNotice={pilotLive?undefined:notices} details={pilotLive?[]:[...detailGroups.map(renderGroup),...compactionDiagnostics]} onInspect={onInspect}>{replyContent}</TurnExecutionDetails>:replyContent}
       {mode==='conversation'&&turnDispatchRows.length>0&&<PilotSpecialistConversation rows={turnDispatchRows} onSpecialist={onSpecialist} connected={pilotConnected}/>}
       {turnConversations.length>0&&<PilotConversationProgress rounds={turnConversations} connected={pilotConnected} onSpecialist={onSpecialist}/>}
       <FileChanges live={turn===currentTurn&&(currentTiming?currentTiming.status==='running':liveConversation)} deferUntilEnd={mode==='conversation'} cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>
