@@ -1,0 +1,45 @@
+{
+  "pullRequest": 226,
+  "version": "0.3.33",
+  "headSHA": "cd3e7c6273796c9a135e66a1b75fda3733b2dc12",
+  "baseSHA": "48ffda34e9d0244d3dd4b42baf89bba95e3baea4",
+  "ciRun": 43397674178,
+  "ciMergeSHA": "120365fb45c7d32d3ed6f7cdecb51fc1143563b7",
+  "ciTree": "130ee9bb25bbda6546a77fa95086bcd5ac5167e6",
+  "requiredChecksPassed": true,
+  "jobs": [
+    {
+      "name": "macos_runtime",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "legacy_go (web)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "legacy_go (ai)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "legacy_go (remaining)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "workbench",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "independentReview": "Current user explicitly selected: 本次豁免独立评审，全部检查通过后直接发布. Release-specific exception, not an independent approval.",
+  "optionalChecks": [
+    {
+      "name": "windows-amd64",
+      "status": "COMPLETED",
+      "conclusion": "FAILURE"
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "version": "0.3.33",
+  "sourceSHA": "4fe9c9a3017f4867eae9b36cf685b95289930d3f",
+  "backendSHA256": "edcccd226c7f1ac7b569500dac1d76a36127b0cf48a9a7b97254882f55e00677",
+  "cleanSource": true,
+  "signedBundle": true,
+  "certificateSHA256": "377ee437dfbfdde4abf3acc055fa5892bd9d0625b762ac3b825091dba3a086e6",
+  "preparationOnly": true,
+  "restarts": [
+    {
+      "attempt": 1,
+      "bootstrap": true,
+      "catalog": true,
+      "identity": true,
+      "gracefulDrain": true,
+      "originalMarker": true
+    },
+    {
+      "attempt": 2,
+      "bootstrap": true,
+      "catalog": true,
+      "identity": true,
+      "gracefulDrain": true,
+      "originalMarker": true
+    }
+  ],
+  "mixedProfileRejected": true,
+  "zipVerified": true,
+  "dmgVerified": true,
+  "assets": [
+    {
+      "name": "Lake-0.3.33-macos-arm64.zip",
+      "size": 68060226,
+      "sha256": "6d23b7cdf76a762ab44dcb28da62155e80f286422248aa6b6cae55e3ef65f807"
+    },
+    {
+      "name": "Lake-0.3.33-macos-arm64.dmg",
+      "size": 81554901,
+      "sha256": "ff142ae25505b135f94bbcecf705d8aba6f5172bf04c975525746f42096f85aa"
+    }
+  ]
+}
