@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-14
 last_updated: 2026-11-14
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [feature, gateway, mcp, specialist]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
 研发人员在自家 Agent（Claude Code、Codex CLI 等）中为每个专员配置一条 stdio MCP 入口，直接发指令、收回应。指令复用专员频道真实人工输入链路（InputEvent → Pilot 路由 → route_work → Worker → 署名报告回投频道）；Lake Security、operation permissions、计划/审批确认照旧在 Lake 界面完成。接入形态：`--mcp-specialist` stdio 子命令（每个专员一个 MCP 条目）；鉴权：独立签发的受限网关凭据。
 
@@ -48,6 +48,7 @@ tags: [feature, gateway, mcp, specialist]
 | TASK-004 | `mcp-stdio.ts`：`specialistTools`（回环 endpoint 校验、token 解析、角色绑定、wait 轮询）+ `runSpecialistMcp` 注册与 `--mcp-specialist` argv 分支；`mcp-stdio.test.ts` 直测工具语义。 | ✅ | 2026-11-14 |
 | TASK-005 | 前端：`GatewaySettings.tsx`（创建/限定/删除/复制命令）接入 Agent 页签；`TranscriptMessage` 外部 Agent 徽标；`gatewaySettings.css`；api helpers；`gatewaySettings.test.ts`。 | ✅ | 2026-11-14 |
 | TASK-006 | `gateway.test.cjs`：真实 HTTP 端到端——完整 Pilot 路由→Worker→署名报告、幂等/内容冲突、错误令牌/会话令牌/越权/吊销、停止频道、无效 waitSeconds。 | ✅ | 2026-11-14 |
+| TASK-007 | 隔离签名实例真实模型端到端：stdio MCP 握手/工具发现/发指令/收报告、幂等重放、吊销即 401、UI 徽标与设置卡片明暗窄窗；验证记录与截图。 | ✅；发现并修复公共指令 ID 解析两处遗漏（0660e9ed、1b947a7e）。 | 2026-11-14 |
 
 ## 3. Alternatives
 
@@ -66,7 +67,7 @@ tags: [feature, gateway, mcp, specialist]
 - **FILE-002**: `runtime/typescript/server.ts`、`superagent.ts`、`store.ts`、`router-context.ts`、`super-prompts.ts`：路由、来源标记与投影。
 - **FILE-003**: `web-agent/shared/contracts.ts`、`web-agent/web/src/GatewaySettings.tsx`、`gatewaySettings.css`、`ModelSettings.tsx`、`AIPanel.tsx`、`api.ts`：公开类型与 UI。
 - **FILE-004**: `docs/lake-pilot.md`、`agent.md`：行为与架构说明。
-- **FILE-005**: `docs/validation/typescript-candidate/external-specialist-mcp-2026-11-14.md`：最终验证记录。
+- **FILE-005**: `docs/validation/typescript-candidate/external-specialist-mcp-2026-11-14.md` 及相邻截图目录：最终验证记录。
 
 ## 6. Testing
 

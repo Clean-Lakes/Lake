@@ -548,8 +548,10 @@ export class LakeSuperagent implements AgentHost {
       ...(goal.status==="paused"&&goal.summary==="model_round_limit"&&{reason:"round_limit_removed",summary:"轮次限制已取消，可继续当前任务。"}) };
   }
   private workerView(worker: Worker,runs?:ExternalRun[]): SuperWorker {
+    const sourceEvent = worker.sourceEventId ? this.store.get<InputEvent>("superInputs", worker.sourceEventId) : undefined;
     return { id: worker.id, createdAt: worker.createdAt, roleId: worker.roleId, roleName: worker.roleSnapshot.name,
       sessionId: worker.sessionId, task: this.taskView(this.ledger.get(worker.taskId)), assignmentState: worker.state,
+      ...(sourceEvent?.external && { sourceExternal: true }),
       activity: this.workerActivity(worker),execution:this.workerExecution(worker,runs) };
   }
   private workerExecution(worker:Worker,externalRuns=this.store.list<ExternalRun>('acpRuns')):AgentExecutionSummary {
