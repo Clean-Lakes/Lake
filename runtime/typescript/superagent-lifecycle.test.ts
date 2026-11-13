@@ -63,6 +63,41 @@ async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date
     steering: () => steering };
 }
 
+test('Pilot shared dialogue routes through the existing host with independent replies and a final Pilot summary, without business goals',async t=>{
+  const f=await fixture(t),event=await f.admit('全部干员给我报数！');
+  const invite=f.host.profile(f.router)!.tools.find(entry=>entry.metadata.name==='convene_specialists')!;
+  const input={event_id:event.id,part_key:'attendance',quote:event.payload,instruction:'请每位干员亲自报数',audience:'all'};
+  const round:any=await invite.handler(input,{} as any);
+  assert.equal(round.members.length,1);assert.equal(round.members[0].roleId,f.role.id);
+  assert.equal((await invite.handler(input,{} as any) as any).id,round.id);
+  assert.equal(f.requests.length,0);
+  f.settleRouter();await f.activate();
+  assert.equal(f.requests.length,1);assert.equal(f.requests[0].sessionId,round.members[0].sessionId);
+  assert.equal(f.host.profile(round.members[0].sessionId)!.systemPrompt.includes(f.role.name),true);
+  f.store.put('views',round.members[0].sessionId,{...f.store.view(round.members[0].sessionId),status:'completed'});
+  f.host.settled(round.members[0].sessionId,{response:'1，项目检查员到！'});await f.activate();
+  const summary=f.requests.at(-1)!;assert.equal(summary.input.replied,1);
+  f.store.put('views',summary.sessionId,{...f.store.view(summary.sessionId),status:'completed'});
+  f.host.settled(summary.sessionId,{response:'1 位干员已回应。'});
+  assert.equal(f.host.workspace(f.project.id).conversations![0].state,'completed');
+  assert.equal(f.store.messages(f.router).at(-2)?.author?.roleId,f.role.id);
+  assert.equal(f.store.messages(f.router).at(-1)?.conversation?.kind,'summary');
+  assert.equal(f.store.list('superGoals').length,0);assert.equal(f.store.list('superOperations').length,0);
+  assert.ok(f.store.catalog().sessions.every(session=>session.workspaceRole!=='conversation'));
+  await assert.rejects(f.host.send(round.members[0].sessionId,'伪造来源'),/请在 Pilot/);
+});
+
+test('Pilot stop cancels dialogue speakers and prevents a late response or summary',async t=>{
+  const f=await fixture(t),event=await f.admit('全部干员报数！');
+  const invite=f.host.profile(f.router)!.tools.find(entry=>entry.metadata.name==='convene_specialists')!;
+  const round:any=await invite.handler({event_id:event.id,part_key:'attendance',quote:event.payload,instruction:'报数',audience:'all'},{} as any);
+  f.settleRouter();await f.activate();await f.host.stopWorkspace(f.project.id,f.router);
+  f.store.put('views',round.members[0].sessionId,{...f.store.view(round.members[0].sessionId),status:'completed'});
+  f.host.settled(round.members[0].sessionId,{response:'迟到的报到'});await f.activate();
+  assert.equal(f.host.workspace(f.project.id).conversations![0].state,'cancelled');
+  assert.equal(f.store.messages(f.router).filter(message=>message.conversation).length,0);
+});
+
 test("only current unfinished business work requests a final report, without changing acceptance", async t => {
   const f = await fixture(t), { taskId } = await f.start(), worker = f.worker(taskId), profile = f.host.profile(worker.sessionId)!;
   const goal = JSON.stringify(f.host.ledger.get(taskId)), operations = JSON.stringify(f.store.list("superOperations"));

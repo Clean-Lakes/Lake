@@ -22,7 +22,12 @@ export function superPilotActivity(workspace:SuperWorkspace|null|undefined,sessi
  const workers=workspace.workers.filter((worker):worker is ActiveWorker=>!!worker.activity&&
   worker.assignmentState!=='archived'&&worker.assignmentState!=='stopped'&&!finished.has(worker.task.state)&&
   worker.task.sessionId===worker.sessionId&&(!worker.task.projectId||worker.task.projectId===session.projectId));
- if(!workers.length)return null;
+ if(!workers.length){
+  const rounds=workspace.conversations?.filter(round=>round.projectId===session.projectId&&round.sessionId===session.id&&['queued','running','summarizing'].includes(round.state))??[];
+  if(!rounds.length)return null;
+  const count=rounds.reduce((sum,round)=>sum+round.members.filter(member=>['queued','running'].includes(member.state)).length,0);
+  return {status:connected?'investigating':'idle',label:connected?rounds.some(round=>round.state==='summarizing')?'Pilot 正在汇总干员回应':`${count} 位干员尚未回应`:'进度暂未更新，正在重连',phase:'thinking',animated:connected,motion:connected?'working':'still',workerCount:count};
+ }
  workers.sort((a,b)=>priority[a.activity.phase]-priority[b.activity.phase]||b.activity.updatedAt.localeCompare(a.activity.updatedAt)||a.sessionId.localeCompare(b.sessionId));
  const phase=workers[0].activity.phase;
  if(!connected)return {status:'idle',label:'进度暂未更新，正在重连',phase,animated:false,motion:'still',workerCount:workers.length};

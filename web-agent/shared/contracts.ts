@@ -38,7 +38,7 @@ export type Resource = {
 };
 
 export type WorkSession = {
-	workspaceRole?: 'router'|'worker'|'role'|'legacy';
+	workspaceRole?: 'router'|'worker'|'role'|'legacy'|'conversation';
   id: string;
   projectId: string;
   title: string;
@@ -59,8 +59,9 @@ export type WorkspaceTag = {id: string; projectId: string; name: string; color: 
 
 export type MessageMention = {kind: "resource" | "skill" | "mcp" | "role"; id: string; label: string; start: number; end: number; resourceKind?: Resource["kind"]};
 
-export type SpecialistReplyAuthor = {kind:'specialist';name:string;roleId?:string;workerId:string;sessionId:string;taskId:string;channelSessionId?:string;rootTurnId?:string};
+export type SpecialistReplyAuthor = {kind:'specialist';name:string;roleId?:string;workerId:string;sessionId:string;taskId?:string;conversationId?:string;channelSessionId?:string;rootTurnId?:string};
 export type Message = {
+  conversation?: {id:string;sourceMessageId:string;kind:'reply'|'summary'|'notice'};
   jointAcceptance?: {taskId:string;receiptId:string};
   author?: SpecialistReplyAuthor;
   dispatch?: {id:string;sourceMessageId:string;workerId:string;sessionId:string;taskId:string;roleId:string;roleName:string;channelSessionId:string;instruction:string;action:'create'|'followup'};
@@ -384,7 +385,17 @@ export type SuperWorker = {id:string;createdAt?:string;roleId:string;roleName:st
 export type SpecialistChannelInfo = {messageRead?:ConversationReadState;id:string;projectId:string;roleId:string;roleName:string;duties?:string;roleRevision?:number;sessionId:string;revision:number;createdAt:string;needsConfirmation?:boolean;running?:boolean;preparing?:boolean;completionCursor?:string;seenCompletionCursor?:string};
 export type SpecialistChannelEntry = {id:string;sourceSessionId:string;taskId?:string;workerId?:string;createdAt:string;message?:Message;card?:AICard;reply?:{turnId:string;state:'working'|'settled'}};
 export type SpecialistChannelPage = {replyPresentation?:'invocation';channel:SpecialistChannelInfo;entries:SpecialistChannelEntry[];nextCursor:string;workers:SuperWorker[];active:SessionSnapshot[];routing:boolean;queued:number};
-export type SuperWorkspace = {pilotMessageRead?:ConversationReadState;active:boolean;project:SuperProject;workers:SuperWorker[];channels?:SpecialistChannelInfo[];cursor?:number};
+export type SpecialistConversationMember = {
+  id:string;roleId:string;roleName:string;sessionId:string;channelSessionId:string;
+  state:'queued'|'running'|'replied'|'failed'|'timed_out'|'cancelled'|'interrupted';
+  replyMessageId?:string;reason?:string;
+};
+export type SpecialistConversation = {
+  id:string;projectId:string;sessionId:string;sourceMessageId:string;title:string;
+  state:'queued'|'running'|'summarizing'|'completed'|'cancelled'|'interrupted'|'failed';
+  createdAt:string;deadlineAt:string;members:SpecialistConversationMember[];summaryMessageId?:string;
+};
+export type SuperWorkspace = {pilotMessageRead?:ConversationReadState;active:boolean;project:SuperProject;workers:SuperWorker[];channels?:SpecialistChannelInfo[];conversations?:SpecialistConversation[];cursor?:number};
 export type SRESnapshot = {featureVersion:number;enabled:boolean;tasks:SRETask[];pilot?:PilotSettings};
 
 export type ScheduleExecution={id:string;scheduled_at:string;started_at?:string;finished_at?:string;status:string;error?:string;task_id?:string;session_id?:string};
