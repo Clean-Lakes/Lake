@@ -2,7 +2,7 @@
 
 按用户对实际 Dev 截图的反馈收紧侧栏。新增、导入和批量入口共用资源页签右侧的动作位，不再独占资源标题行；资源列表直接衔接页签。Pilot 使用 48px 行高和 14px 转角，页签使用 28px 高度和 8px 转角，沿用共享 `--corner-window` 曲线。新增目录取消后，在浏览器完成模态焦点切换的下一帧恢复“＋”入口焦点。
 
-验证代码提交：`718da90303be0a41c661a312f5ae2a2de714695d`。已按 `scripts/build_lake_desktop.sh --dev --install` 签名安装 Lake Dev 0.3.32，使用 `com.cleanlakes.lake.desktop.dev` 与原 `~/.lake-dev`；安装来源、二进制 hash 和指标见 [evidence.json](compact-sidebar/evidence.json)。文档提交不改变这次验证的构建输入。
+验证代码提交：`718da90303be0a41c661a312f5ae2a2de714695d`。已按 `scripts/build_lake_desktop.sh --dev --install` 签名安装 Lake Dev 0.3.32，使用 `com.cleanlakes.lake.desktop.dev` 与原 `~/.lake-dev`；安装来源、二进制 hash 和指标见 [evidence.json](compact-sidebar/evidence.json)。最终安装来源为 `6c0054aba76e9474b74cf0de4f0bb39c2b5c98dc`，构建时工作区干净；与验证代码的差异仅为 docs，构建输入相同。
 
 | 实测项 | 调整前 | 调整后 |
 | --- | --- | --- |

@@ -1,9 +1,9 @@
 {
   "testedCodeSHA": "718da90303be0a41c661a312f5ae2a2de714695d",
-  "installedSourceSHA": "718da90303be0a41c661a312f5ae2a2de714695d",
+  "installedSourceSHA": "6c0054aba76e9474b74cf0de4f0bb39c2b5c98dc",
   "buildInputsMatchTestedCode": true,
-  "buildWorktreeDirty": true,
-  "backendSHA256": "af22c24f517315a35033e14cb4b598021e6516e94d416b797adf75414e17e134",
+  "buildWorktreeDirty": false,
+  "backendSHA256": "14e75c6320b8afbdde29856052eedf9d947495a852c22fe46150ab6733dd866f",
   "bundleId": "com.cleanlakes.lake.desktop.dev",
   "version": "0.3.32",
   "signingVerified": true,
