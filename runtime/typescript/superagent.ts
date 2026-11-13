@@ -2672,7 +2672,12 @@ export class LakeSuperagent implements AgentHost {
     return { instructionId: message.id, eventId: event.id, roleId: role.id, sessionId: channel.sessionId };
   }
   async instructionStatus(eventId: unknown, waitSeconds = 0): Promise<GatewayInstructionStatus> {
-    const event = typeof eventId === "string" ? this.store.get<InputEvent>("superInputs", eventId) : undefined;
+    // The public instruction id is the channel message id; the event id is
+    // also accepted so internal callers and tests can use either handle.
+    const event = typeof eventId === "string"
+      ? this.store.get<InputEvent>("superInputs", eventId) ??
+        this.store.list<InputEvent>("superInputs").find(candidate => candidate.external && candidate.messageId === eventId)
+      : undefined;
     if (!event?.external) throw new HttpError(404, "外部指令不存在");
     const deadline = Date.now() + Math.max(0, Math.min(60, waitSeconds)) * 1000;
     for (; ;) {
