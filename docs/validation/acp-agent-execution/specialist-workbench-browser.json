@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-11",
+  "testedSource": "73e1755c162fde814b57a2f79019cca4770727ac",
+  "browser": "Ego Lite",
+  "taskSpaceId": 88,
+  "taskSpaceFinished": true,
+  "data": "fictional in-memory API, real App components; no model or host calls",
+  "wide": {
+    "theme": "light",
+    "width": 1280,
+    "height": 960,
+    "rows": 34,
+    "counts": {
+      "active": 0,
+      "attention": 8,
+      "completed": 22,
+      "other": 4
+    },
+    "groups": [
+      "需关注",
+      "已完成",
+      "其他任务"
+    ],
+    "table": false,
+    "horizontalOverflow": false,
+    "foregroundReadCursorAcknowledged": true
+  },
+  "filters": {
+    "arrowRightEmptyActive": true,
+    "endCompletedRows": 22,
+    "homeAllRows": 34,
+    "filteredGroups": 0,
+    "codexSearchRows": 2,
+    "emptySearch": true
+  },
+  "interaction": {
+    "exactTaskDetails": true,
+    "questionRoute": "/api/sessions/fixture-session-2/ai/questionReply",
+    "questionId": "fixture-question",
+    "stopRoute": "/api/sessions/fixture-session-1/ai/workControl",
+    "stopGoalId": "fixture-task-1",
+    "focusReturnedToOriginalRow": true,
+    "pilotDraftPreserved": true,
+    "specialistComposer": false,
+    "specialistNewTask": false,
+    "hoverChevronOpacity": 1
+  },
+  "stability": {
+    "pollSameRowButtonAndAvatar": true,
+    "statusMoveSameRowButtonAndAvatar": true,
+    "statusMoveRowsRetained": 8,
+    "longListScrollBefore": 491,
+    "longListScrollAfter": 491,
+    "longListRowsRetained": 34
+  },
+  "visual": [
+    {
+      "file": "specialist-workbench-light.png",
+      "width": 1280,
+      "theme": "light"
+    },
+    {
+      "file": "specialist-workbench-focus-dark.png",
+      "width": 1140,
+      "theme": "dark",
+      "selectedTask": "fixture-task-0",
+      "keyboardFocus": "查看任务：检查韦二 Kubernetes 集群状态",
+      "focusOutline": "rgb(155, 188, 232)",
+      "actualProgress": "2 / 4"
+    },
+    {
+      "file": "specialist-workbench-dark-620.png",
+      "width": 620,
+      "theme": "dark",
+      "horizontalOverflow": false
+    },
+    {
+      "file": "specialist-workbench-dark-380.png",
+      "width": 380,
+      "theme": "dark",
+      "horizontalOverflow": false,
+      "rowAndFilterRadius": "10px"
+    }
+  ],
+  "observations": [
+    "Waited for existing sidebar resize animation to finish before narrow screenshots; no application fix was needed for a transitional capture",
+    "Ego pointer wrapper reported enabled question/stop buttons as disabled; inspected actual disabled=false and verified both through focus+Enter",
+    "No live business task or actual model request submitted; only fixture endpoints received question/stop operations"
+  ]
+}

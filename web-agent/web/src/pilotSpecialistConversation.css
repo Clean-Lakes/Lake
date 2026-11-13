@@ -1,0 +1,4 @@
+.pilot-specialist-conversation { display:grid; grid-template-columns:minmax(0,1fr); gap:24px; width:100%; min-width:0; }
+.pilot-specialist-waiting { display:flex; align-items:center; gap:9px; min-width:0; color:var(--foreground); font-size:var(--reply-body-size,15px); line-height:1.75; overflow-wrap:anywhere; }
+.pilot-specialist-waiting > .turn-status-mark { flex:none; }
+.pilot-specialist-connection { display:block; margin-top:8px; color:var(--text-muted); font-size:12px; }

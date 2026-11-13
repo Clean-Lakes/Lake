@@ -21,3 +21,5 @@ Lake 保留 Go 默认构建，并通过显式选项提供 TypeScript Dev 后端�
 旧 Electron 构建及早期源码快照已移除，历史许可归属继续保留。当前 TypeScript 候选使用公开 Agent SDK；依赖版本、原始仓库、归档摘要与工具链固定在 [上游清单](../runtime/typescript/upstream.json)，通过 [SDK 绑定](../runtime/typescript/sdk.ts) 接入。候选随包携带原始 LICENSE、NOTICE、Node LICENSE 和依赖许可；构建时逐文件核对下载源码。项目名称与运行时标识统一使用 Lake / TypeScript，依赖的真实名称及版权归属保留在集成边界。普通 Go 构建与完整切换门槛见 [候选说明](../runtime/typescript/README.md)。
 
 模型供应商品牌 SVG 来自 [Lobe Icons](https://github.com/lobehub/lobe-icons) 的 `@lobehub/icons-static-svg` v1.95.1，采用 MIT 许可；[原始许可](../web-agent/licenses/lobe-icons-MIT) 与 [素材来源和摘要](../web-agent/web/public/providers/provenance.json) 随仓库保存，图标随应用本地分发。
+
+ACP 执行后端额外使用固定 `@agentclientprotocol/sdk@2.5.0`、`@modelcontextprotocol/server@2.4.0` 与 `zod@4.6.7`。构建按实际 bundle 收集这些依赖及传递依赖原始许可到 `lake-runtime/licenses/acp-*`，并保留 `acp-dependencies.json`。Codex 模型元数据来自 OpenAI `rust-v0.160.1` 的 `codex-rs/models-manager/models.json`，保留 Apache-2.0 [原许可](../runtime/typescript/licenses/codex-0.160.1-LICENSE)。Codex adapter/engine 不随 Lake 自动下载，操作者显式安装精确版本后使用其 npm 包附带的许可与完整性校验。

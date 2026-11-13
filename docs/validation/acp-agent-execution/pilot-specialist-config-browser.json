@@ -1,0 +1,33 @@
+{
+  "spaceId": 86,
+  "fixture": "full App with fictional local API",
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "viewportWidths": [
+    1100,
+    620
+  ],
+  "defaultShape": "flamingo",
+  "configuredShape": "beaver",
+  "headerAndSidebarMatch": true,
+  "allEightTaskRowsMatch": true,
+  "taskInspectorMatches": true,
+  "stableAvatarNode": true,
+  "stablePhase": true,
+  "siblingRolesUnchanged": true,
+  "autoRestoresOriginalShape": true,
+  "pilotDraftAndContinuedTyping": true,
+  "composerAndNewTaskStillAbsentOnOverview": true,
+  "horizontalOverflow": false,
+  "businessMessagesOrUploadsWritten": false,
+  "screenshots": [
+    "pilot-config-beaver-light.png",
+    "pilot-config-beaver-dark-narrow.png",
+    "pilot-config-beaver-inspector-dark.png"
+  ],
+  "browserTaskFinished": true,
+  "viteStopped": true,
+  "draftInteraction": "keyboard focus and typing; Ego pointer wrapper failed on the editable container although DOM was enabled"
+}

@@ -8,6 +8,7 @@ import {Glyph} from './Icons';
 import {NavigationMenu} from './NavigationDelete';
 import {SpecialistDelete} from './SpecialistDelete';
 import {SidebarPilotEntry} from './SidebarPilotEntry';
+import {AgentBackendLogo,agentTypeName} from './AgentBackendLogo';
 
 export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
  const [workspace,setWorkspace]=useState<SuperWorkspace|null>(null),[error,setError]=useState('');
@@ -114,6 +115,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
   {entries.length ? entries.map(({channel, workers}) => {
    const aggregate=specialistTaskActivity(workers),worker = aggregate.worker, task = worker?.task;
    const name = channel?.roleName ?? worker!.roleName;
+   const backend = channel ? channel.execution : worker?.execution?.backend;
    const selected = channel ? channel.roleId === viewedRole : worker?.sessionId === selectedId;
    // Only the host can attest that a live, source-bound interaction exists.
    // A task's waiting state (including older protocol snapshots) is not one.
@@ -130,14 +132,14 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
    const status = [needsConfirmation && '需确认', activityLabel, showUnread && '有新消息未读'].filter(Boolean).join(' · ') ||
     (task && task.state !== 'running' ? channelTaskPresentation(task).label : task ? '暂无正在执行的任务' : '暂无任务');
    const detail=aggregate.detail??(channel?.duties||'持续沟通');
-   const label = `${name} · ${detail}${detail.endsWith(status)?'':` · ${status}`}`;
+   const label = `${name}${backend?` · Agent 类型：${agentTypeName(backend)}`:''} · ${detail}${detail.endsWith(status)?'':` · ${status}`}`;
    return <button type="button" key={channel?.id ?? worker!.id} className={`nav-row pilot-worker-row${selected ? ' active' : ''}`}
      aria-current={selected ? 'page' : undefined} aria-label={label} title={label}
      aria-haspopup={channel?'menu':undefined}
      onContextMenu={event=>{event.preventDefault();event.stopPropagation();if(channel&&!disabled){anchor.current=event.currentTarget;setContext({channel,x:event.clientX,y:event.clientY});}}}
      onKeyDown={event=>{if(channel&&!disabled&&(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10')){event.preventDefault();const bounds=event.currentTarget.getBoundingClientRect();anchor.current=event.currentTarget;setContext({channel,x:bounds.left+20,y:bounds.bottom});}}}
      onClick={event=>{greetRoleAvatar(event.currentTarget);if(channel&&onChannel)onChannel(channel);else if(worker)onWorker(worker);}}>
-    <SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId} motion={preparing?'working':replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/><span className="nav-row-text"><strong>{name}</strong><span className="pilot-worker-task">{detail}</span></span>
+    <SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId} motion={preparing?'working':replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/><span className="nav-row-text"><span className="pilot-worker-name"><strong>{name}</strong><AgentBackendLogo backend={backend}/></span><span className="pilot-worker-task">{detail}</span></span>
     <span className="pilot-worker-status">
      {aggregate.runningCount>1&&<span className="pilot-worker-count" aria-label={`${aggregate.runningCount} 项任务执行中`}>{aggregate.runningCount}</span>}
      {needsConfirmation && <span className="pilot-worker-confirmation">需确认</span>}

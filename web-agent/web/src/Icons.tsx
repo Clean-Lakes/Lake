@@ -26,7 +26,9 @@ export function Glyph({name,size=18,className=""}:{name:string;size?:number;clas
  const path=lakeIcons[name as keyof typeof lakeIcons];
  if(path)return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" className={className} data-glyph={name} aria-hidden="true"><path d={path}/></svg>;
  const Icon = icons[name as keyof typeof icons] ?? FileText;
- return <Icon size={size} strokeWidth={1.7} className={className} aria-hidden="true"/>;
+ // Every loading glyph shares the existing motion and reduced-motion rules.
+ const classes=name==='loader'?[...new Set(['activity-indicator',...className.split(/\s+/).filter(Boolean)])].join(' '):className;
+ return <Icon size={size} strokeWidth={1.7} className={classes} aria-hidden="true"/>;
 }
 export function ResourceIcon({kind,size=16}:{kind:string;size?:number}) {
  return <Glyph name={kind==="ssh"?"server":kind} size={size} className={`resource-kind-icon kind-${kind}`}/>;

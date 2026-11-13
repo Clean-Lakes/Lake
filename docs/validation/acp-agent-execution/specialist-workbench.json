@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-11",
+  "testedSource": "73e1755c162fde814b57a2f79019cca4770727ac",
+  "platform": "darwin-arm64",
+  "node": "24.14.0",
+  "scope": "frontend specialist task presentation only; unframed two-line list, existing state groups, stable exact task nodes",
+  "checks": {
+    "frontendTypes": "pass",
+    "frontendUnit": {
+      "passed": 800,
+      "failed": 0,
+      "skipped": 0
+    },
+    "webBuild": "pass standalone and signed desktop build",
+    "runtimeBoundary": "pass",
+    "browserProof": "specialist-workbench-browser.json"
+  },
+  "historicalBackendChecks": {
+    "rerunThisTask": false,
+    "source": "afbfe85ed6cff7c1d30a4e48c70d76a64559f1a9",
+    "backendUnit": {
+      "passed": 275,
+      "skipped": 4
+    },
+    "hostIntegration": {
+      "passed": 199
+    },
+    "fixedRealCodexACP": {
+      "passed": 4
+    },
+    "evidence": "pilot-specialist-config.json"
+  },
+  "dev": {
+    "command": "scripts/build_lake_desktop.sh --dev --install",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "home": "~/.lake-dev",
+    "dirty": false,
+    "deepStrictSignatureVerified": true,
+    "buildOriginVerified": true,
+    "backendSHA256": "704dd7c585b999cbbbbe6b00e1573825aff9364fa4ca2e79c4d22cc9ddfa1e36",
+    "nativeActualTaskCount": 34,
+    "nativeGroups": {
+      "attention": 8,
+      "completed": 22,
+      "other": 4
+    },
+    "actualBusinessPromptOrTaskOperationSent": false,
+    "fullHomeOrDatabaseBackupsCreated": false,
+    "deletedBackupRootsRecreated": false
+  },
+  "preservation": {
+    "projects": 19,
+    "visibleWorkers": 151,
+    "recordCounts": {
+      "superRoles": 21,
+      "superChannels": 18,
+      "superRoleMutations": 5,
+      "superWorkers": 129,
+      "superGoals": 129,
+      "superAttempts": 183,
+      "superOperations": 400,
+      "superAcceptance": 162,
+      "superReports": 175,
+      "acpRuns": 5,
+      "commandExecutions": 287,
+      "legacyChannelReads": 3,
+      "legacyChannelTimeline": 190,
+      "legacyGoals": 46,
+      "legacyLoadedViews": 17,
+      "legacyMigrationBatches": 1,
+      "legacyMySQLConnections": 5,
+      "legacyOperations": 53,
+      "legacyProjectPolicies": 2,
+      "legacyResources": 139,
+      "legacySSHConnections": 123,
+      "legacyServiceConnections": 5,
+      "legacySessionSources": 82,
+      "legacyWorkers": 22,
+      "legacyWorkflowTemplates": 1
+    },
+    "protectedRecordsUnchanged": true,
+    "localCodexConfigurationUnchanged": true,
+    "freshBaselineUsed": true
+  },
+  "limitations": [
+    "No backend suite rerun for this frontend-only change",
+    "No real external model inference, actual cluster inspection, other-platform or complete migration parity validation",
+    "No merge, production installation, release or manual CI"
+  ]
+}

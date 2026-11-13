@@ -1,5 +1,7 @@
 # Lake Items × Lake Security × Lake Memory 对接说明
 
+> **2026-11-12 TypeScript 用户修订**：业务任务的待核实/验收系统已按新方案退役。报告提交结束执行，多人报告汇总不生成 acceptance；原操作与历史验收保持。Items 身份/连接、Security 当前权限/执行归属及 Memory 同意/来源职责独立保留。Memory 接收新报告及实际已结算观测时明确 reported、未独立验收，unknown 不成为成功事实。下文早期任务验收门禁不再适用于当前 TS；Go 历史及未交付接口不随本次启用。见[当前合同](../security/task-confirmation.md)。
+
 > **Memory 主线调整（2026-11-04）**：后续以 [Agent 本地文件记忆主计划](../../plan/feature-agent-file-memory-1.md) 为准。旧正文数据库/Markdown 投影及条目管理路线进入分批替换；下文既有行为和测试是历史/当前代码水位，不表示新方案已实现或旧链路已下线。保留真实来源、同意、项目/角色范围、撤回及运行账本；新 Agent 接管后停止旧写入/注入，Worker 读取能力另行验收。
 
 > **上下文与角色知识增量（2026-11-05，待实施）**：按[总方案](../../plan/architecture-context-role-memory-1.md)区分 Pilot 协调工作集、独立任务上下文、RoleID 长期知识及原始档案。CM 负责摘要/引用和角色读取适配，FM 仍负责唯一记忆流水线；现有 Worker unavailable 与使用开关不因文档变更自动改变。

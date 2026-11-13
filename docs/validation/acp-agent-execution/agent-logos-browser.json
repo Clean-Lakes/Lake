@@ -1,0 +1,61 @@
+{
+  "light": {
+    "width": 1280,
+    "height": 900,
+    "overflow": false
+  },
+  "dark": {
+    "width": 1280,
+    "height": 900,
+    "overflow": false
+  },
+  "narrowChat": {
+    "width": 380,
+    "overflow": false,
+    "logos": [
+      {
+        "type": "codex",
+        "right": 220
+      },
+      {
+        "type": "native",
+        "right": 150
+      },
+      {
+        "type": "codex",
+        "right": 164
+      }
+    ]
+  },
+  "narrowSidebar": {
+    "width": 380,
+    "overflow": false,
+    "logos": [
+      {
+        "type": "codex",
+        "left": 179,
+        "right": 193
+      },
+      {
+        "type": "native",
+        "left": 109,
+        "right": 123
+      },
+      {
+        "type": "codex",
+        "left": 123,
+        "right": 137
+      },
+      {
+        "type": "native",
+        "left": 123,
+        "right": 137
+      },
+      {
+        "type": "codex",
+        "left": 140.6875,
+        "right": 154.6875
+      }
+    ]
+  }
+}

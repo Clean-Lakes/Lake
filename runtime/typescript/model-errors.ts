@@ -1,4 +1,7 @@
-/** Redact model values without turning Error instances into empty records.
+/** Redact structured model/tool values without corrupting numeric metadata or
+ * JSON syntax. Keep schema keys, primitives and Date values; redact string
+ * values before serialization, including Error messages and causes.
+ * Redact model values without turning Error instances into empty records.
  * The SDK uses non-enumerable messages/causes and error brands to classify
  * failures. Keep descriptors and prototypes; never mutate the provider error. */
 export function redactModelValue<T>(value:T, redact:(text:string)=>string, seen=new WeakMap<object,unknown>()):T {
@@ -21,6 +24,14 @@ export function redactModelValue<T>(value:T, redact:(text:string)=>string, seen=
   const result:any=Array.isArray(value)?[]:{};seen.set(value,result);
   for(const [key,item] of Object.entries(value))Object.defineProperty(result,key,{configurable:true,enumerable:true,writable:true,value:redactModelValue(item,redact,seen)});
   return result;
+}
+
+/** Tool arguments are JSON text inside the approval schema. Redact their
+ * values before serializing, and keep legacy invalid text displayable. */
+export function redactJSONText(value:string,redact:(text:string)=>string):string {
+  let parsed:unknown;
+  try{parsed=JSON.parse(value);}catch{return redact(value);}
+  return JSON.stringify(redactModelValue(parsed,redact));
 }
 
 const generic=/^(?:Turn execution failed|Model request failed|Model stream failed|Unknown error)\.?$/i;

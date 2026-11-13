@@ -24,7 +24,9 @@ async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date
   internal.schedule = () => {};
   t.after(async () => { await host.close(); store.db.close(); await rm(home, { recursive: true, force: true }); });
   const project = store.createProject("isolated lifecycle"), router = host.ensure(project.id).routerSessionId;
-  const role = { id: "role-checker", projectId: project.id, roleKey: "checker", name: "项目检查员", duties: "检查当前项目", revision: 1 };
+  store.put('providers','fixture-models',{id:'fixture-models',name:'Synthetic configured models',enabled:true,keyConfigured:true,protocol:'openai',baseURL:'http://127.0.0.1:9/v1',
+    models:['model-a','model-b'].map(name=>({id:name,name,enabled:true,supportsImageInput:false,supportsImageOutput:false}))});
+  const role = { id: "role-checker", projectId: project.id, roleKey: "checker", name: "项目检查员", duties: "检查当前项目", revision: 1, execution:{kind:'native' as const} };
   store.put("superRoles", role.id, role);
   const admit = async (value: string, selected?: MessageInput) => {
     const message = await host.send(router, value, undefined, false, selected) as { id: string };
@@ -63,6 +65,25 @@ async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date
     steering: () => steering };
 }
 
+test('specialist report Agent identity stays frozen and legacy projection never rewrites history or crosses bindings',async t=>{
+ const f=await fixture(t),work=await f.start(),worker=f.worker(work.taskId);
+ await f.finish(work.taskId);f.settleWorker(work.taskId);
+ const report=f.store.messages(f.router).find(message=>message.author?.taskId===work.taskId)!;
+ assert.ok(report?.author);assert.deepEqual(report.author.execution,worker.roleSnapshot.execution);
+ const legacy=structuredClone(report);delete legacy.author!.execution;f.store.put('messages',legacy.id,legacy);
+ const current=f.store.require<any>('superRoles',worker.roleId);current.execution={kind:'acp',agent:'codex'};current.revision++;f.store.put('superRoles',current.id,current);
+ const before=JSON.stringify(f.store.messages(f.router));
+ const shown=f.host.decorate(f.store.snapshot(f.router)).messages.find(message=>message.id===report.id)!;
+ assert.deepEqual(shown.author!.execution,worker.roleSnapshot.execution);
+ assert.equal(JSON.stringify(f.store.messages(f.router)),before,'reading history does not persist a migration');
+ for(const field of ['roleId','workerId','sessionId','taskId']){
+  const wrong=structuredClone(legacy);(wrong.author as any)[field]='unrelated';
+  assert.equal(f.internal.reportMessage(wrong).author.execution,undefined,field);
+ }
+ const other=f.store.createProject('other project'),otherRouter=f.host.ensure(other.id).routerSessionId;
+ assert.equal(f.internal.reportMessage({...legacy,sessionId:otherRouter}).author.execution,undefined);
+});
+
 test("only current unfinished business work requests a final report, without changing acceptance", async t => {
   const f = await fixture(t), { taskId } = await f.start(), worker = f.worker(taskId), profile = f.host.profile(worker.sessionId)!;
   const goal = JSON.stringify(f.host.ledger.get(taskId)), operations = JSON.stringify(f.store.list("superOperations"));
@@ -71,7 +92,134 @@ test("only current unfinished business work requests a final report, without cha
   assert.equal(JSON.stringify(f.store.list("superOperations")), operations);
   await f.finish(taskId);
   assert.equal(profile.requestFinalReport!(), false);
-  assert.equal(f.host.ledger.get(taskId).acceptanceState, "pass");
+  assert.equal(f.host.ledger.get(taskId).acceptanceState, "not_evaluated");
+});
+
+test('specialist creation persists a random available model, replays once and preserves frozen Workers on later edits',async t=>{
+ const f=await fixture(t),event=await f.admit('创建一个巡检专员，负责检查项目。');
+ const input={event_id:event.id,part_key:'create',action:'create',role_key:'new-checker',name:'巡检专员',duties:'检查项目',quote:event.payload};
+ const saved=f.internal.manage(f.router,input),binding=saved.execution;
+ assert.equal(binding.kind,'native');assert.equal(binding.model.providerId,'fixture-models');assert.ok(['model-a','model-b'].includes(binding.model.modelId));
+ const provider=f.store.modelProvider('fixture-models')!;provider.enabled=false;f.store.put('providers',provider.id,provider);
+ assert.deepEqual(f.internal.manage(f.router,input),saved,'the same creation returns its receipt even if the available pool changes');
+ assert.equal(f.store.list('superRoleMutations').length,1);
+ const reopened=await LakeStore.open(f.store.home,f.store.data);try{assert.deepEqual(reopened.require<any>('superRoles',saved.id).execution,binding);}finally{reopened.db.close();}
+ provider.enabled=true;f.store.put('providers',provider.id,provider);
+ const taskEvent=await f.admit('让巡检专员检查项目。'),task=f.route(taskEvent,{action:'create',title:'检查项目',role_id:saved.id});f.settleRouter();
+ const worker=f.worker(task.taskId),before=JSON.stringify(worker.roleSnapshot);
+ const appearance=await f.admit('把巡检专员头像改为河狸。');
+ const changed=f.internal.manage(f.router,{event_id:appearance.id,part_key:'avatar',action:'update',role_id:saved.id,expected_revision:1,avatar_id:'beaver',quote:appearance.payload});
+ assert.deepEqual(changed.execution,binding);assert.equal(JSON.stringify(f.worker(task.taskId).roleSnapshot),before);
+ const same=f.host.setRoleExecution(f.project.id,saved.id,{expectedRevision:2,execution:{kind:'native'}});assert.deepEqual(same.execution,binding);
+ const other=binding.model.modelId==='model-a'?'model-b':'model-a',modelEvent=await f.admit('以后巡检专员使用 '+other+'。');
+ const updated=f.internal.manage(f.router,{event_id:modelEvent.id,part_key:'model',action:'update',role_id:saved.id,expected_revision:3,model_id:other,quote:modelEvent.payload});
+ assert.equal(updated.execution.model.modelId,other);assert.equal(JSON.stringify(f.worker(task.taskId).roleSnapshot),before);
+ assert.equal(f.store.modelSelection(),undefined,'role configuration never changes Pilot selection');
+});
+
+test('model-only specialist creation keeps the requested model and freezes its compatible Codex Agent',async t=>{
+ const f=await fixture(t),profile={id:'codex',projectId:f.project.id,revision:7,enabled:true};
+ (f.agents as any).external={registry:{get:()=>profile}};
+ f.store.put('acpProbes',f.project.id+':codex',{revision:7,authentication:'codex-local',ready:true,authenticated:true,model:'gpt-6.1-sol'});
+ const event=await f.admit('创建专员，使用 gpt-6.1-sol。');
+ const saved=f.internal.manage(f.router,{event_id:event.id,part_key:'create',action:'create',role_key:'sol-checker',name:'Sol 检查员',duties:'检查项目',model_id:'gpt-6.1-sol',quote:event.payload});
+ assert.deepEqual(saved.execution,{kind:'acp',agent:'codex',model:{modelId:'gpt-6.1-sol'}});
+ const work=await f.admit('检查项目。'),task=f.route(work,{action:'create',title:'检查项目',role_id:saved.id});
+ assert.deepEqual(f.worker(task.taskId).roleSnapshot.execution,{...saved.execution,revision:7});
+ assert.deepEqual(f.internal.listRoles(f.project.id).items.find((role:any)=>role.id===saved.id).execution,saved.execution);
+});
+
+test('implicit specialist creation saves its default once and an empty model pool cannot create a role',async t=>{
+ const f=await fixture(t),event=await f.admit('创建一个新专员检查项目。');
+ const input={action:'create',title:'检查项目',role_key:'implicit-checker'},task=f.route(event,input),role=f.store.require<any>('superRoles',task.roleId);
+ assert.ok(role.execution.model);assert.deepEqual(f.worker(task.taskId).roleSnapshot.execution,role.execution);
+ const replay=f.route(event,input);assert.equal(replay.taskId,task.taskId);assert.equal(replay.roleId,task.roleId);
+ assert.deepEqual(f.store.require<any>('superRoles',role.id).execution,role.execution);assert.equal(f.store.list('superWorkers').length,1);
+ f.settleRouter();for(const provider of f.store.modelProviders())f.store.delete('providers',provider.id);
+ const next=await f.admit('创建另一个专员。'),before=JSON.stringify([f.store.list('superRoles'),f.store.list('superChannels'),f.store.list('superRoleMutations')]);
+ assert.throws(()=>f.internal.manage(f.router,{event_id:next.id,part_key:'create',action:'create',role_key:'unavailable',name:'新专员',duties:'',quote:next.payload}),/没有符合要求/);
+ assert.equal(JSON.stringify([f.store.list('superRoles'),f.store.list('superChannels'),f.store.list('superRoleMutations')]),before);
+});
+
+test('Pilot partially updates appearance and future defaults without changing existing task snapshots',async t=>{
+ const f=await fixture(t),source=await f.admit('检查本项目文件。');
+ const handoff=f.route(source,{action:'create',title:'原检查任务',role_id:f.role.id});f.settleRouter();
+ const before=JSON.stringify(f.store.list('superWorkers')),goals=JSON.stringify(f.store.list('superGoals'));
+ const channel=f.host.workspace(f.project.id).channels![0];
+ const event=await f.admit('把项目检查员的头像改成河狸。');
+ const change={event_id:event.id,part_key:'appearance',action:'update',role_id:f.role.id,expected_revision:1,avatar_id:'beaver',quote:event.payload};
+ const saved=f.internal.manage(f.router,change);
+ assert.equal(saved.name,f.role.name);assert.equal(saved.duties,f.role.duties);assert.deepEqual(saved.execution,{kind:'native'});
+ assert.equal(saved.avatarId,'beaver');assert.equal(saved.revision,2);
+ assert.deepEqual(f.internal.manage(f.router,change),saved,'exact decision replay does not increment the role');
+ assert.throws(()=>f.internal.manage(f.router,{...change,avatar_id:'fox'}),/decision conflict/);
+ const updated=f.host.workspace(f.project.id).channels![0];
+ assert.equal(updated.sessionId,channel.sessionId);assert.equal(updated.roleId,channel.roleId);assert.equal(updated.avatarId,'beaver');
+ assert.equal(JSON.stringify(f.store.list('superWorkers')),before);assert.equal(JSON.stringify(f.store.list('superGoals')),goals);
+ assert.equal(f.worker(handoff.taskId).roleSnapshot.avatarId,undefined);
+ (f.agents as any).external={registry:{get:()=>({id:'codex',projectId:f.project.id,revision:7,enabled:true})}};
+ const defaults=await f.admit('更名为复核专员，职责改为核实证据，以后默认用 Codex。');
+ const configured=f.internal.manage(f.router,{event_id:defaults.id,part_key:'defaults',action:'update',role_id:f.role.id,expected_revision:2,name:'复核专员',duties:'核实证据',execution:{kind:'acp',agent:'codex'},quote:defaults.payload});
+ assert.equal(configured.avatarId,'beaver');assert.equal(configured.name,'复核专员');assert.equal(configured.duties,'核实证据');
+ assert.deepEqual(configured.execution,{kind:'acp',agent:'codex'});
+ assert.equal(f.store.session(channel.sessionId).title,'复核专员');
+ assert.equal(JSON.stringify(f.store.list('superWorkers')),before);assert.equal(JSON.stringify(f.store.list('superGoals')),goals);
+ assert.deepEqual(f.worker(handoff.taskId).roleSnapshot.execution,{kind:'native'});
+ const reset=await f.admit('恢复默认头像。');
+ f.internal.manage(f.router,{event_id:reset.id,part_key:'reset',action:'update',role_id:f.role.id,expected_revision:3,avatar_id:'auto',quote:reset.payload});
+ assert.equal(Object.hasOwn(f.store.require<any>('superRoles',f.role.id),'avatarId'),false);
+ assert.equal(f.store.require<any>('superRoles',f.role.id).name,'复核专员');
+ const api=f.host.setRoleExecution(f.project.id,f.role.id,{expectedRevision:4,execution:{kind:'acp',agent:'codex',revision:7}});
+ assert.deepEqual(api.execution,{kind:'acp',agent:'codex'},'the existing API accepts a profile revision without persisting a task binding');
+});
+
+test('specialist configuration rejects stale, foreign, unsupported and unadmitted edits atomically',async t=>{
+ const f=await fixture(t),event=await f.admit('调整项目检查员的配置。');
+ const base={event_id:event.id,part_key:'edit',action:'update',role_id:f.role.id,expected_revision:1,avatar_id:'beaver',quote:event.payload};
+ const before=JSON.stringify(f.store.require('superRoles',f.role.id));
+ const reject=(patch:Record<string,unknown>)=>{
+  assert.throws(()=>f.internal.manage(f.router,{...base,...patch}));
+  assert.equal(JSON.stringify(f.store.require('superRoles',f.role.id)),before);
+  assert.deepEqual(f.store.list('superRoleMutations'),[]);
+ };
+ reject({expected_revision:0});reject({avatar_id:'https://invalid.example/avatar.svg'});reject({avatar_id:null});
+ reject({duties:42});reject({name:''});reject({permissions:{silentCommands:true}});
+ reject({execution:{kind:'acp',agent:'claude'}});reject({execution:{kind:'native',agent:'codex'}});
+ reject({execution:{kind:'native',extra:true}});reject({quote:'not admitted'});reject({event_id:'missing-event'});
+ const foreign=f.store.createProject('other project');
+ f.store.put('superRoles','foreign-role',{...f.role,id:'foreign-role',projectId:foreign.id});
+ reject({role_id:'foreign-role'});
+ assert.throws(()=>f.internal.manage(f.router,{event_id:event.id,part_key:'create',action:'create',role_key:'incomplete',avatar_id:'beaver',quote:event.payload}),/name and duties/);
+ assert.equal(f.store.list<any>('superRoles').length,2);
+});
+
+test('the shared avatar catalog is discoverable by Chinese name, alias and exact ID only as metadata',async t=>{
+ const f=await fixture(t),entry=f.internal.routerEntries(f.router).find((item:any)=>item.metadata.name==='list_specialist_avatars');
+ assert.ok(entry);assert.equal(entry.metadata.readOnly,true);
+ const lookup=async(query?:string)=>entry.handler(query===undefined?{}:{query},{});
+ assert.equal((await lookup()).items.length,100);
+ for(const query of ['河狸','海狸','🦫','BEAVER'])assert.deepEqual((await lookup(query)).items.map((item:any)=>item.id),['beaver']);
+ assert.deepEqual((await lookup('https://invalid.example')).items,[]);
+ assert.equal((await lookup('河狸')).reset,'auto');
+ const event=await f.admit('创建牛马专员，头像河狸，负责核实证据。');
+ const saved=f.internal.manage(f.router,{event_id:event.id,part_key:'create',action:'create',role_key:'beaver-reviewer',name:'牛马专员',duties:'核实证据',avatar_id:'beaver',execution:{kind:'native'},quote:event.payload});
+ assert.equal(saved.avatarId,'beaver');assert.equal(saved.revision,1);
+ assert.equal(f.host.workspace(f.project.id).channels!.find(item=>item.roleId===saved.id)?.avatarId,'beaver');
+ const appearance=await f.admit('创建一个只有名称和河狸头像的专员，不指定职责。');
+ const empty=f.internal.manage(f.router,{event_id:appearance.id,part_key:'appearance-only',action:'create',role_key:'appearance-only',name:'河狸伙伴',duties:'',avatar_id:'beaver',execution:{kind:'native'},quote:appearance.payload});
+ assert.equal(empty.duties,'');assert.equal(empty.avatarId,'beaver');
+ assert.deepEqual(f.store.list('superWorkers'),[]);assert.deepEqual(f.store.list('superGoals'),[]);
+});
+
+test('Pilot delegation reports a missing local Codex login after a successful connection without creating a task',async t=>{
+  const f=await fixture(t);
+  (f.agents as any).external={registry:{get:()=>({id:'codex',projectId:f.project.id,revision:1,enabled:true})}};
+  f.store.put('superRoles',f.role.id,{...f.role,execution:{kind:'acp',agent:'codex'}});
+  f.store.put('acpProbes',f.project.id+':codex',{revision:1,ready:true,authentication:'codex-local',authenticated:false});
+  const event=await f.admit('检查当前服务器状态');
+  assert.throws(()=>f.route(event,{action:'create',role_id:f.role.id,title:'检查服务器'}),/本机 Codex 尚未登录/);
+  assert.equal(f.store.list('superWorkers').length,0);
+  assert.equal(f.store.list('superGoals').length,0);
 });
 
 test("old generations, explicit plans and a stopped worker cannot start report repair", async t => {
@@ -106,7 +254,7 @@ test("an ordinary partial report is delivered without requesting another model s
   await finish.handler({ summary: "已读取记录，尚缺平台事件。", outcome: "partial" }, {} as any);
   assert.equal(profile.requestFinalReport!(), false);
   assert.equal(f.store.list("superReportRepairs").length, 0);
-  assert.equal(f.host.ledger.get(taskId).status, "paused");
+  assert.equal(f.host.ledger.get(taskId).status, "completed");
   assert.notEqual(f.host.ledger.get(taskId).acceptanceState, "pass");
 });
 
@@ -165,7 +313,7 @@ test("ordinary inline Pilot profiles use host-managed tools while explicit plans
   const session = f.store.session(f.router); session.options.conversationMode = "plan"; f.store.put("sessions", f.router, session);
   profile = f.host.profile(f.router)!;
   assert.ok(names(profile).includes("work_begin")); assert.ok(names(profile).includes("work_update"));
-  assert.ok(!JSON.stringify(finishSchema(profile)).includes('"outcome"'));
+  assert.ok(JSON.stringify(finishSchema(profile)).includes('"outcome"'));
   // Existing explicit contracts win over a later conversation-mode change.
   const actor = f.internal.pilotActors.get(f.router);
   f.host.ledger.create({ id: actor.taskId, projectId: f.project.id, sessionId: f.router, workerId: actor.id, roleId: actor.roleId,
@@ -174,7 +322,7 @@ test("ordinary inline Pilot profiles use host-managed tools while explicit plans
   session.options.conversationMode = "default"; f.store.put("sessions", f.router, session);
   profile = f.host.profile(f.router)!;
   assert.ok(names(profile).includes("work_begin")); assert.ok(names(profile).includes("work_update"));
-  assert.ok(!JSON.stringify(finishSchema(profile)).includes('"outcome"'));
+  assert.ok(JSON.stringify(finishSchema(profile)).includes('"outcome"'));
 });
 
 for(const entrance of ["followup","predecessor","predecessor-current-memory"]) test(`invalid-memory ${entrance} creates one bounded read-only recheck without changing its source`, async t => {
@@ -210,7 +358,7 @@ for(const entrance of ["followup","predecessor","predecessor-current-memory"]) t
   assert.deepEqual(f.internal.recallContext(f.worker(fresh.id),{task_id:source.id},true).items,[]);
   assert.ok(!JSON.stringify(envelope).includes(memoryContextUnavailable));
   await f.read(fresh.id); await f.finish(fresh.id); f.settleWorker(fresh.id);
-  assert.equal(f.host.ledger.get(fresh.id).acceptanceState,"pass");
+  assert.equal(f.host.ledger.get(fresh.id).acceptanceState,"not_evaluated");
   assert.deepEqual(f.host.ledger.get(source.id),before.goal); assert.deepEqual(f.worker(source.id),before.worker);
   assert.deepEqual(f.store.list<any>("superOperations").filter(op=>op.goalId===source.id),before.operations);
   assert.equal(f.host.ledger.unresolved(source.id),true);
@@ -249,7 +397,7 @@ test("an unfinished predecessor cannot expand resources, import old evidence or 
   assert.throws(()=>f.route(human,{...input,resource_ids:[other.id]}),/扩大范围/);
   assert.throws(()=>f.route(human,{...input,evidence_task_ids:[goal.id]}),/不导入旧执行证据/);
   const {role_id:_,...joint}=input;
-  assert.throws(()=>f.route(human,{...joint,role_ids:[f.role.id,otherRole.id]}),/共同验收/);
+  assert.throws(()=>f.route(human,{...joint,role_ids:[f.role.id,otherRole.id]}),/共同任务/);
   assert.deepEqual(f.store.list("superGoals"),before);assert.equal(f.store.list("superReferences").length,0);
 });
 
@@ -277,9 +425,9 @@ test("completed fresh checks preserve old acceptance, carry target context and u
   assert.equal(assignment.originalRequirement, "再试试"); assert.equal(assignment.predecessor.originalDeliverable, original.event.payload);
   assert.equal(assignment.predecessor.historicalContextOnly, true); assert.equal(assignment.predecessor.taskRef.id, source.id);
   assert.equal(f.host.ledger.get(next.taskId).modelRounds, 0); assert.equal(f.host.ledger.get(next.taskId).acceptanceState, "not_evaluated");
-  await assert.rejects(f.finish(next.taskId), /confirmed|binding|work_begin|active/i);
+  assert.equal(f.host.ledger.get(next.taskId).status,"running");
   await f.read(next.taskId); await f.finish(next.taskId); f.settleWorker(next.taskId);
-  assert.equal(f.host.ledger.get(next.taskId).acceptanceState, "pass");
+  assert.equal(f.host.ledger.get(next.taskId).acceptanceState, "not_evaluated");
   assert.deepEqual(f.host.ledger.get(source.id), source);
   assert.equal(f.store.list<any>("superOperations").filter((operation) => operation.goalId === next.taskId).length, 1);
 });
@@ -382,11 +530,11 @@ for(const readOnly of [true,false])test(`stop waits for ${readOnly?'read':'opaqu
  assert.equal(JSON.stringify(f.worker(b.taskId)),sibling);
  release();await settled;await Promise.all([stopping,duplicate]);
  const report=f.store.messages(f.router).filter(m=>m.author?.taskId===a.taskId);
- assert.equal(report.length,1);assert.equal(report[0]!.text,readOnly?'已停止这次工作。':'有一项操作的结果还需核实，暂时不能重复该操作。');
- assert.equal(f.host.ledger.get(a.taskId).status,readOnly?'cancelled':'blocked');
+ assert.equal(report.length,1);assert.equal(report[0]!.text,'已停止这次工作。');
+ assert.equal(f.host.ledger.get(a.taskId).status,'cancelled');
  const op=f.store.list<any>('superOperations').find(o=>o.callId==='in-flight');assert.equal(op.status,readOnly?'failed':'unknown');
  f.settleWorker(a.taskId);assert.equal(f.store.messages(f.router).filter(m=>m.author?.taskId===a.taskId).length,1,'late completion cannot add another stop report');
- await f.finish(b.taskId);f.settleWorker(b.taskId);assert.equal(f.host.ledger.get(b.taskId).acceptanceState,'pass');
+ await f.finish(b.taskId);f.settleWorker(b.taskId);assert.equal(f.host.ledger.get(b.taskId).acceptanceState,"not_evaluated");
 });
 
 test('stopping the remaining reply after business acceptance preserves the accepted goal and receipts',async t=>{
@@ -475,7 +623,7 @@ test('Pilot stop fences current queued/active work and late decisions without ch
  await assert.rejects(()=>f.host.stopWorkspace(f.project.id,'wrong-router'),/不属于/);
  const count=f.requests.length,result=await f.host.stopWorkspace(f.project.id,f.router);
  assert.equal(result.tasks,2);assert.equal(f.worker(current.taskId).state,'stopped');
- assert.equal(f.host.ledger.get(current.taskId).status,'blocked');assert.equal(f.store.get<any>('superOperations','uncertain')!.status,'unknown');
+ assert.equal(f.host.ledger.get(current.taskId).status,'cancelled');assert.equal(f.store.get<any>('superOperations','uncertain')!.status,'unknown');
  assert.equal(f.host.ledger.get(queued.taskId).status,'cancelled');assert.equal(f.store.get<any>('superInputs',pending.id)!.disposition,'stopped');
  assert.equal(JSON.stringify(f.host.ledger.get(old.taskId)),oldGoal);assert.equal(f.store.get<any>('superWorkers','other-worker')!.state,'active');
  assert.throws(()=>f.route(pending,{action:'create',title:'迟到任务',role_id:f.role.id}));
@@ -673,9 +821,9 @@ for (const recovery of ["followup", "resume"] as const) test(`a failed additiona
   const snapshot = await read.handler({ goal_id: first.taskId }, { abortSignal: new AbortController().signal } as any) as any;
   assert.equal(snapshot.goal.id, member.taskId);
   assert.ok(snapshot.operations.length && snapshot.operations.every((op: any) => op.goalId === member.taskId));
-  await assert.rejects(f.host.ledger.operation(member.taskId, member.generation, member.policyHash, "write-B", "Write",
-    mutation, async () => { dispatches++; return {}; }, x => x, { readOnly: false }), /reconcil|unresolved|mutation/i);
-  assert.equal(dispatches, 1);
+  await f.host.ledger.operation(member.taskId, member.generation, member.policyHash, "write-B", "Write",
+    mutation, async () => { dispatches++; return {}; }, x => x, { readOnly: false });
+  assert.equal(dispatches, 2);
   assert.deepEqual(f.store.require("superOperations", prior.id), prior);
 });
 
@@ -709,7 +857,7 @@ async function watchdogFixture(t: Parameters<typeof fixture>[0], joint = false) 
   return {...f, member, fail, event, handoff, advance:(ms:number)=>{time+=ms;}};
 }
 
-test("watchdog retries a scoped pre-execution outage once due and marks recovery only after original acceptance", async t => {
+test("watchdog retries a scoped pre-execution outage once due and marks recovery after the original execution submits its report", async t => {
   const f = await watchdogFixture(t), before = f.host.ledger.get(f.member.taskId);
   f.host.setWatchdogMode(f.project.id,"guide");
   f.fail();
@@ -729,7 +877,7 @@ test("watchdog retries a scoped pre-execution outage once due and marks recovery
   assert.equal(f.host.watchdog.records(f.project.id,f.member.taskId)[0]?.state,"retry_queued");
   await f.read(f.member.taskId); await f.finish(f.member.taskId); f.settleWorker(f.member.taskId);
   assert.equal(f.host.watchdog.records(f.project.id,f.member.taskId)[0]?.state,"recovered");
-  assert.equal(f.host.ledger.get(f.member.taskId).acceptanceState,"pass");
+  assert.equal(f.host.ledger.get(f.member.taskId).acceptanceState,"not_evaluated");
   assert.equal(f.store.list("superGoals").length,1);
 });
 
@@ -774,8 +922,8 @@ for (const intervention of ["stop","disable","permission","unresolved sibling","
       await f.host.scanWatchdog();
       await f.activate();
     }
-    assert.equal(f.requests.length,before);
-    assert.equal(f.store.get("superWatchdogLastRetry",f.member.id),undefined);
+    assert.equal(f.requests.length,before+(intervention==="unresolved sibling"?1:0));
+    assert.equal(!!f.store.get("superWatchdogLastRetry",f.member.id),intervention==="unresolved sibling");
     assert.equal(f.store.get("superWatchdogRetry",f.member.id),undefined);
     assert.equal(f.store.list("superAcceptance").length,0);
   });
@@ -897,6 +1045,7 @@ test("a cross-resource comparison can include both selected endpoints and newly 
   const result=f.route(event,{action:"create",role_id:f.role.id,resource_ids:["one","two"],title:"比较两端"});
   f.settleRouter();
   const add=await f.admit("另一位专员也加入此任务");
+  f.store.put("superRoles","role-second",{...f.role,id:"role-second",roleKey:"second",name:"另一位专员"});
   const member=f.route(add,{action:"assign",task_id:result.taskId,role_key:"second"});
   assert.deepEqual(f.worker(member.assignments[0].executionId).targetResourceIds,["one","two"]);
   assert.throws(()=>f.route(add,{action:"followup",task_id:result.taskId,role_id:f.role.id,part_key:"widen",resource_ids:["third"]}),/Only create/);
@@ -977,7 +1126,7 @@ test('a specialist passes 500 model calls and its stored legacy ceiling without 
  const current=f.host.ledger.get(goal.id);assert.equal(current.modelRounds,503);assert.equal(current.status,'running');assert.equal(current.roundLimit,2);
  assert.equal(current.deadlineAt,deadline);assert.equal(current.acceptanceState,'not_evaluated');
  assert.equal(f.internal.publicGoal(current).roundLimit,undefined);
- await f.finish();f.settleWorker();assert.equal(f.host.ledger.get(goal.id).acceptanceState,'pass');
+ await f.finish();f.settleWorker();assert.equal(f.host.ledger.get(goal.id).acceptanceState,"not_evaluated");
  assert.equal(f.host.ledger.get(goal.id).modelRounds,503);
 });
 
@@ -988,7 +1137,7 @@ test('joint contributors continue independently beyond their combined legacy rou
  for(const id of members){const goal=f.host.ledger.get(id);goal.roundLimit=1;goal.modelRounds=501;f.host.ledger.save(goal);
   f.host.profile(goal.sessionId)!.beforeModel!();assert.equal(f.host.ledger.get(id).modelRounds,502);
   await f.read(id);await f.finish(id);f.settleWorker(id);}
- assert.equal(f.host.ledger.jointState(result.taskId)!.acceptanceState,'pass');
+ assert.equal(f.host.ledger.jointState(result.taskId)!.acceptanceState,"not_evaluated");
  assert.equal(f.host.ledger.totalModelRounds(f.host.ledger.get(result.taskId)),1004);
 });
 

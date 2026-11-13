@@ -16,6 +16,7 @@ export type TaskContextEntry = {
   observedAt: string;
   state: string;
   acceptanceState: string;
+  reportedOutcome?: "completed" | "partial";
   unresolvedOperations: number;
   summary: string;
   humanInputs: {
@@ -197,6 +198,7 @@ export class TaskContext {
       title: clip(this.scrub(goal.title), 256),
       observedAt: goal.updatedAt,
       state: goal.status,
+      reportedOutcome: goal.reportedOutcome,
       acceptanceState: hasAcceptedExecution(this.store, goal) ? "pass" : goal.acceptanceState,
       unresolvedOperations: operations.filter((op) =>
         ["unknown", "dispatched"].includes(op.status),

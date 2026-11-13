@@ -15,8 +15,12 @@ export function applyLiveText(previous:SessionSnapshot|null,event:SessionEvent):
   const agentRuns=ai.agentRuns!.map((item,i)=>i===index?{...item,liveText:update.content,liveTextId:update.textId}:item);
   return {...previous,cursor:event.seq,ai:{...ai,agentRuns}};
  }
- if(update.target!=='card'||!['message','thinking'].includes(update.cardType??'')||ai.status!=='running'||!update.rootTurnId||update.rootTurnId!==ai.rootTurnId)return null;
+ if(update.target!=='card'||!['message','thinking','operation'].includes(update.cardType??'')||ai.status!=='running'||!update.rootTurnId||update.rootTurnId!==ai.rootTurnId)return null;
  const index=ai.cards.findIndex(card=>card.id===update.id);
+ if(update.cardType==='operation'){
+  const card=ai.cards[index],data=card?.data as Record<string,unknown>|undefined;
+  if(card?.type!=='operation'||data?.source!=='external_agent'||data.external_run_id!==update.id||data.root_turn_id!==ai.rootTurnId||data.agentRunId||data.childSessionId)return null;
+ }
  if(index<0&&!update.at)return null;
  if(index>=0&&ai.cards[index]!.status!=='running')return null;
  const cards=index<0?[...ai.cards,{id:update.id,type:update.cardType!,content:update.content,status:'running',at:update.at!}]:ai.cards.map((card,i)=>i===index?{...card,content:update.content}:card);

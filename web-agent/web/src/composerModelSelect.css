@@ -79,3 +79,9 @@
 .composer-model-current { display:flex; align-items:center; gap:7px; min-width:0; }
 .composer-model-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .composer-model-effort { flex-shrink:0; color:var(--text-muted); font-size: var(--font-size-toolbar); font-weight:var(--font-weight-ui); }
+
+.composer-codex-footer{padding:8px 12px;display:grid;gap:8px;color:var(--text-secondary);font-size:12px;line-height:1.5}
+.composer-codex-footer p{margin:0}
+.composer-codex-footer button{display:flex;align-items:center;gap:6px;border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-settings-control,10px);corner-shape:var(--corner-window);padding:7px 9px;color:var(--foreground);font:inherit;text-align:left}
+.composer-codex-footer button:hover:not(:disabled){background:var(--surface-hover)}
+.composer-codex-footer small{font-size:11px}

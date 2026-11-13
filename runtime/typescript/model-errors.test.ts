@@ -1,10 +1,21 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {types} from 'node:util';
-import {redactModelValue,describeTurnFailure} from './model-errors';
+import {redactModelValue,redactJSONText,describeTurnFailure} from './model-errors';
 
 const secret='synthetic-private-token';
 const redact=(text:string)=>text.replaceAll(secret,'[REDACTED]');
+
+test('structured receipts redact numeric-looking and escaped string secrets without corrupting metadata',()=>{
+ const numeric='7319',escaped='quote"\\line\nprivate',stamp=new Date('2026-11-11T03:06:12.000Z');
+ const clean=(value:string)=>value.replaceAll(numeric,'[REDACTED]').replaceAll(escaped,'[REDACTED]').replaceAll('2026','[REDACTED]');
+ const original={durationMs:73192,exitCode:0,cancelled:false,result:null,startedAt:stamp,stdout:{text:numeric+' '+escaped,bytes:73190},nested:[numeric,7319,true]};
+ const result=redactModelValue(original,clean),serialized=JSON.parse(JSON.stringify(result));
+ assert.equal(result.durationMs,73192);assert.equal(result.stdout.bytes,73190);assert.equal(result.exitCode,0);assert.equal(result.cancelled,false);assert.equal(result.result,null);
+ assert.equal(result.startedAt,stamp);assert.equal(serialized.startedAt,stamp.toISOString());
+ assert.equal(serialized.stdout.text,'[REDACTED] [REDACTED]');assert.deepEqual(result.nested,['[REDACTED]',7319,true]);
+ assert.equal(original.stdout.text,numeric+' '+escaped);assert.ok(Object.hasOwn(result,'durationMs'));
+});
 
 test('model redaction retains Error identity, non-enumerable cause/message and SDK brands',()=>{
  const brand=Symbol.for('synthetic.sdk.error');
@@ -22,6 +33,13 @@ test('model redaction retains Error identity, non-enumerable cause/message and S
  assert.deepEqual(describeTurnFailure(new Error('Turn execution failed',{cause:clean}),redact),{
   message:'模型调用失败：Provider stream broke [REDACTED]',source:'provider',code:'model_request_failed',phase:'stream',retryable:false,
  });
+});
+
+test('embedded approval JSON keeps numeric arguments valid through repeated redaction',()=>{
+ const redact=(text:string)=>text.replaceAll('7319','[REDACTED]'),source=JSON.stringify({timeout:73192,text:'private=7319'});
+ const first=redactJSONText(source,redact),second=redactJSONText(first,redact);
+ assert.deepEqual(JSON.parse(first),{timeout:73192,text:'private=[REDACTED]'});assert.equal(second,first);
+ assert.equal(redactJSONText('legacy invalid JSON private=7319',redact),'legacy invalid JSON private=[REDACTED]');
 });
 
 test('native cancellation exceptions keep readable names and codes after redaction',()=>{
