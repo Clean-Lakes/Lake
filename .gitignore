@@ -96,3 +96,6 @@ __pycache__/
 
 # Legacy local dependency cache; never stage extracted source.
 /third_party/zcode/
+
+# Local AI session tooling state; never stage or audit as first-party source.
+/.zcode/
