@@ -2,14 +2,21 @@
 
 `wechat.svg` is the WeChat logo from [SuperTinyIcons](https://github.com/edent/SuperTinyIcons/blob/master/images/svg/wechat.svg), distributed under the [MIT license](wechat.LICENSE). It is stored locally for the README contact section.
 
-`lake-workbench-light.jpg` and `lake-workbench-dark.jpg` show the Lake v0.3.23 release candidate workspace from develop commit `72048c775a1d6abe82fabdd1b664e095b34353f5` in light and dark themes, with the red, yellow and green window controls.
+The README images show the Lake v0.3.33 interface in light and dark themes:
 
-These are browser-rendered presentation images of the actual React App with a standard macOS window frame, not unmodified native OS captures. Native automation overlays obscured the system window controls, so the presentation frame is rendered by the isolated fixture. The workspace, components, icons and theme come from the current application; the frame does not change shipping UI.
+- `lake-workbench-light.jpg` / `lake-workbench-dark.jpg`: Pilot and three specialists replying with their own identities, including native Lake and Codex Agent logos. Viewport: **1200 × 840**.
+- `lake-specialist-tasks-light.jpg` / `lake-specialist-tasks-dark.jpg`: one specialist's four task records, executor and dates. Viewport: **1200 × 780**.
 
-Capture fixture: `web-agent/web/test/fixtures/readme-macos.html`, extending the read-only `readme-workbench` fixture. All project names, resources, conversations, timestamps, versions and measurements in the images are fictional. No real data, credentials, DEV badge, developer controls, model requests or resource commands are included. Mutating API requests are rejected.
+These are direct browser captures of the actual React App with a macOS presentation frame, not native OS screenshots. The workspace, components, icons and themes use the shipping v0.3.33 application source, production commit `4fe9c9a3017f4867eae9b36cf685b95289930d3f`. The fixture supplies records and the frame; it does not modify application components or styles.
 
-To reproduce this release preview, extract `web-agent/` from the source commit above into a temporary directory, install its locked dependencies, and run the following command from that directory. This keeps newer develop UI out of the production README. No Go backend or Lake home is required.
+Capture fixture: [`readme-macos.html`](../../web-agent/web/test/fixtures/readme-macos.html) and [`readme-macos.tsx`](../../web-agent/web/test/fixtures/readme-macos.tsx). Its data is independent of the older SRE demonstration. Names, resources, messages, versions and measurements are fictional. The fixture uses read-only in-memory responses, rejects mutating API requests with HTTP 405, and substitutes local EventSource events. It uses no backend, Lake home, credentials, model service or business resource.
 
-Run the Vite frontend with `npm --prefix web-agent run dev:web -- --host 127.0.0.1 --port 5194 --strictPort`, then capture `/test/fixtures/readme-macos.html?theme=light` and `?theme=dark` at the browser viewport (current captures: **1512 × 761**) with the full-page browser screenshot API (Chrome, device scale 1, JPEG quality 90, reduced motion). Expand both resource folders before capture and move the pointer out of the workspace. Stop the temporary frontend host afterward. Both `README.md` (English default) and `README.zh-CN.md` share these images; their picture elements follow the reader’s color scheme. The application UI in these screenshots remains Chinese.
+To reproduce the images, use this README update's capture fixture with the application source above, install the locked dependencies, and run from the repository root:
 
-The v0.3.23 images capture the current React interface with both fictional resource folders expanded and the inspection card collapsed. The original browser captures are converted to JPEG quality 90; no private workspace is used.
+```sh
+pnpm --dir web-agent exec vite --config web/vite.config.ts --host 127.0.0.1 --port 5198 --strictPort
+```
+
+Open `/test/fixtures/readme-macos.html?theme=light&session=demo-session-0` and the matching `theme=dark` URL. Capture the Pilot conversation at 1200 × 840. Click “服务器运维专员”, wait for four task rows, and capture at 1200 × 780. Use Chromium, device scale 1, reduced motion and JPEG quality 90; wait for fonts and layout to settle, move the pointer to the outer margin, and capture the viewport directly with `Page.captureScreenshot`. No image compositing or screenshot retouching is used. Stop the temporary Vite host afterward.
+
+Both language READMEs share these images and select the matching light/dark asset with `<picture>`. The application UI is Chinese. Asset hashes, fixture provenance and checks are recorded in [`readme-0.3.33.json`](../validation/readme-0.3.33.json).
