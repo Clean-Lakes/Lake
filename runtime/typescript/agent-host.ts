@@ -22,6 +22,7 @@ export type HostProfile = {
   taskId?: string;
   workerId?: string;
   execution?: AgentBackendRef;
+  conversation?: {id:string;participantId:string;deadlineAt:string};
   validateExecution?: () => void;
   memoryActor?: LayeredMemoryActor;
   recordModel?: (stage: "start" | "success" | "error", operation?: string, usage?: {inputTokens?:number;outputTokens?:number}) => void;

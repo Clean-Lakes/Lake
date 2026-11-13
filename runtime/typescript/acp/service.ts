@@ -79,17 +79,20 @@ export class LakeExternalAgents {
     limitations:['外部运行返回本次报告；请结合实际工具结果汇总原任务结论，如实说明失败或未知结果。']};}
   async run(agent:unknown,instruction:string,requestKey:string,actor:ExternalActor,resumeRunId?:string):Promise<ExternalResult>{
     const agentId=externalAgentId(agent);actor.guard();actor.signal.throwIfAborted();
+    if(actor.purpose==='conversation'){
+      if(!actor.conversationId||actor.taskId||actor.tools.length||resumeRunId)throw new HttpError(409,'对话执行必须使用独立来源且不携带业务工具或重放上下文');
+    }else if(!actor.taskId||actor.conversationId)throw new HttpError(409,'业务外部执行缺少原任务身份');
     if(!instruction.trim()||Buffer.byteLength(instruction)>65536)throw new HttpError(400,'外部任务说明需要 1–65536 字节');
     const profile=this.registry.get(actor.projectId,agentId);if(!profile.enabled)throw new HttpError(409,'请先启用该项目的外部 Agent');
     const inputHash=digest({agent:agentId,instruction,resumeRunId:resumeRunId??null,...(actor.model?{model:actor.model}:{})});
     const duplicate=this.store.list<ExternalRun>('acpRuns').find(run=>run.requestKey===requestKey);
-    if(duplicate){if(duplicate.schemaVersion!==1||duplicate.inputHash!==inputHash||duplicate.agent!==agentId||duplicate.profileRevision!==profile.revision||duplicate.scopeHash!==actor.scopeHash||duplicate.projectId!==actor.projectId||duplicate.taskId!==actor.taskId||duplicate.workerId!==actor.workerId||duplicate.generation!==actor.generation||duplicate.sessionId!==actor.sessionId||duplicate.childSessionId!==actor.childSessionId)throw new HttpError(409,'原外部调用的身份或输入不匹配');return this.result(duplicate);}
+    if(duplicate){if(duplicate.schemaVersion!==1||duplicate.inputHash!==inputHash||duplicate.agent!==agentId||duplicate.profileRevision!==profile.revision||duplicate.scopeHash!==actor.scopeHash||duplicate.projectId!==actor.projectId||duplicate.taskId!==actor.taskId||duplicate.conversationId!==actor.conversationId||(duplicate.purpose??'segment')!==(actor.purpose??'segment')||duplicate.workerId!==actor.workerId||duplicate.generation!==actor.generation||duplicate.sessionId!==actor.sessionId||duplicate.childSessionId!==actor.childSessionId)throw new HttpError(409,'原外部调用的身份或输入不匹配');return this.result(duplicate);}
     const prior=resumeRunId?this.store.require<ExternalRun>('acpRuns',resumeRunId):undefined;
     if(prior&&(prior.schemaVersion!==1||prior.projectId!==actor.projectId||prior.taskId!==actor.taskId||prior.workerId!==actor.workerId||prior.generation!==actor.generation||prior.scopeHash!==actor.scopeHash||prior.sessionId!==actor.sessionId||prior.childSessionId!==actor.childSessionId||prior.agent!==agentId||prior.requestedModel!==actor.model||prior.profileRevision!==profile.revision||prior.dispatchPhase!=='answered'||prior.state!=='completed'||!prior.contextId))throw new HttpError(409,'只能继续同一执行身份与模型下已明确结束的外部会话');
     if(prior&&[...this.live.keys()].some(key=>this.store.get<ExternalRun>('acpRuns',key)?.contextId===prior.contextId))throw new HttpError(409,'该外部会话仍在运行');
     if(this.live.size>=4)throw new HttpError(409,'外部 Agent 正在处理其他工作，请稍后继续原任务');
     const runId=id();
-    const run:ExternalRun={schemaVersion:1,id:runId,purpose:actor.purpose??'segment',contextId:prior?.contextId??runId,scopeHash:actor.scopeHash,agent:agentId,profileRevision:profile.revision,projectId:actor.projectId,taskId:actor.taskId,workerId:actor.workerId,sessionId:actor.sessionId,
+    const run:ExternalRun={schemaVersion:1,id:runId,purpose:actor.purpose??'segment',contextId:prior?.contextId??runId,scopeHash:actor.scopeHash,agent:agentId,profileRevision:profile.revision,projectId:actor.projectId,taskId:actor.taskId,conversationId:actor.conversationId,workerId:actor.workerId,sessionId:actor.sessionId,
       childSessionId:actor.childSessionId,agentRunId:actor.agentRunId,generation:actor.generation,requestKey,inputHash,...(actor.model?{requestedModel:actor.model}:{}),state:'starting',dispatchPhase:'not_sent',createdAt:now(),updatedAt:now(),events:[],usage:null};
     const controller=new AbortController(),stop=()=>controller.abort(actor.signal.reason);
     actor.signal.addEventListener('abort',stop,{once:true});
@@ -119,7 +122,7 @@ export class LakeExternalAgents {
     persist();
     try{
       const directory=await privatePath(this.store.data,'external-agents','runs',run.contextId);
-      if(agentId==='codex')bridge=await openToolBridge(tools.map(tool=>({name:tool.metadata.name,description:tool.metadata.description??tool.metadata.name,inputSchema:tool.inputSchema as Record<string,unknown>})),invoke);
+      if(agentId==='codex'&&actor.purpose!=='conversation')bridge=await openToolBridge(tools.map(tool=>({name:tool.metadata.name,description:tool.metadata.description??tool.metadata.name,inputSchema:tool.inputSchema as Record<string,unknown>})),invoke);
       const launcher=ownLauncher('--internal-acp-mcp');
       const mcp=bridge?{command:'/usr/bin/env',args:['-i','PATH='+process.env.PATH,'HOME='+directory,'TMPDIR='+directory,'LANG='+(process.env.LANG??'en_US.UTF-8'),'LAKE_TS_IMPORT_ONLY=0',launcher.executable,...launcher.args,bridge.socket]}:undefined;
       const launch=await this.launch(profile,directory,controller.signal,mcp,actor.model);

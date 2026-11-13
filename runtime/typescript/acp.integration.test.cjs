@@ -25,6 +25,45 @@ async function localCodexProvider(registry,url,model){
 }
 
 // Opt-in integration: real pinned Codex + ACP, a local Responses fixture, and no real credentials.
+test('real Codex conversation uses a fresh identity, exposes no task transport and cannot resume or borrow another conversation',{skip:!adapter,timeout:90000},async t=>{
+ const home=await mkdtemp(join(tmpdir(),'lake-codex-conversation-')),web=join(home,'web');await mkdir(web);await writeFile(join(web,'index.html'),'fixture');
+ const requests=[];let providerError;
+ const provider=createServer(async(req,res)=>{
+  try{
+   const chunks=[];for await(const chunk of req)chunks.push(chunk);const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
+   const tools=(body.tools??[]).flatMap(tool=>tool.type==='namespace'?(tool.tools??[]).map(item=>({...item,namespace:tool.name})):[tool]);
+   assert.ok(tools.every(tool=>['list_mcp_resources','list_mcp_resource_templates','read_mcp_resource'].includes(tool.name)),JSON.stringify(tools.map(tool=>tool.name)));
+   const item={id:'conversation_reply',type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:'ACP_CONVERSATION_REPLY: 本人已回应。',annotations:[]}]};
+   const response={id:'conversation_response',object:'response',status:'completed',output:[item],usage:{input_tokens:10,output_tokens:5,total_tokens:15}};
+   res.writeHead(200,{'Content-Type':'text/event-stream'});
+   const event=(type,data)=>res.write('event: '+type+'\ndata: '+JSON.stringify({type,...data})+'\n\n');
+   event('response.created',{response:{...response,status:'in_progress',output:[]}});
+   event('response.output_item.added',{output_index:0,item:{...item,content:[]}});
+   event('response.output_text.delta',{item_id:item.id,output_index:0,content_index:0,delta:item.content[0].text});
+   event('response.output_item.done',{output_index:0,item});event('response.completed',{response});res.end();
+  }catch(error){providerError=error;res.writeHead(500);res.end('isolated conversation fixture rejected request');}
+ });
+ await new Promise(resolve=>provider.listen(0,'127.0.0.1',resolve));
+ const app=await startLakeServer({home,codexHome:join(home,'local-codex'),data:join(home,'data'),port:0,staticRoot:web});
+ t.after(async()=>{await app.close();provider.closeAllConnections();await new Promise(resolve=>provider.close(resolve));await rm(home,{recursive:true,force:true});});
+ const project=app.store.createProject('text-only Codex conversation'),external=app.agents.external,registry=external.registry;
+ await cp(adapter,registry.adapterRoot(),{recursive:true});
+ const unchanged=await localCodexProvider(registry,'http://127.0.0.1:'+provider.address().port+'/v1');
+ await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_ACP_TEST_NODE??process.execPath});
+ const signal=AbortSignal.timeout(45000),actor={purpose:'conversation',projectId:project.id,conversationId:'conversation-fixture',workerId:'speaker-fixture',sessionId:'speaker-session',generation:1,deadlineAt:new Date(Date.now()+60000).toISOString(),scopeHash:'conversation-scope',workspace:home,model:'gpt-6.1-sol',systemPrompt:'Reply as yourself in a text-only conversation.',signal,guard:()=>signal.throwIfAborted(),tools:[],executeTool:async()=>{assert.fail('a conversation cannot execute tools');},event:()=>{}};
+ const result=await external.run('codex','Reply ACP_CONVERSATION_REPLY without using tools.','conversation-request',actor);
+ if(providerError)throw providerError;
+ assert.equal(result.state,'completed',result.summary);assert.match(result.summary,/ACP_CONVERSATION_REPLY/);assert.ok(requests.length);
+ const run=app.store.list('acpRuns')[0];assert.equal(run.conversationId,actor.conversationId);assert.equal(run.taskId,undefined);assert.equal(run.purpose,'conversation');
+ assert.equal((await external.run('codex','Reply ACP_CONVERSATION_REPLY without using tools.','conversation-request',actor)).run_id,run.id);
+ await assert.rejects(external.run('codex','Reply ACP_CONVERSATION_REPLY without using tools.','conversation-request',{...actor,conversationId:'different'}),/身份或输入不匹配/);
+ await assert.rejects(external.run('codex','Continue.','conversation-resume',actor,run.id),/独立来源/);
+ await assert.rejects(external.run('codex','Continue.','conversation-task',{...actor,taskId:'borrowed-task'}),/独立来源/);
+ await assert.rejects(external.run('codex','Continue.','conversation-tools',{...actor,tools:[{metadata:{name:'Read'}}]}),/独立来源/);
+ for(const table of ['superGoals','superWorkers','superOperations','superAcceptance'])assert.equal(app.store.list(table).length,0,table);
+ assert.equal(app.store.list('acpRuns').length,1);await unchanged();
+});
+
 test('real Codex exposes only managed tools and returns a result through the task socket',{skip:!adapter,timeout:90000},async t=>{
  const home=await mkdtemp(join(tmpdir(),'lake-codex-test-')),web=join(home,'web');await mkdir(web);await writeFile(join(web,'index.html'),'fixture');
  await writeFile(join(home,'evidence.txt'),'ACTUAL_CODEX_HOST_EVIDENCE');

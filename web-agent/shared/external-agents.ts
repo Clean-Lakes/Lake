@@ -12,7 +12,7 @@ export type SpecialistAgentAssignment = {requestId:string;roleRevision:number;ex
 export type ExternalAgentRunSummary = {
  id:string;agent:StoredExternalAgentId;state:'starting'|'running'|'completed'|'failed'|'cancelled'|'interrupted'|'unknown';
  dispatchPhase:'not_sent'|'dispatching'|'sent'|'answered';externalSessionId?:string;childSessionId?:string;
- scope:'worker'|'child'|'segment';createdAt:string;updatedAt:string;summary?:string;error?:string;
+ scope:'worker'|'child'|'segment'|'conversation';createdAt:string;updatedAt:string;summary?:string;error?:string;
  usage:{inputTokens:number;outputTokens:number}|null;
 };
 export type AgentExecutionSummary = {backend:AgentBackendRef;source:'task_assignment'|'specialist_default';assignedAt:string;runs:ExternalAgentRunSummary[];totalRuns:number};

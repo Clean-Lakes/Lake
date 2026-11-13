@@ -1,3 +1,4 @@
+import type {LakeAvatarName} from './specialist-avatars';
 export type SSHConnection = { shell?: "sh" | "bash" | "zsh" | "fish"; host: string; port: number; username: string; authMethod?: "key" | "password"; identityFile?: string; credentialRef?: string };
 export type SSHConnectionInput = SSHConnection & { password?: string; passphrase?: string; privateKey?: string };
 export type SSHKeyDirectory = { directory: string; keys: { name: string; path: string }[] };
@@ -390,6 +391,7 @@ export type SpecialistChannelEntry = {id:string;sourceSessionId:string;taskId?:s
 export type SpecialistChannelPage = {replyPresentation?:'invocation';channel:SpecialistChannelInfo;entries:SpecialistChannelEntry[];nextCursor:string;workers:SuperWorker[];active:SessionSnapshot[];routing:boolean;queued:number};
 export type SpecialistConversationMember = {
   id:string;roleId:string;roleName:string;sessionId:string;channelSessionId:string;
+  execution?:AgentBackendRef;avatarId?:LakeAvatarName;
   state:'queued'|'running'|'replied'|'failed'|'timed_out'|'cancelled'|'interrupted';
   replyMessageId?:string;reason?:string;
 };

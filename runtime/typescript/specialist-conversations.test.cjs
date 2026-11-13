@@ -13,7 +13,7 @@ async function until(read,predicate){
  while(Date.now()<deadline){value=await read();if(predicate(value))return value;await new Promise(resolve=>setTimeout(resolve,20));}
  assert.fail('Timed out: '+JSON.stringify(value));
 }
-async function fixture(t,{count=6,failRole,hold=false}={}){
+async function fixture(t,{count=6,failRole,hold=false,acp=false}={}){
  const home=await mkdtemp(join(tmpdir(),'lake-dialogue-sdk-')),web=join(home,'web');
  await mkdir(web);await writeFile(join(web,'index.html'),'<html>dialogue fixture</html>');
  const requests=[];let release;const gate=new Promise(resolve=>{release=resolve;});
@@ -42,7 +42,9 @@ async function fixture(t,{count=6,failRole,hold=false}={}){
   res.end('data: [DONE]\n\n');
  });
  await new Promise(resolve=>provider.listen(0,'127.0.0.1',resolve));
- const app=await startLakeServer({home,data:join(home,'data'),port:0,staticRoot:web});
+ const codexHome=join(home,'local-codex');
+ if(acp){await mkdir(codexHome);await writeFile(join(codexHome,'config.toml'),'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "max"\n');await writeFile(join(codexHome,'auth.json'),JSON.stringify({tokens:{access_token:'synthetic-protocol-token'}}),{mode:0o600});}
+ const app=await startLakeServer({home,codexHome,data:join(home,'data'),port:0,staticRoot:web});
  t.after(async()=>{release();await app.close();await new Promise(resolve=>provider.close(resolve));await rm(home,{recursive:true,force:true});});
  const api=async(path,method='GET',body,expected=200)=>{
   const response=await fetch(app.origin+path,{method,headers:{Authorization:`Bearer ${app.token}`,...(body===undefined?{}:{'Content-Type':'application/json'})},body:body===undefined?undefined:JSON.stringify(body)});
@@ -50,11 +52,27 @@ async function fixture(t,{count=6,failRole,hold=false}={}){
  };
  await api('/api/settings/model','PUT',{url:`http://127.0.0.1:${provider.address().port}/v1/chat/completions`,name:'fixture',apiKey:'synthetic-dialogue-key'});
  const project=await api('/api/projects','POST',{name:'isolated dialogue'}),pilot=await api(`/api/projects/${project.id}/superagent`,'POST',{});
- const roles=Array.from({length:count},(_,i)=>({id:'role-'+i,projectId:project.id,roleKey:'fixture-'+i,name:'干员'+(i+1),duties:'亲自回应讨论',revision:1}));
+ const launches=[];
+ if(acp){
+  const registry=app.agents.external.registry,root=registry.adapterRoot();
+  await mkdir(join(root,'node_modules/@agentclientprotocol/codex-acp/dist'),{recursive:true});
+  await writeFile(join(root,'node_modules/@agentclientprotocol/codex-acp/package.json'),JSON.stringify({version:'2.2.2'}));
+  await writeFile(registry.adapterEntry(),'// owned protocol fixture');
+  await mkdir(join(root,'node_modules/@openai/codex'),{recursive:true});
+  await writeFile(join(root,'node_modules/@openai/codex/package.json'),JSON.stringify({version:'0.160.1'}));
+  app.agents.external.launch=async(_profile,directory,_signal,mcp,model)=>{
+   launches.push({mcp,model});
+   return {executable:process.execPath,args:[join(__dirname,'test-fixtures/codex-acp.cjs')],cwd:directory,env:{LAKE_TEST_ACP_SCENARIO:'conversation',LAKE_TEST_ACP_SOCKET:mcp?.args.at(-1)},observed:{model:model??'gpt-6.1-sol',modelProvider:'fixture',reasoningEffort:'max',authenticated:true,authMode:'chatgpt'}};
+  };
+  await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.execPath});
+  await app.agents.external.probe(project.id,'codex',AbortSignal.timeout(5000));
+ }
+ const roles=Array.from({length:count},(_,i)=>({id:'role-'+i,projectId:project.id,roleKey:'fixture-'+i,name:'干员'+(i+1),duties:'亲自回应讨论',revision:1,execution:{kind:'native'}}));
+ if(acp)for(const role of roles.slice(0,-1))role.execution={kind:'acp',agent:'codex',revision:1,model:{modelId:'gpt-6.1-sol'}};
  for(const role of roles)app.store.put('superRoles',role.id,role);
  const path=`/api/projects/${project.id}/superagent`;
  const start=()=>api(`/api/sessions/${pilot.routerSessionId}/messages`,'POST',{text:'全部干员给我报数！'},202);
- return {app,api,project,pilot,roles,path,requests,start,release};
+ return {app,api,project,pilot,roles,path,requests,launches,start,release};
 }
 
 test('HTTP and actual SDK deliver six independent specialist replies and one final Pilot summary to the same conversation',async t=>{
@@ -79,6 +97,27 @@ test('a specialist provider failure is visible as absent and Pilot receives the 
  const messages=f.app.store.messages(f.pilot.routerSessionId).filter(message=>message.conversation?.id===round.id);
  assert.equal(messages.length,3);assert.equal(messages.at(-1).text,'2 / 3 位干员已回应。未回应：干员2。');
  assert.equal(f.app.store.list('superAcceptance').length,0);
+});
+
+test('configured ACP and native specialists reply together through separate identities without creating business tasks or MCP transports',async t=>{
+ const f=await fixture(t,{count:3,acp:true});await f.start();
+ const state=await until(()=>f.api(f.path),state=>state.conversations?.[0]?.state==='completed'),round=state.conversations[0];
+ assert.deepEqual(round.members.map(member=>member.state),['replied','replied','replied']);
+ const runs=f.app.store.list('acpRuns');assert.equal(runs.length,2);
+ assert.equal(new Set(runs.map(run=>run.externalSessionId)).size,2);
+ for(const run of runs){
+  assert.equal(run.purpose,'conversation');assert.equal(run.conversationId,round.id);assert.equal(run.taskId,undefined);
+  const member=round.members.find(member=>member.sessionId===run.sessionId);assert.ok(member);
+  assert.equal(run.workerId,member.id);assert.equal(run.requestedModel,'gpt-6.1-sol');assert.equal(run.state,'completed');
+ }
+ assert.ok(f.launches.every(launch=>launch.mcp===undefined));
+ assert.equal(f.launches.filter(launch=>launch.model==='gpt-6.1-sol').length,2);
+ const replies=f.app.store.messages(f.pilot.routerSessionId).filter(message=>message.conversation?.id===round.id);
+ assert.equal(replies.length,4);assert.equal(replies.at(-1).text,'3 / 3 位干员已回应。全部到齐。');
+ assert.equal(replies.filter(message=>message.author?.execution?.kind==='acp').length,2);
+ for(const table of ['superGoals','superWorkers','superOperations','superAcceptance'])assert.equal(f.app.store.list(table).length,0,table);
+ const native=f.requests.filter(request=>request.messages.some(message=>message.role==='system'&&content(message).includes('personally responding in a shared conversation')));
+ assert.equal(native.length,1,'ACP speakers must not be silently routed through the native model');
 });
 
 test('HTTP Pilot stop cancels active/queued dialogue and late SDK output cannot produce attendance or a summary',async t=>{

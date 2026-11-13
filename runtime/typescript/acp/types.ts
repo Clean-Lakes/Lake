@@ -17,9 +17,9 @@ export type ExternalRunState = 'starting' | 'running' | 'completed' | 'failed' |
 export type ExternalRun = {
   schemaVersion: 1;
   id: string; agent: StoredExternalAgentId; profileRevision: number; projectId: string;
-  purpose?:'worker'|'child'|'segment';
+  purpose?:'worker'|'child'|'segment'|'conversation';
   requestedModel?:string;model?:string;modelProvider?:string;reasoningEffort?:string;
-  taskId: string; workerId: string; sessionId: string; childSessionId?: string; agentRunId?: string;
+  taskId?: string; conversationId?:string; workerId: string; sessionId: string; childSessionId?: string; agentRunId?: string;
   generation: number; scopeHash: string; contextId: string; requestKey: string; inputHash: string; state: ExternalRunState;
   dispatchPhase: 'not_sent' | 'dispatching' | 'sent' | 'answered';
   externalSessionId?: string; createdAt: string; updatedAt: string;
@@ -30,12 +30,12 @@ export type ExternalEvent = {
   sequence: number; kind: 'text' | 'tool' | 'tool_update' | 'status'; text?: string;
   callId?: string; title?: string; status?: string; at: string;
 };
-/** Constructed by Lake's current task host. Never deserialized from tool arguments. */
+/** Constructed by Lake's current task or conversation host. Never deserialized from tool arguments. */
 export type ExternalActor = {
-  projectId: string; taskId: string; workerId: string; sessionId: string;
+  projectId: string; taskId?: string; conversationId?:string; workerId: string; sessionId: string;
   childSessionId?: string; agentRunId?: string; generation: number;
   deadlineAt: string; scopeHash: string; workspace: string; signal: AbortSignal;
-  purpose?: 'worker' | 'child' | 'segment';
+  purpose?: 'worker' | 'child' | 'segment' | 'conversation';
   systemPrompt?: string;
   model?:string;
   guard: () => void; tools: ToolEntry[];

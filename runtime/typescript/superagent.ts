@@ -173,6 +173,19 @@ export class LakeSuperagent implements AgentHost {
     this.conversations=new SpecialistConversations(store,agents,{
       check:()=>{if(this.closed)throw new HttpError(409,'Lake 正在退出');this.security?.check();},
       channel:role=>this.ensureChannel(this.role(role.projectId,role.id)).sessionId,
+      freeze:role=>{
+        if(role.execution?.kind==='acp'&&role.execution.agent!=='codex')return role;
+        let execution=this.roleExecution(this.role(role.projectId,role.id));
+        const selected=execution.kind==='native'&&!execution.model?this.store.modelSelection():undefined;
+        if(selected)execution={kind:'native',model:{providerId:selected.providerId,modelId:selected.modelId}};
+        return {...role,execution};
+      },
+      validate:role=>{
+        const snapshot=role as Role;
+        if(snapshot.execution?.kind==='acp'&&snapshot.execution.agent!=='codex')throw new HttpError(409,'该干员绑定的外部后端已退役，请先更新配置');
+        if(snapshot.execution?.kind==='acp'&&digest(this.roleExecution(snapshot))!==digest(snapshot.execution))throw new HttpError(409,'干员冻结的 Agent 配置已变化');
+        this.freezeRoleExecution(snapshot);
+      },
       notify:(session,message)=>{this.notify(session,'specialist');if(message)this.notify(session,'message');},schedule:()=>this.schedule(),
     });
     prepareWatchdogEvidence(store);
@@ -2177,7 +2190,7 @@ export class LakeSuperagent implements AgentHost {
   /** Enrich old report display from its frozen Worker, without rewriting history. */
   private reportMessage(original:Message):Message {
     const message=stoppedReportProjection(this.store,original,id=>this.ledger.unresolved(id)),author=message.author;
-    if(!author||author.execution)return message;
+    if(!author||author.execution||!author.taskId)return message;
     const worker=this.store.get<Worker>('superWorkers',author.workerId);
     const target=this.store.get<StoredSession>('sessions',message.sessionId);
     if(!worker||!target||worker.projectId!==target.projectId||worker.sessionId!==author.sessionId||worker.roleId!==author.roleId||

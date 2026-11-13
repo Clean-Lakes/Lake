@@ -58,16 +58,20 @@ test("retry context includes the delivered report, exact original task and curre
   assert.equal(result.complete.has("event-retry"), true);
 });
 
-test("focus carries the current lifecycle and acceptance separately for a continuation or a new check", () => {
+test("focus carries current lifecycle and reported outcome without promoting historical acceptance into a routing gate", () => {
   for (const state of ["queued", "running", "waiting_user", "waiting_external", "paused", "blocked", "completed", "failed", "cancelled"]) {
     for (const acceptanceState of ["insufficient", "pass"]) {
-      const original = source({ tasks: [task({ state, acceptanceState, revision: 12, updatedAt: when(8),
+      const reportedOutcome = state === "completed" ? "partial" : undefined;
+      const original = source({ tasks: [task({ state, acceptanceState, reportedOutcome, revision: 12, updatedAt: when(8),
         pendingApproval: state === "waiting_user", unresolvedOperations: state === "blocked" ? 1 : 0 })] });
       const before = JSON.stringify(original), value = parse(buildRouterContext(original));
       assert.deepEqual(value.context.focus[0], {
         task: { kind: "task", id: "original-task", revision: 12, hash: "a".repeat(64) },
-        roleId: "ops", title: "检查测试服务器", state, acceptanceState, archived: false, updatedAt: when(8), basis: "recent_dialogue",
+        roleId: "ops", title: "检查测试服务器", state, ...(reportedOutcome && {reportedOutcome}), archived: false, updatedAt: when(8), basis: "recent_dialogue",
       });
+      assert.equal(value.tasks[0].reportedOutcome, reportedOutcome);
+      assert.ok(!Object.hasOwn(value.tasks[0], "acceptanceState"));
+      assert.ok(!Object.hasOwn(value.context.focus[0], "acceptanceState"));
       assert.equal(value.tasks[0].pendingApproval, state === "waiting_user");
       assert.equal(value.tasks[0].unresolvedOperations, state === "blocked" ? 1 : 0);
       assert.equal(JSON.stringify(original), before, "routing context does not reopen tasks or alter acceptance");
@@ -78,7 +82,7 @@ test("focus carries the current lifecycle and acceptance separately for a contin
 test("a new check sees the exact completed task without rewriting old queue prose or inferring IDs from it", () => {
   const oldQueueText = "目前还在排队，旧记录任务是 retired-task，专员是 retired-role。";
   const original = source({ events: [event({ payload: "重新查一下这台服务器" })],
-    tasks: [task({ state: "completed", acceptanceState: "pass", revision: 11, updatedAt: when(8), summary: "磁盘使用率 18%。" })],
+    tasks: [task({ state: "completed", acceptanceState: "pass", reportedOutcome: "completed", revision: 11, updatedAt: when(8), summary: "磁盘使用率 18%。" })],
     messages: [...source().messages, message("old-queue", "assistant", oldQueueText, 2)] });
   const before = JSON.stringify(original), result = buildRouterContext(original), value = parse(result);
   const historical = value.context.dialogue.find((row) => row.id === "old-queue");
@@ -88,7 +92,8 @@ test("a new check sees the exact completed task without rewriting old queue pros
   assert.equal(value.context.focus[0].task.id, "original-task");
   assert.equal(value.context.focus[0].roleId, "ops");
   assert.equal(value.context.focus[0].state, "completed");
-  assert.equal(value.context.focus[0].acceptanceState, "pass");
+  assert.equal(value.context.focus[0].reportedOutcome, "completed");
+  assert.ok(!Object.hasOwn(value.context.focus[0], "acceptanceState"));
   assert.ok(!JSON.stringify(value.context.focus).includes("retired-"));
   assert.deepEqual(parse(buildRouterContext({ ...original, tasks: [] })).context.focus, [], "historical IDs cannot manufacture current task references");
   const request = projectRouterHistory({ messages: [{ role: "user", content: result.input }] }, [], new Set(), result.input);
@@ -123,7 +128,7 @@ test("only the four recent turns are carried; pending effects remain distinct fr
 
 test("bounded UTF-8 request clips narrative without changing identities or source records", () => {
   const original = source({ events: [event({ payload: "服务器🌊".repeat(8000) })], messages: Array.from({ length: 12 }, (_, index) => message(`m${index}`, index % 2 ? "assistant" : "user", "检查🌊".repeat(1500), index)),
-    tasks: Array.from({ length: 30 }, (_, index) => task({ taskId: `task${index}`, title: "业务标题🌊".repeat(50), summary: "说明🌊".repeat(1000), updatedAt: when(index) })) });
+    tasks: Array.from({ length: 30 }, (_, index) => task({ taskId: `task${index}`, state: "completed", reportedOutcome: index % 2 ? "partial" : "completed", title: "业务标题🌊".repeat(50), summary: "说明🌊".repeat(1000), updatedAt: when(index) })) });
   const before = JSON.stringify(original);
   const result = buildRouterContext(original), value = parse(result);
   assert.ok(Buffer.byteLength(result.input) <= 16384);
@@ -140,7 +145,8 @@ test("bounded UTF-8 request clips narrative without changing identities or sourc
     assert.equal(focus.task.revision, current.revision);
     assert.equal(focus.task.hash, current.hash);
     assert.equal(focus.state, current.state);
-    assert.equal(focus.acceptanceState, current.acceptanceState);
+    assert.equal(focus.reportedOutcome, current.reportedOutcome);
+    assert.ok(!Object.hasOwn(focus, "acceptanceState"));
     assert.equal(focus.updatedAt, current.updatedAt);
   }
   assert.equal(JSON.stringify(original), before, "workset projection cannot mutate the original archive");

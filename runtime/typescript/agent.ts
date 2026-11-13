@@ -123,6 +123,17 @@ export class LakeAgents {
     this.update(sessionId,view,externalReplyTextUpdate(run,event,{...card,content:this.redact(card.content??'')},view.rootTurnId));
   }
   private externalActor(sessionId:string,profile:HostProfile,runtime:AgentRuntime,context:Pick<HostToolContext,'toolCallId'|'abortSignal'|'lakeSubagent'>,purpose:ExternalActor['purpose']='segment'):ExternalActor{
+    if(profile.conversation){
+      const binding=profile.conversation,session=this.store.session(sessionId),controller=this.live.get(sessionId)?.controller;
+      if(!controller||context.lakeSubagent||profile.tools.length||profile.allowlist.length)throw new HttpError(409,'对话执行身份或无工具约束已变化');
+      const guard=()=>{this.guard?.();profile.beforeModel?.();profile.validateExecution?.();context.abortSignal.throwIfAborted();controller.signal.throwIfAborted();};
+      guard();
+      return {projectId:session.projectId,conversationId:binding.id,workerId:binding.participantId,sessionId,generation:1,
+        deadlineAt:binding.deadlineAt,scopeHash:digest([binding,profile.execution]),workspace:'',signal:AbortSignal.any([controller.signal,context.abortSignal]),
+        purpose:'conversation',systemPrompt:profile.systemPrompt+'\n'+lakeCommunicationPrompt,
+        ...(profile.execution?.kind==='acp'&&profile.execution.model?{model:profile.execution.model.modelId}:{}),guard,tools:[],
+        executeTool:async()=>{throw new HttpError(403,'对话回应没有资源或任务工具权限');},event:(run,event)=>this.externalEvent(sessionId,run,event)};
+    }
     const worker=this.store.require<any>('superWorkers',profile.workerId!);
     const goal=this.store.require<any>('superGoals',profile.taskId!);
     const child=context.lakeSubagent;
@@ -1036,7 +1047,7 @@ export class LakeAgents {
         const view=this.store.view(sessionId);view.rootTurnId='acp_turn_'+id();
         this.toolActivity.clear(sessionId);this.update(sessionId,view);
         const actor=this.externalActor(sessionId,profile,runtime,{toolCallId:id(),abortSignal:options?.abortSignal??new AbortController().signal},'worker');
-        const prior=this.store.list<ExternalRun>('acpRuns').filter(run=>run.taskId===actor.taskId&&run.workerId===actor.workerId&&run.generation===actor.generation&&!run.childSessionId&&run.state==='completed').at(-1);
+        const prior=actor.purpose==='conversation'?undefined:this.store.list<ExternalRun>('acpRuns').filter(run=>run.taskId===actor.taskId&&run.workerId===actor.workerId&&run.generation===actor.generation&&!run.childSessionId&&run.state==='completed').at(-1);
         const result=await this.external.run(selected.agent,input,digest([actor.workerId,actor.generation,id()]),actor,prior?.id);
         if(result.state!=='completed')throw new HttpError(409,result.summary||'外部任务没有明确完成');
         return {response:result.summary};

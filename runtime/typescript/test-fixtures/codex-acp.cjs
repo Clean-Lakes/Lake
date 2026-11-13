@@ -4,7 +4,7 @@ const {createInterface}=require('node:readline');
 const {request}=require('node:http');
 const {randomUUID}=require('node:crypto');
 const mode=process.env.LAKE_TEST_ACP_SCENARIO;
-let sessionId,socket,sequence=0;const pending=new Map();
+let sessionId,socket,servers,sequence=0;const pending=new Map();
 const send=value=>process.stdout.write(JSON.stringify({jsonrpc:'2.0',...value})+'\n');
 const notify=update=>send({method:'session/update',params:{sessionId,update}});
 const ask=(method,params)=>new Promise((resolve,reject)=>{const id=++sequence;pending.set(id,{resolve,reject});send({id,method,params});});
@@ -27,7 +27,11 @@ async function handle(message){
   let result;
   if(message.method==='initialize')result={protocolVersion:1,agentInfo:{name:'codex-protocol-fixture',version:'1'},agentCapabilities:{loadSession:true}};
   else if(['session/new','session/load'].includes(message.method)){
-   sessionId=message.params.sessionId??randomUUID();socket=process.env.LAKE_TEST_ACP_SOCKET??message.params.mcpServers[0]?.args.at(-1);result=message.method==='session/new'?{sessionId}:{};
+   sessionId=message.params.sessionId??randomUUID();servers=message.params.mcpServers;socket=process.env.LAKE_TEST_ACP_SOCKET??servers[0]?.args.at(-1);result=message.method==='session/new'?{sessionId}:{};
+  }else if(message.method==='session/prompt'&&mode==='conversation'){
+   if(socket||servers.length)throw new Error('Text-only conversation must not have an MCP transport');
+   const input=message.params.prompt.map(part=>part.text??'').join('\n'),data=JSON.parse(input.slice(input.lastIndexOf('\n')+1));
+   notify({sessionUpdate:'agent_message_chunk',content:{type:'text',text:`${data.self.number}，${data.self.name}通过本人 ACP 会话报到！`}});result={stopReason:'end_turn'};
   }else if(message.method==='session/prompt'){
    const tools=await bridge('/tools'),worker=tools.some(tool=>tool.name==='work_finish');let report;
    if(!worker){

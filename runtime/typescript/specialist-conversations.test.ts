@@ -15,7 +15,7 @@ async function fixture(t:{after(fn:()=>Promise<void>):void},count=3){
  const requests:{sessionId:string;input:any}[]=[],aborts:string[]=[],notices:string[]=[];
  let clock=Date.now(),denied=false,sendGate:Promise<void>|undefined,abortGate:Promise<void>|undefined;
  const agents={redact:(v:string)=>v,publish(){},send:async(sessionId:string,_text:string,options:any)=>{requests.push({sessionId,input:JSON.parse(options.input)});const gate=sendGate;sendGate=undefined;await gate;},abort:async(sessionId:string)=>{aborts.push(sessionId);const gate=abortGate;abortGate=undefined;await gate;}};
- const ports={clock:()=>clock,check:()=>{if(denied)throw new HttpError(403,'denied');},channel:(role:ConversationRole)=>{
+ const ports:ConstructorParameters<typeof SpecialistConversations>[2]={clock:()=>clock,check:()=>{if(denied)throw new HttpError(403,'denied');},channel:(role:ConversationRole)=>{
   const id='channel-'+role.id;if(!store.get('sessions',id))store.put('sessions',id,{...store.createSession(project.id),id});return id;
  },notify:(session:string)=>notices.push(session),schedule(){}};
  let host=new SpecialistConversations(store,agents as any,ports);
@@ -27,7 +27,7 @@ async function fixture(t:{after(fn:()=>Promise<void>):void},count=3){
  const pump=()=>host.pump(4,()=>2);
  const settle=(sessionId:string,response?:string,error?:string)=>{store.put('views',sessionId,{...store.view(sessionId),status:error?'failed':'completed'});host.settled(sessionId,{response,error});};
  t.after(async()=>{await host.close();store.db.close();await rm(home,{recursive:true,force:true});});
- return {store,project,pilot,roles,event,input,requests,aborts,notices,get host(){return host;},start,admit,pump,settle,
+ return {store,project,pilot,roles,event,input,requests,aborts,notices,ports,get host(){return host;},start,admit,pump,settle,
   tick:(ms:number)=>{clock+=ms;},deny:()=>{denied=true;},restart:()=>{host=new SpecialistConversations(store,agents as any,ports);},
   holdSend:()=>{let release!:()=>void;sendGate=new Promise<void>(resolve=>{release=resolve;});return release;},
   holdAbort:()=>{let release!:()=>void;abortGate=new Promise<void>(resolve=>{release=resolve;});return release;}};
@@ -60,6 +60,41 @@ test('same event/part retries preserve membership and deliver each response once
  assert.equal(f.host.start({...f.input,roles:[...f.roles,later]}).members.length,1);
  f.admit();await f.pump();f.settle(round.members[0].sessionId,'本人到！');f.settle(round.members[0].sessionId,'重复回应');
  assert.equal(f.store.messages(f.pilot.id).length,1);assert.equal(f.store.messages(f.pilot.id)[0].text,'本人到！');
+});
+
+test('invitation freezes each configured Agent, model and avatar independently of later role edits',async t=>{
+ const f=await fixture(t,2);
+ f.ports.freeze=role=>({...role,avatarId:'beaver',execution:role.id===f.roles[0].id
+  ?{kind:'acp',agent:'codex',revision:7,model:{modelId:'gpt-6.1-sol'}}
+  :{kind:'native',model:{providerId:'provider',modelId:'native-model'}}});
+ const round=f.start();assert.deepEqual(f.start(),round);
+ f.store.put('superRoles',f.roles[0].id,{...f.roles[0],revision:2,name:'edited',execution:{kind:'native'}});
+ f.admit();await f.pump();
+ for(const member of round.members){
+  const profile=f.host.profile(member.sessionId)!;
+  assert.deepEqual(profile.execution,member.execution);
+  assert.deepEqual(profile.conversation,{id:round.id,participantId:member.id,deadlineAt:round.deadlineAt});
+  assert.equal(profile.taskId,undefined);assert.deepEqual(profile.tools,[]);
+  f.settle(member.sessionId,member.roleName+'到！');
+ }
+ for(const reply of f.store.messages(f.pilot.id)){
+  const member=round.members.find(member=>member.roleId===reply.author?.roleId)!;
+  assert.deepEqual(reply.author?.execution,member.execution);assert.equal(reply.author?.avatarId,'beaver');
+  assert.equal(reply.author?.name,member.roleName);
+ }
+ await f.pump();const summary=f.host.profile(f.requests.at(-1)!.sessionId)!;
+ assert.equal(summary.execution,undefined);assert.equal(summary.conversation,undefined,'Pilot summary keeps its native host identity');
+});
+
+test('an unavailable frozen backend marks only that specialist absent and still permits the other reply and Pilot summary',async t=>{
+ const f=await fixture(t,2);
+ f.ports.validate=role=>{if(role.id===f.roles[0].id)throw new HttpError(409,'Codex 当前连接配置尚未验证');};
+ const round=f.start();f.admit();await f.pump();
+ assert.equal(f.requests.length,1);assert.equal(f.requests[0].sessionId,round.members[1].sessionId);
+ f.settle(round.members[1].sessionId,'2，到！');await f.pump();
+ const summary=f.requests.at(-1)!.input;assert.equal(summary.replied,1);
+ assert.equal(summary.members[0].state,'failed');assert.match(summary.members[0].reason,/Codex 当前连接配置尚未验证/);
+ assert.equal(f.store.messages(f.pilot.id).length,1);assert.equal(f.store.list('superGoals').length,0);
 });
 
 test('empty responses, model failures and timeouts remain absent and the real summary receives their exact states',async t=>{
