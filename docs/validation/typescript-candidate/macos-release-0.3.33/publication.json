@@ -1,0 +1,34 @@
+{
+  "version": "0.3.33",
+  "masterSHA": "4fe9c9a3017f4867eae9b36cf685b95289930d3f",
+  "releaseURL": "https://github.com/Clean-Lakes/Lake/releases/tag/v0.3.33",
+  "publishedAt": "2026-11-13T09:23:18Z",
+  "backendSHA256": "edcccd226c7f1ac7b569500dac1d76a36127b0cf48a9a7b97254882f55e00677",
+  "minimumMacOS": "13.5",
+  "assets": [
+    {
+      "name": "Lake-0.3.33-macos-arm64.dmg",
+      "size": 81554901,
+      "sha256": "ff142ae25505b135f94bbcecf705d8aba6f5172bf04c975525746f42096f85aa"
+    },
+    {
+      "name": "Lake-0.3.33-macos-arm64.dmg.sha256",
+      "size": 94,
+      "sha256": "eeb092992c3a1c6b12e1a3560cd714a99bdba2fc59c7dd192b7830db06d6b419"
+    },
+    {
+      "name": "Lake-0.3.33-macos-arm64.zip",
+      "size": 68060226,
+      "sha256": "6d23b7cdf76a762ab44dcb28da62155e80f286422248aa6b6cae55e3ef65f807"
+    },
+    {
+      "name": "Lake-0.3.33-macos-arm64.zip.sha256",
+      "size": 94,
+      "sha256": "34c52f76e158d69e50e7986621b6406423ad9d9ce11ea38adbcd7d4a4df4880d"
+    }
+  ],
+  "tagTargetVerified": true,
+  "latestVerified": true,
+  "downloadedBytesVerified": true,
+  "signedBundleVerified": true
+}
