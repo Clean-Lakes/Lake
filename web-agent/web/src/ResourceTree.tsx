@@ -16,7 +16,14 @@ function ResourceFolderDialog({editor,location,busy,blocked,error,returnFocus,on
   useEffect(()=>{
     const node=dialog.current,previous=returnFocus.current;
     node?.showModal();input.current?.focus({preventScroll:true});input.current?.select();
-    return()=>{node?.close();if(previous?.isConnected)previous.focus({preventScroll:true});};
+    return()=>{
+      node?.close();
+      // Pointer dismissal can finish the browser's modal focus restoration
+      // after React removes the dialog. Restore once that transition is done.
+      requestAnimationFrame(()=>{
+        if(previous?.isConnected&&(!document.activeElement||document.activeElement===document.body||document.activeElement===previous))previous.focus({preventScroll:true});
+      });
+    };
   },[returnFocus]);
   return createPortal(<dialog ref={dialog} className="presentation-dialog resource-folder-dialog" aria-label={title} aria-busy={busy} onCancel={event=>{event.preventDefault();if(!busy)onClose();}}>
     <div className="presentation-dialog-head"><h2>{title}</h2><button type="button" className="icon-button" aria-label={`关闭${title}`} disabled={busy} onClick={onClose}><Glyph name="close" size={18}/></button></div>
