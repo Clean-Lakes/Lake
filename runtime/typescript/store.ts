@@ -230,7 +230,7 @@ export class LakeStore {
       projects: this.list<Project>("projects").filter(project => !hidden('project', project.id)),
       resources,
       resourceTree: tree,
-      sessions: this.list<StoredSession>("sessions").filter((session) => !hidden('project', session.projectId) && !this.list<string>("terminalScopes").includes(session.id)).map(({ id }) => {
+      sessions: this.list<StoredSession>("sessions").filter((session) => session.workspaceRole!=='conversation' && !hidden('project', session.projectId) && !this.list<string>("terminalScopes").includes(session.id)).map(({ id }) => {
         const { options, ...session } = this.session(id);
         return session;
       }),
@@ -277,7 +277,7 @@ export class LakeStore {
       }
     );
     // Normalize presentation on read; original stored rows remain untouched.
-    for (const run of view.agentRuns ?? []) if (isNativeAgentSource(run.source)) run.source = "native_subagent";
+    for (const run of view.agentRuns ?? []) if (run.source!=='acp_subagent'&&isNativeAgentSource(run.source)) run.source = "native_subagent";
     for (const card of [...view.cards, ...(view.agentRuns ?? []).flatMap(run => run.cards ?? [])]) {
       const data = card.data as Record<string, unknown> | undefined;
       if (data && isNativeControlSource(data.source)) data.source = "native_subagent_control";

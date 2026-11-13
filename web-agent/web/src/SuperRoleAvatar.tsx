@@ -1,8 +1,17 @@
 import {AgentIcon} from './AgentIcon';
 import {superWorkerAppearance,type AvatarMotion} from './superAgentPresentation';
-import {useEffect,useRef,type CSSProperties} from 'react';
+import {createContext,useContext,useEffect,useMemo,useRef,type CSSProperties,type ReactNode} from 'react';
+import type {SpecialistChannelInfo} from '../../shared/contracts';
+import {isLakeAvatarName,type LakeAvatarName} from './lakeAvatarCatalog';
 import {lakeAvatarMotions} from './lakeAvatarMotion';
 import {usePageVisible} from './usePageVisible';
+
+const roleAvatars=createContext<ReadonlyMap<string,LakeAvatarName>>(new Map());
+/** Current project display metadata; never changes task snapshots or role IDs. */
+export function SpecialistAvatarProvider({channels,children}:{channels?:readonly SpecialistChannelInfo[];children:ReactNode}){
+ const avatars=useMemo(()=>new Map((channels??[]).flatMap(channel=>channel.avatarId&&isLakeAvatarName(channel.avatarId)?[[channel.roleId,channel.avatarId] as const]:[])),[channels]);
+ return <roleAvatars.Provider value={avatars}>{children}</roleAvatars.Provider>;
+}
 
 /** A brief greeting on conversation entry, separate from live work motion. */
 export function greetRoleAvatar(container:HTMLElement) {
@@ -16,11 +25,12 @@ export function greetRoleAvatar(container:HTMLElement) {
 }
 
 /** The same Lake ecosystem silhouette in navigation, the island and task details. */
-export function SuperRoleAvatar({name='',roleId,pilot=false,size=22,motion='idle'}:{name?:string;roleId?:string;pilot?:boolean;size?:number;motion?:AvatarMotion}) {
+export function SuperRoleAvatar({name='',roleId,avatarId,pilot=false,size=22,motion='idle'}:{name?:string;roleId?:string;avatarId?:LakeAvatarName;pilot?:boolean;size?:number;motion?:AvatarMotion}) {
+ const avatars=useContext(roleAvatars);
  const avatarRef=useRef<HTMLSpanElement>(null);
  useEffect(()=>{const media=window.matchMedia('(prefers-reduced-motion: reduce)');const reset=()=>{if(media.matches)avatarRef.current?.classList.remove('is-greeting');};media.addEventListener('change',reset);return()=>media.removeEventListener('change',reset);},[]);
  const visible=usePageVisible();
- const look=superWorkerAppearance({roleId,roleName:name}),role=pilot?'coordinator':look.icon;
+ const look=superWorkerAppearance({roleId,roleName:name,avatarId:avatarId??(roleId?avatars.get(roleId):undefined)}),role=pilot?'coordinator':look.icon;
  const style={'--avatar-phase':`${look.phase}ms`,'--avatar-greet-time':`${pilot?650:lakeAvatarMotions[look.icon].greetMs}ms`} as CSSProperties;
  return <span ref={avatarRef} className="super-role-avatar" data-role={role} data-palette={pilot?'river':look.palette} data-variant={look.variant} data-motion={motion} data-hidden={!visible||undefined} style={style} aria-hidden="true" onAnimationEnd={event=>{if(event.target===event.currentTarget&&event.animationName==='lake-avatar-greet-done')event.currentTarget.classList.remove('is-greeting');}}><AgentIcon role={role} size={size}/></span>;
 }

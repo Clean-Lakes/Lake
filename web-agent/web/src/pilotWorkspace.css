@@ -7,6 +7,10 @@
 .pilot-workspace .nav-heading small,.pilot-workspace-empty,.pilot-workspace-error { color:var(--text-muted); font-size:var(--font-size-ui); }
 .pilot-worker-row { min-height:56px; margin-bottom:2px; align-items:center; }
 .pilot-worker-row .nav-row-text { gap:3px; min-width:0; }
+.pilot-worker-name { display:flex; align-items:center; gap:6px; min-width:0; }
+.pilot-worker-name > strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.agent-backend-logo { display:inline-flex; align-items:center; justify-content:center; flex:none; vertical-align:middle; line-height:1; }
+.agent-backend-logo[data-agent-type=native] { color:var(--agent-coordinator); }
 .sidebar-pilot-entry { min-height:56px; margin-bottom:2px; align-items:center; }
 .sidebar-pilot-entry .nav-row-text { gap:3px; }
 .pilot-entry-name { display:flex; align-items:center; gap:7px; min-width:0; }

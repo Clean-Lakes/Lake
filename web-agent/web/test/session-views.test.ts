@@ -135,7 +135,7 @@ test("directory keeps repeated questions as separate targets and excludes unload
 });
 
 test("directory turn targets exist in both dialogue and operation views and are session scoped", () => {
-  const s=snapshot();
+  const s=snapshot();s.ai!.cardsOffset=1;
   for(const mode of ["conversation","activity"] as const) {
     const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode}));
     assert.ok(html.includes(`id="${conversationTurnId("s","user")}"`));
@@ -144,18 +144,20 @@ test("directory turn targets exist in both dialogue and operation views and are 
   assert.notEqual(conversationTurnId("s/a","u1"),conversationTurnId("s","a/u1"));
 });
 
-test("the directory rail has exactly one mark per entry as history grows", () => {
-  for(const count of [1,3,20]) {
+test("history stays behind one directory entry point and short conversations omit it", () => {
+  for(const count of [0,1,3,20]) {
     const items=Array.from({length:count},(_,index)=>({id:`u${index}`,number:index+1,label:`提问 ${index+1}`}));
     const html=renderToStaticMarkup(createElement(ConversationDirectory,{sessionId:"s",items,onJump:()=>{},onLatest:()=>{}}));
-    assert.equal((html.match(/data-directory-item=/g)||[]).length,count);
-    assert.equal((html.match(/is-current/g)||[]).length,1);
-    assert.ok(!html.includes("<svg"));
-    assert.ok(html.includes('aria-describedby='));
-    assert.ok(html.includes('悬停预览这一轮的提问与回复，点击刻度跳转'));
-    assert.ok(html.includes('完整记录保留'));
-    assert.ok(!html.includes('title="会话目录"'), 'a native tooltip must not compete with the hover preview');
+    if(count<2)assert.equal(html,'');
+    else {
+      assert.equal((html.match(/<button/g)||[]).length,1);
+      assert.match(html,/aria-label="会话目录"/);
+      assert.match(html,/aria-expanded="false"/);
+      assert.doesNotMatch(html,/提问 [0-9]|conversation-directory-tick|role="dialog"/);
+    }
   }
+  const older=renderToStaticMarkup(createElement(ConversationDirectory,{sessionId:'s',items:[],onJump:()=>{},onLatest:()=>{},onLoadOlder:()=>{}}));
+  assert.match(older,/aria-label="会话目录"/,'older records remain reachable even when no turns are currently loaded');
 });
 
 test("active directory entry follows reading position in either scroll direction", () => {

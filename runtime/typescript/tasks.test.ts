@@ -21,15 +21,14 @@ async function fixture(t: { after: (fn: () => Promise<void>) => void }, revalida
   return { store, ledger, create, invoke };
 }
 
-test("ordinary business tools create their own step and finish with current real receipts", async (t) => {
-  const { store, ledger, create, invoke } = await fixture(t); create();
-  await invoke("current-host");
-  const result = ledger.finishHost("goal", { summary: "当前负载为 0.4。", outcome: "completed" }, 1, "policy");
-  assert.equal(result.status, "completed"); assert.equal(result.acceptanceState, "pass");
-  assert.equal(result.items.length, 1); assert.equal(result.items[0].evidenceIds.length, 1);
-  assert.equal(store.list("superAcceptance").length, 2);
-  assert.equal(store.list("superPendingReports").length, 1);
-  assert.equal(store.require<any>("superDeliveries", digest(["goal", 1])).outcome, "completed");
+test("ordinary tools retain actual receipts while report submission creates no acceptance", async t => {
+ const f=await fixture(t);f.create();await f.invoke("current-host");
+ const operations=f.store.list("superOperations"),attempts=f.store.list("superAttempts");
+ const result=f.ledger.finishHost("goal",{summary:"当前负载为 0.4。",outcome:"completed"},1,"policy");
+ assert.equal(result.status,"completed");assert.equal(result.acceptanceState,"not_evaluated");
+ assert.equal(result.reportedOutcome,"completed");assert.equal(result.completionReportId,digest(["goal",1]));
+ assert.deepEqual(f.store.list("superOperations"),operations);assert.equal(f.store.list<any>("superAttempts").at(-1).state,"succeeded");
+ assert.equal(f.store.list("superAcceptance").length,0);assert.equal(f.store.list("superPendingReports").length,1);
 });
 
 test("fresh read-only recovery rejects mutations, opaque calls and children before dispatch",async t=>{
@@ -52,55 +51,58 @@ async function acceptedHostStep(t: Parameters<typeof fixture>[0], tool = "inspec
   return f;
 }
 
-test("host completion closes an already accepted current step without replacing evidence or running I/O", async (t) => {
-  const { store, ledger } = await acceptedHostStep(t);
-  const attempts = store.list("superAttempts"), operations = store.list("superOperations"), receipt = store.list("superAcceptance")[0];
-  const result = ledger.finishHost("goal", { summary: "已核对真实启动时间。", outcome: "completed" }, 1, "policy");
-  assert.equal(result.status, "completed"); assert.equal(result.acceptanceState, "pass");
-  assert.deepEqual(store.list("superAttempts"), attempts); assert.deepEqual(store.list("superOperations"), operations);
-  assert.deepEqual(store.require("superAcceptance", (receipt as any).id), receipt);
-  assert.equal(store.list("superAcceptance").length, 2); assert.equal(store.list("superPendingReports").length, 1);
-  assert.throws(() => ledger.finishHost("goal", { summary: "再次完成。", outcome: "completed" }, 1, "policy"), /closed/);
-  assert.equal(store.list("superAcceptance").length, 2);
+test("a completed stage can submit its report while historical acceptance and execution rows stay unchanged", async t => {
+ const {store,ledger}=await acceptedHostStep(t);
+ store.put("superAcceptance","historical",{id:"historical",goalId:"old",state:"pass"});
+ const attempts=store.list("superAttempts"),operations=store.list("superOperations"),old=store.list("superAcceptance");
+ const result=ledger.finishHost("goal",{summary:"已核对真实启动时间。",outcome:"completed"},1,"policy");
+ assert.equal(result.status,"completed");assert.equal(result.acceptanceState,"not_evaluated");
+ assert.deepEqual(store.list("superAttempts"),attempts);assert.deepEqual(store.list("superOperations"),operations);
+ assert.deepEqual(store.list("superAcceptance"),old);assert.equal(store.list("superPendingReports").length,1);
+ assert.throws(()=>ledger.finishHost("goal",{summary:"再次完成。",outcome:"completed"},1,"policy"),/closed/);
 });
 
-test("accepted host steps still reject stale generations, changed policies and modified evidence", async (t) => {
-  const { store, ledger } = await acceptedHostStep(t);
-  const finish = (generation = 1, policy = "policy") => ledger.finishHost("goal", { summary: "完成。", outcome: "completed" }, generation, policy);
-  assert.throws(() => finish(2), /binding changed/);
-  assert.throws(() => finish(1, "new-policy"), /permissions|binding changed/);
-  const operation = store.list<Operation>("superOperations")[0]; operation.output = { forged: true }; store.put("superOperations", operation.id, operation);
-  assert.throws(() => finish(), /evidence/);
-  assert.notEqual(ledger.get("goal").acceptanceState, "pass");
-  assert.equal(store.list("superDeliveries").length, 0); assert.equal(store.list("superPendingReports").length, 0);
+test("report submission rejects stale execution bindings and never certifies modified observations",async t=>{
+ const {store,ledger}=await acceptedHostStep(t);
+ const finish=(generation=1,policy="policy")=>ledger.finishHost("goal",{summary:"已结束本轮。",outcome:"completed"},generation,policy);
+ assert.throws(()=>finish(2),/binding changed/);assert.throws(()=>finish(1,"new-policy"),/binding changed/);
+ const op=store.list<Operation>("superOperations")[0];op.output={changed:true};store.put("superOperations",op.id,op);
+ assert.equal(finish().status,"completed");assert.deepEqual(store.require("superOperations",op.id),op);
+ assert.equal(store.list("superAcceptance").length,0);
 });
 
-test("accepted host steps revalidate resources and cannot complete from discovery alone or unresolved effects", async (t) => {
-  let revoked = false;
-  const { store, ledger } = await acceptedHostStep(t, "inspect_host", () => { if (revoked) throw new Error("resource revision changed"); });
-  revoked = true;
-  assert.throws(() => ledger.finishHost("goal", { summary: "完成。", outcome: "completed" }, 1, "policy"), /resource revision/);
-  revoked = false;
-  const original = store.list<Operation>("superOperations")[0];
-  store.put("superOperations", "unknown", { ...original, id: "unknown", status: "unknown", readOnly: false });
-  assert.throws(() => ledger.finishHost("goal", { summary: "完成。", outcome: "completed" }, 1, "policy"), /evidence/);
-  assert.equal(store.list("superDeliveries").length, 0);
-  const discovery = await acceptedHostStep(t, "list_mcp_tools");
-  assert.throws(() => discovery.ledger.finishHost("goal", { summary: "完成。", outcome: "completed" }, 1, "policy"), /discovery/);
+test("changed resources still reject new I/O without blocking an honest historical report",async t=>{
+ let revoked=false,calls=0;const f=await fixture(t,()=>{if(revoked)throw Error("resource revision changed");});f.create();
+ await f.invoke("original");revoked=true;
+ await assert.rejects(f.invoke("new-read","inspect_host",1,async()=>{calls++;return {}; }),/resource revision changed/);
+ assert.equal(calls,0);
+ const before=f.store.list("superOperations");
+ assert.equal(f.ledger.finishHost("goal",{summary:"先前已取得负载；连接配置随后变化。",outcome:"partial"},1,"policy").status,"completed");
+ assert.deepEqual(f.store.list("superOperations"),before);assert.equal(f.store.list("superAcceptance").length,0);
 });
 
-test("discovery and failed observations cannot pass; a partial report preserves the actual business explanation", async (t) => {
-  const { store, ledger, create, invoke } = await fixture(t); create();
-  await invoke("catalog", "list_mcp_tools");
-  assert.throws(() => ledger.finishHost("goal", { summary: "已完成。", outcome: "completed" }, 1, "policy"), /discovery/);
-  await invoke("failed-host", "inspect_host", 1, async () => ({ success: false, error: "authentication failed" }));
-  assert.throws(() => ledger.finishHost("goal", { summary: "已完成。", outcome: "completed" }, 1, "policy"), /Failed/);
-  const partial = ledger.finishHost("goal", { summary: "SSH 认证失败，暂时没有取得运行数据。", outcome: "partial" }, 1, "policy");
-  assert.equal(partial.status, "paused"); assert.equal(partial.acceptanceState, "not_evaluated");
-  assert.equal(partial.summary, "SSH 认证失败，暂时没有取得运行数据。");
-  assert.equal(store.list("superAcceptance").length, 0);
-  assert.deepEqual(store.require<any>("superDeliveries", digest(["goal", 1])).summary, partial.summary);
-  assert.equal(store.require<any>("superDeliveries", digest(["goal", 1])).outcome, "partial");
+test("discovery-only, failed and no-I/O reports can end without being certified successful",async t=>{
+ const f=await fixture(t);f.create();await f.invoke("catalog","list_mcp_tools");
+ await f.invoke("failed-host","inspect_host",1,async()=>({success:false,error:"authentication failed"}));
+ const result=f.ledger.finishHost("goal",{summary:"SSH 认证失败，暂时没有运行数据。",outcome:"partial"},1,"policy");
+ assert.equal(result.status,"completed");assert.equal(result.reportedOutcome,"partial");
+ assert.equal(f.store.list("superAcceptance").length,0);
+ f.create({id:"explanation",sessionId:"explanation-session"});
+ assert.equal(f.ledger.finishHost("explanation",{summary:"这轮只整理了已有信息。",outcome:"completed"},1,"policy").status,"completed");
+ assert.equal(f.store.list("superOperations").length,2);
+});
+
+test("completed and partial reports end with unknown results without another inspection or acceptance",async t=>{
+ for(const outcome of ["completed","partial"] as const){
+  const f=await fixture(t);f.create();let calls=0;
+  await assert.rejects(f.invoke("lost","Bash",1,async()=>{calls++;throw Error("connection lost");},{readOnly:false}),/connection lost/);
+  await f.invoke("read","inspect_host",1,async()=>{calls++;return {load:0.4};});
+  const operations=f.store.list("superOperations"),attempts=f.store.list("superAttempts");
+  const goal=f.ledger.finishHost("goal",{summary:"当前负载 0.4，原命令结果不确定。",outcome},1,"policy");
+  assert.equal(goal.status,"completed");assert.equal(goal.reportedOutcome,outcome);assert.equal(calls,2);
+  assert.deepEqual(f.store.list("superOperations"),operations);assert.deepEqual(f.store.list("superAttempts").slice(0,-1),attempts.slice(0,-1));
+  assert.equal(f.store.list("superAcceptance").length,0);assert.equal(f.store.list("superPendingReports").length,1);
+ }
 });
 
 test("a settled read failure can obtain a fresh sample without model bookkeeping", async (t) => {
@@ -114,70 +116,43 @@ test("a settled read failure can obtain a fresh sample without model bookkeeping
   assert.equal(store.require<any>("superAttempts", previous.attemptId).state, "failed");
   assert.ok(store.require<any>("superAttempts", previous.attemptId).reconciledAt);
   assert.equal(store.list<any>("superAttempts").at(-1).retryOf, previous.attemptId);
-  assert.deepEqual(goal.items[0].evidenceIds, store.list<Operation>("superOperations").filter((operation) => operation.status === "succeeded").map((operation) => operation.id));
+  assert.equal(store.list("superAcceptance").length,0);
 });
 
-test("another invocation cannot accept stale observations or a discovery-only continuation", async (t) => {
-  const { store, ledger, create, invoke } = await fixture(t); create();
-  await invoke("old-host");
-  const old = store.list<Operation>("superOperations")[0];
-  assert.throws(() => ledger.finishHost("goal", { summary: "已完成。", outcome: "completed" }, 2, "policy"), /binding changed/);
-  await invoke("new-catalog", "list_mcp_tools", 2);
-  assert.throws(() => ledger.finishHost("goal", { summary: "已完成。", outcome: "completed" }, 2, "policy"), /discovery/);
-  await invoke("new-host", "inspect_host", 2);
-  const goal = ledger.finishHost("goal", { summary: "已取得本次检查数据。", outcome: "completed" }, 2, "policy");
-  assert.ok(!goal.items[0].evidenceIds.includes(old.id));
-  assert.equal(store.require<Operation>("superOperations", old.id).generation, 1);
+test("a new invocation retains original observations and can report without fresh business I/O",async t=>{
+ const f=await fixture(t);f.create();await f.invoke("old-host");const old=f.store.list<Operation>("superOperations")[0];
+ assert.throws(()=>f.ledger.finishHost("goal",{summary:"结束",outcome:"completed"},2,"policy"),/binding changed/);
+ await f.invoke("new-catalog","list_mcp_tools",2);
+ assert.equal(f.ledger.finishHost("goal",{summary:"这轮取得目录；主机信息来自上一轮。",outcome:"partial"},2,"policy").status,"completed");
+ assert.deepEqual(f.store.require("superOperations",old.id),old);assert.equal(f.store.list("superAcceptance").length,0);
 });
 
-test("unknown writes are never replayed while independent proven reads remain usable", async (t) => {
-  const { store, ledger, create, invoke } = await fixture(t); create();
-  let mutations = 0;
-  await assert.rejects(invoke("uncertain-write", "Write", 1, async () => { mutations++; throw new Error("lost response"); }, { readOnly: false }), /lost response/);
-  const unknown = store.list<Operation>("superOperations")[0];
-  const before = structuredClone(unknown);
-  const originalAttempt = store.require<any>("superAttempts", unknown.attemptId);
-  await assert.rejects(invoke("uncertain-write", "Write", 1, async () => { mutations++; return {}; }, { readOnly: false }), /cannot be replayed/);
-  await assert.rejects(invoke("new-write", "Write", 1, async () => { mutations++; return {}; }, { readOnly: false }), /reconciliation/);
-  await invoke("independent-host", "inspect_host", 2);
-  assert.deepEqual(store.require("superOperations", unknown.id), before);
-  assert.deepEqual(store.require("superAttempts", unknown.attemptId), originalAttempt);
-  assert.equal(mutations, 1); assert.equal(ledger.unresolved("goal"), true);
-  assert.throws(() => ledger.finishHost("goal", { summary: "已完成。", outcome: "completed" }, 2, "policy"), /evidence/);
-  const partial = ledger.finishHost("goal", { summary: "已取得负载；先前写入结果仍待核实。", outcome: "partial" }, 2, "policy");
-  assert.equal(partial.status, "blocked"); assert.notEqual(partial.acceptanceState, "pass");
+test("unknown original calls never replay while new authorized writes and reads remain usable",async t=>{
+ const f=await fixture(t);f.create();let writes=0;
+ await assert.rejects(f.invoke("lost","Write",1,async()=>{writes++;throw Error("lost response");},{readOnly:false}),/lost response/);
+ const old=f.store.list<Operation>("superOperations")[0],attempt=f.store.require("superAttempts",old.attemptId);
+ await assert.rejects(f.invoke("lost","Write",1,async()=>{writes++;return {};},{readOnly:false}),/cannot be replayed/);
+ await f.invoke("new-write","Write",1,async()=>{writes++;return {};},{readOnly:false});await f.invoke("new-read","inspect_host",2);
+ assert.deepEqual(f.store.require("superOperations",old.id),old);assert.deepEqual(f.store.require("superAttempts",old.attemptId),attempt);assert.equal(writes,2);
+ assert.equal(f.ledger.finishHost("goal",{summary:"取得了新结果；早先写入影响不确定。",outcome:"partial"},2,"policy").status,"completed");
+ assert.equal(f.store.list("superAcceptance").length,0);
 });
 
-test("legacy unresolved operations do not prevent proven reads and still block mutations", async (t) => {
-  const { store, ledger, create, invoke } = await fixture(t); create();
-  store.put("legacyOperations", "legacy-unknown", { id: "legacy-unknown", projectId: "project", status: "unknown" });
-  await invoke("current-host");
-  let writes = 0;
-  await assert.rejects(invoke("new-write", "Write", 1, async () => { writes++; return {}; }, { readOnly: false }), /旧 Go/);
-  assert.equal(writes, 0); assert.equal(store.require<any>("legacyOperations", "legacy-unknown").status, "unknown");
-  assert.equal(ledger.finishHost("goal", { summary: "已完成独立只读检查。", outcome: "completed" }, 1, "policy").status, "completed");
+test("legacy unknown operations no longer gate new authorized calls and remain unchanged",async t=>{
+ const f=await fixture(t);f.create();const legacy={id:"legacy",projectId:"project",status:"unknown"};f.store.put("legacyOperations","legacy",legacy);
+ await f.invoke("read");let writes=0;await f.invoke("write","Write",1,async()=>({writes:++writes}),{readOnly:false});
+ assert.equal(writes,1);assert.deepEqual(f.store.require("legacyOperations","legacy"),legacy);
+ assert.equal(f.ledger.finishHost("goal",{summary:"本轮结果已提交。",outcome:"completed"},1,"policy").status,"completed");
 });
 
-test("new commands continue after unknown results without changing their original attempt or replaying an old call ID",async t=>{
-  const f=await fixture(t);f.create();let dispatched=0;
-  const run=(call:string,goal="goal",generation=1)=>f.ledger.operation(goal,generation,"policy",call,"Bash",{command:"same authorized command"},
-    async()=>{dispatched++;if(call==="lost")throw new Error("lost response");return {exitCode:0};},v=>v,
-    {readOnly:false,resourceId:"host",commandExecutionId:digest([goal,generation,call])});
-  await assert.rejects(run("lost"),/lost response/);
-  const old=f.store.list<Operation>("superOperations")[0],before=JSON.stringify(old),attempt=JSON.stringify(f.store.require("superAttempts",old.attemptId));
-  f.store.put("legacyOperations","legacy-unknown",{projectId:"project",status:"unknown"});
-  await run("new-call");await run("same-parameters-new-call");
-  await assert.rejects(run("lost"),/cannot be replayed/);
-  assert.equal(dispatched,3);assert.equal(JSON.stringify(f.store.require("superOperations",old.id)),before);
-  assert.equal(JSON.stringify(f.store.require("superAttempts",old.attemptId)),attempt);
-  assert.equal(f.ledger.unresolved("goal"),true);
-  assert.throws(()=>f.ledger.finishHost("goal",{summary:"不能抹掉原未知结果",outcome:"completed"},1,"policy"),/evidence/);
-  f.create({id:"next",workerId:"next-worker",sessionId:"next-session"});await run("next-task","next");
-  assert.equal(f.ledger.finishHost("next",{summary:"新任务已实际执行",outcome:"completed"},1,"policy").status,"completed");
-  // The original non-command contract remains independent of command dispatch.
-  await assert.rejects(f.ledger.operation("goal",1,"policy","file-write","Write",{},async()=>({}),v=>v,{readOnly:false}),/reconciliation/);
-  await assert.rejects(f.ledger.operation("goal",1,"policy","not-a-command","Write",{},async()=>({}),v=>v,{readOnly:false,commandExecutionId:"not-a-host-bash"}),/reconciliation/);
-  await assert.rejects(f.ledger.operation("goal",1,"policy","missing-command-binding","Bash",{},async()=>({}),v=>v,{readOnly:false}),/reconciliation/);
+test("new command, file and MCP calls proceed after unknown results while exact original IDs remain fenced",async t=>{
+ const f=await fixture(t);f.create();let calls=0;
+ const run=(call:string,tool="Bash",binding:Record<string,unknown>={})=>f.ledger.operation("goal",1,"policy",call,tool,{command:"same requested work"},async()=>{calls++;if(call==="lost")throw Error("lost response");return {exitCode:0};},v=>v,{readOnly:false,...binding});
+ await assert.rejects(run("lost"),/lost response/);const old=f.store.list<Operation>("superOperations")[0],attempt=f.store.require("superAttempts",old.attemptId);
+ await run("new-command");await run("same-command-new-call");await run("file","Write");await run("mcp","call_mcp_tool",{mcpServerId:"same"});
+ await assert.rejects(run("lost"),/cannot be replayed/);assert.equal(calls,5);
+ assert.deepEqual(f.store.require("superOperations",old.id),old);assert.deepEqual(f.store.require("superAttempts",old.attemptId),attempt);
+ assert.equal(f.ledger.finishHost("goal",{summary:"本轮调用已结束，旧结果仍保留。",outcome:"completed"},1,"policy").status,"completed");
 });
 
 test("reviewed change directories and closed historical failures impose no second authorization or replay-scope gate on new commands",async t=>{
@@ -212,7 +187,7 @@ test("explicit steps can start a fresh command attempt without reconciling the u
   assert.equal(f.ledger.get("goal").acceptanceState,"not_evaluated");
 });
 
-test("Plan and explicit contracts retain the existing model-driven acceptance path", async (t) => {
+test("Plan confirmation and explicit step ownership remain separate from report submission", async (t) => {
   const { ledger, create } = await fixture(t);
   create({ mode: "plan" });
   assert.equal(ledger.isHostManaged(ledger.get("goal")), false);
@@ -247,16 +222,16 @@ test("multi-step or already accepted legacy plans are not silently adopted", asy
   assert.equal(ledger.isHostManaged(old), false);
 });
 
-test("fresh reads and completion still revalidate current permissions", async (t) => {
-  let denied = false, dispatched = 0;
-  const { ledger, create, invoke } = await fixture(t, () => { if (denied) throw new Error("current policy denied"); }); create();
-  denied = true;
-  await assert.rejects(invoke("denied-host", "inspect_host", 1, async () => { dispatched++; return {}; }), /policy denied/);
-  assert.equal(dispatched, 0);
-  denied = false; await invoke("allowed-host"); denied = true;
-  assert.throws(() => ledger.finishHost("goal", { summary: "完成。", outcome: "completed" }, 1, "policy"), /policy denied/);
-  assert.notEqual(ledger.get("goal").acceptanceState, "pass");
-  assert.equal(storeDeliveries(ledger), 0);
+test("current I/O permissions and report ownership still reject stale policies before side effects",async t=>{
+ let denied=false,calls=0;const f=await fixture(t,()=>{if(denied)throw Error("current policy denied");});f.create();denied=true;
+ await assert.rejects(f.invoke("denied","inspect_host",1,async()=>{calls++;return {}; }),/policy denied/);assert.equal(calls,0);
+ denied=false;await f.invoke("allowed");
+ const owner={taskId:"goal",sessionId:"session",projectId:"project",state:"active",generation:1,policyHash:"changed-policy",leaseUntil:Date.now()+60000};
+ f.store.put("superWorkers","worker",owner);
+ assert.throws(()=>f.ledger.finishHost("goal",{summary:"结束",outcome:"completed"},1,"policy"),/binding changed/);
+ assert.equal(storeDeliveries(f.ledger),0);
+ f.store.put("superWorkers","worker",{...owner,policyHash:"policy"});
+ assert.equal(f.ledger.finishHost("goal",{summary:"已取得本轮数据",outcome:"completed"},1,"policy").status,"completed");
 });
 
 const storeDeliveries = (ledger: TaskLedger) => ledger.store.list("superDeliveries").length;
@@ -283,73 +258,43 @@ test("a report without an explicit valid outcome cannot create a delivery or acc
   assert.equal(store.list("superDeliveries").length, 0); assert.equal(store.list("superAcceptance").length, 0);
 });
 
-test("delivery presentation is tied to the invocation and failed acceptance never creates a success delivery", async (t) => {
-  const { store, ledger, create, invoke } = await fixture(t); create();
-  ledger.finishHost("goal", { summary: "暂时还没有运行数据。", outcome: "partial" }, 1, "policy");
-  const goal = ledger.get("goal"); goal.status = "running"; ledger.save(goal);
-  await invoke("current-discovery", "list_mcp_tools", 2);
-  assert.throws(() => ledger.finishHost("goal", { summary: "已完成。", outcome: "completed" }, 2, "policy"), /discovery/);
-  assert.equal(store.get("superDeliveries", digest(["goal", 2])), undefined);
-  assert.equal(store.require<any>("superDeliveries", digest(["goal", 1])).outcome, "partial");
+test("report metadata remains bound to each invocation without creating a pass verdict",async t=>{
+ const f=await fixture(t);f.create();f.ledger.finishHost("goal",{summary:"暂时没有运行数据。",outcome:"partial"},1,"policy");
+ const old=f.store.require("superDeliveries",digest(["goal",1]));const goal=f.ledger.get("goal");goal.status="running";f.ledger.save(goal);
+ await f.invoke("catalog","list_mcp_tools",2);
+ f.ledger.finishHost("goal",{summary:"第二轮取得目录。",outcome:"partial"},2,"policy");
+ assert.deepEqual(f.store.require("superDeliveries",digest(["goal",1])),old);
+ assert.equal(f.store.require<any>("superDeliveries",digest(["goal",2])).outcome,"partial");assert.equal(f.store.list("superAcceptance").length,0);
 });
 
-test("shared task accepts once after both assignments submit their own evidence and survives reopening", async t => {
-  const {store, ledger, create, invoke} = await fixture(t);
-  const first = create();
-  const second = create({id: 'b', sessionId: 'b-session', workerId: 'b-worker', roleId: 'b-role', mode: 'plan'});
-  store.transaction(() => ledger.joinTask(first.id, [first.id, second.id]));
-  assert.deepEqual(ledger.joinTask(first.id, [second.id]).memberIds, [first.id, second.id]);
-  const {hasAcceptedExecution} = await import('./joint-tasks');
-  await invoke('same-call-id');
-  const firstDone = ledger.finishHost(first.id, {summary: '甲已检查服务', outcome: 'completed'}, 1, 'policy');
-  assert.equal(firstDone.acceptanceState, 'not_evaluated');
-  assert.equal(hasAcceptedExecution(store, firstDone), false);
-  assert.equal(store.list<any>('superAcceptance').filter(receipt => receipt.scope === 'goal').length, 0);
-  assert.equal(ledger.jointState(first.id)?.completed, 1);
-  const reopenedStore = await LakeStore.open(store.home, store.data);
-  try {
-    const reopened = new TaskLedger(reopenedStore);
-    const plan = reopened.begin(second.id, {title: '乙的检查', items: [{id: 'query', title: '检查数据库'}]});
-    reopened.confirm(second.id, plan.revision, true);
-    reopened.start(second.id, 'query', 1, 'policy');
-    await reopened.operation(second.id, 1, 'policy', 'same-call-id', 'read_db_table', {}, async () => ({rows: 1}), v => v, {readOnly: true});
-    assert.throws(() => reopened.update(second.id, {item_id: 'query', status: 'completed', evidence_ids: firstDone.items[0].evidenceIds}, 1, 'policy'), /unrelated/i);
-    reopened.update(second.id, {item_id: 'query', status: 'completed', evidence_ids: ['same-call-id']}, 1, 'policy');
-    reopened.finish(second.id, '乙已检查数据库', 'policy');
-    assert.throws(() => reopened.finish(second.id, '再次提交', 'policy'));
-    const receipts = store.list<any>('superAcceptance');
-    assert.equal(receipts.filter(receipt => receipt.scope === 'contribution').length, 2);
-    const goalReceipts = receipts.filter(receipt => receipt.scope === 'goal');
-    assert.equal(goalReceipts.length, 1);
-    assert.deepEqual(goalReceipts[0].contributionReceipts, [firstDone.contributionReceiptId, reopened.get(second.id).contributionReceiptId]);
-    assert.equal(store.require<any>('superPendingJointReports', first.id).acceptanceId, goalReceipts[0].id);
-    assert.equal(hasAcceptedExecution(store, firstDone), true);
-    assert.equal(ledger.jointState(first.id)?.acceptanceState, 'pass');
-  } finally { reopenedStore.db.close(); }
+test("shared reports aggregate once after both members submit and survive reopening without acceptance",async t=>{
+ const f=await fixture(t);const a=f.create(),b=f.create({id:"b",sessionId:"b-session",workerId:"b-worker",roleId:"b-role",mode:"plan"});f.ledger.joinTask(a.id,[b.id]);
+ await f.invoke("same-call-id");const original=f.store.list<Operation>("superOperations")[0];
+ const first=f.ledger.finishHost(a.id,{summary:"甲的实际报告",outcome:"partial"},1,"policy");assert.equal(f.ledger.jointState(a.id)?.completed,1);
+ const reopenedStore=await LakeStore.open(f.store.home,f.store.data);
+ try{
+  const reopened=new TaskLedger(reopenedStore);const plan=reopened.begin(b.id,{title:"乙的检查",items:[{id:"query",title:"检查数据库"}]});
+  assert.throws(()=>reopened.finish(b.id,"尚未确认计划","policy",1),/active/);
+  reopened.confirm(b.id,plan.revision,true);reopened.start(b.id,"query",1,"policy");
+  await reopened.operation(b.id,1,"policy","same-call-id","read_db_table",{},async()=>({rows:1}),v=>v,{readOnly:true});
+  assert.throws(()=>reopened.update(b.id,{item_id:"query",status:"completed",evidence_ids:[original.id]},1,"policy"),/exact attempt/);
+  reopened.update(b.id,{item_id:"query",status:"completed",evidence_ids:["same-call-id"]},1,"policy");reopened.finish(b.id,"乙的实际报告","policy",1);
+  assert.throws(()=>reopened.finish(b.id,"再次提交","policy",1),/closed/);
+  assert.equal(f.ledger.jointState(a.id)?.status,"completed");assert.equal(f.ledger.jointState(a.id)?.completed,2);
+  const report=f.store.require<any>("superPendingJointReports",a.id);assert.equal(report.reportId,f.ledger.jointTask(a.id)?.reportId);
+  assert.ok(first.completionReportId);assert.equal(f.store.list("superAcceptance").length,0);assert.equal(f.ledger.jointState(a.id)?.acceptanceState,"not_evaluated");
+ }finally{reopenedStore.db.close();}
 });
 
-test("shared acceptance atomically rechecks the first contribution against current permissions and evidence", async t => {
-  let revokeFirst = false;
-  const {store, ledger, create, invoke} = await fixture(t, operation => {
-    if (revokeFirst && operation.goalId === 'goal') throw new Error('first connection changed');
-  });
-  const a = create(), b = create({id: 'b', sessionId: 'b-session', roleId: 'b-role', workerId: 'b-worker'});
-  ledger.joinTask(a.id, [b.id]);
-  await invoke('a'); await invoke('b', 'inspect_host', 1, undefined, {readOnly: true}, b.id);
-  ledger.finishHost(a.id, {summary: 'A', outcome: 'completed'}, 1, 'policy');
-  const finishB = () => ledger.finishHost(b.id, {summary: 'B', outcome: 'completed'}, 1, 'policy');
-  const op = store.list<Operation>('superOperations').find(operation => operation.goalId === a.id)!;
-  store.put('superOperations', op.id, {...op, outputHash: 'tampered'});
-  assert.throws(finishB, /evidence/);
-  store.put('superOperations', op.id, op);
-  revokeFirst = true;
-  assert.throws(finishB, /first connection changed/);
-  assert.equal(ledger.get(b.id).contributionReceiptId, undefined);
-  assert.equal(ledger.jointState(a.id)?.completed, 1);
-  assert.equal(store.list('superPendingJointReports').length, 0);
-  revokeFirst = false;
-  finishB();
-  assert.equal(ledger.jointState(a.id)?.acceptanceState, 'pass');
+test("shared aggregation does not reverify earlier observations or manufacture an acceptance receipt",async t=>{
+ let revoked=false;const f=await fixture(t,op=>{if(revoked&&op.goalId==="goal")throw Error("first connection changed");});
+ const a=f.create(),b=f.create({id:"b",sessionId:"b-session",roleId:"b-role",workerId:"b-worker"});f.ledger.joinTask(a.id,[b.id]);
+ await f.invoke("a");await f.invoke("b","inspect_host",1,undefined,{readOnly:true},b.id);
+ f.ledger.finishHost(a.id,{summary:"A 的先前观测",outcome:"completed"},1,"policy");
+ const original=f.store.list("superOperations");revoked=true;
+ f.ledger.finishHost(b.id,{summary:"B 的部分结果",outcome:"partial"},1,"policy");
+ assert.equal(f.ledger.jointState(a.id)?.status,"completed");assert.deepEqual(f.store.list("superOperations"),original);
+ assert.equal(f.store.list("superAcceptance").length,0);assert.equal(f.store.list("superPendingJointReports").length,1);
 });
 
 test("joining a task enforces project and role identity, cancellation leaves the other member's work available", async t => {
@@ -368,20 +313,15 @@ test("joining a task enforces project and role identity, cancellation leaves the
   await invoke('b', 'inspect_host', 1, undefined, {readOnly: true}, b.id);
   ledger.finishHost(b.id, {summary: 'B', outcome: 'completed'}, 1, 'policy');
   assert.equal(ledger.jointState(a.id)?.status, 'cancelled');
-  assert.equal(ledger.jointState(a.id)?.acceptanceState, 'insufficient');
+  assert.equal(ledger.jointState(a.id)?.acceptanceState, 'not_evaluated');
   assert.equal(store.list<any>('superAcceptance').some(receipt => receipt.scope === 'goal'), false);
 });
 
-test("independent assignments cannot replay one mutation with a different call ID", async t => {
-  const {ledger, create} = await fixture(t);
-  const a = create(), b = create({id: 'b', sessionId: 'b-session', roleId: 'b-role', workerId: 'b-worker'});
-  ledger.joinTask(a.id, [b.id]);
-  let writes = 0;
-  const write = (goalId: string, call: string) => ledger.operation(goalId, 1, 'policy', call, 'Write', {file: 'one'},
-    async () => ({writes: ++writes}), value => value, {readOnly: false, resourceId: 'host'});
-  await write(a.id, 'a-call');
-  await assert.rejects(write(b.id, 'b-call'), /Identical mutation/);
-  assert.equal(writes, 1);
+test("independent calls retain their own IDs without an implicit cross-member mutation deduplication lock",async t=>{
+ const f=await fixture(t);const a=f.create(),b=f.create({id:"b",sessionId:"b-session",roleId:"b-role",workerId:"b-worker"});f.ledger.joinTask(a.id,[b.id]);let writes=0;
+ const write=(goal:string,call:string)=>f.ledger.operation(goal,1,"policy",call,"Write",{file:"one"},async()=>({writes:++writes}),v=>v,{readOnly:false,resourceId:"host"});
+ const first=await write(a.id,"a");await write(b.id,"b");assert.deepEqual(await write(a.id,"a"),first);assert.equal(writes,2);
+ await assert.rejects(f.ledger.operation(a.id,1,"policy","a","Write",{file:"different"},async()=>({writes:++writes}),v=>v,{readOnly:false}),/identity reused/);assert.equal(writes,2);
 });
 
 test("joint tasks retain per-member usage and sum it without a round ceiling", async t => {

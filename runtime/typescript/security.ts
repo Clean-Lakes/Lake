@@ -150,18 +150,6 @@ export class LakeSecurity {
   }
   mcp(projectId: string, capability: "mcp.discover" | "mcp.call" | "artifact.read", local: boolean): "allow" | "ask" {
     this.check();
-    // Catalog v1 imported only visible projects. Until exact legacy service
-    // descriptors are validated, an unresolved MCP call anywhere in the old
-    // ledger remains an unknown service identity, including archived projects.
-    const path = join(this.store.data, "adk/sessions.sqlite");
-    if (capability === "mcp.call" && existsSync(path)) {
-      const db = new DatabaseSync(path, { readOnly: true });
-      try {
-        if (db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='native_operations'").get() &&
-            db.prepare("SELECT 1 FROM native_operations WHERE tool='call_mcp_tool' AND (status IN ('dispatched','running','unknown') OR (orphan_state <> '' AND risk_resolved_at IS NULL)) AND (closure_state IS NULL OR closure_state <> 'reconciled') LIMIT 1").get())
-          throw new HttpError(409, "旧 MCP 调用的准确服务身份及结果仍需核实，不能跨项目重试");
-      } finally { db.close(); }
-    }
     const legacy = this.store.get<any>("legacyProjectPolicies", projectId);
     if (!legacy) return "allow";
     const policy = legacy.data;

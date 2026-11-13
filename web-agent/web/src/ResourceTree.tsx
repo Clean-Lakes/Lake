@@ -1,9 +1,10 @@
 import {createPortal} from "react-dom";
+import {SidebarResourceActions} from "./SidebarResourceActions";
 import {AppSelect} from "./AppSelect";
 import {Glyph} from "./Icons";
 import {BulkCheckbox, type BulkSelection} from "./BulkNavigationDelete";
 import {NavigationMenu,type NavigationDeleteTarget} from "./NavigationDelete";
-import { useEffect, useRef, useState, type DragEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { useContext, useEffect, useRef, useState, type DragEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import type { Project, Resource, ResourceTreeNode } from "../../shared/contracts";
 import { api, readableError } from "./api";
 import { canMoveInto, compareTreeNodes, dropPlacement, projectResourceTree, treeDropZone } from "./resource-tree-model";
@@ -15,7 +16,14 @@ function ResourceFolderDialog({editor,location,busy,blocked,error,returnFocus,on
   useEffect(()=>{
     const node=dialog.current,previous=returnFocus.current;
     node?.showModal();input.current?.focus({preventScroll:true});input.current?.select();
-    return()=>{node?.close();if(previous?.isConnected)previous.focus({preventScroll:true});};
+    return()=>{
+      node?.close();
+      // Pointer dismissal can finish the browser's modal focus restoration
+      // after React removes the dialog. Restore once that transition is done.
+      requestAnimationFrame(()=>{
+        if(previous?.isConnected&&(!document.activeElement||document.activeElement===document.body||document.activeElement===previous))previous.focus({preventScroll:true});
+      });
+    };
   },[returnFocus]);
   return createPortal(<dialog ref={dialog} className="presentation-dialog resource-folder-dialog" aria-label={title} aria-busy={busy} onCancel={event=>{event.preventDefault();if(!busy)onClose();}}>
     <div className="presentation-dialog-head"><h2>{title}</h2><button type="button" className="icon-button" aria-label={`关闭${title}`} disabled={busy} onClick={onClose}><Glyph name="close" size={18}/></button></div>
@@ -28,12 +36,14 @@ function ResourceFolderDialog({editor,location,busy,blocked,error,returnFocus,on
   </dialog>,document.body);
 }
 function FolderIcon() { return <Glyph name="folder" size={16} className="resource-tree-folder-icon"/>; }
-export function ResourceTree({project, resources, nodes, disabled, renderResource, refresh, onAddResource, onImport, onDelete, selection, onSelectAll, filtering = false}: {
+export function ResourceTree({project, resources, nodes, disabled, renderResource, refresh, onAddResource, onImport, onDelete, selection, onSelectAll, filtering = false, navigationPanel = false}: {
+  navigationPanel?: boolean;
   filtering?: boolean;
   selection?: BulkSelection; onSelectAll?: () => void;
   project: Project; resources: Resource[]; nodes: ResourceTreeNode[]; disabled: boolean;
   renderResource: (resource: Resource) => ReactNode; refresh: () => Promise<unknown>; onAddResource: (parentId: string | null) => void; onImport: () => void; onDelete:(target:NavigationDeleteTarget)=>void;
 }) {
+  const actionHost=useContext(SidebarResourceActions);
   const tree = projectResourceTree(project.id, nodes, resources);
   const resourceMap = new Map(resources.map(resource => [resource.id, resource]));
   const nodeMap = new Map(tree.map(node => [node.id, node]));
@@ -239,15 +249,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   }
   const contextNode=context ? nodeMap.get(context.id) : undefined;
   const contextResource=contextNode?.resourceId ? resourceMap.get(contextNode.resourceId) : undefined;
-  return <>{context && contextNode && <NavigationMenu title={contextResource?.name || contextNode.name} anchor={contextAnchor} x={context.x} y={context.y} onClose={()=>setContext(null)} actions={[
-   ...(contextNode.kind==="folder" ? [
-    {label:"新建资源",icon:"server" as const,disabled:blocked,run:()=>onAddResource(contextNode.id)},
-    {label:"新建子目录",icon:"folder" as const,disabled:blocked,run:()=>openEditor({parentId:contextNode.id,name:""},contextAnchor.current)},
-    {label:"重命名",icon:"edit" as const,separatorBefore:true,run:()=>openEditor({id:contextNode.id,parentId:contextNode.parentId,name:contextNode.name},contextAnchor.current)}
-   ] : []),
-   {label:"移动到…",icon:"arrow",run:()=>setMoving(contextNode.id)},
-   {label:contextNode.kind==="folder"?"删除目录":"删除资源",icon:"trash",separatorBefore:true,danger:true,run:()=>onDelete({kind:contextNode.kind,id:contextResource?.id || contextNode.id,projectId:project.id,name:contextResource?.name || contextNode.name})}
-  ]}/>}<div className="nav-heading resources-heading"><button type="button" className="nav-section-toggle" aria-label={`${sectionExpanded ? "折叠" : "展开"}${project.name}的资源`} aria-expanded={sectionExpanded} aria-controls={`project-resources-${project.id}`} onClick={() => setSectionExpanded(value => !value)}><Glyph name="chevron" size={13} className={`resource-section-chevron ${sectionExpanded ? "chevron-open" : ""}`}/><span className="resource-section-label">资源 <small>{resources.length}</small></span></button>{selection && <button type="button" className="bulk-group-toggle" disabled={blocked || selection.disabled || !resources.length && !tree.length} aria-label={`全选 ${project.name} 的资源和文件夹`} onClick={onSelectAll}>全选</button>}<div hidden={!!selection} className="resource-add-control" ref={addControl} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setAddOpen(false); }}>
+  const heading=<div className={navigationPanel?"resource-panel-actions":"nav-heading resources-heading"}>{!navigationPanel&&<button type="button" className="nav-section-toggle" aria-label={`${sectionExpanded ? "折叠" : "展开"}${project.name}的资源`} aria-expanded={sectionExpanded} aria-controls={`project-resources-${project.id}`} onClick={() => setSectionExpanded(value => !value)}><Glyph name="chevron" size={13} className={`resource-section-chevron ${sectionExpanded ? "chevron-open" : ""}`}/><span className="resource-section-label">资源 <small>{resources.length}</small></span></button>}{selection && <button type="button" className="bulk-group-toggle" disabled={blocked || selection.disabled || !resources.length && !tree.length} aria-label={`全选 ${project.name} 的资源和文件夹`} onClick={onSelectAll}>全选</button>}<div hidden={!!selection} className="resource-add-control" ref={addControl} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setAddOpen(false); }}>
     <button type="button" ref={addButton} className="nav-add resource-create-trigger" aria-label={`在${project.name}新建资源或目录`} title="新建资源或目录" aria-haspopup="menu" aria-expanded={addOpen} aria-controls={`resource-add-${project.id}`} disabled={blocked} onPointerDown={() => { addFocusTarget.current = null; }} onKeyDown={event => {
       // Enter/Space 交给按钮原生激活（随后触发 onClick），避免再手动切换造成双重开关。
       if (event.key === "Enter" || event.key === " ") { addFocusTarget.current = "first"; return; }
@@ -257,7 +259,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
       if (!addOpen) { setAddOpen(true); return; }
       const items = Array.from(addMenu.current?.querySelectorAll<HTMLButtonElement>("button") ?? []);
       (event.key === "ArrowDown" ? items[0] : items.at(-1))?.focus();
-    }} onClick={() => setAddOpen(value => !value)}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>新建</span></button>
+    }} onClick={() => setAddOpen(value => !value)}><Glyph name="plus" size={16}/><span>新建</span></button>
     {addOpen && <div ref={addMenu} id={`resource-add-${project.id}`} className="resource-add-menu" role="menu" aria-label="新建资源或目录" onMouseDown={event => {
       // Safari 点击按钮时会先 blur 到 body；保留菜单焦点，避免 onBlur 在 click 前卸载菜单。
       if (event.button === 0) event.preventDefault();
@@ -271,7 +273,16 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
       <button type="button" role="menuitem" onClick={() => { setAddOpen(false); onImport(); }}><FolderIcon/><span>导入资源</span></button>
       <button type="button" role="menuitem" onClick={() => { setAddOpen(false); openEditor({parentId:null,name:""},addButton.current); }}><FolderIcon/>新建目录</button>
     </div>}
-  </div></div>{(sectionExpanded || filtering) && <div id={`project-resources-${project.id}`} className="resource-tree" ref={root} aria-label={`${project.name} 资源目录`}>
+  </div></div>;
+  return <>{context && contextNode && <NavigationMenu title={contextResource?.name || contextNode.name} anchor={contextAnchor} x={context.x} y={context.y} onClose={()=>setContext(null)} actions={[
+   ...(contextNode.kind==="folder" ? [
+    {label:"新建资源",icon:"server" as const,disabled:blocked,run:()=>onAddResource(contextNode.id)},
+    {label:"新建子目录",icon:"folder" as const,disabled:blocked,run:()=>openEditor({parentId:contextNode.id,name:""},contextAnchor.current)},
+    {label:"重命名",icon:"edit" as const,separatorBefore:true,run:()=>openEditor({id:contextNode.id,parentId:contextNode.parentId,name:contextNode.name},contextAnchor.current)}
+   ] : []),
+   {label:"移动到…",icon:"arrow",run:()=>setMoving(contextNode.id)},
+   {label:contextNode.kind==="folder"?"删除目录":"删除资源",icon:"trash",separatorBefore:true,danger:true,run:()=>onDelete({kind:contextNode.kind,id:contextResource?.id || contextNode.id,projectId:project.id,name:contextResource?.name || contextNode.name})}
+  ]}/>}{navigationPanel&&actionHost?createPortal(heading,actionHost):heading}{(sectionExpanded || filtering || navigationPanel) && <div id={`project-resources-${project.id}`} className="resource-tree" ref={root} aria-label={`${project.name} 资源目录`}>
     {error&&!editor&&<p className="form-error" role="alert">{error}</p>}
     {dragging && <div className="resource-drag-status" role="status">{drop ? `${drop.zone==='inside'?'移入':drop.zone==='before'?'排在前面：':'排在后面：'}${drop.id==='root'?'资源根层':resourceMap.get(nodeMap.get(drop.id)?.resourceId??'')?.name??nodeMap.get(drop.id)?.name??''}` : '上下拖动排序，向右拖入目录'} · Esc 取消</div>}
     {render(null)}

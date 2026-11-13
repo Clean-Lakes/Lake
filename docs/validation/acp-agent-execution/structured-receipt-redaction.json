@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-11",
+  "testedSource": "c521f01867b241b7f3485411928934f810bb5d5a",
+  "platform": "darwin-arm64",
+  "node": "24.14.0",
+  "cause": "String replacement on serialized receipt JSON corrupted a numeric duration field; receipt handling threw before settling the internal execution.",
+  "changes": [
+    "Reuse structured string-value redaction across receipts, progress, ledgers, views, MCP, database and operator confirmation input.",
+    "Parse embedded approval JSON before redaction and serialization.",
+    "Persist unknown and settle pending promises on receipt processing failure; complete underlying runtime close without replay."
+  ],
+  "checks": {
+    "backendTypes": "pass",
+    "runtimeBuild": "pass",
+    "backendUnit": {"passed": 272, "skipped": 4, "failed": 0},
+    "hostIntegration": {"passed": 193, "skipped": 0, "failed": 0},
+    "realCodexACP": {"passed": 4, "failed": 0, "adapter": "2.2.2", "engine": "0.160.1", "modelService": "loopback synthetic Responses", "realExternalInference": false},
+    "runtimeBoundary": "pass",
+    "backendNamingViolations": 0,
+    "namingUnit": {"passed": 5, "failed": 0},
+    "webTypesAndBuild": "pass via signed desktop build",
+    "frontendUnitsRerun": false
+  },
+  "dev": {
+    "command": "scripts/build_lake_desktop.sh --dev --install",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "home": "~/.lake-dev",
+    "dirty": false,
+    "backendRuntime": "typescript",
+    "backendSHA256": "8422b31aa4629b0199d1d9f23d629e62793cc12dec1898b6b25f537e103dc44e",
+    "deepSignatureVerified": true,
+    "buildOriginVerified": true,
+    "taskListVisible": 33,
+    "normalPreInstallExit": true,
+    "forcedTermination": false
+  },
+  "preservation": {
+    "projects": 19,
+    "visibleWorkers": 150,
+    "recordsUnchanged": {"superWorkers": 128, "superGoals": 128, "superAttempts": 167, "superOperations": 354, "superAcceptance": 162, "superReports": 174, "acpRuns": 4, "commandExecutions": 241},
+    "legacyKinds": 14,
+    "legacyRecordsUnchanged": 689,
+    "localCodexConfigurationUnchanged": true,
+    "historicalUnknownRewritten": false,
+    "businessTasksReplayed": false
+  },
+  "limitations": ["No real cluster checks or inference latency benchmark", "Existing reports and unknown outcomes retained", "Other Agent/platform and complete migration parity not retested", "Go/race/vet not rerun", "No production changes, merge, release or automatic CI"]
+}

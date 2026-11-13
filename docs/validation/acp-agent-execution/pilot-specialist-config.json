@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-11",
+  "testedSource": "afbfe85ed6cff7c1d30a4e48c70d76a64559f1a9",
+  "platform": "darwin-arm64",
+  "node": "24.14.0",
+  "behavior": {
+    "scope": "project specialist configuration through Pilot",
+    "fields": [
+      "name",
+      "duties",
+      "avatar_id",
+      "execution"
+    ],
+    "partialUpdate": "omitted fields retained; create still requires name and duties, allowing empty duties when unstated",
+    "avatar": "100 shared local IDs; exact name/alias first, then partial match; beaver maps to 河狸/海狸/🦫; auto restores default",
+    "execution": "native or Codex, future tasks only; existing API profile revision remains compatible",
+    "guards": [
+      "admitted current human event and exact quote",
+      "project RoleID and current expected_revision",
+      "atomic event/part idempotency",
+      "unknown fields and invalid avatars/backends rejected"
+    ],
+    "display": "current project Provider updates navigation, headings, task views and reports by exact RoleID; default order, palette and phase retained"
+  },
+  "checks": {
+    "backendTypes": "pass",
+    "runtimeBuild": "pass",
+    "backendUnit": {
+      "passed": 275,
+      "skipped": 4,
+      "failed": 0
+    },
+    "hostIntegration": {
+      "passed": 199,
+      "failed": 0
+    },
+    "realCodexACP": {
+      "passed": 4,
+      "failed": 0,
+      "adapter": "2.2.2",
+      "engine": "0.160.1",
+      "service": "loopback synthetic Responses",
+      "realExternalInference": false
+    },
+    "frontendTypes": "pass",
+    "frontendUnit": {
+      "passed": 799,
+      "failed": 0
+    },
+    "webBuild": "pass standalone and signed desktop build",
+    "totalPassedExcludingNaming": 1277,
+    "runtimeBoundary": "pass",
+    "backendNamingViolations": 0,
+    "namingUnit": {
+      "passed": 5,
+      "failed": 0
+    },
+    "browserProof": "pilot-specialist-config-browser.json"
+  },
+  "dev": {
+    "command": "scripts/build_lake_desktop.sh --dev --install",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "home": "~/.lake-dev",
+    "dirty": false,
+    "backendSHA256": "a8a4a66efc8548f8cbfb11fb938a240666cb558dc6f037eabae2e154c517f3db",
+    "deepSignatureVerified": true,
+    "buildOriginVerified": true,
+    "nativePilotLoadedWithComposer": true,
+    "actualBusinessPromptOrRoleEditSent": false,
+    "fullHomeOrDatabaseBackupsCreated": false,
+    "deletedBackupRootsRecreated": false
+  },
+  "preservation": {
+    "projects": 19,
+    "visibleWorkers": 151,
+    "recordCounts": {
+      "superRoles": 20,
+      "superChannels": 17,
+      "superRoleMutations": 4,
+      "superWorkers": 129,
+      "superGoals": 129,
+      "superAttempts": 183,
+      "superOperations": 400,
+      "superAcceptance": 162,
+      "superReports": 175,
+      "acpRuns": 5,
+      "commandExecutions": 287,
+      "legacyChannelReads": 3,
+      "legacyChannelTimeline": 190,
+      "legacyGoals": 46,
+      "legacyLoadedViews": 17,
+      "legacyMigrationBatches": 1,
+      "legacyMySQLConnections": 5,
+      "legacyOperations": 53,
+      "legacyProjectPolicies": 2,
+      "legacyResources": 139,
+      "legacySSHConnections": 123,
+      "legacyServiceConnections": 5,
+      "legacySessionSources": 82,
+      "legacyWorkers": 22,
+      "legacyWorkflowTemplates": 1
+    },
+    "protectedRecordsUnchanged": true,
+    "localCodexConfigurationUnchanged": true
+  },
+  "limitations": [
+    "Synthetic model responses validate actual SDK tools and storage, not external-model interpretation reliability",
+    "Native Dev validation was read-only; real specialist configuration and old tasks were not rewritten or replayed",
+    "No global credentials or security-policy natural-language editing",
+    "No other-platform, Go/race/vet or complete migration parity rerun",
+    "No merge, release, production install or automatic CI"
+  ]
+}

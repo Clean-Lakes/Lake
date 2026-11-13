@@ -1,0 +1,66 @@
+{
+  "testedCodeSHA": "718da90303be0a41c661a312f5ae2a2de714695d",
+  "installedSourceSHA": "6c0054aba76e9474b74cf0de4f0bb39c2b5c98dc",
+  "buildInputsMatchTestedCode": true,
+  "buildWorktreeDirty": false,
+  "backendSHA256": "14e75c6320b8afbdde29856052eedf9d947495a852c22fe46150ab6733dd866f",
+  "bundleId": "com.cleanlakes.lake.desktop.dev",
+  "version": "0.3.32",
+  "signingVerified": true,
+  "nativeWindowObserved": true,
+  "before": {
+    "pilot": {
+      "height": 56,
+      "radius": "22px",
+      "padding": "8px",
+      "lineHeight": "normal",
+      "textHeight": 40
+    },
+    "resourceGap": 63,
+    "headerHeight": 41,
+    "tabHeight": 32
+  },
+  "after": {
+    "pilotHeight": 48,
+    "pilotRadius": "14px",
+    "tabHeight": 28,
+    "tabRadius": "8px",
+    "resourceGap": 7,
+    "plusInHeader": true,
+    "standaloneActionRows": 0,
+    "overflow": false,
+    "pointerCancelFocus": true,
+    "menu": {
+      "radius": "14px",
+      "within": true,
+      "items": [
+        "新建资源",
+        "导入资源",
+        "新建目录"
+      ]
+    },
+    "narrow": {
+      "overflow": false,
+      "coarse": true,
+      "actionHeight": 44,
+      "headerHeight": 44,
+      "tabHeight": 44,
+      "aligned": true
+    },
+    "themeRestored": "light"
+  },
+  "fixture": {
+    "pilotHeight": 48,
+    "pilotRadius": "14px",
+    "tabRadius": "8px",
+    "gap": 6,
+    "actionInHeader": true,
+    "actionAligned": true,
+    "actionTop": 163,
+    "headerTop": 163,
+    "tabX": 12
+  },
+  "frontendTests": 816,
+  "webTypecheckAndBuild": true,
+  "backup": "/Users/lingyunxieqing/Library/Application Support/LakeDevBackups/compact-sidebar-20261113-135142"
+}

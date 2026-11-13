@@ -1,5 +1,21 @@
 # Lake Super-agent 内核与三模块协作约定
 
+2026-11-13 用户要求 Pilot 真正召集干员在当前对话中逐人回应，追踪缺席并最终汇总。TypeScript 使用 `convene_specialists` 将当前真实人工事件绑定到独立对话轮次，冻结全部或指定的稳定 RoleID 和职责版本；每位收件人冻结既有 Agent/模型与头像，使用独立原生 SDK 或 Codex ACP Session 生成自己的文字回复，宿主按准确来源署名投递到 Pilot 与角色频道。共享全局/项目调度容量，持久记录排队、回应、失败、超时、停止和中断；按用户后续反馈，报数、介绍与普通讨论在收件人全部结清后直接结束，只显示实际人数与缺席状态，不再重复生成名单/职责总结；仅用户明确要求综合结论或比较时通过 summarize=true 启动独立 Pilot 汇总。过程使用 13px 次要状态字体，与 15px 正式正文区分；历史自动总结仅从主对话展示隐藏，原消息不改写。对话不创建业务 Goal/Operation/验收回执，不提供资源工具、子智能体或长期记忆读取，不把报到当业务完成。业务调查继续沿 ACP 分支的 Task/Worker 报告协议执行，不恢复已移除的待核实和验收系统。停止撤销未结回应和汇总，重启保留状态但不重放模型；此条细化下文“纯对话直接答复”，普通单人聊天继续直接答复。实现计划见[多人对话计划](plan/feature-pilot-conversation-1.md)。
+
+2026-11-12 用户要求 Pilot 创建专员时，未指定 Agent 和模型的部分从当前已配置可用组合中随机选择并保存：先等概率选择 Agent，再选择该 Agent 的兼容模型；只指定一个字段时仅随机其余部分。原生候选只包含启用且已配置凭据（或 Ollama）的对话模型，Codex 只包含当前就绪且在固定兼容目录中的本机模型，不扩大适配器目录。随机只发生在新专员创建时，含 route_work 隐式建角色；重复创建回执、已有专员、局部更新与原 Worker 不重抽。execution.model 保存准确 provider/model 引用，新 Worker 冻结引用并实际用于原生 SDK 或 Codex 进程级模型覆盖，不修改 Pilot 全局选择、本机登录/配置或思考强度。Codex 启动脚本按内容区分，避免并发覆盖；原权限、来源、任务报告和幂等约定保持。本条替代下文“新专员未指定时默认 Codex”的旧规则，历史未绑定专员仍保持兼容默认。见[实施计划](plan/feature-specialist-random-execution-1.md)。
+
+2026-11-12 用户明确要求移除 TypeScript 的“待核实／验收”系统，包含前端和后台。`work_finish` 提交 completed/partial 报告均结束本次执行；completed 表示报告已提交，不是宿主独立核验业务成功。不再生成步骤、目标或共同任务的 `superAcceptance`，旧 unknown/dispatched 不阻断新调用、报告、后续重查或停止，核实 API 返回 410。多人任务汇总各自报告，不发布“统一验收通过”。专员页按原分配时间展示任务记录，取消状态标签、分类与分组。旧操作、已结算尝试、验收和报告原样保留，不重放原调用或将 unknown 改为成功；兼容 acceptance 字段只供旧数据读取。当前权限、明确 deny、资源/连接版本、审批偏好、Plan 确认、owner/代次/期限、取消和实际后台执行汇合仍独立生效。Memory 保留同意与来源检查，新报告只有已结算观测，没有业务验收；失败/未知不能成为成功经验。原上下文引用已撤回知识时，已结束报告也可沿原明确范围和原期限建立独立只读复查。此条替代下文历史 TS 验收和待核实门禁，不改旧 Go 档案或生产安装。见[实施计划](plan/refactor-task-result-lifecycle-1.md)及[当前合同](docs/security/task-confirmation.md)。
+
+2026-11-11 Pilot 支持自然语言管理当前项目的资源/资源文件夹，以及 Lake 全局 Skills/注册目录和 MCP 服务配置。控制工具仅注册给 Pilot，校验当前完整人工事件/原文、准确对象与版本、权限偏好和持久幂等回执；Worker、child 与 ACP 业务目录不接收管理权。资源沿共享 Items 写入及回收站；导入 Skill 的内容不覆盖、删除只解除注册，Lake 管理的目录可回收且旧读取器仍保持停用。MCP 全局服务保存与当前项目工具绑定分开，连接测试需单独执行并受 MCP/本机权限约束。省略字段保留凭据和原工具范围；配置成功不代表连接可用或任务验收。新 SSH 缺少凭据时保存 unavailable，执行验证继续严格；只有用户明确选定的同项目来源可在宿主内部复用已有凭据。文件与 SQLite 间未确认提交不自动重放，不经 Shell 直接修改配置，不改变 Memory 及业务账本职责。见[实施计划](plan/feature-pilot-configuration-crud-1.md)及[验证](docs/validation/acp-agent-execution/pilot-configuration-crud.md)。
+
+2026-11-11 用户进一步要求 SSH 首次连接及已存公钥变化均默认后台信任并连接。TypeScript LakeSSH 在认证前沿原校验和私有文件原子保存路径更新观察到的公钥，不发布指纹弹窗；已存算法仅作为偏好，允许默认支持的新算法。原配置/凭据版本、权限、取消与业务验收继续生效；旧身份回执不因更新公钥变成当前有效证据。专员页面改为纯角色任务概览，移除聊天输入、新建任务及隐藏上传入口，派单统一从 Pilot 完成，原任务详情、问题、确认、停止及未读保持。此条取代上一轮仅自动首次信任的限制。见[实施计划](plan/refactor-ssh-trust-specialist-view-1.md)。
+
+2026-11-11 回执脱敏修复：工具结果、进展、展示及审批参数复用结构化脱敏，只处理字符串值，保留数值、布尔、固定 schema 键及 Date；禁止在整段序列化 JSON 中替换再解析。回执处理异常时清理内部执行、定时器与等待者并记录 unknown，退出仍完成底层 runtime 清理；后台账本不把缺失回执当成功。原任务、历史 unknown、资源权限及验收不追溯修改，不自动重派。见[实施计划](plan/refactor-structured-receipt-redaction-1.md)。
+
+2026-11-11 资源发现修复：原生 Worker、任务内 child 与 ACP 共用的 `list_assets` 读取当前项目的真实资源树，返回有界 `path` 并按祖先目录名/完整路径检索。相关目录改名或移动使旧分页游标失效；异常目录明确不可解析。目录路径仅为显示与发现元数据，不签发权限，不按相同 IP 或跳板入口合并资源；准确资源 ID、连接版本、原任务范围和验收继续生效。旧 Worker/run/unknown 不改写、不重放。见[实施计划](plan/refactor-agent-resource-directory-1.md)。
+
+2026-11-10 用户提出让专员、任务 Worker 及任务内 subagent 通过 ACP 驱动 Codex、Claude Code 等独立 Agent。方向为统一可选执行后端：长期专员保存新任务默认配置，Worker 与逻辑 child 使用独立任务会话，原生 Worker/child 也可调用外部执行段；Task、权限、Memory 和验收仍归原模块。ACP 通知与外部回答只提供过程和结果线索，真实业务证据来自 Lake 工具桥或宿主独立验证。协议本身不提供沙箱，外部工具约束须按适配器版本和平台实测；不能以全量自动批准替代当前 Pilot 权限。详见 [ACP 外部 Agent 执行设计](plan/architecture-acp-agent-execution-1.md)。用户最新修订仅保留 Codex 外部后端：移除 runtime-acp 启动与私有模型代理，历史绑定只读且禁止改派或重放；Lake 自身的公开 SDK 保留。未设置偏好的专员默认 Codex，执行选择统一在聊天框模型菜单；启用时自动识别本机 Node/npm 并准备固定连接，独立 Codex 不依赖普通模型 Key。按用户后续明确要求，直接复用宿主 CODEX_HOME（默认 ~/.codex）已有登录和模型/服务配置，取消 Lake 项目独立 Key；不复制凭据或改写本机配置。新 profile 升级 schema2，账号/配置变化递增 revision，同账号令牌刷新保持身份；旧 Worker/run 不改写。仍固定已验证引擎与模型工具目录，启动及线程层逐个禁用继承 MCP、hooks、notify，业务工具走私有 Lake MCP/ToolExecutor；SQLite 与日志保留在 Lake 私有目录。详见[本机登录实施](plan/refactor-codex-local-login-1.md)。详见[统一模型入口实施](plan/refactor-codex-composer-1.md)。项目设置按需启用，现有任务及一层逻辑 child 约定保持；实际验证与剩余范围见 [兼容记录](docs/validation/acp-agent-execution/compatibility.md)。
+
 2026-11-09 用户要求专员统一跟随 Pilot 的执行偏好，开启相应自动执行后不再额外确认。TypeScript 的 Pilot、独立 Worker 和原生 child 共用当前项目 Pilot 的分类开关及共享默认值；Python/动态脚本的风险等级、SDK build 模式、MCP stdio 发现、旧策略可用能力的单次 ask 不再形成第二套操作审批。关闭开关时，实际工具调用在 I/O 前等待原生审批。文件/搜索/技能/网页读取、写入、命令/主机检查、数据库只读查询及 MCP 发现/调用分别使用对应开关。风险和只读证明保持原样；自动执行不改变资源归属、明确 deny、连接/凭据/SSH 指纹、Plan/明确只读范围、停止/代次/期限、Memory 与结果验收。原待确认调用不自动批准或重放；人的终端接管与任务计划确认保留原协议。专员频道与 Worker 只投影 Pilot 的有效权限，不维护独立权限配置。见[实施计划](plan/refactor-pilot-operation-permissions-1.md)。
 
 2026-11-09 调查文件与聊天结论分别交付：普通任务已有本轮实际操作却未提交 `work_finish` 时，通过 SDK 原生 Stop hook 在同一轮内请求一次结论补报，不创建新的任务、执行上下文或自定义模型循环。补报只使用已有结果、原后台任务汇合和结果提交，不重复调查命令或追加文件。正常提交的完整/部分总结直接沿原频道投递；仍未提交时明确显示未完成。显式计划、正在等待的人工输入、停止、原操作结果及任务/共同验收仍由原账本负责，不从调查文件推断成功。实现与验证见[结论补报记录](docs/validation/typescript-candidate/final-report-2026-11-09.md)。
@@ -55,7 +71,7 @@ Lake 的目标业务架构统一为持续的 **Pilot Router + 独立任务 Worke
 
 交互任务与资源选择解耦：任务可以先建立目标和步骤，再按执行需要发现所属项目的数据库、主机、集群、MCP 或技能。同一目标补充资源不另建 Task/Worker，不冻结首次目录为资源白名单。任务中的资源字段是历史参考；每次操作仍绑定准确资源、当前连接版本、参数、权限及原操作句柄。明确的用户/父任务边界、保存工作流的冻结模板、未决副作用和验收条件继续由各自原账本约束。无完整受信操作描述的旧自动恢复保留原保守核验，不自动迁移或重放。
 
-长期专员可由 Pilot 独立创建、列出和编辑名称/职责，创建不附带任务或许可；按稳定 RoleID 复用。任务创建时冻结职责版本，后续编辑不改写已有任务。详见 [长期专员管理](docs/lake-pilot.md#长期专员管理)。
+长期专员可由 Pilot 独立创建、列出，并局部编辑名称、职责、显式本地头像与后续任务默认后端，创建和配置不附带任务或许可；按稳定 RoleID 复用。头像目录与显示共用当前 100 项 Lake 图形，未显式选择时保留原 RoleID 默认外观。管理沿原人工 event/quote、当前 revision 和幂等事务，任务创建时冻结职责与执行版本，后续编辑不改写已有任务或本机 Codex 配置。详见 [长期专员管理](docs/lake-pilot.md#长期专员管理)。
 
 长期专员入口与执行上下文分离：同一项目/准确 RoleID 使用一个连续角色频道，每项工作仍有独立 Task、Worker 和 ADK Session。频道不能签发许可或隐式扩大旧任务；跨任务比较只读取显式登记且当前可读的证据。实现和验收进度见 [长期专员频道计划](plan/feature-specialist-channel-1.md)，不改变下述 Memory 所有权和门控。
 
@@ -159,3 +175,5 @@ CM 的 Pilot 工作集/摘要可在 FM 新流水线启用前独立交付；角�
 - [旧运维 V2 门控与历史验收](docs/validation/lake-operational-memory-v2.md)
 
 变更前重新核对实际代码、已合入 PR 与维护者当前方案。发现旧草稿或历史阶段记录与本文职责约定不一致时，明确记录差异并更新对应规格，不把未交付能力写成现状；用户后续明确调整架构时同步维护本文件与详细说明。
+
+2026-11-10 已授权首批 ACP 执行后端实施：runtime-acp 与 Codex，保留 Task/Security/Memory 既有职责。见 [架构与实施进度](plan/architecture-acp-agent-execution-1.md) 和 [兼容记录](docs/validation/acp-agent-execution/compatibility.md)。

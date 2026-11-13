@@ -1,0 +1,52 @@
+{
+  "initialWrites": 0,
+  "rowSurvivesPoll": true,
+  "animationSurvivesPoll": true,
+  "selectedAfterPoll": "fixture-session-0",
+  "activeRows": 2,
+  "keyboardFilter": "需关注2",
+  "keyboardFocus": "需关注2",
+  "directoryMatches": 6,
+  "emptySearch": "没有匹配的任务",
+  "newTaskFocus": "message-input",
+  "draft": "保留这份派发草稿，不发送",
+  "questionAndStop": [
+    {
+      "path": "/api/sessions/fixture-session-2/ai/questionReply",
+      "body": {
+        "id": "fixture-question",
+        "answers": {
+          "scope": [
+            "只读检查当前集群"
+          ]
+        }
+      }
+    },
+    {
+      "path": "/api/sessions/fixture-session-0/ai/workControl",
+      "body": {
+        "goalId": "fixture-task-0",
+        "command": "cancel",
+        "revision": 1
+      }
+    }
+  ],
+  "scrolling": {
+    "before": 574,
+    "after": 600,
+    "rows": 43
+  },
+  "escapeRestoresOriginalRow": true,
+  "emptyPage": {
+    "title": "还没有任务",
+    "newTaskEnabled": true
+  },
+  "viewportWidths": [
+    1680,
+    1280,
+    900,
+    560
+  ],
+  "noHorizontalOverflow": true,
+  "reducedMotionLoaders": "none"
+}

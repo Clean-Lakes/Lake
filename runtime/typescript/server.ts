@@ -1,3 +1,4 @@
+import {redactModelValue} from "./model-errors";
 import { permissionDefaults } from "../../web-agent/shared/execution-preferences";
 import {acknowledgeConversation} from "./conversation-reads";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -26,6 +27,8 @@ import { LakeStore, HttpError, id, now, privateDirectory } from "./store";
 import { LakeAgents } from "./agent";
 import { LakeNavigation } from "./navigation";
 import { LakeResourceNavigation } from "./resource-navigation";
+import {LakeResourceManagement} from "./resource-management";
+import {PilotConfiguration} from "./pilot-configuration";
 import {messageInput} from './message-input';
 import {LakeMessageQueue} from './message-queue';
 import {LakeWorkflowCatalog} from './workflow-catalog';
@@ -43,7 +46,7 @@ import { digest } from "./tasks";
 import { LakeSecurity } from "./security";
 import { LakeMemory } from "./memory";
 import {openClaudeMemIndex} from './claude-mem';
-import {LakeServiceResources,isServiceKind} from './service-resources';
+import {LakeServiceResources} from './service-resources';
 import { LakeExtensions } from "./extensions";
 import {LakeSSH} from "./ssh";
 import { LakeTerminals } from "./terminal";
@@ -53,7 +56,7 @@ export { LakeMemory } from "./memory";
 export {sessionArchiveName, legacySessionArchiveName} from "./session-archive";
 
 declare const __LAKE_VERSION__:string;
-export type ServerOptions = { home: string; data: string; port: number; staticRoot: string; development?: boolean; production?:boolean; importLegacy?: boolean; importOnly?:boolean };
+export type ServerOptions = { codexHome?:string; home: string; data: string; port: number; staticRoot: string; development?: boolean; production?:boolean; importLegacy?: boolean; importOnly?:boolean };
 const encode = (value: unknown) => JSON.stringify(value);
 const equal = (left: string, right: string) => {
   const a = Buffer.from(left),
@@ -159,6 +162,7 @@ export async function startLakeServer(options: ServerOptions) {
   let ssh:LakeSSH|undefined;
   let mysql:LakeMySQL|undefined;
   let services:LakeServiceResources|undefined;
+  let resourceManagement:LakeResourceManagement|undefined;
   let execution:LakeExecution|undefined;
   let messageQueue: LakeMessageQueue | undefined;
   let draining = false;
@@ -481,24 +485,19 @@ export async function startLakeServer(options: ServerOptions) {
         else if(path.length!==4)throw new HttpError(404,'资源接口不存在');
         else if (method === "GET")
           result = store.catalog().resources.filter((resource) => resource.projectId === path[2]);
-        else if(method==='POST'&&isServiceKind(data.kind,data.settings))result=services!.create(path[2],data);
-        else {
-          if (!["local","ssh"].includes(data.kind)&&!(data.kind==="database"&&data.settings?.driver==="mysql")) throw new HttpError(501, "此资源类型的连接仍在迁移中");
-          if(method!=="POST")throw new HttpError(405,"不支持此资源请求");
-          const parentId = resourceNavigation.parent(path[2], data.parentId);
-          const resource: Resource = {
-            id: id(),
-            projectId: path[2],
-            name: String(data.name ?? "本机"),
-            kind: data.kind,
-            ...(data.kind==="ssh"?{ssh:ssh!.prepare(data.ssh)}:{}),
-            description: "",
-            status: "available",
-            settings: data.kind==="database"&&data.settings?.driver==="mysql"?mysql!.prepare(data.settings):data.settings ?? {},
-          };
-          store.transaction(() => { store!.put("resources", resource.id, resource); resourceNavigation.attach(resource, parentId); });
-          result = resource;
-        }
+        else if(method==='POST')result=resourceManagement!.create(path[2],data);
+        else throw new HttpError(405,'不支持此资源请求');
+      } else if (path[1] === 'projects' && path[3] === 'external-agents') {
+        store.project(path[2]);
+        const registry=agents.external.registry;
+        if(path.length===4&&method==='GET')result={agents:await agents.external.status(path[2])};
+        else if(path.length===5&&method==='PUT')result=await registry.save(path[2],path[4],data);
+        else if(path.length===6&&method==='POST'&&['probe','install','prepare'].includes(path[5])){
+          const cancel=new AbortController(),abort=()=>cancel.abort();response.on('close',abort);
+          const timeout=setTimeout(abort,path[5]==='probe'?90000:300000);
+          try{result=path[5]==='prepare'?await agents.external.prepare(path[2],path[4],data,cancel.signal):path[5]==='probe'?await agents.external.probe(path[2],path[4],cancel.signal):await registry.install(path[2],path[4],data.npmPath,cancel.signal);}
+          finally{clearTimeout(timeout);response.off('close',abort);}
+        }else throw new HttpError(405,'不支持此外部 Agent 请求');
       } else if (path[1] === "projects" && path[3] === "watchdog" && path.length === 4) {
         store.project(path[2]);
         if (method === "GET") result = {mode:superagent.watchdog.mode(path[2])};
@@ -512,6 +511,8 @@ export async function startLakeServer(options: ServerOptions) {
         }
         else if (path.length === 6 && path[4] === "specialists" && method === "DELETE")
           result = await superagent.deleteRole(path[2], path[5], data.revision);
+        else if (path.length === 7 && path[4] === 'specialists' && path[6] === 'execution' && method === 'PUT')
+          result = superagent.setRoleExecution(path[2],path[5],data);
         else if (path.length !== 4) throw new HttpError(404, "Super-agent 接口不存在");
         else if (method === "GET") result = superagent.workspace(path[2]);
         else if (method === "POST") result = superagent.ensure(path[2]);
@@ -552,20 +553,13 @@ export async function startLakeServer(options: ServerOptions) {
           for (const terminal of entries) await terminals!.disconnect(terminal.sessionId, terminal.id);
           result = { closed: entries.length };
         }
-        else if (method === 'PATCH'&&path.length===3&&isServiceKind(resource.kind,resource.settings))result=services!.update(resource,data);
-        else if (method === "PATCH"&&path.length===3) {
-          resource.name = String(data.name ?? resource.name);
-          if (data.settings && digest(data.settings) !== digest(resource.settings)) store.put("resourceRevisions", resource.id, (store.get<number>("resourceRevisions", resource.id) ?? 1) + 1);
-          resource.settings = resource.kind==="database"&&data.settings?mysql!.prepare(data.settings,resource.settings):data.settings ?? resource.settings;
-          if(resource.kind==="database"&&resource.settings?.driver==="mysql")resource.status="available";
-          if(data.ssh!==undefined){resource.ssh=ssh!.prepare(data.ssh,resource.ssh);resource.status="available";store.put("resourceRevisions",resource.id,(store.get<number>("resourceRevisions",resource.id)??1)+1);}
-          store.put("resources", resource.id, resource);
-          result = resource;
-        } else if (method === "GET" && path.length === 3) result = {...resource,configurationRevision:store.get<number>('resourceRevisions',resource.id)??1};
+        else if(method==='PATCH'&&path.length===3)result=resourceManagement!.update(resource,data);
+        else if (method === "GET" && path.length === 3) result = {...resource,configurationRevision:store.get<number>('resourceRevisions',resource.id)??1};
         else throw new HttpError(path.length === 3 ? 405 : 404, "资源接口不存在或不支持此请求方法");
       } else if (path[1] === "sessions") {
         const sessionId = path[2];
         const session = store.session(sessionId);
+        if(session.workspaceRole==='conversation'&&!['GET','HEAD'].includes(method))throw new HttpError(409,'对话回应会话由宿主管理，请在 Pilot 或专员频道继续');
         if (session.workspaceRole === "legacy" && !["GET", "HEAD"].includes(method) && !(path[3] === "presentation" || path.length === 3 && method === "PATCH"))
           throw new HttpError(409, "旧 Go 会话为只读档案；请在 Pilot 中提出新的明确要求，历史任务与操作不会重放");
         if (method === "GET" && (path[3] === "snapshot" || path[3] === "ai")) {
@@ -574,16 +568,8 @@ export async function startLakeServer(options: ServerOptions) {
         }
         if (path[3] === "messages-read" && path.length === 4 && method === "PUT") result = acknowledgeConversation(store, sessionId, data.cursor);
         else if (path[3] === "executions" && path.length === 6 && path[5] === "interrupt" && method === "POST") { result = execution!.interrupt(sessionId, path[4], data.generation); status = 202; }
-        else if (path[3] === "operation-reconciliation" && path.length===5) {
-          if (method==="GET") result=await superagent.discoveryRecovery.reviewInfo(sessionId,path[4]);
-          else if (method==="POST") result=await superagent.discoveryRecovery.confirmInventoryReview(sessionId,path[4],{...data,
-            note:typeof data.note==="string"?agents.redact(data.note):data.note},(executionId,goalId,generation)=>{execution!.evidence(executionId,goalId,generation);});
-          else throw new HttpError(405,"不支持此核实请求");
-        }
-        else if (path[3] === "operator-effect-review" && path.length===5) {
-          if (method==='GET') result=await superagent.operatorReviews.reviewInfo(sessionId,path[4]);
-          else if (method==='POST') result=await superagent.operatorReviews.confirm(sessionId,path[4],JSON.parse(agents.redact(JSON.stringify(data))));
-          else throw new HttpError(405,'不支持此人工影响复核请求');
+        else if (["operation-reconciliation", "operator-effect-review"].includes(path[3]) && path.length===5) {
+          throw new HttpError(410, "任务核实与验收流程已移除；原操作记录保留，无需提交核实结果");
         }
         else if (path[3] === "host-key" && path.length===4 && method==="POST")result=ssh!.decide(sessionId,data);
         else if (path[3] === "terminals") {
@@ -648,7 +634,11 @@ export async function startLakeServer(options: ServerOptions) {
           if (data.terminalReuse) throw new HttpError(501, '终端交接尚未接入，未发送此消息');
           await agents.prepareRedaction();
           const input = messageInput(store, sessionId, agents.redact(String(data.text ?? '')), data);
-          if (data.enqueue === true || messageQueue!.get(sessionId).items.length) result = messageQueue!.enqueue(sessionId, agents.redact(String(data.text ?? '')), {...data, ...input});
+          if(data.assignment!==undefined){
+            if(data.enqueue===true)throw new HttpError(400,'分配新任务须直接接单，不能作为普通待发送消息入队');
+            result=await superagent.send(sessionId,String(data.text??''),data.taskId,data.ignoreProjectMemory===true,input,data.assignment);
+          }
+          else if (data.enqueue === true || messageQueue!.get(sessionId).items.length) result = messageQueue!.enqueue(sessionId, agents.redact(String(data.text ?? '')), {...data, ...input});
           else result = await superagent.send(sessionId, String(data.text ?? ""), data.taskId, data.ignoreProjectMemory === true, input);
           status = 202;
         } else if (path[3] === "message-queue") {
@@ -763,6 +753,7 @@ export async function startLakeServer(options: ServerOptions) {
         else if (path.length === 4 && path[3] === "roots" && ["POST", "DELETE"].includes(method)) result = extensions!.skillRoot(data.path, method === "DELETE");
         else if (path.length === 4 && method === "GET") result = extensions!.skill(path[3]);
         else if (path.length === 4 && method === "PUT") result = extensions!.saveSkill(path[3], data);
+        else if (path.length === 4 && method === "DELETE") result = extensions!.removeSkill(path[3]);
         else throw new HttpError(405, "不支持此 Skill 配置操作");
       } else if (path[1] === "ai" && path[2] === "presets" && path.length === 3) {
         if (method === "GET") result = store.list("aiPresets");
@@ -811,7 +802,7 @@ export async function startLakeServer(options: ServerOptions) {
   try {
     store = await LakeStore.open(options.home, options.data);
     if (options.development||options.production) await importLegacyModelSettings(store);
-    agents = await LakeAgents.open(store, broadcast);
+    agents = await LakeAgents.open(store, broadcast,options.codexHome);
     store.magpie = await LakeMagpie.connect(store, key => agents!.registerSecret(key));
     security = new LakeSecurity(store);
     extensions = new LakeExtensions(store, security, (value) => agents!.redact(value));
@@ -838,8 +829,10 @@ export async function startLakeServer(options: ServerOptions) {
     // extraction. The actual application launch owns those runtime services.
     if(options.importOnly)return {origin,token,store,agents,superagent,memory,mysql,services,execution,close};
     execution=new LakeExecution(store,security,ssh,value=>agents!.redact(ssh!.scrub(value)));
-    superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql,execution);
-    await superagent.discoveryRecovery.verify();
+    const resourceNavigation=new LakeResourceNavigation(store,(projectId,actorSessionId)=>store!.list<any>('sessions').some(session=>session.projectId===projectId&&session.id!==actorSessionId&&agents!.isRunning(session.id)));
+    resourceManagement=new LakeResourceManagement(store,security,ssh,services,resourceNavigation);
+    const configuration=new PilotConfiguration(store,security,extensions,resourceManagement,value=>agents!.redact(ssh!.scrub(extensions!.scrub(value))));
+    superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql,execution,Date.now,configuration);
     memory = new LakeMemory(store, () => security!.check(), value => agents!.redact(ssh!.scrub(extensions!.scrub(value))));
     try { await memory.initialize(); } catch { memory.disable("记忆文件需要核实，当前暂停记忆功能；原记录保留，普通新任务仍可运行"); }
     agents.memory = memory;
@@ -871,6 +864,10 @@ export async function startLakeServer(options: ServerOptions) {
 
 async function main() {
   const args = process.argv.slice(2);
+  if(args[0]==='--internal-acp-mcp'){
+    if(!args[1])throw new Error('ACP 工具桥缺少原任务端点');
+    const {runToolBridge}=await import('./acp/bridge');await runToolBridge(args[1]);return;
+  }
   if (args.includes("--version")) {
     console.log(`Lake ${typeof __LAKE_VERSION__==='undefined'?'development':__LAKE_VERSION__} TypeScript`);
     return;

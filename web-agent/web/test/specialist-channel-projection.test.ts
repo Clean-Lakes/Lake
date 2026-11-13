@@ -5,7 +5,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import type {AICard,SessionSnapshot,SpecialistChannelEntry,SpecialistChannelPage,SuperWorker} from '../../shared/contracts';
 import {SpecialistChannelEntries} from '../src/SpecialistChannel';
 import {AITranscript} from '../src/AIPanel';
-import {channelCardEntryId,liveChannelProse,mergeChannelEntries,mergeChannelPage} from '../src/specialistChannelProjection';
+import {channelExecutionTimeline,channelCardEntryId,liveChannelProse,mergeChannelEntries,mergeChannelPage} from '../src/specialistChannelProjection';
 
 const at='2026-11-06T08:00:00Z';
 const worker=(id='a',state:SuperWorker['task']['state']='running'):SuperWorker=>({id,roleId:'role',roleName:'服务器专员',sessionId:`worker-${id}`,assignmentState:state==='running'?'active':'parked',task:{taskId:`task-${id}`,sessionId:`worker-${id}`,title:'检查服务器',state,acceptanceState:'not_evaluated',revision:1,originRootTurnId:`root-${id}`,deadlineAt:''}});
@@ -122,4 +122,32 @@ test('saved and incomplete legacy plans stay out of channel prose without reclas
  assert.equal((html.match(/aria-label="计划状态"/g)??[]).length,2);
  assert.match(html,/计划未完成/);assert.match(html,/请说明/);assert.match(html,/ai-role-user/);
  assert.doesNotMatch(html,/CHANNEL_LEGACY_BODY|CHANNEL_UNFINISHED_BODY/);
+});
+
+test('assignment-only history is placed before a later Codex reply without rewriting either backend',()=>{
+ const old={...worker('old','completed'),createdAt:'2026-11-05T08:00:00Z',execution:{backend:{kind:'native'},source:'specialist_default',assignedAt:'2026-11-05T08:00:00Z',runs:[],totalRuns:0}} as SuperWorker;
+ const current={...worker('new','completed'),execution:{backend:{kind:'acp',agent:'codex',revision:2},source:'specialist_default',assignedAt:'2026-11-11T01:14:24Z',runs:[],totalRuns:1}} as SuperWorker;
+ const entry:SpecialistChannelEntry={id:'codex-reply',sourceSessionId:current.sessionId,taskId:current.task.taskId,createdAt:'2026-11-11T01:14:35Z'};
+ const before=JSON.stringify([old,current,entry]),items=channelExecutionTimeline([entry],[current,old]);
+ assert.deepEqual(items.map(item=>item.kind),['assignment','entry']);assert.equal(items.at(-1)?.key,'codex-reply');
+ assert.equal(items[0]?.kind==='assignment'&&items[0].worker.execution?.backend.kind,'native');
+ assert.equal(JSON.stringify([old,current,entry]),before);
+});
+
+test('paged history defers old empty cards while keeping newly queued and active assignments visible',()=>{
+ const assigned=(id:string,time:string,state:SuperWorker['task']['state']='completed')=>({...worker(id,state),assignmentState:state==='queued'?'queued':state==='running'?'active':'parked',execution:{backend:{kind:'native'},source:'specialist_default',assignedAt:time,runs:[],totalRuns:0}} as SuperWorker);
+ const old=assigned('old','2026-11-05T08:00:00Z'),queued=assigned('queued','2026-11-11T02:00:00Z','queued'),active=assigned('active','2026-11-05T08:00:00Z','running'),unknown=assigned('unknown','');
+ const entry:SpecialistChannelEntry={id:'latest',sourceSessionId:'worker-latest',createdAt:'2026-11-10T08:00:00Z'};
+ const paged=channelExecutionTimeline([entry],[old,queued,active,unknown],true);
+ assert.deepEqual(paged.map(item=>item.kind==='assignment'?item.worker.id:item.entry.id),['active','latest','queued']);
+ const full=channelExecutionTimeline([entry],[old,queued,unknown],false);
+ assert.deepEqual(full.map(item=>item.kind==='assignment'?item.worker.id:item.entry.id),['unknown','old','latest','queued']);
+});
+
+test('task and source identities suppress duplicate assignment cards without merging equal task titles',()=>{
+ const assigned=(id:string)=>({...worker(id),execution:{backend:{kind:'native'},source:'specialist_default',assignedAt:at,runs:[],totalRuns:0}} as SuperWorker);
+ const a=assigned('a'),b=assigned('b'),c=assigned('c');
+ const entries:SpecialistChannelEntry[]=[{id:'legacy-a',sourceSessionId:a.sessionId,createdAt:at},{id:'channel-b',sourceSessionId:'channel',taskId:b.task.taskId,createdAt:at}];
+ const result=channelExecutionTimeline(entries,[a,b,c]);
+ assert.deepEqual(result.filter(item=>item.kind==='assignment').map(item=>item.worker.id),['c']);assert.equal(result.length,3);
 });

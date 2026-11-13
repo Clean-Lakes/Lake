@@ -1,3 +1,4 @@
+import {redactModelValue} from "./model-errors";
 import { boundResourceRevision } from "./resource-pin";
 import { createConnection, type Connection, type FieldPacket } from "mysql2";
 import { createConnection as socketConnection } from "node:net";
@@ -459,7 +460,7 @@ export class LakeMySQL {
         notice:
           "Bounded observation from one read-only transaction; not a cross-server consistency proof.",
       };
-      return JSON.parse(this.redact(JSON.stringify(output)));
+      return redactModelValue(output,text=>this.redact(text));
     } catch (error) {
       if (failure) throw failure;
       if (error instanceof HttpError) throw error;

@@ -172,14 +172,6 @@ test("historical literal lookup is mechanically reconciled without changing resu
     /cannot be replayed/,
   );
   assert.equal(calls, 0);
-  assert.throws(() =>
-    ledger.finishHost(
-      "goal",
-      { outcome: "completed", summary: "done" },
-      1,
-      "policy",
-    ),
-  );
   await ledger.operation(
     "goal",
     2,
@@ -203,6 +195,7 @@ test("historical literal lookup is mechanically reconciled without changing resu
     store.require<Operation>("superOperations", operation.id).status,
     "unknown",
   );
+  assert.equal(ledger.finishHost("goal",{summary:"已保留当前发现和旧未知记录。",outcome:"partial"},2,"policy").status,"completed");
   assert.equal(store.list("superAcceptance").length, 0);
 });
 
@@ -227,7 +220,7 @@ for (const variant of [
   "substitution",
   "late-change",
 ] as const) {
-  test(`historical verification rejects ${variant} without changing the blocker`, async (t) => {
+  test(`historical verification rejects ${variant} without rewriting the original result or locking new calls`, async (t) => {
     const f = await fixture(t),
       { store, operation, execution, part } = f;
     switch (variant) {
@@ -310,8 +303,7 @@ for (const variant of [
     assert.equal(f.ledger.unresolved("goal"), true);
     assert.equal(store.list("commandReadReconciliations").length, 0);
     let calls = 0;
-    await assert.rejects(
-      f.ledger.operation(
+    await f.ledger.operation(
         "goal",
         2,
         "policy",
@@ -324,10 +316,9 @@ for (const variant of [
         },
         (v) => v,
         { readOnly: false },
-      ),
-      /requires reconciliation/,
     );
-    assert.equal(calls, 0);
+    assert.equal(calls, 1);
+    assert.equal(store.require<Operation>("superOperations",operation.id).status,"unknown");
   });
 }
 

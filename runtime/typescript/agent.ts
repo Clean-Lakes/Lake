@@ -1,10 +1,13 @@
+import {pilotConfigurationToolNames} from './configuration-tool-names';
+import {agentBackendName} from '../../web-agent/shared/external-agents';
+import {externalReplyTextUpdate} from './external-reply-events';
 import {prepareSessionArchive} from "./session-archive";
 import {finalReportBoundary} from "./final-report";
 import type {MessageInput} from "./message-input";
 import {providerConnection} from './provider-connection';
 import {parseWatchdogReview, watchdogReviewData, watchdogReviewPrompt, type WatchdogReviewInput, type WatchdogReviewResult} from "./watchdog-review";
 import {reasoningBinding} from './reasoning';
-import {redactModelValue,describeTurnFailure} from "./model-errors";
+import {redactModelValue,redactJSONText,describeTurnFailure} from "./model-errors";
 import { join } from "node:path";
 import { builtInTools, AgentRuntime, ManualPermissionBroker, createToolRegistry, createExploreSubagentPort, InMemoryRuntimeTaskRegistry,
   createBuiltInGeneralPurposeAgentProfile, createBuiltInExploreAgentProfile, type ExploreSubagentRuntimeRequest, type ToolEntry } from "./sdk";
@@ -44,9 +47,12 @@ import { LiveToolActivity } from "./activity";
 import {connectAgentToolCatalog,nativeSearchSupported} from "./capabilities";
 connectAgentToolCatalog(builtInTools);
 import type { LakeMemory, NativeMemoryWork } from "./memory";
+import {LakeExternalAgents} from './acp/service';
+import {externalControlTools} from './acp/catalog';
+import type {ExternalActor,ExternalRun,ExternalEvent} from './acp/types';
 
 type Live = {
-  runtime: AgentRuntime;
+  runtime: Pick<AgentRuntime,'close'> & {executeTurn:(input:string,unused?:undefined,options?:{abortSignal?:AbortSignal})=>Promise<{response?:string}>;steerTurn:(input:any)=>Promise<{kind:string}>};
   broker: ManualPermissionBroker;
   execution: import("./sdk").ExecutionPort;
   controller?: AbortController;
@@ -55,7 +61,7 @@ type Live = {
   children?: { registry: InMemoryRuntimeTaskRegistry; active: () => boolean; cancel: () => Promise<void> };
 };
 const nativeControlTools = new Set(["Agent", "Task", "TaskOutput", "TaskStop", "SendMessage"]);
-const childForbiddenTools = new Set([...nativeControlTools, "work_begin", "work_update", "work_finish", "work_wait", "recall_task_context", "recall_memory", "route_work", "manage_specialist", "ask_user_question", "EnterPlanMode", "ExitPlanMode"]);
+const childForbiddenTools = new Set([...pilotConfigurationToolNames,...nativeControlTools, "work_begin", "work_update", "work_finish", "work_wait", "recall_task_context", "recall_memory", "route_work", "manage_specialist", "ask_user_question", "EnterPlanMode", "ExitPlanMode"]);
 function guardedRegistry(transform:(entry:ToolEntry)=>ToolEntry){
   const base=createToolRegistry(),wrapped=new WeakSet<ToolEntry>();
   return new Proxy(base,{get(target,key){
@@ -64,6 +70,16 @@ function guardedRegistry(transform:(entry:ToolEntry)=>ToolEntry){
   }});
 }
 const childTerminal = new Set(["completed", "failed", "cancelled", "killed", "stopped", "lost"]);
+/** Tool hosting for an external Worker needs no second inference credential. */
+function unavailableNativeModel():Model {
+  const unavailable=():never=>{throw new HttpError(409,'原生子任务尚未配置 Lake 模型；可使用 Codex 子任务，或先配置普通模型。');};
+  const model:Model={providerId:'lake-tool-host' as Model['providerId'],modelId:'unconfigured' as Model['modelId'],
+    // SDK-local tool serialization limits, never Codex capacity/usage claims.
+    properties:{requiresMfjsToolSchema:false,contextWindow:128000,inputFormat:{supportsText:true,supportsImage:false,supportsVideo:false,supportsAudio:false,supportsPdf:false},outputFormat:{supportsText:true},supportsToolCall:true,supportsJsonSchemaOutput:false,supportsNativeWebSearch:false,supportsMidConversationSystem:true},
+    optionSpecs:{reasoningLevel:{values:['none'],map:'{}'},maxOutputTokens:{max:32768,map:'{"max_tokens":maxOutputTokens}'}},options:{},
+    bind:()=>model,generateText:async()=>unavailable(),async *streamText(){unavailable();}};
+  return model;
+}
 
 export class LakeAgents {
   host?: AgentHost;
@@ -71,6 +87,9 @@ export class LakeAgents {
   guard?: () => void;
   private live = new Map<string, Live>();
   private toolActivity = new LiveToolActivity();
+  readonly external: LakeExternalAgents;
+  private childRuntimes = new Map<string,AgentRuntime>();
+  private externalCalls = new Map<string,NonNullable<HostToolContext['lakeExternal']>>();
   isRunning(sessionId: string) {
     return !!this.live.get(sessionId)?.controller;
   }
@@ -81,12 +100,72 @@ export class LakeAgents {
     readonly store: LakeStore,
     readonly sessions: Awaited<ReturnType<typeof createSqliteSessionStore>>,
     readonly publish: (event: SessionEvent) => void,
-  ) {}
-  static async open(store: LakeStore, publish: (event: SessionEvent) => void) {
+    codexHome?:string,
+  ) { this.external = new LakeExternalAgents(store,(value,live)=>live?this.redactLive(value):this.redact(value),value=>this.registerSecret(value),codexHome); }
+  static async open(store: LakeStore, publish: (event: SessionEvent) => void,codexHome?:string) {
     const sessions = await createSqliteSessionStore({
       dbPath: await prepareSessionArchive(store.data),
     });
-    return new LakeAgents(store, sessions, publish);
+    return new LakeAgents(store, sessions, publish,codexHome);
+  }
+  private externalEvent(sessionId:string,run:ExternalRun,event:ExternalEvent){
+    const worker=this.store.get<any>('superWorkers',run.workerId);
+    if(!worker||worker.generation!==run.generation||worker.taskId!==run.taskId)return;
+    const view=this.store.view(sessionId);
+    const child=run.agentRunId?view.agentRuns?.find(item=>item.id===run.agentRunId&&item.childSessionId===run.childSessionId):undefined;
+    const cards=child?(child.cards??=[]):view.cards;
+    let card=cards.find(item=>item.id===run.id);
+    if(!card){card={id:run.id,type:'operation',title:agentBackendName({kind:'acp',agent:run.agent})+' · ACP',status:'running',content:'',at:run.createdAt,
+      data:{source:'external_agent',external_run_id:run.id,taskId:run.taskId,agentRunId:run.agentRunId,childSessionId:run.childSessionId,root_turn_id:view.rootTurnId}};cards.push(card);}
+    if(event.kind==='text')card.content=event.text??'';
+    if(event.kind==='status'){card.status=event.status==='completed'?'completed':['failed','cancelled','unknown','interrupted'].includes(event.status??'')?event.status!:'running';if(run.summary||run.error)card.content=run.summary||run.error||'';}
+    card.data={...(card.data??{}),external_agent:run.agent,external_state:run.state,external_usage:run.usage,external_events:run.events.filter(item=>item.kind==='tool'||item.kind==='tool_update').slice(-16)};
+    this.update(sessionId,view,externalReplyTextUpdate(run,event,{...card,content:this.redact(card.content??'')},view.rootTurnId));
+  }
+  private externalActor(sessionId:string,profile:HostProfile,runtime:AgentRuntime,context:Pick<HostToolContext,'toolCallId'|'abortSignal'|'lakeSubagent'>,purpose:ExternalActor['purpose']='segment'):ExternalActor{
+    if(profile.conversation){
+      const binding=profile.conversation,session=this.store.session(sessionId),controller=this.live.get(sessionId)?.controller;
+      if(!controller||context.lakeSubagent||profile.tools.length||profile.allowlist.length)throw new HttpError(409,'对话执行身份或无工具约束已变化');
+      const guard=()=>{this.guard?.();profile.beforeModel?.();profile.validateExecution?.();context.abortSignal.throwIfAborted();controller.signal.throwIfAborted();};
+      guard();
+      return {projectId:session.projectId,conversationId:binding.id,workerId:binding.participantId,sessionId,generation:1,
+        deadlineAt:binding.deadlineAt,scopeHash:digest([binding,profile.execution]),workspace:'',signal:AbortSignal.any([controller.signal,context.abortSignal]),
+        purpose:'conversation',systemPrompt:profile.systemPrompt+'\n'+lakeCommunicationPrompt,
+        ...(profile.execution?.kind==='acp'&&profile.execution.model?{model:profile.execution.model.modelId}:{}),guard,tools:[],
+        executeTool:async()=>{throw new HttpError(403,'对话回应没有资源或任务工具权限');},event:(run,event)=>this.externalEvent(sessionId,run,event)};
+    }
+    const worker=this.store.require<any>('superWorkers',profile.workerId!);
+    const goal=this.store.require<any>('superGoals',profile.taskId!);
+    const child=context.lakeSubagent;
+    const caller=child?this.childRuntimes.get(child.sessionId):runtime;
+    if(!caller)throw new HttpError(409,'原子执行已结束，不能派发外部任务');
+    const controller=this.live.get(sessionId)?.controller;
+    if(!controller)throw new HttpError(409,'原任务未处于执行中');
+    const guard=()=>{this.guard?.();profile.validateExecution?.();context.abortSignal.throwIfAborted();controller.signal.throwIfAborted();
+      const current=this.store.require<any>('superWorkers',worker.id);
+      if(current.generation!==worker.generation||current.state!=='active'||current.taskId!==goal.id)throw new HttpError(409,'原任务执行归属已变化');
+      this.memory?.validateContinuation({...profile.memoryActor!,sessionId});};
+    const names=profile.allowlist.filter(name=>(!externalControlTools.has(name)||purpose==='worker'&&nativeControlTools.has(name))&&(!child||!childForbiddenTools.has(name)));
+    const tools=names.map(name=>caller.getToolRegistry().get(name)).filter((entry):entry is ToolEntry=>!!entry);
+    return {projectId:worker.projectId,taskId:goal.id,workerId:worker.id,sessionId,childSessionId:child?.sessionId,agentRunId:child?.id,
+      generation:worker.generation,deadlineAt:goal.deadlineAt,scopeHash:digest([worker.id,worker.generation,worker.policyHash,child?.sessionId]),workspace:'',
+      ...(profile.execution?.kind==='acp'&&profile.execution.model?{model:profile.execution.model.modelId}:{}),
+      signal:AbortSignal.any([controller.signal,context.abortSignal]),guard,tools,purpose,systemPrompt:purpose==='worker'?profile.systemPrompt+'\n'+lakeCommunicationPrompt:undefined,
+      executeTool:async(name,input,callId,signal)=>{
+        guard();const run=this.store.require<ExternalRun>('acpRuns',callId.split(':',1)[0]);
+        if(run.workerId!==worker.id||run.generation!==worker.generation||run.childSessionId!==child?.sessionId)throw new HttpError(409,'外部工具执行来源不匹配');
+        this.externalCalls.set(callId,{externalRunId:run.id,externalSessionId:run.externalSessionId});
+        try{const result=await caller.getToolExecutor().execute({id:callId,name,input},{signal:AbortSignal.any([controller.signal,context.abortSignal,signal])});
+          guard();if(!result.success)throw new HttpError(409,this.redact(result.error?.message??'工具调用未成功'));return result.output;
+        }finally{this.externalCalls.delete(callId);}
+      },event:(run,event)=>this.externalEvent(sessionId,run,event)};
+  }
+  private externalTool(sessionId:string,profile:HostProfile,runtime:()=>AgentRuntime,available:string[]):ToolEntry{
+    const base=profile.tools[0];
+    return {...base,metadata:{...base.metadata,name:'run_external_agent',description:'Delegate a bounded segment of this task to an enabled external ACP agent. The host supplies task identity, tools and scope. Use agent codex. Review the external findings and actual tool results, then submit the original work_finish report. No separate acceptance or reconciliation is required.',readOnly:true,needsApproval:false,stopTurnOnSuccess:false},
+      permission:{...base.permission,needsApproval:false},resolvePermissionCapability:()=>({needsApproval:false}),
+      inputSchema:{type:'object',properties:{agent:{type:'string',enum:available},instruction:{type:'string',minLength:1,maxLength:65536},resume_run_id:{type:'string'}},required:['agent','instruction'],additionalProperties:false},
+      handler:async(input:any,context)=>{const actor=this.externalActor(sessionId,profile,runtime(),context);return this.external.run(input.agent,input.instruction,digest([actor.taskId,actor.generation,actor.childSessionId,context.toolCallId]),actor,input.resume_run_id);}};
   }
   private update(sessionId: string, view: AIView, extra: Partial<SessionEvent> = {}) {
     view.totalCards = view.cards.length;
@@ -235,7 +314,7 @@ export class LakeAgents {
     for (const card of projected.cards) if (["operation", "shell", "error"].includes(card.type))
       this.bindOperationCard(sessionId, card, callId(card), undefined, operations);
     for (const run of projected.agentRuns ?? []) {
-      if (run.source !== "native_subagent" || run.sessionId !== sessionId || !run.taskId || !run.childSessionId) continue;
+      if (!['native_subagent','acp_subagent'].includes(run.source??'') || run.sessionId !== sessionId || !run.taskId || !run.childSessionId) continue;
       for (const card of run.cards ?? []) if (["operation", "shell", "error"].includes(card.type)) {
         const raw = callId(card), prefix = run.childSessionId + ":";
         this.bindOperationCard(sessionId, card, raw.startsWith(prefix) ? raw : prefix + raw, run, operations);
@@ -398,17 +477,21 @@ export class LakeAgents {
     };
   }
   private redactView(view: AIView) {
+    const approval=(source:AIApproval)=>{
+      const argumentsText=redactJSONText(source.call.arguments,text=>this.redact(text)),clean=this.scrub(source);
+      clean.call.arguments=argumentsText;return clean;
+    };
     for (const card of view.cards) {
       card.content = this.redact(card.content ?? "");
-      if (card.data) card.data = JSON.parse(this.redact(JSON.stringify(card.data)));
+      if (card.data) card.data = this.scrub(card.data);
     }
     for (const run of view.agentRuns ?? []) {
       if (run.summary) run.summary = this.redact(run.summary);
       for (const card of run.cards ?? []) { card.content = this.redact(card.content ?? ""); if (card.data) card.data = this.scrub(card.data); }
     }
-    if (view.pending) view.pending = JSON.parse(this.redact(JSON.stringify(view.pending)));
+    if (view.pending) view.pending = approval(view.pending);
     if (view.pendingApprovals)
-      view.pendingApprovals = JSON.parse(this.redact(JSON.stringify(view.pendingApprovals)));
+      view.pendingApprovals = view.pendingApprovals.map(approval);
   }
   private async model(provider: ModelProvider, model: ProviderModel, profile?: HostProfile, memoryActor?: LayeredMemoryActor, testKey?: string, options: Record<string, unknown> = {}, maxAttempts = 2): Promise<Model> {
     const key = testKey ?? await this.store.modelCredential(provider);
@@ -632,9 +715,12 @@ export class LakeAgents {
     const previous = view.agentRuns?.find((run) => run.id === request.agentId);
     if (previous && (previous.childSessionId !== request.sessionId || previous.taskId !== profile.taskId))
       throw new HttpError(409, "子智能体执行身份不匹配");
-    if (!previous && (view.agentRuns ?? []).filter((run) => run.source === "native_subagent" && run.taskId === profile.taskId).length >= 7)
+    if (!previous && (view.agentRuns ?? []).filter((run) => ['native_subagent','acp_subagent'].includes(run.source??'') && run.taskId === profile.taskId).length >= 7)
       throw new HttpError(409, "同一任务累计最多 7 个临时子智能体；请复用已有结果继续原任务");
-    const run: AgentRun = previous ?? { id: request.agentId, sessionId: parentId, source: "native_subagent",
+    if(request.agentType==='runtime-acp'||previous?.execution?.kind==='acp'&&previous.execution.agent!=='codex')throw new HttpError(409,'该子任务的外部 Agent 已移除，不能切换或重放旧执行');
+    const externalChild=request.agentType==='codex-acp'?'codex':undefined;
+    if(previous&&(previous.execution?.kind==='acp'?previous.execution.agent!==externalChild:!!externalChild))throw new HttpError(409,'已有子任务不能切换执行后端');
+    const run: AgentRun = previous ?? { id: request.agentId, sessionId: parentId, source: externalChild?'acp_subagent':'native_subagent',execution:externalChild?{kind:'acp',agent:externalChild}:{kind:'native'},
       taskId: profile.taskId, workerId: profile.workerId, childSessionId: request.sessionId,
       rootTurnId: view.rootTurnId, role: request.agentType, name: this.redact(request.description),
       task: this.redact(request.description), resourceIds: [], status: "running", createdAt: now(), cards: [], toolCount: 0 };
@@ -650,8 +736,9 @@ export class LakeAgents {
         this.guard?.();
         if(!allowed.includes(name)||childForbiddenTools.has(name))throw new HttpError(403,'子智能体不能使用此工具');
         if(profile.memoryActor)this.memory?.validateContinuation({...profile.memoryActor,sessionId:parentId});
-        const scoped:HostToolContext={...context,toolCallId:`${request.sessionId}:${context.toolCallId}`,lakeSubagent:{id:request.agentId,sessionId:request.sessionId,toolCallId:context.toolCallId,agentType:request.agentType}};
+        const scoped:HostToolContext={...context,toolCallId:`${request.sessionId}:${context.toolCallId}`,lakeExternal:this.externalCalls.get(context.toolCallId),lakeSubagent:{id:request.agentId,sessionId:request.sessionId,toolCallId:context.toolCallId,agentType:request.agentType}};
         if(!profile.invoke)throw new HttpError(409,'Child business tool fence is unavailable');
+        if(name==='run_external_agent')return entry.handler(input,scoped);
         return profile.invoke(entry,input,scoped);
       }};
     });
@@ -698,6 +785,7 @@ export class LakeAgents {
         await parent.notifyExternalChildSessionEvent({ childSessionId: request.sessionId, event, traceContext: request.traceContext, interactionOrigin: interaction });
       } },
     });
+    this.childRuntimes.set(request.sessionId,child);
     ownedChildren.add(child);
     try {
       if (request.resumeFromStore) {
@@ -706,9 +794,18 @@ export class LakeAgents {
       } else await child.ensureSessionPersistedForExternalActivity(request.prompt, { traceContext: request.traceContext });
       await request.onSessionReady?.();
       request.registerMessageSink?.({ send: async (message) => {
+        if(externalChild){const result=await this.external.steer(parentId,message.message,message.id,request.agentId);if(result.kind!=='queued')throw new HttpError(409,'该外部子任务当前不能接收运行中补充输入，请等待本次调用结束');return 'steered';}
         await child.steerTurn({ input: message.message, pendingInputId: message.id, delivery: "guide" }); return "steered";
       } });
-      const result = await child.executeTurn(request.prompt, undefined, {
+      const result = externalChild ? await (async()=>{
+        const actor=this.externalActor(parentId,profile,parent,{toolCallId:request.agentId,abortSignal:signal??this.live.get(parentId)!.controller!.signal,
+          lakeSubagent:{id:request.agentId,sessionId:request.sessionId,toolCallId:request.agentId,agentType:request.agentType}},'child');
+        const prior=this.store.list<ExternalRun>('acpRuns').filter(run=>run.agentRunId===request.agentId&&run.state==='completed').at(-1);
+        if(request.resumeFromStore&&!prior)throw new HttpError(409,'原外部执行没有可安全继续的已完成会话');
+        const result=await this.external.run(externalChild,request.prompt,digest([profile.workerId,request.agentId,id()]),actor,request.resumeFromStore?prior?.id:undefined);
+        if(result.state!=='completed')throw new HttpError(409,result.summary||'外部子任务没有明确完成');
+        return {response:result.summary,traceId:request.traceContext.traceId,events:[]};
+      })() : await child.executeTurn(request.prompt, undefined, {
         abortSignal: signal, inputSource: "subagent", inputPresentation: "coordinator_input", traceContext: request.traceContext,
       });
       const finalView = this.store.view(parentId), final = finalView.agentRuns?.find((entry) => entry.id === request.agentId);
@@ -722,20 +819,26 @@ export class LakeAgents {
       this.update(parentId, finalView);
       throw error;
     } finally {
+      this.childRuntimes.delete(request.sessionId);
       await child.close(); ownedChildren.delete(child);
     }
   }
   async runtime(sessionId: string) {
     const session = this.store.session(sessionId);
     const profile = this.host?.profile(sessionId);
+    if(profile?.execution?.kind==='acp'&&profile.execution.agent!=='codex')throw new HttpError(409,'该任务的外部 Agent 已移除，不能切换或重放旧执行');
     await this.store.refreshModels();
-    const selection = this.store.modelSelection();
-    if (!selection) throw new HttpError(409, "请先配置模型");
-    const provider = this.store.modelProvider(selection.providerId);
-    if (!provider) throw new HttpError(409, '所选模型来源不可用');
-    const model = provider.models.find((model) => model.id === selection.modelId && model.enabled);
-    if (!provider.enabled || !model) throw new HttpError(409, "所选模型不可用");
-    const selectionKey = JSON.stringify([selection, provider, this.store.modelConnectionVersion(provider), session.options, profile?.version]);
+    const selection = profile?.execution?.kind==='native'&&profile.execution.model
+      ? {providerId:profile.execution.model.providerId!,modelId:profile.execution.model.modelId}:this.store.modelSelection();
+    const externalWorker=profile?.execution?.kind==='acp'&&profile.execution.agent==='codex';
+    if (!selection&&!externalWorker) throw new HttpError(409, "请先配置模型");
+    const selectedProvider = selection&&this.store.modelProvider(selection.providerId);
+    if (!selectedProvider&&!externalWorker) throw new HttpError(409, '所选模型来源不可用');
+    const selectedModel = selectedProvider?.models.find((model) => model.id === selection?.modelId && model.enabled);
+    if ((!selectedProvider?.enabled || !selectedModel)&&!externalWorker) throw new HttpError(409, "所选模型不可用");
+    const provider:ModelProvider=selectedProvider??{id:'lake-tool-host',name:'Lake 工具宿主',protocol:'openai',baseURL:'',enabled:false,keyConfigured:false,models:[]};
+    const model:ProviderModel=selectedModel??{id:'unconfigured',name:'unconfigured',enabled:false,supportsImageInput:false,supportsImageOutput:false};
+    const selectionKey = JSON.stringify([selection, provider, this.store.modelConnectionVersion(provider), session.options, profile?.version,this.external.registry.revision(session.projectId)]);
     let live = this.live.get(sessionId);
     if (live?.selection === selectionKey) return live;
     if (live?.controller) throw new HttpError(409, "请先停止当前任务，再切换模型");
@@ -761,7 +864,9 @@ export class LakeAgents {
     const memoryActor = { ...(profile?.memoryActor ?? { kind: "pilot" as const, projectId: session.projectId }), sessionId };
     const report = finalReportBoundary(profile?.requestFinalReport);
     const modelProfile = profile ? { ...profile, projectRequest: <T>(request: T) => report.project(profile.projectRequest?.(request) ?? request) } : undefined;
-    const boundModel = await this.model(provider, model, modelProfile, memoryActor, undefined, session.options);
+    let boundModel:Model;
+    try{boundModel=selectedProvider?.enabled&&selectedModel?await this.model(provider,model,modelProfile,memoryActor,undefined,session.options):unavailableNativeModel();}
+    catch(error){if(!externalWorker)throw error;boundModel=unavailableNativeModel();}
     const broker = new ManualPermissionBroker({
       onRequest: (request) => {
         const view = this.store.view(sessionId);
@@ -770,7 +875,7 @@ export class LakeAgents {
           call: {
             id: request.toolCallId,
             name: request.toolName,
-            arguments: this.redact(JSON.stringify(request.input)),
+            arguments: JSON.stringify(this.scrub(request.input)),
           },
           target: request.toolName,
           risk: request.riskLevel,
@@ -826,10 +931,19 @@ export class LakeAgents {
           if(!profile.invokeControl)throw new HttpError(409,'Managed subagent control is unavailable');
           return profile.invokeControl(entry,input,context);
         }
-        return profile?.invoke?profile.invoke(entry,input,context):entry.handler(input,context);
+        if(name==='run_external_agent')return entry.handler(input,context);
+        const scoped:HostToolContext={...context,lakeExternal:this.externalCalls.get(context.toolCallId)};
+        return profile?.invoke?profile.invoke(entry,input,scoped):entry.handler(input,scoped);
       }};
     });
     for (const tool of profile?.tools ?? []) registry.register(tool);
+    const externalAgents=(await this.external.status(session.projectId)).filter(agent=>agent.assignmentReady);
+    const hasExternal=!!profile?.taskId&&externalAgents.length>0;
+    if(hasExternal&&profile){
+      const externalTool=this.externalTool(sessionId,profile,()=>runtime,externalAgents.map(agent=>agent.id));
+      registry.register(externalTool);
+      profile.tools.push(externalTool);profile.allowlist.push('run_external_agent');
+    }
     // The SDK bootstraps its record on first input with a cwd-derived project
     // and mode-only permissions. Keep Lake's canonical host identity and
     // session-scoped rules at the public SessionStore port on every write.
@@ -855,6 +969,7 @@ export class LakeAgents {
       profiles: [
         { ...createBuiltInGeneralPurposeAgentProfile(), tools: profile.allowlist.filter((name) => !childForbiddenTools.has(name)) },
         { ...createBuiltInExploreAgentProfile(), tools: profile.allowlist.filter((name) => !childForbiddenTools.has(name) && !["Write", "Edit", "call_mcp_tool"].includes(name)) },
+        ...(hasExternal?externalAgents.map(agent=>({...createBuiltInGeneralPurposeAgentProfile(),name:'codex-acp',description:`Delegate one bounded child task to ${agent.name} over ACP. Its host tools stay scoped to this task.`,injectAgentsMd:false,tools:profile.allowlist.filter(name=>!childForbiddenTools.has(name)&&name!=='run_external_agent')})):[]),
       ],
       getAllowedTools: () => profile.allowlist.filter((name) => !childForbiddenTools.has(name) && !["Write", "Edit", "call_mcp_tool"].includes(name)),
       emitParentEvent: (event, trace) => runtime.appendEvent(event, trace),
@@ -921,7 +1036,24 @@ export class LakeAgents {
         await Promise.allSettled(active.map((task) => childPort!.stopTask?.(task.taskId, { initiator: "model" })));
         await Promise.allSettled([...childExecutions]);
       } } : undefined;
-    live = { runtime, broker, execution, selection: selectionKey, children };
+    let activeRuntime:Live['runtime']=runtime;
+    if(profile?.execution?.kind==='acp'){
+      const selected=profile.execution,configuration=this.external.registry.get(session.projectId,selected.agent);
+      if(selected.revision!==undefined&&selected.revision!==configuration.revision)throw new HttpError(409,'专员冻结的外部 Agent 配置已变化，请重新选择专员的新任务后端');
+      activeRuntime={close:()=>runtime.close(),steerTurn:input=>this.external.steer(sessionId,input.input,input.pendingInputId),executeTurn:async(input,_unused,options)=>{
+        // ACP has no local SDK turn_started event. Give this actual invocation
+        // its own host identity so its progress and delivered report share one
+        // channel reply, without manufacturing an SDK event or task evidence.
+        const view=this.store.view(sessionId);view.rootTurnId='acp_turn_'+id();
+        this.toolActivity.clear(sessionId);this.update(sessionId,view);
+        const actor=this.externalActor(sessionId,profile,runtime,{toolCallId:id(),abortSignal:options?.abortSignal??new AbortController().signal},'worker');
+        const prior=actor.purpose==='conversation'?undefined:this.store.list<ExternalRun>('acpRuns').filter(run=>run.taskId===actor.taskId&&run.workerId===actor.workerId&&run.generation===actor.generation&&!run.childSessionId&&run.state==='completed').at(-1);
+        const result=await this.external.run(selected.agent,input,digest([actor.workerId,actor.generation,id()]),actor,prior?.id);
+        if(result.state!=='completed')throw new HttpError(409,result.summary||'外部任务没有明确完成');
+        return {response:result.summary};
+      }};
+    }
+    live = { runtime:activeRuntime, broker, execution, selection: selectionKey, children };
     this.live.set(sessionId, live);
     return live;
   }
@@ -1039,6 +1171,7 @@ export class LakeAgents {
     if (live?.completion) await live.completion;
   }
   async close() {
+    await this.external.close();
     for (const live of this.live.values()) live.controller?.abort(new Error("Lake 正在退出"));
     await Promise.allSettled(
       [...this.live.values()].map(async (live) => {

@@ -1,3 +1,5 @@
+@import './pilotConversationProgress.css';
+@import './replyProcessStatus.css';
 @import './miniBox.css';
 @import "./userMessageCopy.css";
 @import "./settledReply.css";
@@ -13,7 +15,7 @@
 @import "./disclosureSummary.css";
 @import "./replyInfo.css";
 @import "./strategyCorrection.css";
-@import "./pilotDispatchProgress.css";
+@import "./pilotSpecialistConversation.css";
 
 :root { font-family: var(--font-ui); font-size: var(--font-size-body); font-weight:var(--font-weight-ui); color: var(--foreground); background: var(--background); font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
 * { box-sizing: border-box; }

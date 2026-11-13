@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { Resource } from "../../web-agent/shared/contracts";
+import type { Resource, ResourceTreeNode } from "../../web-agent/shared/contracts";
 import { assetPageBytes, listProjectAssets } from "./assets";
 import { digest } from "./tasks";
 
@@ -140,4 +140,112 @@ test("inputs are bounded and empty or conflicting searches are not silently broa
   assert.throws(() => listProjectAssets(input, { asset_ref: "resource-139", query: "服务器" }), /not both/);
   assert.equal(listProjectAssets(input, { query: "RESOURCE-139" }).assets[0].id, "resource-139");
   assert.deepEqual(listProjectAssets(input, { query: "没有这个资源" }).assets, []);
+});
+
+const folder = (id: string, name: string, parentId: string | null = null): ResourceTreeNode =>
+  ({ id, name, parentId, projectId: "project", kind: "folder", resourceId: null, position: 0 });
+const leaf = (resourceId: string, parentId: string | null): ResourceTreeNode =>
+  ({ id: `node-${resourceId}`, name: "stale display label", parentId, projectId: "project", kind: "resource", resourceId, position: 0 });
+
+test("Chinese directory queries find IP-named descendants and return the original full Lake path", () => {
+  const resources = catalog(141);
+  resources[0].name = "192.0.2.50 (Jenkins)";
+  resources[139].name = "10.0.0.10"; resources[140].name = "10.0.0.11";
+  const resourceTree = [folder("root", "演示组织"), folder("build", "构建环境", "root"), folder("cluster", "实验集群", "root"),
+    folder("nodes", "控制节点", "cluster"), leaf(resources[0].id, "build"), leaf(resources[139].id, "nodes"), leaf(resources[140].id, "cluster")];
+  const inspected: string[] = [];
+  const input = { ...source(resources), resourceTree, sshRevision: (resource: Resource) => { inspected.push(resource.id); return digest(resource.id); } };
+  const page = listProjectAssets(input, { query: "实验集群" });
+  assert.deepEqual(page.assets.map(asset => asset.asset_ref), ["resource-139", "resource-140"]);
+  assert.deepEqual(inspected, ["resource-139", "resource-140"]);
+  assert.deepEqual(page.assets.map(asset => asset.path), ["演示组织 / 实验集群 / 控制节点 / 10.0.0.10", "演示组织 / 实验集群 / 10.0.0.11"]);
+  for (const query of ["演示组织/实验集群", "演示组织 / 实验集群", "控制节点"])
+    assert.ok(listProjectAssets(input, { query }).assets.every(asset => asset.asset_ref !== "resource-000"));
+  const exact = listProjectAssets(input, { asset_ref: "resource-000" }).assets[0];
+  assert.equal(exact.path, "演示组织 / 构建环境 / 192.0.2.50 (Jenkins)");
+  assert.equal(exact.configuration_revision, digest("resource-000"));
+});
+
+test("same-name hosts through one gateway remain separate identities in different folders", () => {
+  const resources = catalog(2).map((resource, i) => ({ ...resource, name: "应用节点", ssh: { ...resource.ssh!, port: i ? 3370 : 22 } }));
+  const input = { ...source(resources), resourceTree: [folder("one", "构建环境"), folder("two", "实验集群"), leaf(resources[0].id, "one"), leaf(resources[1].id, "two")],
+    configurationPin: (resource: Resource) => `pin-${resource.id}` };
+  const named = listProjectAssets(input, { query: "应用节点" });
+  assert.equal(named.total, 2); assert.notEqual(named.assets[0].path, named.assets[1].path);
+  const cluster = listProjectAssets(input, { query: "实验集群" });
+  assert.equal(cluster.assets[0].asset_ref, resources[1].id); assert.equal(cluster.assets[0].configuration_pin, "pin-resource-001");
+  assert.doesNotMatch(JSON.stringify(cluster), /private-host|private-user|credential-reference|synthetic-private-password|"port"/);
+});
+
+test("folder rename invalidates a directory query cursor without changing a resource revision", () => {
+  const resources = catalog(3), tree = [folder("parent", "旧环境"), ...resources.map(resource => leaf(resource.id, "parent"))];
+  const input = { ...source(resources), resourceTree: tree };
+  const first = listProjectAssets(input, { query: "旧环境", limit: 1 });
+  tree[0] = { ...tree[0], name: "新环境" };
+  assert.throws(() => listProjectAssets(input, { query: "旧环境", cursor: first.nextCursor }), /catalog changed/);
+  assert.equal(listProjectAssets(input, { query: "新环境" }).total, 3);
+  assert.equal(listProjectAssets(input, { asset_ref: resources[0].id }).assets[0].path, "新环境 / 服务器 0");
+});
+
+test("moving into a same-name folder invalidates a cursor even when the displayed path is identical", () => {
+  const resources = catalog(2), tree = [folder("one", "相同目录"), folder("two", "相同目录"), ...resources.map(resource => leaf(resource.id, "one"))];
+  const input = { ...source(resources), resourceTree: tree }, first = listProjectAssets(input, { limit: 1 });
+  tree[2] = { ...tree[2], parentId: "two" };
+  assert.throws(() => listProjectAssets(input, { cursor: first.nextCursor }), /catalog changed/);
+});
+
+test("orphaned, foreign, cyclic and ambiguous ancestry never invent a directory membership", () => {
+  const resources = catalog(5), tree = [folder("loop", "循环目录", "loop"), { ...folder("foreign", "foreign-private-folder"), projectId: "foreign" },
+    leaf(resources[0].id, "missing"), leaf(resources[1].id, "foreign"), leaf(resources[2].id, "loop"),
+    leaf(resources[3].id, null), { ...leaf(resources[3].id, "loop"), id: "duplicate-leaf" }];
+  const input = { ...source(resources), resourceTree: tree }, page = listProjectAssets(input);
+  for (const resource of page.assets.slice(0, 4)) {
+    assert.equal(resource.path, undefined); assert.equal(resource.path_state, "unavailable");
+    assert.ok(resource.configuration_revision, "a broken display path cannot remove an otherwise valid exact resource");
+  }
+  assert.equal(page.assets[4].path, resources[4].name, "legacy resources without tree nodes remain at the root");
+  assert.deepEqual(listProjectAssets(input, { query: "循环目录" }).assets, []);
+  assert.deepEqual(listProjectAssets(input, { query: "foreign-private-folder" }).assets, []);
+  assert.doesNotMatch(JSON.stringify(page), /foreign-private-folder/);
+});
+
+test("duplicate ancestors and paths beyond the navigation depth bound are unavailable without hiding other resources", () => {
+  const resources = catalog(2);
+  const deep = Array.from({ length: 33 }, (_, i) => folder(`deep-${i}`, `层级 ${i}`, i ? `deep-${i - 1}` : null));
+  const input = { ...source(resources), resourceTree: [...deep, leaf(resources[0].id, "deep-32"), leaf(resources[1].id, null)] };
+  assert.equal(listProjectAssets(input).assets[0].path_state, "unavailable");
+  assert.equal(listProjectAssets(input).assets[1].path, resources[1].name);
+  const duplicate = { ...input, resourceTree: [folder("same", "一"), folder("same", "二"), leaf(resources[0].id, "same")] };
+  assert.equal(listProjectAssets(duplicate).assets[0].path_state, "unavailable");
+});
+
+test("long escaped Unicode paths fit each page and search the untruncated ancestry", () => {
+  const resources = catalog(47).map(resource => ({ ...resource, name: '节点"\\'.repeat(150) + resource.id }));
+  const deep = Array.from({ length: 20 }, (_, i) => folder(`deep-${i}`, i === 19 ? "最深环境" : '环境"\\\n'.repeat(80), i ? `deep-${i - 1}` : null));
+  const input = { ...source(resources), resourceTree: [...deep, ...resources.map(resource => leaf(resource.id, "deep-19"))] };
+  let cursor: string | undefined; const seen: string[] = [];
+  do {
+    const page = listProjectAssets(input, { query: "最深环境", cursor, limit: 50 });
+    assert.ok(page.assets.length > 0); assert.ok(Buffer.byteLength(JSON.stringify(page)) <= assetPageBytes);
+    for (const asset of page.assets) {
+      assert.equal(asset.pathTruncated, true); assert.ok(Buffer.byteLength(JSON.stringify(asset.path)) <= 2048);
+      assert.ok(!asset.path!.includes("�")); seen.push(asset.asset_ref);
+    }
+    cursor = page.nextCursor;
+  } while (cursor);
+  assert.equal(seen.length, 47); assert.equal(new Set(seen).size, 47);
+});
+
+test("directory metadata respects the already-filtered task and project scope", () => {
+  const resources = catalog(3), foreign = { ...resources[2], id: "foreign-resource", projectId: "foreign" };
+  const tree = [folder("allowed", "可见目录"), folder("denied", "sibling-private-folder"),
+    { ...folder("outside", "foreign-private-folder"), projectId: "foreign" }, leaf(resources[0].id, "allowed"), leaf(resources[1].id, "allowed"), leaf(resources[2].id, "denied"),
+    { ...leaf(foreign.id, "outside"), projectId: "foreign" }];
+  const input = { ...source([resources[0], resources[1], foreign]), resourceTree: tree };
+  const first = listProjectAssets(input, { limit: 1 });
+  assert.equal(first.total, 2); assert.equal(listProjectAssets(input, { query: "sibling-private-folder" }).total, 0);
+  assert.equal(listProjectAssets(input, { asset_ref: foreign.id }).total, 0);
+  tree[1] = { ...tree[1], name: "renamed-private-folder" };
+  assert.equal(listProjectAssets(input, { cursor: first.nextCursor }).assets[0].asset_ref, resources[1].id);
+  assert.doesNotMatch(JSON.stringify(listProjectAssets(input)), /private-folder|foreign-resource/);
 });

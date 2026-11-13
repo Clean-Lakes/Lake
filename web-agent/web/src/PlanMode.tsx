@@ -1,5 +1,4 @@
 import {useRef,useState} from 'react';
-import type {ConversationMode} from '../../shared/contracts';
 import {Glyph} from './Icons';
 import {readableError} from './api';
 
@@ -25,17 +24,6 @@ export function planMarkdown(text:string):string {
   if(marker){fence=marker[0];return true;}
   return trimmed!=='<proposed_plan>'&&trimmed!=='</proposed_plan>';
  }).join('\n');
-}
-
-export function PlanModeToggle({mode='default',disabled=false,disabledReason,onChange}:{mode?:ConversationMode;disabled?:boolean;disabledReason?:string;onChange:(mode:ConversationMode)=>Promise<unknown>}) {
- const saving=useRef(false);
- const [busy,setBusy]=useState(false),[error,setError]=useState('');
- const enabled=mode==='plan';
- const hint=disabled?disabledReason||'本轮运行或有待发送消息，结束后可切换模式。':enabled?'Plan 模式：只读调查、澄清需求并制定方案。点击退出，或输入 /plan。':'开启 Plan 模式，先制定方案再执行。也可输入 /plan。';
- return <><button type="button" className="composer-permission-button plan-mode-toggle" aria-label="Plan 模式" aria-pressed={enabled} aria-busy={busy} disabled={disabled||busy} title={hint} onClick={()=>{
-  if(saving.current||disabled)return;saving.current=true;setBusy(true);setError('');
-  void onChange(enabled?'default':'plan').catch(error=>setError(readableError(error))).finally(()=>{saving.current=false;setBusy(false);});
- }}><Glyph name="document" size={14}/><span className="composer-tool-label">Plan</span></button>{error&&<span className="plan-mode-error" role="alert">{error}</span>}</>;
 }
 
 export function PlanActions({disabled=false,onExecute,onRevise}:{disabled?:boolean;onExecute:()=>Promise<unknown>;onRevise:()=>void}) {

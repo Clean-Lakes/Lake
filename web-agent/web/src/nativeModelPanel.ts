@@ -1,10 +1,11 @@
 import {useEffect,useId,useLayoutEffect,useRef,useState,type RefObject} from "react";
 import type {ComposerModelSelectProps} from "./ComposerModelSelect";
 import type {ReasoningSelectorProps} from "./ReasoningSelector";
+import {codexModelValue,codexSettingsValue} from './composerAgentModel';
 
 type Bridge={role:"workbench"|"panel";command:(message:Record<string,unknown>)=>Promise<unknown>};
 declare global {interface Window {lakeNativeModelPanel?:Bridge;}}
-export type NativeModelPanelState=Pick<ComposerModelSelectProps,"available"|"modelName"|"selection"|"disabled"|"contextUsage">&{
+export type NativeModelPanelState=Pick<ComposerModelSelectProps,"externalAgent"|"available"|"modelName"|"selection"|"disabled"|"contextUsage">&{
   id:string;presentation:number;theme:"light"|"dark";reasoning?:Omit<ReasoningSelectorProps,"onSaving">;
   anchor:{left:number;top:number;width:number;height:number};
 };
@@ -36,6 +37,8 @@ export function useNativeModelPanel(props:ComposerModelSelectProps,anchor:RefObj
       if(detail.kind==="settings") current.onSettings();
       if(detail.kind==="close") {current.onOpenChange(false);if(detail.restoreFocus) anchor.current?.querySelector("button")?.focus({preventScroll:true});}
       if(detail.kind==="select"&&!current.disabled) {
+        if(detail.value===codexModelValue&&current.externalAgent&&!current.externalAgent.configurationOnly){current.onExternalAgentSelect?.();current.onOpenChange(false);return;}
+        if(detail.value===codexSettingsValue&&current.externalAgent){current.onExternalAgentSettings?.();current.onOpenChange(false);return;}
         const row=current.available.entries?.find(entry=>JSON.stringify([entry.providerId,entry.modelId])===detail.value);
         if(row) current.onSelect(row);
         else if(!current.available.entries&&current.available.models.includes(detail.value||"")) current.onSelect(detail.value!);
@@ -55,7 +58,7 @@ export function useNativeModelPanel(props:ComposerModelSelectProps,anchor:RefObj
     if(!rect) return;
     const {onSaving:_,...reasoning}=props.reasoning||{} as ReasoningSelectorProps;
     if(!sent.current) presentation.current++;
-    const state:NativeModelPanelState={id,presentation:presentation.current,available:props.available,modelName:props.modelName,selection:props.selection,disabled:props.disabled,contextUsage:props.contextUsage,theme:theme==="dark"?"dark":"light",reasoning:props.reasoning?reasoning:undefined,anchor:{left:rect.left,top:rect.top,width:rect.width,height:rect.height}};
+    const state:NativeModelPanelState={id,presentation:presentation.current,externalAgent:props.externalAgent,available:props.available,modelName:props.modelName,selection:props.selection,disabled:props.disabled,contextUsage:props.contextUsage,theme:theme==="dark"?"dark":"light",reasoning:props.reasoning?reasoning:undefined,anchor:{left:rect.left,top:rect.top,width:rect.width,height:rect.height}};
     const json=JSON.stringify(state);
     if(sent.current===json) return;
     sent.current=json;

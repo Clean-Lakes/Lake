@@ -20,7 +20,7 @@ import type {
 } from "../../web-agent/shared/contracts";
 import { HttpError, id, LakeStore, now, privateDirectory } from "./store";
 import { canonical, digest, text, type Goal, type Operation } from "./tasks";
-import { hasAcceptedExecution } from "./joint-tasks";
+import { hasAcceptedExecution, hasReportedExecution } from "./joint-tasks";
 import type {TaskContextEntry} from './task-context';
 import type {ClaudeMemIndex,MemorySearchDocument} from './claude-mem';
 
@@ -47,7 +47,8 @@ export type MemorySource = {
   hash: string;
   messageHash?: string;
   operationHashes?: Record<string, string>;
-  taskEvidence?: "accepted" | "failed";
+  taskEvidence?: "accepted" | "failed" | "reported";
+  taskReportId?: string;
   operationStates?: Record<string, string>;
   settingsRevision: number;
   epoch: number;
@@ -633,17 +634,17 @@ export class LakeMemory {
         )
       )
         return;
-      const accepted = hasAcceptedExecution(this.store, goal);
-      if (!accepted && !["paused", "failed", "blocked"].includes(goal.status))
+      const accepted = hasAcceptedExecution(this.store, goal), reported = hasReportedExecution(this.store, goal);
+      if (!accepted && !reported && !["paused", "failed", "blocked"].includes(goal.status))
         return;
       const business = operations
         .filter(
           (operation) =>
-            (accepted
-              ? operation.status === "succeeded"
+            ((accepted || reported)
+              ? operation.status === "succeeded" || reported && operation.status === "failed" && operation.readOnly === true
               : operation.status === "failed" && operation.readOnly === true) &&
             operation.outputHash &&
-            operation.output !== undefined,
+            operation.output !== undefined && operation.outputHash === digest(operation.output),
         )
         .slice(-8);
       if (!business.length) return;
@@ -663,7 +664,7 @@ export class LakeMemory {
             1,
           hostConfigurationHash: operation.hostConfigurationHash,
         }));
-      const taskEvidence = accepted ? "accepted" : "failed";
+      const taskEvidence = reported ? "reported" : accepted ? "accepted" : "failed";
       const source = this.source(
         scope,
         "task",
@@ -672,10 +673,12 @@ export class LakeMemory {
           goal.goalRevision,
           goal.planRevision,
           taskEvidence,
+          reported ? goal.completionReportId : null,
           business.map((operation) => [operation.id, operation.outputHash]),
         ]),
         {
-          kind: accepted ? "accepted_task" : "settled_read_failure",
+          kind: reported ? "reported_task_observations" : accepted ? "accepted_task" : "settled_read_failure",
+          ...(reported ? { reportedOutcome: goal.reportedOutcome, verification: "No business acceptance; these are original settled observations and the agent report." } : {}),
           taskId: goal.id,
           title: goal.title,
           state: goal.status,
@@ -694,13 +697,14 @@ export class LakeMemory {
             truncated: Buffer.byteLength(canonical(operation.output)) > 1500,
           })),
           instruction:
-            "Retain reusable methods with conditions. Resource values are historical observations, never current state or authority. Child findings belong to this parent task and role. A settled_read_failure is only a historical failure lesson, never success or proof that the target is currently unavailable.",
+            "Retain reusable methods with conditions. Resource values are historical observations, never current state or authority. Child findings belong to this parent task and role. A settled_read_failure is only a historical failure lesson, never success or proof that the target is currently unavailable. A reported_task_observations source has no business acceptance: retain only what individual recorded observations support, with their failures and limitations; the agent report never proves the overall goal succeeded.",
         },
         {
           taskId: goal.id,
           taskRevision: goal.goalRevision,
           ...(pilot?{taskRoleId:goal.roleId}:{}),
           taskEvidence,
+          ...(reported ? {taskReportId: goal.completionReportId} : {}),
           sessionId: goal.sessionId,
           bindings,
           operationIds: business.map((operation) => operation.id),
@@ -761,7 +765,8 @@ export class LakeMemory {
         goal.sessionId !== source.sessionId ||
         goal.goalRevision !== source.taskRevision ||
         (source.taskEvidence === "accepted" &&
-          !hasAcceptedExecution(this.store, goal))
+          !hasAcceptedExecution(this.store, goal)) ||
+        (source.taskEvidence === "reported" && (!hasReportedExecution(this.store, goal) || source.taskReportId !== goal.completionReportId))
       )
         return false;
     }

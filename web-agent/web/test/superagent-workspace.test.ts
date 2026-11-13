@@ -9,7 +9,7 @@ test('Pilot and real specialist instances replace session creation',()=>{
  const workspace:SuperWorkspace={active:true,project:{projectId:'project',routerSessionId:'pilot',version:1},workers:[{id:'orders-worker',roleId:'orders',roleName:'订单专员',sessionId:'orders-context',assignmentState:'parked',task:{taskId:'orders',sessionId:'orders-context',projectId:'project',title:'排查订单超时',state:'blocked',acceptanceState:'insufficient',revision:7,originRootTurnId:'actual-root',deadlineAt:'2026-11-03T00:00:00Z'}}]};
  const html=renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:'pilot',onPilot(){},onWorker(){}}));
  assert.match(html,/对话与任务统筹/);
- assert.match(html,/订单专员/);assert.match(html,/排查订单超时/);assert.match(html,/待核实/);
+ assert.match(html,/订单专员/);assert.match(html,/排查订单超时/);assert.match(html,/已暂停/);
  assert.doesNotMatch(html,/新会话|新对话|已验收|项目执行范围|设置执行范围/);
  assert.match(html,/aria-current="page"/);
  assert.doesNotMatch(html,/brand\/lake-app-icon\.png/);

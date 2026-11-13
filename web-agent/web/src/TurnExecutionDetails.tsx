@@ -7,7 +7,7 @@ import {quietCoordination} from './coordinationActivity';
 import {recoveredRouteFailures} from './routeDispatchPresentation';
 export const ExecutionDetailsOpen=createContext(false);
 export const RoutingRecoveryContext=createContext<ReadonlySet<string>>(new Set());
-export function TurnExecutionDetails({details,onInspect,presentingReply=false,hideLive=false,hideIdentity:_hideIdentity=false,sessionId,latest=false,latestTaskId,canonicalGoalId,children,progress:_progress,...timing}:{hideIdentity?:boolean;latest?:boolean;latestTaskId?:string;canonicalGoalId?:string;progress?:{text:string;active:boolean};hideLive?:boolean;sessionId?:string;children?:ReactNode;details:ReactNode[];onInspect?:()=>void;presentingReply?:boolean}&ReplyDurationProps){
+export function TurnExecutionDetails({details,onInspect,presentingReply=false,hideLive=false,hideStatus=false,hideIdentity:_hideIdentity=false,sessionId,latest=false,latestTaskId,canonicalGoalId,children,progress:_progress,...timing}:{hideStatus?:boolean;hideIdentity?:boolean;latest?:boolean;latestTaskId?:string;canonicalGoalId?:string;progress?:{text:string;active:boolean};hideLive?:boolean;sessionId?:string;children?:ReactNode;details:ReactNode[];onInspect?:()=>void;presentingReply?:boolean}&ReplyDurationProps){
  const id=useId();
  const inspector=useSessionInspector();
  const selection=inspector?.selection;
@@ -28,5 +28,5 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
  const summary=<ReplyDuration key="turn-duration" {...timing} previewAt={previewAt} latestStep={latestStep} disclosure={summaryDisclosure}/>;
  const body=canonicalGoalId?null:inspector&&sessionId?inspecting&&inspector.host&&createPortal(<ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{details.length?details:<p className="inspector-empty">本轮尚无执行记录。</p>}</div></ExecutionDetailsOpen.Provider>,inspector.host)
   :details.length>0&&<div id={id} className={`turn-execution-details${open?' is-open':''}`} aria-hidden={!open} inert={!open} role="region" aria-label="执行详细过程"><div className="turn-execution-content"><div className="turn-execution-body"><ExecutionDetailsOpen.Provider value={open}>{details}</ExecutionDetailsOpen.Provider></div></div></div>;
- return <RoutingRecoveryContext.Provider value={recoveredRouting}>{children}{(!live||!hideLive)&&summary}{body}</RoutingRecoveryContext.Provider>;
+ return <RoutingRecoveryContext.Provider value={recoveredRouting}>{children}{!hideStatus&&(!live||!hideLive)&&summary}{body}</RoutingRecoveryContext.Provider>;
 }

@@ -5,6 +5,7 @@
   --font-size-ui: 14px;
   --font-size-body: var(--font-size-ui);
   --font-size-toolbar: 12px;
+  --font-size-process: 13px;
   --font-size-badge: 10px;
   --font-weight-ui: 500;
   --font-weight-normal: 450;
@@ -66,6 +67,8 @@
   --radius-dialog: 9px;
   /* Settings surfaces: fixed scale rather than borrowing a dialog radius for controls. */
   --radius-settings-control: 10px;
+  --radius-sidebar-pilot: 14px;
+  --radius-sidebar-tab: 8px;
   --radius-settings-panel: 14px;
   --radius-settings-dialog: 22px;
   --radius-settings-icon: 8px;

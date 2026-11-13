@@ -1,0 +1,2 @@
+.pilot-conversation-progress { display:grid; gap:12px; width:100%; min-width:0; }
+.pilot-conversation-status { padding-inline-start:var(--reply-avatar-column,40px); }
