@@ -230,7 +230,7 @@ export class LakeStore {
       projects: this.list<Project>("projects").filter(project => !hidden('project', project.id)),
       resources,
       resourceTree: tree,
-      sessions: this.list<StoredSession>("sessions").filter((session) => !hidden('project', session.projectId) && !this.list<string>("terminalScopes").includes(session.id)).map(({ id }) => {
+      sessions: this.list<StoredSession>("sessions").filter((session) => session.workspaceRole!=='conversation' && !hidden('project', session.projectId) && !this.list<string>("terminalScopes").includes(session.id)).map(({ id }) => {
         const { options, ...session } = this.session(id);
         return session;
       }),
