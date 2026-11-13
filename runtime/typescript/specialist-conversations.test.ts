@@ -21,7 +21,7 @@ async function fixture(t:{after(fn:()=>Promise<void>):void},count=3){
  let host=new SpecialistConversations(store,agents as any,ports);
  const event={id:'human-event',projectId:project.id,sessionId:pilot.id,messageId:'human-message',payload:'全部干员给我报数！',disposition:'pending'};
  store.put('superInputs',event.id,event);
- const input={eventId:event.id,partKey:'roll-call',projectId:project.id,sessionId:pilot.id,sourceMessageId:event.messageId,quote:event.payload,instruction:'请每位干员亲自报数',roles,requestHash:'exact-request'};
+ const input={eventId:event.id,partKey:'roll-call',projectId:project.id,sessionId:pilot.id,sourceMessageId:event.messageId,quote:event.payload,instruction:'请每位干员亲自报数',roles,requestHash:'exact-request',summaryRequested:true};
  const start=()=>host.start(input);
  const admit=()=>{store.put('superInputs',event.id,{...event,disposition:'routed'});};
  const pump=()=>host.pump(4,()=>2);
@@ -60,6 +60,17 @@ test('same event/part retries preserve membership and deliver each response once
  assert.equal(f.host.start({...f.input,roles:[...f.roles,later]}).members.length,1);
  f.admit();await f.pump();f.settle(round.members[0].sessionId,'本人到！');f.settle(round.members[0].sessionId,'重复回应');
  assert.equal(f.store.messages(f.pilot.id).length,1);assert.equal(f.store.messages(f.pilot.id)[0].text,'本人到！');
+});
+
+test('ordinary shared dialogue settles without a Pilot model request or a redundant summary, preserving missing member states',async t=>{
+ const f=await fixture(t,2),round=f.host.start({...f.input,summaryRequested:undefined});
+ assert.equal(round.summaryRequested,false);f.admit();await f.pump();
+ f.settle(round.members[0].sessionId,'1，到！');f.settle(round.members[1].sessionId,undefined,'unavailable');await f.host.pump(0,()=>0);
+ const finished=f.host.read(f.project.id,round.id);
+ assert.equal(finished.state,'completed');assert.deepEqual(finished.members.map(m=>m.state),['replied','failed']);
+ assert.equal(f.requests.length,2,'only invited specialists call a model');assert.equal(finished.summaryMessageId,undefined);
+ assert.equal(f.store.messages(f.pilot.id).length,1);assert.equal(f.host.busy(f.project.id),false);
+ assert.equal(f.store.list('superGoals').length,0);
 });
 
 test('invitation freezes each configured Agent, model and avatar independently of later role edits',async t=>{

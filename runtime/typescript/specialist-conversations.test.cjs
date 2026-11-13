@@ -13,7 +13,7 @@ async function until(read,predicate){
  while(Date.now()<deadline){value=await read();if(predicate(value))return value;await new Promise(resolve=>setTimeout(resolve,20));}
  assert.fail('Timed out: '+JSON.stringify(value));
 }
-async function fixture(t,{count=6,failRole,hold=false,acp=false}={}){
+async function fixture(t,{count=6,failRole,hold=false,acp=false,summarize=false}={}){
  const home=await mkdtemp(join(tmpdir(),'lake-dialogue-sdk-')),web=join(home,'web');
  await mkdir(web);await writeFile(join(web,'index.html'),'<html>dialogue fixture</html>');
  const requests=[];let release;const gate=new Promise(resolve=>{release=resolve;});
@@ -34,7 +34,7 @@ async function fixture(t,{count=6,failRole,hold=false,acp=false}={}){
   }else if(request.messages.some(message=>message.role==='tool'))delta={content:'已召集全部干员，请各自回应。'};
   else{
    const events=JSON.parse(input.match(/\[LAKE ADMITTED HUMAN EVENTS[^\n]*\n([^\n]+)/)[1]),event=events[0];
-   delta={tool_calls:[{index:0,id:'invite-'+event.id,type:'function',function:{name:'convene_specialists',arguments:JSON.stringify({event_id:event.id,part_key:'attendance',quote:event.text,instruction:'每位干员亲自报数',audience:'all'})}}]};
+   delta={tool_calls:[{index:0,id:'invite-'+event.id,type:'function',function:{name:'convene_specialists',arguments:JSON.stringify({event_id:event.id,part_key:'attendance',quote:event.text,instruction:'每位干员亲自回应',audience:'all',...(summarize?{summarize:true}:{})})}}]};
   }
   res.writeHead(200,{'Content-Type':'text/event-stream'});
   res.write('data: '+JSON.stringify({id:'dialogue-fixture',object:'chat.completion.chunk',created:1,model:'fixture',choices:[{index:0,delta:{role:'assistant',...delta},finish_reason:null}]})+'\n\n');
@@ -71,18 +71,19 @@ async function fixture(t,{count=6,failRole,hold=false,acp=false}={}){
  if(acp)for(const role of roles.slice(0,-1))role.execution={kind:'acp',agent:'codex',revision:1,model:{modelId:'gpt-6.1-sol'}};
  for(const role of roles)app.store.put('superRoles',role.id,role);
  const path=`/api/projects/${project.id}/superagent`;
- const start=()=>api(`/api/sessions/${pilot.routerSessionId}/messages`,'POST',{text:'全部干员给我报数！'},202);
+ const start=()=>api(`/api/sessions/${pilot.routerSessionId}/messages`,'POST',{text:summarize?'全部干员亲自回应，最后请 Pilot 综合各位的意见。':'全部干员给我报数！'},202);
  return {app,api,project,pilot,roles,path,requests,launches,start,release};
 }
 
-test('HTTP and actual SDK deliver six independent specialist replies and one final Pilot summary to the same conversation',async t=>{
+test('HTTP and actual SDK deliver six independent replies without another Pilot summary call for roll call',async t=>{
  const f=await fixture(t);await f.start();
  const state=await until(()=>f.api(f.path),state=>state.conversations?.[0]?.state==='completed'),round=state.conversations[0];
  assert.equal(round.members.length,6);assert.ok(round.members.every(member=>member.state==='replied'));
  assert.equal(new Set(round.members.map(member=>member.sessionId)).size,6);
  const snapshot=await f.api(`/api/sessions/${f.pilot.routerSessionId}/snapshot`),messages=snapshot.messages.filter(message=>message.conversation?.id===round.id);
- assert.equal(messages.length,7);assert.deepEqual(new Set(messages.filter(message=>message.author).map(message=>message.author.roleId)),new Set(f.roles.map(role=>role.id)));
- assert.equal(messages.at(-1).text,'6 / 6 位干员已回应。全部到齐。');assert.equal(messages.at(-1).conversation.kind,'summary');
+ assert.equal(messages.length,6);assert.deepEqual(new Set(messages.filter(message=>message.author).map(message=>message.author.roleId)),new Set(f.roles.map(role=>role.id)));
+ assert.ok(messages.every(message=>message.conversation.kind==='reply'));assert.equal(round.summaryRequested,false);
+ assert.equal(f.requests.filter(request=>request.messages.some(message=>message.role==='system'&&content(message).includes('summarizing a shared conversation'))).length,0);
  assert.equal(f.app.store.list('superGoals').length,0);assert.equal(f.app.store.list('superOperations').length,0);
  const speakers=f.requests.filter(request=>request.messages.some(message=>message.role==='system'&&content(message).includes('personally responding in a shared conversation')));
  assert.equal(speakers.length,6);assert.ok(speakers.every(request=>!request.tools?.length));
@@ -90,12 +91,12 @@ test('HTTP and actual SDK deliver six independent specialist replies and one fin
  await f.api(`/api/sessions/${round.members[0].sessionId}/messages`,'POST',{text:'forged'},409);
 });
 
-test('a specialist provider failure is visible as absent and Pilot receives the real partial attendance',async t=>{
+test('a failed specialist remains absent without triggering a redundant summary or a substitute reply',async t=>{
  const f=await fixture(t,{count:3,failRole:'role-1'});await f.start();
  const state=await until(()=>f.api(f.path),state=>state.conversations?.[0]?.state==='completed'),round=state.conversations[0];
  assert.deepEqual(round.members.map(member=>member.state),['replied','failed','replied']);
  const messages=f.app.store.messages(f.pilot.routerSessionId).filter(message=>message.conversation?.id===round.id);
- assert.equal(messages.length,3);assert.equal(messages.at(-1).text,'2 / 3 位干员已回应。未回应：干员2。');
+ assert.equal(messages.length,2);assert.ok(messages.every(message=>message.conversation.kind==='reply'&&message.author.roleId!=='role-1'));
  assert.equal(f.app.store.list('superAcceptance').length,0);
 });
 
@@ -113,11 +114,20 @@ test('configured ACP and native specialists reply together through separate iden
  assert.ok(f.launches.every(launch=>launch.mcp===undefined));
  assert.equal(f.launches.filter(launch=>launch.model==='gpt-6.1-sol').length,2);
  const replies=f.app.store.messages(f.pilot.routerSessionId).filter(message=>message.conversation?.id===round.id);
- assert.equal(replies.length,4);assert.equal(replies.at(-1).text,'3 / 3 位干员已回应。全部到齐。');
+ assert.equal(replies.length,3);assert.ok(replies.every(message=>message.conversation.kind==='reply'));
  assert.equal(replies.filter(message=>message.author?.execution?.kind==='acp').length,2);
  for(const table of ['superGoals','superWorkers','superOperations','superAcceptance'])assert.equal(f.app.store.list(table).length,0,table);
  const native=f.requests.filter(request=>request.messages.some(message=>message.role==='system'&&content(message).includes('personally responding in a shared conversation')));
  assert.equal(native.length,1,'ACP speakers must not be silently routed through the native model');
+});
+
+test('only an explicit request for synthesis creates a separate Pilot summary with requested provenance',async t=>{
+ const f=await fixture(t,{count:2,summarize:true});await f.start();
+ const state=await until(()=>f.api(f.path),state=>state.conversations?.[0]?.state==='completed'),round=state.conversations[0];
+ const messages=f.app.store.messages(f.pilot.routerSessionId).filter(message=>message.conversation?.id===round.id);
+ assert.equal(round.summaryRequested,true);assert.equal(messages.length,3);
+ assert.equal(messages.at(-1).conversation.kind,'summary');assert.equal(messages.at(-1).conversation.summaryRequested,true);
+ assert.equal(f.requests.filter(request=>request.messages.some(message=>message.role==='system'&&content(message).includes('summarizing a shared conversation'))).length,1);
 });
 
 test('HTTP Pilot stop cancels active/queued dialogue and late SDK output cannot produce attendance or a summary',async t=>{

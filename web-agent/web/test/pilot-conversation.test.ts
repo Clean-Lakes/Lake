@@ -15,10 +15,11 @@ const workspace:SuperWorkspace={active:true,project:{projectId:'project',routerS
 
 test('real replied counts and every outstanding specialist remain visible, including failures after summary',()=>{
  const html=renderToStaticMarkup(createElement(PilotConversationProgress,{rounds:[round]}));
- assert.match(html,/1 \/ 3 位干员已回应/);assert.match(html,/数据库专员 · 尚未回应，正在回复/);assert.match(html,/发布专员 · 尚未回应，等待唤醒/);
+ assert.match(html,/1 \/ 3 位干员已回应/);assert.match(html,/正在回复…/);assert.match(html,/等待回应/);
+ assert.doesNotMatch(html,/数据库专员 ·|发布专员 ·/);assert.match(html,/reply-process-status reply-process-text/);
  const failed={...round,state:'completed' as const,members:round.members.map(member=>member.state==='running'?{...member,state:'timed_out' as const}:member)};
  const settled=renderToStaticMarkup(createElement(PilotConversationProgress,{rounds:[failed]}));
- assert.match(settled,/数据库专员 · 未回应，等待超时/);assert.match(settled,/Pilot 已汇总/);
+ assert.match(settled,/回应超时/);assert.doesNotMatch(settled,/Pilot 已汇总/);
  const offline=renderToStaticMarkup(createElement(PilotConversationProgress,{rounds:[round],connected:false}));
  assert.match(offline,/正在重连/);assert.doesNotMatch(offline,/status-text--active/);
 });
@@ -43,4 +44,15 @@ test('progress stays with its originating turn and actual speakers retain their 
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,pilotWorkspace:workspace,assistantIdentity:{name:'Pilot',pilot:true}}));
  assert.match(html,/<strong>运维专员<\/strong>/);assert.ok(html.indexOf('data-conversation-id="round"')<html.indexOf('class="user-message-text">另一个问题'));
  assert.equal((html.match(/data-conversation-id="round"/g)??[]).length,1);
+});
+
+test('automatic conversation summaries stay in storage while requested synthesis and real speaker replies remain visible',()=>{
+ const human:Message={id:'human',sessionId:'pilot',role:'user',text:'全部干员报数',createdAt:round.createdAt};
+ const legacy:Message={id:'automatic',sessionId:'pilot',role:'assistant',text:'AUTOMATIC_REPEATED_ROSTER',createdAt:'2026-11-13T00:00:02Z',conversation:{id:round.id,sourceMessageId:human.id,kind:'summary'}};
+ const requested:Message={...legacy,id:'requested',text:'REQUESTED_INTEGRATED_CONCLUSION',conversation:{...legacy.conversation!,summaryRequested:true}};
+ const plain:Message={...legacy,id:'ordinary',text:'ORDINARY_PILOT_REPLY',conversation:undefined};
+ const snapshot={session:{id:'pilot',projectId:'project',workspaceRole:'router'},messages:[human,legacy,requested,plain],resources:[],actions:[],ai:{session:'pilot',status:'completed',cards:[],cardsOffset:0}} as unknown as SessionSnapshot;
+ const before=JSON.stringify(snapshot),html=renderToStaticMarkup(createElement(AITranscript,{snapshot,pilotWorkspace:workspace,assistantIdentity:{name:'Pilot',pilot:true}}));
+ assert.doesNotMatch(html,/AUTOMATIC_REPEATED_ROSTER/);assert.match(html,/REQUESTED_INTEGRATED_CONCLUSION/);assert.match(html,/ORDINARY_PILOT_REPLY/);
+ assert.equal(JSON.stringify(snapshot),before);
 });

@@ -84,10 +84,10 @@ test('specialist report Agent identity stays frozen and legacy projection never 
  assert.equal(f.internal.reportMessage({...legacy,sessionId:otherRouter}).author.execution,undefined);
 });
 
-test('Pilot shared dialogue routes through the existing host with independent replies and a final Pilot summary, without business goals',async t=>{
-  const f=await fixture(t),event=await f.admit('全部干员给我报数！');
+test('Pilot shared dialogue runs independent replies and an explicitly requested Pilot synthesis without business goals',async t=>{
+  const f=await fixture(t),event=await f.admit('全部干员亲自回应，最后由 Pilot 综合意见。');
   const invite=f.host.profile(f.router)!.tools.find(entry=>entry.metadata.name==='convene_specialists')!;
-  const input={event_id:event.id,part_key:'attendance',quote:event.payload,instruction:'请每位干员亲自报数',audience:'all'};
+  const input={event_id:event.id,part_key:'attendance',quote:event.payload,instruction:'请每位干员亲自回应',audience:'all',summarize:true};
   const round:any=await invite.handler(input,{} as any);
   assert.equal(round.members.length,1);assert.equal(round.members[0].roleId,f.role.id);
   assert.equal((await invite.handler(input,{} as any) as any).id,round.id);

@@ -5,7 +5,7 @@ import {applyLiveText} from './liveTextUpdates';
 import {pilotSpecialistReply,specialistSnapshotMatches,type PilotSpecialistRow} from './pilotSpecialistReplies';
 import {ReplyIdentity} from './ReplyIdentity';
 import {AssistantMarkdown} from './AssistantMarkdown';
-import {LoadingWaves} from './LoadingWaves';
+import {ReplyProcessStatus} from './ReplyProcessStatus';
 import {usePageVisible} from './usePageVisible';
 import {useSmoothText} from './useSmoothText';
 import {conversationPlanEntry} from './planConversation';
@@ -68,7 +68,7 @@ function PilotSpecialistReply({row,onSpecialist,connected}:{row:PilotSpecialistR
  const label=available?row.activity.label:'进度暂未更新，正在重连';
  return <section className="ai-chat-message ai-role-assistant pilot-specialist-reply" data-worker-id={row.worker.id} data-task-id={row.worker.task.taskId} data-phase={row.activity.phase} aria-label={`${row.author.name}的回复`}>
   <ReplyIdentity identity={{name:'Pilot',pilot:true}} author={row.author} authorMotion={moving?'working':'still'} onSpecialist={onSpecialist}/>
-  {projected?.card?.type==='plan_reference'?<PlanReference state={(projected.card.data as {state:'saved'|'writing'|'incomplete'}).state}/>:text?<div className="ai-card ai-message"><AssistantMarkdown>{text}</AssistantMarkdown></div>:<div className="pilot-specialist-waiting" role="status">{moving&&visible&&<LoadingWaves/>}<span>{label}</span></div>}
+  {projected?.card?.type==='plan_reference'?<PlanReference state={(projected.card.data as {state:'saved'|'writing'|'incomplete'}).state}/>:text?<div className="ai-card ai-message"><AssistantMarkdown>{text}</AssistantMarkdown></div>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
   {text&&!available&&<small className="pilot-specialist-connection" role="status">进度暂未更新，正在重连</small>}
  </section>;
 }

@@ -1,0 +1,13 @@
+.reply-process-text,
+.reply-duration.reply-process-text {
+ color:var(--text-muted);
+ font-family:var(--font-ui);
+ font-size:var(--font-size-process);
+ font-weight:var(--font-weight-normal);
+ line-height:1.6;
+ --status-text-base:var(--text-muted);
+ --status-text-highlight:var(--foreground);
+}
+.reply-process-status { display:flex; align-items:center; gap:8px; min-width:0; overflow-wrap:anywhere; }
+.reply-process-status > :is(svg,.turn-status-mark) { flex:none; }
+.reply-process-status > .status-text { min-width:0; }

@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-13
 last_updated: 2026-11-13
 owner: Lake
-status: 'Completed'
+status: 'In progress'
 tags: [feature, pilot, conversation]
 ---
 
 # Introduction
 
-![Status: Completed](https://img.shields.io/badge/status-Completed-green)
+![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
 
 为“全部干员报数”和指定多人讨论提供独立的对话轮次。使用现有 SDK、AgentHost、调度容量及角色频道；每人真实回应，超时和失败可见，最后由独立 Pilot 上下文汇总。本轮不产生业务目标，不恢复 ACP 分支已移除的业务验收。
 
@@ -24,6 +24,8 @@ tags: [feature, pilot, conversation]
 - **CON-001**: 初版使用 `codex/pilot-conversation-rounds -> develop`；2026-11-13 用户授权在 `codex/acp-pilot-integration -> develop` 整合 ACP 并安装 Lake Dev；未经用户明确授权不合并、不发布、不操作正式环境。
 - **GUD-001**: 复用现有干员署名、Glyph、状态文字及主题；UI 只展示实际宿主状态。
 - **PAT-001**: SQLite 事务内冻结回应和确定性投递 ID，复用现有 AgentRuntime 和主调度容量。
+- **REQ-004**: 按 2026-11-13 用户反馈，报数和介绍默认只收齐回应并结束，不调用 Pilot 重复名单/职责；仅显式请求综合结论时设置 summarize=true。历史自动生成的对话总结仅从主对话展示隐藏，原消息保留。
+- **GUD-002**: 等待/思路使用共享 13px、常规字重、主题次要色与水波状态样式，区别于 15px 正文，不在同一干员标题下重复名字。
 
 ## 2. Implementation Steps
 
@@ -55,6 +57,16 @@ tags: [feature, pilot, conversation]
 | TASK-006 | 在 AgentHost/ACP 添加无业务 Task 的 conversation 来源，按冻结角色配置运行原生或 Codex，禁止工具和重放，保留实际 Agent Logo 及头像；补充回归。依赖 TASK-005。 | ✅ | 2026-11-13 |
 | TASK-007 | 运行组合源码/SDK/ACP/前端检查，备份并停止现有 Dev，使用标准签名桌面入口安装，核对已安装源码和进程。依赖 TASK-006。 | ✅；已安装干净来源 c270f6c8，严格签名及隔离路径验证通过。 | 2026-11-13 |
 | TASK-008 | 在安装的 Lake Dev 验证真实召集、缺席/停止、角色配置、明暗及完整窄窗布局；保留 tested SHA 并让用户可直接试用。依赖 TASK-007。 | ✅；原项目真实六人 Codex 报到及 Pilot 汇总、独立 QA 缺席与停止、明暗宽/窄窗、焦点与输入光标通过。 | 2026-11-13 |
+
+### Implementation Phase 4
+
+- **GOAL-004**: 按反馈区分过程与正文，并取消冗余报数总结；依赖 GOAL-003。
+
+| Task | Description | Completed | Date |
+|------|-------------|-----------|------|
+| TASK-009 | `specialist-conversations.ts` 与 `superagent.ts` 增加默认关闭的 summarize 选择，收齐直接完成；保留明确综合请求的独立 Pilot 上下文。 | | |
+| TASK-010 | `AIPanel.tsx` 隐藏历史自动总结；共享 ReplyProcessStatus 区分过程字体，供干员等待和召集进展使用。依赖 TASK-009。 | | |
+| TASK-011 | 检查默认零总结调用、显式综合、历史展示与回执保持，签名安装 Dev 并验证明暗/窄窗及真实报数；更新验收记录和原集成 PR。依赖 TASK-010。 | | |
 
 ## 3. Alternatives
 

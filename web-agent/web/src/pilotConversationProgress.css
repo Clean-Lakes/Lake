@@ -1,4 +1,2 @@
 .pilot-conversation-progress { display:grid; gap:12px; width:100%; min-width:0; }
-.pilot-conversation-status { display:flex; align-items:center; gap:9px; min-width:0; padding-inline-start:var(--reply-avatar-column,40px); color:var(--text-muted); }
-.pilot-conversation-status-text { min-width:0; font-size:var(--font-size-ui); overflow-wrap:anywhere; --status-text-base:var(--text-muted); --status-text-highlight:var(--foreground); }
-.pilot-conversation-progress .pilot-specialist-waiting { display:flex; align-items:center; gap:8px; overflow-wrap:anywhere; }
+.pilot-conversation-status { padding-inline-start:var(--reply-avatar-column,40px); }

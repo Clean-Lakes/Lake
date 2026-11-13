@@ -62,7 +62,7 @@ export type MessageMention = {kind: "resource" | "skill" | "mcp" | "role"; id: s
 
 export type SpecialistReplyAuthor = {kind:'specialist';name:string;roleId?:string;workerId:string;sessionId:string;taskId?:string;conversationId?:string;channelSessionId?:string;rootTurnId?:string;execution?:AgentBackendRef;avatarId?:LakeAvatarName};
 export type Message = {
-  conversation?: {id:string;sourceMessageId:string;kind:'reply'|'summary'|'notice'};
+  conversation?: {id:string;sourceMessageId:string;kind:'reply'|'summary'|'notice';summaryRequested?:boolean};
   jointAcceptance?: {taskId:string;receiptId:string};
   jointReport?: {taskId:string;reportId:string};
   author?: SpecialistReplyAuthor;
@@ -398,7 +398,7 @@ export type SpecialistConversationMember = {
 export type SpecialistConversation = {
   id:string;projectId:string;sessionId:string;sourceMessageId:string;title:string;
   state:'queued'|'running'|'summarizing'|'completed'|'cancelled'|'interrupted'|'failed';
-  createdAt:string;deadlineAt:string;members:SpecialistConversationMember[];summaryMessageId?:string;
+  createdAt:string;deadlineAt:string;members:SpecialistConversationMember[];summaryMessageId?:string;summaryRequested?:boolean;
 };
 export type SuperWorkspace = {pilotMessageRead?:ConversationReadState;active:boolean;project:SuperProject;workers:SuperWorker[];channels?:SpecialistChannelInfo[];conversations?:SpecialistConversation[];cursor?:number};
 export type SRESnapshot = {featureVersion:number;enabled:boolean;tasks:SRETask[];pilot?:PilotSettings};
