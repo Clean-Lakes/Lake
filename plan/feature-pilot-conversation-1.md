@@ -4,21 +4,21 @@ version: 1
 date_created: 2026-11-13
 last_updated: 2026-11-13
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [feature, pilot, conversation]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
-为“全部干员报数”和指定多人讨论提供独立的对话轮次。使用现有 SDK、AgentHost、调度容量及角色频道；每人真实回应，超时和失败可见，最后由独立 Pilot 上下文汇总。本轮不产生业务目标，不恢复 ACP 分支已移除的业务验收。
+为“全部干员报数”和指定多人讨论提供独立的对话轮次。使用现有 SDK、AgentHost、调度容量及角色频道；每人真实回应，超时和失败可见。报数按用户后续反馈直接结束，需要综合结论时才启动独立 Pilot 上下文。本轮不产生业务目标，不恢复 ACP 分支已移除的业务验收。
 
 ## 1. Requirements & Constraints
 
 - **REQ-001**: `convene_specialists` 从当前真实人工事件建立轮次，冻结全部或明确 RoleID 收件人，同 event/part 重试幂等。
 - **REQ-002**: 每位收件人冻结既有 Agent/模型与头像，拥有独立原生 SDK 或 Codex ACP Session；只有当前有效执行的成功结束回调能够提交其回复，署名并投递至来源 Pilot 对话及角色频道。
-- **REQ-003**: 宿主持久记录排队、回应中、已回应、失败、超时、中断和取消，等待全部收件人结清后由 Pilot 模型汇总。
+- **REQ-003**: 宿主持久记录排队、回应中、已回应、失败、超时、中断和取消，全部收件人结清后结束；明确请求综合结论时才由 Pilot 模型汇总。
 - **SEC-001**: 对话执行只生成文字，不提供资源工具、任务工具、子智能体或记忆读取；不签发业务许可或成功证据。
 - **SEC-002**: 模型派发及提交前检查当前项目、安全状态、角色存续、来源和轮次；停止后迟到回复失效，重启不重放。
 - **CON-001**: 初版使用 `codex/pilot-conversation-rounds -> develop`；2026-11-13 用户授权在 `codex/acp-pilot-integration -> develop` 整合 ACP 并安装 Lake Dev；未经用户明确授权不合并、不发布、不操作正式环境。
@@ -64,9 +64,9 @@ tags: [feature, pilot, conversation]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-009 | `specialist-conversations.ts` 与 `superagent.ts` 增加默认关闭的 summarize 选择，收齐直接完成；保留明确综合请求的独立 Pilot 上下文。 | | |
-| TASK-010 | `AIPanel.tsx` 隐藏历史自动总结；共享 ReplyProcessStatus 区分过程字体，供干员等待和召集进展使用。依赖 TASK-009。 | | |
-| TASK-011 | 检查默认零总结调用、显式综合、历史展示与回执保持，签名安装 Dev 并验证明暗/窄窗及真实报数；更新验收记录和原集成 PR。依赖 TASK-010。 | | |
+| TASK-009 | `specialist-conversations.ts` 与 `superagent.ts` 增加默认关闭的 summarize 选择，收齐直接完成；保留明确综合请求的独立 Pilot 上下文。 | ✅ | 2026-11-13 |
+| TASK-010 | `AIPanel.tsx` 隐藏历史自动总结；共享 ReplyProcessStatus 区分过程字体，供干员等待和召集进展使用。依赖 TASK-009。 | ✅ | 2026-11-13 |
+| TASK-011 | 检查默认零总结调用、显式综合、历史展示与回执保持，签名安装 Dev 并验证明暗/窄窗及真实报数；更新验收记录和原集成 PR。依赖 TASK-010。 | ✅；b674ff4b 已安装，真实六人短报数、零总结模型调用、13px/15px 字体区分及明暗宽窄窗通过。 | 2026-11-13 |
 
 ## 3. Alternatives
 
@@ -108,3 +108,4 @@ tags: [feature, pilot, conversation]
 - [分支与发布规范](../docs/development-workflow.md)
 - [本次验收与安装限制](../docs/validation/typescript-candidate/pilot-conversation-2026-11-13.md)
 - [ACP 集成与已安装 Dev 验收](../docs/validation/acp-agent-execution/pilot-conversation-integration-2026-11-13.md)
+- [过程样式与报数收尾修订验收](../docs/validation/acp-agent-execution/conversation-feedback-2026-11-13.md)

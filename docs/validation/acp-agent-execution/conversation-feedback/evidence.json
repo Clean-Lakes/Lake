@@ -1,0 +1,200 @@
+{
+  "validatedAt": "2026-11-13T03:50:29.375456+00:00",
+  "installed": {
+    "schemaVersion": 1,
+    "gitHead": "b674ff4b1ed340e71c065512fb6f917445a3cc58",
+    "gitBranch": "codex/acp-pilot-integration",
+    "sourceRoot": "/Users/lingyunxieqing/.codex/worktrees/pilot-conversation-build/Lake",
+    "version": "0.3.32",
+    "dirty": false,
+    "backendRuntime": "typescript",
+    "backendSHA256": "0c2a6ac4acc0566f4b45133ab420267d389b3d473de9a6890b9c04ebcbe45dd1",
+    "uiSourceSHA256": {
+      "AIPanel.tsx": "022c2e2117a0143d6888a24721f5ce50e693e5293905db77d637bc2fa97c7384",
+      "ThinkingTimeline.tsx": "6f91639248cabfd157f3d842a91fa5b736b2cfaee970b92c86f7ebf0ed31cc71",
+      "ReplyDuration.tsx": "91deab95bb740d6681a7af22dc273b34cf83492b55bdae392a1554a412adb4eb",
+      "conversation-progress-model.ts": "f6a472e18129d84872b54c704576feb40387e2d6bdb41beabfd427989429019d"
+    }
+  },
+  "backup": "/Users/lingyunxieqing/Library/Application Support/LakeDevBackups/dialogue-feedback-20261113-114402",
+  "round": {
+    "id": "conversation_7d6ad961e411de6c0454a04e9d14e504",
+    "state": "completed",
+    "summaryRequested": false,
+    "summaryMessageId": null,
+    "createdAt": "2026-11-13T03:46:45.822Z",
+    "title": "请每位干员亲自报数，简短回复自己的编号、姓名及报到确认即可。"
+  },
+  "members": [
+    {
+      "roleName": "服务器运维排查专员",
+      "state": "replied",
+      "execution": {
+        "kind": "acp",
+        "agent": "codex",
+        "revision": 3
+      },
+      "avatarId": null
+    },
+    {
+      "roleName": "ACP 测试专员",
+      "state": "replied",
+      "execution": {
+        "kind": "acp",
+        "agent": "codex",
+        "revision": 3
+      },
+      "avatarId": null
+    },
+    {
+      "roleName": "知识库专员",
+      "state": "replied",
+      "execution": {
+        "kind": "acp",
+        "agent": "codex",
+        "revision": 3
+      },
+      "avatarId": null
+    },
+    {
+      "roleName": "数据库专员",
+      "state": "replied",
+      "execution": {
+        "kind": "acp",
+        "agent": "codex",
+        "revision": 3
+      },
+      "avatarId": null
+    },
+    {
+      "roleName": "河狸专员",
+      "state": "replied",
+      "execution": {
+        "kind": "acp",
+        "agent": "codex",
+        "revision": 3
+      },
+      "avatarId": "beaver"
+    },
+    {
+      "roleName": "发布专员",
+      "state": "replied",
+      "execution": {
+        "kind": "acp",
+        "agent": "codex",
+        "revision": 3
+      },
+      "avatarId": null
+    }
+  ],
+  "replies": [
+    "1 号，服务器运维排查专员，报到！",
+    "6号，发布专员报到！",
+    "5号，河狸专员，报到！",
+    "2 号，ACP 测试专员报到！",
+    "3号，知识库专员报到！",
+    "4号，数据库专员报到！"
+  ],
+  "externalRuns": [
+    {
+      "id": "2bd07896-c236-44d9-a27b-45035584c123",
+      "model": "gpt-6.1-sol",
+      "state": "completed"
+    },
+    {
+      "id": "6639c565-fa9d-4c90-bdf0-d0847e627013",
+      "model": "gpt-6.1-sol",
+      "state": "completed"
+    },
+    {
+      "id": "8eaca48c-ae66-4761-92dc-b8491c8092f3",
+      "model": "gpt-6.1-sol",
+      "state": "completed"
+    },
+    {
+      "id": "a14aa900-699f-443a-8316-8fd1b2359459",
+      "model": "gpt-6.1-sol",
+      "state": "completed"
+    },
+    {
+      "id": "bb51efc9-8ee4-4ebb-bc6f-1b6e01f83b54",
+      "model": "gpt-6.1-sol",
+      "state": "completed"
+    },
+    {
+      "id": "c23aee3c-b910-440e-afb0-9628fe927337",
+      "model": "gpt-6.1-sol",
+      "state": "completed"
+    }
+  ],
+  "summaryModelCalled": false,
+  "originalSummaryRetained": true,
+  "business": {
+    "superGoals": {
+      "count": 130,
+      "unchanged": true
+    },
+    "superWorkers": {
+      "count": 130,
+      "unchanged": true
+    },
+    "superOperations": {
+      "count": 403,
+      "unchanged": true
+    },
+    "superAcceptance": {
+      "count": 162,
+      "unchanged": true
+    }
+  },
+  "ui": {
+    "width": 1280,
+    "scrollWidth": 1280,
+    "process": [
+      {
+        "text": "6 / 6 位干员已回应",
+        "size": "13px",
+        "weight": "450",
+        "color": "rgb(142, 143, 144)"
+      },
+      {
+        "text": "3 / 6 位干员已回应 · 等待回应",
+        "size": "13px",
+        "weight": "450",
+        "color": "rgb(142, 143, 144)"
+      },
+      {
+        "text": "正在回复…",
+        "size": "13px",
+        "weight": "450",
+        "color": "rgb(142, 143, 144)"
+      },
+      {
+        "text": "正在回复…",
+        "size": "13px",
+        "weight": "450",
+        "color": "rgb(142, 143, 144)"
+      },
+      {
+        "text": "等待回应",
+        "size": "13px",
+        "weight": "450",
+        "color": "rgb(142, 143, 144)"
+      }
+    ],
+    "body": [
+      {
+        "size": "15px",
+        "weight": "500"
+      },
+      {
+        "size": "15px",
+        "weight": "500"
+      }
+    ],
+    "progress": [
+      "6 / 6 位干员已回应",
+      "3 / 6 位干员已回应 · 等待回应"
+    ]
+  }
+}
