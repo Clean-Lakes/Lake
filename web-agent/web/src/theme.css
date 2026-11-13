@@ -67,6 +67,8 @@
   --radius-dialog: 9px;
   /* Settings surfaces: fixed scale rather than borrowing a dialog radius for controls. */
   --radius-settings-control: 10px;
+  --radius-sidebar-pilot: 14px;
+  --radius-sidebar-tab: 8px;
   --radius-settings-panel: 14px;
   --radius-settings-dialog: 22px;
   --radius-settings-icon: 8px;
