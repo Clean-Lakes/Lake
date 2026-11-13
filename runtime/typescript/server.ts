@@ -785,7 +785,9 @@ export async function startLakeServer(options: ServerOptions) {
         } else if (path[2] === "instructions" && path.length === 4 && method === "GET") {
           const waitSeconds = Number(url.searchParams.get("waitSeconds") ?? 0);
           if (!Number.isSafeInteger(waitSeconds) || waitSeconds < 0 || waitSeconds > 60) throw new HttpError(400, "waitSeconds 须为 0–60 的整数");
-          const event = store.get<{ external?: unknown; preferredRoleId?: string }>("superInputs", path[3]);
+          const event = store.get<{ external?: unknown; preferredRoleId?: string }>("superInputs", path[3]) ??
+            store.list<{ external?: unknown; preferredRoleId?: string; messageId?: string }>("superInputs")
+              .find(candidate => candidate.external && candidate.messageId === path[3]);
           if (!event?.external) throw new HttpError(404, "外部指令不存在");
           gateway!.requireRole(auth, event.preferredRoleId ?? "");
           result = await superagent.instructionStatus(path[3], waitSeconds);
