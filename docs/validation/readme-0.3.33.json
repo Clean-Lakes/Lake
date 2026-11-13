@@ -138,7 +138,25 @@
       "visualReview": "desktop dark and Chinese narrow previews inspected"
     },
     "localLinks": "Both root READMEs, image provenance and new guide-entry links checked",
-    "historicalNotes": "Old Go/SRE implementation notes retained in collapsed sections"
+    "historicalNotes": "Old Go/SRE implementation notes retained in collapsed sections",
+    "githubBranchPreview": {
+      "sourceCommit": "716ef5a913c18fbd9dd20e0e8ca3a2fde7d5f051",
+      "englishAndChineseImagesLoaded": true,
+      "actualImageDimensions": [
+        [
+          1200,
+          840
+        ],
+        [
+          1200,
+          780
+        ]
+      ],
+      "englishDarkPictureSelection": true,
+      "englishQuickStartJump": true,
+      "chineseQuickStartJump": true
+    }
   },
-  "scope": "README text, documentation assets and capture fixture only. No backend/model/resource calls or application home. Functional release tests are retained at their original SHAs; they are not claimed as rerun for this documentation update."
+  "scope": "README text, documentation assets and capture fixture only. No backend/model/resource calls or application home. Functional release tests are retained at their original SHAs; they are not claimed as rerun for this documentation update.",
+  "cleanup": "Screenshot/preview TaskSpace finished; both temporary loopback web hosts stopped. Dev and production apps, homes and system theme were not modified."
 }
