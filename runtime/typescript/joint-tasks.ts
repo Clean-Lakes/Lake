@@ -10,6 +10,7 @@ export type JointTask = {
   memberIds: string[];
   revision: number;
   acceptanceId?: string;
+  reportId?: string;
   summary?: string;
 };
 
@@ -30,26 +31,32 @@ export function hasAcceptedExecution(store: LakeStore, goal: Goal) {
     receipt.state === 'pass' && receipt.contributionReceipts?.includes(goal.contributionReceiptId) === true;
 }
 
+/** Submission provenance only; a report is never a business verification. */
+export function hasReportedExecution(store: LakeStore, goal: Goal) {
+  if (goal.status !== 'completed' || !goal.completionReportId) return false;
+  const report = store.get<{taskId: string; sessionId: string; projectId: string; workerId: string; outcome: string; summary: string}>('superDeliveries', goal.completionReportId);
+  return !!report && report.taskId === goal.id && report.sessionId === goal.sessionId && report.projectId === goal.projectId &&
+    report.workerId === goal.workerId && report.outcome === goal.reportedOutcome && report.summary === goal.summary;
+}
+
 export function jointTaskState(task: JointTask, members: Goal[]) {
-  const completed = members.filter(member => member.status === 'completed' && member.contributionReceiptId).length;
+  const completed = members.filter(member => member.status === 'completed' && (member.completionReportId || member.contributionReceiptId)).length;
   const has = (status: string) => members.some(member => member.status === status);
   let status: SuperTask['state'];
-  if (task.acceptanceId) status = 'completed';
-  else if (has('blocked')) status = 'blocked';
+  if (task.reportId || task.acceptanceId || completed === members.length && members.length > 0) status = 'completed';
   else if (has('waiting_user')) status = 'waiting_user';
   else if (has('running')) status = 'running';
   else if (has('waiting_external')) status = 'waiting_external';
-  else if (has('paused')) status = 'paused';
+  else if (has('paused') || has('blocked')) status = 'paused';
   else if (has('failed')) status = 'failed';
   else if (has('cancelled')) status = 'cancelled';
-  else status = 'blocked';
-  const acceptanceState: Goal['acceptanceState'] = task.acceptanceId ? 'pass' :
-    ['blocked', 'failed', 'cancelled'].includes(status) ? 'insufficient' : 'not_evaluated';
+  else status = 'paused';
+  const acceptanceState: Goal['acceptanceState'] = task.acceptanceId ? 'pass' : 'not_evaluated';
   return {status, acceptanceState, completed, total: members.length, summary: task.summary};
 }
 
 /** The same goal may be visible by its original ID before and after becoming shared. */
-export function joinExecutions(store: LakeStore, taskId: string, addedIds: string[], unresolved: (id: string) => boolean) {
+export function joinExecutions(store: LakeStore, taskId: string, addedIds: string[]) {
   const register = () => {
     const previous = jointTask(store, taskId);
     const memberIds = [...new Set([...(previous?.memberIds ?? [taskId]), ...addedIds])];
@@ -57,11 +64,11 @@ export function joinExecutions(store: LakeStore, taskId: string, addedIds: strin
     if (memberIds.length < 2) throw new HttpError(400, '共同任务至少需要两位专员');
     const members = memberIds.map(id => store.require<Goal>('superGoals', id));
     const primary = members[0];
-    if (previous?.acceptanceId || members.some(member => member.projectId !== primary.projectId ||
-      member.sharedTaskId && member.sharedTaskId !== taskId || member.acceptanceState === 'pass' ||
+    if (previous?.reportId || previous?.acceptanceId || members.some(member => member.projectId !== primary.projectId ||
+      member.sharedTaskId && member.sharedTaskId !== taskId ||
       member.status === 'completed' && !previous?.memberIds.includes(member.id) ||
-      ['failed', 'cancelled'].includes(member.status) || Date.parse(member.deadlineAt) <= Date.now() || unresolved(member.id)))
-      throw new HttpError(409, '共同任务只能在同一项目的有效任务上补派，已结束或待核实的执行不能重新分派');
+      ['failed', 'cancelled'].includes(member.status) || Date.parse(member.deadlineAt) <= Date.now()))
+      throw new HttpError(409, '共同任务只能在同一项目的有效任务上补派，已结束的执行不能重新分派');
     if ([new Set(members.map(member => member.roleId)), new Set(members.map(member => member.workerId)),
         new Set(members.map(member => member.sessionId))].some(set => set.size !== members.length))
       throw new HttpError(409, '共同任务需要不同的专员、Worker 和执行会话');

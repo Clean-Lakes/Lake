@@ -1,4 +1,4 @@
-import type { Resource } from "../../web-agent/shared/contracts";
+import type { Resource, ResourceTreeNode } from "../../web-agent/shared/contracts";
 import { HttpError } from "./store";
 import { digest } from "./tasks";
 
@@ -7,6 +7,7 @@ export type AssetQuery = { asset_ref?: string; query?: string; cursor?: string; 
 type AssetSource = {
   projectId: string;
   resources: readonly Resource[];
+  resourceTree?: readonly ResourceTreeNode[];
   resourceRevision?: (resource: Resource) => number;
   sshRevision?: (resource: Resource) => string;
   executionRevision?:(resource:Resource)=>string;
@@ -16,6 +17,9 @@ type AssetSource = {
 type AssetEntry = Pick<Resource, "id" | "name" | "kind" | "status"> & {
   asset_ref: string;
   nameTruncated?: boolean;
+  path?: string;
+  pathTruncated?: true;
+  path_state?: "unavailable";
   configuration_revision?: string;
   configuration_pin?: string;
   configuration_state?: "unavailable";
@@ -36,6 +40,46 @@ function clipName(value: string) {
   return { name: bytes.subarray(0, end).toString("utf8"), ...(end < bytes.length ? { nameTruncated: true } : {}) };
 }
 const normalized = (value: string) => value.normalize("NFKC").toLowerCase();
+const normalizedPath = (value: string) => normalized(value).replace(/\s*\/\s*/g, "/");
+
+/** Use only the visible resource's own ancestry, never sibling or foreign data. */
+function directoryIndex(source: AssetSource) {
+  const nodes = new Map<string, ResourceTreeNode>(), duplicates = new Set<string>();
+  const leaves = new Map<string, ResourceTreeNode[]>();
+  for (const node of source.resourceTree ?? []) {
+    if (node.projectId !== source.projectId) continue;
+    if (nodes.has(node.id)) duplicates.add(node.id);
+    nodes.set(node.id, node);
+    if (node.kind === "resource" && node.resourceId)
+      leaves.set(node.resourceId, [...(leaves.get(node.resourceId) ?? []), node]);
+  }
+  return (resource: Resource): { path: string; lineage: string[] } | { unavailable: true } => {
+    const candidates = leaves.get(resource.id) ?? [];
+    if (candidates.length > 1) return { unavailable: true };
+    const leaf = candidates[0];
+    if (leaf && duplicates.has(leaf.id)) return { unavailable: true };
+    const parts = [resource.name], lineage = leaf ? [leaf.id] : [], seen = new Set(lineage);
+    let parentId = leaf?.parentId;
+    while (parentId) {
+      const parent = nodes.get(parentId);
+      if (!parent || parent.kind !== "folder" || typeof parent.name !== "string" || duplicates.has(parentId) || seen.has(parentId) || seen.size >= 32)
+        return { unavailable: true };
+      seen.add(parentId); lineage.unshift(parentId); parts.unshift(parent.name); parentId = parent.parentId;
+    }
+    return { path: parts.join(" / "), lineage };
+  };
+}
+
+/** The JSON budget also bounds quotes/control characters in legacy names. */
+function boundedPath(value: string) {
+  let path = "", bytes = 2;
+  for (const char of value) {
+    const length = Buffer.byteLength(JSON.stringify(char)) - 2;
+    if (bytes + length > 2048) break;
+    path += char; bytes += length;
+  }
+  return { path, ...(path.length < value.length ? { pathTruncated: true as const } : {}) };
+}
 const compareIds = (a: Resource, b: Resource) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 const encodeCursor = (value: Cursor) => Buffer.from(JSON.stringify(value)).toString("base64url");
 function decodeCursor(value: string): Cursor {
@@ -60,12 +104,16 @@ export function listProjectAssets(source: AssetSource, input: AssetQuery = {}) {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) throw new HttpError(400, "Asset page limit must be between 1 and 50");
   if (assetRef && query) throw new HttpError(400, "Use asset_ref for an exact ID or query for a name search, not both");
   const resources = source.resources.filter((resource) => resource.projectId === source.projectId).sort(compareIds);
+  const directory = directoryIndex(source), directories = new Map(resources.map(resource => [resource.id, directory(resource)]));
   const catalog = digest(resources.map((resource) => ({ id: resource.id, name: resource.name, kind: resource.kind,
-    status: resource.status, revision: source.resourceRevision?.(resource) ?? 1 })));
+    status: resource.status, revision: source.resourceRevision?.(resource) ?? 1, directory: directories.get(resource.id) })));
   const search = query ? normalized(query) : undefined;
   const scope = digest([source.projectId, assetRef ?? null, search ?? null]);
-  const matches = resources.filter((resource) => assetRef ? resource.id === assetRef : !search ||
-    normalized(resource.name).includes(search) || normalized(resource.id).includes(search));
+  const matches = resources.filter((resource) => {
+    const current = directories.get(resource.id)!;
+    return assetRef ? resource.id === assetRef : !search || normalized(resource.name).includes(search) || normalized(resource.id).includes(search) ||
+      ("path" in current && normalizedPath(current.path).includes(normalizedPath(search)));
+  });
   let start = 0;
   if (cursorText) {
     const cursor = decodeCursor(cursorText);
@@ -83,6 +131,9 @@ export function listProjectAssets(source: AssetSource, input: AssetQuery = {}) {
   };
   for (const resource of matches.slice(start, start + limit)) {
     const entry: AssetEntry = { id: resource.id, asset_ref: resource.id, ...clipName(resource.name), kind: resource.kind, status: resource.status };
+    const current = directories.get(resource.id)!;
+    if ("path" in current) Object.assign(entry, boundedPath(current.path));
+    else entry.path_state = "unavailable";
     if (resource.kind === "ssh" && resource.status === "available" && source.sshRevision) {
       try {
         const revision = source.sshRevision(resource);

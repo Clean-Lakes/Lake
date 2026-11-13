@@ -1,0 +1,649 @@
+{
+  "date": "2026-11-11",
+  "sourceCommit": "f93cd200f14ba2bbf3f244698bb9d64cc5041594",
+  "backendCodeCommit": "f93cd200f14ba2bbf3f244698bb9d64cc5041594",
+  "scope": "shared backend resource directory discovery",
+  "platform": "macOS arm64",
+  "runtime": "Node 24.14.0 / signed Lake SEA",
+  "dev": {
+    "installed": true,
+    "signatureVerified": true,
+    "buildOriginDirty": false,
+    "backendHashVerified": true,
+    "actualProcessVerified": true,
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "home": "~/.lake-dev",
+    "guiLoaded": true,
+    "nativeSpecialistTaskPagePreserved": true,
+    "existingWorkerCount": 150,
+    "existingWorkersUnchanged": true,
+    "oldExecutionRecords": {
+      "oldTaskOperations": 28,
+      "oldTaskUnknown": 6,
+      "externalRuns": 3,
+      "operationIdentityStatusHashUnchanged": true,
+      "externalRunsUnchanged": true
+    }
+  },
+  "checks": {
+    "assetUnit": {
+      "passed": 20,
+      "includedInBackendUnit": true
+    },
+    "backendTypes": "passed",
+    "backendBuild": "passed",
+    "backendUnit": {
+      "passed": 267,
+      "skipped": 4
+    },
+    "backendIntegration": {
+      "passed": 192
+    },
+    "realCodexACP": {
+      "passed": 3,
+      "adapter": "2.2.2",
+      "engine": "0.160.1",
+      "provider": "local synthetic Responses fixture",
+      "realCredentialsUsed": false,
+      "externalInferenceUsed": false
+    },
+    "boundary": "passed",
+    "naming": "0 violations",
+    "namingUnit": {
+      "passed": 5
+    },
+    "frontendTypesAndBuild": "passed by signed desktop build",
+    "frontendSourceChanged": false,
+    "frontendTestsRerun": false,
+    "legacyGoRerun": false
+  },
+  "resourceDirectory": {
+    "fullPathMetadata": true,
+    "ancestorAndPathQuery": true,
+    "exactIdsAndPinsPreserved": true,
+    "renameAndMoveInvalidateCursor": true,
+    "pathJSONBytes": 2048,
+    "pageJSONBytes": 8192,
+    "brokenAncestryExplicitlyUnavailable": true,
+    "projectAndTaskScopePreserved": true,
+    "gatewayAliasesRemainDistinct": true,
+    "realCodexReceivesDirectoryThroughHostBridge": true,
+    "unrelatedDirectoryExcludedInCodexTest": true,
+    "actualCatalogProjection": {
+      "oldFlatQueryCount": 0,
+      "directoryQueryCount": 27,
+      "returnedCount": 27,
+      "hasMore": false,
+      "allPathsInRequestedDirectory": true,
+      "jenkinsIncluded": false,
+      "serverOperationsExecuted": 0
+    }
+  },
+  "actualServerTaskRetried": false,
+  "originalUnknownReconciled": false,
+  "productionChanged": false,
+  "merged": false,
+  "previousValidations": [
+    {
+      "date": "2026-11-11",
+      "sourceCommit": "d389ca7847ddcfb9537a14fb32bffa018ccb0c97",
+      "backendCodeCommit": "219636df81270129a1a47279e86ee2b29ead33e4",
+      "scope": "frontend specialist task page and loading motion",
+      "platform": "macOS arm64",
+      "runtime": "Node 24.14.0 / signed Lake SEA",
+      "dev": {
+        "installed": true,
+        "signatureVerified": true,
+        "buildOriginDirty": false,
+        "backendHashVerified": true,
+        "actualProcessVerified": true,
+        "bundleId": "com.cleanlakes.lake.desktop.dev",
+        "home": "~/.lake-dev",
+        "guiLoaded": true,
+        "nativeSpecialistTaskListVisible": true,
+        "nativeOriginalTaskDetailVerified": true,
+        "originalTaskProgressReadable": true,
+        "composerCodexSelected": true,
+        "projects": 19,
+        "existingWorkerCount": 150,
+        "existingWorkersUnchanged": true
+      },
+      "checks": {
+        "frontend": {
+          "passed": 797,
+          "newRegressionTests": 6
+        },
+        "frontendTypesAndBuild": "passed",
+        "boundary": "passed",
+        "backendRuntimeSourceChanged": false,
+        "backendIntegrationRerun": false,
+        "backendUnitRerun": false,
+        "realModelInferenceRerun": false,
+        "legacyGoRerun": false
+      },
+      "specialistTaskPage": {
+        "sharedLakeAvatarsAndTheme": true,
+        "originalTaskIdentityPreserved": true,
+        "frozenExecutorShown": true,
+        "unknownProgressNotInvented": true,
+        "selectedDetailReusedWithoutNewRequests": true,
+        "browser": {
+          "initialWrites": 0,
+          "rowSurvivesPoll": true,
+          "animationSurvivesPoll": true,
+          "selectedAfterPoll": "fixture-session-0",
+          "activeRows": 2,
+          "keyboardFilter": "需关注2",
+          "keyboardFocus": "需关注2",
+          "directoryMatches": 6,
+          "emptySearch": "没有匹配的任务",
+          "newTaskFocus": "message-input",
+          "draft": "保留这份派发草稿，不发送",
+          "questionAndStop": [
+            {
+              "path": "/api/sessions/fixture-session-2/ai/questionReply",
+              "body": {
+                "id": "fixture-question",
+                "answers": {
+                  "scope": [
+                    "只读检查当前集群"
+                  ]
+                }
+              }
+            },
+            {
+              "path": "/api/sessions/fixture-session-0/ai/workControl",
+              "body": {
+                "goalId": "fixture-task-0",
+                "command": "cancel",
+                "revision": 1
+              }
+            }
+          ],
+          "scrolling": {
+            "before": 574,
+            "after": 600,
+            "rows": 43
+          },
+          "escapeRestoresOriginalRow": true,
+          "emptyPage": {
+            "title": "还没有任务",
+            "newTaskEnabled": true
+          },
+          "viewportWidths": [
+            1680,
+            1280,
+            900,
+            560
+          ],
+          "noHorizontalOverflow": true,
+          "reducedMotionLoaders": "none"
+        },
+        "screenshots": [
+          "task-list-light.png",
+          "task-list-dark.png",
+          "task-list-narrow-dark.png",
+          "task-list-mobile-dark.png"
+        ]
+      },
+      "loadingMotion": {
+        "sharedGlyphClass": "activity-indicator",
+        "fiveRunningContextsVerified": true,
+        "sameNodeAndAnimationAcrossPoll": true,
+        "reducedMotionRespected": true,
+        "completedHasNoLoaders": true,
+        "proof": "loading-motion.json"
+      },
+      "backendInvestigationDeferred": true,
+      "actualServerTaskRetried": false,
+      "productionChanged": false,
+      "merged": false
+    },
+    {
+      "date": "2026-11-11",
+      "sourceCommit": "9bb1deab7296000e030a7c39b9c54cd97ab32d37",
+      "backendCodeCommit": "219636df81270129a1a47279e86ee2b29ead33e4",
+      "scope": "frontend specialist execution timeline",
+      "platform": "macOS arm64",
+      "runtime": "Node 24.14.0 / signed Lake SEA",
+      "dev": {
+        "installed": true,
+        "signatureVerified": true,
+        "buildOriginDirty": false,
+        "backendHashVerified": true,
+        "actualProcessVerified": true,
+        "bundleId": "com.cleanlakes.lake.desktop.dev",
+        "home": "~/.lake-dev",
+        "guiLoaded": true,
+        "nativeLatestTaskCodexVisible": true,
+        "historicalNativeCardsNotTrailingLatestReply": true,
+        "composerCodexSelected": true,
+        "existingWorkerCount": 149,
+        "existingWorkersUnchanged": true
+      },
+      "checks": {
+        "frontend": {
+          "passed": 791,
+          "newRegressionTests": 5
+        },
+        "frontendTypesAndBuild": "passed",
+        "backendTypes": "passed",
+        "boundary": "passed",
+        "naming": "passed",
+        "namingBoundaryUnit": {
+          "passed": 5
+        },
+        "backendIntegrationRerun": false,
+        "backendUnitRerun": false,
+        "realModelInferenceRerun": false,
+        "legacyGoRerun": false
+      },
+      "executionTimeline": {
+        "historicalAssignmentTimeRespected": true,
+        "historicalAssignmentDateShown": true,
+        "paginationRangeRespected": true,
+        "queuedExecutorVisible": true,
+        "queuedCardReplacedByActualReply": true,
+        "identityDeduplication": true,
+        "originalTaskLinksVerified": true,
+        "sourceRecordsMutated": false,
+        "browser": {
+          "light": true,
+          "dark": true,
+          "narrowWidth": 620,
+          "horizontalOverflow": false,
+          "taskCardOverflow": false,
+          "fictionalFixtureOnly": true,
+          "closed": true
+        },
+        "existingLatestCodexEvidence": {
+          "createdAt": "2026-11-11T01:14:24.814Z",
+          "backend": {
+            "kind": "acp",
+            "agent": "codex",
+            "revision": 2
+          },
+          "runState": "completed",
+          "taskState": "completed",
+          "acceptanceState": "pass",
+          "existingRecordReadOnly": true
+        },
+        "temporaryViteStopped": true
+      },
+      "actualServerTaskRetried": false,
+      "productionChanged": false,
+      "merged": false
+    },
+    {
+      "date": "2026-11-10",
+      "sourceCommit": "219636df81270129a1a47279e86ee2b29ead33e4",
+      "backendCodeCommit": "219636df81270129a1a47279e86ee2b29ead33e4",
+      "platform": "macOS arm64",
+      "runtime": "Node 24.14.0 / signed Lake SEA; Codex Node 22.22.0",
+      "dev": {
+        "installed": true,
+        "signatureVerified": true,
+        "buildOriginDirty": false,
+        "backendHashVerified": true,
+        "actualProcessVerified": true,
+        "bundleId": "com.cleanlakes.lake.desktop.dev",
+        "home": "~/.lake-dev",
+        "guiLoaded": true,
+        "nativePilotCodexConfiguration": true,
+        "nativeLocalLoginVisible": true,
+        "pilotModelUnchanged": true,
+        "userProjectCodexEnabled": true,
+        "userProjectTransportReady": true,
+        "userProjectAssignmentReady": true,
+        "authMode": "chatgpt",
+        "model": "gpt-6.1-sol",
+        "reasoningEffort": "max",
+        "defaultCodexSpecialists": 5,
+        "existingWorkersUnchanged": 148,
+        "originalTaskBackend": "native",
+        "originalTaskState": "paused"
+      },
+      "checks": {
+        "backendTypes": "passed",
+        "frontendTypesAndBuild": "passed",
+        "backendIntegration": {
+          "passed": 192
+        },
+        "backendUnit": {
+          "passed": 259,
+          "skipped": 4
+        },
+        "frontend": {
+          "passed": 786
+        },
+        "realCodex": {
+          "adapter": "2.2.2",
+          "engine": "0.160.1",
+          "node": "22.22.0",
+          "passed": 3,
+          "sourceCommit": "219636df81270129a1a47279e86ee2b29ead33e4",
+          "ordinaryModelConfigured": false,
+          "modelAndProviderInherited": true,
+          "reasoningEffortInherited": "max",
+          "inheritedMcpHookNotifyTrapsExecuted": false,
+          "nativePatchRejected": true,
+          "sourceConfigAuthUnchanged": true,
+          "cachedApiLoginVerified": true,
+          "logoutDetected": true,
+          "requestsReplayed": false
+        },
+        "boundary": "passed",
+        "naming": "passed",
+        "namingBoundaryUnit": {
+          "passed": 5
+        },
+        "legacyGoRerun": false
+      },
+      "localLogin": {
+        "localChatgptLogin": true,
+        "independentApiKeyProvided": false,
+        "model": "gpt-6.1-sol",
+        "reasoningEffort": "max",
+        "worker": "completed",
+        "acceptance": "pass",
+        "externalRun": "completed",
+        "actualReadAndWorkFinish": true,
+        "businessServersAccessed": false,
+        "schemaVersion": 2,
+        "loginFilesCopied": false,
+        "localConfigUnchanged": true,
+        "ordinaryModelInferenceUsed": false,
+        "taskHome": "isolated temporary Lake Home",
+        "inheritedCodexHome": "existing user Codex Home",
+        "browser": {
+          "light": true,
+          "dark": true,
+          "narrowWidth": 620,
+          "horizontalOverflow": false,
+          "passwordFields": 0,
+          "visibleNativeSelects": 0,
+          "settingsPreservesDraft": true,
+          "specialistCodexDefaultPreserved": true
+        },
+        "temporaryProcessAndAccessFilesCleaned": true
+      },
+      "notValidated": [
+        "OS Keychain-only cross-process account switching",
+        "new local-config flow on Codex Node 24",
+        "non-macOS execution",
+        "Claude Code",
+        "images",
+        "running-turn steering",
+        "full Watchdog guidance",
+        "independent inference per-turn budgets"
+      ],
+      "actualServerTaskRetried": false,
+      "productionChanged": false,
+      "merged": false
+    },
+    {
+      "date": "2026-11-10",
+      "sourceCommit": "7b7ef9fef9c0e2712a1898be1b3e51bf7dd3b932",
+      "backendCodeCommit": "7b7ef9fef9c0e2712a1898be1b3e51bf7dd3b932",
+      "platform": "macOS arm64",
+      "runtime": "Node 24.14.0 / signed Lake SEA; real Codex Node 22.22.0",
+      "dev": {
+        "installed": true,
+        "signatureVerified": true,
+        "buildOriginDirty": false,
+        "backendHashVerified": true,
+        "actualProcessVerified": true,
+        "bundleId": "com.cleanlakes.lake.desktop.dev",
+        "home": "~/.lake-dev",
+        "guiLoaded": true,
+        "nativePilotCodexConfiguration": true,
+        "nativeMissingKeyVisible": true,
+        "pilotModelUnchanged": true,
+        "userProjectCodexEnabled": true,
+        "userProjectTransportReady": true,
+        "userProjectAssignmentReady": false,
+        "userProjectBlocker": "尚未配置 Codex 独立 API Key"
+      },
+      "checks": {
+        "backendTypes": "passed",
+        "frontendTypesAndBuild": "passed",
+        "backendIntegration": {
+          "passed": 191
+        },
+        "backendUnit": {
+          "passed": 254,
+          "skipped": 4
+        },
+        "frontend": {
+          "passed": 786
+        },
+        "realCodex": {
+          "adapter": "2.2.2",
+          "engine": "0.160.1",
+          "node": "22.22.0",
+          "passed": 2,
+          "sourceCommit": "7b7ef9fef9c0e2712a1898be1b3e51bf7dd3b932",
+          "ordinaryModelConfigured": false,
+          "paidCredentialsUsed": false
+        },
+        "boundary": "passed",
+        "naming": "passed",
+        "namingBoundaryUnit": {
+          "passed": 5
+        },
+        "legacyGoRerun": false
+      },
+      "readinessRecovery": {
+        "specificMissingKeyError": true,
+        "noTaskCreatedWithoutKey": true,
+        "noNativeFallback": true,
+        "pilotSetupEntry": true,
+        "pilotCannotSelectSpecialistExecutor": true,
+        "settingsShowsMissingCredential": true,
+        "browser": {
+          "light": true,
+          "dark": true,
+          "narrowWidth": 620,
+          "horizontalOverflow": false,
+          "settingsPreservesDraft": true,
+          "specialistCodexDefaultPreserved": true
+        }
+      },
+      "actualServerTaskRetried": false,
+      "productionChanged": false,
+      "merged": false
+    },
+    {
+      "date": "2026-11-10",
+      "sourceCommit": "98140ef9ce6ffbc7f83f9f75c09baacc37586099",
+      "backendCodeCommit": "98140ef9ce6ffbc7f83f9f75c09baacc37586099",
+      "platform": "macOS arm64",
+      "runtime": "Node 24.14.0 / signed Lake SEA; Codex adapter Node 22.22.0 and 24.14.0",
+      "dev": {
+        "installed": true,
+        "signatureVerified": true,
+        "buildOriginDirty": false,
+        "backendHashVerified": true,
+        "actualProcessVerified": true,
+        "bundleId": "com.cleanlakes.lake.desktop.dev",
+        "home": "~/.lake-dev",
+        "guiLoaded": true,
+        "nativeCodexModelMenu": true,
+        "nativeCodexSettingsRelay": true,
+        "settingsOnlyCodex": true,
+        "advancedPathsCollapsed": true,
+        "separateAssignmentPanel": false,
+        "defaultCodexSpecialists": 5,
+        "userProjectCodexEnabled": false,
+        "originalTaskBackend": "native"
+      },
+      "checks": {
+        "backendTypes": "passed",
+        "frontendTypesAndBuild": "passed",
+        "backendIntegration": {
+          "passed": 191
+        },
+        "frontend": {
+          "passed": 784
+        },
+        "backendUnit": {
+          "passed": 253,
+          "skipped": 4
+        },
+        "realCodex": {
+          "adapter": "2.2.2",
+          "engine": "0.160.1",
+          "node22": {
+            "version": "22.22.0",
+            "passed": 2
+          },
+          "node24": {
+            "version": "24.14.0",
+            "passed": 2
+          },
+          "ordinaryModelConfigured": false,
+          "paidModelCredentialsUsed": false,
+          "nativePatchRejected": true,
+          "mcpRead": true,
+          "originalTaskAcceptedFromHostReceipt": true,
+          "duplicatePromptNotReplayed": true,
+          "sessionLoadReplayExcluded": true,
+          "finalRunsSerial": true,
+          "historicalParallelMissingToolUnresolved": true
+        },
+        "signedAutomaticSetup": {
+          "signedSEA": true,
+          "isolatedHome": true,
+          "restrictedGUIPath": true,
+          "nodeVersion": "v22.22.0",
+          "nodePath": "/opt/homebrew/Cellar/node@22/22.22.0/bin/node",
+          "npmPath": "/opt/homebrew/Cellar/node@22/22.22.0/lib/node_modules/npm/bin/npm-cli.js",
+          "adapter": "2.2.2",
+          "engine": "0.160.1",
+          "installedAutomatically": true,
+          "transportReady": true,
+          "ordinaryModelConfigured": false,
+          "paidCredentialsUsed": false
+        },
+        "boundary": "passed",
+        "naming": "passed",
+        "namingBoundaryUnit": {
+          "passed": 5
+        },
+        "legacyGoRerun": false
+      },
+      "specialistComposer": {
+        "defaultCodexWithoutOverride": true,
+        "explicitNativePreferencePreserved": true,
+        "roleSelectionCAS": true,
+        "requestDeduplication": true,
+        "frozenTaskExecutor": true,
+        "retiredBackendNewRunsRejected": true,
+        "retiredHistoryPreserved": true,
+        "codexWithoutNativeModelCredential": true,
+        "actualRunProjection": true,
+        "originalApproval": true,
+        "stopDoesNotReplay": true,
+        "browser": {
+          "light": true,
+          "dark": true,
+          "narrowWidth": 620,
+          "horizontalOverflow": false,
+          "keyboardAndEscape": true,
+          "settingsPreserveDraft": true,
+          "enableAutomaticallyDetectsPaths": true,
+          "actualCodexDispatch": true,
+          "ordinaryModelAndCodexSelectionPersist": true
+        }
+      },
+      "productionChanged": false,
+      "merged": false
+    },
+    {
+      "date": "2026-11-10",
+      "sourceCommit": "b508be56dda27866c2283045a661cfadf7dcd473",
+      "backendCodeCommit": "b508be56dda27866c2283045a661cfadf7dcd473",
+      "platform": "macOS arm64",
+      "runtime": "Node 24.14.0 / signed Lake SEA",
+      "dev": {
+        "installed": true,
+        "signatureVerified": true,
+        "buildOriginDirty": false,
+        "bundleId": "com.cleanlakes.lake.desktop.dev",
+        "home": "~/.lake-dev",
+        "guiLoaded": true,
+        "runtimeACPHandshake": true,
+        "specialistAssignmentUI": true,
+        "codexNotReadyVisible": true,
+        "coordinatorModelLabel": true,
+        "existingProfilesEnabled": false
+      },
+      "checks": {
+        "backendIntegration": {
+          "passed": 188
+        },
+        "frontend": {
+          "passed": 779
+        },
+        "backendUnit": {
+          "passed": 251,
+          "skipped": 4
+        },
+        "realCodex": {
+          "adapter": "2.2.2",
+          "engine": "0.160.1",
+          "paidModelCredentialsUsed": false,
+          "nativePatchRejected": true,
+          "mcpRead": true,
+          "duplicatePromptNotReplayed": true,
+          "sessionLoadReplayExcluded": true,
+          "passed": 2,
+          "explicitSpecialistAssignment": true,
+          "originalTaskAcceptedFromHostReceipt": true,
+          "parallelMissingToolObserved": true,
+          "finalSerialRun": "passed"
+        },
+        "boundary": "passed",
+        "naming": "passed",
+        "goVet": "passed",
+        "goRaceAI": "passed",
+        "goRaceWebFull": {
+          "status": "timeout",
+          "limitSeconds": 600
+        },
+        "goRaceWebSREVerifier": {
+          "status": "passed",
+          "seconds": 18.113
+        },
+        "namingBoundaryUnit": {
+          "passed": 5
+        },
+        "legacyGoChecksSourceCommit": "70b883538dab06866643efc7c3121faf84758533"
+      },
+      "productionChanged": false,
+      "merged": false,
+      "previousDevSourceCommit": "0cd7e116f087db33b7a437dc5c94afa200b626d6",
+      "specialistAssignment": {
+        "operatorInputCAS": true,
+        "requestDeduplication": true,
+        "explicitNativeOverride": true,
+        "sameChannelAndRole": true,
+        "frozenTaskExecutor": true,
+        "nativeDefaultUnchanged": true,
+        "actualRunProjection": true,
+        "originalApproval": true,
+        "stopDoesNotReplay": true,
+        "oneACPInvocationReply": true,
+        "browser": {
+          "light": true,
+          "dark": true,
+          "narrowWidth": 620,
+          "horizontalOverflow": false,
+          "keyboardAndEscape": true,
+          "settingsPreserveDraft": true,
+          "actualRuntimeACPDispatch": true
+        }
+      }
+    }
+  ]
+}

@@ -33,11 +33,11 @@ test('both channels see one task but inspection and evidence use the selected me
  assert.deepEqual(workerBusinessReceipts(snapshot).map(card=>card.id),['exec-b']);
 });
 
-test('a submitted contribution has a different label from unified acceptance in both participant channels',()=>{
+test('both channels retain each submitted report without a unified acceptance verdict',()=>{
  const render=(task:SuperTask,worker:SuperWorker)=>renderToStaticMarkup(createElement(SuperTaskInspector,{task,goal,worker,connected:true}));
  const own=render(a.task,a),other=render(b.task,b);
  for(const html of [own,other]){
-  assert.match(html,/待统一验收/);
+  assert.doesNotMatch(html,/待统一验收/);
   assert.match(html,/1 \/ 2 位专员已提交/);
   assert.match(html,/运维专员/);assert.match(html,/数据库专员/);
   assert.doesNotMatch(html,/统一验收通过/);
@@ -47,5 +47,6 @@ test('a submitted contribution has a different label from unified acceptance in 
  assert.match(other,/aria-label="停止数据库专员参与「检查服务」的执行"/);
  assert.doesNotMatch(own,/停止本专员的执行/);
  const done:TaskCollaboration={state:'completed',acceptanceState:'pass',acceptanceId:'receipt',participants:collaboration.participants.map(member=>({...member,state:'completed',contributed:true}))};
- assert.match(render({...b.task,state:'completed',collaboration:done},b),/统一验收通过/);
+ assert.match(render({...b.task,state:'completed',collaboration:done},b),/2 \/ 2 位专员已提交报告/);
+ assert.doesNotMatch(render({...b.task,state:'completed',collaboration:done},b),/验收/);
 });

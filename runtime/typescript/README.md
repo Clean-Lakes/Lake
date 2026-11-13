@@ -8,6 +8,10 @@
 
 ### 项目命名与兼容
 
+SSH 按用户最新要求对首次及已存公钥变化均后台接受，沿原 `LakeSSH.decide` 校验及私有文件原子写入，在认证前更新观察到的公钥，不发布指纹弹窗。匹配记录直接复用，已存密钥算法仅作优先选择，默认支持的其他算法仍可协商。保存失败、取消、权限和原证据重验继续生效。专员页面只展示角色任务及详情，派单从 Pilot 完成。见[当前实施](../../plan/refactor-ssh-trust-specialist-view-1.md)。
+
+结构化回执使用 `redactModelValue` 按字符串字段脱敏，保留数字、布尔、固定 schema 键和 Date；审批中的 JSON 参数先解析值再脱敏和序列化，不对整段 JSON 替换后重新解析。命令回执处理失败保留 unknown，并结束内部 promise、等待者及定时器；关闭运行时仍完成原底层清理。历史未知结果不因升级获得验收，也不自动重跑。见[回执修复计划](../../plan/refactor-structured-receipt-redaction-1.md)。
+
 Lake 自身的目录、UI、提示词、构建产物与公开元数据使用 TypeScript / 原生 Agent 命名。`sdk.ts` 集中绑定上游公开 API；实际依赖命名、原始许可证、固定来源和源码引用保留真实名称。`python3 scripts/check_backend_naming.py` 扫描所有纳入版本控制和待加入的文件，报告例外分类并拒绝新的产品语义；候选构建先执行该检查。
 
 旧会话档案通过 SQLite backup 复制为 `agent-sessions.sqlite`，包含已提交 WAL，校验逻辑内容后发布。原档案保留，重复启动不复制或重放；回退旧程序后若产生两条历史，下一次启动要求先核对，不自动覆盖。历史 child/control 标记在读取投影中兼容，原任务、业务回执与存储行不因展示改名而重写。公开会话配置统一返回 `agentRuntime: "typescript"`，不改写旧权限输入。
@@ -49,7 +53,9 @@ Magpie 与手动供应商共存。明确选择手动模型后保持该选择；�
 
 `superagent.ts` 将真实 Pilot Router、长期专员管理、独立任务 Worker、连续频道、分页与当前权限接入公开 AgentRuntime。Pilot 与 Worker 共享通用 Agent 工具，Pilot 可直接执行并按需建立原 Task。Worker 可在本项目独立工作区使用 Read/Write/Edit、Glob/Grep、Bash、Todo、网页和真实文件清单及任务工具；Worker 已增量接入项目 MCP 目录/调用和 Skills 读取；本机手动 PTY 与 Worker 执行权限分开。SSH 手动 PTY、原 Dev 凭据/主机指纹和固定主机只读检查已增量接入；通用 SSH Bash 已通过原生执行端口接入，模型可使用实际远端 CLI；手动持续终端交接仍未接通；分层 Memory 的新入口见下文，不可绕过。职责按建单版本冻结，任务不受专员后续改名影响。
 
-`tasks.ts` 保存原目标、步骤、独立尝试、实际派发操作及验收。普通任务自动注册计划；Plan 必须确认且始终只读。步骤验收和最终汇总核对真实操作回执、项目/任务/尝试、原修订、当前权限、资源连接修订与输出 hash。模型文字不能验收；只读失败可以在原目标建立带 retryOf 的新诊断尝试，写入不明仍为 unknown。停止和重启使原 owner/审批失效，旧操作不重放；报告使用事务 outbox 幂等进入 Pilot 与专员频道。
+`list_assets` 以当前项目资源树补全 `path`，支持资源名、ID、祖先目录名与完整目录路径检索；斜线两侧空格不影响路径匹配。路径 JSON 显示最多 2048 字节，截断带 `pathTruncated`，异常目录带 `path_state=unavailable`，总页预算仍为 8192 字节。目录改名/移动使旧游标失效。原生与 ACP 使用同一实现；任务已有限定范围仍先过滤资源，只解析这些资源的祖先。目录与共享入口 IP 不能签发权限或证明集群身份，执行仍使用准确 `asset_ref` 与当前配置 revision/pin。
+
+`tasks.ts` 保存原目标、步骤、独立尝试、实际派发操作及执行报告。按用户 2026-11-12 要求，提交 completed 或 partial 报告后结束本次执行，不再要求步骤验收、最终验收或待核实结清；历史未知结果也不阻止新的 Bash/MCP 调用。每次实际 I/O 仍核对当前权限、准确资源配置和执行 owner/generation；Plan 必须确认且始终只读。原 unknown/失败操作及历史验收记录不改写，原调用 ID 不重放；报告使用事务 outbox 幂等进入 Pilot 与专员频道。报告结束不表示业务结果已独立核验；Memory 仅在原授权和来源 hash 有效时提取实际已返回的观察。
 
 迁移优先读取旧 ADK state 指向的准确 artifact 版本并核验 hash；不选择最大 artifact 版本，旧 UI JSON 仅作前 ADK 兼容缓存。历史卡片分页保留，旧任务不成为新执行权威。原项目明确 Security 策略尚未完成 TS 适配时阻止资源执行；原安全 gate/epoch/reader 不兼容时只允许查看，不能改成 Agent SDK 默认放行。`security.ts` 是迁移屏障，完整 Security/grant/恢复合同仍待移植。
 
@@ -130,9 +136,9 @@ Pilot、专员 Worker 与临时 child 共享公开 Agent SDK 文件、Bash、搜
 
 `GET /api/agent-capabilities` 列出固定上游完整工具清单及实际连接状态。Cron/OffPeak、动态工作流、浏览器插件和跨会话上下文读取等还需要相应 Lake 宿主服务及范围适配，不注册成可成功调用的假工具。未连接项不被称为已完成，完整 TS 产品等价门禁保持原状态。准确检查、签名 Dev 来源和未验证项见[本批记录](../../docs/validation/typescript-candidate/agent-capabilities.md)。
 
-普通命令/只读数据库免确认的缺省值与现有 Web 设置共用 shared/execution-preferences.ts，显式关闭仍询问。程序发现和有限容器查询包装按实际内部命令判断，不因 command 或 exec 这几个字一律升级；危险动作、动态或未识别脚本保留确认。此判定只影响追加确认，不构成 readonly 证据或 TaskGrant，仍受原策略和 unknown 约束。验证见上面的本批记录。
+普通命令/只读数据库免确认的缺省值与现有 Web 设置共用 shared/execution-preferences.ts，显式关闭仍询问。程序发现和有限容器查询包装按实际内部命令判断，不因 command 或 exec 这几个字一律升级；危险动作、动态或未识别脚本保留确认。此判定只影响追加确认，不构成 readonly 证据或 TaskGrant，仍受当前权限策略约束；历史 unknown 不阻止新调用。验证见上面的本批记录。
 
-后续程序查找误锁修复单独将字面量 `command -v/-V` 识别为只读；可选程序不存在不会锁住后续普通执行。准确旧 SDK 调用及宿主失败回执可为有限的 hostname/程序查找链另存无写入核验凭证，原记录不改写、原调用不重放，不放行其他未知副作用或生成业务成功。范围和签名 Dev 验收见[程序发现误锁修复](../../docs/validation/typescript-candidate/program-discovery-recovery.md)。
+后续程序查找误锁修复单独将字面量 `command -v/-V` 识别为只读；可选程序不存在不会锁住后续普通执行。准确旧 SDK 调用及宿主失败回执可为有限的 hostname/程序查找链另存无写入核验凭证，原记录不改写、原调用不重放，不放行其他未知副作用或生成业务成功。该自动核实机制已在 2026-11-12 移除，原记录只保留为历史；旧范围和签名 Dev 验收见[程序发现误锁修复](../../docs/validation/typescript-candidate/program-discovery-recovery.md)。
 
 ## 六类服务资源连接配置
 
@@ -143,3 +149,35 @@ TS Dev 支持 MySQL、PostgreSQL、Redis、APISIX、Prometheus 和 VictoriaMetri
 `scripts/build_lake_desktop.sh` 默认生成 TS 正式 ZIP/DMG；`--dev --install` 只安装 Lake Dev。用户运行包时无需系统 Node。更新器在旧进程退出后，使用准确 Home/data 执行 `--production --migrate-legacy --import-only`，最多等待 120 秒；该准备阶段不启动 Worker、队列或 Memory 提取。失败恢复旧应用，保留原数据库；成功后才进入 45 秒 UI 就绪确认。命令行单独运行须显式传入正确身份及隔离目录。旧 Go 不包含 TS 新历史，回退后两边产生分支历史须核对，不能将其当成双向同步。
 
 从 0.3.27 或更早客户端自动更新时，执行的是旧客户端携带的安装器，仍受原 45 秒总就绪窗口约束，不能提前获得新版的 120 秒准备阶段。若首次迁移较大导致旧安装器回退，请保留备份并改用本版 ZIP/DMG 手动安装；本版安装器的单独准备与回退测试仅证明从本版开始的后续更新路径。
+
+### 项目 ACP 执行后端
+
+常规 Worker 检查先采集有界概况，按异常及用户范围深入；复用已交付的目录、任务上下文和工具结果，避免无收益拆分或每次工具前更新待办。后台结果通过原 TaskOutput 句柄有界等待。完成校验若发现旧 unknown/dispatched，会明确返回 unresolved_operations 并指向部分结果提交；新成功检查不结清旧记录，不以额外巡检强行取得完成。本机 Codex 的模型和思考强度继续原样继承，本轮不降低 max；流程指引不构成真实模型延迟下降的测量。
+
+专员页面已改为角色任务列表，派单及自然语言配置由 Pilot 完成。新专员的 Agent／模型默认规则见下文；旧无绑定专员保留 Codex 兼容默认。Codex 发送沿原显式新任务准入直接派发，不依赖 Router 推理；新 Worker 冻结当前执行配置，已有任务及原生偏好保持。原生 Worker 的 `Agent` 可选择 `codex-acp`，Worker 或已有原生 child 也可用 `run_external_agent(agent='codex')` 委派一段工作。外部 leaf 不再递归委派；任务仍最多 7 个逻辑 child。runtime-acp 生产启动与私有模型代理已删除，仅保留历史绑定的读取与明确拒绝，Lake 自身仍使用原公开 SDK。
+
+在模型菜单选择“配置 Codex”后启用，自动识别 Node 22.22+ / 24.14+ 和配套 npm，在当前 Home 的私有目录安装固定 ACP adapter 2.2.2 与引擎 0.160.1，并完成模型无关的 ACP 握手。路径覆盖折叠在高级设置；主 TS 后端仍使用 Node 24.14.0。Codex 直接复用宿主 CODEX_HOME（默认 ~/.codex）的登录、默认模型、服务地址与思考强度；不再填写或保存项目独立 Key，也不依赖普通模型配置。登录文件由 Codex 原机制读取和刷新；Lake 不复制凭据、不修改本机 config.toml。用于工具托管的 SDK 在没有普通模型时采用不可推理的 Model 端口，原生 child 若需要推理会明确要求普通模型。Codex 原生执行工具关闭，继承的 MCP、hooks 与 notify 在启动和线程配置中关闭；私有模型目录在启动时注入。SQLite 与日志使用 Lake 私有目录。业务调用走每次执行的私有 MCP 桥及原 Lake 审批/账本。具体支持、版本、认证和平台限制见 [兼容记录](../../docs/validation/acp-agent-execution/compatibility.md)。
+
+项目 profile 采用 schema2；旧 schema1 自动递增 revision 迁移，旧 Worker/run 不转用本机认证。修改 Agent 连接配置、本机 config 或登录账号会终止使用旧 revision 的调用，同账号正常令牌刷新保持身份。状态查询自动执行无模型的连接检查；缺登录时提示先在本机 Codex 登录。停止或断线后已发送但未明确回答的 prompt 保留 unknown，不自动重放或回退其他引擎。外部报告交回原任务；原任务提交最终报告后结束执行，不再独立验收，真实业务观察仍以原工具回执为准。
+
+## Pilot 自然语言专员配置
+
+2026-11-12 专员创建默认规则：Pilot 未指定 Agent／模型时，宿主从当前已配置可用组合中先随机 Agent，再随机其模型，并把准确引用保存到专员；只指定其中一项时随机其余部分。`route_work` 隐式新建角色沿同一规则。`list_specialist_execution_options` 提供有界分页目录，`manage_specialist` 支持 `model_id`／`provider_id` 或 execution.model 的明确选择。原生候选排除禁用、未配置凭据、未接入协议及图片输出模型；Codex 仅用当前就绪探针报告且属于固定兼容目录的模型。当前目录只有 gpt-6.1-sol，不从普通 Lake 模型菜单猜测 Codex 支持。空候选集不创建角色，实际调用失败也不静默重抽。
+
+原生 Worker 使用保存的 provider/model 引用，切换 Pilot 全局模型不改变它；Codex 使用单进程模型覆盖，登录、服务与 max 继续沿用本机配置，启动脚本按配置内容区分。重复创建返回原回执，更新省略字段保留，已有角色／任务不迁移或改派；旧无绑定专员保留原兼容默认。配置创建本身不制造业务任务，不修改资源权限、本机配置或全局模型。专员页面仍为任务列表，派单及自然语言配置由 Pilot 完成。
+
+Router 的 `list_specialists` 返回准确角色、当前 revision 及后续任务默认后端；`list_specialist_avatars(query?)` 从共享 100 项 Lake 本地目录按名称、别名或 ID 查询。`manage_specialist` 创建仍要求 name/duties，更新支持 name、duties、avatar_id、execution、model_id 的局部 patch；省略字段保留，auto 清除显式头像。头像通过 SpecialistChannelInfo.avatarId 和共享 Provider 显示，不依赖职责文本。
+
+保存沿原已接纳人工 event/quote、项目 RoleID、expected_revision、事件/part 幂等事务；未知字段、非法头像和失效版本拒绝。execution 只选择 native 或 Codex，复用原 registry 校验，已有 Worker 的职责与执行快照不变，不改本机 Codex 配置、凭据或权限。无需新增业务任务来完成角色配置。
+
+## Pilot 资源、Skills 与 MCP 配置
+
+`pilot-configuration.ts` 仅向准确 Pilot Router 注册三组查询/管理工具及显式 MCP 测试。资源/文件夹限当前项目；Skills/注册目录与服务配置明确为 global，MCP 绑定明确为 project。查询返回准确 ID、对象 revision 和有界分页，模型只能提交局部公开字段，不接收凭据、信任或策略字段。`manage_resource` 新建使用 `create_revision`；Skills/MCP 新建使用 `catalog_revision`，后续修改用对象 revision；注册目录使用 `roots_revision`。
+
+`resource-management.ts` 与 HTTP 资源 API 复用 SSH、服务及目录写入器。缺凭据 SSH 可保存为 unavailable 草稿，执行侧 `configuration/revision` 验证仍拒绝未就绪连接；同项目凭据复用只在宿主内部完成。删除走原回收站，忽略占用时仅排除当前准确配置事件/Router，其他 Worker、输入和终端继续阻止删除。改名和同目录更新保留原排序。
+
+Skill 删除将管理目录移到 `skills/.trash`；导入路径只解除注册。私有扩展配置保存删除标记并同时保留旧格式的停用名称，避免同名来源和旧 reader 误启用。新建可明确恢复该名称，不能覆盖仍存在的保留文件。全部 Skill patch 先校验 enabled 再写正文。
+
+MCP 保存只改变配置，省略 headers/env/公开字段保持；`test_mcp_config` 单独测试当前连接，返回有界工具名，`list_mcp_config(tools_for=...)` 可分页读取已测试目录；绑定沿原 `setBinding` 的版本及目录检查。省略 tool_names 保留原绑定，首次启用须明确列表；空数组明确表示全部。Skills 目录可用 `list_skill_config(entity=root)` 分页读取。查询与 CRUD 不连接服务或执行进程。
+
+控制动作按当前完整人工 event/quote 与稳定 part 保存 `pilotConfigMutations`；持久 pending 在文件/网络 I/O 前写入，成功后记录脱敏回执。重启或中断后 pending/unknown 不自动重放；SQLite、私有扩展文件和 Skill 目录不是跨域原子事务。工具不授予业务权限、不修改任务验收，不开放给 Worker、child 或 ACP。实际 SDK 仍分别使用 Pilot 的 silentReadFiles、silentWriteFiles、silentMCPCalls；Plan 禁止写入。验证见[配置 CRUD](../../docs/validation/acp-agent-execution/pilot-configuration-crud.md)。

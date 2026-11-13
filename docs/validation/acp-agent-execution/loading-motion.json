@@ -1,0 +1,73 @@
+{
+  "reducedMotion": false,
+  "refreshes": 1,
+  "before": [
+    {
+      "animation": "activity-indicator-spin",
+      "time": 124.76600000000002,
+      "transform": "matrix(0.708146, 0.706066, -0.706066, 0.708146, 0, 0)"
+    },
+    {
+      "animation": "activity-indicator-spin",
+      "time": 91.55100003665686,
+      "transform": "matrix(0.839066, 0.544029, -0.544029, 0.839066, 0, 0)"
+    },
+    {
+      "animation": "activity-indicator-spin",
+      "time": 91.55100003665686,
+      "transform": "matrix(0.839066, 0.544029, -0.544029, 0.839066, 0, 0)"
+    },
+    {
+      "animation": "activity-indicator-spin",
+      "time": 91.55100003665686,
+      "transform": "matrix(0.839066, 0.544029, -0.544029, 0.839066, 0, 0)"
+    },
+    {
+      "animation": "activity-indicator-spin",
+      "time": 91.55100003665686,
+      "transform": "matrix(0.839066, 0.544029, -0.544029, 0.839066, 0, 0)"
+    }
+  ],
+  "after": [
+    {
+      "sameNode": true,
+      "sameAnimation": true,
+      "advanced": true,
+      "rotated": true,
+      "animation": "activity-indicator-spin",
+      "playState": "running"
+    },
+    {
+      "sameNode": true,
+      "sameAnimation": true,
+      "advanced": true,
+      "rotated": true,
+      "animation": "activity-indicator-spin",
+      "playState": "running"
+    },
+    {
+      "sameNode": true,
+      "sameAnimation": true,
+      "advanced": true,
+      "rotated": true,
+      "animation": "activity-indicator-spin",
+      "playState": "running"
+    },
+    {
+      "sameNode": true,
+      "sameAnimation": true,
+      "advanced": true,
+      "rotated": true,
+      "animation": "activity-indicator-spin",
+      "playState": "running"
+    },
+    {
+      "sameNode": true,
+      "sameAnimation": true,
+      "advanced": true,
+      "rotated": true,
+      "animation": "activity-indicator-spin",
+      "playState": "running"
+    }
+  ]
+}

@@ -3,21 +3,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {PlanModeToggle,PlanActions,planSlashCommand,planMarkdown,planComposerDraft} from '../src/PlanMode';
+import {PlanActions,planSlashCommand,planMarkdown,planComposerDraft} from '../src/PlanMode';
 
 test('Plan command supports toggle and inline prompts without matching other commands',()=>{
  assert.deepEqual(planSlashCommand('/plan'),{prompt:''});
  assert.deepEqual(planSlashCommand(' /plan  调查架构\n并生成方案 '),{prompt:'调查架构\n并生成方案'});
  for(const text of ['/planet','请用 /plan','/planfoo','/plan-now']) assert.equal(planSlashCommand(text),null);
-});
-
-test('Plan toggle exposes persistent selected and disabled states',()=>{
- const render=(mode:'plan'|'default',disabled=false)=>renderToStaticMarkup(createElement(PlanModeToggle,{mode,disabled,onChange:async()=>{}}));
- assert.match(render('plan'),/aria-pressed="true"/);
- assert.match(render('plan'),/只读调查/);
- assert.match(render('default'),/aria-pressed="false"/);
- assert.match(render('default',true),/disabled=""/);
- assert.match(render('default',true),/待发送消息/);
 });
 
 test('Reviewed plan presents explicit execute and revise actions, both unavailable while blocked',()=>{

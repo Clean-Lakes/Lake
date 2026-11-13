@@ -1,10 +1,12 @@
 import type { ToolEntry, ToolExecutionContext } from "./sdk";
 import type { ExecutionPort, FileSystemPort, HttpClientPort, PermissionRuleset } from "./sdk";
 import type { LayeredMemoryActor } from "../../web-agent/shared/contracts";
+import type {AgentBackendRef} from './acp/types';
 
 /** Host-issued child attribution; never accepted from model arguments. */
 export type HostToolContext = ToolExecutionContext & {
   lakeSubagent?: { id: string; sessionId: string; toolCallId: string;agentType?:string };
+  lakeExternal?: {externalRunId:string;externalSessionId?:string};
 };
 
 export type HostProfile = {
@@ -19,6 +21,9 @@ export type HostProfile = {
   wrapExecution?: (execution: ExecutionPort) => ExecutionPort;
   taskId?: string;
   workerId?: string;
+  execution?: AgentBackendRef;
+  conversation?: {id:string;participantId:string;deadlineAt:string};
+  validateExecution?: () => void;
   memoryActor?: LayeredMemoryActor;
   recordModel?: (stage: "start" | "success" | "error", operation?: string, usage?: {inputTokens?:number;outputTokens?:number}) => void;
   beforeModel?: () => void;

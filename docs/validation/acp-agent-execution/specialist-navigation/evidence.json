@@ -1,0 +1,208 @@
+{
+  "baseline": {
+    "session": "super_7890dbd12b7f5f6d15f4b49471b085a5",
+    "theme": "light",
+    "lastAuthors": 6,
+    "lastProgress": 0,
+    "pinnedPilot": 1,
+    "duplicatePilot": 0,
+    "denseTicks": 0,
+    "directoryEntries": 1,
+    "avoidsIsland": true,
+    "menu": {
+      "left": 1204,
+      "top": 21
+    },
+    "pageWidth": 1280
+  },
+  "resource": {
+    "height": 716,
+    "top": 182,
+    "folderPreserved": true,
+    "duplicateHeadings": 0,
+    "addEntry": true,
+    "terminalEntries": 5,
+    "labelsUseSpecialist": true,
+    "draftCleared": true,
+    "referenceInsertContinueClear": true,
+    "draftPreservedDuringSwitch": true
+  },
+  "directory": {
+    "questions": 86,
+    "height": 520,
+    "within": true,
+    "earlier": true,
+    "radius": "14px"
+  },
+  "dark": {
+    "theme": "dark",
+    "popover": "rgb(27, 27, 27)",
+    "selectedTab": "rgb(44, 44, 44)"
+  },
+  "narrow": {
+    "nav": {
+      "viewport": 390,
+      "overflow": false,
+      "pinned": 72,
+      "resourceHeight": 610,
+      "tabs": [
+        "专员",
+        "资源136"
+      ]
+    },
+    "popup": {
+      "left": 18,
+      "right": 378,
+      "top": 46,
+      "bottom": 566,
+      "within": true
+    }
+  },
+  "olderHistory": {
+    "before": 86,
+    "questions": 105,
+    "stillOpen": true,
+    "inspectorOpened": false
+  },
+  "installed": {
+    "sourceSHA": "c35d40ca0e2a32aacdac60bc06c732ca0fefb182",
+    "sourceClean": true,
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "version": "0.3.32",
+    "backendSHA256": "8e057c6dfa26308486b201c6e308dbec878d0a27c036ac0361f71a949285a08b",
+    "signed": true,
+    "nativeWindowObserved": true
+  },
+  "fixture": {
+    "resourceScrollRestored": 900,
+    "draftPreserved": true,
+    "pilotPinned": true,
+    "directoryItems": 100,
+    "keyboardJump": "u99",
+    "duplicateQuestionJump": "u1",
+    "escapeFocusRestored": true
+  },
+  "ledgers": {
+    "conversationReads": {
+      "count": 33,
+      "backupCount": 33,
+      "unchanged": true
+    },
+    "legacyGoals": {
+      "count": 46,
+      "backupCount": 46,
+      "unchanged": true
+    },
+    "legacyOperations": {
+      "count": 53,
+      "backupCount": 53,
+      "unchanged": true
+    },
+    "legacyResources": {
+      "count": 139,
+      "backupCount": 139,
+      "unchanged": true
+    },
+    "legacyWorkers": {
+      "count": 22,
+      "backupCount": 22,
+      "unchanged": true
+    },
+    "messageInputs": {
+      "count": 190,
+      "backupCount": 190,
+      "unchanged": true
+    },
+    "messageQueueDispatches": {
+      "count": 3,
+      "backupCount": 3,
+      "unchanged": true
+    },
+    "messageQueues": {
+      "count": 1,
+      "backupCount": 1,
+      "unchanged": true
+    },
+    "messages": {
+      "count": 1780,
+      "backupCount": 1780,
+      "unchanged": true
+    },
+    "resourceConfigurationPins": {
+      "count": 133,
+      "backupCount": 133,
+      "unchanged": true
+    },
+    "resourceRevisions": {
+      "count": 133,
+      "backupCount": 133,
+      "unchanged": true
+    },
+    "resources": {
+      "count": 162,
+      "backupCount": 162,
+      "unchanged": true
+    },
+    "sessionResourceReferences": {
+      "count": 22,
+      "backupCount": 22,
+      "unchanged": true
+    },
+    "superAcceptance": {
+      "count": 162,
+      "backupCount": 162,
+      "unchanged": true
+    },
+    "superConversationSessions": {
+      "count": 26,
+      "backupCount": 26,
+      "unchanged": true
+    },
+    "superConversations": {
+      "count": 6,
+      "backupCount": 6,
+      "unchanged": true
+    },
+    "superDispatchMessages": {
+      "count": 148,
+      "backupCount": 148,
+      "unchanged": true
+    },
+    "superGoals": {
+      "count": 130,
+      "backupCount": 130,
+      "unchanged": true
+    },
+    "superOperations": {
+      "count": 403,
+      "backupCount": 403,
+      "unchanged": true
+    },
+    "superRoleMutations": {
+      "count": 7,
+      "backupCount": 7,
+      "unchanged": true
+    },
+    "superRoles": {
+      "count": 23,
+      "backupCount": 23,
+      "unchanged": true
+    },
+    "superWorkers": {
+      "count": 130,
+      "backupCount": 130,
+      "unchanged": true
+    }
+  },
+  "rollbackBackup": "/Users/lingyunxieqing/Library/Application Support/LakeDevBackups/navigation-tabs-20261113-132751",
+  "checks": {
+    "frontend": 816,
+    "targetedRuntime": 91,
+    "SDKHTTPIntegration": 5,
+    "runtimeTypecheck": true,
+    "frontendBuild": true,
+    "ADKBoundary": true,
+    "codeSigning": true,
+    "buildOrigin": true
+  }
+}

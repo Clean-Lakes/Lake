@@ -1,3 +1,4 @@
+import type {LakeAvatarName} from './specialist-avatars';
 export type SSHConnection = { shell?: "sh" | "bash" | "zsh" | "fish"; host: string; port: number; username: string; authMethod?: "key" | "password"; identityFile?: string; credentialRef?: string };
 export type SSHConnectionInput = SSHConnection & { password?: string; passphrase?: string; privateKey?: string };
 export type SSHKeyDirectory = { directory: string; keys: { name: string; path: string }[] };
@@ -38,7 +39,7 @@ export type Resource = {
 };
 
 export type WorkSession = {
-	workspaceRole?: 'router'|'worker'|'role'|'legacy';
+	workspaceRole?: 'router'|'worker'|'role'|'legacy'|'conversation';
   id: string;
   projectId: string;
   title: string;
@@ -59,9 +60,11 @@ export type WorkspaceTag = {id: string; projectId: string; name: string; color: 
 
 export type MessageMention = {kind: "resource" | "skill" | "mcp" | "role"; id: string; label: string; start: number; end: number; resourceKind?: Resource["kind"]};
 
-export type SpecialistReplyAuthor = {kind:'specialist';name:string;roleId?:string;workerId:string;sessionId:string;taskId:string;channelSessionId?:string;rootTurnId?:string};
+export type SpecialistReplyAuthor = {kind:'specialist';name:string;roleId?:string;workerId:string;sessionId:string;taskId?:string;conversationId?:string;channelSessionId?:string;rootTurnId?:string;execution?:AgentBackendRef;avatarId?:LakeAvatarName};
 export type Message = {
+  conversation?: {id:string;sourceMessageId:string;kind:'reply'|'summary'|'notice';summaryRequested?:boolean};
   jointAcceptance?: {taskId:string;receiptId:string};
+  jointReport?: {taskId:string;reportId:string};
   author?: SpecialistReplyAuthor;
   dispatch?: {id:string;sourceMessageId:string;workerId:string;sessionId:string;taskId:string;roleId:string;roleName:string;channelSessionId:string;instruction:string;action:'create'|'followup'};
   id: string;
@@ -86,11 +89,13 @@ export type Specialist = {
 };
 
 /** Independent child tasks, supplied by the runtime rather than inferred from tool calls. */
+import type {AgentBackendRef} from './external-agents';
 export type AgentRole = "host" | "application" | "data" | "network" | "change" | "verify" | "plan" | "memory";
 export type AgentRunStatus = "queued" | "running" | "waiting_approval" | "waiting_input" | "completed" | "failed" | "cancelled" | "interrupted" | "unknown";
 export type AgentRun = {
   /** Native child execution remains owned by the canonical task Worker. */
-  source?: "native_subagent";
+  source?: "native_subagent" | "acp_subagent";
+  execution?: AgentBackendRef;
   taskId?: string;
   workerId?: string;
   parentRunId?: string;
@@ -237,7 +242,7 @@ export type WatchdogView = {mode: WatchdogMode; findings: WatchdogFinding[]};
 export type SessionSnapshot = {
  commandExecutions?:HostCommandView[];
  messageRead?:ConversationReadState;
-	superagent?:{task:SuperTask;goal?:WorkGoal;roleId?:string;deliveredReplies?:Message[];watchdog?:WatchdogView};
+	superagent?:{task:SuperTask;goal?:WorkGoal;roleId?:string;execution?:import('./external-agents').AgentExecutionSummary;deliveredReplies?:Message[];watchdog?:WatchdogView};
  naturalMemoryNotices?:{changeId:string;scope:string;entryId:string;revision:number;batchId?:string}[];
   commandStopNotices?: CommandStopNotice[];
  conversationMode?: ConversationMode;
@@ -375,16 +380,27 @@ export type TaskParticipant = {
   state: SuperTaskState; contributed: boolean;
 };
 export type TaskCollaboration = {
-  participants: TaskParticipant[]; state: SuperTaskState; acceptanceState: SuperTaskAcceptance; acceptanceId?: string;
+  participants: TaskParticipant[]; state: SuperTaskState; acceptanceState: SuperTaskAcceptance; acceptanceId?: string; reportId?: string;
 };
-export type SuperTask = {taskId:string;executionGoalId?:string;collaboration?:TaskCollaboration;sessionId:string;projectId?:string;title:string;state:SuperTaskState;acceptanceState:SuperTaskAcceptance;revision:number;originRootTurnId:string;deadlineAt:string;updatedAt?:string;reason?:string;summary?:string;resources?:{runtime:string;assetRef?:string;terminalId?:string}[]};
+export type SuperTask = {taskId:string;executionGoalId?:string;collaboration?:TaskCollaboration;sessionId:string;projectId?:string;title:string;state:SuperTaskState;acceptanceState:SuperTaskAcceptance;reportedOutcome?:'completed'|'partial';revision:number;originRootTurnId:string;deadlineAt:string;updatedAt?:string;reason?:string;summary?:string;resources?:{runtime:string;assetRef?:string;terminalId?:string}[]};
 export type SuperProject = {projectId:string;routerSessionId:string;version:number};
 export type SuperWorkerActivity = {phase:'queued'|'thinking'|'tool'|'waiting_approval'|'waiting_input'|'waiting_external';label:string;toolName?:string;updatedAt:string;sourceMessageId?:string;sourceSessionId?:string};
-export type SuperWorker = {id:string;createdAt?:string;roleId:string;roleName:string;sessionId:string;task:SuperTask;assignmentState:string;parentWorkerId?:string;activity?:SuperWorkerActivity};
-export type SpecialistChannelInfo = {messageRead?:ConversationReadState;id:string;projectId:string;roleId:string;roleName:string;duties?:string;roleRevision?:number;sessionId:string;revision:number;createdAt:string;needsConfirmation?:boolean;running?:boolean;preparing?:boolean;completionCursor?:string;seenCompletionCursor?:string};
+export type SuperWorker = {id:string;createdAt?:string;roleId:string;roleName:string;sessionId:string;task:SuperTask;assignmentState:string;parentWorkerId?:string;activity?:SuperWorkerActivity;execution?:import('./external-agents').AgentExecutionSummary};
+export type SpecialistChannelInfo = {avatarId?:import('./specialist-avatars').LakeAvatarName;execution?:AgentBackendRef;messageRead?:ConversationReadState;id:string;projectId:string;roleId:string;roleName:string;duties?:string;roleRevision?:number;sessionId:string;revision:number;createdAt:string;needsConfirmation?:boolean;running?:boolean;preparing?:boolean;completionCursor?:string;seenCompletionCursor?:string};
 export type SpecialistChannelEntry = {id:string;sourceSessionId:string;taskId?:string;workerId?:string;createdAt:string;message?:Message;card?:AICard;reply?:{turnId:string;state:'working'|'settled'}};
 export type SpecialistChannelPage = {replyPresentation?:'invocation';channel:SpecialistChannelInfo;entries:SpecialistChannelEntry[];nextCursor:string;workers:SuperWorker[];active:SessionSnapshot[];routing:boolean;queued:number};
-export type SuperWorkspace = {pilotMessageRead?:ConversationReadState;active:boolean;project:SuperProject;workers:SuperWorker[];channels?:SpecialistChannelInfo[];cursor?:number};
+export type SpecialistConversationMember = {
+  id:string;roleId:string;roleName:string;sessionId:string;channelSessionId:string;
+  execution?:AgentBackendRef;avatarId?:LakeAvatarName;
+  state:'queued'|'running'|'replied'|'failed'|'timed_out'|'cancelled'|'interrupted';
+  replyMessageId?:string;reason?:string;
+};
+export type SpecialistConversation = {
+  id:string;projectId:string;sessionId:string;sourceMessageId:string;title:string;
+  state:'queued'|'running'|'summarizing'|'completed'|'cancelled'|'interrupted'|'failed';
+  createdAt:string;deadlineAt:string;members:SpecialistConversationMember[];summaryMessageId?:string;summaryRequested?:boolean;
+};
+export type SuperWorkspace = {pilotMessageRead?:ConversationReadState;active:boolean;project:SuperProject;workers:SuperWorker[];channels?:SpecialistChannelInfo[];conversations?:SpecialistConversation[];cursor?:number};
 export type SRESnapshot = {featureVersion:number;enabled:boolean;tasks:SRETask[];pilot?:PilotSettings};
 
 export type ScheduleExecution={id:string;scheduled_at:string;started_at?:string;finished_at?:string;status:string;error?:string;task_id?:string;session_id?:string};

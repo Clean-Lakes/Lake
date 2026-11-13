@@ -2,7 +2,7 @@ import type {WatchdogFinding,WatchdogView} from '../../shared/contracts';
 import {DisclosureSummary} from './DisclosureSummary';
 
 const categories: Record<WatchdogFinding['kind'], string> = {
-  stalled: '进展停滞', drift: '偏离分工', infrastructure: '运行异常', uncertain: '待核实',
+  stalled: '进展停滞', drift: '偏离分工', infrastructure: '运行异常', uncertain: '结果不确定',
 };
 const actions: Record<WatchdogFinding['action'], string> = {
   observed: '已记录', guided: '已排队纠偏', recovered: '已观察到新进展', skipped: '已跳过', retry_queued: '已排队重试',

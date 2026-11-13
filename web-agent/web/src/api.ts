@@ -104,6 +104,12 @@ export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"model
 };
 
 export const api = {
+  externalAgents:(project:string,signal?:AbortSignal)=>request<{agents:import('../../shared/external-agents').ExternalAgentStatus[]}>(`/api/projects/${encodeURIComponent(project)}/external-agents`,{signal}),
+  saveExternalAgent:(project:string,agent:string,data:Record<string,unknown>)=>request(`/api/projects/${encodeURIComponent(project)}/external-agents/${encodeURIComponent(agent)}`,{method:'PUT',body:JSON.stringify(data)}),
+  probeExternalAgent:(project:string,agent:string)=>post(`/api/projects/${encodeURIComponent(project)}/external-agents/${encodeURIComponent(agent)}/probe`,{}),
+  installExternalAgent:(project:string,agent:string,npmPath:string)=>post(`/api/projects/${encodeURIComponent(project)}/external-agents/${encodeURIComponent(agent)}/install`,{npmPath}),
+  setRoleExecution:(project:string,role:string,expectedRevision:number,execution:import('../../shared/external-agents').AgentBackendRef)=>request<{revision:number;execution:import('../../shared/external-agents').AgentBackendRef}>(`/api/projects/${encodeURIComponent(project)}/superagent/specialists/${encodeURIComponent(role)}/execution`,{method:'PUT',body:JSON.stringify({expectedRevision,execution})}),
+  prepareExternalAgent:(project:string,data:Record<string,unknown>)=>post<{agents:import('../../shared/external-agents').ExternalAgentStatus[]}>(`/api/projects/${encodeURIComponent(project)}/external-agents/codex/prepare`,data),
   memoryScopes: (projectId = "", signal?: AbortSignal) => request<{engine: "typescript"; scopes: LayeredMemoryScope[]}>(`/api/memory?projectId=${encodeURIComponent(projectId)}`, {signal}),
   memoryView: (key: string, projectId = "", signal?: AbortSignal) => request<LayeredMemoryView>(`/api/memory/scopes/${encodeURIComponent(key)}?projectId=${encodeURIComponent(projectId)}`, {signal}),
   memorySettings: (key: string, projectId: string, data: LayeredMemorySettings) => request<LayeredMemorySettings>(`/api/memory/scopes/${encodeURIComponent(key)}/settings?projectId=${encodeURIComponent(projectId)}`, {method: "PATCH", body: JSON.stringify({useEnabled: data.useEnabled, extractionEnabled: data.extractionEnabled, expectedRevision: data.revision})}),
@@ -235,8 +241,8 @@ export const api = {
   renameSession: (sessionId: string, title: string) => request<WorkSession>(`/api/sessions/${encodeURIComponent(sessionId)}`, {method: "PATCH", body: JSON.stringify({title})}),
   deleteSession: (sessionId: string) =>
     request<void>(`/api/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" }),
-  sendMessage: (sessionId: string, text: string, resourceIds: string[] = [], images: AIImage[] = [], references: Record<string, unknown>[] = [], terminalReuse?: {terminalId: string; generation: string}, files: TextFileAttachment[] = [], enqueue = false, ignoreProjectMemory = false, mentions: MessageMention[] = []) =>
-    post<SendMessageResult>(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, { text, mentions, ...(ignoreProjectMemory ? {ignoreProjectMemory:true} : {}), ...(enqueue ? {enqueue:true} : {}), ...(files.length ? {files} : {}), ...(terminalReuse ? {terminalReuse} : {}), ...(references.length ? { references } : {}), ...(images.length ? { images } : {}), ...(resourceIds.length ? { resourceIds } : {}) }),
+  sendMessage: (sessionId: string, text: string, resourceIds: string[] = [], images: AIImage[] = [], references: Record<string, unknown>[] = [], terminalReuse?: {terminalId: string; generation: string}, files: TextFileAttachment[] = [], enqueue = false, ignoreProjectMemory = false, mentions: MessageMention[] = [], assignment?:import('../../shared/external-agents').SpecialistAgentAssignment) =>
+    post<SendMessageResult>(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, { text, mentions, ...(assignment?{assignment}:{}), ...(ignoreProjectMemory ? {ignoreProjectMemory:true} : {}), ...(enqueue ? {enqueue:true} : {}), ...(files.length ? {files} : {}), ...(terminalReuse ? {terminalReuse} : {}), ...(references.length ? { references } : {}), ...(images.length ? { images } : {}), ...(resourceIds.length ? { resourceIds } : {}) }),
   messageQueue: (sessionId: string) => request<MessageQueue>(`/api/sessions/${encodeURIComponent(sessionId)}/message-queue`),
   updateMessageQueue: (sessionId: string, data: QueueOperation) => post<MessageQueue>(`/api/sessions/${encodeURIComponent(sessionId)}/message-queue`, data),
   decide: (actionId: string, decision: "approve" | "reject", confirmation?: string) =>

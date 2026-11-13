@@ -1,0 +1,102 @@
+{
+  "sourceCommit": "b77ab66b6664a9fe78dced26e90fd3a1f841e8f7",
+  "date": "2026-11-11",
+  "scope": "specialist unread acknowledgement and efficient task workflow",
+  "reasoning": {
+    "inheritsLocalCodex": true,
+    "model": "gpt-6.1-sol",
+    "effort": "max",
+    "localConfigModified": false
+  },
+  "historicalObservation": {
+    "totalSeconds": 453.67,
+    "acpStartupSeconds": 4.47,
+    "rootToolWallSeconds": 22.22,
+    "rootToolCalls": 29,
+    "failedCompletedSubmissions": 2,
+    "includesChildWaitingAndModelTransportOutsideRootTools": true,
+    "performanceBenchmark": false
+  },
+  "checks": {
+    "backendTypes": true,
+    "frontendTypes": true,
+    "runtimeBuild": true,
+    "backendUnits": {
+      "passed": 268,
+      "skipped": 4
+    },
+    "frontendUnits": {
+      "passed": 798
+    },
+    "hostIntegration": {
+      "passed": 192
+    },
+    "realPinnedCodex": {
+      "passed": 4,
+      "adapter": "2.2.2",
+      "engine": "0.160.1",
+      "provider": "local synthetic Responses fixture",
+      "realCredentials": false,
+      "externalInference": false,
+      "maxPreserved": true,
+      "partialResultWithoutExtraInspection": true
+    },
+    "runtimeBoundary": true,
+    "backendNamingViolations": 0,
+    "backendNamingTests": 5,
+    "frontendBuild": true
+  },
+  "browser": {
+    "tool": "ego-browser",
+    "fixture": "actual App with synthetic in-memory APIs",
+    "failedReadRetainedUnread": true,
+    "readRetrySucceeded": true,
+    "newCursorNotAcknowledgedByOldResponse": true,
+    "lateResponseDoesNotAcknowledgeAnotherSpecialist": true,
+    "listAndOldResultDoNotAutoAcknowledge": true,
+    "latestResultAcknowledgedWhenVisible": true,
+    "nativeInactiveAttentionPreventsRead": true,
+    "keyboard": true,
+    "lightDarkAnd620px": true,
+    "narrowOverflow": false
+  },
+  "limits": {
+    "realModelSpeedupMeasured": false,
+    "serversContacted": false,
+    "oldTasksReplayed": false,
+    "oldUnknownReconciled": false,
+    "shutdownHangRootCauseFixed": false,
+    "productionChanged": false,
+    "merged": false
+  },
+  "desktop": {
+    "installed": true,
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "sourceCommit": "b77ab66b6664a9fe78dced26e90fd3a1f841e8f7",
+    "dirty": false,
+    "deepSignatureVerified": true,
+    "backendHashVerified": true,
+    "actualInstalledProcess": true,
+    "nativeUnreadCleared": true,
+    "actualSpecialistTasks": 33,
+    "taskAndCanonicalOperationRecordsUnchanged": true,
+    "workersVisible": 150,
+    "recordCounts": {
+      "superWorkers": 128,
+      "superGoals": 128,
+      "superAttempts": 167,
+      "superOperations": 354,
+      "superAcceptance": 162,
+      "acpRuns": 4,
+      "commandExecutions": 241
+    },
+    "legacyRecordKindsUnchanged": 13,
+    "legacyRecordsUnchanged": 672,
+    "commandRecordsUnchanged": 240,
+    "orphanCommandRecordsRecoveredToUnknown": 1,
+    "localCodexConfigHashUnchanged": true,
+    "idleDrainingProcessRequiredTermination": true,
+    "privateSQLiteSnapshotSaved": true,
+    "runtimeOrLockRecordManuallyDeleted": false
+  }
+}

@@ -10,7 +10,7 @@ const name = (value: unknown) => {
 };
 
 export class LakeResourceNavigation {
-  constructor(readonly store: LakeStore, readonly busy: (projectId: string) => boolean) {}
+  constructor(readonly store: LakeStore, readonly busy: (projectId: string,actorSessionId?:string) => boolean) {}
   private nodes(projectId: string) { this.store.project(projectId); return this.store.catalog().resourceTree!.filter(node => node.projectId === projectId); }
   parent(projectId: string, parentId: unknown) {
     if (parentId == null) return null;
@@ -30,23 +30,23 @@ export class LakeResourceNavigation {
     this.store.put('tree', resource.id, {id: resource.id, projectId: resource.projectId, kind: 'resource', resourceId: resource.id,
       name: resource.name, parentId, position: Math.max(-1, ...siblings.map(node => node.position)) + 1} satisfies ResourceTreeNode);
   }
-  edit(projectId: string, input: Record<string, unknown>) {
+  edit(projectId: string, input: Record<string, unknown>,actor?:{sessionId:string;eventId:string}) {
     const nodes = this.nodes(projectId);
     const node = nodes.find(node => node.id === input.nodeId);
-    if (!['create', 'rename', 'move', 'delete'].includes(String(input.operation))) throw new HttpError(400, '资源目录操作无效');
+    if (!['create', 'rename', 'move', 'update', 'delete'].includes(String(input.operation))) throw new HttpError(400, '资源目录操作无效');
     if (input.operation !== 'create' && (!node || node.builtin)) throw new HttpError(404, '目录节点不存在或不可修改');
-    if (input.operation === 'delete') { this.archiveNode(projectId, node!); return {nodes: this.nodes(projectId)}; }
-    const parentId = input.operation === 'rename' ? node!.parentId : this.parent(projectId, input.parentId);
-    if (input.operation === 'move') {
+    if (input.operation === 'delete') { this.archiveNode(projectId, node!,actor); return {nodes: this.nodes(projectId)}; }
+    const parentId = input.operation === 'rename'||input.operation==='update'&&!Object.hasOwn(input,'parentId') ? node!.parentId : this.parent(projectId, input.parentId);
+    if (input.operation === 'move'||input.operation==='update') {
       let cursor = parentId;
       while (cursor) { if (cursor === node!.id) throw new HttpError(409, '不能将目录移入自身或子目录'); cursor = nodes.find(entry => entry.id === cursor)?.parentId ?? null; }
     }
-    const title = input.operation === 'move' ? node!.name : name(input.name);
+    const title = input.operation === 'move'||input.operation==='update'&&!Object.hasOwn(input,'name') ? node!.name : name(input.name);
     if (input.operation === 'create' && nodes.length >= 10000) throw new HttpError(413, '资源目录达到上限');
     const next: ResourceTreeNode = node ? {...node, parentId, name: title} :
       {id: id(), projectId, parentId, name: title, kind: 'folder', resourceId: null, position: 0};
     const siblings = nodes.filter(entry => entry.parentId === parentId && entry.id !== next.id).sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
-    const index = input.beforeId == null ? siblings.length : siblings.findIndex(entry => entry.id === input.beforeId);
+    const index = input.beforeId == null ? node&&parentId===node.parentId?siblings.filter(entry=>entry.position<node.position).length:siblings.length : siblings.findIndex(entry => entry.id === input.beforeId);
     if (index < 0) throw new HttpError(404, '插入位置不属于同一目录');
     siblings.splice(index, 0, next);
     const projected = nodes.filter(entry => entry.id !== next.id).concat(next);
@@ -61,15 +61,15 @@ export class LakeResourceNavigation {
       // Materialize virtual resource nodes only when this explicit edit needs them.
       for (const entry of nodes) this.store.put('tree', entry.id, entry);
       siblings.forEach((entry, position) => this.store.put('tree', entry.id, {...entry, position}));
-      if (next.resourceId && input.operation === 'rename') {
+      if (next.resourceId && ['rename','update'].includes(String(input.operation))) {
         const resource = this.store.require<Resource>('resources', next.resourceId); this.store.put('resources', resource.id, {...resource, name: title});
       }
     });
     return {nodes: this.nodes(projectId)};
   }
-  private assertIdle(projectId: string) {
-    if (this.busy(projectId) || this.store.list<any>('superWorkers').some(worker => worker.projectId === projectId && ['active', 'queued'].includes(worker.state)) ||
-      this.store.list<any>('superInputs').some(input => input.projectId === projectId && input.disposition === 'pending') ||
+  private assertIdle(projectId: string,actor?:{sessionId:string;eventId:string}) {
+    if (this.busy(projectId,actor?.sessionId) || this.store.list<any>('superWorkers').some(worker => worker.projectId === projectId && ['active', 'queued'].includes(worker.state)) ||
+      this.store.list<any>('superInputs').some(input => input.projectId === projectId && input.disposition === 'pending'&&!(input.id===actor?.eventId&&input.sessionId===actor?.sessionId)) ||
       this.store.list<any>('terminals').some(terminal => this.store.get<any>('sessions', terminal.sessionId)?.projectId === projectId && !['closed', 'disconnected', 'failed'].includes(terminal.status)))
       throw new HttpError(409, '请先停止项目活动任务和终端，再移入回收站');
   }
@@ -77,8 +77,8 @@ export class LakeResourceNavigation {
     this.store.put('navigationTrash', trashKey(kind, key), {kind, id: key, projectId, name: title, projectName: this.store.project(projectId).name, deletedAt: now()} satisfies NavigationTrashItem);
     this.store.put('navigationTrashGroups', trashKey(kind, key), group);
   }
-  private archiveNode(projectId: string, root: ResourceTreeNode) {
-    this.assertIdle(projectId); const nodes = this.nodes(projectId), ids = new Set([root.id]);
+  private archiveNode(projectId: string, root: ResourceTreeNode,actor?:{sessionId:string;eventId:string}) {
+    this.assertIdle(projectId,actor); const nodes = this.nodes(projectId), ids = new Set([root.id]);
     for (let depth = 0; depth < 32; depth++) { const size = ids.size; for (const node of nodes) if (node.parentId && ids.has(node.parentId)) ids.add(node.id); if (ids.size === size) break; }
     const group = trashKey(root.kind === 'folder' ? 'folder' : 'resource', root.resourceId ?? root.id);
     this.store.transaction(() => {

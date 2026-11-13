@@ -1,0 +1,254 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const {mkdtemp,mkdir,writeFile,readFile,cp,access,rm}=require('node:fs/promises');
+const {tmpdir}=require('node:os');
+const {join}=require('node:path');
+const {createServer}=require('node:http');
+process.env.LAKE_TS_IMPORT_ONLY='1';
+const {startLakeServer}=require('../../bin/lake-runtime/server.cjs');
+const adapter=process.env.LAKE_CODEX_ACP_TEST_ADAPTER;
+
+async function localCodexProvider(registry,url,model){
+ const source=registry.local.home;await mkdir(source,{recursive:true});
+ const trap=join(source,'MCP_TRAP_EXECUTED'),notify=join(source,'NOTIFY_TRAP_EXECUTED'),hook=join(source,'HOOK_TRAP_EXECUTED'),command=[process.execPath,'-e',"require('fs').writeFileSync("+JSON.stringify(trap)+",'unexpected')"];
+ await writeFile(join(source,'config.toml'),'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "max"\nmodel_provider = "fixture"\nnotify = '+JSON.stringify([process.execPath,'-e',"require('fs').writeFileSync("+JSON.stringify(notify)+",'unexpected')"])+ '\n[model_providers.fixture]\nname = "Isolated Responses fixture"\nbase_url = "'+url+'"\nwire_api = "responses"\nrequires_openai_auth = false\n[mcp_servers.inherited_trap]\ncommand = '+JSON.stringify(process.execPath)+'\nargs = '+JSON.stringify(command.slice(1))+'\nenabled = true\n[hooks]\nSessionStart = [{hooks = [{type = "command", command = "touch '+hook+'"}]}]\n',{mode:0o600});
+ if(model!==undefined){const path=join(source,'config.toml');await writeFile(path,(await readFile(path,'utf8')).replace('model = "gpt-6.1-sol"','model = '+JSON.stringify(model)),{mode:0o600});}
+ await writeFile(join(source,'auth.json'),'{}',{mode:0o600});
+ const before=await readFile(join(source,'config.toml'),'utf8'),auth=await readFile(join(source,'auth.json'),'utf8');
+ const prepare=registry.prepareHome.bind(registry);
+ registry.prepareHome=async profile=>{
+  const root=await prepare(profile),models=JSON.parse(await readFile(join(root,'models.json'),'utf8'));
+  for(const model of models.models){model.prefer_websockets=false;model.use_responses_lite=false;}
+  await writeFile(join(root,'models.json'),JSON.stringify(models),{mode:0o600});return root;
+ };
+ return async()=>{assert.equal(await readFile(join(source,'config.toml'),'utf8'),before);assert.equal(await readFile(join(source,'auth.json'),'utf8'),auth);for(const file of [trap,notify,hook])await assert.rejects(access(file),'inherited extension must not execute: '+file);};
+}
+
+// Opt-in integration: real pinned Codex + ACP, a local Responses fixture, and no real credentials.
+test('real Codex conversation uses a fresh identity, exposes no task transport and cannot resume or borrow another conversation',{skip:!adapter,timeout:90000},async t=>{
+ const home=await mkdtemp(join(tmpdir(),'lake-codex-conversation-')),web=join(home,'web');await mkdir(web);await writeFile(join(web,'index.html'),'fixture');
+ const requests=[];let providerError;
+ const provider=createServer(async(req,res)=>{
+  try{
+   const chunks=[];for await(const chunk of req)chunks.push(chunk);const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
+   const tools=(body.tools??[]).flatMap(tool=>tool.type==='namespace'?(tool.tools??[]).map(item=>({...item,namespace:tool.name})):[tool]);
+   assert.ok(tools.every(tool=>['list_mcp_resources','list_mcp_resource_templates','read_mcp_resource'].includes(tool.name)),JSON.stringify(tools.map(tool=>tool.name)));
+   const item={id:'conversation_reply',type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:'ACP_CONVERSATION_REPLY: 本人已回应。',annotations:[]}]};
+   const response={id:'conversation_response',object:'response',status:'completed',output:[item],usage:{input_tokens:10,output_tokens:5,total_tokens:15}};
+   res.writeHead(200,{'Content-Type':'text/event-stream'});
+   const event=(type,data)=>res.write('event: '+type+'\ndata: '+JSON.stringify({type,...data})+'\n\n');
+   event('response.created',{response:{...response,status:'in_progress',output:[]}});
+   event('response.output_item.added',{output_index:0,item:{...item,content:[]}});
+   event('response.output_text.delta',{item_id:item.id,output_index:0,content_index:0,delta:item.content[0].text});
+   event('response.output_item.done',{output_index:0,item});event('response.completed',{response});res.end();
+  }catch(error){providerError=error;res.writeHead(500);res.end('isolated conversation fixture rejected request');}
+ });
+ await new Promise(resolve=>provider.listen(0,'127.0.0.1',resolve));
+ const app=await startLakeServer({home,codexHome:join(home,'local-codex'),data:join(home,'data'),port:0,staticRoot:web});
+ t.after(async()=>{await app.close();provider.closeAllConnections();await new Promise(resolve=>provider.close(resolve));await rm(home,{recursive:true,force:true});});
+ const project=app.store.createProject('text-only Codex conversation'),external=app.agents.external,registry=external.registry;
+ await cp(adapter,registry.adapterRoot(),{recursive:true});
+ const unchanged=await localCodexProvider(registry,'http://127.0.0.1:'+provider.address().port+'/v1');
+ await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_ACP_TEST_NODE??process.execPath});
+ const signal=AbortSignal.timeout(45000),actor={purpose:'conversation',projectId:project.id,conversationId:'conversation-fixture',workerId:'speaker-fixture',sessionId:'speaker-session',generation:1,deadlineAt:new Date(Date.now()+60000).toISOString(),scopeHash:'conversation-scope',workspace:home,model:'gpt-6.1-sol',systemPrompt:'Reply as yourself in a text-only conversation.',signal,guard:()=>signal.throwIfAborted(),tools:[],executeTool:async()=>{assert.fail('a conversation cannot execute tools');},event:()=>{}};
+ const result=await external.run('codex','Reply ACP_CONVERSATION_REPLY without using tools.','conversation-request',actor);
+ if(providerError)throw providerError;
+ assert.equal(result.state,'completed',result.summary);assert.match(result.summary,/ACP_CONVERSATION_REPLY/);assert.ok(requests.length);
+ const run=app.store.list('acpRuns')[0];assert.equal(run.conversationId,actor.conversationId);assert.equal(run.taskId,undefined);assert.equal(run.purpose,'conversation');
+ assert.equal((await external.run('codex','Reply ACP_CONVERSATION_REPLY without using tools.','conversation-request',actor)).run_id,run.id);
+ await assert.rejects(external.run('codex','Reply ACP_CONVERSATION_REPLY without using tools.','conversation-request',{...actor,conversationId:'different'}),/身份或输入不匹配/);
+ await assert.rejects(external.run('codex','Continue.','conversation-resume',actor,run.id),/独立来源/);
+ await assert.rejects(external.run('codex','Continue.','conversation-task',{...actor,taskId:'borrowed-task'}),/独立来源/);
+ await assert.rejects(external.run('codex','Continue.','conversation-tools',{...actor,tools:[{metadata:{name:'Read'}}]}),/独立来源/);
+ for(const table of ['superGoals','superWorkers','superOperations','superAcceptance'])assert.equal(app.store.list(table).length,0,table);
+ assert.equal(app.store.list('acpRuns').length,1);await unchanged();
+});
+
+test('real Codex exposes only managed tools and returns a result through the task socket',{skip:!adapter,timeout:90000},async t=>{
+ const home=await mkdtemp(join(tmpdir(),'lake-codex-test-')),web=join(home,'web');await mkdir(web);await writeFile(join(web,'index.html'),'fixture');
+ await writeFile(join(home,'evidence.txt'),'ACTUAL_CODEX_HOST_EVIDENCE');
+ const requests=[];let reads=0,chosen;
+ const provider=createServer(async(req,res)=>{
+  const chunks=[];for await(const chunk of req)chunks.push(chunk);
+  const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
+  const tools=(body.tools??[]).flatMap(tool=>tool.type==='namespace'?(tool.tools??[]).map(item=>({...item,namespace:tool.name})):[tool]);
+  const names=tools.map(tool=>tool.name).filter(Boolean);
+  assert.ok(!names.some(name=>/apply_patch|exec_command|shell_command|spawn_agent|js_repl|view_image|write_stdin/.test(name)),JSON.stringify(names));
+  assert.ok(names.every(name=>['Read','list_mcp_resources','list_mcp_resource_templates','read_mcp_resource'].includes(name)),JSON.stringify(names));
+  chosen=tools.find(tool=>tool.name?.endsWith('__Read')||tool.name==='Read');
+  assert.ok(chosen,'Codex must receive the task-scoped Read tool: '+JSON.stringify(names));
+  const hasResult=(body.input??[]).some(item=>item.type==='function_call_output'&&JSON.stringify(item.output).includes('ACTUAL_CODEX_HOST_EVIDENCE'))||requests.length>3;
+  const item=requests.length===1?{id:'forged_native',type:'function_call',call_id:'forged_native',name:'apply_patch',arguments:'*** Begin Patch\n*** Add File: '+join(home,'forged.txt')+'\n+FORGED\n*** End Patch',status:'completed'}:hasResult?{id:'msg_fixture',type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:'ACP_CODEX_REPORT: actual host read complete',annotations:[]}]}:
+   {id:'fc_fixture',type:'function_call',call_id:'fixture_read',name:chosen.name,...(chosen.namespace?{namespace:chosen.namespace}:{}),arguments:JSON.stringify({file_path:'evidence.txt'}),status:'completed'};
+  const response={id:'resp_'+requests.length,object:'response',status:'completed',output:[item],usage:{input_tokens:10,output_tokens:5,total_tokens:15}};
+  res.writeHead(200,{'Content-Type':'text/event-stream'});
+  const event=(type,data)=>res.write('event: '+type+'\ndata: '+JSON.stringify({type,...data})+'\n\n');
+  event('response.created',{response:{...response,status:'in_progress',output:[]}});
+  event('response.output_item.added',{output_index:0,item:{...item,...(hasResult?{content:[]}:{arguments:''})}});
+  if(hasResult)event('response.output_text.delta',{item_id:item.id,output_index:0,content_index:0,delta:item.content[0].text});
+  else event('response.function_call_arguments.delta',{item_id:item.id,output_index:0,delta:item.arguments});
+  event('response.output_item.done',{output_index:0,item});event('response.completed',{response});res.end();
+ });
+ await new Promise(resolve=>provider.listen(0,'127.0.0.1',resolve));
+ const app=await startLakeServer({home,codexHome:join(home,'local-codex'),data:join(home,'data'),port:0,staticRoot:web});
+ t.after(async()=>{await app.close();provider.closeAllConnections();await new Promise(resolve=>provider.close(resolve));});
+ const response=await fetch(app.origin+'/api/projects',{method:'POST',headers:{Authorization:'Bearer '+app.token,'Content-Type':'application/json'},body:JSON.stringify({name:'Codex isolated validation'})});
+ const project=await response.json();assert.equal(response.status,200);
+ const external=app.agents.external,registry=external.registry;
+ await cp(adapter,registry.adapterRoot(),{recursive:true});
+ const unchanged=await localCodexProvider(registry,'http://127.0.0.1:'+provider.address().port+'/v1');
+ await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_ACP_TEST_NODE??process.execPath});
+ await external.probe(project.id,'codex',AbortSignal.timeout(30000));await unchanged();
+ const signal=AbortSignal.timeout(45000),events=[];
+ const actor={projectId:project.id,taskId:'fixture-task',workerId:'fixture-worker',sessionId:'fixture-session',generation:1,deadlineAt:new Date(Date.now()+60000).toISOString(),scopeHash:'fixture-scope',workspace:home,signal,guard:()=>signal.throwIfAborted(),
+  tools:[{metadata:{name:'Read',description:'Read the assigned fixture evidence'},inputSchema:{type:'object',properties:{file_path:{type:'string'}},required:['file_path'],additionalProperties:false}}],
+  executeTool:async(name,input)=>{assert.equal(name,'Read');assert.equal(input.file_path,'evidence.txt');reads++;return {content:await readFile(join(home,'evidence.txt'),'utf8')};},event:(run,event)=>events.push(event)};
+ let result;try{result=await external.run('codex','Read evidence.txt with the supplied Lake tool, then report the result.','fixture-one',actor);}
+ catch(error){assert.fail(JSON.stringify({message:error.message,runs:app.store.list('acpRuns')}));}
+ assert.equal(result.state,'completed',JSON.stringify({result,runs:app.store.list('acpRuns').map(run=>({...run,events:run.events.slice(-5)})),chosen:chosen?.name,requests:requests.slice(-2).map(request=>({names:request.tools?.map(tool=>tool.name),outputs:request.input?.filter(item=>item.type==='function_call_output').slice(-2)}))}));assert.equal(reads,1,JSON.stringify({events:events.slice(-5),outputs:requests.at(-1)?.input?.filter(item=>item.type==='function_call_output').slice(-2)}));
+ assert.equal(result.verification,'insufficient');assert.ok(result.summary.includes('ACP_CODEX_REPORT'));assert.ok(requests.length>=2);
+ assert.ok(requests.some(request=>JSON.stringify(request.input).includes('ACTUAL_CODEX_HOST_EVIDENCE')));
+ assert.ok(requests.some(request=>JSON.stringify(request.input).includes('unsupported call: apply_patch')));
+ await assert.rejects(access(join(home,'forged.txt')),'an unadvertised native write cannot execute');
+ assert.equal((await external.run('codex','Read evidence.txt with the supplied Lake tool, then report the result.','fixture-one',actor)).run_id,result.run_id);
+ assert.equal(reads,1,'duplicate control request must not execute the tool twice');
+ const resumed=await external.run('codex','Report the previously observed fixture result.','fixture-two',actor,result.run_id);
+ assert.equal(resumed.state,'completed',JSON.stringify(resumed));
+ assert.equal(resumed.summary.split('ACP_CODEX_REPORT').length,2,'session/load replay is history, not a new report chunk');
+ assert.equal(reads,1,'loading a completed session must not replay its old tool');await unchanged();
+ assert.ok(requests.every(request=>request.model==='gpt-6.1-sol'&&request.reasoning?.effort==='max'),'source model and reasoning must be inherited');
+});
+
+for(const pending of [false,true])test(pending?'real Codex submits partial findings despite an original unknown result without another inspection':'a specialist assigns real Codex, discovers the exact Lake directory and collects original task receipts',{skip:!adapter,timeout:90000},async t=>{
+ const home=await mkdtemp(join(tmpdir(),'lake-codex-assignment-')),web=join(home,'web');await mkdir(web);await writeFile(join(web,'index.html'),'fixture');
+ const requests=[];let fixtureError,originalUnknown;
+ const provider=createServer(async(req,res)=>{
+  try{
+   const chunks=[];for await(const chunk of req)chunks.push(chunk);const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
+   assert.ok(Array.isArray(body.input),'the explicit Codex assignment must never call a Lake routing model');
+   const tools=(body.tools??[]).flatMap(tool=>tool.type==='namespace'?(tool.tools??[]).map(item=>({...item,namespace:tool.name})):[tool]);
+   const names=tools.map(tool=>tool.name).filter(Boolean);
+   assert.ok(!names.some(name=>/apply_patch|exec_command|shell_command|spawn_agent|js_repl/.test(name)),JSON.stringify(names));
+   const name=requests.length===1?'list_assets':requests.length===2?'Read':'work_finish',chosen=tools.find(tool=>tool.name===name||tool.name?.endsWith('__'+name));
+   const done=requests.length>3;
+   if(!done)assert.ok(chosen,'the Codex Worker needs its original Lake tool: '+name);
+   if(requests.length===2){
+    const output=JSON.stringify(body.input.filter(item=>item.type==='function_call_output'));
+    assert.ok(output.includes('实验组织 / 实验集群 / 10.0.0.10'),'Codex must receive the full Lake path through its managed MCP tool');
+    assert.ok(output.includes('fixture-cluster-node'));assert.ok(!output.includes('fixture-jenkins-node'),'another directory cannot be substituted for the requested cluster');
+   }
+   if(requests.length===3){
+    assert.ok(JSON.stringify(body.input).includes('ACTUAL_ASSIGNED_CODEX_EVIDENCE'));
+    if(pending){
+     // Synthetic original transport uncertainty, not an actual remote command.
+     const read=app.store.list('superOperations').find(operation=>operation.tool==='Read');assert.ok(read);
+     originalUnknown={...read,id:'fixture-original-unknown',callId:'fixture-original-unknown',tool:'Bash',status:'unknown',readOnly:false,externalRunId:undefined,externalSessionId:undefined,output:{error:'synthetic connection lost after dispatch'}};
+     app.store.put('superOperations',originalUnknown.id,originalUnknown);originalUnknown=app.store.get('superOperations',originalUnknown.id);
+    }
+   }
+   if(pending&&requests.length===4){const output=JSON.stringify(body.input);assert.ok(output.includes('partial'));assert.ok(!output.includes('unresolved_operations'));}
+   const item=done?{id:'msg_assigned',type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:'ACP_CODEX_ASSIGNED_REPORT：已读取实际工作区证据并回传。',annotations:[]}]}:
+    {id:'fc_assigned_'+requests.length,type:'function_call',call_id:'assigned_'+requests.length,name:chosen.name,...(chosen.namespace?{namespace:chosen.namespace}:{}),arguments:JSON.stringify(name==='list_assets'?{query:'实验集群'}:name==='Read'?{file_path:'CODEX_ASSIGNED_EVIDENCE.txt'}:{summary:'已通过 Codex 实际读取工作区证据，内容为 ACTUAL_ASSIGNED_CODEX_EVIDENCE。'+(pending?' 原有命令结果不确定。':''),outcome:pending?'partial':'completed'}),status:'completed'};
+   const response={id:'resp_assigned_'+requests.length,object:'response',status:'completed',output:[item],usage:{input_tokens:10,output_tokens:5,total_tokens:15}};
+   res.writeHead(200,{'Content-Type':'text/event-stream'});
+   const event=(type,data)=>res.write('event: '+type+'\ndata: '+JSON.stringify({type,...data})+'\n\n');
+   event('response.created',{response:{...response,status:'in_progress',output:[]}});
+   event('response.output_item.added',{output_index:0,item:{...item,...(done?{content:[]}:{arguments:''})}});
+   if(done)event('response.output_text.delta',{item_id:item.id,output_index:0,content_index:0,delta:item.content[0].text});
+   else event('response.function_call_arguments.delta',{item_id:item.id,output_index:0,delta:item.arguments});
+   event('response.output_item.done',{output_index:0,item});event('response.completed',{response});res.end();
+  }catch(error){fixtureError=error;res.writeHead(500);res.end('Isolated fixture rejected request');}
+ });
+ await new Promise(resolve=>provider.listen(0,'127.0.0.1',resolve));
+ const app=await startLakeServer({home,codexHome:join(home,'local-codex'),data:join(home,'data'),port:0,staticRoot:web});
+ t.after(async()=>{await app.close();provider.closeAllConnections();await new Promise(resolve=>provider.close(resolve));});
+ const api=async(path,method='GET',data,expected=200)=>{
+  const res=await fetch(app.origin+path,{method,headers:{Authorization:'Bearer '+app.token,'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)});
+  const body=await res.json();assert.equal(res.status,expected,JSON.stringify(body));return body;
+ };
+ const url='http://127.0.0.1:'+provider.address().port+'/v1';
+ assert.equal((await api('/api/bootstrap')).modelConfigured,false,'Codex needs no Lake inference credential');
+ const project=await api('/api/projects','POST',{name:'Codex explicit assignment'}),path=`/api/projects/${project.id}`;
+ for(const [id,name,parentId] of [['fixture-jenkins-node','192.0.2.50 (Jenkins)','fixture-build'],['fixture-cluster-node','10.0.0.10','fixture-cluster']]){
+  app.store.put('resources',id,{id,name,projectId:project.id,kind:'ssh',status:'available',description:'Fictional directory metadata; never connect'});
+  app.store.put('tree',id,{id,projectId:project.id,parentId,kind:'resource',resourceId:id,name,position:0});
+ }
+ for(const [id,name,parentId] of [['fixture-root','实验组织',null],['fixture-build','构建环境','fixture-root'],['fixture-cluster','实验集群','fixture-root']])
+  app.store.put('tree',id,{id,name,parentId,projectId:project.id,kind:'folder',resourceId:null,position:0});
+ const workspace=await app.store.workspace(project.id);await writeFile(join(workspace,'CODEX_ASSIGNED_EVIDENCE.txt'),'ACTUAL_ASSIGNED_CODEX_EVIDENCE');
+ const superproject=await api(path+'/superagent','POST',{});
+ await api(`/api/sessions/${superproject.routerSessionId}/ai/configure`,'POST',{silentReadFiles:true});
+ const role={id:'e'.repeat(64),projectId:project.id,roleKey:'codex-inspector',name:'ACP 测试专员',duties:'分配执行 Agent 并收集工作区结果',revision:1};
+ app.store.put('superRoles',role.id,role);await api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:1,execution:{kind:'native'}});
+ const channel=(await api(path+'/superagent')).channels[0],registry=app.agents.external.registry;
+ await cp(adapter,registry.adapterRoot(),{recursive:true});
+ const unchanged=await localCodexProvider(registry,url);
+ await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_ACP_TEST_NODE??process.execPath});
+ await api(path+'/external-agents/codex/probe','POST',{});
+ const body={text:'请读取 CODEX_ASSIGNED_EVIDENCE.txt 并报告实际内容。',assignment:{requestId:'codex-assignment-0001',roleRevision:2,execution:{kind:'acp',agent:'codex',revision:1,model:{modelId:'gpt-6.1-sol'}}}};
+ const receipt=await api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
+ let result;
+ for(let attempt=0;attempt<400;attempt++){
+  result=await api(path+'/superagent');if(result.workers[0]?.assignmentState==='parked')break;
+  await new Promise(resolve=>setTimeout(resolve,50));
+ }
+ if(fixtureError)throw fixtureError;
+ const worker=result.workers[0],run=app.store.list('acpRuns')[0];
+ assert.equal(worker?.task.state,'completed',JSON.stringify({worker,run}));assert.equal(worker.task.acceptanceState,'not_evaluated');
+ assert.equal(worker.execution.backend.agent,'codex');assert.equal(worker.execution.runs[0].state,'completed');assert.equal(run.purpose,'worker');
+ assert.equal(worker.execution.backend.model.modelId,'gpt-6.1-sol');assert.equal(run.requestedModel,'gpt-6.1-sol');assert.equal(run.model,'gpt-6.1-sol');
+ const observed=app.store.list('superOperations').find(operation=>operation.tool==='Read');assert.equal(observed.externalRunId,run.id);assert.equal(observed.status,'succeeded');
+ if(pending){assert.deepEqual(app.store.get('superOperations',originalUnknown.id),originalUnknown);assert.equal(app.store.list('superOperations').length,2);assert.equal(app.store.list('superAcceptance').length,0);assert.equal(requests.length,4);}
+ const page=await api(`/api/sessions/${channel.sessionId}/channel`);assert.equal(page.workers[0].execution.runs[0].id,run.id);
+ assert.ok(page.workers[0].execution.runs[0].summary.includes('ACP_CODEX_ASSIGNED_REPORT'));
+ const count=requests.length,again=await api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
+ assert.equal(again.assignment.workerId,receipt.assignment.workerId);assert.equal(requests.length,count);assert.equal(app.store.list('superWorkers').length,1);await unchanged();
+ assert.ok(requests.every(request=>request.model==='gpt-6.1-sol'&&request.reasoning?.effort==='max'));
+});
+
+test('real Codex reads a cached API login and detects logout without a Lake key or model request',{skip:!adapter,timeout:90000},async t=>{
+ const home=await mkdtemp(join(tmpdir(),'lake-codex-auth-')),web=join(home,'web'),codexHome=join(home,'local-codex');await mkdir(web);await mkdir(codexHome);await writeFile(join(web,'index.html'),'fixture');
+ await writeFile(join(codexHome,'config.toml'),'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "max"\n');
+ await writeFile(join(codexHome,'auth.json'),JSON.stringify({auth_mode:'apikey',OPENAI_API_KEY:'synthetic-cached-native-api-login'}),{mode:0o600});
+ const app=await startLakeServer({home,codexHome,data:join(home,'data'),port:0,staticRoot:web});t.after(()=>app.close());
+ const project=app.store.createProject('cached native auth'),registry=app.agents.external.registry;await cp(adapter,registry.adapterRoot(),{recursive:true});
+ await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_ACP_TEST_NODE??process.execPath});
+ let status=(await app.agents.external.status(project.id))[0];assert.equal(status.authMode,'api_key');assert.equal(status.assignmentReady,true);assert.equal(app.store.list('acpRuns').length,0);
+ const serialized=JSON.stringify([status,app.store.list('acpProfiles'),app.store.list('acpProbes')]);assert.ok(!serialized.includes('synthetic-cached-native-api-login'));assert.equal(await app.store.secret('external-agent-'+project.id+'-codex'),'');
+ await rm(join(codexHome,'auth.json'));status=(await app.agents.external.status(project.id))[0];assert.equal(status.revision,2);assert.equal(status.assignmentReady,false);assert.match(status.assignmentBlocker,/本机 Codex 尚未登录/);
+});
+
+test('real Codex uses a frozen role model over a different local default without changing login or max',{skip:!adapter,timeout:90000},async t=>{
+ const home=await mkdtemp(join(tmpdir(),'lake-codex-role-model-')),web=join(home,'web');await mkdir(web);await writeFile(join(web,'index.html'),'fixture');
+ const requests=[];let providerError;
+ const provider=createServer(async(req,res)=>{
+  try{
+   const chunks=[];for await(const chunk of req)chunks.push(chunk);const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
+   assert.equal(body.model,'gpt-6.1-sol');assert.equal(body.reasoning?.effort,'max');
+   const item={id:'role_model_report',type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:'ROLE_MODEL_REPORT: configuration fixture only',annotations:[]}]};
+   const response={id:'role_model_response',object:'response',status:'completed',output:[item],usage:{input_tokens:10,output_tokens:5,total_tokens:15}};
+   res.writeHead(200,{'Content-Type':'text/event-stream'});
+   const event=(type,data)=>res.write('event: '+type+'\ndata: '+JSON.stringify({type,...data})+'\n\n');
+   event('response.created',{response:{...response,status:'in_progress',output:[]}});
+   event('response.output_item.added',{output_index:0,item:{...item,content:[]}});
+   event('response.output_text.delta',{item_id:item.id,output_index:0,content_index:0,delta:item.content[0].text});
+   event('response.output_item.done',{output_index:0,item});event('response.completed',{response});res.end();
+  }catch(error){providerError=error;res.writeHead(500);res.end('synthetic model binding failure');}
+ });
+ await new Promise(resolve=>provider.listen(0,'127.0.0.1',resolve));
+ const app=await startLakeServer({home,codexHome:join(home,'local-codex'),data:join(home,'data'),port:0,staticRoot:web});
+ t.after(async()=>{await app.close();provider.closeAllConnections();await new Promise(resolve=>provider.close(resolve));await rm(home,{recursive:true,force:true});});
+ const project=app.store.createProject('frozen role model'),external=app.agents.external,registry=external.registry;await cp(adapter,registry.adapterRoot(),{recursive:true});
+ const unchanged=await localCodexProvider(registry,'http://127.0.0.1:'+provider.address().port+'/v1','unverified-local-default');
+ const profile=await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_ACP_TEST_NODE??process.execPath});
+ const signal=AbortSignal.timeout(45000);
+ await assert.rejects(registry.prepareLaunch(profile,signal),/未通过当前 ACP 工具兼容验证/,'the local default cannot pass accidentally');
+ const actor={projectId:project.id,taskId:'role-model-task',workerId:'role-model-worker',sessionId:'role-model-session',generation:1,deadlineAt:new Date(Date.now()+60000).toISOString(),scopeHash:'role-model-scope',workspace:home,model:'gpt-6.1-sol',signal,guard:()=>signal.throwIfAborted(),tools:[],executeTool:async()=>{throw Error('configuration fixture has no business tools');},event:()=>{}};
+ const result=await external.run('codex','Report ROLE_MODEL_REPORT without using tools.','role-model-request',actor);
+ if(providerError)throw providerError;
+ assert.equal(result.state,'completed',result.summary);assert.ok(result.summary.includes('ROLE_MODEL_REPORT'));assert.ok(requests.length);
+ const run=app.store.list('acpRuns')[0];assert.equal(run.requestedModel,'gpt-6.1-sol');assert.equal(run.model,'gpt-6.1-sol');assert.equal(run.reasoningEffort,'max');
+ await assert.rejects(external.run('codex','Report ROLE_MODEL_REPORT without using tools.','role-model-request',{...actor,model:'different-model'}),/身份或输入不匹配/);
+ await assert.rejects(external.run('codex','Continue this report.','role-model-resume',{...actor,model:'different-model'},result.run_id),/同一执行身份与模型/);
+ assert.equal(app.store.list('acpRuns').length,1);await unchanged();
+});

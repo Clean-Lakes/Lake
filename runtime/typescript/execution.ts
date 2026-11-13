@@ -1,3 +1,4 @@
+import {redactModelValue} from "./model-errors";
 import type {SSHTarget} from "./ssh-target";
 import {compileServiceInspection} from "./service-inspection";
 import { boundResourceRevision } from "./resource-pin";
@@ -100,7 +101,7 @@ export class LakeExecution {
   private lives = new Map<string, Live>();
   private handles = new Map<string, Live>();
   private bases = new WeakMap<ExecutionPort, any>();
-  private waiters = new Map<string, Set<(record: CommandRecord) => void>>();
+  private waiters = new Map<string, Set<{resolve:(record:CommandRecord)=>void;reject:(error:unknown)=>void}>>();
   constructor(
     readonly store: LakeStore,
     readonly security: LakeSecurity,
@@ -293,9 +294,9 @@ export class LakeExecution {
       executionId,
     );
     if (record && record.status !== "running") return Promise.resolve(record);
-    return new Promise((resolve) => {
+    return new Promise((resolve,reject) => {
       const set = this.waiters.get(executionId) ?? new Set();
-      set.add(resolve);
+      set.add({resolve,reject});
       this.waiters.set(executionId, set);
     });
   }
@@ -322,6 +323,7 @@ export class LakeExecution {
     if (entry.metadata.name !== "TaskOutput") return entry;
     return {
       ...entry,
+      metadata:{...entry.metadata,description:'Join an existing background command or child task using its exact task_id. When its result is required and no independent work remains, use block=true with a bounded timeout (normally 30000 ms) instead of repeatedly checking block=false. A timeout or not_ready is not failure and never authorizes relaunch. Reuse the original handle. Read the returned task result, not the child conversation transcript. TaskOutput does not accept or reconcile business evidence.'},
       validateInput: (input, context) => {
         const checked = entry.validateInput?.(input, context) ?? {result: true as const};
         // The SDK validates the schema first; error 2 means the runtime registry lost the handle.
@@ -428,13 +430,13 @@ export class LakeExecution {
           };
         if (key === "close")
           return async () => {
-            await Promise.all(
+            await Promise.allSettled(
               [...owner.lives.values()]
                 .filter((live) => live.actor.sessionId === sessionId)
                 .map(async (live) => {
                   live.controller.abort();
-                  await live.cancel?.();
-                  await live.promise;
+                  try { await live.cancel?.(); }
+                  finally { await live.promise; }
                 }),
             );
             for (const [key, live] of owner.handles)
@@ -540,10 +542,13 @@ export class LakeExecution {
         startedAt: now(),
       };
       owner.store.put("commandExecutions", record.id, record);
-      let complete!: (result: ExecutionResult) => void;
+      let complete!: (result: ExecutionResult) => void,reject!: (error:unknown)=>void,settled=false;
       const promise = new Promise<ExecutionResult>(
-        (resolve) => (complete = resolve),
+        (resolve,fail) => {complete=resolve;reject=fail;},
       );
+      // Foreground callers observe the work promise; background waiters may
+      // attach later. Neither path may leave a rejected receipt unobserved.
+      void promise.catch(()=>{});
       const live: Live = { record, actor, controller, promise };
       owner.lives.set(record.id, live);
       live.timer = setInterval(() => {
@@ -558,27 +563,38 @@ export class LakeExecution {
         }
       }, 200);
       live.timer.unref();
-      const finish = (result: ExecutionResult) => {
-        clearInterval(live.timer);
-        result = JSON.parse(owner.scrub(JSON.stringify(result)));
-        result.startedAt = new Date(result.startedAt);
-        result.completedAt = new Date(result.completedAt);
-        record.result = result;
-        record.status = result.status;
-        record.finishedAt = now();
-        owner.store.put("commandExecutions", record.id, record);
-        owner.lives.delete(record.id);
-        complete(result);
-        for (const waiter of owner.waiters.get(record.id) ?? []) waiter(record);
+      const failReceipt=(error:unknown)=>{
+        if(settled)return;
+        settled=true;clearInterval(live.timer);
+        record.status='unknown';record.finishedAt=now();delete record.result;
+        try{owner.store.put('commandExecutions',record.id,record);}catch{/* The caller retains the failure; never persist unsanitized fallback data. */}
+        owner.lives.delete(record.id);controller.abort();reject(error);
+        for(const waiter of owner.waiters.get(record.id)??[])waiter.reject(error);
         owner.waiters.delete(record.id);
-        return result;
+      };
+      const finish = (result: ExecutionResult) => {
+        if(settled)throw new HttpError(409,'命令回执已结束，不重复处理');
+        clearInterval(live.timer);
+        try{
+          result = redactModelValue(result,text=>owner.scrub(text));
+          result.startedAt = new Date(result.startedAt);
+          result.completedAt = new Date(result.completedAt);
+          record.result = result;
+          record.status = result.status;
+          record.finishedAt = now();
+          owner.store.put("commandExecutions", record.id, record);
+          settled=true;owner.lives.delete(record.id);complete(result);
+          for (const waiter of owner.waiters.get(record.id) ?? []) waiter.resolve(record);
+          owner.waiters.delete(record.id);
+          return result;
+        }catch(error){failReceipt(error);throw error;}
       };
       try {
         const requestOptions = {
           ...options,
           signal,
           onEvent: async (event: any) => {
-            const safe = JSON.parse(owner.scrub(JSON.stringify(event)));
+            const safe = redactModelValue(event,text=>owner.scrub(text));
             if (safe.type === 'progress' && owner.lives.get(record.id) === live) {
               if (typeof safe.stdoutTail === 'string') record.stdoutTail = safe.stdoutTail.slice(-8192);
               if (typeof safe.stderrTail === 'string') record.stderrTail = safe.stderrTail.slice(-8192);
@@ -605,6 +621,7 @@ export class LakeExecution {
           const work = output.then(finish, (error) =>
             finish(owner.failure(error, record.startedAt, signal)),
           );
+          void work.catch(error=>failReceipt(error));
           const backgrounded = () => {
             record.publishedBackground = true;
             owner.store.put("commandExecutions", record.id, record);
@@ -676,9 +693,7 @@ export class LakeExecution {
                   signal,
                 ),
             );
-          })().catch((error) =>
-            finish(owner.failure(error, record.startedAt, signal)),
-          );
+          })().catch((error) => {if(!settled)try{finish(owner.failure(error,record.startedAt,signal));}catch(failure){failReceipt(failure);}});
           return started;
         }
         return {
@@ -686,10 +701,9 @@ export class LakeExecution {
           result: finish(await base.run(local, requestOptions)),
         };
       } catch (error) {
-        return {
-          kind: "foreground",
-          result: finish(owner.failure(error, record.startedAt, signal)),
-        };
+        if(settled)throw error;
+        try{return {kind:"foreground",result:finish(owner.failure(error,record.startedAt,signal))};}
+        catch(failure){failReceipt(failure);throw failure;}
       }
     };
     return {
@@ -793,6 +807,7 @@ export class LakeExecution {
             reject(error);
             return;
           }
+          try{
           const completedAt = new Date();
           resolve({
             status: signal.aborted
@@ -819,6 +834,7 @@ export class LakeExecution {
             startedAt,
             completedAt,
           });
+          }catch(failure){reject(failure);}
         };
         const abort = () => finish();
         const timer = setTimeout(
@@ -878,7 +894,7 @@ export class LakeExecution {
                 throw new HttpError(413, "SSH 命令输出超过预算");
               if (isError) stderr = Buffer.concat([stderr, chunk]);
               else stdout = Buffer.concat([stdout, chunk]);
-              void options.onEvent?.({
+              void Promise.resolve(options.onEvent?.({
                 type: "progress",
                 elapsedMs: Date.now() - +startedAt,
                 stdoutBytes: stdout.length,
@@ -886,7 +902,7 @@ export class LakeExecution {
                 stdoutTail: this.scrub(stdout.toString("utf8")).slice(-2048),
                 stderrTail: this.scrub(stderr.toString("utf8")).slice(-2048),
                 timestamp: new Date(),
-              });
+              })).catch(error=>finish(error));
             } catch (error) {
               finish(error);
             }
@@ -912,11 +928,11 @@ export class LakeExecution {
     }
   }
   async close() {
-    await Promise.all(
+    await Promise.allSettled(
       [...this.lives.values()].map(async (live) => {
         live.controller.abort();
-        await live.cancel?.();
-        await live.promise;
+        try { await live.cancel?.(); }
+        finally { await live.promise; }
       }),
     );
   }

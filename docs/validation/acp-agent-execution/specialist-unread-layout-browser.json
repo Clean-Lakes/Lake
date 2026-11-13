@@ -1,0 +1,42 @@
+{
+  "spaceId": 81,
+  "fixture": "full App + fictional local API",
+  "automaticReadAfterFocus": true,
+  "unfocusedNoRead": true,
+  "nativeAttentionDenialPreservesUnread": true,
+  "failedReadPreservesUnread": true,
+  "explicitRetryErrorAndRecovery": true,
+  "lateReadAcknowledgesOnlyOriginalCursor": true,
+  "siblingRoleUnchanged": true,
+  "emptyRoleRead": true,
+  "offlineListDoesNotAcknowledgeNewCursor": true,
+  "reconnectReadsDeliveredCursor": true,
+  "selectedRoleRetained": true,
+  "singleStatistics": true,
+  "genericContextRemoved": true,
+  "agentsStayOnOneLine": true,
+  "viewportWidths": [
+    1002,
+    620
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "overflow": false,
+  "keyboardFilterAndSearch": true,
+  "taskQuestionReplyAndFocusReturn": true,
+  "unexpectedBusinessWrites": false,
+  "screenshots": [
+    "unread-layout-compact-light.png",
+    "unread-layout-dark-narrow.png",
+    "unread-layout-inspector-dark.png",
+    "unread-layout-focus-dark.png"
+  ],
+  "explicitRetryInteraction": "keyboard focus and Enter",
+  "taskQuestionInteraction": "keyboard radio selection and Enter",
+  "browserTaskFinished": true,
+  "viteStopped": true,
+  "testedSource": "5fc12ec15399a9d5c7449c6fb35d2c08a862ee06",
+  "statusColumnFollowupNotIncluded": "ea863e7016bffbe67226e4ba7180a80e8e1f88cf"
+}

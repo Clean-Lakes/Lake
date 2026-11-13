@@ -45,16 +45,16 @@ test('task results render readable Markdown without executing HTML or loading ex
  assert.equal(snapshot.superagent!.task!.summary,summary);
 });
 
-test('overview shows one canonical verdict and never infers acceptance from report text',async()=>{
+test('overview shows execution end without turning reports or historical fields into an acceptance verdict',async()=>{
  const {SuperTaskInspector}=await import('../src/SuperTaskInspector');
  const task={taskId:'task',sessionId:'worker',title:'核对数据',state:'completed',acceptanceState:'pass',summary:'报告声称完成',updatedAt:'2026-11-08T02:00:00Z'} as any;
  const goal={id:'task',items:[]} as any;
  const html=renderToStaticMarkup(createElement(SuperTaskInspector,{task,goal,summaryOnly:true}));
- assert.equal((html.match(/已验收/g)??[]).length,1);
+ assert.equal((html.match(/执行结束/g)??[]).length,1);
  assert.doesNotMatch(html,/验收通过|报告声称完成/);
  assert.match(html,/<time[^>]*dateTime="2026-11-08T02:00:00Z"/);
  const pending=renderToStaticMarkup(createElement(SuperTaskInspector,{task:{...task,acceptanceState:'insufficient'},goal,summaryOnly:true}));
- assert.match(pending,/待验收/);assert.match(pending,/验收证据不足/);assert.doesNotMatch(pending,/已验收|验收通过/);
+ assert.match(pending,/执行结束/);assert.doesNotMatch(pending,/待验收|验收证据不足|已验收|验收通过/);
  const failed=renderToStaticMarkup(createElement(SuperTaskInspector,{task:{...task,state:'failed',acceptanceState:'not_evaluated'},goal,summaryOnly:true}));
  assert.match(failed,/执行失败/);assert.doesNotMatch(failed,/已验收|验收通过/);
 });
@@ -89,7 +89,7 @@ test('a parked specialist shows separate outcomes for its original and verificat
   {id:'followup',status:'blocked',createdAt:'2026-11-07T01:01:00Z'}]}]} as any;
  const html=renderToStaticMarkup(createElement(SuperTaskInspector,{task,goal,plan:true,hideHeading:true}));
  assert.match(html,/2 次执行/);
- assert.match(html,/结果待核实/);
+ assert.match(html,/结果不确定/);
  assert.match(html,/data-state="blocked"/);
  assert.doesNotMatch(html,/执行中|执行成功/);
 });

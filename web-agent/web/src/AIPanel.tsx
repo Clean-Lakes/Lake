@@ -2,7 +2,9 @@ import {isNativeAgentSource} from '../../shared/runtime-compat';
 import {conversationActivity,conversationAvatarMotion,type AvatarMotion} from './superAgentPresentation';
 import {ReplyIdentity,type AssistantIdentity} from './ReplyIdentity';
 import type {SpecialistReplyAuthor,SuperTask,SuperWorkspace} from '../../shared/contracts';
-import {PilotDispatchProgress,pilotDispatchRows} from './PilotDispatchProgress';
+import {PilotSpecialistConversation} from './PilotSpecialistConversation';
+import {pilotDispatchRows} from './pilotSpecialistReplies';
+import {PilotConversationProgress,conversationNeedsStatus} from './PilotConversationProgress';
 import {pendingUserSupplements} from "./messageQueue";
 import {latestInspectorSelection,canonicalGoalForExecution} from './sessionInspectorModel';
 import {MiniBoxCompletionNotice} from './MiniBox';
@@ -151,7 +153,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
   // Native children are task execution records. Their independent sessions and
   // tool results belong in the task inspector, not another chat participant.
   const projected=mode==='conversation'&&!proseInChannel?workerTranscriptCards(snapshot,cards,before):{cards,reported:new Map<string,AICard>()};
-  const entries = orderedTranscript(displaySnapshot, projected.cards, before).filter(entry=>mode!=='conversation'||!isNativeAgentSource(entry.agentRun?.source)).map(entry=>mode==='conversation'?conversationPlanEntry(entry,{planMode:snapshot.conversationMode==='plan',live:snapshot.ai?.status==='running',currentPlanId:snapshot.ai?.proposedPlan?.id}):entry);
+  const entries = orderedTranscript(displaySnapshot, projected.cards, before).filter(entry=>mode!=='conversation'||!isNativeAgentSource(entry.agentRun?.source)&&!(entry.message?.conversation?.kind==='summary'&&entry.message.conversation.summaryRequested!==true)).map(entry=>mode==='conversation'?conversationPlanEntry(entry,{planMode:snapshot.conversationMode==='plan',live:snapshot.ai?.status==='running',currentPlanId:snapshot.ai?.proposedPlan?.id}):entry);
   const loadOlderSRE=async()=>{onInspect?.();const session=snapshot.session.id;setLoadingSRE(true);try{const page=await api.sreTasks(session,sreCursor??snapshot.sre?.tasks.at(-1)?.id??'');if(selectedSession.current===session){setOlderSRE(old=>[...old,...page.items]);setSRECursor(page.nextCursor)}}catch(e){setError(readableError(e))}finally{setLoadingSRE(false)}};
   const visibleEntries = entries.filter(entry => !isFileChangeCard(entry.card));
   const lastBudgetCard=cards.filter(card=>!!card.content).at(-1);
@@ -197,10 +199,9 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
   return <div className="ai-transcript" data-transcript-mode={mode} data-reply-avatar={hideReplyIdentity?"hidden":undefined} ref={transcript}>
     {(snapshot.sre?.tasks.length??0)>=20&&sreCursor!==''&&<button type="button" disabled={loadingSRE} onClick={()=>void loadOlderSRE()}>{loadingSRE?'正在加载…':'加载更早的 SRE 任务'}</button>}
     {mode==='activity'&&mergedSRE.length>1&&<label className="sre-task-filter">任务<AppSelect label="筛选 SRE 任务" value={sreTaskFilter} onChange={event=>setSRETaskFilter(event.target.value)}><option value="">全部任务</option>{mergedSRE.map(task=><option key={task.id} value={task.id}>{task.goal}</option>)}</AppSelect></label>}
-    <ConversationDirectory key={snapshot.session.id} sessionId={snapshot.session.id} items={directoryItems} onJump={jumpTo} onLatest={() => jumpTo()} onOpen={onInspect} onLoadOlder={before > 0 ? () => void loadOlder() : undefined} loading={loading}/>
+    <ConversationDirectory key={snapshot.session.id} sessionId={snapshot.session.id} items={directoryItems} onJump={jumpTo} onLatest={() => jumpTo()} onLoadOlder={before > 0 ? () => void loadOlder() : undefined} loading={loading}/>
     {mode === 'activity' && <OperationOutcomes session={snapshot.session.id} operations={snapshot.ai?.operationOutcomes ?? []} running={['running', 'waiting_approval'].includes(snapshot.ai?.status ?? '')} disabled={disabled} refresh={refresh}/>}
     {mode === "activity" && !turns.length && !snapshot.ai?.operationOutcomes?.some(operation => operation.status === "unknown") && <div className="record-empty"><h2>暂无执行记录</h2><p>工具调用、子 Agent 任务和文件变更会按轮次保留在这里。</p></div>}
-    {before > 0 && <button type="button" disabled={loading} onClick={() => void loadOlder()}>{loading ? "正在加载…" : "加载更早记录"}</button>}
     {error && <p role="alert">{error}</p>}
     {turns.map((turn, index) => {
       const handoffInterim=mode==='conversation'&&assistantIdentity?.pilot&&!(index===0&&before>0)&&!(turn===currentTurn&&(snapshot.ai?.pending||snapshot.ai?.question))?pilotHandoffInterimIds(turn):new Set<string>();
@@ -209,6 +210,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       const activeReply=turn===currentTurn&&(!currentTiming||currentTiming.status==='running')?turn.filter(isAssistantProse).at(-1)?.id:undefined;
       const completed = timingForTurn(turn,snapshot)?.status ?? (turn===currentTurn?snapshot.ai?.status:undefined);
       const turnDispatchRows=dispatchRows.filter(row=>turn.some(entry=>entry.message?.id===row.sourceMessageId));
+      const turnConversations=mode==='conversation'&&assistantIdentity?.pilot?pilotWorkspace?.conversations?.filter(round=>round.projectId===snapshot.session.projectId&&round.sessionId===snapshot.session.id&&turn.some(entry=>entry.message?.id===round.sourceMessageId))??[]:[];
       const presentedReply=mode==='conversation'?trailingTurnReplyId(turn):undefined;
       const presentingReply=!!presentedReply&&(!completed||['running','completed'].includes(completed));
       const fallbackDiagnostic=turn.find(isCompactionFallbackEntry);
@@ -253,12 +255,15 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       // Public prose keeps its key and container throughout tool rounds and completion.
       const interimGroups=groups.filter(group=>group.entries.every(entry=>handoffInterim.has(entry.id)||isDeliveredWorkerInterim(entry,projected.reported)));
       const detailGroups=groups.filter(group=>processGroups.includes(group)||interimGroups.includes(group));
+      const canonicalGoalId=canonicalGoalForExecution(snapshot,timingProps.cards,pilotWorkspace?.workers.map(worker=>worker.task));
+      const hideConversationStatus=turnConversations.length>0&&!turnConversations.some(conversationNeedsStatus)&&!turnDispatchRows.length&&!canonicalGoalId;
       const replyContent=<>{groups.filter(group=>!detailGroups.includes(group)&&!(proseInChannel&&group.entries.every(channelBody))).map(group=>mode==='conversation'&&group.entries.every(isAssistantProse)?<SettledReply key={group.entries[0]!.id} roleBreak={roleBreaks.has(group.entries[0]!.id)} continued={continuations.has(group.entries[0]!.id)}>{renderGroup(group)}</SettledReply>:renderGroup(group))}</>;
       return <ReplyReferenceScope key={turn[0]!.id} cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}><div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)}>
       {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources} arrive={entry.message!.id===latestUser?.id&&!restoredMessageIds.current.has(entry.message!.id)}/>)}
       {mode==='activity'&&<ReplyDuration assistantIdentity={assistantIdentity} {...timingProps}/>}
-      {mode==='conversation'?<TurnExecutionDetails assistantIdentity={assistantIdentity} hideIdentity={hideReplyIdentity} latest={latestUser?turn===currentTurn:turn===turns.at(-1)} latestTaskId={latestInspectorTaskId} canonicalGoalId={canonicalGoalForExecution(snapshot,timingProps.cards,pilotWorkspace?.workers.map(worker=>worker.task))} sessionId={snapshot.session.id} {...timingProps} presentingReply={presentingReply} hideLive={turn.some(entry=>entry.sre?.task.pilot)} detailNotice={pilotLive?undefined:notices} details={pilotLive?[]:[...detailGroups.map(renderGroup),...compactionDiagnostics]} onInspect={onInspect}>{replyContent}</TurnExecutionDetails>:replyContent}
-      {mode==='conversation'&&turnDispatchRows.length>0&&<PilotDispatchProgress rows={turnDispatchRows} onSpecialist={onSpecialist} connected={pilotConnected}/>}
+      {mode==='conversation'?<TurnExecutionDetails hideStatus={hideConversationStatus} processOnly={turnConversations.length>0} assistantIdentity={assistantIdentity} hideIdentity={hideReplyIdentity} latest={latestUser?turn===currentTurn:turn===turns.at(-1)} latestTaskId={latestInspectorTaskId} canonicalGoalId={canonicalGoalId} sessionId={snapshot.session.id} {...timingProps} presentingReply={presentingReply} hideLive={turn.some(entry=>entry.sre?.task.pilot)} detailNotice={pilotLive?undefined:notices} details={pilotLive?[]:[...detailGroups.map(renderGroup),...compactionDiagnostics]} onInspect={onInspect}>{replyContent}</TurnExecutionDetails>:replyContent}
+      {mode==='conversation'&&turnDispatchRows.length>0&&<PilotSpecialistConversation rows={turnDispatchRows} onSpecialist={onSpecialist} connected={pilotConnected}/>}
+      {turnConversations.length>0&&<PilotConversationProgress rounds={turnConversations} connected={pilotConnected} onSpecialist={onSpecialist}/>}
       <FileChanges live={turn===currentTurn&&(currentTiming?currentTiming.status==='running':liveConversation)} deferUntilEnd={mode==='conversation'} cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>
       <TaskProgress cards={turn.flatMap(entry => entry.card ? [entry.card] : [])} executionId={snapshot.superagent?.task.executionGoalId??snapshot.superagent?.task.taskId} legacyTurn historical={!liveConversation || (!!snapshot.superagent?.task && !hasCurrentTaskProgress(snapshot.superagent.task.state)) || turn!==(latestUser?currentTurn:turns.at(-1))}/>
       {mode==='conversation'&&!(turn===currentTurn&&liveConversation)&&<MiniBoxCompletionNotice notices={snapshot.commandStopNotices??[]} startedAt={miniStartedAt} endedAt={miniEndedAt}/>}
