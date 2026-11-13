@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-13
 last_updated: 2026-11-13
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [feature, pilot, conversation]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
 为“全部干员报数”和指定多人讨论提供独立的对话轮次。使用现有 SDK、AgentHost、调度容量及角色频道；每人真实回应，超时和失败可见。报数按用户后续反馈直接结束，需要综合结论时才启动独立 Pilot 上下文。本轮不产生业务目标，不恢复 ACP 分支已移除的业务验收。
 
@@ -67,7 +67,7 @@ tags: [feature, pilot, conversation]
 | TASK-009 | `specialist-conversations.ts` 与 `superagent.ts` 增加默认关闭的 summarize 选择，收齐直接完成；保留明确综合请求的独立 Pilot 上下文。 | ✅ | 2026-11-13 |
 | TASK-010 | `AIPanel.tsx` 隐藏历史自动总结；共享 ReplyProcessStatus 区分过程字体，供干员等待和召集进展使用。依赖 TASK-009。 | ✅ | 2026-11-13 |
 | TASK-011 | 检查默认零总结调用、显式综合、历史展示与回执保持，签名安装 Dev 并验证明暗/窄窗及真实报数；更新验收记录和原集成 PR。依赖 TASK-010。 | ✅；b674ff4b 已安装，真实六人短报数、零总结模型调用、13px/15px 字体区分及明暗宽窄窗通过。 | 2026-11-13 |
-| TASK-012 | 按后续截图反馈，在全员回应完成时移除人数与执行过程尾注；保留等待/缺席状态和业务任务详情，检查前端并更新 Dev。 | 进行中 | 2026-11-13 |
+| TASK-012 | 按后续截图反馈，在全员回应完成时移除人数与执行过程尾注；保留等待/缺席状态和业务任务详情，检查前端并更新 Dev。 | ✅；a2d9e400 已安装，前端816项通过，宽/窄窗和原生窗口确认无尾注。 | 2026-11-13 |
 
 ## 3. Alternatives
 
@@ -110,3 +110,5 @@ tags: [feature, pilot, conversation]
 - [本次验收与安装限制](../docs/validation/typescript-candidate/pilot-conversation-2026-11-13.md)
 - [ACP 集成与已安装 Dev 验收](../docs/validation/acp-agent-execution/pilot-conversation-integration-2026-11-13.md)
 - [过程样式与报数收尾修订验收](../docs/validation/acp-agent-execution/conversation-feedback-2026-11-13.md)
+
+后续完成尾注修订见[验收记录](../docs/validation/acp-agent-execution/quiet-conversation-footer-2026-11-13.md)。
