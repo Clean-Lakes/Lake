@@ -22,6 +22,14 @@ if(query.has('space')){messages.splice(0,11);cards.splice(0,11)}
 if(query.has('narration-only'))cards.pop();
 if(query.has('progress-only'))cards.find(card=>card.id==='note')!.content='';
 if(query.has('families')){cards.find(card=>card.id==='operation-0')!.title='list_workflows';cards.find(card=>card.id==='operation-0')!.data={target:'当前项目/会话',arguments:{}}}
+const specialistConfig=query.get('specialist-config');
+if(specialistConfig){
+ messages.at(-1)!.text=specialistConfig==='codex'?'把 K8s 专员的 Agent 换成 Codex':'创建一个 K8s 专员';
+ const note=cards.find(card=>card.id==='note')!,tool=cards.find(card=>card.id==='operation-0')!;
+ note.content=specialistConfig==='codex'?'我把 K8s 专员的 Agent 改为 Codex。':'我来创建 K8s 专员，负责处理 Kubernetes 相关任务。';
+ note.data={root_turn_id:'turn'};
+ tool.title='manage_specialist';tool.data={root_turn_id:'turn',arguments:{action:specialistConfig==='codex'?'update':'create',name:'K8s 专员'}};
+}
 cards.push({id:'empty-thought',type:'thinking',status:query.has('reasoning')?'completed':'running',at:stamp(query.has('reasoning')?111.5:110.5),content:query.has('reasoning')?'先核对演示主机的实际状态。':''});
 const state={session:{id:'fixture',projectId:'p',title:'进度更新稳定性',status:'investigating',createdAt:stamp(0),updatedAt:stamp(0),tags:[]},cursor:1,messages,resources:[],resourceTree:[],specialists:[],evidence:[],actions:[],terminals:[],ai:{session:'fixture',status:'running',rootTurnId:'turn',turnStartedAt:new Date().toISOString(),cards,cardsOffset:0,totalCards:cards.length,turns:12,usage:{input:0,output:0,total:0}},messageQueue:{paused:false,revision:0,lastError:'',items:[]},sre:{enabled:false,tasks:[]}} as unknown as SessionSnapshot;
 if(query.has('reference-time')){
@@ -166,7 +174,7 @@ document.getElementById('next-operation')!.onclick=()=>{
  state.ai!.cards.push({id:`operation-${n}`,type:'operation',title:step?.title??(query.has('families')?titles[Math.min(n,3)]!:'shell'),status:'running',at:stamp(++tick),content:'',data:query.has('families')?{target:'当前项目/会话',arguments:{}}:{target:query.has('mixed-resources')?(n%2?'演示主机 B':'演示主机'):query.has('same-resource')?'演示主机':`演示主机 ${n}`,arguments:step?.arguments??{command:'uptime'}}});update();
 };
 document.getElementById('grow-reply')!.onclick=()=>{finishCurrent();state.ai!.cards.push({id:'final-reply',type:'message',status:'completed',at:stamp(++tick),content:'核对完成。\n\n'+('这里是实际新增的回复正文，新增高度应正常跟随到底部。\n\n').repeat(12)});state.ai!.status='completed';state.ai!.turnFinishedAt=new Date().toISOString();update()};
-document.getElementById('stream-reply')!.onclick=()=>{finishCurrent();state.ai!.cards.push({id:'stream-reply',type:'message',status:'running',at:stamp(++tick),content:query.has('long')?'核对已完成，完整说明保持可见。\n\n## 详细运行记录\n\n'+('新生成的内容保持原有位置，完成时继续完整展示。\n\n').repeat(40):'核对完成。演示服务运行正常，原始操作记录已保留。'});update()};
+document.getElementById('stream-reply')!.onclick=()=>{finishCurrent();state.ai!.cards.push({id:'stream-reply',type:'message',status:'running',at:stamp(++tick),data:specialistConfig?{root_turn_id:'turn'}:undefined,content:specialistConfig?(specialistConfig==='codex'?'已将 K8s 专员的 Agent 改为 Codex，后续任务将使用 Codex 执行。':'已创建 K8s 专员，负责处理 Kubernetes 相关任务。'):query.has('long')?'核对已完成，完整说明保持可见。\n\n## 详细运行记录\n\n'+('新生成的内容保持原有位置，完成时继续完整展示。\n\n').repeat(40):'核对完成。演示服务运行正常，原始操作记录已保留。'});update()};
 document.getElementById('refresh-snapshot')!.onclick=()=>update();
 document.getElementById('cancel-reply')!.onclick=()=>{finishCurrent();state.ai!.status='cancelled';state.ai!.turnFinishedAt=new Date().toISOString();update()};
 document.getElementById('complete-reply')!.onclick=()=>{finishCurrent();state.ai!.status='completed';state.ai!.turnFinishedAt=new Date().toISOString();update()};

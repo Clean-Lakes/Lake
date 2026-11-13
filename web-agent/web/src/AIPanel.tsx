@@ -15,7 +15,7 @@ import type {MemoryAccess} from "../../shared/contracts";
 import {PlanReference,planMarkdown} from './PlanMode';
 import {conversationPlanEntry} from './planConversation';
 import {workerTranscriptCards,workerConversationTurns,isDeliveredWorkerInterim} from './workerTranscript';
-import {isAssistantProse,trailingTurnReplyId} from './completedTurnProse';
+import {completedTurnInterimIds,isAssistantProse,trailingTurnReplyId} from './completedTurnProse';
 import {SettledReply} from './SettledReply';
 import {pilotReplyContinuations,replyRoleBreaks} from './replyGrouping';
 import {pilotHandoffInterimIds,recoveredRouteFailures} from './routeDispatchPresentation';
@@ -213,6 +213,10 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       const turnConversations=mode==='conversation'&&assistantIdentity?.pilot?pilotWorkspace?.conversations?.filter(round=>round.projectId===snapshot.session.projectId&&round.sessionId===snapshot.session.id&&turn.some(entry=>entry.message?.id===round.sourceMessageId))??[]:[];
       const presentedReply=mode==='conversation'?trailingTurnReplyId(turn):undefined;
       const presentingReply=!!presentedReply&&(!completed||['running','completed'].includes(completed));
+      const interimProse=mode==='conversation'&&!(index===0&&before>0)&&!(turn===currentTurn&&(snapshot.ai?.pending||snapshot.ai?.question))
+        ?completedTurnInterimIds(turn,completed==='completed',presentedReply,!!completed&&!['running','waiting_approval'].includes(completed)):new Set<string>();
+      for(const id of handoffInterim)interimProse.add(id);
+      for(const entry of turn)if(isDeliveredWorkerInterim(entry,projected.reported))interimProse.add(entry.id);
       const fallbackDiagnostic=turn.find(isCompactionFallbackEntry);
       const compactionDiagnostics=turn.flatMap(entry=>entry.card?.type==='error'&&isContextCompactionFailure(entry.card.content||'')?[<details className="compaction-diagnostic" key={`diagnostic-${entry.id}`}><DisclosureSummary>整理请求诊断</DisclosureSummary><pre>{entry.card.content}</pre></details>]:[]);
       if(fallbackDiagnostic)compactionDiagnostics.push(<details className="compaction-diagnostic" key={`diagnostic-${fallbackDiagnostic.id}`}><DisclosureSummary>整理请求诊断</DisclosureSummary><pre>{fallbackDiagnostic.card?.content??fallbackDiagnostic.message?.text}</pre></details>);
@@ -228,13 +232,14 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
         if(entry.card?.type==='thinking'&&!entry.card.content?.trim()&&['running','completed','succeeded','success'].includes(entry.card.status))hiddenProcess.add(entry.id);
       }
       const hiddenProse=new Set(turn.filter(entry=>isAssistantProse(entry)&&!(entry.message?.text.trim()||entry.card?.content?.trim())).map(entry=>entry.id));
-      for(const id of handoffInterim)hiddenProse.add(id);
+      for(const id of interimProse)hiddenProse.add(id);
       const continuations=mode==='conversation'&&assistantIdentity?.pilot?pilotReplyContinuations(turn,hiddenProse,hiddenProcess):new Set<string>();
       const roleBreaks=mode==='conversation'&&!hideReplyIdentity?replyRoleBreaks(turn,hiddenProse,hiddenProcess):new Set<string>();
       const activeIdentity=activeReply&&continuations.has(activeReply)?turn.slice(0,turn.findIndex(entry=>entry.id===activeReply)).filter(entry=>isAssistantProse(entry)&&!hiddenProse.has(entry.id)&&!continuations.has(entry.id)).at(-1)?.id:activeReply;
       const replyMotion=(id:string)=>id===activeIdentity?conversationAvatarMotion(conversationActivity(snapshot.ai)):'idle';
       const renderGroup=({entries:group,progress,resource}:ConversationGroup)=>{
         const entry = group[0]!;
+        if(group.every(item=>interimProse.has(item.id)))return <div key={entry.id} data-conversation-entry={entry.id} className="turn-process-prose reply-process-text"><div className="thinking-prose"><Markdown remarkPlugins={[remarkGfm]} skipHtml components={cardMarkdownComponents}>{entry.card?.content??entry.message?.text??''}</Markdown></div></div>;
         if(mode==='conversation'&&snapshot.superagent?.task&&progress)return null;
         if(proseInChannel&&mode==='conversation'&&group.every(channelBody))return null;
         if(progress)return <ReplyArrival key={entry.id} entryId={entry.id} arrive={!restoredCardIds.current.has(entry.id)&&turn.some(item=>item.message?.id===latestUser?.id)&&!(miniScope.live&&(resource?.kind==='ssh'||resource?.kind==='local')&&group.some(item=>item.card&&isTerminalCommand(item.card)))}><ThinkingTimeline cards={group.map(item=>item.card!)} live={snapshot.ai?.status==='running'&&(group.some(item=>item.card?.status==='running')||entry.id===progressingId)} continuing={entry.id===progressingId} miniScope={mode==='conversation'?miniScope:undefined} resource={resource} resourceRow onInspect={onInspect}/></ReplyArrival>;
@@ -252,8 +257,9 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
         return <ReplyArrival key={entry.id} entryId={entry.id} continued={continuations.has(entry.id)} arrive={false}>{entry.card&&['text','message'].includes(entry.card.type) && <ReplyIdentity identity={assistantIdentity} hidden={hideReplyIdentity} continued={continuations.has(entry.id)} motion={replyMotion(entry.id)}/>}<Card card={entry.card!} tags={snapshot.session.tags} animateInitial={!restoredText.current.has(entry.card!.id)} onOpenPlans={onOpenPlans} onOpenMemory={onOpenMemory}/></ReplyArrival>;
       };
       const pilotLive=miniScope.live&&turn.some(entry=>entry.sre?.task.pilot);
-      // Public prose keeps its key and container throughout tool rounds and completion.
-      const interimGroups=groups.filter(group=>group.entries.every(entry=>handoffInterim.has(entry.id)||isDeliveredWorkerInterim(entry,projected.reported)));
+      // The actual post-tool reply keeps its key from its first chunk onward;
+      // proven pre-tool narration remains available only in execution details.
+      const interimGroups=groups.filter(group=>group.entries.every(entry=>interimProse.has(entry.id)));
       const detailGroups=groups.filter(group=>processGroups.includes(group)||interimGroups.includes(group));
       const canonicalGoalId=canonicalGoalForExecution(snapshot,timingProps.cards,pilotWorkspace?.workers.map(worker=>worker.task));
       const hideConversationStatus=turnConversations.length>0&&!turnConversations.some(conversationNeedsStatus)&&!turnDispatchRows.length&&!canonicalGoalId;
