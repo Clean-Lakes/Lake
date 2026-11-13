@@ -1,0 +1,124 @@
+{
+  "date": "2026-11-13",
+  "testedCodeCommit": "0af409d552c2f4a87d59367e529a75d8a33e84fd",
+  "baseCommit": "af940648e68b505da4f1590532e6f75c082387e9",
+  "behavior": "On a real post-tool reply in the same execution, move proven pre-tool narration to execution details; keep actual results, failures, questions and independent specialist reports in the conversation. Preserve stored messages and receipts.",
+  "checks": [
+    {
+      "command": "pnpm --dir web-agent test:frontend",
+      "result": "passed",
+      "tests": 820,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "command": "pnpm --dir web-agent build:web",
+      "result": "passed; TypeScript and Vite build; existing chunk-size advisory"
+    },
+    {
+      "command": "pnpm --dir web-agent exec tsc --noEmit -p /tmp/lake-final-reply-fixture-tsconfig.json",
+      "result": "passed; production source plus progress-refresh fixture"
+    },
+    {
+      "command": "scripts/build_lake_desktop.sh --dev --install",
+      "result": "passed from clean source using pinned Node 24.14.0"
+    },
+    {
+      "command": "codesign --verify --deep --strict ~/Applications/Lake Dev.app",
+      "result": "passed; Lake Local Development Code Signing"
+    }
+  ],
+  "uiFixtures": {
+    "method": "Real App rendered with fictional read-only snapshots and in-memory SSE; no models, hosts or Lake data used by the fixture",
+    "cases": [
+      "create K8s specialist",
+      "change executor to Codex"
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "widths": [
+      1110,
+      390
+    ],
+    "results": [
+      "only actual post-tool result in body",
+      "narration accessible from execution inspector at 13px secondary color; reply remains 15px",
+      "reply DOM identity preserved through completion, snapshot refresh and inspector toggling",
+      "Escape closes inspector; no horizontal page overflow",
+      "history restoration keeps final result and closed inspector"
+    ],
+    "screenshots": [
+      {
+        "path": "docs/validation/final-reply-details/codex-dark-1110.png",
+        "sha256": "772d2931da89fe4a81ea19d381501d18bf83d4305cef8761cec096f910a06251",
+        "bytes": 49688
+      },
+      {
+        "path": "docs/validation/final-reply-details/codex-dark-390.png",
+        "sha256": "9678547167294e971d9f34ef6500e19ab69814dae314aed8a716c70f2d2bcb19",
+        "bytes": 32246
+      },
+      {
+        "path": "docs/validation/final-reply-details/create-light-390.png",
+        "sha256": "89503b751550cd44b5e7b20d18ce701c4160e3695308b5a75e45e1dc38afb4b7",
+        "bytes": 35345
+      },
+      {
+        "path": "docs/validation/final-reply-details/create-light-details.png",
+        "sha256": "f053e25a86a5998a76c03404f440eb006e1f92758eddb8321c888edfa8c8d01d",
+        "bytes": 64894
+      }
+    ]
+  },
+  "installedDev": {
+    "gitHead": "0af409d552c2f4a87d59367e529a75d8a33e84fd",
+    "gitBranch": "codex/final-reply-details",
+    "version": "0.3.33",
+    "dirty": false,
+    "backendRuntime": "typescript",
+    "backendSHA256": "71eac334d72bd019176946dd99777c289371a952d9836c55eb9aac6e494f3814",
+    "uiSourceSHA256": {
+      "AIPanel.tsx": "18c2df96ac419defd85d53ac1df5ce7fa615e482436bc346c6f4524030f11b01",
+      "ThinkingTimeline.tsx": "6f91639248cabfd157f3d842a91fa5b736b2cfaee970b92c86f7ebf0ed31cc71",
+      "ReplyDuration.tsx": "91deab95bb740d6681a7af22dc273b34cf83492b55bdae392a1554a412adb4eb",
+      "conversation-progress-model.ts": "f6a472e18129d84872b54c704576feb40387e2d6bdb41beabfd427989429019d"
+    }
+  },
+  "devSmoke": {
+    "method": "Fresh temporary Dev project and real Pilot; submit one read-only message using the application messages API, observe installed React UI via SSE, open execution details and reload history",
+    "sent": true,
+    "status": "completed",
+    "toolCalls": [
+      {
+        "name": "list_specialists",
+        "status": "completed"
+      }
+    ],
+    "opened": {
+      "mainReplyCount": 1,
+      "mainText": [
+        "Pilot查询到本项目共有 0 位专员。"
+      ],
+      "processText": "我准备查询本项目的专员列表。",
+      "processFont": "13px"
+    },
+    "restored": {
+      "mainReplyCount": 1,
+      "narrationInBody": false,
+      "detailsOpen": false
+    },
+    "sourceUnchanged": true,
+    "temporaryProjectRecoverablyRemoved": true
+  },
+  "isolation": {
+    "appBundleId": "com.cleanlakes.lake.desktop.dev",
+    "home": "~/.lake-dev",
+    "backup": "APFS clones of installed Dev app and Dev home in private LakeDevBackups directory before installation",
+    "productionAppTouched": false,
+    "productionDataTouched": false
+  },
+  "scope": "Frontend projection only. No model loop, tools, permissions, stored transcript, task execution, or database migration changes. Actual Dev smoke used list_specialists; specialist creation and Codex selection were verified with render regressions and App fixtures.",
+  "rollback": "Restore the backed-up signed Dev app; this display-only change needs no data rollback."
+}
