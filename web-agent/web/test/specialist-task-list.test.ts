@@ -18,6 +18,21 @@ const source={projectId:'project',resources:[resource],resourceTree:tree};
 const participant=(roleId:string,state:TaskParticipant['state']='running'):TaskParticipant=>({roleId,roleName:'同名专员',workerId:`worker-${roleId}`,sessionId:`session-${roleId}`,state,contributed:false});
 const collaboration=(participants:TaskParticipant[]):TaskCollaboration=>({participants,state:'running',acceptanceState:'not_evaluated'});
 
+test('a paused channel keeps its task records without claiming normal navigation is an outage',()=>{
+ const channel={id:'channel',sessionId:'channel',projectId:'project',roleId:'ops',roleName:'服务器专员',revision:1,createdAt:at,messageRead:{cursor:'00000000000000000002',seenCursor:''}};
+ const rows=specialistTaskRows({...source,workers:[worker('saved','completed')]});
+ const render=(error='',loading=false)=>renderToStaticMarkup(createElement(SpecialistTaskList,{channel,rows,onTask(){},connected:false,loading,error,onRetry(){}}));
+ for(const loading of [false,true]){
+  const html=render('',loading);
+  assert.match(html,/data-task-id="task-saved"/,'cached history remains available');
+  assert.doesNotMatch(html,/specialist-page-error|连接已断开|正在重连|role="alert"/);
+  assert.match(html,/<button[^>]*disabled=""[^>]*>.*?标记已读/s,'read receipts stay disabled until this channel is ready');
+ }
+ const failed=render('任务读取失败（HTTP 503）');
+ assert.match(failed,/role="alert"/);assert.match(failed,/任务读取失败（HTTP 503）/);assert.match(failed,/>重新获取<\/button>/);
+ assert.match(failed,/data-task-id="task-saved"/,'a real fetch failure does not discard history');
+});
+
 test('single tasks reserve one stable identity without inventing collaborators',()=>{
  const own=worker('solo'),before=JSON.stringify(own),members=specialistTaskMembers(own,true);
  assert.deepEqual(members,[{key:'role:ops',roleId:'ops',name:own.roleName,moving:true}]);
@@ -149,5 +164,5 @@ test('explicit read controls follow the exact unread cursor and stay disabled of
 test('a disconnected specialist overview keeps its rows and suspends moving indicators',()=>{
  const rows=specialistTaskRows({...source,workers:[worker('a')]});
  const html=renderToStaticMarkup(createElement(SpecialistTaskList,{channel:{id:'channel',sessionId:'channel',projectId:'project',roleId:'ops',roleName:'服务器专员',revision:1,createdAt:at},rows,onTask:()=>{},connected:false}));
- assert.match(html,/正在重连/);assert.match(html,/data-session-id="session-a"/);assert.doesNotMatch(html,/activity-indicator/);
+ assert.doesNotMatch(html,/连接已断开|正在重连/);assert.match(html,/data-session-id="session-a"/);assert.doesNotMatch(html,/activity-indicator/);
 });

@@ -44,7 +44,8 @@ export function SpecialistTaskList({channel,rows,selectedSessionId,onTask,connec
    <label className="specialist-task-search"><Glyph name="search" size={15}/><input type="search" aria-label="搜索专员任务" placeholder="搜索任务…" value={query} onChange={event=>setQuery(event.target.value)}/></label>
   </div>
   {error&&<div className="specialist-page-error" role="alert"><Glyph name="alert" size={14}/><span>{error}</span>{onRetry&&<button type="button" onClick={onRetry}>重新获取</button>}</div>}
-  {!connected&&!error&&<p className="specialist-page-error" role="status">连接已断开，正在重连…</p>}
+  {/* App owns confirmed connection warnings. This flag also pauses actions
+      during ordinary navigation and window restoration, without an outage. */}
   {(routing||queued>0)&&<p className="specialist-task-admitting" role="status"><Glyph name={connected?'loader':'clock'} size={13}/>{routing?'正在分配新任务…':`${queued} 项请求等待分配`}</p>}
   <div className="specialist-task-panel" aria-busy={loading}>
    {visible.length>0?<ul className="specialist-task-rows" data-collaborative={rows.some(row=>row.members.length>1)||undefined} aria-label="专员任务列表">{visible.map(row=>{
