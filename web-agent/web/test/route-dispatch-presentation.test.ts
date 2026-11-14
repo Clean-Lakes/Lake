@@ -157,9 +157,10 @@ test('independent assignments share one final confirmation without combining lat
  assert.equal(pilotHandoffInterimIds([orderedTranscript(snapshot,cards,0)[0]!,{id:'before',at:at(1),card:cards[0]},reportBeforeFinal,...cards.slice(1).map(card=>({id:card.id,at:card.at,card}))]).size,1,'a role boundary protects the earlier packet while a later independent preamble can still retire');
 });
 
-test('ordinary assistants, clipped pages and pending user controls keep their original prose',()=>{
+test('ordinary tool replies also retire narration, while clipped pages and pending controls retain context',()=>{
  const snapshot=handoffSnapshot(handoff());
- assert.ok(mainReply(handoffHTML(snapshot,false)).includes('我安排重新检查运行时长。'));
+ assert.ok(!mainReply(handoffHTML(snapshot,false)).includes('我安排重新检查运行时长。'));
+ assert.ok(handoffHTML(snapshot,false).includes('我安排重新检查运行时长。'));
  snapshot.ai!.cardsOffset=1;
  assert.ok(mainReply(handoffHTML(snapshot)).includes('我安排重新检查运行时长。'));
  snapshot.ai!.cardsOffset=0;snapshot.ai!.question={} as NonNullable<NonNullable<SessionSnapshot['ai']>['question']>;
