@@ -30,11 +30,15 @@
 - UI（Ego Browser，隔离实例）：频道任务行显示"外部 Agent"徽标（浅色/深色/390px 窄窗）；设置 → Agent 页签网关卡片展示凭据、限定专员与完整命令（浅色/深色）。截图见 [external-specialist-mcp/](external-specialist-mcp/)。
 - 后端路由期间发现并修复两处公共指令 ID（消息 ID）解析遗漏（`0660e9ed`、`1b947a7e`），修复后全部复测通过。
 
+## 原生 Lake Dev 安装（2026-11-14 补充）
+
+经用户授权先合并 PR #231（squash `dd92cc65`，远端 topic 分支已清理、本地分支因 worktree 占用保留），功能分支合并 `origin/develop` 与已安装来源的原始提交以核验来源祖先，随后 `scripts/build_lake_desktop.sh --dev --install` 成功安装：installed gitHead `9639781a`、签名校验通过、用户 `~/.lake-dev` 数据完整保留（136 项资源与全部专员）。已安装 Dev 中验证网关卡片正常渲染与凭据创建入口（截图 [installed-dev-gateway.png](external-specialist-mcp/installed-dev-gateway.png)）。注意：工作区含用户遗留的未跟踪 `*. 2.md/2.ts` 文件，本次安装的来源记录 `dirty: true`——下次构建的基线推断会因此被拒，需先提交或清理。
+
 ## 未验证项
 
-- 原生 Lake Dev 组合安装（`build_lake_desktop.sh --dev --install`）与真实 Claude Code/Codex 客户端手工接入：本机 Codex 模型代理当前无响应，改用 DeepSeek 完成真实模型验证；桌面安装来源核对与窄窗目视仍在隔离 Web 实例完成，未做原生安装验收。
+- 真实 Claude Code/Codex 客户端手工接入（本机 Codex 模型代理当前无响应，真实模型改用 DeepSeek 完成）；研发人员实际接入属日常使用验证。
 - Windows/Linux 平台实测；`wait_instruction` 在长任务（>10 分钟）下的多轮轮询行为仅由单测与 600s 上限保证。
-- 未触发 CI、未合并 PR、未发布。
+- PR #232 尚未合并（未经授权）；未触发 CI、未发布。
 
 ## 回退
 
