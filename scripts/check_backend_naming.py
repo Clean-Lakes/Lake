@@ -16,7 +16,7 @@ def exception(path, line):
         return "original licenses"
     if path in AUDIT_FILES:
         return "audit pattern"
-    if path == ".gitignore" and line in {"/zcode-plugin-ops-data/", "/.zcodeignore", "/third_party/zcode/"}:
+    if path == ".gitignore" and line in {"/zcode-plugin-ops-data/", "/.zcodeignore", "/third_party/zcode/", "/.zcode/"}:
         return "legacy cache guard"
     if path == "docs/validation/lake-local-progress-inventory.json" and line.strip() == '".zcode/",':
         return "archived cache exclusion"

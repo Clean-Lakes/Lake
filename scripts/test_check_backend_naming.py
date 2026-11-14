@@ -24,6 +24,8 @@ class NamingBoundaryTest(unittest.TestCase):
         self.assertIsNone(exception("runtime/typescript/build.mjs", 'console.log("ZCode backend");'))
         self.assertIsNone(exception("docs/third-party-notices.md", "Lake uses the ZCode backend"))
         self.assertIsNone(exception(".gitignore", "/new-zcode-runtime/"))
+        self.assertEqual(exception(".gitignore", "/.zcode/"), "legacy cache guard")
+        self.assertIsNone(exception(".gitignore", "/.zcode/plans/"))
 
     def test_removed_external_brand_has_no_product_exception(self):
         line = "export const externalAgentNames:Record<ExternalAgentId,string>={'runtime-acp':'ZCode',codex:'Codex'};"

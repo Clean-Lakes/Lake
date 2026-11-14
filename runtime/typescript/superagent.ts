@@ -18,8 +18,9 @@ import { overlapsPrivateStorage } from "./local-shell-profile";
 import { setTimeout as delay } from "node:timers/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import type { ToolEntry, ToolExecutionContext } from "./sdk";
-import type { AIApproval, AIQuestionRequest, Message, SessionSnapshot, SpecialistChannelInfo,
+import type { AIApproval, AIQuestionRequest, GatewayInstructionStatus, Message, SessionSnapshot, SpecialistChannelInfo,
   SpecialistChannelPage, SuperProject, SuperTask, SuperWorker, SuperWorkspace } from "../../web-agent/shared/contracts";
+import type { GatewaySpecialistRef } from "../../web-agent/shared/contracts";
 import type { AgentHost, HostProfile, HostToolContext } from "./agent-host";
 import {chooseSpecialistExecution,specialistExecutionOptions,type SpecialistExecutionOption} from './specialist-execution';
 import { LakeAgents } from "./agent";
@@ -54,6 +55,7 @@ type Channel = { id: string; projectId: string; roleId: string; sessionId: strin
 type InputEvent = { id: string; projectId: string; sessionId: string; messageId: string; payload: string;
   selectedReferences?: MessageInput;
   ignoreMemory?: boolean;
+  external?: import('../../web-agent/shared/contracts').ExternalMessageOrigin;
   preferredRoleId?: string; explicitTaskId?: string; disposition: "pending" | "routed" | "blocked" | "stopped";
   receivedAt: string; revision: number; error?: string };
 type Worker = { inline?:boolean; preTaskModelRounds?:number; id: string; projectId: string; roleId: string; roleSnapshot: Role; sessionId: string; taskId: string;
@@ -546,8 +548,10 @@ export class LakeSuperagent implements AgentHost {
       ...(goal.status==="paused"&&goal.summary==="model_round_limit"&&{reason:"round_limit_removed",summary:"轮次限制已取消，可继续当前任务。"}) };
   }
   private workerView(worker: Worker,runs?:ExternalRun[]): SuperWorker {
+    const sourceEvent = worker.sourceEventId ? this.store.get<InputEvent>("superInputs", worker.sourceEventId) : undefined;
     return { id: worker.id, createdAt: worker.createdAt, roleId: worker.roleId, roleName: worker.roleSnapshot.name,
       sessionId: worker.sessionId, task: this.taskView(this.ledger.get(worker.taskId)), assignmentState: worker.state,
+      ...(sourceEvent?.external && { sourceExternal: true }),
       activity: this.workerActivity(worker),execution:this.workerExecution(worker,runs) };
   }
   private workerExecution(worker:Worker,externalRuns=this.store.list<ExternalRun>('acpRuns')):AgentExecutionSummary {
@@ -1173,7 +1177,7 @@ export class LakeSuperagent implements AgentHost {
     this.agents.memory?.captureUser(sessionId,accepted.id,channel.roleId,ignoreMemory);
     this.notify(sessionId,'specialist');this.schedule();return accepted;
   }
-  async send(sessionId: string, value: string, explicitTaskId?: string, ignoreMemory = false, selectedReferences?: MessageInput, assignment?:unknown) {
+  async send(sessionId: string, value: string, explicitTaskId?: string, ignoreMemory = false, selectedReferences?: MessageInput, assignment?:unknown, external?:import('../../web-agent/shared/contracts').ExternalMessageOrigin) {
     text(value, "message", 256000);
     await this.agents.prepareRedaction();
     const source = this.store.session(sessionId), project = this.store.get<SuperProject>("superProjects", source.projectId);
@@ -1182,6 +1186,7 @@ export class LakeSuperagent implements AgentHost {
     if(this.stoppingProjects.has(source.projectId))throw new HttpError(409,"当前项目正在停止活动任务，请稍后发送");
     if(assignment!==undefined){
       if(explicitTaskId)throw new HttpError(400,'分配执行 Agent 只用于新任务，不能切换已有任务');
+      if(external)throw new HttpError(400,'外部指令不能同时指定执行 Agent 分配');
       return this.assignAgent(sessionId,value,assignment,ignoreMemory,selectedReferences);
     }
     if (!project) return this.agents.send(sessionId, value, { ignoreMemory, messageInput: selectedReferences });
@@ -1194,10 +1199,11 @@ export class LakeSuperagent implements AgentHost {
         throw new HttpError(404, "Explicit task not found in this channel");
       if (preferredRoleId) this.routedGoal(source.projectId, explicitTaskId, preferredRoleId);
     }
-    const message = this.store.addMessage(sessionId, "user", this.agents.redact(value), {mentions: selectedReferences?.mentions});
+    const message = this.store.addMessage(sessionId, "user", this.agents.redact(value), {mentions: selectedReferences?.mentions, ...(external&&{external})});
     if (selectedReferences) this.store.put('messageInputs', message.id, {messageId: message.id, projectId: source.projectId, sessionId, ...selectedReferences});
     if (selectedReferences?.resourceIds.length) this.store.put('sessionResourceReferences', sessionId, {resourceIds: selectedReferences.resourceIds, sourceMessageId: message.id});
     const event: InputEvent = { id: id(), projectId: source.projectId, sessionId, messageId: message.id, payload: this.agents.redact(value),
+      ...(external&&{external}),
       preferredRoleId, explicitTaskId: explicitTaskId ?? (worker && !worker.inline ? this.ledger.get(worker.taskId).sharedTaskId ?? worker.taskId : undefined), disposition: "pending", receivedAt: message.createdAt, revision: 1, ignoreMemory, selectedReferences };
     this.store.put("superInputs", event.id, event); this.notify(sessionId, "message");
     this.agents.memory?.captureUser(sessionId, message.id, preferredRoleId, ignoreMemory);
@@ -2628,6 +2634,108 @@ export class LakeSuperagent implements AgentHost {
     if (typeof cursor !== "string" || cursor > current || cursor && !/^\d{20}$/.test(cursor)) throw new HttpError(409, "Completion cursor is not current");
     const previous = this.store.get<string>("superChannelReads", channel.id) ?? "";
     const saved = previous > cursor ? previous : cursor; this.store.put("superChannelReads", channel.id, saved); return { cursor: saved };
+  }
+  // ---- External agent gateway (MCP stdio clients) ----
+  // Instructions reuse the exact channel path of a human message: Pilot routes
+  // them, Lake Security and the operation-permission flow stay unchanged, and
+  // no tool call from outside can grant or bypass an approval.
+
+  gatewaySpecialists(projectId?: string): { specialists: GatewaySpecialistRef[] } {
+    const roles = this.store.list<Role>("superRoles").filter(role => !role.deletedAt && (!projectId || role.projectId === projectId));
+    return { specialists: roles.map(role => {
+      const channel = this.ensureChannel(role);
+      return { roleId: role.id, roleKey: role.roleKey, name: role.name, duties: role.duties, projectId: role.projectId,
+        sessionId: channel.sessionId, revision: role.revision, ...(role.execution && { execution: role.execution }) };
+    }) };
+  }
+  async gatewayInstruction(roleId: string, input: { text: unknown; clientRequestId?: unknown }): Promise<{ instructionId: string; eventId: string; roleId: string; sessionId: string; duplicate?: boolean }> {
+    const role = this.store.get<Role>("superRoles", roleId);
+    if (!role || role.deletedAt) throw new HttpError(404, "专员不存在或已删除");
+    this.store.project(role.projectId);
+    const instruction = text(input.text, "text", 16384);
+    const clientRequestId = input.clientRequestId === undefined ? undefined : (() => {
+      if (typeof input.clientRequestId !== "string" || !/^[A-Za-z0-9_-]{8,128}$/.test(input.clientRequestId))
+        throw new HttpError(400, "clientRequestId 须为 8–128 位字母、数字、下划线或连字符");
+      return input.clientRequestId;
+    })();
+    const key = clientRequestId ? digest(["gatewayInstruction", role.projectId, roleId, clientRequestId]) : undefined;
+    const hash = digest({ projectId: role.projectId, roleId, instruction });
+    const receipt = () => {
+      const prior = key && this.store.get<{ eventId: string; messageId: string; hash: string }>("superGatewayInstructions", key);
+      if (!prior) return;
+      if (prior.hash !== hash) throw new HttpError(409, "同一 clientRequestId 的指令内容已变化；请改用新的幂等键发送新指令");
+      return { instructionId: prior.messageId, eventId: prior.eventId, roleId: role.id, sessionId: this.ensureChannel(role).sessionId, duplicate: true as const };
+    };
+    const duplicate = receipt(); if (duplicate) return duplicate;
+    const channel = this.ensureChannel(role);
+    const message = await this.send(channel.sessionId, instruction, undefined, undefined, undefined, undefined, { kind: "mcp" }) as { id: string };
+    const event = this.store.list<InputEvent>("superInputs").find(candidate => candidate.messageId === message.id)!;
+    if (key) this.store.put("superGatewayInstructions", key, { eventId: event.id, messageId: message.id, hash });
+    return { instructionId: message.id, eventId: event.id, roleId: role.id, sessionId: channel.sessionId };
+  }
+  async instructionStatus(eventId: unknown, waitSeconds = 0): Promise<GatewayInstructionStatus> {
+    // The public instruction id is the channel message id; the event id is
+    // also accepted so internal callers and tests can use either handle.
+    const event = typeof eventId === "string"
+      ? this.store.get<InputEvent>("superInputs", eventId) ??
+        this.store.list<InputEvent>("superInputs").find(candidate => candidate.external && candidate.messageId === eventId)
+      : undefined;
+    if (!event?.external) throw new HttpError(404, "外部指令不存在");
+    const deadline = Date.now() + Math.max(0, Math.min(60, waitSeconds)) * 1000;
+    for (; ;) {
+      const view = this.instructionView(event);
+      if (["replied", "failed", "blocked", "stopped", "waiting_approval", "waiting_input"].includes(view.state) || Date.now() >= deadline) return view;
+      await delay(2000);
+    }
+  }
+  private instructionView(event: InputEvent): GatewayInstructionStatus {
+    const message = this.store.get<Message>("messages", event.messageId)!;
+    const role = this.role(event.projectId, event.preferredRoleId!, true);
+    const project = this.store.require<SuperProject>("superProjects", event.projectId);
+    const channel = this.store.get<Channel>("superChannels", role.id);
+    const decisions = this.store.list<Decision>("superDecisions").filter(decision => decision.eventId === event.id);
+    const workers = this.store.list<Worker>("superWorkers").filter(worker => worker.projectId === event.projectId &&
+      (worker.sourceEventId === event.id || decisions.some(decision => decision.workerId === worker.id)));
+    const taskIds = new Set(workers.map(worker => worker.taskId));
+    const tasks = workers.map(worker => {
+      const goal = this.ledger.get(worker.taskId);
+      const question = [...this.interactions.values()].some(entry => entry.workerId === worker.id && entry.kind === "question");
+      const waiting = this.pendingInteraction(worker.sessionId);
+      return { taskId: worker.taskId, title: clip(this.agents.redact(goal.title), 512), state: worker.state, goalState: goal.status,
+        ...(waiting && !question && { waitingApproval: true }), ...(question && { waitingInput: true }),
+        ...(!["completed", "failed", "cancelled"].includes(goal.status) && { activity: this.workerActivity(worker) }),
+        ...(goal.summary && { summary: clip(this.agents.redact(goal.summary), 2048) }) };
+    });
+    const replies: GatewayInstructionStatus["replies"] = channel ? this.store.messages(channel.sessionId)
+      .filter(reply => reply.createdAt >= message.createdAt && reply.id !== event.messageId &&
+        reply.author?.kind === "specialist" && reply.author.taskId && taskIds.has(reply.author.taskId))
+      .map(reply => ({ text: reply.text, taskId: reply.author!.taskId, createdAt: reply.createdAt, from: "specialist" as const })) : [];
+    // A stopped or failed task still delivers its signed notice into the
+    // channel. It informs the caller but never counts as a fulfilled reply.
+    const cancelled = tasks.some(task => task.goalState === "cancelled");
+    const failedTasks = tasks.some(task => task.goalState === "failed");
+    const fulfilled = replies.filter(reply => {
+      const task = tasks.find(candidate => candidate.taskId === reply.taskId);
+      return !task || !["cancelled", "failed"].includes(task.goalState);
+    });
+    // A conversational Pilot answer (route_work respond/ask) lands in the
+    // router session right after the committed decision of the same turn.
+    if (decisions.some(decision => ["respond", "ask"].includes(decision.action))) {
+      const answer = this.store.messages(project.routerSessionId).find(candidate => candidate.role === "assistant" &&
+        !candidate.author && !candidate.dispatch && !candidate.conversation && candidate.createdAt >= message.createdAt &&
+        candidate.text.trim());
+      if (answer) replies.push({ text: answer.text, createdAt: answer.createdAt, from: "pilot" });
+    }
+    const waiting = tasks.find(task => task.waitingInput) ?? tasks.find(task => task.waitingApproval);
+    const running = tasks.some(task => ["queued", "active"].includes(task.state) || task.activity);
+    const state: GatewayInstructionStatus["state"] =
+      event.disposition === "stopped" ? "stopped" : event.disposition === "blocked" ? "failed" :
+      fulfilled.length ? "replied" : cancelled && !running ? "stopped" : failedTasks && !running ? "failed" :
+      waiting?.waitingInput ? "waiting_input" : waiting?.waitingApproval ? "waiting_approval" :
+      running ? "running" : decisions.length ? "routed" : "routing";
+    return { instructionId: event.messageId, eventId: event.id, sessionId: event.sessionId, roleId: role.id, roleName: role.name,
+      projectId: event.projectId, state, disposition: event.disposition, tasks, replies,
+      ...(event.disposition === "blocked" && event.error && { error: this.agents.redact(event.error) }) };
   }
   async close() {
     this.closed = true; clearInterval(this.heartbeat); clearInterval(this.watchdogTimer);
