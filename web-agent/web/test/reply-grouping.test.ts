@@ -84,8 +84,11 @@ test('real errors, confirmation and specialist authors still separate visible Pi
   const snapshot={session:{id:'pilot'},resources:[],actions:[],messages:[{id:'user',sessionId:'pilot',role:'user',text:'检查服务器',createdAt:at(0)},...(boundary.message?[boundary.message]:[])],
    ai:{session:'pilot',status:'completed',cardsOffset:0,cards:[prose('first',1).card!,...(boundary.card?[boundary.card]:[]),prose('last',4).card!]}} as SessionSnapshot;
   const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:'Pilot',pilot:true},onSpecialist(){}}));
-  assert.equal((html.match(/<strong>Pilot<\/strong>/g)??[]).length,2,boundary.id);
+  const narrationRetired=boundary.card?.type==='operation'&&boundary.card.title!=='ask_user_question';
+  assert.equal((html.match(/<strong>Pilot<\/strong>/g)??[]).length,narrationRetired?1:2,boundary.id);
   assert.ok(!html.includes('data-conversation-entry="last" class="ai-response is-reply-continuation"'),boundary.id);
+  if(narrationRetired)assert.match(html,/data-conversation-entry="first" class="turn-process-prose reply-process-text"/);
+  if(boundary.card?.type==='operation'&&boundary.card.status!=='completed')assert.ok(html.includes('thinking-timeline'),'real operation attention remains available');
  }
 });
 test('streaming and restored Pilot replies group without changing messages or specialist navigation',()=>{
