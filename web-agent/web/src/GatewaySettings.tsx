@@ -41,8 +41,8 @@ export function GatewaySettings({onBusyChange}:{onBusyChange:(value:boolean)=>vo
     {loading&&<p role="status">正在读取网关凭据…</p>}
     {!loading&&<div className="gateway-create">
       <label className="field-label">凭据名称<input spellCheck={false} autoComplete="off" placeholder="例如：研发 Claude Code" value={name} maxLength={120} onChange={event=>setName(event.target.value)}/></label>
-      <AppSelect label="允许的专员" value={role} onChange={event=>setRole(event.target.value)}>{<option value="">全部专员</option>}{specialists.map(entry=><option key={entry.roleId} value={entry.roleId}>{entry.name} · {entry.roleKey}</option>)}</AppSelect>
-      <button type="button" className="button" disabled={!!busy||!name.trim()} onClick={()=>void create()}>{busy==='create'?'创建中…':'创建凭据'}</button>
+      <label className="field-label gateway-role-field">允许的专员<AppSelect value={role} disabled={!!busy} onChange={event=>setRole(event.target.value)}>{<option value="">全部专员</option>}{specialists.map(entry=><option key={entry.roleId} value={entry.roleId}>{entry.name}{entry.roleKey&&entry.roleKey!==entry.name?` · ${entry.roleKey}`:''}</option>)}</AppSelect></label>
+      <button type="button" className="button primary" disabled={!!busy||!name.trim()} onClick={()=>void create()}><Glyph name={busy==='create'?'loader':'plus'} size={14}/>{busy==='create'?'创建中…':'创建凭据'}</button>
     </div>}
     {created&&<div className="gateway-created" role="status">
       <p><strong>{created.name}</strong> 的令牌（只显示这一次，请立即保存）：<code>{created.token}</code></p>

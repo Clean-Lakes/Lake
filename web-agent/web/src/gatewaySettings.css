@@ -1,7 +1,9 @@
 /* External agent gateway (MCP) settings. Reuses the external-agent panel and
  * settings tokens; only the token rows need their own layout. */
 .gateway-create { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-top:14px; }
-.gateway-create .field-label { flex:1; min-width:220px; }
+.gateway-create > .field-label:first-child { flex:1; min-width:220px; }
+.gateway-create .gateway-role-field { width:220px; flex-shrink:0; }
+.gateway-create .button { flex-shrink:0; display:inline-flex; align-items:center; gap:6px; }
 .gateway-created { margin-top:14px; border:1px solid var(--border); border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); padding:12px 14px; background:var(--surface); }
 .gateway-created p { margin:0 0 8px; }
 .gateway-created code { font-size:12px; word-break:break-all; }
