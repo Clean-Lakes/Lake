@@ -7,6 +7,7 @@ import {ReplyDuration,type ReplyDurationProps} from '../src/ReplyDuration';
 import {SpecialistAvatarProvider} from '../src/SuperRoleAvatar';
 import {AITranscript} from '../src/AIPanel';
 import {PilotSpecialistReplyView} from '../src/PilotSpecialistConversation';
+import {ReplyIdentity} from '../src/ReplyIdentity';
 import {pilotDispatchRows} from '../src/pilotSpecialistReplies';
 import {PilotConversationProgress} from '../src/PilotConversationProgress';
 import {allowsAnimalThinking,turnStatus} from '../src/turnStatus';
@@ -124,6 +125,58 @@ test('Pilot specialist waiting slot uses border animation only for exact thinkin
  assert.doesNotMatch(html(),/animal-thinking-bubble/);assert.match(html(),/正在压缩上下文/);
  snapshot.ai!.cards=[{id:'reply',type:'message',status:'running',content:'这是本次检查结果。',at,data:{root_turn_id:'root'}}];
  assert.match(html(),/这是本次检查结果。/);assert.doesNotMatch(html(),/animal-thinking-bubble|正在歪头推敲中/);
+});
+
+test('Pilot thinking unifies the exact specialist entry, Agent logo and a single 28px character',()=>{
+ for(const backend of [{kind:'native'},{kind:'acp',agent:'codex'}] as const){
+  const row=specialistRow();
+  row.author.name='负责基础设施与数据库检查的长期专员'.repeat(3);
+  row.author.execution=backend;
+  const onSpecialist=()=>{};
+  const html=renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row,onSpecialist}));
+  assert.match(html,/<section[^>]*is-animal-thinking[^>]*><div class="animal-thinking-bubble reply-process-text has-identity"/,'there is no separate identity header or avatar column');
+  assert.equal((html.match(/class="animal-thinking-surface"/g)??[]).length,1);
+  assert.equal((html.match(/class="response-identity/g)??[]).length,1);
+  assert.equal((html.match(/data-avatar="owl" width="28" height="28"/g)??[]).length,1);
+  assert.doesNotMatch(html,/response-avatar|turn-activity-mark/);
+  assert.match(html,/<button type="button" class="response-author"/);
+  assert.ok(html.includes(`<strong>${row.author.name}</strong>`),'the full long name remains available to layout and accessible naming');
+  assert.ok(html.includes(`aria-label="与${row.author.name}继续沟通 · Agent 类型：${backend.kind==='native'?'Lake':'Codex'}"`));
+  assert.equal((html.match(/data-agent-type=/g)??[]).length,1);
+  assert.ok(html.includes(`data-agent-type="${backend.kind==='native'?'native':'codex'}"`),'branding follows the real execution binding');
+  assert.ok(html.indexOf('<button')<html.indexOf('class="animal-thinking-label"'));
+  const live=html.match(/<span class="animal-thinking-label" role="status" aria-live="polite" aria-atomic="true">([^<]+)<\/span>/);
+  assert.equal(live?.[1],'正在歪头推敲中','the status live region excludes the identity button and logo');
+  assert.equal((html.match(/role="status"/g)??[]).length,1);
+ }
+});
+
+test('the unified identity retains the native button and exact specialist navigation target',()=>{
+ const row=specialistRow();let selected:typeof row.author|undefined;
+ const buttonRef=()=>{};
+ const identity=ReplyIdentity({identity:{name:'Pilot',pilot:true},author:row.author,buttonRef,hideAvatar:true,onSpecialist:author=>{selected=author;}})!;
+ const button=identity.props.children;
+ assert.equal(button.type,'button');assert.equal(button.props.type,'button');
+ assert.equal(button.props.ref,buttonRef,'focus continuity tracks the actual navigation button');
+ assert.equal(button.props.disabled,undefined);assert.equal(button.props.tabIndex,undefined,'native keyboard activation stays enabled');
+ button.props.onClick();
+ assert.equal(selected,row.author,'navigation retains the original worker, task and channel identity');
+});
+
+test('tool, wait, reconnect, settled and actual prose restore the original separate identity',()=>{
+ const row=specialistRow();
+ const snapshot={session:{id:'worker',projectId:'project'},superagent:{roleId:row.worker.roleId,task:row.worker.task},cursor:1,ai:view({rootTurnId:'root'})} as SessionSnapshot;
+ const renderReply=(available=true)=>renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row,snapshot,available,onSpecialist(){}}));
+ const assertSeparate=(html:string)=>{
+  assert.match(html,/^<section[^>]*><div class="response-identity">/);
+  assert.equal((html.match(/class="response-avatar"/g)??[]).length,1);
+  assert.doesNotMatch(html,/animal-thinking-bubble|has-identity/);
+ };
+ for(const phase of ['tool','queued','waiting_approval','waiting_input','waiting_external'] as const){row.activity.phase=phase;assertSeparate(renderReply());}
+ row.activity.phase='thinking';assertSeparate(renderReply(false));
+ snapshot.ai!.status='completed';assertSeparate(renderReply());
+ snapshot.ai!.status='running';snapshot.ai!.cards=[{id:'reply',type:'message',status:'running',content:'实际正文接替思考气泡。',at,data:{root_turn_id:'root'}}];
+ const prose=renderReply();assertSeparate(prose);assert.match(prose,/实际正文接替思考气泡/);
 });
 
 test('discussion member running is not enough evidence to invent animal thinking',()=>{

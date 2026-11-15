@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react';
+import {useCallback,useEffect,useLayoutEffect,useState} from 'react';
 import type {SessionEvent,SessionSnapshot,SpecialistReplyAuthor} from '../../shared/contracts';
 import {api} from './api';
 import {applyLiveText} from './liveTextUpdates';
@@ -13,6 +13,7 @@ import {PlanReference} from './PlanMode';
 import {AnimalThinkingBubble} from './AnimalThinkingBubble';
 import {allowsAnimalThinking,turnStatus} from './turnStatus';
 import {conversationActivity} from './superAgentPresentation';
+import {createReplyIdentityFocus} from './replyIdentityFocus';
 
 export async function loadPilotSpecialistSnapshot(row:PilotSpecialistRow,signal?:AbortSignal){
  // Task-scoped inspector snapshots replace the SDK invocation root with the
@@ -75,6 +76,10 @@ function PilotSpecialistReply({row,onSpecialist,connected}:{row:PilotSpecialistR
 
 /** Public reply presentation is separate from the exact-worker live subscription. */
 export function PilotSpecialistReplyView({row,snapshot,available=true,visible=true,onSpecialist}:{row:PilotSpecialistRow;snapshot?:SessionSnapshot;available?:boolean;visible?:boolean;onSpecialist?:(author:SpecialistReplyAuthor)=>void}){
+ const binding=JSON.stringify([row.projectId,row.worker.id,row.worker.roleId,row.worker.sessionId,row.worker.task.taskId,row.worker.task.executionGoalId,row.sourceMessageId]);
+ const [identityFocus]=useState(createReplyIdentityFocus);
+ const identityButtonRef=useCallback((button:HTMLButtonElement|null)=>identityFocus.setButton(binding,button),[identityFocus,binding]);
+ useLayoutEffect(()=>identityFocus.finishCommit(binding));
  const entry=pilotSpecialistReply(row,snapshot);
  const status=snapshot?.ai?turnStatus(undefined,snapshot.ai,snapshot.ai.cards,snapshot.ai.turnStartedAt??row.sourceCreatedAt,Date.now()):undefined;
  const moving=available&&['thinking','tool'].includes(row.activity.phase)&&(!snapshot||conversationActivity(snapshot.ai)==='running')&&(!status||!['waiting','settled'].includes(status.phase));
@@ -84,9 +89,10 @@ export function PilotSpecialistReplyView({row,snapshot,available=true,visible=tr
  const animalThinking=moving&&row.activity.phase==='thinking'&&allowsAnimalThinking(snapshot?.ai)&&(!status||status.phase==='thinking')&&!text&&projected?.card?.type!=='plan_reference';
  const snapshotLabel=status&&(status.phase==='waiting'||status.phase==='settled'||row.activity.phase==='thinking'&&status.phase!=='thinking')?status.state:undefined;
  const label=available?snapshotLabel??row.activity.label:'进度暂未更新，正在重连';
- return <section className="ai-chat-message ai-role-assistant pilot-specialist-reply" data-worker-id={row.worker.id} data-task-id={row.worker.task.taskId} data-phase={row.activity.phase} aria-label={`${row.author.name}的回复`}>
-  <ReplyIdentity identity={{name:'Pilot',pilot:true}} author={row.author} authorMotion={moving&&!animalThinking?'working':'still'} onSpecialist={onSpecialist}/>
-  {projected?.card?.type==='plan_reference'?<PlanReference state={(projected.card.data as {state:'saved'|'writing'|'incomplete'}).state}/>:text?<div className="ai-card ai-message"><AssistantMarkdown>{text}</AssistantMarkdown></div>:animalThinking?<AnimalThinkingBubble name={row.author.name} roleId={row.author.roleId} avatarId={row.author.avatarId} active={moving&&visible}/>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
+ const identity=<ReplyIdentity identity={{name:'Pilot',pilot:true}} author={row.author} buttonRef={identityButtonRef} hideAvatar={animalThinking} authorMotion={moving&&!animalThinking?'working':'still'} onSpecialist={onSpecialist}/>;
+ return <section className={`ai-chat-message ai-role-assistant pilot-specialist-reply${animalThinking?' is-animal-thinking':''}`} data-worker-id={row.worker.id} data-task-id={row.worker.task.taskId} data-phase={row.activity.phase} aria-label={`${row.author.name}的回复`}>
+  {!animalThinking&&identity}
+  {projected?.card?.type==='plan_reference'?<PlanReference state={(projected.card.data as {state:'saved'|'writing'|'incomplete'}).state}/>:text?<div className="ai-card ai-message"><AssistantMarkdown>{text}</AssistantMarkdown></div>:animalThinking?<AnimalThinkingBubble name={row.author.name} roleId={row.author.roleId} avatarId={row.author.avatarId} active={moving&&visible} identity={identity}/>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
   {text&&!available&&<small className="pilot-specialist-connection" role="status">进度暂未更新，正在重连</small>}
  </section>;
 }
