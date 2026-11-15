@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-15
 last_updated: 2026-11-15
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [refactor, superagent, mcp, channels]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
 用户选定含「消息与任务」的接入渠道渲染图，并授权功能、UI、回归测试及 Lake Dev 验证。MCP 接入作为 Super Agent 的消息入口，连接绑定项目，默认由 Pilot 路由；来源消息显示现有 Task/Worker 的进展与报告。继续使用已有 `codex/external-specialist-mcp -> develop` PR，不合并或发布。
 
@@ -56,8 +56,8 @@ tags: [refactor, superagent, mcp, channels]
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-007 | 运行 TS、HTTP、前端回归和构建、架构边界检查；覆盖原七项可靠性回归。 | true | 2026-11-15 |
-| TASK-008 | `scripts/build_lake_desktop.sh --dev --install` 安装签名 Dev，以隔离 Home 和本地模型夹具实测官方 MCP SDK、消息/多任务/回复、接入管理及 UI。 | false | — |
-| TASK-009 | 更新 `agent.md`、`docs/lake-pilot.md`、验证报告与 PR 描述，记录准确 tested SHA、限制和截图，恢复日常 Dev 项目。 | false | — |
+| TASK-008 | `scripts/build_lake_desktop.sh --dev --install` 安装签名 Dev，以隔离 Home 和本地模型夹具实测官方 MCP SDK、消息/多任务/回复、接入管理及 UI。 | true | 2026-11-15 |
+| TASK-009 | 更新 `agent.md`、`docs/lake-pilot.md`、验证报告与 PR 描述，记录准确 tested SHA、限制和截图，恢复日常 Dev 项目。 | true | 2026-11-15 |
 
 ## 3. Alternatives
 
