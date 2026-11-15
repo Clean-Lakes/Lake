@@ -67,6 +67,7 @@ import {SidebarUtilities} from "./SidebarUtilities";
 import { ActivityIndicator } from "./ActivityIndicator";
 import { PendingMessages } from "./PendingMessages";
 import { ModelSettings } from "./ModelSettings";
+import {gatewayTaskMatches,type GatewayTaskTarget} from "./GatewaySettings";
 import { readImageSelection } from "./imageAttachments";
 import {clipboardFiles,partitionAttachments,attachmentCountLimit,fileSize} from "./fileAttachments";
 import { ResourceImport } from "./ResourceImport";
@@ -754,7 +755,21 @@ function AppContent() {
   const updateRoleTasks=useCallback((id:string,workers:SuperWorker[],page:SpecialistChannelPage)=>setRoleTasks({sessionId:id,workers,page}),[]);
   const roleWorkers=roleTasks?.sessionId===sessionId?roleTasks.workers:[];
   const roleInspectionRequest=useRef(0);
+  const [gatewayInspection,setGatewayInspection]=useState<SessionSnapshot|null>(null);
   useEffect(()=>{roleInspectionRequest.current++;setRoleInspection(null);},[sessionId]);
+  const inspectGatewayTask=async(target:GatewayTaskTarget)=>{
+    const next=await api.snapshot(target.sessionId,undefined,target.taskId);
+    if(!gatewayTaskMatches(next,target))throw new Error('任务的项目或执行身份已变化，请刷新消息后重试');
+    await refreshCatalog();
+    setSidebarProjectId(target.projectId);setSettingsOpen(false);
+    navigate({sessionId:target.sessionId,resourceId:null});setGatewayInspection(next);
+  };
+  useEffect(()=>{
+    if(!gatewayInspection||gatewayInspection.session.id!==sessionId||activeSnapshot?.session.id!==sessionId)return;
+    setRoleInspection(gatewayInspection);
+    const tab=gatewayInspection.superagent?.task.summary?'plan':'execution';
+    inspector.open({...latestInspectorSelection(gatewayInspection,tab),followLatest:false});setGatewayInspection(null);
+  },[gatewayInspection,sessionId,activeSnapshot?.session.id,inspector.open]);
   const inspectedSnapshot=roleInspection??activeSnapshot;
   const inspectRoleTask=async(target:string,selectedWorker?:SuperWorker)=>{
     const expected=selectedWorker??roleWorkers.find(worker=>worker.sessionId===target);
@@ -1698,7 +1713,7 @@ function AppContent() {
     {bulkConfirmation && <BulkNavigationDelete targets={bulkConfirmation} onClose={() => setBulkConfirmation(null)} onProcessed={bulkProcessed} onBusy={busy => setPendingOperation(current => busy ? "bulk-delete" : current === "bulk-delete" ? "" : current)}/>}
     {navigationDelete && <NavigationDelete target={navigationDelete} onClose={()=>setNavigationDelete(null)} onDeleted={async()=>{setResourceTerminalMenu(null);if(navigationDelete.kind==="project" && selectedSession?.projectId===navigationDelete.id)navigate({sessionId:null,resourceId:null});else if(navigationDelete.kind==="resource"&&route.resourceId===navigationDelete.id)navigate({sessionId:route.sessionId,resourceId:null});await refreshCatalog();if(navigationDelete.kind!=="project")await refreshCurrent();}}/>}
     {trashOpen && <NavigationTrash onClose={()=>setTrashOpen(false)} onRestored={async()=>{await refreshCatalog();await refreshCurrent();}}/>}
-    {settingsOpen && <ModelSettings watchdogEnabled={bootstrap?.backendRuntime==='typescript'} memoryEngine={bootstrap?.memoryEngine} initialTab={settingsInitialTab} onClose={() => setSettingsOpen(false)} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut} onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {setSettingsOpen(false);setAgentOptionsOpen(true);} : undefined} onProjectMemory={selectedProjectId ? () => {const project=projectList.find(p=>p.id===selectedProjectId);if(project){setSettingsOpen(false);setMemoryProject(project);}} : undefined} projectId={selectedProjectId??sidebarProject?.id} projectName={projectList.find(project=>project.id===(selectedProjectId??sidebarProject?.id))?.name} ignoreProjectMemory={ignoreProjectMemory} onIgnoreProjectMemoryChange={setIgnoreProjectMemory}/>}
+    {settingsOpen && <ModelSettings onGatewayTask={inspectGatewayTask} watchdogEnabled={bootstrap?.backendRuntime==='typescript'} memoryEngine={bootstrap?.memoryEngine} initialTab={settingsInitialTab} onClose={() => setSettingsOpen(false)} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut} onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {setSettingsOpen(false);setAgentOptionsOpen(true);} : undefined} onProjectMemory={selectedProjectId ? () => {const project=projectList.find(p=>p.id===selectedProjectId);if(project){setSettingsOpen(false);setMemoryProject(project);}} : undefined} projectId={selectedProjectId??sidebarProject?.id} projectName={projectList.find(project=>project.id===(selectedProjectId??sidebarProject?.id))?.name} ignoreProjectMemory={ignoreProjectMemory} onIgnoreProjectMemoryChange={setIgnoreProjectMemory}/>}
     {importProject && <ResourceImport project={importProject} hexhub={importHexhub} refresh={refreshCatalog} onClose={() => { setImportProject(null); setImportHexhub(false); }} onImported={notify}/>}
     {sshProject && <div className="modal-scrim"><div className="modal resource-create-dialog" role="dialog" aria-modal="true" aria-labelledby="ssh-title" onKeyDown={event => {
       if (event.key === "Escape" && !sshBusy) {event.stopPropagation();setSshProject(null);setSshParent(null);setSshDraft(emptySSH());setServiceSettings(emptyServiceDraft());}

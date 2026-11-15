@@ -1,0 +1,14 @@
+{
+  "sourceSHA": "97a3bd6de1d516bfc3737d7e2857464a75dd5531",
+  "reverse": {
+    "tag": "SUMMARY",
+    "text": "连接配置与管理"
+  },
+  "forward": "关闭设置",
+  "expanded": "关闭设置",
+  "escape": {
+    "dialog": true,
+    "listbox": false,
+    "routing": "Pilot 自动路由"
+  }
+}
