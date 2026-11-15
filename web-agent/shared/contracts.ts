@@ -62,7 +62,7 @@ export type MessageMention = {kind: "resource" | "skill" | "mcp" | "role"; id: s
 
 export type SpecialistReplyAuthor = {kind:'specialist';name:string;roleId?:string;workerId:string;sessionId:string;taskId?:string;conversationId?:string;channelSessionId?:string;rootTurnId?:string;execution?:AgentBackendRef;avatarId?:LakeAvatarName};
 /** An instruction that entered Lake from an external developer agent client. */
-export type ExternalMessageOrigin = {kind:'mcp'};
+export type ExternalMessageOrigin = {kind:'mcp';connectionId?:string;connectionName?:string;threadId?:string;threadTitle?:string;clientMessageId?:string};
 export type Message = {
   conversation?: {id:string;sourceMessageId:string;kind:'reply'|'summary'|'notice';summaryRequested?:boolean};
   jointAcceptance?: {taskId:string;receiptId:string};
@@ -406,14 +406,21 @@ export type SpecialistConversation = {
 export type SuperWorkspace = {pilotMessageRead?:ConversationReadState;active:boolean;project:SuperProject;workers:SuperWorker[];channels?:SpecialistChannelInfo[];conversations?:SpecialistConversation[];cursor?:number};
 export type GatewayTokenView = {id:string;name:string;roles?:string[];createdAt:string};
 export type GatewayCommand = {program:string;script?:string;home:string;data?:string};
+export type GatewayRouting = {mode:'pilot'} | {mode:'specialist';roleId:string};
+export type GatewayConnection = {id:string;name:string;projectId:string;enabled:boolean;routing:GatewayRouting;createdAt:string;updatedAt:string;lastReceivedAt?:string};
+export type GatewayConnections = {connections:GatewayConnection[];command:GatewayCommand;projects:{id:string;name:string}[];specialists:GatewaySpecialistRef[];legacyTokens:GatewayTokenView[]};
+export type GatewayMessageInput = {text:string;threadId:string;threadTitle?:string;clientMessageId:string;replyTo?:string};
+export type GatewayMessage = GatewayInstructionStatus & {text:string;createdAt:string;connectionId:string;threadId:string;threadTitle?:string;replyTo?:string};
+export type GatewayMessagePage = {messages:GatewayMessage[];nextCursor?:string};
 export type GatewaySpecialistRef = {roleId:string;roleKey:string;name:string;duties:string;projectId:string;sessionId:string;revision:number;execution?:AgentBackendRef};
-export type GatewayInstructionTask = {taskId:string;title:string;state:string;goalState:string;waitingApproval?:boolean;waitingInput?:boolean;activity?:SuperWorkerActivity;summary?:string};
+export type GatewayInstructionTask = {taskId:string;title:string;state:string;goalState:string;sessionId?:string;roleId?:string;roleName?:string;waitingApproval?:boolean;waitingInput?:boolean;activity?:SuperWorkerActivity;summary?:string};
 export type GatewayInstructionStatus = {
-  instructionId:string;eventId:string;sessionId:string;roleId:string;roleName:string;projectId:string;
+  instructionId:string;eventId:string;sessionId:string;roleId?:string;roleName?:string;projectId:string;
   state:'routing'|'routed'|'running'|'waiting_approval'|'waiting_input'|'replied'|'failed'|'blocked'|'stopped';
   disposition:'pending'|'routed'|'blocked'|'stopped';
   tasks:GatewayInstructionTask[];
-  replies:{text:string;taskId?:string;createdAt:string;from:'specialist'|'pilot'}[];
+  conversations?:SpecialistConversation[];
+  replies:{text:string;taskId?:string;conversationId?:string;roleName?:string;createdAt:string;from:'specialist'|'pilot'}[];
   error?:string;
 };
 export type SRESnapshot = {featureVersion:number;enabled:boolean;tasks:SRETask[];pilot?:PilotSettings};

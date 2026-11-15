@@ -7,6 +7,7 @@ import { LakeGateway } from "./gateway";
 import type { GatewayInstructionStatus } from "../../web-agent/shared/contracts";
 
 export type SpecialistMcpOptions = { home: string; data?: string; role?: string; tokenId?: string; /** Test seam: an already-linked transport instead of stdio. */ transport?: unknown };
+export type ChannelMcpOptions = {home: string; data?: string; connectionId: string; transport?: unknown};
 export type SpecialistTool = { name: string; description: string; inputSchema: z.ZodTypeAny; handler: (args: any, extra?: unknown) => Promise<unknown> };
 
 const pending = (state: GatewayInstructionStatus["state"]) => ["routing", "routed", "running"].includes(state);
@@ -31,11 +32,8 @@ export function backendEndpoint(home: string, dataDir?: string): { origin: strin
 /** The tool surface offered to an external developer agent. Instructions reuse
  * the exact channel path of a human message, so Pilot routing, Lake Security
  * and the approval flow stay unchanged; no tool call can grant permission. */
-export function specialistTools(options: SpecialistMcpOptions): SpecialistTool[] {
-  const gateway = new LakeGateway(options.home);
-  const { token } = gateway.resolveToken(options.tokenId);
-  const role = options.role?.trim();
-  const call = async (path: string, init?: RequestInit, timeoutMs = 120000): Promise<any> => {
+function backendCall(options: {home:string; data?:string}, token: string) {
+  return async (path: string, init?: RequestInit, timeoutMs = 120000): Promise<any> => {
     const { origin } = backendEndpoint(options.home, options.data);
     const signal = AbortSignal.timeout(Math.max(1, Math.ceil(timeoutMs)));
     let response: Response;
@@ -54,6 +52,24 @@ export function specialistTools(options: SpecialistMcpOptions): SpecialistTool[]
     if (!response.ok) throw new Error(String((body as any).error ?? `Lake 网关返回 HTTP ${response.status}`));
     return body;
   };
+}
+async function waitStatus(call: ReturnType<typeof backendCall>, path: string, timeoutSeconds = 120) {
+  const deadline = Date.now() + Math.min(600, Math.max(1, Math.floor(timeoutSeconds))) * 1000;
+  // The last value must come from the backend, including when the final body stalls.
+  let status = await call(path, undefined, deadline - Date.now()) as GatewayInstructionStatus;
+  while (pending(status.state) && Date.now() < deadline) {
+    const remaining = deadline - Date.now();
+    try { status = await call(`${path}?waitSeconds=${Math.min(30, Math.ceil(remaining / 1000))}`, undefined, remaining); }
+    catch (error) { if (error instanceof BackendTimeoutError) return status; throw error; }
+  }
+  return status;
+}
+
+export function specialistTools(options: SpecialistMcpOptions): SpecialistTool[] {
+  const gateway = new LakeGateway(options.home);
+  const { token } = gateway.resolveToken(options.tokenId);
+  gateway.requireLegacy(gateway.authenticate(token));
+  const role = options.role?.trim(), call = backendCall(options, token);
   const resolveRole = async (requested: unknown): Promise<string> => {
     if (role) {
       if (requested !== undefined && requested !== role) throw new Error(`此 MCP 服务绑定专员 ${role}，不能指定其他专员`);
@@ -68,21 +84,7 @@ export function specialistTools(options: SpecialistMcpOptions): SpecialistTool[]
       { method: "POST", body: JSON.stringify({ text: args.text, ...(args.client_request_id && { clientRequestId: args.client_request_id }) }) });
   };
   const wait = async (args: { instruction_id: string; timeout_seconds?: number }) => {
-    const deadline = Date.now() + Math.min(600, Math.max(1, Math.floor(args.timeout_seconds ?? 120))) * 1000;
-    const path = `/api/gateway/instructions/${encodeURIComponent(args.instruction_id)}`;
-    // Keep a real observed status to return if the final long poll reaches the
-    // caller's deadline, including a server that stalls after sending headers.
-    let status = await call(path, undefined, deadline - Date.now()) as GatewayInstructionStatus;
-    while (pending(status.state) && Date.now() < deadline) {
-      const remaining = deadline - Date.now();
-      try {
-        status = await call(`${path}?waitSeconds=${Math.min(30, Math.ceil(remaining / 1000))}`, undefined, remaining);
-      } catch (error) {
-        if (error instanceof BackendTimeoutError) return status;
-        throw error;
-      }
-    }
-    return status;
+    return waitStatus(call, `/api/gateway/instructions/${encodeURIComponent(args.instruction_id)}`, args.timeout_seconds);
   };
   const tools: SpecialistTool[] = [];
   if (!role) tools.push({
@@ -112,10 +114,40 @@ export function specialistTools(options: SpecialistMcpOptions): SpecialistTool[]
   return tools;
 }
 
+/** A connection is bound to one project by the host. Clients supply only
+ * their own thread/message keys, never a project, role, task or permission. */
+export function channelTools(options: ChannelMcpOptions): SpecialistTool[] {
+  const gateway = new LakeGateway(options.home), {token} = gateway.resolveToken(options.connectionId);
+  gateway.requireConnection(gateway.authenticate(token));
+  const call = backendCall(options, token);
+  const messageId = z.string().min(1).max(128).describe('send_message 返回的 instructionId');
+  return [
+    {name: 'send_message', description: '向此连接绑定的 Lake 项目发送消息。Pilot 自动回复、追问或分派任务；同一外部对话复用 thread_id，新消息使用新的 client_message_id，重试复用原值。答复追问时用 reply_to 引用原消息。任务审批仍在 Lake 中完成。',
+      inputSchema: z.object({text: z.string().min(1).max(16384).refine(value => Buffer.byteLength(value, 'utf8') <= 16384, '消息须不超过 16384 UTF-8 字节'), thread_id: z.string().min(1).max(128),
+        client_message_id: z.string().regex(/^[A-Za-z0-9_-]{8,128}$/), thread_title: z.string().min(1).max(120).optional(), reply_to: messageId.optional()}).strict(),
+      handler: (args: {text:string;thread_id:string;client_message_id:string;thread_title?:string;reply_to?:string}) => call('/api/gateway/messages', {method: 'POST',
+        body: JSON.stringify({text: args.text, threadId: args.thread_id, clientMessageId: args.client_message_id,
+          ...(args.thread_title !== undefined && {threadTitle: args.thread_title}), ...(args.reply_to !== undefined && {replyTo: args.reply_to})})})},
+    {name: 'get_message_status', description: '读取本连接消息的处理状态、关联任务、各专员报告与 Pilot 回复；报告已提交不代表独立核验业务成功。',
+      inputSchema: z.object({message_id: messageId}).strict(), handler: (args: {message_id:string}) => call(`/api/gateway/messages/${encodeURIComponent(args.message_id)}`)},
+    {name: 'wait_message', description: '等待本连接消息的任务报告、回复、需要输入或审批等状态，超时返回最近一次实际状态；任务尚在处理时可再次等待。',
+      inputSchema: z.object({message_id: messageId, timeout_seconds: z.number().int().min(1).max(600).optional()}).strict(),
+      handler: (args: {message_id:string;timeout_seconds?:number}) => waitStatus(call, `/api/gateway/messages/${encodeURIComponent(args.message_id)}`, args.timeout_seconds)},
+    {name: 'test_connection', description: '验证当前 MCP 客户端到 Lake 后端的连接身份与项目配置；不发送业务消息、不创建任务。',
+      inputSchema: z.object({}).strict(), handler: () => call('/api/gateway/connection')},
+  ];
+}
+
 /** Run the stdio MCP server for one specialist (role bound) or all of them. */
 export async function runSpecialistMcp(options: SpecialistMcpOptions) {
-  const server = new McpServer({ name: "lake-specialists", version: "1.0.0" });
-  for (const tool of specialistTools(options))
+  await runMcp('lake-specialists', specialistTools(options), options.transport);
+}
+export async function runChannelMcp(options: ChannelMcpOptions) {
+  await runMcp('lake-channels', channelTools(options), options.transport);
+}
+async function runMcp(name: string, tools: SpecialistTool[], transport?: unknown) {
+  const server = new McpServer({ name, version: "1.0.0" });
+  for (const tool of tools)
     server.registerTool(tool.name, { description: tool.description, inputSchema: tool.inputSchema }, async (args, extra) => {
       try {
         const value = await tool.handler(args, extra);
@@ -124,5 +156,5 @@ export async function runSpecialistMcp(options: SpecialistMcpOptions) {
         return { content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }], isError: true as const };
       }
     });
-  await server.connect((options.transport as any) ?? new StdioServerTransport());
+  await server.connect((transport as any) ?? new StdioServerTransport());
 }

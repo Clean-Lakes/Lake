@@ -87,3 +87,58 @@ test('creation and deletion respect the security fence and input validation',asy
  assert.throws(()=>gateway.create({name:'dup'}),/同名/);
  assert.ok(first.token);
 });
+
+test('project connections persist without exposing credentials and keep legacy scopes separate',async t=>{
+ const f=await fixture(t),legacy=f.gateway.create({name:'legacy',roles:['role_dba']});
+ const connection=f.gateway.createConnection({name:'我的 Codex',projectId:'project_a'});
+ assert.deepEqual(connection.routing,{mode:'pilot'});assert.equal(connection.enabled,true);
+ assert.equal('token' in connection,false);
+ const local=f.gateway.resolveToken(connection.id),auth=f.gateway.authenticate(local.token);
+ assert.equal(auth.connection?.projectId,'project_a');
+ assert.deepEqual(f.gateway.list().tokens.map(row=>row.id),[legacy.id]);
+ assert.equal(JSON.stringify(f.gateway.connections()).includes(local.token),false);
+ assert.throws(()=>f.gateway.requireRole(auth,'role_dba'),/只能使用消息/);
+ assert.throws(()=>f.gateway.requireConnection(f.gateway.authenticate(legacy.token)),/原专员入口/);
+ const restarted=new LakeGateway(f.home);
+ assert.deepEqual(restarted.connection(connection.id),connection);
+ assert.equal(restarted.authenticate(local.token).id,connection.id);
+});
+
+test('connection changes revoke stale revisions and disabled or deleted connections fail closed',async t=>{
+ const f=await fixture(t),connection=f.gateway.createConnection({name:'Codex',projectId:'project_a'});
+ const secret=f.gateway.resolveToken(connection.id).token;
+ const disabled=f.gateway.updateConnection(connection.id,{enabled:false,expectedUpdatedAt:connection.updatedAt});
+ assert.notEqual(disabled.updatedAt,connection.updatedAt);
+ assert.throws(()=>f.gateway.authenticate(secret),/已停用/);
+ assert.throws(()=>f.gateway.updateConnection(connection.id,{name:'stale',expectedUpdatedAt:connection.updatedAt}),/已变化/);
+ const enabled=f.gateway.updateConnection(connection.id,{enabled:true,routing:{mode:'specialist',roleId:'role_dba'},expectedUpdatedAt:disabled.updatedAt});
+ assert.equal(enabled.enabled,true);assert.equal(f.gateway.authenticate(secret).connection?.routing.mode,'specialist');
+ assert.throws(()=>f.gateway.updateConnection(connection.id,{projectId:'project_b'}),/字段无效/);
+ f.gateway.removeConnection(connection.id);
+ assert.throws(()=>f.gateway.authenticate(secret),/需要 Lake 网关凭据/);
+ assert.throws(()=>f.gateway.connection(connection.id),/不存在/);
+});
+
+test('connection writes validate scope shape and obey the security fence',async t=>{
+ const f=await fixture(t);
+ for(const input of [
+  {name:'x',projectId:''}, {name:'x',projectId:'p',roles:['role']},
+  {name:'x',projectId:'p',routing:{mode:'pilot',roleId:'role'}},
+  {name:'x',projectId:'p',routing:{mode:'specialist'}},
+  {name:'x',projectId:'p',routing:{mode:'other'}},
+ ]) assert.throws(()=>f.gateway.createConnection(input));
+ const created=f.gateway.createConnection({name:'valid',projectId:'p'});
+ assert.throws(()=>f.gateway.updateConnection(created.id,{enabled:'false'}),/布尔/);
+ const denied=new LakeGateway(f.home,{check(){throw new HttpError(403,'denied');}});
+ assert.throws(()=>denied.createConnection({name:'denied',projectId:'p'}),/denied/);
+ assert.throws(()=>denied.updateConnection(created.id,{enabled:false}),/denied/);
+ assert.throws(()=>denied.removeConnection(created.id),/denied/);
+});
+
+test('malformed persisted connection records cannot become broad legacy credentials',async t=>{
+ const f=await fixture(t),connection=f.gateway.createConnection({name:'valid',projectId:'p'});
+ const token=f.gateway.resolveToken(connection.id).token;
+ writeFileSync(join(f.secrets,'mcp-gateway.json'),JSON.stringify({version:1,tokens:[{id:connection.id,name:'tampered',token,createdAt:connection.createdAt,
+  roles:['role_dba'],connection:{projectId:'p',enabled:true,routing:{mode:'pilot'},updatedAt:connection.updatedAt}}]}),{mode:0o600});
+ assert.throws(()=>f.gateway.authenticate(token),/接入连接记录无效/);
+});

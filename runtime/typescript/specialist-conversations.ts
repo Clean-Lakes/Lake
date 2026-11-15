@@ -75,7 +75,8 @@ export class SpecialistConversations {
     this.store.put('sessions',id,{...template,id,title,workspaceRole:'conversation',options:{...options,conversationMode:'default',userPrompt:'',ignoreNaturalMemory:true}});
   }
   start(input:{eventId:string;partKey:string;projectId:string;sessionId:string;sourceMessageId:string;
-    quote:string;instruction:string;roles:ConversationRole[];requestHash:string;timeoutSeconds?:number;summaryRequested?:boolean}):SpecialistConversation {
+    quote:string;instruction:string;roles:ConversationRole[];requestHash:string;timeoutSeconds?:number;summaryRequested?:boolean;
+    dialogue?:{speaker:string;text:string}[]}):SpecialistConversation {
     this.ports.check();this.store.project(input.projectId);
     const roundId='conversation_'+digest([input.eventId,input.partKey]).slice(0,32);
     const prior=this.store.get<Round>('superConversations',roundId);
@@ -95,7 +96,8 @@ export class SpecialistConversations {
     text(input.instruction,'instruction',4096);text(input.quote,'quote',16384);
     const round:Round={id:roundId,eventId:input.eventId,projectId:input.projectId,sessionId:input.sessionId,sourceMessageId:input.sourceMessageId,
       title:bounded(input.instruction,256),quote:input.quote,instruction:input.instruction,requestHash:input.requestHash,
-      dialogue:this.store.messages(input.sessionId).slice(-10).map(message=>({speaker:message.role==='user'?'user':message.author?.name??'Pilot',text:this.agents.redact(bounded(message.text,2048))})),
+      dialogue:(input.dialogue??this.store.messages(input.sessionId).slice(-10).map(message=>({speaker:message.role==='user'?'user':message.author?.name??'Pilot',text:message.text})))
+        .slice(-10).map(message=>({speaker:bounded(message.speaker,128),text:this.agents.redact(bounded(message.text,2048))})),
       state:'queued',createdAt:now(),deadlineAt:new Date(this.time()+timeout*1000).toISOString(),summarySessionId:roundId+'_pilot',summaryRequested:input.summaryRequested===true,members:[]};
     this.store.transaction(()=>{
       round.members=input.roles.map(role=>{

@@ -4,23 +4,27 @@ import {mkdtemp,rm,mkdir,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createServer,type Server,type IncomingMessage,type ServerResponse} from 'node:http';
-import {backendEndpoint,specialistTools} from './mcp-stdio';
+import {backendEndpoint,specialistTools,channelTools} from './mcp-stdio';
+import {LakeGateway} from './gateway';
 
-type Backend = {requests:{method:string;path:string;auth:string;body:any;waitSeconds:number}[];specialists:any[];statuses:Map<string,any>;sendReceipt:any;statusDelayMs?:number};
+type Backend = {requests:{method:string;path:string;auth:string;body:any;waitSeconds:number}[];specialists:any[];statuses:Map<string,any>;errors:Map<string,{status:number;error:string}>;sendReceipt:any;statusDelayMs?:number};
 
 async function fixture(t:{after(fn:()=>Promise<void>):void},tokens:{id:string;token:string}[]=[{id:'gw1',token:'lkgw-test-token'}]) {
   const home=await mkdtemp(join(tmpdir(),'lake-mcp-')),data=join(home,'web-agent');
   const backend:Backend={requests:[],specialists:[{roleId:'role_dba',roleKey:'dba',name:'数据库专员',duties:'检查数据库',projectId:'p1',sessionId:'sc_dba',revision:3},
-    {roleId:'role_sre',roleKey:'sre',name:'SRE 专员',duties:'主机巡检',projectId:'p1',sessionId:'sc_sre',revision:1}],statuses:new Map(),
+    {roleId:'role_sre',roleKey:'sre',name:'SRE 专员',duties:'主机巡检',projectId:'p1',sessionId:'sc_sre',revision:1}],statuses:new Map(),errors:new Map(),
     sendReceipt:{instructionId:'m1',eventId:'e1',roleId:'role_dba',sessionId:'sc_dba'}};
   const server:Server=createServer((request:IncomingMessage,response:ServerResponse)=>{
     const chunks:Buffer[]=[];request.on('data',chunk=>chunks.push(chunk));request.on('end',async()=>{
       const body=chunks.length?JSON.parse(Buffer.concat(chunks).toString()):{};
       const url=new URL(request.url!,'http://localhost'),path=url.pathname,waitSeconds=Number(url.searchParams.get('waitSeconds')??0);
       backend.requests.push({method:request.method!,path,auth:String(request.headers.authorization??''),body,waitSeconds});
-      if(path==='/api/gateway/specialists')response.end(JSON.stringify({specialists:backend.specialists}));
-      else if(path==='/api/gateway/specialists/role_dba/instructions'){backend.statuses.set('m1',{state:'routing'});response.end(JSON.stringify(backend.sendReceipt));}
-      else if(path.startsWith('/api/gateway/instructions/')){
+      const failure=backend.errors.get(path);
+      if(failure){response.writeHead(failure.status);response.end(JSON.stringify({error:failure.error}));}
+      else if(path==='/api/gateway/connection')response.end(JSON.stringify({ready:true,connection:{id:'test',projectId:'p1'}}));
+      else if(path==='/api/gateway/specialists')response.end(JSON.stringify({specialists:backend.specialists}));
+      else if(path==='/api/gateway/specialists/role_dba/instructions'||path==='/api/gateway/messages'){backend.statuses.set('m1',{state:'routing'});response.end(JSON.stringify(backend.sendReceipt));}
+      else if(path.startsWith('/api/gateway/instructions/')||path.startsWith('/api/gateway/messages/')){
         const id=path.split('/').at(-1)!,status=backend.statuses.get(id);
         if(!status){response.writeHead(404);response.end(JSON.stringify({error:'外部指令不存在'}));return;}
         if(waitSeconds&&backend.statusDelayMs){
@@ -101,4 +105,42 @@ test('ambiguous tokens require an explicit id and backend outages surface as err
   await writeFile(join(f.home,'web-agent','runtime.json'),JSON.stringify({origin:'http://127.0.0.1:1'}));
   const tools=Object.fromEntries(specialistTools({home:f.home,role:'role_dba',tokenId:'gw1'}).map(tool=>[tool.name,tool.handler]));
   await assert.rejects(()=>tools.send_instruction!({text:'检查磁盘'}),/HTTP|网关|连接/);
+});
+
+test('channel tools expose project messaging and preserve thread, message and reply identities',async t=>{
+ const f=await fixture(t),gateway=new LakeGateway(f.home),connection=gateway.createConnection({name:'Codex',projectId:'p1'});
+ const tools=Object.fromEntries(channelTools({home:f.home,connectionId:connection.id}).map(tool=>[tool.name,tool]));
+ assert.deepEqual(Object.keys(tools).sort(),['get_message_status','send_message','test_connection','wait_message']);
+ const input={text:'检查发布',thread_id:'thread-1',thread_title:'发布前检查',client_message_id:'message-0001',reply_to:'prior-message'};
+ await tools.send_message.handler(input);
+ const call=f.backend.requests.at(-1)!;
+ assert.equal(call.path,'/api/gateway/messages');
+ assert.deepEqual(call.body,{text:'检查发布',threadId:'thread-1',threadTitle:'发布前检查',clientMessageId:'message-0001',replyTo:'prior-message'});
+ assert.equal(call.auth,'Bearer '+gateway.resolveToken(connection.id).token);
+ assert.equal(tools.send_message.inputSchema.safeParse({...input,project_id:'other'}).success,false);
+ assert.equal(tools.send_message.inputSchema.safeParse({...input,role:'role_dba'}).success,false);
+ assert.equal(tools.send_message.inputSchema.safeParse({text:'x',client_message_id:'message-0001'}).success,false);
+ assert.equal(tools.send_message.inputSchema.safeParse({...input,text:'a'.repeat(16384)}).success,true);
+ assert.equal(tools.send_message.inputSchema.safeParse({...input,text:'中'.repeat(5461)}).success,true);
+ assert.equal(tools.send_message.inputSchema.safeParse({...input,text:'中'.repeat(5462)}).success,false);
+ const before=f.backend.requests.length;
+ assert.equal((await tools.test_connection.handler({}) as any).ready,true);
+ assert.equal(f.backend.requests.length,before+1);assert.equal(f.backend.requests.at(-1)!.path,'/api/gateway/connection');
+ assert.throws(()=>specialistTools({home:f.home,tokenId:connection.id}),/只能使用消息/);
+ assert.throws(()=>channelTools({home:f.home,connectionId:'gw1'}),/原专员入口/);
+});
+
+test('channel waits bound stalled bodies and surface revoked connections instead of reporting success',async t=>{
+ const f=await fixture(t),gateway=new LakeGateway(f.home),connection=gateway.createConnection({name:'Codex',projectId:'p1'});
+ const tools=Object.fromEntries(channelTools({home:f.home,connectionId:connection.id}).map(tool=>[tool.name,tool.handler]));
+ f.backend.statuses.set('m1',{instructionId:'m1',state:'running',tasks:[{taskId:'task-one'}],replies:[]});
+ f.backend.statusDelayMs=3000;
+ const started=Date.now(),status=await tools.wait_message({message_id:'m1',timeout_seconds:1}) as any;
+ assert.equal(status.state,'running');assert.equal(status.tasks[0].taskId,'task-one');
+ assert.ok(Date.now()-started<1800);
+ assert.ok(f.backend.requests.some(request=>request.path==='/api/gateway/messages/m1'&&request.waitSeconds===1));
+ f.backend.errors.set('/api/gateway/messages/m1',{status:403,error:'接入连接已停用'});
+ await assert.rejects(()=>tools.wait_message({message_id:'m1',timeout_seconds:1}),/已停用/);
+ gateway.updateConnection(connection.id,{enabled:false});
+ assert.throws(()=>channelTools({home:f.home,connectionId:connection.id}),/已停用/);
 });

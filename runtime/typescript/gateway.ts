@@ -1,14 +1,15 @@
 import { existsSync, lstatSync, mkdirSync, openSync, writeFileSync, fsyncSync, closeSync, renameSync, readFileSync } from "node:fs";
-import { randomBytes } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { dirname, join } from "node:path";
 import { HttpError, id, now } from "./store";
 import { text } from "./tasks";
-import type { LakeSecurity } from "./security";
+import type { GatewayConnection, GatewayRouting } from "../../web-agent/shared/contracts";
 
-type TokenRecord = { id: string; name: string; token: string; roles?: string[]; createdAt: string };
+type ConnectionRecord = Pick<GatewayConnection, 'projectId' | 'enabled' | 'routing' | 'updatedAt'>;
+type TokenRecord = { id: string; name: string; token: string; roles?: string[]; createdAt: string; connection?: ConnectionRecord };
 type GatewayConfig = { version: 1; tokens: TokenRecord[] };
 export type GatewayTokenView = { id: string; name: string; roles?: string[]; createdAt: string };
-export type GatewayAuth = { id: string; roles?: string[] };
+export type GatewayAuth = { id: string; roles?: string[]; connection?: GatewayConnection };
 
 const maximum = 1000000;
 const empty = (): GatewayConfig => ({ version: 1, tokens: [] });
@@ -21,7 +22,23 @@ function privateFile(path: string) {
 }
 function equal(left: string, right: string) {
   const a = Buffer.from(left), b = Buffer.from(right);
-  return a.length === b.length && a.equals(b);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+const identity = (value: unknown, field: string) => {
+  if (typeof value !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(value)) throw new HttpError(400, `${field} 身份无效`);
+  return value;
+};
+function routing(value: unknown): GatewayRouting {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new HttpError(400, '处理方式无效');
+  const input = value as Record<string, unknown>;
+  if (input.mode === 'pilot' && Object.keys(input).every(key => key === 'mode')) return {mode: 'pilot'};
+  if (input.mode === 'specialist' && Object.keys(input).every(key => ['mode', 'roleId'].includes(key)))
+    return {mode: 'specialist', roleId: identity(input.roleId, '专员')};
+  throw new HttpError(400, '处理方式无效');
+}
+function fields(input: Record<string, unknown>, allowed: string[]) {
+  if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !allowed.includes(key)))
+    throw new HttpError(400, '接入连接字段无效');
 }
 
 /** Scoped gateway credentials for external agent clients. The plaintext token
@@ -40,6 +57,14 @@ export class LakeGateway {
       typeof row.createdAt !== "string" || row.roles !== undefined && (!Array.isArray(row.roles) || row.roles.some(role => typeof role !== "string"))))
       throw new HttpError(409, "网关凭据版本或记录无效");
     for (const row of value.tokens) this.secretValues.add(row.token);
+    for (const row of value.tokens) if (row.connection !== undefined) {
+      try {
+        if (row.roles !== undefined) throw new Error('mixed scope');
+        fields(row.connection as unknown as Record<string, unknown>, ['projectId', 'enabled', 'routing', 'updatedAt']);
+        identity(row.connection.projectId, '项目'); routing(row.connection.routing);
+        if (typeof row.connection.enabled !== 'boolean' || typeof row.connection.updatedAt !== 'string' || !Number.isFinite(Date.parse(row.connection.updatedAt))) throw new Error('invalid connection');
+      } catch { throw new HttpError(409, '接入连接记录无效'); }
+    }
     return value;
   }
   private write(config: GatewayConfig) {
@@ -78,7 +103,51 @@ export class LakeGateway {
   }
   list(): { tokens: GatewayTokenView[] } {
     this.closed || this.config();
-    return { tokens: this.config().tokens.map(row => LakeGateway.view(row)) };
+    return { tokens: this.config().tokens.filter(row => !row.connection).map(row => LakeGateway.view(row)) };
+  }
+  private static connectionView(row: TokenRecord): GatewayConnection {
+    if (!row.connection) throw new HttpError(404, '接入连接不存在');
+    return {id: row.id, name: row.name, createdAt: row.createdAt, ...row.connection, routing: {...row.connection.routing}};
+  }
+  connections(): GatewayConnection[] { return this.config().tokens.filter(row => row.connection).map(LakeGateway.connectionView); }
+  connection(connectionId: unknown): GatewayConnection {
+    const row = this.config().tokens.find(row => row.id === connectionId && row.connection);
+    if (!row) throw new HttpError(404, '接入连接不存在');
+    return LakeGateway.connectionView(row);
+  }
+  createConnection(input: Record<string, unknown>): GatewayConnection {
+    this.security?.check(); fields(input, ['name', 'projectId', 'routing']);
+    const name = text(input.name, 'name', 120), projectId = identity(input.projectId, '项目');
+    const route = routing(input.routing ?? {mode: 'pilot'}), config = this.config();
+    if (config.tokens.length >= 64) throw new HttpError(409, '接入凭据已达上限，请先删除不再使用的连接');
+    if (config.tokens.some(row => row.name === name)) throw new HttpError(409, '存在同名接入凭据，请改名后重试');
+    const createdAt = now();
+    const row: TokenRecord = {id: id(), name, token: 'lkgw_' + randomBytes(24).toString('hex'), createdAt,
+      connection: {projectId, routing: route, enabled: true, updatedAt: createdAt}};
+    this.write({...config, tokens: [...config.tokens, row]}); this.secretValues.add(row.token);
+    return LakeGateway.connectionView(row);
+  }
+  updateConnection(connectionId: string, input: Record<string, unknown>): GatewayConnection {
+    this.security?.check(); fields(input, ['name', 'enabled', 'routing', 'expectedUpdatedAt']);
+    const config = this.config(), row = config.tokens.find(row => row.id === connectionId && row.connection);
+    if (!row?.connection) throw new HttpError(404, '接入连接不存在');
+    if (input.expectedUpdatedAt !== undefined && input.expectedUpdatedAt !== row.connection.updatedAt) throw new HttpError(409, '连接配置已变化，请刷新后重试');
+    const name = input.name === undefined ? row.name : text(input.name, 'name', 120);
+    if (config.tokens.some(other => other.id !== row.id && other.name === name)) throw new HttpError(409, '存在同名接入凭据，请改名后重试');
+    if (input.enabled !== undefined && typeof input.enabled !== 'boolean') throw new HttpError(400, '启用状态须为布尔值');
+    const route = input.routing === undefined ? row.connection.routing : routing(input.routing);
+    const next: TokenRecord = {...row, name, connection: {...row.connection, enabled: input.enabled as boolean ?? row.connection.enabled, routing: route,
+      updatedAt: new Date(Math.max(Date.now(), Date.parse(row.connection.updatedAt) + 1)).toISOString()}};
+    this.write({...config, tokens: config.tokens.map(entry => entry.id === row.id ? next : entry)});
+    return LakeGateway.connectionView(next);
+  }
+  removeConnection(connectionId: string) { this.connection(connectionId); return this.remove(connectionId); }
+  requireConnection(auth: GatewayAuth): GatewayConnection {
+    if (!auth.connection) throw new HttpError(403, '此凭据只能使用原专员入口，请创建项目接入连接');
+    return auth.connection;
+  }
+  requireLegacy(auth: GatewayAuth) {
+    if (auth.connection) throw new HttpError(403, '项目连接只能使用消息接入接口');
   }
   remove(tokenId: unknown) {
     this.security?.check();
@@ -95,7 +164,8 @@ export class LakeGateway {
     const config = this.config();
     const row = config.tokens.find(candidate => equal(bearer, candidate.token));
     if (!row) throw new HttpError(401, "需要 Lake 网关凭据");
-    return { id: row.id, ...(row.roles?.length ? { roles: [...row.roles] } : {}) };
+    if (row.connection && !row.connection.enabled) throw new HttpError(403, '接入连接已停用');
+    return { id: row.id, ...(row.roles?.length ? { roles: [...row.roles] } : {}), ...(row.connection && {connection: LakeGateway.connectionView(row)}) };
   }
   /** Resolve the plaintext token a local stdio client should present. Only
    * the owner of the private secrets file can call this process-side. */
@@ -106,6 +176,7 @@ export class LakeGateway {
     return { id: row.id, token: row.token };
   }
   requireRole(auth: GatewayAuth, roleId: string) {
+    this.requireLegacy(auth);
     if (auth.roles && !auth.roles.includes(roleId)) throw new HttpError(403, "此网关凭据未被允许访问该专员");
   }
   scrub(value: string) { for (const secret of this.secretValues) value = value.split(secret).join("[REDACTED]"); return value; }

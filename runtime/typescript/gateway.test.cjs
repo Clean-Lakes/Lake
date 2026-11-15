@@ -1,7 +1,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {createServer}=require('node:http');
-const {mkdtemp,mkdir,writeFile,rm,realpath}=require('node:fs/promises');
+const {mkdtemp,mkdir,writeFile,readFile,rm,realpath}=require('node:fs/promises');
 const {tmpdir}=require('node:os');
 const {join}=require('node:path');
 process.env.LAKE_TS_IMPORT_ONLY='1';
@@ -13,9 +13,9 @@ async function until(read,predicate){
  while(Date.now()<deadline){value=await read();if(predicate(value))return value;await new Promise(resolve=>setTimeout(resolve,20));}
  assert.fail('Timed out: '+JSON.stringify(value));
 }
-async function fixture(t,{hold=false,holdRouter=false,routerAction='create'}={}){
+async function fixture(t,{hold=false,holdRouter=false,routerAction='create',routeParts,holdSecondWorker=false,replyRespond=false,conversation=false,echoResponses=false}={}){
  const releaseRef={release:()=>{}};
- const gatePromise=hold||holdRouter?new Promise(resolve=>{releaseRef.release=resolve;}):Promise.resolve();
+ const gatePromise=hold||holdRouter||holdSecondWorker?new Promise(resolve=>{releaseRef.release=resolve;}):Promise.resolve();
  const home=await mkdtemp(join(tmpdir(),'lake-gateway-http-')),web=join(home,'web');
  await mkdir(web);await writeFile(join(web,'index.html'),'<html>gateway fixture</html>');
  const requests=[];
@@ -28,16 +28,18 @@ async function fixture(t,{hold=false,holdRouter=false,routerAction='create'}={})
   if(router){
    if(holdRouter)await gatePromise;
    const marker=request.messages.findLast(message=>message.role==='user'&&content(message).startsWith('[LAKE ADMITTED HUMAN EVENTS'));
+   const event=JSON.parse(content(marker).split('\n')[1])[0];
+   const action=replyRespond&&event.replyTo?'respond':routerAction;
    const current=request.messages.slice(Math.max(0,request.messages.indexOf(marker)));
    const names=current.flatMap(message=>message.tool_calls??[]).map(call=>call.function.name);
-   if(names.includes('route_work'))delta={content:routerAction==='ask'?'请补充要检查的数据库名称。':routerAction==='respond'?'当前专员负责数据库健康检查。':'已安排专员检查。'};
+   if(names.includes('route_work')||names.includes('convene_specialists'))delta={content:action==='ask'?'请补充要检查的数据库名称。':action==='respond'?(echoResponses?`当前回复：${event.text}`:'当前专员负责数据库健康检查。'):'已安排专员检查。'};
    else{
-    const event=JSON.parse(content(marker).split('\n')[1])[0];
-    delta={tool_calls:[{index:0,id:'route-'+event.id,type:'function',function:{name:'route_work',arguments:JSON.stringify({event_id:event.id,part_key:'external-instruction',action:routerAction,...(routerAction==='create'?{role_id:event.preferredRoleID??'role-dba',title:'外部指令磁盘检查'}:{}),quote:event.text,reason:'外部研发 Agent 指令'})}}]};
+    const parts=routeParts??[{part_key:'external-instruction',action,...(action==='create'?{role_id:event.preferredRoleID??'role-dba',title:'外部指令磁盘检查'}:{}),quote:event.text}];
+    delta={tool_calls:conversation?[{index:0,id:'convene-'+event.id,type:'function',function:{name:'convene_specialists',arguments:JSON.stringify({event_id:event.id,part_key:'discussion',quote:event.text,instruction:'请两位分别介绍职责',role_ids:['role-dba','role-sre']})}}]:parts.map((part,index)=>({index,id:'route-'+event.id+'-'+index,type:'function',function:{name:'route_work',arguments:JSON.stringify({event_id:event.id,reason:'外部研发 Agent 指令',...part})}}))};
    }
   }else if(worker){
    const names=request.messages.flatMap(message=>message.tool_calls??[]).map(call=>call.function.name);
-   await gatePromise;
+   if(hold||holdSecondWorker&&JSON.stringify(request).includes('PUBLISH_CHECK'))await gatePromise;
    delta=names.includes('work_finish')?{content:'本轮检查结束。'}:{tool_calls:[{index:0,id:'finish-1',type:'function',function:{name:'work_finish',arguments:JSON.stringify({summary:'磁盘使用率 42%，无异常日志。',outcome:'completed'})}}]};
   }else delta={content:'收到。'};
   res.writeHead(200,{'Content-Type':'text/event-stream'});
@@ -68,6 +70,147 @@ async function fixture(t,{hold=false,holdRouter=false,routerAction='create'}={})
  const status=async(eventId,which='scoped')=>gw(`/api/gateway/instructions/${eventId}?waitSeconds=0`,'GET',undefined,200,which);
  return {home,app,api,gw,send,status,project,pilot,role,other,scoped,wide,requests,release:()=>releaseRef.release()};
 }
+
+async function connection(f,name='客户端',routing={mode:'pilot'}){
+ const value=await f.api('/api/settings/gateway/connections','POST',{name,projectId:f.project.id,routing},201);
+ const secrets=JSON.parse(await readFile(join(f.home,'secrets/mcp-gateway.json'),'utf8'));
+ const token=secrets.tokens.find(row=>row.id===value.id).token;
+ return {...value,token,
+  send:(body,expected=202)=>f.gw('/api/gateway/messages','POST',body,expected,token),
+  status:id=>f.gw('/api/gateway/messages/'+id,'GET',undefined,200,token)};
+}
+const admitted=request=>{
+ const marker=request.messages.findLast(message=>message.role==='user'&&content(message).startsWith('[LAKE ADMITTED HUMAN EVENTS'));
+ return marker?JSON.parse(content(marker).split('\n')[1]):[];
+};
+
+test('connection retries are atomic and client identities and reply targets are scoped by thread',async t=>{
+ const f=await fixture(t),a=await connection(f,'A'),b=await connection(f,'B');
+ f.app.superagent.schedule=()=>{};
+ const input={text:'检查服务',threadId:'thread-a',clientMessageId:'same-client-0001'};
+ const receipts=await Promise.all(Array.from({length:8},()=>f.app.superagent.gatewayMessage(a,input)));
+ assert.equal(new Set(receipts.map(row=>row.instructionId)).size,1);assert.equal(receipts.filter(row=>row.duplicate).length,7);
+ const otherThread=await a.send({...input,threadId:'thread-b'}),otherConnection=await b.send(input);
+ assert.equal(new Set([receipts[0].instructionId,otherThread.value.instructionId,otherConnection.value.instructionId]).size,3);
+ await a.send({...input,text:'变更的内容'},409);
+ await a.send({...input,clientMessageId:'reply-key-0002',threadId:'thread-b',replyTo:receipts[0].instructionId},404);
+ await b.send({...input,clientMessageId:'reply-key-0003',replyTo:receipts[0].instructionId},404);
+ assert.equal(f.app.store.list('superInputs').filter(row=>row.external?.connectionId).length,3);
+ const page=f.app.superagent.gatewayMessages(a.id,{limit:1});
+ assert.equal(page.messages.length,1);assert.ok(page.nextCursor);
+ const rest=f.app.superagent.gatewayMessages(a.id,{limit:1,cursor:page.nextCursor});
+ assert.equal(rest.messages.length,1);assert.notEqual(rest.messages[0].instructionId,page.messages[0].instructionId);
+ assert.equal(rest.nextCursor,undefined);
+});
+
+test('external Router requests isolate UI, connection and thread history while replyTo retains its actual question',async t=>{
+ const f=await fixture(t,{routerAction:'ask',replyRespond:true}),a=await connection(f,'A'),b=await connection(f,'B');
+ const router=f.app.store.get('superProjects',f.project.id).routerSessionId;
+ await f.app.superagent.send(router,'UI_HISTORY_PRIVATE');
+ await until(async()=>f.app.store.list('superInputs'),rows=>rows.some(row=>row.payload==='UI_HISTORY_PRIVATE'&&row.disposition==='routed'));
+ const input={text:'A_THREAD_ORIGINAL_DATABASE',threadId:'a-thread',clientMessageId:'ask-client-0001'};
+ const first=await a.send(input);
+ const asked=await until(()=>a.status(first.value.instructionId),row=>row.value.state==='waiting_input');
+ assert.deepEqual(asked.value.replies.map(reply=>reply.text),['请补充要检查的数据库名称。']);
+ const other=await b.send({text:'OTHER_CONNECTION_PRIVATE',threadId:'a-thread',clientMessageId:'ask-client-0001'});
+ await until(()=>b.status(other.value.instructionId),row=>row.value.state==='waiting_input');
+ const otherThread=await a.send({text:'OTHER_THREAD_PRIVATE',threadId:'different-thread',clientMessageId:'ask-client-0001'});
+ await until(()=>a.status(otherThread.value.instructionId),row=>row.value.state==='waiting_input');
+ const followup=await a.send({...input,text:'就是 accounts 数据库',replyTo:first.value.instructionId,clientMessageId:'reply-client-0002'});
+ const result=await until(()=>a.status(followup.value.instructionId),row=>row.value.state==='replied');
+ assert.equal(result.value.tasks.length,0);assert.equal(result.value.roleId,undefined);
+ const request=f.requests.find(request=>admitted(request).some(event=>event.id===followup.value.eventId));
+ const serialized=JSON.stringify(request);
+ assert.match(serialized,/A_THREAD_ORIGINAL_DATABASE/);assert.match(serialized,/请补充要检查的数据库名称/);
+ for(const forbidden of ['UI_HISTORY_PRIVATE','OTHER_CONNECTION_PRIVATE','OTHER_THREAD_PRIVATE'])assert.equal(serialized.includes(forbidden),false,forbidden);
+ for(const request of f.requests.filter(request=>admitted(request).some(event=>event.connectionId)))assert.equal(admitted(request).length,1);
+ const source=f.app.store.get('superInputs',followup.value.eventId);
+ f.app.superagent.batches.set(router,{eventIds:[source.id],input:'required-current-input'});
+ try{assert.throws(()=>f.app.superagent.projectRouterRequest(f.project.id,{messages:[{role:'user',content:'FOREIGN_SDK_HISTORY'}]}),/当前输入缺失/);}
+ finally{f.app.superagent.batches.delete(router);}
+});
+
+test('project messages collect all exact task reports and do not finish after one worker or an early Pilot acknowledgment',async t=>{
+ const f=await fixture(t,{holdSecondWorker:true,routeParts:[
+  {part_key:'health',action:'create',role_id:'role-dba',title:'HEALTH_CHECK',quote:'检查服务健康'},
+  {part_key:'publish',action:'create',role_id:'role-sre',title:'PUBLISH_CHECK',quote:'核对最近发布'},
+  {part_key:'acknowledgment',action:'respond'}]}),a=await connection(f);
+ const receipt=await a.send({text:'检查服务健康；核对最近发布',threadId:'two-workers',clientMessageId:'workers-client-0001'});
+ const partial=await until(()=>a.status(receipt.value.instructionId),row=>row.value.tasks.length===2&&row.value.replies.filter(reply=>reply.taskId).length===1);
+ assert.equal(partial.value.state,'running');
+ assert.ok(partial.value.replies.some(reply=>reply.from==='pilot'&&!reply.taskId),'an early Pilot acknowledgment is not task completion');
+ assert.ok(partial.value.tasks.every(task=>task.sessionId&&task.roleId&&task.roleName));
+ assert.deepEqual(new Set(partial.value.tasks.map(task=>task.roleId)),new Set(['role-dba','role-sre']));
+ f.release();
+ const done=await until(()=>a.status(receipt.value.instructionId),row=>row.value.state==='replied');
+ assert.equal(done.value.replies.filter(reply=>reply.taskId).length,2);
+ assert.deepEqual(new Set(done.value.replies.filter(reply=>reply.taskId).map(reply=>reply.taskId)),new Set(done.value.tasks.map(task=>task.taskId)));
+ assert.equal(f.app.store.list('superAcceptance').length,0);
+ await f.app.close();
+ const restarted=await startLakeServer({home:f.home,data:join(f.home,'data'),port:0,staticRoot:join(f.home,'web')});
+ t.after(()=>restarted.close());
+ const response=await fetch(restarted.origin+'/api/gateway/messages/'+receipt.value.instructionId,{headers:{Authorization:`Bearer ${a.token}`}});
+ assert.equal(response.status,200);const restored=await response.json();
+ assert.equal(restored.state,'replied');assert.deepEqual(restored.replies,done.value.replies);
+});
+
+test('replyTo task controls cannot select another independent task from the same external thread',async t=>{
+ const f=await fixture(t),a=await connection(f);
+ const base={text:'检查服务',threadId:'one-thread',clientMessageId:'task-client-0001'};
+ const first=await a.send(base),firstDone=await until(()=>a.status(first.value.instructionId),row=>row.value.state==='replied');
+ const second=await a.send({...base,clientMessageId:'task-client-0002'}),secondDone=await until(()=>a.status(second.value.instructionId),row=>row.value.state==='replied');
+ assert.notEqual(firstDone.value.tasks[0].taskId,secondDone.value.tasks[0].taskId,'same thread alone never continues a task');
+ f.app.superagent.schedule=()=>{};
+ const next=await a.send({...base,text:'继续刚才那个任务',clientMessageId:'task-client-0003',replyTo:first.value.instructionId});
+ const event=f.app.store.get('superInputs',next.value.eventId),router=next.value.sessionId;
+ assert.doesNotThrow(()=>f.app.superagent.requireGatewayTask(event,firstDone.value.tasks[0].taskId));
+ assert.throws(()=>f.app.superagent.requireGatewayTask(event,secondDone.value.tasks[0].taskId),/任务不属于/);
+ f.app.superagent.batches.set(router,{eventIds:[event.id],complete:new Set([event.id]),input:'current'});
+ try{
+  const route=f.app.superagent.routerEntries(router).find(entry=>entry.metadata.name==='route_work');
+  await assert.rejects(()=>route.handler({event_id:event.id,part_key:'wrong-task',action:'followup',role_id:'role-dba',task_id:secondDone.value.tasks[0].taskId,quote:event.payload,reason:'继续'},{abortSignal:new AbortController().signal}),/任务不属于/);
+ }finally{f.app.superagent.batches.delete(router);}
+});
+
+test('fixed-specialist connections route to the bound role and reject other or multiple recipients',async t=>{
+ const f=await fixture(t),a=await connection(f,'固定 SRE',{mode:'specialist',roleId:f.other.id});
+ const input={text:'检查服务健康',threadId:'fixed-specialist',clientMessageId:'fixed-client-0001'};
+ const receipt=await a.send(input);
+ assert.equal(receipt.value.roleId,f.other.id);
+ assert.equal(f.app.store.get('superInputs',receipt.value.eventId).preferredRoleId,f.other.id);
+ const done=await until(()=>a.status(receipt.value.instructionId),row=>row.value.state==='replied');
+ assert.equal(done.value.roleId,f.other.id);assert.equal(done.value.tasks.length,1);
+ assert.equal(done.value.tasks[0].roleId,f.other.id);assert.equal(done.value.tasks[0].roleName,f.other.name);
+ assert.equal(done.value.replies.filter(reply=>reply.taskId).length,1);
+ f.app.superagent.schedule=()=>{};
+ const next=await a.send({...input,clientMessageId:'fixed-client-0002'});
+ const event=f.app.store.get('superInputs',next.value.eventId),router=next.value.sessionId;
+ f.app.superagent.batches.set(router,{eventIds:[event.id],complete:new Set([event.id]),input:'current'});
+ try{
+  const route=f.app.superagent.routerEntries(router).find(entry=>entry.metadata.name==='route_work');
+  const create={event_id:event.id,part_key:'fixed-route',action:'create',title:'服务健康',quote:event.payload,reason:'检查'};
+  for(const recipients of [{role_id:f.role.id},{role_ids:[f.other.id,f.role.id]}])
+   await assert.rejects(()=>route.handler({...create,...recipients},{abortSignal:new AbortController().signal}),/exact source channel role_id/);
+  assert.equal(f.app.store.list('superWorkers').length,1,'rejected recipients never create another task');
+  assert.equal(f.app.store.list('superDecisions').filter(row=>row.eventId===event.id).length,0);
+ }finally{f.app.superagent.batches.delete(router);}
+});
+
+test('project messages preserve direct multi-specialist discussion with exact isolated replies and no task creation',async t=>{
+ const f=await fixture(t,{conversation:true}),a=await connection(f),router=f.app.store.get('superProjects',f.project.id).routerSessionId;
+ f.app.store.addMessage(router,'user','UNRELATED_UI_CONVERSATION');
+ f.app.store.addMessage(router,'assistant','UNRELATED_UI_ANSWER');
+ const receipt=await a.send({text:'请两位专员各自介绍职责',threadId:'discussion',clientMessageId:'discussion-client-0001'});
+ const done=await until(()=>a.status(receipt.value.instructionId),row=>['replied','failed'].includes(row.value.state));
+ assert.equal(done.value.state,'replied');assert.equal(done.value.tasks.length,0);
+ assert.equal(done.value.conversations.length,1);assert.equal(done.value.conversations[0].members.length,2);
+ const replies=done.value.replies.filter(reply=>reply.conversationId);
+ assert.equal(replies.filter(reply=>reply.from==='specialist').length,2);
+ assert.deepEqual(new Set(replies.filter(reply=>reply.from==='specialist').map(reply=>reply.roleName)),new Set(['数据库专员','SRE 专员']));
+ assert.equal(f.app.store.list('superWorkers').length,0);assert.equal(f.app.store.list('superAcceptance').length,0);
+ assert.equal(JSON.stringify(f.requests).includes('UNRELATED_UI_CONVERSATION'),false);
+ assert.equal(JSON.stringify(f.requests).includes('UNRELATED_UI_ANSWER'),false);
+});
 
 test('a scoped gateway token delivers an instruction through Pilot routing and receives the specialist report',async t=>{
  const f=await fixture(t);

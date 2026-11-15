@@ -10,7 +10,9 @@ const pilotCoordinationPolicy = {
 
 export type RouterEvent = { id: string; projectId: string; sessionId: string; messageId: string; payload: string;
   selectedReferences?: import('./message-input').MessageInput;
-  receivedAt: string; revision: number; hash: string; preferredRoleId?: string; explicitTaskId?: string; external?: { kind: string } };
+  receivedAt: string; revision: number; hash: string; preferredRoleId?: string; explicitTaskId?: string;
+  external?: import('../../web-agent/shared/contracts').ExternalMessageOrigin;
+  replyContext?: {messageId:string;eventId:string;text:string;pilotReply?:string} };
 export type RouterMessage = { id: string; projectId: string; sessionId: string; sourceSessionId?: string;
   role: "user" | "assistant" | "system"; text: string; createdAt: string; taskId?: string; kind?: "report" | "dispatch" };
 export type RouterTask = { taskId: string; projectId: string; roleId: string; sessionId: string; title: string;
@@ -76,7 +78,10 @@ export function buildRouterContext(source: RouterContextInput) {
   const format = () => {
     const admitted = events.map((event) => ({ id: event.id, sourceSessionId: event.sessionId, preferredRoleID: event.preferredRoleId,
       explicitTaskID: event.explicitTaskId, revision: event.revision, hash: event.hash, text: clip(event.payload, previewBytes),
-      ...(event.external && { externalOrigin: event.external.kind }), selectedReferences: event.selectedReferences, clipped: Buffer.byteLength(event.payload) > previewBytes }));
+      ...(event.external && { externalOrigin: event.external.kind, ...(event.external.connectionId&&{connectionId:event.external.connectionId,
+        threadId:event.external.threadId,threadTitle:event.external.threadTitle}) }),
+      ...(event.replyContext&&{replyTo:{...event.replyContext,text:clip(event.replyContext.text,conversationBytes),pilotReply:event.replyContext.pilotReply&&clip(event.replyContext.pilotReply,conversationBytes)}}),
+      selectedReferences: event.selectedReferences, clipped: Buffer.byteLength(event.payload) > previewBytes }));
     const tasks = taskRows.slice(0, taskCount).map((task) => ({ taskId: task.taskId, roleId: task.roleId, title: clip(task.title, 128),
       state: task.state, reportedOutcome: task.reportedOutcome, pendingApproval: task.pendingApproval, unresolvedOperations: task.unresolvedOperations,
       archived: task.archived === true, updatedAt: task.updatedAt, summary: clip(task.summary ?? "", summaryBytes),
