@@ -13,6 +13,12 @@ export function SpecialistAvatarProvider({channels,children}:{channels?:readonly
  return <roleAvatars.Provider value={avatars}>{children}</roleAvatars.Provider>;
 }
 
+/** One identity resolver for navigation, replies and their thinking character. */
+export function useSpecialistAppearance({name='',roleId,avatarId}:{name?:string;roleId?:string;avatarId?:LakeAvatarName}){
+ const avatars=useContext(roleAvatars);
+ return superWorkerAppearance({roleId,roleName:name,avatarId:avatarId??(roleId?avatars.get(roleId):undefined)});
+}
+
 /** A brief greeting on conversation entry, separate from live work motion. */
 export function greetRoleAvatar(container:HTMLElement) {
  if(document.hidden||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
@@ -26,11 +32,11 @@ export function greetRoleAvatar(container:HTMLElement) {
 
 /** The same Lake ecosystem silhouette in navigation, the island and task details. */
 export function SuperRoleAvatar({name='',roleId,avatarId,pilot=false,size=22,motion='idle'}:{name?:string;roleId?:string;avatarId?:LakeAvatarName;pilot?:boolean;size?:number;motion?:AvatarMotion}) {
- const avatars=useContext(roleAvatars);
+ const look=useSpecialistAppearance({name,roleId,avatarId});
  const avatarRef=useRef<HTMLSpanElement>(null);
  useEffect(()=>{const media=window.matchMedia('(prefers-reduced-motion: reduce)');const reset=()=>{if(media.matches)avatarRef.current?.classList.remove('is-greeting');};media.addEventListener('change',reset);return()=>media.removeEventListener('change',reset);},[]);
  const visible=usePageVisible();
- const look=superWorkerAppearance({roleId,roleName:name,avatarId:avatarId??(roleId?avatars.get(roleId):undefined)}),role=pilot?'coordinator':look.icon;
+ const role=pilot?'coordinator':look.icon;
  const style={'--avatar-phase':`${look.phase}ms`,'--avatar-greet-time':`${pilot?650:lakeAvatarMotions[look.icon].greetMs}ms`} as CSSProperties;
  return <span ref={avatarRef} className="super-role-avatar" data-role={role} data-palette={pilot?'river':look.palette} data-variant={look.variant} data-motion={motion} data-hidden={!visible||undefined} style={style} aria-hidden="true" onAnimationEnd={event=>{if(event.target===event.currentTarget&&event.animationName==='lake-avatar-greet-done')event.currentTarget.classList.remove('is-greeting');}}><AgentIcon role={role} size={size}/></span>;
 }

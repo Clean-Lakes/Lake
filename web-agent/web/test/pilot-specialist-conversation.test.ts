@@ -4,7 +4,7 @@ import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {Message,SessionSnapshot,SuperWorker,SuperWorkspace} from '../../shared/contracts';
 import {AITranscript} from '../src/AIPanel';
-import {PilotSpecialistConversation} from '../src/PilotSpecialistConversation';
+import {loadPilotSpecialistSnapshot,PilotSpecialistConversation,PilotSpecialistReplyView} from '../src/PilotSpecialistConversation';
 import {pilotDispatchRows,pilotSpecialistReply} from '../src/pilotSpecialistReplies';
 
 const at='2026-11-06T00:00:00Z';
@@ -26,7 +26,8 @@ test('Pilot retains each dispatched worker after its own reply, with exact task 
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,pilotWorkspace:state,assistantIdentity:{name:'Pilot',pilot:true},onSpecialist(){}}));
  assert.ok(html.indexOf('我会检查这两项。')<html.indexOf('pilot-specialist-reply'));
  assert.equal((html.match(/data-worker-id=/g)??[]).length,2);
- assert.ok(html.includes('turn-activity-mark')&&html.includes('data-motion="working"'));
+ assert.ok(html.includes('animal-thinking-bubble')&&html.includes('data-motion="thinking"'));
+ assert.doesNotMatch(html,/turn-activity-mark|data-motion="working"/);
  assert.ok(html.includes('<strong>服务器专员</strong>')&&html.includes('<strong>数据库专员</strong>'));
  assert.doesNotMatch(html,/pilot-dispatch-progress|专员工作进展/);
  assert.equal(JSON.stringify(snapshot),before,'live progress must never be persisted as a reply or report');
@@ -35,8 +36,10 @@ test('Pilot retains each dispatched worker after its own reply, with exact task 
 test('queued, human confirmation, questions and external waits stay static; only current work moves',()=>{
  for(const phase of ['queued','thinking','tool','waiting_approval','waiting_input','waiting_external'] as const){
   const item=worker();item.activity!.phase=phase;item.activity!.label=phase==='queued'?'准备处理':phase.startsWith('waiting')?'等待确认':'正在分析';
-  const html=render(workspace([item])),moving=['thinking','tool'].includes(phase);
-  assert.equal(html.includes('turn-activity-mark'),moving,phase);assert.equal(html.includes('data-motion="working"'),moving,phase);
+  const html=render(workspace([item]));
+  assert.equal(html.includes('animal-thinking-bubble'),phase==='thinking',phase);
+  assert.equal(html.includes('data-motion="thinking"'),phase==='thinking',phase);
+  assert.equal(html.includes('turn-activity-mark'),phase==='tool',phase);assert.equal(html.includes('data-motion="working"'),phase==='tool',phase);
  }
  const offline=render(workspace(),false);
  assert.ok(offline.includes('进度暂未更新，正在重连'));assert.ok(!offline.includes('data-motion="working"')&&!offline.includes('turn-activity-mark'));
@@ -61,6 +64,39 @@ test('specialist conversation reads only the exact current invocation public pro
  assert.equal(pilotSpecialistReply({...row,sourceCreatedAt:'2026-11-06T00:00:03Z'},snapshot),undefined,'a followup cannot borrow an older reply');
  assert.equal(pilotSpecialistReply({...row,activity:{...row.activity,phase:'queued'}},snapshot),undefined);
  assert.equal(JSON.stringify(snapshot),before);
+});
+
+test('Pilot live loading preserves the SDK root instead of the task inspector root and rejects changed ownership',async t=>{
+ const item=worker();item.task.originRootTurnId='super-task-origin';
+ item.task.executionGoalId='execution-goal';
+ const row=pilotDispatchRows(workspace([item]),'pilot',[user])[0]!;
+ // Shape observed in installed Lake Dev: the task origin and the current SDK
+ // invocation differ; ?taskId projects only ai.rootTurnId to the task origin.
+ const snapshot={session:{id:item.sessionId,projectId:'project'},superagent:{roleId:item.roleId,task:{...item.task}},cursor:4,
+  ai:{session:item.sessionId,status:'running',replyStatus:'running',rootTurnId:'turn-current-sdk',turnStartedAt:'2026-11-06T00:00:01Z',cards:[
+   {id:'current-message',type:'message',status:'running',at:'2026-11-06T00:00:02Z',content:'本次隔离验收正文已经开始输出。',data:{root_turn_id:'turn-current-sdk',taskId:'execution-goal'}},
+  ],cardsOffset:0,totalCards:1}} as SessionSnapshot;
+ const scoped={...snapshot,ai:{...snapshot.ai!,rootTurnId:item.task.originRootTurnId}};
+ assert.equal(pilotSpecialistReply(row,scoped)?.card,undefined,'the inspector root cannot stand in for the current model invocation');
+ let response=snapshot;const calls:{url:string;signal?:AbortSignal|null}[]=[];
+ t.mock.method(globalThis,'fetch',async(input:string,init?:RequestInit)=>{
+  calls.push({url:String(input),signal:init?.signal});
+  return Response.json(String(input).includes('?taskId=')?scoped:response);
+ });
+ const controller=new AbortController();
+ const loaded=await loadPilotSpecialistSnapshot(row,controller.signal);
+ assert.deepEqual(calls,[{url:`/api/sessions/${item.sessionId}/snapshot`,signal:controller.signal}]);
+ assert.equal(pilotSpecialistReply(row,loaded)?.card?.content,snapshot.ai!.cards[0]!.content);
+ const html=renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row,snapshot:loaded}));
+ assert.match(html,/本次隔离验收正文已经开始输出/);
+ assert.doesNotMatch(html,/animal-thinking-bubble|正在生成回复/);
+ for(const changed of [
+  {...snapshot,session:{...snapshot.session,id:'other-session'}},
+  {...snapshot,session:{...snapshot.session,projectId:'other-project'}},
+  {...snapshot,superagent:{...snapshot.superagent!,roleId:'other-role'}},
+  {...snapshot,superagent:{...snapshot.superagent!,task:{...item.task,taskId:'other-task'}}},
+  {...snapshot,superagent:{...snapshot.superagent!,task:{...item.task,executionGoalId:'other-execution'}}},
+ ]){response=changed;assert.equal(await loadPilotSpecialistSnapshot(row),undefined,'current snapshot still requires every exact ownership binding');}
 });
 
 test('live authors use the original execution and only exact delivered roots retire a live reply',()=>{

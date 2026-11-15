@@ -1,0 +1,43 @@
+/* The animal stands on the border; only current model thinking opts in. */
+.animal-thinking-bubble {
+ display:inline-flex;
+ align-self:flex-start;
+ max-width:100%;
+ min-width:0;
+ padding-top:20px;
+ color:var(--text-secondary);
+ font-size:var(--font-size-process);
+ font-weight:var(--font-weight-normal);
+ line-height:1.6;
+}
+.animal-thinking-surface {
+ position:relative;
+ box-sizing:border-box;
+ max-width:100%;
+ min-width:0;
+ padding:18px 22px;
+ border:1px solid var(--border-strong);
+ border-radius:14px;
+ corner-shape:var(--corner-window,round);
+ background:var(--background);
+}
+.animal-thinking-label { overflow-wrap:anywhere; }
+.animal-thinking-character {
+ position:absolute;
+ top:calc(-1px - var(--thinking-character-ground));
+ left:18px;
+ width:28px;
+ height:28px;
+ pointer-events:none;
+}
+.animal-thinking-character[data-side=right] { left:auto; right:16px; }
+.animal-thinking-character > .lake-avatar-figure { display:block; width:28px; height:28px; max-width:none; max-height:none; overflow:visible; }
+.animal-thinking-character[data-variant="1"] > .lake-avatar-figure { transform:scaleX(-1); }
+.animal-thinking-character .avatar-body { transform-box:view-box; transform-origin:32px 50px; }
+.animal-thinking-character .avatar-eye { transform-box:fill-box; transform-origin:center; }
+.reply-duration.is-animal-thinking { flex-direction:column; align-items:flex-start; gap:6px; min-height:0; padding-block:0; border:0; }
+.reply-duration.is-animal-thinking .animal-thinking-meta { display:flex; align-items:center; flex-wrap:wrap; gap:6px; min-width:0; color:var(--text-muted); }
+.reply-duration.is-animal-thinking .turn-duration-disclosure { width:auto; }
+@media (prefers-reduced-motion:reduce) {
+ .animal-thinking-character,.animal-thinking-character * { animation:none!important; transition:none!important; }
+}
