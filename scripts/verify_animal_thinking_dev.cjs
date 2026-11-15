@@ -2,14 +2,16 @@
 /* Installed Lake Dev, real Pilot/Worker flow, disposable data, local model only.
  *
  * node scripts/verify_animal_thinking_dev.cjs [new-metadata-file]
- * The script prints a private metadata path after eight specialists and three
- * held Workers (otter/owl/turtle) are ready. Read controlOrigin from that file:
+ * The script prints a private metadata path after eight specialists and two
+ * held Workers (otter/owl) are ready. Read controlOrigin from that file:
  *   GET  /status
- *   POST /dispatch?animal=bee       start one of the other five Workers
+ *   POST /dispatch?animal=bee       start another Worker after releasing a slot
  *   POST /stream?animal=otter       send body text; leave the response open
  *   POST /complete?animal=otter     send work_finish and end the response
  *   POST /release-all              complete all dispatched Workers
  *   POST /finish                   complete Workers, then close this fixture
+ * Each project runs at most two Workers. /dispatch returns 409 while both slots
+ * are occupied; complete one Worker (or /release-all), wait, then retry dispatch.
  * No app is stopped by this script. The isolated native PID is in metadata;
  * quit that Lake Dev window when finished. Its private evidence directory stays.
  */
@@ -27,7 +29,7 @@ const animals = [
   {id: 'turtle', name: '乌龟'}, {id: 'bee', name: '蜜蜂'},
   {id: 'woodpecker', name: '啄木鸟'}, {id: 'pufferfish', name: '河豚'},
 ];
-const initialAnimals = ['otter', 'owl', 'turtle'];
+const initialAnimals = ['otter', 'owl'];
 const setupText = '创建八位思考动画验收专员，头像分别使用 otter、beaver、owl、fox、turtle、bee、woodpecker、pufferfish；全部使用原生 Agent 和当前本地验证模型。只进行隔离界面验收，不连接业务资源。';
 const modelKey = 'synthetic-animal-thinking-dev-key';
 const slots = new Map(animals.map(animal => [animal.id, {
@@ -290,6 +292,17 @@ async function handle(req, res) {
   if (!slot) return json(res, 400, {error: 'unknown animal', animals: [...slots.keys()]});
   if (url.pathname === '/dispatch') {
     if (slot.dispatched || slot.dispatching) return json(res, 200, status());
+    await refreshWorkspace();
+    // Recheck after I/O: another control request may have reserved this animal.
+    if (slot.dispatched || slot.dispatching) return json(res, 200, status());
+    const occupied = [...slots.values()].filter(other => other.dispatching ||
+      other.worker?.assignmentState === 'active' &&
+      !['completed', 'failed', 'cancelled'].includes(other.worker.state));
+    if (occupied.length >= 2) return json(res, 409, {
+      error: 'release required',
+      message: 'This project already has two active Workers. Complete one with /complete?animal=NAME (or /release-all), wait for it to finish, then retry /dispatch.',
+      activeAnimals: occupied.map(other => other.id),
+    });
     // Reserve before queueing, so duplicate control calls cannot create tasks.
     slot.dispatching = true;
     dispatchQueue = dispatchQueue.then(() => dispatch(slot.id)).catch(() => {
@@ -366,7 +379,7 @@ async function main() {
   await api(`/api/sessions/${routerSessionId}/messages`, 'POST', {text: setupText});
   await until(refreshWorkspace, () => [...slots.values()].every(slot => slot.roleId && slot.channelSessionId), 'specialist-setup-timeout');
   await until(() => api(`/api/sessions/${routerSessionId}/snapshot`), value => value.ai?.status === 'completed', 'pilot-setup-timeout');
-  stage = 'starting-three-workers';
+  stage = 'starting-two-workers';
   for (const animal of initialAnimals) await dispatch(animal);
   ready = true; stage = 'ready';
   await saveMetadata();
