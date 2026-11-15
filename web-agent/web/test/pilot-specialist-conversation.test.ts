@@ -26,7 +26,8 @@ test('Pilot retains each dispatched worker after its own reply, with exact task 
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,pilotWorkspace:state,assistantIdentity:{name:'Pilot',pilot:true},onSpecialist(){}}));
  assert.ok(html.indexOf('我会检查这两项。')<html.indexOf('pilot-specialist-reply'));
  assert.equal((html.match(/data-worker-id=/g)??[]).length,2);
- assert.ok(html.includes('turn-activity-mark')&&html.includes('data-motion="working"'));
+ assert.ok(html.includes('animal-thinking-bubble')&&html.includes('data-motion="thinking"'));
+ assert.doesNotMatch(html,/turn-activity-mark|data-motion="working"/);
  assert.ok(html.includes('<strong>服务器专员</strong>')&&html.includes('<strong>数据库专员</strong>'));
  assert.doesNotMatch(html,/pilot-dispatch-progress|专员工作进展/);
  assert.equal(JSON.stringify(snapshot),before,'live progress must never be persisted as a reply or report');
@@ -35,8 +36,10 @@ test('Pilot retains each dispatched worker after its own reply, with exact task 
 test('queued, human confirmation, questions and external waits stay static; only current work moves',()=>{
  for(const phase of ['queued','thinking','tool','waiting_approval','waiting_input','waiting_external'] as const){
   const item=worker();item.activity!.phase=phase;item.activity!.label=phase==='queued'?'准备处理':phase.startsWith('waiting')?'等待确认':'正在分析';
-  const html=render(workspace([item])),moving=['thinking','tool'].includes(phase);
-  assert.equal(html.includes('turn-activity-mark'),moving,phase);assert.equal(html.includes('data-motion="working"'),moving,phase);
+  const html=render(workspace([item]));
+  assert.equal(html.includes('animal-thinking-bubble'),phase==='thinking',phase);
+  assert.equal(html.includes('data-motion="thinking"'),phase==='thinking',phase);
+  assert.equal(html.includes('turn-activity-mark'),phase==='tool',phase);assert.equal(html.includes('data-motion="working"'),phase==='tool',phase);
  }
  const offline=render(workspace(),false);
  assert.ok(offline.includes('进度暂未更新，正在重连'));assert.ok(!offline.includes('data-motion="working"')&&!offline.includes('turn-activity-mark'));
