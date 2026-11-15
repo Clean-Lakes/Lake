@@ -16,6 +16,7 @@ import {contextLabel, discoveredModels, providerDraft, providerPayload, provider
 import {parseSendShortcut, type SendShortcut} from "./composerKeyboard";
 import {ProviderQuickSetup,ProviderModelPicker} from "./ProviderSetup";
 import {type ProviderPreset} from "./providerPresets";
+import {trapSettingsTab} from './settingsFocus';
 import "./modelSettings.css";
 import "./externalAgents.css";
 import "./gatewaySettings.css";
@@ -100,11 +101,7 @@ export function ModelSettings({initialTab="models",onClose,onChanged,sendShortcu
     dialogRef.current?.focus();
     const key = (event:KeyboardEvent) => {
       if (event.key === "Escape" && !busyRef.current) {event.preventDefault();event.stopPropagation();closeRef.current();}
-      if (event.key !== "Tab") return;
-      const items = [...(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),summary,[tabindex="0"]') || [])].filter(item => item.getClientRects().length);
-      const first=items[0],last=items[items.length-1];
-      if (event.shiftKey && (document.activeElement===first || document.activeElement===dialogRef.current)) {event.preventDefault();last?.focus();}
-      else if (!event.shiftKey && (document.activeElement===last || document.activeElement===dialogRef.current)) {event.preventDefault();first?.focus();}
+      trapSettingsTab(event,dialogRef.current);
     };
     document.addEventListener("keydown",key);
     return () => {document.removeEventListener("keydown",key);previous?.focus();};

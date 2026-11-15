@@ -25,6 +25,8 @@
 
 第二次比较：`dark-desktop-second.png`，已安装 Dev `c5d15701`。940px 高度、字段对齐与字号层级已修复；相同状态下页脚 bottom 990.98px 超过弹窗 bottom 981px，仍为 P2。已压缩详情与分组的纵向间距，浏览器临时样式预览显示页脚完整进入首屏；临时样式截图不作为最终通过证据。另将连接卡片统一到 14px 面板圆角。下一次比较须使用重新安装后的资产。
 
+第三次比较：签名安装版 `3c238995`，没有样式注入。页脚 bottom 937.98px、管理入口 bottom 976.48px 均位于弹窗 bottom 981px 内；浅色、深色及 390px 窄窗无横向溢出，任务宽度与 scrollWidth 均为 300px。独立复核确认视觉 P2 已解决。键盘实测另发现 [P2]：Chromium 中 closed details 子按钮仍有非零 rect，原焦点列表误纳入隐藏按钮，Tab 可跳到背景。已补筛选和回归，待新安装版验证。
+
 ## Implementation checklist
 
 - 修复三个 P2，构建新的签名 Lake Dev。
