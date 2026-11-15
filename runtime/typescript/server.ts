@@ -41,6 +41,7 @@ import {agentCapabilityCatalog,nativeSearchSupported} from "./capabilities";
 import { importLegacyModelSettings } from "./dev-settings";
 import {validateRuntimeProfile} from './runtime-profile';
 import { LakeSuperagent } from "./superagent";
+import { LakeGateway, type GatewayAuth } from "./gateway";
 import { applyLegacyMigration, importLegacySSH, importLegacyMySQL, importLegacyMCP, importLegacyServices, importLegacyWorkflows, loadLegacyView } from "./migration";
 import { digest } from "./tasks";
 import { LakeSecurity } from "./security";
@@ -155,6 +156,7 @@ export async function startLakeServer(options: ServerOptions) {
   let store: LakeStore | undefined;
   let agents: LakeAgents | undefined;
   let superagent: LakeSuperagent | undefined;
+  let gateway: LakeGateway | undefined;
   let security: LakeSecurity | undefined;
   let memory: LakeMemory | undefined;
   let extensions: LakeExtensions | undefined;
@@ -181,6 +183,13 @@ export async function startLakeServer(options: ServerOptions) {
     });
     response.end(encode(value));
   };
+  // The exact stdio command for external MCP clients on this install type.
+  const gatewayCommand = () => ({
+    program: process.execPath,
+    script: isSea() ? undefined : process.argv[1],
+    home: options.home,
+    data: options.data,
+  });
   const server = createServer(async (request, response) => {
     response.setHeader("X-Content-Type-Options", "nosniff");
     response.setHeader("Referrer-Policy", "no-referrer");
@@ -226,8 +235,16 @@ export async function startLakeServer(options: ServerOptions) {
           .map((part) => part.trim())
           .find((part) => part.startsWith("lake_session="))
           ?.slice("lake_session=".length) ?? "";
-      if (!equal(token, bearer) && !equal(token, cookie))
+      let gatewayAuth: GatewayAuth | undefined;
+      if (path[1] === "gateway") {
+        // External agent clients authenticate with their own scoped token.
+        // The UI session token deliberately cannot open the gateway, and the
+        // gateway token deliberately cannot open anything else.
+        if (!gateway) throw new HttpError(503, "服务正在启动");
+        gatewayAuth = gateway.authenticate(bearer);
+      } else if (!equal(token, bearer) && !equal(token, cookie)) {
         throw new HttpError(401, "需要 Lake 访问凭据");
+      }
       if (!store || !agents || !superagent) throw new HttpError(503, "服务正在启动");
       if (path[1] === "bootstrap")
         response.setHeader(
@@ -240,6 +257,13 @@ export async function startLakeServer(options: ServerOptions) {
       const navigation = new LakeNavigation(store, broadcast);
       const resourceNavigation = new LakeResourceNavigation(store, projectId => store!.list<any>('sessions').some(session => session.projectId === projectId && agents!.isRunning(session.id)));
       await store.refreshModels();
+      const validateGatewayScope = (projectId: unknown, routing: unknown) => {
+        if (typeof projectId !== 'string' || !projectId) throw new HttpError(400, '请选择所属项目');
+        store!.project(projectId);
+        const route = routing as {mode?: unknown; roleId?: unknown} | undefined;
+        if (route?.mode === 'specialist' && !superagent!.gatewaySpecialists(projectId).specialists.some(role => role.roleId === route.roleId))
+          throw new HttpError(400, '指定专员不属于当前项目或已删除');
+      };
       const selection = () =>
         store!.modelSelection();
       const catalog = () => ({
@@ -755,6 +779,82 @@ export async function startLakeServer(options: ServerOptions) {
         else if (path.length === 4 && method === "PUT") result = extensions!.saveSkill(path[3], data);
         else if (path.length === 4 && method === "DELETE") result = extensions!.removeSkill(path[3]);
         else throw new HttpError(405, "不支持此 Skill 配置操作");
+      } else if (path[1] === "gateway") {
+        const auth = gateway!.authenticate(bearer);
+        if (path[2] === 'connection' || path[2] === 'messages') {
+          const connection = gateway!.requireConnection(auth);
+          const guard = () => {
+            const current = gateway!.requireConnection(gateway!.authenticate(bearer));
+            if (current.id !== connection.id || current.updatedAt !== connection.updatedAt) throw new HttpError(409, '连接配置已变化，请重新读取后重试');
+            validateGatewayScope(current.projectId, current.routing);
+          };
+          guard();
+          if (path[2] === 'connection' && path.length === 3 && method === 'GET')
+            result = {connection, ready: true, message: 'Lake 后端已就绪；此请求已通过当前连接认证。', lastReceivedAt: superagent.lastGatewayMessageAt(connection.id)};
+          else if (path[2] === 'messages' && path.length === 3 && method === 'POST') {
+            if (draining) throw new HttpError(503, '服务正在退出');
+            if (Object.keys(data).some(key => !['text', 'threadId', 'threadTitle', 'clientMessageId', 'replyTo'].includes(key))) throw new HttpError(400, '消息字段无效');
+            result = await superagent.gatewayMessage(connection, data as import('../../web-agent/shared/contracts').GatewayMessageInput, guard);
+            status = 202;
+          } else if (path[2] === 'messages' && path.length === 4 && method === 'GET') {
+            const waitSeconds = Number(url.searchParams.get('waitSeconds') ?? 0);
+            if (!Number.isSafeInteger(waitSeconds) || waitSeconds < 0 || waitSeconds > 60) throw new HttpError(400, 'waitSeconds 须为 0–60 的整数');
+            result = await superagent.gatewayMessageStatus(connection.id, path[3], waitSeconds, guard);
+          } else throw new HttpError(405, '不支持此消息接入请求');
+          guard();
+        } else if (path[2] === "specialists" && path.length === 3 && method === "GET") {
+          gateway!.requireLegacy(auth);
+          const { specialists } = superagent.gatewaySpecialists(url.searchParams.get("projectId") || undefined);
+          result = { specialists: auth.roles ? specialists.filter(specialist => auth.roles!.includes(specialist.roleId)) : specialists };
+        } else if (path[2] === "specialists" && path.length === 5 && path[4] === "instructions" && method === "POST") {
+          const guard = () => gateway!.requireRole(gateway!.authenticate(bearer), path[3]);
+          guard();
+          if (draining) throw new HttpError(503, "服务正在退出");
+          result = await superagent.gatewayInstruction(path[3], { text: data.text, clientRequestId: data.clientRequestId }, guard);
+          guard();
+          status = 202;
+        } else if (path[2] === "instructions" && path.length === 4 && method === "GET") {
+          const waitSeconds = Number(url.searchParams.get("waitSeconds") ?? 0);
+          if (!Number.isSafeInteger(waitSeconds) || waitSeconds < 0 || waitSeconds > 60) throw new HttpError(400, "waitSeconds 须为 0–60 的整数");
+          const event = store.get<{ external?: unknown; preferredRoleId?: string }>("superInputs", path[3]) ??
+            store.list<{ external?: unknown; preferredRoleId?: string; messageId?: string }>("superInputs")
+              .find(candidate => candidate.external && candidate.messageId === path[3]);
+          if (!event?.external) throw new HttpError(404, "外部指令不存在");
+          if ((event.external as {connectionId?: string}).connectionId) throw new HttpError(403, '项目连接消息不可通过专员接口读取');
+          gateway!.requireRole(auth, event.preferredRoleId ?? "");
+          result = await superagent.instructionStatus(path[3], waitSeconds);
+          gateway!.requireRole(gateway!.authenticate(bearer), event.preferredRoleId ?? '');
+        } else throw new HttpError(405, "不支持此网关请求");
+      } else if (path[1] === "settings" && path[2] === "gateway") {
+        if (path[3] === 'connections') {
+          if (path.length === 4 && method === 'GET') result = {
+            connections: gateway!.connections().map(connection => ({...connection, lastReceivedAt: superagent!.lastGatewayMessageAt(connection.id)})),
+            command: gatewayCommand(), projects: store.catalog().projects.map(({id, name}) => ({id, name})),
+            specialists: superagent.gatewaySpecialists().specialists, legacyTokens: gateway!.list().tokens,
+          };
+          else if (path.length === 4 && method === 'POST') {
+            validateGatewayScope(data.projectId, data.routing);
+            result = gateway!.createConnection(data); status = 201;
+          } else if (path.length === 5 && method === 'PATCH') {
+            const current = gateway!.connection(path[4]);
+            if (data.routing !== undefined || data.enabled === true) validateGatewayScope(current.projectId, data.routing ?? current.routing);
+            result = gateway!.updateConnection(path[4], data);
+          } else if (path.length === 5 && method === 'DELETE') result = gateway!.removeConnection(path[4]);
+          else if (path.length === 6 && path[5] === 'messages' && method === 'GET') {
+            gateway!.connection(path[4]);
+            const limit = Number(url.searchParams.get('limit') ?? 20);
+            if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) throw new HttpError(400, 'limit 须为 1–50 的整数');
+            result = superagent.gatewayMessages(path[4], {limit, cursor: url.searchParams.get('cursor') ?? undefined});
+          } else if (path.length === 6 && path[5] === 'test' && method === 'POST') {
+            const connection = gateway!.connection(path[4]); validateGatewayScope(connection.projectId, connection.routing);
+            result = {ready: connection.enabled, lastReceivedAt: superagent.lastGatewayMessageAt(connection.id),
+              message: connection.enabled ? 'Lake 后端与连接配置已就绪。请从外部客户端调用 test_connection 验证实际接入。' : '连接已停用；启用后可测试外部客户端接入。'};
+          } else throw new HttpError(405, '不支持此接入连接操作');
+        } else if (path[3] === "tokens" && path.length === 4 && method === "GET") result = {...gateway!.list(), command: gatewayCommand()};
+        else if (path[3] === "tokens" && path.length === 4 && method === "POST") { result = gateway!.create(data); status = 201; }
+        else if (path[3] === "tokens" && path.length === 5 && method === "DELETE") result = gateway!.remove(path[4]);
+        else if (path[3] === "specialists" && path.length === 4 && method === "GET") result = superagent.gatewaySpecialists();
+        else throw new HttpError(405, "不支持此网关凭据操作");
       } else if (path[1] === "ai" && path[2] === "presets" && path.length === 3) {
         if (method === "GET") result = store.list("aiPresets");
         else if (method === "POST") {
@@ -793,6 +893,7 @@ export async function startLakeServer(options: ServerOptions) {
     services?.close();mysql?.close();
     await execution?.close();
     await extensions?.close();
+    gateway?.close();
     for (const set of clients.values()) for (const response of set) response.end();
     await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
     store?.close();
@@ -805,6 +906,7 @@ export async function startLakeServer(options: ServerOptions) {
     agents = await LakeAgents.open(store, broadcast,options.codexHome);
     store.magpie = await LakeMagpie.connect(store, key => agents!.registerSecret(key));
     security = new LakeSecurity(store);
+    gateway = new LakeGateway(options.home, security);
     extensions = new LakeExtensions(store, security, (value) => agents!.redact(value));
     ssh=new LakeSSH(store,security,(session)=>{broadcast(store!.event(session,"session"));superagent?.changed(session);},value=>extensions!.scrub(value),value=>agents!.registerSecret(value));
     mysql=new LakeMySQL(store,security,value=>agents!.registerSecret(value),value=>agents!.redact(value));
@@ -868,13 +970,27 @@ async function main() {
     if(!args[1])throw new Error('ACP 工具桥缺少原任务端点');
     const {runToolBridge}=await import('./acp/bridge');await runToolBridge(args[1]);return;
   }
+  if(args[0]==='--mcp-channel'){
+    const option=(name:string)=>{const index=args.indexOf(name);return index>=0?args[index+1]:undefined;};
+    const home=option('--home'),connectionId=option('--connection');
+    if(!home||!connectionId)throw new Error('请使用 --home 和 --connection 显式指定 Lake 数据目录与接入连接');
+    const {runChannelMcp}=await import('./mcp-stdio');
+    await runChannelMcp({home,data:option('--data'),connectionId});return;
+  }
+  if(args[0]==='--mcp-specialist'){
+    const option=(name:string)=>{const index=args.indexOf(name);return index>=0?args[index+1]:undefined;};
+    const home=option('--home')??process.env.LAKE_HOME;
+    if(!home)throw new Error('请使用 --home 显式指定 Lake 数据目录');
+    const {runSpecialistMcp}=await import('./mcp-stdio');
+    await runSpecialistMcp({home,data:option('--data'),role:option('--role'),tokenId:option('--token-id')});return;
+  }
   if (args.includes("--version")) {
     console.log(`Lake ${typeof __LAKE_VERSION__==='undefined'?'development':__LAKE_VERSION__} TypeScript`);
     return;
   }
   if (args.includes("--help") || !args.length) {
     console.log(
-      "Lake TypeScript backend\n用法：lake web --home <目录> [--port 0] [--data <目录>] [--dev | --production]",
+      "Lake TypeScript backend\n用法：lake web --home <目录> [--port 0] [--data <目录>] [--dev | --production]\n消息渠道接入：lake --mcp-channel --home <目录> --connection <id> [--data <目录>]\n兼容专员入口：lake --mcp-specialist --home <目录> [--role <roleId>] [--token-id <id>]",
     );
     return;
   }

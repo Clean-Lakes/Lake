@@ -1,0 +1,37 @@
+{
+  "viewport": [
+    1538,
+    1022,
+    1
+  ],
+  "theme": "dark",
+  "styleOverride": false,
+  "dialog": {
+    "top": 41,
+    "bottom": 981,
+    "width": 1248,
+    "height": 940
+  },
+  "footer": {
+    "top": 880.9765625,
+    "bottom": 937.9765625,
+    "width": 762,
+    "height": 57
+  },
+  "manage": {
+    "top": 949.9765625,
+    "bottom": 976.4765625,
+    "width": 762,
+    "height": 26.5
+  },
+  "fields": [
+    335.59375,
+    335.59375
+  ],
+  "cornerShape": true,
+  "radii": {
+    "connection": "14px",
+    "source": "14px",
+    "select": "10px"
+  }
+}

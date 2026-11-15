@@ -1,0 +1,30 @@
+{
+  "sourceSHA": "97a3bd6de1d516bfc3737d7e2857464a75dd5531",
+  "styleOverrides": false,
+  "before": "running",
+  "after": "replied",
+  "reports": 2,
+  "exactTaskNavigation": {
+    "projectId": "92f0e1d2-c515-415c-bd72-31f2d8475108",
+    "sessionId": "sw_b7124ccdbc30e4e5b29e825e00bf082a",
+    "taskId": "st_b7124ccdbc30e4e5b29e825e00bf082a",
+    "url": "http://localhost:53177/?session=sw_b7124ccdbc30e4e5b29e825e00bf082a"
+  },
+  "consoleErrorCount": 0,
+  "viewports": [
+    [
+      1538,
+      1022,
+      1
+    ],
+    [
+      390,
+      844,
+      1
+    ]
+  ],
+  "themes": [
+    "dark",
+    "light"
+  ]
+}

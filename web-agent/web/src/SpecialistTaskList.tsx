@@ -59,6 +59,7 @@ export function SpecialistTaskList({channel,rows,selectedSessionId,onTask,connec
        <span className="specialist-task-topline"><strong title={worker.task.title}>{worker.task.title}</strong>{updated!=='—'&&<time dateTime={row.updatedAt} title={new Date(row.updatedAt!).toLocaleString('zh-CN',{hour12:false})}>{updated}</time>}</span>
        <span className="specialist-task-meta">
         <span className="specialist-task-agent"><ExecutionAgentIcon agent={worker.execution?.backend.kind==='acp'?worker.execution.backend.agent:undefined} size={12}/><span>{row.agent}</span></span>
+        {worker.sourceExternal&&<span className="external-origin-badge" title="任务来自外部研发 Agent 的指令（MCP）"><Glyph name="plug" size={12}/>外部 Agent</span>}
         {context&&<span className="specialist-task-context" title={context}>{context}</span>}
         {progress?<span className="specialist-task-progress"><span role="progressbar" aria-label={`${worker.task.title}步骤进度`} aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.completed}><i style={{width:`${100*progress.completed/progress.total}%`}}/></span><small>{progress.completed} / {progress.total}</small></span>:<span className="visually-hidden">步骤进度未报告</span>}
        </span>

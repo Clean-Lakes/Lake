@@ -1,0 +1,20 @@
+{
+  "sourceSHA": "8a93b9f91cca0d6bae7d81590a1d78e55d35fc37",
+  "checks": [
+    "copy config",
+    "test connection",
+    "recent/history toggle",
+    "exact task navigation",
+    "keyboard fixed-role selection",
+    "create",
+    "disable/enable",
+    "rename",
+    "delete",
+    "legacy revoke",
+    "live 1/2 to 2/2"
+  ],
+  "remainingConnections": 3,
+  "legacyRemaining": 0,
+  "previewState": "replied",
+  "consoleErrorCount": 0
+}

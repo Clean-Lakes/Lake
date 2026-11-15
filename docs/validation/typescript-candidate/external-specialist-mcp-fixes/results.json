@@ -1,0 +1,122 @@
+{
+  "date": "2026-11-15",
+  "testedSHA": "e42f948287fd3b6f331d8e16f73761a00314f25b",
+  "buildDirty": false,
+  "backendSHA256": "a1db0f73fde5a6c17f7ae12af5f42fb30c7d38f63e9ab8ce3da4c0e125c1dda9",
+  "automated": {
+    "typescript": {
+      "total": 319,
+      "passed": 315,
+      "skipped": 4
+    },
+    "http": {
+      "total": 270,
+      "passed": 264,
+      "skipped": 6
+    },
+    "frontend": {
+      "total": 824,
+      "passed": 824
+    },
+    "gatewayUnit": 10,
+    "gatewayHttp": 11,
+    "gatewayFrontend": 4
+  },
+  "devProtocol": {
+    "testedSHA": "e42f9482",
+    "model": "deterministic local HTTP fixture",
+    "checks": [
+      {
+        "name": "signed stdio handshake and custom data command",
+        "pass": true,
+        "tools": [
+          "send_instruction",
+          "wait_instruction",
+          "get_instruction_status"
+        ]
+      },
+      {
+        "name": "eight concurrent retries produce one instruction and one task",
+        "pass": true,
+        "instructions": 1,
+        "tasks": 1
+      },
+      {
+        "name": "a prior turn finishing after the new input does not steal its reply",
+        "pass": true,
+        "state": "replied"
+      },
+      {
+        "name": "Pilot clarification returns waiting_input",
+        "pass": true
+      },
+      {
+        "name": "one-second MCP wait returns running within its budget",
+        "pass": true,
+        "elapsedMs": 1003
+      },
+      {
+        "name": "a running long poll sees the stopped pending event",
+        "pass": true,
+        "state": "stopped"
+      }
+    ]
+  },
+  "ui": {
+    "native": "installed Lake Dev.app, isolated --lake-home and custom --lake-data",
+    "browser": "Ego Lite, same installed Dev backend",
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "widths": [
+      1110,
+      390
+    ],
+    "keyboard": "ArrowDown opens AppSelect; Escape closes only the dropdown and preserves trigger focus",
+    "narrowDocumentWidth": 390,
+    "narrowPanelOverflow": false,
+    "screenshots": {
+      "gateway-dark-1110.png": [
+        1110,
+        860
+      ],
+      "gateway-dark-390-command.png": [
+        390,
+        844
+      ],
+      "gateway-dark-390-top.png": [
+        390,
+        844
+      ],
+      "gateway-keyboard-light.png": [
+        1512,
+        761
+      ],
+      "gateway-light-1110.png": [
+        1110,
+        860
+      ],
+      "gateway-light-390-command.png": [
+        390,
+        844
+      ],
+      "installed-dev-dark.jpg": [
+        2416,
+        1604
+      ]
+    }
+  },
+  "limitations": [
+    "No real Claude Code or Codex application connected; MCP used the pinned official SDK client and installed signed binary.",
+    "Dev model responses were deterministic local HTTP fixtures; no external model or business resource requests.",
+    "Windows and Linux were not run."
+  ],
+  "restoredDailyDev": {
+    "home": "/Users/lingyunxieqing/.lake-dev",
+    "totalResources": 162,
+    "projectCount": 20,
+    "specialistCount": 21,
+    "selectedProjectResources": 136
+  }
+}

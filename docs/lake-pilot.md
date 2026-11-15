@@ -208,3 +208,30 @@ Pilot 和专员模型菜单中的“配置 Codex”均可打开当前项目的 A
 专员频道与任务执行详情显示“专员 → 任务 Worker → 执行 Agent”、实际派发/运行状态和回传报告。没有运行记录时显示“尚未派发”；“已回传”只表示外部运行结束，任务完成仍由真实工具回执验收。输入区只保留原模型入口；供应商名称中含 Codex 的普通模型仍是模型服务，独立 Codex 选项以 Agent / ACP 标识。
 
 Agent 设置还可修改专员的新任务默认后端。未设置偏好的专员默认 Codex，明确保存过的原生选择继续有效。修改连接配置或本机 Codex 的配置/账号会停止旧调用，后续新任务使用最新配置；同账号令牌正常刷新保持身份，旧 Worker 不被改写。已移除 runtime-acp 外部后端及其新任务入口，历史运行与未知操作保留，不自动改派。原生 Worker 可以通过 Agent 创建 codex-acp 子任务，或使用 run_external_agent 委派 Codex 执行段；原生子任务也可委派外部段。独立任务、逻辑 child 与外部执行段保留各自身份，回传不会自行生成验收证据。当前范围与未验证项见 [ACP 兼容记录](validation/acp-agent-execution/compatibility.md)。
+
+## 接入渠道（MCP，TypeScript Dev）
+
+在设置 → 接入渠道添加连接，例如「我的 Codex」，选择消息所属项目及处理方式。默认「Pilot 自动路由」会按消息直接答复、追问或安排专员；固定专员适合明确限定角色的入口。连接创建后项目固定，如需切换项目应另建连接。
+
+复制接入配置得到包含实际程序、`--home`、`--data` 和 `--connection` 参数的 MCP JSON；凭据保存在本机私有目录，配置中不包含明文秘密。命令入口为 `<Lake 运行程序> --mcp-channel --home <Home> [--data <Data>] --connection <连接ID>`。Lake 与客户端须运行在同一台机器、同一系统用户下；启动 Lake 后使用以下工具：
+
+| 工具 | 用途 |
+| --- | --- |
+| `send_message` | 提交 `text`、`thread_id`、`client_message_id`，可带 `thread_title`；重试复用同一消息键，修改正文须换键。 |
+| `get_message_status` | 按 `message_id` 读取原消息的任务、进展、等待信息及回复。 |
+| `wait_message` | 在 `timeout_seconds` 预算内等待，最长 600 秒；超时返回已观测状态。 |
+| `test_connection` | 验证本机后端和当前连接认证，不派发模型或业务任务。 |
+
+需要回答追问时，在同一 `thread_id` 发送新消息并用 `reply_to` 引用原 `message_id`。线程连续不等于永远复用同一任务；新目标仍由 Pilot 判断。独立连接和线程使用不同的消息/幂等身份，不能通过另一连接读取或续接原消息。
+
+「消息与任务」按来源展示所有关联执行，每项显示负责专员、当前进展及报告，并可打开 Lake 原有任务详情。某个专员先提交报告时，其余任务继续显示真实进展；报告已提交不等于宿主独立验收业务成功。结果由 MCP 客户端读取，Lake 不把可读取结果声称为远端已收到或阅读。
+
+启停连接只控制接入与读取，不自动停止已接收任务；停止任务仍在原任务界面操作。删除连接立即吊销凭据，历史消息和任务保留。修改路由只影响后续准入，不改写已派出的任务。设置页的「测试接入」只检查后端配置和最近收件，客户端实际连接需要运行复制配置或调用 MCP `test_connection`。
+
+旧单专员入口仍可使用，并在「兼容接入」保留原凭据管理；不会自动扩大为项目连接。
+
+### 原单专员入口（兼容）
+
+原配置命令为 `<Lake 运行程序> --mcp-specialist --home <Home> [--data <Data>] [--role <RoleID>] [--token-id <凭据ID>]`。不带 `--role` 时提供 `list_specialists` 共享模式；带 `--role` 时绑定单个专员。工具包括 `send_instruction`（支持 `client_request_id` 幂等重试）、`wait_instruction`（最长 600 秒）和 `get_instruction_status`。兼容凭据只能使用原接口，项目连接只能使用新消息接口。
+
+外部指令等同研发人员在专员频道亲手输入：进入 Pilot 路由，可创建或续接业务任务，Lake Security、operation permissions、计划与审批确认全部照旧在 Lake 界面完成；MCP 工具本身没有任何资源工具或许可签发能力。网关凭据是独立签发的受限令牌（存 `<Home>/secrets/mcp-gateway.json`，0600 私有文件、constant-time 校验），只允许发指令和读取指令状态，可限定专员范围，删除立即失效；它与 UI 会话令牌互不通用。指令消息带 `external` 来源标记并在频道显示"外部 Agent"徽标；停止频道后未结指令进入已停止状态，已停止/已取消任务的署名通知不会冒充正常回应。`waitSeconds` 长轮询上限 60 秒，指令文本上限 16KB。

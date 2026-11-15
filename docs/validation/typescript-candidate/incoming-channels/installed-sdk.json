@@ -1,0 +1,47 @@
+{
+  "model": "deterministic local HTTP fixture",
+  "checks": [
+    {
+      "name": "signed installed stdio, custom data path and read-only connection test",
+      "pass": true
+    },
+    {
+      "name": "concurrent duplicate admits once, two tasks wait for all reports, bounded wait",
+      "pass": true,
+      "taskCount": 2,
+      "elapsedMs": 1005
+    },
+    {
+      "name": "both task reports and exact existing task sessions",
+      "pass": true
+    },
+    {
+      "name": "connection isolation, independent idempotency and clarification continuation",
+      "pass": true
+    },
+    {
+      "name": "disabled connection immediately rejects requests",
+      "pass": true
+    },
+    {
+      "name": "fixed specialist routing uses one bound existing specialist task",
+      "pass": true
+    }
+  ],
+  "build": {
+    "schemaVersion": 1,
+    "gitHead": "97a3bd6de1d516bfc3737d7e2857464a75dd5531",
+    "gitBranch": "",
+    "sourceRoot": "/Users/lingyunxieqing/.codex/worktrees/lake-incoming-validation/Lake",
+    "version": "0.3.33",
+    "dirty": false,
+    "backendRuntime": "typescript",
+    "backendSHA256": "d38e9164d2c695146474a95bb39015c90b450470ca99bbe589d6affd3b896f1c",
+    "uiSourceSHA256": {
+      "AIPanel.tsx": "ee018060fc5a49bb9973aad0669558342d36daebd737678717ce56a1bda79ad9",
+      "ThinkingTimeline.tsx": "6f91639248cabfd157f3d842a91fa5b736b2cfaee970b92c86f7ebf0ed31cc71",
+      "ReplyDuration.tsx": "91deab95bb740d6681a7af22dc273b34cf83492b55bdae392a1554a412adb4eb",
+      "conversation-progress-model.ts": "f6a472e18129d84872b54c704576feb40387e2d6bdb41beabfd427989429019d"
+    }
+  }
+}
