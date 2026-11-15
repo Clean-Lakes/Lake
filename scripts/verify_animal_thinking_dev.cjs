@@ -352,8 +352,15 @@ async function main() {
   controlOrigin = 'http://127.0.0.1:' + provider.address().port;
   stage = 'starting-isolated-dev';
   const log = await fs.open(path.join(home, 'native.log'), 'wx', 0o600);
+  const fixtureCodexHome = path.join(home, 'empty-codex-config');
+  await fs.mkdir(fixtureCodexHome, {mode: 0o700});
   const env = {...process.env};
   for (const key of ['LAKE_HOME', 'LAKE_WEB_DATA_DIR', 'LAKE_WEB_TOKEN', 'LAKE_DEV_HOME', 'LAKE_DEV_WEB_DATA_DIR', 'LAKE_DEV_WEB_TOKEN']) delete env[key];
+  // This fixture exercises native Workers only. Runtime capability discovery
+  // also inspects Codex configuration; keep that source empty so local OAuth
+  // tokens cannot enlarge the shared streaming redaction tail. The override
+  // belongs only to this child process, never to the user's Codex environment.
+  env.CODEX_HOME = fixtureCodexHome;
   const native = spawn(path.join(app, 'Contents/MacOS/Lake'), ['--lake-home', home, '--lake-data', data],
     {stdio: ['ignore', log.fd, log.fd], env});
   let nativeExited = false;

@@ -4,7 +4,7 @@ import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {Message,SessionSnapshot,SuperWorker,SuperWorkspace} from '../../shared/contracts';
 import {AITranscript} from '../src/AIPanel';
-import {PilotSpecialistConversation} from '../src/PilotSpecialistConversation';
+import {loadPilotSpecialistSnapshot,PilotSpecialistConversation,PilotSpecialistReplyView} from '../src/PilotSpecialistConversation';
 import {pilotDispatchRows,pilotSpecialistReply} from '../src/pilotSpecialistReplies';
 
 const at='2026-11-06T00:00:00Z';
@@ -64,6 +64,39 @@ test('specialist conversation reads only the exact current invocation public pro
  assert.equal(pilotSpecialistReply({...row,sourceCreatedAt:'2026-11-06T00:00:03Z'},snapshot),undefined,'a followup cannot borrow an older reply');
  assert.equal(pilotSpecialistReply({...row,activity:{...row.activity,phase:'queued'}},snapshot),undefined);
  assert.equal(JSON.stringify(snapshot),before);
+});
+
+test('Pilot live loading preserves the SDK root instead of the task inspector root and rejects changed ownership',async t=>{
+ const item=worker();item.task.originRootTurnId='super-task-origin';
+ item.task.executionGoalId='execution-goal';
+ const row=pilotDispatchRows(workspace([item]),'pilot',[user])[0]!;
+ // Shape observed in installed Lake Dev: the task origin and the current SDK
+ // invocation differ; ?taskId projects only ai.rootTurnId to the task origin.
+ const snapshot={session:{id:item.sessionId,projectId:'project'},superagent:{roleId:item.roleId,task:{...item.task}},cursor:4,
+  ai:{session:item.sessionId,status:'running',replyStatus:'running',rootTurnId:'turn-current-sdk',turnStartedAt:'2026-11-06T00:00:01Z',cards:[
+   {id:'current-message',type:'message',status:'running',at:'2026-11-06T00:00:02Z',content:'本次隔离验收正文已经开始输出。',data:{root_turn_id:'turn-current-sdk',taskId:'execution-goal'}},
+  ],cardsOffset:0,totalCards:1}} as SessionSnapshot;
+ const scoped={...snapshot,ai:{...snapshot.ai!,rootTurnId:item.task.originRootTurnId}};
+ assert.equal(pilotSpecialistReply(row,scoped)?.card,undefined,'the inspector root cannot stand in for the current model invocation');
+ let response=snapshot;const calls:{url:string;signal?:AbortSignal|null}[]=[];
+ t.mock.method(globalThis,'fetch',async(input:string,init?:RequestInit)=>{
+  calls.push({url:String(input),signal:init?.signal});
+  return Response.json(String(input).includes('?taskId=')?scoped:response);
+ });
+ const controller=new AbortController();
+ const loaded=await loadPilotSpecialistSnapshot(row,controller.signal);
+ assert.deepEqual(calls,[{url:`/api/sessions/${item.sessionId}/snapshot`,signal:controller.signal}]);
+ assert.equal(pilotSpecialistReply(row,loaded)?.card?.content,snapshot.ai!.cards[0]!.content);
+ const html=renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row,snapshot:loaded}));
+ assert.match(html,/本次隔离验收正文已经开始输出/);
+ assert.doesNotMatch(html,/animal-thinking-bubble|正在生成回复/);
+ for(const changed of [
+  {...snapshot,session:{...snapshot.session,id:'other-session'}},
+  {...snapshot,session:{...snapshot.session,projectId:'other-project'}},
+  {...snapshot,superagent:{...snapshot.superagent!,roleId:'other-role'}},
+  {...snapshot,superagent:{...snapshot.superagent!,task:{...item.task,taskId:'other-task'}}},
+  {...snapshot,superagent:{...snapshot.superagent!,task:{...item.task,executionGoalId:'other-execution'}}},
+ ]){response=changed;assert.equal(await loadPilotSpecialistSnapshot(row),undefined,'current snapshot still requires every exact ownership binding');}
 });
 
 test('live authors use the original execution and only exact delivered roots retire a live reply',()=>{

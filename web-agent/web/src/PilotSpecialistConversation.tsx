@@ -14,6 +14,13 @@ import {AnimalThinkingBubble} from './AnimalThinkingBubble';
 import {allowsAnimalThinking,turnStatus} from './turnStatus';
 import {conversationActivity} from './superAgentPresentation';
 
+export async function loadPilotSpecialistSnapshot(row:PilotSpecialistRow,signal?:AbortSignal){
+ // Task-scoped inspector snapshots replace the SDK invocation root with the
+ // task's origin root. Live prose needs the current invocation and exact owner.
+ const snapshot=await api.snapshot(row.worker.sessionId,signal);
+ return specialistSnapshotMatches(row,snapshot)?snapshot:undefined;
+}
+
 function useSpecialistReply(row:PilotSpecialistRow,connected:boolean,visible:boolean){
  const binding=JSON.stringify([row.projectId,row.worker.id,row.worker.roleId,row.worker.sessionId,row.worker.task.taskId,row.worker.task.executionGoalId,row.sourceMessageId]);
  const [state,setState]=useState<{binding:string;snapshot?:SessionSnapshot;failed:boolean}>();
@@ -25,9 +32,9 @@ function useSpecialistReply(row:PilotSpecialistRow,connected:boolean,visible:boo
   const refresh=async()=>{
    if(busy){queued=true;return;}busy=true;
    try{
-    const next=await api.snapshot(row.worker.sessionId,controller.signal,row.worker.task.executionGoalId??row.worker.task.taskId);
+    const next=await loadPilotSpecialistSnapshot(row,controller.signal);
     if(disposed)return;
-    if(!specialistSnapshotMatches(row,next)){latest=undefined;setState({binding,failed:true});return;}
+    if(!next){latest=undefined;setState({binding,failed:true});return;}
     if(!latest||next.cursor>=latest.cursor){latest=next;healthy=stream?.readyState===1;setState({binding,snapshot:next,failed:false});}
    }catch{if(!disposed){healthy=false;setState({binding,snapshot:latest,failed:true});}}
    finally{busy=false;if(queued&&!disposed){queued=false;void refresh();}}
