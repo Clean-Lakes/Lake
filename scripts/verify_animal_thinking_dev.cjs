@@ -113,8 +113,17 @@ function finishStream(res, delta) {
 function release(slot) {
   for (const response of slot.responses) {
     if (slot.requested === 'stream' && !response.textSent) {
+      // safeModel.streamText (runtime/typescript/agent.ts) retains at least the
+      // last 79 characters until text_end/finish to redact split credentials.
+      // Send 200+ synthetic characters so public prose reaches the real Worker
+      // card while this model response remains open for transition inspection.
       response.textSent = chunk(response.res, {
-        role: 'assistant', content: `${slot.name}的隔离动画验收正文已开始输出，等待完成指令。`,
+        role: 'assistant', content: [
+          `${marker(slot.id)} ${slot.name}的隔离动画验收正文已开始输出。`,
+          '这是一段完全虚构的本地验收文字，用于观察思考气泡如何交接给正在生成的正文。当前页面应保留这位专员的名称和本次任务归属，正文出现后，边框上的小动物停止显示，另一位仍在思考的专员继续保持自己的动作。',
+          '本段文字不表示执行过任何业务检查，也不包含服务器状态、凭据或真实用户资料。可以切换明暗主题、调整窗口宽度并查看正文排版，确认长句换行不会遮挡名称、任务入口或者其他专员的回复。',
+          '当前模型响应仍然保持打开，便于检查正在输出时的界面状态。只有收到本地验收控制端的完成指令后，这次演示才会提交结束报告。视觉验收结论由检查者记录，此处不预先宣称功能通过。',
+        ].join('\n\n'),
       });
       slot.textSent ||= response.textSent;
     }
