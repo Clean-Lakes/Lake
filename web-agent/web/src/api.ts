@@ -155,7 +155,7 @@ export const api = {
 	sreEvidence:(session:string,task:string,evidence:string,offset=0)=>request<{source:string;nextCursor:number|null;sourceTruncated:boolean;sourceBytes:number;collectedAt:string}>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks/${encodeURIComponent(task)}/evidence/${encodeURIComponent(evidence)}?offset=${offset}`),
 	sreExport:(session:string,task:string)=>request<{name:string;content:string}>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks/${encodeURIComponent(task)}/export`),
   mcpServers:()=>request<{servers:MCPServerConfig[]}>("/api/settings/mcp"),
-  gatewayTokens:()=>request<{tokens:import('../../shared/contracts').GatewayTokenView[];command:{program:string;script?:string;home:string}}>("/api/settings/gateway/tokens"),
+  gatewayTokens:()=>request<{tokens:import('../../shared/contracts').GatewayTokenView[];command:import('../../shared/contracts').GatewayCommand}>("/api/settings/gateway/tokens"),
   gatewaySpecialists:()=>request<{specialists:import('../../shared/contracts').GatewaySpecialistRef[]}>("/api/settings/gateway/specialists"),
   createGatewayToken:(value:{name:string;roles?:string[]})=>request<import('../../shared/contracts').GatewayTokenView&{token:string}>("/api/settings/gateway/tokens",{method:"POST",body:JSON.stringify(value)}),
   deleteGatewayToken:(id:string)=>request(`/api/settings/gateway/tokens/${encodeURIComponent(id)}`,{method:"DELETE"}),

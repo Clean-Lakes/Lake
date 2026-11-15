@@ -405,6 +405,7 @@ export type SpecialistConversation = {
 };
 export type SuperWorkspace = {pilotMessageRead?:ConversationReadState;active:boolean;project:SuperProject;workers:SuperWorker[];channels?:SpecialistChannelInfo[];conversations?:SpecialistConversation[];cursor?:number};
 export type GatewayTokenView = {id:string;name:string;roles?:string[];createdAt:string};
+export type GatewayCommand = {program:string;script?:string;home:string;data?:string};
 export type GatewaySpecialistRef = {roleId:string;roleKey:string;name:string;duties:string;projectId:string;sessionId:string;revision:number;execution?:AgentBackendRef};
 export type GatewayInstructionTask = {taskId:string;title:string;state:string;goalState:string;waitingApproval?:boolean;waitingInput?:boolean;activity?:SuperWorkerActivity;summary?:string};
 export type GatewayInstructionStatus = {

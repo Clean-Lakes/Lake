@@ -188,6 +188,7 @@ export async function startLakeServer(options: ServerOptions) {
     program: process.execPath,
     script: isSea() ? undefined : process.argv[1],
     home: options.home,
+    data: options.data,
   });
   const server = createServer(async (request, response) => {
     response.setHeader("X-Content-Type-Options", "nosniff");

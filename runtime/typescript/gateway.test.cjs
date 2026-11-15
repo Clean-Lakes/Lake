@@ -1,7 +1,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {createServer}=require('node:http');
-const {mkdtemp,mkdir,writeFile,rm}=require('node:fs/promises');
+const {mkdtemp,mkdir,writeFile,rm,realpath}=require('node:fs/promises');
 const {tmpdir}=require('node:os');
 const {join}=require('node:path');
 process.env.LAKE_TS_IMPORT_ONLY='1';
@@ -13,9 +13,9 @@ async function until(read,predicate){
  while(Date.now()<deadline){value=await read();if(predicate(value))return value;await new Promise(resolve=>setTimeout(resolve,20));}
  assert.fail('Timed out: '+JSON.stringify(value));
 }
-async function fixture(t,{hold=false}={}){
+async function fixture(t,{hold=false,holdRouter=false,routerAction='create'}={}){
  const releaseRef={release:()=>{}};
- const gatePromise=hold?new Promise(resolve=>{releaseRef.release=resolve;}):Promise.resolve();
+ const gatePromise=hold||holdRouter?new Promise(resolve=>{releaseRef.release=resolve;}):Promise.resolve();
  const home=await mkdtemp(join(tmpdir(),'lake-gateway-http-')),web=join(home,'web');
  await mkdir(web);await writeFile(join(web,'index.html'),'<html>gateway fixture</html>');
  const requests=[];
@@ -26,13 +26,14 @@ async function fixture(t,{hold=false}={}){
     worker=tools.some(tool=>tool.function?.name==='work_finish')&&!router;
   let delta;
   if(router){
+   if(holdRouter)await gatePromise;
    const marker=request.messages.findLast(message=>message.role==='user'&&content(message).startsWith('[LAKE ADMITTED HUMAN EVENTS'));
    const current=request.messages.slice(Math.max(0,request.messages.indexOf(marker)));
    const names=current.flatMap(message=>message.tool_calls??[]).map(call=>call.function.name);
-   if(names.includes('route_work'))delta={content:'已安排专员检查。'};
+   if(names.includes('route_work'))delta={content:routerAction==='ask'?'请补充要检查的数据库名称。':routerAction==='respond'?'当前专员负责数据库健康检查。':'已安排专员检查。'};
    else{
     const event=JSON.parse(content(marker).split('\n')[1])[0];
-    delta={tool_calls:[{index:0,id:'route-'+event.id,type:'function',function:{name:'route_work',arguments:JSON.stringify({event_id:event.id,part_key:'external-instruction',action:'create',role_id:event.preferredRoleID??'role-dba',quote:event.text,title:'外部指令磁盘检查',reason:'外部研发 Agent 指令'})}}]};
+    delta={tool_calls:[{index:0,id:'route-'+event.id,type:'function',function:{name:'route_work',arguments:JSON.stringify({event_id:event.id,part_key:'external-instruction',action:routerAction,...(routerAction==='create'?{role_id:event.preferredRoleID??'role-dba',title:'外部指令磁盘检查'}:{}),quote:event.text,reason:'外部研发 Agent 指令'})}}]};
    }
   }else if(worker){
    const names=request.messages.flatMap(message=>message.tool_calls??[]).map(call=>call.function.name);
@@ -46,7 +47,7 @@ async function fixture(t,{hold=false}={}){
  });
  await new Promise(resolve=>provider.listen(0,'127.0.0.1',resolve));
  const app=await startLakeServer({home,data:join(home,'data'),port:0,staticRoot:web});
- t.after(async()=>{await app.close();await new Promise(resolve=>provider.close(resolve));await rm(home,{recursive:true,force:true});});
+ t.after(async()=>{releaseRef.release();await app.close();await new Promise(resolve=>provider.close(resolve));await rm(home,{recursive:true,force:true});});
  const api=async(path,method='GET',body,expected=200,token)=>{
   const response=await fetch(app.origin+path,{method,headers:{Authorization:`Bearer ${token??app.token}`,...(body===undefined?{}:{'Content-Type':'application/json'})},body:body===undefined?undefined:JSON.stringify(body)});
   const value=await response.json().catch(()=>({}));assert.equal(response.status,expected,JSON.stringify(value));return value;
@@ -65,7 +66,7 @@ async function fixture(t,{hold=false}={}){
  };
  const send=async(body,expected=202,which='scoped')=>gw(`/api/gateway/specialists/${role.id}/instructions`,'POST',body,expected,which);
  const status=async(eventId,which='scoped')=>gw(`/api/gateway/instructions/${eventId}?waitSeconds=0`,'GET',undefined,200,which);
- return {app,api,gw,send,status,project,pilot,role,other,scoped,wide,requests,release:()=>releaseRef.release()};
+ return {home,app,api,gw,send,status,project,pilot,role,other,scoped,wide,requests,release:()=>releaseRef.release()};
 }
 
 test('a scoped gateway token delivers an instruction through Pilot routing and receives the specialist report',async t=>{
@@ -102,6 +103,88 @@ test('same clientRequestId replays the same instruction; changed content is reje
  const fresh=await f.send({text:'检查内存',clientRequestId:'instr-uuid-0003'});
  assert.notEqual(fresh.value.eventId,first.value.eventId);
  await until(()=>f.status(fresh.value.eventId),state=>['replied','failed','blocked','stopped'].includes(state.value.state));
+});
+
+test('overlapping retries atomically admit one input and reject conflicting content',async t=>{
+ const f=await fixture(t);
+ f.app.superagent.schedule=()=>{};
+ const input={text:'检查磁盘',clientRequestId:'concurrent-retry-0001'};
+ const receipts=await Promise.all(Array.from({length:8},()=>f.app.superagent.gatewayInstruction(f.role.id,input)));
+ assert.equal(new Set(receipts.map(row=>row.instructionId)).size,1);
+ assert.equal(receipts.filter(row=>row.duplicate).length,7);
+ assert.equal(f.app.store.list('superInputs').filter(row=>row.external).length,1);
+ assert.equal(f.app.store.messages(receipts[0].sessionId).filter(row=>row.external).length,1);
+ const conflict=await Promise.allSettled(['检查磁盘','检查内存'].map(text=>f.app.superagent.gatewayInstruction(f.role.id,{text,clientRequestId:'concurrent-conflict-0002'})));
+ assert.equal(conflict.filter(row=>row.status==='fulfilled').length,1);
+ assert.match(conflict.find(row=>row.status==='rejected').reason.message,/内容已变化/);
+});
+
+test('receipt write failure rolls back the input and a retry admits it once',async t=>{
+ const f=await fixture(t);
+ f.app.superagent.schedule=()=>{};
+ const put=f.app.store.put.bind(f.app.store),input={text:'检查磁盘',clientRequestId:'rollback-retry-0001'};
+ f.app.store.put=(kind,...args)=>{if(kind==='superGatewayInstructions')throw new Error('synthetic receipt failure');return put(kind,...args);};
+ try{await assert.rejects(()=>f.app.superagent.gatewayInstruction(f.role.id,input),/synthetic receipt failure/);}
+ finally{f.app.store.put=put;}
+ assert.equal(f.app.store.list('superInputs').filter(row=>row.external).length,0);
+ assert.equal(f.app.store.list('messages').filter(row=>row.external).length,0);
+ const first=await f.app.superagent.gatewayInstruction(f.role.id,input),retry=await f.app.superagent.gatewayInstruction(f.role.id,input);
+ assert.equal(retry.instructionId,first.instructionId);assert.equal(retry.duplicate,true);
+});
+
+test('a settled Pilot reply belongs only to its admitted instruction and survives restart',async t=>{
+ const f=await fixture(t,{holdRouter:true,routerAction:'respond'});
+ const receipt=await f.send({text:'解释一下你的职责'});
+ const router=f.app.store.get('superProjects',f.project.id).routerSessionId;
+ f.app.store.addMessage(router,'assistant','上一条请求刚完成，与当前指令无关。');
+ const pending=await f.status(receipt.value.instructionId);
+ assert.equal(pending.value.replies.length,0,'a later timestamp does not establish reply ownership');
+ f.release();
+ const done=await until(()=>f.status(receipt.value.instructionId),row=>row.value.state==='replied');
+ assert.equal(done.value.tasks.length,0);
+ assert.deepEqual(done.value.replies.map(row=>row.text),['当前专员负责数据库健康检查。']);
+ // Read the same receipt through a new backend, after unrelated later prose.
+ await until(async()=>f.app.agents.isRunning(router),running=>!running);
+ f.app.store.addMessage(router,'assistant','后续另一条请求的回复。');
+ await f.app.close();
+ const restarted=await startLakeServer({home:f.home,data:join(f.home,'data'),port:0,staticRoot:join(f.home,'web')});
+ t.after(()=>restarted.close());
+ const response=await fetch(restarted.origin+`/api/gateway/instructions/${receipt.value.instructionId}`,{headers:{Authorization:`Bearer ${f.scoped.token}`}});
+ assert.equal(response.status,200);
+ const restored=await response.json();
+ assert.equal(restored.state,'replied');assert.deepEqual(restored.replies,done.value.replies);
+});
+
+test('a Pilot clarification returns waiting_input with its actual question',async t=>{
+ const f=await fixture(t,{routerAction:'ask'});
+ const receipt=await f.send({text:'检查一下那个数据库'});
+ const state=await until(()=>f.status(receipt.value.instructionId),row=>row.value.state==='waiting_input');
+ assert.equal(state.value.tasks.length,0);
+ assert.deepEqual(state.value.replies.map(row=>row.text),['请补充要检查的数据库名称。']);
+});
+
+test('an in-flight long poll observes stopped and blocked events and respects its wait bound',async t=>{
+ const f=await fixture(t);
+ f.app.superagent.schedule=()=>{};
+ for(const disposition of ['stopped','blocked']){
+  const receipt=await f.app.superagent.gatewayInstruction(f.role.id,{text:'检查磁盘'});
+  const started=Date.now(),waiting=f.app.superagent.instructionStatus(receipt.instructionId,1);
+  if(disposition==='stopped')await f.app.superagent.stopChannel(receipt.sessionId);
+  else{
+   const event=f.app.store.get('superInputs',receipt.eventId);
+   f.app.store.put('superInputs',event.id,{...event,disposition,error:'synthetic router failure'});
+  }
+  const state=await waiting;
+  assert.equal(state.disposition,disposition);assert.equal(state.state,disposition==='stopped'?'stopped':'failed');
+  if(disposition==='blocked')assert.match(state.error,/synthetic router failure/);
+  assert.ok(Date.now()-started<1800,'one-second polling must not sleep for two seconds');
+ }
+});
+
+test('the MCP command preserves a nondefault backend data directory',async t=>{
+ const f=await fixture(t);
+ const {command}=await f.api('/api/settings/gateway/tokens');
+ assert.equal(command.home,await realpath(f.home));assert.equal(command.data,await realpath(join(f.home,'data')));
 });
 
 test('authentication and role scoping reject wrong tokens, session tokens and out-of-scope specialists',async t=>{

@@ -58,6 +58,8 @@ type InputEvent = { id: string; projectId: string; sessionId: string; messageId:
   external?: import('../../web-agent/shared/contracts').ExternalMessageOrigin;
   preferredRoleId?: string; explicitTaskId?: string; disposition: "pending" | "routed" | "blocked" | "stopped";
   receivedAt: string; revision: number; error?: string };
+type GatewayReceipt = { key: string; hash: string };
+type GatewayReply = { sessionId: string; rootTurnId?: string; text: string; createdAt: string; action: 'respond' | 'ask' };
 type Worker = { inline?:boolean; preTaskModelRounds?:number; id: string; projectId: string; roleId: string; roleSnapshot: Role; sessionId: string; taskId: string;
   explicitAgentAssignment?:string;
   targetResourceIds?: string[];
@@ -1177,7 +1179,7 @@ export class LakeSuperagent implements AgentHost {
     this.agents.memory?.captureUser(sessionId,accepted.id,channel.roleId,ignoreMemory);
     this.notify(sessionId,'specialist');this.schedule();return accepted;
   }
-  async send(sessionId: string, value: string, explicitTaskId?: string, ignoreMemory = false, selectedReferences?: MessageInput, assignment?:unknown, external?:import('../../web-agent/shared/contracts').ExternalMessageOrigin) {
+  async send(sessionId: string, value: string, explicitTaskId?: string, ignoreMemory = false, selectedReferences?: MessageInput, assignment?:unknown, external?:import('../../web-agent/shared/contracts').ExternalMessageOrigin, gatewayReceipt?: GatewayReceipt) {
     text(value, "message", 256000);
     await this.agents.prepareRedaction();
     const source = this.store.session(sessionId), project = this.store.get<SuperProject>("superProjects", source.projectId);
@@ -1199,16 +1201,30 @@ export class LakeSuperagent implements AgentHost {
         throw new HttpError(404, "Explicit task not found in this channel");
       if (preferredRoleId) this.routedGoal(source.projectId, explicitTaskId, preferredRoleId);
     }
-    const message = this.store.addMessage(sessionId, "user", this.agents.redact(value), {mentions: selectedReferences?.mentions, ...(external&&{external})});
-    if (selectedReferences) this.store.put('messageInputs', message.id, {messageId: message.id, projectId: source.projectId, sessionId, ...selectedReferences});
-    if (selectedReferences?.resourceIds.length) this.store.put('sessionResourceReferences', sessionId, {resourceIds: selectedReferences.resourceIds, sourceMessageId: message.id});
-    const event: InputEvent = { id: id(), projectId: source.projectId, sessionId, messageId: message.id, payload: this.agents.redact(value),
-      ...(external&&{external}),
-      preferredRoleId, explicitTaskId: explicitTaskId ?? (worker && !worker.inline ? this.ledger.get(worker.taskId).sharedTaskId ?? worker.taskId : undefined), disposition: "pending", receivedAt: message.createdAt, revision: 1, ignoreMemory, selectedReferences };
-    this.store.put("superInputs", event.id, event); this.notify(sessionId, "message");
-    this.agents.memory?.captureUser(sessionId, message.id, preferredRoleId, ignoreMemory);
-    this.schedule();
-    return { ...message, pilotSessionId: channel?.sessionId ?? project.routerSessionId };
+    // No await or observer notification may separate the idempotency check,
+    // accepted input and durable receipt. A failed receipt rolls back the input.
+    const accepted = this.store.transaction(() => {
+      const prior = gatewayReceipt && this.store.get<{messageId: string; hash: string}>("superGatewayInstructions", gatewayReceipt.key);
+      if (prior) {
+        if (prior.hash !== gatewayReceipt!.hash) throw new HttpError(409, "同一 clientRequestId 的指令内容已变化；请改用新的幂等键发送新指令");
+        return { message: this.store.require<Message>("messages", prior.messageId), duplicate: true };
+      }
+      const message = this.store.addMessage(sessionId, "user", this.agents.redact(value), {mentions: selectedReferences?.mentions, ...(external&&{external})});
+      if (selectedReferences) this.store.put('messageInputs', message.id, {messageId: message.id, projectId: source.projectId, sessionId, ...selectedReferences});
+      if (selectedReferences?.resourceIds.length) this.store.put('sessionResourceReferences', sessionId, {resourceIds: selectedReferences.resourceIds, sourceMessageId: message.id});
+      const event: InputEvent = { id: id(), projectId: source.projectId, sessionId, messageId: message.id, payload: this.agents.redact(value),
+        ...(external&&{external}),
+        preferredRoleId, explicitTaskId: explicitTaskId ?? (worker && !worker.inline ? this.ledger.get(worker.taskId).sharedTaskId ?? worker.taskId : undefined), disposition: "pending", receivedAt: message.createdAt, revision: 1, ignoreMemory, selectedReferences };
+      this.store.put("superInputs", event.id, event);
+      if (gatewayReceipt) this.store.put("superGatewayInstructions", gatewayReceipt.key, {eventId: event.id, messageId: message.id, hash: gatewayReceipt.hash});
+      return { message, duplicate: false };
+    });
+    if (!accepted.duplicate) {
+      this.notify(sessionId, "message");
+      this.agents.memory?.captureUser(sessionId, accepted.message.id, preferredRoleId, ignoreMemory);
+      this.schedule();
+    }
+    return { ...accepted.message, pilotSessionId: channel?.sessionId ?? project.routerSessionId, ...(accepted.duplicate && {duplicate: true}) };
   }
   private schedule() {
     if (this.closed || this.scheduled) return;
@@ -2254,20 +2270,28 @@ export class LakeSuperagent implements AgentHost {
   }
   settled(sessionId: string, outcome?: { response?: string; error?: string; failure?:TurnFailure }) {
     if(this.conversations.settled(sessionId,outcome)){this.schedule();return;}
-    if (this.projectFor(sessionId)) {const actor=this.pilotActors.get(sessionId),worker=actor&&this.store.get<Worker>('superWorkers',actor.id);if(worker?.inline)this.workerFinished(sessionId,outcome?.error,outcome?.response);this.routerFinished(sessionId,outcome?.error);}
+    if (this.projectFor(sessionId)) {const actor=this.pilotActors.get(sessionId),worker=actor&&this.store.get<Worker>('superWorkers',actor.id);if(worker?.inline)this.workerFinished(sessionId,outcome?.error,outcome?.response);this.routerFinished(sessionId,outcome?.error,outcome?.response);}
     else if (this.workerFor(sessionId)) this.workerFinished(sessionId, outcome?.error, outcome?.response, outcome?.failure);
     this.schedule();
   }
-  private routerFinished(sessionId: string, error?: string) {
+  private routerFinished(sessionId: string, error?: string, response?: string) {
     const project = this.projectFor(sessionId)!, batch = this.batches.get(sessionId);
     if (!batch) return;
-    const success = !error && this.store.view(sessionId).status === "completed";
-    for (const eventId of batch.eventIds) {
+    const view = this.store.view(sessionId), success = !error && view.status === "completed";
+    const decisions = this.store.list<Decision>("superDecisions").filter(decision => batch.eventIds.includes(decision.eventId));
+    this.store.transaction(() => { for (const eventId of batch.eventIds) {
       const event = this.store.require<InputEvent>("superInputs", eventId);
       if (event.disposition !== "pending") continue;
       event.disposition = success ? "routed" : "blocked"; event.error = error;
       this.store.put("superInputs", event.id, event);
-    }
+      const actions = decisions.filter(decision => decision.eventId === event.id).map(decision => decision.action);
+      if (event.external && success && response?.trim() && (actions.includes('ask') || actions.includes('respond'))) {
+        // Bind the actual settled response to this admitted batch. Timestamps
+        // cannot distinguish a previous turn that finishes after a new input.
+        this.store.put<GatewayReply>("superGatewayReplies", event.id, {sessionId, rootTurnId: view.rootTurnId,
+          text: this.agents.redact(response), createdAt: view.turnFinishedAt ?? now(), action: actions.includes('ask') ? 'ask' : 'respond'});
+      }
+    } });
     if (success) this.store.put("superRouterArchives", digest(batch.input), { projectId: project.projectId, eventIds: batch.eventIds, hash: digest(batch.input) });
     if (success) for (const decision of this.store.list<Decision>("superDecisions").filter((decision) => batch.eventIds.includes(decision.eventId) && decision.action === "stop" && decision.taskId))
       for (const assignment of this.decisionAssignments(decision)) void this.stopTask(assignment.executionId);
@@ -2660,18 +2684,10 @@ export class LakeSuperagent implements AgentHost {
     })();
     const key = clientRequestId ? digest(["gatewayInstruction", role.projectId, roleId, clientRequestId]) : undefined;
     const hash = digest({ projectId: role.projectId, roleId, instruction });
-    const receipt = () => {
-      const prior = key && this.store.get<{ eventId: string; messageId: string; hash: string }>("superGatewayInstructions", key);
-      if (!prior) return;
-      if (prior.hash !== hash) throw new HttpError(409, "同一 clientRequestId 的指令内容已变化；请改用新的幂等键发送新指令");
-      return { instructionId: prior.messageId, eventId: prior.eventId, roleId: role.id, sessionId: this.ensureChannel(role).sessionId, duplicate: true as const };
-    };
-    const duplicate = receipt(); if (duplicate) return duplicate;
     const channel = this.ensureChannel(role);
-    const message = await this.send(channel.sessionId, instruction, undefined, undefined, undefined, undefined, { kind: "mcp" }) as { id: string };
+    const message = await this.send(channel.sessionId, instruction, undefined, undefined, undefined, undefined, { kind: "mcp" }, key ? {key, hash} : undefined) as { id: string; duplicate?: boolean };
     const event = this.store.list<InputEvent>("superInputs").find(candidate => candidate.messageId === message.id)!;
-    if (key) this.store.put("superGatewayInstructions", key, { eventId: event.id, messageId: message.id, hash });
-    return { instructionId: message.id, eventId: event.id, roleId: role.id, sessionId: channel.sessionId };
+    return { instructionId: message.id, eventId: event.id, roleId: role.id, sessionId: channel.sessionId, ...(message.duplicate && {duplicate: true}) };
   }
   async instructionStatus(eventId: unknown, waitSeconds = 0): Promise<GatewayInstructionStatus> {
     // The public instruction id is the channel message id; the event id is
@@ -2683,9 +2699,9 @@ export class LakeSuperagent implements AgentHost {
     if (!event?.external) throw new HttpError(404, "外部指令不存在");
     const deadline = Date.now() + Math.max(0, Math.min(60, waitSeconds)) * 1000;
     for (; ;) {
-      const view = this.instructionView(event);
+      const view = this.instructionView(this.store.require<InputEvent>("superInputs", event.id));
       if (["replied", "failed", "blocked", "stopped", "waiting_approval", "waiting_input"].includes(view.state) || Date.now() >= deadline) return view;
-      await delay(2000);
+      await delay(Math.min(2000, Math.max(0, deadline - Date.now())));
     }
   }
   private instructionView(event: InputEvent): GatewayInstructionStatus {
@@ -2718,19 +2734,15 @@ export class LakeSuperagent implements AgentHost {
       const task = tasks.find(candidate => candidate.taskId === reply.taskId);
       return !task || !["cancelled", "failed"].includes(task.goalState);
     });
-    // A conversational Pilot answer (route_work respond/ask) lands in the
-    // router session right after the committed decision of the same turn.
-    if (decisions.some(decision => ["respond", "ask"].includes(decision.action))) {
-      const answer = this.store.messages(project.routerSessionId).find(candidate => candidate.role === "assistant" &&
-        !candidate.author && !candidate.dispatch && !candidate.conversation && candidate.createdAt >= message.createdAt &&
-        candidate.text.trim());
-      if (answer) replies.push({ text: answer.text, createdAt: answer.createdAt, from: "pilot" });
-    }
+    const savedReply = this.store.get<GatewayReply>("superGatewayReplies", event.id);
+    const pilotReply = savedReply?.sessionId === project.routerSessionId ? savedReply : undefined;
+    if (pilotReply) replies.push({text: pilotReply.text, createdAt: pilotReply.createdAt, from: "pilot"});
     const waiting = tasks.find(task => task.waitingInput) ?? tasks.find(task => task.waitingApproval);
     const running = tasks.some(task => ["queued", "active"].includes(task.state) || task.activity);
     const state: GatewayInstructionStatus["state"] =
       event.disposition === "stopped" ? "stopped" : event.disposition === "blocked" ? "failed" :
-      fulfilled.length ? "replied" : cancelled && !running ? "stopped" : failedTasks && !running ? "failed" :
+      fulfilled.length || pilotReply?.action === 'respond' ? "replied" : cancelled && !running ? "stopped" : failedTasks && !running ? "failed" :
+      pilotReply?.action === 'ask' ? "waiting_input" :
       waiting?.waitingInput ? "waiting_input" : waiting?.waitingApproval ? "waiting_approval" :
       running ? "running" : decisions.length ? "routed" : "routing";
     return { instructionId: event.messageId, eventId: event.id, sessionId: event.sessionId, roleId: role.id, roleName: role.name,

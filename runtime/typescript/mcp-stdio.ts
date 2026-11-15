@@ -4,13 +4,16 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
 import { LakeGateway } from "./gateway";
-import type { GatewayInstructionStatus, GatewaySpecialistRef } from "../../web-agent/shared/contracts";
+import type { GatewayInstructionStatus } from "../../web-agent/shared/contracts";
 
 export type SpecialistMcpOptions = { home: string; data?: string; role?: string; tokenId?: string; /** Test seam: an already-linked transport instead of stdio. */ transport?: unknown };
 export type SpecialistTool = { name: string; description: string; inputSchema: z.ZodTypeAny; handler: (args: any, extra?: unknown) => Promise<unknown> };
 
 const pending = (state: GatewayInstructionStatus["state"]) => ["routing", "routed", "running"].includes(state);
 const roleShape = { role: z.string().optional().describe("专员的准确 RoleID，来自 list_specialists；单专员服务无需此参数") };
+class BackendTimeoutError extends Error {
+  constructor() { super("Lake 后端响应超时，请稍后重试"); }
+}
 
 /** Read the loopback endpoint of the running Lake backend for this Home. */
 export function backendEndpoint(home: string, dataDir?: string): { origin: string } {
@@ -32,20 +35,22 @@ export function specialistTools(options: SpecialistMcpOptions): SpecialistTool[]
   const gateway = new LakeGateway(options.home);
   const { token } = gateway.resolveToken(options.tokenId);
   const role = options.role?.trim();
-  const call = async (path: string, init?: RequestInit): Promise<any> => {
+  const call = async (path: string, init?: RequestInit, timeoutMs = 120000): Promise<any> => {
     const { origin } = backendEndpoint(options.home, options.data);
+    const signal = AbortSignal.timeout(Math.max(1, Math.ceil(timeoutMs)));
     let response: Response;
+    let body: any;
     try {
       response = await fetch(origin + path, {
         ...init,
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) },
-        signal: AbortSignal.timeout(120000),
+        signal,
       });
+      body = await response.json().catch(error => { if (signal.aborted) throw error; return {}; });
     } catch (error) {
-      if ((error as Error).name === "AbortError") throw new Error("Lake 后端响应超时，请稍后重试");
+      if (signal.aborted) throw new BackendTimeoutError();
       throw new Error(`无法连接 Lake 后端（${origin}）：请确认 Lake 正在运行`);
     }
-    const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(String((body as any).error ?? `Lake 网关返回 HTTP ${response.status}`));
     return body;
   };
@@ -64,10 +69,20 @@ export function specialistTools(options: SpecialistMcpOptions): SpecialistTool[]
   };
   const wait = async (args: { instruction_id: string; timeout_seconds?: number }) => {
     const deadline = Date.now() + Math.min(600, Math.max(1, Math.floor(args.timeout_seconds ?? 120))) * 1000;
-    for (;;) {
-      const status = await call(`/api/gateway/instructions/${encodeURIComponent(args.instruction_id)}?waitSeconds=30`) as GatewayInstructionStatus;
-      if (!pending(status.state) || Date.now() >= deadline) return status;
+    const path = `/api/gateway/instructions/${encodeURIComponent(args.instruction_id)}`;
+    // Keep a real observed status to return if the final long poll reaches the
+    // caller's deadline, including a server that stalls after sending headers.
+    let status = await call(path, undefined, deadline - Date.now()) as GatewayInstructionStatus;
+    while (pending(status.state) && Date.now() < deadline) {
+      const remaining = deadline - Date.now();
+      try {
+        status = await call(`${path}?waitSeconds=${Math.min(30, Math.ceil(remaining / 1000))}`, undefined, remaining);
+      } catch (error) {
+        if (error instanceof BackendTimeoutError) return status;
+        throw error;
+      }
     }
+    return status;
   };
   const tools: SpecialistTool[] = [];
   if (!role) tools.push({

@@ -1,13 +1,16 @@
 import {useEffect,useRef,useState} from 'react';
-import type {GatewaySpecialistRef,GatewayTokenView} from '../../shared/contracts';
+import type {GatewayCommand,GatewaySpecialistRef,GatewayTokenView} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {AppSelect} from './AppSelect';
 import {Glyph} from './Icons';
 
-type Command = {program:string;script?:string;home:string};
+export function gatewayCommandSnippet(command:GatewayCommand|undefined,tokenId:string,roleId?:string){
+  return [command?.program??'lake',command?.script,'--mcp-specialist','--home',command?.home??'~/.lake',command?.data?['--data',command.data]:[],roleId?['--role',roleId]:[],'--token-id',tokenId]
+    .flat().filter(Boolean).map(part=>/\s/.test(String(part))?`"${part}"`:String(part)).join(' ');
+}
 export function GatewaySettings({onBusyChange}:{onBusyChange:(value:boolean)=>void}){
   const [tokens,setTokens]=useState<GatewayTokenView[]>([]),[specialists,setSpecialists]=useState<GatewaySpecialistRef[]>([]);
-  const [command,setCommand]=useState<Command|undefined>();
+  const [command,setCommand]=useState<GatewayCommand|undefined>();
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(''),[error,setError]=useState(''),[message,setMessage]=useState('');
   const [name,setName]=useState(''),[role,setRole]=useState('');
   const [created,setCreated]=useState<{name:string;token:string;snippet:string}|undefined>(),[copied,setCopied]=useState('');
@@ -28,7 +31,7 @@ export function GatewaySettings({onBusyChange}:{onBusyChange:(value:boolean)=>vo
     catch(cause){try{await load();}catch{}if(mounted.current)setError(readableError(cause));}
     finally{flight.current=false;if(mounted.current)setBusy('');}
   }
-  const snippet=(tokenId:string,roleId?:string)=>[command?.program??'lake',command?.script,'--mcp-specialist','--home',command?.home??'~/.lake',roleId?['--role',roleId]:[],'--token-id',tokenId].flat().filter(Boolean).map(part=>/\s/.test(String(part))?`"${part}"`:String(part)).join(' ');
+  const snippet=(tokenId:string,roleId?:string)=>gatewayCommandSnippet(command,tokenId,roleId);
   const create=async()=>{
     const value=await run('create',()=>api.createGatewayToken({name:name.trim(),...(role?{roles:[role]}:{})}),'网关凭据已创建，令牌只显示这一次');
     if(value){setName('');setRole('');setCreated({name:value.name,token:value.token,snippet:snippet(value.id,role||undefined)});}

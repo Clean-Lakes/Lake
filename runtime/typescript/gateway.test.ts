@@ -7,6 +7,8 @@ import {writeFileSync,chmodSync,mkdirSync,symlinkSync,renameSync,unlinkSync} fro
 import {HttpError} from './store';
 import {LakeGateway} from './gateway';
 
+const differentToken=(token:string)=>token.slice(0,-1)+(token.endsWith('0')?'1':'0');
+
 async function fixture(t:{after(fn:()=>Promise<void>):void},denied=false){
  const home=await mkdtemp(join(tmpdir(),'lake-gateway-')),secrets=join(home,'secrets');
  mkdirSync(secrets,{recursive:true,mode:0o700});chmodSync(secrets,0o700);
@@ -35,11 +37,22 @@ test('authenticate only accepts the exact token and enforces scoped roles',async
  const auth=f.gateway.authenticate(scoped.token);
  assert.deepEqual(auth,{id:scoped.id,roles:['role_dba']});
  assert.deepEqual(f.gateway.authenticate(wide.token),{id:wide.id});
- for(const attempt of [scoped.token.slice(0,-1)+'0','Bearer '+scoped.token,'','lk_gw_wrong'])
+ for(const attempt of [differentToken(scoped.token),'Bearer '+scoped.token,'','lk_gw_wrong'])
   assert.throws(()=>f.gateway.authenticate(attempt),/需要 Lake 网关凭据/);
  f.gateway.requireRole(auth,'role_dba');
  assert.throws(()=>f.gateway.requireRole(auth,'role_sre'),/未被允许访问该专员/);
  f.gateway.requireRole(f.gateway.authenticate(wide.token),'role_sre');
+});
+
+test('negative token candidates differ for every possible final hex digit',async t=>{
+ const f=await fixture(t);
+ for(const last of '0123456789abcdef'){
+  const token='synthetic-token-'+last;
+  writeFileSync(join(f.secrets,'mcp-gateway.json'),JSON.stringify({version:1,tokens:[{id:'edge',name:'edge',token,createdAt:'2026-11-15'}]}),{mode:0o600});
+  assert.equal(f.gateway.authenticate(token).id,'edge');
+  assert.notEqual(differentToken(token),token);
+  assert.throws(()=>f.gateway.authenticate(differentToken(token)),/需要 Lake 网关凭据/);
+ }
 });
 
 test('a tampered or world-readable credentials file is rejected',async t=>{

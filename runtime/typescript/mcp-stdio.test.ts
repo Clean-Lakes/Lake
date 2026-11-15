@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {createServer,type Server,type IncomingMessage,type ServerResponse} from 'node:http';
 import {backendEndpoint,specialistTools} from './mcp-stdio';
 
-type Backend = {requests:{method:string;path:string;auth:string;body:any}[];specialists:any[];statuses:Map<string,any>;sendReceipt:any};
+type Backend = {requests:{method:string;path:string;auth:string;body:any;waitSeconds:number}[];specialists:any[];statuses:Map<string,any>;sendReceipt:any;statusDelayMs?:number};
 
 async function fixture(t:{after(fn:()=>Promise<void>):void},tokens:{id:string;token:string}[]=[{id:'gw1',token:'lkgw-test-token'}]) {
   const home=await mkdtemp(join(tmpdir(),'lake-mcp-')),data=join(home,'web-agent');
@@ -16,14 +16,17 @@ async function fixture(t:{after(fn:()=>Promise<void>):void},tokens:{id:string;to
   const server:Server=createServer((request:IncomingMessage,response:ServerResponse)=>{
     const chunks:Buffer[]=[];request.on('data',chunk=>chunks.push(chunk));request.on('end',async()=>{
       const body=chunks.length?JSON.parse(Buffer.concat(chunks).toString()):{};
-      const path=request.url!.split('?')[0]!;
-      backend.requests.push({method:request.method!,path,auth:String(request.headers.authorization??''),body});
+      const url=new URL(request.url!,'http://localhost'),path=url.pathname,waitSeconds=Number(url.searchParams.get('waitSeconds')??0);
+      backend.requests.push({method:request.method!,path,auth:String(request.headers.authorization??''),body,waitSeconds});
       if(path==='/api/gateway/specialists')response.end(JSON.stringify({specialists:backend.specialists}));
       else if(path==='/api/gateway/specialists/role_dba/instructions'){backend.statuses.set('m1',{state:'routing'});response.end(JSON.stringify(backend.sendReceipt));}
       else if(path.startsWith('/api/gateway/instructions/')){
         const id=path.split('/').at(-1)!,status=backend.statuses.get(id);
         if(!status){response.writeHead(404);response.end(JSON.stringify({error:'外部指令不存在'}));return;}
-        response.end(JSON.stringify(status));
+        if(waitSeconds&&backend.statusDelayMs){
+          response.writeHead(200,{'Content-Type':'application/json'});response.flushHeaders();
+          setTimeout(()=>response.end(JSON.stringify(status)),backend.statusDelayMs).unref();
+        }else response.end(JSON.stringify(status));
       }
       else{response.writeHead(404);response.end(JSON.stringify({error:'接口不存在'}));}
     });
@@ -44,6 +47,18 @@ test('backendEndpoint accepts only a loopback origin and refuses missing records
   assert.throws(()=>backendEndpoint(join(f.home,'missing-home')),/Lake 后端未运行/);
   await writeFile(join(f.home,'web-agent','runtime.json'),JSON.stringify({origin:'http://evil.example:1'}));
   assert.throws(()=>backendEndpoint(f.home),/回环地址/);
+});
+
+test('a one-second wait bounds the long poll and returns the last status if the response body stalls',async t=>{
+  const f=await fixture(t);
+  f.backend.statuses.set('m1',{instructionId:'m1',state:'running',replies:[]});
+  f.backend.statusDelayMs=3000;
+  const wait=specialistTools({home:f.home,role:'role_dba'}).find(tool=>tool.name==='wait_instruction')!;
+  const started=Date.now(),status=await wait.handler({instruction_id:'m1',timeout_seconds:1}) as any;
+  assert.equal(status.state,'running');
+  const polls=f.backend.requests.filter(request=>request.waitSeconds>0);
+  assert.ok(polls.length>0);assert.ok(polls.every(request=>request.waitSeconds<=1));
+  assert.ok(Date.now()-started<1800,'the caller budget includes fetch and response-body reads');
 });
 
 test('shared mode lists specialists and resolves the role from arguments',async t=>{

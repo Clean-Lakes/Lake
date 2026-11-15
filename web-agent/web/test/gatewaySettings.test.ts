@@ -4,7 +4,7 @@ import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {Message} from '../../shared/contracts';
 import {TranscriptMessage} from '../src/AIPanel';
-import {GatewaySettings} from '../src/GatewaySettings';
+import {GatewaySettings,gatewayCommandSnippet} from '../src/GatewaySettings';
 import {SpecialistTaskList} from '../src/SpecialistTaskList';
 
 const base:Message={id:'m1',sessionId:'channel',role:'user',text:'检查生产数据库磁盘',createdAt:'2026-11-14T00:00:00Z'};
@@ -22,6 +22,15 @@ test('external MCP instructions carry a visible origin badge; ordinary user mess
 test('gateway settings render their loading shell without a server connection',()=>{
   const html=renderToStaticMarkup(createElement(GatewaySettings,{onBusyChange:()=>{}}));
   assert.match(html,/外部研发 Agent 接入/);assert.match(html,/正在读取网关凭据…/);
+});
+
+test('copied MCP commands retain a custom data path for packaged and script installs',()=>{
+  const packaged={program:'/Applications/Lake Dev.app/Contents/Resources/lake',home:'/tmp/dev-home',data:'/tmp/custom web data'};
+  for(const command of [packaged,{...packaged,program:'/opt/node/bin/node',script:'/tmp/lake server.cjs'}]){
+    const snippet=gatewayCommandSnippet(command,'token-id','role_dba');
+    assert.match(snippet,/--home \/tmp\/dev-home --data "\/tmp\/custom web data" --role role_dba --token-id token-id$/);
+  }
+  assert.doesNotMatch(gatewayCommandSnippet({program:'lake',home:'/tmp/legacy'},'token-id'),/--data/,'older servers keep the default data layout');
 });
 
 test('task rows mark work that arrived from an external agent',()=>{
