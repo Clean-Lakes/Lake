@@ -5,11 +5,16 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import type {SessionSnapshot} from '../../shared/contracts';
 import {PilotSpecialistReplyView} from '../src/PilotSpecialistConversation';
 import type {PilotSpecialistRow} from '../src/pilotSpecialistReplies';
+import {SpecialistProcessLink} from '../src/SpecialistProcessLink';
 
 const at='2026-11-16T00:00:00Z';
 const prose='已收到第一段公开进度，继续核对结果。';
-const activeProse=/<div class="[^"]*\bassistant-prose\b[^"]*" data-live-motion="active">/;
-const stillProse=/<div class="[^"]*\bassistant-prose\b[^"]*" data-live-motion="still">/;
+const processLink=(html:string)=>html.match(/<button\b[^>]*data-specialist-process="[^"]*"[\s\S]*?<\/button>/)?.[0]??'';
+const assertQuietProse=(html:string,text=prose)=>{
+ const body=html.match(/<div class="ai-card ai-message">([\s\S]*?)<\/div>/)?.[1]??'';
+ assert.ok(body.replace(/<[^>]*>/g,'').includes(text),'the public body stays readable as received');
+ assert.doesNotMatch(body,/data-live-(?:motion|glow)|live-text-motion-character/,'public prose has no continuous motion or glow hosts');
+};
 function progress(phase:'thinking'|'tool'='thinking'){
  const worker={id:'worker',roleId:'role',roleName:'检查专员',sessionId:'worker-session',assignmentState:'active',
   task:{taskId:'task',sessionId:'worker-session',projectId:'project',title:'隔离检查任务',state:'running' as const,acceptanceState:'not_evaluated' as const,revision:1,originRootTurnId:'task-origin',deadlineAt:at}};
@@ -22,31 +27,68 @@ function progress(phase:'thinking'|'tool'='thinking'){
   ],cardsOffset:0}} as SessionSnapshot;
  return {row,snapshot};
 }
-const render=(props:ComponentProps<typeof PilotSpecialistReplyView>)=>renderToStaticMarkup(createElement(PilotSpecialistReplyView,props));
+const render=(props:ComponentProps<typeof PilotSpecialistReplyView>)=>renderToStaticMarkup(createElement(PilotSpecialistReplyView,{onInspectSpecialist(){},...props}));
 
-test('received public prose keeps moving between updates throughout thinking and tool execution',()=>{
+test('received public prose stays still while its process entry moves through thinking and tool execution',()=>{
  for(const phase of ['thinking','tool'] as const){
   const props=progress(phase),html=render(props);
-  assert.match(html,activeProse,phase);
-  assert.match(html.replace(/<[^>]*>/g,''),new RegExp(prose));
+  assertQuietProse(html);
+  assert.match(processLink(html),/data-live-motion="active" data-live-glow="active"/,phase);
+  assert.equal((processLink(html).match(/live-text-motion-character/g)??[]).length,4,'only the four-character process label receives the shared wave');
   assert.doesNotMatch(html,/PRIVATE_TOOL_DETAIL/,'only the public progress text is exposed');
-  assert.equal(render({...props,snapshot:{...props.snapshot,cursor:2}}),html,'a snapshot without new public tokens keeps the exact active prose markup');
+  assert.equal(render({...props,snapshot:{...props.snapshot,cursor:2}}),html,'unchanged snapshots retain the same body and process entry');
   props.snapshot.ai!.cards[0]!.status='running';
-  assert.match(render(props),activeProse,'public card streaming/completion does not substitute for the actual runtime activity');
+  assertQuietProse(render(props));
+  assert.match(processLink(render(props)),/data-live-motion="active" data-live-glow="active"/,'card streaming/completion does not substitute for runtime activity');
  }
 });
 
-test('public prose stops for a real wait, terminal state, disconnection, or hidden surface',()=>{
+test('the process entry stops for a real wait, terminal state, disconnection, or hidden surface without removing prose',()=>{
  for(const status of ['waiting_approval','waiting_input','waiting_external','queued','completed','failed','cancelled','interrupted','paused'] as const){
   const props=progress('tool');props.snapshot.ai!.status=status;
   // A stale running reply projection must not override the authoritative wait.
   if(status==='completed')props.snapshot.ai!.replyStatus='completed';
   const html=render(props);
-  assert.match(html,stillProse,status);assert.doesNotMatch(html,activeProse,status);
-  assert.match(html.replace(/<[^>]*>/g,''),new RegExp(prose),'received prose remains readable');
+  assertQuietProse(html);
+  assert.match(processLink(html),/data-live-motion="still" data-live-glow="still"/,status);
+  assert.doesNotMatch(html,/data-live-(?:motion|glow)="active"/,status);
  }
  for(const override of [{available:false},{visible:false}]){
   const html=render({...progress('tool'),...override});
-  assert.match(html,stillProse);assert.doesNotMatch(html,activeProse);
+  assertQuietProse(html);
+  assert.match(processLink(html),/data-live-motion="still" data-live-glow="still"/);
+  assert.doesNotMatch(html,/data-live-(?:motion|glow)="active"/);
  }
+});
+
+test('ACP segmented public prose stays quiet and the exact process entry remains animated',()=>{
+ const props=progress('tool');
+ const execution={backend:{kind:'acp' as const,agent:'codex'},source:'task_assignment' as const,assignedAt:at,runs:[{id:'acp-run',agent:'codex',scope:'worker' as const,state:'running' as const,dispatchPhase:'sent' as const,createdAt:at,updatedAt:at,usage:null}],totalRuns:1};
+ props.row.worker.execution=execution;props.row.author.execution=execution.backend;props.snapshot.superagent!.execution=execution;
+ props.snapshot.ai!.cards=[{id:'acp-run',type:'operation',status:'running',at,content:'PRIVATE_CUMULATIVE_AUDIT',data:{root_turn_id:'current-root',taskId:'task',source:'external_agent',external_run_id:'acp-run',external_reply:{id:'segment',content:prose}}}];
+ const html=render(props);
+ assertQuietProse(html);assert.doesNotMatch(html,/PRIVATE_CUMULATIVE_AUDIT/);
+ assert.match(processLink(html),/data-specialist-process="task"/);
+ assert.match(processLink(html),/data-live-motion="active" data-live-glow="active"/);
+});
+
+test('adopted final reports stop the process light even when a live snapshot arrives late',()=>{
+ const props=progress('tool'),final='本次检查已经完成。';
+ props.row.finalReport={id:'report',sessionId:'pilot',role:'assistant',text:final,createdAt:at,author:{...props.row.author,rootTurnId:'current-root'}};
+ const html=render(props);
+ assertQuietProse(html,final);assert.doesNotMatch(html,new RegExp(prose));
+ assert.match(processLink(html),/data-live-motion="still" data-live-glow="still"/);
+ assert.doesNotMatch(html,/data-live-(?:motion|glow)="active"/);
+});
+
+test('the process link preserves native keyboard activation and exact task navigation; cold history defaults to still',()=>{
+ const {row}=progress();let selected:typeof row.author|undefined;
+ const element=SpecialistProcessLink({author:row.author,active:true,onInspect:author=>{selected=author;}})!;
+ const button=element.props.children;
+ assert.equal(button.type,'button');assert.equal(button.props.type,'button');
+ assert.equal(button.props.tabIndex,undefined);button.props.onClick();assert.equal(selected,row.author);
+ const html=renderToStaticMarkup(createElement(SpecialistProcessLink,{author:row.author,onInspect(){}}));
+ assert.match(processLink(html),/data-live-motion="still" data-live-glow="still"/);
+ assert.equal((html.replace(/<[^>]*>/g,'').match(/执行过程/g)??[]).length,1);
+ assert.doesNotMatch(html,/role="status"|aria-live=/,'the accessible process button does not add a live announcement');
 });

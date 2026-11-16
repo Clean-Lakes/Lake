@@ -131,7 +131,7 @@ test('Pilot shows animal-specific thinking text under its original identity, the
  snapshot.ai!.cards=[{id:'reply',type:'message',status:'running',content:'这是本次检查结果。',at,data:{root_turn_id:'root'}}];
  assert.match(html().replace(/<[^>]*>/g,''),/这是本次检查结果。/);assert.doesNotMatch(html(),/animal-thinking-bubble|pilot-specialist-thinking-label|turn-activity-mark|正在生成回复/);
  assert.match(html(),/data-live-motion="active"/);
- assert.equal((html().match(/data-live-glow="active"/g)??[]).length,1,'the public body keeps its existing motion without inheriting the name glow');
+ assert.equal((html().match(/data-live-glow="active"/g)??[]).length,1,'the public body stays quiet while the existing name keeps its glow');
  assert.equal(html().match(/<div class="response-identity">[\s\S]*?<\/div>/)?.[0],thinking.match(/<div class="response-identity">[\s\S]*?<\/div>/)?.[0],'the identity stays in the same parent and retains the same author while its content slot changes');
 });
 
@@ -204,7 +204,7 @@ test('tool, wait, reconnect, settled and actual prose all retain the original se
  const prose=renderReply();assertSeparate(prose);assert.match(prose.replace(/<[^>]*>/g,''),/实际正文接替思考气泡/);
 });
 
-test('Pilot public text moves only during connected visible execution and stays intact through waits and termination',()=>{
+test('Pilot identity moves only during connected visible execution while public text stays intact through waits and termination',()=>{
  const row=specialistRow();
  const content='已收到的真实公开正文不因暂停、失败或断线丢失。';
  const snapshot={session:{id:'worker',projectId:'project'},superagent:{roleId:row.worker.roleId,task:row.worker.task},cursor:1,ai:view({rootTurnId:'root',replyStatus:'running',cards:[{id:'reply',type:'message',status:'running',content,at,data:{root_turn_id:'root'}}]})} as SessionSnapshot;

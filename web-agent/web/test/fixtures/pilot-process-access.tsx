@@ -23,11 +23,12 @@ initializeFocusModality();
 const at='2026-11-16T08:00:00.000Z',started='2026-11-16T08:00:01.000Z';
 const projectId='process-fixture',routerId='pilot-process-fixture',sourceId='native-process-fixture';
 const author:SpecialistReplyAuthor={kind:'specialist',name:'服务器运维排查专员',roleId:'role-host',workerId:'worker-host',sessionId:sourceId,taskId:'task-host',rootTurnId:'sdk-native-current',avatarId:'otter'};
-const stages={live:'实时进度',append:'追加进度',report:'正式报告',restored:'恢复历史'} as const;
+const stages={live:'实时进度',long:'大段进度',append:'追加进度',waiting:'等待确认',disconnected:'连接断开',report:'正式报告',restored:'恢复历史'} as const;
 type Stage=keyof typeof stages;
 let stage:Stage=new URLSearchParams(location.search).get('stage')==='restored'?'restored':'live',cursor=1;
 const progress='已取得本地样例，正在核对 CPU 与内存。';
 const appended=' 接下来比对磁盘记录。';
+const longProgress=progress+'\n\n'+('这段是公开检查进度的本地样例，用来观察长段正文是否保持静止，以及下方过程入口是否继续提示执行状态。'.repeat(5))+'\n\n正在整理各项记录，稍后给出最终结论。';
 const conclusion='本轮样例核对完成，三项记录一致。';
 const streams=new Set<FixtureEvents>();
 class FixtureEvents extends EventTarget{
@@ -43,8 +44,8 @@ function session(id:string,workspaceRole:'router'|'worker'):WorkSession{
 function worker():SuperWorker{
  return {id:author.workerId!,roleId:author.roleId!,roleName:author.name,sessionId:sourceId,assignmentState:finished()?'parked':'active',
   execution:{backend:{kind:'native'},source:'task_assignment',assignedAt:started,totalRuns:0,runs:[]},
-  task:{taskId:author.taskId!,sessionId:sourceId,projectId,title:'样例主机检查',state:finished()?'completed':'running',acceptanceState:finished()?'pass':'not_evaluated',revision:1,originRootTurnId:'task-origin',deadlineAt:'',summary:finished()?conclusion:undefined},
-  activity:finished()?undefined:{phase:'thinking',label:'正在核对样例',sourceSessionId:routerId,sourceMessageId:'current-user',updatedAt:started}};
+  task:{taskId:author.taskId!,sessionId:sourceId,projectId,title:'样例主机检查',state:finished()?'completed':stage==='waiting'?'waiting_user':'running',acceptanceState:finished()?'pass':'not_evaluated',revision:1,originRootTurnId:'task-origin',deadlineAt:'',summary:finished()?conclusion:undefined},
+  activity:finished()?undefined:{phase:stage==='waiting'?'waiting_approval':'thinking',label:stage==='waiting'?'等待确认':'正在核对样例',sourceSessionId:routerId,sourceMessageId:'current-user',updatedAt:started}};
 }
 function nativeCards():AICard[]{
  const current={taskId:author.taskId,root_turn_id:author.rootTurnId};
@@ -53,7 +54,7 @@ function nativeCards():AICard[]{
   {id:'native-old-thought',type:'thinking',status:'completed',at:'2026-11-16T07:59:00.000Z',content:'上一次尝试先核对样例来源。',data:older},
   {id:'native-old-public',type:'message',status:'completed',at:'2026-11-16T07:59:01.000Z',content:'上一次公开进度：已确认样例目录。',data:older},
   {id:'native-thought',type:'thinking',status:'completed',at:started,content:'专员思考样例：分别比对三项记录，保留每次读取结果。',data:current},
-  {id:'native-public',type:'message',status:'completed',at:'2026-11-16T08:00:02.000Z',content:progress+(stage!=='live'?appended:''),data:current},
+  {id:'native-public',type:'message',status:'completed',at:'2026-11-16T08:00:02.000Z',content:stage==='long'?longProgress:progress+(stage!=='live'?appended:''),data:current},
   {id:'native-tool',type:'operation',title:'inspect_host',status:'completed',at:'2026-11-16T08:00:03.000Z',content:'样例工具回执：三项固定数据已读取。',data:current},
   {id:'native-thought-later',type:'thinking',status:finished()?'completed':'running',at:'2026-11-16T08:00:04.000Z',content:'专员后续思考样例：核对是否遗漏磁盘记录。',data:current},
   ...(finished()?[{id:'native-final',type:'message' as const,status:'completed',at:'2026-11-16T08:00:05.000Z',content:conclusion,data:current}]:[]),
@@ -62,7 +63,7 @@ function nativeCards():AICard[]{
 function workerSnapshot():SessionSnapshot{
  const source=worker(),cards=nativeCards();
  return {session:session(sourceId,'worker'),cursor,messages:[],resources:[],actions:[],specialists:[],evidence:[],terminals:[],superagent:{roleId:source.roleId,task:source.task,execution:source.execution},
-  ai:{session:sourceId,profile:'fixture',turns:1,usage:{input:0,output:0,total:0},status:finished()?'completed':'running',replyStatus:finished()?undefined:'running',rootTurnId:author.rootTurnId,turnStartedAt:started,cards,cardsOffset:0,totalCards:cards.length}};
+  ai:{session:sourceId,profile:'fixture',turns:1,usage:{input:0,output:0,total:0},status:finished()?'completed':stage==='waiting'?'waiting_approval':'running',replyStatus:finished()?undefined:'running',rootTurnId:author.rootTurnId,turnStartedAt:started,cards,cardsOffset:0,totalCards:cards.length}};
 }
 window.fetch=async input=>{
  const path=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href).pathname;
@@ -105,10 +106,16 @@ function Fixture(){
  };
  const measure=()=>{
   const now=nodes(),before=baseline.current;
+  const runningAnimations=(node:Element|null)=>node?.getAnimations({subtree:true}).filter(animation=>animation.playState==='running')??[];
+  const processAnimations=runningAnimations(now.process),prose=now.body?.querySelector('.assistant-prose')??null;
   return {stage,captured:!!before,...Object.fromEntries(Object.entries(now).map(([key,node])=>[`${key}Same`,!!node&&!!before&&node===before[key as keyof Baseline]&&node.isConnected])),
    processEntries:box.current!.querySelectorAll('[data-specialist-process]').length,conclusionCopies:box.current!.textContent?.split(conclusion).length! -1,
    reportId:now.slot?.getAttribute('data-report-id')??'',inspectorSession:inspector.selection?.sessionId??'',workerRecords:document.querySelectorAll('[data-process-card]').length,
-   thinkingVisible:[...box.current!.querySelectorAll('[role="status"]')].some(node=>node.textContent?.includes('正在思考')),activeAnimations:now.body?.getAnimations({subtree:true}).filter(animation=>animation.playState==='running').length??0};
+   thinkingVisible:[...box.current!.querySelectorAll('[role="status"]')].some(node=>node.textContent?.includes('正在思考')),
+   activeAnimations:runningAnimations(now.body).length,proseAnimations:runningAnimations(prose).length,proseCharacters:prose?.querySelectorAll('.live-text-motion-character').length??0,
+   processAnimations:processAnimations.length,processMotion:now.process?.querySelector('[data-live-motion]')?.getAttribute('data-live-motion')??'',
+   processLight:processAnimations.map(animation=>({name:animation instanceof CSSAnimation?animation.animationName:'transition',startTime:animation.startTime,duration:animation.effect?.getTiming().duration,delay:animation.effect?.getTiming().delay})),
+   nameAnimations:runningAnimations(now.identity).length,proseLength:prose?.textContent?.length??0};
  };
  const capture=()=>{baseline.current=nodes();const result=measure();setQA(JSON.stringify(result));return result;};
  useLayoutEffect(()=>{Object.assign(window,{pilotProcessQA:{capture,measure}});});
@@ -128,7 +135,7 @@ function Fixture(){
   <div className="session-layout" style={{flex:1,border:'1px solid var(--border)',borderRadius:'var(--radius-settings-panel)'}}>
    <div className="session-view" style={{display:'flex',flexDirection:'column',flex:1,minWidth:0}}>
     <div ref={box} className="conversation" tabIndex={0} style={{overflow:'auto',padding:'24px 20px',flex:1,overflowAnchor:'none'}}>
-     <SpecialistAvatarProvider channels={channels}><AITranscript key={restoration} snapshot={snapshot} pilotWorkspace={workspace} assistantIdentity={{name:'Pilot',pilot:true}} onInspectSpecialist={inspectSpecialist}/></SpecialistAvatarProvider>
+     <SpecialistAvatarProvider channels={channels}><AITranscript key={restoration} snapshot={snapshot} pilotWorkspace={workspace} pilotConnected={stage!=='disconnected'} assistantIdentity={{name:'Pilot',pilot:true}} onInspectSpecialist={inspectSpecialist}/></SpecialistAvatarProvider>
     </div>
    </div>
    <SessionInspector key={workerOpen?sourceId:routerId} snapshot={workerOpen?source:snapshot} worker={workerOpen?owner:undefined} connected onUpdated={()=>{cursor++;setRevision(cursor);announce();}}/>

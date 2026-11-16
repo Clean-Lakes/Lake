@@ -89,7 +89,7 @@ function PilotReplyProse({text,active}:{text:string;active:boolean}){
  // Mount with the first received prefix. Only later suffixes enter the buffer,
  // so a real first packet never takes a detour through a temporary status.
  const shown=useSmoothText(text,active);
- return <div className="ai-card ai-message"><AssistantMarkdown liveMotion={active}>{shown}</AssistantMarkdown></div>;
+ return <div className="ai-card ai-message"><AssistantMarkdown>{shown}</AssistantMarkdown></div>;
 }
 
 /** Public reply presentation is separate from the exact-worker live subscription. */
@@ -127,7 +127,7 @@ export function PilotSpecialistReplyView({row,snapshot,available=true,visible=tr
    {planState?<PlanReference state={planState}/>:text?<PilotReplyProse text={text} active={moving&&visible}/>:report?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
    {report&&<MessageAttachments message={report} sessionId={report.sessionId}/>}
   </PilotReplyContent>
-  <SpecialistProcessLink author={report?.author??row.author} onInspect={onInspectSpecialist}/>
+  <SpecialistProcessLink author={report?.author??row.author} onInspect={onInspectSpecialist} active={moving&&visible}/>
   {!report&&text&&(!available||updating)&&<small className="pilot-specialist-connection" role="status">{label}</small>}
  </section>;
 }
