@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-16
 last_updated: 2026-11-16
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [refactor, codex, app-server, typescript]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 用户授权采用 Tutti 的本机智能体调用设计。以 origin/develop 的 `88682744` 为基线，将 Codex 的第三方 ACP 包装器替换为官方 `codex app-server`，拆分受管理进程、提供商协议适配器和统一活动事件；现有 Lake Task/Worker、专员、私有工具桥和来源账本继续消费统一接口。参考 Tutti `207beeea554435618dffd3b579d0ffe112b065c4` 的设计，自行实现 TypeScript 适配，不复制其 Go 源码。
 
@@ -55,7 +55,7 @@ tags: [refactor, codex, app-server, typescript]
 |------|-------------|-----------|------|
 | TASK-006 | 添加进程/协议故障测试：分块、乱序、早于 turn/start 回应的通知、外来线程、重复终态、退出、超时和停止；迁移不得改写旧 Worker/run。依赖 TASK-005。 | Yes | 2026-11-16 |
 | TASK-007 | 运行类型检查、宿主及前端回归、固定真实 Codex + 本地 Responses 端到端与边界检查；记录实际结果。依赖 TASK-006。 | Yes | 2026-11-16 |
-| TASK-008 | 更新 agent.md、README 和兼容记录；提交候选后签名构建安装 Lake Dev，验证连接和执行，记录 tested SHA 并创建 develop PR，未经用户授权不合并。依赖 TASK-007。 | No | |
+| TASK-008 | 更新 agent.md、README 和兼容记录；提交候选后签名构建安装 Lake Dev，验证连接和执行，记录 tested SHA 并创建 develop PR，未经用户授权不合并。依赖 TASK-007。 | Yes | 2026-11-16 |
 
 ## 3. Alternatives
 
@@ -91,3 +91,5 @@ tags: [refactor, codex, app-server, typescript]
 - [贡献规则](../CONTRIBUTING.md)、[开发流程](../docs/development-workflow.md)、[架构约定](../agent.md)。
 - [本机登录合同](refactor-codex-local-login-1.md)、[当前任务报告合同](../docs/security/task-confirmation.md)。
 - [Tutti Codex 提供商定义](https://github.com/tutti-os/tutti/blob/207beeea554435618dffd3b579d0ffe112b065c4/packages/agent/daemon/providerregistry/codex.go)、[会话适配](https://github.com/tutti-os/tutti/blob/207beeea554435618dffd3b579d0ffe112b065c4/packages/agent/daemon/runtime/codex_appserver_session.go)、[进程传输](https://github.com/tutti-os/tutti/blob/207beeea554435618dffd3b579d0ffe112b065c4/packages/agent/daemon/runtime/process_transport.go)。
+
+实施已完成并创建 develop PR [#236](https://github.com/Clean-Lakes/Lake/pull/236)，尚未合并。功能源码 `5223bcb7`；签名 Lake Dev 使用保留现有 #235 改动的本地集成提交 `72782f46`。准确测试提交、签名入口真实引擎 6 项、原生连接与历史数据保留见[验证记录](../docs/validation/acp-agent-execution/compatibility.md)和[结构化证据](../docs/validation/acp-agent-execution/codex-app-server.json)。
