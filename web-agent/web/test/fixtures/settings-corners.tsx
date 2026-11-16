@@ -2,6 +2,7 @@
 import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {ModelSettings} from '../../src/ModelSettings';
+import type {GatewayConnection} from '../../../shared/contracts';
 import '../../src/styles.css';
 import '../../src/appSelect.css';
 import '../../src/providerIcon.css';
@@ -13,7 +14,7 @@ const providers=[
  {id:'deepseek',name:'DeepSeek',baseURL:'https://api.deepseek.com/v1',protocol:'openai-response',enabled:true,keyConfigured:false,models:['deepseek-flash','deepseek-v4-pro'].map(id=>({id,name:id,enabled:true,contextWindow:1050000,supportsImageInput:true,supportsImageOutput:false}))},
 ];
 const catalog={providers,activeProviderId:'deepseek',activeModelId:'deepseek-flash'};
-const projectId='settings-layout-fixture',connection={id:'fixture-client',name:'研发使用',projectId,enabled:true,routing:{kind:'pilot'},createdAt:'2026-11-16T00:00:00Z',updatedAt:'2026-11-16T00:00:00Z'};
+const projectId='settings-layout-fixture',connection:GatewayConnection={id:'fixture-client',name:'研发使用',projectId,enabled:true,routing:{mode:'pilot'},createdAt:'2026-11-16T00:00:00Z',updatedAt:'2026-11-16T00:00:00Z'};
 window.fetch=async(input,init)=>{
  const path=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href).pathname;
  const json=(data:unknown)=>new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json'}});
