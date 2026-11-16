@@ -1,0 +1,38 @@
+{
+  "build": {
+    "gitHead": "b95a5e4fa099cdf6f22d1bebcdaacbd61720e0d2",
+    "dirty": false,
+    "version": "0.3.33",
+    "backendRuntime": "typescript"
+  },
+  "samples": [
+    {
+      "sample": 1,
+      "originalStatus": "failed",
+      "originalFailureRetained": true,
+      "recoveryKind": "corrected_resource_selection",
+      "successfulRetryStatus": "completed",
+      "correctedCallOmitsResourceIds": true
+    },
+    {
+      "sample": 2,
+      "originalStatus": "failed",
+      "originalFailureRetained": true,
+      "recoveryKind": "corrected_resource_selection",
+      "successfulRetryStatus": "completed",
+      "correctedCallOmitsResourceIds": true
+    }
+  ],
+  "nativeUI": {
+    "historyRecoveredCaptions": 2,
+    "executionGroup": "执行操作 · 重试后已恢复",
+    "toolSummary": "route_work 首次失败 · 重试后已恢复",
+    "originalErrorVisible": true,
+    "newPilotMarkVisible": [
+      "sidebar",
+      "header",
+      "reply"
+    ],
+    "inspectorClosedAfterValidation": true
+  }
+}
