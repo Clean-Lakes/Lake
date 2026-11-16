@@ -1,0 +1,136 @@
+[
+  {
+    "imageSize" : [
+      2154,
+      1488
+    ],
+    "label" : "模型",
+    "path" : "\/tmp\/lake-settings-native-models.png",
+    "surfaceMidlineBounds" : [
+      99,
+      66,
+      2054,
+      1421
+    ]
+  },
+  {
+    "imageSize" : [
+      2154,
+      1488
+    ],
+    "label" : "Agent 执行器",
+    "path" : "\/tmp\/lake-settings-native-0.png",
+    "selected" : true,
+    "surfaceMidlineBounds" : [
+      99,
+      66,
+      2054,
+      1421
+    ]
+  },
+  {
+    "imageSize" : [
+      2154,
+      1488
+    ],
+    "label" : "MCP 工具",
+    "path" : "\/tmp\/lake-settings-native-1.png",
+    "selected" : true,
+    "surfaceMidlineBounds" : [
+      99,
+      66,
+      2054,
+      1421
+    ]
+  },
+  {
+    "imageSize" : [
+      2154,
+      1488
+    ],
+    "label" : "Skills",
+    "path" : "\/tmp\/lake-settings-native-2.png",
+    "selected" : true,
+    "surfaceMidlineBounds" : [
+      99,
+      66,
+      2054,
+      1421
+    ]
+  },
+  {
+    "imageSize" : [
+      2154,
+      1488
+    ],
+    "label" : "记忆 实验功能",
+    "path" : "\/tmp\/lake-settings-native-3.png",
+    "selected" : true,
+    "surfaceMidlineBounds" : [
+      99,
+      66,
+      2054,
+      1421
+    ]
+  },
+  {
+    "imageSize" : [
+      2154,
+      1488
+    ],
+    "label" : "对话",
+    "path" : "\/tmp\/lake-settings-native-4.png",
+    "selected" : true,
+    "surfaceMidlineBounds" : [
+      99,
+      66,
+      2054,
+      1421
+    ]
+  },
+  {
+    "imageSize" : [
+      2154,
+      1488
+    ],
+    "label" : "巡检",
+    "path" : "\/tmp\/lake-settings-native-5.png",
+    "selected" : true,
+    "surfaceMidlineBounds" : [
+      99,
+      66,
+      2054,
+      1421
+    ]
+  },
+  {
+    "imageSize" : [
+      2154,
+      1488
+    ],
+    "label" : "外观",
+    "path" : "\/tmp\/lake-settings-native-6.png",
+    "selected" : true,
+    "surfaceMidlineBounds" : [
+      99,
+      66,
+      2054,
+      1421
+    ]
+  },
+  {
+    "imageSize" : [
+      2154,
+      1488
+    ],
+    "label" : "接入渠道",
+    "path" : "\/tmp\/lake-settings-native-7.png",
+    "selected" : true,
+    "surfaceMidlineBounds" : [
+      99,
+      66,
+      2054,
+      1421
+    ]
+  }
+]

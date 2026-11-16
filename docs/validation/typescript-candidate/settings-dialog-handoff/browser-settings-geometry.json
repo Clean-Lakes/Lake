@@ -1,0 +1,614 @@
+[
+  {
+    "config": {
+      "width": 1440,
+      "height": 1000,
+      "dark": false
+    },
+    "samples": [
+      {
+        "tab": "接入渠道",
+        "x": 230,
+        "y": 120,
+        "width": 980,
+        "height": 760,
+        "documentWidth": 1440,
+        "viewport": 1440,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "channels-settings-tab"
+      },
+      {
+        "tab": "Agent 执行器",
+        "x": 230,
+        "y": 120,
+        "width": 980,
+        "height": 760,
+        "documentWidth": 1440,
+        "viewport": 1440,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "agents-settings-tab"
+      },
+      {
+        "tab": "模型",
+        "x": 230,
+        "y": 120,
+        "width": 980,
+        "height": 760,
+        "documentWidth": 1440,
+        "viewport": 1440,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "model-settings-tab"
+      },
+      {
+        "tab": "MCP 工具",
+        "x": 230,
+        "y": 120,
+        "width": 980,
+        "height": 760,
+        "documentWidth": 1440,
+        "viewport": 1440,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "mcp-settings-tab"
+      },
+      {
+        "tab": "Skills",
+        "x": 230,
+        "y": 120,
+        "width": 980,
+        "height": 760,
+        "documentWidth": 1440,
+        "viewport": 1440,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "skills-settings-tab"
+      },
+      {
+        "tab": "记忆实验",
+        "x": 230,
+        "y": 120,
+        "width": 980,
+        "height": 760,
+        "documentWidth": 1440,
+        "viewport": 1440,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "memory-settings-tab"
+      },
+      {
+        "tab": "对话",
+        "x": 230,
+        "y": 120,
+        "width": 980,
+        "height": 760,
+        "documentWidth": 1440,
+        "viewport": 1440,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "conversation-settings-tab"
+      },
+      {
+        "tab": "巡检",
+        "x": 230,
+        "y": 120,
+        "width": 980,
+        "height": 760,
+        "documentWidth": 1440,
+        "viewport": 1440,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "watchdog-settings-tab"
+      },
+      {
+        "tab": "外观",
+        "x": 230,
+        "y": 120,
+        "width": 980,
+        "height": 760,
+        "documentWidth": 1440,
+        "viewport": 1440,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "appearance-settings-tab"
+      },
+      {
+        "tab": "接入渠道",
+        "x": 230,
+        "y": 120,
+        "width": 980,
+        "height": 760,
+        "documentWidth": 1440,
+        "viewport": 1440,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "channels-settings-tab"
+      },
+      {
+        "tab": "模型",
+        "x": 230,
+        "y": 120,
+        "width": 980,
+        "height": 760,
+        "documentWidth": 1440,
+        "viewport": 1440,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "model-settings-tab"
+      },
+      {
+        "tab": "接入渠道",
+        "x": 230,
+        "y": 120,
+        "width": 980,
+        "height": 760,
+        "documentWidth": 1440,
+        "viewport": 1440,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "channels-settings-tab"
+      }
+    ]
+  },
+  {
+    "config": {
+      "width": 1100,
+      "height": 700,
+      "dark": true
+    },
+    "samples": [
+      {
+        "tab": "接入渠道",
+        "x": 60,
+        "y": 32,
+        "width": 980,
+        "height": 636,
+        "documentWidth": 1100,
+        "viewport": 1100,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "channels-settings-tab"
+      },
+      {
+        "tab": "Agent 执行器",
+        "x": 60,
+        "y": 32,
+        "width": 980,
+        "height": 636,
+        "documentWidth": 1100,
+        "viewport": 1100,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "agents-settings-tab"
+      },
+      {
+        "tab": "模型",
+        "x": 60,
+        "y": 32,
+        "width": 980,
+        "height": 636,
+        "documentWidth": 1100,
+        "viewport": 1100,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "model-settings-tab"
+      },
+      {
+        "tab": "MCP 工具",
+        "x": 60,
+        "y": 32,
+        "width": 980,
+        "height": 636,
+        "documentWidth": 1100,
+        "viewport": 1100,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "mcp-settings-tab"
+      },
+      {
+        "tab": "Skills",
+        "x": 60,
+        "y": 32,
+        "width": 980,
+        "height": 636,
+        "documentWidth": 1100,
+        "viewport": 1100,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "skills-settings-tab"
+      },
+      {
+        "tab": "记忆实验",
+        "x": 60,
+        "y": 32,
+        "width": 980,
+        "height": 636,
+        "documentWidth": 1100,
+        "viewport": 1100,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "memory-settings-tab"
+      },
+      {
+        "tab": "对话",
+        "x": 60,
+        "y": 32,
+        "width": 980,
+        "height": 636,
+        "documentWidth": 1100,
+        "viewport": 1100,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "conversation-settings-tab"
+      },
+      {
+        "tab": "巡检",
+        "x": 60,
+        "y": 32,
+        "width": 980,
+        "height": 636,
+        "documentWidth": 1100,
+        "viewport": 1100,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "watchdog-settings-tab"
+      },
+      {
+        "tab": "外观",
+        "x": 60,
+        "y": 32,
+        "width": 980,
+        "height": 636,
+        "documentWidth": 1100,
+        "viewport": 1100,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "appearance-settings-tab"
+      },
+      {
+        "tab": "接入渠道",
+        "x": 60,
+        "y": 32,
+        "width": 980,
+        "height": 636,
+        "documentWidth": 1100,
+        "viewport": 1100,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "channels-settings-tab"
+      },
+      {
+        "tab": "模型",
+        "x": 60,
+        "y": 32,
+        "width": 980,
+        "height": 636,
+        "documentWidth": 1100,
+        "viewport": 1100,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "model-settings-tab"
+      },
+      {
+        "tab": "接入渠道",
+        "x": 60,
+        "y": 32,
+        "width": 980,
+        "height": 636,
+        "documentWidth": 1100,
+        "viewport": 1100,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "channels-settings-tab"
+      }
+    ]
+  },
+  {
+    "config": {
+      "width": 760,
+      "height": 620,
+      "dark": false
+    },
+    "samples": [
+      {
+        "tab": "接入渠道",
+        "x": 24,
+        "y": 32,
+        "width": 712,
+        "height": 556,
+        "documentWidth": 760,
+        "viewport": 760,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "channels-settings-tab"
+      },
+      {
+        "tab": "Agent 执行器",
+        "x": 24,
+        "y": 32,
+        "width": 712,
+        "height": 556,
+        "documentWidth": 760,
+        "viewport": 760,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "agents-settings-tab"
+      },
+      {
+        "tab": "模型",
+        "x": 24,
+        "y": 32,
+        "width": 712,
+        "height": 556,
+        "documentWidth": 760,
+        "viewport": 760,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "model-settings-tab"
+      },
+      {
+        "tab": "MCP 工具",
+        "x": 24,
+        "y": 32,
+        "width": 712,
+        "height": 556,
+        "documentWidth": 760,
+        "viewport": 760,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "mcp-settings-tab"
+      },
+      {
+        "tab": "Skills",
+        "x": 24,
+        "y": 32,
+        "width": 712,
+        "height": 556,
+        "documentWidth": 760,
+        "viewport": 760,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "skills-settings-tab"
+      },
+      {
+        "tab": "记忆实验",
+        "x": 24,
+        "y": 32,
+        "width": 712,
+        "height": 556,
+        "documentWidth": 760,
+        "viewport": 760,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "memory-settings-tab"
+      },
+      {
+        "tab": "对话",
+        "x": 24,
+        "y": 32,
+        "width": 712,
+        "height": 556,
+        "documentWidth": 760,
+        "viewport": 760,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "conversation-settings-tab"
+      },
+      {
+        "tab": "巡检",
+        "x": 24,
+        "y": 32,
+        "width": 712,
+        "height": 556,
+        "documentWidth": 760,
+        "viewport": 760,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "watchdog-settings-tab"
+      },
+      {
+        "tab": "外观",
+        "x": 24,
+        "y": 32,
+        "width": 712,
+        "height": 556,
+        "documentWidth": 760,
+        "viewport": 760,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "appearance-settings-tab"
+      },
+      {
+        "tab": "接入渠道",
+        "x": 24,
+        "y": 32,
+        "width": 712,
+        "height": 556,
+        "documentWidth": 760,
+        "viewport": 760,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "channels-settings-tab"
+      },
+      {
+        "tab": "模型",
+        "x": 24,
+        "y": 32,
+        "width": 712,
+        "height": 556,
+        "documentWidth": 760,
+        "viewport": 760,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "model-settings-tab"
+      },
+      {
+        "tab": "接入渠道",
+        "x": 24,
+        "y": 32,
+        "width": 712,
+        "height": 556,
+        "documentWidth": 760,
+        "viewport": 760,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "channels-settings-tab"
+      }
+    ]
+  },
+  {
+    "config": {
+      "width": 390,
+      "height": 844,
+      "dark": true
+    },
+    "samples": [
+      {
+        "tab": "接入渠道",
+        "x": 18,
+        "y": 16,
+        "width": 354,
+        "height": 812,
+        "documentWidth": 390,
+        "viewport": 390,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "channels-settings-tab"
+      },
+      {
+        "tab": "Agent 执行器",
+        "x": 18,
+        "y": 16,
+        "width": 354,
+        "height": 812,
+        "documentWidth": 390,
+        "viewport": 390,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "agents-settings-tab"
+      },
+      {
+        "tab": "模型",
+        "x": 18,
+        "y": 16,
+        "width": 354,
+        "height": 812,
+        "documentWidth": 390,
+        "viewport": 390,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "model-settings-tab"
+      },
+      {
+        "tab": "MCP 工具",
+        "x": 18,
+        "y": 16,
+        "width": 354,
+        "height": 812,
+        "documentWidth": 390,
+        "viewport": 390,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "mcp-settings-tab"
+      },
+      {
+        "tab": "Skills",
+        "x": 18,
+        "y": 16,
+        "width": 354,
+        "height": 812,
+        "documentWidth": 390,
+        "viewport": 390,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "skills-settings-tab"
+      },
+      {
+        "tab": "记忆实验",
+        "x": 18,
+        "y": 16,
+        "width": 354,
+        "height": 812,
+        "documentWidth": 390,
+        "viewport": 390,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "memory-settings-tab"
+      },
+      {
+        "tab": "对话",
+        "x": 18,
+        "y": 16,
+        "width": 354,
+        "height": 812,
+        "documentWidth": 390,
+        "viewport": 390,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "conversation-settings-tab"
+      },
+      {
+        "tab": "巡检",
+        "x": 18,
+        "y": 16,
+        "width": 354,
+        "height": 812,
+        "documentWidth": 390,
+        "viewport": 390,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "watchdog-settings-tab"
+      },
+      {
+        "tab": "外观",
+        "x": 18,
+        "y": 16,
+        "width": 354,
+        "height": 812,
+        "documentWidth": 390,
+        "viewport": 390,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "appearance-settings-tab"
+      },
+      {
+        "tab": "接入渠道",
+        "x": 18,
+        "y": 16,
+        "width": 354,
+        "height": 812,
+        "documentWidth": 390,
+        "viewport": 390,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "channels-settings-tab"
+      },
+      {
+        "tab": "模型",
+        "x": 18,
+        "y": 16,
+        "width": 354,
+        "height": 812,
+        "documentWidth": 390,
+        "viewport": 390,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "model-settings-tab"
+      },
+      {
+        "tab": "接入渠道",
+        "x": 18,
+        "y": 16,
+        "width": 354,
+        "height": 812,
+        "documentWidth": 390,
+        "viewport": 390,
+        "closeWithin": true,
+        "dialogOverflow": 0,
+        "selected": "channels-settings-tab"
+      }
+    ]
+  }
+]
