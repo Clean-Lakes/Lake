@@ -61,8 +61,15 @@ export function liveTextMotionParts(text:string,start:number){
 }
 
 /** Inline spans preserve normal line breaking, selectable text and one readable copy. */
-export function LiveTextMotionText({text,start,end=text.length}:{text:string;start:number;end?:number}){
- return <span className="live-text-motion-text"><Fragment key="prefix">{text.slice(0,start)}</Fragment>{liveTextMotionParts(text.slice(0,end),start).map(part=><Fragment key={part.offset}>{part.moving?<span className="live-text-motion-character" data-text-offset={part.offset} style={{'--live-text-phase':`${-(part.offset*73%phaseWindowMs)}ms`} as CSSProperties}>{part.text}</span>:part.text}</Fragment>)}<Fragment key="suffix">{text.slice(end)}</Fragment></span>;
+export function LiveTextMotionText({text,start,end=text.length,glow=false}:{text:string;start:number;end?:number;glow?:boolean}){
+ const parts=liveTextMotionParts(text.slice(0,end),start),count=parts.filter(part=>part.moving).length;
+ let index=0;
+ // Later glyphs peak later, from left to right. Center the bounded wave on
+ // the header's mid-cycle peak; UTF-16 offsets remain keys, never light phases.
+ return <span className="live-text-motion-text"><Fragment key="prefix">{text.slice(0,start)}</Fragment>{parts.map(part=>{
+  const phase=part.moving&&glow?(index++-(count-1)/2)*73:-(part.offset*73%phaseWindowMs);
+  return <Fragment key={part.offset}>{part.moving?<span className="live-text-motion-character" data-text-offset={part.offset} style={{'--live-text-phase':`${phase}ms`} as CSSProperties}>{part.text}</span>:part.text}</Fragment>;
+ })}<Fragment key="suffix">{text.slice(end)}</Fragment></span>;
 }
 
 /** Pure status text shares the prose motion without Markdown or a second live region. */
@@ -73,7 +80,7 @@ export function LiveTextMotionLabel({children,active=false,glow=false,leading=fa
  const range=leading?{start:0,end:readableHeadEnd(children)}:{start:readableTail(children).start,end:children.length};
  const running=active&&visible;
  useSynchronizedLight(lightRef,glow&&running);
- return <span ref={lightRef} className={`live-text-motion-label${className?` ${className}`:''}`} data-live-motion={running?'active':'still'} data-live-glow={glow?running?'active':'still':undefined}><LiveTextMotionText text={children} {...range}/></span>;
+ return <span ref={lightRef} className={`live-text-motion-label${className?` ${className}`:''}`} data-live-motion={running?'active':'still'} data-live-glow={glow?running?'active':'still':undefined}><LiveTextMotionText text={children} {...range} glow={glow}/></span>;
 }
 
 /** Ordinary Markdown does not subscribe to visibility or acquire motion markup. */
