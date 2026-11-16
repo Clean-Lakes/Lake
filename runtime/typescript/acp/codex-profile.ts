@@ -12,7 +12,7 @@ export const codexCatalog = {models: upstream.models.map(model => ({...model,
 export const codexModels: string[] = codexCatalog.models.map(model => model.slug);
 export function codexConfig(home: string) {
   const disabled=['shell_tool','unified_exec','apply_patch_freeform','view_image','web_search_request','web_search_cached','multi_agent','multi_agent_v2','collab','plugins','hooks','codex_hooks','plugin_hooks','js_repl','code_mode','computer_use','browser_use','apps','connectors','memories','memory_tool','goals','remote_control','search_tool','deferred_executor','request_permissions_tool','token_budget','current_time_reminder','sleep_tool','send_message_to_user_async','image_generation'];
-  return {model_catalog_json:home+'/models.json',features:Object.fromEntries(disabled.map(name=>[name,false])),
+  return {model_catalog_json:home+'/models.json',features:{...Object.fromEntries(disabled.map(name=>[name,false])),tool_call_mcp_elicitation:true},
     tools:{experimental_request_user_input:{enabled:false},update_plan:{enabled:false}},agents:{enabled:false},
     notify:[],history:{persistence:'none'},sqlite_home:home+'/state',log_dir:home+'/logs',
     web_search:'disabled',project_doc_max_bytes:0,include_environment_context:false,approval_policy:'never',sandbox_mode:'read-only'};

@@ -3,7 +3,7 @@ import type { ToolEntry } from '../sdk';
 import type {ExternalAgentId,StoredExternalAgentId} from '../../../web-agent/shared/external-agents';
 export type {ExternalAgentId,AgentBackendRef} from '../../../web-agent/shared/external-agents';
 export type ExternalAgentProfile = {
-  schemaVersion: 2;
+  schemaVersion: 3; runtimeKind:'codex-app-server';
   id: ExternalAgentId; projectId: string; revision: number; enabled: boolean;
   nodePath?: string; npmPath?:string; authentication:'codex-local';sourceFingerprint:string;updatedAt: string;
 };

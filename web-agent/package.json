@@ -20,7 +20,6 @@
     "package": "../scripts/build_lake.sh"
   },
   "dependencies": {
-    "@agentclientprotocol/sdk": "2.5.0",
     "@modelcontextprotocol/server": "2.4.0",
     "@redis/client": "6.3.1",
     "@xterm/addon-fit": "0.10.0",

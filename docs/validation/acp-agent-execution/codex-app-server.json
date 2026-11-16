@@ -1,0 +1,125 @@
+{
+  "date": "2026-11-16",
+  "featureSource": "5223bcb76f7a502b21276a5b0e06af985ded0374",
+  "installedDevSource": "72782f4608e53180f27c977d5217bf7a1f766237",
+  "installedDevDirty": false,
+  "backendSHA256": "94c3e711824dd731cedf884a0c8337ea8b9a571d812bc9324fd1ee932426b26d",
+  "signedBinaryMatches": true,
+  "tests": {
+    "featureUnit": {
+      "source": "41eb1187d0eeef798e37dfc3ddceb670ad86de50",
+      "tests": 340,
+      "pass": 336,
+      "fail": 0,
+      "skipped": 4
+    },
+    "featureHost": {
+      "source": "41eb1187d0eeef798e37dfc3ddceb670ad86de50",
+      "tests": 281,
+      "pass": 275,
+      "fail": 0,
+      "skipped": 6
+    },
+    "featureFrontend": {
+      "source": "41eb1187d0eeef798e37dfc3ddceb670ad86de50",
+      "tests": 866,
+      "pass": 866,
+      "fail": 0,
+      "skipped": 0
+    },
+    "protocol": {
+      "source": "9b77597878f9a3a417d973dcdca8f611aabfcb10",
+      "tests": 14,
+      "pass": 14,
+      "fail": 0,
+      "skipped": 0
+    },
+    "integratedUnit": {
+      "source": "08e62b5845fa1856e4920cf6de907e3fdbd54a08",
+      "tests": 363,
+      "pass": 359,
+      "fail": 0,
+      "skipped": 4
+    },
+    "integratedHost": {
+      "source": "08e62b5845fa1856e4920cf6de907e3fdbd54a08",
+      "tests": 288,
+      "pass": 282,
+      "fail": 0,
+      "skipped": 6
+    },
+    "integratedFrontend": {
+      "source": "08e62b5845fa1856e4920cf6de907e3fdbd54a08",
+      "tests": 948,
+      "pass": 948,
+      "fail": 0,
+      "skipped": 0
+    },
+    "integratedRealCodex": {
+      "source": "08e62b5845fa1856e4920cf6de907e3fdbd54a08",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0
+    },
+    "signedRealCodex": {
+      "source": "72782f4608e53180f27c977d5217bf7a1f766237",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0
+    }
+  },
+  "preservedRecords": {
+    "superRoles": {
+      "count": 23,
+      "unchanged": true
+    },
+    "superWorkers": {
+      "count": 139,
+      "unchanged": true
+    },
+    "superGoals": {
+      "count": 139,
+      "unchanged": true
+    },
+    "superOperations": {
+      "count": 434,
+      "unchanged": true
+    },
+    "superAttempts": {
+      "count": 194,
+      "unchanged": true
+    },
+    "superAcceptance": {
+      "count": 162,
+      "unchanged": true
+    },
+    "acpRuns": {
+      "count": 34,
+      "unchanged": true
+    }
+  },
+  "sourceCodexFilesUnchanged": true,
+  "nativeUI": {
+    "connectionReady": true,
+    "authMode": "chatgpt",
+    "model": "gpt-6.1-sol",
+    "effort": "max",
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "restoredTheme": "system",
+    "separate390pxWebVerified": false
+  },
+  "platform": "darwin-arm64",
+  "notVerified": [
+    "Windows",
+    "Linux",
+    "Claude",
+    "real remote business operations"
+  ],
+  "localIntegrationBranch": "codex/codex-app-server-dev",
+  "preservedOpenPR": 235
+}

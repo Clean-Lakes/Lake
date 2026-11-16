@@ -54,15 +54,13 @@ async function fixture(t,{count=6,failRole,hold=false,acp=false,summarize=false}
  const project=await api('/api/projects','POST',{name:'isolated dialogue'}),pilot=await api(`/api/projects/${project.id}/superagent`,'POST',{});
  const launches=[];
  if(acp){
-  const registry=app.agents.external.registry,root=registry.adapterRoot();
-  await mkdir(join(root,'node_modules/@agentclientprotocol/codex-acp/dist'),{recursive:true});
-  await writeFile(join(root,'node_modules/@agentclientprotocol/codex-acp/package.json'),JSON.stringify({version:'2.2.2'}));
-  await writeFile(registry.adapterEntry(),'// owned protocol fixture');
-  await mkdir(join(root,'node_modules/@openai/codex'),{recursive:true});
+  const registry=app.agents.external.registry,root=registry.runtimeRoot();
+  await mkdir(join(root,'node_modules/@openai/codex/bin'),{recursive:true});
+  await writeFile(registry.engineEntry(),'// owned protocol fixture');
   await writeFile(join(root,'node_modules/@openai/codex/package.json'),JSON.stringify({version:'0.160.1'}));
   app.agents.external.launch=async(_profile,directory,_signal,mcp,model)=>{
    launches.push({mcp,model});
-   return {executable:process.execPath,args:[join(__dirname,'test-fixtures/codex-acp.cjs')],cwd:directory,env:{LAKE_TEST_ACP_SCENARIO:'conversation',LAKE_TEST_ACP_SOCKET:mcp?.args.at(-1)},observed:{model:model??'gpt-6.1-sol',modelProvider:'fixture',reasoningEffort:'max',authenticated:true,authMode:'chatgpt'}};
+   return {executable:process.execPath,args:[join(__dirname,'test-fixtures/codex-app-server.cjs')],cwd:directory,env:{LAKE_TEST_ACP_SCENARIO:'conversation',LAKE_TEST_ACP_SOCKET:mcp?.args.at(-1)},observed:{model:model??'gpt-6.1-sol',modelProvider:'fixture',reasoningEffort:'max',authenticated:true,authMode:'chatgpt'}};
   };
   await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.execPath});
   await app.agents.external.probe(project.id,'codex',AbortSignal.timeout(5000));
