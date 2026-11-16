@@ -2,10 +2,12 @@
 
 专员尚未输出公开正文时，主会话保留普通头像、名称、Agent 标识和身份入口，下面显示动物专属思考文案并轻微逐字跃动。移除思考卡片外框与边框角色；真实正文到达后，在同一署名下原位接替，正文末尾沿用轻微跃动。运行中的专员名字和下方思考小字叠加柔和光脉冲，名字使用淡蓝高光，小字从次级文字色逐渐提亮。
 
+本页记录光效与频率同步阶段；后续进度更新连续性修复、最新 SHA 与 901 项回归见[进度连续性验收](specialist-progress-continuity-2026-11-16.md)。
+
 ## 候选与范围
 
 - 开发基线：`88682744e8d5a1a336ae289cc98cbb59fcbb2bb3`（develop，含 PR #234）。
-- 最终测试与签名 Lake Dev 安装源码：`70de4d58593e9b39a644a2ba8c7c379d864f7787`，构建来源 `dirty=false`。
+- 频率同步阶段测试与签名 Lake Dev 安装源码：`70de4d58593e9b39a644a2ba8c7c379d864f7787`，构建来源 `dirty=false`。
 - 完整光效/布局初验为 `3ac6ff0b2078dec2a5d19951a41333ec0dd4fb32`；本轮频率与相位同步复验见下文，原始截图保留对应初验版本。
 - 分支：`codex/specialist-live-text-motion`；PR #235 目标 `develop`。
 - 平台：macOS Apple Silicon，Lake Dev 0.3.33 / TypeScript 后端；Chromium 补充明暗、390px 和动态效果状态验证。
