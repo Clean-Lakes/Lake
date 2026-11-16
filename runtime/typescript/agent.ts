@@ -193,7 +193,7 @@ export class LakeAgents {
     let card = view.cards.find((card) => card.id === cardId);
     if (!card) {
       card = { id: cardId, type, title, content: "", status: "running", at: now() };
-      card.data={root_turn_id:view.rootTurnId,taskId:this.host?.currentTask?.(view.session)};
+      card.data={root_turn_id:view.rootTurnId,taskId:this.host?.currentTask?.(view.session),source_message_id:view.sourceMessageIds?.[0]};
       view.cards.push(card);
     }
     return card;
@@ -1062,7 +1062,7 @@ export class LakeAgents {
     this.live.set(sessionId, live);
     return live;
   }
-  async send(sessionId: string, text: string, options: { input?: string; recordUser?: boolean; recordAssistant?: boolean; ignoreMemory?: boolean; messageInput?: MessageInput } = {}) {
+  async send(sessionId: string, text: string, options: { input?: string; recordUser?: boolean; recordAssistant?: boolean; ignoreMemory?: boolean; messageInput?: MessageInput;sourceMessageIds?:string[] } = {}) {
     if (!text.trim()) throw new HttpError(400, "消息不能为空");
     if (this.store.session(sessionId).workspaceRole === "legacy") throw new HttpError(409, "旧会话只读，不恢复或重放历史执行");
     const live = await this.runtime(sessionId);
@@ -1073,18 +1073,23 @@ export class LakeAgents {
       session.title = text.slice(0, 40);
       this.store.put("sessions", sessionId, session);
     }
+    let sourceMessageIds=options.sourceMessageIds;
     if (options.recordUser !== false) {
       const message = this.store.addMessage(sessionId, "user", text, {mentions: options.messageInput?.mentions});
+      sourceMessageIds=[message.id];
       if (options.messageInput) this.store.put('messageInputs', message.id, {messageId: message.id, projectId: session.projectId, sessionId, ...options.messageInput});
       if (options.messageInput?.resourceIds.length) this.store.put('sessionResourceReferences', sessionId, {resourceIds: options.messageInput.resourceIds, sourceMessageId: message.id});
       this.memory?.captureUser(sessionId, message.id, undefined, options.ignoreMemory);
     }
     const view = this.store.view(sessionId);
+    view.sourceMessageIds=sourceMessageIds;
     view.status = "running";
     view.replyStatus = "running";
     view.turns++;
     view.turnStartedAt = now();
     view.turnFinishedAt = undefined;
+    if(sourceMessageIds?.length)view.replyTimings=[...(view.replyTimings??[]).filter(timing=>!sourceMessageIds.includes(timing.messageId)),
+      ...sourceMessageIds.map(messageId=>({messageId,startedAt:view.turnStartedAt!,finishedAt:'',status:'running' as const}))];
     this.update(sessionId, view);
     const controller = new AbortController();
     live.controller = controller;
@@ -1109,10 +1114,10 @@ export class LakeAgents {
               content: this.redact(result.response),
               status: "completed",
               at: now(),
-              data: {root_turn_id:final.rootTurnId,taskId:this.host?.currentTask?.(sessionId)},
+              data: {root_turn_id:final.rootTurnId,taskId:this.host?.currentTask?.(sessionId),source_message_id:final.sourceMessageIds?.[0]},
             });
           if (options.recordAssistant !== false) {
-            const message = this.store.addMessage(sessionId, "assistant", this.redact(result.response));
+            const message = this.store.addMessage(sessionId, "assistant", this.redact(result.response),{replyToMessageId:final.sourceMessageIds?.[0]});
             this.memory?.tagMessage(sessionId, message.id);
           }
         }
@@ -1129,7 +1134,7 @@ export class LakeAgents {
             id: id(),
             type: "error",
             content: failure.message,
-            data:{root_turn_id:final.rootTurnId,taskId:this.host?.currentTask?.(sessionId),failure},
+            data:{root_turn_id:final.rootTurnId,taskId:this.host?.currentTask?.(sessionId),source_message_id:final.sourceMessageIds?.[0],failure},
             status: "failed",
             at: now(),
           });
@@ -1142,6 +1147,8 @@ export class LakeAgents {
         final.pendingApprovals = [];
         final.turnFinishedAt = now();
         final.replyStatus = final.status;
+        const timingStatus=final.status==='completed'||final.status==='cancelled'||final.status==='failed'?final.status:'interrupted';
+        final.replyTimings=final.replyTimings?.map(timing=>sourceMessageIds?.includes(timing.messageId)?{...timing,finishedAt:final.turnFinishedAt!,status:timingStatus}:timing);
         for (const card of final.cards)
           if (["running", "pending"].includes(card.status)) card.status = final.status;
         this.update(sessionId, final);

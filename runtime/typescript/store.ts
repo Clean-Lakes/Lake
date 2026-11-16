@@ -108,12 +108,18 @@ export class LakeStore {
       let changed = false;
       if (["running", "waiting_approval", "waiting_input"].includes(view.status)) {
         view.status = "interrupted";
+        view.replyStatus='interrupted';
         view.pending = undefined;
         view.pendingApprovals = [];
         view.question = undefined;
         for (const card of view.cards)
           if (["running", "pending"].includes(card.status)) card.status = "interrupted";
         changed = true;
+      }
+      if(view.replyTimings?.some(timing=>timing.status==='running')){
+        view.replyTimings=view.replyTimings.map(timing=>timing.status==='running'?{...timing,status:'interrupted',finishedAt:now()}:timing);
+        if(view.replyStatus==='running')view.replyStatus=view.status;
+        changed=true;
       }
       for (const run of view.agentRuns ?? []) {
         if (!isNativeAgentSource(run.source) || !["queued", "running", "waiting_approval", "waiting_input"].includes(run.status)) continue;
@@ -299,7 +305,7 @@ export class LakeStore {
     const start = Math.max(0, end - limit);
     return { ...view, cards: view.cards.slice(start, end), cardsOffset: start, totalCards: total };
   }
-  addMessage(sessionId: string, role: Message["role"], text: string, metadata: Pick<Message, 'mentions' | 'images' | 'files' | 'external'> = {}) {
+  addMessage(sessionId: string, role: Message["role"], text: string, metadata: Pick<Message, 'mentions' | 'images' | 'files' | 'external' | 'replyToMessageId'> = {}) {
     const message: Message = { ...metadata, id: id(), sessionId, role, text, createdAt: now() };
     return this.put("messages", message.id, message);
   }
@@ -331,6 +337,7 @@ export class LakeStore {
   snapshot(sessionId: string): SessionSnapshot {
     const session = this.session(sessionId);
     const catalog = this.catalog();
+    const view=this.view(sessionId);
     const { options, ...publicSession } = session;
     return {
       session: publicSession,
@@ -342,8 +349,9 @@ export class LakeStore {
       actions: [],
       terminals: (catalog.terminals ?? []).filter((terminal) => terminal.sessionId === sessionId),
       cursor: this.cursor(sessionId),
+      replyTimings:view.replyTimings,
       messageQueue: {...(this.get<import('../../web-agent/shared/contracts').MessageQueue>('messageQueues', sessionId) ?? {paused: false, revision: 0, lastError: '', items: []}), pushSupported: false},
-      ai: this.view(sessionId),
+      ai: view,
       conversationMode: options.conversationMode === "plan" ? "plan" : "default",
     };
   }

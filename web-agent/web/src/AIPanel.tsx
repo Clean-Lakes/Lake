@@ -53,7 +53,7 @@ import { memo, useEffect, useMemo, useRef, useState, type ReactNode, type RefObj
 import type { AIImage, AICard, AIView, AIPreset, TextFileAttachment, SessionSnapshot, TerminalSession, WorkspaceTag } from "../../shared/contracts";
 import { conversationTagSignature } from "./conversationTags";
 import {AssistantMarkdown, ObjectReferencesProvider, ReplyReferenceScope} from './AssistantMarkdown';
-import { isCompactionFallbackEntry, isCompactionFailureEntry, orderedTranscript, transcriptGroups, transcriptTurns } from "./timeline";
+import { isCompactionFallbackEntry, isCompactionFailureEntry, orderedTranscript, replySourceMessageId, transcriptGroups, transcriptTurns } from "./timeline";
 import { FileChanges } from "./FileChanges";
 import { hasCurrentTaskProgress, TaskProgress } from "./TaskProgress";
 import { isFileChangeCard } from "./file-changes-model";
@@ -183,9 +183,10 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
   const tail = groups.at(-1);
   const thinkingVisible = !!tail?.some(entry => entry.agentRun || entry.card && ["thinking", "operation", "shell"].includes(entry.card.type)) && ["running", "waiting_approval"].includes(snapshot.ai?.status || "");
   const latestUser = snapshot.messages.filter(message => message.role === "user").at(-1);
-  const latestUserAt = latestUser?.createdAt || "";
+  const replyUser=snapshot.messages.find(message=>message.id===replySourceMessageId(snapshot));
+  const latestUserAt = replyUser?.createdAt || "";
   const latestInspectorTaskId=latestInspectorSelection(snapshot).taskId;
-  const currentTurn=latestUser?turns.find(turn=>turn.some(entry=>entry.message?.id===latestUser.id))??[]:[];
+  const currentTurn=replyUser?turns.find(turn=>turn.some(entry=>entry.message?.id===replyUser.id))??[]:[];
   const currentTiming=timingForTurn(currentTurn,snapshot);
   const liveConversation=['running','waiting_approval'].includes(snapshot.ai?.status||'')&&(!currentTiming||currentTiming.status==='running');
   const conversationTurnEntries=(turn:typeof entries)=>turn.filter(entry=>!isFileChangeCard(entry.card)
@@ -229,9 +230,9 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       if(fallbackDiagnostic)compactionDiagnostics.push(<details className="compaction-diagnostic" key={`diagnostic-${fallbackDiagnostic.id}`}><DisclosureSummary>整理请求诊断</DisclosureSummary><pre>{fallbackDiagnostic.card?.content??fallbackDiagnostic.message?.text}</pre></details>);
       const recoveredRouting=recoveredRouteFailures(turn.flatMap(entry=>entry.card?[entry.card]:[]));
       const notices=[...(recoveredRouting.size?[["recovered","项派单重试后已恢复"]]:[]),['failed','项失败'],['pending','项待确认'],['unknown','项结果待核查'],['background_running','项后台执行中'],['not_executed','项未执行'],['interrupted','项已停止'],['cancelled','项已停止']].flatMap(([status,label])=>{const count=status==='recovered'?recoveredRouting.size:processGroups.flatMap(group=>group.entries).filter(entry=>entry.card?.status===status&&!(status==='failed'&&recoveredRouting.has(entry.id))).length;return count?[`${count} ${label}`]:[];}).join(' · ');
-      const timingProps={connected,current:turn===currentTurn,timing:timingForTurn(turn,snapshot),view:turn.some(entry=>entry.message?.id===latestUser?.id)?snapshot.ai:undefined,cards:turn.flatMap(entry=>entry.card?[entry.card]:[]),latestUserAt:turn.find(entry=>entry.message?.role==='user')?.at??''};
+      const timingProps={connected,current:turn===currentTurn,timing:timingForTurn(turn,snapshot),view:turn===currentTurn?snapshot.ai:undefined,cards:turn.flatMap(entry=>entry.card?[entry.card]:[]),latestUserAt:turn.find(entry=>entry.message?.role==='user')?.at??''};
       const miniStartedAt=timingProps.timing?.startedAt||timingProps.latestUserAt||turn[0]!.at;
-      const miniEndedAt=turns[index+1]?.find(entry=>entry.message?.role==='user')?.at;
+      const miniEndedAt=timingProps.timing?(timingProps.timing.finishedAt||undefined):turns[index+1]?.find(entry=>entry.message?.role==='user')?.at;
       const miniScope={session:snapshot.session.id,taskId:snapshot.superagent?.task.executionGoalId??snapshot.superagent?.task.taskId,executions:snapshot.commandExecutions,terminals:snapshot.terminals??[],startedAt:miniStartedAt,endedAt:miniEndedAt,live:turn===currentTurn&&liveConversation,waiting:snapshot.ai?.status==='waiting_approval',connected:!disabled,multiResource:hasMultipleMiniResources(processGroups)};
       const hiddenProcess=new Set(processGroups.flatMap(group=>group.entries).filter(entry=>entry.card?.title!=='ask_user_question'&&!!entry.card&&(['running','completed','succeeded','success'].includes(entry.card.status)||recoveredRouting.has(entry.id))).map(entry=>entry.id));
       for(const entry of turn){

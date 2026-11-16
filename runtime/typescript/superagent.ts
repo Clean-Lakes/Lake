@@ -1274,9 +1274,9 @@ export class LakeSuperagent implements AgentHost {
     if (this.closed) return;
     for (const project of this.store.list<SuperProject>("superProjects")) if (!this.stoppingProjects.has(project.projectId)&&!this.routing.has(project.projectId) && !this.agents.isRunning(project.routerSessionId)) {
       const pending = this.store.list<InputEvent>("superInputs").filter((event) => event.projectId === project.projectId && event.disposition === "pending");
-      // An external reply is an exact message receipt. Never attribute one
-      // model response to several callers, threads or independent messages.
-      const events = pending[0]?.external?.connectionId ? pending.slice(0,1) : pending.filter(event=>!event.external?.connectionId).slice(0,16);
+      // Admit inputs immediately, then route each source in order. A later
+      // message cannot replace an active batch or share its reply identity.
+      const events = pending.slice(0,1);
       if (events.length) {
         this.routing.add(project.projectId);
         const external=events[0].external?.connectionId ? events[0] : undefined;
@@ -1328,7 +1328,7 @@ export class LakeSuperagent implements AgentHost {
           adapters: { ssh: !!this.ssh, extensions: !!this.extensions,mysql:!!this.mysql } });
         const { input, complete, eventIds } = context;
         this.batches.set(project.routerSessionId, { eventIds, complete, input });
-        try { await this.agents.send(project.routerSessionId, events.filter((event) => eventIds.includes(event.id)).map((event) => event.payload).join("\n"), { input, recordUser: false, ignoreMemory: events.some(event => event.ignoreMemory) }); }
+        try { await this.agents.send(project.routerSessionId, events.filter((event) => eventIds.includes(event.id)).map((event) => event.payload).join("\n"), { input, recordUser: false,sourceMessageIds:events.filter(event=>eventIds.includes(event.id)).map(event=>event.messageId), ignoreMemory: events.some(event => event.ignoreMemory) }); }
         catch (error) { this.routerFinished(project.routerSessionId, String(error)); }
       }
     }

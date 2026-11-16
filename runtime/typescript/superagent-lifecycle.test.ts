@@ -15,11 +15,12 @@ import {HttpError} from "./store";
 async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date.now) {
   const home = await mkdtemp(join(tmpdir(), "lake-dispatch-lifecycle-"));
   const store = await LakeStore.open(home, join(home, "data"));
-  const requests: { sessionId: string; input: any }[] = [];
+  const requests: { sessionId: string; input: any;sourceMessageIds?:string[] }[] = [];
+  const aborted:string[]=[];
   let steering = 0;
   const agents = { executionView: (_sessionId:string,view:any)=>view, redact: (value: string) => value, publish() {}, prepareRedaction: async () => {}, isRunning: () => false,
-    send: async (sessionId: string, _text: string, options: any) => { requests.push({ sessionId, input: JSON.parse(options.input) }); },
-    steer: async () => { steering++; return true; }, abort: async () => {} };
+    send: async (sessionId: string, _text: string, options: any) => { requests.push({ sessionId, input: options.input.startsWith('{')?JSON.parse(options.input):options.input,sourceMessageIds:options.sourceMessageIds }); },
+    steer: async () => { steering++; return true; }, abort: async (sessionId:string) => {aborted.push(sessionId);} };
   const host = new LakeSuperagent(store, agents as any, undefined, undefined, undefined, undefined, undefined, clock), internal = host as any;
   internal.schedule = () => {};
   t.after(async () => { await host.close(); store.db.close(); await rm(home, { recursive: true, force: true }); });
@@ -62,8 +63,76 @@ async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date
     return { event, handoff, taskId: handoff.taskId };
   };
   return { store, host, internal, agents, project, router, role, requests, admit, route, settleRouter, activate, worker, read, finish, settleWorker, start,
-    steering: () => steering };
+    aborted,steering: () => steering };
 }
+
+test('Pilot accepts B and C during A, routes their exact sources in order and keeps same-role tasks independent',async t=>{
+ const f=await fixture(t);
+ const send=async(text:string)=>{const message=await f.host.send(f.router,text) as {id:string};return f.store.list<any>('superInputs').find(e=>e.messageId===message.id)!;};
+ const a=await send('A：检查当前项目文件。');await f.activate();
+ const batch=f.internal.batches.get(f.router);
+ const b=await send('B：同一专员另做一项独立目录检查。'),c=await send('C：给 A 补充检查要求。');
+ await f.activate();
+ assert.equal(f.internal.batches.get(f.router),batch,'new inputs never replace the active routing context');
+ assert.equal(f.store.messages(f.router).filter(m=>m.role==='user').length,3);
+ assert.equal(f.requests.filter(r=>r.sessionId===f.router).length,1);
+ assert.deepEqual(batch.eventIds,[a.id]);assert.deepEqual(f.aborted,[]);
+ const first=f.route(a,{action:'create',title:'A 项目文件检查',role_id:f.role.id});
+ f.settleRouter();await f.activate();
+ const original=f.worker(first.taskId),generation=original.generation;
+ assert.equal(original.state,'active');assert.deepEqual(f.internal.batches.get(f.router).eventIds,[b.id]);
+ const second=f.route(b,{action:'create',title:'B 独立目录检查',role_id:f.role.id});
+ f.settleRouter();await f.activate();
+ assert.equal(f.worker(second.taskId).state,'active');
+ assert.notEqual(second.taskId,first.taskId);assert.notEqual(second.sessionId,first.sessionId);
+ assert.equal(f.worker(first.taskId).generation,generation);
+ assert.deepEqual(f.internal.batches.get(f.router).eventIds,[c.id]);
+ f.route(c,{action:'followup',task_id:first.taskId,role_id:f.role.id});f.settleRouter();
+ assert.deepEqual(f.requests.filter(r=>r.sessionId===f.router).map(r=>r.sourceMessageIds),[[a.messageId],[b.messageId],[c.messageId]]);
+ assert.deepEqual(f.worker(first.taskId).inputEventIds,[a.id,c.id]);
+ assert.deepEqual(f.worker(second.taskId).inputEventIds,[b.id],'a supplement to A never enters B even when the role is identical');
+ assert.equal((await f.finish(first.taskId)).completionDeferred,true);
+ f.settleWorker(first.taskId);await f.activate();
+ const continuation=f.requests.filter(r=>r.sessionId===first.sessionId).at(-1)!;
+ assert.deepEqual(continuation.input.followups,[{id:c.id,text:c.payload}]);
+ assert.equal(f.worker(first.taskId).taskId,first.taskId);assert.equal(f.worker(second.taskId).state,'active');
+ assert.deepEqual(f.aborted,[]);assert.equal(f.steering(),0,'a queued SDK acknowledgement is not treated as consumed input');
+});
+
+test('one message can supplement an active task and create joint new work for the same and another specialist',async t=>{
+ const f=await fixture(t),first=await f.start(),original=f.worker(first.taskId);
+ const other={...f.role,id:'role-evidence',roleKey:'evidence',name:'资料专员'};f.store.put('superRoles',other.id,other);
+ const event=await f.admit('给原检查补充日志；并请项目检查员和资料专员共同整理另一份清单。');
+ f.route(event,{part_key:'old-task',action:'followup',task_id:first.taskId,role_id:f.role.id,quote:'给原检查补充日志'});
+ const joint=f.route(event,{part_key:'new-task',action:'create',title:'独立资料清单',role_ids:[f.role.id,other.id],quote:'项目检查员和资料专员共同整理另一份清单',
+  role_instructions:[{role_id:f.role.id,instruction:'整理项目部分'},{role_id:other.id,instruction:'整理资料部分'}]});
+ f.settleRouter();await f.activate();
+ assert.equal(joint.assignments.length,2);assert.notEqual(joint.taskId,first.taskId);
+ assert.equal(f.worker(first.taskId).sessionId,original.sessionId);
+ assert.deepEqual(f.worker(first.taskId).inputEventIds,[first.event.id,event.id]);
+ for(const member of joint.assignments){assert.notEqual(member.workerId,original.id);assert.deepEqual(f.worker(member.executionId).inputEventIds,[event.id]);}
+ assert.equal(f.host.workers(f.project.id).filter(w=>w.roleId===f.role.id).length,2);
+ assert.equal(f.store.list<any>('superWorkers').filter(w=>w.state==='active').length,2,'the existing project capacity still applies');
+ assert.equal((await f.finish(first.taskId)).completionDeferred,true);assert.deepEqual(f.aborted,[]);
+});
+
+test('a shared supplement reaches each selected existing task once without creating or stopping work',async t=>{
+ const f=await fixture(t),a=await f.start(),other={...f.role,id:'role-second',roleKey:'second'};f.store.put('superRoles',other.id,other);
+ const eventB=await f.admit('另一位专员检查独立清单。'),b=f.route(eventB,{action:'create',title:'独立清单',role_id:other.id});
+ f.settleRouter();await f.activate();
+ const supplement=await f.admit('请两位专员给原任务都补充当前日志。');
+ for(const [part,taskId,roleId] of [['first',a.taskId,f.role.id],['second',b.taskId,other.id]])
+  f.route(supplement,{part_key:part,action:'followup',task_id:taskId,role_id:roleId});
+ f.settleRouter();
+ for(const taskId of [a.taskId,b.taskId]){assert.equal((await f.finish(taskId)).completionDeferred,true);f.settleWorker(taskId);}
+ await f.activate();
+ assert.equal(f.store.list('superWorkers').length,2);
+ for(const taskId of [a.taskId,b.taskId]){
+  const worker=f.worker(taskId),request=f.requests.filter(r=>r.sessionId===worker.sessionId).at(-1)!;
+  assert.equal(worker.generation,2);assert.deepEqual(request.input.followups,[{id:supplement.id,text:supplement.payload}]);
+ }
+ assert.deepEqual(f.aborted,[]);
+});
 
 test('specialist report Agent identity stays frozen and legacy projection never rewrites history or crosses bindings',async t=>{
  const f=await fixture(t),work=await f.start(),worker=f.worker(work.taskId);
