@@ -16,7 +16,7 @@ const workspace=(workers=[worker()]):SuperWorkspace=>({active:true,project:{proj
  channels:workers.map(item=>({id:`channel-${item.id}`,roleId:item.roleId,roleName:item.roleName,sessionId:`channel-session-${item.id}`,projectId:'project',revision:1,createdAt:at}))});
 const render=(value:SuperWorkspace,connected=true)=>renderToStaticMarkup(createElement(PilotSpecialistConversation,{rows:pilotDispatchRows(value,'pilot',[user]),onSpecialist(){},connected}));
 
-test('Pilot retains exact worker bindings and subscriptions while private thinking adds no conversation placeholder',()=>{
+test('Pilot shows each exact dispatched worker and its thinking text below the source reply',()=>{
  const a=worker(),b={...worker('database'),roleName:'数据库专员'},state=workspace([a,b]);
  const rows=pilotDispatchRows(state,'pilot',[user]);
  assert.equal(rows.length,2);assert.deepEqual(rows.map(row=>row.author.channelSessionId),['channel-session-host','channel-session-database']);
@@ -24,10 +24,11 @@ test('Pilot retains exact worker bindings and subscriptions while private thinki
  const snapshot={session:{id:'pilot',workspaceRole:'router'},messages:[user,{id:'reply',sessionId:'pilot',role:'assistant',text:'我会检查这两项。',createdAt:at}],resources:[],actions:[],ai:{session:'pilot',status:'completed',cards:[],cardsOffset:0}} as SessionSnapshot;
  const before=JSON.stringify(snapshot);
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,pilotWorkspace:state,assistantIdentity:{name:'Pilot',pilot:true},onSpecialist(){}}));
- assert.ok(html.includes('我会检查这两项。'));
- assert.equal(render(state),'<div class="pilot-specialist-conversation"></div>','null views leave the exact worker subscriptions mounted');
- assert.doesNotMatch(html,/data-worker-id=|animal-thinking-bubble|turn-activity-mark|data-motion="working"/);
- assert.doesNotMatch(html,/<strong>服务器专员<\/strong>|<strong>数据库专员<\/strong>/);
+ assert.ok(html.indexOf('我会检查这两项。')<html.indexOf('pilot-specialist-reply'));
+ assert.equal((html.match(/data-worker-id=/g)??[]).length,2);
+ assert.equal((html.match(/data-live-motion="active"/g)??[]).length,2);
+ assert.doesNotMatch(html,/animal-thinking-bubble|animal-thinking-character|turn-activity-mark|status-text--active/);
+ assert.ok(html.includes('<strong>服务器专员</strong>')&&html.includes('<strong>数据库专员</strong>'));
  assert.doesNotMatch(html,/pilot-dispatch-progress|专员工作进展/);
  assert.equal(JSON.stringify(snapshot),before,'live progress must never be persisted as a reply or report');
 });
@@ -37,8 +38,9 @@ test('queued, human confirmation, questions and external waits stay static; only
   const item=worker();item.activity!.phase=phase;item.activity!.label=phase==='queued'?'准备处理':phase.startsWith('waiting')?'等待确认':'正在分析';
   const html=render(workspace([item]));
   assert.doesNotMatch(html,/animal-thinking-bubble|data-motion="thinking"/,phase);
-  assert.equal(html.includes('pilot-specialist-reply'),phase!=='thinking',phase);
-  assert.equal(html.includes('turn-activity-mark'),phase==='tool',phase);assert.equal(html.includes('data-motion="working"'),phase==='tool',phase);
+  assert.ok(html.includes('pilot-specialist-reply'),phase);
+  assert.equal(html.includes('live-text-motion-label'),phase==='thinking',phase);
+  assert.equal(html.includes('turn-activity-mark'),phase==='tool',phase);assert.equal(html.includes('data-motion="working"'),phase==='tool'||phase==='thinking',phase);
  }
  const offline=render(workspace(),false);
  assert.ok(offline.includes('进度暂未更新，正在重连'));assert.ok(!offline.includes('data-motion="working"')&&!offline.includes('turn-activity-mark'));

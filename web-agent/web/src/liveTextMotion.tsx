@@ -8,6 +8,14 @@ const segmenter=new Intl.Segmenter(undefined,{granularity:'grapheme'});
 type TextNode={type:string;value?:string;children?:TextNode[];data?:{hName?:string;hProperties?:Record<string,unknown>}};
 const opaque=new Set(['code','inlineCode','link','linkReference','image','imageReference','html','definition','table']);
 
+function readableTail(text:string,limit=LIVE_TEXT_MOTION_LIMIT){
+ const readable:number[]=[];
+ for(const part of segmenter.segment(text))if(part.segment.trim()){
+  readable.push(part.index);if(readable.length>limit)readable.shift();
+ }
+ return {start:readable[0]??text.length,count:readable.length};
+}
+
 /** Decorate a bounded tail of plain prose, after references and other Markdown features. */
 export function remarkLiveTextMotion(){
  return (tree:TextNode)=>{
@@ -21,11 +29,7 @@ export function remarkLiveTextMotion(){
   let remaining=LIVE_TEXT_MOTION_LIMIT;
   for(let index=textNodes.length-1;index>=0&&remaining>0;index--){
    const node=textNodes[index]!,value=node.value!;
-   const readable:number[]=[];
-   for(const part of segmenter.segment(value))if(part.segment.trim()){
-    readable.push(part.index);if(readable.length>remaining)readable.shift();
-   }
-   const count=readable.length,start=readable[0]!;
+   const {count,start}=readableTail(value,remaining);
    node.type='liveTextMotion';
    // react-markdown keys siblings by tag name. A private renderer keeps the
    // bounded motion hosts out of existing reference/commit span key sequences.
@@ -49,6 +53,12 @@ export function liveTextMotionParts(text:string,start:number){
 /** Inline spans preserve normal line breaking, selectable text and one readable copy. */
 export function LiveTextMotionText({text,start}:{text:string;start:number}){
  return <span className="live-text-motion-text"><Fragment key="prefix">{text.slice(0,start)}</Fragment>{liveTextMotionParts(text,start).map(part=><Fragment key={part.offset}>{part.moving?<span className="live-text-motion-character" data-text-offset={part.offset} style={{'--live-text-phase':`${-(part.offset*73%phaseWindowMs)}ms`} as CSSProperties}>{part.text}</span>:part.text}</Fragment>)}</span>;
+}
+
+/** Pure status text shares the prose motion without Markdown or a second live region. */
+export function LiveTextMotionLabel({children,active=false,className=''}:{children:string;active?:boolean;className?:string}){
+ const visible=usePageVisible(),{start}=readableTail(children);
+ return <span className={`live-text-motion-label${className?` ${className}`:''}`} data-live-motion={active&&visible?'active':'still'}><LiveTextMotionText text={children} start={start}/></span>;
 }
 
 /** Ordinary Markdown does not subscribe to visibility or acquire motion markup. */

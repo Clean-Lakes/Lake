@@ -4,7 +4,7 @@ import {createElement,isValidElement,type ReactNode} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import Markdown from 'react-markdown';
 import {AssistantMarkdown,ObjectReferencesProvider} from '../src/AssistantMarkdown';
-import {LIVE_TEXT_MOTION_LIMIT,LiveTextMotionText,liveTextMotionParts,remarkLiveTextMotion} from '../src/liveTextMotion';
+import {LIVE_TEXT_MOTION_LIMIT,LiveTextMotionLabel,LiveTextMotionText,liveTextMotionParts,remarkLiveTextMotion} from '../src/liveTextMotion';
 import {objectCatalog,remarkObjectReferences} from '../src/objectReferences';
 import type {Resource} from '../../shared/contracts';
 
@@ -21,6 +21,30 @@ test('ordinary Markdown stays unchanged; opt-in motion uses one copy and stops w
  assert.equal(plain(active),plain(ordinary));
  assert.doesNotMatch(active,/aria-hidden|aria-label|role="status"/,'the actual text remains the only accessible/readable copy');
  assert.doesNotMatch(active,/<lake-live-text/,'the private Markdown node renders as a normal inline span');
+});
+
+test('a plain animal status label uses one inline text copy with no frame, Markdown or extra announcement',()=>{
+ const source='正在搓爪琢磨中';
+ const label=(active?:boolean)=>renderToStaticMarkup(createElement(LiveTextMotionLabel,{children:source,active,className:'test-status'}));
+ const active=label(true),still=label(false);
+ assert.match(active,/^<span class="live-text-motion-label test-status" data-live-motion="active">/);
+ assert.equal(active.replace('data-live-motion="active"','data-live-motion="still"'),still);
+ assert.equal(label(),still,'labels only move when the caller explicitly marks actual work active');
+ assert.equal(plain(active),source);assert.equal(moving(active).join(''),source);
+ assert.doesNotMatch(active,/<p\b|<div\b|aria-hidden|aria-label|role=|status-text|animal-thinking/);
+ const literal='**原文** <字符> `命令`';
+ assert.equal(plain(renderToStaticMarkup(createElement(LiveTextMotionLabel,{children:literal,active:true}))),literal,'the label does not parse or rewrite Markdown');
+});
+
+test('plain labels share the bounded grapheme tail and retain empty or whitespace-only text',()=>{
+ const source='保持原有前缀'.repeat(40)+'A\u0301 👩🏽‍💻 🇨🇳 继续核对';
+ const html=renderToStaticMarkup(createElement(LiveTextMotionLabel,{children:source,active:true}));
+ assert.equal(moving(html).length,LIVE_TEXT_MOTION_LIMIT);assert.equal(plain(html),source);
+ for(const grapheme of ['A\u0301','👩🏽‍💻','🇨🇳'])assert.ok(moving(html).includes(grapheme));
+ for(const text of ['', ' \t\n ']){
+  const empty=renderToStaticMarkup(createElement(LiveTextMotionLabel,{children:text,active:true}));
+  assert.equal(moving(empty).length,0);assert.equal(plain(empty),text);
+ }
 });
 
 test('retiring an earlier motion host cannot change an existing object reference React key',()=>{

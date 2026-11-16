@@ -112,20 +112,43 @@ function specialistRow(){
  row.author.avatarId='owl';return row;
 }
 
-test('Pilot private thinking contributes no placeholder, then its exact public output becomes visible',t=>{
+test('Pilot shows animal-specific thinking text under its original identity, then public output replaces only that text',t=>{
  t.mock.method(Date,'now',()=>now);
  const row=specialistRow();
  const snapshot={session:{id:'worker',projectId:'project'},superagent:{roleId:row.worker.roleId,task:row.worker.task},cursor:1,ai:view({rootTurnId:'root'})} as SessionSnapshot;
  const html=(available=true)=>renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row,snapshot,available}));
- assert.equal(html(),'');
- assert.equal(renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row})),'','the first-packet wait is also silent');
- for(const phase of ['queued','tool','waiting_approval','waiting_input','waiting_external'] as const){row.activity.phase=phase;assert.match(html(),/reply-process-status/,phase);assert.doesNotMatch(html(),/animal-thinking-bubble/,phase);}
- row.activity.phase='thinking';assert.doesNotMatch(html(false),/animal-thinking-bubble/);assert.match(html(false),/正在重连/);
+ const thinking=html();
+ assert.match(thinking.replace(/<[^>]*>/g,''),/正在歪头推敲中/);
+ assert.match(thinking,/data-live-motion="active"/);
+ assert.equal((thinking.match(/role="status"/g)??[]).length,1);
+ assert.doesNotMatch(thinking,/animal-thinking-bubble|animal-thinking-character|turn-activity-mark|status-text--active/);
+ assert.match(renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row})).replace(/<[^>]*>/g,''),/正在歪头推敲中/,'the exact dispatched worker has feedback before the first model packet');
+ for(const phase of ['queued','tool','waiting_approval','waiting_input','waiting_external'] as const){row.activity.phase=phase;assert.match(html(),/reply-process-status/,phase);assert.doesNotMatch(html(),/animal-thinking-bubble|live-text-motion-label/,phase);}
+ row.activity.phase='thinking';assert.doesNotMatch(html(false),/animal-thinking-bubble|live-text-motion-label/);assert.match(html(false),/正在重连/);
  snapshot.ai!.cards=[{id:'compact',type:'compaction',status:'running',at}];
- assert.doesNotMatch(html(),/animal-thinking-bubble/);assert.match(html(),/正在压缩上下文/);
+ assert.doesNotMatch(html(),/animal-thinking-bubble|live-text-motion-label/);assert.match(html(),/正在压缩上下文/);
  snapshot.ai!.cards=[{id:'reply',type:'message',status:'running',content:'这是本次检查结果。',at,data:{root_turn_id:'root'}}];
- assert.match(html().replace(/<[^>]*>/g,''),/这是本次检查结果。/);assert.doesNotMatch(html(),/animal-thinking-bubble|正在歪头推敲中|turn-activity-mark|正在生成回复/);
+ assert.match(html().replace(/<[^>]*>/g,''),/这是本次检查结果。/);assert.doesNotMatch(html(),/animal-thinking-bubble|live-text-motion-label|turn-activity-mark|正在生成回复/);
  assert.match(html(),/data-live-motion="active"/);
+ assert.equal(html().match(/<div class="response-identity">[\s\S]*?<\/div>/)?.[0],thinking.match(/<div class="response-identity">[\s\S]*?<\/div>/)?.[0],'the identity stays in the same parent and retains the same author while its content slot changes');
+});
+
+test('Pilot thinking copy follows the exact original avatar for explicit IDs, project roles and duplicate names',()=>{
+ const channels=[channel('role-a','turtle'),channel('role-b','owl')];
+ const renderThinking=(roleId:string,avatarId?:'otter',visible=true)=>{
+  const row=specialistRow();row.author={...row.author,roleId,avatarId};
+  return renderToStaticMarkup(createElement(SpecialistAvatarProvider,{channels,children:createElement(PilotSpecialistReplyView,{row,visible,onSpecialist(){}})}));
+ };
+ for(const [roleId,avatarId,animal,label] of [['role-a',undefined,'turtle','正在慢慢推演中'],['role-b',undefined,'owl','正在歪头推敲中'],['role-a','otter','otter','正在搓爪琢磨中']] as const){
+  const html=renderThinking(roleId,avatarId);
+  assert.ok(html.replace(/<[^>]*>/g,'').includes(label));assert.ok(html.includes(`data-avatar="${animal}"`));
+  assert.equal((html.match(/class="response-avatar"/g)??[]).length,1);
+  assert.equal((html.match(/role="status"/g)??[]).length,1);
+  assert.match(html,/<button type="button" class="response-author"/);
+  assert.doesNotMatch(html,/animal-thinking-bubble|animal-thinking-character|turn-activity-mark|status-text--active/);
+ }
+ const hidden=renderThinking('role-a','otter',false);
+ assert.match(hidden,/data-live-motion="still"/);assert.match(hidden.replace(/<[^>]*>/g,''),/正在搓爪琢磨中/,'hidden pages pause motion without deleting the real state');
 });
 
 test('Pilot public prose keeps its original specialist entry and execution logo outside any bubble',()=>{
@@ -216,6 +239,6 @@ test('Pilot live snapshots stop every work loop for pending cards, child waits a
   const snapshot={...base,ai:view({rootTurnId:'root',replyStatus:'running',...extra})};
   const html=renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row,snapshot}));
   assert.ok(html.includes(label),`${phase}: ${label}`);
-  assert.doesNotMatch(html,/animal-thinking-bubble|turn-activity-mark|status-text--active|data-motion="working"/);
+  assert.doesNotMatch(html,/animal-thinking-bubble|live-text-motion-label|turn-activity-mark|status-text--active|data-motion="working"/);
  }
 });

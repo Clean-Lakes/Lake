@@ -10,8 +10,11 @@ import {usePageVisible} from './usePageVisible';
 import {useSmoothText} from './useSmoothText';
 import {conversationPlanEntry} from './planConversation';
 import {PlanReference} from './PlanMode';
-import {turnStatus} from './turnStatus';
+import {allowsAnimalThinking,turnStatus} from './turnStatus';
 import {conversationActivity} from './superAgentPresentation';
+import {useSpecialistAppearance} from './SuperRoleAvatar';
+import {lakeAvatarThinking} from './lakeAvatarThinking';
+import {LiveTextMotionLabel} from './liveTextMotion';
 
 export async function loadPilotSpecialistSnapshot(row:PilotSpecialistRow,signal?:AbortSignal){
  // Task-scoped inspector snapshots replace the SDK invocation root with the
@@ -74,19 +77,19 @@ function PilotSpecialistReply({row,onSpecialist,connected}:{row:PilotSpecialistR
 
 /** Public reply presentation is separate from the exact-worker live subscription. */
 export function PilotSpecialistReplyView({row,snapshot,available=true,visible=true,onSpecialist}:{row:PilotSpecialistRow;snapshot?:SessionSnapshot;available?:boolean;visible?:boolean;onSpecialist?:(author:SpecialistReplyAuthor)=>void}){
+ const appearance=useSpecialistAppearance(row.author);
  const entry=pilotSpecialistReply(row,snapshot);
  const status=snapshot?.ai?turnStatus(undefined,snapshot.ai,snapshot.ai.cards,snapshot.ai.turnStartedAt??row.sourceCreatedAt,Date.now()):undefined;
  const moving=available&&['thinking','tool'].includes(row.activity.phase)&&(!snapshot||conversationActivity(snapshot.ai)==='running')&&(!status||!['waiting','settled'].includes(status.phase));
  const projected=entry?.card?conversationPlanEntry({id:entry.card.id,at:entry.createdAt,card:entry.card},{planMode:snapshot?.conversationMode==='plan',live:moving,currentPlanId:snapshot?.ai?.proposedPlan?.id}):undefined;
  const text=useSmoothText(projected?.card?.type==='plan_reference'?'':entry?.card?.content??'',moving&&visible);
  if(entry?.reply&&row.reportedTurns.includes(entry.reply.turnId))return null;
- // Keep the worker subscription alive while its private thinking has no public reply.
- if(moving&&row.activity.phase==='thinking'&&(!status||status.phase==='thinking')&&!text&&projected?.card?.type!=='plan_reference')return null;
+ const thinking=moving&&row.activity.phase==='thinking'&&allowsAnimalThinking(snapshot?.ai)&&(!status||status.phase==='thinking')&&!text&&projected?.card?.type!=='plan_reference';
  const snapshotLabel=status&&(status.phase==='waiting'||status.phase==='settled'||row.activity.phase==='thinking'&&status.phase!=='thinking')?status.state:undefined;
  const label=available?snapshotLabel??row.activity.label:'进度暂未更新，正在重连';
  return <section className="ai-chat-message ai-role-assistant pilot-specialist-reply" data-worker-id={row.worker.id} data-task-id={row.worker.task.taskId} data-phase={row.activity.phase} aria-label={`${row.author.name}的回复`}>
   <ReplyIdentity identity={{name:'Pilot',pilot:true}} author={row.author} authorMotion={moving?'working':'still'} onSpecialist={onSpecialist}/>
-  {projected?.card?.type==='plan_reference'?<PlanReference state={(projected.card.data as {state:'saved'|'writing'|'incomplete'}).state}/>:text?<div className="ai-card ai-message"><AssistantMarkdown liveMotion={moving&&visible}>{text}</AssistantMarkdown></div>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
+  {projected?.card?.type==='plan_reference'?<PlanReference state={(projected.card.data as {state:'saved'|'writing'|'incomplete'}).state}/>:text?<div className="ai-card ai-message"><AssistantMarkdown liveMotion={moving&&visible}>{text}</AssistantMarkdown></div>:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible}>{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
   {text&&!available&&<small className="pilot-specialist-connection" role="status">进度暂未更新，正在重连</small>}
  </section>;
 }
