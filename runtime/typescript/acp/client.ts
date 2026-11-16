@@ -5,7 +5,7 @@ export type AgentLaunch = {
   observed?: {model:string;modelProvider:string;reasoningEffort?:string;authenticated:boolean;authMode:'chatgpt'|'api_key'|'provider'|'none'};
 };
 export type AgentActivity =
-  | {kind:'text';text:string}
+  | {kind:'text';text:string;messageId:string;messageText:string}
   | {kind:'tool'|'tool_update';callId:string;title:string;status:string}
   | {kind:'usage';usage:{inputTokens:number;outputTokens:number}};
 export type AgentTurnResult = {stopReason:'end_turn'|'cancelled'|'failed';error?:string};

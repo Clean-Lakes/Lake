@@ -106,10 +106,11 @@ export class CodexAppServer implements AgentConnection {
     this.route(turn,method,params);
   }
   private messageText(turn:Turn,id:string,text:string) {
+    const changed=!turn.messages.has(id)||turn.messages.get(id)!==text;
     turn.messages.set(id,text);
     const combined=[...turn.messages.values()].join('');
     if(Buffer.byteLength(combined)>1024*1024){turn.reject(new Error('Codex 正文超过本次输出上限'));void this.rpc.close();return;}
-    if(combined!==turn.text){turn.text=combined;this.activity({kind:'text',text:combined});}
+    if(changed){turn.text=combined;this.activity({kind:'text',text:combined,messageId:id,messageText:text});}
   }
   private route(turn:Turn,method:string,params:any) {
     const id=method==='turn/completed'?params.turn?.id:params.turnId;
