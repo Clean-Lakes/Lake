@@ -16,7 +16,7 @@ const workspace=(workers=[worker()]):SuperWorkspace=>({active:true,project:{proj
  channels:workers.map(item=>({id:`channel-${item.id}`,roleId:item.roleId,roleName:item.roleName,sessionId:`channel-session-${item.id}`,projectId:'project',revision:1,createdAt:at}))});
 const render=(value:SuperWorkspace,connected=true)=>renderToStaticMarkup(createElement(PilotSpecialistConversation,{rows:pilotDispatchRows(value,'pilot',[user]),onSpecialist(){},connected}));
 
-test('Pilot retains each dispatched worker after its own reply, with exact task and channel targets',()=>{
+test('Pilot retains exact worker bindings and subscriptions while private thinking adds no conversation placeholder',()=>{
  const a=worker(),b={...worker('database'),roleName:'数据库专员'},state=workspace([a,b]);
  const rows=pilotDispatchRows(state,'pilot',[user]);
  assert.equal(rows.length,2);assert.deepEqual(rows.map(row=>row.author.channelSessionId),['channel-session-host','channel-session-database']);
@@ -24,11 +24,10 @@ test('Pilot retains each dispatched worker after its own reply, with exact task 
  const snapshot={session:{id:'pilot',workspaceRole:'router'},messages:[user,{id:'reply',sessionId:'pilot',role:'assistant',text:'我会检查这两项。',createdAt:at}],resources:[],actions:[],ai:{session:'pilot',status:'completed',cards:[],cardsOffset:0}} as SessionSnapshot;
  const before=JSON.stringify(snapshot);
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,pilotWorkspace:state,assistantIdentity:{name:'Pilot',pilot:true},onSpecialist(){}}));
- assert.ok(html.indexOf('我会检查这两项。')<html.indexOf('pilot-specialist-reply'));
- assert.equal((html.match(/data-worker-id=/g)??[]).length,2);
- assert.ok(html.includes('animal-thinking-bubble')&&html.includes('data-motion="thinking"'));
- assert.doesNotMatch(html,/turn-activity-mark|data-motion="working"/);
- assert.ok(html.includes('<strong>服务器专员</strong>')&&html.includes('<strong>数据库专员</strong>'));
+ assert.ok(html.includes('我会检查这两项。'));
+ assert.equal(render(state),'<div class="pilot-specialist-conversation"></div>','null views leave the exact worker subscriptions mounted');
+ assert.doesNotMatch(html,/data-worker-id=|animal-thinking-bubble|turn-activity-mark|data-motion="working"/);
+ assert.doesNotMatch(html,/<strong>服务器专员<\/strong>|<strong>数据库专员<\/strong>/);
  assert.doesNotMatch(html,/pilot-dispatch-progress|专员工作进展/);
  assert.equal(JSON.stringify(snapshot),before,'live progress must never be persisted as a reply or report');
 });
@@ -37,8 +36,8 @@ test('queued, human confirmation, questions and external waits stay static; only
  for(const phase of ['queued','thinking','tool','waiting_approval','waiting_input','waiting_external'] as const){
   const item=worker();item.activity!.phase=phase;item.activity!.label=phase==='queued'?'准备处理':phase.startsWith('waiting')?'等待确认':'正在分析';
   const html=render(workspace([item]));
-  assert.equal(html.includes('animal-thinking-bubble'),phase==='thinking',phase);
-  assert.equal(html.includes('data-motion="thinking"'),phase==='thinking',phase);
+  assert.doesNotMatch(html,/animal-thinking-bubble|data-motion="thinking"/,phase);
+  assert.equal(html.includes('pilot-specialist-reply'),phase!=='thinking',phase);
   assert.equal(html.includes('turn-activity-mark'),phase==='tool',phase);assert.equal(html.includes('data-motion="working"'),phase==='tool',phase);
  }
  const offline=render(workspace(),false);
@@ -88,8 +87,10 @@ test('Pilot live loading preserves the SDK root instead of the task inspector ro
  assert.deepEqual(calls,[{url:`/api/sessions/${item.sessionId}/snapshot`,signal:controller.signal}]);
  assert.equal(pilotSpecialistReply(row,loaded)?.card?.content,snapshot.ai!.cards[0]!.content);
  const html=renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row,snapshot:loaded}));
- assert.match(html,/本次隔离验收正文已经开始输出/);
+ assert.match(html.replace(/<[^>]*>/g,''),/本次隔离验收正文已经开始输出/);
  assert.doesNotMatch(html,/animal-thinking-bubble|正在生成回复/);
+ assert.equal(renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row:{...row,reportedTurns:['turn-current-sdk']},snapshot:loaded})),'','a delivered report retires only this exact live SDK invocation');
+ assert.match(renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row:{...row,reportedTurns:['super-task-origin']},snapshot:loaded})),/data-live-motion="active"/,'task origin is not proof that the current public reply was delivered');
  for(const changed of [
   {...snapshot,session:{...snapshot.session,id:'other-session'}},
   {...snapshot,session:{...snapshot.session,projectId:'other-project'}},
@@ -103,7 +104,7 @@ test('live authors use the original execution and only exact delivered roots ret
  const item=worker();item.execution={backend:{kind:'acp',agent:'codex'},source:'task_assignment',assignedAt:at,runs:[],totalRuns:0};
  const state=workspace([item]);state.channels![0].execution={kind:'native'};
  const row=pilotDispatchRows(state,'pilot',[user])[0]!;
- assert.equal(row.author.execution?.kind,'acp');assert.match(render(state),/Agent 类型：Codex/);
+ assert.equal(row.author.execution?.kind,'acp');item.activity!.phase='tool';assert.match(render(state),/Agent 类型：Codex/);
  const report:Message={id:'report',sessionId:'pilot',role:'assistant',text:'实际结果',createdAt:at,author:{...row.author,rootTurnId:'reported-root'}};
  const other:Message={...report,id:'other',author:{...row.author,workerId:'another-worker',rootTurnId:'unrelated-root'}};
  assert.deepEqual(pilotDispatchRows(state,'pilot',[user,report,other])[0]!.reportedTurns,['reported-root']);
@@ -156,7 +157,8 @@ test('a followup moves the same worker to its exact new user turn, with committe
 test('current progress stays below its source reply when newer unrelated dialogue arrives',()=>{
  const later={...user,id:'later',text:'另一件事',createdAt:'2026-11-06T00:00:02Z'};
  const snapshot={session:{id:'pilot',workspaceRole:'router'},messages:[user,{id:'reply',sessionId:'pilot',role:'assistant',text:'已经安排检查。',createdAt:'2026-11-06T00:00:01Z'},later],resources:[],actions:[],ai:{session:'pilot',status:'completed',cards:[],cardsOffset:0}} as SessionSnapshot;
- const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,pilotWorkspace:workspace(),assistantIdentity:{name:'Pilot',pilot:true},onSpecialist(){}}));
+ const state=workspace();state.workers[0]!.activity!.phase='tool';
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,pilotWorkspace:state,assistantIdentity:{name:'Pilot',pilot:true},onSpecialist(){}}));
  assert.ok(html.indexOf('已经安排检查。')<html.indexOf('data-worker-id="host"'));
  assert.ok(html.indexOf('data-worker-id="host"')<html.indexOf('class="user-message-text">另一件事'));
 });

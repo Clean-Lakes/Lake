@@ -1,2 +1,3 @@
 .pilot-specialist-conversation { display:grid; grid-template-columns:minmax(0,1fr); gap:24px; width:100%; min-width:0; }
+.pilot-specialist-conversation:empty { display:none; }
 .pilot-specialist-connection { display:block; margin-top:8px; color:var(--text-muted); font-size:12px; }

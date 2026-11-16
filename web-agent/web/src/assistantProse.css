@@ -32,6 +32,13 @@ div.ai-markdown.assistant-prose:has(> .reply-info-facts) > :is(h1,h2,h3,h4) { fo
 .sre-report-facts > li > .sre-prose > .assistant-prose { display: inline; }
 .sre-report-facts > li > .sre-prose > .assistant-prose > p:last-child { display: inline; margin: 0; }
 .sre-report-section h4 { font-weight:var(--font-weight-semibold); }
+/* Only an opted-in live reply moves, with a bounded tail and a long quiet rest. */
+.live-text-motion-character { position:relative; top:0; animation:4200ms ease-in-out var(--live-text-phase,0ms) infinite; animation-play-state:paused; }
+.assistant-prose[data-live-motion=active] .live-text-motion-character { animation-name:lake-live-text-rise; animation-play-state:running; }
+@keyframes lake-live-text-rise { 0%,12%,100% { top:0; } 6% { top:-1px; } }
+@media (prefers-reduced-motion:reduce) {
+ .assistant-prose[data-live-motion] .live-text-motion-character { animation-name:none; animation-play-state:paused; top:0; }
+}
 @media (max-width: 600px) {
   .ai-markdown.assistant-prose ul,.ai-markdown.assistant-prose ol { padding-inline-start: 1.35em; }
   .ai-markdown.assistant-prose li { padding-inline-start: 2px; }
