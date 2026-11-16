@@ -1,0 +1,186 @@
+{
+  "frames": 101,
+  "name": [
+    {
+      "text": "服",
+      "phaseAtPeak": 1400.4000000000015,
+      "top": -0.997333,
+      "delay": -292,
+      "duration": 3400,
+      "startTime": 0
+    },
+    {
+      "text": "务",
+      "phaseAtPeak": 1467.4000000000015,
+      "top": -0.991353,
+      "delay": -219,
+      "duration": 3400,
+      "startTime": 0
+    },
+    {
+      "text": "器",
+      "phaseAtPeak": 1567.3999999999942,
+      "top": -0.991609,
+      "delay": -146,
+      "duration": 3400,
+      "startTime": 0
+    },
+    {
+      "text": "运",
+      "phaseAtPeak": 1634,
+      "top": -0.997741,
+      "delay": -73,
+      "duration": 3400,
+      "startTime": 0
+    },
+    {
+      "text": "维",
+      "phaseAtPeak": 1700.5999999999985,
+      "top": -0.999984,
+      "delay": 0,
+      "duration": 3400,
+      "startTime": 0
+    },
+    {
+      "text": "排",
+      "phaseAtPeak": 1759,
+      "top": -0.990829,
+      "delay": 73,
+      "duration": 3400,
+      "startTime": 0
+    },
+    {
+      "text": "查",
+      "phaseAtPeak": 1834,
+      "top": -0.99329,
+      "delay": 146,
+      "duration": 3400,
+      "startTime": 0
+    },
+    {
+      "text": "专",
+      "phaseAtPeak": 1934,
+      "top": -0.989451,
+      "delay": 219,
+      "duration": 3400,
+      "startTime": 0
+    },
+    {
+      "text": "员",
+      "phaseAtPeak": 2000.699999999997,
+      "top": -0.996497,
+      "delay": 292,
+      "duration": 3400,
+      "startTime": 0
+    }
+  ],
+  "status": [
+    {
+      "text": "正",
+      "phaseAtPeak": 1467.4000000000015,
+      "top": -0.991353,
+      "delay": -219,
+      "duration": 3400,
+      "startTime": 0
+    },
+    {
+      "text": "在",
+      "phaseAtPeak": 1567.3999999999942,
+      "top": -0.991609,
+      "delay": -146,
+      "duration": 3400,
+      "startTime": 0
+    },
+    {
+      "text": "独",
+      "phaseAtPeak": 1634,
+      "top": -0.997741,
+      "delay": -73,
+      "duration": 3400,
+      "startTime": 0
+    },
+    {
+      "text": "立",
+      "phaseAtPeak": 1700.5999999999985,
+      "top": -0.999984,
+      "delay": 0,
+      "duration": 3400,
+      "startTime": 0
+    },
+    {
+      "text": "凝",
+      "phaseAtPeak": 1759,
+      "top": -0.990829,
+      "delay": 73,
+      "duration": 3400,
+      "startTime": 0
+    },
+    {
+      "text": "神",
+      "phaseAtPeak": 1834,
+      "top": -0.99329,
+      "delay": 146,
+      "duration": 3400,
+      "startTime": 0
+    },
+    {
+      "text": "中",
+      "phaseAtPeak": 1934,
+      "top": -0.989451,
+      "delay": 219,
+      "duration": 3400,
+      "startTime": 0
+    }
+  ],
+  "header": {
+    "duration": 3400,
+    "startTime": 0,
+    "leftToRight": true,
+    "firstX": -227.977,
+    "lastX": 227.981
+  },
+  "snapshotUpdate": {
+    "visibilityBefore": "visible",
+    "visibilityAfter": "visible",
+    "nodesConnected": true,
+    "animationsRetained": false,
+    "allStartZero": true,
+    "note": "跨工具点击可能切换页面可见性，CSS 动画恢复后仍对齐 document 0；同一可见页面内更新的动画对象保持不变。"
+  },
+  "longLabel": {
+    "glyphs": 24,
+    "delays": [
+      -839.5,
+      -766.5,
+      -693.5,
+      -620.5,
+      -547.5,
+      -474.5,
+      -401.5,
+      -328.5,
+      -255.5,
+      -182.5,
+      -109.5,
+      -36.5,
+      36.5,
+      109.5,
+      182.5,
+      255.5,
+      328.5,
+      401.5,
+      474.5,
+      547.5,
+      620.5,
+      693.5,
+      766.5,
+      839.5
+    ],
+    "duration": "3.4s"
+  },
+  "reducedMotionAnimationCount": 0,
+  "inPageSnapshotUpdate": {
+    "nodesConnected": true,
+    "animationsRetained": true,
+    "allStartZero": true
+  }
+}
