@@ -1,0 +1,10 @@
+{
+  "testedSha": "7f3138af131ca54f0a3ca642d75098997273696f",
+  "dirty": false,
+  "replyStatus": "running",
+  "cardStatus": "running",
+  "bodyLength": 241,
+  "rootTurnId": "turn_aa0bd5f0-5826-4d4c-961c-777e45ea24a0",
+  "workerTaskId": "st_68610b2b425258a0e99258c37a63771a",
+  "model": "deterministic loopback fixture"
+}
