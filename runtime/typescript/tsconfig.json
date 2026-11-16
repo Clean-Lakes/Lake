@@ -15,7 +15,6 @@
     ],
     "paths": {
       "smol-toml": ["../../web-agent/node_modules/smol-toml"],
-      "@agentclientprotocol/sdk": ["../../web-agent/node_modules/@agentclientprotocol/sdk"],
       "@modelcontextprotocol/server": ["../../web-agent/node_modules/@modelcontextprotocol/server"],
       "@modelcontextprotocol/server/stdio": ["../../web-agent/node_modules/@modelcontextprotocol/server/dist/stdio.d.mts"],
       "zod": ["../../web-agent/node_modules/zod"],

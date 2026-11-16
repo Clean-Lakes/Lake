@@ -4,7 +4,7 @@ import {mkdtemp,mkdir,writeFile,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {parse} from 'smol-toml';
-import {CodexLocalSource,shellQuote} from './acp/codex-local';
+import {CodexLocalSource} from './acp/codex-local';
 import {codexStartupArgs} from './acp/codex-profile';
 import {ExternalAgentRegistry} from './acp/registry';
 import {LakeStore} from './store';
@@ -40,13 +40,13 @@ test('provider credentials follow only the selected environment and are never pe
  assert.ok(!JSON.stringify(store.list('acpProfiles')).includes('synthetic-provider'));
 });
 
-test('migration and source changes fence old bindings without rewriting their history or copying login',async t=>{
+for(const schemaVersion of [1,2])test('schema '+schemaVersion+' migration and source changes fence old bindings without rewriting history or copying login',async t=>{
  const f=await fixture(t),store=await LakeStore.open(join(f.home,'lake'),join(f.home,'data'));t.after(async()=>{store.db.close();});
  const project=store.createProject('legacy profile'),key=project.id+':codex';
- store.put('acpProfiles',key,{schemaVersion:1,id:'codex',projectId:project.id,revision:4,enabled:true,model:'obsolete-model'});
+ store.put('acpProfiles',key,{schemaVersion,id:'codex',projectId:project.id,revision:4,enabled:true,model:'obsolete-model',sourceFingerprint:f.local.current().fingerprint});
  const frozen={execution:{kind:'acp',agent:'codex',revision:4}};store.put('superWorkers','old-worker',frozen);
  const registry=new ExternalAgentRegistry(store,{codexHome:f.source}),profile=registry.get(project.id,'codex');
- assert.equal(profile.schemaVersion,2);assert.equal(profile.revision,5);assert.equal(profile.authentication,'codex-local');assert.equal((profile as any).model,undefined);
+ assert.equal(profile.schemaVersion,3);assert.equal(profile.runtimeKind,'codex-app-server');assert.equal(profile.revision,5);assert.equal(profile.authentication,'codex-local');assert.equal((profile as any).model,undefined);
  await f.login('account-a','refresh');assert.equal(registry.get(project.id,'codex').revision,5);
  await f.login('account-b','switch');assert.equal(registry.get(project.id,'codex').revision,6);assert.deepEqual(store.get('superWorkers','old-worker'),frozen);
  const before=await readFile(f.auth,'utf8'),managed=await registry.prepareHome(profile);
@@ -64,10 +64,10 @@ test('startup overrides disable inherited services with literal IDs and preserve
  const args=codexStartupArgs('/private/lake', ['a.b','a"b'],{SessionStart:[{}]}),config=Object.fromEntries(Array.from({length:args.length/2},(_,i)=>{const override=args[i*2+1],index=override.indexOf('=');return [override.slice(0,index),parse('value = '+override.slice(index+1)).value];}));
  assert.deepEqual(config.mcp_servers,{'a.b':{enabled:false},'a"b':{enabled:false}});assert.deepEqual(config.hooks,{SessionStart:[]});assert.deepEqual(config.notify,[]);
  assert.equal(config.model,undefined);assert.equal(config.model_provider,undefined);assert.equal(config.model_reasoning_effort,undefined);
- assert.equal(config.sqlite_home,'/private/lake/state');assert.equal(shellQuote("one'two"),"'one'\\''two'");
+ assert.equal(config.sqlite_home,'/private/lake/state');
 });
 
-test('role model overrides keep local login and max intact and concurrent launch configurations use distinct immutable files',async t=>{
+test('role model overrides keep local login and max intact and concurrent launch configurations own separate argv arrays',async t=>{
  const f=await fixture(t),store=await LakeStore.open(join(f.home,'lake'),join(f.home,'data'));t.after(async()=>{store.db.close();});
  const project=store.createProject('parallel model launch'),registry=new ExternalAgentRegistry(store,{codexHome:f.source});
  const profile={...registry.get(project.id,'codex'),enabled:true,nodePath:process.execPath};store.put('acpProfiles',project.id+':codex',profile);
@@ -78,11 +78,13 @@ test('role model overrides keep local login and max intact and concurrent launch
  };
  const signal=new AbortController().signal;
  const [inherited,selected]=await Promise.all([registry.prepareLaunch(profile,signal),registry.prepareLaunch(profile,signal,'gpt-6.1-sol')]);
- assert.notEqual(inherited.launcher,selected.launcher);
- const original=await readFile(inherited.launcher,'utf8'),overridden=await readFile(selected.launcher,'utf8');
- assert.ok(!original.includes('model='));assert.ok(overridden.includes('model='));assert.ok(overridden.includes('gpt-6.1-sol'));
+ const original=[...inherited.args];
+ assert.notDeepEqual(inherited.args,selected.args);
+ assert.ok(!inherited.args.some(arg=>arg.startsWith('model=')));
+ assert.ok(selected.args.includes('model="gpt-6.1-sol"'));
+ assert.equal(inherited.args.at(-1),'app-server');assert.equal(selected.args.at(-1),'app-server');
  assert.equal(selected.observed.reasoningEffort,'max');assert.equal(selected.observed.authenticated,true);
- await registry.prepareLaunch(profile,signal,'gpt-6.1-sol');assert.equal(await readFile(inherited.launcher,'utf8'),original);
+ await registry.prepareLaunch(profile,signal,'gpt-6.1-sol');assert.deepEqual(inherited.args,original);
  assert.deepEqual([await readFile(f.config,'utf8'),await readFile(f.auth,'utf8')],before);
  await assert.rejects(registry.prepareLaunch(profile,signal,'unverified-model'),/兼容目录/);
 });

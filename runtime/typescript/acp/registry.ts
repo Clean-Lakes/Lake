@@ -1,4 +1,4 @@
-import { access, readFile, realpath, chmod } from 'node:fs/promises';
+import { access, readFile, realpath } from 'node:fs/promises';
 import { join, isAbsolute, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import {createHash} from 'node:crypto';
@@ -7,7 +7,7 @@ import type { ExternalAgentId, ExternalAgentProfile, ExternalAgentStatus } from 
 import { HttpError, LakeStore, now } from '../store';
 import { privateFile, privatePath } from './private';
 import { codexCatalog, codexModels, codexStartupArgs,tomlValue } from './codex-profile';
-import {CodexLocalSource,codexHomePresent,shellQuote} from './codex-local';
+import {CodexLocalSource,codexHomePresent} from './codex-local';
 import {discoverCodexRuntime,validateCodexNode} from './runtime-paths';
 
 export class ExternalAgentRegistry {
@@ -16,7 +16,7 @@ export class ExternalAgentRegistry {
   readonly local:CodexLocalSource;
   constructor(readonly store: LakeStore,options:{codexHome?:string;registerSecret?:(value:string)=>void}={}) {
     this.local=new CodexLocalSource(options.codexHome,options.registerSecret??(()=>{}));
-    for(const profile of store.list<any>('acpProfiles'))if(profile.id==='codex'&&profile.schemaVersion===1)this.get(profile.projectId,'codex');
+    for(const profile of store.list<any>('acpProfiles'))if(profile.id==='codex'&&[1,2].includes(profile.schemaVersion))this.get(profile.projectId,'codex');
   }
   source(){
     try{return {...this.local.current(),error:undefined as string|undefined};}
@@ -26,26 +26,26 @@ export class ExternalAgentRegistry {
   get(projectId: string, agent: unknown): ExternalAgentProfile {
     const id = externalAgentId(agent), key = this.key(projectId, id);
     const source=this.source(),current=this.store.get<any>('acpProfiles',key);
-    if(current&&![1,2].includes(current.schemaVersion))throw new HttpError(409,'外部 Agent 配置版本不受当前版本支持');
-    if(current&&(current.schemaVersion!==2||current.sourceFingerprint!==source.fingerprint)){
-      const profile:ExternalAgentProfile={schemaVersion:2,id,projectId,revision:current.revision+1,enabled:current.enabled,
+    if(current&&![1,2,3].includes(current.schemaVersion))throw new HttpError(409,'外部 Agent 配置版本不受当前版本支持');
+    if(current&&(current.schemaVersion!==3||current.runtimeKind!=='codex-app-server'||current.sourceFingerprint!==source.fingerprint)){
+      const profile:ExternalAgentProfile={schemaVersion:3,runtimeKind:'codex-app-server',id,projectId,revision:current.revision+1,enabled:current.enabled,
         nodePath:current.nodePath,npmPath:current.npmPath,authentication:'codex-local',sourceFingerprint:source.fingerprint,updatedAt:now()};
       return this.store.put('acpProfiles',key,profile);
     }
-    return current??{schemaVersion:2,id,projectId,revision:0,enabled:false,authentication:'codex-local',sourceFingerprint:source.fingerprint,updatedAt:now()};
+    return current??{schemaVersion:3,runtimeKind:'codex-app-server',id,projectId,revision:0,enabled:false,authentication:'codex-local',sourceFingerprint:source.fingerprint,updatedAt:now()};
   }
   revision(projectId: string) { return externalAgentIds.map(id => this.get(projectId, id).revision).join(':'); }
-  adapterRoot() { return join(this.store.home, 'external-agents', 'adapters', 'codex'); }
-  adapterEntry() { return join(this.adapterRoot(), 'node_modules', '@agentclientprotocol', 'codex-acp', 'dist', 'index.js'); }
+  // Retain the installed engine location across the transport migration.
+  runtimeRoot() { return join(this.store.home, 'external-agents', 'adapters', 'codex'); }
+  engineEntry() { return join(this.runtimeRoot(), 'node_modules', '@openai', 'codex', 'bin', 'codex.js'); }
   async list(projectId: string): Promise<ExternalAgentStatus[]> {
     return Promise.all(externalAgentIds.map(async id => {
       const profile = this.get(projectId, id);
       let installed = false;
       try {
-        const manifest = JSON.parse(await readFile(join(dirname(this.adapterEntry()), '../package.json'), 'utf8'));
-        const engine = JSON.parse(await readFile(join(this.adapterRoot(), 'node_modules/@openai/codex/package.json'), 'utf8'));
-        await access(this.adapterEntry());await access(profile.nodePath!);
-        installed = manifest.version === externalProducts.codex.version && engine.version === '0.160.1';
+        const engine = JSON.parse(await readFile(join(this.runtimeRoot(), 'node_modules/@openai/codex/package.json'), 'utf8'));
+        await access(this.engineEntry());await access(profile.nodePath!);
+        installed = engine.version === externalProducts.codex.version;
       } catch { /* unavailable */ }
       const probe=this.probe(projectId,id),source=this.source();
       const current=probe?.revision===profile.revision&&probe.authentication==='codex-local';
@@ -53,7 +53,7 @@ export class ExternalAgentRegistry {
       const assignmentBlocker=!profile.enabled?'尚未启用，请在 Agent 设置中启用并保存':
         process.platform!=='darwin'?'当前平台的 Codex 执行尚未开放':source.error??
         (!codexHomePresent(source.home)?'未找到本机 Codex 配置目录，请先在本机 Codex 完成登录':
-        !installed?'尚未安装，请启用后自动准备 Codex 适配器':
+        !installed?'尚未安装，请启用后自动准备 Codex 引擎':
         !transportReady?(current&&probe.message||'正在读取本机 Codex 登录与连接状态'):
         !probe.authenticated?'本机 Codex 尚未登录，请先在 Codex 中完成登录后重新连接':undefined);
       return {...profile,name:externalProducts[id].name,installed,transportReady,assignmentReady:!assignmentBlocker,assignmentBlocker,
@@ -102,35 +102,35 @@ export class ExternalAgentRegistry {
     if(model!==undefined&&!codexModels.includes(model))throw new HttpError(400,'该模型不在当前 Codex 兼容目录中');
     const source=this.source();if(source.error)throw new HttpError(409,source.error);
     if(!codexHomePresent(source.home))throw new HttpError(409,'未找到本机 Codex 配置目录，请先在 Codex 中完成登录');
-    const home=await this.prepareHome(profile),engine=join(this.adapterRoot(),'node_modules/@openai/codex/bin/codex.js');
+    const home=await this.prepareHome(profile),engine=join(this.runtimeRoot(),'node_modules/@openai/codex/bin/codex.js');
     const modelArgs=model===undefined?[]:['-c','model='+tomlValue(model)];
     const config=await this.local.inspect(profile.nodePath!,engine,home,[...codexStartupArgs(home,source.mcpIds,source.hooks),...modelArgs],signal);
-    if(!codexModels.includes(config.model))throw new HttpError(409,'本机 Codex 模型尚未通过当前 ACP 工具兼容验证：'+config.model);
+    if(!codexModels.includes(config.model))throw new HttpError(409,'本机 Codex 模型尚未通过当前工具兼容验证：'+config.model);
     if(model!==undefined&&config.model!==model)throw new HttpError(409,'未能确认专员指定的 Codex 模型，未启动任务');
     if(this.get(profile.projectId,profile.id).revision!==profile.revision)throw new HttpError(409,'本机 Codex 配置或账号已变化，请重新连接');
-    const args=[engine,...codexStartupArgs(home,config.mcpIds,config.hooks),...modelArgs];
-    const launcherName='launch-codex-'+createHash('sha256').update(JSON.stringify(args)).digest('hex'),launcher=join(home,launcherName);
-    await privateFile(home,launcherName,'#!/bin/sh\nexec '+[profile.nodePath!,...args].map(shellQuote).join(' ')+' "$@"\n');await chmod(launcher,0o700);
-    return {home,launcher,disabledMcp:Object.fromEntries(config.mcpIds.map(name=>[name,{enabled:false}])),environment:config.environment,observed:{model:config.model,modelProvider:config.provider,reasoningEffort:config.reasoningEffort,authenticated:config.authenticated,authMode:config.authMode}};
+    return {home,command:profile.nodePath!,args:[engine,...codexStartupArgs(home,config.mcpIds,config.hooks),...modelArgs,'app-server'],
+      disabledMcp:Object.fromEntries(config.mcpIds.map(name=>[name,{enabled:false}])),environment:config.environment,
+      observed:{model:config.model,modelProvider:config.provider,reasoningEffort:config.reasoningEffort,authenticated:config.authenticated,authMode:config.authMode}};
   }
+
   async install(projectId: string, agent: unknown, npmPath: unknown, signal: AbortSignal) {
     const profile=this.get(projectId,agent);
-    if(this.installation)throw new HttpError(409,'Codex ACP 适配器正在安装');
+    if(this.installation)throw new HttpError(409,'Codex 引擎正在安装');
     npmPath=npmPath??profile.npmPath;
     if(!profile.nodePath||typeof npmPath!=='string'||!isAbsolute(npmPath)||/[\0\r\n]/.test(npmPath))throw new HttpError(400,'未识别到 Node/npm，请重新启用自动识别或检查高级设置');
     const node=profile.nodePath,npm=await realpath(npmPath);await this.validateNode(node);
-    if(this.installation||this.store.list<any>('acpRuns').some(run=>run.agent==='codex'&&['starting','running'].includes(run.state)))throw new HttpError(409,'请等待 Codex 当前运行结束后再安装适配器');
+    if(this.installation||this.store.list<any>('acpRuns').some(run=>run.agent==='codex'&&['starting','running'].includes(run.state)))throw new HttpError(409,'请等待 Codex 当前运行结束后再安装引擎');
     const work=(async()=>{
       const root=await privatePath(this.store.home,'external-agents','adapters','codex');
       const cache=await privatePath(this.store.home,'external-agents','npm-cache');
-      // The adapter's engine dependency is a range. Pin the engine independently.
+      // Install only the pinned official provider runtime; no protocol wrapper.
       await new Promise<void>((resolve,reject)=>{
-        const proc=spawn(node,[npm,'install','--prefix',root,'--ignore-scripts','--no-audit','--no-fund','--save-exact','@agentclientprotocol/codex-acp@2.2.2','@openai/codex@0.160.1'],
+        const proc=spawn(node,[npm,'install','--prefix',root,'--ignore-scripts','--no-audit','--no-fund','--save-exact','@openai/codex@0.160.1'],
           {env:{PATH:dirname(node)+(process.platform==='win32'?';':':')+(process.env.PATH??''),HOME:this.store.home,npm_config_cache:cache},stdio:'ignore',signal,shell:false});
-        proc.once('error',reject);proc.once('exit',code=>code===0?resolve():reject(new Error('ACP 适配器安装失败，请检查运行时和网络')));
+        proc.once('error',reject);proc.once('exit',code=>code===0?resolve():reject(new Error('Codex 引擎安装失败，请检查运行时和网络')));
       });
-      const manifest=JSON.parse(await readFile(join(root,'node_modules/@agentclientprotocol/codex-acp/package.json'),'utf8'));
-      if(manifest.version!==externalProducts.codex.version)throw new Error('ACP 适配器版本与固定版本不符');
+      const manifest=JSON.parse(await readFile(join(root,'node_modules/@openai/codex/package.json'),'utf8'));
+      if(manifest.version!==externalProducts.codex.version)throw new Error('Codex 引擎版本与固定版本不符');
       return {installed:true,version:manifest.version};
     })();this.installation=work;
     try{return await work;}finally{this.installation=undefined;}
