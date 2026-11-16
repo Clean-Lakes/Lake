@@ -39,7 +39,7 @@ div.ai-markdown.assistant-prose:has(> .reply-info-facts) > :is(h1,h2,h3,h4) { fo
 /* Opaque glyph color carries the highlight even inside a clipped author name.
    Combining the lift and light keeps one clock per glyph; no text-clip mask. */
 .live-text-motion-label[data-live-glow] { --live-text-glow-base:var(--text-secondary); --live-text-glow-highlight:var(--foreground); --live-text-glow-halo:color-mix(in srgb,var(--foreground) 22%,transparent); }
-.live-text-motion-label[data-live-glow] .live-text-motion-character { -webkit-text-fill-color:currentColor; }
+.live-text-motion-label[data-live-glow] .live-text-motion-character { animation-duration:3400ms; -webkit-text-fill-color:currentColor; }
 .live-text-motion-label.reply-author-name-motion { --live-text-glow-base:var(--foreground); --live-text-glow-highlight:var(--info); --live-text-glow-halo:color-mix(in srgb,var(--info) 28%,transparent); }
 .live-text-motion-label[data-live-glow=active] .live-text-motion-character { animation-name:lake-live-text-glow-rise; }
 @keyframes lake-live-text-glow-rise {
