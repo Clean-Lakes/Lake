@@ -1,0 +1,28 @@
+{
+  "labels": [
+    {
+      "text": "服务器运维排查专员",
+      "glow": "active",
+      "colors": 30,
+      "shadowCount": 30,
+      "minTop": -0.999731,
+      "maxTop": 0,
+      "transparentFill": false
+    },
+    {
+      "text": "正在独立凝神中",
+      "glow": "active",
+      "colors": 28,
+      "shadowCount": 30,
+      "minTop": -0.999731,
+      "maxTop": 0,
+      "transparentFill": false
+    }
+  ],
+  "sameButton": true,
+  "sameGlyph": true,
+  "sameAnimation": true,
+  "statusRegions": 1,
+  "logoInsideGlow": false,
+  "animalCards": 0
+}

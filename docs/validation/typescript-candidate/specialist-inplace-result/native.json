@@ -1,0 +1,86 @@
+{
+  "build": {
+    "schemaVersion": 1,
+    "gitHead": "0a4a68c0faf1dc66cc11d9eb345f0b261e75c295",
+    "gitBranch": "codex/specialist-live-text-motion",
+    "sourceRoot": "/Users/lingyunxieqing/.codex/worktrees/animal-thinking-edge/Lake",
+    "version": "0.3.33",
+    "dirty": false,
+    "backendRuntime": "typescript",
+    "backendSHA256": "7a0433ab4d95d10f6696153c0e20197376190a578830891174702de40de6e75b",
+    "uiSourceSHA256": {
+      "AIPanel.tsx": "9295eadb06edf7b1208c911379474e7299d4a436fc2531fe8d2e6b8fe1b80f1d",
+      "ThinkingTimeline.tsx": "6f91639248cabfd157f3d842a91fa5b736b2cfaee970b92c86f7ebf0ed31cc71",
+      "ReplyDuration.tsx": "42cd45ed0e43f6fefff1f94aae5efef5dec0b41b02fa53090d0ded5f22ada7f9",
+      "conversation-progress-model.ts": "f6a472e18129d84872b54c704576feb40387e2d6bdb41beabfd427989429019d"
+    }
+  },
+  "workers": [
+    {
+      "animal": "otter",
+      "state": "completed",
+      "assignmentState": "parked",
+      "rootTurnId": "turn_3e92ac24-e8a0-4e80-93d8-3562634b0477",
+      "publicMessageCards": [
+        {
+          "id": "turn_3e92ac24-e8a0-4e80-93d8-3562634b0477:msg_mwir9lwi_0812910a-5063-4423-be52-fee995f1c41b:message",
+          "status": "completed",
+          "rootTurnId": "turn_3e92ac24-e8a0-4e80-93d8-3562634b0477",
+          "prefix": "[LAKE_ANIMAL_THINKING:otter] 水獭的隔离动画验收正文已开始输出。\n\n这是一段完全虚构的本地验收文字，用于观察思考气泡如何交接给正在生成的正文。当前页面应保留这位专"
+        },
+        {
+          "id": "turn_3e92ac24-e8a0-4e80-93d8-3562634b0477:msg_mwirax1a_04c109a7-5a2b-4ebf-b1e6-24a36c242d4f:message",
+          "status": "completed",
+          "rootTurnId": "turn_3e92ac24-e8a0-4e80-93d8-3562634b0477",
+          "prefix": "第 2 段公开进度：水獭已完成本地等待，正在继续演示原位更新。[LAKE_ANIMAL_THINKING:otter]\n\n这是一段完全虚构的本地验收文字，用于观察思考气泡如何交接给正在生成的"
+        }
+      ],
+      "operations": [
+        {
+          "title": "work_wait",
+          "status": "completed"
+        },
+        {
+          "title": "work_finish",
+          "status": "completed"
+        }
+      ],
+      "reports": [
+        {
+          "id": "report_26af23f242facd293940e803d8a01fc49a331a95c7ef0533d7a2be235b2f7cc1",
+          "text": "水獭的隔离动画演示已结束；未访问业务资源。视觉验收结果由检查者记录。",
+          "rootTurnId": "turn_3e92ac24-e8a0-4e80-93d8-3562634b0477"
+        }
+      ]
+    },
+    {
+      "animal": "owl",
+      "state": "completed",
+      "assignmentState": "parked",
+      "rootTurnId": "turn_f7c6acee-ee1e-46ad-a9ff-68a5c9fc5c69",
+      "publicMessageCards": [
+        {
+          "id": "turn_f7c6acee-ee1e-46ad-a9ff-68a5c9fc5c69:msg_mwir9m0c_ca8d35b8-d863-4bad-8321-8da657e355ea:message",
+          "status": "completed",
+          "rootTurnId": "turn_f7c6acee-ee1e-46ad-a9ff-68a5c9fc5c69",
+          "prefix": "[LAKE_ANIMAL_THINKING:owl] 猫头鹰的隔离动画验收正文已开始输出。\n\n这是一段完全虚构的本地验收文字，用于观察思考气泡如何交接给正在生成的正文。当前页面应保留这位专员"
+        }
+      ],
+      "operations": [
+        {
+          "title": "work_finish",
+          "status": "completed"
+        }
+      ],
+      "reports": [
+        {
+          "id": "report_525ce6c650990ec79210b7a58e70a2eeee642cbc50cdf1b967307e8e49eb8d70",
+          "text": "猫头鹰的隔离动画演示已结束；未访问业务资源。视觉验收结果由检查者记录。",
+          "rootTurnId": "turn_f7c6acee-ee1e-46ad-a9ff-68a5c9fc5c69"
+        }
+      ]
+    }
+  ],
+  "totalSpecialistReports": 2,
+  "isolation": "Temporary Dev home with deterministic loopback model; no business requests"
+}

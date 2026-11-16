@@ -1,0 +1,304 @@
+{
+  "fixture": "pilot-process-access.html",
+  "samples": [
+    {
+      "case": "live",
+      "result": {
+        "stage": "live",
+        "captured": true,
+        "slotSame": true,
+        "identitySame": true,
+        "bodySame": true,
+        "processSame": true,
+        "historySame": true,
+        "pilotSame": true,
+        "processEntries": 1,
+        "conclusionCopies": 0,
+        "reportId": "",
+        "inspectorSession": "",
+        "workerRecords": 0,
+        "thinkingVisible": true,
+        "activeAnimations": 0,
+        "proseAnimations": 0,
+        "proseCharacters": 0,
+        "processAnimations": 4,
+        "processMotion": "active",
+        "processLight": [
+          {
+            "name": "lake-live-text-glow-rise",
+            "startTime": 0,
+            "duration": 3400,
+            "delay": -109.5
+          },
+          {
+            "name": "lake-live-text-glow-rise",
+            "startTime": 0,
+            "duration": 3400,
+            "delay": -36.5
+          },
+          {
+            "name": "lake-live-text-glow-rise",
+            "startTime": 0,
+            "duration": 3400,
+            "delay": 36.5
+          },
+          {
+            "name": "lake-live-text-glow-rise",
+            "startTime": 0,
+            "duration": 3400,
+            "delay": 109.5
+          }
+        ],
+        "nameAnimations": 15,
+        "proseLength": 21
+      }
+    },
+    {
+      "case": "long-prose",
+      "result": {
+        "stage": "long",
+        "captured": true,
+        "slotSame": true,
+        "identitySame": true,
+        "bodySame": true,
+        "processSame": true,
+        "historySame": true,
+        "pilotSame": true,
+        "processEntries": 1,
+        "conclusionCopies": 0,
+        "reportId": "",
+        "inspectorSession": "",
+        "workerRecords": 0,
+        "thinkingVisible": true,
+        "activeAnimations": 0,
+        "proseAnimations": 0,
+        "proseCharacters": 0,
+        "processAnimations": 4,
+        "processMotion": "active",
+        "processLight": [
+          {
+            "name": "lake-live-text-glow-rise",
+            "startTime": 0,
+            "duration": 3400,
+            "delay": -109.5
+          },
+          {
+            "name": "lake-live-text-glow-rise",
+            "startTime": 0,
+            "duration": 3400,
+            "delay": -36.5
+          },
+          {
+            "name": "lake-live-text-glow-rise",
+            "startTime": 0,
+            "duration": 3400,
+            "delay": 36.5
+          },
+          {
+            "name": "lake-live-text-glow-rise",
+            "startTime": 0,
+            "duration": 3400,
+            "delay": 109.5
+          }
+        ],
+        "nameAnimations": 15,
+        "proseLength": 286
+      }
+    },
+    {
+      "case": "waiting",
+      "result": {
+        "stage": "waiting",
+        "captured": true,
+        "slotSame": true,
+        "identitySame": true,
+        "bodySame": true,
+        "processSame": true,
+        "historySame": true,
+        "pilotSame": true,
+        "processEntries": 1,
+        "conclusionCopies": 0,
+        "reportId": "",
+        "inspectorSession": "",
+        "workerRecords": 0,
+        "thinkingVisible": true,
+        "activeAnimations": 0,
+        "proseAnimations": 0,
+        "proseCharacters": 0,
+        "processAnimations": 0,
+        "processMotion": "still",
+        "processLight": [],
+        "nameAnimations": 0,
+        "proseLength": 286
+      }
+    },
+    {
+      "case": "disconnected",
+      "result": {
+        "stage": "disconnected",
+        "captured": true,
+        "slotSame": true,
+        "identitySame": true,
+        "bodySame": true,
+        "processSame": true,
+        "historySame": true,
+        "pilotSame": true,
+        "processEntries": 1,
+        "conclusionCopies": 0,
+        "reportId": "",
+        "inspectorSession": "",
+        "workerRecords": 0,
+        "thinkingVisible": true,
+        "activeAnimations": 0,
+        "proseAnimations": 0,
+        "proseCharacters": 0,
+        "processAnimations": 0,
+        "processMotion": "still",
+        "processLight": [],
+        "nameAnimations": 0,
+        "proseLength": 21
+      }
+    },
+    {
+      "case": "reduced-motion",
+      "result": {
+        "stage": "live",
+        "captured": true,
+        "slotSame": true,
+        "identitySame": true,
+        "bodySame": true,
+        "processSame": true,
+        "historySame": true,
+        "pilotSame": true,
+        "processEntries": 1,
+        "conclusionCopies": 0,
+        "reportId": "",
+        "inspectorSession": "",
+        "workerRecords": 0,
+        "thinkingVisible": true,
+        "activeAnimations": 0,
+        "proseAnimations": 0,
+        "proseCharacters": 0,
+        "processAnimations": 0,
+        "processMotion": "active",
+        "processLight": [],
+        "nameAnimations": 0,
+        "proseLength": 21
+      }
+    },
+    {
+      "case": "reduced-motion-restored",
+      "result": {
+        "stage": "live",
+        "captured": true,
+        "slotSame": true,
+        "identitySame": true,
+        "bodySame": true,
+        "processSame": true,
+        "historySame": true,
+        "pilotSame": true,
+        "processEntries": 1,
+        "conclusionCopies": 0,
+        "reportId": "",
+        "inspectorSession": "",
+        "workerRecords": 0,
+        "thinkingVisible": true,
+        "activeAnimations": 0,
+        "proseAnimations": 0,
+        "proseCharacters": 0,
+        "processAnimations": 4,
+        "processMotion": "active",
+        "processLight": [
+          {
+            "name": "lake-live-text-glow-rise",
+            "startTime": 0,
+            "duration": 3400,
+            "delay": -109.5
+          },
+          {
+            "name": "lake-live-text-glow-rise",
+            "startTime": 0,
+            "duration": 3400,
+            "delay": -36.5
+          },
+          {
+            "name": "lake-live-text-glow-rise",
+            "startTime": 0,
+            "duration": 3400,
+            "delay": 36.5
+          },
+          {
+            "name": "lake-live-text-glow-rise",
+            "startTime": 0,
+            "duration": 3400,
+            "delay": 109.5
+          }
+        ],
+        "nameAnimations": 15,
+        "proseLength": 21
+      }
+    },
+    {
+      "case": "in-place-report-with-focused-process",
+      "result": {
+        "qa": {
+          "stage": "report",
+          "captured": true,
+          "slotSame": true,
+          "identitySame": true,
+          "bodySame": true,
+          "processSame": true,
+          "historySame": true,
+          "pilotSame": true,
+          "processEntries": 1,
+          "conclusionCopies": 1,
+          "reportId": "native-report",
+          "inspectorSession": "native-process-fixture",
+          "workerRecords": 6,
+          "thinkingVisible": true,
+          "activeAnimations": 0,
+          "proseAnimations": 0,
+          "proseCharacters": 0,
+          "processAnimations": 0,
+          "processMotion": "still",
+          "processLight": [],
+          "nameAnimations": 0,
+          "proseLength": 16
+        },
+        "processLabelSame": true,
+        "charactersSame": true,
+        "focusRetained": true,
+        "recordsOpen": true
+      }
+    },
+    {
+      "case": "restored-history",
+      "result": {
+        "stage": "restored",
+        "captured": false,
+        "slotSame": false,
+        "identitySame": false,
+        "bodySame": false,
+        "processSame": false,
+        "historySame": false,
+        "pilotSame": false,
+        "processEntries": 1,
+        "conclusionCopies": 1,
+        "reportId": "",
+        "inspectorSession": "",
+        "workerRecords": 0,
+        "thinkingVisible": true,
+        "activeAnimations": 0,
+        "proseAnimations": 0,
+        "proseCharacters": 0,
+        "processAnimations": 0,
+        "processMotion": "still",
+        "processLight": [],
+        "nameAnimations": 0,
+        "proseLength": 0
+      }
+    }
+  ],
+  "lightScreenshot": "/tmp/lake-specialist-process-light-live.png",
+  "darkScreenshot": "/tmp/lake-specialist-process-light-report-dark.png"
+}

@@ -12,9 +12,12 @@ export function inspectedTask(snapshot:SessionSnapshot,selection:InspectorSelect
  * projection is catching up. An empty chat turn must not hide its records. */
 export function hasInspectorTask(snapshot:SessionSnapshot,selection:InspectorSelection):boolean{
  if(inspectedTask(snapshot,selection))return true;
+ return !!inspectedCanonicalTask(snapshot,selection);
+}
+export function inspectedCanonicalTask(snapshot:SessionSnapshot,selection:InspectorSelection):SuperTask|undefined{
  const task=snapshot.superagent?.task;
- return !!task&&selection.sessionId===snapshot.session.id&&task.sessionId===snapshot.session.id&&
-  task.taskId===selection.canonicalGoalId&&(!task.projectId||task.projectId===snapshot.session.projectId);
+ return task&&selection.sessionId===snapshot.session.id&&task.sessionId===snapshot.session.id&&
+  task.taskId===selection.canonicalGoalId&&(!task.projectId||task.projectId===snapshot.session.projectId)?task:undefined;
 }
 export function inspectorWorker(workers:readonly SuperWorker[],snapshot?:SessionSnapshot|null){
  const task=snapshot?.superagent?.task;

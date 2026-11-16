@@ -11,6 +11,7 @@ import {ToolStep} from './ThinkingTimeline';
 import {MiniBox} from './MiniBox';
 import {isTerminalCommand,type MiniBoxScope} from './miniBoxModel';
 import {executionCard,nativeRunState,needsExecutionAttention,workerBusinessReceipts,workerExecutionModel,type WorkerExecutionNode} from './workerExecutionModel';
+import {workerProcessRecords} from './workerProcessRecords';
 import './workerExecutionTree.css';
 
 const ExecutionMiniContext=createContext<{snapshot:SessionSnapshot;scope:MiniBoxScope;onUpdated?:()=>void}|null>(null);
@@ -77,6 +78,7 @@ export function WorkerExecutionTree({snapshot,worker,connected=false,onUpdated}:
  const status=task.state==='waiting_user'?'waiting_input':task.state;
  const executionId=task.executionGoalId??task.taskId;
  const owner=worker?.sessionId===task.sessionId&&worker.task.taskId===task.taskId?worker:undefined;
+ const processRecords=workerProcessRecords(snapshot,snapshot.superagent?.execution?.backend??owner?.execution?.backend);
  const active=model.runs.filter(run=>needsExecutionAttention(run.status)&&run.status!=='failed'&&run.status!=='unknown').length;
  const unresolved=model.runs.filter(run=>nativeRunState(run)==='unknown').length;
  const resourceIds=new Set([...model.taskCards,...snapshot.ai?.cards??[],...model.runs.flatMap(run=>run.cards??[])].filter(isTerminalCommand).flatMap(card=>{
@@ -86,6 +88,12 @@ export function WorkerExecutionTree({snapshot,worker,connected=false,onUpdated}:
  return <ExecutionMiniContext.Provider value={{snapshot,scope,onUpdated}}><section className="worker-execution-tree" aria-label="任务执行过程" data-worker-id={owner?.id}>
   <header className="worker-execution-root"><Glyph name="lakeWorkflow" size={19}/><strong>{task.collaboration&&owner?owner.roleName:'任务 Worker'}</strong><small>{task.collaboration?'本次执行':'由 Lake 分配'}</small><State status={status}/></header>
   <AgentExecution execution={snapshot.superagent?.execution??owner?.execution} waiting={snapshot.ai?.status==='waiting_approval'}/>
+  {processRecords.length>0&&<Branch key={executionId} className="worker-process-records" summary={<><Glyph name="lakeProcess" size={15}/><span className="worker-execution-name">思考与过程记录</span><small>{processRecords.length} 条</small></>}>
+   <div className="worker-child-detail"><ReplyReferenceScope cards={snapshot.ai?.cards??[]}>{processRecords.map(card=><section key={card.id} data-process-card={card.id}>
+    <p className="worker-child-created"><span>{card.type==='thinking'?'思考记录':'公开回复记录'}</span><time dateTime={card.at}>{time(card.at)}</time></p>
+    <AssistantMarkdown allowImages={false}>{card.content!}</AssistantMarkdown>
+   </section>)}</ReplyReferenceScope></div>
+  </Branch>}
   {model.runs.length>0&&<p className="worker-execution-caption">临时子智能体 · {model.runs.length}{active>0&&<span>{active} 个需要跟进</span>}</p>}
   <div className="worker-execution-trunk">
    {model.resources.map(node=><ResourceBranch key={node.id} node={node} paths={model.resourcePaths}/>)}

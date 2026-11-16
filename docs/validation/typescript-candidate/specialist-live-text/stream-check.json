@@ -1,0 +1,20 @@
+{
+  "testedSHA": "3ac6ff0b2078dec2a5d19951a41333ec0dd4fb32",
+  "dirty": false,
+  "checks": [
+    {
+      "animal": "otter",
+      "replyStatus": "running",
+      "cardStatus": "running",
+      "bodyLength": 241,
+      "rootTurnId": "turn_0f94d279-b693-4082-a99a-98ef60b05045",
+      "cardRootTurnId": "turn_0f94d279-b693-4082-a99a-98ef60b05045"
+    },
+    {
+      "animal": "owl",
+      "replyStatus": "running",
+      "bodyLength": 0,
+      "rootTurnId": "turn_62cd2e54-43f2-43c2-b5f3-c67718ffb15a"
+    }
+  ]
+}

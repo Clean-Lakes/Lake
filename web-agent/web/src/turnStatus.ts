@@ -17,6 +17,8 @@ export function turnStatus(timing:ReplyTiming|undefined,view:AIView|undefined,ca
  const live=timing ? timing.status==="running" : !!view && ["running","waiting_approval","waiting_input","waiting_external","queued"].includes(activityStatus??'');
  const start=timing?.startedAt || latestUserAt;
  const currentCards=start ? cards.filter(card=>compareTime(card.at,start)>=0) : [];
+ // File changes and other passive attachments do not end a public reply stream.
+ const lastActivity=currentCards.filter(card=>['thinking','message','text','operation','shell'].includes(card.type)).at(-1);
  const compacting=!!start && view?.cards.some(card=>card.type==="compaction"&&card.status==="running"&&compareTime(card.at,start)>=0);
  const runs=(view?.agentRuns??[]).filter(run=>run.sessionId===view?.session && (view?.rootTurnId&&run.rootTurnId ? run.rootTurnId===view.rootTurnId : !!start&&compareTime(run.createdAt,start)>=0));
  const terminalState=activityStatus?terminalLabels[activityStatus]:undefined;
@@ -32,7 +34,7 @@ export function turnStatus(timing:ReplyTiming|undefined,view:AIView|undefined,ca
   else if(compacting){state="正在压缩上下文…";phase='compacting';}
   else if(runs.some(run=>run.status==="running"||run.status==="queued")){state=`${runs.filter(run=>run.status==="running"||run.status==="queued").length} 个子任务执行中…`;phase='delegating';}
   else if(currentCards.some(card=>["operation","shell"].includes(card.type)&&card.status==="running"&&!quietCoordination(card))){state="正在执行工具…";phase='tool';}
-  else if(["message","text"].includes(currentCards.at(-1)?.type??"")&&currentCards.at(-1)?.status==="running"&&currentCards.at(-1)?.content?.trim()){state="正在生成回复…";phase='streaming';}
+  else if(["message","text"].includes(lastActivity?.type??"")&&lastActivity?.status==="running"&&lastActivity?.content?.trim()){state="正在生成回复…";phase='streaming';}
   else {state="正在思考…";phase='thinking';}
  } else {
   const last=currentCards.at(-1);

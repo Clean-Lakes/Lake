@@ -10,6 +10,7 @@ import {externalAgentName} from '../../../web-agent/shared/external-agents';
 import { openToolBridge } from './bridge';
 import {privatePath} from './private';
 import {codexConfig} from './codex-profile';
+import {ExternalPublicText} from './public-text';
 import type { ExternalActor,ExternalAgentProfile,ExternalEvent,ExternalResult,ExternalRun } from './types';
 
 function ownLauncher(flag:string,args:string[]=[]){return {executable:process.execPath,args:isSea()?[flag,...args]:[__filename,flag,...args]};}
@@ -75,7 +76,8 @@ export class LakeExternalAgents {
     }
     return {agents:await this.registry.list(projectId)};
   }
-  private result(run:ExternalRun):ExternalResult{return {run_id:run.id,agent:externalAgentName(run.agent),state:run.state,summary:run.summary??run.error??'',verification:'insufficient',
+  private result(run:ExternalRun):ExternalResult{const last=run.events.findLast(event=>event.kind==='text'&&event.publicTextId&&typeof event.publicText==='string');return {run_id:run.id,agent:externalAgentName(run.agent),state:run.state,summary:run.summary??run.error??'',
+    ...(last&&{public_reply:{id:last.publicTextId!,content:last.publicText!}}),verification:'insufficient',
     limitations:['外部运行返回本次报告；请结合实际工具结果汇总原任务结论，如实说明失败或未知结果。']};}
   async run(agent:unknown,instruction:string,requestKey:string,actor:ExternalActor,resumeRunId?:string):Promise<ExternalResult>{
     const agentId=externalAgentId(agent);actor.guard();actor.signal.throwIfAborted();
@@ -102,10 +104,11 @@ export class LakeExternalAgents {
     const timer=setTimeout(()=>controller.abort(new Error('原任务期限已到')),deadline);
     const guard=()=>{controller.signal.throwIfAborted();actor.guard();const current=this.registry.get(actor.projectId,agentId);if(!current.enabled||current.revision!==profile.revision)throw new HttpError(409,'外部 Agent 配置已变化');};
     const fence=setInterval(()=>{try{guard();}catch(error){controller.abort(error);}},1000);
-    let bridge:Awaited<ReturnType<typeof openToolBridge>>|undefined,text='',submittedReport='',eventBytes=0;
+    let bridge:Awaited<ReturnType<typeof openToolBridge>>|undefined,submittedReport='',eventBytes=0;
+    const text=new ExternalPublicText(run.id,this.redact);
     const persist=()=>{run.updatedAt=now();this.store.put('acpRuns',run.id,run);};
     const event=(value:Omit<ExternalEvent,'sequence'|'at'>)=>{
-      const clean=Object.fromEntries(Object.entries(value).map(([key,item])=>[key,['text','title','callId'].includes(key)&&typeof item==='string'?this.redact(item,key==='text').slice(0,key==='text'?32768:512):item]));
+      const clean=Object.fromEntries(Object.entries(value).map(([key,item])=>[key,['text','publicText','title','callId'].includes(key)&&typeof item==='string'?this.redact(item,key==='text'||key==='publicText').slice(0,key==='text'||key==='publicText'?32768:512):item]));
       const entry:ExternalEvent={...value,...clean,sequence:run.events.length+1,at:now()};eventBytes+=Buffer.byteLength(JSON.stringify(entry));
       if(eventBytes<=16*1024*1024&&run.events.length<2048)run.events.push(entry);
       else if(!controller.signal.aborted)controller.abort(new Error('外部 Agent 过程输出达到本次上限'));
@@ -145,7 +148,7 @@ export class LakeExternalAgents {
           if(update.sessionUpdate==='tool_call'&&update.rawInput?.server==='lake'&&tools.some(tool=>tool.metadata.name===update.rawInput.tool))bridgeCalls.add(String(update.toolCallId));
           if(update.sessionUpdate==='tool_call_update'&&['completed','failed'].includes(update.status))bridgeCalls.delete(String(update.toolCallId));
           if(update.sessionUpdate==='agent_message_chunk'&&update.content?.type==='text'){
-            text=(text+String(update.content.text)).slice(0,1024*1024);event({kind:'text',text:this.redact(text,true).slice(0,32768)});
+            event({kind:'text',...text.append(String(update.content.text),update.messageId)});
           }else if(['tool_call','tool_call_update'].includes(update.sessionUpdate))event({kind:update.sessionUpdate==='tool_call'?'tool':'tool_update',callId:String(update.toolCallId??''),title:String(update.title??''),status:String(update.status??'running')});
         }});
       live.process=transport;
@@ -164,12 +167,12 @@ export class LakeExternalAgents {
       const prompt=transport.request('session/prompt',{sessionId:run.externalSessionId,prompt:[{type:'text',text:agentId==='codex'&&actor.systemPrompt?actor.systemPrompt+'\n'+instruction:instruction}]},controller.signal,deadline);
       run.dispatchPhase='sent';persist();
       const response=await prompt;guard();run.dispatchPhase='answered';run.stopReason=response.stopReason;
-      run.summary=this.redact(text||submittedReport).slice(0,32768);run.state=response.stopReason==='end_turn'?'completed':response.stopReason==='cancelled'?'cancelled':'failed';
+      run.summary=this.redact(text.auditText||submittedReport).slice(0,32768);run.state=response.stopReason==='end_turn'?'completed':response.stopReason==='cancelled'?'cancelled':'failed';
       if(!run.summary&&run.state==='completed'){run.state='failed';run.error='外部 Agent 没有返回业务报告';}
       persist();event({kind:'status',status:run.state});
       return this.result(run);
     }catch(error){run.error=this.redact((error instanceof Error?error.message:'外部 Agent 执行失败')+((error as any)?.data?': '+JSON.stringify((error as any).data).slice(0,4096):'')+(live.process?.diagnostics()?': '+live.process.diagnostics().slice(-4096):''));
-      run.summary=this.redact(text).slice(0,32768);run.state=run.dispatchPhase==='not_sent'?(controller.signal.aborted?'cancelled':'failed'):'unknown';persist();event({kind:'status',status:run.state});
+      run.summary=this.redact(text.auditText).slice(0,32768);run.state=run.dispatchPhase==='not_sent'?(controller.signal.aborted?'cancelled':'failed'):'unknown';persist();event({kind:'status',status:run.state});
       if(run.state==='failed'&&!run.summary)throw new HttpError(409,run.error);return this.result(run);
     }finally{clearTimeout(timer);clearInterval(fence);controller.abort(new Error('外部执行已结束'));actor.signal.removeEventListener('abort',stop);await bridge?.close();await live.process?.close();this.live.delete(run.id);}
   }

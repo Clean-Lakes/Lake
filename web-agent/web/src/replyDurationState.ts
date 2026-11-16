@@ -1,6 +1,6 @@
 import type {ReplyTiming,SessionSnapshot} from "../../shared/contracts";
 import {formatElapsed} from "./activity";
-import {compareTime,type TranscriptEntry} from "./timeline";
+import {compareTime,replySourceMessageId,type TranscriptEntry} from "./timeline";
 
 export function timingForTurn(turn:TranscriptEntry[],snapshot:SessionSnapshot):ReplyTiming|undefined {
  const user=turn.find(entry => entry.message?.role==="user")?.message;
@@ -8,9 +8,8 @@ export function timingForTurn(turn:TranscriptEntry[],snapshot:SessionSnapshot):R
  const saved=snapshot.replyTimings?.find(timing => timing.messageId===user.id);
  if (saved) return saved;
  // Older builds retained exact times for the latest engine turn only.
- const latest=snapshot.messages.filter(message => message.role==="user").at(-1);
  const view=snapshot.ai;
- if (user.id!==latest?.id || !view?.turnStartedAt || compareTime(view.turnStartedAt,user.createdAt)<0) return;
+ if (user.id!==replySourceMessageId(snapshot) || !view?.turnStartedAt || compareTime(view.turnStartedAt,user.createdAt)<0) return;
  if (["running","waiting_approval"].includes(view.status)) return {messageId:user.id,startedAt:user.createdAt,finishedAt:"",status:"running"};
  if (!view.turnFinishedAt || !["completed","cancelled","failed"].includes(view.status)) return;
  return {messageId:user.id,startedAt:view.turnStartedAt,finishedAt:view.turnFinishedAt,status:view.status as ReplyTiming["status"]};

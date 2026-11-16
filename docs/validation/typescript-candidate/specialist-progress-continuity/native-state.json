@@ -1,0 +1,24 @@
+{
+  "installed": "979c255a6829e1cb29a28638eec06a44b0de2ef0",
+  "dirty": false,
+  "aiStatus": "running",
+  "root": "turn_d0dbdf26-152f-4328-aa04-11fb89d5a964",
+  "publicCards": [
+    {
+      "id": "turn_d0dbdf26-152f-4328-aa04-11fb89d5a964:msg_mwio7fzb_6a16e680-1675-419a-ae8b-cfb05344f987:message",
+      "root": "turn_d0dbdf26-152f-4328-aa04-11fb89d5a964",
+      "prefix": "[LAKE_ANIMAL_THINKING:otter] 水獭的隔离动画验收正文已开始输出。\n\n这是一段完全虚构的本地验收文字，用于观察思考气泡如何交接给正在生成的正文。当前页面应保留这位专"
+    },
+    {
+      "id": "turn_d0dbdf26-152f-4328-aa04-11fb89d5a964:msg_mwio8s65_6f53de6f-09bc-45f9-a6f7-84a488f8633b:message",
+      "root": "turn_d0dbdf26-152f-4328-aa04-11fb89d5a964",
+      "prefix": "第 2 段公开进度：水獭已完成本地等待，正在继续演示原位更新。[LAKE_ANIMAL_THINKING:otter]\n\n这是一段完全虚构的本地验收文字，用于观察思考气泡如何交接给正在生成的"
+    }
+  ],
+  "tools": [
+    {
+      "name": "work_wait",
+      "status": "completed"
+    }
+  ]
+}

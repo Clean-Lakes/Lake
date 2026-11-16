@@ -32,6 +32,32 @@ div.ai-markdown.assistant-prose:has(> .reply-info-facts) > :is(h1,h2,h3,h4) { fo
 .sre-report-facts > li > .sre-prose > .assistant-prose { display: inline; }
 .sre-report-facts > li > .sre-prose > .assistant-prose > p:last-child { display: inline; margin: 0; }
 .sre-report-section h4 { font-weight:var(--font-weight-semibold); }
+/* Only an opted-in live reply moves, with a bounded tail. Keep received prose
+   gently moving while work continues, including the gaps between tool updates. */
+.live-text-motion-character { position:relative; top:0; animation:4200ms ease-in-out var(--live-text-phase,0ms) infinite; animation-play-state:paused; }
+:is(.assistant-prose,.live-text-motion-label)[data-live-motion=active] .live-text-motion-character { animation-name:lake-live-text-rise; animation-play-state:running; }
+@keyframes lake-live-text-rise { 0%,12%,100% { top:0; } 6% { top:-1px; } }
+.assistant-prose[data-live-motion=active] .live-text-motion-character { animation-name:lake-live-prose-rise; }
+@keyframes lake-live-prose-rise { 0%,100% { top:0; } 50% { top:-1px; } }
+/* Opaque glyph color carries the highlight even inside a clipped author name.
+   Combining the lift and light keeps one clock per glyph; no text-clip mask. */
+.live-text-motion-label[data-live-glow] { --live-text-glow-base:var(--text-secondary); --live-text-glow-highlight:var(--foreground); --live-text-glow-halo:color-mix(in srgb,var(--foreground) 22%,transparent); }
+.live-text-motion-label[data-live-glow] .live-text-motion-character { animation-duration:var(--live-light-period); -webkit-text-fill-color:currentColor; }
+.live-text-motion-label.reply-author-name-motion { --live-text-glow-base:var(--foreground); --live-text-glow-highlight:var(--info); --live-text-glow-halo:color-mix(in srgb,var(--info) 28%,transparent); }
+.live-text-motion-label[data-live-glow=active] .live-text-motion-character { animation-name:lake-live-text-glow-rise; }
+@keyframes lake-live-text-glow-rise {
+ 0%,44%,56%,100% { top:0; color:var(--live-text-glow-base); text-shadow:none; }
+ 50% { top:-1px; color:var(--live-text-glow-highlight); text-shadow:0 0 1px var(--live-text-glow-halo); }
+}
+@media (forced-colors:active) {
+ /* currentColor can resolve before forced colors; glyph fill must name the
+    system color explicitly, including stopped and reduced-motion labels. */
+ .live-text-motion-label[data-live-glow] .live-text-motion-character { color:CanvasText; -webkit-text-fill-color:CanvasText; text-shadow:none; }
+ .live-text-motion-label[data-live-glow=active] .live-text-motion-character { animation-name:lake-live-text-rise; }
+}
+@media (prefers-reduced-motion:reduce) {
+ :is(.assistant-prose,.live-text-motion-label)[data-live-motion] .live-text-motion-character { animation-name:none; animation-play-state:paused; top:0; text-shadow:none; }
+}
 @media (max-width: 600px) {
   .ai-markdown.assistant-prose ul,.ai-markdown.assistant-prose ol { padding-inline-start: 1.35em; }
   .ai-markdown.assistant-prose li { padding-inline-start: 2px; }

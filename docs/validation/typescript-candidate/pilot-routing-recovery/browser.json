@@ -1,0 +1,249 @@
+{
+  "businessFailure": {
+    "notice": [
+      " · 1 项派单重试后已恢复 · 1 项失败"
+    ],
+    "motion": [
+      "still",
+      "still",
+      "still",
+      "still"
+    ],
+    "avatarAnimations": [],
+    "shapes": [
+      {
+        "w": 8.75,
+        "h": 10.966667175292969
+      },
+      {
+        "w": 12.5,
+        "h": 15.666664123535156
+      },
+      {
+        "w": 13.75,
+        "h": 17.23333740234375
+      },
+      {
+        "w": 8.75,
+        "h": 10.966667175292969
+      },
+      {
+        "w": 12.5,
+        "h": 15.666656494140625
+      }
+    ]
+  },
+  "unrecovered": {
+    "notice": [
+      " · 1 项失败"
+    ],
+    "motion": [
+      "working",
+      "working",
+      "working",
+      "working",
+      "working"
+    ],
+    "avatarAnimations": [
+      "lake-pilot-water-flow",
+      "lake-pilot-water-flow",
+      "lake-pilot-water-flow",
+      "lake-pilot-water-flow",
+      "lake-pilot-water-flow"
+    ],
+    "shapes": [
+      {
+        "w": 8.75,
+        "h": 10.966667175292969
+      },
+      {
+        "w": 12.5,
+        "h": 15.666664123535156
+      },
+      {
+        "w": 13.75,
+        "h": 17.23333740234375
+      },
+      {
+        "w": 8.75,
+        "h": 10.966667175292969
+      },
+      {
+        "w": 12.5,
+        "h": 15.666656494140625
+      },
+      {
+        "w": 15,
+        "h": 18.79998779296875
+      }
+    ]
+  },
+  "waiting": {
+    "notice": [
+      " · 1 项派单重试后已恢复 · 1 项待确认"
+    ],
+    "motion": [
+      "still",
+      "still",
+      "still",
+      "still"
+    ],
+    "avatarAnimations": [],
+    "shapes": [
+      {
+        "w": 8.75,
+        "h": 10.966667175292969
+      },
+      {
+        "w": 12.5,
+        "h": 15.666664123535156
+      },
+      {
+        "w": 13.75,
+        "h": 17.23333740234375
+      },
+      {
+        "w": 8.75,
+        "h": 10.966667175292969
+      },
+      {
+        "w": 12.5,
+        "h": 15.666656494140625
+      }
+    ]
+  },
+  "complete": {
+    "notice": [
+      " · 1 项派单重试后已恢复"
+    ],
+    "motion": [
+      "idle",
+      "idle",
+      "idle",
+      "idle",
+      "idle"
+    ],
+    "avatarAnimations": [
+      "lake-pilot-water-idle",
+      "lake-pilot-water-idle",
+      "lake-pilot-water-idle",
+      "lake-pilot-water-idle",
+      "lake-pilot-water-idle"
+    ],
+    "shapes": [
+      {
+        "w": 8.75,
+        "h": 10.966667175292969
+      },
+      {
+        "w": 12.5,
+        "h": 15.666664123535156
+      },
+      {
+        "w": 13.75,
+        "h": 17.23333740234375
+      },
+      {
+        "w": 8.75,
+        "h": 10.966667175292969
+      },
+      {
+        "w": 12.5,
+        "h": 15.666656494140625
+      },
+      {
+        "w": 15,
+        "h": 18.79998779296875
+      }
+    ]
+  },
+  "recovered": {
+    "notice": [
+      " · 1 项派单重试后已恢复"
+    ],
+    "motion": [
+      "working",
+      "working",
+      "working",
+      "working",
+      "working"
+    ],
+    "avatarAnimations": [
+      "lake-pilot-water-flow",
+      "lake-pilot-water-flow",
+      "lake-pilot-water-flow",
+      "lake-pilot-water-flow",
+      "lake-pilot-water-flow"
+    ],
+    "shapes": [
+      {
+        "w": 8.75,
+        "h": 10.966667175292969
+      },
+      {
+        "w": 12.5,
+        "h": 15.666664123535156
+      },
+      {
+        "w": 13.75,
+        "h": 17.23333740234375
+      },
+      {
+        "w": 8.75,
+        "h": 10.966667175292969
+      },
+      {
+        "w": 12.5,
+        "h": 15.666656494140625
+      },
+      {
+        "w": 15,
+        "h": 18.79998779296875
+      }
+    ]
+  },
+  "reduced": {
+    "notice": [
+      " · 1 项派单重试后已恢复"
+    ],
+    "motion": [
+      "working",
+      "working",
+      "working",
+      "working",
+      "working"
+    ],
+    "avatarAnimations": [],
+    "shapes": [
+      {
+        "w": 8.75,
+        "h": 10.966667175292969
+      },
+      {
+        "w": 12.5,
+        "h": 15.666664123535156
+      },
+      {
+        "w": 13.75,
+        "h": 17.23333740234375
+      },
+      {
+        "w": 8.75,
+        "h": 10.966667175292969
+      },
+      {
+        "w": 12.5,
+        "h": 15.666656494140625
+      },
+      {
+        "w": 15,
+        "h": 18.79998779296875
+      }
+    ]
+  },
+  "darkScreenshot": "dark-390.png",
+  "width": {
+    "viewport": 390,
+    "content": 390
+  }
+}

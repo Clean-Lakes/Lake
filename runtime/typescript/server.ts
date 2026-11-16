@@ -662,7 +662,7 @@ export async function startLakeServer(options: ServerOptions) {
             if(data.enqueue===true)throw new HttpError(400,'分配新任务须直接接单，不能作为普通待发送消息入队');
             result=await superagent.send(sessionId,String(data.text??''),data.taskId,data.ignoreProjectMemory===true,input,data.assignment);
           }
-          else if (data.enqueue === true || messageQueue!.get(sessionId).items.length) result = messageQueue!.enqueue(sessionId, agents.redact(String(data.text ?? '')), {...data, ...input});
+          else if (data.enqueue === true || store.session(sessionId).workspaceRole !== 'router' && messageQueue!.get(sessionId).items.length) result = messageQueue!.enqueue(sessionId, agents.redact(String(data.text ?? '')), {...data, ...input});
           else result = await superagent.send(sessionId, String(data.text ?? ""), data.taskId, data.ignoreProjectMemory === true, input);
           status = 202;
         } else if (path[3] === "message-queue") {

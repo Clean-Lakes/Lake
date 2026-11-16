@@ -1,5 +1,7 @@
 # Lake Super-agent 内核与三模块协作约定
 
+2026-11-16 用户明确 Pilot 持续接单：A 发出后仍可发送新消息，分别创建新目标或补充准确旧任务，面向同一专员或一个/多个不同专员。消息沿现有 `superInputs` 立即保存，Router 按消息串行协调，后台 Worker 不因新消息而停止；同一稳定 RoleID 的独立任务保持各自 Task/Worker/Session。补充沿原任务的安全续接边界处理，宿主不把仅已记录的补充当成本次模型已消费；未消费补充不能被旧报告抢先结清。前台回复按真实来源消息归属，不能在后来消息到达后改挂。原任务、权限、期限、并发与历史结果继续有效，不引入第二套路由或模型执行循环。见[持续接单说明](docs/lake-pilot.md#持续接单与任务补充typescript)。
+
 2026-11-15 用户确认将外部专员 MCP 演进为 **Super Agent 接入渠道**：本机 MCP 连接固定绑定项目，默认由 Pilot 统一处理消息，也可显式固定专员。宿主从独立凭据派生连接/项目身份，客户端携带外部线程与消息键；幂等按连接、线程和消息隔离，追问通过同线程准确消息引用续接。来源消息进入既有 `superInputs`，Router 工作集及模型历史按来源隔离，任务沿原 Task/Worker 与当前权限执行。渠道只投影真实任务、专员、进展及报告，不创建第二套任务状态权威；多任务须等全部执行结清，不把首份报告或派单确认当成完成。设置分为「接入渠道」「Agent 执行器」「MCP 工具」，渠道页可从来源消息打开现有任务详情。旧 `--mcp-specialist` 和角色范围凭据保留，不自动升级项目权限；新 `--mcp-channel --connection <id>` 只读取本连接消息，停用/吊销及配置变化在异步准入和等待返回前重验。此条替代下段对新接入的「每个专员一个入口」要求；现阶段仅本机 MCP，未来 Webhook/IM 的请求者绑定与机器观察规则仍未交付。见[接入渠道改造计划](plan/refactor-superagent-incoming-channels-1.md)。
 
 2026-11-14 用户要求开放长期专员给研发人员的自有 Agent：每位专员经 stdio MCP 入口（`--mcp-specialist`）接收外部指令。指令复用专员频道的真实人工输入链路（InputEvent → Pilot 路由 → Worker），携带 `external` 来源标记并等同本人输入授权；Lake Security、operation permissions、计划/审批确认照旧在 Lake 界面完成，网关工具不提供资源工具、不签发许可或成功证据。外部访问使用独立签发的受限网关凭据（`secrets/mcp-gateway.json`，constant-time 校验、可限定专员、可吊销），与 UI 会话令牌互不通用；stdio 进程只经回环 HTTP 访问后端，不直接打开 SQLite。停止频道后未结指令进入已停止状态；已停止/已取消任务的署名通知不得冒充正常回应。实现计划见[外部接入计划](plan/feature-external-specialist-mcp-1.md)。

@@ -1,0 +1,89 @@
+{
+  "before": [
+    {
+      "node": "header-sweep-light",
+      "duration": 3400,
+      "startTime": 0,
+      "currentTime": 23351.566,
+      "progress": 0.8681076470588236
+    },
+    {
+      "node": "live-text-motion-character",
+      "duration": 3400,
+      "startTime": 0,
+      "currentTime": 23351.566,
+      "progress": 0.8681076470588236
+    },
+    {
+      "node": "live-text-motion-character",
+      "duration": 3400,
+      "startTime": 0,
+      "currentTime": 23351.566,
+      "progress": 0.8681076470588236
+    }
+  ],
+  "stable": true,
+  "lateStatus": [
+    {
+      "node": "header-sweep-light",
+      "duration": 3400,
+      "startTime": 0,
+      "currentTime": 23542.5,
+      "progress": 0.9242647058823534
+    },
+    {
+      "node": "live-text-motion-character",
+      "duration": 3400,
+      "startTime": 0,
+      "currentTime": 23542.5,
+      "progress": 0.9242647058823534
+    },
+    {
+      "node": "live-text-motion-character",
+      "duration": 3400,
+      "startTime": 0,
+      "currentTime": 23542.5,
+      "progress": 0.9242647058823534
+    }
+  ],
+  "newNameGlyphs": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "periods": [
+    [
+      3392,
+      3425
+    ],
+    [
+      3392,
+      3425
+    ],
+    [
+      3392,
+      3425
+    ]
+  ]
+}
