@@ -151,10 +151,9 @@ test('retained progress stays static and preserves actual waiting or failure hin
    if(text)assert.ok(plain.includes(text));
    assert.doesNotMatch(html,/data-live-motion="active"|data-live-glow="active"|status-text--active/);
   }
-  const terminal={...row,continuity:'terminal' as const,activity:{...row.activity,label:'执行已结束，正在接收结果'}};
+  const terminal={...row,worker:{...row.worker,task:{...row.worker.task,state:'completed' as const}},continuity:'terminal' as const,activity:{...row.activity,label:'执行已结束，正在接收结果'}};
   const html=renderReply(terminal,{...base,ai:{...base.ai!,status:'waiting_approval'}} as SessionSnapshot);
-  assert.match(html.replace(/<[^>]*>/g,''),/执行已结束，正在接收结果/);
-  assert.doesNotMatch(html,/等待确认|data-live-motion="active"/);
+  assert.doesNotMatch(html,/执行已结束，正在接收结果|等待确认|data-live-motion="active"/);
  }
 });
 

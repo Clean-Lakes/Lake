@@ -1,4 +1,4 @@
-import type {Message,SessionSnapshot,SpecialistReplyAuthor,SuperWorker,SuperWorkspace} from '../../shared/contracts';
+import type {Message,SessionSnapshot,SpecialistChannelEntry,SpecialistReplyAuthor,SuperWorker,SuperWorkspace} from '../../shared/contracts';
 import {liveSpecialistReplies} from '../../shared/specialist-replies';
 
 type PilotSpecialistActivity=Omit<NonNullable<SuperWorker['activity']>,'phase'>&{phase:NonNullable<SuperWorker['activity']>['phase']|'updating'};
@@ -87,6 +87,25 @@ export function specialistSnapshotMatches(row:PilotSpecialistRow,snapshot:Sessio
  return snapshot.session.id===worker.sessionId&&snapshot.session.projectId===row.projectId&&
   snapshot.superagent?.roleId===worker.roleId&&task?.taskId===worker.task.taskId&&
   (!worker.task.executionGoalId||task.executionGoalId===worker.task.executionGoalId);
+}
+
+/** Execution ending and its formal report can arrive on separate streams. */
+export function awaitingPilotReport(row:PilotSpecialistRow,snapshot?:SessionSnapshot){
+ if(row.worker.assignmentState==='stopped'||['failed','cancelled'].includes(row.worker.task.state))return false;
+ if(row.continuity==='terminal')return row.worker.task.state==='completed';
+ // The worker snapshot can report completion before the workspace does.
+ return !!row.observedRootTurnId&&!!snapshot&&specialistSnapshotMatches(row,snapshot)&&snapshot.superagent?.task.state==='completed'&&
+  (!snapshot.ai?.rootTurnId||snapshot.ai.rootTurnId===row.observedRootTurnId);
+}
+
+export type PilotReplyPresentation={binding:string;entry?:SpecialistChannelEntry};
+
+/** Keep the last committed public segment until the host's exact report takes
+ * over. A late completion snapshot is audit data, not another public update. */
+export function pilotSpecialistPresentation(row:PilotSpecialistRow,snapshot:SessionSnapshot|undefined,previous?:PilotReplyPresentation){
+ if(awaitingPilotReport(row,snapshot)&&previous?.binding===pilotSpecialistBinding(row)&&
+  previous.entry?.reply?.turnId===row.observedRootTurnId)return previous.entry;
+ return pilotSpecialistReply(row,snapshot);
 }
 
 /** Public current-invocation prose only; thinking, tools and old replies stay private. */

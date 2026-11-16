@@ -3,7 +3,7 @@ import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {Message,SessionSnapshot,SuperWorker,SuperWorkspace} from '../../shared/contracts';
-import {continuousPilotDispatchRows,pilotDispatchRows,pilotSpecialistBinding,pilotSpecialistReply,type PilotSpecialistRow} from '../src/pilotSpecialistReplies';
+import {awaitingPilotReport,continuousPilotDispatchRows,pilotDispatchRows,pilotSpecialistBinding,pilotSpecialistPresentation,pilotSpecialistReply,type PilotSpecialistRow} from '../src/pilotSpecialistReplies';
 import {PilotSpecialistReplyView} from '../src/PilotSpecialistConversation';
 
 const at='2026-11-16T00:00:00Z';
@@ -34,16 +34,67 @@ test('an observed dispatch survives an activity gap in its original slot without
  assert.equal(pilotSpecialistBinding(resumed[0]!),pilotSpecialistBinding(initial[0]!));
 });
 
-test('task completion before report retains true static status despite a stale running child snapshot',()=>{
+test('successful completion before a report keeps prose without an extra ending notice; failures and stops remain visible',()=>{
  for(const [state,label] of [['completed','执行结束'],['failed','执行失败'],['cancelled','已停止']] as const){
   const item=worker(),initial=advance([],workspace([item])),running=snapshot(initial[0]!);
   item.task={...item.task,state};item.activity=undefined;item.assignmentState='parked';
   const retained=advance(initial,workspace([item]),[user],new Map([[pilotSpecialistBinding(initial[0]!), 'sdk-root']]))[0]!;
   assert.equal(retained.continuity,'terminal');assert.equal(retained.activity.label,label);
   const rendered=html(retained,running),plain=rendered.replace(/<[^>]*>/g,'');
-  assert.match(plain,/这是真实公开进度/);assert.ok(plain.includes(label));
+  assert.match(plain,/这是真实公开进度/);
+  if(state==='completed')assert.doesNotMatch(plain,/执行结束|回复结束|接收结果/);
+  else assert.ok(plain.includes(label));
   assert.doesNotMatch(rendered,/data-live-(?:motion|glow)="active"|status-text--active|data-motion="working"/);
  }
+});
+
+test('the completed-task report gap freezes the last committed public segment through late prose and missing SDK snapshots',()=>{
+ const item=worker(),initial=advance([],workspace([item]))[0]!,live=snapshot(initial);
+ const entry=pilotSpecialistPresentation(initial,live)!,binding=pilotSpecialistBinding(initial),previous={binding,entry};
+ item.task={...item.task,state:'completed'};item.activity=undefined;item.assignmentState='parked';
+ const row=advance([initial],workspace([item]),[user],new Map([[binding,'sdk-root']]))[0]!;
+ assert.equal(awaitingPilotReport(row),true);
+ const late=snapshot(row);late.ai!.cards[0]!.content='执行已经结束，正在整理结论。';
+ const missing={...late,ai:{...late.ai!,cards:[],rootTurnId:undefined}};
+ for(const current of [late,missing,undefined]){
+  assert.equal(pilotSpecialistPresentation(row,current,previous),entry,'the exact retained paragraph survives each terminal transport update');
+  assert.equal(entry.card?.content,'这是真实公开进度。');
+ }
+ const final=report(initial),delivered=advance([row],workspace([item]),[user,final],new Map([[binding,'sdk-root']]))[0]!;
+ assert.equal(delivered.finalReport,final,'only the exact host report replaces the retained content');
+});
+
+test('a retained public segment cannot cross its binding, SDK root, resumed work or actual failure',()=>{
+ const item=worker(),initial=advance([],workspace([item]))[0]!,live=snapshot(initial);
+ const previous={binding:pilotSpecialistBinding(initial),entry:pilotSpecialistPresentation(initial,live)};
+ const row:PilotSpecialistRow={...initial,worker:{...item,task:{...item.task,state:'completed'}},continuity:'terminal',observedRootTurnId:'sdk-root'};
+ for(const changed of [
+  {...row,projectId:'other'}, {...row,sourceMessageId:'other'}, {...row,sourceCreatedAt:'later'},
+  {...row,worker:{...row.worker,id:'other'}}, {...row,worker:{...row.worker,roleId:'other'}},
+  {...row,worker:{...row.worker,sessionId:'other'}}, {...row,worker:{...row.worker,task:{...row.worker.task,taskId:'other'}}},
+  {...row,observedRootTurnId:'new-root'},
+ ])assert.equal(pilotSpecialistPresentation(changed,undefined,previous),undefined);
+ const resumed={...initial,observedRootTurnId:'sdk-root'},next=snapshot(resumed,'new-root');
+ next.ai!.cards[0]!.content='下一次执行的真实进度。';
+ assert.equal(pilotSpecialistPresentation(resumed,next,previous)?.card?.content,'下一次执行的真实进度。');
+ for(const state of ['failed','cancelled'] as const){
+  const failed={...row,worker:{...row.worker,task:{...row.worker.task,state}}};
+  assert.equal(awaitingPilotReport(failed),false);
+  assert.equal(pilotSpecialistPresentation(failed,undefined,previous),undefined,'failure presentation is never replaced by a retained running paragraph');
+ }
+});
+
+test('a matching worker completion snapshot can freeze prose before the workspace learns that execution ended',()=>{
+ const item=worker(),initial=advance([],workspace([item]))[0]!,row={...initial,observedRootTurnId:'sdk-root'},live=snapshot(row);
+ const previous={binding:pilotSpecialistBinding(row),entry:pilotSpecialistPresentation(row,live)};
+ const done=snapshot(row);done.superagent!.task={...done.superagent!.task,state:'completed'};done.ai!.cards[0]!.content='收尾播报';
+ assert.equal(awaitingPilotReport(row,done),true);
+ assert.equal(pilotSpecialistPresentation(row,done,previous),previous.entry);
+ const next=snapshot(row,'new-root');next.superagent!.task={...next.superagent!.task,state:'completed'};
+ assert.equal(awaitingPilotReport(row,next),false,'a different SDK invocation is not a completion signal for the old one');
+ const other={...done,session:{...done.session,id:'other-session'}};
+ assert.equal(awaitingPilotReport(row,other),false);
+ assert.equal(pilotSpecialistPresentation(row,other,previous),undefined);
 });
 
 test('a task ending before its first SDK snapshot does not leave an unknown-root terminal duplicate',()=>{
@@ -73,7 +124,8 @@ test('only the exact observed SDK root hands the slot to its formal report, with
  const item=worker(),initial=advance([],workspace([item])),key=pilotSpecialistBinding(initial[0]!);
  const roots=new Map([[key,'sdk-root']]);item.activity=undefined;item.task={...item.task,state:'completed'};
  const pending=advance(initial,workspace([item]),[user,report(initial[0]!,'task-origin')],roots)[0]!;
- assert.equal(pending.observedRootTurnId,'sdk-root');assert.equal(pending.finalReport,undefined);assert.match(html(pending),/执行结束/,'the task origin is not the observed SDK root');
+ assert.equal(pending.observedRootTurnId,'sdk-root');assert.equal(pending.finalReport,undefined);
+ assert.doesNotMatch(html(pending),/正式结果|执行结束/,'an unproven report cannot invent a public completion sentence');
  const final=report(initial[0]!);
  const delivered=advance([pending],workspace([item]),[user,final],roots)[0]!;
  assert.equal(delivered.finalReport,final,'the actual frozen report belongs to the original slot');

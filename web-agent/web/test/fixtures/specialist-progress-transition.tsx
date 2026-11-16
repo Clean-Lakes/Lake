@@ -17,9 +17,9 @@ import '../../src/conversationBubbles.css';
 import '../../src/sreCollaboration.css';
 
 const at='2026-11-16T08:00:00.000Z',started='2026-11-16T08:00:01.000Z';
-const labels=['思考','首段进度','流式追加','工具执行','新段进度','最终段待报告','完成待报告','正式报告','ACP晚到累计','ACP完成message','等待审批','活动快照空窗','断线','删除专员'] as const;
+const labels=['思考','首段进度','流式追加','工具执行','新段进度','最终段待报告','源快照先结束','完成待报告','结束后播报','结束快照空窗','正式报告','ACP晚到累计','ACP完成message','等待审批','活动快照空窗','断线','删除专员'] as const;
 type Stage=typeof labels[number];
-let stage:Stage='思考',cursor=1,acp=true,long=false,secondComplete=false;
+let stage:Stage='思考',cursor=1,servedCursor=0,acp=true,long=false,secondComplete=false;
 const streams=new Set<FixtureEvents>();
 class FixtureEvents extends EventTarget {
  readyState=1;onopen:(()=>void)|null=null;onerror:(()=>void)|null=null;onmessage:((event:MessageEvent)=>void)|null=null;
@@ -30,7 +30,7 @@ window.EventSource=FixtureEvents as unknown as typeof EventSource;
 const primary={kind:'specialist' as const,name:'服务器运维排查专员',roleId:'role-host',workerId:'worker-host',sessionId:'source-host',taskId:'task-host',rootTurnId:'sdk-current',avatarId:'flamingo' as const};
 const parallel={...primary,name:'资料核对专员',roleId:'role-library',workerId:'worker-library',sessionId:'source-library',taskId:'task-library',rootTurnId:'sdk-library',avatarId:'owl' as const};
 const hasReport=()=>['正式报告','ACP晚到累计','ACP完成message'].includes(stage);
-const terminal=()=>hasReport()||stage==='完成待报告';
+const terminal=()=>hasReport()||['完成待报告','结束后播报','结束快照空窗'].includes(stage);
 const first='我先核对公开样例的 CPU 与内存。';
 const firstAppend=' 再读取磁盘与进程摘要。';
 const shortProgress='已取得样例数据，正在对比本轮变化。';
@@ -38,6 +38,7 @@ const longProgress='已取得样例数据，正在逐项核对。\n\n- 负载与
 const conclusion='本轮样例核对已结束，未连接业务资源。';
 function publicSegment(){
  if(stage==='思考')return {id:'acp_message_first',content:''};
+ if(['源快照先结束','结束后播报'].includes(stage))return {id:'acp_message_ending',content:'执行已经结束，正在整理结论。'};
  if(['首段进度','流式追加','工具执行'].includes(stage))return {id:'acp_message_first',content:first+(stage==='首段进度'?'':firstAppend)};
  if(['最终段待报告','完成待报告','正式报告','ACP晚到累计','ACP完成message'].includes(stage))return {id:'acp_message_final',content:conclusion};
  return {id:'acp_message_second',content:long?longProgress:shortProgress};
@@ -49,7 +50,7 @@ function execution(isSecond=false):AgentExecutionSummary{
 }
 function worker(isSecond=false):SuperWorker{
  const author=isSecond?parallel:primary,finished=isSecond?secondComplete:terminal();
- const absent=!isSecond&&['活动快照空窗','完成待报告','正式报告','ACP晚到累计','ACP完成message'].includes(stage);
+ const absent=!isSecond&&(stage==='活动快照空窗'||terminal());
  const waiting=!isSecond&&stage==='等待审批',tool=isSecond||stage==='工具执行';
  return {id:author.workerId,roleId:author.roleId,roleName:author.name,sessionId:author.sessionId,execution:execution(isSecond),assignmentState:finished?'parked':'active',
   task:{taskId:author.taskId,sessionId:author.sessionId,projectId:'fixture-project',title:isSecond?'并行资料核对':'公开进度连续性验收',state:finished?'completed':waiting?'waiting_user':'running',acceptanceState:finished?'pass':'not_evaluated',revision:1,originRootTurnId:'task-origin',deadlineAt:''},
@@ -57,6 +58,7 @@ function worker(isSecond=false):SuperWorker{
 }
 function sourceCards(isSecond=false):AICard[]{
  if(isSecond)return [{id:'parallel-progress',type:'message',status:secondComplete?'completed':'running',at:started,content:'并行核对资料目录；第一位专员结束后，我仍继续当前任务。',data:{root_turn_id:parallel.rootTurnId}}];
+ if(stage==='结束快照空窗')return [];
  const segment=publicSegment();
  const cumulative=segment.id==='acp_message_first'?segment.content:[first+firstAppend,long?longProgress:shortProgress,...(segment.id==='acp_message_final'?[conclusion]:[])].join('\n\n');
  const cards:AICard[]=acp?[{id:'acp-run-current',type:'operation',status:stage==='ACP完成message'?'completed':'running',at:started,content:cumulative+(stage==='ACP晚到累计'?'\n\n晚到的累计审计更新，不应替换已送达报告。':''),
@@ -66,14 +68,14 @@ function sourceCards(isSecond=false):AICard[]{
  return cards;
 }
 function sourceSnapshot(isSecond=false):SessionSnapshot{
- const owner=worker(isSecond),cards=sourceCards(isSecond),done=isSecond?secondComplete:stage==='完成待报告'||stage==='ACP完成message',waiting=!isSecond&&stage==='等待审批';
- return {session:session(owner.sessionId,'worker'),superagent:{roleId:owner.roleId,task:owner.task,execution:owner.execution},cursor,messages:[],resources:[],actions:[],specialists:[],evidence:[],terminals:[],
-  ai:{session:owner.sessionId,profile:'fixture',turns:1,usage:{input:0,output:0,total:0},status:waiting?'waiting_approval':done?'completed':'running',replyStatus:done?undefined:'running',rootTurnId:isSecond?parallel.rootTurnId:primary.rootTurnId,turnStartedAt:started,cards,cardsOffset:0,totalCards:cards.length}};
+ const owner=worker(isSecond),cards=sourceCards(isSecond),done=isSecond?secondComplete:terminal()||stage==='源快照先结束',waiting=!isSecond&&stage==='等待审批';
+ return {session:session(owner.sessionId,'worker'),superagent:{roleId:owner.roleId,task:!isSecond&&stage==='源快照先结束'?{...owner.task,state:'completed'}:owner.task,execution:owner.execution},cursor,messages:[],resources:[],actions:[],specialists:[],evidence:[],terminals:[],
+  ai:{session:owner.sessionId,profile:'fixture',turns:1,usage:{input:0,output:0,total:0},status:waiting?'waiting_approval':done?'completed':'running',replyStatus:done?undefined:'running',rootTurnId:isSecond?parallel.rootTurnId:stage==='结束快照空窗'?undefined:primary.rootTurnId,turnStartedAt:started,cards,cardsOffset:0,totalCards:cards.length}};
 }
 function session(id:string,workspaceRole:'router'|'worker'){return {id,projectId:'fixture-project',workspaceRole,title:'连续进度隔离验收',status:'idle' as const,resourceIds:[],createdAt:at,updatedAt:started};}
 window.fetch=async input=>{
  const path=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,window.location.href).pathname;
- if(path===`/api/sessions/${primary.sessionId}/snapshot`)return Response.json(sourceSnapshot());
+ if(path===`/api/sessions/${primary.sessionId}/snapshot`){servedCursor=cursor;return Response.json(sourceSnapshot());}
  if(path===`/api/sessions/${parallel.sessionId}/snapshot`)return Response.json(sourceSnapshot(true));
  return Response.json({error:'fixture blocks all other requests'},{status:404});
 };
@@ -99,8 +101,9 @@ function Fixture(){
  };
  const measure=()=>{
   const now=nodes(),before=baseline.current;
-  return {stage,mode:acp?'ACP':'Native',captured:!!before,slotSame:!!before?.slot&&before.slot===now.slot,identitySame:!!before?.identity&&before.identity===now.identity,bodySame:!!before?.body&&before.body===now.body,proseSame:!!before?.prose&&before.prose===now.prose,
+  return {stage,cursor,servedCursor,mode:acp?'ACP':'Native',captured:!!before,slotSame:!!before?.slot&&before.slot===now.slot,identitySame:!!before?.identity&&before.identity===now.identity,bodySame:!!before?.body&&before.body===now.body,proseSame:!!before?.prose&&before.prose===now.prose,
    historyNodes:now.history.length,historySame:!!before?.history.length&&before.history.length===now.history.length&&before.history.every((node,index)=>node.isConnected&&node===now.history[index]),parallelSame:!!before?.parallel&&before.parallel===now.parallel,
+   endingNotice:now.slot?.querySelector('.pilot-specialist-connection')?.textContent??'',bodyHeight:now.body?.getBoundingClientRect().height??0,bodyAnimations:now.body?.getAnimations().map(animation=>({playState:animation.playState,duration:animation.effect?.getTiming().duration}))??[],
    following:following.current,scrollTop:now.top,scrollDelta:before?now.top-before.top:0,scrollEvents:scrolls.current,scrollHeight:box.current!.scrollHeight,clientHeight:box.current!.clientHeight,reportId:now.slot?.getAttribute('data-report-id')??'',publicText:now.body?.textContent??''};
  };
  const capture=()=>{baseline.current=nodes();scrolls.current=0;const result=measure();setQA(JSON.stringify(result));return result;};
@@ -142,7 +145,7 @@ function Fixture(){
    onWheel={event=>{if(pausesConversationFollow(box.current!,event.deltaY,following.current)){following.current=false;follower.current?.stop();}}}
    onKeyDown={event=>{if(['ArrowUp','PageUp','Home'].includes(event.key)){following.current=false;follower.current?.stop();}}}
    onScroll={()=>{scrolls.current++;following.current=followsConversationScroll(box.current!,following.current);}}>
-   <SpecialistAvatarProvider channels={channels}><ObjectReferencesProvider><AITranscript snapshot={snapshot} pilotWorkspace={workspace} pilotConnected={stage!=='断线'} assistantIdentity={{name:'Pilot',pilot:true}} onSpecialist={author=>setOpened(author.workerId)}/></ObjectReferencesProvider></SpecialistAvatarProvider>
+   <SpecialistAvatarProvider channels={channels}><ObjectReferencesProvider><AITranscript snapshot={snapshot} pilotWorkspace={workspace} pilotConnected={stage!=='断线'} assistantIdentity={{name:'Pilot',pilot:true}} onSpecialist={author=>setOpened(author.workerId)} onInspectSpecialist={author=>setOpened(author.workerId)}/></ObjectReferencesProvider></SpecialistAvatarProvider>
   </div>
   <details style={{marginTop:12}}><summary>查看当前合成源事件</summary><pre style={{fontSize:11,whiteSpace:'pre-wrap'}}>{JSON.stringify({cards:sourceCards(),worker:worker()},null,2)}</pre></details>
  </main>;
