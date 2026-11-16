@@ -1,0 +1,94 @@
+{
+  "buildOrigin": {
+    "gitHead": "0f622f221f0bbf71e974fedf171c9ae657c4d232",
+    "gitBranch": "codex/specialist-live-text-motion",
+    "version": "0.3.33",
+    "dirty": false,
+    "backendRuntime": "typescript"
+  },
+  "platform": "macOS arm64",
+  "home": "isolated temporary Dev Home",
+  "model": "deterministic loopback SSE with a synthetic 4096-character credential",
+  "pollIntervalMs": 25,
+  "samplesPerKind": 1,
+  "measurementsAreBackendViewsNotPaintTimes": true,
+  "nativeComposerSubmissionMs": {
+    "pilot": 1794816963646,
+    "specialist": 1794817012616
+  },
+  "metrics": [
+    {
+      "kind": "pilot",
+      "requestedAt": 1794816963787,
+      "sourceMessageId": "9958eb72-1087-4090-a6e9-7190a6d98aff",
+      "acceptedAt": 1794816963692,
+      "sessionId": "sp_448150afd5a10d60ff52867795b5c05e",
+      "startedAt": 1794816963725,
+      "firstChunkAt": 1794816970890,
+      "providerStillOpenAtObservation": true,
+      "firstChunkToViewMs": 26,
+      "acceptToStartMs": 33,
+      "observedAt": 1794816970916
+    },
+    {
+      "kind": "specialist",
+      "requestedAt": 1794817044707,
+      "sourceMessageId": "13aebbed-a99f-48bd-adf0-e871cc8c2708",
+      "acceptedAt": 1794817012645,
+      "sessionId": "sw_53f372a9feba14e1bc9f4ee2bfb04c5f",
+      "startedAt": 1794817044691,
+      "firstChunkAt": 1794817059043,
+      "providerStillOpenAtObservation": true,
+      "firstChunkToViewMs": 21,
+      "acceptToStartMs": 32046,
+      "observedAt": 1794817059064
+    }
+  ],
+  "manualGates": {
+    "routing": [
+      {
+        "requestedAt": 1794817020893,
+        "releasedAt": 1794817044659
+      }
+    ],
+    "modelStreams": [
+      {
+        "kind": "pilot",
+        "firstAt": 1794816970890,
+        "completedAt": 1794817020814
+      },
+      {
+        "kind": "specialist",
+        "firstAt": 1794817059043,
+        "completedAt": 1794817132862
+      }
+    ]
+  },
+  "routeReleaseToWorkerStartMs": 32,
+  "observations": {
+    "thinkingBeforeAnyModelChunk": true,
+    "preparationVisibleBeforeRoutingSettled": true,
+    "specialistAnimalThinkingBeforeAnyModelChunk": true,
+    "publicShortTextVisibleBeforeFinish": true,
+    "reasoningAndPublicRecordVisibleBeforeFinish": true,
+    "finalReportReplacedProgress": true
+  },
+  "checks": {
+    "typescriptSource": {
+      "passed": 344,
+      "skipped": 4
+    },
+    "packagedProtocol": {
+      "passed": 282,
+      "skipped": 6
+    },
+    "codesign": true
+  },
+  "cleanup": {
+    "isolatedNativeExited": true,
+    "isolatedRuntimeRemoved": true,
+    "dailyPilotRestored": true,
+    "dailyResourceCount": 136,
+    "dailyModel": "codex/gpt-6.1-sol"
+  }
+}
