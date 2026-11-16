@@ -1,4 +1,12 @@
-## 当前：移除聊天框 Plan 按钮（2026-11-12）
+## 当前：Codex App Server 直连（2026-11-16）
+
+采用 Tutti 的进程传输、提供商适配、活动归一分层，Codex 通过官方 0.160.1 App Server 直接执行。删除第三方 ACP 包装器安装、ACP SDK 和 Shell 启动器。profile schema3/runtimeKind 迁移增加 revision，旧 Worker/run 不改写或静默重派；本机登录与 ToolExecutor 权限继续有效。见[架构](../../design/local-agent-runtime.md)及[实施计划](../../../plan/refactor-codex-app-server-1.md)。
+
+本地验证：336 后端单元通过，4 个既有可选跳过；275 宿主/服务/配置测试通过，6 个真实引擎测试在通用套件中按需跳过并另行全部执行通过；866 前端测试、前后端类型、React 构建、ADK 边界及命名检查通过。真实引擎运行目录只有官方 @openai 包，没有 codex-acp；实际验证包括纯对话、工具桥、同任务恢复无历史重放、业务派单与 partial、API 登录/退出及冻结模型。继承 MCP/hooks/notify 陷阱未执行，源配置与认证文件不变。
+
+签名 Lake Dev 集成验证进行中。当前已安装 Dev 源码为开放 PR #235 的 `0f622f22`，普通 develop 基线不能直接覆盖；使用独立本地集成分支保留该源码并叠加本次改造，不合并或修改 PR #235。准确源码、集成 SHA 与 Dev 结果将在验证后记录。Windows/Linux、Claude 和真实远程业务系统未验证。下方 ACP 记录均保留为对应历史版本证据。
+
+## 历史：移除聊天框 Plan 按钮（2026-11-12）
 
 源码与签名 Lake Dev 已测试：`90bd0cbdfe71133724a37352fbbb43d50fce00ec`。移除输入工具栏的 Plan 按钮、专用组件和样式；计划列表的空提示改为 Pilot `/plan` 指令。指令解析、已有模式／计划和执行／修改计划操作保留；没有更改后端或会话配置。删除了一项仅对应已移除按钮的旧渲染测试，其余测试保留。
 

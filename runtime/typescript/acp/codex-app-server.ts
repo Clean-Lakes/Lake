@@ -1,0 +1,150 @@
+import type {AgentActivity,AgentConnection,AgentLaunch,AgentTurnResult} from './client';
+import {JsonRpcProcess} from './process';
+
+type Tokens={inputTokens:number;outputTokens:number};
+type Turn={id?:string;done:boolean;resolve:(result:AgentTurnResult)=>void;reject:(error:Error)=>void;
+  confirmed:Promise<void>;confirm:()=>void;mcpCalls:Map<string,{server:string;tool:string;pending:boolean}>;
+  buffered:Array<{method:string;params:any}>;bytes:number;messages:Map<string,string>;text:string;baseline?:Tokens;};
+const tokens=(value:any):Tokens|undefined=>value&&Number.isSafeInteger(value.inputTokens)&&value.inputTokens>=0&&Number.isSafeInteger(value.outputTokens)&&value.outputTokens>=0?
+  {inputTokens:value.inputTokens,outputTokens:value.outputTokens}:undefined;
+type McpGate={server:string;tools:ReadonlySet<string>;guard:()=>void};
+
+/** Official Codex 0.160.1 App Server. JSON-RPC version headers are omitted. */
+export class CodexAppServer implements AgentConnection {
+  private readonly rpc:JsonRpcProcess;
+  private initialized=false;
+  private threadId?:string;
+  private turn?:Turn;
+  private totalTokens?:Tokens;
+  private broken=false;
+  constructor(private readonly launch:AgentLaunch,private readonly activity:(event:AgentActivity)=>void,private readonly mcp?:McpGate) {
+    this.rpc=new JsonRpcProcess(launch,{
+      notification:(method,params)=>this.notification(method,params),
+      request:async(method,params)=>{
+        // Business tools execute only through the task-bound MCP bridge.
+        if(method==='item/commandExecution/requestApproval'||method==='item/fileChange/requestApproval')return {decision:'decline'};
+        if(method==='mcpServer/elicitation/request')return this.approveMcp(params);
+        throw new Error('Codex 请求不在 Lake 工具边界中');
+      },
+    });
+    this.rpc.signal.addEventListener('abort',()=>this.turn?.reject(this.rpc.signal.reason),{once:true});
+  }
+  private async approveMcp(params:any) {
+    const cancelled={action:'cancel',content:null,_meta:null};
+    const turn=this.turn;if(!turn||!this.mcp)return cancelled;
+    await turn.confirmed;
+    if(this.turn!==turn||turn.done||params?.threadId!==this.threadId||params.turnId!==turn.id||
+      params.serverName!==this.mcp.server||!['form','openai/form','openaiForm'].includes(params.mode)||params._meta?.codex_approval_kind!=='mcp_tool_call')return cancelled;
+    // App Server 0.160.1 omits the MCP call ID from form elicitations. Consume
+    // one observed call for this exact thread/turn/server. This admits only the
+    // private transport; ToolExecutor checks the actual business action.
+    const call=[...turn.mcpCalls.values()].find(call=>call.pending&&call.server===this.mcp!.server&&this.mcp!.tools.has(call.tool));
+    if(!call)return cancelled;
+    call.pending=false;this.mcp.guard();
+    return {action:'accept',content:null,_meta:null};
+  }
+  async initialize(signal:AbortSignal) {
+    if(this.initialized)throw new Error('Codex 连接已经初始化');
+    const serverInfo=await this.rpc.request('initialize',{clientInfo:{name:'lake',title:'Lake',version:'1'},capabilities:{experimentalApi:true}},signal);
+    this.rpc.notify('initialized');this.initialized=true;
+    return {runtime:'codex-app-server',serverInfo,resume:true,streaming:true,cancel:true};
+  }
+  async openSession(options:{cwd:string;threadId?:string;systemPrompt?:string},signal:AbortSignal) {
+    if(!this.initialized||this.threadId)throw new Error('Codex 线程状态不允许创建或载入');
+    const params={cwd:options.cwd,approvalPolicy:'on-request',approvalsReviewer:'user',sandbox:'read-only',config:this.launch.threadConfig??{},
+      ...(options.systemPrompt?{developerInstructions:options.systemPrompt}:{}),
+      ...(options.threadId?{threadId:options.threadId}:{})};
+    // Resume may replay usage before its response, but never replay messages.
+    this.threadId=options.threadId;
+    this.totalTokens=options.threadId?undefined:{inputTokens:0,outputTokens:0};
+    const result=await this.rpc.request(options.threadId?'thread/resume':'thread/start',params,signal);
+    const id=result?.thread?.id;
+    if(typeof id!=='string'||!id||options.threadId&&id!==options.threadId)throw new Error('Codex 没有返回对应线程');
+    if(this.launch.observed&&typeof result.model==='string'&&result.model!==this.launch.observed.model)throw new Error('Codex 线程模型与冻结配置不一致');
+    this.threadId=id;return id;
+  }
+  async exec(text:string,signal:AbortSignal,timeout:number):Promise<AgentTurnResult> {
+    signal.throwIfAborted();
+    if(!this.threadId||this.turn||this.broken)throw new Error('Codex 线程不可用或已有轮次运行');
+    let turn!:Turn;
+    let confirm!:()=>void,failConfirm!:(error:Error)=>void;
+    const confirmed=new Promise<void>((resolve,reject)=>{confirm=resolve;failConfirm=reject;});void confirmed.catch(()=>{});
+    const completed=new Promise<AgentTurnResult>((resolve,reject)=>{turn={done:false,
+      resolve:result=>{if(!turn.done){turn.done=true;resolve(result);}},
+      reject:error=>{if(!turn.done){turn.done=true;failConfirm(error);reject(error);}},
+      confirmed,confirm,mcpCalls:new Map(),
+      buffered:[],bytes:0,messages:new Map(),text:'',baseline:this.totalTokens};});
+    void completed.catch(()=>{});
+    this.turn=turn;
+    const abort=()=>turn.reject(signal.reason instanceof Error?signal.reason:new Error('Codex 轮次已取消'));
+    signal.addEventListener('abort',abort,{once:true});
+    const timer=setTimeout(()=>turn.reject(new Error('Codex 轮次等待超时')),timeout);
+    try {
+      const result=await this.rpc.request('turn/start',{threadId:this.threadId,input:[{type:'text',text}],approvalPolicy:'on-request',approvalsReviewer:'user'},signal,Math.min(timeout,120000));
+      if(typeof result?.turn?.id!=='string'||!result.turn.id)throw new Error('Codex 没有确认本次轮次');
+      turn.id=result.turn.id;
+      for(const item of turn.buffered)this.route(turn,item.method,item.params);
+      turn.buffered=[];turn.bytes=0;
+      turn.confirm();
+      return await completed;
+    }catch(error){this.broken=true;turn.reject(error instanceof Error?error:new Error('Codex 轮次失败'));throw error;
+    }finally{clearTimeout(timer);signal.removeEventListener('abort',abort);if(this.turn===turn)this.turn=undefined;}
+  }
+  private notification(method:string,params:any) {
+    if(!params||params.threadId!==this.threadId)return;
+    const turn=this.turn;
+    if(!turn) {
+      if(method==='thread/tokenUsage/updated')this.totalTokens=tokens(params.tokenUsage?.total);
+      return;
+    }
+    if(turn.done)return;
+    if(!turn.id) {
+      turn.bytes+=Buffer.byteLength(JSON.stringify(params));
+      if(turn.buffered.length>=2048||turn.bytes>8*1024*1024){turn.reject(new Error('Codex 未确认轮次的输出过多'));void this.rpc.close();return;}
+      turn.buffered.push({method,params});return;
+    }
+    this.route(turn,method,params);
+  }
+  private messageText(turn:Turn,id:string,text:string) {
+    const changed=!turn.messages.has(id)||turn.messages.get(id)!==text;
+    turn.messages.set(id,text);
+    const combined=[...turn.messages.values()].join('');
+    if(Buffer.byteLength(combined)>1024*1024){turn.reject(new Error('Codex 正文超过本次输出上限'));void this.rpc.close();return;}
+    if(changed){turn.text=combined;this.activity({kind:'text',text:combined,messageId:id,messageText:text});}
+  }
+  private route(turn:Turn,method:string,params:any) {
+    const id=method==='turn/completed'?params.turn?.id:params.turnId;
+    if(turn.done||id!==turn.id)return;
+    if(method==='item/agentMessage/delta'&&typeof params.itemId==='string'&&typeof params.delta==='string')
+      this.messageText(turn,params.itemId,(turn.messages.get(params.itemId)??'')+params.delta);
+    else if(method==='item/started'||method==='item/completed') {
+      const item=params.item;if(!item||typeof item.id!=='string')return;
+      if(item.type==='mcpToolCall') {
+        if(method==='item/started'&&!turn.mcpCalls.has(item.id))turn.mcpCalls.set(item.id,{server:item.server,tool:item.tool,pending:true});
+        if(method==='item/completed'){const call=turn.mcpCalls.get(item.id);if(call)call.pending=false;}
+      }
+      if(item.type==='agentMessage'&&method==='item/completed'&&typeof item.text==='string')this.messageText(turn,item.id,item.text);
+      else if(['mcpToolCall','commandExecution','fileChange','dynamicToolCall','collabAgentToolCall'].includes(item.type))
+        this.activity({kind:method==='item/started'?'tool':'tool_update',callId:item.id,
+          title:item.type==='mcpToolCall'?item.server==='lake'?item.tool:item.server+' / '+item.tool:item.tool??item.command??item.type,
+          status:method==='item/started'?'running':item.status==='failed'||item.success===false?'failed':'completed'});
+    }else if(method==='thread/tokenUsage/updated') {
+      const total=tokens(params.tokenUsage?.total);if(!total)return;
+      this.totalTokens=total;
+      if(turn.baseline&&total.inputTokens>=turn.baseline.inputTokens&&total.outputTokens>=turn.baseline.outputTokens)
+        this.activity({kind:'usage',usage:{inputTokens:total.inputTokens-turn.baseline.inputTokens,outputTokens:total.outputTokens-turn.baseline.outputTokens}});
+    }else if(method==='turn/completed') {
+      for(const item of params.turn.items??[])if(item.type==='agentMessage'&&typeof item.id==='string'&&typeof item.text==='string')this.messageText(turn,item.id,item.text);
+      const status=params.turn.status;
+      if(!['completed','interrupted','failed'].includes(status)){turn.reject(new Error('Codex 返回了无效终态'));return;}
+      turn.resolve({stopReason:status==='completed'?'end_turn':status==='interrupted'?'cancelled':'failed',
+        ...(typeof params.turn.error?.message==='string'?{error:params.turn.error.message}:{})});
+    }
+  }
+  async cancel() {
+    if(!this.threadId||!this.turn?.id||this.rpc.signal.aborted)return;
+    await this.rpc.request('turn/interrupt',{threadId:this.threadId,turnId:this.turn.id},AbortSignal.timeout(500),500).catch(()=>{});
+  }
+  diagnostics(){return this.rpc.diagnostics();}
+  close(){return this.rpc.close();}
+}

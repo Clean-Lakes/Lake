@@ -1313,14 +1313,12 @@ test("Watchdog identifies a real provider 503 and retries the same SDK assignmen
 
 async function prepareCodexProtocolFixture(app,mode){
  const fs=require('node:fs/promises'),registry=app.agents.external.registry;
- const root=registry.adapterRoot();await fs.mkdir(join(root,'node_modules/@agentclientprotocol/codex-acp/dist'),{recursive:true});
- await fs.writeFile(join(root,'node_modules/@agentclientprotocol/codex-acp/package.json'),JSON.stringify({version:'2.2.2'}));
- await fs.writeFile(registry.adapterEntry(),'// owned protocol fixture; launch is overridden below');
- await fs.mkdir(join(root,'node_modules/@openai/codex'),{recursive:true});
+ const root=registry.runtimeRoot();await fs.mkdir(join(root,'node_modules/@openai/codex/bin'),{recursive:true});
+ await fs.writeFile(registry.engineEntry(),'// owned protocol fixture; launch is overridden below');
  await fs.writeFile(join(root,'node_modules/@openai/codex/package.json'),JSON.stringify({version:'0.160.1'}));
  app.agents.external.launch=async(_profile,directory,_signal,mcp)=>{
   const source=registry.local.current(),auth=JSON.parse(await fs.readFile(join(source.home,'auth.json'),'utf8'));
-  return {executable:process.execPath,args:[join(__dirname,'test-fixtures/codex-acp.cjs')],cwd:directory,env:{LAKE_TEST_ACP_SCENARIO:mode,LAKE_TEST_ACP_SOCKET:mcp?.args.at(-1)},
+  return {executable:process.execPath,args:[join(__dirname,'test-fixtures/codex-app-server.cjs')],cwd:directory,env:{LAKE_TEST_ACP_SCENARIO:mode,LAKE_TEST_ACP_SOCKET:mcp?.args.at(-1)},
     observed:{model:'gpt-6.1-sol',modelProvider:'openai',reasoningEffort:'max',authenticated:!!auth.tokens?.access_token,authMode:auth.tokens?.access_token?'chatgpt':'none'}};
  };
 }
@@ -3995,7 +3993,7 @@ test('enabling Codex prepares its runtime, installs only when missing and probes
  const again=await f.api(path,'POST',{expectedRevision:1,enabled:true});
  assert.equal(again.agents[0].revision,2);assert.equal(again.agents[0].assignmentReady,true);
  assert.equal(installations,1);assert.equal(f.calls,0);
- await writeFile(join(f.app.agents.external.registry.adapterRoot(),'node_modules/@openai/codex/package.json'),JSON.stringify({version:'0.1.0'}));
+ await writeFile(join(f.app.agents.external.registry.runtimeRoot(),'node_modules/@openai/codex/package.json'),JSON.stringify({version:'0.1.0'}));
  const repaired=await f.api(path,'POST',{expectedRevision:2,enabled:true});
  assert.equal(repaired.agents[0].assignmentReady,true);assert.equal(installations,2);assert.equal(f.calls,0);
  await f.api(path,'POST',{expectedRevision:0,enabled:true},409);

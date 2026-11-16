@@ -8,6 +8,14 @@ export class ExternalPublicText {
  private messages=new Map<string,string>();
  constructor(private runId:string,private redact:(text:string,live?:boolean)=>string){}
  get auditText(){return this.text;}
+ snapshot(text:string,messageId:string,messageText:string){
+  this.text=text.slice(0,rawLimit);
+  const key=JSON.stringify(['message',this.runId,messageId]);
+  return {text:this.redact(this.text,true).slice(0,visibleLimit),
+   publicText:this.redact(messageText,true).slice(0,visibleLimit),
+   publicTextId:'acp_message_'+createHash('sha256').update(key).digest('hex')};
+ }
+
  append(delta:string,messageId:unknown){
   // Share the existing run text budget rather than retaining an unbounded copy
   // for each message. No timing, punctuation or tool call guesses a boundary.
