@@ -13,7 +13,7 @@ import {ObjectReferencesProvider} from './AssistantMarkdown';
 import {SREPlanCard} from './SREPlanCard';
 import {SRERoleMessage} from './SRERoleMessage';
 import {sreRoles,sreStatus,sreStepStatus} from './sreTranscript';
-import {inspectorGoal,hasInspectorTask,inspectedTask,inspectedAttempt,inspectorAttempts,resolvedInspectorSelection} from './sessionInspectorModel';
+import {inspectorGoal,hasInspectorTask,inspectedTask,inspectedCanonicalTask,inspectedAttempt,inspectorAttempts,resolvedInspectorSelection} from './sessionInspectorModel';
 import {sessionInspectorId,useSessionInspector,type InspectorSelection} from './SessionInspectorContext';
 import {SpecialistTaskSteps} from './SpecialistTaskList';
 
@@ -34,8 +34,8 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
  useLayoutEffect(()=>{const scroll=panel.current?.querySelector('.session-inspector-scroll');if(scroll)scroll.scrollTop=0;},[selection?.sessionId,selection?.turnId,selection?.taskId,selection?.canonicalGoalId,followTurn]);
  const task=target?inspectedTask(snapshot,target):undefined;
  const plan=task?.plans?.at(-1);
- const canonical=snapshot.superagent?.task;
- const goal=inspectorGoal(snapshot,target?.canonicalGoalId);
+ const canonical=target?inspectedCanonicalTask(snapshot,target):undefined;
+ const goal=canonical?inspectorGoal(snapshot,target?.canonicalGoalId):undefined;
  const hasPlan=!!plan||!!goal?.items?.length;
  const selected=task?inspectedAttempt(task,target?.attemptId):undefined;
  useLayoutEffect(()=>{
@@ -73,16 +73,16 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
        {currentEntry?<SRERoleMessage key={`${task.id}:${currentEntry.attemptId}`} detailsOnly connected={connected&&!readOnly} task={task} entry={currentEntry} snapshot={snapshot} onUpdated={onUpdated} renderApproval={()=>null}/>:<p className="inspector-empty">本步骤尚无执行记录。</p>}
       </details>
      </>}
-     {goal&&canonical&&<>
-      {taskPage?<><SpecialistTaskSteps snapshot={snapshot} worker={worker} connected={connected}/><details className="specialist-inspector-records"><DisclosureSummary><Glyph name="layers" size={14}/><span>完整执行记录</span>{!!snapshot.ai?.agentRuns?.length&&<small>协作 Agent · {snapshot.ai.agentRuns.length}</small>}</DisclosureSummary><WorkerExecutionTree snapshot={snapshot} worker={worker} connected={connected&&!readOnly} onUpdated={onUpdated}/></details></>:<><TaskProgress cards={snapshot.ai?.cards??[]} executionId={goal.id} historical={!hasCurrentTaskProgress(canonical.state)}/><WorkerExecutionTree snapshot={snapshot} worker={worker} connected={connected&&!readOnly} onUpdated={onUpdated}/></>}
-      <SuperTaskInspector task={canonical} goal={goal} worker={worker} controlsOnly connected={connected&&!readOnly} onUpdated={onUpdated}/>
+     {canonical&&<>
+      {taskPage?<><SpecialistTaskSteps snapshot={snapshot} worker={worker} connected={connected}/><details className="specialist-inspector-records"><DisclosureSummary><Glyph name="layers" size={14}/><span>完整执行记录</span>{!!snapshot.ai?.agentRuns?.length&&<small>协作 Agent · {snapshot.ai.agentRuns.length}</small>}</DisclosureSummary><WorkerExecutionTree snapshot={snapshot} worker={worker} connected={connected&&!readOnly} onUpdated={onUpdated}/></details></>:<><TaskProgress cards={snapshot.ai?.cards??[]} executionId={canonical.executionGoalId??canonical.taskId} historical={!hasCurrentTaskProgress(canonical.state)}/><WorkerExecutionTree snapshot={snapshot} worker={worker} connected={connected&&!readOnly} onUpdated={onUpdated}/></>}
+      {goal&&<SuperTaskInspector task={canonical} goal={goal} worker={worker} controlsOnly connected={connected&&!readOnly} onUpdated={onUpdated}/>}
      </>}
      {goal && canonical && snapshot.superagent?.watchdog && <TaskWatchdog
        key={JSON.stringify([snapshot.session.projectId, snapshot.session.id, goal.id])}
        view={snapshot.superagent.watchdog}/>}
-     {!task&&!goal&&<h3 className="inspector-execution-title"><Glyph name="document" size={17}/>当前执行</h3>}
+     {!task&&!canonical&&<h3 className="inspector-execution-title"><Glyph name="document" size={17}/>当前执行</h3>}
      {!hasInspectorTask(snapshot,target)&&!target.turnId&&(!target.followLatest||!(snapshot.messages?.length??0)&&!snapshot.ai?.cards.length)&&<p className="inspector-empty">本轮尚无执行记录。</p>}
-     {!goal&&<div ref={inspector.setHost} className="inspector-turn-host"/>}
+     {!canonical&&<div ref={inspector.setHost} className="inspector-turn-host"/>}
     </div>
    </div>
   </ObjectReferencesProvider>

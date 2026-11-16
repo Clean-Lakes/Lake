@@ -1,5 +1,5 @@
 import {createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
-import Markdown, {type Components} from 'react-markdown';
+import Markdown, {type Components,type ExtraProps} from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type {AICard, AgentRun, Resource, WorkspaceTag} from '../../shared/contracts';
 import {remarkAssistantProse} from './assistantProse';
@@ -11,6 +11,7 @@ import {Glyph, ResourceIcon} from './Icons';
 import {MarkdownCodeBlock} from './MarkdownCodeBlock';
 import {remarkReplyInfo} from './replyInfo';
 import {replyInfoComponents, ReplyInfoSpan} from './ReplyInfoElements';
+import {LiveTextMotionBoundary,LiveTextMotionText,remarkLiveTextMotion} from './liveTextMotion';
 
 const emptyCatalog = objectCatalog();
 const References = createContext<{catalog: ObjectCatalog; open?: (reference: ObjectReference) => void}>({catalog: emptyCatalog});
@@ -70,9 +71,17 @@ function InlineReference({reference}: {reference: ObjectReference}) {
   return inspectable ? <button type="button" className={className} data-object-kind={reference.kind} data-object-id={reference.key} title={reference.description} aria-label={`查看${reference.description}`} onClick={() => open(reference)}>{content}</button> : <span className={className} data-object-kind={reference.kind} title={reference.description}>{content}</span>;
 }
 
+const liveTextComponents={
+  'lake-live-text':function LiveTextSpan({node}:ExtraProps){
+    const start=node?.properties?.['data-live-text-start'];
+    return <LiveTextMotionText text={node?.children.map(child=>child.type==='text'?child.value:'').join('')??''} start={typeof start==='number'?start:0}/>;
+  },
+};
+
 // Keep renderer identity stable while streamed text and snapshots are updated.
 const components: Components = {
   ...replyInfoComponents,
+  ...liveTextComponents,
   pre: MarkdownCodeBlock,
   table: ({node, ...props}) => <div className="markdown-table-scroll"><table {...props}/></div>,
   span: function ReferenceSpan({node, children, ...props}) {
@@ -89,10 +98,12 @@ const components: Components = {
 
 const textImageComponents:Components={...components,img:({alt})=>alt?<span>{alt}</span>:null};
 
-export const AssistantMarkdown = memo(function AssistantMarkdown({children, tags = [], className = '', allowImages = true}: {children: string; tags?: readonly WorkspaceTag[]; className?: string; allowImages?: boolean}) {
+export const AssistantMarkdown = memo(function AssistantMarkdown({children, tags = [], className = '', allowImages = true,liveMotion}: {children: string; tags?: readonly WorkspaceTag[]; className?: string; allowImages?: boolean;liveMotion?:boolean}) {
   const {catalog} = useContext(References);
   const signature = conversationTagSignature(tags);
   const decorateTags = useMemo(() => remarkConversationTags(tags), [signature]);
   const decorateObjects = useMemo(() => remarkObjectReferences(catalog), [catalog]);
-  return <div className={`ai-markdown assistant-prose${className ? ` ${className}` : ''}`}><Markdown remarkPlugins={[remarkGfm, remarkAssistantProse, remarkReplyInfo, decorateTags, decorateObjects]} components={allowImages?components:textImageComponents} skipHtml>{children}</Markdown></div>;
+  const proseClass=`ai-markdown assistant-prose${className ? ` ${className}` : ''}`;
+  const prose=<Markdown remarkPlugins={[remarkGfm, remarkAssistantProse, remarkReplyInfo, decorateTags, decorateObjects,...(liveMotion===undefined?[]:[remarkLiveTextMotion])]} components={allowImages?components:textImageComponents} skipHtml>{children}</Markdown>;
+  return liveMotion===undefined?<div className={proseClass}>{prose}</div>:<LiveTextMotionBoundary active={liveMotion} className={proseClass}>{prose}</LiveTextMotionBoundary>;
 });

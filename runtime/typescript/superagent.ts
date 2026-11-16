@@ -3,7 +3,7 @@ import type {PilotConfiguration} from "./pilot-configuration";
 import {pilotConfigurationToolNames} from "./configuration-tool-names";
 import {workerDeliveries} from "./worker-deliveries";
 import {SpecialistConversations} from './specialist-conversations';
-import {confirmsDispatch,correctedSpecialistRequestKey,record,routingCall} from "../../web-agent/shared/route-dispatch";
+import {confirmsDispatch,correctedResourceSelectionRequestKey,correctedSpecialistRequestKey,record,routingCall} from "../../web-agent/shared/route-dispatch";
 import { projectTaskProgress } from "./task-progress";
 import { requestedInspectionRoot } from "../../web-agent/shared/command-policy";
 import {authorizeNetworkProbe, networkProbe} from "./network-probe";
@@ -573,15 +573,22 @@ export class LakeSuperagent implements AgentHost {
   private workerActivity(worker: Worker): SuperWorker["activity"] {
     const goal = this.ledger.get(worker.taskId);
     if (terminal(goal.status) || worker.state === "stopped") return;
-    if (worker.state === "queued" && (Date.parse(goal.deadlineAt) <= Date.now() ||
-      !this.dispatchReady(worker))) return;
+    if (worker.state === "queued" && Date.parse(goal.deadlineAt) <= Date.now()) return;
     const acceptedIds = new Set([...(worker.invocationInputIds ?? []), ...(worker.deliveredInputIds ?? [])]);
-    const source = [...worker.inputEventIds].reverse()
+    let source = [...worker.inputEventIds].reverse()
       .filter((id) => worker.state === "queued" || acceptedIds.has(id))
       .map((id) => this.store.get<InputEvent>("superInputs", id)).find((event) => event?.disposition === "routed");
+    // A committed assignment is already visible while Pilot finishes routing.
+    // Describe it as preparing; dispatchReady still gates all real execution.
+    if (!source && worker.state === 'queued') {
+      const pending = this.store.get<InputEvent>('superInputs', worker.sourceEventId), decision = this.sourceDecision(worker);
+      if (pending?.disposition === 'pending' && decision?.eventId === pending.id && this.decisionAssignments(decision).some(assignment =>
+        assignment.workerId === worker.id && assignment.sessionId === worker.sessionId && assignment.executionId === worker.taskId)) source = pending;
+    }
     if (!source) return;
+    if (worker.state === 'queued' && source.disposition !== 'pending' && !this.dispatchReady(worker)) return;
     const origin = { sourceMessageId: source?.messageId, sourceSessionId: source?.sessionId };
-    if (worker.state === "queued") return { phase: "queued", label: "等待开始", updatedAt: source?.receivedAt ?? worker.createdAt, ...origin };
+    if (worker.state === "queued") return { phase: "queued", label: source.disposition === 'pending' ? '准备处理' : '等待开始', updatedAt: source.receivedAt ?? worker.createdAt, ...origin };
     if (!this.active.has(worker.id) || !this.agents.isRunning(worker.sessionId)) return;
     const view = this.store.view(worker.sessionId), updatedAt = view.turnStartedAt ?? goal.updatedAt;
     if (this.ssh?.prompt(worker.sessionId)) return { phase: "waiting_approval", label: "等待确认服务器指纹", updatedAt, ...origin };
@@ -1274,9 +1281,9 @@ export class LakeSuperagent implements AgentHost {
     if (this.closed) return;
     for (const project of this.store.list<SuperProject>("superProjects")) if (!this.stoppingProjects.has(project.projectId)&&!this.routing.has(project.projectId) && !this.agents.isRunning(project.routerSessionId)) {
       const pending = this.store.list<InputEvent>("superInputs").filter((event) => event.projectId === project.projectId && event.disposition === "pending");
-      // An external reply is an exact message receipt. Never attribute one
-      // model response to several callers, threads or independent messages.
-      const events = pending[0]?.external?.connectionId ? pending.slice(0,1) : pending.filter(event=>!event.external?.connectionId).slice(0,16);
+      // Admit inputs immediately, then route each source in order. A later
+      // message cannot replace an active batch or share its reply identity.
+      const events = pending.slice(0,1);
       if (events.length) {
         this.routing.add(project.projectId);
         const external=events[0].external?.connectionId ? events[0] : undefined;
@@ -1328,7 +1335,7 @@ export class LakeSuperagent implements AgentHost {
           adapters: { ssh: !!this.ssh, extensions: !!this.extensions,mysql:!!this.mysql } });
         const { input, complete, eventIds } = context;
         this.batches.set(project.routerSessionId, { eventIds, complete, input });
-        try { await this.agents.send(project.routerSessionId, events.filter((event) => eventIds.includes(event.id)).map((event) => event.payload).join("\n"), { input, recordUser: false, ignoreMemory: events.some(event => event.ignoreMemory) }); }
+        try { await this.agents.send(project.routerSessionId, events.filter((event) => eventIds.includes(event.id)).map((event) => event.payload).join("\n"), { input, recordUser: false,sourceMessageIds:events.filter(event=>eventIds.includes(event.id)).map(event=>event.messageId), ignoreMemory: events.some(event => event.ignoreMemory) }); }
         catch (error) { this.routerFinished(project.routerSessionId, String(error)); }
       }
     }
@@ -1905,7 +1912,7 @@ export class LakeSuperagent implements AgentHost {
             const available=a.action==='create'||a.model_id!==undefined||a.execution!==undefined?await this.refreshedExecutionOptions(projectId):undefined;
             context.abortSignal.throwIfAborted();return this.manage(sessionId,a,available);
           }),
-      this.entry("route_work", "Commit one exact admitted event part. Copy role_id verbatim from the current specialists catalog or list_specialists; never reconstruct IDs. If specialist_not_found, refresh the catalog and correct the same event/part, without changing its deliverable or scope. For an event selecting multiple resources, create must set resource_ids to its exact subset of selected IDs. Independent per-resource tasks may quote the same request if subsets are disjoint; for a single comparison include both IDs. Create requires title, quote and one recipient selector: role_id, new role_key, or role_ids for one shared task. Specify role_instructions for each contributor. Omit task_id for create; for assign supply the existing public task_id and additional roles. Followup, context_only and stop target the exact task and recipient role_id, using the public ID for a shared task. Use predecessor_task_id to link an earlier task. A finished source supplies historical context, including any partial findings. An unfinished ordinary source creates an independent read-only recheck for the same specialist, original explicit resource scope and deadline; it preserves original records and cannot replay original operation IDs. Invalid-memory followup uses the same safe recheck path. Inspect assignments in the receipt for the exact recipients. ask/respond omit task_id.",
+      this.entry("route_work", "Commit one exact admitted event part. Copy role_id verbatim from the current specialists catalog or list_specialists; never reconstruct IDs. If specialist_not_found, refresh the catalog and correct the same event/part, without changing its deliverable or scope. resource_ids may contain only IDs explicitly selected on this exact admitted event in selectedReferences.resourceIds. If that list is absent or empty, omit resource_ids entirely, including for a fresh check; never copy it from predecessor tasks, prior messages, resource metadata or memory. Use predecessor_task_id for historical target context, not as a new selection or permission. For an event selecting multiple resources, create must set resource_ids to its exact subset of selected IDs. Independent per-resource tasks may quote the same request if subsets are disjoint; for a single comparison include both IDs. Create requires title, quote and one recipient selector: role_id, new role_key, or role_ids for one shared task. Specify role_instructions for each contributor. Omit task_id for create; for assign supply the existing public task_id and additional roles. Followup, context_only and stop target the exact task and recipient role_id, using the public ID for a shared task. Use predecessor_task_id to link an earlier task. A finished source supplies historical context, including any partial findings. An unfinished ordinary source creates an independent read-only recheck for the same specialist, original explicit resource scope and deadline; it preserves original records and cannot replay original operation IDs. Invalid-memory followup uses the same safe recheck path. Inspect assignments in the receipt for the exact recipients. ask/respond omit task_id.",
         objectSchema({ event_id: str, part_key: str, action: { type: "string", enum: ["create", "assign", "followup", "context_only", "stop", "ask", "respond"] },
           task_id: str, predecessor_task_id: str, title: str, role_id: str, role_key: str, role_ids: array(str), resource_ids:array(str),
           role_instructions: array(objectSchema({role_id: str, instruction: str}, ["role_id", "instruction"])), quote: str, reason: str, evidence_task_ids: array(str) }, ["event_id", "part_key", "action", "reason"]), async (a,context) => {
@@ -2230,31 +2237,53 @@ export class LakeSuperagent implements AgentHost {
     return goal;
   }
   /** Snapshot annotation only: never rewrite SDK cards, decisions or acceptance.
-   * A recipient correction needs an absent exact ID and the durable successful
-   * decision for an otherwise identical request in the same SDK root. */
+   * Corrections need the exact durable handoff, not a successful-looking report. */
   routingView(sessionId:string,view:NonNullable<SessionSnapshot['ai']>) {
     const session=this.store.session(sessionId);
     if(session.workspaceRole!=="router")return view;
-    const cards=view.cards, later=new Map<string,typeof cards[number]>(), recovered=new Map<string,string>();
+    const cards=view.cards, laterRoles=new Map<string,typeof cards[number]>(), laterSelections=new Map<string,typeof cards[number]>();
+    const recovered=new Map<string,{kind:"corrected_missing_specialist"|"corrected_resource_selection";recoveredBy:string}>();
     for(let index=cards.length-1;index>=0;index--){
-      const card=cards[index]!, call=routingCall(card), key=correctedSpecialistRequestKey(card);
-      if(!call||!key)continue;
+      const card=cards[index]!,call=routingCall(card),roleKey=correctedSpecialistRequestKey(card),selectionKey=correctedResourceSelectionRequestKey(card);
+      if(!call||!roleKey&&!selectionKey)continue;
       const args=record(record(card.data)?.arguments)!;
       if(["completed","succeeded","success"].includes(card.status)&&confirmsDispatch(card,call)){
-        const receipt=record(card.content)!, decision=this.store.get<Decision>("superDecisions",digest([call.eventId,call.partKey]));
-        const event=this.store.get<InputEvent>("superInputs",call.eventId);
-        const role=this.store.get<Role>("superRoles",String(args.role_id));
+        const receipt=record(card.content)!,decision=this.store.get<Decision>("superDecisions",digest([call.eventId,call.partKey]));
+        const event=this.store.get<InputEvent>("superInputs",call.eventId),role=this.store.get<Role>("superRoles",String(args.role_id));
         if(event?.projectId!==session.projectId||!role||role.projectId!==event.projectId||
           !decision||decision.projectId!==event.projectId||decision.hash!==digest(args)||receipt.id!==decision.id||receipt.taskId!==decision.taskId)continue;
         const members=this.decisionAssignments(decision),actual=Array.isArray(receipt.assignments)?receipt.assignments.map(record):[receipt];
         if(members.length!==1||actual.length!==1||!actual[0]||["roleId","workerId","sessionId"].some(field=>actual[0]![field]!==members[0]![field as keyof Assignment]))continue;
-        later.set(key,card);
-      }else if(card.status==="failed"&&later.has(key)&&!this.store.get<Role>("superRoles",String(args.role_id))&&
-        (card.content?.trim()==="记录不存在"||card.content?.includes('"code":"specialist_not_found"'))){
-        recovered.set(card.id,later.get(key)!.id);
+        if(roleKey)laterRoles.set(roleKey,card);
+        if(selectionKey&&!Object.hasOwn(args,"resource_ids")&&!event.selectedReferences?.resourceIds.length){
+          const member=members[0]!,goal=this.store.get<Goal>("superGoals",member.executionId),worker=this.store.get<Worker>("superWorkers",member.workerId);
+          const predecessor=this.store.get<TaskPredecessor>("superTaskPredecessors",member.executionId);
+          const source=predecessor&&this.store.get<Goal>("superGoals",predecessor.taskRef.id);
+          // Only a same-specialist fresh check with the frozen historical target
+          // can recover a copied selection. No original selection is removed.
+          if(decision.action==="create"&&member.executionId===decision.taskId&&actual[0].executionId===member.executionId&&
+            goal?.projectId===event.projectId&&goal.sourceEventId===event.id&&goal.workerId===member.workerId&&goal.roleId===role.id&&goal.sessionId===member.sessionId&&
+            worker?.projectId===event.projectId&&worker.sourceEventId===event.id&&worker.taskId===goal.id&&worker.roleId===role.id&&worker.sessionId===member.sessionId&&
+            predecessor?.historicalContextOnly===true&&predecessor.taskRef.id===args.predecessor_task_id&&predecessor.roleId===role.id&&
+            source?.projectId===event.projectId&&source.roleId===role.id&&source.status==="completed"&&source.sourceEventId!==event.id)
+            laterSelections.set(selectionKey,card);
+        }
+      }else if(card.status==="failed"){
+        const recipient=roleKey&&laterRoles.get(roleKey);
+        if(recipient&&!this.store.get<Role>("superRoles",String(args.role_id))&&
+          (card.content?.trim()==="记录不存在"||card.content?.includes('"code":"specialist_not_found"')))
+          recovered.set(card.id,{kind:"corrected_missing_specialist",recoveredBy:recipient.id});
+        const selection=selectionKey&&laterSelections.get(selectionKey),ids=args.resource_ids;
+        if(selection&&card.content?.trim()==="resource_ids must be a nonempty subset of this human event's selected resource IDs"&&
+          Array.isArray(ids)&&ids.length>0&&ids.length<=32&&ids.every(value=>typeof value==="string"&&!!value.trim())&&new Set(ids).size===ids.length){
+          const receipt=record(selection.content)!,predecessor=this.store.get<TaskPredecessor>("superTaskPredecessors",String(receipt.taskId));
+          if(predecessor?.resourceIds.length===ids.length&&ids.every(resourceId=>predecessor.resourceIds.includes(resourceId)&&
+            this.store.get<{projectId:string}>("resources",resourceId)?.projectId===session.projectId))
+            recovered.set(card.id,{kind:"corrected_resource_selection",recoveredBy:selection.id});
+        }
       }
     }
-    return {...view,cards:cards.map(card=>recovered.has(card.id)?{...card,data:{...record(card.data),routingRecovery:{kind:"corrected_missing_specialist",recoveredBy:recovered.get(card.id)}}}:card)};
+    return {...view,cards:cards.map(card=>recovered.has(card.id)?{...card,data:{...record(card.data),routingRecovery:recovered.get(card.id)}}:card)};
   }
   /** Enrich old report display from its frozen Worker, without rewriting history. */
   private reportMessage(original:Message):Message {

@@ -235,3 +235,38 @@ test('unchanged recipients cannot recover changed scope, instructions, deliverab
   assert.equal(recoveredRouteFailures([failed,{...success,data:{...(success.data as any),arguments:{...(success.data as any).arguments,...change}}}]).size,0);
  assert.equal(recoveredRouteFailures([failed,bound(success,'other-root')]).size,0);
 });
+
+test('a host-confirmed stale resource selection retry is recovered without rewriting the original failure',()=>{
+ const args={event_id:'event',part_key:'host',action:'create',role_id:'ops',predecessor_task_id:'previous',title:'复查主机',quote:'再查一下'};
+ const failed=bound({...route('stale-selection','failed',1),content:"resource_ids must be a nonempty subset of this human event's selected resource IDs",data:{arguments:{...args,resource_ids:['host'],reason:'复查同一目标'},routingRecovery:{kind:'corrected_resource_selection',recoveredBy:'corrected'}}});
+ const success=bound({...route('corrected','completed',2),data:{arguments:{...args,reason:'按前次上下文复查'}},content:JSON.stringify({...receipt(),roleId:'ops',handoff:{recorded:true}})});
+ const original=JSON.stringify([failed,success]);
+ assert.deepEqual([...recoveredRouteFailures([failed,success])],['stale-selection']);
+ assert.deepEqual(notices(render([failed,success])),[' · 1 项派单重试后已恢复']);
+ const detail=renderToStaticMarkup(createElement(RoutingRecoveryContext.Provider,{value:recoveredRouteFailures([failed,success])},createElement(ToolStep,{card:failed})));
+ assert.ok(detail.includes('首次失败 · 重试后已恢复')&&detail.includes('step-recovered'));
+ const live=renderToStaticMarkup(createElement(TurnExecutionDetails,{cards:[failed,success],view:{session:'pilot',status:'running',cards:[failed,success],turnStartedAt:at(0)} as SessionSnapshot['ai'],latestUserAt:at(0),details:[]}));
+ assert.ok(!live.includes('turn-current-step'),'recovered coordination cannot remain a failed execution operation');
+ assert.equal(JSON.stringify([failed,success]),original);
+});
+
+test('resource correction cannot borrow recovery across roots, users, targets, scope or an unconfirmed handoff',()=>{
+ const args={event_id:'event',part_key:'host',action:'create',role_id:'ops',predecessor_task_id:'previous',title:'复查主机',quote:'再查一下'};
+ const failed=bound({...route('failed','failed',1),data:{arguments:{...args,resource_ids:['host']},routingRecovery:{kind:'corrected_resource_selection',recoveredBy:'success'}}});
+ const success=bound({...route('success','completed',2),data:{arguments:args},content:JSON.stringify({...receipt(),roleId:'ops',handoff:{recorded:true}})});
+ const noRecovery=(first:AICard,second=success)=>assert.equal(recoveredRouteFailures([first,second]).size,0);
+ for(const proof of [undefined,{kind:'corrected_resource_selection',recoveredBy:'absent'},{kind:'corrected_missing_specialist',recoveredBy:'success'}])
+  noRecovery({...failed,data:{...failed.data as object,routingRecovery:proof}});
+ for(const resources of [[],[''],['host','host'],['host',3],'host'])
+  noRecovery({...failed,data:{...failed.data as object,arguments:{...args,resource_ids:resources}}});
+ for(const change of [{event_id:'other'},{part_key:'other'},{role_id:'other'},{predecessor_task_id:'other'},{title:'other'},{quote:'other'},{action:'followup'},
+  {resource_ids:['other']},{resource_ids:[]},{resource_ids:null},{role_ids:['ops']},{role_instructions:[{role_id:'ops',instruction:'other'}]}])
+  noRecovery(failed,{...success,data:{...success.data as object,arguments:{...args,...change}}});
+ noRecovery(failed,bound(success,'other-root'));
+ noRecovery(failed,{...success,status:'running'});
+ noRecovery(failed,{...success,content:JSON.stringify({...receipt(),roleId:'other'})});
+ noRecovery(failed,{...success,content:JSON.stringify({...receipt(),roleId:'ops',dispatch:{state:'needs_input'},handoff:{recorded:true}})});
+ assert.equal(recoveredRouteFailures([success,failed]).size,0);
+ assert.deepEqual(notices(render([failed,{...success,at:at(4)}],true)),[' · 1 项失败']);
+ assert.deepEqual(notices(render([failed,success,{...route('host-failure','failed',3),title:'inspect_host'}])),[' · 1 项派单重试后已恢复 · 1 项失败']);
+});

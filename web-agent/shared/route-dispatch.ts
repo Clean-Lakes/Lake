@@ -60,6 +60,16 @@ export function correctedSpecialistRequestKey(card:AICard):string|undefined {
  return JSON.stringify([root,stable(request)]);
 }
 
+/** A fresh check may correct stale resource selection only with host proof.
+ * Preserve the exact predecessor, recipient, user quote, deliverable and root. */
+export function correctedResourceSelectionRequestKey(card:AICard):string|undefined {
+ const call=routingCall(card),args=record(record(card.data)?.arguments),root=record(card.data)?.root_turn_id;
+ if(!call||call.action!=='create'||!args||!nonempty(root)||!nonempty(args.role_id)||!nonempty(args.predecessor_task_id)||
+  ['role_ids','role_key','role_instructions'].some(key=>args[key]!=null))return;
+ const {resource_ids:_resources,reason:_reason,...request}=args;
+ return JSON.stringify([root,stable(request)]);
+}
+
 /** Presentation only; cards remain immutable. Corrected recipients additionally
  * require a host-verified annotation and the exact later dispatch receipt. */
 export function recoveredRouteFailures(cards:readonly AICard[]):Set<string> {
@@ -75,6 +85,12 @@ export function recoveredRouteFailures(cards:readonly AICard[]):Set<string> {
     const proof=record(record(card.data)?.routingRecovery),success=typeof proof?.recoveredBy==='string'?later.get(proof.recoveredBy):undefined;
     const key=correctedSpecialistRequestKey(card);
     if(proof?.kind==='corrected_missing_specialist'&&success&&key&&key===correctedSpecialistRequestKey(success))recovered.add(card.id);
+    if(proof?.kind==='corrected_resource_selection'&&success){
+     const args=record(record(card.data)?.arguments),next=record(record(success.data)?.arguments),resources=args?.resource_ids;
+     const resourceKey=correctedResourceSelectionRequestKey(card);
+     if(Array.isArray(resources)&&resources.length>0&&resources.every(nonempty)&&new Set(resources).size===resources.length&&
+      next&&!Object.hasOwn(next,'resource_ids')&&resourceKey&&resourceKey===correctedResourceSelectionRequestKey(success))recovered.add(card.id);
+    }
    }
   }
  }

@@ -1,0 +1,257 @@
+[
+  {
+    "scenario": {
+      "width": 1440,
+      "height": 1000,
+      "theme": "light"
+    },
+    "before": {
+      "accepted": [
+        {
+          "id": "continuous-a",
+          "text": "A：请核对本地样例。"
+        }
+      ],
+      "payloads": [],
+      "stopCalls": 0,
+      "stage": "A",
+      "originalTurnRetained": true,
+      "originalBodyRetained": true,
+      "inputRetained": true,
+      "originalReplyCount": 1,
+      "queueCopies": 1,
+      "overflow": false
+    },
+    "afterB": {
+      "accepted": [
+        {
+          "id": "continuous-a",
+          "text": "A：请核对本地样例。"
+        },
+        {
+          "id": "continuous-b",
+          "text": "B：同一专员做新任务，原任务继续。"
+        }
+      ],
+      "payloads": [
+        {
+          "text": "B：同一专员做新任务，原任务继续。",
+          "mentions": []
+        }
+      ],
+      "stopCalls": 0,
+      "stage": "A",
+      "originalTurnRetained": true,
+      "originalBodyRetained": true,
+      "inputRetained": true,
+      "originalReplyCount": 1,
+      "queueCopies": 1,
+      "overflow": false
+    },
+    "afterC": {
+      "accepted": [
+        {
+          "id": "continuous-a",
+          "text": "A：请核对本地样例。"
+        },
+        {
+          "id": "continuous-b",
+          "text": "B：同一专员做新任务，原任务继续。"
+        },
+        {
+          "id": "continuous-c",
+          "text": "C：给 A 补充日志，再安排两位专员的新任务。"
+        }
+      ],
+      "payloads": [
+        {
+          "text": "B：同一专员做新任务，原任务继续。",
+          "mentions": []
+        },
+        {
+          "text": "C：给 A 补充日志，再安排两位专员的新任务。",
+          "mentions": []
+        }
+      ],
+      "stopCalls": 0,
+      "stage": "B",
+      "originalTurnRetained": true,
+      "originalBodyRetained": true,
+      "inputRetained": true,
+      "originalReplyCount": 1,
+      "queueCopies": 1,
+      "overflow": false
+    },
+    "screenshot": "browser-light.png"
+  },
+  {
+    "scenario": {
+      "width": 1100,
+      "height": 700,
+      "theme": "dark"
+    },
+    "before": {
+      "accepted": [
+        {
+          "id": "continuous-a",
+          "text": "A：请核对本地样例。"
+        }
+      ],
+      "payloads": [],
+      "stopCalls": 0,
+      "stage": "A",
+      "originalTurnRetained": true,
+      "originalBodyRetained": true,
+      "inputRetained": true,
+      "originalReplyCount": 1,
+      "queueCopies": 1,
+      "overflow": false
+    },
+    "afterB": {
+      "accepted": [
+        {
+          "id": "continuous-a",
+          "text": "A：请核对本地样例。"
+        },
+        {
+          "id": "continuous-b",
+          "text": "B：同一专员做新任务，原任务继续。"
+        }
+      ],
+      "payloads": [
+        {
+          "text": "B：同一专员做新任务，原任务继续。",
+          "mentions": []
+        }
+      ],
+      "stopCalls": 0,
+      "stage": "A",
+      "originalTurnRetained": true,
+      "originalBodyRetained": true,
+      "inputRetained": true,
+      "originalReplyCount": 1,
+      "queueCopies": 1,
+      "overflow": false
+    },
+    "afterC": {
+      "accepted": [
+        {
+          "id": "continuous-a",
+          "text": "A：请核对本地样例。"
+        },
+        {
+          "id": "continuous-b",
+          "text": "B：同一专员做新任务，原任务继续。"
+        },
+        {
+          "id": "continuous-c",
+          "text": "C：给 A 补充日志，再安排两位专员的新任务。"
+        }
+      ],
+      "payloads": [
+        {
+          "text": "B：同一专员做新任务，原任务继续。",
+          "mentions": []
+        },
+        {
+          "text": "C：给 A 补充日志，再安排两位专员的新任务。",
+          "mentions": []
+        }
+      ],
+      "stopCalls": 0,
+      "stage": "B",
+      "originalTurnRetained": true,
+      "originalBodyRetained": true,
+      "inputRetained": true,
+      "originalReplyCount": 1,
+      "queueCopies": 1,
+      "overflow": false
+    },
+    "screenshot": "browser-dark.png"
+  },
+  {
+    "scenario": {
+      "width": 390,
+      "height": 844,
+      "theme": "dark"
+    },
+    "before": {
+      "accepted": [
+        {
+          "id": "continuous-a",
+          "text": "A：请核对本地样例。"
+        }
+      ],
+      "payloads": [],
+      "stopCalls": 0,
+      "stage": "A",
+      "originalTurnRetained": true,
+      "originalBodyRetained": true,
+      "inputRetained": true,
+      "originalReplyCount": 1,
+      "queueCopies": 1,
+      "overflow": false
+    },
+    "afterB": {
+      "accepted": [
+        {
+          "id": "continuous-a",
+          "text": "A：请核对本地样例。"
+        },
+        {
+          "id": "continuous-b",
+          "text": "B：同一专员做新任务，原任务继续。"
+        }
+      ],
+      "payloads": [
+        {
+          "text": "B：同一专员做新任务，原任务继续。",
+          "mentions": []
+        }
+      ],
+      "stopCalls": 0,
+      "stage": "A",
+      "originalTurnRetained": true,
+      "originalBodyRetained": true,
+      "inputRetained": true,
+      "originalReplyCount": 1,
+      "queueCopies": 1,
+      "overflow": false
+    },
+    "afterC": {
+      "accepted": [
+        {
+          "id": "continuous-a",
+          "text": "A：请核对本地样例。"
+        },
+        {
+          "id": "continuous-b",
+          "text": "B：同一专员做新任务，原任务继续。"
+        },
+        {
+          "id": "continuous-c",
+          "text": "C：给 A 补充日志，再安排两位专员的新任务。"
+        }
+      ],
+      "payloads": [
+        {
+          "text": "B：同一专员做新任务，原任务继续。",
+          "mentions": []
+        },
+        {
+          "text": "C：给 A 补充日志，再安排两位专员的新任务。",
+          "mentions": []
+        }
+      ],
+      "stopCalls": 0,
+      "stage": "B",
+      "originalTurnRetained": true,
+      "originalBodyRetained": true,
+      "inputRetained": true,
+      "originalReplyCount": 1,
+      "queueCopies": 1,
+      "overflow": false
+    },
+    "screenshot": "browser-narrow.png"
+  }
+]

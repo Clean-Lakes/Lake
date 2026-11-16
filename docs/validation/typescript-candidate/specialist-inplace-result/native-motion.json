@@ -1,0 +1,124 @@
+{
+  "source_manifest": "Local CUA sequence: 77 original PNGs; representative frames 000/040 included as native-second-progress-a/b.png",
+  "frame_count": 77,
+  "duration_ms": 4985,
+  "screenshot_size_px": [
+    2416,
+    1604
+  ],
+  "method": "Lossless PNG RGB comparisons, >2/255 channel-range threshold; per-glyph vertical centroid weighted by max(245-mean(RGB),0). Coordinates manually calibrated on frames 000 and 040. Originals unmodified.",
+  "regions": {
+    "tail": {
+      "bounds_xyxy": [
+        780,
+        735,
+        2300,
+        870
+      ],
+      "unique_frames": 41,
+      "pixels_with_channel_range_gt2": 18819,
+      "changed_adjacent_pairs": 44,
+      "max_changed_pixels_per_pair": 2519,
+      "variation_bounds_xyxy": [
+        784,
+        744,
+        1928,
+        864
+      ]
+    },
+    "static_paragraph": {
+      "bounds_xyxy": [
+        780,
+        510,
+        2200,
+        650
+      ],
+      "unique_frames": 1,
+      "pixels_with_channel_range_gt2": 0,
+      "changed_adjacent_pairs": 0,
+      "max_changed_pixels_per_pair": 0,
+      "variation_bounds_xyxy": null
+    },
+    "body_before_tail": {
+      "bounds_xyxy": [
+        780,
+        425,
+        2300,
+        735
+      ],
+      "unique_frames": 1,
+      "pixels_with_channel_range_gt2": 0,
+      "changed_adjacent_pairs": 0,
+      "max_changed_pixels_per_pair": 0,
+      "variation_bounds_xyxy": null
+    }
+  },
+  "tail_text": "遮挡名称、任务入口或者其他专员的回复。当前模型响",
+  "readable_graphemes": 24,
+  "all_24_graphemes_move": true,
+  "vertical_centroid_range_px_min_max": [
+    1.9898,
+    2.0065
+  ],
+  "conclusion": "The 24-glyph tail moves vertically by approximately 2 physical pixels while all pixels in the preceding body regions remain unchanged. Pixel quantization produces repeated adjacent screenshots; 44/76 tail pairs change.",
+  "limits": "This sequence measures ongoing prose motion only; it is not evidence of a 160ms report replacement transition.",
+  "per_glyph_motion": {
+    "order": "Matches tail_text, one entry per readable grapheme",
+    "vertical_centroid_range_px": [
+      1.9973,
+      2.0065,
+      2.0002,
+      2.0063,
+      1.9994,
+      2.0022,
+      2.0059,
+      1.9933,
+      2.0033,
+      2.0036,
+      1.9968,
+      2.0045,
+      2.0032,
+      1.9898,
+      2.0028,
+      1.9971,
+      1.9989,
+      2.0062,
+      2.0027,
+      2.0012,
+      1.9981,
+      2.0007,
+      2.0017,
+      2.0059
+    ],
+    "changed_adjacent_pairs": [
+      4,
+      4,
+      8,
+      10,
+      6,
+      8,
+      9,
+      9,
+      10,
+      8,
+      12,
+      8,
+      4,
+      8,
+      8,
+      4,
+      10,
+      10,
+      10,
+      4,
+      8,
+      8,
+      4,
+      4
+    ]
+  },
+  "representative_images": [
+    "native-second-progress-a.png",
+    "native-second-progress-b.png"
+  ]
+}

@@ -44,11 +44,19 @@ async function handle(message){
     if(mode.includes('prose'))report='我宣称完成了检查，但没有调用任何实际资源工具。';
     else{const writing=mode.includes('write');const output=await invoke(writing?'Write':'Read',{file_path:writing?'child-output.txt':'child-evidence-a.txt',...(writing?{content:'actual child write receipt'}:{})});report='子智能体实际工具回执：'+JSON.stringify(output);}
    }else{
+    if(mode.startsWith('super-acp-public-text')){
+     const itemId=mode.endsWith('legacy')?'fixture-legacy':'fixture-progress';
+     notify('item/agentMessage/delta',{itemId,delta:'先读取项目。'});
+     notify('item/agentMessage/delta',{itemId,delta:'继续核对。'});
+    }
     if(mode==='super-acp-worker-child')await invoke('Agent',{description:'读取独立任务证据',prompt:'读取 child-evidence-a.txt 并报告实际内容。',subagent_type:'codex-acp',run_in_background:false});
     else await invoke('list_project_files',{path:'.'});
-    report='已由独立 ACP Worker 读取实际项目文件。';await invoke('work_finish',{summary:report,outcome:'completed'});
+    report='已由独立 ACP Worker 读取实际项目文件。';if(mode!=='super-acp-public-text-unreported')await invoke('work_finish',{summary:report,outcome:'completed'});
    }
-    if(!cancelled)finish(report);return;
+    if(!cancelled){
+     const legacy=mode.endsWith('legacy'),empty=['super-acp-public-text-empty','super-acp-public-text-unreported'].includes(mode);
+     finish(empty?'':report,legacy?'fixture-legacy':'fixture-final',legacy?'先读取项目。继续核对。':'');
+    }return;
    }
    if(!cancelled)finish(report);return;
   }else if(message.method==='turn/interrupt'){
@@ -58,8 +66,8 @@ async function handle(message){
   if(message.id!==undefined)send({id:message.id,result});
  }catch(error){if(message.id!==undefined)send({id:message.id,error:{code:-32603,message:error.message}});}
 }
-function finish(text){
- const item={id:randomUUID(),type:'agentMessage',text};
+function finish(text,id=randomUUID(),prefix=''){
+ const item={id,type:'agentMessage',text:prefix+text};
  notify('item/agentMessage/delta',{itemId:item.id,delta:text});
  notify('item/completed',{item});
  notify('turn/completed',{turn:{id:turnId,status:'completed',items:[item]}});

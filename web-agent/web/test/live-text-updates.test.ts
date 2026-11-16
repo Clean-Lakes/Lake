@@ -55,3 +55,17 @@ test('completion wins over queued live frames and final authoritative replacemen
  assert.equal(applyLiveText(final,event(card('旧部分'),12)),final);
  assert.equal(final.ai!.cards.at(-1)!.content,'最终正文');
 });
+
+
+test('ACP segment prefixes replace public prose without replacing audit content or history nodes',()=>{
+ const before=snapshot();before.ai!.cards.push({id:'acp',type:'operation',status:'running',at:'now',content:'过程',data:{source:'external_agent',external_run_id:'acp',root_turn_id:'turn',external_reply:{id:'first',content:'过程'}}});
+ const prefix={target:'card' as const,id:'acp',cardType:'operation',content:'过程结论',rootTurnId:'turn',externalReply:{id:'final',content:'结论'}};
+ const next=applyLiveText(before,event(prefix))!;
+ assert.equal(next.ai!.cards.at(-1)!.content,'过程结论','original cumulative audit remains available');
+ assert.deepEqual((next.ai!.cards.at(-1)!.data as any).external_reply,{id:'final',content:'结论'});
+ assert.equal(next.messages,before.messages);assert.equal(next.ai!.cards[0],before.ai!.cards[0]);
+ const appended=applyLiveText(next,event({...prefix,content:'过程结论完整',externalReply:{id:'final',content:'结论完整'}},12))!;
+ assert.equal((appended.ai!.cards.at(-1)!.data as any).external_reply.content,'结论完整');
+ assert.equal(applyLiveText(before,event({...prefix,rootTurnId:'other'})),null);
+ assert.equal(applyLiveText(before,event({...card('x'),externalReply:prefix.externalReply})),null,'unrelated message SSE cannot acquire ACP ownership');
+});

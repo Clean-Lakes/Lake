@@ -1,4 +1,13 @@
 import type {MessageQueue,SessionSnapshot} from "../../shared/contracts";
+
+/** Pilot admits each human message while its Router or Workers are occupied. */
+export function continuousPilotInput(snapshot:SessionSnapshot|null|undefined,backendRuntime?:string){
+ return backendRuntime==='typescript'&&snapshot?.session.workspaceRole==='router';
+}
+export function queuesComposerMessage(snapshot:SessionSnapshot|null|undefined,backendRuntime:string|undefined,active:boolean){
+ return !continuousPilotInput(snapshot,backendRuntime)&&snapshot?.session.workspaceRole!=='worker'&&snapshot?.session.workspaceRole!=='role'&&
+  (active||(snapshot?.messageQueue?.items.length??0)>0);
+}
 /** Moves an item to an absolute queue position, preserving all other relative order. */
 export function reorderQueuedMessages(ids: string[], id: string, position: number): string[] {
   if (!ids.includes(id) || !Number.isInteger(position) || position < 0 || position >= ids.length) return ids;

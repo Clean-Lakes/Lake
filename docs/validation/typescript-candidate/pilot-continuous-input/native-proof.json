@@ -1,0 +1,668 @@
+{
+  "build": {
+    "gitHead": "5395e43fdde0579b46428a97f58b6b82f9f7e994",
+    "gitBranch": "codex/specialist-live-text-motion",
+    "version": "0.3.33",
+    "dirty": false,
+    "backendRuntime": "typescript"
+  },
+  "afterB": {
+    "workers": [
+      {
+        "id": "worker_15b5bfbaa0d3b3708c5284c10a429211",
+        "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+        "roleName": "水獭核对专员",
+        "sessionId": "sw_15b5bfbaa0d3b3708c5284c10a429211",
+        "assignmentState": "active",
+        "task": {
+          "taskId": "st_15b5bfbaa0d3b3708c5284c10a429211",
+          "sessionId": "sw_15b5bfbaa0d3b3708c5284c10a429211",
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "title": "独立样例 A [PILOT_CONTINUOUS:A]",
+          "state": "running",
+          "acceptanceState": "not_evaluated",
+          "revision": 2,
+          "originRootTurnId": "super_15b5bfbaa0d3b3708c5284c10a429211",
+          "deadlineAt": "2026-11-17T07:37:28.538Z",
+          "updatedAt": "2026-11-16T07:37:28.593Z"
+        }
+      },
+      {
+        "id": "worker_bbab909693e44b836e55f1eeb43c16d8",
+        "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+        "roleName": "水獭核对专员",
+        "sessionId": "sw_bbab909693e44b836e55f1eeb43c16d8",
+        "assignmentState": "active",
+        "task": {
+          "taskId": "st_bbab909693e44b836e55f1eeb43c16d8",
+          "sessionId": "sw_bbab909693e44b836e55f1eeb43c16d8",
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "title": "独立样例 B [PILOT_CONTINUOUS:B]",
+          "state": "running",
+          "acceptanceState": "not_evaluated",
+          "revision": 2,
+          "originRootTurnId": "super_bbab909693e44b836e55f1eeb43c16d8",
+          "deadlineAt": "2026-11-17T07:38:17.104Z",
+          "updatedAt": "2026-11-16T07:38:17.172Z"
+        }
+      }
+    ],
+    "held": 2,
+    "requests": [
+      {
+        "kind": "router",
+        "eventId": "743ae98f-6e96-49e0-b1cc-2084e21745dd",
+        "text": "创建水獭核对专员和猫头鹰资料专员，使用 Lake 原生 Agent，仅处理本地虚构样例，不连接业务资源。[PILOT_CONTINUOUS:setup]",
+        "tag": "setup"
+      },
+      {
+        "kind": "router",
+        "eventId": "4d12a3cc-1ff6-459a-b7bd-78abae2275ee",
+        "text": "请水獭核对专员处理样例 A，保留进展等待补充。[PILOT_CONTINUOUS:A]",
+        "tag": "A"
+      },
+      {
+        "kind": "worker",
+        "tag": "A",
+        "assignment": {
+          "executionId": "st_15b5bfbaa0d3b3708c5284c10a429211",
+          "joint": false,
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+          "roleRevision": 1,
+          "sessionId": "sw_15b5bfbaa0d3b3708c5284c10a429211",
+          "taskId": "st_15b5bfbaa0d3b3708c5284c10a429211",
+          "workerId": "worker_15b5bfbaa0d3b3708c5284c10a429211"
+        },
+        "followups": []
+      },
+      {
+        "kind": "router",
+        "eventId": "2c287555-1032-48e0-b6cf-25e4d256f0b3",
+        "text": "让同一位水獭核对专员另做独立样例 B，原任务 A 继续。[PILOT_CONTINUOUS:B]",
+        "tag": "B"
+      },
+      {
+        "kind": "worker",
+        "tag": "B",
+        "assignment": {
+          "executionId": "st_bbab909693e44b836e55f1eeb43c16d8",
+          "joint": false,
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+          "roleRevision": 1,
+          "sessionId": "sw_bbab909693e44b836e55f1eeb43c16d8",
+          "taskId": "st_bbab909693e44b836e55f1eeb43c16d8",
+          "workerId": "worker_bbab909693e44b836e55f1eeb43c16d8"
+        },
+        "followups": []
+      }
+    ]
+  },
+  "afterC": {
+    "workers": [
+      {
+        "id": "worker_15b5bfbaa0d3b3708c5284c10a429211",
+        "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+        "roleName": "水獭核对专员",
+        "sessionId": "sw_15b5bfbaa0d3b3708c5284c10a429211",
+        "assignmentState": "active",
+        "task": {
+          "taskId": "st_15b5bfbaa0d3b3708c5284c10a429211",
+          "sessionId": "sw_15b5bfbaa0d3b3708c5284c10a429211",
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "title": "独立样例 A [PILOT_CONTINUOUS:A]",
+          "state": "running",
+          "acceptanceState": "not_evaluated",
+          "revision": 2,
+          "originRootTurnId": "super_15b5bfbaa0d3b3708c5284c10a429211",
+          "deadlineAt": "2026-11-17T07:37:28.538Z",
+          "updatedAt": "2026-11-16T07:37:28.593Z"
+        }
+      },
+      {
+        "id": "worker_bbab909693e44b836e55f1eeb43c16d8",
+        "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+        "roleName": "水獭核对专员",
+        "sessionId": "sw_bbab909693e44b836e55f1eeb43c16d8",
+        "assignmentState": "active",
+        "task": {
+          "taskId": "st_bbab909693e44b836e55f1eeb43c16d8",
+          "sessionId": "sw_bbab909693e44b836e55f1eeb43c16d8",
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "title": "独立样例 B [PILOT_CONTINUOUS:B]",
+          "state": "running",
+          "acceptanceState": "not_evaluated",
+          "revision": 2,
+          "originRootTurnId": "super_bbab909693e44b836e55f1eeb43c16d8",
+          "deadlineAt": "2026-11-17T07:38:17.104Z",
+          "updatedAt": "2026-11-16T07:38:17.172Z"
+        }
+      },
+      {
+        "id": "worker_46c1bba174e942030579f5e82519a9ff",
+        "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+        "roleName": "水獭核对专员",
+        "sessionId": "sw_46c1bba174e942030579f5e82519a9ff",
+        "assignmentState": "queued",
+        "task": {
+          "taskId": "st_46c1bba174e942030579f5e82519a9ff",
+          "sessionId": "sw_46c1bba174e942030579f5e82519a9ff",
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "title": "共同样例 C [PILOT_CONTINUOUS:C]",
+          "executionGoalId": "st_46c1bba174e942030579f5e82519a9ff",
+          "collaboration": {
+            "state": "running",
+            "acceptanceState": "not_evaluated",
+            "participants": [
+              {
+                "workerId": "worker_46c1bba174e942030579f5e82519a9ff",
+                "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+                "roleName": "水獭核对专员",
+                "sessionId": "sw_46c1bba174e942030579f5e82519a9ff",
+                "state": "queued",
+                "contributed": false
+              },
+              {
+                "workerId": "worker_e2518c316bc070f93f13ab783d1be3e1",
+                "roleId": "8061faa8ad1c645c621b5bbf7786d6c4e7ce42006fb57db4dfa7af8009669466",
+                "roleName": "猫头鹰资料专员",
+                "sessionId": "sw_e2518c316bc070f93f13ab783d1be3e1",
+                "state": "queued",
+                "contributed": false
+              }
+            ]
+          },
+          "state": "queued",
+          "acceptanceState": "not_evaluated",
+          "revision": 1,
+          "originRootTurnId": "super_46c1bba174e942030579f5e82519a9ff",
+          "deadlineAt": "2026-11-17T07:39:16.544Z",
+          "updatedAt": "2026-11-16T07:39:16.611Z"
+        }
+      },
+      {
+        "id": "worker_e2518c316bc070f93f13ab783d1be3e1",
+        "roleId": "8061faa8ad1c645c621b5bbf7786d6c4e7ce42006fb57db4dfa7af8009669466",
+        "roleName": "猫头鹰资料专员",
+        "sessionId": "sw_e2518c316bc070f93f13ab783d1be3e1",
+        "assignmentState": "queued",
+        "task": {
+          "taskId": "st_46c1bba174e942030579f5e82519a9ff",
+          "sessionId": "sw_e2518c316bc070f93f13ab783d1be3e1",
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "title": "共同样例 C [PILOT_CONTINUOUS:C]",
+          "executionGoalId": "st_e2518c316bc070f93f13ab783d1be3e1",
+          "collaboration": {
+            "state": "running",
+            "acceptanceState": "not_evaluated",
+            "participants": [
+              {
+                "workerId": "worker_46c1bba174e942030579f5e82519a9ff",
+                "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+                "roleName": "水獭核对专员",
+                "sessionId": "sw_46c1bba174e942030579f5e82519a9ff",
+                "state": "queued",
+                "contributed": false
+              },
+              {
+                "workerId": "worker_e2518c316bc070f93f13ab783d1be3e1",
+                "roleId": "8061faa8ad1c645c621b5bbf7786d6c4e7ce42006fb57db4dfa7af8009669466",
+                "roleName": "猫头鹰资料专员",
+                "sessionId": "sw_e2518c316bc070f93f13ab783d1be3e1",
+                "state": "queued",
+                "contributed": false
+              }
+            ]
+          },
+          "state": "queued",
+          "acceptanceState": "not_evaluated",
+          "revision": 1,
+          "originRootTurnId": "super_e2518c316bc070f93f13ab783d1be3e1",
+          "deadlineAt": "2026-11-17T07:39:16.544Z",
+          "updatedAt": "2026-11-16T07:39:16.612Z"
+        }
+      }
+    ],
+    "held": 2,
+    "requests": [
+      {
+        "kind": "router",
+        "eventId": "743ae98f-6e96-49e0-b1cc-2084e21745dd",
+        "text": "创建水獭核对专员和猫头鹰资料专员，使用 Lake 原生 Agent，仅处理本地虚构样例，不连接业务资源。[PILOT_CONTINUOUS:setup]",
+        "tag": "setup"
+      },
+      {
+        "kind": "router",
+        "eventId": "4d12a3cc-1ff6-459a-b7bd-78abae2275ee",
+        "text": "请水獭核对专员处理样例 A，保留进展等待补充。[PILOT_CONTINUOUS:A]",
+        "tag": "A"
+      },
+      {
+        "kind": "worker",
+        "tag": "A",
+        "assignment": {
+          "executionId": "st_15b5bfbaa0d3b3708c5284c10a429211",
+          "joint": false,
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+          "roleRevision": 1,
+          "sessionId": "sw_15b5bfbaa0d3b3708c5284c10a429211",
+          "taskId": "st_15b5bfbaa0d3b3708c5284c10a429211",
+          "workerId": "worker_15b5bfbaa0d3b3708c5284c10a429211"
+        },
+        "followups": []
+      },
+      {
+        "kind": "router",
+        "eventId": "2c287555-1032-48e0-b6cf-25e4d256f0b3",
+        "text": "让同一位水獭核对专员另做独立样例 B，原任务 A 继续。[PILOT_CONTINUOUS:B]",
+        "tag": "B"
+      },
+      {
+        "kind": "worker",
+        "tag": "B",
+        "assignment": {
+          "executionId": "st_bbab909693e44b836e55f1eeb43c16d8",
+          "joint": false,
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+          "roleRevision": 1,
+          "sessionId": "sw_bbab909693e44b836e55f1eeb43c16d8",
+          "taskId": "st_bbab909693e44b836e55f1eeb43c16d8",
+          "workerId": "worker_bbab909693e44b836e55f1eeb43c16d8"
+        },
+        "followups": []
+      },
+      {
+        "kind": "router",
+        "eventId": "9fcff41d-4a49-436d-b4a7-319a17785c17",
+        "text": "给原任务 A 补充日志核对要求；再让水獭和猫头鹰两位专员共同整理另一份样例 C。[PILOT_CONTINUOUS:C]",
+        "tag": "C"
+      }
+    ]
+  },
+  "completed": {
+    "workers": [
+      {
+        "id": "worker_15b5bfbaa0d3b3708c5284c10a429211",
+        "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+        "sessionId": "sw_15b5bfbaa0d3b3708c5284c10a429211",
+        "task": {
+          "taskId": "st_15b5bfbaa0d3b3708c5284c10a429211",
+          "sessionId": "sw_15b5bfbaa0d3b3708c5284c10a429211",
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "title": "独立样例 A [PILOT_CONTINUOUS:A]",
+          "state": "completed",
+          "acceptanceState": "not_evaluated",
+          "reportedOutcome": "completed",
+          "revision": 6,
+          "originRootTurnId": "super_15b5bfbaa0d3b3708c5284c10a429211",
+          "deadlineAt": "2026-11-17T07:37:28.538Z",
+          "summary": "A 的本地样例核对已包含原任务收到的补充要求，已完成；未访问业务资源。",
+          "updatedAt": "2026-11-16T07:40:29.100Z"
+        }
+      },
+      {
+        "id": "worker_bbab909693e44b836e55f1eeb43c16d8",
+        "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+        "sessionId": "sw_bbab909693e44b836e55f1eeb43c16d8",
+        "task": {
+          "taskId": "st_bbab909693e44b836e55f1eeb43c16d8",
+          "sessionId": "sw_bbab909693e44b836e55f1eeb43c16d8",
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "title": "独立样例 B [PILOT_CONTINUOUS:B]",
+          "state": "completed",
+          "acceptanceState": "not_evaluated",
+          "reportedOutcome": "completed",
+          "revision": 3,
+          "originRootTurnId": "super_bbab909693e44b836e55f1eeb43c16d8",
+          "deadlineAt": "2026-11-17T07:38:17.104Z",
+          "summary": "B 的本地样例核对已完成；未访问业务资源。",
+          "updatedAt": "2026-11-16T07:40:28.992Z"
+        }
+      },
+      {
+        "id": "worker_46c1bba174e942030579f5e82519a9ff",
+        "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+        "sessionId": "sw_46c1bba174e942030579f5e82519a9ff",
+        "task": {
+          "taskId": "st_46c1bba174e942030579f5e82519a9ff",
+          "sessionId": "sw_46c1bba174e942030579f5e82519a9ff",
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "title": "共同样例 C [PILOT_CONTINUOUS:C]",
+          "executionGoalId": "st_46c1bba174e942030579f5e82519a9ff",
+          "collaboration": {
+            "state": "completed",
+            "acceptanceState": "not_evaluated",
+            "reportId": "68a09da6114b19dac50cfcd3a2d4a3153f1db83d29adb0917c8f0d8914b7595e",
+            "participants": [
+              {
+                "workerId": "worker_46c1bba174e942030579f5e82519a9ff",
+                "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+                "roleName": "水獭核对专员",
+                "sessionId": "sw_46c1bba174e942030579f5e82519a9ff",
+                "state": "completed",
+                "contributed": true
+              },
+              {
+                "workerId": "worker_e2518c316bc070f93f13ab783d1be3e1",
+                "roleId": "8061faa8ad1c645c621b5bbf7786d6c4e7ce42006fb57db4dfa7af8009669466",
+                "roleName": "猫头鹰资料专员",
+                "sessionId": "sw_e2518c316bc070f93f13ab783d1be3e1",
+                "state": "completed",
+                "contributed": true
+              }
+            ]
+          },
+          "state": "completed",
+          "acceptanceState": "not_evaluated",
+          "reportedOutcome": "completed",
+          "revision": 3,
+          "originRootTurnId": "super_46c1bba174e942030579f5e82519a9ff",
+          "deadlineAt": "2026-11-17T07:39:16.544Z",
+          "summary": "C 的本地样例核对已完成；未访问业务资源。",
+          "updatedAt": "2026-11-16T07:40:29.069Z"
+        }
+      },
+      {
+        "id": "worker_e2518c316bc070f93f13ab783d1be3e1",
+        "roleId": "8061faa8ad1c645c621b5bbf7786d6c4e7ce42006fb57db4dfa7af8009669466",
+        "sessionId": "sw_e2518c316bc070f93f13ab783d1be3e1",
+        "task": {
+          "taskId": "st_46c1bba174e942030579f5e82519a9ff",
+          "sessionId": "sw_e2518c316bc070f93f13ab783d1be3e1",
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "title": "共同样例 C [PILOT_CONTINUOUS:C]",
+          "executionGoalId": "st_e2518c316bc070f93f13ab783d1be3e1",
+          "collaboration": {
+            "state": "completed",
+            "acceptanceState": "not_evaluated",
+            "reportId": "68a09da6114b19dac50cfcd3a2d4a3153f1db83d29adb0917c8f0d8914b7595e",
+            "participants": [
+              {
+                "workerId": "worker_46c1bba174e942030579f5e82519a9ff",
+                "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+                "roleName": "水獭核对专员",
+                "sessionId": "sw_46c1bba174e942030579f5e82519a9ff",
+                "state": "completed",
+                "contributed": true
+              },
+              {
+                "workerId": "worker_e2518c316bc070f93f13ab783d1be3e1",
+                "roleId": "8061faa8ad1c645c621b5bbf7786d6c4e7ce42006fb57db4dfa7af8009669466",
+                "roleName": "猫头鹰资料专员",
+                "sessionId": "sw_e2518c316bc070f93f13ab783d1be3e1",
+                "state": "completed",
+                "contributed": true
+              }
+            ]
+          },
+          "state": "completed",
+          "acceptanceState": "not_evaluated",
+          "reportedOutcome": "completed",
+          "revision": 3,
+          "originRootTurnId": "super_e2518c316bc070f93f13ab783d1be3e1",
+          "deadlineAt": "2026-11-17T07:39:16.544Z",
+          "summary": "C 的本地样例核对已完成；未访问业务资源。",
+          "updatedAt": "2026-11-16T07:40:29.137Z"
+        }
+      }
+    ],
+    "requests": [
+      {
+        "kind": "router",
+        "eventId": "743ae98f-6e96-49e0-b1cc-2084e21745dd",
+        "text": "创建水獭核对专员和猫头鹰资料专员，使用 Lake 原生 Agent，仅处理本地虚构样例，不连接业务资源。[PILOT_CONTINUOUS:setup]",
+        "tag": "setup"
+      },
+      {
+        "kind": "router",
+        "eventId": "4d12a3cc-1ff6-459a-b7bd-78abae2275ee",
+        "text": "请水獭核对专员处理样例 A，保留进展等待补充。[PILOT_CONTINUOUS:A]",
+        "tag": "A"
+      },
+      {
+        "kind": "worker",
+        "tag": "A",
+        "assignment": {
+          "executionId": "st_15b5bfbaa0d3b3708c5284c10a429211",
+          "joint": false,
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+          "roleRevision": 1,
+          "sessionId": "sw_15b5bfbaa0d3b3708c5284c10a429211",
+          "taskId": "st_15b5bfbaa0d3b3708c5284c10a429211",
+          "workerId": "worker_15b5bfbaa0d3b3708c5284c10a429211"
+        },
+        "followups": []
+      },
+      {
+        "kind": "router",
+        "eventId": "2c287555-1032-48e0-b6cf-25e4d256f0b3",
+        "text": "让同一位水獭核对专员另做独立样例 B，原任务 A 继续。[PILOT_CONTINUOUS:B]",
+        "tag": "B"
+      },
+      {
+        "kind": "worker",
+        "tag": "B",
+        "assignment": {
+          "executionId": "st_bbab909693e44b836e55f1eeb43c16d8",
+          "joint": false,
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+          "roleRevision": 1,
+          "sessionId": "sw_bbab909693e44b836e55f1eeb43c16d8",
+          "taskId": "st_bbab909693e44b836e55f1eeb43c16d8",
+          "workerId": "worker_bbab909693e44b836e55f1eeb43c16d8"
+        },
+        "followups": []
+      },
+      {
+        "kind": "router",
+        "eventId": "9fcff41d-4a49-436d-b4a7-319a17785c17",
+        "text": "给原任务 A 补充日志核对要求；再让水獭和猫头鹰两位专员共同整理另一份样例 C。[PILOT_CONTINUOUS:C]",
+        "tag": "C"
+      },
+      {
+        "kind": "worker",
+        "tag": "C",
+        "assignment": {
+          "executionId": "st_46c1bba174e942030579f5e82519a9ff",
+          "joint": true,
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+          "roleRevision": 1,
+          "sessionId": "sw_46c1bba174e942030579f5e82519a9ff",
+          "taskId": "st_46c1bba174e942030579f5e82519a9ff",
+          "workerId": "worker_46c1bba174e942030579f5e82519a9ff"
+        },
+        "followups": []
+      },
+      {
+        "kind": "worker",
+        "tag": "A",
+        "assignment": {
+          "executionId": "st_15b5bfbaa0d3b3708c5284c10a429211",
+          "joint": false,
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+          "roleRevision": 1,
+          "sessionId": "sw_15b5bfbaa0d3b3708c5284c10a429211",
+          "taskId": "st_15b5bfbaa0d3b3708c5284c10a429211",
+          "workerId": "worker_15b5bfbaa0d3b3708c5284c10a429211"
+        },
+        "followups": [
+          {
+            "id": "9fcff41d-4a49-436d-b4a7-319a17785c17",
+            "text": "给原任务 A 补充日志核对要求；再让水獭和猫头鹰两位专员共同整理另一份样例 C。[PILOT_CONTINUOUS:C]"
+          }
+        ]
+      },
+      {
+        "kind": "worker",
+        "tag": "C",
+        "assignment": {
+          "executionId": "st_e2518c316bc070f93f13ab783d1be3e1",
+          "joint": true,
+          "projectId": "53da60c3-4e02-4715-81de-eb1334c23760",
+          "roleId": "8061faa8ad1c645c621b5bbf7786d6c4e7ce42006fb57db4dfa7af8009669466",
+          "roleRevision": 1,
+          "sessionId": "sw_e2518c316bc070f93f13ab783d1be3e1",
+          "taskId": "st_46c1bba174e942030579f5e82519a9ff",
+          "workerId": "worker_e2518c316bc070f93f13ab783d1be3e1"
+        },
+        "followups": []
+      }
+    ],
+    "reports": [
+      {
+        "id": "report_3ef138da0a3b66d74a0ef9312f4ee33a887391f6bc8c8a2ba14d17e0d2c11ff7",
+        "text": "B 的本地样例核对已完成；未访问业务资源。",
+        "author": {
+          "kind": "specialist",
+          "name": "水獭核对专员",
+          "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+          "workerId": "worker_bbab909693e44b836e55f1eeb43c16d8",
+          "sessionId": "sw_bbab909693e44b836e55f1eeb43c16d8",
+          "taskId": "st_bbab909693e44b836e55f1eeb43c16d8",
+          "channelSessionId": "sc_4ccd33cb1357fe3ee1d3baad59133115",
+          "rootTurnId": "turn_6553fde3-f9cb-4aed-a95a-abb2314d959f",
+          "execution": {
+            "kind": "native",
+            "model": {
+              "providerId": "custom",
+              "modelId": "continuous-input-fixture"
+            }
+          }
+        }
+      },
+      {
+        "id": "report_9ced1301c404aea19c31b191b0d2aa7cfba64364d83723e53d999299c07c3d75",
+        "text": "C 的本地样例核对已完成；未访问业务资源。",
+        "author": {
+          "kind": "specialist",
+          "name": "水獭核对专员",
+          "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+          "workerId": "worker_46c1bba174e942030579f5e82519a9ff",
+          "sessionId": "sw_46c1bba174e942030579f5e82519a9ff",
+          "taskId": "st_46c1bba174e942030579f5e82519a9ff",
+          "channelSessionId": "sc_4ccd33cb1357fe3ee1d3baad59133115",
+          "rootTurnId": "turn_918bdb83-3727-472e-89da-fd3f6197695c",
+          "execution": {
+            "kind": "native",
+            "model": {
+              "providerId": "custom",
+              "modelId": "continuous-input-fixture"
+            }
+          }
+        }
+      },
+      {
+        "id": "report_0661c691df7c8648fb81716e60a3f429b759462770acdd6c825f7f5b2a72ccea",
+        "text": "A 的本地样例核对已包含原任务收到的补充要求，已完成；未访问业务资源。",
+        "author": {
+          "kind": "specialist",
+          "name": "水獭核对专员",
+          "roleId": "66b511885bd8b27f7a27c24e82fc2d5b06c466491b30ce87822a7bcc5b9bf75c",
+          "workerId": "worker_15b5bfbaa0d3b3708c5284c10a429211",
+          "sessionId": "sw_15b5bfbaa0d3b3708c5284c10a429211",
+          "taskId": "st_15b5bfbaa0d3b3708c5284c10a429211",
+          "channelSessionId": "sc_4ccd33cb1357fe3ee1d3baad59133115",
+          "rootTurnId": "turn_527b8ac0-4274-43ab-82dc-2b3c20be3408",
+          "execution": {
+            "kind": "native",
+            "model": {
+              "providerId": "custom",
+              "modelId": "continuous-input-fixture"
+            }
+          }
+        }
+      },
+      {
+        "id": "report_d9264f562614ed42e46f22a27f3831760238d4d77bdf84a888a5aefa0997cc45",
+        "text": "C 的本地样例核对已完成；未访问业务资源。",
+        "author": {
+          "kind": "specialist",
+          "name": "猫头鹰资料专员",
+          "roleId": "8061faa8ad1c645c621b5bbf7786d6c4e7ce42006fb57db4dfa7af8009669466",
+          "workerId": "worker_e2518c316bc070f93f13ab783d1be3e1",
+          "sessionId": "sw_e2518c316bc070f93f13ab783d1be3e1",
+          "taskId": "st_46c1bba174e942030579f5e82519a9ff",
+          "channelSessionId": "sc_1e5b710c869e3c3d1c267db472625039",
+          "rootTurnId": "turn_f4c48d08-4e57-42e6-884e-fe3ca9620b06",
+          "execution": {
+            "kind": "native",
+            "model": {
+              "providerId": "custom",
+              "modelId": "continuous-input-fixture"
+            }
+          }
+        }
+      }
+    ],
+    "pilotReplies": [
+      {
+        "id": "03fe3367-2006-43bc-a4a4-e598fa3dc01f",
+        "text": "setup 已安排。",
+        "replyToMessageId": "fc93ba16-fa55-4f2a-964d-b798bc502053"
+      },
+      {
+        "id": "3cb28622-ac51-4a41-8215-8fbc75cd3427",
+        "text": "A 已安排。",
+        "replyToMessageId": "ca361a1e-4f98-4458-8dd0-1eeefc20f811"
+      },
+      {
+        "id": "8c34aadb-4bd6-42b7-b6ba-90e9dbd4d89e",
+        "text": "B 已安排。",
+        "replyToMessageId": "e893ac6d-dde9-4ccc-b914-435cb13034d7"
+      },
+      {
+        "id": "6c16cc01-cbe0-4eb1-baf7-2585312ce8ac",
+        "text": "C 已安排。",
+        "replyToMessageId": "7f0d4fd6-f184-4588-a45f-57203f2cfa93"
+      }
+    ],
+    "replyTimings": [
+      {
+        "messageId": "fc93ba16-fa55-4f2a-964d-b798bc502053",
+        "startedAt": "2026-11-16T07:37:28.334Z",
+        "finishedAt": "2026-11-16T07:37:28.467Z",
+        "status": "completed"
+      },
+      {
+        "messageId": "ca361a1e-4f98-4458-8dd0-1eeefc20f811",
+        "startedAt": "2026-11-16T07:37:28.546Z",
+        "finishedAt": "2026-11-16T07:37:28.582Z",
+        "status": "completed"
+      },
+      {
+        "messageId": "e893ac6d-dde9-4ccc-b914-435cb13034d7",
+        "startedAt": "2026-11-16T07:38:17.116Z",
+        "finishedAt": "2026-11-16T07:38:17.160Z",
+        "status": "completed"
+      },
+      {
+        "messageId": "7f0d4fd6-f184-4588-a45f-57203f2cfa93",
+        "startedAt": "2026-11-16T07:39:16.570Z",
+        "finishedAt": "2026-11-16T07:39:16.640Z",
+        "status": "completed"
+      }
+    ],
+    "sourceRootTurnId": "turn_527b8ac0-4274-43ab-82dc-2b3c20be3408",
+    "held": 0
+  },
+  "isolation": {
+    "temporaryHome": true,
+    "separateWebData": true,
+    "model": "deterministic loopback fixture",
+    "businessResourcesAccessed": false
+  },
+  "cleanup": {
+    "isolatedNativeExited": true,
+    "allWorkersCompleted": true,
+    "browserAndViteStopped": true,
+    "dailyDevPilotRestored": true,
+    "dailyModel": "gpt-6.1-sol"
+  }
+}

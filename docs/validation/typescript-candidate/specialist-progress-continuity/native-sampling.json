@@ -1,0 +1,44 @@
+[
+  {
+    "frame": 0,
+    "at": 141,
+    "otter": true,
+    "owl": true,
+    "newProgress": true
+  },
+  {
+    "frame": 8,
+    "at": 642,
+    "otter": true,
+    "owl": true,
+    "newProgress": true
+  },
+  {
+    "frame": 16,
+    "at": 1133,
+    "otter": true,
+    "owl": true,
+    "newProgress": true
+  },
+  {
+    "frame": 24,
+    "at": 1617,
+    "otter": true,
+    "owl": true,
+    "newProgress": true
+  },
+  {
+    "frame": 32,
+    "at": 2114,
+    "otter": true,
+    "owl": true,
+    "newProgress": true
+  },
+  {
+    "frame": 40,
+    "at": 2577,
+    "otter": true,
+    "owl": true,
+    "newProgress": true
+  }
+]

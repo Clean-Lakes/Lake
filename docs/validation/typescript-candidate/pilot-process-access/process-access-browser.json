@@ -1,0 +1,233 @@
+{
+  "fixture": "web-agent/web/test/fixtures/pilot-process-access.html",
+  "url": "http://127.0.0.1:5187/test/fixtures/pilot-process-access.html",
+  "data": "synthetic-only",
+  "samples": [
+    {
+      "case": "initial-live",
+      "result": {
+        "stage": "live",
+        "captured": true,
+        "slotSame": true,
+        "identitySame": true,
+        "bodySame": true,
+        "processSame": true,
+        "historySame": true,
+        "pilotSame": true,
+        "processEntries": 1,
+        "conclusionCopies": 0,
+        "reportId": "",
+        "inspectorSession": "",
+        "workerRecords": 0,
+        "thinkingVisible": true,
+        "activeAnimations": 20
+      }
+    },
+    {
+      "case": "native-live-records",
+      "result": {
+        "qa": {
+          "stage": "live",
+          "captured": true,
+          "slotSame": true,
+          "identitySame": true,
+          "bodySame": true,
+          "processSame": true,
+          "historySame": true,
+          "pilotSame": true,
+          "processEntries": 1,
+          "conclusionCopies": 0,
+          "reportId": "",
+          "inspectorSession": "native-process-fixture",
+          "workerRecords": 5,
+          "thinkingVisible": true,
+          "activeAnimations": 19
+        },
+        "records": [
+          {
+            "id": "native-old-thought",
+            "text": "思考记录15:59:00上一次尝试先核对样例来源。"
+          },
+          {
+            "id": "native-old-public",
+            "text": "公开回复记录15:59:01上一次公开进度：已确认样例目录。"
+          },
+          {
+            "id": "native-thought",
+            "text": "思考记录16:00:01专员思考样例：分别比对三项记录，保留每次读取结果。"
+          },
+          {
+            "id": "native-public",
+            "text": "公开回复记录16:00:02已取得本地样例，正在核对 CPU 与内存。"
+          },
+          {
+            "id": "native-thought-later",
+            "text": "思考记录16:00:04专员后续思考样例：核对是否遗漏磁盘记录。"
+          }
+        ]
+      }
+    },
+    {
+      "case": "reduced-motion",
+      "result": {
+        "reduced": true,
+        "body": 0,
+        "name": 0
+      }
+    },
+    {
+      "case": "append",
+      "result": {
+        "stage": "append",
+        "captured": true,
+        "slotSame": true,
+        "identitySame": true,
+        "bodySame": true,
+        "processSame": true,
+        "historySame": true,
+        "pilotSame": true,
+        "processEntries": 1,
+        "conclusionCopies": 0,
+        "reportId": "",
+        "inspectorSession": "native-process-fixture",
+        "workerRecords": 5,
+        "thinkingVisible": true,
+        "activeAnimations": 24
+      }
+    },
+    {
+      "case": "adopted-report",
+      "result": {
+        "qa": {
+          "stage": "report",
+          "captured": true,
+          "slotSame": true,
+          "identitySame": true,
+          "bodySame": true,
+          "processSame": true,
+          "historySame": true,
+          "pilotSame": true,
+          "processEntries": 1,
+          "conclusionCopies": 1,
+          "reportId": "native-report",
+          "inspectorSession": "native-process-fixture",
+          "workerRecords": 6,
+          "thinkingVisible": true,
+          "activeAnimations": 0
+        },
+        "recordsOpen": true,
+        "records": [
+          "native-old-thought",
+          "native-old-public",
+          "native-thought",
+          "native-public",
+          "native-thought-later",
+          "native-final"
+        ]
+      }
+    },
+    {
+      "case": "pilot-public-then-thinking",
+      "result": {
+        "qa": {
+          "stage": "report",
+          "captured": true,
+          "slotSame": true,
+          "identitySame": true,
+          "bodySame": true,
+          "processSame": true,
+          "historySame": true,
+          "pilotSame": true,
+          "processEntries": 1,
+          "conclusionCopies": 1,
+          "reportId": "native-report",
+          "inspectorSession": "pilot-process-fixture",
+          "workerRecords": 0,
+          "thinkingVisible": true,
+          "activeAnimations": 0
+        },
+        "text": "计划执行计划生成后会显示在这里。当前执行分析问题原始思考记录Pilot 思考样例：先请专员核对，再整理结果。Pilot 后续思考样例：公开说明后仍在核对结果完整性。执行操作"
+      }
+    },
+    {
+      "case": "pilot-completed",
+      "result": {
+        "qa": {
+          "stage": "report",
+          "captured": true,
+          "slotSame": true,
+          "identitySame": true,
+          "bodySame": true,
+          "processSame": true,
+          "historySame": true,
+          "pilotSame": true,
+          "processEntries": 1,
+          "conclusionCopies": 1,
+          "reportId": "native-report",
+          "inspectorSession": "pilot-process-fixture",
+          "workerRecords": 0,
+          "thinkingVisible": false,
+          "activeAnimations": 0
+        },
+        "historyRetained": true
+      }
+    },
+    {
+      "case": "restored-report",
+      "result": {
+        "qa": {
+          "stage": "restored",
+          "captured": false,
+          "slotSame": false,
+          "identitySame": false,
+          "bodySame": false,
+          "processSame": false,
+          "historySame": false,
+          "pilotSame": false,
+          "processEntries": 1,
+          "conclusionCopies": 1,
+          "reportId": "",
+          "inspectorSession": "native-process-fixture",
+          "workerRecords": 6,
+          "thinkingVisible": false,
+          "activeAnimations": 0
+        },
+        "records": [
+          {
+            "id": "native-old-thought",
+            "text": "思考记录15:59:00上一次尝试先核对样例来源。"
+          },
+          {
+            "id": "native-old-public",
+            "text": "公开回复记录15:59:01上一次公开进度：已确认样例目录。"
+          },
+          {
+            "id": "native-thought",
+            "text": "思考记录16:00:01专员思考样例：分别比对三项记录，保留每次读取结果。"
+          },
+          {
+            "id": "native-public",
+            "text": "公开回复记录16:00:02已取得本地样例，正在核对 CPU 与内存。 接下来比对磁盘记录。"
+          },
+          {
+            "id": "native-thought-later",
+            "text": "思考记录16:00:04专员后续思考样例：核对是否遗漏磁盘记录。"
+          },
+          {
+            "id": "native-final",
+            "text": "公开回复记录16:00:05本轮样例核对完成，三项记录一致。"
+          }
+        ]
+      }
+    },
+    {
+      "case": "escape-focus",
+      "result": {
+        "open": false,
+        "focusedTask": "task-host"
+      }
+    }
+  ],
+  "lightScreenshot": "/tmp/lake-pilot-process-access-light.png",
+  "darkScreenshot": "/tmp/lake-pilot-process-access-dark.png"
+}

@@ -64,6 +64,8 @@ export type SpecialistReplyAuthor = {kind:'specialist';name:string;roleId?:strin
 /** An instruction that entered Lake from an external developer agent client. */
 export type ExternalMessageOrigin = {kind:'mcp';connectionId?:string;connectionName?:string;threadId?:string;threadTitle?:string;clientMessageId?:string};
 export type Message = {
+  /** Host-owned reply association; a later user message never owns this reply. */
+  replyToMessageId?:string;
   conversation?: {id:string;sourceMessageId:string;kind:'reply'|'summary'|'notice';summaryRequested?:boolean};
   jointAcceptance?: {taskId:string;receiptId:string};
   jointReport?: {taskId:string;reportId:string};
@@ -278,7 +280,7 @@ export type SessionEvent = {
   sessionId: string;
   type: "session" | "message" | "specialist" | "evidence" | "action" | "terminal";
   createdAt: string;
-  textUpdate?: {target:"card"|"agent";id:string;content:string;cardType?:string;at?:string;rootTurnId?:string;textId?:string};
+  textUpdate?: {target:"card"|"agent";id:string;content:string;cardType?:string;at?:string;rootTurnId?:string;textId?:string;externalReply?:{id:string;content:string}};
 };
 
 export type TerminalHistory = {
@@ -338,7 +340,7 @@ export type ProposedPlan = {id:string;content:string;at:string};
 export type ExternalWorkWatch={adapter:string;operationId:string;handle:string;state:string;lastObservedAt?:string};
 export type WorkAttemptView = {id:string; status:string; createdAt:string};
 export type WorkGoal={userText?:string;id:string;sessionId:string;originRootTurnId:string;title:string;status:string;revision:number;items:{id:string;title:string;status:string;reason?:string;attempts?:WorkAttemptView[];watch?:ExternalWorkWatch}[]|null;modelRounds:number;roundLimit?:number;deadlineAt:string;updatedAt:string;summary?:string};
-export type AIView = {replyStatus?:string;workGoals?:WorkGoal[]; proposedPlan?: ProposedPlan; operationOutcomes?: AIOperationOutcome[]; todos?: AITodo[]; question?: AIQuestionRequest; session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; pendingApprovals?: AIApproval[]; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; memoryAccess?: MemoryAccess[]; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
+export type AIView = {replyTimings?:ReplyTiming[];sourceMessageIds?:string[];replyStatus?:string;workGoals?:WorkGoal[]; proposedPlan?: ProposedPlan; operationOutcomes?: AIOperationOutcome[]; todos?: AITodo[]; question?: AIQuestionRequest; session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; pendingApprovals?: AIApproval[]; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; memoryAccess?: MemoryAccess[]; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
 export type AIPreset = { id: string; title: string; content: string };
 
 export type AIImage = { id: string; mimeType: string; base64: string; sizeBytes: number; width: number; height: number; name?: string; url?: string };

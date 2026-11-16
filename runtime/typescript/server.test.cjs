@@ -3999,8 +3999,8 @@ test('enabling Codex prepares its runtime, installs only when missing and probes
  await f.api(path,'POST',{expectedRevision:0,enabled:true},409);
 });
 
-async function specialistAssignmentFixture(t,permissions={}){
- const f=await fixture(t,'super-acp-worker'),path=`/api/projects/${f.project.id}`;
+async function specialistAssignmentFixture(t,permissions={},mode='super-acp-worker'){
+ const f=await fixture(t,mode),path=`/api/projects/${f.project.id}`;
  const project=await f.api(path+'/superagent','POST',{});
  const role={id:'e'.repeat(64),projectId:f.project.id,roleKey:'project-inspector',name:'项目检查员',duties:'检查项目并收集实际结果',revision:1};
  f.app.store.put('superRoles',role.id,role);
@@ -4035,6 +4035,52 @@ test('explicit specialist assignment dispatches the chosen ACP Worker without a 
  await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',{...body,text:'不同的交付内容'},409);
  await f.restart();const replay=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
  assert.equal(replay.assignment.workerId,receipt.assignment.workerId);assert.equal(f.calls,count);assert.equal(f.app.store.list('acpRuns').length,1);
+});
+
+for(const legacy of [false,true])test(`direct ACP Worker ${legacy?'legacy cumulative':'message-scoped'} public prose survives tools and completion without changing its audit`,{timeout:30000},async t=>{
+ const {f,path,channel,body}=await specialistAssignmentFixture(t,{},legacy?'super-acp-public-text-legacy':'super-acp-public-text');
+ await f.enableCodexFixture();
+ await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0});
+ await f.api(path+'/external-agents/codex/probe','POST',{});
+ const receipt=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
+ await settledSubagentTask(f);await f.app.agents.wait(receipt.assignment.sessionId);
+ const run=f.app.store.list('acpRuns')[0],snapshot=await f.api(`/api/sessions/${receipt.assignment.sessionId}/snapshot`);
+ const texts=run.events.filter(event=>event.kind==='text'),first=texts[0],last=texts.at(-1);
+ const report='已由独立 ACP Worker 读取实际项目文件。',audit='先读取项目。继续核对。'+report;
+ assert.equal(run.summary,audit);
+ assert.equal(texts[1].publicTextId,first.publicTextId);assert.equal(texts[1].publicText,'先读取项目。继续核对。');
+ assert.equal(last.publicTextId===first.publicTextId,legacy);
+ assert.equal(last.publicText,legacy?audit:report);
+ assert.ok(run.events.some(event=>event.kind==='tool'));
+ const operation=snapshot.ai.cards.find(card=>card.id===run.id),message=snapshot.ai.cards.filter(card=>card.type==='message').at(-1);
+ assert.equal(operation.content,audit);
+ assert.deepEqual(operation.data.external_reply,{id:last.publicTextId,content:last.publicText});
+ assert.equal(operation.status,'completed','the late terminal event preserves the public message metadata');
+ assert.equal(message.content,legacy?audit:report,'the synthetic final message cannot append earlier progress again');
+ const updates=f.app.store.db.prepare('SELECT value FROM events WHERE session=? ORDER BY seq').all(receipt.assignment.sessionId).map(row=>JSON.parse(row.value)).filter(event=>event.textUpdate);
+ assert.deepEqual(updates.at(-1).textUpdate.externalReply,{id:last.publicTextId,content:last.publicText});
+ assert.equal(updates.at(-1).textUpdate.content,audit);
+ const page=await f.api(`/api/sessions/${channel.sessionId}/channel`);
+ assert.equal(page.entries.filter(entry=>entry.reply?.state==='settled').length,1);
+ assert.equal(page.entries.find(entry=>entry.reply?.state==='settled').message.text,report,'work_finish remains the frozen task report authority');
+});
+
+for(const reported of [true,false])test(`direct ACP Worker empty final message ${reported?'preserves the submitted report':'cannot promote progress into a report'}`,{timeout:30000},async t=>{
+ const {f,path,channel,body}=await specialistAssignmentFixture(t,{},reported?'super-acp-public-text-empty':'super-acp-public-text-unreported');
+ await f.enableCodexFixture();
+ await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0});
+ await f.api(path+'/external-agents/codex/probe','POST',{});
+ const receipt=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
+ await settledSubagentTask(f);await f.app.agents.wait(receipt.assignment.sessionId);
+ const run=f.app.store.list('acpRuns')[0],snapshot=await f.api(`/api/sessions/${receipt.assignment.sessionId}/snapshot`);
+ assert.equal(run.summary,'先读取项目。继续核对。','the original cumulative audit remains available');
+ assert.equal(run.events.findLast(event=>event.kind==='text').publicText,'');
+ assert.equal(snapshot.ai.cards.filter(card=>card.type==='message').length,0,'an empty last message never falls back to earlier progress');
+ const page=await f.api(`/api/sessions/${channel.sessionId}/channel`),reply=page.entries.find(entry=>entry.reply?.state==='settled');
+ assert.ok(reply?.message?.text);assert.ok(!reply.message.text.includes('先读取项目'));
+ assert.equal(snapshot.superagent.task.state,reported?'completed':'paused');
+ if(reported)assert.equal(reply.message.text,'已由独立 ACP Worker 读取实际项目文件。');
+ else assert.match(reply.message.text,/尚未提交最终结论|尚未完成|还没完成/);
 });
 
 test('explicit assignment rejects missing setup, stale revisions and wrong entrances before recording a message or task',async t=>{

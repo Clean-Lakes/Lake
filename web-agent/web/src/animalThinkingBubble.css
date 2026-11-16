@@ -22,14 +22,6 @@
  background:var(--background);
 }
 .animal-thinking-label { overflow-wrap:anywhere; }
-/* One border owns both the specialist entry and its current thinking state. */
-.ai-chat-message.pilot-specialist-reply.is-animal-thinking { padding-inline-start:0; max-width:var(--reply-body-width,720px); }
-.animal-thinking-bubble.has-identity .animal-thinking-surface { display:flex; flex-direction:column; align-items:flex-start; gap:6px; padding:14px 18px; }
-.animal-thinking-bubble.has-identity .response-identity { align-self:stretch; min-width:0; max-width:100%; min-height:22px; margin:0; font-size:var(--font-size-ui); line-height:22px; }
-.animal-thinking-bubble.has-identity .response-author { min-width:0; max-width:100%; margin:0; padding:0; gap:6px; }
-.animal-thinking-bubble.has-identity .response-identity strong { min-width:0; overflow-wrap:anywhere; white-space:normal; line-height:1.45; }
-.animal-thinking-bubble.has-identity .response-author > strong { flex:1 1 auto; }
-.animal-thinking-bubble.has-identity .response-identity :is(.agent-backend-logo,.lucide) { flex:none; }
 .animal-thinking-character {
  position:absolute;
  top:calc(-1px - var(--thinking-character-ground));

@@ -8,6 +8,7 @@ import {providerConnection} from './provider-connection';
 import {parseWatchdogReview, watchdogReviewData, watchdogReviewPrompt, type WatchdogReviewInput, type WatchdogReviewResult} from "./watchdog-review";
 import {reasoningBinding} from './reasoning';
 import {redactModelValue,redactJSONText,describeTurnFailure} from "./model-errors";
+import {redactModelStream} from './model-stream-redaction';
 import { join } from "node:path";
 import { builtInTools, AgentRuntime, ManualPermissionBroker, createToolRegistry, createExploreSubagentPort, InMemoryRuntimeTaskRegistry,
   createBuiltInGeneralPurposeAgentProfile, createBuiltInExploreAgentProfile, type ExploreSubagentRuntimeRequest, type ToolEntry } from "./sdk";
@@ -117,7 +118,10 @@ export class LakeAgents {
     let card=cards.find(item=>item.id===run.id);
     if(!card){card={id:run.id,type:'operation',title:agentBackendName({kind:'acp',agent:run.agent})+' · ACP',status:'running',content:'',at:run.createdAt,
       data:{source:'external_agent',external_run_id:run.id,taskId:run.taskId,agentRunId:run.agentRunId,childSessionId:run.childSessionId,root_turn_id:view.rootTurnId}};cards.push(card);}
-    if(event.kind==='text')card.content=event.text??'';
+    if(event.kind==='text'){
+      card.content=event.text??'';
+      if(event.publicTextId&&typeof event.publicText==='string')card.data={...(card.data??{}),external_reply:{id:event.publicTextId,content:this.redact(event.publicText)}};
+    }
     if(event.kind==='status'){card.status=event.status==='completed'?'completed':['failed','cancelled','unknown','interrupted'].includes(event.status??'')?event.status!:'running';if(run.summary||run.error)card.content=run.summary||run.error||'';}
     card.data={...(card.data??{}),external_agent:run.agent,external_state:run.state,external_usage:run.usage,external_events:run.events.filter(item=>item.kind==='tool'||item.kind==='tool_update').slice(-16)};
     this.update(sessionId,view,externalReplyTextUpdate(run,event,{...card,content:this.redact(card.content??'')},view.rootTurnId));
@@ -190,7 +194,7 @@ export class LakeAgents {
     let card = view.cards.find((card) => card.id === cardId);
     if (!card) {
       card = { id: cardId, type, title, content: "", status: "running", at: now() };
-      card.data={root_turn_id:view.rootTurnId,taskId:this.host?.currentTask?.(view.session)};
+      card.data={root_turn_id:view.rootTurnId,taskId:this.host?.currentTask?.(view.session),source_message_id:view.sourceMessageIds?.[0]};
       view.cards.push(card);
     }
     return card;
@@ -434,45 +438,14 @@ export class LakeAgents {
       async *streamText(request) {
         owner.guard?.();
         profile?.beforeModel?.();
-        // Hold a short raw tail so a credential split across provider chunks
-        // cannot reach the UI, transcript or upstream session database.
-        const held = new Map<string, { text: string; event: Record<string, any>; field: string }>();
-        const limit = Math.max(80, ...[...owner.keys].map((key) => key.length));
-        const flush = function* () {
-          for (const item of held.values())
-            if (item.text) yield { ...item.event, [item.field]: owner.redact(item.text) } as any;
-          held.clear();
-        };
-        try { for await (const event of base.streamText(project(request))) {
-          if (memoryActor) owner.memory?.validateContinuation(memoryActor);
-          const raw = event as unknown as Record<string, any>;
-          const field =
-            typeof raw.text === "string"
-              ? "text"
-              : typeof raw.delta === "string"
-                ? "delta"
-                : undefined;
-          if (field && String(raw.type).endsWith("_delta")) {
-            const key = String(raw.id ?? raw.toolCallId ?? "") + ":" + raw.type;
-            const text = (held.get(key)?.text ?? "") + raw[field];
-            let cut = Math.max(0, text.length - limit + 1);
-            for (const secret of owner.keys) {
-              let at = text.indexOf(secret);
-              while (at >= 0) {
-                if (at < cut && at + secret.length > cut) cut = at;
-                at = text.indexOf(secret, at + 1);
-              }
-            }
-            const privateKey = text.search(/-----BEGIN [A-Z ]*PRIVATE KEY-----/);
-            if (privateKey >= 0 && privateKey < cut) cut = privateKey;
-            if (cut > 0) yield owner.scrub({ ...raw, [field]: text.slice(0, cut) }) as any;
-            held.set(key, { text: text.slice(cut), event: raw, field });
-          } else {
-            if (String(raw.type).endsWith("_end") || raw.type === "finish") yield* flush();
-            yield owner.scrub(event);
+        const validated = async function* () {
+          for await (const event of base.streamText(project(request))) {
+            if (memoryActor) owner.memory?.validateContinuation(memoryActor);
+            yield event;
           }
-        } } catch(error) { throw owner.scrub(error); }
-        yield* flush();
+        };
+        try { yield* redactModelStream(validated(), owner.keys, value => owner.scrub(value)); }
+        catch(error) { throw owner.scrub(error); }
       },
     };
   }
@@ -937,7 +910,10 @@ export class LakeAgents {
       }};
     });
     for (const tool of profile?.tools ?? []) registry.register(tool);
-    const externalAgents=(await this.external.status(session.projectId)).filter(agent=>agent.assignmentReady);
+    // Optional delegation uses already verified capabilities. Starting native
+    // inference must not wait for a separate Codex process/connection probe.
+    // Actual ACP launches and explicit status requests still validate it.
+    const externalAgents=profile?.taskId?(await this.external.registry.list(session.projectId)).filter(agent=>agent.assignmentReady):[];
     const hasExternal=!!profile?.taskId&&externalAgents.length>0;
     if(hasExternal&&profile){
       const externalTool=this.externalTool(sessionId,profile,()=>runtime,externalAgents.map(agent=>agent.id));
@@ -1050,14 +1026,16 @@ export class LakeAgents {
         const prior=actor.purpose==='conversation'?undefined:this.store.list<ExternalRun>('acpRuns').filter(run=>run.taskId===actor.taskId&&run.workerId===actor.workerId&&run.generation===actor.generation&&!run.childSessionId&&run.state==='completed').at(-1);
         const result=await this.external.run(selected.agent,input,digest([actor.workerId,actor.generation,id()]),actor,prior?.id);
         if(result.state!=='completed')throw new HttpError(409,result.summary||'外部任务没有明确完成');
-        return {response:result.summary};
+        // Preserve the cumulative external run/operation audit, but do not
+        // reintroduce earlier progress into the Worker's completed reply card.
+        return {response:actor.purpose==='worker'?result.public_reply?.content??result.summary:result.summary};
       }};
     }
     live = { runtime:activeRuntime, broker, execution, selection: selectionKey, children };
     this.live.set(sessionId, live);
     return live;
   }
-  async send(sessionId: string, text: string, options: { input?: string; recordUser?: boolean; recordAssistant?: boolean; ignoreMemory?: boolean; messageInput?: MessageInput } = {}) {
+  async send(sessionId: string, text: string, options: { input?: string; recordUser?: boolean; recordAssistant?: boolean; ignoreMemory?: boolean; messageInput?: MessageInput;sourceMessageIds?:string[] } = {}) {
     if (!text.trim()) throw new HttpError(400, "消息不能为空");
     if (this.store.session(sessionId).workspaceRole === "legacy") throw new HttpError(409, "旧会话只读，不恢复或重放历史执行");
     const live = await this.runtime(sessionId);
@@ -1068,18 +1046,23 @@ export class LakeAgents {
       session.title = text.slice(0, 40);
       this.store.put("sessions", sessionId, session);
     }
+    let sourceMessageIds=options.sourceMessageIds;
     if (options.recordUser !== false) {
       const message = this.store.addMessage(sessionId, "user", text, {mentions: options.messageInput?.mentions});
+      sourceMessageIds=[message.id];
       if (options.messageInput) this.store.put('messageInputs', message.id, {messageId: message.id, projectId: session.projectId, sessionId, ...options.messageInput});
       if (options.messageInput?.resourceIds.length) this.store.put('sessionResourceReferences', sessionId, {resourceIds: options.messageInput.resourceIds, sourceMessageId: message.id});
       this.memory?.captureUser(sessionId, message.id, undefined, options.ignoreMemory);
     }
     const view = this.store.view(sessionId);
+    view.sourceMessageIds=sourceMessageIds;
     view.status = "running";
     view.replyStatus = "running";
     view.turns++;
     view.turnStartedAt = now();
     view.turnFinishedAt = undefined;
+    if(sourceMessageIds?.length)view.replyTimings=[...(view.replyTimings??[]).filter(timing=>!sourceMessageIds.includes(timing.messageId)),
+      ...sourceMessageIds.map(messageId=>({messageId,startedAt:view.turnStartedAt!,finishedAt:'',status:'running' as const}))];
     this.update(sessionId, view);
     const controller = new AbortController();
     live.controller = controller;
@@ -1104,10 +1087,10 @@ export class LakeAgents {
               content: this.redact(result.response),
               status: "completed",
               at: now(),
-              data: {root_turn_id:final.rootTurnId,taskId:this.host?.currentTask?.(sessionId)},
+              data: {root_turn_id:final.rootTurnId,taskId:this.host?.currentTask?.(sessionId),source_message_id:final.sourceMessageIds?.[0]},
             });
           if (options.recordAssistant !== false) {
-            const message = this.store.addMessage(sessionId, "assistant", this.redact(result.response));
+            const message = this.store.addMessage(sessionId, "assistant", this.redact(result.response),{replyToMessageId:final.sourceMessageIds?.[0]});
             this.memory?.tagMessage(sessionId, message.id);
           }
         }
@@ -1124,7 +1107,7 @@ export class LakeAgents {
             id: id(),
             type: "error",
             content: failure.message,
-            data:{root_turn_id:final.rootTurnId,taskId:this.host?.currentTask?.(sessionId),failure},
+            data:{root_turn_id:final.rootTurnId,taskId:this.host?.currentTask?.(sessionId),source_message_id:final.sourceMessageIds?.[0],failure},
             status: "failed",
             at: now(),
           });
@@ -1137,6 +1120,8 @@ export class LakeAgents {
         final.pendingApprovals = [];
         final.turnFinishedAt = now();
         final.replyStatus = final.status;
+        const timingStatus=final.status==='completed'||final.status==='cancelled'||final.status==='failed'?final.status:'interrupted';
+        final.replyTimings=final.replyTimings?.map(timing=>sourceMessageIds?.includes(timing.messageId)?{...timing,finishedAt:final.turnFinishedAt!,status:timingStatus}:timing);
         for (const card of final.cards)
           if (["running", "pending"].includes(card.status)) card.status = final.status;
         this.update(sessionId, final);

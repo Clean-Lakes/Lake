@@ -28,6 +28,8 @@ export type ExternalRun = {
 };
 export type ExternalEvent = {
   sequence: number; kind: 'text' | 'tool' | 'tool_update' | 'status'; text?: string;
+  /** Read-only current ACP message projection; text remains the full run audit. */
+  publicText?: string; publicTextId?: string;
   callId?: string; title?: string; status?: string; at: string;
 };
 /** Constructed by Lake's current task or conversation host. Never deserialized from tool arguments. */
@@ -44,5 +46,6 @@ export type ExternalActor = {
 };
 export type ExternalResult = {
   run_id: string; agent: string; state: ExternalRunState; summary: string;
+  public_reply?: {id:string;content:string};
   verification: 'insufficient'; limitations: string[];
 };

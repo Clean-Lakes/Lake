@@ -1,0 +1,5123 @@
+[
+  {
+    "label": "native thinking -> tool status",
+    "frames": [
+      {
+        "ms": 0,
+        "text": "正在独立凝神中",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 870,
+        "conclusions": 0
+      },
+      {
+        "ms": 964.6260000953675,
+        "text": "正在独立凝神中",
+        "clip": "inset(0%)",
+        "height": 20.796875,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 0,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 0,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 871.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1005.6000000953675,
+        "text": "正在独立凝神中",
+        "clip": "inset(0% 33.841% 0% 0%)",
+        "height": 20.796875,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 40.99900006949908,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 40.99900006949908,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 873,
+        "conclusions": 0
+      },
+      {
+        "ms": 1039.6000000953675,
+        "text": "正在独立凝神中",
+        "clip": "inset(0% 90.0756% 0% 0%)",
+        "height": 20.796875,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 74.99900006949912,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 74.99900006949912,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 874,
+        "conclusions": 0
+      },
+      {
+        "ms": 1071.4000000953674,
+        "text": "正在独立凝神中",
+        "clip": "inset(0% 100% 0% 0%)",
+        "height": 20.796875,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 80,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 80,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875,
+        "conclusions": 0
+      },
+      {
+        "ms": 1106.3000000953675,
+        "text": "正在读取公开样例",
+        "clip": "inset(0% 100% 0% 0%)",
+        "height": 20.796875,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 0,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1148.3000000953675,
+        "text": "正在读取公开样例",
+        "clip": "inset(0% 21.5929% 0% 0%)",
+        "height": 20.796875,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 42.042999902367484,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1181.3000000953675,
+        "text": "正在读取公开样例",
+        "clip": "inset(0% 4.93178% 0% 0%)",
+        "height": 20.796875,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 75.04299990236763,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1213.9000000953674,
+        "text": "正在读取公开样例",
+        "clip": "inset(0% 0.787906% 0% 0%)",
+        "height": 20.796875,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 107.64299990236759,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1246.7000000953674,
+        "text": "正在读取公开样例",
+        "clip": "inset(0% 0.0301937% 0% 0%)",
+        "height": 20.796875,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 140.44299990236752,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1281.3000000953675,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1313.1000000953675,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1356.2000000953674,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1380.1000000953675,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1412.9000000953674,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1447.0000000953673,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1481.1000000953675,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1522.0000000953673,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1556.4000000953674,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1589.6000000953672,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1621.2000000953676,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1662.9000000953674,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1687.9000000953674,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1721.5000000953673,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1756.2000000953676,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1796.2000000953676,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1831.2000000953676,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1863.9000000953674,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1897.9000000953674,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1930.4000000953674,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1964.1000000953672,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 1997.0000000953673,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 2031.2000000953676,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 2072.7000000953676,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 2105.9000000953674,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 2138.7000000953676,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 2171.8000000953675,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 2206.2000000953676,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 2239.5000000953673,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 2271.3000000953675,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 2306.3000000953675,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 2339.9000000953674,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      }
+    ],
+    "interrupted": false,
+    "final": {
+      "stage": "工具状态",
+      "cursor": 3,
+      "servedCursor": 3,
+      "mode": "Native",
+      "captured": false,
+      "slotSame": false,
+      "identitySame": false,
+      "bodySame": false,
+      "proseSame": false,
+      "historyNodes": 20,
+      "historySame": false,
+      "parallelSame": false,
+      "endingNotice": "",
+      "bodyHeight": 20.796875,
+      "bodyAnimations": [],
+      "following": true,
+      "scrollTop": 875.5,
+      "scrollDelta": 0,
+      "scrollEvents": 6,
+      "scrollHeight": 1394,
+      "clientHeight": 518,
+      "reportId": "",
+      "publicText": "正在读取公开样例"
+    }
+  },
+  {
+    "label": "native status -> first prose",
+    "frames": [
+      {
+        "ms": 0,
+        "text": "正在读取公开样例",
+        "clip": "none",
+        "height": 20.796875,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 36.49999990463266,
+        "text": "正在读取公开样例",
+        "clip": "inset(0%)",
+        "height": 20.796875,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 0,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 0,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 69.79999990463239,
+        "text": "正在读取公开样例",
+        "clip": "inset(0% 23.9265% 0% 0%)",
+        "height": 20.796875,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 33.34099998027096,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 33.34099998027096,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 101.59999990463257,
+        "text": "正在读取公开样例",
+        "clip": "inset(0% 71.8904% 0% 0%)",
+        "height": 20.796875,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 65.140999980271,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 65.140999980271,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 136.39999990463275,
+        "text": "正在读取公开样例",
+        "clip": "inset(0% 100% 0% 0%)",
+        "height": 20.796875,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 80,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 80,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 169.7999999046324,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "inset(0% 100% 0% 0%)",
+        "height": 20.796875,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 0,
+            "frames": []
+          },
+          {
+            "duration": 160,
+            "time": 0,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 202.99999990463266,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "inset(0% 31.0286% 0% 0%)",
+        "height": 24.5546875,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 33.22999979332097,
+            "frames": []
+          },
+          {
+            "duration": 160,
+            "time": 33.22999979332097,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 235.49999990463266,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "inset(0% 7.65405% 0% 0%)",
+        "height": 25.828125,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 65.72999979332073,
+            "frames": []
+          },
+          {
+            "duration": 160,
+            "time": 65.72999979332073,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 875.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 269.6999999046325,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "inset(0% 1.29208% 0% 0%)",
+        "height": 26.171875,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 99.92999979332096,
+            "frames": []
+          },
+          {
+            "duration": 160,
+            "time": 99.92999979332096,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 876.5,
+        "conclusions": 0
+      },
+      {
+        "ms": 311.49999990463266,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "inset(0% 0.0243503% 0% 0%)",
+        "height": 26.2421875,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 141.7299997933208,
+            "frames": []
+          },
+          {
+            "duration": 160,
+            "time": 141.7299997933208,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 878,
+        "conclusions": 0
+      },
+      {
+        "ms": 344.6999999046325,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 879,
+        "conclusions": 0
+      },
+      {
+        "ms": 378.2999999046324,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 880,
+        "conclusions": 0
+      },
+      {
+        "ms": 411.49999990463266,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 443.89999990463275,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 478.09999990463257,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 511.59999990463257,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 551.6999999046325,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 585.4999999046327,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 619.7999999046324,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 652.3999999046328,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 694.6999999046325,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 727.9999999046327,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 761.0999999046326,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 794.7999999046324,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 819.1999999046325,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 851.7999999046324,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 885.1999999046325,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 928.0999999046326,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 960.4999999046327,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 994.7999999046324,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1027.1999999046325,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1061.3999999046328,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1094.7999999046324,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1128.0999999046326,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1161.3999999046328,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1194.7999999046324,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1235.9999999046322,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1261.3999999046328,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1294.699999904633,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1335.4999999046322,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1369.199999904633,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1401.9999999046322,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": false,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      }
+    ],
+    "interrupted": false,
+    "final": {
+      "stage": "首段进度",
+      "cursor": 4,
+      "servedCursor": 4,
+      "mode": "Native",
+      "captured": false,
+      "slotSame": false,
+      "identitySame": false,
+      "bodySame": false,
+      "proseSame": false,
+      "historyNodes": 20,
+      "historySame": false,
+      "parallelSame": false,
+      "endingNotice": "",
+      "bodyHeight": 26.25,
+      "bodyAnimations": [],
+      "following": true,
+      "scrollTop": 881,
+      "scrollDelta": 0,
+      "scrollEvents": 11,
+      "scrollHeight": 1399,
+      "clientHeight": 518,
+      "reportId": "",
+      "publicText": "我先核对公开样例的 CPU 与内存。"
+    }
+  },
+  {
+    "label": "same-segment streamed suffix",
+    "frames": [
+      {
+        "ms": 0,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 30.49999980926532,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 64.2999998092655,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 97.89999980926495,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 139.49999980926532,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 172.69999980926514,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 204.7999998092655,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 239.39999980926495,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 272.69999980926514,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 305.39999980926495,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 339.39999980926495,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 372.69999980926514,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 412.9999998092653,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 447.7999998092655,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 480.9999998092653,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 514.399999809265,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 547.7999998092655,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 588.5999998092648,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 622.2999998092655,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 647.6999998092651,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 680.9999998092653,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 722.6999998092651,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 755.9999998092653,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 789.1999998092651,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 822.6999998092651,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 856.0999998092648,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 888.5999998092648,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 922.899999809265,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 955.9999998092653,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 989.2999998092655,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1030.9999998092653,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1064.399999809265,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1096.9999998092653,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1130.9999998092653,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1172.9999998092653,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1204.899999809265,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1239.2999998092655,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1272.6999998092651,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1297.5999998092648,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1329.899999809265,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1372.6999998092651,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1405.399999809265,
+        "text": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      }
+    ],
+    "interrupted": false,
+    "final": {
+      "stage": "流式追加",
+      "cursor": 5,
+      "servedCursor": 4,
+      "mode": "Native",
+      "captured": false,
+      "slotSame": false,
+      "identitySame": false,
+      "bodySame": false,
+      "proseSame": false,
+      "historyNodes": 20,
+      "historySame": false,
+      "parallelSame": false,
+      "endingNotice": "",
+      "bodyHeight": 26.25,
+      "bodyAnimations": [],
+      "following": true,
+      "scrollTop": 881,
+      "scrollDelta": 0,
+      "scrollEvents": 11,
+      "scrollHeight": 1399,
+      "clientHeight": 518,
+      "reportId": "",
+      "publicText": "我先核对公开样例的 CPU 与内存。 再读取磁盘与进程摘要。"
+    }
+  },
+  {
+    "label": "native long prose -> formal conclusion",
+    "frames": [
+      {
+        "ms": 0,
+        "text": "已取得样例数据，正在逐项核对。\n\n负载与内存：使用固定的虚构数字，仅验证排版。\n磁盘与进程：继续比对本轮公开摘要。\n关联资料：保留 样例记录 与 sample-only。\n\n这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。",
+        "clip": "none",
+        "height": 264,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 0
+      },
+      {
+        "ms": 969.3999999999996,
+        "text": "已取得样例数据，正在逐项核对。\n\n负载与内存：使用固定的虚构数字，仅验证排版。\n磁盘与进程：继续比对本轮公开摘要。\n关联资料：保留 样例记录 与 sample-only。\n\n这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。",
+        "clip": "inset(0%)",
+        "height": 264,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 0,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 0,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 0
+      },
+      {
+        "ms": 993.2000000000007,
+        "text": "已取得样例数据，正在逐项核对。\n\n负载与内存：使用固定的虚构数字，仅验证排版。\n磁盘与进程：继续比对本轮公开摘要。\n关联资料：保留 样例记录 与 sample-only。\n\n这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。",
+        "clip": "inset(0% 13.4637% 0% 0%)",
+        "height": 264,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 23.868000049889204,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 23.868000049889204,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 0
+      },
+      {
+        "ms": 1027.7000000000007,
+        "text": "已取得样例数据，正在逐项核对。\n\n负载与内存：使用固定的虚构数字，仅验证排版。\n磁盘与进程：继续比对本轮公开摘要。\n关联资料：保留 样例记录 与 sample-only。\n\n这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。",
+        "clip": "inset(0% 60.2736% 0% 0%)",
+        "height": 264,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 58.368000049888735,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 58.368000049888735,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 0
+      },
+      {
+        "ms": 1060.7000000000007,
+        "text": "已取得样例数据，正在逐项核对。\n\n负载与内存：使用固定的虚构数字，仅验证排版。\n磁盘与进程：继续比对本轮公开摘要。\n关联资料：保留 样例记录 与 sample-only。\n\n这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。",
+        "clip": "inset(0% 100% 0% 0%)",
+        "height": 264,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 80,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 80,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 0
+      },
+      {
+        "ms": 1094,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "inset(0% 100% 0% 0%)",
+        "height": 264,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 0,
+            "frames": []
+          },
+          {
+            "duration": 160,
+            "time": 0,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1127.6000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "inset(0% 30.6278% 0% 0%)",
+        "height": 99.0625,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 33.551999884098294,
+            "frames": []
+          },
+          {
+            "duration": 160,
+            "time": 33.551999884098294,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1161,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "inset(0% 7.23437% 0% 0%)",
+        "height": 43.4453125,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 66.95199988409861,
+            "frames": []
+          },
+          {
+            "duration": 160,
+            "time": 66.95199988409861,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1202.6000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "inset(0% 0.740567% 0% 0%)",
+        "height": 28.0078125,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 108.55199988409936,
+            "frames": []
+          },
+          {
+            "duration": 160,
+            "time": 108.55199988409936,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1235.7999999999993,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "inset(0% 0.0242579% 0% 0%)",
+        "height": 26.3046875,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 141.75199988409838,
+            "frames": []
+          },
+          {
+            "duration": 160,
+            "time": 141.75199988409838,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1269.1000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1302,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1334.2999999999993,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1376.1000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1410.7999999999993,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1444.1000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1477.3999999999996,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1511.2000000000007,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1543.1000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1577.3999999999996,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1610.8999999999996,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1642.7999999999993,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1676.1000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1710.6000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1752.1000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1786.1000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1819.1000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1852,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1885.1000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1918.2999999999993,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1952.2999999999993,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 1986.2000000000007,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 2019.5,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 2060.7999999999993,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 2094.1000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 2127.3999999999996,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 2160,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 2194.2000000000007,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 2226.2000000000007,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 2259.5,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 2302.5,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      },
+      {
+        "ms": 2326.8999999999996,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 180,
+        "conclusions": 1
+      }
+    ],
+    "interrupted": false,
+    "final": {
+      "stage": "正式报告",
+      "cursor": 7,
+      "servedCursor": 6,
+      "mode": "Native",
+      "captured": true,
+      "slotSame": true,
+      "identitySame": true,
+      "bodySame": true,
+      "proseSame": true,
+      "historyNodes": 20,
+      "historySame": true,
+      "parallelSame": true,
+      "endingNotice": "",
+      "bodyHeight": 26.25,
+      "bodyAnimations": [],
+      "following": false,
+      "scrollTop": 180,
+      "scrollDelta": 0,
+      "scrollEvents": 0,
+      "scrollHeight": 1399,
+      "clientHeight": 518,
+      "reportId": "report-current",
+      "publicText": "本轮样例核对已结束，未连接业务资源。"
+    }
+  },
+  {
+    "label": "ACP progress -> conclusion during exit",
+    "frames": [
+      {
+        "ms": 0,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 7.0320000953674935,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 39.20000009536761,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 71.80000009536752,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 106.80000009536752,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "inset(0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 0,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 0,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1107.0000000953673,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "inset(0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 0,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 0,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1140.0000000953673,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "inset(0% 23.4675% 0% 0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 32.999999999999915,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 32.961999973654784,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1171.7000000953676,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "inset(0% 71.0458% 0% 0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 64.69999999999976,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 64.66199997365463,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1205.5000000953673,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "inset(0% 100% 0% 0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 80,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 80,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1240.3000000953675,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "inset(0% 100% 0% 0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 0,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1273.5000000953673,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "inset(0% 100% 0% 0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 0,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1306.4000000953674,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "inset(0% 31.4428% 0% 0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 32.900999754667204,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1338.6000000953672,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "inset(0% 7.87841% 0% 0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 65.10099975466721,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1372.4000000953674,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "inset(0% 1.37512% 0% 0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 98.90099975466748,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1406.4000000953674,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "inset(0% 0.0857522% 0% 0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 132.90099975466728,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1439.7000000953676,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1473.7000000953676,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1513.5000000953673,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1547.9000000953674,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1580.0000000953673,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1613.5000000953673,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1648.3000000953675,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1681.8000000953675,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1713.7000000953676,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1748.4000000953674,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1788.6000000953672,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1822.9000000953674,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1855.4000000953674,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1890.0000000953673,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1931.7000000953676,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1964.5000000953673,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1997.2000000953676,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 2031.5000000953673,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 2064.500000095368,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 2098.7000000953676,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 2131.6000000953672,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 2165.1000000953672,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 2198.1000000953672,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 2231.7000000953676,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 2264.9000000953674,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 2297.500000095368,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 2331.000000095368,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      }
+    ],
+    "interrupted": true,
+    "final": {
+      "stage": "正式报告",
+      "cursor": 4,
+      "servedCursor": 3,
+      "mode": "ACP",
+      "captured": false,
+      "slotSame": false,
+      "identitySame": false,
+      "bodySame": false,
+      "proseSame": false,
+      "historyNodes": 20,
+      "historySame": false,
+      "parallelSame": false,
+      "endingNotice": "",
+      "bodyHeight": 26.25,
+      "bodyAnimations": [],
+      "following": true,
+      "scrollTop": 881,
+      "scrollDelta": 0,
+      "scrollEvents": 11,
+      "scrollHeight": 1399,
+      "clientHeight": 518,
+      "reportId": "report-current",
+      "publicText": "本轮样例核对已结束，未连接业务资源。"
+    }
+  },
+  {
+    "label": "approval interrupts pending replacement",
+    "frames": [
+      {
+        "ms": 0,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 22.50000009536734,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 57.20000009536761,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 88.90000009536743,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 123.50000009536734,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "inset(0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 0,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 0,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1123.9000000953674,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1149.0000000953673,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1190.7000000953676,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1222.2000000953676,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1249.1000000953672,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1289.9000000953674,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1323.7000000953676,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1356.4000000953674,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1389.1000000953672,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1432.4000000953674,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1465.4000000953674,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1490.4000000953674,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1523.6000000953672,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1557.5000000953678,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1590.2000000953676,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1632.1000000953672,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1665.5000000953678,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1698.5000000953678,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1731.1000000953672,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1765.5000000953678,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1807.4000000953674,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1839.1000000953672,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1873.4000000953674,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1907.4000000953674,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1939.6000000953672,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 1973.9000000953674,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 2007.2000000953676,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 2047.5000000953678,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 2081.500000095368,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 2115.4000000953674,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 2155.6000000953672,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 2190.500000095368,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 2223.800000095367,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 2247.9000000953674,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 2288.800000095367,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 2322.2000000953676,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 2355.6000000953672,
+        "text": "已取得样例数据，正在对比本轮变化。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      }
+    ],
+    "interrupted": true,
+    "final": {
+      "stage": "等待审批",
+      "cursor": 5,
+      "servedCursor": 5,
+      "mode": "Native",
+      "captured": false,
+      "slotSame": false,
+      "identitySame": false,
+      "bodySame": false,
+      "proseSame": false,
+      "historyNodes": 20,
+      "historySame": false,
+      "parallelSame": false,
+      "endingNotice": "",
+      "bodyHeight": 26.25,
+      "bodyAnimations": [],
+      "following": true,
+      "scrollTop": 881,
+      "scrollDelta": 0,
+      "scrollEvents": 11,
+      "scrollHeight": 1399,
+      "clientHeight": 518,
+      "reportId": "",
+      "publicText": "已取得样例数据，正在对比本轮变化。"
+    }
+  },
+  {
+    "label": "reduced motion -> formal conclusion",
+    "frames": [
+      {
+        "ms": 0,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 0
+      },
+      {
+        "ms": 18.700000286102295,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 60.200000286102295,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 93.50000028610248,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 1100.600000286102,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 2100.7000002861023,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 3101.600000286102,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      },
+      {
+        "ms": 4101.800000286103,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 881,
+        "conclusions": 1
+      }
+    ],
+    "interrupted": false,
+    "final": {
+      "stage": "正式报告",
+      "cursor": 3,
+      "servedCursor": 2,
+      "mode": "ACP",
+      "captured": false,
+      "slotSame": false,
+      "identitySame": false,
+      "bodySame": false,
+      "proseSame": false,
+      "historyNodes": 20,
+      "historySame": false,
+      "parallelSame": false,
+      "endingNotice": "",
+      "bodyHeight": 26.25,
+      "bodyAnimations": [],
+      "following": true,
+      "scrollTop": 881,
+      "scrollDelta": 0,
+      "scrollEvents": 11,
+      "scrollHeight": 1399,
+      "clientHeight": 518,
+      "reportId": "report-current",
+      "publicText": "本轮样例核对已结束，未连接业务资源。"
+    }
+  },
+  {
+    "label": "390px dark prose -> conclusion",
+    "frames": [
+      {
+        "ms": 0,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "none",
+        "height": 26.25,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1012,
+        "conclusions": 0
+      },
+      {
+        "ms": 14.998000000000047,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "inset(0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 0,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 0,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1012,
+        "conclusions": 0
+      },
+      {
+        "ms": 1006.8999999999996,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "inset(0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 0,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 0,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1012,
+        "conclusions": 0
+      },
+      {
+        "ms": 1022,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "inset(0% 5.94147% 0% 0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 15.100000000000335,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 15.078000135719805,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1012,
+        "conclusions": 0
+      },
+      {
+        "ms": 1056.3999999999996,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "inset(0% 46.1116% 0% 0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 49.5000000000001,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 49.47800013571957,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1012,
+        "conclusions": 0
+      },
+      {
+        "ms": 1097.8000000000002,
+        "text": "我先核对公开样例的 CPU 与内存。",
+        "clip": "inset(0% 100% 0% 0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 80,
+            "time": 80,
+            "frames": []
+          },
+          {
+            "duration": 80,
+            "time": 80,
+            "frames": [
+              "inset(0%)",
+              "inset(0% 100% 0% 0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1012,
+        "conclusions": 0
+      },
+      {
+        "ms": 1132,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "inset(0% 100% 0% 0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 0,
+            "frames": []
+          },
+          {
+            "duration": 160,
+            "time": 0,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1012,
+        "conclusions": 1
+      },
+      {
+        "ms": 1164.1999999999998,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "inset(0% 100% 0% 0%)",
+        "height": 26.25,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 0,
+            "frames": []
+          },
+          {
+            "duration": 160,
+            "time": 0,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1012,
+        "conclusions": 1
+      },
+      {
+        "ms": 1198.3999999999996,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "inset(0% 29.8133% 0% 0%)",
+        "height": 44.671875,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 34.21799989566221,
+            "frames": []
+          },
+          {
+            "duration": 160,
+            "time": 34.21799989566221,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1012,
+        "conclusions": 1
+      },
+      {
+        "ms": 1231.8999999999996,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "inset(0% 6.98184% 0% 0%)",
+        "height": 50.6640625,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 67.7179998956623,
+            "frames": []
+          },
+          {
+            "duration": 160,
+            "time": 67.7179998956623,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1012,
+        "conclusions": 1
+      },
+      {
+        "ms": 1265.1999999999998,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "inset(0% 1.20869% 0% 0%)",
+        "height": 52.1796875,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 101.01799989566196,
+            "frames": []
+          },
+          {
+            "duration": 160,
+            "time": 101.01799989566196,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1017.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 1298.8000000000002,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "inset(0% 0.0694054% 0% 0%)",
+        "height": 52.4765625,
+        "animations": [
+          {
+            "duration": 160,
+            "time": 134.6179998956618,
+            "frames": []
+          },
+          {
+            "duration": 160,
+            "time": 134.6179998956618,
+            "frames": [
+              "inset(0% 100% 0% 0%)",
+              "inset(0%)"
+            ]
+          }
+        ],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1025.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 1340.6000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1030.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 1373.6000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1034,
+        "conclusions": 1
+      },
+      {
+        "ms": 1406.8999999999996,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1036,
+        "conclusions": 1
+      },
+      {
+        "ms": 1440.1999999999998,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1037,
+        "conclusions": 1
+      },
+      {
+        "ms": 1472.8999999999996,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038,
+        "conclusions": 1
+      },
+      {
+        "ms": 1506.8999999999996,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 1539.3999999999996,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 1580.3000000000002,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 1615.1999999999998,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 1648.8999999999996,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 1673.6000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 1715.1000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 1748.3999999999996,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 1781.8999999999996,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 1815.6000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 1848.6000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 1881.1000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 1915.1999999999998,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 1948.6000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 1989.6000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 2023.5,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 2056.5,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 2088.8999999999996,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 2123.1000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 2156.3,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 2190.6000000000004,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 2232.2,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 2257,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 2298.8,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      },
+      {
+        "ms": 2331.8999999999996,
+        "text": "本轮样例核对已结束，未连接业务资源。",
+        "clip": "none",
+        "height": 52.5,
+        "animations": [],
+        "slotSame": true,
+        "bodySame": true,
+        "proseSame": true,
+        "identitySame": true,
+        "parallelSame": true,
+        "scrollTop": 1038.5,
+        "conclusions": 1
+      }
+    ],
+    "interrupted": false,
+    "final": {
+      "stage": "正式报告",
+      "cursor": 4,
+      "servedCursor": 3,
+      "mode": "Native",
+      "captured": false,
+      "slotSame": false,
+      "identitySame": false,
+      "bodySame": false,
+      "proseSame": false,
+      "historyNodes": 20,
+      "historySame": false,
+      "parallelSame": false,
+      "endingNotice": "",
+      "bodyHeight": 52.5,
+      "bodyAnimations": [],
+      "following": true,
+      "scrollTop": 1038.5,
+      "scrollDelta": 0,
+      "scrollEvents": 21,
+      "scrollHeight": 1557,
+      "clientHeight": 518,
+      "reportId": "report-current",
+      "publicText": "本轮样例核对已结束，未连接业务资源。"
+    }
+  }
+]

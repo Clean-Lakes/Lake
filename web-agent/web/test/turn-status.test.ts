@@ -92,6 +92,7 @@ test("elapsed preview follows public prose and stays there for subsequent tools;
  s.ai!.cards.push({...tool,id:'next-tool'});
  const next=render();
  assert.equal((next.match(/class="reply-duration /g)||[]).length,1,'a real subsequent tool restores execution status');
+ assert.ok(next.includes('is-live')&&next.includes('正在执行工具'),'public progress must not suppress the next real operation');
  assert.ok(next.indexOf('最后的回复')<next.indexOf('class="reply-duration '),'the same paragraph remains above status after the next tool starts');
  assert.ok(!next.includes('is-archived')&&!next.includes('is-awaiting-reply'));
  s.messages.push({id:"v",sessionId:"s",role:"user",text:"新提问",createdAt:"2026-10-14T03:01:00Z"});

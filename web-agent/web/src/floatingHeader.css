@@ -71,7 +71,7 @@ html.lake-windows-chrome .workspace.has-floating-header > .workspace-header {
   position:absolute;
   inset:0;
   background:linear-gradient(105deg,transparent 20%,color-mix(in srgb,var(--info) 5%,transparent) 36%,color-mix(in srgb,var(--info) 14%,transparent) 50%,color-mix(in srgb,var(--info) 5%,transparent) 64%,transparent 80%);
-  animation:workspace-header-sweep 2.1s ease-in-out infinite;
+  animation:workspace-header-sweep var(--live-light-period) ease-in-out infinite;
   will-change:transform;
 }
 @keyframes workspace-header-sweep {
