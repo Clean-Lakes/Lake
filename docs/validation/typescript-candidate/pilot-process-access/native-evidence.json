@@ -1,0 +1,74 @@
+{
+  "buildOrigin": {
+    "schemaVersion": 1,
+    "gitHead": "3b25c76bda116f24c9549afc63cd477d51d1fbf5",
+    "gitBranch": "codex/specialist-live-text-motion",
+    "sourceRoot": "/Users/lingyunxieqing/.codex/worktrees/animal-thinking-edge/Lake",
+    "version": "0.3.33",
+    "dirty": false,
+    "backendRuntime": "typescript",
+    "backendSHA256": "a2f95c6eac9f349ee76f8d0eee51f2cf5a1b2db2c86c91d73ed5660faa4776b6",
+    "uiSourceSHA256": {
+      "AIPanel.tsx": "496f8348604d8cceb53f30405401315d1f39b93bd2fec686379f0e0d19727222",
+      "ThinkingTimeline.tsx": "6f91639248cabfd157f3d842a91fa5b736b2cfaee970b92c86f7ebf0ed31cc71",
+      "ReplyDuration.tsx": "42cd45ed0e43f6fefff1f94aae5efef5dec0b41b02fa53090d0ded5f22ada7f9",
+      "conversation-progress-model.ts": "f6a472e18129d84872b54c704576feb40387e2d6bdb41beabfd427989429019d"
+    }
+  },
+  "syntheticOnly": true,
+  "workers": [
+    {
+      "animal": "otter",
+      "taskState": "running",
+      "cards": []
+    },
+    {
+      "animal": "owl",
+      "taskState": "completed",
+      "cards": [
+        {
+          "type": "thinking",
+          "status": "completed",
+          "length": 45,
+          "taskTagged": true,
+          "rootTagged": true
+        },
+        {
+          "type": "message",
+          "status": "completed",
+          "length": 319,
+          "taskTagged": true,
+          "rootTagged": true
+        },
+        {
+          "type": "operation",
+          "status": "completed",
+          "length": 17,
+          "taskTagged": true,
+          "rootTagged": true
+        },
+        {
+          "type": "thinking",
+          "status": "completed",
+          "length": 45,
+          "taskTagged": true,
+          "rootTagged": true
+        },
+        {
+          "type": "message",
+          "status": "completed",
+          "length": 332,
+          "taskTagged": true,
+          "rootTagged": true
+        },
+        {
+          "type": "operation",
+          "status": "completed",
+          "length": 621,
+          "taskTagged": true,
+          "rootTagged": true
+        }
+      ]
+    }
+  ]
+}
