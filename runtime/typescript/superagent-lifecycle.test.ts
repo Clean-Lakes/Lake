@@ -66,6 +66,20 @@ async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date
     aborted,steering: () => steering };
 }
 
+for (const fail of [false, true]) test(`a committed assignment shows preparation before Pilot settles without starting execution (routing failure: ${fail})`, async t => {
+  const f = await fixture(t), event = await f.admit('检查本地虚构文字。');
+  const handoff = f.route(event, {action: 'create', title: '即时接单状态', role_id: f.role.id});
+  const row = f.host.workers(f.project.id).find(worker => worker.id === handoff.workerId)!;
+  assert.equal(row.activity?.phase, 'queued'); assert.equal(row.activity?.label, '准备处理');
+  assert.equal(row.activity?.sourceMessageId, event.messageId); assert.equal(row.activity?.sourceSessionId, f.router);
+  await f.activate();
+  assert.equal(f.requests.filter(request => request.sessionId === handoff.sessionId).length, 0, 'preparation never bypasses routing');
+  f.settleRouter(fail ? 'synthetic routing failure' : undefined); await f.activate();
+  assert.equal(f.worker(handoff.taskId).state, fail ? 'parked' : 'active');
+  assert.equal(f.requests.filter(request => request.sessionId === handoff.sessionId).length, fail ? 0 : 1);
+  if (fail) assert.equal(f.host.workers(f.project.id).find(worker => worker.id === handoff.workerId)?.activity, undefined);
+});
+
 test('Pilot accepts B and C during A, routes their exact sources in order and keeps same-role tasks independent',async t=>{
  const f=await fixture(t);
  const send=async(text:string)=>{const message=await f.host.send(f.router,text) as {id:string};return f.store.list<any>('superInputs').find(e=>e.messageId===message.id)!;};

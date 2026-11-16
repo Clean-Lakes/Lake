@@ -23,8 +23,9 @@ for (const specialist of [false, true]) test(`${specialist ? 'specialist' : 'Pil
   const web = join(home, 'web'), codexHome = join(home, 'codex');
   await mkdir(web); await writeFile(join(web, 'index.html'), '<html>isolated latency fixture</html>');
   await mkdir(codexHome); await writeFile(join(codexHome, 'config.toml'), '');
-  let release, held = false, workerRequest = false, app, role;
+  let release, releaseRoute, routingHeld = false, held = false, workerRequest = false, app, role;
   const gate = new Promise(resolve => { release = resolve; });
+  const routeGate = new Promise(resolve => { releaseRoute = resolve; });
   let probes = 0;
   const blockProbe = () => { app.agents.external.status = async () => { probes++; await gate; return []; }; };
   const chunk = (res, delta, finish = null) => res.write('data: ' + JSON.stringify({id: 'latency-fixture', object: 'chat.completion.chunk', created: 1,
@@ -41,7 +42,7 @@ for (const specialist of [false, true]) test(`${specialist ? 'specialist' : 'Pil
           event_id: event.id, quote: event.text, part_key: 'check', action: 'create', role_id: role.id, title: '本地首包验收', reason: '仅虚构数据',
         })}}]});
         chunk(res, {}, 'tool_calls');
-      } else { blockProbe(); chunk(res, {content: '已安排。'}); chunk(res, {}, 'stop'); }
+      } else { routingHeld = true; await routeGate; blockProbe(); chunk(res, {content: '已安排。'}); chunk(res, {}, 'stop'); }
     } else {
       workerRequest = specialist;
       chunk(res, {reasoning_content: '先核对。'});
@@ -53,7 +54,7 @@ for (const specialist of [false, true]) test(`${specialist ? 'specialist' : 'Pil
     res.end('data: [DONE]\n\n');
   });
   await new Promise(resolve => provider.listen(0, '127.0.0.1', resolve));
-  t.after(async () => { release(); await app?.close(); provider.closeAllConnections(); await new Promise(resolve => provider.close(resolve)); await rm(home, {recursive: true, force: true}); });
+  t.after(async () => { releaseRoute(); release(); await app?.close(); provider.closeAllConnections(); await new Promise(resolve => provider.close(resolve)); await rm(home, {recursive: true, force: true}); });
   app = await startLakeServer({home, data: join(home, 'data'), staticRoot: web, codexHome, port: 0});
   const api = async (path, method = 'GET', body) => {
     const response = await fetch(app.origin + path, {method, headers: {Authorization: 'Bearer ' + app.token, 'Content-Type': 'application/json'}, body: body === undefined ? undefined : JSON.stringify(body)});
@@ -68,6 +69,14 @@ for (const specialist of [false, true]) test(`${specialist ? 'specialist' : 'Pil
   role = {id: 'latency-otter', projectId: project.id, roleKey: 'latency', name: '首包核对专员', duties: '仅虚构数据', revision: 1, avatarId: 'otter', execution: {kind: 'native'}};
   if (specialist) app.store.put('superRoles', role.id, role);
   await api(`/api/sessions/${router}/messages`, 'POST', {text: '验证本地首包。', ignoreProjectMemory: true});
+  if (specialist) {
+    await until(() => routingHeld, Boolean, 'Pilot did not receive the routing receipt');
+    const workspace = await api(`/api/projects/${project.id}/superagent`);
+    const row = workspace.workers.find(worker => worker.roleId === role.id);
+    assert.equal(row.activity?.phase, 'queued'); assert.equal(row.activity?.label, '准备处理');
+    assert.equal(row.activity?.sourceSessionId, router); assert.equal(workerRequest, false);
+    releaseRoute();
+  }
   await until(() => held, Boolean, 'provider never received the invocation');
   let sessionId = router;
   if (specialist) {

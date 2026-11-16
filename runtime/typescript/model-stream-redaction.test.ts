@@ -77,6 +77,12 @@ test('ordinary ambiguous punctuation is released at a real end while unfinished 
   assert.equal((await collect([{type: 'text_delta', text: '普通 -----BEGIN CERTIFICATE-----内容'}])).map(textOf).join(''), '普通 -----BEGIN CERTIFICATE-----内容');
 });
 
+test('providers may omit a repeated delta ID without breaking credential redaction', async () => {
+  const output = await collect([{type: 'text_delta', id: 'm', text: '准备。synthetic-private-'},
+    {type: 'text_delta', text: 'token。'}, {type: 'text_end', id: 'm'}]);
+  assert.equal(output.map(textOf).join(''), '准备。[REDACTED]。');
+});
+
 test('error events discard ambiguous bytes and keep structured metadata safe', async () => {
   const output = await collect([{type: 'text_delta', text: '安全。synthetic-private-'},
     {type: 'error', error: Object.assign(new Error('synthetic-private-token'), {statusCode: 401})}]);

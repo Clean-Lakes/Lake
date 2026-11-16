@@ -114,10 +114,8 @@ function finishStream(res, delta) {
 function release(slot) {
   for (const response of slot.responses) {
     if (slot.requested === 'stream' && !response.textSent) {
-      // safeModel.streamText (runtime/typescript/agent.ts) retains at least the
-      // last 79 characters until text_end/finish to redact split credentials.
-      // Send 200+ synthetic characters so public prose reaches the real Worker
-      // card while this model response remains open for transition inspection.
+      // Keep a long, synthetic passage for wrapping and in-place transitions.
+      // Short first-packet latency is covered by verify_response_latency_dev.
       response.textSent = chunk(response.res, {
         role: 'assistant', content: [
           slot.progressRevision ? `第 ${slot.progressRevision + 1} 段公开进度：${slot.name}已完成本地等待，正在继续演示原位更新。${marker(slot.id)}` : `${marker(slot.id)} ${slot.name}的隔离动画验收正文已开始输出。`,
@@ -376,8 +374,8 @@ async function main() {
   const env = {...process.env};
   for (const key of ['LAKE_HOME', 'LAKE_WEB_DATA_DIR', 'LAKE_WEB_TOKEN', 'LAKE_DEV_HOME', 'LAKE_DEV_WEB_DATA_DIR', 'LAKE_DEV_WEB_TOKEN']) delete env[key];
   // This fixture exercises native Workers only. Runtime capability discovery
-  // also inspects Codex configuration; keep that source empty so local OAuth
-  // tokens cannot enlarge the shared streaming redaction tail. The override
+  // also inspects Codex configuration; keep that source empty for isolation.
+  // The override
   // belongs only to this child process, never to the user's Codex environment.
   env.CODEX_HOME = fixtureCodexHome;
   const native = spawn(path.join(app, 'Contents/MacOS/Lake'), ['--lake-home', home, '--lake-data', data],

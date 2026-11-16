@@ -573,15 +573,22 @@ export class LakeSuperagent implements AgentHost {
   private workerActivity(worker: Worker): SuperWorker["activity"] {
     const goal = this.ledger.get(worker.taskId);
     if (terminal(goal.status) || worker.state === "stopped") return;
-    if (worker.state === "queued" && (Date.parse(goal.deadlineAt) <= Date.now() ||
-      !this.dispatchReady(worker))) return;
+    if (worker.state === "queued" && Date.parse(goal.deadlineAt) <= Date.now()) return;
     const acceptedIds = new Set([...(worker.invocationInputIds ?? []), ...(worker.deliveredInputIds ?? [])]);
-    const source = [...worker.inputEventIds].reverse()
+    let source = [...worker.inputEventIds].reverse()
       .filter((id) => worker.state === "queued" || acceptedIds.has(id))
       .map((id) => this.store.get<InputEvent>("superInputs", id)).find((event) => event?.disposition === "routed");
+    // A committed assignment is already visible while Pilot finishes routing.
+    // Describe it as preparing; dispatchReady still gates all real execution.
+    if (!source && worker.state === 'queued') {
+      const pending = this.store.get<InputEvent>('superInputs', worker.sourceEventId), decision = this.sourceDecision(worker);
+      if (pending?.disposition === 'pending' && decision?.eventId === pending.id && this.decisionAssignments(decision).some(assignment =>
+        assignment.workerId === worker.id && assignment.sessionId === worker.sessionId && assignment.executionId === worker.taskId)) source = pending;
+    }
     if (!source) return;
+    if (worker.state === 'queued' && source.disposition !== 'pending' && !this.dispatchReady(worker)) return;
     const origin = { sourceMessageId: source?.messageId, sourceSessionId: source?.sessionId };
-    if (worker.state === "queued") return { phase: "queued", label: "等待开始", updatedAt: source?.receivedAt ?? worker.createdAt, ...origin };
+    if (worker.state === "queued") return { phase: "queued", label: source.disposition === 'pending' ? '准备处理' : '等待开始', updatedAt: source.receivedAt ?? worker.createdAt, ...origin };
     if (!this.active.has(worker.id) || !this.agents.isRunning(worker.sessionId)) return;
     const view = this.store.view(worker.sessionId), updatedAt = view.turnStartedAt ?? goal.updatedAt;
     if (this.ssh?.prompt(worker.sessionId)) return { phase: "waiting_approval", label: "等待确认服务器指纹", updatedAt, ...origin };

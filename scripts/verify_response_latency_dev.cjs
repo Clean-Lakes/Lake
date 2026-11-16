@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Installed, signed Lake Dev + isolated Home + gated loopback model. Send the
-// published texts in the real composer, POST /first, then POST /complete.
+// published texts in the real composer. For specialists POST /route after
+// inspecting preparation; POST /first for a short chunk, then /complete.
 'use strict';
 const fs = require('node:fs/promises'), path = require('node:path'), os = require('node:os');
 const http = require('node:http'), {spawn} = require('node:child_process');
@@ -16,9 +17,10 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(read, check, label) { for (const end = Date.now() + 45000; Date.now() < end;) { const value = await read(); if (check(value)) return value; await sleep(50); } throw Error(label); }
 let metadata, home, data, origin, controlOrigin, nativePid, projectId, routerSessionId, buildOrigin, api, roleId, timer, stopped = false, ready = false;
 const requests = [], metrics = [];
-const held = new Set();
+const held = new Set(), routing = new Set();
 let writes = Promise.resolve();
 const status = () => ({ready, home, data, origin, controlOrigin, nativePid, projectId, routerSessionId, buildOrigin, texts, requests, metrics,
+  routing: [...routing].map(entry => ({requestedAt: entry.requestedAt, releasedAt: entry.releasedAt})),
   held: [...held].map(entry => ({kind: entry.kind, firstAt: entry.firstAt, completedAt: entry.completedAt}))});
 function save() {
   if (!metadata) return Promise.resolve();
@@ -42,7 +44,13 @@ async function model(req, res) {
     const source = messages.findLast(m => m.role === 'user' && content(m).startsWith('[LAKE ADMITTED HUMAN EVENTS'));
     const event = JSON.parse(content(source).split('\n')[1])[0], tag = event.text.match(/\[RESPONSE_LATENCY:(\w+)\]/)?.[1];
     const sourceIndex = messages.indexOf(source);
-    if (messages.slice(sourceIndex + 1).some(m => m.role === 'tool')) { end(res, {content: '已安排。'}); return; }
+    if (messages.slice(sourceIndex + 1).some(m => m.role === 'tool')) {
+      if (tag === 'specialist') {
+        let release; const gate = new Promise(resolve => { release = resolve; });
+        const entry = {release, requestedAt: Date.now(), releasedAt: undefined}; routing.add(entry); await save(); await gate;
+      }
+      end(res, {content: '已安排。'}); return;
+    }
     if (tag === 'setup') { end(res, {tool_calls: [tool('manage_specialist', {event_id: event.id, quote: event.text, part_key: 'create', action: 'create',
       role_key: 'response-latency', name: '首包核对专员', duties: '仅核对本地虚构文字', avatar_id: 'otter', execution: {kind: 'native'}})]}); return; }
     if (tag === 'specialist') { end(res, {tool_calls: [tool('route_work', {event_id: event.id, quote: event.text, part_key: 'check', action: 'create',
@@ -104,6 +112,7 @@ async function main() {
     if (req.headers.origin && req.headers.origin !== controlOrigin || req.headers.host !== new URL(controlOrigin).host) return json(res, 403, {});
     if (url.pathname === '/v1/chat/completions' && req.method === 'POST') return model(req, res);
     if (url.pathname === '/status' && req.method === 'GET') return json(res, 200, status());
+    if (url.pathname === '/route' && req.method === 'POST') { for (const entry of routing) { entry.releasedAt ??= Date.now(); entry.release(); } return json(res, 202, {}); }
     if (url.pathname === '/first' && req.method === 'POST') { for (const entry of held) entry.first(); return json(res, 202, {}); }
     if (url.pathname === '/complete' && req.method === 'POST') { for (const entry of held) { entry.first(); entry.complete(); } return json(res, 202, {}); }
     json(res, 404, {});
@@ -112,7 +121,7 @@ async function main() {
   const log = await fs.open(path.join(home, 'native.log'), 'wx', 0o600), env = {...process.env, CODEX_HOME: codexHome};
   for (const field of ['LAKE_HOME', 'LAKE_WEB_DATA_DIR', 'LAKE_WEB_TOKEN', 'LAKE_DEV_HOME', 'LAKE_DEV_WEB_DATA_DIR', 'LAKE_DEV_WEB_TOKEN']) delete env[field];
   const native = spawn(path.join(app, 'Contents/MacOS/Lake'), ['--lake-home', home, '--lake-data', data], {env, stdio: ['ignore', log.fd, log.fd]}); nativePid = native.pid; await log.close();
-  native.once('exit', () => { stopped = true; clearInterval(timer); for (const entry of held) { entry.first(); entry.complete(); } provider.close(); provider.closeAllConnections(); void save(); });
+  native.once('exit', () => { stopped = true; clearInterval(timer); for (const entry of routing) entry.release(); for (const entry of held) { entry.first(); entry.complete(); } provider.close(); provider.closeAllConnections(); void save(); });
   const runtime = await until(async () => { if (stopped) throw Error('Dev exited'); try { return JSON.parse(await fs.readFile(path.join(data, 'runtime.json'), 'utf8')); } catch { return; } }, r => r?.origin && r?.token, 'Dev did not start');
   const endpoint = new URL(runtime.origin); if (endpoint.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(endpoint.hostname)) throw Error('loopback required'); origin = endpoint.origin;
   api = async (route, method = 'GET', body) => { const response = await fetch(origin + route, {method, headers: {Authorization: 'Bearer ' + runtime.token, 'Content-Type': 'application/json'}, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(10000)}); if (!response.ok) throw Error('isolated API rejected'); return response.json(); };

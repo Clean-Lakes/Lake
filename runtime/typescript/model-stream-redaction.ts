@@ -65,6 +65,7 @@ export async function* redactModelStream(events: AsyncIterable<StreamEvent>, sec
     if (type.endsWith('_start') && raw.id !== undefined) currentIds.set(type.slice(0, -6), raw.id);
     const field = typeof raw.text === 'string' ? 'text' : typeof raw.delta === 'string' ? 'delta' : undefined;
     if (field && type.endsWith('_delta')) {
+      if (raw.id !== undefined) currentIds.set(type.slice(0, -6), raw.id);
       const key = keyFor(raw, type);
       const channel = channels.get(key) ?? {redactor: new StreamTextRedactor(secrets), event: raw, field};
       channel.event = raw; channel.field = field; channels.set(key, channel);
