@@ -1,0 +1,102 @@
+Window: "Lake Dev · TypeScript", App: Lake Dev.
+0 standard window Lake Dev · TypeScript, Secondary Actions: Raise
+	1 scroll area
+		2 HTML content Description: Lake Dev, URL: localhost:50975/?session=sp_448150afd5a10d60ff52867795b5c05e
+			3 container 项目导航
+				4 container Lake
+					5 text Lake
+				6 pop up button 搜索会话和资源, Help: 搜索（⌘ K）
+				7 button Pilot · 话事人 · 内置专员 · 对话与任务统筹, Help: Pilot · 话事人 · 内置专员 · 对话与任务统筹 · 不可删除
+				8 tab group (selectable) 项目导航内容
+					9 tab (selected) 专员 专员有待确认事项或未读消息
+					10 tab (selectable) 资源 1
+				11 container 专员 专员有待确认事项或未读消息
+					12 container 专员
+						13 pop up button 首包核对专员 · Agent 类型：Lake · 本地首包核对 [RESPONSE_LATENCY:specialist] · 执行中
+				14 pop up button 工作区
+			15 container Lake Island 工作台
+				16 container
+					17 text Pilot
+					18 container 首包核对专员：正在分析
+						19 text 处理中
+					20 button (expanded) 收起执行详情, Secondary Actions: Collapse
+			21 container
+				22 container 会话记录
+					23 text 创建首包核对专员，使用水獭头像和 Lake 原生 Agent，只处理本地虚构文字。[RESPONSE_LATENCY:setup]
+					24 button 复制消息
+					25 text Pilot
+					26 text 已安排。
+					27 container 回答耗时, Help: 本轮总耗时包含等待确认，不包含排队等待
+						28 button (collapsed) 执行过程, Help: 在右侧查看执行详细过程, Secondary Actions: Expand
+					29 text 验证 Pilot 即时响应，仅使用本地虚构文字。[RESPONSE_LATENCY:pilot]
+					30 button 复制消息
+					31 text Pilot
+					32 text 收到。这是本地首包验收结论。
+					33 container 回答耗时, Help: 本轮总耗时包含等待确认，不包含排队等待
+						34 button (collapsed) 用时 57秒, Help: 在右侧查看执行详细过程, Secondary Actions: Expand
+					35 text 请首包核对专员核对本地虚构文字。[RESPONSE_LATENCY:specialist]
+					36 button 复制消息
+					37 text Pilot
+					38 text 已安排。
+					39 container 回答耗时, Help: 本轮总耗时包含等待确认，不包含排队等待
+						40 button (collapsed) 用时 23秒, Help: 在右侧查看执行详细过程, Secondary Actions: Expand
+					41 container 首包核对专员的回复
+						42 button 与首包核对专员继续沟通 · Agent 类型：Lake
+						43 text 已接单。
+						44 button 查看首包核对专员的执行过程, Help: 在右侧查看思考、公开进度和工具记录
+				45 text 给 Lake 的消息
+				46 combo box (collapsed, settable) 给 Lake 的消息, Value: ​, Secondary Actions: Expand
+					47 text 想让 Lake 帮你做什么？
+				48 file upload button 选择文件或图片
+				49 button 添加附件, Help: 添加任意文件或图片，也可拖入或粘贴文件
+				50 pop up button 会话权限
+				51 combo box (collapsed, settable) 选择模型：response-latency-fixture · 自定义模型, Help: response-latency-fixture, Secondary Actions: Expand, Value: response-latency-fixture
+
+					52 text response-latency-fixture
+				53 text 停止项目全部任务
+				54 button 停止当前项目全部任务, Help: 停止当前项目全部活动任务，保留历史和草稿
+				55 container 任务检查
+					56 container
+						57 text 任务详情
+						58 button 关闭任务检查
+					59 container 当前任务执行
+						60 text 本地首包核对 [RESPONSE_LATENCY:specialist]
+						61 text 执行中 首包核对专员
+						62 container
+							63 text 更新于  11/16 16:17
+					64 tab group (selectable) 任务视图
+						65 tab (selectable) 结果与证据
+						66 tab (selected) 执行过程
+					67 container 执行过程
+						68 container 任务执行过程
+							69 container
+								70 text 任务 Worker 由 Lake 分配 执行中
+							71 container Agent 分配与回传
+								72 text 任务 Worker
+								73 text Lake Worker
+								74 text Lake 原生执行 当前任务使用 Lake 原生执行上下文。
+							75 container (expanded) Secondary Actions: Collapse
+								76 summary 思考与过程记录 2 条, Value: on
+									77 text 思考与过程记录
+									78 text 2
+									79 text  条
+								80 text 思考记录
+								81 text 16:17:39
+								82 text 先核对。
+								83 text 公开回复记录
+								84 text 16:17:39
+								85 text 已接单。
+							86 text 执行工具后，记录会按资源显示在这里。
+						87 container 当前任务执行
+							88 button 停止任务：本地首包核对 [RESPONSE_LATENCY:specialist], Help: 仅停止「本地首包核对 [RESPONSE_LATENCY:specialist]」，不影响该专员的其他任务
+					89 splitter 调整任务检查宽度, Help: 拖动调整宽度，双击恢复默认；方向键微调, Value: 400.3789
+			90 splitter 调整项目导航宽度, Help: 拖动调整宽度，双击恢复默认；方向键微调, Value: 304.4492
+			91 pop up button 会话目录
+	92 close button
+	93 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	94 minimize button
+95 menu bar
+	96 Lake Dev
+	97 编辑
+
+The focused UI element is 76 summary 思考与过程记录 2 条, Value: on
