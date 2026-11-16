@@ -1,8 +1,9 @@
-import {Fragment,type CSSProperties,type ReactNode} from 'react';
+import {Fragment,useRef,type CSSProperties,type ReactNode} from 'react';
 import {usePageVisible} from './usePageVisible';
+import {useSynchronizedLight} from './synchronizedLight';
 
 export const LIVE_TEXT_MOTION_LIMIT=24;
-// Stagger within part of the 4200ms CSS cycle, leaving a quiet pause between waves.
+// Keep a bounded stagger and a quiet pause in both prose and shared light cycles.
 const phaseWindowMs=2800;
 const segmenter=new Intl.Segmenter(undefined,{granularity:'grapheme'});
 type TextNode={type:string;value?:string;children?:TextNode[];data?:{hName?:string;hProperties?:Record<string,unknown>}};
@@ -67,10 +68,12 @@ export function LiveTextMotionText({text,start,end=text.length}:{text:string;sta
 /** Pure status text shares the prose motion without Markdown or a second live region. */
 export function LiveTextMotionLabel({children,active=false,glow=false,leading=false,className=''}:{children:string;active?:boolean;glow?:boolean;leading?:boolean;className?:string}){
  const visible=usePageVisible();
+ const lightRef=useRef<HTMLSpanElement>(null);
  // Ellipsized names expose their beginning; streaming prose exposes its tail.
  const range=leading?{start:0,end:readableHeadEnd(children)}:{start:readableTail(children).start,end:children.length};
  const running=active&&visible;
- return <span className={`live-text-motion-label${className?` ${className}`:''}`} data-live-motion={running?'active':'still'} data-live-glow={glow?running?'active':'still':undefined}><LiveTextMotionText text={children} {...range}/></span>;
+ useSynchronizedLight(lightRef,glow&&running);
+ return <span ref={lightRef} className={`live-text-motion-label${className?` ${className}`:''}`} data-live-motion={running?'active':'still'} data-live-glow={glow?running?'active':'still':undefined}><LiveTextMotionText text={children} {...range}/></span>;
 }
 
 /** Ordinary Markdown does not subscribe to visibility or acquire motion markup. */

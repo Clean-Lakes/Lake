@@ -14,6 +14,7 @@
   --font-weight-bold: 750;
   --font-prose: var(--font-ui);
   --status-text-base: var(--text-secondary);
+  --live-light-period: 3400ms;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --background: var(--sidebar);
   --surface: #ffffff;

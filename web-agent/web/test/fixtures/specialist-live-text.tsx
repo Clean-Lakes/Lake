@@ -5,10 +5,12 @@ import {PilotSpecialistReplyView} from '../../src/PilotSpecialistConversation';
 import type {PilotSpecialistRow} from '../../src/pilotSpecialistReplies';
 import {ObjectReferencesProvider} from '../../src/AssistantMarkdown';
 import {SpecialistAvatarProvider} from '../../src/SuperRoleAvatar';
+import {HeaderSweep} from '../../src/HeaderSweep';
 import '../../src/styles.css';
 import '../../src/pilotWorkspace.css';
 import '../../src/specialistAvatars.css';
 import '../../src/assistantProse.css';
+import '../../src/floatingHeader.css';
 import '../../src/conversationBubbles.css';
 import '../../src/sreCollaboration.css';
 import '../../src/animalThinkingBubble.css';
@@ -37,6 +39,7 @@ function Preview(){
    <button type="button" onClick={()=>{document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark';}}>切换主题</button>
   </header>
   <p data-state={state}>状态：{state} · 快照 {revision}</p>
+  <div data-header-preview style={{position:'relative',isolation:'isolate',width:230,height:46,display:'flex',alignItems:'center',gap:16,padding:'0 16px',border:'1px solid var(--border)',borderRadius:22,marginBottom:24}}><HeaderSweep active={!waiting&&!disconnected&&!queued&&state!=='完成'}/><strong style={{position:'relative'}}>Pilot</strong><span style={{position:'relative',color:'var(--info)'}}>{waiting?'等待确认':disconnected?'重连中':queued?'排队中':state==='完成'?'已结束':'处理中'}</span></div>
   {opened&&<p data-opened-role="fixture-role">已打开准确专员入口</p>}
   <SpecialistAvatarProvider channels={[channel]}><ObjectReferencesProvider><div className="ai-transcript" data-transcript-mode="conversation"><div className="ai-turn">
    <p data-before-reply>已安排专员检查。</p>
