@@ -278,7 +278,7 @@ export type SessionEvent = {
   sessionId: string;
   type: "session" | "message" | "specialist" | "evidence" | "action" | "terminal";
   createdAt: string;
-  textUpdate?: {target:"card"|"agent";id:string;content:string;cardType?:string;at?:string;rootTurnId?:string;textId?:string};
+  textUpdate?: {target:"card"|"agent";id:string;content:string;cardType?:string;at?:string;rootTurnId?:string;textId?:string;externalReply?:{id:string;content:string}};
 };
 
 export type TerminalHistory = {

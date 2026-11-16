@@ -32,10 +32,13 @@ div.ai-markdown.assistant-prose:has(> .reply-info-facts) > :is(h1,h2,h3,h4) { fo
 .sre-report-facts > li > .sre-prose > .assistant-prose { display: inline; }
 .sre-report-facts > li > .sre-prose > .assistant-prose > p:last-child { display: inline; margin: 0; }
 .sre-report-section h4 { font-weight:var(--font-weight-semibold); }
-/* Only an opted-in live reply moves, with a bounded tail and a long quiet rest. */
+/* Only an opted-in live reply moves, with a bounded tail. Keep received prose
+   gently moving while work continues, including the gaps between tool updates. */
 .live-text-motion-character { position:relative; top:0; animation:4200ms ease-in-out var(--live-text-phase,0ms) infinite; animation-play-state:paused; }
 :is(.assistant-prose,.live-text-motion-label)[data-live-motion=active] .live-text-motion-character { animation-name:lake-live-text-rise; animation-play-state:running; }
 @keyframes lake-live-text-rise { 0%,12%,100% { top:0; } 6% { top:-1px; } }
+.assistant-prose[data-live-motion=active] .live-text-motion-character { animation-name:lake-live-prose-rise; }
+@keyframes lake-live-prose-rise { 0%,100% { top:0; } 50% { top:-1px; } }
 /* Opaque glyph color carries the highlight even inside a clipped author name.
    Combining the lift and light keeps one clock per glyph; no text-clip mask. */
 .live-text-motion-label[data-live-glow] { --live-text-glow-base:var(--text-secondary); --live-text-glow-highlight:var(--foreground); --live-text-glow-halo:color-mix(in srgb,var(--foreground) 22%,transparent); }

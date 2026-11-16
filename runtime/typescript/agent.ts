@@ -117,7 +117,10 @@ export class LakeAgents {
     let card=cards.find(item=>item.id===run.id);
     if(!card){card={id:run.id,type:'operation',title:agentBackendName({kind:'acp',agent:run.agent})+' · ACP',status:'running',content:'',at:run.createdAt,
       data:{source:'external_agent',external_run_id:run.id,taskId:run.taskId,agentRunId:run.agentRunId,childSessionId:run.childSessionId,root_turn_id:view.rootTurnId}};cards.push(card);}
-    if(event.kind==='text')card.content=event.text??'';
+    if(event.kind==='text'){
+      card.content=event.text??'';
+      if(event.publicTextId&&typeof event.publicText==='string')card.data={...(card.data??{}),external_reply:{id:event.publicTextId,content:this.redact(event.publicText)}};
+    }
     if(event.kind==='status'){card.status=event.status==='completed'?'completed':['failed','cancelled','unknown','interrupted'].includes(event.status??'')?event.status!:'running';if(run.summary||run.error)card.content=run.summary||run.error||'';}
     card.data={...(card.data??{}),external_agent:run.agent,external_state:run.state,external_usage:run.usage,external_events:run.events.filter(item=>item.kind==='tool'||item.kind==='tool_update').slice(-16)};
     this.update(sessionId,view,externalReplyTextUpdate(run,event,{...card,content:this.redact(card.content??'')},view.rootTurnId));
@@ -1050,7 +1053,9 @@ export class LakeAgents {
         const prior=actor.purpose==='conversation'?undefined:this.store.list<ExternalRun>('acpRuns').filter(run=>run.taskId===actor.taskId&&run.workerId===actor.workerId&&run.generation===actor.generation&&!run.childSessionId&&run.state==='completed').at(-1);
         const result=await this.external.run(selected.agent,input,digest([actor.workerId,actor.generation,id()]),actor,prior?.id);
         if(result.state!=='completed')throw new HttpError(409,result.summary||'外部任务没有明确完成');
-        return {response:result.summary};
+        // Preserve the cumulative external run/operation audit, but do not
+        // reintroduce earlier progress into the Worker's completed reply card.
+        return {response:actor.purpose==='worker'?result.public_reply?.content??result.summary:result.summary};
       }};
     }
     live = { runtime:activeRuntime, broker, execution, selection: selectionKey, children };

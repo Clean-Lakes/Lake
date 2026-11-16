@@ -38,11 +38,16 @@ async function handle(message){
     if(mode.includes('prose'))report='我宣称完成了检查，但没有调用任何实际资源工具。';
     else{const writing=mode.includes('write');const output=await invoke(writing?'Write':'Read',{file_path:writing?'child-output.txt':'child-evidence-a.txt',...(writing?{content:'actual child write receipt'}:{})});report='子智能体实际工具回执：'+JSON.stringify(output);}
    }else{
+    if(mode.startsWith('super-acp-public-text')){
+     const identity=mode.endsWith('legacy')?{}:{messageId:'fixture-progress'};
+     notify({sessionUpdate:'agent_message_chunk',...identity,content:{type:'text',text:'先读取项目。'}});
+     notify({sessionUpdate:'agent_message_chunk',...identity,content:{type:'text',text:'继续核对。'}});
+    }
     if(mode==='super-acp-worker-child')await invoke('Agent',{description:'读取独立任务证据',prompt:'读取 child-evidence-a.txt 并报告实际内容。',subagent_type:'codex-acp',run_in_background:false});
     else await invoke('list_project_files',{path:'.'});
-    report='已由独立 ACP Worker 读取实际项目文件。';await invoke('work_finish',{summary:report,outcome:'completed'});
+    report='已由独立 ACP Worker 读取实际项目文件。';if(mode!=='super-acp-public-text-unreported')await invoke('work_finish',{summary:report,outcome:'completed'});
    }
-   notify({sessionUpdate:'agent_message_chunk',content:{type:'text',text:report}});result={stopReason:'end_turn'};
+   notify({sessionUpdate:'agent_message_chunk',...(mode.startsWith('super-acp-public-text')&&!mode.endsWith('legacy')?{messageId:'fixture-final'}:{}),content:{type:'text',text:['super-acp-public-text-empty','super-acp-public-text-unreported'].includes(mode)?'':report}});result={stopReason:'end_turn'};
   }else if(message.method==='session/cancel')return;
   else throw new Error('Unsupported fixture method');
   if(message.id!==undefined)send({id:message.id,result});

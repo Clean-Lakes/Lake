@@ -73,15 +73,20 @@ test('only the exact observed SDK root hands the slot to its formal report, with
  const item=worker(),initial=advance([],workspace([item])),key=pilotSpecialistBinding(initial[0]!);
  const roots=new Map([[key,'sdk-root']]);item.activity=undefined;item.task={...item.task,state:'completed'};
  const pending=advance(initial,workspace([item]),[user,report(initial[0]!,'task-origin')],roots)[0]!;
- assert.equal(pending.observedRootTurnId,'sdk-root');assert.match(html(pending),/执行结束/,'the task origin is not the observed SDK root');
- const delivered=advance([pending],workspace([item]),[user,report(initial[0]!)],roots)[0]!;
- assert.equal(html(delivered),'','keep the subscription slot without a visible duplicate');
+ assert.equal(pending.observedRootTurnId,'sdk-root');assert.equal(pending.finalReport,undefined);assert.match(html(pending),/执行结束/,'the task origin is not the observed SDK root');
+ const final=report(initial[0]!);
+ const delivered=advance([pending],workspace([item]),[user,final],roots)[0]!;
+ assert.equal(delivered.finalReport,final,'the actual frozen report belongs to the original slot');
+ const rendered=html(delivered);
+ assert.match(rendered.replace(/<[^>]*>/g,''),/正式结果/);assert.doesNotMatch(rendered,/data-live-(?:motion|glow)="active"|status-text--active|data-motion="working"/);
  item.task={...item.task,state:'running'};item.activity=worker().activity;
- const stale=advance([delivered],workspace([item]),[user,report(initial[0]!)],roots)[0]!;
- assert.equal(html(stale),'','a stale workspace thinking activity cannot flash a new empty reply');
- assert.equal(html(stale,snapshot(stale)),'','the old SDK snapshot remains delivered');
+ const stale=advance([delivered],workspace([item]),[user,final],roots)[0]!;
+ assert.equal(stale.finalReport,final);assert.match(html(stale).replace(/<[^>]*>/g,''),/正式结果/,'a stale workspace thinking activity cannot flash a new empty reply');
+ assert.match(html(stale,snapshot(stale)).replace(/<[^>]*>/g,''),/正式结果/,'the old SDK snapshot remains delivered');
+ assert.doesNotMatch(html(stale,snapshot(stale)),/这是真实公开进度|data-live-(?:motion|glow)="active"/);
  assert.match(html(stale,snapshot(stale,'sdk-root-next')).replace(/<[^>]*>/g,''),/这是真实公开进度/,'a different exact SDK invocation supersedes the observed root');
  const next=advance([stale],workspace([item]),[user,report(initial[0]!)],new Map([[key,'sdk-root-next']]))[0]!;
+ assert.equal(next.finalReport,undefined,'a new root cannot inherit the preceding final report');
  assert.match(html(next),/pilot-specialist-reply/,'the preceding report does not retire the new root');
 });
 
@@ -91,8 +96,31 @@ test('reports for another owner or router cannot retire the retained reply',()=>
  const mismatches:Message[]=[{...exact,sessionId:'other-router'},...(['workerId','sessionId','taskId','roleId'] as const).map(field=>({...exact,author:{...exact.author!,[field]:'other'}}))];
  for(const wrong of mismatches){
   const retained=advance(initial,workspace([item]),[user,wrong],roots)[0]!;
-  assert.deepEqual(retained.reportedTurns,[]);assert.match(html(retained),/进度暂未更新/);
+  assert.deepEqual(retained.reportedTurns,[]);assert.equal(retained.finalReport,undefined);assert.match(html(retained),/进度暂未更新/);
  }
+});
+
+test('final report projection requires an observed root and a formal specialist message without guessing from text',()=>{
+ const item=worker(),initial=advance([],workspace([item])),row=initial[0]!,exact=report(row),roots=new Map([[pilotSpecialistBinding(row),'sdk-root']]);
+ assert.equal(advance(initial,workspace([item]),[user,exact])[0]!.finalReport,undefined,'a matching report cannot invent observation');
+ const wrongReports:Message[]=[report(row,'other-root'),{...exact,role:'system'},{...exact,author:undefined},
+  {...exact,author:{...exact.author!,rootTurnId:undefined}},{...exact,author:{...exact.author!,taskId:undefined}},
+  {...exact,author:{...exact.author!,roleId:undefined}}];
+ for(const wrong of wrongReports)assert.equal(advance(initial,workspace([item]),[user,wrong],roots)[0]!.finalReport,undefined);
+ const delivered=advance(initial,workspace([item]),[user,exact],roots)[0]!;
+ assert.equal(delivered.finalReport,exact);assert.deepEqual(delivered.reportedTurns,['sdk-root']);
+ assert.equal(advance([delivered],workspace([item]),[user],roots)[0]!.finalReport,undefined,'removed reports are not restored from cached rows');
+});
+
+test('a final report arriving after another user message stays in its original source slot',()=>{
+ const item=worker(),initial=advance([],workspace([item])),row=initial[0]!,roots=new Map([[pilotSpecialistBinding(row),'sdk-root']]);
+ const later:Message={...user,id:'later-question',text:'另一个问题',createdAt:'2026-11-16T00:00:02Z'};
+ const final={...report(row),createdAt:'2026-11-16T00:00:03Z'};
+ item.activity=undefined;item.task={...item.task,state:'completed'};
+ const delivered=advance(initial,workspace([item]),[user,later,final],roots)[0]!;
+ assert.equal(delivered.sourceMessageId,user.id);assert.equal(delivered.sourceCreatedAt,user.createdAt);
+ assert.equal(pilotSpecialistBinding(delivered),pilotSpecialistBinding(row));assert.equal(delivered.finalReport,final);
+ assert.equal(advance([delivered],workspace([item]),[later,final],roots).length,0,'a missing original source cannot move its report into the later user turn');
 });
 
 test('an activity gap cannot expose a new SDK invocation until its Pilot source is proven again',()=>{
@@ -134,8 +162,8 @@ test('a followup replaces the source binding and never borrows the preceding obs
  const item=worker(),initial=advance([],workspace([item])),roots=new Map([[pilotSpecialistBinding(initial[0]!), 'old-sdk-root']]);
  const followup:Message={...user,id:'followup',createdAt:'2026-11-16T00:00:01Z'};
  item.activity!.sourceMessageId=followup.id;
- const rows=advance(initial,workspace([item]),[user,followup],roots);
- assert.equal(rows.length,1);assert.equal(rows[0]!.sourceMessageId,followup.id);assert.equal(rows[0]!.observedRootTurnId,undefined);
+ const rows=advance(initial,workspace([item]),[user,followup,report(initial[0]!,'old-sdk-root')],roots);
+ assert.equal(rows.length,1);assert.equal(rows[0]!.sourceMessageId,followup.id);assert.equal(rows[0]!.observedRootTurnId,undefined);assert.equal(rows[0]!.finalReport,undefined);
  item.activity=undefined;
  const dispatch:Message={id:'dispatch',sessionId:'pilot',role:'assistant',text:'',createdAt:followup.createdAt,dispatch:{id:'decision',workerId:item.id,sessionId:item.sessionId,roleId:item.roleId,roleName:item.roleName,taskId:item.task.taskId,sourceMessageId:followup.id,instruction:'继续检查',action:'followup'}};
  assert.deepEqual(advance(initial,workspace([item]),[user,followup,dispatch],roots),[],'a committed different source invalidates the previous slot during a startup gap');

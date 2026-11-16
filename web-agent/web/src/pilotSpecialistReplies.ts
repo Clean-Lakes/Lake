@@ -2,7 +2,7 @@ import type {Message,SessionSnapshot,SpecialistReplyAuthor,SuperWorker,SuperWork
 import {liveSpecialistReplies} from '../../shared/specialist-replies';
 
 type PilotSpecialistActivity=Omit<NonNullable<SuperWorker['activity']>,'phase'>&{phase:NonNullable<SuperWorker['activity']>['phase']|'updating'};
-export type PilotSpecialistRow={projectId:string;routerSessionId?:string;worker:SuperWorker;activity:PilotSpecialistActivity;sourceMessageId:string;sourceCreatedAt:string;author:SpecialistReplyAuthor;reportedTurns:string[];continuity?:'updating'|'terminal';observedRootTurnId?:string};
+export type PilotSpecialistRow={projectId:string;routerSessionId?:string;worker:SuperWorker;activity:PilotSpecialistActivity;sourceMessageId:string;sourceCreatedAt:string;author:SpecialistReplyAuthor;reportedTurns:string[];continuity?:'updating'|'terminal';observedRootTurnId?:string;finalReport?:Message};
 
 /** The UI may retain a dispatch slot, never transfer it to another owner. */
 export function pilotSpecialistBinding(row:PilotSpecialistRow){
@@ -16,6 +16,14 @@ function workerDispatch(worker:SuperWorker,sessionId:string,messages:Message[]){
 
 function workerReportedTurns(worker:SuperWorker,sessionId:string,messages:Message[]){
  return messages.flatMap(message=>message.sessionId===sessionId&&message.author?.workerId===worker.id&&message.author.sessionId===worker.sessionId&&message.author.taskId===worker.task.taskId&&message.author.roleId===worker.roleId&&message.author.rootTurnId?[message.author.rootTurnId]:[]);
+}
+
+/** A delivered report can replace only the invocation already seen in this slot. */
+function workerFinalReport(worker:SuperWorker,sessionId:string,messages:Message[],observedRootTurnId?:string){
+ if(!observedRootTurnId)return;
+ return [...messages].reverse().find(message=>message.role==='assistant'&&message.sessionId===sessionId&&
+  message.author?.kind==='specialist'&&message.author.workerId===worker.id&&message.author.roleId===worker.roleId&&
+  message.author.sessionId===worker.sessionId&&message.author.taskId===worker.task.taskId&&message.author.rootTurnId===observedRootTurnId);
 }
 
 /** Committed source bindings place each live specialist in its original user turn. */
@@ -41,8 +49,8 @@ export function pilotDispatchRows(workspace:SuperWorkspace|null|undefined,sessio
 }
 
 /** Keep an already observed dispatch in place across workspace/report refreshes.
- * An observed report retires its section. Keep the slot's exact root so stale
- * activity cannot flash it back; a fresh source binding admits the next root.
+ * Its exact delivered report takes over the same slot. Keep the observed root so
+ * stale activity cannot flash it back; a fresh source binding admits the next root.
  */
 export function continuousPilotDispatchRows(previous:PilotSpecialistRow[],workspace:SuperWorkspace|null|undefined,sessionId:string,messages:Message[],observedRoots:ReadonlyMap<string,string>=new Map()):PilotSpecialistRow[]{
  if(!workspace?.active||workspace.project.routerSessionId!==sessionId)return [];
@@ -69,7 +77,8 @@ export function continuousPilotDispatchRows(previous:PilotSpecialistRow[],worksp
    row={...old,worker,continuity:terminal?'terminal':'updating',author:{...old.author,name:worker.roleName,channelSessionId:channel?.sessionId??dispatch?.channelSessionId??old.author.channelSessionId,execution:worker.execution?.backend},reportedTurns:workerReportedTurns(worker,sessionId,messages),
     activity:{phase:'updating',label:worker.assignmentState==='stopped'?'已停止':labels[worker.task.state]??'进度暂未更新',updatedAt:worker.task.updatedAt??old.activity.updatedAt,sourceSessionId:sessionId,sourceMessageId:old.sourceMessageId}};
   }
-  return [{...row,observedRootTurnId:observedRoots.get(pilotSpecialistBinding(row))}];
+  const observedRootTurnId=observedRoots.get(pilotSpecialistBinding(row));
+  return [{...row,observedRootTurnId,finalReport:workerFinalReport(worker,sessionId,messages,observedRootTurnId)}];
  });
 }
 
@@ -97,7 +106,9 @@ export function pilotSpecialistReply(row:PilotSpecialistRow,snapshot?:SessionSna
   const data=card.data as Record<string,unknown>|undefined;
   const direct=card.type==='operation'&&runs.has(card.id)&&data?.source==='external_agent'&&data.external_run_id===card.id&&
    data.taskId===(row.worker.task.executionGoalId??row.worker.task.taskId)&&data.root_turn_id===view.rootTurnId&&!data.agentRunId&&!data.childSessionId;
-  return direct?{...card,type:'message',at:card.at<view.turnStartedAt!?view.turnStartedAt!:card.at}:card;
+  const reply=direct?data?.external_reply as {id?:unknown;content?:unknown}|undefined:undefined;
+  const publicSegment=reply&&typeof reply.id==='string'&&reply.id&&typeof reply.content==='string'?reply:undefined;
+  return direct?{...card,type:'message',...(publicSegment?{id:publicSegment.id as string,content:publicSegment.content as string}:{}),at:card.at<view.turnStartedAt!?view.turnStartedAt!:card.at}:card;
  });
  const projectedSnapshot={...snapshot,ai:{...view,cards}};
  return liveSpecialistReplies([projectedSnapshot],[row.worker]).find(entry=>entry.reply?.turnId===view.rootTurnId);

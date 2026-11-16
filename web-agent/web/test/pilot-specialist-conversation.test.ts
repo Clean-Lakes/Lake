@@ -123,6 +123,10 @@ test('Codex public root-worker text is projected from its exact ACP run, without
  const card={id:'acp-run',type:'operation',status:'running',at,content:'Codex 正在核对项目目录。',data:{source:'external_agent',external_run_id:'acp-run',taskId:item.task.taskId,root_turn_id:'current'}};
  const snapshot={session:{id:item.sessionId,projectId:'project'},superagent:{roleId:item.roleId,task:item.task,execution:item.execution},cursor:1,ai:{session:item.sessionId,status:'running',rootTurnId:'current',turnStartedAt:at,cards:[card],cardsOffset:0,totalCards:1}} as SessionSnapshot;
  assert.equal(pilotSpecialistReply(row,snapshot)?.card?.content,card.content);
+ const segmented={...card,data:{...card.data,external_reply:{id:'message-final',content:'仅结论'}}};
+ const selected=pilotSpecialistReply(row,{...snapshot,ai:{...snapshot.ai!,cards:[segmented]}})?.card;
+ assert.equal(selected?.id,'message-final');assert.equal(selected?.content,'仅结论');
+ assert.equal(segmented.content,card.content,'the original cumulative audit is unchanged');
  for(const wrong of [{...card,data:{...card.data,source:'tool'}},{...card,data:{...card.data,taskId:'another-task'}},{...card,data:{...card.data,childSessionId:'child'}},{...card,data:{...card.data,root_turn_id:'old'}}]){
   assert.equal(pilotSpecialistReply(row,{...snapshot,ai:{...snapshot.ai!,cards:[wrong]}})?.card,undefined);
  }

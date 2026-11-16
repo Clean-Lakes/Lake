@@ -21,8 +21,9 @@ export function applyLiveText(previous:SessionSnapshot|null,event:SessionEvent):
   const card=ai.cards[index],data=card?.data as Record<string,unknown>|undefined;
   if(card?.type!=='operation'||data?.source!=='external_agent'||data.external_run_id!==update.id||data.root_turn_id!==ai.rootTurnId||data.agentRunId||data.childSessionId)return null;
  }
+ if(update.externalReply&&(update.cardType!=='operation'||typeof update.externalReply.id!=='string'||!update.externalReply.id||typeof update.externalReply.content!=='string'))return null;
  if(index<0&&!update.at)return null;
  if(index>=0&&ai.cards[index]!.status!=='running')return null;
- const cards=index<0?[...ai.cards,{id:update.id,type:update.cardType!,content:update.content,status:'running',at:update.at!}]:ai.cards.map((card,i)=>i===index?{...card,content:update.content}:card);
+ const cards=index<0?[...ai.cards,{id:update.id,type:update.cardType!,content:update.content,status:'running',at:update.at!}]:ai.cards.map((card,i)=>i===index?{...card,content:update.content,...(update.externalReply?{data:{...(card.data as Record<string,unknown>),external_reply:update.externalReply}}:{})}:card);
  return {...previous,cursor:event.seq,ai:{...ai,cards,totalCards:ai.totalCards+(index<0?1:0)}};
 }

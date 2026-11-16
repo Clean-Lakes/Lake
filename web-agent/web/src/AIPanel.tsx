@@ -22,7 +22,7 @@ import {pilotHandoffInterimIds,recoveredRouteFailures} from './routeDispatchPres
 import {OperationOutcomes} from './OperationOutcomes';
 import {MessageText} from './MessageText';
 import {StrategyCorrectionCard} from './StrategyCorrectionCard';
-import {MessageImages} from './MessageImages';
+import {MessageAttachments} from './MessageAttachments';
 import {DisclosureSummary} from './DisclosureSummary';
 import {useSmoothText} from './useSmoothText';
 import type {Components} from 'react-markdown';
@@ -118,7 +118,7 @@ export function TranscriptMessage({message,sessionId,resources,arrive=false,pend
  // Handoffs belong to execution records, not the human-facing conversation.
  if(message.dispatch)return null;
  if(message.role==='system'&&isContextCompactionFailure(message.text||''))return <CompactionNotice message={message.text}/>;
- const attachments=<>{message.files?.length ? <div className="message-attachments">{message.files.map(file=><a key={file.sourceId} href={`/api/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(file.sourceId)}`} download={file.name}><Glyph name="file" size={14}/>{file.name}</a>)}</div> : null}{!!message.images?.length&&<MessageImages images={message.images}/>}</>;
+ const attachments=<MessageAttachments message={message} sessionId={sessionId}/>;
    return <div className={`ai-chat-message ai-role-${message.role}${roleBreak?' is-role-break':''}${continued?' is-reply-continuation':''}${message.images?.length?" has-message-images":""}${animate?" user-message-arrival":""}`}>
           {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <ReplyIdentity identity={assistantIdentity} author={message.author} onSpecialist={onSpecialist} hidden={hideIdentity} continued={continued} motion={motion}/> }{message.role === "user" && message.external && <small className="external-origin-badge" title={message.external.connectionName?`接入渠道：${message.external.connectionName}${message.external.threadTitle?` · 会话：${message.external.threadTitle}`:""}（MCP）`:"来自外部 Agent 的消息（MCP）"}><Glyph name="plug" size={12}/>{message.external.connectionName||"外部 Agent"}</small>}{message.text && (message.role === 'assistant' ? <AssistantMarkdown>{planMarkdown(message.text)}</AssistantMarkdown> : <div className={message.role==='user'?'user-message-text':undefined}>{message.role === "system" ? displayAiError(message.text) : <MessageText text={message.text} mentions={message.mentions} resources={resources}/>}</div>)}
           {attachments}
@@ -154,7 +154,11 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
   // Native children are task execution records. Their independent sessions and
   // tool results belong in the task inspector, not another chat participant.
   const projected=mode==='conversation'&&!proseInChannel?workerTranscriptCards(snapshot,cards,before):{cards,reported:new Map<string,AICard>()};
-  const entries = orderedTranscript(displaySnapshot, projected.cards, before).filter(entry=>mode!=='conversation'||!isNativeAgentSource(entry.agentRun?.source)&&!(entry.message?.conversation?.kind==='summary'&&entry.message.conversation.summaryRequested!==true)).map(entry=>mode==='conversation'?conversationPlanEntry(entry,{planMode:snapshot.conversationMode==='plan',live:snapshot.ai?.status==='running',currentPlanId:snapshot.ai?.proposedPlan?.id}):entry);
+  // A proven report replaces its observed live slot in the original user turn.
+  // Exclude it from the timestamp-ordered transcript in the same render, so a
+  // later user message cannot pull the conclusion into a different turn.
+  const slottedReports=new Set(dispatchRows.flatMap(row=>row.finalReport?[row.finalReport.id]:[]));
+  const entries = orderedTranscript(displaySnapshot, projected.cards, before).filter(entry=>!slottedReports.has(entry.message?.id??'')).filter(entry=>mode!=='conversation'||!isNativeAgentSource(entry.agentRun?.source)&&!(entry.message?.conversation?.kind==='summary'&&entry.message.conversation.summaryRequested!==true)).map(entry=>mode==='conversation'?conversationPlanEntry(entry,{planMode:snapshot.conversationMode==='plan',live:snapshot.ai?.status==='running',currentPlanId:snapshot.ai?.proposedPlan?.id}):entry);
   const loadOlderSRE=async()=>{onInspect?.();const session=snapshot.session.id;setLoadingSRE(true);try{const page=await api.sreTasks(session,sreCursor??snapshot.sre?.tasks.at(-1)?.id??'');if(selectedSession.current===session){setOlderSRE(old=>[...old,...page.items]);setSRECursor(page.nextCursor)}}catch(e){setError(readableError(e))}finally{setLoadingSRE(false)}};
   const visibleEntries = entries.filter(entry => !isFileChangeCard(entry.card));
   const lastBudgetCard=cards.filter(card=>!!card.content).at(-1);

@@ -103,7 +103,7 @@ test('the content surface contains exactly one usable copy and no initial hidden
  const children=createElement('p',null,'真实文字 ',createElement('a',{href:'https://example.com'},'资源链接'));
  const html=renderToStaticMarkup(createElement(PilotReplyContent,{state:content('真实文字 资源链接'),active:true,children}));
  assert.equal((html.match(/真实文字/g)??[]).length,1);assert.equal((html.match(/<a /g)??[]).length,1);
- assert.match(html,/class="pilot-specialist-reply-content"><p>/);
+ assert.match(html,/class="pilot-specialist-reply-content"><div class="pilot-specialist-reply-body"><p>/);
  assert.doesNotMatch(html,/aria-hidden|inert|style=|key=/);
 });
 
@@ -164,4 +164,43 @@ test('a retained slot cannot borrow public prose or waiting state from an unrela
  const html=renderReply(row,snapshot),plain=html.replace(/<[^>]*>/g,'');
  assert.match(plain,/进度更新中/);assert.doesNotMatch(plain,/OTHER_INVOCATION_PROSE|等待确认/);
  assert.doesNotMatch(html,/data-live-motion="active"|data-live-glow="active"/);
+});
+
+
+test('short and long progress replacements animate the existing surface height and return to natural layout',()=>{
+ const {transition,calls}=transitionHarness();
+ transition.update(content('两行过程'),true,52);
+ transition.update(content('完整结论',{id:'report'}),true,104);
+ assert.equal(calls.length,1);
+ assert.equal(calls[0]!.frames[0]!.height,'52px');
+ assert.equal(calls[0]!.frames[1]!.height,'104px');
+ assert.equal(calls[0]!.options.fill,'none');
+ assert.equal(calls[0]!.frames[0]!.overflow,'clip');
+ transition.update(content('相同结论',{id:'report'}),false,26);
+ assert.equal(calls[0]!.animation.cancelled,1,'interruption/reduced motion releases the animated height immediately');
+});
+
+
+test('new lines or a loaded attachment release an in-flight height without replaying the text transition',()=>{
+ const {transition,calls}=transitionHarness();
+ transition.update(content('短进度'),true,26);
+ transition.update(content('新段进度',{id:'next'}),true,52);
+ transition.update(content('新段进度继续流入更多行',{id:'next'}),true,104);
+ assert.equal(calls.length,1);assert.equal(calls[0]!.animation.cancelled,1);
+ transition.update(content('新段进度继续流入更多行',{id:'next'}),true,180);
+ assert.equal(calls.length,1,'attachment resize alone does not replay');
+});
+
+test('an adopted report keeps attachments and plan projection while stopping working effects',()=>{
+ const base=replyRow(),author={...base.author,rootTurnId:'current-sdk-root'};
+ const row:PilotSpecialistRow={...base,observedRootTurnId:author.rootTurnId,reportedTurns:[author.rootTurnId],
+  finalReport:{id:'formal',sessionId:'pilot/session',role:'assistant',text:'',createdAt:at,author,
+   files:[{sourceId:'file/id',name:'核对.txt',text:'sample'}],images:[{id:'img',mimeType:'image/png',base64:'AA==',width:1,height:1,sizeBytes:1}]}};
+ const attached=renderReply(row,replySnapshot(row));
+ assert.match(attached,/\/api\/sessions\/pilot%2Fsession\/attachments\/file%2Fid/);
+ assert.match(attached,/核对.txt/);assert.match(attached,/<img/);
+ assert.doesNotMatch(attached,/正在分析|data-live-motion="active"/);
+ const plan={...row,finalReport:{...row.finalReport!,text:'<proposed_plan>\nPRIVATE_PLAN_BODY\n</proposed_plan>'}};
+ const planned=renderReply(plan,replySnapshot(plan));
+ assert.match(planned,/plan-reference/);assert.doesNotMatch(planned,/PRIVATE_PLAN_BODY/);
 });

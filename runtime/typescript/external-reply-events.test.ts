@@ -14,3 +14,16 @@ test('only public root ACP Worker text gets a prefix; child and tool records rem
  assert.deepEqual(externalReplyTextUpdate({purpose:'worker'},{kind:'text'},card),{});
  assert.equal(JSON.stringify(card),before,'the audit card does not become a stored chat message');
 });
+
+test('public ACP message prefixes accompany the unchanged cumulative audit prefix',()=>{
+ const card:AICard={id:'run',type:'operation',status:'running',at:'2026-11-12T00:00:00Z',content:'过程句。最终结论。',data:{source:'external_agent',external_run_id:'run',external_reply:{id:'last-message',content:'最终结论。'}}};
+ const before=JSON.stringify(card),update=externalReplyTextUpdate({purpose:'worker'},{kind:'text'},card,'root').textUpdate!;
+ assert.equal(update.content,'过程句。最终结论。');
+ assert.deepEqual(update.externalReply,{id:'last-message',content:'最终结论。'});
+ assert.deepEqual(externalReplyTextUpdate({purpose:'worker'},{kind:'status'},card,'root'),{});
+ assert.equal(JSON.stringify(card),before,'a late status never clears or rewrites the retained message projection');
+ for(const invalid of [{content:'missing id'},{id:'message',content:3},{id:'',content:'empty id'}]){
+  const update=externalReplyTextUpdate({purpose:'worker'},{kind:'text'},{...card,data:{external_reply:invalid}},'root').textUpdate!;
+  assert.equal(update.externalReply,undefined);
+ }
+});

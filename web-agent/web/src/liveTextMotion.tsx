@@ -3,7 +3,7 @@ import {usePageVisible} from './usePageVisible';
 import {useSynchronizedLight} from './synchronizedLight';
 
 export const LIVE_TEXT_MOTION_LIMIT=24;
-// Keep a bounded stagger and a quiet pause in both prose and shared light cycles.
+// Keep the offset-based stagger bounded as streamed prose grows.
 const phaseWindowMs=2800;
 const segmenter=new Intl.Segmenter(undefined,{granularity:'grapheme'});
 type TextNode={type:string;value?:string;children?:TextNode[];data?:{hName?:string;hProperties?:Record<string,unknown>}};

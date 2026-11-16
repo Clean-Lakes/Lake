@@ -9,7 +9,8 @@ import {ReplyProcessStatus} from './ReplyProcessStatus';
 import {usePageVisible} from './usePageVisible';
 import {useSmoothText} from './useSmoothText';
 import {conversationPlanEntry} from './planConversation';
-import {PlanReference} from './PlanMode';
+import {PlanReference,planMarkdown} from './PlanMode';
+import {MessageAttachments} from './MessageAttachments';
 import {allowsAnimalThinking,turnStatus} from './turnStatus';
 import {conversationActivity} from './superAgentPresentation';
 import {useSpecialistAppearance} from './SuperRoleAvatar';
@@ -96,14 +97,16 @@ export function PilotSpecialistReplyView({row,snapshot,available=true,visible=tr
  const entry=pilotSpecialistReply(row,snapshot);
  const statusSnapshot=snapshot&&specialistSnapshotMatches(row,snapshot)&&(!row.continuity||!!row.observedRootTurnId&&snapshot.ai?.rootTurnId===row.observedRootTurnId)?snapshot:undefined;
  const status=statusSnapshot?.ai?turnStatus(undefined,statusSnapshot.ai,statusSnapshot.ai.cards,statusSnapshot.ai.turnStartedAt??row.sourceCreatedAt,Date.now()):undefined;
- const moving=available&&['thinking','tool'].includes(row.activity.phase)&&(!snapshot||conversationActivity(snapshot.ai)==='running')&&(!status||!['waiting','settled'].includes(status.phase));
- const projected=entry?.card?conversationPlanEntry({id:entry.card.id,at:entry.createdAt,card:entry.card},{planMode:snapshot?.conversationMode==='plan',live:moving,currentPlanId:snapshot?.ai?.proposedPlan?.id}):undefined;
- const text=projected?.card?.type==='plan_reference'?'':entry?.card?.content??'';
+ const report=row.finalReport&&(!entry?.reply?.turnId||entry.reply.turnId===row.finalReport.author?.rootTurnId)?row.finalReport:undefined;
+ const moving=!report&&available&&['thinking','tool'].includes(row.activity.phase)&&(!snapshot||conversationActivity(snapshot.ai)==='running')&&(!status||!['waiting','settled'].includes(status.phase));
+ const reportEntry=report?conversationPlanEntry({id:report.id,at:report.createdAt,message:report},{planMode:snapshot?.conversationMode==='plan',live:false,currentPlanId:snapshot?.ai?.proposedPlan?.id}):undefined;
+ const projected=reportEntry??(entry?.card?conversationPlanEntry({id:entry.card.id,at:entry.createdAt,card:entry.card},{planMode:snapshot?.conversationMode==='plan',live:moving,currentPlanId:snapshot?.ai?.proposedPlan?.id}):undefined);
+ const text=projected?.card?.type==='plan_reference'?'':report?planMarkdown(report.text):entry?.card?.content??'';
  useLayoutEffect(()=>{
   if(entry?.reply?.turnId)onObservedTurn?.(row,entry.reply.turnId);
  },[entry?.reply?.turnId,onObservedTurn,row]);
  const observedRoot=entry?.reply?.turnId??row.observedRootTurnId;
- if(observedRoot&&row.reportedTurns.includes(observedRoot))return null;
+ if(!report&&observedRoot&&row.reportedTurns.includes(observedRoot))return null;
  const thinking=moving&&row.activity.phase==='thinking'&&allowsAnimalThinking(snapshot?.ai)&&(!status||status.phase==='thinking')&&!text&&projected?.card?.type!=='plan_reference';
  const snapshotLabel=status&&(status.phase==='waiting'||status.phase==='settled'||row.activity.phase==='thinking'&&status.phase!=='thinking')?status.state:undefined;
  const updating=row.activity.phase==='updating';
@@ -114,15 +117,16 @@ export function PilotSpecialistReplyView({row,snapshot,available=true,visible=tr
  const planState=projected?.card?.type==='plan_reference'?(projected.card.data as {state:'saved'|'writing'|'incomplete'}).state:undefined;
  const contentState:PilotReplyContentState={
   binding:pilotSpecialistBinding(row),
-  kind:planState?'plan':text?'prose':'status',id:entry?.card?.id??'',
-  text:planState??(text|| (thinking?lakeAvatarThinking[appearance.icon].label:label)),
+  kind:planState?'plan':text||report?'prose':'status',id:report?.id??entry?.card?.id??'',
+  text:planState??(report?text:text||(thinking?lakeAvatarThinking[appearance.icon].label:label)),
  };
- return <section className="ai-chat-message ai-role-assistant pilot-specialist-reply" data-worker-id={row.worker.id} data-task-id={row.worker.task.taskId} data-phase={row.activity.phase} aria-label={`${row.author.name}的回复`}>
-  <ReplyIdentity identity={{name:'Pilot',pilot:true}} author={row.author} authorMotion={moving?'working':'still'} nameMotion={moving&&visible} onSpecialist={onSpecialist}/>
-  <PilotReplyContent state={contentState} active={moving&&visible}>
-   {planState?<PlanReference state={planState}/>:text?<PilotReplyProse text={text} active={moving&&visible}/>:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
+ return <section className="ai-chat-message ai-role-assistant pilot-specialist-reply" data-worker-id={row.worker.id} data-task-id={row.worker.task.taskId} data-phase={report?'settled':row.activity.phase} data-report-id={report?.id} aria-label={`${row.author.name}的回复`}>
+  <ReplyIdentity identity={{name:'Pilot',pilot:true}} author={report?.author??row.author} authorMotion={moving?'working':'still'} nameMotion={moving&&visible} onSpecialist={onSpecialist}/>
+  <PilotReplyContent state={contentState} active={(moving||!!report)&&available&&visible}>
+   {planState?<PlanReference state={planState}/>:text?<PilotReplyProse text={text} active={moving&&visible}/>:report?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
+   {report&&<MessageAttachments message={report} sessionId={report.sessionId}/>}
   </PilotReplyContent>
-  {text&&(!available||updating)&&<small className="pilot-specialist-connection" role="status">{label}</small>}
+  {!report&&text&&(!available||updating)&&<small className="pilot-specialist-connection" role="status">{label}</small>}
  </section>;
 }
 
