@@ -1,0 +1,42 @@
+{
+  "candidate": "ea5233aeef6d0f7a7c5df68434177b09d0ba2c04",
+  "testedDevSource": "72782f4608e53180f27c977d5217bf7a1f766237",
+  "buildInputChanges": [],
+  "onlyEvidenceChanges": [
+    "docs/validation/acp-agent-execution/codex-app-server.json",
+    "docs/validation/acp-agent-execution/compatibility.md",
+    "docs/validation/typescript-candidate/response-latency-2026-11-16.md",
+    "docs/validation/typescript-candidate/response-latency/native.json",
+    "docs/validation/typescript-candidate/response-latency/pilot-short-open.png",
+    "docs/validation/typescript-candidate/response-latency/short-process.txt",
+    "docs/validation/typescript-candidate/response-latency/specialist-preparing.png",
+    "docs/validation/typescript-candidate/response-latency/specialist-preparing.txt",
+    "docs/validation/typescript-candidate/response-latency/specialist-short-open.png",
+    "docs/validation/typescript-candidate/response-latency/specialist-short-open.txt",
+    "plan/refactor-codex-app-server-1.md",
+    "runtime/typescript/README.md"
+  ],
+  "bothLatestHeadsIncluded": true,
+  "signedBinaryMatches": true,
+  "checks": {
+    "backendTypes": "passed",
+    "frontendTypes": "passed",
+    "adkBoundary": "passed",
+    "diffWhitespace": "passed",
+    "devOriginGuard": "passed"
+  },
+  "reusedRuntimeValidation": {
+    "testedSource": "72782f4608e53180f27c977d5217bf7a1f766237",
+    "backendUnitPassed": 359,
+    "backendUnitSkipped": 4,
+    "hostPassed": 282,
+    "hostSkipped": 6,
+    "frontendPassed": 948,
+    "realCodexPassed": 6,
+    "signedMcpRealCodexPassed": 6,
+    "rerunFullSuites": false,
+    "reason": "Every build input is identical to the signed and tested Dev source; only evidence and the explicitly excluded runtime README differ.",
+    "suiteEvidenceSource": "08e62b5845fa1856e4920cf6de907e3fdbd54a08",
+    "signedRealEvidenceSource": "72782f4608e53180f27c977d5217bf7a1f766237"
+  }
+}
