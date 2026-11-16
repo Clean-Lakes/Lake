@@ -26,9 +26,11 @@ test('Pilot shows each exact dispatched worker and its thinking text below the s
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,pilotWorkspace:state,assistantIdentity:{name:'Pilot',pilot:true},onSpecialist(){}}));
  assert.ok(html.indexOf('我会检查这两项。')<html.indexOf('pilot-specialist-reply'));
  assert.equal((html.match(/data-worker-id=/g)??[]).length,2);
- assert.equal((html.match(/data-live-motion="active"/g)??[]).length,2);
+ assert.equal((html.match(/data-live-motion="active"/g)??[]).length,4);
+ assert.equal((html.match(/data-live-glow="active"/g)??[]).length,4);
  assert.doesNotMatch(html,/animal-thinking-bubble|animal-thinking-character|turn-activity-mark|status-text--active/);
- assert.ok(html.includes('<strong>服务器专员</strong>')&&html.includes('<strong>数据库专员</strong>'));
+ const names=[...html.matchAll(/<strong>([\s\S]*?)<\/strong>/g)].map(match=>match[1].replace(/<[^>]*>/g,''));
+ assert.ok(names.includes('服务器专员')&&names.includes('数据库专员'));
  assert.doesNotMatch(html,/pilot-dispatch-progress|专员工作进展/);
  assert.equal(JSON.stringify(snapshot),before,'live progress must never be persisted as a reply or report');
 });
@@ -39,7 +41,8 @@ test('queued, human confirmation, questions and external waits stay static; only
   const html=render(workspace([item]));
   assert.doesNotMatch(html,/animal-thinking-bubble|data-motion="thinking"/,phase);
   assert.ok(html.includes('pilot-specialist-reply'),phase);
-  assert.equal(html.includes('live-text-motion-label'),phase==='thinking',phase);
+  assert.equal(html.includes('pilot-specialist-thinking-label'),phase==='thinking',phase);
+  assert.equal(html.includes('data-live-glow="active"'),phase==='thinking'||phase==='tool',phase);
   assert.equal(html.includes('turn-activity-mark'),phase==='tool',phase);assert.equal(html.includes('data-motion="working"'),phase==='tool'||phase==='thinking',phase);
  }
  const offline=render(workspace(),false);

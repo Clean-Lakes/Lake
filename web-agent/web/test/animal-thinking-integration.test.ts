@@ -120,16 +120,18 @@ test('Pilot shows animal-specific thinking text under its original identity, the
  const thinking=html();
  assert.match(thinking.replace(/<[^>]*>/g,''),/正在歪头推敲中/);
  assert.match(thinking,/data-live-motion="active"/);
+ assert.equal((thinking.match(/data-live-glow="active"/g)??[]).length,2,'only the original name and thinking text opt in to the soft glow');
  assert.equal((thinking.match(/role="status"/g)??[]).length,1);
  assert.doesNotMatch(thinking,/animal-thinking-bubble|animal-thinking-character|turn-activity-mark|status-text--active/);
  assert.match(renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row})).replace(/<[^>]*>/g,''),/正在歪头推敲中/,'the exact dispatched worker has feedback before the first model packet');
- for(const phase of ['queued','tool','waiting_approval','waiting_input','waiting_external'] as const){row.activity.phase=phase;assert.match(html(),/reply-process-status/,phase);assert.doesNotMatch(html(),/animal-thinking-bubble|live-text-motion-label/,phase);}
- row.activity.phase='thinking';assert.doesNotMatch(html(false),/animal-thinking-bubble|live-text-motion-label/);assert.match(html(false),/正在重连/);
+ for(const phase of ['queued','tool','waiting_approval','waiting_input','waiting_external'] as const){row.activity.phase=phase;assert.match(html(),/reply-process-status/,phase);assert.doesNotMatch(html(),/animal-thinking-bubble|pilot-specialist-thinking-label/,phase);}
+ row.activity.phase='thinking';assert.doesNotMatch(html(false),/animal-thinking-bubble|pilot-specialist-thinking-label|data-live-glow="active"/);assert.match(html(false),/正在重连/);
  snapshot.ai!.cards=[{id:'compact',type:'compaction',status:'running',at}];
- assert.doesNotMatch(html(),/animal-thinking-bubble|live-text-motion-label/);assert.match(html(),/正在压缩上下文/);
+ assert.doesNotMatch(html(),/animal-thinking-bubble|pilot-specialist-thinking-label/);assert.match(html(),/正在压缩上下文/);
  snapshot.ai!.cards=[{id:'reply',type:'message',status:'running',content:'这是本次检查结果。',at,data:{root_turn_id:'root'}}];
- assert.match(html().replace(/<[^>]*>/g,''),/这是本次检查结果。/);assert.doesNotMatch(html(),/animal-thinking-bubble|live-text-motion-label|turn-activity-mark|正在生成回复/);
+ assert.match(html().replace(/<[^>]*>/g,''),/这是本次检查结果。/);assert.doesNotMatch(html(),/animal-thinking-bubble|pilot-specialist-thinking-label|turn-activity-mark|正在生成回复/);
  assert.match(html(),/data-live-motion="active"/);
+ assert.equal((html().match(/data-live-glow="active"/g)??[]).length,1,'the public body keeps its existing motion without inheriting the name glow');
  assert.equal(html().match(/<div class="response-identity">[\s\S]*?<\/div>/)?.[0],thinking.match(/<div class="response-identity">[\s\S]*?<\/div>/)?.[0],'the identity stays in the same parent and retains the same author while its content slot changes');
 });
 
@@ -148,7 +150,7 @@ test('Pilot thinking copy follows the exact original avatar for explicit IDs, pr
   assert.doesNotMatch(html,/animal-thinking-bubble|animal-thinking-character|turn-activity-mark|status-text--active/);
  }
  const hidden=renderThinking('role-a','otter',false);
- assert.match(hidden,/data-live-motion="still"/);assert.match(hidden.replace(/<[^>]*>/g,''),/正在搓爪琢磨中/,'hidden pages pause motion without deleting the real state');
+ assert.match(hidden,/data-live-motion="still"/);assert.doesNotMatch(hidden,/data-live-(?:motion|glow)="active"/);assert.match(hidden.replace(/<[^>]*>/g,''),/正在搓爪琢磨中/,'hidden pages pause both effects without deleting the real state');
 });
 
 test('Pilot public prose keeps its original specialist entry and execution logo outside any bubble',()=>{
@@ -165,7 +167,7 @@ test('Pilot public prose keeps its original specialist entry and execution logo 
   assert.equal((html.match(/class="response-avatar"/g)??[]).length,1);
   assert.doesNotMatch(html,/animal-thinking-bubble|animal-thinking-surface|turn-activity-mark/);
   assert.match(html,/<button type="button" class="response-author"/);
-  assert.ok(html.includes(`<strong>${row.author.name}</strong>`),'the full long name remains available to layout and accessible naming');
+  assert.equal(html.match(/<strong>([\s\S]*?)<\/strong>/)?.[1].replace(/<[^>]*>/g,''),row.author.name,'the full long name remains available to layout and accessible naming');
   assert.ok(html.includes(`aria-label="与${row.author.name}继续沟通 · Agent 类型：${backend.kind==='native'?'Lake':'Codex'}"`));
   assert.equal((html.match(/data-agent-type=/g)??[]).length,1);
   assert.ok(html.includes(`data-agent-type="${backend.kind==='native'?'native':'codex'}"`),'branding follows the real execution binding');
@@ -208,7 +210,7 @@ test('Pilot public text moves only during connected visible execution and stays 
  const snapshot={session:{id:'worker',projectId:'project'},superagent:{roleId:row.worker.roleId,task:row.worker.task},cursor:1,ai:view({rootTurnId:'root',replyStatus:'running',cards:[{id:'reply',type:'message',status:'running',content,at,data:{root_turn_id:'root'}}]})} as SessionSnapshot;
  const renderReply=(extra:{available?:boolean;visible?:boolean}={})=>renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row,snapshot,...extra}));
  for(const phase of ['thinking','tool'] as const){row.activity.phase=phase;assert.match(renderReply(),/data-live-motion="active"/);}
- const assertStill=(html:string)=>{assert.ok(html.replace(/<[^>]*>/g,'').includes(content));assert.match(html,/data-live-motion="still"/);assert.doesNotMatch(html,/animal-thinking-bubble|turn-activity-mark|status-text--active/);};
+ const assertStill=(html:string)=>{assert.ok(html.replace(/<[^>]*>/g,'').includes(content));assert.match(html,/data-live-motion="still"/);assert.doesNotMatch(html,/animal-thinking-bubble|turn-activity-mark|status-text--active|data-live-(?:motion|glow)="active"/);};
  assertStill(renderReply({available:false}));assert.match(renderReply({available:false}),/进度暂未更新，正在重连/);
  assertStill(renderReply({visible:false}));
  for(const phase of ['waiting_approval','waiting_input','waiting_external'] as const){row.activity.phase=phase;assertStill(renderReply());}
@@ -239,6 +241,6 @@ test('Pilot live snapshots stop every work loop for pending cards, child waits a
   const snapshot={...base,ai:view({rootTurnId:'root',replyStatus:'running',...extra})};
   const html=renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row,snapshot}));
   assert.ok(html.includes(label),`${phase}: ${label}`);
-  assert.doesNotMatch(html,/animal-thinking-bubble|live-text-motion-label|turn-activity-mark|status-text--active|data-motion="working"/);
+  assert.doesNotMatch(html,/animal-thinking-bubble|pilot-specialist-thinking-label|turn-activity-mark|status-text--active|data-motion="working"|data-live-(?:motion|glow)="active"/);
  }
 });

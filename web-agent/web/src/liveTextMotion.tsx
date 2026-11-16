@@ -16,6 +16,15 @@ function readableTail(text:string,limit=LIVE_TEXT_MOTION_LIMIT){
  return {start:readable[0]??text.length,count:readable.length};
 }
 
+function readableHeadEnd(text:string){
+ let count=0,end=0;
+ for(const part of segmenter.segment(text))if(part.segment.trim()){
+  end=part.index+part.segment.length;
+  if(++count===LIVE_TEXT_MOTION_LIMIT)break;
+ }
+ return end;
+}
+
 /** Decorate a bounded tail of plain prose, after references and other Markdown features. */
 export function remarkLiveTextMotion(){
  return (tree:TextNode)=>{
@@ -51,14 +60,17 @@ export function liveTextMotionParts(text:string,start:number){
 }
 
 /** Inline spans preserve normal line breaking, selectable text and one readable copy. */
-export function LiveTextMotionText({text,start}:{text:string;start:number}){
- return <span className="live-text-motion-text"><Fragment key="prefix">{text.slice(0,start)}</Fragment>{liveTextMotionParts(text,start).map(part=><Fragment key={part.offset}>{part.moving?<span className="live-text-motion-character" data-text-offset={part.offset} style={{'--live-text-phase':`${-(part.offset*73%phaseWindowMs)}ms`} as CSSProperties}>{part.text}</span>:part.text}</Fragment>)}</span>;
+export function LiveTextMotionText({text,start,end=text.length}:{text:string;start:number;end?:number}){
+ return <span className="live-text-motion-text"><Fragment key="prefix">{text.slice(0,start)}</Fragment>{liveTextMotionParts(text.slice(0,end),start).map(part=><Fragment key={part.offset}>{part.moving?<span className="live-text-motion-character" data-text-offset={part.offset} style={{'--live-text-phase':`${-(part.offset*73%phaseWindowMs)}ms`} as CSSProperties}>{part.text}</span>:part.text}</Fragment>)}<Fragment key="suffix">{text.slice(end)}</Fragment></span>;
 }
 
 /** Pure status text shares the prose motion without Markdown or a second live region. */
-export function LiveTextMotionLabel({children,active=false,className=''}:{children:string;active?:boolean;className?:string}){
- const visible=usePageVisible(),{start}=readableTail(children);
- return <span className={`live-text-motion-label${className?` ${className}`:''}`} data-live-motion={active&&visible?'active':'still'}><LiveTextMotionText text={children} start={start}/></span>;
+export function LiveTextMotionLabel({children,active=false,glow=false,leading=false,className=''}:{children:string;active?:boolean;glow?:boolean;leading?:boolean;className?:string}){
+ const visible=usePageVisible();
+ // Ellipsized names expose their beginning; streaming prose exposes its tail.
+ const range=leading?{start:0,end:readableHeadEnd(children)}:{start:readableTail(children).start,end:children.length};
+ const running=active&&visible;
+ return <span className={`live-text-motion-label${className?` ${className}`:''}`} data-live-motion={running?'active':'still'} data-live-glow={glow?running?'active':'still':undefined}><LiveTextMotionText text={children} {...range}/></span>;
 }
 
 /** Ordinary Markdown does not subscribe to visibility or acquire motion markup. */

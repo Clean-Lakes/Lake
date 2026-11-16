@@ -88,8 +88,8 @@ export function PilotSpecialistReplyView({row,snapshot,available=true,visible=tr
  const snapshotLabel=status&&(status.phase==='waiting'||status.phase==='settled'||row.activity.phase==='thinking'&&status.phase!=='thinking')?status.state:undefined;
  const label=available?snapshotLabel??row.activity.label:'进度暂未更新，正在重连';
  return <section className="ai-chat-message ai-role-assistant pilot-specialist-reply" data-worker-id={row.worker.id} data-task-id={row.worker.task.taskId} data-phase={row.activity.phase} aria-label={`${row.author.name}的回复`}>
-  <ReplyIdentity identity={{name:'Pilot',pilot:true}} author={row.author} authorMotion={moving?'working':'still'} onSpecialist={onSpecialist}/>
-  {projected?.card?.type==='plan_reference'?<PlanReference state={(projected.card.data as {state:'saved'|'writing'|'incomplete'}).state}/>:text?<div className="ai-card ai-message"><AssistantMarkdown liveMotion={moving&&visible}>{text}</AssistantMarkdown></div>:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible}>{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
+  <ReplyIdentity identity={{name:'Pilot',pilot:true}} author={row.author} authorMotion={moving?'working':'still'} nameMotion={moving&&visible} onSpecialist={onSpecialist}/>
+  {projected?.card?.type==='plan_reference'?<PlanReference state={(projected.card.data as {state:'saved'|'writing'|'incomplete'}).state}/>:text?<div className="ai-card ai-message"><AssistantMarkdown liveMotion={moving&&visible}>{text}</AssistantMarkdown></div>:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
   {text&&!available&&<small className="pilot-specialist-connection" role="status">进度暂未更新，正在重连</small>}
  </section>;
 }

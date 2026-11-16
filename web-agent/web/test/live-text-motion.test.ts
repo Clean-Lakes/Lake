@@ -47,6 +47,36 @@ test('plain labels share the bounded grapheme tail and retain empty or whitespac
  }
 });
 
+test('text glow is explicit, follows activity, and preserves the same readable glyph markup',()=>{
+ const source='正在搓爪琢磨中';
+ const label=(active:boolean,glow?:boolean,className?:string)=>renderToStaticMarkup(createElement(LiveTextMotionLabel,{children:source,active,glow,className}));
+ assert.doesNotMatch(label(true),/data-live-glow/,'existing motion-only labels keep their appearance');
+ const active=label(true,true),still=label(false,true);
+ assert.match(active,/data-live-motion="active" data-live-glow="active"/);
+ assert.match(still,/data-live-motion="still" data-live-glow="still"/);
+ assert.equal(active.replaceAll('="active"','="still"'),still);
+ assert.equal(plain(active),source);assert.equal(moving(active).join(''),source);
+ assert.doesNotMatch(active,/aria-hidden|aria-label|role=|status-text|background/,'glow retains opaque actual text without a second sweep or accessible copy');
+ const author=label(true,true,'reply-author-name-motion');
+ assert.match(author,/class="live-text-motion-label reply-author-name-motion"/);
+ assert.equal(plain(author),source);
+});
+
+test('ellipsized names can animate only their visible leading graphemes and retain one static suffix',()=>{
+ const source='👩🏽‍💻e\u0301负责跨区域生产平台和业务服务可用性核验的长期专员'.repeat(8);
+ const graphemes=Array.from(new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(source));
+ const expected=graphemes.slice(0,LIVE_TEXT_MOTION_LIMIT).map(part=>part.segment).join('');
+ const active=renderToStaticMarkup(createElement(LiveTextMotionLabel,{children:source,active:true,glow:true,leading:true}));
+ const still=renderToStaticMarkup(createElement(LiveTextMotionLabel,{children:source,active:false,glow:true,leading:true}));
+ assert.equal(moving(active).length,LIVE_TEXT_MOTION_LIMIT);
+ assert.equal(moving(active).join(''),expected,'the animated glyphs remain in the visible name prefix');
+ assert.ok(active.includes(source.slice(expected.length)),'the long suffix stays a single static text run');
+ assert.equal(plain(active),source);assert.equal(active.replaceAll('="active"','="still"'),still);
+ assert.ok(moving(active).includes('👩🏽‍💻'));assert.ok(moving(active).includes('e\u0301'));
+ const empty=renderToStaticMarkup(createElement(LiveTextMotionLabel,{children:' \t ',active:true,leading:true}));
+ assert.equal(moving(empty).length,0);assert.equal(plain(empty),' \t ');
+});
+
 test('retiring an earlier motion host cannot change an existing object reference React key',()=>{
  const host:Resource={id:'host',projectId:'project',kind:'ssh',name:'验收服务器',description:'',status:'available',ssh:{host:'192.0.2.2',port:22,username:'operator'}};
  const decorate=remarkObjectReferences(objectCatalog([host]));
