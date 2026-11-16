@@ -5,8 +5,25 @@ const {tmpdir}=require('node:os');
 const {join}=require('node:path');
 const {createServer}=require('node:http');
 process.env.LAKE_TS_IMPORT_ONLY='1';
-const {startLakeServer}=require('../../bin/lake-runtime/server.cjs');
+const {startLakeServer:startSourceServer}=require('../../bin/lake-runtime/server.cjs');
 const adapter=process.env.LAKE_CODEX_APP_SERVER_TEST_RUNTIME;
+
+// Optional packaged-binary validation: the real provider launches the signed
+// SEA MCP entrypoint while the same task-scoped host retains its tool authority.
+async function startLakeServer(options){
+ const app=await startSourceServer(options),binary=process.env.LAKE_CODEX_TEST_MCP_BINARY;
+ if(binary){
+  const external=app.agents.external,launch=external.launch.bind(external);
+  external.launch=(profile,directory,signal,mcp,model)=>{
+   if(mcp){
+    const end=mcp.args.indexOf('LAKE_TS_IMPORT_ONLY=0');assert.ok(end>=0);
+    mcp={command:mcp.command,args:[...mcp.args.slice(0,end+1),binary,'--internal-acp-mcp',mcp.args.at(-1)]};
+   }
+   return launch(profile,directory,signal,mcp,model);
+  };
+ }
+ return app;
+}
 
 async function copyRuntime(registry){
  await mkdir(join(registry.runtimeRoot(),'node_modules'),{recursive:true});
