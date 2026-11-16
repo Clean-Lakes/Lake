@@ -8,6 +8,7 @@ import {providerConnection} from './provider-connection';
 import {parseWatchdogReview, watchdogReviewData, watchdogReviewPrompt, type WatchdogReviewInput, type WatchdogReviewResult} from "./watchdog-review";
 import {reasoningBinding} from './reasoning';
 import {redactModelValue,redactJSONText,describeTurnFailure} from "./model-errors";
+import {redactModelStream} from './model-stream-redaction';
 import { join } from "node:path";
 import { builtInTools, AgentRuntime, ManualPermissionBroker, createToolRegistry, createExploreSubagentPort, InMemoryRuntimeTaskRegistry,
   createBuiltInGeneralPurposeAgentProfile, createBuiltInExploreAgentProfile, type ExploreSubagentRuntimeRequest, type ToolEntry } from "./sdk";
@@ -437,45 +438,14 @@ export class LakeAgents {
       async *streamText(request) {
         owner.guard?.();
         profile?.beforeModel?.();
-        // Hold a short raw tail so a credential split across provider chunks
-        // cannot reach the UI, transcript or upstream session database.
-        const held = new Map<string, { text: string; event: Record<string, any>; field: string }>();
-        const limit = Math.max(80, ...[...owner.keys].map((key) => key.length));
-        const flush = function* () {
-          for (const item of held.values())
-            if (item.text) yield { ...item.event, [item.field]: owner.redact(item.text) } as any;
-          held.clear();
-        };
-        try { for await (const event of base.streamText(project(request))) {
-          if (memoryActor) owner.memory?.validateContinuation(memoryActor);
-          const raw = event as unknown as Record<string, any>;
-          const field =
-            typeof raw.text === "string"
-              ? "text"
-              : typeof raw.delta === "string"
-                ? "delta"
-                : undefined;
-          if (field && String(raw.type).endsWith("_delta")) {
-            const key = String(raw.id ?? raw.toolCallId ?? "") + ":" + raw.type;
-            const text = (held.get(key)?.text ?? "") + raw[field];
-            let cut = Math.max(0, text.length - limit + 1);
-            for (const secret of owner.keys) {
-              let at = text.indexOf(secret);
-              while (at >= 0) {
-                if (at < cut && at + secret.length > cut) cut = at;
-                at = text.indexOf(secret, at + 1);
-              }
-            }
-            const privateKey = text.search(/-----BEGIN [A-Z ]*PRIVATE KEY-----/);
-            if (privateKey >= 0 && privateKey < cut) cut = privateKey;
-            if (cut > 0) yield owner.scrub({ ...raw, [field]: text.slice(0, cut) }) as any;
-            held.set(key, { text: text.slice(cut), event: raw, field });
-          } else {
-            if (String(raw.type).endsWith("_end") || raw.type === "finish") yield* flush();
-            yield owner.scrub(event);
+        const validated = async function* () {
+          for await (const event of base.streamText(project(request))) {
+            if (memoryActor) owner.memory?.validateContinuation(memoryActor);
+            yield event;
           }
-        } } catch(error) { throw owner.scrub(error); }
-        yield* flush();
+        };
+        try { yield* redactModelStream(validated(), owner.keys, value => owner.scrub(value)); }
+        catch(error) { throw owner.scrub(error); }
       },
     };
   }
@@ -940,7 +910,10 @@ export class LakeAgents {
       }};
     });
     for (const tool of profile?.tools ?? []) registry.register(tool);
-    const externalAgents=(await this.external.status(session.projectId)).filter(agent=>agent.assignmentReady);
+    // Optional delegation uses already verified capabilities. Starting native
+    // inference must not wait for a separate Codex process/connection probe.
+    // Actual ACP launches and explicit status requests still validate it.
+    const externalAgents=profile?.taskId?(await this.external.registry.list(session.projectId)).filter(agent=>agent.assignmentReady):[];
     const hasExternal=!!profile?.taskId&&externalAgents.length>0;
     if(hasExternal&&profile){
       const externalTool=this.externalTool(sessionId,profile,()=>runtime,externalAgents.map(agent=>agent.id));
