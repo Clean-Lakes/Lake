@@ -7,6 +7,7 @@
  *   GET  /status
  *   POST /dispatch?animal=bee       start another Worker after releasing a slot
  *   POST /stream?animal=otter       send body text; leave the response open
+ *   POST /progress?animal=otter     replace progress after one local wait tool
  *   POST /complete?animal=otter     send work_finish and end the response
  *   POST /release-all              complete all dispatched Workers
  *   POST /finish                   complete Workers, then close this fixture
@@ -36,7 +37,7 @@ const slots = new Map(animals.map(animal => [animal.id, {
   ...animal, roleName: `${animal.name}动画验收专员`, roleId: null,
   channelId: null, channelSessionId: null, worker: null,
   dispatched: false, dispatching: false, requested: 'held',
-  requests: 0, textSent: false, finishSent: false, responses: new Set(),
+  requests: 0, textSent: false, finishSent: false, progressRevision: 0, progressPending: false, responses: new Set(),
 }]));
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const content = message => typeof message?.content === 'string' ? message.content :
@@ -74,7 +75,7 @@ function status() {
       dispatched: slot.dispatched, dispatching: slot.dispatching,
       requested: slot.requested, modelRequests: slot.requests,
       openResponses: slot.responses.size, textSent: slot.textSent,
-      finishSent: slot.finishSent, worker: slot.worker,
+      finishSent: slot.finishSent, progressRevision: slot.progressRevision, progressPending: slot.progressPending, worker: slot.worker,
     })),
   };
 }
@@ -119,7 +120,7 @@ function release(slot) {
       // card while this model response remains open for transition inspection.
       response.textSent = chunk(response.res, {
         role: 'assistant', content: [
-          `${marker(slot.id)} ${slot.name}的隔离动画验收正文已开始输出。`,
+          slot.progressRevision ? `第 ${slot.progressRevision + 1} 段公开进度：${slot.name}已完成本地等待，正在继续演示原位更新。${marker(slot.id)}` : `${marker(slot.id)} ${slot.name}的隔离动画验收正文已开始输出。`,
           '这是一段完全虚构的本地验收文字，用于观察思考气泡如何交接给正在生成的正文。当前页面应保留这位专员的名称和本次任务归属，正文出现后，边框上的小动物停止显示，另一位仍在思考的专员继续保持自己的动作。',
           '本段文字不表示执行过任何业务检查，也不包含服务器状态、凭据或真实用户资料。可以切换明暗主题、调整窗口宽度并查看正文排版，确认长句换行不会遮挡名称、任务入口或者其他专员的回复。',
           '当前模型响应仍然保持打开，便于检查正在输出时的界面状态。只有收到本地验收控制端的完成指令后，这次演示才会提交结束报告。视觉验收结论由检查者记录，此处不预先宣称功能通过。',
@@ -138,6 +139,7 @@ function release(slot) {
   backgroundSave();
 }
 function holdWorker(res, slot) {
+  slot.progressPending = false;
   const response = {res, textSent: false};
   slot.requests++;
   slot.responses.add(response);
@@ -319,6 +321,19 @@ async function handle(req, res) {
       console.error('Fixture dispatch failed; use /status to inspect the exact worker IDs.');
     });
     return json(res, 202, {animal: slot.id, dispatching: true});
+  }
+  if (url.pathname === '/progress') {
+    const open = [...slot.responses].filter(response => !response.res.destroyed && !response.res.writableEnded && response.textSent);
+    if (slot.requested !== 'stream' || slot.progressPending || !open.length) return json(res, 409, {error: 'stream current progress first'});
+    slot.progressPending = true;
+    slot.progressRevision++;
+    for (const response of open) {
+      const call = tool('work_wait', {seconds: 1});
+      call.id += '-' + slot.progressRevision;
+      finishStream(response.res, {tool_calls: [call]});
+    }
+    await saveMetadata();
+    return json(res, 200, status());
   }
   if (!['/stream', '/complete'].includes(url.pathname)) return json(res, 404, {error: 'unknown control'});
   if (!slot.worker && !slot.dispatching) return json(res, 409, {error: 'dispatch this animal first'});

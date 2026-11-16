@@ -1,3 +1,7 @@
 .pilot-specialist-conversation { display:grid; grid-template-columns:minmax(0,1fr); gap:24px; width:100%; min-width:0; }
 .pilot-specialist-conversation:empty { display:none; }
+.pilot-specialist-reply-content { min-width:0; }
 .pilot-specialist-connection { display:block; margin-top:8px; color:var(--text-muted); font-size:12px; }
+@media (prefers-reduced-motion:reduce) {
+ .pilot-specialist-reply-content { opacity:1!important; transform:none!important; }
+}
