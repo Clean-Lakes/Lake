@@ -17,7 +17,7 @@ import '../../src/conversationBubbles.css';
 import '../../src/sreCollaboration.css';
 
 const at='2026-11-16T08:00:00.000Z',started='2026-11-16T08:00:01.000Z';
-const labels=['思考','首段进度','流式追加','工具执行','新段进度','最终段待报告','源快照先结束','完成待报告','结束后播报','结束快照空窗','正式报告','ACP晚到累计','ACP完成message','等待审批','活动快照空窗','断线','删除专员'] as const;
+const labels=['思考','工具状态','首段进度','流式追加','工具执行','新段进度','最终段待报告','源快照先结束','完成待报告','结束后播报','结束快照空窗','正式报告','ACP晚到累计','ACP完成message','等待审批','活动快照空窗','断线','删除专员'] as const;
 type Stage=typeof labels[number];
 let stage:Stage='思考',cursor=1,servedCursor=0,acp=true,long=false,secondComplete=false;
 const streams=new Set<FixtureEvents>();
@@ -37,7 +37,7 @@ const shortProgress='已取得样例数据，正在对比本轮变化。';
 const longProgress='已取得样例数据，正在逐项核对。\n\n- 负载与内存：使用固定的虚构数字，仅验证排版。\n- 磁盘与进程：继续比对本轮公开摘要。\n- 关联资料：保留 [样例记录](#fixture-evidence) 与 `sample-only`。\n\n'+('这一段仅用于观察长内容替换时的滚动和持续跃动，不表示执行了业务检查。'.repeat(5));
 const conclusion='本轮样例核对已结束，未连接业务资源。';
 function publicSegment(){
- if(stage==='思考')return {id:'acp_message_first',content:''};
+ if(['思考','工具状态'].includes(stage))return {id:'acp_message_first',content:''};
  if(['源快照先结束','结束后播报'].includes(stage))return {id:'acp_message_ending',content:'执行已经结束，正在整理结论。'};
  if(['首段进度','流式追加','工具执行'].includes(stage))return {id:'acp_message_first',content:first+(stage==='首段进度'?'':firstAppend)};
  if(['最终段待报告','完成待报告','正式报告','ACP晚到累计','ACP完成message'].includes(stage))return {id:'acp_message_final',content:conclusion};
@@ -51,7 +51,7 @@ function execution(isSecond=false):AgentExecutionSummary{
 function worker(isSecond=false):SuperWorker{
  const author=isSecond?parallel:primary,finished=isSecond?secondComplete:terminal();
  const absent=!isSecond&&(stage==='活动快照空窗'||terminal());
- const waiting=!isSecond&&stage==='等待审批',tool=isSecond||stage==='工具执行';
+ const waiting=!isSecond&&stage==='等待审批',tool=isSecond||['工具执行','工具状态'].includes(stage);
  return {id:author.workerId,roleId:author.roleId,roleName:author.name,sessionId:author.sessionId,execution:execution(isSecond),assignmentState:finished?'parked':'active',
   task:{taskId:author.taskId,sessionId:author.sessionId,projectId:'fixture-project',title:isSecond?'并行资料核对':'公开进度连续性验收',state:finished?'completed':waiting?'waiting_user':'running',acceptanceState:finished?'pass':'not_evaluated',revision:1,originRootTurnId:'task-origin',deadlineAt:''},
   activity:absent||finished?undefined:{phase:waiting?'waiting_approval':tool?'tool':'thinking',label:waiting?'等待确认':tool?'正在读取公开样例':'正在分析',sourceSessionId:'pilot-fixture',sourceMessageId:'user-fixture',updatedAt:started}};
@@ -63,7 +63,7 @@ function sourceCards(isSecond=false):AICard[]{
  const cumulative=segment.id==='acp_message_first'?segment.content:[first+firstAppend,long?longProgress:shortProgress,...(segment.id==='acp_message_final'?[conclusion]:[])].join('\n\n');
  const cards:AICard[]=acp?[{id:'acp-run-current',type:'operation',status:stage==='ACP完成message'?'completed':'running',at:started,content:cumulative+(stage==='ACP晚到累计'?'\n\n晚到的累计审计更新，不应替换已送达报告。':''),
   data:{source:'external_agent',external_run_id:'acp-run-current',taskId:primary.taskId,root_turn_id:primary.rootTurnId,external_reply:segment}}]:segment.content?[{id:segment.id,type:'message',status:'running',at:started,content:segment.content,data:{root_turn_id:primary.rootTurnId}}]:[];
- if(stage==='工具执行')cards.push({id:'sample-operation',type:'operation',status:'running',at:started,title:'读取样例',content:'PRIVATE_TOOL_DETAIL',data:{root_turn_id:primary.rootTurnId}});
+ if(['工具执行','工具状态'].includes(stage))cards.push({id:'sample-operation',type:'operation',status:'running',at:started,title:'读取样例',content:'PRIVATE_TOOL_DETAIL',data:{root_turn_id:primary.rootTurnId}});
  if(stage==='ACP完成message')cards.push({id:'acp-completed-message',type:'message',status:'completed',at:'2026-11-16T08:00:12.000Z',content:cumulative,data:{root_turn_id:primary.rootTurnId}});
  return cards;
 }

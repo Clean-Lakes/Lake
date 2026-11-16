@@ -1,7 +1,9 @@
-import {useLayoutEffect,useRef,type ReactNode} from 'react';
+import {useLayoutEffect,useMemo,useRef,useState,type ReactNode} from 'react';
 
 export type PilotReplyContentState={binding:string;kind:'prose'|'plan'|'status';id:string;text:string};
 export const PILOT_REPLY_TRANSITION_MS=160;
+export const PILOT_REPLY_EXIT_MS=80;
+const visibleClip='inset(0% 0% 0% 0%)',hiddenClip='inset(0% 100% 0% 0%)';
 
 /** Only a replacement needs a transition; received prefixes already stream smoothly. */
 export function changesPilotReplyContent(previous:PilotReplyContentState|undefined,next:PilotReplyContentState){
@@ -11,55 +13,88 @@ export function changesPilotReplyContent(previous:PilotReplyContentState|undefin
 }
 
 type ContentSurface=Pick<HTMLElement,'animate'>;
-type VisualState={opacity:string;transform:string;height?:string};
+type VisualState={clipPath:string;height?:string};
 
 /** Owns only the body transition, never the identity's or text glyphs' clocks. */
 export class PilotReplyContentTransition {
- private previous:PilotReplyContentState|undefined;
+ private current:PilotReplyContentState|undefined;
+ private target:PilotReplyContentState|undefined;
  private animation:Animation|undefined;
+ private layout:Animation|undefined;
+ private phase:'idle'|'exit'|'entry-ready'|'entry'='idle';
  private height:number|undefined;
- constructor(private surface:ContentSurface,private visual:()=>VisualState){}
+ private beforeHeight:number|undefined;
+ constructor(private surface:ContentSurface,private visual:()=>VisualState,private commit:(next:PilotReplyContentState)=>void=()=>{}){}
  update(next:PilotReplyContentState,enabled:boolean,height?:number){
-  const changed=changesPilotReplyContent(this.previous,next),sameBinding=this.previous?.binding===next.binding;
-  const before=this.height;this.height=height;
-  this.previous=next;
-  if(!enabled||!sameBinding){this.stop();return;}
-  // A prefix or loaded attachment can grow during a replacement. Release the
-  // old height rather than clipping new lines until its stale endpoint ends.
-  if(!changed){if(before!==undefined&&height!==undefined&&Math.abs(before-height)>.5)this.stop();return;}
-  if(typeof this.surface.animate!=='function')return;
-  // Commit the new content immediately. Fast replacements continue from the
-  // current painted position instead of clearing or cloning readable content.
-  const from:Keyframe=this.animation?this.visual():{opacity:'0.78',transform:'translateY(2px)'};
-  const to:Keyframe={opacity:'1',transform:'translateY(0)'};
-  if(before!==undefined&&height!==undefined&&Math.abs(before-height)>.5){
-   from.height=from.height??`${before}px`;to.height=`${height}px`;
-   from.overflow=to.overflow='clip';
+  this.target=next;
+  if(!enabled||this.current?.binding!==next.binding||typeof this.surface.animate!=='function'){
+   this.stop();this.current=next;this.height=height;this.commit(next);return;
   }
-  this.stop();
-  const animation=this.surface.animate([from,to],{
-   duration:PILOT_REPLY_TRANSITION_MS,easing:'cubic-bezier(.22,1,.36,1)',fill:'none',
+  const changed=changesPilotReplyContent(this.current,next);
+  if(this.phase==='exit'){
+   // Finish retiring the painted paragraph once; bursts only replace its target.
+   if(!changed){this.stop();this.current=next;this.height=height;this.commit(next);}
+   return;
+  }
+  if(this.phase==='entry-ready'){
+   this.current=next;
+   if(changed){this.commit(next);return;}
+   const before=this.beforeHeight;this.clearAnimations();this.phase='entry';this.height=height;
+   if(before!==undefined&&height!==undefined&&Math.abs(before-height)>.5)this.layout=this.surface.animate(
+    [{height:`${before}px`,overflow:'clip'},{height:`${height}px`,overflow:'clip'}],
+    {duration:PILOT_REPLY_TRANSITION_MS,easing:'cubic-bezier(.22,1,.36,1)',fill:'none'});
+   const animation=this.surface.animate([{clipPath:hiddenClip},{clipPath:visibleClip}],{
+    duration:PILOT_REPLY_TRANSITION_MS,easing:'cubic-bezier(.22,1,.36,1)',fill:'none',
+   });
+   this.animation=animation;animation.onfinish=()=>{if(this.animation===animation)this.stop();};
+   this.commit(next);return;
+  }
+  if(!changed){
+   // New lines and attachments release only the stale height; the reveal keeps
+   // moving, without replaying either half of the text replacement.
+   if(this.height!==undefined&&height!==undefined&&Math.abs(this.height-height)>.5)this.clearLayout();
+   this.current=next;this.height=height;this.commit(next);return;
+  }
+  const painted=this.animation?this.visual():undefined;
+  const before=painted?.height??(height===undefined?undefined:`${height}px`);
+  this.clearAnimations();this.phase='exit';
+  if(before)this.layout=this.surface.animate([{height:before,overflow:'clip'},{height:before,overflow:'clip'}],{duration:PILOT_REPLY_EXIT_MS,fill:'forwards'});
+  const animation=this.surface.animate([{clipPath:painted?.clipPath&&painted.clipPath!=='none'?painted.clipPath:visibleClip},{clipPath:hiddenClip}],{
+   duration:PILOT_REPLY_EXIT_MS,easing:'cubic-bezier(.4,0,1,1)',fill:'forwards',
   });
   this.animation=animation;
-  animation.onfinish=()=>{if(this.animation===animation)this.stop();};
+  animation.onfinish=()=>{
+   if(this.animation!==animation||this.phase!=='exit')return;
+   const measured=Number.parseFloat(this.visual().height??'');
+   this.beforeHeight=Number.isFinite(measured)?measured:height;
+   this.phase='entry-ready';this.current=this.target;this.commit(this.target!);
+  };
  }
- stop(){
+ private clearLayout(){if(this.layout){this.layout.cancel();this.layout=undefined;}}
+ private clearAnimations(){
   if(this.animation){this.animation.onfinish=null;this.animation.cancel();this.animation=undefined;}
+  this.clearLayout();
  }
+ stop(){this.clearAnimations();this.phase='idle';}
 }
 
 export function PilotReplyContent({state,active,children}:{state:PilotReplyContentState;active:boolean;children:ReactNode}){
- const surface=useRef<HTMLDivElement>(null),latest=useRef({state,active});latest.current={state,active};
+ const source=useMemo(()=>({state,children}),[state,children]);
+ const [shown,setShown]=useState(source);
+ const allowed=active&&(typeof document==='undefined'||!document.hidden)&&(typeof window==='undefined'||!window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+ const displayed=allowed&&changesPilotReplyContent(shown.state,state)?shown:source;
+ const surface=useRef<HTMLDivElement>(null),latest=useRef({source,active});
  const body=useRef<HTMLDivElement>(null);
  const sync=useRef<()=>void>(()=>{});
+ useLayoutEffect(()=>{latest.current={source,active};});
  useLayoutEffect(()=>{
   const element=surface.current;if(!element)return;
   const media=window.matchMedia('(prefers-reduced-motion: reduce)');
   const transition=new PilotReplyContentTransition(element,()=>{
-   const style=getComputedStyle(element);return {opacity:style.opacity,transform:style.transform,height:style.height};
-  });
-  const update=()=>transition.update(latest.current.state,latest.current.active&&!document.hidden&&!media.matches,body.current?.getBoundingClientRect().height);
-  const stop=()=>transition.stop();
+   const style=getComputedStyle(element);return {clipPath:style.clipPath,height:style.height};
+  },()=>setShown(latest.current.source));
+  const update=()=>transition.update(latest.current.source.state,latest.current.active&&!document.hidden&&!media.matches,body.current?.getBoundingClientRect().height);
+  const stop=()=>transition.update(latest.current.source.state,false,body.current?.getBoundingClientRect().height);
   sync.current=update;
   // Track smooth prefix growth without remounting or measuring the whole page.
   const observer=typeof ResizeObserver==='undefined'?undefined:new ResizeObserver(update);
@@ -73,5 +108,5 @@ export function PilotReplyContent({state,active,children}:{state:PilotReplyConte
   };
  },[]);
  useLayoutEffect(()=>sync.current());
- return <div ref={surface} className="pilot-specialist-reply-content"><div ref={body} className="pilot-specialist-reply-body">{children}</div></div>;
+ return <div ref={surface} className="pilot-specialist-reply-content"><div ref={body} className="pilot-specialist-reply-body">{displayed.children}</div></div>;
 }
