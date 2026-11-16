@@ -1,10 +1,21 @@
 {
-  "testedSha": "7f3138af131ca54f0a3ca642d75098997273696f",
+  "testedSha": "9f7019d24fd919a5008c472a71448af077dadb3b",
   "dirty": false,
-  "replyStatus": "running",
-  "cardStatus": "running",
-  "bodyLength": 241,
-  "rootTurnId": "turn_aa0bd5f0-5826-4d4c-961c-777e45ea24a0",
-  "workerTaskId": "st_68610b2b425258a0e99258c37a63771a",
-  "model": "deterministic loopback fixture"
+  "model": "deterministic loopback fixture",
+  "workers": [
+    {
+      "animal": "otter",
+      "replyStatus": "running",
+      "cardStatus": "running",
+      "bodyLength": 241,
+      "rootTurnId": "turn_3e4256e4-4859-40db-845e-957495e171e0",
+      "cardRootTurnId": "turn_3e4256e4-4859-40db-845e-957495e171e0"
+    },
+    {
+      "animal": "owl",
+      "replyStatus": "running",
+      "bodyLength": 0,
+      "rootTurnId": "turn_909190dc-d9c4-4cd7-91d1-d9dc640e0260"
+    }
+  ]
 }
