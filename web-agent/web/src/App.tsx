@@ -22,6 +22,7 @@ import {useInspectorWindow} from './inspectorWindow';
 import {SessionInspectorProvider,useSessionInspector} from './SessionInspectorContext';
 import {SessionInspector} from './SessionInspector';
 import {inspectorWorker,latestInspectorSelection} from './sessionInspectorModel';
+import {InspectionRequestGuard,matchesSpecialistInspection,selectedRoleInspection,snapshotInspectionTarget,specialistInspectionWorker,workerInspectionTarget} from './specialistInspection';
 import {ServiceResourceFields} from "./ServiceResourceFields";
 import {ServiceConfigEdit} from "./ServiceConfigEdit";
 import {emptyServiceDraft, resourceTypeOptions, resourceTypeLabel, serviceResourceType, serviceResourceInput, type ResourceInputType} from "./serviceResourceModel";
@@ -72,7 +73,7 @@ import { readImageSelection } from "./imageAttachments";
 import {clipboardFiles,partitionAttachments,attachmentCountLimit,fileSize} from "./fileAttachments";
 import { ResourceImport } from "./ResourceImport";
 import { SSHResourceFields, emptySSH } from "./SSHResourceFields";
-import type { SSHConnectionInput,SuperWorker,SpecialistChannelPage } from "../../shared/contracts";
+import type { SSHConnectionInput,SuperWorker,SpecialistChannelPage,SpecialistReplyAuthor } from "../../shared/contracts";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import type {
   Action,
@@ -755,9 +756,18 @@ function AppContent() {
   const [roleTasks,setRoleTasks]=useState<{sessionId:string;workers:SuperWorker[];page:SpecialistChannelPage}|null>(null);
   const updateRoleTasks=useCallback((id:string,workers:SuperWorker[],page:SpecialistChannelPage)=>setRoleTasks({sessionId:id,workers,page}),[]);
   const roleWorkers=roleTasks?.sessionId===sessionId?roleTasks.workers:[];
-  const roleInspectionRequest=useRef(0);
+  const roleInspectionRequest=useRef(new InspectionRequestGuard());
+  const pendingRoleInspection=useRef<{selection:typeof inspector.selection;current:()=>boolean}|undefined>(undefined);
+  const inspectionSelection=useRef(inspector.selection);inspectionSelection.current=inspector.selection;
   const [gatewayInspection,setGatewayInspection]=useState<SessionSnapshot|null>(null);
-  useEffect(()=>{roleInspectionRequest.current++;setRoleInspection(null);},[sessionId]);
+  useLayoutEffect(()=>{roleInspectionRequest.current.cancel();pendingRoleInspection.current=undefined;setRoleInspection(null);},[sessionId,activeSnapshot?.session.projectId,route.resourceId,isPlansPage]);
+  useLayoutEffect(()=>{
+    const pending=pendingRoleInspection.current;
+    if(pending&&inspector.selection!==pending.selection){roleInspectionRequest.current.cancel();pendingRoleInspection.current=undefined;}
+    if(roleInspection&&(!inspector.selection||inspector.selection.sessionId!==roleInspection.session.id||inspector.selection.canonicalGoalId!==roleInspection.superagent?.task.taskId)){
+      roleInspectionRequest.current.cancel();setRoleInspection(null);
+    }
+  },[inspector.selection,roleInspection?.session.id,roleInspection?.superagent?.task.taskId]);
   const inspectGatewayTask=async(target:GatewayTaskTarget)=>{
     const next=await api.snapshot(target.sessionId,undefined,target.taskId);
     if(!gatewayTaskMatches(next,target))throw new Error('任务的项目或执行身份已变化，请刷新消息后重试');
@@ -772,21 +782,43 @@ function AppContent() {
     inspector.open({...latestInspectorSelection(gatewayInspection,tab),followLatest:false});setGatewayInspection(null);
   },[gatewayInspection,sessionId,activeSnapshot?.session.id,inspector.open]);
   const inspectedSnapshot=roleInspection??activeSnapshot;
-  const inspectRoleTask=async(target:string,selectedWorker?:SuperWorker)=>{
+  const inspectRoleTask=async(target:string,selectedWorker?:SuperWorker,requestedTab?:'plan'|'execution')=>{
     const expected=selectedWorker??roleWorkers.find(worker=>worker.sessionId===target);
     if(!expected||expected.sessionId!==target)return;
-    const tab=expected.task.summary&&!['running','queued','waiting_external','waiting_user'].includes(expected.task.state)?'plan':'execution';
+    const identity=workerInspectionTarget(expected,activeSnapshot?.session.projectId??'');
+    if(!identity){handleFailure(new Error('任务不属于当前项目或执行身份已变化'));return;}
+    const tab=requestedTab??(expected.task.summary&&!['running','queued','waiting_external','waiting_user'].includes(expected.task.state)?'plan':'execution');
     if(roleInspection?.session.id===target&&roleInspection.superagent?.task.taskId===expected.task.taskId&&inspector.selection?.sessionId===target&&inspector.selection.tab===tab)return;
-    const request=++roleInspectionRequest.current;
-    try{const next=await api.snapshot(target,undefined,expected.task.taskId);if(request!==roleInspectionRequest.current)return;
-      if(next.session.projectId!==activeSnapshot?.session.projectId||(next.session.workspaceRole!=='worker'&&!(next.session.workspaceRole==='router'&&expected.roleId==='pilot:'+next.session.projectId))||next.superagent?.task.taskId!==expected.task.taskId||next.superagent?.roleId!==expected.roleId)throw new Error('任务不属于当前项目或执行身份已变化');
+    const request=roleInspectionRequest.current.begin(),selection=inspectionSelection.current;
+    pendingRoleInspection.current={selection,current:request.current};
+    try{const next=await api.snapshot(target,request.signal,expected.task.taskId);if(!request.current()||inspectionSelection.current!==selection)return;
+      if(!matchesSpecialistInspection(next,identity))throw new Error('任务不属于当前项目或执行身份已变化');
+      pendingRoleInspection.current=undefined;
       setRoleInspection(next);inspector.open({...latestInspectorSelection(next,tab),followLatest:false});
-    }catch(error){if(request===roleInspectionRequest.current)handleFailure(error);}
+    }catch(error){if(request.current()&&inspectionSelection.current===selection)handleFailure(error);}
+    finally{if(pendingRoleInspection.current?.current===request.current)pendingRoleInspection.current=undefined;}
+  };
+  const inspectSpecialist=(author:SpecialistReplyAuthor)=>{
+    const worker=specialistInspectionWorker(author,pilotWorkspace.workspace,activeSnapshot?.session.projectId??'');
+    if(!worker){handleFailure(new Error('未找到这次专员任务，或任务身份已变化，请刷新后重试'));return;}
+    void inspectRoleTask(author.sessionId,worker,'execution');
+  };
+  const refreshRoleInspection=async(signal?:AbortSignal)=>{
+    if(!roleInspection)return;
+    const identity=snapshotInspectionTarget(roleInspection),current=roleInspectionRequest.current.capture();
+    const selected=()=>{const value=inspectionSelection.current;return value?.sessionId===identity?.sessionId&&value?.canonicalGoalId===identity?.taskId;};
+    if(!identity||!selected())return;
+    try{
+      const next=await api.snapshot(identity.sessionId,signal,identity.taskId);
+      if(signal?.aborted||!current()||!selected())return;
+      if(!matchesSpecialistInspection(next,identity))throw new Error('任务不属于当前项目或执行身份已变化');
+      setRoleInspection(next);
+    }catch(error){if(!signal?.aborted&&current()&&selected())handleFailure(error);}
   };
   useEffect(()=>{
     if(!roleInspection||inspector.selection?.sessionId!==roleInspection.session.id)return;
-    const target=roleInspection.session.id,request=roleInspectionRequest.current,controller=new AbortController();let busy=false;
-    const refresh=async()=>{if(busy)return;busy=true;try{const next=await api.snapshot(target,controller.signal,roleInspection.superagent?.task.taskId);if(request===roleInspectionRequest.current)setRoleInspection(next);}catch(error){if(!controller.signal.aborted&&request===roleInspectionRequest.current)handleFailure(error);}finally{busy=false;}};
+    const controller=new AbortController();let busy=false;
+    const refresh=async()=>{if(busy)return;busy=true;try{await refreshRoleInspection(controller.signal);}finally{busy=false;}};
     const timer=window.setInterval(()=>void refresh(),1000);
     return()=>{controller.abort();window.clearInterval(timer);};
   },[sessionId,roleInspection?.session.id,roleInspection?.superagent?.task.taskId,inspector.selection?.sessionId]);
@@ -804,7 +836,7 @@ function AppContent() {
       return;
     }
     if(!inspectedSnapshot||!inspectorAvailable)return;
-    if(roleInspection?.session.id===sessionId){roleInspectionRequest.current++;setRoleInspection(null);}
+    if(roleInspection?.session.id===sessionId){roleInspectionRequest.current.cancel();setRoleInspection(null);}
     const tab=inspector.lastSelection?.sessionId===inspectedSnapshot.session.id?inspector.lastSelection.tab:headerPilot?'plan':'execution';
     inspector.open(latestInspectorSelection(activeSnapshot??inspectedSnapshot,tab));
   };
@@ -907,12 +939,12 @@ function AppContent() {
   const specialistModel=useSpecialistModel(selectedSuperChannel,settingsOpen,modelMenuOpen,codexSettingsProject);
   useEffect(()=>{
     const selected=inspector.selection;if(!selected||selected.sessionId!==sessionId)return;
-    if(!selected.canonicalGoalId||selected.followLatest){if(roleInspection?.session.id===sessionId){roleInspectionRequest.current++;setRoleInspection(null);}return;}
+    if(!selected.canonicalGoalId||selected.followLatest){if(roleInspection?.session.id===sessionId){roleInspectionRequest.current.cancel();setRoleInspection(null);}return;}
     if(selected.canonicalGoalId===roleInspection?.superagent?.task.taskId)return;
-    if(selected.canonicalGoalId===activeSnapshot?.superagent?.task.taskId){if(roleInspection){roleInspectionRequest.current++;setRoleInspection(null);}return;}
-    const worker=pilotWorkspace.workspace?.workers.find(worker=>worker.sessionId===sessionId&&worker.task.taskId===selected.canonicalGoalId);
-    if(worker)void inspectRoleTask(sessionId,worker);
-  },[sessionId,inspector.selection?.canonicalGoalId,inspector.selection?.followLatest,pilotWorkspace.workspace?.workers,activeSnapshot?.superagent?.task.taskId]);
+    if(selected.canonicalGoalId===activeSnapshot?.superagent?.task.taskId){if(roleInspection){roleInspectionRequest.current.cancel();setRoleInspection(null);}return;}
+    const target=selectedRoleInspection(selected,pilotWorkspace.workspace?.workers??[]);
+    if(target)void inspectRoleTask(sessionId,target.worker,target.tab);
+  },[sessionId,inspector.selection,pilotWorkspace.workspace?.workers,activeSnapshot?.superagent?.task.taskId]);
   const pilotWorkActive=bootstrap?.backendRuntime==='typescript'&&!!superPilotActivity(pilotWorkspace.workspace,selectedSession,sessionConnected);
   const currentAssignment=specialistModel.selected?{assignment:specialistModel.assignment(),checking:specialistModel.loading,blockedReason:specialistModel.blocker}:undefined;
   const executionStoppable=turnActive||pilotWorkActive;
@@ -1669,7 +1701,7 @@ function AppContent() {
           if(direction&&pausesConversationFollow(event.currentTarget,direction,conversationScroll.current.following))pauseFollowing();
         }} onScroll={event => { if (conversationFollower.current?.animating) return; conversationScroll.current.following = followsConversationScroll(event.currentTarget,conversationScroll.current.following); if(conversationScroll.current.following)conversationFollower.current?.request(); }} className={`conversation${historyPending?" is-entering":""}`} inert={historyPending} aria-label={isSpecialistTasks?"专员任务":"会话记录"}>
           {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true"/> : selectedSession.workspaceRole==='role'?<div className="timeline-list"><SpecialistChannel key={sessionId} snapshot={activeSnapshot} connected={sessionConnected} selectedSessionId={inspectorOpen?inspectedSnapshot?.session.id:undefined} inspectedSnapshot={roleInspection??undefined} onTask={id=>void inspectRoleTask(id)} onTasks={updateRoleTasks} onActivity={updateRoleReplyActivity} onReady={updateRoleContentReady}/></div>: (itemList.length || !!activeSnapshot.ai?.cards.length || !!activeSnapshot.superagent || !!activeSnapshot.sre?.tasks.length || !!activeSnapshot.ai?.operationOutcomes?.length) ? <div className="timeline-list">
-            {activeSnapshot?.ai ? <AITranscript key={sessionId} pilotWorkspace={selectedSuperPilot?pilotWorkspace.workspace:undefined} pilotConnected={pilotActivityConnected} connected={!isLegacyHistory&&sessionConnected} superTask={selectedSuperWorker?.task} onSpecialist={author=>{const worker=pilotWorkspace.workspace?.workers.find(row=>row.id===author.workerId);const channel=pilotWorkspace.workspace?.channels?.find(row=>row.roleId===worker?.roleId);void api.superWorkspace(selectedSession.projectId).then(()=>refreshCatalog()).then(()=>navigate({sessionId:author.channelSessionId??channel?.sessionId??author.sessionId,resourceId:null})).catch(handleFailure);}} assistantIdentity={selectedSuperWorker?{name:selectedSuperWorker.roleName,roleId:selectedSuperWorker.roleId}:selectedSuperPilot?{name:"Pilot",pilot:true}:undefined} onOpenMemory={()=>{setSettingsInitialTab("memory");setSettingsOpen(true)}} refresh={refreshCurrent} snapshot={activeSnapshot} mode={conversationMode} onOpenPlans={openPlans} onInspect={inspectConversation} onStopTurn={() => void stopCurrentTurn()} stopping={stoppingTurn} disabled={isLegacyHistory||!sessionConnected || modeSaving.has(sessionId)} renderAction={action => <TimelineNode entry={{ kind: "action", at: action.createdAt, id: action.id, item: action }} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={isLegacyHistory||!sessionConnected || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })}/>} /> : itemList.map(entry => <TimelineNode key={`${entry.kind}:${entry.id}`} entry={entry} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || messageBlocked || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })} />)}
+            {activeSnapshot?.ai ? <AITranscript key={sessionId} pilotWorkspace={selectedSuperPilot?pilotWorkspace.workspace:undefined} pilotConnected={pilotActivityConnected} connected={!isLegacyHistory&&sessionConnected} superTask={selectedSuperWorker?.task} onInspectSpecialist={inspectSpecialist} onSpecialist={author=>{const worker=pilotWorkspace.workspace?.workers.find(row=>row.id===author.workerId);const channel=pilotWorkspace.workspace?.channels?.find(row=>row.roleId===worker?.roleId);void api.superWorkspace(selectedSession.projectId).then(()=>refreshCatalog()).then(()=>navigate({sessionId:author.channelSessionId??channel?.sessionId??author.sessionId,resourceId:null})).catch(handleFailure);}} assistantIdentity={selectedSuperWorker?{name:selectedSuperWorker.roleName,roleId:selectedSuperWorker.roleId}:selectedSuperPilot?{name:"Pilot",pilot:true}:undefined} onOpenMemory={()=>{setSettingsInitialTab("memory");setSettingsOpen(true)}} refresh={refreshCurrent} snapshot={activeSnapshot} mode={conversationMode} onOpenPlans={openPlans} onInspect={inspectConversation} onStopTurn={() => void stopCurrentTurn()} stopping={stoppingTurn} disabled={isLegacyHistory||!sessionConnected || modeSaving.has(sessionId)} renderAction={action => <TimelineNode entry={{ kind: "action", at: action.createdAt, id: action.id, item: action }} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={isLegacyHistory||!sessionConnected || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })}/>} /> : itemList.map(entry => <TimelineNode key={`${entry.kind}:${entry.id}`} entry={entry} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || messageBlocked || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })} />)}
             {selectedSession.status === "investigating" && !activeSnapshot.ai && <div className="timeline-item item-thinking" role="status" aria-live="polite"><span className="timeline-point"><Glyph name="spark" size={15}/></span><div className="timeline-content"><div className="thinking-line"><span className="thinking-dots" aria-hidden="true"><i/><i/><i/></span><span>正在处理…</span></div></div></div>}
           </div> : <div className="timeline-empty"><div className="empty-icon"><Glyph name="chat" size={25}/></div><h2>从一个问题开始</h2><p>描述你看到的故障或想核实的现象。Lake 会把调查过程、证据和需要确认的操作留在这里。</p></div>}
           {activeSnapshot?.session.workspaceRole==='router'&&<ConversationReadMarker session={activeSnapshot.session.id} state={activeSnapshot.messageRead} enabled={sessionConnected&&!historyPending}/>}
@@ -1692,7 +1724,7 @@ function AppContent() {
           }}/></div><div className="composer-foot"><input ref={attachmentInputRef} className="visually-hidden" type="file" multiple aria-label="选择文件或图片" onChange={event => void attachFiles(event.target.files)}/><button type="button" className="image-attach-button composer-attach-button" disabled={!sessionConnected || !!pendingOperation} title="添加任意文件或图片，也可拖入或粘贴文件" aria-label="添加附件" onClick={() => attachmentInputRef.current?.click()}><Glyph name="plus" size={18}/></button>{activeSnapshot?.ai && activeSnapshot.session.workspaceRole!=="role" && activeSnapshot.session.workspaceRole!=="worker" && <button type="button" ref={permissionButtonRef} className="composer-permission-button" aria-label="会话权限" title="会话权限" aria-haspopup="dialog" aria-expanded={permissionsOpen} onClick={() => setPermissionsOpen(current => !current)}><Glyph name="lakePermission" size={16}/><span className="composer-tool-label">权限</span></button>} {activeSnapshot&&!pilotWorkspace.workspace?.active&&<LakePilotControl key={activeSnapshot.session.projectId} snapshot={activeSnapshot} onUpdated={refreshCurrent} disabled={!sessionConnected||turnActive} disabledReason={!sessionConnected?"连接恢复后可切换 Lake Pilot。":"本轮运行中，结束后可切换 Lake Pilot。"}/> }<div className="composer-status"><div className="model-switch-wrap">
           <ComposerModelSelect key={sessionId} externalAgent={codexSettingsProject?{selected:specialistModel.selected,ready:!!specialistModel.agent?.assignmentReady,message:specialistModel.message,model:specialistModel.agent?.model,configurationOnly:!selectedSuperChannel}:undefined} onExternalAgentSelect={()=>{void specialistModel.select("codex").catch(handleFailure);}} onExternalAgentSettings={()=>{setModelMenuOpen(false);setSettingsInitialTab("agents");setSettingsOpen(true);}} contextUsage={activeSnapshot?.ai?{view:{session:activeSnapshot.ai.session,context:activeSnapshot.ai.context,usage:activeSnapshot.ai.usage},model:{modelId:bootstrap?.modelId},status:headerPilot?.status==='paused'?'idle':currentSessionStatus}:undefined} available={modelMenu} modelName={bootstrap?.modelName??null} selection={bootstrap?.modelSelection??undefined} configured={modelConfigured} open={modelMenuOpen} disabled={!!pendingOperation||reasoningSaving.size>0||specialistModel.saving} onOpenChange={open=>{if(open) void openModelMenu();else setModelMenuOpen(false);}} onSelect={model=>void (async()=>{if(selectedSuperChannel)await specialistModel.select("native");await switchModel(model);})().catch(handleFailure)} onSettings={()=>{setModelMenuOpen(false);void openSettings();}} reasoning={activeSnapshot?.ai ? {session:sessionId,modelId:bootstrap?.modelId,disabled:!sessionConnected || turnActive || !!pendingOperation,disabledReason:!sessionConnected?"连接恢复后可调整思考级别。":turnActive?"本轮运行中，结束后可调整思考级别。":"正在保存设置，请稍后调整思考级别。",onSaving:(saving,savingSession=sessionId) => setReasoningSaving(current=>{const next=new Set(current);if(saving)next.add(savingSession);else next.delete(savingSession);return next;})}:undefined}/>
         </div>{!specialistModel.selected&&activeSnapshot?.ai && <ContextUsage view={activeSnapshot.ai} model={bootstrap || undefined} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} compact presentation="warning"/>}</div><div className="composer-send-actions">{sendFeedback&&<span className="composer-send-feedback" role="status">{sendFeedback}</span>}{executionStoppable&&!sendFeedback&&<span className="composer-stop-scope">{stopPresentation.shortLabel}</span>}{executionStoppable && hasMessageDraft && <button type="button" className="send-button queued-stop-button" aria-label={stopPresentation.label} title={stopPresentation.title} aria-busy={stoppingTurn} disabled={stoppingTurn || !sessionConnected} onClick={() => void stopCurrentTurn()}><Glyph name="stop" size={15}/></button>}<button className={`send-button${composerStop ? " stop-button" : ""}`} type={composerStop ? "button" : "submit"} data-sending={sendFeedback?true:undefined} aria-label={sendFeedback??(composerStop ? stopPresentation.label : !modelConfigured&&!currentAssignment ? "连接模型" : currentAssignment?.blockedReason?"配置 Codex":currentAssignment?"发送给 Codex":queueMode ? "加入待发送队列" : "发送消息")} title={sendFeedback??(composerStop ? stopPresentation.title : !modelConfigured&&!currentAssignment ? "连接模型，保留当前草稿" : currentAssignment?.blockedReason?currentAssignment.blockedReason:`${currentAssignment?"发送给 Codex":queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`)} aria-busy={!!sendFeedback||stoppingTurn} onClick={composerStop ? () => void stopCurrentTurn() : undefined} disabled={sendFeedback?true:composerStop ? stoppingTurn || !sessionConnected : !sessionConnected || !!pendingOperation || reasoningSaving.has(sessionId) || modeSaving.has(sessionId) || stoppingTurn || currentAssignment?.checking || specialistModel.saving || ((modelConfigured||!!currentAssignment) && (!hasMessageDraft || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)))}><Glyph name={sendFeedback?"loader":composerStop ? "stop" : !modelConfigured&&!currentAssignment ? "plug" : "return"} size={16}/></button></div></div></div></form></div>}
-      </div>{activeSnapshot&&<SessionInspector key={inspectedSnapshot!.session.id} snapshot={inspectedSnapshot!} taskPage={isSpecialistTasks} worker={inspectedWorker} taskMetadata={isSpecialistTasks?<SpecialistTaskMetadata snapshot={inspectedSnapshot!} worker={inspectedWorker}/>:undefined} taskControls={isSpecialistTasks?<SpecialistTaskControls snapshot={inspectedSnapshot!} connected={sessionConnected}/>:undefined} resultsFooter={isSpecialistTasks&&roleResultRead?<ConversationReadMarker session={sessionId} state={roleTasks?.page.channel.messageRead} enabled={sessionConnected}/>:undefined} taskNavigation={activeSnapshot.session.workspaceRole==='role'&&roleWorkers.length>0?<SpecialistTaskSelect workers={roleWorkers} sessionId={inspectedSnapshot!.session.id} onTask={id=>void inspectRoleTask(id)}/>:undefined} readOnly={isLegacyHistory} connected={sessionConnected&&!modeSaving.has(inspectedSnapshot!.session.id)} onUpdated={()=>{if(roleInspection){const request=roleInspectionRequest.current;void api.snapshot(roleInspection.session.id,undefined,roleInspection.superagent?.task.taskId).then(next=>{if(request===roleInspectionRequest.current)setRoleInspection(next);}).catch(handleFailure);}else void refreshCurrent();}}/>}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
+      </div>{activeSnapshot&&<SessionInspector key={inspectedSnapshot!.session.id} snapshot={inspectedSnapshot!} taskPage={isSpecialistTasks} worker={inspectedWorker} taskMetadata={isSpecialistTasks?<SpecialistTaskMetadata snapshot={inspectedSnapshot!} worker={inspectedWorker}/>:undefined} taskControls={isSpecialistTasks?<SpecialistTaskControls snapshot={inspectedSnapshot!} connected={sessionConnected}/>:undefined} resultsFooter={isSpecialistTasks&&roleResultRead?<ConversationReadMarker session={sessionId} state={roleTasks?.page.channel.messageRead} enabled={sessionConnected}/>:undefined} taskNavigation={activeSnapshot.session.workspaceRole==='role'&&roleWorkers.length>0?<SpecialistTaskSelect workers={roleWorkers} sessionId={inspectedSnapshot!.session.id} onTask={id=>void inspectRoleTask(id)}/>:undefined} readOnly={isLegacyHistory} connected={sessionConnected&&!modeSaving.has(inspectedSnapshot!.session.id)} onUpdated={()=>{if(roleInspection)void refreshRoleInspection();else void refreshCurrent();}}/>}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
     </main>
     {terminalTabContext && <NavigationMenu title="终端" x={terminalTabContext.x} y={terminalTabContext.y} onClose={() => setTerminalTabContext(null)} actions={[
       {label: "打开终端", run: () => selectTerminalTab(terminalTabContext.terminal)},

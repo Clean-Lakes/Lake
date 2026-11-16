@@ -217,6 +217,10 @@ async function modelRequest(req, res) {
   const worker = !router && tools.some(tool => tool.function?.name === 'work_finish');
   const slot = worker ? workerSlot(messages) : null;
   startStream(res);
+  // Deliberately authored fixture text verifies saved process access through
+  // the real reasoning-card transport; it is not a model's private reasoning.
+  if (router || worker) chunk(res, {role: 'assistant', reasoning_content:
+    `${router ? 'Pilot' : slot.name}的合成思考记录：先检查隔离样例，再保留公开进度与工具记录。此文字仅用于本地界面回归。`});
   if (router) finishStream(res, routerDelta(messages));
   else if (worker) {
     const finished = messages.some(message => message.tool_calls?.some(call => call.function?.name === 'work_finish'));
