@@ -1153,6 +1153,78 @@ test("snapshot verifies a corrected missing recipient against the original durab
 });
 
 
+async function resourceSelectionRecoveryFixture(t:{after(fn:()=>Promise<void>):void}) {
+  const f=await fixture(t),resource=f.store.catalog().resources.find(item=>item.projectId===f.project.id)!;
+  const original=await f.admit("检查本项目当前文件",{resourceIds:[resource.id],mentions:[],references:[]});
+  const previous=f.route(original,{action:'create',title:'检查当前文件',role_id:f.role.id,resource_ids:[resource.id]});
+  f.settleRouter();await f.activate();await f.read(previous.taskId);await f.finish(previous.taskId);f.settleWorker(previous.taskId);
+  const event=await f.admit('再查一下'),args={event_id:event.id,part_key:'work',action:'create',title:'复查当前文件',role_id:f.role.id,
+    predecessor_task_id:previous.taskId,quote:event.payload,reason:'current human instruction'};
+  const invalid={...args,resource_ids:[resource.id]};
+  let failure='';
+  const goalsBefore=JSON.stringify(f.store.list('superGoals')),decisionsBefore=JSON.stringify(f.store.list('superDecisions'));
+  assert.throws(()=>f.route(event,invalid),(error:any)=>{assert.equal(error.status,400);failure=error.message;return failure==="resource_ids must be a nonempty subset of this human event's selected resource IDs"});
+  assert.equal(JSON.stringify(f.store.list('superGoals')),goalsBefore);assert.equal(JSON.stringify(f.store.list('superDecisions')),decisionsBefore);
+  const receipt=f.route(event,args),root='resource-correction-root';
+  const failed={id:'selection-failure',type:'operation',title:'route_work',status:'failed',at:'2026-11-16T00:00:01Z',content:failure,data:{root_turn_id:root,arguments:invalid}};
+  const success={...failed,id:'selection-success',status:'completed',at:'2026-11-16T00:00:02Z',content:JSON.stringify(receipt),data:{root_turn_id:root,arguments:args}};
+  const project=(cards:any[])=>f.host.routingView(f.router,{...f.store.view(f.router),cards}).cards;
+  return {...f,event,args,invalid,receipt,previous,resource,failed,success,project};
+}
+
+test('copied predecessor resource selection stays rejected until an exact new handoff proves its correction',async t=>{
+  const f=await resourceSelectionRecoveryFixture(t),{failed,success}=f;
+  const cards=JSON.stringify([failed,success]),ledger=JSON.stringify(['superGoals','superOperations','superDecisions','superTaskPredecessors'].map(table=>f.store.list(table)));
+  assert.equal((f.project([failed])[0]!.data as any).routingRecovery,undefined,'no successful handoff means the failure remains');
+  const proof={kind:'corrected_resource_selection',recoveredBy:success.id};
+  assert.deepEqual((f.project([failed,success])[0]!.data as any).routingRecovery,proof);
+  const shown=f.host.decorate({...f.store.snapshot(f.router),ai:{...f.store.view(f.router),cards:[failed,success]}}).ai!.cards;
+  assert.deepEqual((shown[0]!.data as any).routingRecovery,proof);
+  assert.equal(shown[0]!.status,'failed');assert.equal(shown[0]!.content,failed.content,'only the display annotation changes');
+  assert.equal(JSON.stringify([failed,success]),cards);assert.equal(JSON.stringify(['superGoals','superOperations','superDecisions','superTaskPredecessors'].map(table=>f.store.list(table))),ledger);
+  assert.notEqual(f.receipt.taskId,f.previous.taskId);assert.equal(f.host.ledger.get(f.previous.taskId).status,'completed');
+});
+
+test('selection correction cannot cross roots, human inputs, recipients, predecessor targets or other request changes',async t=>{
+  const f=await resourceSelectionRecoveryFixture(t),{failed,success}=f;
+  const negative=(first:any,second:any=success)=>assert.equal((f.project([first,second])[0]!.data as any).routingRecovery,undefined);
+  for(const change of [{event_id:'other'},{part_key:'other'},{role_id:'other'},{predecessor_task_id:'other'},{title:'other'},{quote:'other'},
+    {evidence_task_ids:['other']},{role_instructions:[{role_id:f.role.id,instruction:'other'}]}])
+    negative({...failed,data:{...failed.data,arguments:{...f.invalid,...change}}});
+  negative({...failed,data:{...failed.data,root_turn_id:'other'}});
+  negative({...failed,content:'Permission denied'});negative({...failed,title:'Bash'});
+  for(const resource_ids of [undefined,[],['unrelated'],[f.resource.id,f.resource.id],[''],[1]])
+    negative({...failed,data:{...failed.data,arguments:{...f.invalid,resource_ids}}});
+  negative(failed,{...success,status:'running'});negative(failed,{...success,status:'failed'});
+  negative(failed,{...success,content:JSON.stringify({...f.receipt,id:'not-committed'})});
+  negative(failed,{...success,data:{...success.data,arguments:{...f.args,resource_ids:[]}}});
+  negative(failed,{...success,data:{...success.data,arguments:{...f.args,reason:'different from durable decision'}}});
+  assert.equal((f.project([success,failed])[1]!.data as any).routingRecovery,undefined,'earlier success cannot recover a later failed call');
+});
+
+test('selection recovery requires empty current selection and exact frozen predecessor and new worker ownership',async t=>{
+  const f=await resourceSelectionRecoveryFixture(t),{failed,success}=f;
+  const proof=()=>((f.project([failed,success])[0]!.data as any).routingRecovery);
+  const mutate=(table:string,key:string,changes:Record<string,unknown>)=>{
+    const before=f.store.require<any>(table,key);f.store.put(table,key,{...before,...changes});
+    assert.equal(proof(),undefined,table+JSON.stringify(changes));f.store.put(table,key,before);
+  };
+  mutate('superInputs',f.event.id,{selectedReferences:{resourceIds:[f.resource.id],mentions:[],references:[]}});
+  mutate('superInputs',f.event.id,{projectId:'other'});
+  mutate('superTaskPredecessors',f.receipt.taskId,{resourceIds:['other']});
+  mutate('superTaskPredecessors',f.receipt.taskId,{resourceIds:[f.resource.id,'other']});
+  mutate('superTaskPredecessors',f.receipt.taskId,{roleId:'other'});
+  mutate('superTaskPredecessors',f.receipt.taskId,{taskRef:{id:'other',revision:1,hash:'other'}});
+  mutate('superTaskPredecessors',f.receipt.taskId,{historicalContextOnly:false});
+  const worker=f.worker(f.receipt.taskId);
+  for(const changes of [{sourceEventId:'other'},{projectId:'other'},{taskId:'other'},{roleId:'other'},{sessionId:'other'}])mutate('superWorkers',worker.id,changes);
+  for(const changes of [{sourceEventId:'other'},{projectId:'other'},{workerId:'other'},{roleId:'other'},{sessionId:'other'}])mutate('superGoals',f.receipt.taskId,changes);
+  mutate('superGoals',f.previous.taskId,{status:'failed'});mutate('superGoals',f.previous.taskId,{projectId:'other'});mutate('resources',f.resource.id,{projectId:'other'});
+  const decision=f.store.require<any>('superDecisions',f.receipt.id);f.store.delete('superDecisions',decision.id);assert.equal(proof(),undefined);f.store.put('superDecisions',decision.id,decision);
+  assert.deepEqual(proof(),{kind:'corrected_resource_selection',recoveredBy:success.id});
+});
+
+
 test('a specialist passes 500 model calls and its stored legacy ceiling without resetting usage or acceptance',async t=>{
  const f=await fixture(t),initial=await f.start(),goal=f.host.ledger.get(initial.taskId);
  assert.equal(goal.roundLimit,undefined);
