@@ -1,0 +1,88 @@
+{
+  "testedCommit": "09611a180f4f5bae527713f127722c3ec8312e0b",
+  "build": {
+    "version": "0.3.33",
+    "dirty": false,
+    "backendRuntime": "typescript",
+    "gitBranch": "codex/specialist-live-text-motion",
+    "uiSourceSHA256": {
+      "AIPanel.tsx": "496f8348604d8cceb53f30405401315d1f39b93bd2fec686379f0e0d19727222",
+      "ThinkingTimeline.tsx": "6f91639248cabfd157f3d842a91fa5b736b2cfaee970b92c86f7ebf0ed31cc71",
+      "ReplyDuration.tsx": "42cd45ed0e43f6fefff1f94aae5efef5dec0b41b02fa53090d0ded5f22ada7f9",
+      "conversation-progress-model.ts": "f6a472e18129d84872b54c704576feb40387e2d6bdb41beabfd427989429019d"
+    }
+  },
+  "isolation": {
+    "temporaryHome": true,
+    "separateWebData": true,
+    "model": "deterministic loopback fixture",
+    "businessResourcesAccessed": false
+  },
+  "workerState": "completed",
+  "parallelWorkerState": "running",
+  "formalReportCount": 1,
+  "formalReportText": "猫头鹰的隔离动画演示已结束；未访问业务资源。视觉验收结果由检查者记录。",
+  "authorBinding": {
+    "kind": "specialist",
+    "name": "猫头鹰动画验收专员",
+    "roleId": "708dcff64ed62f06a440b86238e2c5be0bccaadbecf89835cfc6659683e7c2bb",
+    "workerId": "worker_ecd181d8cb3c4996295bb2089272f5f8",
+    "sessionId": "sw_ecd181d8cb3c4996295bb2089272f5f8",
+    "taskId": "st_ecd181d8cb3c4996295bb2089272f5f8",
+    "channelSessionId": "sc_1473a4e8d04914aa1b4efdcbeb807f64",
+    "rootTurnId": "turn_5a3f6a2d-4afa-4ccb-bdbb-94f554daf515",
+    "execution": {
+      "kind": "native",
+      "model": {
+        "providerId": "custom",
+        "modelId": "animal-thinking-fixture"
+      }
+    }
+  },
+  "sourceRootTurnId": "turn_5a3f6a2d-4afa-4ccb-bdbb-94f554daf515",
+  "processRecords": [
+    {
+      "type": "thinking",
+      "status": "completed",
+      "title": ""
+    },
+    {
+      "type": "message",
+      "status": "completed",
+      "title": ""
+    },
+    {
+      "type": "operation",
+      "status": "completed",
+      "title": "work_wait"
+    },
+    {
+      "type": "thinking",
+      "status": "completed",
+      "title": ""
+    },
+    {
+      "type": "message",
+      "status": "completed",
+      "title": ""
+    },
+    {
+      "type": "operation",
+      "status": "completed",
+      "title": "work_finish"
+    }
+  ],
+  "uiVerified": [
+    "thinking to first progress",
+    "second progress after work_wait",
+    "one in-place final report",
+    "accurate task process entry remains available"
+  ],
+  "cleanup": {
+    "fixtureFinished": true,
+    "workersCompleted": true,
+    "isolatedNativeExited": true,
+    "dailyDevPilotRestored": true,
+    "dailyModel": "gpt-6.1-sol"
+  }
+}
