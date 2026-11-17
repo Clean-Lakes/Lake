@@ -1,5 +1,7 @@
 # Lake Super-agent 内核与三模块协作约定
 
+2026-11-17 用户报告后续补充未被专员读取、仍重复提问。成功路由的补充沿同一 Task/Worker/代次送入当前执行：原生 SDK 以真实 guide drain、Codex App Server 以准确 thread/turn/clientUserMessageId 的 userMessage 事件确认消费，排队应答不算消费。专员等待业务缺失信息时，宿主将补充原文作为新上下文返回原问题，不伪造选项答案，由专员重新判断尚缺内容。计划确认、操作审批及终端接管不因补充而解除；未确认消费的输入仍沿原安全续接边界处理，停止、原期限、权限与历史操作不变。Pilot 只能根据已记录回执描述补充，不能把登记说成已读取。见[修复计划](plan/refactor-specialist-followups-1.md)。
+
 2026-11-16 用户要求采用 Tutti 的本地智能体调用设计。Codex 从第三方 codex-acp 包装器迁移为官方 `codex app-server` 直连：受管理进程传输、Codex 线程/轮次协议适配和提供商中立的活动/生命周期接口分层。配置探测与执行共用进程传输；通知必须匹配实际 thread/turn，RPC 应答不代表完成，恢复历史不重放。固定引擎保持 0.160.1，移除 ACP SDK 与适配器安装依赖。profile 升级 schema3/runtimeKind 并增加旧配置 revision，旧 Worker/run 与未知结果保留，不静默换用新传输。历史 `kind: acp`、表名与 `codex-acp` 子类型作为兼容标识保留。按已观察的当前 Lake MCP 调用单次允许进入私有工具桥，业务操作继续经过原 ToolExecutor、Pilot 权限及 Task/Worker 身份。CODEX_HOME 仍直接复用已有登录/配置，不复制凭据、不改写用户配置；原生工具、继承 MCP/hooks/notify 与递归仍关闭。Claude SDK 和其他 Agent 不在本批实现范围。见[本机执行架构](docs/design/local-agent-runtime.md)及[迁移计划](plan/refactor-codex-app-server-1.md)。本条替代下文“所有外部执行统一使用 ACP 传输”的旧约定，不更改任务报告和模块归属。
 
 2026-11-16 用户明确 Pilot 持续接单：A 发出后仍可发送新消息，分别创建新目标或补充准确旧任务，面向同一专员或一个/多个不同专员。消息沿现有 `superInputs` 立即保存，Router 按消息串行协调，后台 Worker 不因新消息而停止；同一稳定 RoleID 的独立任务保持各自 Task/Worker/Session。补充沿原任务的安全续接边界处理，宿主不把仅已记录的补充当成本次模型已消费；未消费补充不能被旧报告抢先结清。前台回复按真实来源消息归属，不能在后来消息到达后改挂。原任务、权限、期限、并发与历史结果继续有效，不引入第二套路由或模型执行循环。见[持续接单说明](docs/lake-pilot.md#持续接单与任务补充typescript)。

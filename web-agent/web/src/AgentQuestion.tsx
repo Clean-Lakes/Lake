@@ -1,10 +1,10 @@
 import {Glyph} from './Icons';
-import {useEffect, useState} from "react";
+import {useEffect, useState,type ReactNode} from "react";
 import type {AIQuestionRequest} from "../../shared/contracts";
 import {api, readableError} from "./api";
 import {chooseAnswer, questionAnswer, questionOptions, recordQuestionAnswer} from "./questionState";
 import {PilotChoiceQuestion} from './PilotChoiceQuestion';
-export function AgentQuestion({session, request, refresh,runId}: {runId?:string;session: string; request: AIQuestionRequest; refresh: () => Promise<unknown>}) {
+export function AgentQuestion({session, request, refresh,runId,identity}: {runId?:string;session: string; request: AIQuestionRequest; refresh: () => Promise<unknown>;identity?:ReactNode}) {
  const [selected,setSelected]=useState<Record<string,string[]>>({});
  const [text,setText]=useState<Record<string,string>>({});
  const [other,setOther]=useState<Record<string,boolean>>({});
@@ -30,6 +30,7 @@ export function AgentQuestion({session, request, refresh,runId}: {runId?:string;
  return <section className="lake-question" aria-label="Agent 问题" onKeyDown={event=>{
   if((event.metaKey||event.ctrlKey)&&event.key==="Enter"&&!event.nativeEvent.isComposing){event.preventDefault();advance();}
  }}>
+ {identity}
  <header className="lake-question-heading"><span className="lake-question-count">{index+1}/{request.questions.length}</span>
  <strong>{question.title}{question.multi_select?<small>（可多选）</small>:null}</strong>
  <button type="button" aria-label={collapsed?"展开问题":"收起问题"} aria-expanded={!collapsed} onClick={()=>setCollapsed(!collapsed)}><Glyph name="chevron" size={14} className={collapsed?"is-collapsed":""}/></button>

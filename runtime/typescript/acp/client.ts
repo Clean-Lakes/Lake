@@ -5,6 +5,7 @@ export type AgentLaunch = {
   observed?: {model:string;modelProvider:string;reasoningEffort?:string;authenticated:boolean;authMode:'chatgpt'|'api_key'|'provider'|'none'};
 };
 export type AgentActivity =
+  | {kind:'input';inputId:string}
   | {kind:'text';text:string;messageId:string;messageText:string}
   | {kind:'tool'|'tool_update';callId:string;title:string;status:string}
   | {kind:'usage';usage:{inputTokens:number;outputTokens:number}};
@@ -13,6 +14,7 @@ export interface AgentConnection {
   initialize(signal:AbortSignal):Promise<Record<string,unknown>>;
   openSession(options:{cwd:string;threadId?:string;systemPrompt?:string},signal:AbortSignal):Promise<string>;
   exec(text:string,signal:AbortSignal,timeout:number):Promise<AgentTurnResult>;
+  steer(text:string,inputId:string,signal:AbortSignal):Promise<boolean>;
   cancel():Promise<void>;
   diagnostics():string;
   close():Promise<void>;

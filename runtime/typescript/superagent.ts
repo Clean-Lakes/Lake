@@ -19,7 +19,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import type { ToolEntry, ToolExecutionContext } from "./sdk";
 import type { AIApproval, AIQuestionRequest, GatewayInstructionStatus, Message, SessionSnapshot, SpecialistChannelInfo,
-  SpecialistChannelPage, SuperProject, SuperTask, SuperWorker, SuperWorkspace } from "../../web-agent/shared/contracts";
+  SpecialistChannelPage, SpecialistQuestion, SuperProject, SuperTask, SuperWorker, SuperWorkspace } from "../../web-agent/shared/contracts";
 import type { GatewaySpecialistRef, GatewayConnection, GatewayMessage, GatewayMessageInput, GatewayMessagePage } from "../../web-agent/shared/contracts";
 import type { AgentHost, HostProfile, HostToolContext } from "./agent-host";
 import {chooseSpecialistExecution,specialistExecutionOptions,type SpecialistExecutionOption} from './specialist-execution';
@@ -81,6 +81,8 @@ type Decision = { id: string; projectId: string; eventId: string; partKey: strin
   quote: string; hash: string; reason?: string; taskId?: string; workerId?: string; sessionId?: string; roleId?: string; assignments?: Assignment[] };
 type Interaction = { id: string; workerId: string; generation: number; kind: "plan" | "question";
   revision: number; resolve: (value: unknown) => void; reject: (error: Error) => void };
+type InputDelivery = { id:string; workerId:string; sessionId:string; taskId:string; generation:number; eventId:string;
+  state:'queued'|'consumed'|'deferred'; via:'guide'|'question'; createdAt:string; consumedAt?:string };
 const permissionKeys = ["silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "silentMCPCalls", "denyLocalExecution", "blockUnreferencedAssets", "permissions", "permissionRevision", "securityPolicyRevision"];
 const routerTools = [...pilotConfigurationToolNames,"list_specialists", "list_specialist_avatars", "list_specialist_execution_options", "manage_specialist", "search_super_tasks", "route_work", "read_super_object", "inspect_watchdog", "convene_specialists", "inspect_specialist_conversation"];
 const workTools = ["work_begin", "work_read", "work_update", "work_finish", "work_wait", "recall_task_context", "recall_memory", "ask_user_question", "list_assets", "list_project_files",
@@ -634,8 +636,24 @@ export class LakeSuperagent implements AgentHost {
     const project = this.store.get<SuperProject>("superProjects", projectId);
     const workers=this.workers(projectId);
     return { pilotMessageRead: project ? conversationReadState(this.store, project.routerSessionId) : undefined, active: !!project, project: project ?? { projectId, routerSessionId: "", version: 0 }, workers, conversations:this.conversations.list(projectId),
+      questions: this.specialistQuestions(projectId),
       channels: this.store.list<Channel>("superChannels").filter((channel) => channel.projectId === projectId && !this.role(projectId, channel.roleId, true).deletedAt)
         .map((channel) => this.channelView(channel, workers)), cursor: project ? this.store.cursor(project.routerSessionId) : 0 };
+  }
+  private specialistQuestions(projectId:string):SpecialistQuestion[] {
+    if(this.closed)return [];
+    return [...this.interactions.values()].flatMap(entry=>{
+      if(entry.kind!=='question')return [];
+      const worker=this.store.get<Worker>('superWorkers',entry.workerId);
+      if(!worker||worker.inline||worker.projectId!==projectId)return [];
+      try{this.validateWorker(worker.id,entry.generation);}catch{return [];}
+      const goal=this.ledger.get(worker.taskId),request=this.store.view(worker.sessionId).question;
+      if(terminal(goal.status)||Date.parse(goal.deadlineAt)<=Date.now()||request?.id!==entry.id)return [];
+      const channel=this.store.get<Channel>('superChannels',worker.roleId);
+      return [{request,taskTitle:goal.title,author:{kind:'specialist' as const,name:worker.roleSnapshot.name,
+        avatarId:worker.roleSnapshot.avatarId,roleId:worker.roleId,workerId:worker.id,sessionId:worker.sessionId,
+        taskId:goal.sharedTaskId??goal.id,channelSessionId:channel?.sessionId,execution:worker.roleSnapshot.execution??{kind:'native' as const}}}];
+    });
   }
   private policy(projectId: string) {
     const project = this.store.require<SuperProject>("superProjects", projectId);
@@ -1097,7 +1115,8 @@ export class LakeSuperagent implements AgentHost {
       const state = this.pendingInteraction(worker.sessionId) ? "needs_input" : Date.parse(goal.deadlineAt) <= Date.now() ? "limit_reached"
         : worker.state === "active" ? "running" : worker.state === "queued" ? "queued" : "recorded";
       const {instruction: _instruction, ...recipient} = assignment;
-      return { ...recipient, dispatch: { state, observedAt, reason: state === "limit_reached" ? "deadline_reached" : undefined,
+      return { ...recipient, ...(result.action==='followup'&&{supplement:{state:'recorded',consumed:false,
+        meaning:'Recorded for this exact task. Delivery begins after this Pilot routing turn succeeds; do not claim the specialist has read it.'}}), dispatch: { state, observedAt, reason: state === "limit_reached" ? "deadline_reached" : undefined,
         unresolvedOperations: this.ledger.unresolved(goal.id), observation: "Point-in-time scheduling snapshot. Live activity records progress; each operation checks current permissions." } };
     });
     return { ...routeReceipt, assignments, handoff: { recorded: true, observedAt, meaning: "The assignment was recorded. This does not grant permission, prove execution or accept the result." },
@@ -1698,9 +1717,18 @@ export class LakeSuperagent implements AgentHost {
       const value:any=await this.invokeExtension(worker,worker.generation,source,{name:input.skill},context);
       return `<skill_content name="${value.name}">\n${value.content}\nBase directory: ${value.base_directory}\n</skill_content>`;
     },resolvePermissionCapability:()=>{const source=this.extensionEntries(worker).find(tool=>tool.metadata.name==='load_skill');return source?.resolvePermissionCapability?.({});}};
-    if(name==='AskUserQuestion')return {...entry,requiresUserInteraction:false,permission:{...entry.permission,needsApproval:false},resolvePermissionCapability:()=>({needsApproval:false,permission:{needsApproval:false}}),timeout:{kind:'none'},metadata:{...entry.metadata,requiresUserInteraction:false,shouldDefer:false,alwaysLoad:true},handler:async(input:any,context)=>{
+    if(name==='AskUserQuestion')return {...entry,requiresUserInteraction:false,permission:{...entry.permission,needsApproval:false},resolvePermissionCapability:()=>({needsApproval:false,permission:{needsApproval:false}}),timeout:{kind:'none'},metadata:{...entry.metadata,requiresUserInteraction:false,shouldDefer:false,alwaysLoad:true},
+      // Lake can resume with routed context instead of selected answers. The
+      // SDK's strict answer-only output schema/formatter would discard it.
+      outputSchema:{anyOf:[entry.outputSchema,{type:'object',properties:{
+        superseded:{const:true},answers:{type:'object',maxProperties:0},unanswered:array(str),
+        followups:array({type:'object'}),pendingInputIds:array(str),instruction:str,
+      },required:['superseded','answers','unanswered','followups','instruction'],additionalProperties:false}]},runtimeOutputSchema:undefined,
+      formatModelContent:output=>record(output)?.superseded===true?canonical(output):entry.formatModelContent?.(output)??canonical(output),
+      handler:async(input:any,context)=>{
       const normalized={questions:input.questions.map((question:any,index:number)=>({id:'q'+index,title:question.question,reason:question.header,options:question.options?.map((option:any)=>option.label),multi_select:question.multiSelect}))};
       const response:any=await this.questionInteraction(worker,normalized,context.abortSignal);
+      if(response.superseded)return response;
       const answers=Object.fromEntries(input.questions.map((question:any,index:number)=>[question.question,(response.answers['q'+index]??[]).join(', ')]));
       return entry.handler({...input,answers},context);
     }};
@@ -2168,15 +2196,20 @@ export class LakeSuperagent implements AgentHost {
   private async interaction(worker: Worker, kind: Interaction["kind"], revision: number, signal: AbortSignal, present: (interaction: Interaction) => void) {
     if (signal.aborted) throw new HttpError(409, "Task stopped");
     let entry: Interaction;
+    const abort=()=>{this.interactions.delete(entry.id);entry.reject(new HttpError(409,"Task stopped"));};
     return new Promise((resolve, reject) => {
       entry = { id: id(), workerId: worker.id, generation: worker.generation, kind, revision, resolve, reject };
       this.interactions.set(entry.id, entry);
-      signal.addEventListener("abort", () => { this.interactions.delete(entry.id); reject(new HttpError(409, "Task stopped")); }, { once: true });
+      signal.addEventListener("abort", abort, { once: true });
       present(entry);
     }).finally(() => {
+      signal.removeEventListener('abort',abort);
       this.interactions.delete(entry.id);
-      const view = this.store.view(worker.sessionId); view.pending = undefined; view.question = undefined;
-      view.status = "running"; this.store.put("views", worker.sessionId, view); this.changed(worker.sessionId);
+      const view = this.store.view(worker.sessionId);
+      if(view.pending?.id===entry.id)view.pending=undefined;
+      if(view.question?.id===entry.id)view.question=undefined;
+      if(!signal.aborted&&!view.pending&&!view.question&&['waiting_input','waiting_approval'].includes(view.status))view.status="running";
+      this.store.put("views", worker.sessionId, view); this.changed(worker.sessionId);
     });
   }
   private planInteraction(worker: Worker, goal: Goal, signal: AbortSignal) {
@@ -2195,6 +2228,7 @@ export class LakeSuperagent implements AgentHost {
     return this.interaction(worker, "question", goal.revision, signal, (entry) => {
       const view = this.store.view(worker.sessionId); view.question = { id: entry.id, questions: input.questions } as AIQuestionRequest;
       view.status = "waiting_input"; this.store.put("views", worker.sessionId, view); this.changed(worker.sessionId);
+      this.continueQuestionWithFollowups(worker);
     });
   }
   decision(sessionId: string, input: any, actionSessionId = sessionId): boolean {
@@ -2343,6 +2377,7 @@ export class LakeSuperagent implements AgentHost {
       const roles=joint ? joint.memberIds.map(id=>this.ledger.get(id).roleId) : [worker.roleId];
       for(const roleId of roles) this.notify(this.store.require<Channel>("superChannels", roleId).sessionId,"specialist");
     }
+    this.forwardFollowups(worker);
   }
   settled(sessionId: string, outcome?: { response?: string; error?: string; failure?:TurnFailure }) {
     if(this.conversations.settled(sessionId,outcome)){this.schedule();return;}
@@ -2373,9 +2408,11 @@ export class LakeSuperagent implements AgentHost {
       for (const assignment of this.decisionAssignments(decision)) void this.stopTask(assignment.executionId);
     if (success) {
       const targets = new Set(this.store.list<Decision>("superDecisions").filter((decision) =>
-        batch.eventIds.includes(decision.eventId) && decision.action === "followup").map((decision) => decision.workerId));
-      for (const worker of this.store.list<Worker>("superWorkers").filter((worker) => worker.projectId === project.projectId && targets.has(worker.id)))
+        batch.eventIds.includes(decision.eventId) && decision.action === "followup").flatMap(decision=>this.decisionAssignments(decision).map(assignment=>assignment.workerId)));
+      for (const worker of this.store.list<Worker>("superWorkers").filter((worker) => worker.projectId === project.projectId && targets.has(worker.id))) {
+        this.forwardFollowups(worker);
         this.queueFollowups(worker);
+      }
     }
     if (!success) for (const worker of this.store.list<Worker>("superWorkers").filter((worker) => worker.projectId === project.projectId && ["parked", "queued"].includes(worker.state))) {
       if (!worker.inputEventIds.some((eventId) => batch.eventIds.includes(eventId)) || this.routedInputs(worker).length ||
@@ -2453,6 +2490,90 @@ export class LakeSuperagent implements AgentHost {
     }
     worker.state = "queued"; goal.status = "running";
     this.ledger.save(goal); this.store.put("superWorkers", worker.id, worker); return true;
+  }
+  private followupDelivery(worker:Worker,eventId:string):InputDelivery|undefined {
+    return this.store.get<InputDelivery>('superInputDeliveries',this.followupId(worker,eventId));
+  }
+  private followupId(worker:Worker,eventId:string){return 'task_followup_'+digest([worker.id,worker.generation,eventId]);}
+  private pendingFollowups(worker:Worker){
+    return this.routedInputs(worker).filter(eventId=>!worker.invocationInputIds?.includes(eventId));
+  }
+  private followupContext(eventId:string){
+    const event=this.store.require<InputEvent>('superInputs',eventId);
+    return {id:event.id,text:event.payload,...(event.selectedReferences&&{selectedReferences:event.selectedReferences})};
+  }
+  private prepareFollowup(worker:Worker,eventId:string,via:InputDelivery['via']){
+    const delivery:InputDelivery={id:this.followupId(worker,eventId),workerId:worker.id,taskId:worker.taskId,
+      sessionId:worker.sessionId,generation:worker.generation,eventId,state:'queued',via,createdAt:now()};
+    return this.store.put('superInputDeliveries',delivery.id,delivery);
+  }
+  /** Called only by the owned runtime's real input-consumption boundary. */
+  inputsConsumed(sessionId:string,inputIds:string[]){
+    const worker=this.workerFor(sessionId);
+    if(!worker||worker.inline||this.closed)return;
+    try{this.validateWorker(worker.id,worker.generation);this.security?.check();}catch{return;}
+    const goal=this.ledger.get(worker.taskId);
+    if(terminal(goal.status)||Date.parse(goal.deadlineAt)<=Date.now())return;
+    let changed=false;
+    this.store.transaction(()=>{
+      for(const inputId of inputIds){
+        const delivery=this.store.get<InputDelivery>('superInputDeliveries',inputId);
+        if(!delivery||delivery.state!=='queued'||delivery.workerId!==worker.id||delivery.sessionId!==sessionId||
+            delivery.taskId!==worker.taskId||delivery.generation!==worker.generation||!worker.inputEventIds.includes(delivery.eventId)||
+            this.store.get<InputEvent>('superInputs',delivery.eventId)?.disposition!=='routed')continue;
+        delivery.state='consumed';delivery.consumedAt=now();this.store.put('superInputDeliveries',inputId,delivery);
+        worker.invocationInputIds=[...new Set([...(worker.invocationInputIds??[]),delivery.eventId])];changed=true;
+      }
+      if(changed){
+        this.store.put('superWorkers',worker.id,worker);
+        if(!this.pendingFollowups(worker).length)this.store.delete('superDeferredFinishes',digest([worker.id,worker.generation]));
+      }
+    });
+    if(changed)this.changed(sessionId);
+  }
+  private continueQuestionWithFollowups(worker:Worker){
+    const entry=[...this.interactions.values()].find(entry=>entry.workerId===worker.id&&entry.generation===worker.generation&&entry.kind==='question');
+    if(!entry||worker.inline||this.closed)return false;
+    try{this.validateWorker(worker.id,worker.generation);this.security?.check();}catch{return false;}
+    const goal=this.ledger.get(worker.taskId),pending=this.pendingFollowups(worker);
+    if(!pending.length||terminal(goal.status)||Date.parse(goal.deadlineAt)<=Date.now())return false;
+    const direct=pending.filter(eventId=>this.followupDelivery(worker,eventId)?.state!=='queued');
+    const queued=pending.filter(eventId=>!direct.includes(eventId));
+    this.interactions.delete(entry.id);
+    const deliveries=direct.map(eventId=>this.prepareFollowup(worker,eventId,'question'));
+    this.inputsConsumed(worker.sessionId,deliveries.map(delivery=>delivery.id));
+    goal.status='running';this.ledger.save(goal);
+    entry.resolve({answers:{},unanswered:this.store.view(worker.sessionId).question?.questions.map(question=>question.id),
+      superseded:true,followups:direct.map(eventId=>this.followupContext(eventId)),
+      ...(queued.length&&{pendingInputIds:queued.map(eventId=>this.followupId(worker,eventId))}),
+      instruction:'The user supplied new context for this same task. Re-evaluate the prerequisite using these followups and any pending same-turn input. These are not selected answers or operation/plan approvals. Continue what is now possible; ask only for information still missing.'});
+    return true;
+  }
+  private forwardFollowups(worker:Worker){
+    if(worker.inline||worker.state!=='active'||this.closed)return;
+    try{this.validateWorker(worker.id,worker.generation);this.security?.check();}catch{return;}
+    const goal=this.ledger.get(worker.taskId);
+    if(terminal(goal.status)||Date.parse(goal.deadlineAt)<=Date.now())return;
+    if(this.continueQuestionWithFollowups(worker))return;
+    // A supplement cannot answer a plan approval, operation approval or human
+    // terminal takeover. Keep it for the next safe boundary of this same task.
+    if(this.pendingInteraction(worker.sessionId)||!this.agents.isRunning(worker.sessionId))return;
+    for(const eventId of this.pendingFollowups(worker)){
+      if(this.followupDelivery(worker,eventId))continue;
+      const delivery=this.prepareFollowup(worker,eventId,'guide');
+      const input=canonical({taskId:goal.sharedTaskId??goal.id,followups:[this.followupContext(eventId)],
+        instruction:'New human context for this same task. Combine it with the original requirement, update your approach, and ask only for remaining missing information. It does not resolve operation or plan approvals.'});
+      void this.agents.steer(worker.sessionId,input,delivery.id,{taskInput:true}).then(accepted=>{
+        if(accepted)return;
+        const current=this.store.get<InputDelivery>('superInputDeliveries',delivery.id);
+        if(current?.state==='queued'){current.state='deferred';this.store.put('superInputDeliveries',current.id,current);}
+        const latest=this.workerFor(worker.sessionId);
+        if(latest?.generation===worker.generation)this.continueQuestionWithFollowups(latest);
+      }).catch(()=>{
+        // A lost RPC acknowledgement is uncertain. Keep the receipt unconsumed;
+        // the exact input falls back after this invocation, never replay I/O.
+      });
+    }
   }
   private routedInputs(worker: Worker) {
     return worker.inputEventIds.filter((eventId) => !(worker.settledInputIds ?? worker.deliveredInputIds)?.includes(eventId) &&

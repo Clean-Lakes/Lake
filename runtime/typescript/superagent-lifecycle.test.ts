@@ -20,7 +20,7 @@ async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date
   let steering = 0;
   const agents = { executionView: (_sessionId:string,view:any)=>view, redact: (value: string) => value, publish() {}, prepareRedaction: async () => {}, isRunning: () => false,
     send: async (sessionId: string, _text: string, options: any) => { requests.push({ sessionId, input: options.input.startsWith('{')?JSON.parse(options.input):options.input,sourceMessageIds:options.sourceMessageIds }); },
-    steer: async () => { steering++; return true; }, abort: async (sessionId:string) => {aborted.push(sessionId);} };
+    steer: async (_sessionId:string,_input:string,_inputId:string) => { steering++; return true; }, abort: async (sessionId:string) => {aborted.push(sessionId);} };
   const host = new LakeSuperagent(store, agents as any, undefined, undefined, undefined, undefined, undefined, clock), internal = host as any;
   internal.schedule = () => {};
   t.after(async () => { await host.close(); store.db.close(); await rm(home, { recursive: true, force: true }); });
@@ -65,6 +65,141 @@ async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date
   return { store, host, internal, agents, project, router, role, requests, admit, route, settleRouter, activate, worker, read, finish, settleWorker, start,
     aborted,steering: () => steering };
 }
+
+test('a successfully routed supplement resumes the exact pending prerequisite without inventing answers',async t=>{
+  const f=await fixture(t),initial=await f.start(),worker=f.worker(initial.taskId),generation=worker.generation;
+  const ask=f.host.profile(worker.sessionId)!.tools.find(tool=>tool.metadata.name==='ask_user_question')!;
+  const question=ask.handler({questions:[{id:'entrance',title:'Which entrance should be used?'}]},
+    {abortSignal:new AbortController().signal} as any) as Promise<any>;
+  void question.catch(()=>{});
+  assert.equal(f.store.view(worker.sessionId).status,'waiting_input');
+  const event=await f.admit('补充：沿已选测试入口复制配置，并使用测试凭据引用。');
+  const receipt=f.route(event,{action:'followup',task_id:initial.taskId,role_id:f.role.id});
+  assert.equal(receipt.assignments[0].supplement.state,'recorded');
+  assert.equal(f.internal.interactions.size,1,'routing admission alone cannot answer the question');
+  f.settleRouter();
+  assert.equal(f.internal.interactions.size,0,'successful routing wakes the original question');
+  const result=await question;
+  assert.equal(result.superseded,true);assert.deepEqual(result.answers,{});
+  assert.deepEqual(result.unanswered,['entrance']);assert.deepEqual(result.followups,[{id:event.id,text:event.payload}]);
+  assert.equal(f.store.view(worker.sessionId).question,undefined);
+  assert.equal(f.host.ledger.get(initial.taskId).status,'running');
+  assert.deepEqual(f.worker(initial.taskId).invocationInputIds,[initial.event.id,event.id]);
+  assert.equal(f.worker(initial.taskId).generation,generation);assert.equal(f.steering(),0);
+  assert.notEqual((await f.finish(initial.taskId)).completionDeferred,true);
+  f.settleWorker(initial.taskId);await f.activate();
+  assert.equal(f.requests.filter(request=>request.sessionId===worker.sessionId).length,1,'consumed context is never sent in another invocation');
+});
+
+test('Pilot projects only current source-bound specialist questions and answers the exact original session',async t=>{
+  const f=await fixture(t),initial=await f.start(),worker=f.worker(initial.taskId);
+  const ask=f.host.profile(worker.sessionId)!.tools.find(tool=>tool.metadata.name==='ask_user_question')!;
+  const promise=ask.handler({questions:[{id:'source',title:'Which synthetic source?'}]},{abortSignal:new AbortController().signal} as any) as Promise<any>;
+  void promise.catch(()=>{});
+  const [question]=f.host.workspace(f.project.id).questions!;
+  assert.equal(question.author.workerId,worker.id);assert.equal(question.author.sessionId,worker.sessionId);
+  assert.equal(question.author.taskId,worker.taskId);assert.equal(question.author.name,worker.roleSnapshot.name);
+  assert.equal(question.request.id,f.store.view(worker.sessionId).question!.id);
+  const foreign=f.store.createProject('unrelated synthetic project');assert.deepEqual(f.host.workspace(foreign.id).questions,[]);
+  assert.throws(()=>f.host.answer(f.router,{id:question.request.id,answers:{source:['Test A']}}),/another task/);
+  assert.equal(f.host.workspace(f.project.id).questions!.length,1);
+  f.host.answer(question.author.sessionId,{id:question.request.id,answers:{source:['Test A']}});
+  assert.deepEqual((await promise).answers,{source:['Test A']});assert.deepEqual(f.host.workspace(f.project.id).questions,[]);
+  assert.equal(f.worker(initial.taskId).generation,worker.generation);
+  assert.throws(()=>f.host.answer(worker.sessionId,{id:question.request.id,answers:{source:['late']}}),/no longer active/);
+});
+
+for(const boundary of ['plan','operation','stopped','deadline','stale-generation','mismatched-question'] as const)
+test('Pilot question projection excludes '+boundary,async t=>{
+  const f=await fixture(t),initial=await f.start(),worker=f.worker(initial.taskId),signal=new AbortController().signal;
+  if(boundary==='plan'){
+    const promise=f.internal.planInteraction(worker,f.host.ledger.get(initial.taskId),signal);void promise.catch(()=>{});
+  }else if(boundary==='operation'){
+    const view=f.store.view(worker.sessionId);view.pending={id:'synthetic-operation'} as any;f.store.put('views',worker.sessionId,view);
+  }else{
+    const promise=f.internal.questionInteraction(worker,{questions:[{id:'source',title:'Synthetic source?'}]},signal);void promise.catch(()=>{});
+    if(boundary==='stopped'||boundary==='stale-generation'){
+      const current=f.worker(initial.taskId);if(boundary==='stopped')current.state='stopped';else current.generation++;
+      f.store.put('superWorkers',current.id,current);
+    }else if(boundary==='deadline'){
+      const goal=f.host.ledger.get(initial.taskId);goal.deadlineAt=new Date(Date.now()-1).toISOString();f.host.ledger.save(goal);
+    }else{
+      const view=f.store.view(worker.sessionId);view.question!.id='unrelated-question';f.store.put('views',worker.sessionId,view);
+    }
+  }
+  assert.deepEqual(f.host.workspace(f.project.id).questions,[]);
+});
+
+test('a question checks already-routed supplements and replaces a deferred old report',async t=>{
+  const f=await fixture(t),initial=await f.start(),worker=f.worker(initial.taskId);
+  const event=await f.admit('补充：使用源环境的同名应用和网关配置。');
+  f.route(event,{action:'followup',task_id:initial.taskId,role_id:f.role.id});f.settleRouter();
+  assert.equal((await f.finish(initial.taskId)).completionDeferred,true);
+  const ask=f.host.profile(worker.sessionId)!.tools.find(tool=>tool.metadata.name==='ask_user_question')!;
+  const result:any=await ask.handler({questions:[{id:'source',title:'Provide the source application.'}]},
+    {abortSignal:new AbortController().signal} as any);
+  assert.equal(result.superseded,true);assert.equal(result.followups[0].id,event.id);
+  assert.equal(f.store.list('superDeferredFinishes').length,0);
+  assert.notEqual((await f.finish(initial.taskId)).completionDeferred,true);
+});
+
+test('an active guide is consumed only by its exact runtime receipt and cannot leak to another task',async t=>{
+  const f=await fixture(t),initial=await f.start(),worker=f.worker(initial.taskId);
+  const guides:{sessionId:string;input:string;inputId:string}[]=[];
+  f.agents.isRunning=()=>true;
+  f.agents.steer=async(sessionId:string,input:string,inputId:string)=>{guides.push({sessionId,input,inputId});return true;};
+  const event=await f.admit('补充：先查看测试入口。');f.route(event,{action:'followup',task_id:initial.taskId,role_id:f.role.id});f.settleRouter();
+  assert.equal(guides.length,1);assert.equal(guides[0].sessionId,worker.sessionId);
+  assert.deepEqual(JSON.parse(guides[0].input).followups,[{id:event.id,text:event.payload}]);
+  assert.deepEqual(f.worker(initial.taskId).invocationInputIds,[initial.event.id],'queue acknowledgement is not consumption');
+  f.host.inputsConsumed(f.router,[guides[0].inputId]);f.host.inputsConsumed(worker.sessionId,['wrong-input']);
+  assert.deepEqual(f.worker(initial.taskId).invocationInputIds,[initial.event.id]);
+  f.host.inputsConsumed(worker.sessionId,[guides[0].inputId]);f.host.inputsConsumed(worker.sessionId,[guides[0].inputId]);
+  assert.deepEqual(f.worker(initial.taskId).invocationInputIds,[initial.event.id,event.id]);
+  assert.equal(f.store.list<any>('superInputDeliveries')[0].state,'consumed');
+  assert.notEqual((await f.finish(initial.taskId)).completionDeferred,true);
+});
+
+for(const boundary of ['failed-routing','plan','operation','stopped','deadline','stale-generation'] as const)
+test('supplement delivery preserves '+boundary,async t=>{
+  const f=await fixture(t),initial=await f.start(),worker=f.worker(initial.taskId);
+  const guides:string[]=[];f.agents.isRunning=()=>true;
+  f.agents.steer=async(_sessionId:string,_input:string,inputId:string)=>{guides.push(inputId);return true;};
+  if(boundary==='plan'){
+    const result=f.internal.planInteraction(worker,f.host.ledger.get(initial.taskId),new AbortController().signal);void result.catch(()=>{});
+  }
+  if(boundary==='operation'){
+    const view=f.store.view(worker.sessionId);view.pending={id:'synthetic-operation'} as any;f.store.put('views',worker.sessionId,view);
+  }
+  const event=await f.admit('补充：使用新提供的配置线索。');f.route(event,{action:'followup',task_id:initial.taskId,role_id:f.role.id});
+  if(boundary==='stopped'){
+    const current=f.worker(initial.taskId);current.state='stopped';f.store.put('superWorkers',current.id,current);
+  }
+  if(boundary==='deadline'){
+    const goal=f.host.ledger.get(initial.taskId);goal.deadlineAt=new Date(Date.now()-1).toISOString();f.host.ledger.save(goal);
+  }
+  f.settleRouter(boundary==='failed-routing'?'synthetic routing failure':undefined);
+  if(boundary==='stale-generation'){
+    assert.equal(guides.length,1);
+    const current=f.worker(initial.taskId);current.generation++;f.store.put('superWorkers',current.id,current);
+    f.host.inputsConsumed(worker.sessionId,guides);
+  }else assert.equal(guides.length,0);
+  assert.deepEqual(f.worker(initial.taskId).invocationInputIds,[initial.event.id]);
+  if(boundary==='plan')assert.equal(f.internal.interactions.size,1,'supplements do not approve plans');
+});
+
+test('a question racing an accepted guide wakes without injecting the queued supplement twice',async t=>{
+  const f=await fixture(t),initial=await f.start(),worker=f.worker(initial.taskId);
+  const ids:string[]=[];f.agents.isRunning=()=>true;
+  f.agents.steer=async(_sessionId:string,_input:string,inputId:string)=>{ids.push(inputId);return true;};
+  const event=await f.admit('补充：先检查已给出的源配置。');f.route(event,{action:'followup',task_id:initial.taskId,role_id:f.role.id});f.settleRouter();
+  const ask=f.host.profile(worker.sessionId)!.tools.find(tool=>tool.metadata.name==='ask_user_question')!;
+  const result:any=await ask.handler({questions:[{id:'source',title:'Which source?'}]},{abortSignal:new AbortController().signal} as any);
+  assert.equal(result.superseded,true);assert.deepEqual(result.followups,[]);assert.deepEqual(result.pendingInputIds,ids);
+  assert.deepEqual(f.worker(initial.taskId).invocationInputIds,[initial.event.id]);
+  f.host.inputsConsumed(worker.sessionId,ids);
+  assert.deepEqual(f.worker(initial.taskId).invocationInputIds,[initial.event.id,event.id]);
+});
 
 for (const fail of [false, true]) test(`a committed assignment shows preparation before Pilot settles without starting execution (routing failure: ${fail})`, async t => {
   const f = await fixture(t), event = await f.admit('检查本地虚构文字。');
