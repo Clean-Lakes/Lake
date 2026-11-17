@@ -625,6 +625,69 @@ test(
   },
 );
 
+test("Redis connection probes support RESP2-only servers and preserve exact AUTH identity", async (t) => {
+  const f = await fixture(t), commands = [], sockets = new Set();
+  const expectedPassword = "synthetic-resp2-credential";
+  const server = net.createServer(socket => {
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
+    socket.on("error", () => {});
+    let pending = Buffer.alloc(0), authenticated = false;
+    socket.on("data", data => {
+      pending = Buffer.concat([pending, data]);
+      while (pending.length) {
+        const head = pending.indexOf("\r\n");
+        if (head < 0) return;
+        const count = Number(pending.subarray(1, head).toString());
+        assert.equal(pending[0], 42);
+        assert.ok(Number.isInteger(count) && count > 0 && count < 10);
+        const values = []; let offset = head + 2;
+        for (let i = 0; i < count; i++) {
+          const end = pending.indexOf("\r\n", offset);
+          if (end < 0) return;
+          assert.equal(pending[offset], 36);
+          const length = Number(pending.subarray(offset + 1, end).toString());
+          assert.ok(Number.isInteger(length) && length >= 0 && length < 16384);
+          if (pending.length < end + 2 + length + 2) return;
+          values.push(pending.subarray(end + 2, end + 2 + length).toString());
+          offset = end + 2 + length + 2;
+        }
+        pending = pending.subarray(offset);
+        const [name, ...args] = values;
+        commands.push({name, arguments: args.length, username: name === "AUTH" && args.length === 2 ? args[0] : undefined});
+        if (name === "AUTH") {
+          authenticated = args.length === 1 && args[0] === expectedPassword || args.length === 2 && args[0] === "reader" && args[1] === expectedPassword;
+          socket.write(authenticated ? "+OK\r\n" : "-WRONGPASS invalid credential\r\n");
+        } else if (!authenticated) socket.write("-NOAUTH Authentication required\r\n");
+        else if (name === "SELECT" && args.length === 1 && args[0] === "2") socket.write("+OK\r\n");
+        else if (name === "PING" && !args.length) socket.write("+PONG\r\n");
+        else socket.write("-ERR unsupported command\r\n");
+      }
+    });
+  });
+  await new Promise(ok => server.listen(0, "127.0.0.1", ok));
+  t.after(async () => {
+    for (const socket of sockets) socket.destroy();
+    await new Promise(ok => server.close(ok));
+  });
+  const settings = {host:"127.0.0.1", port:server.address().port, password:expectedPassword, db:2, tls:false};
+  const result = await f.api(f.path + "/test", "POST", input("redis", settings));
+  assert.equal(result.protocol, "redis");
+  assert.deepEqual(commands.map(c => c.name), ["AUTH", "SELECT", "PING"]);
+  assert.equal(commands[0].arguments, 1);
+  commands.length = 0;
+  await f.api(f.path + "/test", "POST", input("redis", {...settings, username:"reader"}));
+  assert.equal(commands[0].arguments, 2);
+  assert.equal(commands[0].username, "reader");
+  assert.ok(commands.every(c => ["AUTH", "SELECT", "PING"].includes(c.name)));
+  commands.length = 0;
+  const failure = await f.api(f.path + "/test", "POST", input("redis", {...settings, password:"synthetic-wrong-credential"}), 502);
+  assert.ok(!JSON.stringify(failure).includes(expectedPassword));
+  assert.ok(!JSON.stringify(failure).includes("synthetic-wrong-credential"));
+  assert.ok(!commands.some(c => c.name === "PING"));
+  assert.deepEqual(await secretFiles(f.home), []);
+});
+
 test("unsafe credential files and an in-place credential change invalidate saved probes", async (t) => {
   const f = await fixture(t);
   let arrive, release;

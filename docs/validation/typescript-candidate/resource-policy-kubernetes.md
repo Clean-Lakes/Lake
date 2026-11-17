@@ -48,3 +48,11 @@ The native Dev Kubernetes editor restored endpoint/auth/namespace/TLS/timeout, k
 The combined integration checkout ran Kubernetes, existing service and specialist-followup regressions: **38 passed, three pre-existing conditional Codex cases skipped, zero failures**. The full application build passed. No model call, Worker grant, policy deletion or historical operation replay was used for these checks.
 
 Resource import continues for the remaining credential-backed entrances. [PR 238](https://github.com/Clean-Lakes/Lake/pull/238) targets develop; merging and production installation still require the repository's explicit authorization.
+
+### Redis compatibility follow-up
+
+The user authorized PR 238's merge; it merged as `ae5de678ede42553edcd6778ee934d59c1305f7b`, with identical trees and both topic refs cleaned up. Dev now contains all fourteen requested service entrances, grouped by scene, with resource count 165. Ten actual probes pass, including the Jushan cluster using its existing CA and client certificate with an IP SAN verified against the server certificate. The four Redis entrances rejected the pinned client's default `HELLO 3`; a private diagnostic using the same actual credentials and RESP2 authenticated and returned PONG on all four.
+
+The follow-up explicitly selects RESP2 for connection probes. This uses ordinary AUTH, optional SELECT and PING, retaining explicit ACL usernames, TLS, deadlines and policy checks. [Redis documents HELLO as introduced in 6.0](https://redis.io/docs/latest/commands/hello/); the pinned client supports explicit protocol selection. No server configuration or credentials are changed.
+
+A new RESP2-only wire regression failed on the prior implementation (HTTP 502 instead of 200), then passed with the protocol selection. It verifies password-only and named-user AUTH, rejection of wrong credentials, no PING after failed authentication, no stored draft credentials and no credential echo. The existing real isolated Redis test remains. Backend typecheck/bundle and all **34 Kubernetes/service integration tests passed, with no skips or failures**. Signed Dev verification of this follow-up is recorded after installation.

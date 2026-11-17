@@ -18,6 +18,7 @@ The TypeScript service resource path rejects every project containing a preserve
 
 - **REQ-001**: Preserve existing resource IDs, credentials, directories and historical policy records. Match imports by project, resource type and explicit connection endpoint before creating a resource.
 - **REQ-002**: Add Kubernetes create, edit and explicit connection testing to `LakeServiceResources`; support uploaded YAML/JSON kubeconfig or endpoint/token, context, namespace, timeout and TLS settings.
+- **REQ-003**: Redis connection tests must support existing RESP2-only servers, preserve explicit ACL usernames and authenticate before PING without changing server configuration.
 - **SEC-001**: Adapt only confirmed, valid legacy policies with explicit unrestricted management/read permissions. Explicit deny, ask, resource scopes, unsupported limits, recovery identity and current policy changes continue to reject unsupported operations.
 - **SEC-002**: Configuration and its explicit connection test do not grant Worker execution, expand the preserved policy ResourceIDs, edit historical policy rules, or resume old operations.
 - **SEC-003**: Keep kubeconfig, token and embedded certificate/private-key material in the selected Home's private secrets directory. Reject credential plugins, external file references, proxies, impersonation, YAML anchors/aliases and redirected credential requests. Never log parser source text or credentials.
@@ -57,6 +58,7 @@ The TypeScript service resource path rejects every project containing a preserve
 | TASK-008 | Run TypeScript checks, affected/full runtime suites, frontend checks/build and repository boundary checks; record the exact tested SHA. Depends on TASK-005, TASK-006 and TASK-007. | ✅ | 2026-11-17 |
 | TASK-009 | Build/install with `scripts/build_lake_desktop.sh --dev --install` after normal Dev shutdown; verify the real Dev API, import missing scene-grouped resources with independent credentials, and audit duplicate endpoints and retained records. Depends on TASK-008. | | |
 | TASK-010 | Create the ordinary PR targeting develop. After the repository-required merge/release authorization and verified production installation, repeat the idempotent resource import against the release Home and record final receipts. Depends on TASK-009. | | |
+| TASK-011 | Fix the RESP3 handshake incompatibility found on the four actual Redis entrances. Add a RESP2-only wire regression, validate exact AUTH identity/rejected credentials and update signed Dev before repeating all fourteen probes. | | |
 
 ## 3. Alternatives
 
@@ -108,3 +110,5 @@ The TypeScript service resource path rejects every project containing a preserve
 [YAML parser options](https://eemeli.org/yaml/#parse-options)
 
 2026-11-17 progress: feature `8c4c43c2` passed local suites; signed Dev integration `60b2d26e` preserves the installed baseline and passed real Kubernetes editing/testing. Six resources were added through Dev APIs, old resources/policy preserved, and the repeated plan skipped all six. Remaining service credentials and production import are pending; PR [238](https://github.com/Clean-Lakes/Lake/pull/238) targets develop. The detailed verification record distinguishes successful probes from 217 transport failures and the unverified narrow-window geometry.
+
+PR 238 merged with the user's explicit authorization as `ae5de678ede42553edcd6778ee934d59c1305f7b`; its topic branches were cleaned up. All fourteen configuration entries now exist in Dev with ten passing actual probes. The four Redis servers reject the driver's default HELLO 3; their exact saved credentials passed direct RESP2 AUTH/PING checks. Follow-up work uses `codex/redis-resp2-compat` from that current origin/develop. It changes only the probe's protocol selection; TLS, authentication, cancellation and policy checks remain in place.
