@@ -56,9 +56,9 @@ The TypeScript service resource path rejects every project containing a preserve
 |------|-------------|-----------|------|
 | TASK-007 | Add isolated HTTP/TLS integration tests in `runtime/typescript/service-resources.test.cjs` and Kubernetes tests for credentials, parser bounds, policy denial, cancellation, revision changes and HTTP error validation. Depends on TASK-002 and TASK-004. | ✅ | 2026-11-17 |
 | TASK-008 | Run TypeScript checks, affected/full runtime suites, frontend checks/build and repository boundary checks; record the exact tested SHA. Depends on TASK-005, TASK-006 and TASK-007. | ✅ | 2026-11-17 |
-| TASK-009 | Build/install with `scripts/build_lake_desktop.sh --dev --install` after normal Dev shutdown; verify the real Dev API, import missing scene-grouped resources with independent credentials, and audit duplicate endpoints and retained records. Depends on TASK-008. | | |
+| TASK-009 | Build/install with `scripts/build_lake_desktop.sh --dev --install` after normal Dev shutdown; verify the real Dev API, import missing scene-grouped resources with independent credentials, and audit duplicate endpoints and retained records. Depends on TASK-008. | ✅ | 2026-11-17 |
 | TASK-010 | Create the ordinary PR targeting develop. After the repository-required merge/release authorization and verified production installation, repeat the idempotent resource import against the release Home and record final receipts. Depends on TASK-009. | | |
-| TASK-011 | Fix the RESP3 handshake incompatibility found on the four actual Redis entrances. Add a RESP2-only wire regression, validate exact AUTH identity/rejected credentials and update signed Dev before repeating all fourteen probes. | | |
+| TASK-011 | Fix the RESP3 handshake incompatibility found on the four actual Redis entrances. Add a RESP2-only wire regression, validate exact AUTH identity/rejected credentials and update signed Dev before repeating all fourteen probes. | ✅ | 2026-11-17 |
 
 ## 3. Alternatives
 

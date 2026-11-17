@@ -15,7 +15,11 @@ The connection changes adapt only proven legacy management permissions, support 
 - Signed daily Dev integration `497a7f6c89f247f103cc82856cda35c45eeb069f` preserves previously installed source `3e5f73e9`, plus the merged connection fixes and Redis follow-up. It is clean; installed binary digest matches the build-origin manifest. Daily Dev's additional unmerged specialist baseline is retained locally and is not silently included in this candidate.
 - Fourteen connection entries have been added through authenticated Dev APIs with exact endpoint matching and scene placement. Prior resources and policy bytes were preserved. Subsequent observations and duplicate audit are recorded in the connection validation document; private source files/credentials are not committed.
 
-The final clean candidate's signed Dev package/build identity, isolated smoke checks and production-PR CI results are appended when performed. Daily Dev and production retain their separate Homes and credentials. No production process has been restarted or application replaced during preparation.
+Clean preparation `ca6431dc4a25686a0b5b40698bcde628775be5f3` built a signed 0.3.34 Dev package. The packaged SEA's isolated-Home smoke test passed bootstrap, exact PID/Home/runtime identity, Kubernetes create/test, RESP2-only Redis create/test (AUTH/SELECT/PING only) and normal drain. Deep/strict signature and manifest/binary digest verification passed. Backend SHA-256: `14e4d8008ffdbe020ee159f871541f9c2ec78bb2c989d35f1d217325b658ac99`. Subsequent preparation changes are validation/plan documents only.
+
+Daily Dev's fourteen imports are idempotent: repeated runs report 0 creates/14 skips, count 165, unchanged prior resources/policy and no duplicate service endpoints. Eleven actual API probes passed across the observed attempts. Three Jushan Redis resources have valid directly tested RESP2 credentials but later Dev probes encounter transport resets/timeouts; no continuous network/service health is claimed. Native light/dark and narrow-window form/menu/focus clipping checks were completed and preferences/window restored.
+
+Production-PR CI results are appended when performed. Daily Dev and production retain their separate Homes and credentials. No production process has been restarted or application replaced during preparation.
 
 ## Promotion and rollback
 
