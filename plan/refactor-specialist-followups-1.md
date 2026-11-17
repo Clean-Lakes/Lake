@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-17
 last_updated: 2026-11-17
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [runtime, bug, supplements]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
 Pilot currently records followups without delivering them to the active invocation. A specialist blocked in a prerequisite question therefore never reads the supplement. Deliver exact routed inputs to the original execution and retain the existing next-invocation fallback when delivery is unconfirmed.
 
@@ -66,7 +66,7 @@ Pilot currently records followups without delivering them to the active invocati
 | TASK-007 | Run focused regressions, TypeScript checks, affected host integration tests and scripts/check_adk_runtime_boundary.py; cover stale/rejected/late delivery, source isolation, routing failure and approval preservation. | Yes | 2026-11-17 |
 | TASK-008 | Build signed Lake Dev using scripts/build_lake_desktop.sh --dev --install, verify synthetic supplement delivery without real resource operations, and record tested SHA and remaining limits in docs/validation/typescript-candidate/. Depends on TASK-007. | Yes | 2026-11-17 |
 | TASK-012 | Bound question-result batches, preserve overflow, and verify the long-context tail in actual native SDK and Codex requests. Rebuild signed Dev for the final product commit. | Yes | 2026-11-17 |
-| TASK-009 | Review diff, verify authorized GitHub identity, push codex/specialist-followup-delivery and open a PR against develop. Leave merge pending explicit authorization. Depends on TASK-008 and TASK-012. | | |
+| TASK-009 | Review diff, verify authorized GitHub identity, push codex/specialist-followup-delivery and open a PR against develop. Leave merge pending explicit authorization. Depends on TASK-008 and TASK-012. | Yes | 2026-11-17 |
 
 ## 3. Alternatives
 
@@ -105,6 +105,7 @@ Pilot currently records followups without delivering them to the active invocati
 
 ## 8. Related Specifications / Further Reading
 
+- [PR #237](https://github.com/Clean-Lakes/Lake/pull/237): develop integration remains pending explicit merge authorization.
 - [Contribution workflow](../CONTRIBUTING.md)
 - [Pilot continuous intake](../docs/lake-pilot.md)
 - [Current task contract](../docs/security/task-confirmation.md)
