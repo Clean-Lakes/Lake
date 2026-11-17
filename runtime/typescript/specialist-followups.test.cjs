@@ -8,15 +8,17 @@ process.env.LAKE_TS_IMPORT_ONLY='1';
 const {startLakeServer}=require('../../bin/lake-runtime/server.cjs');
 const codexRuntime=process.env.LAKE_CODEX_APP_SERVER_TEST_RUNTIME;
 const content=message=>typeof message.content==='string'?message.content:(message.content??[]).map(part=>part.text??'').join('');
-const clarification='SYNTHETIC_FOLLOWUP_CONTEXT：使用测试源配置与测试凭据引用。';
 async function until(read,check){
  for(const end=Date.now()+30000;Date.now()<end;){const value=await read();if(check(value))return value;await new Promise(resolve=>setTimeout(resolve,20));}
  assert.fail('isolated specialist did not consume the expected supplement');
 }
 
-for(const backend of ['native','codex'])for(const boundary of backend==='native'?['question','native-question','guide']:['question','guide'])
+for(const backend of ['native','codex'])for(const boundary of backend==='native'?['question','native-question','long-question','native-long-question','guide']:['question','long-question','guide'])
 test(`${backend} specialist consumes a Pilot supplement during ${boundary} in the same invocation`,
  {skip:backend==='codex'&&!codexRuntime,timeout:90000},async t=>{
+ const clarification=boundary.includes('long')?'SYNTHETIC_LONG_CONTEXT：'+'x'.repeat(16280)+' COMPLETE_SUPPLEMENT_TAIL':
+  'SYNTHETIC_FOLLOWUP_CONTEXT：使用测试源配置与测试凭据引用。';
+ assert.ok(Buffer.byteLength(clarification)<=16384);
  const home=await mkdtemp(join(tmpdir(),'lake-specialist-followup-')),web=join(home,'web');
  await mkdir(web);await writeFile(join(web,'index.html'),'isolated supplement validation');
  let app,fixtureError,releaseFirst,held=false,workerRequests=0,sequence=0;
@@ -34,10 +36,16 @@ test(`${backend} specialist consumes a Pilot supplement during ${boundary} in th
    if(router){
     const admitted=[...messages].reverse().find(message=>message.role==='user'&&content(message).startsWith('[LAKE ADMITTED HUMAN EVENTS'));
     const event=JSON.parse(content(admitted).split('\n')[1])[0];
-    const start=messages.indexOf(admitted),routed=messages.slice(start+1).some(message=>message.tool_calls?.some(call=>call.function.name==='route_work'));
-    if(!routed){
+    const after=messages.slice(messages.indexOf(admitted)+1),routed=after.some(message=>message.tool_calls?.some(call=>call.function.name==='route_work'));
+    const pages=after.filter(message=>message.role==='tool').flatMap(message=>{
+     try{const value=JSON.parse(content(message));return value.id===event.id&&typeof value.content==='string'?[value]:[];}catch{return [];}
+    });
+    if(event.clipped&&!pages.at(-1)?.complete){
+     toolCall={name:'read_super_object',input:{kind:'event',id:event.id,revision:event.revision,expected_hash:event.hash,offset:pages.at(-1)?.nextOffset??0,limit:16384}};
+    }else if(!routed){
+     const quote=event.clipped?JSON.parse(pages.map(page=>page.content).join('')).payload:event.text;
      const worker=app.store.list('superWorkers')[0];
-     toolCall={name:'route_work',input:{event_id:event.id,part_key:'task',quote:event.text,role_id:'followup-test-role',reason:'exact current synthetic requirement',
+     toolCall={name:'route_work',input:{event_id:event.id,part_key:'task',quote,role_id:'followup-test-role',reason:'exact current synthetic requirement',
       ...(worker?{action:'followup',task_id:worker.taskId}:{action:'create',title:'验证同任务补充'})}};
     }else text='已记录给测试专员的补充或任务。';
    }else{
@@ -46,7 +54,7 @@ test(`${backend} specialist consumes a Pilot supplement during ${boundary} in th
     const calls=codex?messages.filter(item=>item.type==='function_call').map(item=>item.name):
      messages.flatMap(message=>message.tool_calls??[]).map(call=>call.function.name);
     if(!calls.length){
-     toolCall=boundary==='guide'?{name:'work_read',input:{}}:boundary==='native-question'?
+     toolCall=boundary==='guide'?{name:'work_read',input:{}}:boundary.startsWith('native-')?
       {name:'AskUserQuestion',input:{questions:[{question:'Which test source should be used?',header:'Source',options:[{label:'Source A',description:'First source'},{label:'Source B',description:'Second source'}],multiSelect:false}]}}:
       {name:'ask_user_question',input:{questions:[{id:'source',title:'Which test source should be used?'}]}};
     }else if(!calls.some(name=>name.endsWith('work_finish'))){

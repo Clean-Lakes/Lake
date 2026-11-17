@@ -50,6 +50,10 @@ import type {AgentBackendRef,AgentExecutionSummary,SpecialistAgentAssignment} fr
 import type {ExternalRun} from './acp/types';
 import {codexModels} from './acp/codex-profile';
 
+const questionResultBytes=131072;
+const questionResultBudget={maxInlineBytes:questionResultBytes,maxModelBytes:questionResultBytes,strategy:'truncate' as const,
+  preview:{maxBytes:questionResultBytes,direction:'head' as const}};
+
 type Role = { id: string; projectId: string; roleKey: string; name: string; duties: string; revision: number; avatarId?:LakeAvatarName; deletedAt?: string; execution?: import('./acp/types').AgentBackendRef };
 type Channel = { id: string; projectId: string; roleId: string; sessionId: string; revision: number; createdAt: string };
 type InputEvent = { id: string; projectId: string; sessionId: string; messageId: string; payload: string;
@@ -1724,6 +1728,7 @@ export class LakeSuperagent implements AgentHost {
         superseded:{const:true},answers:{type:'object',maxProperties:0},unanswered:array(str),
         followups:array({type:'object'}),pendingInputIds:array(str),instruction:str,
       },required:['superseded','answers','unanswered','followups','instruction'],additionalProperties:false}]},runtimeOutputSchema:undefined,
+      resultBudget:questionResultBudget,
       formatModelContent:output=>record(output)?.superseded===true?canonical(output):entry.formatModelContent?.(output)??canonical(output),
       handler:async(input:any,context)=>{
       const normalized={questions:input.questions.map((question:any,index:number)=>({id:'q'+index,title:question.question,reason:question.header,options:question.options?.map((option:any)=>option.label),multi_select:question.multiSelect}))};
@@ -2113,7 +2118,7 @@ export class LakeSuperagent implements AgentHost {
           return {waitedMs: Date.now() - started};
         })),
       this.entry("ask_user_question", "Ask a bounded human prerequisite question for this exact task. Answers do not grant operation approval.",
-        objectSchema({ questions: array(objectSchema({ id: str, title: str, reason: str, options: array(str), multi_select: { type: "boolean" } }, ["id", "title"])) }, ["questions"]), run((a, context) => this.questionInteraction(worker, a, context.abortSignal))),
+        objectSchema({ questions: array(objectSchema({ id: str, title: str, reason: str, options: array(str), multi_select: { type: "boolean" } }, ["id", "title"])) }, ["questions"]), run((a, context) => this.questionInteraction(worker, a, context.abortSignal)),false,questionResultBytes),
       this.entry("list_assets", "Find current project resource metadata: use asset_ref for an exact resource ID, or query for its name, ID or Lake directory path (Chinese names supported). Each result includes path; ancestor folder names are searchable. For a named directory/environment, search that folder and confirm the returned path before choosing a host. A shared IP/gateway does not identify the same target or cluster. Same-name matches remain separate resources. pathTruncated marks a shortened display; path_state=unavailable means ancestry could not be resolved. Otherwise browse bounded pages (default 20, max 50); follow nextCursor with the same query until hasMore is false. Use the exact returned asset_ref and configuration_revision for inspect_host. Metadata and cursor are not execution permission.",
         objectSchema({ asset_ref: str, query: str, cursor: str, limit: integer }), run((a) => {
           const catalog = this.store.catalog();
@@ -2539,14 +2544,23 @@ export class LakeSuperagent implements AgentHost {
     if(!pending.length||terminal(goal.status)||Date.parse(goal.deadlineAt)<=Date.now())return false;
     const direct=pending.filter(eventId=>this.followupDelivery(worker,eventId)?.state!=='queued');
     const queued=pending.filter(eventId=>!direct.includes(eventId));
+    const instruction='The user supplied new context for this same task. Re-evaluate the prerequisite using these followups and any pending same-turn input. These are not selected answers or operation/plan approvals. Continue what is now possible; ask only for information still missing.';
+    const result={answers:{},unanswered:this.store.view(worker.sessionId).question?.questions.map(question=>question.id)??[],
+      superseded:true,followups:[] as ReturnType<LakeSuperagent['followupContext']>[],
+      ...(queued.length&&{pendingInputIds:queued.slice(0,64).map(eventId=>this.followupId(worker,eventId))}),
+      instruction:instruction+' Additional context may remain pending. If it is still needed, finish this invocation rather than repeating this question, so the host can continue with the remaining context.'};
+    // Consumption must never outrun the actual tool-result budget. Include a
+    // complete ordered prefix; the rest keeps its guide/next-invocation path.
+    for(const eventId of direct){
+      result.followups.push(this.followupContext(eventId));
+      if(Buffer.byteLength(canonical(result))>questionResultBytes){result.followups.pop();break;}
+    }
+    if(result.followups.length===direct.length)result.instruction=instruction;
     this.interactions.delete(entry.id);
-    const deliveries=direct.map(eventId=>this.prepareFollowup(worker,eventId,'question'));
+    const deliveries=result.followups.map(event=>this.prepareFollowup(worker,event.id,'question'));
     this.inputsConsumed(worker.sessionId,deliveries.map(delivery=>delivery.id));
     goal.status='running';this.ledger.save(goal);
-    entry.resolve({answers:{},unanswered:this.store.view(worker.sessionId).question?.questions.map(question=>question.id),
-      superseded:true,followups:direct.map(eventId=>this.followupContext(eventId)),
-      ...(queued.length&&{pendingInputIds:queued.map(eventId=>this.followupId(worker,eventId))}),
-      instruction:'The user supplied new context for this same task. Re-evaluate the prerequisite using these followups and any pending same-turn input. These are not selected answers or operation/plan approvals. Continue what is now possible; ask only for information still missing.'});
+    entry.resolve(result);
     return true;
   }
   private forwardFollowups(worker:Worker){

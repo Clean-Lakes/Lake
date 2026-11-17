@@ -20,6 +20,7 @@ Pilot currently records followups without delivering them to the active invocati
 - **REQ-002**: Distinguish queued input from consumed input. Only SDK drain events, matching Codex user-message events, or the resolved prerequisite-question result may add an input to invocationInputIds.
 - **REQ-003**: Resume a prerequisite question with the actual supplement as new context, without inventing answers. Re-evaluate missing information in the same invocation.
 - **REQ-004**: Show every active specialist prerequisite question directly above the Pilot composer, with its real name, avatar and task; reply to the exact original worker session without opening task details. Preserve drafts during refreshes and isolate concurrent questions.
+- **REQ-005**: A resolved question must carry complete followups within its actual serialization budget; retain all overflow input as unconsumed for a safe continuation.
 - **SEC-001**: Never resolve plan or operation approvals from a supplement; preserve current permission, memory, cancellation and resource checks. Do not replay business operations or stopped tasks.
 - **CON-001**: Use the existing native SDK and official Codex 0.160.1 App Server; no second model loop, dependency upgrade or production installation.
 - **GUD-001**: Keep original Dev business records and credentials unchanged. Synthetic tests contain no user credentials or remote mutations.
@@ -54,7 +55,7 @@ Pilot currently records followups without delivering them to the active invocati
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-010 | Project active, generation-bound questions in SuperWorkspace and render them with shared ReplyIdentity and AgentQuestion above the Pilot composer. Answers retain their original session and question IDs. | Yes | 2026-11-17 |
-| TASK-011 | Validate concurrent questions, exact-session answers, refresh draft stability, disconnect/retirement, keyboard focus and light/dark/narrow layouts. Update UI guidelines and local validation evidence. Depends on TASK-010. | | |
+| TASK-011 | Validate concurrent questions, exact-session answers, refresh draft stability, disconnect/retirement, keyboard focus and light/dark/narrow layouts. Update UI guidelines and local validation evidence. Depends on TASK-010. | Yes | 2026-11-17 |
 
 ### Implementation Phase 4
 
@@ -62,9 +63,10 @@ Pilot currently records followups without delivering them to the active invocati
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-007 | Run focused regressions, TypeScript checks, affected host integration tests and scripts/check_adk_runtime_boundary.py; cover stale/rejected/late delivery, source isolation, routing failure and approval preservation. | | |
-| TASK-008 | Build signed Lake Dev using scripts/build_lake_desktop.sh --dev --install, verify synthetic supplement delivery without real resource operations, and record tested SHA and remaining limits in docs/validation/typescript-candidate/. Depends on TASK-007. | | |
-| TASK-009 | Review diff, verify authorized GitHub identity, push codex/specialist-followup-delivery and open a PR against develop. Leave merge pending explicit authorization. Depends on TASK-008. | | |
+| TASK-007 | Run focused regressions, TypeScript checks, affected host integration tests and scripts/check_adk_runtime_boundary.py; cover stale/rejected/late delivery, source isolation, routing failure and approval preservation. | Yes | 2026-11-17 |
+| TASK-008 | Build signed Lake Dev using scripts/build_lake_desktop.sh --dev --install, verify synthetic supplement delivery without real resource operations, and record tested SHA and remaining limits in docs/validation/typescript-candidate/. Depends on TASK-007. | Yes | 2026-11-17 |
+| TASK-012 | Bound question-result batches, preserve overflow, and verify the long-context tail in actual native SDK and Codex requests. Rebuild signed Dev for the final product commit. | | |
+| TASK-009 | Review diff, verify authorized GitHub identity, push codex/specialist-followup-delivery and open a PR against develop. Leave merge pending explicit authorization. Depends on TASK-008 and TASK-012. | | |
 
 ## 3. Alternatives
 
@@ -93,6 +95,7 @@ Pilot currently records followups without delivering them to the active invocati
 - **TEST-004**: Failed routing, stop, stale generation, deadlines, other specialists, plan confirmation and operation approvals cannot be bypassed.
 - **TEST-006**: Pilot automatically displays all current source-bound questions with real names/avatars; answers and retirement affect only the exact original task, drafts survive snapshots, and disconnected forms cannot submit.
 - **TEST-005**: Signed Dev and isolated real/synthetic runtime validation record actual input consumption and no duplicate or real business operations.
+- **TEST-007**: Long supplements reach the provider with their exact tail; oversized batches consume only complete results and retain their suffix for the same task's next invocation.
 
 ## 7. Risks & Assumptions
 

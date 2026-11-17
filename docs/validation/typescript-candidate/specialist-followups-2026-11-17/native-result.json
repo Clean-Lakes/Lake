@@ -1,0 +1,29 @@
+{
+  "testedSHA": "824b0618341f38495af610179c836cba4c2104c9",
+  "workerCount": 2,
+  "workers": [
+    {
+      "roleId": "qa-release",
+      "generation": 1,
+      "state": "parked",
+      "invocationInputCount": 1
+    },
+    {
+      "roleId": "qa-data",
+      "generation": 1,
+      "state": "parked",
+      "invocationInputCount": 2
+    }
+  ],
+  "goalStates": [
+    "completed",
+    "completed"
+  ],
+  "deliveryStates": [
+    {
+      "state": "consumed",
+      "via": "question"
+    }
+  ],
+  "operations": 0
+}

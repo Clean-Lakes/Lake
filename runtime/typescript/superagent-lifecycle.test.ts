@@ -143,6 +143,43 @@ test('a question checks already-routed supplements and replaces a deferred old r
   assert.notEqual((await f.finish(initial.taskId)).completionDeferred,true);
 });
 
+test('question results consume only a complete prefix within the model budget and retain the rest',async t=>{
+  const f=await fixture(t),initial=await f.start(),worker=f.worker(initial.taskId),events:any[]=[];
+  for(let index=0;index<12;index++){
+    const event=await f.admit(`Supplement ${index}: `+'x'.repeat(16200)+` COMPLETE_TAIL_${index}`);
+    f.route(event,{action:'followup',task_id:initial.taskId,role_id:f.role.id});f.settleRouter();events.push(event);
+  }
+  const ask=f.host.profile(worker.sessionId)!.tools.find(tool=>tool.metadata.name==='ask_user_question')!;
+  const result:any=await ask.handler({questions:[{id:'source',title:'Which synthetic source?'}]},
+    {abortSignal:new AbortController().signal} as any);
+  const count=result.followups.length;
+  assert.ok(count>0&&count<events.length);
+  assert.ok(Buffer.byteLength(JSON.stringify(result))<=ask.resultBudget!.maxModelBytes);
+  assert.deepEqual(result.followups,events.slice(0,count).map(event=>({id:event.id,text:event.payload})));
+  assert.deepEqual(f.worker(initial.taskId).invocationInputIds,[initial.event.id,...events.slice(0,count).map(event=>event.id)]);
+  assert.equal(f.store.list<any>('superInputDeliveries').filter(row=>row.state==='consumed').length,count);
+  assert.equal((await f.finish(initial.taskId)).completionDeferred,true,'unread suffix cannot settle with the old report');
+  f.settleWorker(initial.taskId);await f.activate();
+  assert.deepEqual(f.requests.at(-1)!.input.followups,events.slice(count).map(event=>({id:event.id,text:event.payload})));
+});
+
+test('an oversized reference context wakes the question without consuming or truncating that input',async t=>{
+  const f=await fixture(t),initial=await f.start(),worker=f.worker(initial.taskId),payload='x'.repeat(16000);
+  const selected={resourceIds:[],mentions:[],references:Array.from({length:32},()=>({kind:'skill',skill_name:'synthetic',label:payload,start:0,end:payload.length}))};
+  const event=await f.admit(payload,selected);
+  f.route(event,{action:'followup',task_id:initial.taskId,role_id:f.role.id});f.settleRouter();
+  const ask=f.host.profile(worker.sessionId)!.tools.find(tool=>tool.metadata.name==='ask_user_question')!;
+  const result:any=await ask.handler({questions:[{id:'source',title:'Which synthetic source?'}]},
+    {abortSignal:new AbortController().signal} as any);
+  assert.equal(result.superseded,true);assert.deepEqual(result.followups,[]);
+  assert.deepEqual(f.worker(initial.taskId).invocationInputIds,[initial.event.id]);
+  assert.equal(f.store.list('superInputDeliveries').length,0);
+  assert.equal((await f.finish(initial.taskId)).completionDeferred,true);
+  f.settleWorker(initial.taskId);await f.activate();
+  assert.deepEqual(f.requests.at(-1)!.input.followups,[{id:event.id,text:payload}]);
+  assert.deepEqual(f.store.require<any>('superInputs',event.id).selectedReferences,selected);
+});
+
 test('an active guide is consumed only by its exact runtime receipt and cannot leak to another task',async t=>{
   const f=await fixture(t),initial=await f.start(),worker=f.worker(initial.taskId);
   const guides:{sessionId:string;input:string;inputId:string}[]=[];
