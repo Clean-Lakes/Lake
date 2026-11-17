@@ -1,0 +1,42 @@
+{
+  "home": "~/.lake-dev",
+  "allUnchanged": true,
+  "kinds": {
+    "superWorkers": {
+      "count": 142,
+      "unchanged": true
+    },
+    "superGoals": {
+      "count": 142,
+      "unchanged": true
+    },
+    "superOperations": {
+      "count": 467,
+      "unchanged": true
+    },
+    "superInputs": {
+      "count": 237,
+      "unchanged": true
+    },
+    "superDecisions": {
+      "count": 201,
+      "unchanged": true
+    },
+    "superReports": {
+      "count": 188,
+      "unchanged": true
+    },
+    "providers": {
+      "count": 4,
+      "unchanged": true
+    },
+    "modelProviders": {
+      "count": 0,
+      "unchanged": true
+    },
+    "resources": {
+      "count": 178,
+      "unchanged": true
+    }
+  }
+}
