@@ -13,11 +13,11 @@
 
 ## 自动验证
 
-使用固定 Node 24.14.0 和 SDK v3.17.2。后端 typecheck/bundle、前端 typecheck/build、ADK runtime boundary、backend naming 和 diff 检查通过。
+使用固定 Node 24.14.0 和 SDK v3.17.2。实际功能提交为 `7d6104cb7df7a5f9f107840e39f891729d39606b`。后端 typecheck/bundle、前端 typecheck/build、ADK runtime boundary、backend naming 和 diff 检查通过。
 
 | 验证 | 结果 |
 | --- | --- |
-| 全部 CJS runtime 用例 | 328 项，322 通过，6 条件跳过；跳过项未计为成功 |
+| 全部 CJS runtime 用例 | 328 项，322 通过，6 条件跳过；随后重复行补齐调整由最终 19 项导入测试覆盖；跳过项未计为成功 |
 | 全部 TS runtime 用例 | 363 项，359 通过，4 条件跳过 |
 | 前端用例 | 949 通过 |
 | 最后源码调整后的 import/storage 用例 | 19 通过，0 跳过 |
@@ -27,11 +27,21 @@
 
 ## 签名 Dev 验证
 
-待在保留现有 `497a7f6c89f247f103cc82856cda35c45eeb069f` 的本机集成分支安装后补充准确源码 SHA、签名产物、原生预览及既有数据审计结果。开发应用继续使用 `~/.lake-dev`；正式应用和 `~/.lake` 保持原状。
+本机集成分支保留现有 `497a7f6c89f247f103cc82856cda35c45eeb069f` 及之前的专员/Redis 改动，cherry-pick 功能提交后为 `cbcadcfc24a8f63230ad9cdea9e5c5c1060d9778`。该组合的 import/storage/services/Kubernetes 53 项测试全部通过，0 跳过。
+
+通过 `scripts/build_lake_desktop.sh --dev --install` 构建、签名、安装 **0.3.33 Lake Dev**。来源清单 `dirty=false`，严格签名通过；安装后端 SHA256 为 `5cf34d0a50d6efa446c83d0180f1513fdb0125a9aabe0d3b95ca41186e098980`，与清单一致。开发应用仅使用 `~/.lake-dev`，未覆盖为版本准备分支上的 0.3.34。
+
+原生 Dev 点击“从 HexHub 导入”正常显示 158 行和登录资料安全读取提示，没有“接口不存在”。观察了明暗主题、约 850pt 窄窗口、勾选/全不选、Tab + 空格选择、滚动与裁切，关闭后恢复窗口尺寸和资源目录状态。真实清单仅预览，未整批提交；不公开包含用户会话或凭据的截图。
+
+运行安装后的签名后端，使用显式独立临时 Home 和随机端口：预览 2 项不创建资源；确认创建 2 项；同计划重放创建 0、跳过 2；正常 SIGTERM 退出并移除运行记录。临时数据随后清理，没有第二个后端打开 Dev 或正式 Home。
+
+只读比对安装前后 `resources`、`tree`、`resourceRevisions` 和 `legacyProjectPolicies`：Dev 共 192 项资源、目标项目 165 项逐条相同；正式版 150 项逐条相同，生产原 PID 和后端哈希也未改变。真实项目没有新增、重复资源或策略范围变化。
 
 ## 仍未交付
 
-自然语言清单推断、任意服务端文件路径、借用其他资源凭据、SSH IdentityFile/代理/通配 Host、整体加密 HexHub 导出、Docker/SQLite 与 Worker/Pilot 导入执行不属于本增量。完整等价门禁仍关闭；资源配置成功不代表现场持续可达。原 14 项服务已在 Dev 建立；生产补齐仍受用户的升级暂停指示约束。
+自然语言清单推断、任意服务端文件路径、借用其他资源凭据、SSH IdentityFile/代理/通配 Host、整体加密 HexHub 导出、Docker/SQLite 与 Worker/Pilot 导入执行不属于本增量。完整等价门禁仍关闭；资源配置成功不代表现场持续可达。原 14 项服务已在 Dev 建立；安装后的莒山 Redis 16379/16380/16381 复测均返回超时，不能报告持续健康。生产补齐仍受用户的升级暂停指示约束。
+
+本增量通过 [PR 240](https://github.com/Clean-Lakes/Lake/pull/240) 提交 develop，保持未合并，等待用户单独授权。PR 239 和生产操作继续保留暂停状态。
 
 ## 回退
 

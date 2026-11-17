@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-17
 last_updated: 2026-11-17
 owner: Codex
-status: In progress
+status: Completed
 tags: [items, resources, import, hexhub, typescript]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
 The existing resource import dialog calls preview and commit routes absent from the TypeScript server and displays “接口不存在”. Restore the complete authenticated UI path, current HexHub inventory/login matching, private previews and duplicate-safe commits. The user declined the proposed production upgrade; all further application installation is Dev only.
 
@@ -58,8 +58,8 @@ The existing resource import dialog calls preview and commit routes absent from 
 |------|-------------|-----------|------|
 | TASK-008 | Add isolated source/HTTP/API regressions covering current-vs-stale storage, corruption, scoped credential matching, no secret echo, selection, ownership, revisions, busy targets, rollback and duplicate/replay behavior. | Yes | 2026-11-17 |
 | TASK-009 | Run backend typecheck/bundle, affected/full runtime tests and frontend checks where needed; record exact tested SHA and limits. Depends on TASK-006 through TASK-008. | Yes | 2026-11-17 |
-| TASK-010 | Preserve installed Dev source, stop normally, signed build/install, verify native HexHub preview and a synthetic import/replay in an isolated Home. Audit that the existing 165-resource project and its policy remain unchanged. Depends on TASK-009. | | |
-| TASK-011 | Create an ordinary develop PR with actual validation. Retain unmerged branches and the Dev provenance checkout. Respect the user's production hold. | | |
+| TASK-010 | Preserve installed Dev source, stop normally, signed build/install, verify native HexHub preview and a synthetic import/replay in an isolated Home. Audit that the existing 165-resource project and its policy remain unchanged. Depends on TASK-009. | Yes | 2026-11-17 |
+| TASK-011 | Create an ordinary develop PR with actual validation. Retain unmerged branches and the Dev provenance checkout. Respect the user's production hold. | Yes | 2026-11-17 |
 
 ## 3. Alternatives
 
@@ -110,3 +110,7 @@ The existing resource import dialog calls preview and commit routes absent from 
 [Existing Go import behavior](../internal/web/resource_import.go)
 
 [Existing HexHub reader](../internal/web/hexhub_local_storage.go)
+
+[Final validation and tested SHAs](../docs/validation/typescript-candidate/resource-import.md)
+
+[PR 240 (unmerged)](https://github.com/Clean-Lakes/Lake/pull/240)
