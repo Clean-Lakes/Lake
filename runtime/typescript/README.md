@@ -59,6 +59,8 @@ Magpie 与手动供应商共存。明确选择手动模型后保持该选择；�
 
 迁移优先读取旧 ADK state 指向的准确 artifact 版本并核验 hash；不选择最大 artifact 版本，旧 UI JSON 仅作前 ADK 兼容缓存。历史卡片分页保留，旧任务不成为新执行权威。原项目明确 Security 策略尚未完成 TS 适配时阻止资源执行；原安全 gate/epoch/reader 不兼容时只允许查看，不能改成 Agent SDK 默认放行。`security.ts` 是迁移屏障，完整 Security/grant/恢复合同仍待移植。
 
+连接配置的增量适配独立于 Worker 执行：已确认的原 legacy 策略须具有准确项目/恢复身份、有效版本及明确的 resource.manage 允许规则；显式测试另外要求 resource.resolve 和对应 db.read、cluster.read 或 network.fetch。deny、ask、未支持的非空限制保持关闭；无准确资源 ID 的测试遇到按资源细分的规则时拒绝。测试过程中和发布结果前重验原策略摘要、资源与凭据版本，不改写旧 ResourceIDs 或规则、不授权历史任务。Kubernetes 现有新增/编辑表单接通 TS 的私有 Kubeconfig/Token 保存与只读 `/version` 测试，支持内嵌 CA、客户端证书、TLS server name、上下文、命名空间、超时和取消；拒绝外部文件、插件、代理、身份模拟、YAML 引用和重定向。Kubernetes Agent 查询/变更工具及完整策略管理迁移仍不在本增量内。实际测试和安装范围见[验证记录](../../docs/validation/typescript-candidate/resource-policy-kubernetes.md)。
+
 最初 24 项隔离集成验证与真实 Dev 目录副本演练见[Super-agent 验证记录](../../docs/validation/typescript-candidate/superagent.md)。该批是已有迁移候选的增量，不代表全量功能切换。
 
 ### 验证和切换门槛
