@@ -93,6 +93,7 @@ export function ServiceResourceFields({
     <fieldset disabled={disabled} className="service-resource-fields">
       {type === "kubernetes" ? (
         <KubernetesResourceFields
+          existing={nativeConnections ? existing : undefined}
           value={value}
           onChange={onChange}
           disabled={disabled}

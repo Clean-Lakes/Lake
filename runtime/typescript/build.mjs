@@ -233,7 +233,7 @@ await writeFile(
 );
 dependencyNotices.length = 0;
 noticePrefix = 'services';
-for(const name of ['pg','@redis/client'])await copyDependencyNotices(createRequire(join(root,'web-agent/package.json')).resolve(name));
+for(const name of ['pg','@redis/client','yaml'])await copyDependencyNotices(createRequire(join(root,'web-agent/package.json')).resolve(name));
 await writeFile(join(output,'licenses/service-dependencies.json'),JSON.stringify(dependencyNotices,null,2));
 dependencyNotices.length = 0;
 noticePrefix = "image";

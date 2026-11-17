@@ -1,5 +1,7 @@
 # Lake Super-agent 内核与三模块协作约定
 
+2026-11-17 资源连接迁移增量：TypeScript 的服务资源配置和显式连接测试可适配已确认、恢复身份一致、相关规则明确允许且无未支持范围限制的旧 legacy 项目策略；拒绝、ask、按资源身份限定的测试和策略变化继续阻止对应操作。只扩展 Items 的连接管理，不删除旧策略、不扩大其 ResourceIDs、不为 Worker/历史任务签发执行权限。Kubernetes 连接支持上传的内嵌 Kubeconfig 或端点/Token、上下文、命名空间及明确 TLS/超时设置；不执行插件、不读取外部凭据文件、不跟随凭据请求重定向。该增量不代表完整 Security 恢复或 Kubernetes Agent 操作工具已迁移。实施及真实安装状态见[计划](plan/feature-resource-policy-kubernetes-1.md)与[验证记录](docs/validation/typescript-candidate/resource-policy-kubernetes.md)。
+
 2026-11-16 用户要求采用 Tutti 的本地智能体调用设计。Codex 从第三方 codex-acp 包装器迁移为官方 `codex app-server` 直连：受管理进程传输、Codex 线程/轮次协议适配和提供商中立的活动/生命周期接口分层。配置探测与执行共用进程传输；通知必须匹配实际 thread/turn，RPC 应答不代表完成，恢复历史不重放。固定引擎保持 0.160.1，移除 ACP SDK 与适配器安装依赖。profile 升级 schema3/runtimeKind 并增加旧配置 revision，旧 Worker/run 与未知结果保留，不静默换用新传输。历史 `kind: acp`、表名与 `codex-acp` 子类型作为兼容标识保留。按已观察的当前 Lake MCP 调用单次允许进入私有工具桥，业务操作继续经过原 ToolExecutor、Pilot 权限及 Task/Worker 身份。CODEX_HOME 仍直接复用已有登录/配置，不复制凭据、不改写用户配置；原生工具、继承 MCP/hooks/notify 与递归仍关闭。Claude SDK 和其他 Agent 不在本批实现范围。见[本机执行架构](docs/design/local-agent-runtime.md)及[迁移计划](plan/refactor-codex-app-server-1.md)。本条替代下文“所有外部执行统一使用 ACP 传输”的旧约定，不更改任务报告和模块归属。
 
 2026-11-16 用户明确 Pilot 持续接单：A 发出后仍可发送新消息，分别创建新目标或补充准确旧任务，面向同一专员或一个/多个不同专员。消息沿现有 `superInputs` 立即保存，Router 按消息串行协调，后台 Worker 不因新消息而停止；同一稳定 RoleID 的独立任务保持各自 Task/Worker/Session。补充沿原任务的安全续接边界处理，宿主不把仅已记录的补充当成本次模型已消费；未消费补充不能被旧报告抢先结清。前台回复按真实来源消息归属，不能在后来消息到达后改挂。原任务、权限、期限、并发与历史结果继续有效，不引入第二套路由或模型执行循环。见[持续接单说明](docs/lake-pilot.md#持续接单与任务补充typescript)。
