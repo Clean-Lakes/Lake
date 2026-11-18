@@ -40,7 +40,7 @@ export function ComposerModelSelect({externalAgent,onExternalAgentSelect,onExter
   useEffect(()=>{if(!open)setProviderOpen(false);},[open]);
   const [source,setSource]=useState<string|null>(null);
   useEffect(()=>{setSource(externalAgent?.selected?'agent:codex':selection?'provider:'+selection.providerId:null);setSearch("");},[presentation,externalAgent?.selected]);
-  if (!configured&&(!externalAgent||externalAgent.configurationOnly)) return <button type="button" className="composer-model-setup" disabled={disabled} onClick={onSettings} title="连接模型后即可发送，已输入的内容会保留"><Glyph name="plug" size={16}/><span>连接模型</span><Glyph name="chevron" size={12}/></button>;
+  if (!configured&&(!externalAgent||externalAgent.configurationOnly)) return <button type="button" className="composer-model-setup" aria-label="连接模型" aria-haspopup="dialog" disabled={disabled} onClick={onSettings} title="打开模型设置"><Glyph name="settings" size={16}/><span>连接模型</span></button>;
   const modelRows=available.entries?.map(entry=>({value:JSON.stringify([entry.providerId,entry.modelId]),label:entry.displayName,name:entry.name,group:entry.providerName,groupId:'provider:'+entry.providerId,model:entry as AvailableModelEntry|string,external:false}))??available.models.map(name=>({value:name,label:name,name,group:"",groupId:"provider:",model:name as AvailableModelEntry|string,external:false}));
   const allRows=externalAgent&&!externalAgent.configurationOnly?[{value:codexModelValue,label:'Codex',name:'codex-acp',group:'Codex · Agent',groupId:'agent:codex',model:codexModelValue,external:true},...modelRows]:modelRows;
   // Refreshing the catalog must not remove cached rows or resize an open panel.

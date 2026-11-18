@@ -14,16 +14,33 @@ const thinking=content('正在抱石琢磨中',{kind:'status',id:''});
 function transitionHarness(){
  const calls:{frames:Keyframe[];options:KeyframeAnimationOptions;animation:Animation&{cancelled:number}}[]=[];
  const committed:PilotReplyContentState[]=[];
+ const presented:PilotReplyContentState[]=[];
  const visual:{clipPath:string;height?:string}={clipPath:'inset(0% 38% 0% 0%)'};
  const surface={animate(frames:Keyframe[],options:KeyframeAnimationOptions){
   const animation={onfinish:null,cancelled:0,cancel(){this.cancelled++;}} as unknown as Animation&{cancelled:number};
   calls.push({frames,options,animation});return animation;
  }};
- const transition=new PilotReplyContentTransition(surface as unknown as HTMLElement,()=>({...visual}),next=>committed.push(next));
+ const transition=new PilotReplyContentTransition(surface as unknown as HTMLElement,()=>({...visual}),next=>committed.push(next),next=>presented.push(next));
  const clips=()=>calls.filter(call=>call.frames[0]?.clipPath!==undefined);
  const finish=(call=clips().at(-1)!)=>call.animation.onfinish!.call(call.animation,{} as AnimationPlaybackEvent);
- return {transition,calls,visual,committed,clips,finish};
+ return {transition,calls,visual,committed,presented,clips,finish};
 }
+
+test('the final report is ready for the island only after its replacement has been revealed',()=>{
+ const h=transitionHarness(),progress=content('进度文字'),report=content('正式报告',{id:'report-id'});
+ h.transition.update(progress,true);
+ h.transition.update(report,true);
+ assert.deepEqual(h.presented,[progress]);
+ h.finish(); // retiring progress can commit the report but cannot mark it visible yet
+ h.transition.update(report,true);
+ assert.deepEqual(h.presented,[progress]);
+ h.finish();
+ assert.deepEqual(h.presented,[progress,report]);
+ const reduced=transitionHarness();
+ reduced.transition.update(progress,true);
+ reduced.transition.update(report,false);
+ assert.equal(reduced.presented.at(-1),report);
+});
 
 test('only actual same-binding text replacements retire and reveal; initial, equal and streamed prefixes stay immediate',()=>{
  const first=content('已经读取主机信息。');

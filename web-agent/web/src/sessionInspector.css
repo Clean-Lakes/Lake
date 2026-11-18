@@ -120,6 +120,21 @@
 .task-watchdog details > summary { width:fit-content; max-width:100%; gap:5px; }
 @keyframes inspector-arrive { from { opacity:0; transform:translateX(12px); } to { opacity:1; transform:translateX(0); } }
 @keyframes inspector-depart { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(10px); } }
+@property --inspector-reveal { syntax:'<number>'; inherits:true; initial-value:0; }
+@media (width > 1100px) {
+ .workspace.web-inspector-layout { --inspector-reveal:0; --inspector-width:calc(var(--inspector-preferred-width, 382px) * var(--inspector-reveal)); }
+ .workspace.web-inspector-layout.has-session-inspector { --inspector-reveal:1; }
+ .workspace.web-inspector-layout.has-floating-header {
+  --session-content-start:max(var(--session-gutter),calc((100cqw - var(--inspector-width) - 960px)/2));
+  --session-content-width:min(960px,calc(100cqw - var(--inspector-width) - var(--session-gutter) - var(--session-gutter)));
+ }
+ .web-inspector-layout .session-layout::after { content:''; flex:0 0 var(--inspector-width); }
+ .web-inspector-layout .session-inspector { position:absolute; inset:0 0 0 auto; animation:none; opacity:var(--inspector-reveal); transform:translateX(calc(100% * (1 - var(--inspector-reveal)))); }
+}
+@media (width > 1100px) and (prefers-reduced-motion:no-preference) {
+ .workspace.web-inspector-layout { transition:--inspector-reveal 180ms ease; }
+ .workspace.web-inspector-layout.has-session-inspector { transition-duration:240ms; transition-timing-function:cubic-bezier(.22,1,.36,1); }
+}
 @media (max-width:1100px) {
  .workspace.has-session-inspector { --inspector-width:0px; }
  .session-inspector { position:absolute; top:0; bottom:0; right:0; width:min(var(--inspector-preferred-width, 382px),100%); z-index:26; }

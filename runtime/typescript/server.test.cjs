@@ -1318,7 +1318,8 @@ async function prepareCodexProtocolFixture(app,mode){
  await fs.writeFile(join(root,'node_modules/@openai/codex/package.json'),JSON.stringify({version:'0.160.1'}));
  app.agents.external.launch=async(_profile,directory,_signal,mcp)=>{
   const source=registry.local.current(),auth=JSON.parse(await fs.readFile(join(source.home,'auth.json'),'utf8'));
-  return {executable:process.execPath,args:[join(__dirname,'test-fixtures/codex-app-server.cjs')],cwd:directory,env:{LAKE_TEST_ACP_SCENARIO:mode,LAKE_TEST_ACP_SOCKET:mcp?.args.at(-1)},
+  return {executable:process.execPath,args:[join(__dirname,'test-fixtures/codex-app-server.cjs')],cwd:directory,env:{LAKE_TEST_ACP_SCENARIO:mode,LAKE_TEST_ACP_SOCKET:mcp?.args.at(-1),
+    ...(mode==='super-acp-public-text-finish-gate'&&{LAKE_TEST_ACP_RELEASE_FILE:join(app.store.home,'release-specialist-finish')})},
     observed:{model:'gpt-6.1-sol',modelProvider:'openai',reasoningEffort:'max',authenticated:!!auth.tokens?.access_token,authMode:auth.tokens?.access_token?'chatgpt':'none'}};
  };
 }
@@ -4063,6 +4064,28 @@ for(const legacy of [false,true])test(`direct ACP Worker ${legacy?'legacy cumula
  const page=await f.api(`/api/sessions/${channel.sessionId}/channel`);
  assert.equal(page.entries.filter(entry=>entry.reply?.state==='settled').length,1);
  assert.equal(page.entries.find(entry=>entry.reply?.state==='settled').message.text,report,'work_finish remains the frozen task report authority');
+});
+
+test('Pilot report handoff spans work_finish, Codex settlement and durable chat delivery',{timeout:30000},async t=>{
+ const {f,path,project,channel,body}=await specialistAssignmentFixture(t,{},'super-acp-public-text-finish-gate');
+ await f.enableCodexFixture();
+ await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0});
+ await f.api(path+'/external-agents/codex/probe','POST',{});
+ const receipt=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
+ const readWorker=async()=>(await f.api(path+'/superagent')).workers.find(item=>item.sessionId===receipt.assignment.sessionId);
+ const readPilot=()=>f.api(`/api/sessions/${project.routerSessionId}/snapshot`);
+ const submitted=await until(readWorker,worker=>worker?.task.state==='completed');
+ assert.equal(submitted.assignmentState,'active');
+ assert.equal(submitted.pilotReport.executionSettled,false);
+ const id=submitted.pilotReport.messageId;
+ assert.ok(id);
+ assert.ok(!(await readPilot()).messages.some(message=>message.id===id),'a submitted task is not a delivered reply');
+ await writeFile(join(f.home,'release-specialist-finish'),'');
+ const finished=await until(readWorker,worker=>worker?.assignmentState==='parked');
+ assert.deepEqual(finished.pilotReport,{messageId:id,executionSettled:true});
+ const reply=(await readPilot()).messages.find(message=>message.id===id);
+ assert.equal(reply.author.workerId,finished.id);
+ assert.equal(reply.text,finished.task.summary);
 });
 
 for(const reported of [true,false])test(`direct ACP Worker empty final message ${reported?'preserves the submitted report':'cannot promote progress into a report'}`,{timeout:30000},async t=>{

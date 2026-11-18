@@ -15,8 +15,8 @@ function worker(phase?:SuperWorkerActivity['phase'],overrides:Partial<SuperWorke
 function workspace(workers:SuperWorker[]):SuperWorkspace {
  return {active:true,project:{projectId:'project',routerSessionId:router.id,version:1},workers};
 }
-function badge(workspaceValue:SuperWorkspace) {
- return renderToStaticMarkup(createElement(SessionStateBadge,{session:router,...superPilotActivity(workspaceValue,router)}));
+function badge(workspaceValue:SuperWorkspace,presentedReports?:ReadonlySet<string>) {
+ return renderToStaticMarkup(createElement(SessionStateBadge,{session:router,...superPilotActivity(workspaceValue,router,true,presentedReports)}));
 }
 
 test('a completed Router reply still shows real thinking and tool activity from its workers',()=>{
@@ -103,6 +103,22 @@ test('Pilot activity cannot cross project or selected session boundaries',()=>{
  assert.equal(superPilotActivity(undefined,router),null);assert.equal(superPilotActivity(current,undefined),null);
  assert.equal(superPilotActivity(workspace([worker('tool',{task:{...task,projectId:'other-project'}})]),router),null);
  assert.equal(superPilotActivity(workspace([worker('tool',{task:{...task,sessionId:'another-task-session'}})]),router),null);
+});
+
+test('Pilot ends only after each exact specialist report has settled and been presented',()=>{
+ const report=(id:string,executionSettled:boolean)=>worker(undefined,{id,task:{...task,state:'completed'},
+  assignmentState:executionSettled?'parked':'active',pilotReport:{messageId:id,executionSettled}});
+ // Another worker may flush the pending message before this invocation returns.
+ assert.match(badge(workspace([report('report-a',false)]),new Set(['report-a'])),/data-badge-state="working"/);
+ const delivered=workspace([report('report-a',true),report('report-b',true)]);
+ assert.match(badge(delivered,new Set(['report-old','report-a'])),/data-badge-state="working"/);
+ assert.match(badge(delivered,new Set(['report-a','report-b'])),/已结束/);
+ const otherTask=workspace([...delivered.workers,worker('waiting_approval',{id:'waiting'})]);
+ assert.match(badge(otherTask,new Set()),/data-badge-state="approval"/);
+ const offline=superPilotActivity(delivered,router,false,new Set());
+ assert.equal(offline?.status,'idle');assert.equal(offline?.phase,'finishing');
+ assert.equal(offline?.idleLabel,'重连中');assert.equal(offline?.animated,false);
+ assert.equal(superPilotActivity(delivered,{...router,id:'another-pilot'},true,new Set()),null);
 });
 
 test('multiple workers prefer actual tools to queues, exclude completed workers and leave workspace order intact',()=>{
