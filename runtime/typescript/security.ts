@@ -68,6 +68,50 @@ export class LakeSecurity {
     if (this.store.get("legacyProjectPolicies", projectId))
       throw new HttpError(409, "此项目的安全策略已保留，资源操作须完成迁移核验后继续");
   }
+  /** Authenticated connection management only; never grants task execution. */
+  resourceConfiguration(projectId: string, resourceId?: string, probeCapability?: "db.read" | "cluster.read" | "network.fetch") {
+    this.check(); this.store.project(projectId);
+    if (resourceId && this.store.require<any>("resources", resourceId).projectId !== projectId)
+      throw new HttpError(404, "资源不属于当前项目");
+    const legacy = this.store.get<any>("legacyProjectPolicies", projectId);
+    if (!legacy) return digest([projectId, null, this.authority()]);
+    const policy = legacy.data;
+    // Other modes/constraints retain their migration barrier until a matching
+    // adapter exists. A saved legacy policy is data, never an implicit allow.
+    if (!policy || policy.SchemaVersion !== 1 || policy.Confirmed !== true || policy.ProjectID !== projectId || policy.Mode !== "legacy" ||
+        !Number.isSafeInteger(policy.Revision) || policy.Revision < 1 || legacy.revision !== undefined && legacy.revision !== policy.Revision ||
+        legacy.mode !== undefined && legacy.mode !== policy.Mode || legacy.projectId !== undefined && legacy.projectId !== projectId ||
+        !/^[a-fA-F0-9]{64}$/.test(policy.StoreID ?? "") || !/^[a-fA-F0-9]{64}$/.test(policy.RecoveryEpoch ?? "") ||
+        !Array.isArray(policy.ResourceIDs) || !policy.ResourceIDs.every((id: unknown) => typeof id === "string" && id) || !Array.isArray(policy.Rules))
+      throw new HttpError(409, "原项目策略尚不支持连接管理迁移，请先核实策略");
+    const path = join(this.store.home, "security/control.json");
+    if (existsSync(path)) {
+      const control = JSON.parse(readFileSync(path, "utf8"));
+      if (policy.StoreID !== control.storeID || policy.RecoveryEpoch !== control.recoveryEpoch)
+        throw new HttpError(409, "原项目策略的安全身份已失效");
+    }
+    const limits = new Set(["FileRoots", "DatabaseID", "Schemas", "MaxRows", "MaxDurationMS", "ClusterID", "Namespaces", "ResourceKinds", "Verbs", "MaxLogLines", "MaxLogSeconds", "NetworkTargets"]);
+    for (const rule of policy.Rules) {
+      if (!rule || typeof rule.Capability !== "string" || !["allow", "ask", "deny"].includes(rule.Effect) ||
+          rule.ResourceIDs != null && (!Array.isArray(rule.ResourceIDs) || !rule.ResourceIDs.every((id: unknown) => typeof id === "string" && id)))
+        throw new HttpError(409, "原项目策略规则无效");
+    }
+    const capabilities = ["resource.manage", ...(probeCapability ? ["resource.resolve", probeCapability] : [])];
+    for (const capability of capabilities) {
+      if (probeCapability && resourceId === undefined && policy.Rules.some((rule: any) => rule.Capability === capability && rule.ResourceIDs?.length))
+        throw new HttpError(409, "按资源限定的连接测试须先保存资源并绑定准确身份");
+      const rules = policy.Rules.filter((rule: any) => rule.Capability === capability &&
+        (!rule.ResourceIDs?.length || resourceId !== undefined && rule.ResourceIDs.includes(resourceId)));
+      if (!rules.length || rules.some((rule: any) => rule.Effect !== "allow"))
+        throw new HttpError(403, "原项目策略未允许此连接管理或连接测试");
+      for (const rule of rules) {
+        if (rule.Limits != null && (typeof rule.Limits !== "object" || Array.isArray(rule.Limits) ||
+            Object.entries(rule.Limits).some(([key, value]) => !limits.has(key) || !(value == null || value === "" || value === 0 || Array.isArray(value) && value.length === 0))))
+          throw new HttpError(409, "原项目连接规则的范围限制尚未完成迁移");
+      }
+    }
+    return digest([projectId, legacy, this.authority()]);
+  }
   network(projectId:string,address:string):'allow'|'ask' {
     this.check();this.store.project(projectId);let url:URL;try{url=new URL(address);}catch{throw new HttpError(400,'网页地址无效');}
     if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw new HttpError(403,'网页读取仅允许不携带认证凭据的 HTTP(S) 地址');

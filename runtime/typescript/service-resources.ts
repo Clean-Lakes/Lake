@@ -17,6 +17,7 @@ import type {
 import { LakeStore, HttpError, id, now } from "./store";
 import type { LakeSecurity } from "./security";
 import { digest, text } from "./tasks";
+import { kubeconfigLimit, normalizeKubernetesSettings, testKubernetesConnection } from "./kubernetes";
 
 const serviceKinds = [
   "database",
@@ -24,8 +25,9 @@ const serviceKinds = [
   "apisix",
   "prometheus",
   "victoriametrics",
+  "kubernetes",
 ];
-const secretKeys = ["password", "token", "apiKey"] as const;
+const secretKeys = ["password", "token", "apiKey", "kubeconfig"] as const;
 type Settings = Record<string, any>;
 type Secrets = Partial<Record<(typeof secretKeys)[number], string>>;
 const integer = (value: any, fallback: number, min: number, max: number) => {
@@ -103,7 +105,7 @@ export class LakeServiceResources {
         file.isSymbolicLink() ||
         !file.isFile() ||
         file.mode & 0o077 ||
-        file.size > 65536 ||
+        file.size > 6 * kubeconfigLimit ||
         !path.startsWith(root + sep) ||
         !realpathSync(path).startsWith(realpathSync(root) + sep) ||
         (process.platform !== "win32" &&
@@ -134,8 +136,8 @@ export class LakeServiceResources {
         if (value[key] !== undefined) {
           if (
             typeof value[key] !== "string" ||
-            value[key].length > 16384 ||
-            /[\r\n\0]/.test(value[key])
+            Buffer.byteLength(value[key]) > (key === "kubeconfig" ? kubeconfigLimit : 16384) ||
+            (key === "kubeconfig" ? /\0/ : /[\r\n\0]/).test(value[key])
           )
             throw new Error();
           result[key] = value[key];
@@ -151,7 +153,7 @@ export class LakeServiceResources {
       !input ||
       typeof input !== "object" ||
       Array.isArray(input) ||
-      JSON.stringify(input).length > 65536
+      JSON.stringify(input).length > (kind === "kubernetes" ? 6 * kubeconfigLimit : 65536)
     )
       throw new HttpError(400, "资源配置无效");
     const allowed =
@@ -159,6 +161,8 @@ export class LakeServiceResources {
         ? ["driver", "host", "port", "username", "database", "tls", "sslmode"]
         : kind === "redis"
           ? ["host", "port", "username", "db", "tls"]
+          : kind === "kubernetes"
+            ? ["endpoint", "context", "namespace", "authMethod", "requestTimeout", "tlsMode"]
           : kind === "apisix"
             ? ["endpoint"]
             : ["endpoint", "username", "authMethod"];
@@ -186,6 +190,7 @@ export class LakeServiceResources {
       typeof input.clearCredential !== "boolean"
     )
       throw new HttpError(400, "清除凭据选项无效");
+    if (kind === "kubernetes") return this.parseKubernetes(input, previous);
     const value = { ...previous, ...input },
       config: Settings = {};
     if (kind === "database") {
@@ -289,6 +294,21 @@ export class LakeServiceResources {
     for (const value of Object.values(secrets)) this.registerSecret(value!);
     return { config, secrets };
   }
+  private parseKubernetes(input: Settings, previous?: Settings) {
+    const value = { ...previous, ...input }, method = value.authMethod ?? "token";
+    if (Object.hasOwn(input, "password") || Object.hasOwn(input, "apiKey"))
+      throw new HttpError(400, "Kubernetes 仅接受 Token 或 Kubeconfig 凭据");
+    let secrets: Secrets = input.clearCredential || previous?.authMethod !== method ? {} : this.readSecrets(previous?.credentialRef);
+    for (const key of ["token", "kubeconfig"] as const) if (input[key] !== undefined) {
+      if (typeof input[key] !== "string" || Buffer.byteLength(input[key]) > (key === "kubeconfig" ? kubeconfigLimit : 16384) ||
+          (key === "kubeconfig" ? /\0/ : /[\r\n\0]/).test(input[key])) throw new HttpError(400, "Kubernetes 凭据格式无效");
+      if (input[key]) secrets = { ...secrets, [key]: input[key] };
+    }
+    const key = method === "kubeconfig" ? "kubeconfig" : "token";
+    if (Object.keys(secrets).some(name => name !== key)) throw new HttpError(400, "Kubernetes 认证方式与凭据不一致");
+    const config = normalizeKubernetesSettings(value, secrets, this.registerSecret);
+    return { config, secrets };
+  }
   /** Migration-only adoption of an exact private Dev reference. Never creates
    * a credential, weakens TLS or accepts credentials from an HTTP request. */
   configuration(kind: string, input: Settings) {
@@ -345,8 +365,16 @@ export class LakeServiceResources {
       },
     };
   }
+  /** Internal prepared-plan validation. HTTP callers still cannot borrow refs. */
+  validatePrepared(kind: string, settings: Settings) {
+    if (secretKeys.some(key => settings[key] !== undefined) || settings.clearCredential !== undefined)
+      throw new HttpError(400, '导入计划不能包含内联凭据');
+    const {config} = this.parse(kind, {}, settings);
+    if (settings.credentialRef) config.credentialRef = settings.credentialRef;
+    return config;
+  }
   create(projectId: string, input: any) {
-    this.security.resource(projectId);
+    this.security.resourceConfiguration(projectId);
     this.store.project(projectId);
     const name = text(input.name, "资源名称", 160).trim();
     if (!name) throw new HttpError(400, "请填写资源名称");
@@ -409,7 +437,7 @@ export class LakeServiceResources {
     }
   }
   update(resource: Resource, input: any) {
-    this.security.resource(resource.projectId);
+    this.security.resourceConfiguration(resource.projectId, resource.id);
     const prepared = input.settings
       ? this.prepare(resource.kind, input.settings, resource.settings)
       : undefined;
@@ -453,7 +481,6 @@ export class LakeServiceResources {
     }
   }
   async test(projectId: string, input: any, signal?: AbortSignal) {
-    this.security.resource(projectId);
     this.store.project(projectId);
     const saved = input.resourceId
       ? this.store.require<Resource>(
@@ -463,6 +490,12 @@ export class LakeServiceResources {
       : undefined;
     if (saved && (saved.projectId !== projectId || saved.kind !== input.kind))
       throw new HttpError(404, "当前项目中未找到此资源");
+    const capability = input.kind === "kubernetes" ? "cluster.read" : ["database", "redis"].includes(input.kind) ? "db.read" : "network.fetch";
+    const policyPin = this.security.resourceConfiguration(projectId, saved?.id, capability);
+    const validatePolicy = () => {
+      if (this.security.resourceConfiguration(projectId, saved?.id, capability) !== policyPin)
+        throw new HttpError(409, "资源策略已变化，请重新测试");
+    };
     const credentialState = saved
       ? digest(this.readSecrets(saved.settings?.credentialRef))
       : undefined;
@@ -483,11 +516,14 @@ export class LakeServiceResources {
     const abort = () => controller.abort();
     signal?.addEventListener("abort", abort, { once: true });
     if (signal?.aborted) abort();
-    const timeout = setTimeout(abort, 8000),
+    let policyFailure: unknown;
+    let observation: Awaited<ReturnType<typeof testKubernetesConnection>> | undefined;
+    const timeout = setTimeout(abort, input.kind === "kubernetes" ? config.requestTimeout * 1000 : 8000),
       guard = setInterval(() => {
         try {
-          this.security.resource(projectId);
-        } catch {
+          validatePolicy();
+        } catch (error) {
+          policyFailure = error;
           abort();
         }
       }, 200);
@@ -499,7 +535,7 @@ export class LakeServiceResources {
           "abort",
           () => {
             close();
-            reject(new HttpError(408, "连接测试已取消或超时"));
+            reject(policyFailure ?? new HttpError(408, "连接测试已取消或超时"));
           },
           { once: true },
         ),
@@ -508,7 +544,9 @@ export class LakeServiceResources {
         stop,
         (async () => {
           const host = String(config.host ?? "").replace(/^\[|\]$/g, "");
-          if (input.kind === "database" && config.driver === "mysql") {
+          if (input.kind === "kubernetes") {
+            observation = await testKubernetesConnection(config, secrets, controller.signal, this.registerSecret);
+          } else if (input.kind === "database" && config.driver === "mysql") {
             const connection = createConnection({
               host,
               port: config.port,
@@ -550,6 +588,8 @@ export class LakeServiceResources {
             await client.query("SELECT 1 AS lake_connection_test");
           } else if (input.kind === "redis") {
             const client = createClient({
+              // AUTH/PING also work on servers predating HELLO and RESP3.
+              RESP: 2,
               socket: {
                 host,
                 port: config.port,
@@ -575,7 +615,7 @@ export class LakeServiceResources {
             await this.testHTTP(input.kind, config, secrets, controller.signal);
         })(),
       ]);
-      this.security.resource(projectId);
+      validatePolicy();
       if (saved) {
         const current = this.store.get<Resource>("resources", saved.id);
         if (
@@ -590,6 +630,7 @@ export class LakeServiceResources {
       }
       return {
         message: "连接和认证检查通过；这不代表业务服务整体健康。",
+        ...observation,
         protocol: input.kind === "database" ? config.driver : input.kind,
         testedAt: now(),
       };

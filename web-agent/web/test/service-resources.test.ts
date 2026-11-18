@@ -119,6 +119,20 @@ test("Kubeconfig payload contains content but never local filename or stale toke
   assert.equal(emptyServiceDraft().kubeconfig, "");
 });
 
+test("Kubernetes edits restore the connection metadata without refilling private credentials", () => {
+  const resource: Resource = {
+    id: "cluster", projectId: "p", name: "cluster", kind: "kubernetes", description: "", status: "available",
+    settings: { authMethod: "kubeconfig", endpoint: "https://api.example:6443", context: "production", namespace: "apps", requestTimeout: 30, tlsMode: "verify", credentialRef: "private-cluster-reference" },
+  };
+  assert.equal(serviceResourceType(resource), "kubernetes");
+  const draft = serviceDraftFromResource(resource);
+  assert.equal(draft.kubeAuthMethod, "kubeconfig"); assert.equal(draft.context, "production"); assert.equal(draft.namespace, "apps");
+  assert.equal(draft.requestTimeout, 30); assert.equal(draft.tlsMode, "verify"); assert.equal(draft.endpoint, "https://api.example:6443");
+  assert.equal(draft.kubeconfig, ""); assert.equal(draft.token, ""); assert.ok(!JSON.stringify(draft).includes("private-cluster-reference"));
+  const next = serviceResourceInput("kubernetes", draft);
+  assert.equal(next.settings.kubeconfig, ""); assert.ok(!("credentialRef" in next.settings));
+});
+
 test("service edits preserve public connection fields but never refill credential values", () => {
   const resource = {
     id: "metrics",

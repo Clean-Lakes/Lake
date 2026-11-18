@@ -64,7 +64,7 @@ export function serviceResourceType(
   )
     return resource.settings!.driver as "mysql" | "postgres";
   if (
-    ["redis", "apisix", "prometheus", "victoriametrics"].includes(resource.kind)
+    ["redis", "apisix", "prometheus", "victoriametrics", "kubernetes"].includes(resource.kind)
   )
     return resource.kind as ResourceInputType;
 }
@@ -77,6 +77,13 @@ export function serviceDraftFromResource(resource: Resource): ServiceDraft {
   for (const key of ["port", "db"] as const)
     if (typeof settings[key] === "number") draft[key] = settings[key];
   if (typeof settings.tls === "boolean") draft.tls = settings.tls;
+  if (type === "kubernetes") {
+    draft.kubeAuthMethod = settings.authMethod === "kubeconfig" ? "kubeconfig" : "token";
+    draft.context = typeof settings.context === "string" ? settings.context : "";
+    draft.namespace = typeof settings.namespace === "string" ? settings.namespace : "";
+    if (typeof settings.requestTimeout === "number") draft.requestTimeout = settings.requestTimeout;
+    if (["config", "verify", "skip"].includes(String(settings.tlsMode))) draft.tlsMode = settings.tlsMode as ServiceDraft["tlsMode"];
+  }
   draft.serviceAuth = ["none", "basic", "bearer"].includes(
     String(settings.authMethod),
   )
@@ -136,6 +143,7 @@ export function serviceResourceInput(
         namespace: v.namespace.trim(),
         requestTimeout: v.requestTimeout,
         tlsMode: v.tlsMode,
+        ...credential,
         ...(v.kubeAuthMethod === "kubeconfig"
           ? { kubeconfig: v.kubeconfig }
           : { endpoint: v.endpoint.trim(), token: v.token }),

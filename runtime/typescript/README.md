@@ -59,6 +59,8 @@ Magpie 与手动供应商共存。明确选择手动模型后保持该选择；�
 
 迁移优先读取旧 ADK state 指向的准确 artifact 版本并核验 hash；不选择最大 artifact 版本，旧 UI JSON 仅作前 ADK 兼容缓存。历史卡片分页保留，旧任务不成为新执行权威。原项目明确 Security 策略尚未完成 TS 适配时阻止资源执行；原安全 gate/epoch/reader 不兼容时只允许查看，不能改成 Agent SDK 默认放行。`security.ts` 是迁移屏障，完整 Security/grant/恢复合同仍待移植。
 
+连接配置的增量适配独立于 Worker 执行：已确认的原 legacy 策略须具有准确项目/恢复身份、有效版本及明确的 resource.manage 允许规则；显式测试另外要求 resource.resolve 和对应 db.read、cluster.read 或 network.fetch。deny、ask、未支持的非空限制保持关闭；无准确资源 ID 的测试遇到按资源细分的规则时拒绝。测试过程中和发布结果前重验原策略摘要、资源与凭据版本，不改写旧 ResourceIDs 或规则、不授权历史任务。Kubernetes 现有新增/编辑表单接通 TS 的私有 Kubeconfig/Token 保存与只读 `/version` 测试，支持内嵌 CA、客户端证书、TLS server name、上下文、命名空间、超时和取消；拒绝外部文件、插件、代理、身份模拟、YAML 引用和重定向。Kubernetes Agent 查询/变更工具及完整策略管理迁移仍不在本增量内。实际测试和安装范围见[验证记录](../../docs/validation/typescript-candidate/resource-policy-kubernetes.md)。
+
 最初 24 项隔离集成验证与真实 Dev 目录副本演练见[Super-agent 验证记录](../../docs/validation/typescript-candidate/superagent.md)。该批是已有迁移候选的增量，不代表全量功能切换。
 
 ### 验证和切换门槛
@@ -76,6 +78,12 @@ Node 命令须使用准备好的 24.14.0。测试经过真实 Agent SDK 源码�
 `api-inventory.json` 从现有前端 TypeScript AST 提取完整 API 操作表；`parity.json` 记录逐项与领域验收。最后一个检查目前**必须失败**：候选测试不等于功能等价。资产/SSH/数据库/终端、Pilot/专员/频道、任务/权限账本、工作流/日程、记忆、附件、MCP/Skills、队列/补充/压缩、历史迁移、CLI/Magpie、macOS/Windows 与 Lake Dev 主题/窄窗均需补齐。候选 API 的 501、空只读目录或关闭的开关不能作为已迁移证据。
 
 完整等价验收继续逐项进行；0.3.28 macOS 正式分发是用户明确选择当前 TS 水位后的例外，不将缺口标为已完成。其发布仍需独立验证准确生产 SHA、迁移、签名包与更新回退。合并、生产安装和发布继续遵守仓库原有授权流程。
+
+### 资源导入增量
+
+认证 UI 的 `resource-import-preview` / `resource-import` 两步接口支持 JSON、HexHub 明文结构导出、含表头 CSV/TSV 和明确的 SSH Host 配置。HexHub 按本机 MCP `list_assets` 的范围读取，只有与当前原生 assets 存储唯一匹配的连接才补充登录信息；不读取其他对象存储、Keychain 或过期 LevelDB 表。无法稳定读取本地存储时返回明确的仅清单预览。
+
+预览不连接现场、不创建资源；凭据进入当前 Home 的私有文件，30 分钟预览计划仅保存引用与指纹。提交校验选择、项目、策略、源清单、凭据和旧资源版本，再原子写入资源、目录、版本及重放回执。完整连接跳过，缺少登录信息的唯一旧连接保留 ID、名称、目录及其他设置；活动项目拒绝补充已有连接。配置导入不扩展 Worker 资源范围或旧策略。文件路径、凭据引用、SSH 代理/通配配置、整体加密导出、SQLite/Docker 及自然语言推断未在此增量接通。实际验证和限制见[资源导入记录](../../docs/validation/typescript-candidate/resource-import.md)。
 
 本轮准确源码 SHA、签名进程检查、界面截图与未验证项见[阶段验证记录](../../docs/validation/typescript-candidate/README.md)。
 
