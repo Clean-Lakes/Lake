@@ -1,0 +1,15 @@
+{
+  "testedSHA": "3e5f73e9c01d82681fac5a7a5cfe4dfec8023349",
+  "backend": "installed signed Dev SEA",
+  "workerCount": 1,
+  "generation": 1,
+  "inputCount": 2,
+  "deliveryState": "consumed",
+  "via": "question",
+  "goalStatus": "completed",
+  "resourceOperations": 0,
+  "fullSupplementObserved": true,
+  "bytes": 16326,
+  "tailPresent": true,
+  "provider": "loopback synthetic"
+}

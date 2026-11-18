@@ -53,7 +53,8 @@ import {externalControlTools} from './acp/catalog';
 import type {ExternalActor,ExternalRun,ExternalEvent} from './acp/types';
 
 type Live = {
-  runtime: Pick<AgentRuntime,'close'> & {executeTurn:(input:string,unused?:undefined,options?:{abortSignal?:AbortSignal})=>Promise<{response?:string}>;steerTurn:(input:any)=>Promise<{kind:string}>};
+  runtime: Pick<AgentRuntime,'close'|'removePendingInputById'> & {executeTurn:(input:string,unused?:undefined,options?:{abortSignal?:AbortSignal})=>Promise<{response?:string}>;steerTurn:(input:any)=>Promise<{kind:string}>};
+  pendingTaskInputs:Set<string>;
   broker: ManualPermissionBroker;
   execution: import("./sdk").ExecutionPort;
   controller?: AbortController;
@@ -162,7 +163,10 @@ export class LakeAgents {
         try{const result=await caller.getToolExecutor().execute({id:callId,name,input},{signal:AbortSignal.any([controller.signal,context.abortSignal,signal])});
           guard();if(!result.success)throw new HttpError(409,this.redact(result.error?.message??'工具调用未成功'));return result.output;
         }finally{this.externalCalls.delete(callId);}
-      },event:(run,event)=>this.externalEvent(sessionId,run,event)};
+      },event:(run,event)=>this.externalEvent(sessionId,run,event),
+      ...(purpose==='worker'&&!child&&{inputConsumed:(inputId:string)=>{
+        this.live.get(sessionId)?.pendingTaskInputs.delete(inputId);this.host?.inputsConsumed?.(sessionId,[inputId]);
+      }})};
   }
   private externalTool(sessionId:string,profile:HostProfile,runtime:()=>AgentRuntime,available:string[]):ToolEntry{
     const base=profile.tools[0];
@@ -205,6 +209,13 @@ export class LakeAgents {
     const payload = event.payload as Record<string, any>;
     let extra: Partial<SessionEvent> = {};
     switch (event.type) {
+      case "turn_steer_drained":
+        if(Array.isArray(payload.pendingInputIds)){
+          const ids=payload.pendingInputIds.filter((id:unknown):id is string=>typeof id==='string'&&this.live.get(sessionId)?.pendingTaskInputs.has(id)===true);
+          for(const id of ids)this.live.get(sessionId)?.pendingTaskInputs.delete(id);
+          this.host?.inputsConsumed?.(sessionId,ids);
+        }
+        break;
       case "turn_started":
         this.toolActivity.clear(sessionId);
         view.rootTurnId = String(event.turnId ?? id());
@@ -1016,7 +1027,7 @@ export class LakeAgents {
     if(profile?.execution?.kind==='acp'){
       const selected=profile.execution,configuration=this.external.registry.get(session.projectId,selected.agent);
       if(selected.revision!==undefined&&selected.revision!==configuration.revision)throw new HttpError(409,'专员冻结的外部 Agent 配置已变化，请重新选择专员的新任务后端');
-      activeRuntime={close:()=>runtime.close(),steerTurn:input=>this.external.steer(sessionId,input.input,input.pendingInputId),executeTurn:async(input,_unused,options)=>{
+      activeRuntime={close:()=>runtime.close(),removePendingInputById:options=>runtime.removePendingInputById(options),steerTurn:input=>this.external.steer(sessionId,input.input,input.pendingInputId),executeTurn:async(input,_unused,options)=>{
         // ACP has no local SDK turn_started event. Give this actual invocation
         // its own host identity so its progress and delivered report share one
         // channel reply, without manufacturing an SDK event or task evidence.
@@ -1031,7 +1042,7 @@ export class LakeAgents {
         return {response:actor.purpose==='worker'?result.public_reply?.content??result.summary:result.summary};
       }};
     }
-    live = { runtime:activeRuntime, broker, execution, selection: selectionKey, children };
+    live = { runtime:activeRuntime, pendingTaskInputs:new Set(), broker, execution, selection: selectionKey, children };
     this.live.set(sessionId, live);
     return live;
   }
@@ -1114,6 +1125,12 @@ export class LakeAgents {
         this.update(sessionId, final);
       } finally {
         await live.children?.cancel();
+        // The host owns fallback delivery. Remove only its unconsumed guides
+        // from the SDK's retained queue before handing input to a new invocation.
+        for(const pendingInputId of live.pendingTaskInputs){
+          await live.runtime.removePendingInputById({pendingInputId,reason:'promoted'}).catch(()=>{});
+        }
+        live.pendingTaskInputs.clear();
         this.toolActivity.clear(sessionId);
         const final = this.store.view(sessionId);
         final.pending = undefined;
@@ -1133,10 +1150,12 @@ export class LakeAgents {
     return {};
   }
   async wait(sessionId: string) { await this.live.get(sessionId)?.completion; }
-  async steer(sessionId: string, input: string, inputId: string) {
+  async steer(sessionId: string, input: string, inputId: string, options?:{taskInput?:boolean}) {
     const live = this.live.get(sessionId);
-    if (!live?.controller) return false;
+    if (!live?.controller||live.controller.signal.aborted) return false;
+    if(options?.taskInput)live.pendingTaskInputs.add(inputId);
     const result = await live.runtime.steerTurn({ input, pendingInputId: inputId, delivery: "guide" });
+    if(result.kind!=='queued')live.pendingTaskInputs.delete(inputId);
     return result.kind === "queued";
   }
   decision(sessionId: string, approvalId: string, accept: boolean) {

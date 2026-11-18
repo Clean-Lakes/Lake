@@ -47,7 +47,7 @@ async function handle(message){
    }
   }
   if(scenario==='exit'){process.exit(1);return;}
-  if(scenario==='hold')return;
+  if(scenario==='hold'||scenario.startsWith('steer-'))return;
   if(scenario==='approval'){
    const params={threadId,turnId,itemId:'native'};
    const command=await ask('item/commandExecution/requestApproval',params);
@@ -78,6 +78,18 @@ async function handle(message){
   if(scenario==='early'){finish();reply({turn:{id:turnId,status:'inProgress'}});}
   else setTimeout(finish,40);
   return;
+ }
+ if(message.method==='turn/steer'){
+  if(message.params.threadId!==threadId||message.params.expectedTurnId!==turnId||!message.params.clientUserMessageId||message.params.input?.[0]?.text_elements?.length!==0){process.exit(4);return;}
+  if(scenario==='steer-rejected'){send({id:message.id,error:{code:-32600,message:'no active turn'}});return;}
+  const item={type:'userMessage',id:randomUUID(),clientId:message.params.clientUserMessageId,content:message.params.input};
+  note('item/started',{threadId:'foreign',item});note('item/started',{turnId:'old-turn',item});
+  note('item/started',{item:{...item,clientId:'foreign'}});
+  note('item/started',{item:{...item,content:[{type:'text',text:'WRONG_CONTENT'}]}});
+  if(scenario==='steer-early')note('item/started',{item});
+  reply({turnId:scenario==='steer-wrong-ack'?'old-turn':turnId});
+  if(scenario==='steer-ack-only'||scenario==='steer-wrong-ack')return;
+  setTimeout(()=>{note('item/started',{item});note('item/completed',{item});},20);return;
  }
  if(message.method==='turn/interrupt'){
   if(message.params.threadId!==threadId||message.params.turnId!==turnId){process.exit(3);return;}

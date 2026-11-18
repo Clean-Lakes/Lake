@@ -1,4 +1,11 @@
 .lake-question { max-width: 790px; margin: 10px auto 14px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-dialog); background: var(--surface); box-shadow: none; color: var(--foreground); }
+.composer-session-controls > .lake-question { width:100%; max-width:none; }
+.pilot-specialist-questions { max-height:min(60vh,640px); overflow-y:auto; overscroll-behavior:contain; padding:2px; }
+.pilot-specialist-question { border:0; min-width:0; margin:0; padding:0; }
+.pilot-specialist-question > .lake-question { width:100%; max-width:none; }
+.pilot-specialist-question .response-identity { min-width:0; margin-bottom:6px; }
+.pilot-specialist-question .response-identity > strong { min-width:0; overflow-wrap:anywhere; }
+.pilot-specialist-question-task { margin:0 0 12px 36px; color:var(--text-secondary); font-size:var(--font-size-ui); overflow-wrap:anywhere; }
 .lake-question-heading { display: flex; align-items: flex-start; gap: 10px; }
 .lake-question-count { flex: 0 0 auto; border-radius: var(--radius-settings-badge); corner-shape: var(--corner-window); padding: 4px 9px; background: var(--surface-hover); color: var(--text-secondary); font-size: var(--font-size-ui); }
 .lake-question-heading > strong { flex: 1; padding-top: 4px; line-height: 1.5; font-size: var(--font-size-ui); overflow-wrap: anywhere; }

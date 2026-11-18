@@ -4,7 +4,8 @@ import {JsonRpcProcess} from './process';
 type Tokens={inputTokens:number;outputTokens:number};
 type Turn={id?:string;done:boolean;resolve:(result:AgentTurnResult)=>void;reject:(error:Error)=>void;
   confirmed:Promise<void>;confirm:()=>void;mcpCalls:Map<string,{server:string;tool:string;pending:boolean}>;
-  buffered:Array<{method:string;params:any}>;bytes:number;messages:Map<string,string>;text:string;baseline?:Tokens;};
+  buffered:Array<{method:string;params:any}>;bytes:number;messages:Map<string,string>;text:string;baseline?:Tokens;
+  inputs:Map<string,{text:string;consumed:boolean}>;};
 const tokens=(value:any):Tokens|undefined=>value&&Number.isSafeInteger(value.inputTokens)&&value.inputTokens>=0&&Number.isSafeInteger(value.outputTokens)&&value.outputTokens>=0?
   {inputTokens:value.inputTokens,outputTokens:value.outputTokens}:undefined;
 type McpGate={server:string;tools:ReadonlySet<string>;guard:()=>void};
@@ -72,7 +73,7 @@ export class CodexAppServer implements AgentConnection {
     const completed=new Promise<AgentTurnResult>((resolve,reject)=>{turn={done:false,
       resolve:result=>{if(!turn.done){turn.done=true;resolve(result);}},
       reject:error=>{if(!turn.done){turn.done=true;failConfirm(error);reject(error);}},
-      confirmed,confirm,mcpCalls:new Map(),
+      confirmed,confirm,mcpCalls:new Map(),inputs:new Map(),
       buffered:[],bytes:0,messages:new Map(),text:'',baseline:this.totalTokens};});
     void completed.catch(()=>{});
     this.turn=turn;
@@ -105,6 +106,27 @@ export class CodexAppServer implements AgentConnection {
     }
     this.route(turn,method,params);
   }
+  async steer(text:string,inputId:string,signal:AbortSignal) {
+    signal.throwIfAborted();
+    const turn=this.turn;
+    if(!turn||turn.done||this.broken)return false;
+    await turn.confirmed;
+    if(this.turn!==turn||turn.done||!turn.id)return false;
+    const old=turn.inputs.get(inputId);
+    if(old){if(old.text!==text)throw new Error('Codex 补充输入身份不匹配');return true;}
+    turn.inputs.set(inputId,{text,consumed:false});
+    try{
+      const result=await this.rpc.request('turn/steer',{threadId:this.threadId,expectedTurnId:turn.id,
+        clientUserMessageId:inputId,input:[{type:'text',text,text_elements:[]}]},signal,10000);
+      if(result?.turnId!==turn.id)throw new Error('Codex 没有确认对应的补充轮次');
+    }catch(error){
+      if((error as any)?.code===-32600&&!turn.inputs.get(inputId)?.consumed){turn.inputs.delete(inputId);return false;}
+      throw error;
+    }
+    // Acceptance is only queue admission. A matching userMessage item below
+    // proves this input entered the current turn's model context.
+    return true;
+  }
   private messageText(turn:Turn,id:string,text:string) {
     const changed=!turn.messages.has(id)||turn.messages.get(id)!==text;
     turn.messages.set(id,text);
@@ -119,6 +141,13 @@ export class CodexAppServer implements AgentConnection {
       this.messageText(turn,params.itemId,(turn.messages.get(params.itemId)??'')+params.delta);
     else if(method==='item/started'||method==='item/completed') {
       const item=params.item;if(!item||typeof item.id!=='string')return;
+      if(item.type==='userMessage'&&typeof item.clientId==='string') {
+        const input=turn.inputs.get(item.clientId);
+        if(input&&!input.consumed&&Array.isArray(item.content)&&item.content.length===1&&
+            item.content[0]?.type==='text'&&item.content[0].text===input.text){
+          input.consumed=true;this.activity({kind:'input',inputId:item.clientId});
+        }
+      }
       if(item.type==='mcpToolCall') {
         if(method==='item/started'&&!turn.mcpCalls.has(item.id))turn.mcpCalls.set(item.id,{server:item.server,tool:item.tool,pending:true});
         if(method==='item/completed'){const call=turn.mcpCalls.get(item.id);if(call)call.pending=false;}

@@ -43,6 +43,7 @@ export type ExternalActor = {
   guard: () => void; tools: ToolEntry[];
   executeTool: (name: string, input: unknown, callId: string, signal: AbortSignal) => Promise<unknown>;
   event: (run: ExternalRun, event: ExternalEvent) => void;
+  inputConsumed?: (inputId:string) => void;
 };
 export type ExternalResult = {
   run_id: string; agent: string; state: ExternalRunState; summary: string;

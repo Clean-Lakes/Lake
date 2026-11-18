@@ -70,7 +70,8 @@ export class JsonRpcProcess {
     if(!Object.hasOwn(message,'result')&&!message.error)throw new Error('Invalid RPC response');
     const pending=this.pending.get(message.id);if(!pending)return;
     this.pending.delete(message.id);
-    if(message.error)pending.reject(new Error(typeof message.error.message==='string'?message.error.message:'智能体请求失败'));
+    if(message.error)pending.reject(Object.assign(new Error(typeof message.error.message==='string'?message.error.message:'智能体请求失败'),
+      {code:message.error.code}));
     else pending.resolve(message.result);
   }
   private send(message:unknown) {

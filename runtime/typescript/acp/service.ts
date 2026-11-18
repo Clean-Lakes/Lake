@@ -18,7 +18,7 @@ function ownLauncher(flag:string,args:string[]=[]){return {executable:process.ex
 export class LakeExternalAgents {
   readonly registry:ExternalAgentRegistry;
   private probes=new Map<string,{controller:AbortController;work:Promise<unknown>}>();
-  private live=new Map<string,{process?:AgentConnection;controller:AbortController;scopeHash:string}>();
+  private live=new Map<string,{process?:AgentConnection;controller:AbortController;scopeHash:string;guard?:()=>void}>();
   constructor(readonly store:LakeStore,readonly redact:(text:string,live?:boolean)=>string,readonly registerSecret:(value:string)=>void,codexHome?:string){
     this.registry=new ExternalAgentRegistry(store,{codexHome,registerSecret});
     for(const run of store.list<ExternalRun>('acpRuns'))if(run.schemaVersion===1&&['starting','running'].includes(run.state)){
@@ -95,11 +95,12 @@ export class LakeExternalAgents {
       childSessionId:actor.childSessionId,agentRunId:actor.agentRunId,generation:actor.generation,requestKey,inputHash,...(actor.model?{requestedModel:actor.model}:{}),state:'starting',dispatchPhase:'not_sent',createdAt:now(),updatedAt:now(),events:[],usage:null};
     const controller=new AbortController(),stop=()=>controller.abort(actor.signal.reason);
     actor.signal.addEventListener('abort',stop,{once:true});
-    const live:{process?:AgentConnection;controller:AbortController;scopeHash:string}={controller,scopeHash:actor.scopeHash};this.live.set(run.id,live);
+    const live:{process?:AgentConnection;controller:AbortController;scopeHash:string;guard?:()=>void}={controller,scopeHash:actor.scopeHash};this.live.set(run.id,live);
     const deadline=Math.min(Date.parse(actor.deadlineAt)-Date.now(),15*60*1000);
     if(!Number.isFinite(deadline)||deadline<=0){this.live.delete(run.id);actor.signal.removeEventListener('abort',stop);throw new HttpError(409,'原任务期限已到');}
     const timer=setTimeout(()=>controller.abort(new Error('原任务期限已到')),deadline);
     const guard=()=>{controller.signal.throwIfAborted();actor.guard();const current=this.registry.get(actor.projectId,agentId);if(!current.enabled||current.revision!==profile.revision)throw new HttpError(409,'外部 Agent 配置已变化');};
+    live.guard=guard;
     const fence=setInterval(()=>{try{guard();}catch(error){controller.abort(error);}},1000);
     let bridge:Awaited<ReturnType<typeof openToolBridge>>|undefined,submittedReport='',eventBytes=0;
     const text=new ExternalPublicText(run.id,this.redact);
@@ -128,7 +129,8 @@ export class LakeExternalAgents {
       if(launch.observed){run.model=launch.observed.model;run.modelProvider=launch.observed.modelProvider;run.reasoningEffort=launch.observed.reasoningEffort;persist();}
       const transport:AgentConnection=new CodexAppServer(launch,update=>{
         if(controller.signal.aborted||!['dispatching','sent'].includes(run.dispatchPhase))return;
-        if(update.kind==='usage'){run.usage=update.usage;persist();}
+        if(update.kind==='input'){guard();actor.inputConsumed?.(update.inputId);}
+        else if(update.kind==='usage'){run.usage=update.usage;persist();}
         else if(update.kind==='text')event({kind:'text',...text.snapshot(update.text,update.messageId,update.messageText)});
         else event(update);
       },bridge?{server:'lake',tools:new Set(tools.map(tool=>tool.metadata.name)),guard:activePrompt}:undefined);
@@ -151,6 +153,16 @@ export class LakeExternalAgents {
     }finally{clearTimeout(timer);clearInterval(fence);controller.abort(new Error('外部执行已结束'));actor.signal.removeEventListener('abort',stop);await bridge?.close();await live.process?.close();this.live.delete(run.id);}
   }
   active(sessionId:string){return [...this.live.keys()].some(id=>this.store.get<ExternalRun>('acpRuns',id)?.sessionId===sessionId);}
-  async steer(_sessionId:string,_input:string,_inputId:string,_agentRunId?:string){return {kind:'rejected'};}
+  async steer(sessionId:string,input:string,inputId:string,agentRunId?:string){
+    if(!input.trim()||Buffer.byteLength(input)>65536)return {kind:'rejected'};
+    const matches=[...this.live].filter(([id])=>{
+      const run=this.store.get<ExternalRun>('acpRuns',id);
+      return run?.sessionId===sessionId&&run.state==='running'&&run.dispatchPhase==='sent'&&
+        (agentRunId?run.agentRunId===agentRunId:run.purpose==='worker'&&!run.childSessionId);
+    });
+    if(matches.length!==1)return {kind:'rejected'};
+    const [,live]=matches[0];live.guard?.();
+    return {kind:await live.process?.steer(input,inputId,live.controller.signal)?'queued':'rejected'};
+  }
   async close(){for(const probe of this.probes.values())probe.controller.abort();await Promise.allSettled([...this.probes.values()].map(probe=>probe.work));await Promise.allSettled([...this.live.values()].map(async live=>{live.controller.abort();await live.process?.close();}));}
 }
