@@ -219,6 +219,8 @@ Agent 设置还可修改专员的新任务默认后端。未设置偏好的专�
 
 ## 接入渠道（MCP，TypeScript Dev）
 
+Grafana 告警使用同一设置页中的「Grafana Webhook」来源，接收记录可在对应连接下查看。 [Grafana 接入步骤](grafana-event-receiver.md)
+
 在设置 → 接入渠道添加连接，例如「我的 Codex」，选择消息所属项目及处理方式。默认「Pilot 自动路由」会按消息直接答复、追问或安排专员；固定专员适合明确限定角色的入口。连接创建后项目固定，如需切换项目应另建连接。
 
 复制接入配置得到包含实际程序、`--home`、`--data` 和 `--connection` 参数的 MCP JSON；凭据保存在本机私有目录，配置中不包含明文秘密。命令入口为 `<Lake 运行程序> --mcp-channel --home <Home> [--data <Data>] --connection <连接ID>`。Lake 与客户端须运行在同一台机器、同一系统用户下；启动 Lake 后使用以下工具：

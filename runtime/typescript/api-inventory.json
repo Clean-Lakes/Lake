@@ -148,6 +148,33 @@
       ]
     },
     {
+      "name": "createEventSource",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "'/api/settings/event-sources'"
+        }
+      ]
+    },
+    {
+      "name": "createGatewayConnection",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "\"/api/settings/gateway/connections\""
+        }
+      ]
+    },
+    {
+      "name": "createGatewayToken",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "\"/api/settings/gateway/tokens\""
+        }
+      ]
+    },
+    {
       "name": "createProject",
       "routes": [
         {
@@ -216,6 +243,24 @@
         {
           "method": "DELETE",
           "path": "\"/api/ai/presets\""
+        }
+      ]
+    },
+    {
+      "name": "deleteGatewayConnection",
+      "routes": [
+        {
+          "method": "DELETE",
+          "path": "`/api/settings/gateway/connections/${encodeURIComponent(id)}`"
+        }
+      ]
+    },
+    {
+      "name": "deleteGatewayToken",
+      "routes": [
+        {
+          "method": "DELETE",
+          "path": "`/api/settings/gateway/tokens/${encodeURIComponent(id)}`"
         }
       ]
     },
@@ -337,6 +382,24 @@
       ]
     },
     {
+      "name": "eventDeliveries",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "`/api/settings/event-sources/${encodeURIComponent(id)}/deliveries?limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`"
+        }
+      ]
+    },
+    {
+      "name": "eventDelivery",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "`/api/settings/event-sources/${encodeURIComponent(id)}/deliveries/${encodeURIComponent(deliveryId)}`"
+        }
+      ]
+    },
+    {
       "name": "eventsUrl",
       "routes": [
         {
@@ -355,6 +418,15 @@
       ]
     },
     {
+      "name": "externalAgents",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "`/api/projects/${encodeURIComponent(project)}/external-agents`"
+        }
+      ]
+    },
+    {
       "name": "forgetMemory",
       "routes": [
         {
@@ -369,6 +441,42 @@
         {
           "method": "DELETE",
           "path": "`/api/projects/${encodeURIComponent(projectId)}/memory/${encodeURIComponent(key)}`"
+        }
+      ]
+    },
+    {
+      "name": "gatewayConnections",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "\"/api/settings/gateway/connections\""
+        }
+      ]
+    },
+    {
+      "name": "gatewayMessages",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "`/api/settings/gateway/connections/${encodeURIComponent(id)}/messages?limit=20${cursor?`&cursor=${encodeURIComponent(cursor)}`:''}`"
+        }
+      ]
+    },
+    {
+      "name": "gatewaySpecialists",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "\"/api/settings/gateway/specialists\""
+        }
+      ]
+    },
+    {
+      "name": "gatewayTokens",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "\"/api/settings/gateway/tokens\""
         }
       ]
     },
@@ -414,6 +522,15 @@
         {
           "method": "POST",
           "path": "`/api/projects/${encodeURIComponent(projectId)}/resource-import`"
+        }
+      ]
+    },
+    {
+      "name": "installExternalAgent",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/projects/${encodeURIComponent(project)}/external-agents/${encodeURIComponent(agent)}/install`"
         }
       ]
     },
@@ -544,6 +661,15 @@
       ]
     },
     {
+      "name": "prepareExternalAgent",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/projects/${encodeURIComponent(project)}/external-agents/codex/prepare`"
+        }
+      ]
+    },
+    {
       "name": "previewHexhubImport",
       "routes": [
         {
@@ -558,6 +684,15 @@
         {
           "method": "POST",
           "path": "`/api/projects/${encodeURIComponent(projectId)}/resource-import-preview`"
+        }
+      ]
+    },
+    {
+      "name": "probeExternalAgent",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/projects/${encodeURIComponent(project)}/external-agents/${encodeURIComponent(agent)}/probe`"
         }
       ]
     },
@@ -715,6 +850,15 @@
       ]
     },
     {
+      "name": "saveExternalAgent",
+      "routes": [
+        {
+          "method": "PUT",
+          "path": "`/api/projects/${encodeURIComponent(project)}/external-agents/${encodeURIComponent(agent)}`"
+        }
+      ]
+    },
+    {
       "name": "saveMCP",
       "routes": [
         {
@@ -859,6 +1003,15 @@
         {
           "method": "POST",
           "path": "`/api/sessions/${encodeURIComponent(session)}/ai/reasoning`"
+        }
+      ]
+    },
+    {
+      "name": "setRoleExecution",
+      "routes": [
+        {
+          "method": "PUT",
+          "path": "`/api/projects/${encodeURIComponent(project)}/superagent/specialists/${encodeURIComponent(role)}/execution`"
         }
       ]
     },
@@ -1115,6 +1268,15 @@
       ]
     },
     {
+      "name": "testGatewayConnection",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/settings/gateway/connections/${encodeURIComponent(id)}/test`"
+        }
+      ]
+    },
+    {
       "name": "testKubernetesResource",
       "routes": [
         {
@@ -1160,6 +1322,24 @@
       ]
     },
     {
+      "name": "updateEventSource",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "`/api/settings/event-sources/${encodeURIComponent(id)}`"
+        }
+      ]
+    },
+    {
+      "name": "updateGatewayConnection",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "`/api/settings/gateway/connections/${encodeURIComponent(id)}`"
+        }
+      ]
+    },
+    {
       "name": "updateMessageQueue",
       "routes": [
         {
@@ -1192,6 +1372,15 @@
         {
           "method": "POST",
           "path": "`/api/sessions/${encodeURIComponent(sessionId)}/text-files`"
+        }
+      ]
+    },
+    {
+      "name": "watchdogMode",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "`/api/projects/${encodeURIComponent(projectId)}/watchdog`"
         }
       ]
     },

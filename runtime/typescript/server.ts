@@ -42,6 +42,7 @@ import { importLegacyModelSettings } from "./dev-settings";
 import {validateRuntimeProfile} from './runtime-profile';
 import { LakeSuperagent } from "./superagent";
 import { LakeGateway, type GatewayAuth } from "./gateway";
+import { LakeEventReceiver } from "./event-receiver";
 import { applyLegacyMigration, importLegacySSH, importLegacyMySQL, importLegacyMCP, importLegacyServices, importLegacyWorkflows, loadLegacyView } from "./migration";
 import { digest } from "./tasks";
 import { LakeSecurity } from "./security";
@@ -157,6 +158,7 @@ export async function startLakeServer(options: ServerOptions) {
   let agents: LakeAgents | undefined;
   let superagent: LakeSuperagent | undefined;
   let gateway: LakeGateway | undefined;
+  let eventReceiver: LakeEventReceiver | undefined;
   let security: LakeSecurity | undefined;
   let memory: LakeMemory | undefined;
   let extensions: LakeExtensions | undefined;
@@ -228,6 +230,16 @@ export async function startLakeServer(options: ServerOptions) {
         response.end(method === "HEAD" ? undefined : await readFile(file));
         return;
       }
+      if (path[1] === 'ingress') {
+        response.setHeader('Connection', 'close');
+        if (path.length !== 5 || path[2] !== 'v1' || path[3] !== 'grafana')
+          throw new HttpError(404, 'Grafana 接收地址不存在');
+        if (method !== 'POST') throw new HttpError(405, 'Grafana Webhook 仅接受 POST');
+        if (!eventReceiver || draining) throw new HttpError(503, 'Lake 接收端未就绪');
+        const receipt = await eventReceiver.receive(path[4]!, request, () => draining);
+        json(response, 200, receipt);
+        return;
+      }
       const bearer = request.headers.authorization?.replace(/^Bearer /, "") ?? "";
       const cookie =
         request.headers.cookie
@@ -246,6 +258,22 @@ export async function startLakeServer(options: ServerOptions) {
         throw new HttpError(401, "需要 Lake 访问凭据");
       }
       if (!store || !agents || !superagent) throw new HttpError(503, "服务正在启动");
+      if (path[1] === 'settings' && path[2] === 'event-sources') {
+        if (!eventReceiver || draining) throw new HttpError(503, 'Lake 接收端未就绪');
+        if (path.length === 3 && method === 'POST') {
+          json(response, 201, eventReceiver.create(await body(request), origin));
+        } else if (path.length === 4 && method === 'PATCH') {
+          json(response, 200, eventReceiver.update(path[3]!, await body(request), origin));
+        } else if (path[4] === 'deliveries' && method === 'GET' && path.length === 5) {
+          const limit = Number(url.searchParams.get('limit') ?? 20);
+          json(response, 200, eventReceiver.deliveries(path[3]!, limit, url.searchParams.get('cursor') ?? undefined));
+        } else if (path[4] === 'deliveries' && method === 'GET' && path.length === 6) {
+          json(response, 200, eventReceiver.delivery(path[3]!, path[5]!));
+        } else {
+          throw new HttpError(405, '不支持此事件来源操作');
+        }
+        return;
+      }
       if (path[1] === "bootstrap")
         response.setHeader(
           "Set-Cookie",
@@ -827,11 +855,15 @@ export async function startLakeServer(options: ServerOptions) {
         } else throw new HttpError(405, "不支持此网关请求");
       } else if (path[1] === "settings" && path[2] === "gateway") {
         if (path[3] === 'connections') {
-          if (path.length === 4 && method === 'GET') result = {
-            connections: gateway!.connections().map(connection => ({...connection, lastReceivedAt: superagent!.lastGatewayMessageAt(connection.id)})),
-            command: gatewayCommand(), projects: store.catalog().projects.map(({id, name}) => ({id, name})),
-            specialists: superagent.gatewaySpecialists().specialists, legacyTokens: gateway!.list().tokens,
-          };
+          if (path.length === 4 && method === 'GET') {
+            const projects = store.catalog().projects.map(({id, name}) => ({id, name}));
+            result = {
+              connections: gateway!.connections().map(connection => ({...connection, lastReceivedAt: superagent!.lastGatewayMessageAt(connection.id)})),
+              command: gatewayCommand(), projects,
+              specialists: superagent.gatewaySpecialists().specialists, legacyTokens: gateway!.list().tokens,
+              eventSources: eventReceiver!.list(projects.map(project => project.id), origin),
+            };
+          }
           else if (path.length === 4 && method === 'POST') {
             validateGatewayScope(data.projectId, data.routing);
             result = gateway!.createConnection(data); status = 201;
@@ -930,6 +962,7 @@ export async function startLakeServer(options: ServerOptions) {
     // Preparation must not start Workers, Watchdog, queued inputs or Memory
     // extraction. The actual application launch owns those runtime services.
     if(options.importOnly)return {origin,token,store,agents,superagent,memory,mysql,services,execution,close};
+    eventReceiver = new LakeEventReceiver(store, security, value => ssh!.scrub(extensions!.scrub(value)));
     execution=new LakeExecution(store,security,ssh,value=>agents!.redact(ssh!.scrub(value)));
     const resourceNavigation=new LakeResourceNavigation(store,(projectId,actorSessionId)=>store!.list<any>('sessions').some(session=>session.projectId===projectId&&session.id!==actorSessionId&&agents!.isRunning(session.id)));
     resourceManagement=new LakeResourceManagement(store,security,ssh,services,resourceNavigation);
