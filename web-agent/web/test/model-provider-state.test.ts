@@ -1,9 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {contextLabel,discoveredModels,providerDraft,providerPayload,providerProtocolBaseURL} from "../src/modelProviderState";
+import {contextLabel,discoveredModels,providerDraft,providerHasEdits,providerPayload,providerProtocolBaseURL} from "../src/modelProviderState";
 import type {ModelProvider} from "../../shared/contracts";
 
 const provider:ModelProvider={id:"A",name:"Provider A",baseURL:"https://example.test/v1",protocol:"openai",enabled:true,keyConfigured:true,models:[{id:"model",name:"same-model",enabled:true,supportsImageInput:true,supportsImageOutput:false}]};
+test('only actual configuration changes guard leaving, including unsaved keys and model edits',()=>{
+ const draft={...providerDraft(provider),isNew:true};
+ assert.equal(providerHasEdits(draft,provider),false);
+ for(const patch of [{name:'edited'},{baseURL:''},{enabled:false},{protocol:'ollama'},{apiKey:'fixture'},{clearKey:true},{models:[]},{models:[{...provider.models[0]!,enabled:false}]}]){
+  assert.equal(providerHasEdits({...draft,...patch},provider),true);
+ }
+ const edited={...draft,name:'edited',dirty:true};
+ assert.equal(providerHasEdits({...edited,name:provider.name},provider),false);
+});
 test("MiMo protocol changes keep official API prefixes aligned without changing proxy routes",()=>{
  assert.equal(providerProtocolBaseURL("https://api.xiaomimimo.com/v1","claude"),"https://api.xiaomimimo.com/anthropic/v1");
  assert.equal(providerProtocolBaseURL("https://api.xiaomimimo.com/anthropic/v1","openai"),"https://api.xiaomimimo.com/v1");
