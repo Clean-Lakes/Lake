@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-18
 last_updated: 2026-11-18
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [feature, grafana, alerting, ingress]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
 在「接入渠道」添加 Grafana 来源，将每次有效投递保存到所属项目，供用户查看批次和逐条告警。首期范围截至收件和查看记录。运行环境为本机 Lake，网络部署地址后续确定。
 
@@ -43,7 +43,7 @@ tags: [feature, grafana, alerting, ingress]
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-003 | 调整 `GatewaySettings.tsx` 的来源选择及添加流程。用 `GrafanaEventSource.tsx` 显示本机 URL、凭据控件、投递摘要及详情。在 `api.ts` 接入 API 并更新清单。依赖 TASK-002。 | true | 2026-11-18 |
-| TASK-004 | 增加端到端 HTTP 回归，在隔离环境用 Grafana 11.1.4 的测试通知验证接收。检查 Dev 界面，并记录接入步骤和实际验证。依赖 TASK-003。 | false | — |
+| TASK-004 | 增加端到端 HTTP 回归，在隔离环境用 Grafana 11.1.4 的测试通知验证接收。检查 Dev 界面，并记录接入步骤和实际验证。依赖 TASK-003。 | true | 2026-11-18 |
 
 ## 3. Alternatives
 
@@ -66,6 +66,16 @@ tags: [feature, grafana, alerting, ingress]
 - **TEST-001**: 用真实 HTTP 接收批次、恢复和重复投递。检查准确来源/项目、分页、重启后记录、凭据隔离、停用/轮换、请求拒绝，以及接入不创建 `superInputs` 或任务。
 - **TEST-002**: 用隔离 Grafana 11.1.4 的 Contact point Test 检查实际请求格式、Bearer 认证、确认响应和入库记录。
 - **TEST-003**: 执行前后端类型检查、相关现有回归、API 清单和签名 Dev 联调。界面核对主题、窄窗、凭据配置和记录详情。
+
+2026-11-18 验证记录
+
+| 范围 | 结果 |
+| --- | --- |
+| 最终代码 | `5cb4737fdfaf6e114f390b0e67526ec9a446885d`，基于 `ae5de678`。macOS arm64 使用 `scripts/build_lake.sh --typescript` 构建，签名校验和前后端类型检查通过。 |
+| 后端 | 收件、MCP 接入和后端服务回归 234 项通过。最终签名版本重新运行 3 项收件 HTTP 集成测试。覆盖混合批次、恢复、重复投递、凭据范围、停用时的在途请求、写入失败及重启。 |
+| 前端 | 前端回归 949 项通过。最终版本复查新增来源、凭据轮换、展开投递及保存后的记录。浅色、390px 深色窄窗和键盘焦点通过。 |
+| 实际发送 | 隔离 Grafana 11.1.4 的 Contact point Test 返回成功。短时回环转发承接容器到 IPv6 回环的连接。两次测试原始告警均在 Lake 显示，跨重启仍可查询，任务记录数为 0。 |
+| 检查与范围 | API 清单及 ADK 边界检查通过。日常 Lake Dev 正在运行，本轮在独立临时 Home 验证签名后端及工作台 Web 页面。已安装的原生客户端与真实 Grafana 网络地址留待对应环境联调。 |
 
 ## 7. Risks & Assumptions
 
