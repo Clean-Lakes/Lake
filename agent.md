@@ -1,5 +1,7 @@
 # Lake Super-agent 内核与三模块协作约定
 
+2026-11-18 Grafana 事件接入先交付本机收件。接入渠道内的 Grafana Webhook 来源固定绑定项目，独立 Bearer 凭据只用于投稿。Lake 按实际来源保存每次默认 JSON v1 通知，保留批次及每条告警的状态，提交投递记录后返回回执。事件保存在独立收件记录中，人工和 MCP 消息沿原 `superInputs`。规则、去重、Pilot/Worker 调度和网络部署后续另行设计。见[接入说明](docs/grafana-event-receiver.md)与[实施计划](plan/feature-grafana-event-receiver-1.md)。
+
 2026-11-17 资源连接迁移增量：TypeScript 的服务资源配置和显式连接测试可适配已确认、恢复身份一致、相关规则明确允许且无未支持范围限制的旧 legacy 项目策略；拒绝、ask、按资源身份限定的测试和策略变化继续阻止对应操作。只扩展 Items 的连接管理，不删除旧策略、不扩大其 ResourceIDs、不为 Worker/历史任务签发执行权限。Kubernetes 连接支持上传的内嵌 Kubeconfig 或端点/Token、上下文、命名空间及明确 TLS/超时设置；不执行插件、不读取外部凭据文件、不跟随凭据请求重定向。该增量不代表完整 Security 恢复或 Kubernetes Agent 操作工具已迁移。实施及真实安装状态见[计划](plan/feature-resource-policy-kubernetes-1.md)与[验证记录](docs/validation/typescript-candidate/resource-policy-kubernetes.md)。
 
 2026-11-17 用户报告后续补充未被专员读取、仍重复提问。成功路由的补充沿同一 Task/Worker/代次送入当前执行：原生 SDK 以真实 guide drain、Codex App Server 以准确 thread/turn/clientUserMessageId 的 userMessage 事件确认消费，排队应答不算消费。专员等待业务缺失信息时，宿主将补充原文作为新上下文返回原问题，不伪造选项答案，由专员重新判断尚缺内容。计划确认、操作审批及终端接管不因补充而解除；未确认消费的输入仍沿原安全续接边界处理，停止、原期限、权限与历史操作不变。Pilot 只能根据已记录回执描述补充，不能把登记说成已读取。见[修复计划](plan/refactor-specialist-followups-1.md)。

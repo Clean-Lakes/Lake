@@ -148,6 +148,15 @@
       ]
     },
     {
+      "name": "createEventSource",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "'/api/settings/event-sources'"
+        }
+      ]
+    },
+    {
       "name": "createGatewayConnection",
       "routes": [
         {
@@ -369,6 +378,24 @@
         {
           "method": "POST",
           "path": "`/api/projects/${encodeURIComponent(project)}/superagent`"
+        }
+      ]
+    },
+    {
+      "name": "eventDeliveries",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "`/api/settings/event-sources/${encodeURIComponent(id)}/deliveries?limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`"
+        }
+      ]
+    },
+    {
+      "name": "eventDelivery",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "`/api/settings/event-sources/${encodeURIComponent(id)}/deliveries/${encodeURIComponent(deliveryId)}`"
         }
       ]
     },
@@ -1291,6 +1318,15 @@
         {
           "method": "POST",
           "path": "`/api/projects/${encodeURIComponent(projectId)}/resources/test`"
+        }
+      ]
+    },
+    {
+      "name": "updateEventSource",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "`/api/settings/event-sources/${encodeURIComponent(id)}`"
         }
       ]
     },

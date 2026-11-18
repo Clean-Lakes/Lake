@@ -411,7 +411,31 @@ export type GatewayTokenView = {id:string;name:string;roles?:string[];createdAt:
 export type GatewayCommand = {program:string;script?:string;home:string;data?:string};
 export type GatewayRouting = {mode:'pilot'} | {mode:'specialist';roleId:string};
 export type GatewayConnection = {id:string;name:string;projectId:string;enabled:boolean;routing:GatewayRouting;createdAt:string;updatedAt:string;lastReceivedAt?:string};
-export type GatewayConnections = {connections:GatewayConnection[];command:GatewayCommand;projects:{id:string;name:string}[];specialists:GatewaySpecialistRef[];legacyTokens:GatewayTokenView[]};
+export type GatewayConnections = {connections:GatewayConnection[];command:GatewayCommand;projects:{id:string;name:string}[];specialists:GatewaySpecialistRef[];legacyTokens:GatewayTokenView[];eventSources?:LakeEventSource[]};
+export type LakeEventSource = {
+  id: string;
+  kind: 'grafana';
+  name: string;
+  projectId: string;
+  enabled: boolean;
+  revision: number;
+  webhookUrl: string;
+  lastReceivedAt?: string;
+};
+export type LakeEventSourceUpdate =
+  | {expectedRevision: number; enabled: boolean}
+  | {expectedRevision: number; rotateCredential: true};
+export type LakeEventSourceResult = {source: LakeEventSource; token?: string};
+export type GrafanaDelivery = {
+  id: string;
+  receivedAt: string;
+  status: 'firing' | 'resolved';
+  title: string;
+  alertCount: number;
+  truncatedAlerts?: number;
+};
+export type GrafanaDeliveryPage = {deliveries: GrafanaDelivery[]; nextCursor?: string};
+export type GrafanaDeliveryDetail = GrafanaDelivery & {payload: Record<string, unknown>};
 export type GatewayMessageInput = {text:string;threadId:string;threadTitle?:string;clientMessageId:string;replyTo?:string};
 export type GatewayMessage = GatewayInstructionStatus & {text:string;createdAt:string;connectionId:string;threadId:string;threadTitle?:string;replyTo?:string};
 export type GatewayMessagePage = {messages:GatewayMessage[];nextCursor?:string};

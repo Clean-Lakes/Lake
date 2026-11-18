@@ -165,6 +165,14 @@ export const api = {
   deleteGatewayConnection:(id:string)=>request(`/api/settings/gateway/connections/${encodeURIComponent(id)}`,{method:"DELETE"}),
   gatewayMessages:(id:string,cursor?:string,signal?:AbortSignal)=>request<import('../../shared/contracts').GatewayMessagePage>(`/api/settings/gateway/connections/${encodeURIComponent(id)}/messages?limit=20${cursor?`&cursor=${encodeURIComponent(cursor)}`:''}`,{signal}),
   testGatewayConnection:(id:string)=>request<{ready:boolean;message:string;lastReceivedAt?:string}>(`/api/settings/gateway/connections/${encodeURIComponent(id)}/test`,{method:"POST",body:"{}"}),
+  createEventSource: (value: {name: string; projectId: string}) =>
+    post<import('../../shared/contracts').LakeEventSourceResult>('/api/settings/event-sources', value),
+  updateEventSource: (id: string, value: import('../../shared/contracts').LakeEventSourceUpdate) =>
+    request<import('../../shared/contracts').LakeEventSourceResult>(`/api/settings/event-sources/${encodeURIComponent(id)}`, {method: 'PATCH', body: JSON.stringify(value)}),
+  eventDeliveries: (id: string, cursor?: string, signal?: AbortSignal) =>
+    request<import('../../shared/contracts').GrafanaDeliveryPage>(`/api/settings/event-sources/${encodeURIComponent(id)}/deliveries?limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, {signal}),
+  eventDelivery: (id: string, deliveryId: string, signal?: AbortSignal) =>
+    request<import('../../shared/contracts').GrafanaDeliveryDetail>(`/api/settings/event-sources/${encodeURIComponent(id)}/deliveries/${encodeURIComponent(deliveryId)}`, {signal}),
   importMCP:(value:unknown)=>request<{servers:MCPServerConfig[]}>("/api/settings/mcp/import",{method:"POST",body:JSON.stringify(value)}),
   saveMCP:(value:Record<string,unknown>)=>request<MCPServerConfig>(`/api/settings/mcp${value.id?`/${encodeURIComponent(String(value.id))}`:""}`,{method:value.id?"PUT":"POST",body:JSON.stringify(value)}),
   deleteMCP:(id:string)=>request(`/api/settings/mcp/${encodeURIComponent(id)}`,{method:"DELETE"}),
