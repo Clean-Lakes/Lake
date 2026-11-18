@@ -12,7 +12,7 @@ import {AgentBackendLogo,agentTypeName} from './AgentBackendLogo';
 
 export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
  const [workspace,setWorkspace]=useState<SuperWorkspace|null>(null),[error,setError]=useState('');
- const generation=useRef(0),refreshRef=useRef<()=>void>(()=>{});
+ const generation=useRef(0),refreshRef=useRef<()=>Promise<void>>(async()=>{});
  const deletedRoles=useRef(new Set<string>());
  useEffect(()=>{
   const current=++generation.current;deletedRoles.current.clear();setWorkspace(null);setError('');
@@ -23,13 +23,13 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
    try{
     let next=await api.superWorkspace(projectId,controller.signal);
     if(!next.active&&Date.now()>=nextActivation){nextActivation=Date.now()+15000;await api.ensureSuperWorkspace(projectId,controller.signal);next=await api.superWorkspace(projectId,controller.signal);}
-    if(generation.current===current){setWorkspace({...next,channels:next.channels?.filter(channel=>!deletedRoles.current.has(channel.roleId)),workers:next.workers.filter(worker=>!deletedRoles.current.has(worker.roleId))});if(next.active)setError('');}
+    if(generation.current===current){setWorkspace({...next,questions:next.questions?.filter(question=>!deletedRoles.current.has(question.author.roleId??'')),channels:next.channels?.filter(channel=>!deletedRoles.current.has(channel.roleId)),workers:next.workers.filter(worker=>!deletedRoles.current.has(worker.roleId))});if(next.active)setError('');}
    }catch(reason){if(!controller.signal.aborted&&generation.current===current)setError(readableError(reason));}
    finally{busy=false;if(queued&&!controller.signal.aborted){queued=false;void refresh();}}
   };
-  refreshRef.current=()=>void refresh();
+  refreshRef.current=refresh;
   void refresh();const timer=window.setInterval(()=>void refresh(),2500);
-  return()=>{controller.abort();refreshRef.current=()=>{};window.clearInterval(timer);};
+  return()=>{controller.abort();refreshRef.current=async()=>{};window.clearInterval(timer);};
  },[projectId,connected]);
  const routerId=workspace?.active?workspace.project.routerSessionId:undefined;
  const cursor=useRef(0);cursor.current=workspace?.cursor??0;
@@ -41,8 +41,8 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
   return()=>stream.close();
  },[routerId,connected]);
  useEffect(()=>{const refresh=()=>refreshRef.current();window.addEventListener('lake:conversation-read',refresh);return()=>window.removeEventListener('lake:conversation-read',refresh);},[]);
- const removeRole=(roleId:string)=>{deletedRoles.current.add(roleId);setWorkspace(current=>current?{...current,channels:current.channels?.filter(channel=>channel.roleId!==roleId),workers:current.workers.filter(worker=>worker.roleId!==roleId)}:current);refreshRef.current();};
- return {workspace,error,removeRole};
+ const removeRole=(roleId:string)=>{deletedRoles.current.add(roleId);setWorkspace(current=>current?{...current,questions:current.questions?.filter(question=>question.author.roleId!==roleId),channels:current.channels?.filter(channel=>channel.roleId!==roleId),workers:current.workers.filter(worker=>worker.roleId!==roleId)}:current);void refreshRef.current();};
+ return {workspace,error,removeRole,refresh:()=>refreshRef.current()};
 }
 
 type ReadMark = {requested: string; acknowledged: string; pending: boolean};

@@ -39,6 +39,8 @@ export type HostProfile = {
 export interface AgentHost {
   profile(sessionId: string): HostProfile | undefined;
   currentTask?(sessionId:string):string|undefined;
+  /** Actual same-turn input consumption, never a steering queue acknowledgement. */
+  inputsConsumed?(sessionId:string,inputIds:string[]):void;
   changed(sessionId: string): void;
   settled(sessionId: string, outcome?: { response?: string; error?: string; failure?: import("./model-errors").TurnFailure }): void;
 }

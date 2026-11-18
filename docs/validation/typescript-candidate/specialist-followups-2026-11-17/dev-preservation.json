@@ -1,0 +1,19 @@
+{
+  "unchangedKinds": [
+    "superWorkers",
+    "superGoals",
+    "superOperations",
+    "superInputs",
+    "superDecisions",
+    "superReports",
+    "providers",
+    "modelProviders",
+    "resources"
+  ],
+  "changedKinds": [],
+  "restoredDev": {
+    "backendRuntime": "typescript",
+    "home": "~/.lake-dev",
+    "draining": false
+  }
+}

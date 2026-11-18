@@ -28,6 +28,8 @@ import { LakeAgents } from "./agent";
 import { LakeNavigation } from "./navigation";
 import { LakeResourceNavigation } from "./resource-navigation";
 import {LakeResourceManagement} from "./resource-management";
+import {LakeResourceImport} from './resource-import';
+import type {HexHubImportOptions} from './hexhub-import';
 import {PilotConfiguration} from "./pilot-configuration";
 import {messageInput} from './message-input';
 import {LakeMessageQueue} from './message-queue';
@@ -58,7 +60,7 @@ export { LakeMemory } from "./memory";
 export {sessionArchiveName, legacySessionArchiveName} from "./session-archive";
 
 declare const __LAKE_VERSION__:string;
-export type ServerOptions = { codexHome?:string; home: string; data: string; port: number; staticRoot: string; development?: boolean; production?:boolean; importLegacy?: boolean; importOnly?:boolean };
+export type ServerOptions = { codexHome?:string; home: string; data: string; port: number; staticRoot: string; development?: boolean; production?:boolean; importLegacy?: boolean; importOnly?:boolean; resourceImport?:HexHubImportOptions };
 const encode = (value: unknown) => JSON.stringify(value);
 const equal = (left: string, right: string) => {
   const a = Buffer.from(left),
@@ -167,6 +169,7 @@ export async function startLakeServer(options: ServerOptions) {
   let mysql:LakeMySQL|undefined;
   let services:LakeServiceResources|undefined;
   let resourceManagement:LakeResourceManagement|undefined;
+  let resourceImport:LakeResourceImport|undefined;
   let execution:LakeExecution|undefined;
   let messageQueue: LakeMessageQueue | undefined;
   let draining = false;
@@ -527,6 +530,14 @@ export async function startLakeServer(options: ServerOptions) {
       else if (path[1] === "projects" && path[3] === "resource-tree" && path.length === 4) {
         if (method !== 'POST') throw new HttpError(405, '不支持此资源目录请求');
         result = resourceNavigation.edit(path[2], data);
+      }
+      else if(path[1]==='projects'&&path.length===4&&['resource-import-preview','resource-import'].includes(path[3])){
+        if(method!=='POST')throw new HttpError(405,'不支持此资源导入请求');
+        const cancel=new AbortController(),abort=()=>cancel.abort();response.on('close',abort);
+        try{
+          result=path[3]==='resource-import-preview'?await resourceImport!.preview(path[2],data,cancel.signal):await resourceImport!.commit(path[2],data,cancel.signal);
+          if(path[3]==='resource-import')status=201;
+        }finally{response.off('close',abort);}
       }
       else if (path[1] === "projects" && path[3] === "resources") {
         store.project(path[2]);
@@ -916,6 +927,7 @@ export async function startLakeServer(options: ServerOptions) {
     if (closed) return;
     closed = true;
     draining = true;
+    resourceImport?.close();
     await messageQueue?.close();
     await superagent?.close();
     await memory?.close();
@@ -966,6 +978,7 @@ export async function startLakeServer(options: ServerOptions) {
     execution=new LakeExecution(store,security,ssh,value=>agents!.redact(ssh!.scrub(value)));
     const resourceNavigation=new LakeResourceNavigation(store,(projectId,actorSessionId)=>store!.list<any>('sessions').some(session=>session.projectId===projectId&&session.id!==actorSessionId&&agents!.isRunning(session.id)));
     resourceManagement=new LakeResourceManagement(store,security,ssh,services,resourceNavigation);
+    resourceImport=new LakeResourceImport(store,resourceManagement,value=>agents!.registerSecret(value),options.resourceImport);
     const configuration=new PilotConfiguration(store,security,extensions,resourceManagement,value=>agents!.redact(ssh!.scrub(extensions!.scrub(value))));
     superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql,execution,Date.now,configuration);
     memory = new LakeMemory(store, () => security!.check(), value => agents!.redact(ssh!.scrub(extensions!.scrub(value))));

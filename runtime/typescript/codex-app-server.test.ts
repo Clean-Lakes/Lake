@@ -87,3 +87,18 @@ test('an uncertain timed-out turn cannot be followed by another turn on the same
  await assert.rejects(adapter.exec('hello',signal(),30),/超时/);
  await assert.rejects(adapter.exec('do not replay',signal(),2000),/不可用/);
 });
+
+for(const scenario of ['steer-normal','steer-early','steer-ack-only','steer-rejected','steer-wrong-ack'])
+test('Codex supplement consumption uses the exact current user-message identity: '+scenario,async t=>{
+ const activity:AgentActivity[]=[],adapter=new CodexAppServer(launch(scenario),event=>activity.push(event));t.after(()=>adapter.close());
+ await adapter.initialize(signal());await adapter.openSession({cwd:process.cwd()},signal());
+ assert.equal(await adapter.steer('no active invocation','no-turn',signal()),false);
+ const work=adapter.exec('original task',signal(),2000);await delay(30);
+ if(scenario==='steer-wrong-ack')await assert.rejects(adapter.steer('new human context','input-1',signal()),/对应的补充轮次/);
+ else assert.equal(await adapter.steer('new human context','input-1',signal()),scenario!=='steer-rejected');
+ if(scenario==='steer-ack-only')assert.equal(activity.filter(event=>event.kind==='input').length,0,'RPC admission is not consumption');
+ await delay(40);
+ assert.deepEqual(activity.filter(event=>event.kind==='input'),['steer-normal','steer-early'].includes(scenario)?[{kind:'input',inputId:'input-1'}]:[]);
+ await adapter.cancel();await work;
+ assert.equal(await adapter.steer('after completion','late',signal()),false);
+});

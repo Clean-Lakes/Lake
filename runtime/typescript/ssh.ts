@@ -5,7 +5,7 @@ import {directoryProcessSample} from "./process-sampling";
 import {Client, utils, type ClientChannel} from 'ssh2';
 import {EventEmitter} from 'node:events';
 import {createHash,createHmac,timingSafeEqual} from 'node:crypto';
-import {existsSync,lstatSync,readFileSync,realpathSync,mkdirSync,openSync,writeFileSync,fsyncSync,closeSync,renameSync} from 'node:fs';
+import {existsSync,lstatSync,readFileSync,realpathSync,mkdirSync,openSync,writeFileSync,fsyncSync,closeSync,renameSync,unlinkSync} from 'node:fs';
 import {basename,dirname,isAbsolute,join,resolve,sep} from 'node:path';
 import {StringDecoder} from 'node:string_decoder';
 import {isIP} from 'node:net';
@@ -62,18 +62,25 @@ export class LakeSSH {
   try{writeFileSync(file,value);fsyncSync(file);}finally{closeSync(file);}renameSync(temporary,path);
  }
  prepare(input:any,previous?:SSHConnection,allowIncomplete=false) {
+  return this.prepareImport(input,previous,allowIncomplete).configuration;
+ }
+ /** Import plans own newly created files until committed or expired. */
+ prepareImport(input:any,previous?:SSHConnection,allowIncomplete=false) {
+  const created:string[]=[],rollback=()=>{for(const path of created.splice(0))try{unlinkSync(path);}catch{}};
+  try {
   const value={...previous,...input};
   if(input?.privateKey!==undefined){
    if(typeof input.privateKey!=='string'||Buffer.byteLength(input.privateKey)>1024*1024||!/^-----BEGIN .*PRIVATE KEY-----/.test(input.privateKey))throw new HttpError(400,'请选择有效的 SSH 私钥');
    const parsed=utils.parseKey(input.privateKey,input.passphrase);if(parsed instanceof Error&&!/encrypted|passphrase/i.test(parsed.message))throw new HttpError(400,'SSH 私钥格式无效');
-   value.identityFile='ssh-key-'+id();this.atomic(join(this.store.home,'secrets',value.identityFile),input.privateKey);
+   value.identityFile='ssh-key-'+id();const path=join(this.store.home,'secrets',value.identityFile);created.push(path);this.atomic(path,input.privateKey);this.registerSecret?.(input.privateKey);
   }
   const secret=value.authMethod==='password'?input?.password:input?.passphrase;
   if(secret!==undefined&&secret!==''){
    if(typeof secret!=='string'||secret.length>4096||/[\0\r\n]/.test(secret))throw new HttpError(400,'SSH 密码或口令格式无效');
-   value.credentialRef='ssh-secret-'+id();this.atomic(join(this.store.home,'secrets',value.credentialRef),secret);this.secrets.add(secret);
+   value.credentialRef='ssh-secret-'+id();const path=join(this.store.home,'secrets',value.credentialRef);created.push(path);this.atomic(path,secret);this.secrets.add(secret);this.registerSecret?.(secret);
   }
-  return this.configuration(value,allowIncomplete);
+  return {configuration:this.configuration(value,allowIncomplete),rollback};
+  }catch(error){rollback();throw error;}
  }
  revision(resource:Resource) {
   const config=this.configuration(resource.ssh),files=[config.identityFile,config.credentialRef].filter(Boolean).map(value=>{const info=lstatSync(this.privateFile(value!));return [info.ino,info.size,info.mtimeMs,info.ctimeMs];});
