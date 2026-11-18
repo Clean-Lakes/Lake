@@ -35,7 +35,7 @@ import {messageInput} from './message-input';
 import {LakeMessageQueue} from './message-queue';
 import {LakeWorkflowCatalog} from './workflow-catalog';
 import {providerConnection, modelCatalogHeaders} from './provider-connection';
-import {reasoningSettings, reasoningUpdate} from './reasoning';
+import {reasoningModelIdentity, reasoningSettings, reasoningUpdate} from './reasoning';
 import {LakeMagpie} from './magpie';
 import {LakeMySQL} from "./mysql";
 import {LakeExecution} from "./execution";
@@ -349,7 +349,7 @@ export async function startLakeServer(options: ServerOptions) {
           authenticated: true,
           modelConfigured: !!model,
           modelName: model?.name ?? null,
-          modelId: model?.id ?? null,
+          modelId: model && provider ? reasoningModelIdentity(provider, model) : null,
           modelSelection: model && provider ? entry(provider, model) : null,
           supportsImageInput: model?.supportsImageInput ?? false,
           terminalMode: terminals?.supported ? "pty" : "command",

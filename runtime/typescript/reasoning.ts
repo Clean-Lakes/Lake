@@ -30,10 +30,14 @@ function legacyCapability(provider: ModelProvider, model: ProviderModel) {
   return undefined;
 }
 
+export function reasoningModelIdentity(provider: ModelProvider, model: ProviderModel) {
+  return createHash('sha256').update(JSON.stringify([provider.id, provider.baseURL, provider.protocol, model.id, model.name])).digest('hex');
+}
+
 /** Unknown names never acquire support by matching a loose substring. */
 export function reasoningSettings(provider?: ModelProvider, model?: ProviderModel, options: Record<string, unknown> = {}) {
   if (!provider || !model) return {modelId: '', levels: [] as string[], effort: '', supported: false};
-  const modelId = createHash('sha256').update(JSON.stringify([provider.id, provider.baseURL, provider.protocol, model.id, model.name])).digest('hex');
+  const modelId = reasoningModelIdentity(provider, model);
   const api = providerConnection(provider.protocol, provider.baseURL).apiType;
   const compatible = ['openai-chat-completions', 'openai-responses', 'anthropic-messages'].includes(api);
   const metadata = model.reasoningCapability ?? legacyCapability(provider, model);

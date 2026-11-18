@@ -687,6 +687,10 @@ test('declared reasoning options persist, reach the actual SDK request and canno
   provider.models[0].reasoningCapability = {levels: ['low', 'high', 'not-a-real-level'], default: 'high', source: 'provider'};
   await f.api(`/api/settings/providers/${provider.id}`, 'PUT', provider);
   let settings = await f.api(base); assert.deepEqual(settings.levels, ['low', 'high']); assert.equal(settings.effort, '');
+  const initialIdentity = settings.modelId;
+  const bootstrap = await f.api('/api/bootstrap');
+  assert.equal(bootstrap.modelId, initialIdentity);
+  assert.equal(bootstrap.modelSelection.modelId, provider.models[0].id);
   await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'Default request'}, 202); await f.wait(['completed']);
   assert.equal(f.requests.at(-1).reasoning_effort, undefined, 'default leaves the provider request unchanged');
   await f.api(base, 'POST', {modelId: settings.modelId, effort: 'max'}, 400);
@@ -700,6 +704,11 @@ test('declared reasoning options persist, reach the actual SDK request and canno
   const changed = {...provider, id: undefined}; const saved = await f.api('/api/settings/providers', 'POST', changed);
   await f.api('/api/settings/model/select', 'POST', {providerId: saved.savedProviderId, modelId: provider.models[0].id});
   settings = await f.api(base); assert.equal(settings.effort, '');
+  const state = await f.api('/api/settings/model/state');
+  assert.equal(state.modelId, settings.modelId);
+  assert.notEqual(state.modelId, initialIdentity);
+  assert.equal(state.available.activeModelId, provider.models[0].id);
+  await f.api(base, 'POST', {modelId: initialIdentity, effort: 'high'}, 409);
   await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'New identity default'}, 202); await f.wait(['completed']);
   assert.equal(f.requests.at(-1).reasoning_effort, undefined);
 });

@@ -1,5 +1,13 @@
 export type SelectOption = {value:string;label:string;disabled?:boolean;group?:string};
 
+export function activeSelectIndex(options:SelectOption[],highlighted:string|null,selected:string,direction:1|-1=1):number {
+  for (const value of [highlighted,selected]) {
+    const index=options.findIndex(option=>option.value===value&&!option.disabled);
+    if (index>=0) return index;
+  }
+  return nextEnabledOption(options,direction===1?-1:0,direction);
+}
+
 export function nextEnabledOption(options:SelectOption[],current:number,direction:1|-1):number {
   for (let count=1;count<=options.length;count++) {
     const index=(current+direction*count+options.length*2)%options.length;
@@ -26,10 +34,16 @@ export function selectPopupPosition(rect:{left:number;top:number;bottom:number;w
   return {left,width,maxHeight,...(upward?{bottom:viewport.height-rect.top+gap}:{top:rect.bottom+gap})};
 }
 
-/** Cascading menus prefer the left of their parent, then fit inside narrow viewports. */
-export function selectSidePopupPosition(rect:{left:number;top:number;width:number},viewport:{width:number;height:number},count:number) {
-  const width=Math.min(208,Math.max(0,viewport.width-16)),maxHeight=Math.min(288,Math.max(0,viewport.height-16));
-  const desired=Math.min(maxHeight,count*36+10);
-  const preferred=rect.left-width-6>=8?rect.left-width-6:rect.left+rect.width+6;
-  return {left:Math.max(8,Math.min(preferred,viewport.width-width-8)),top:Math.max(8,Math.min(rect.top,viewport.height-desired-8)),width,maxHeight};
+/** Keep the supplier toggle reachable when neither side can fit the menu. */
+export function selectSidePopupPosition(rect:{left:number;top:number;bottom:number;width:number},viewport:{width:number;height:number},count:number) {
+  const gap=6,margin=8,limit=288;
+  const width=Math.min(208,Math.max(0,viewport.width-2*margin));
+  const left=rect.left-width-gap,right=rect.left+rect.width+gap;
+  if (left<margin&&right+width>viewport.width-margin) {
+    const anchor={left:rect.left,top:rect.top,bottom:rect.bottom,width};
+    return selectPopupPosition(anchor,viewport,count,{minWidth:width,maxHeight:limit});
+  }
+  const desired=Math.min(limit,count*36+10);
+  const top=Math.max(margin,Math.min(rect.top,viewport.height-desired-margin));
+  return {left:left>=margin?left:right,top,width,maxHeight:Math.max(0,Math.min(limit,viewport.height-top-margin))};
 }
