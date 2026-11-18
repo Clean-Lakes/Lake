@@ -37,7 +37,9 @@ export function ReasoningSelector({ session, modelId, disabled, disabledReason, 
   useEffect(() => {
     let cancelled = false; setSettings(null); setError(""); showPreview(null); setDragProgress(null);dragging.current=false;
     if (modelId) void api.reasoning(session).then(value => {
-      if (!cancelled && value.modelId === modelId) setSettings({ ...value, session });
+      if (cancelled) return;
+      if (value.modelId === modelId) setSettings({ ...value, session });
+      else setError("当前模型已切换，请重新读取思考强度。");
     }).catch(error => { if (!cancelled) setError(readableError(error)); });
     return () => { cancelled = true; };
   }, [session, modelId, retry]);

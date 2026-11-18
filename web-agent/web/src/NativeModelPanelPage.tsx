@@ -32,12 +32,13 @@ export function NativeModelPanelPage() {
     mutations.observe(document.body,{childList:true,subtree:true});attach();
     const tab=(event:KeyboardEvent)=>{
       if(event.key!=="Tab") return;
-      const controls=[...document.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),summary')].filter(element=>element.getClientRects().length>0);
+      const controls=[...(observed?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),summary')??[])].filter(element=>element.getClientRects().length>0);
       const index=controls.indexOf(document.activeElement as HTMLElement);
-      if(event.shiftKey&&index<=0||!event.shiftKey&&index===controls.length-1) {event.preventDefault();void nativePanelCommand({action:"close"});}
+      if(event.shiftKey&&index<=0||!event.shiftKey&&index===controls.length-1) {event.preventDefault();event.stopPropagation();void nativePanelCommand({action:"close"});}
     };
-    document.addEventListener("keydown",tab);
-    return()=>{resize.disconnect();mutations.disconnect();document.removeEventListener("keydown",tab);};
+    // The host owns Tab at the panel edges; there is no adjacent form in this webview.
+    document.addEventListener("keydown",tab,true);
+    return()=>{resize.disconnect();mutations.disconnect();document.removeEventListener("keydown",tab,true);};
   },[]);
   if(!state) return null;
   const relay=(event:Omit<NativeModelPanelEvent,"id">)=>{void nativePanelCommand({action:"event",event:{id:state.id,...event}});};

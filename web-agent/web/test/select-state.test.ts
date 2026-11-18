@@ -2,11 +2,21 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {readFileSync,readdirSync,existsSync} from "node:fs";
 import {fileURLToPath} from "node:url";
-import {matchSelectOption,nextEnabledOption,selectPopupPosition,selectSidePopupPosition} from "../src/selectState";
+import {activeSelectIndex,matchSelectOption,nextEnabledOption,selectPopupPosition,selectSidePopupPosition} from "../src/selectState";
 import {providerBrand} from "../src/providerBrand";
 import {providerPresets} from "../src/providerPresets";
 
 const options=[{value:"a",label:"Alpha"},{value:"b",label:"Beta",disabled:true},{value:"g",label:"Gamma"}];
+test("filtering, reopening and reordering keep the highlighted option by value",()=>{
+ const filtered=[options[2]!];
+ assert.equal(activeSelectIndex(filtered,null,"g"),0);
+ assert.equal(activeSelectIndex(options,null,"g"),2);
+ assert.equal(activeSelectIndex([...options].reverse(),"g","a"),0);
+ assert.equal(activeSelectIndex(options,"b","g"),2);
+ assert.equal(activeSelectIndex(filtered,"a","a"),0);
+ assert.equal(activeSelectIndex(options,null,"missing",-1),2);
+ assert.equal(activeSelectIndex([],null,"g"),-1);
+});
 test("select keyboard navigation skips disabled options and wraps at both ends",()=>{
  assert.equal(nextEnabledOption(options,0,1),2);
  assert.equal(nextEnabledOption(options,2,1),0);
@@ -59,11 +69,19 @@ test("brand resolution uses known endpoints and keeps custom loopback services g
  for(const preset of providerPresets) assert.ok(existsSync(fileURLToPath(new URL(`../public/providers/${preset.id}.svg`,import.meta.url))),`missing ${preset.id} logo`);
 });
 
-test("supplier submenu stays beside its parent or fits a narrow viewport",()=>{
- const left=selectSidePopupPosition({left:600,top:500,width:260},{width:1200,height:800},6);
+test("supplier submenu opens beside its parent when a full menu fits",()=>{
+ const left=selectSidePopupPosition({left:600,top:500,bottom:534,width:260},{width:1200,height:800},6);
  assert.equal(left.left+left.width+6,600);assert.equal(left.top,500);
- const right=selectSidePopupPosition({left:20,top:20,width:260},{width:900,height:600},4);
+ const right=selectSidePopupPosition({left:20,top:20,bottom:54,width:260},{width:900,height:600},4);
  assert.equal(right.left,286);
- const narrow=selectSidePopupPosition({left:100,top:380,width:260},{width:390,height:400},12);
- assert.ok(narrow.left>=8&&narrow.left+narrow.width<=382);assert.ok(narrow.top>=8&&narrow.top+narrow.maxHeight<=392);
+});
+test("stacked supplier menus leave the toggle visible and use the available height",()=>{
+ // DOMRect exposes coordinates as inherited getters in the browser.
+ const anchor=Object.create({get left(){return 14;},get top(){return 354;},get bottom(){return 388;},get width(){return 248;}});
+ const below=selectSidePopupPosition(anchor,{width:320,height:720},3);
+ assert.equal(below.left,14);assert.equal(below.width,208);assert.equal(below.top,394);
+ const above=selectSidePopupPosition({left:100,top:380,bottom:414,width:260},{width:390,height:420},12);
+ assert.equal(above.bottom,46);assert.ok(above.left+above.width<=382);assert.equal(above.maxHeight,288);
+ const short=selectSidePopupPosition({left:8,top:78,bottom:112,width:230},{width:260,height:160},12);
+ assert.equal(short.bottom,88);assert.equal(short.maxHeight,64);
 });
