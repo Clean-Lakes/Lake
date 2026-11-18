@@ -15,6 +15,10 @@ export function providerProtocolBaseURL(base: string, protocol: string): string 
 export function providerDraft(provider: ModelProvider): ProviderDraft {
   return {...provider, models: provider.models.map(model => ({...model})), apiKey:"", clearKey:false, isNew:false, dirty:false};
 }
+export function providerHasEdits(draft:ProviderDraft, original:ModelProvider) {
+  return !!draft.apiKey || draft.clearKey || draft.name!==original.name || draft.baseURL!==original.baseURL ||
+    draft.protocol!==original.protocol || draft.enabled!==original.enabled || JSON.stringify(draft.models)!==JSON.stringify(original.models);
+}
 export function providerPayload(draft: ProviderDraft): ProviderInput {
   return {name:draft.name.trim(), baseURL:draft.baseURL.trim(), protocol:draft.protocol, enabled:draft.enabled,
     models:draft.models.map(model => ({...model, name:model.name.trim(), displayName:model.displayName?.trim()})),
