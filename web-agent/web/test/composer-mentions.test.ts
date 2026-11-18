@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type {MCPServerConfig,Resource,SkillConfig} from "../../shared/contracts";
 import {rebaseMentions,referencedExtensions,referencedResources,rebaseExtensionReferences} from "../../shared/references";
-import {composerClipboardFragment,composerToken,replaceComposerRange,composerMessage,composerResourceIds,selectComposerMention,appendResourceMention,filterMentions,mentionCategoryCount,mentionInsertion,mentionOptions,nextMentionCategory,mentionTypeLabel,type MentionOption} from "../src/composerMentionState";
+import {composerMentionQuery,composerClipboardFragment,composerToken,replaceComposerRange,composerMessage,composerResourceIds,selectComposerMention,appendResourceMention,filterMentions,mentionCategoryCount,mentionInsertion,mentionOptions,nextMentionCategory,mentionTypeLabel,type MentionOption} from "../src/composerMentionState";
 
 test("left and right cycle visible categories including empty categories",()=>{
  assert.equal(nextMentionCategory("all",[],{key:"ArrowRight"}),"resource");
@@ -24,6 +24,35 @@ test("category navigation preserves modified arrows and other keys",()=>{
  for(const key of ["ArrowUp","ArrowDown","Enter","Tab","Escape"]){
   assert.equal(nextMentionCategory("all",[],{key}),null);
  }
+});
+
+test("a mention query follows a collapsed caret and leaves email addresses as prose",()=>{
+ const text="请联系 ops+lake@example.test，检查@db.replica";
+ assert.equal(composerMentionQuery(text,text.indexOf("example")+2),null);
+ assert.equal(composerMentionQuery(text,text.indexOf("，")),null);
+ assert.deepEqual(composerMentionQuery(text,text.length),{start:text.lastIndexOf("@"),query:"db.replica"});
+ assert.deepEqual(composerMentionQuery("check@host",10),{start:5,query:"host"});
+ assert.equal(composerMentionQuery(text,text.length-1,text.length),null);
+ assert.equal(composerMentionQuery("检查@库 后续",7),null);
+});
+
+test("choosing a stale candidate cannot insert at a new caret or another identical query",()=>{
+ const draft="@库 和 @库",option:MentionOption={id:"db",kind:"resource",name:"归档库",detail:""};
+ const expected=composerMentionQuery(draft,draft.length)!;
+ for(const caret of [0,2,4]){
+  const result=selectComposerMention(draft,caret,[],option,expected);
+  assert.equal(result.next,draft);assert.deepEqual(result.references,[]);
+ }
+ assert.equal(selectComposerMention(draft,draft.length,[],option,expected).next,"@库 和 "+composerToken);
+});
+
+test("resource search includes descriptions and preserves status and distinct same-name IDs",()=>{
+ const common={name:"归档",kind:"local",status:"available"} as const;
+ const resources=[{...common,id:"hot",description:"本周日报"},{...common,id:"cold",description:"月末结算"},{...common,id:"old",description:"",status:"unavailable"}] as Resource[];
+ const options=mentionOptions(resources,[],[]);
+ assert.deepEqual(filterMentions(options,"结算","resource").map(o=>o.id),["cold"]);
+ assert.equal(options[0]?.detail,"本周日报 · 可用资源");
+ assert.equal(options[2]?.detail,"不可用资源");
 });
 
 const skill:SkillConfig={name:"service-check",description:"检查服务健康",path:"/fixture/SKILL.md",source:"Lake",enabled:true,managed:true};

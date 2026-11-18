@@ -20,7 +20,10 @@ export function nextMentionCategory(category:MentionCategory,options:MentionOpti
 export function mentionOptions(resources:Resource[],skills:SkillConfig[],servers:MCPServerConfig[],sreEnabled=false,specialists:Pick<SpecialistChannelInfo,'roleId'|'roleName'|'duties'>[]=[]):MentionOption[] {
  return [
   ...specialists.map(role=>({id:role.roleId,kind:'role' as const,name:role.roleName,detail:role.duties||'已创建的专员'})),
-  ...resources.map(r=>({id:r.id,kind:"resource" as const,resourceKind:r.kind,name:r.name,detail:r.status==="available"?"可用资源":"不可用资源"})),
+  ...resources.map(r=>{
+   const status=r.status==="available"?"可用资源":"不可用资源";
+   return {id:r.id,kind:"resource" as const,resourceKind:r.kind,name:r.name,detail:[r.description?.trim(),status].filter(Boolean).join(" · ")};
+  }),
   ...skills.filter(s=>s.enabled).map(s=>({id:s.name,kind:"skill" as const,name:s.name,detail:s.description||"可复用操作流程"})),
   ...servers.filter(s=>s.enabled).map(s=>({id:s.id,kind:"mcp" as const,name:s.name,detail:s.transport==="stdio"?"本机工具服务":"远程工具服务"})),
   ...(sreEnabled?[['coordinator','协调者','计划与调度'],['investigator','调查员','只读取证'],['executor','执行员','受控执行'],['verifier','验证员','独立复测']].map(([id,name,detail])=>({id:id!,name:name!,detail:detail!,kind:'role' as const})):[]),
@@ -41,6 +44,17 @@ export function mentionInsertion(draft:string,caret:number,option:MentionOption)
 /** Each atomic reference occupies one UTF-16 code unit in the editable document. */
 export const composerToken="\ufffc";
 export type ComposerReference={kind:MentionKind;resourceId:string;label:string;position:number};
+export type ComposerMentionQuery={start:number;query:string};
+
+export function composerMentionQuery(draft:string,caret:number,end=caret):ComposerMentionQuery|null {
+ if(caret!==end)return null;
+ const match=/@([^\s@\ufffc]*)$/.exec(draft.slice(0,caret));
+ if(!match)return null;
+ // Keep an address as prose, including when the caret is inside its domain.
+ const start=match.index;
+ if(/[a-z0-9_+%-]/i.test(draft[start-1]??"")&&/^[a-z0-9-]+(?:\.[a-z0-9-]+)+/i.test(draft.slice(start+1)))return null;
+ return {start,query:match[1]!};
+}
 export function replaceComposerRange(draft:string,references:ComposerReference[],start:number,end:number,text:string,inserted:ComposerReference[]=[]) {
  start=Math.max(0,Math.min(draft.length,start));end=Math.max(start,Math.min(draft.length,end));
  const next=draft.slice(0,start)+text+draft.slice(end),delta=text.length-(end-start);
@@ -48,11 +62,11 @@ export function replaceComposerRange(draft:string,references:ComposerReference[]
  refs.push(...inserted.map(ref=>({...ref,position:ref.position+start})));
  return {next,position:start+text.length,references:refs.filter(ref=>next[ref.position]===composerToken).sort((a,b)=>a.position-b.position)};
 }
-export function selectComposerMention(draft:string,caret:number,references:ComposerReference[],option:MentionOption) {
- const before=draft.slice(0,caret),token=before.match(/@([^\s@\ufffc]*)$/);
- const start=token?before.lastIndexOf("@"):caret;
+export function selectComposerMention(draft:string,caret:number,references:ComposerReference[],option:MentionOption,expected?:ComposerMentionQuery) {
+ const token=composerMentionQuery(draft,caret);
+ if(!token||expected&&(expected.start!==token.start||expected.query!==token.query))return {next:draft,references,position:caret};
  const existing=references.find(ref=>ref.kind===option.kind&&ref.resourceId===option.id);
- return replaceComposerRange(draft,references,start,caret,existing?"":composerToken,existing?[]:[{kind:option.kind,resourceId:option.id,label:`@${option.name}`,position:0}]);
+ return replaceComposerRange(draft,references,token.start,caret,existing?"":composerToken,existing?[]:[{kind:option.kind,resourceId:option.id,label:`@${option.name}`,position:0}]);
 }
 export function appendResourceMention(draft:string,references:ComposerReference[],resource:Pick<Resource,"id"|"name">,caret=draft.length,end=caret) {
  const existing=references.find(ref=>ref.kind==="resource"&&ref.resourceId===resource.id);
