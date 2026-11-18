@@ -9,11 +9,20 @@ const finished=new Set<SuperWorker['task']['state']>(['completed','failed','canc
 export type SuperPilotActivity={
  status:WorkSession['status'];
  label:string;
+ idleLabel?:string;
  phase:SuperWorkerActivity['phase']|'finishing';
  animated:boolean;
  motion:AvatarMotion;
  workerCount:number;
 };
+
+function reconnecting(phase:SuperPilotActivity['phase'],workerCount:number):SuperPilotActivity {
+ return {status:'idle',label:'进度暂未更新，正在重连',idleLabel:'重连中',phase,animated:false,motion:'still',workerCount};
+}
+
+function activityLabel(activity:SuperWorkerActivity) {
+ return activity.label.trim()||fallbackLabels[activity.phase];
+}
 
 // This is a view of live host activity, never an inference from a task's last
 // status or report. Completing the Router reply does not complete its workers.
@@ -26,23 +35,23 @@ export function superPilotActivity(workspace:SuperWorkspace|null|undefined,sessi
   const rounds=workspace.conversations?.filter(round=>round.projectId===session.projectId&&round.sessionId===session.id&&['queued','running','summarizing'].includes(round.state))??[];
   if(rounds.length){
    const count=rounds.reduce((sum,round)=>sum+round.members.filter(member=>['queued','running'].includes(member.state)).length,0);
-   return {status:connected?'investigating':'idle',label:connected?rounds.some(round=>round.state==='summarizing')?'Pilot 正在汇总专员回应':`${count} 位专员尚未回应`:'进度暂未更新，正在重连',phase:'thinking',animated:connected,motion:connected?'working':'still',workerCount:count};
+   if(!connected)return reconnecting('thinking',count);
+   return {status:'investigating',label:rounds.some(round=>round.state==='summarizing')?'Pilot 正在汇总专员回应':`${count} 位专员尚未回应`,phase:'thinking',animated:true,motion:'working',workerCount:count};
   }
   const closing=presentedReports&&scoped.filter(worker=>worker.task.state==='completed'&&worker.pilotReport&&
    (!worker.pilotReport.executionSettled||!presentedReports.has(worker.pilotReport.messageId)));
   if(!closing?.length)return null;
-  return {status:connected?'investigating':'idle',label:connected?'正在收尾专员回复':'进度暂未更新，正在重连',
-   phase:'finishing',animated:connected,motion:connected?'working':'still',workerCount:closing.length};
+  if(!connected)return reconnecting('finishing',closing.length);
+  return {status:'investigating',label:'正在收尾专员回复',phase:'finishing',animated:true,motion:'working',workerCount:closing.length};
  }
  workers.sort((a,b)=>priority[a.activity.phase]-priority[b.activity.phase]||b.activity.updatedAt.localeCompare(a.activity.updatedAt)||a.sessionId.localeCompare(b.sessionId));
  const phase=workers[0].activity.phase;
- if(!connected)return {status:'idle',label:'进度暂未更新，正在重连',phase,animated:false,motion:'still',workerCount:workers.length};
+ if(!connected)return reconnecting(phase,workers.length);
  const animated=phase==='thinking'||phase==='tool';
  const waiting=phase==='waiting_approval'||phase==='waiting_input';
- // The badge keeps its compact shared label; its tooltip names the specialists
- // and their current safe activity labels. Never copy historical step reasons.
- const descriptions=workers.slice(0,4).map(worker=>`${worker.roleName}：${worker.activity.label.trim()||fallbackLabels[worker.activity.phase]}`);
+ const descriptions=workers.slice(0,4).map(worker=>`${worker.roleName}：${activityLabel(worker.activity)}`);
  if(workers.length>descriptions.length)descriptions.push(`另有 ${workers.length-descriptions.length} 位专员`);
  return {status:waiting?'waiting_approval':animated?'investigating':'idle',label:descriptions.join('；'),phase,
+  idleLabel:phase==='queued'||phase==='waiting_external'?activityLabel(workers[0].activity):undefined,
   animated,motion:animated?'working':'still',workerCount:workers.length};
 }

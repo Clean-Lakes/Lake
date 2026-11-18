@@ -51,12 +51,30 @@ test('queued and external waits stay visible and still rather than claiming exec
  }
 });
 
+test('the compact badge shows the leading live wait and keeps every specialist in its accessible detail',()=>{
+ for(const [phase,label,expected] of [
+  ['queued','准备处理','准备处理'],['queued','等待开始','等待开始'],
+  ['waiting_external','等待外部结果','等待外部结果'],['queued','  ','等待开始'],
+ ] as const){
+  const first=worker(phase,{activity:{phase,label,updatedAt:'2026-11-05T12:01:00Z'}});
+  const next=worker('queued',{id:'next',roleName:'文档专员'});
+  const html=badge(workspace([next,first]));
+  assert.match(html,new RegExp(`class="session-state-label">${expected}</span>`));
+  assert.match(html,new RegExp(`aria-label="运维专员：${expected}；文档专员：等待处理"`));
+  assert.match(html,/data-badge-state="idle" data-tone="neutral"/);
+  assert.doesNotMatch(html,/activity-indicator/);
+ }
+ const idle=renderToStaticMarkup(createElement(SessionStateBadge,{session:{...router,status:'idle'}}));
+ assert.match(idle,/class="session-state-label">待命<\/span>/);
+});
+
 test('connection loss makes retained worker activity static until a live connection returns',()=>{
  const current=workspace([worker('tool')]);
  const offline=superPilotActivity(current,router,false)!;
  assert.equal(offline.status,'idle');assert.equal(offline.animated,false);assert.equal(offline.motion,'still');
  assert.equal(offline.label,'进度暂未更新，正在重连');
  const html=renderToStaticMarkup(createElement(SessionStateBadge,{session:router,...offline}));
+ assert.match(html,/class="session-state-label">重连中<\/span>/);
  assert.match(html,/进度暂未更新，正在重连/);assert.match(html,/data-badge-state="idle"/);assert.doesNotMatch(html,/data-badge-state="working"|已结束/);
  const restored=superPilotActivity(current,router,true)!;
  assert.equal(restored.status,'investigating');assert.equal(restored.animated,true);assert.equal(restored.motion,'working');
@@ -97,7 +115,9 @@ test('Pilot ends only after each exact specialist report has settled and been pr
  assert.match(badge(delivered,new Set(['report-a','report-b'])),/已结束/);
  const otherTask=workspace([...delivered.workers,worker('waiting_approval',{id:'waiting'})]);
  assert.match(badge(otherTask,new Set()),/data-badge-state="approval"/);
- assert.equal(superPilotActivity(delivered,router,false,new Set())?.status,'idle');
+ const offline=superPilotActivity(delivered,router,false,new Set());
+ assert.equal(offline?.status,'idle');assert.equal(offline?.phase,'finishing');
+ assert.equal(offline?.idleLabel,'重连中');assert.equal(offline?.animated,false);
  assert.equal(superPilotActivity(delivered,{...router,id:'another-pilot'},true,new Set()),null);
 });
 
