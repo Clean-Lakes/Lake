@@ -10,6 +10,11 @@ import {isAssistantProse} from '../src/completedTurnProse';
 import {superWorkerIcon} from '../src/superAgentPresentation';
 
 const author=(name:string,id:string):SpecialistReplyAuthor=>({kind:'specialist',name,roleId:'role-'+id,workerId:'worker-'+id,sessionId:'session-'+id,taskId:'task-'+id});
+test('a legacy session-only author link names the record it can open',()=>{
+ const old={...author('旧专员','old'),taskId:undefined};
+ const html=renderToStaticMarkup(createElement(ReplyIdentity,{author:old,onSpecialist(){}}));
+ assert.match(html,/aria-label="查看旧专员的记录"/);
+});
 test('specialist own-session replies omit repeated identity headers and chat avatars',()=>{
  for(const type of ['text','message'])for(const status of ['running','completed'])for(const persisted of [false,true]){
   const at='2026-11-03T00:00:00Z';
@@ -24,7 +29,7 @@ test('specialist own-session replies omit repeated identity headers and chat ava
 test('each delivered report displays its own specialist even inside the Pilot conversation',()=>{
  for(const name of ['Go 审查专员','前端执行专员']){
   const html=renderToStaticMarkup(createElement(ReplyIdentity,{identity:{name:'Pilot',pilot:true},author:author(name,name),onSpecialist(){}}));
-  assert.ok(html.includes(`<strong>${name}</strong>`));assert.ok(html.includes(`aria-label="与${name}继续沟通"`));
+  assert.ok(html.includes(`<strong>${name}</strong>`));assert.ok(html.includes(`aria-label="查看${name}的任务记录"`));
   assert.match(html,/class="response-avatar"/);
   assert.ok(html.includes(`data-role="${superWorkerIcon({roleId:author(name,name).roleId,roleName:name})}"`));
   assert.doesNotMatch(html,/data-role="coordinator"/);
@@ -47,7 +52,7 @@ test('name motion opts in only the live specialist name while its logo, avatar a
  assert.doesNotMatch(name,/response-avatar|agent-backend-logo|<svg|<button/);
  assert.match(active,/<\/strong><span[^>]*agent-backend-logo/,'the real Agent logo is a sibling of the decorated name');
  assert.match(active,/<button type="button" class="response-author"/);
- assert.ok(active.includes(`aria-label="与${specialist.name}继续沟通 · Agent 类型：Codex"`));
+ assert.ok(active.includes(`aria-label="查看${specialist.name}的任务记录 · Agent 类型：Codex"`));
  assert.equal(active.replaceAll('data-live-motion="active"','data-live-motion="still"').replaceAll('data-live-glow="active"','data-live-glow="still"'),still,'stopping keeps the entire identity DOM shape and navigation stable');
 });
 test('historical reports and ordinary identities never acquire name effects from avatar activity',()=>{
@@ -70,7 +75,7 @@ test('long specialist names animate the visible leading graphemes before ellipsi
  assert.deepEqual(animatedOffsets,graphemes.slice(0,24).map(part=>part.index),'a clipped long name must not reserve all motion for its invisible suffix');
  assert.equal(name.replace(/<[^>]*>/g,''),fullName,'selection and accessible text retain every character exactly once');
  assert.ok(name.includes(fullName.slice(graphemes[24]!.index)),'the rest of the name stays one static suffix');
- assert.ok(html.includes(`aria-label="与${fullName}继续沟通"`));
+ assert.ok(html.includes(`aria-label="查看${fullName}的任务记录"`));
 });
 test('equal reply text cannot erase a different specialist or turn its report into progress prose',()=>{
  const at='2026-11-02T12:00:00Z';

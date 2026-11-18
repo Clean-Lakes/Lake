@@ -16,7 +16,7 @@ export function ReplyIdentity({identity,author,onSpecialist,hidden=false,continu
  if(continued)return <span className="reply-continued-author">{name}</span>;
  const avatar=showsReplyAvatar(identity);
  const backend=author?author.execution:identity?.pilot?undefined:identity?.execution;
- const targetLabel=`与${name}继续沟通${backend?` · Agent 类型：${agentTypeName(backend)}`:''}`;
+ const targetLabel=`查看${name}的${author?.channelSessionId || author?.taskId ? '任务记录' : '记录'}${backend?` · Agent 类型：${agentTypeName(backend)}`:''}`;
  const content=<>{avatar&&<span className="response-avatar" aria-hidden="true">{author||identity?<SuperRoleAvatar name={name} roleId={author?.roleId??identity?.roleId} avatarId={author?author.avatarId:identity?.avatarId} pilot={!author&&identity?.pilot} size={28} motion={author?authorMotion:motion}/>:<AgentIcon role="lake" size={28}/>}</span>}<strong>{author&&nameMotion!==undefined?<LiveTextMotionLabel active={nameMotion} glow leading className="reply-author-name-motion">{name}</LiveTextMotionLabel>:name}</strong><AgentBackendLogo backend={backend}/></>;
  return <div className={`response-identity${avatar?'':' without-avatar'}`}>{author&&onSpecialist?<button type="button" className="response-author" onClick={()=>onSpecialist(author)} title={targetLabel} aria-label={targetLabel}>{content}<Glyph name="next" size={12}/></button>:content}</div>;
 }

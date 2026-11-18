@@ -12,6 +12,7 @@ export function compareTime(a: string, b: string): number {
 export type TranscriptEntry = {
   at: string; id: string; card?: AICard;
   sourceMessageId?:string;
+  separateIfUnbound?:boolean;
   message?: SessionSnapshot["messages"][number];
   action?: SessionSnapshot["actions"][number];
   agentRun?: AgentRun;
@@ -39,12 +40,21 @@ export function isCompactionFallbackEntry(entry: Pick<TranscriptEntry, 'card' | 
 export function transcriptTurns(entries: TranscriptEntry[]): TranscriptEntry[][] {
   const turns: TranscriptEntry[][] = [];
   const sources=new Map<string,TranscriptEntry[]>();
+  let current: TranscriptEntry[] | undefined;
   for (const entry of entries) {
-    if (!turns.length || entry.message?.role === "user") {
-      turns.push([]);
-      if(entry.message?.role==='user')sources.set(entry.id,turns.at(-1)!);
+    if (entry.message?.role === 'user') {
+      current = [entry];
+      turns.push(current);
+      sources.set(entry.id, current);
+      continue;
     }
-    (sources.get(entrySource(entry)??'')??turns.at(-1)!).push(entry);
+    const owner = sources.get(entrySource(entry) ?? '');
+    if (owner) owner.push(entry);
+    else if (entry.separateIfUnbound) turns.push([entry]);
+    else {
+      if (!current) { current = []; turns.push(current); }
+      current.push(entry);
+    }
   }
   return turns;
 }
@@ -59,7 +69,10 @@ export function orderedTranscript(snapshot: SessionSnapshot, cards: AICard[], be
   if(snapshot.ai?.rootTurnId&&snapshot.ai.sourceMessageIds?.[0])rootSources.set(snapshot.ai.rootTurnId,snapshot.ai.sourceMessageIds[0]);
   const sources=new Set([...rootSources.values(),...snapshot.messages.flatMap(m=>m.replyToMessageId?[m.replyToMessageId]:[])]);
   const entries: TranscriptEntry[] = [
-    ...snapshot.messages.filter(m => (before === 0 || compareTime(m.createdAt, earliest) >= 0 || m.id === earlierUser || sources.has(m.id))).map(message => ({ at: message.createdAt, id: message.id, message })),
+    ...snapshot.messages.filter(m => (before === 0 || compareTime(m.createdAt, earliest) >= 0 || m.id === earlierUser || sources.has(m.id))).map(message => ({
+      at: message.createdAt, id: message.id, message,
+      separateIfUnbound: snapshot.session?.workspaceRole === 'router' && !!message.author?.taskId && !message.conversation && !message.author.conversationId,
+    })),
     ...cards.filter(card => card.type !== "compaction" && card.type !== "draft" && (!!card.content || ["operation", "chart", "diff", "image", "strategy_correction"].includes(card.type) || card.type === "thinking" && card.status === "running")).map(card => ({ at: card.at, id: card.id, card })),
     // The Go engine owns new tool cards. Keep earlier native approvals in their original turn.
     ...snapshot.actions.filter(action => (!snapshot.ai?.startedAt || compareTime(action.createdAt, snapshot.ai.startedAt) < 0) && (before === 0 || compareTime(action.createdAt, earliest) >= 0)).map(action => ({ at: action.createdAt, id: action.id, action })),

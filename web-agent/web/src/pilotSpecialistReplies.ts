@@ -19,9 +19,10 @@ function workerReportedTurns(worker:SuperWorker,sessionId:string,messages:Messag
 }
 
 /** A delivered report can replace only the invocation already seen in this slot. */
-function workerFinalReport(worker:SuperWorker,sessionId:string,messages:Message[],observedRootTurnId?:string){
+function workerFinalReport(worker:SuperWorker,sessionId:string,messages:Message[],sourceMessageId:string,observedRootTurnId?:string){
  if(!observedRootTurnId)return;
  return [...messages].reverse().find(message=>message.role==='assistant'&&message.sessionId===sessionId&&
+  (!message.replyToMessageId||message.replyToMessageId===sourceMessageId)&&
   message.author?.kind==='specialist'&&message.author.workerId===worker.id&&message.author.roleId===worker.roleId&&
   message.author.sessionId===worker.sessionId&&message.author.taskId===worker.task.taskId&&message.author.rootTurnId===observedRootTurnId);
 }
@@ -78,7 +79,7 @@ export function continuousPilotDispatchRows(previous:PilotSpecialistRow[],worksp
     activity:{phase:'updating',label:worker.assignmentState==='stopped'?'已停止':labels[worker.task.state]??'进度暂未更新',updatedAt:worker.task.updatedAt??old.activity.updatedAt,sourceSessionId:sessionId,sourceMessageId:old.sourceMessageId}};
   }
   const observedRootTurnId=observedRoots.get(pilotSpecialistBinding(row));
-  return [{...row,observedRootTurnId,finalReport:workerFinalReport(worker,sessionId,messages,observedRootTurnId)}];
+  return [{...row,observedRootTurnId,finalReport:workerFinalReport(worker,sessionId,messages,row.sourceMessageId,observedRootTurnId)}];
  });
 }
 

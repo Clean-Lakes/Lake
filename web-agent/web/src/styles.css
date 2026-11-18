@@ -565,11 +565,11 @@ a { color: inherit; }
   .resource-detail-grid { grid-template-columns: 1fr; gap: 28px; }
 }
 @media (max-width: 480px) {
-  .workspace { --session-gutter: 32px; }
+  .workspace { --session-gutter: clamp(16px, calc((100vw - 288px) / 2), 32px); }
   .workspace-header { padding: 0 12px; }
   .breadcrumbs .crumb-project, .breadcrumbs .crumb-slash { display: none; }
   .live-indicator { font-size: var(--font-size-ui); }
-  .session-overview, .timeline-list, .timeline-empty, .terminal-drawer { width: calc(100% - 64px); }
+  .session-overview, .timeline-list, .timeline-empty, .terminal-drawer { width: calc(100% - var(--session-gutter) - var(--session-gutter)); }
   .session-overview { padding: 17px 0 15px; }
   .session-heading h1 { font-size: 21px; }
   .session-overview-side { align-items: flex-start; gap: 7px; margin-top: 13px; }
@@ -1171,7 +1171,8 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 @container lake-composer (max-width: 480px) {
  .composer-foot .composer-tool-label { display:none; }
  .composer-foot > .composer-permission-button:not(.sre-mode-toggle) { justify-content:center; width:28px; padding:0; }
- .composer-foot .composer-stop-scope { display:none; }
+ .composer-foot .composer-send-actions { gap:4px; }
+ .composer-foot .composer-status { min-width:28px; }
 }
 @container lake-composer (max-width: 360px) {
  .composer-foot .composer-model-effort { display:none; }

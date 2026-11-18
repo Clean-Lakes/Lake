@@ -168,7 +168,7 @@ test('Pilot public prose keeps its original specialist entry and execution logo 
   assert.doesNotMatch(html,/animal-thinking-bubble|animal-thinking-surface|turn-activity-mark/);
   assert.match(html,/<button type="button" class="response-author"/);
   assert.equal(html.match(/<strong>([\s\S]*?)<\/strong>/)?.[1].replace(/<[^>]*>/g,''),row.author.name,'the full long name remains available to layout and accessible naming');
-  assert.ok(html.includes(`aria-label="与${row.author.name}继续沟通 · Agent 类型：${backend.kind==='native'?'Lake':'Codex'}"`));
+  assert.ok(html.includes(`aria-label="查看${row.author.name}的任务记录 · Agent 类型：${backend.kind==='native'?'Lake':'Codex'}"`));
   assert.equal((html.match(/data-agent-type=/g)??[]).length,1);
   assert.ok(html.includes(`data-agent-type="${backend.kind==='native'?'native':'codex'}"`),'branding follows the real execution binding');
   assert.ok(html.indexOf('<button')<html.indexOf('class="ai-card ai-message"'));

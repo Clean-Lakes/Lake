@@ -221,6 +221,15 @@ test('a followup replaces the source binding and never borrows the preceding obs
  assert.deepEqual(advance(initial,workspace([item]),[user,followup,dispatch],roots),[],'a committed different source invalidates the previous slot during a startup gap');
 });
 
+test('an observed root cannot claim a report explicitly bound to another human input',()=>{
+ const state=workspace(), initial=advance([],state), row=initial[0]!;
+ const roots=new Map([[pilotSpecialistBinding(row),'sdk-root']]);
+ const other={...user,id:'other-user'};
+ const message={...report(row),replyToMessageId:other.id};
+ assert.equal(advance(initial,state,[user,other,message],roots)[0]!.finalReport,undefined);
+ assert.equal(advance(initial,state,[user,other,{...message,replyToMessageId:user.id}],roots)[0]!.finalReport?.id,message.id);
+});
+
 test('current identity metadata updates during a retained slot without preserving old role names',()=>{
  const item=worker(),initial=advance([],workspace([item]));item.activity=undefined;item.roleName='新的专员名字';
  const state=workspace([item]);state.channels=[{id:'channel',roleId:item.roleId,roleName:item.roleName,sessionId:'current-channel',projectId:'project',revision:2,createdAt:at}];

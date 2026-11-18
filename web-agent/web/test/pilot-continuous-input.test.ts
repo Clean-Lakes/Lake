@@ -9,6 +9,7 @@ import {applyLiveText} from '../src/liveTextUpdates';
 import {orderedTranscript,replySourceMessageId,transcriptTurns} from '../src/timeline';
 import {timingForTurn} from '../src/replyDurationState';
 import {islandFixture} from './fixtures/pilot-island-data';
+import type {Message} from '../../shared/contracts';
 
 const at=(second:number)=>`2026-11-16T08:00:${String(second).padStart(2,'0')}.000Z`;
 function snapshot(){
@@ -27,6 +28,22 @@ test('TypeScript Pilot admits new messages while busy even with paused old draft
  assert.equal(queuesComposerMessage(value,'go',true),true);
  for(const role of ['role','worker'] as const)assert.equal(queuesComposerMessage({...value,session:{...value.session,workspaceRole:role}},'typescript',true),false);
  assert.equal(queuesComposerMessage({...value,session:{...value.session,workspaceRole:undefined}},'typescript',true),true);
+});
+
+test('cold Pilot history keeps each specialist report with its source and leaves unowned reports independent',()=>{
+ const value=snapshot(), sessionId=value.session.id;
+ const report:Message={id:'stopped-a',sessionId,role:'assistant',text:'已停止这次工作。',createdAt:at(4),replyToMessageId:'user-a',
+  author:{kind:'specialist',name:'核对专员',roleId:'checker',workerId:'worker-a',sessionId:'worker-session-a',taskId:'task-a'}};
+ value.messages.push(report,
+  {...report,id:'completed-b',createdAt:at(5),replyToMessageId:'user-b',author:{...report.author!,workerId:'worker-b',sessionId:'worker-session-b',taskId:'task-b'}},
+  {...report,id:'unbound',createdAt:at(6),replyToMessageId:undefined},
+  {...report,id:'missing-user',createdAt:at(7),replyToMessageId:'other-session-user'},
+  {id:'pilot-b',sessionId,role:'assistant',text:'收到。',createdAt:at(8)});
+ for(const offset of [0,2]){
+  const entries=orderedTranscript(value,[{id:'later-card',at:at(4),type:'text',status:'completed',content:'Pilot 回复',data:{source_message_id:'user-b'}}],offset);
+  assert.deepEqual(transcriptTurns(entries).map(turn=>turn.map(entry=>entry.id)),
+   [['user-a','stopped-a'],['user-b','later-card','completed-b','pilot-b'],['unbound'],['missing-user']]);
+ }
 });
 
 test('a first streamed packet after B arrives retains A source, root, timing and transcript placement',()=>{

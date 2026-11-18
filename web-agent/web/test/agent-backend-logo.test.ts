@@ -35,7 +35,7 @@ test('report logos retain the original execution and never inherit a current con
  const author:SpecialistReplyAuthor={kind:'specialist',name:'数据库专员',roleId:'db',workerId:'w',sessionId:'s',taskId:'t',execution:{kind:'native'}};
  const identity={name:'Pilot',pilot:true,execution:{kind:'acp' as const,agent:'codex' as const}};
  const html=renderToStaticMarkup(createElement(ReplyIdentity,{author,identity,onSpecialist(){}}));
- assert.match(html,/aria-label="与数据库专员继续沟通 · Agent 类型：Lake"/);
+ assert.match(html,/aria-label="查看数据库专员的任务记录 · Agent 类型：Lake"/);
  assert.match(html,/<strong>数据库专员<\/strong>/);assert.match(html,/Agent 类型：Lake/);
  assert.doesNotMatch(html,/Agent 类型：Codex/);assert.match(html,/response-avatar/);
  delete author.execution;

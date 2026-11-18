@@ -755,6 +755,7 @@ for (const routerFirst of [false, true]) test(`accepted followup crosses complet
   assert.deepEqual(f.worker().invocationInputIds, [event.id]); assert.equal(f.worker().generation, 2);
   assert.deepEqual(f.requests.at(-1)!.input.followups, [{ id: event.id, text: event.payload }]);
   await f.read(); await f.finish(); f.settleWorker();
+  assert.equal(f.store.messages(f.router).find(message => message.author?.taskId === initial.taskId)?.replyToMessageId, event.messageId);
   const goal = f.host.ledger.get(initial.taskId);
   assert.equal(goal.status, "completed"); assert.equal(goal.deadlineAt, before.deadlineAt); assert.equal(goal.roundLimit, before.roundLimit);
   assert.equal(f.store.list("superGoals").length, 1);
@@ -821,10 +822,35 @@ for(const readOnly of [true,false])test(`stop waits for ${readOnly?'read':'opaqu
  release();await settled;await Promise.all([stopping,duplicate]);
  const report=f.store.messages(f.router).filter(m=>m.author?.taskId===a.taskId);
  assert.equal(report.length,1);assert.equal(report[0]!.text,'已停止这次工作。');
+ assert.equal(report[0]!.replyToMessageId, a.event.messageId);
  assert.equal(f.host.ledger.get(a.taskId).status,'cancelled');
  const op=f.store.list<any>('superOperations').find(o=>o.callId==='in-flight');assert.equal(op.status,readOnly?'failed':'unknown');
  f.settleWorker(a.taskId);assert.equal(f.store.messages(f.router).filter(m=>m.author?.taskId===a.taskId).length,1,'late completion cannot add another stop report');
  await f.finish(b.taskId);f.settleWorker(b.taskId);assert.equal(f.host.ledger.get(b.taskId).acceptanceState,"not_evaluated");
+ assert.equal(f.store.messages(f.router).find(message => message.author?.taskId === b.taskId)?.replyToMessageId, event.messageId);
+});
+
+test('legacy reports recover only an exact single source on projection', async t => {
+  const f = await fixture(t), a = await f.start();
+  await f.host.stopTask(a.taskId);
+  const report = f.store.messages(f.router).find(message => message.author?.taskId === a.taskId)!;
+  const channel = f.store.messages(report.author!.channelSessionId!).find(message => message.author?.taskId === a.taskId)!;
+  assert.equal(channel.replyToMessageId, undefined);
+
+  const {replyToMessageId, ...legacy} = report;
+  f.store.put('messages', report.id, legacy);
+  const restored = () => f.host.decorate(f.store.snapshot(f.router)).messages.find(message => message.id === report.id)!;
+  assert.equal(restored().replyToMessageId, a.event.messageId);
+  assert.equal(f.store.get<typeof report>('messages', report.id)!.replyToMessageId, undefined);
+  assert.equal(f.internal.reportMessage({...legacy, id:'report_unrelated'}).replyToMessageId, undefined);
+  const worker = f.worker(a.taskId);
+  f.store.put('superWorkers', worker.id, {...worker, inputEventIds:[a.event.id, 'another-input']});
+  assert.equal(restored().replyToMessageId, undefined);
+  f.store.put('superWorkers', worker.id, worker);
+  f.store.put('superInputs', a.event.id, {...a.event, projectId:'different-project'});
+  assert.equal(restored().replyToMessageId, undefined);
+  f.store.put('superInputs', a.event.id, {...a.event, sessionId:channel.sessionId});
+  assert.equal(restored().replyToMessageId, undefined);
 });
 
 test('stopping the remaining reply after business acceptance preserves the accepted goal and receipts',async t=>{

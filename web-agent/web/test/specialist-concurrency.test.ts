@@ -111,6 +111,10 @@ test("queued and actual waiting tasks remain distinct and old parked waiting sta
   assert.equal(status.detail, "1 项执行中 · 1 项待确认 · 1 项排队");
 });
 test("project, specialist, single-task and reply stop controls have explicit independent scopes", () => {
+  assert.deepEqual([
+    stopControlPresentation('router',true), stopControlPresentation('role',true),
+    stopControlPresentation('worker',true,true), stopControlPresentation('worker',true), stopControlPresentation('router',false),
+  ].map(scope => scope.shortLabel), ['停止项目全部任务','停止专员全部任务','停止本专员的执行','停止当前任务','停止本轮']);
   assert.equal(
     stopControlPresentation("router", true).label,
     "停止当前项目全部任务",

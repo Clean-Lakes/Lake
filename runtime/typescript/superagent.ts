@@ -1,7 +1,7 @@
 import {redactModelValue} from "./model-errors";
 import type {PilotConfiguration} from "./pilot-configuration";
 import {pilotConfigurationToolNames} from "./configuration-tool-names";
-import {workerDeliveries} from "./worker-deliveries";
+import {workerDeliveries, workerReportKeys} from "./worker-deliveries";
 import {SpecialistConversations} from './specialist-conversations';
 import {confirmsDispatch,correctedResourceSelectionRequestKey,correctedSpecialistRequestKey,record,routingCall} from "../../web-agent/shared/route-dispatch";
 import { projectTaskProgress } from "./task-progress";
@@ -2324,15 +2324,42 @@ export class LakeSuperagent implements AgentHost {
     }
     return {...view,cards:cards.map(card=>recovered.has(card.id)?{...card,data:{...record(card.data),routingRecovery:recovered.get(card.id)}}:card)};
   }
+  private reportSourceEventId(worker: Worker, included?: readonly string[]) {
+    const inputs = worker.inputEventIds ?? [];
+    if (included?.length) {
+      const accepted = new Set(included);
+      return inputs.findLast(id => accepted.has(id));
+    }
+    if (inputs.length === 1 && inputs[0] === worker.sourceEventId) return worker.sourceEventId;
+  }
+  private reportSourceMessage(projectId: string, eventId?: string) {
+    if (!eventId) return;
+    const event = this.store.get<InputEvent>("superInputs", eventId);
+    if (!event || event.projectId !== projectId) return;
+    const message = this.store.get<Message>("messages", event.messageId);
+    if (message?.role === "user" && message.sessionId === event.sessionId) return message;
+  }
   /** Enrich old report display from its frozen Worker, without rewriting history. */
   private reportMessage(original:Message):Message {
     const message=stoppedReportProjection(this.store,original,id=>this.ledger.unresolved(id)),author=message.author;
-    if(!author||author.execution||!author.taskId)return message;
+    if(!author?.taskId || (author.execution && (message.replyToMessageId || !message.id.startsWith('report_'))))return message;
     const worker=this.store.get<Worker>('superWorkers',author.workerId);
     const target=this.store.get<StoredSession>('sessions',message.sessionId);
     if(!worker||!target||worker.projectId!==target.projectId||worker.sessionId!==author.sessionId||worker.roleId!==author.roleId||
       (worker.taskId!==author.taskId&&!this.ledger.jointTask(author.taskId)?.memberIds.includes(worker.taskId)))return message;
-    return {...message,author:{...author,execution:worker.roleSnapshot.execution??{kind:'native'}}};
+    let result = message;
+    if (!message.replyToMessageId && message.id.startsWith('report_') && message.role === 'assistant' && !message.conversation) {
+      const source = this.reportSourceMessage(worker.projectId, this.reportSourceEventId(worker));
+      if (source?.sessionId === message.sessionId) {
+        const goal = this.store.get<Goal>('superGoals', worker.taskId);
+        if (goal?.workerId === worker.id && goal.sessionId === worker.sessionId && goal.roleId === worker.roleId &&
+            goal.projectId === worker.projectId && (goal.sharedTaskId ?? goal.id) === author.taskId &&
+            workerReportKeys(this.store, goal).some(key => message.id === 'report_' + digest([key, message.sessionId]))) {
+          result = {...message, replyToMessageId:source.id};
+        }
+      }
+    }
+    return author.execution ? result : {...result,author:{...author,execution:worker.roleSnapshot.execution??{kind:'native'}}};
   }
   decorate(snapshot: SessionSnapshot,taskId?:string): SessionSnapshot {
     snapshot.hostKeyTrust=this.ssh?.prompt(snapshot.session.id)??null;
@@ -2427,7 +2454,8 @@ export class LakeSuperagent implements AgentHost {
       goal.status = "paused";
       goal.summary = "这条消息没有处理成功，检查暂时停在这里。请重试这条消息。"; this.ledger.save(goal);
       this.store.put("superPendingReports", digest([goal.id, goal.revision]), { taskId: goal.id, revision: goal.revision,
-        snapshot: structuredClone(goal), presentation: { body: goal.summary, channelBody: goal.summary }, createdAt: now() });
+        snapshot: structuredClone(goal), sourceEventId:this.reportSourceEventId(worker, batch.eventIds),
+        presentation: { body: goal.summary, channelBody: goal.summary }, createdAt: now() });
       this.deliverReports(); this.changed(worker.sessionId);
     }
     this.batches.delete(sessionId); this.routing.delete(project.projectId); this.notify(sessionId, "specialist"); this.schedule();
@@ -2654,13 +2682,14 @@ export class LakeSuperagent implements AgentHost {
   }
   private deliverReports() {
     if (this.closed) return;
-    for (const pending of this.store.list<{ taskId: string; revision: number; snapshot: Goal; presentation?: { body: string; channelBody: string | null }; rootTurnId?:string; createdAt: string;inputEventIds?:string[] }>("superPendingReports")) {
+    for (const pending of this.store.list<{ taskId: string; revision: number; snapshot: Goal; presentation?: { body: string; channelBody: string | null }; rootTurnId?:string; createdAt: string;inputEventIds?:string[]; sourceEventId?:string }>("superPendingReports")) {
       const goal = pending.snapshot, worker = this.store.require<Worker>("superWorkers", goal.workerId);
       const key = digest([worker.taskId, pending.revision]);
       if(worker.inline){this.store.transaction(()=>{this.recordGatewayTaskReport(worker,pending,goal.summary??'');this.store.put("superReports",key,{key,workerId:worker.id,goalRevision:goal.revision,deliveredAt:now(),inline:true});this.store.delete("superPendingReports",digest([pending.taskId,pending.revision]));});continue;}
     if (!this.store.get("superReports", key)) {
       const project = this.store.require<SuperProject>("superProjects", worker.projectId), channel = this.store.require<Channel>("superChannels", worker.roleId);
       const presentation = pending.presentation ?? { body: goal.summary ?? "这次检查还没完成。", channelBody: goal.summary ?? "这次检查还没完成。" };
+      const source = this.reportSourceMessage(worker.projectId, pending.sourceEventId ?? this.reportSourceEventId(worker, pending.inputEventIds));
       this.store.transaction(() => { for (const target of [project.routerSessionId, channel.sessionId]) {
         const body = target === channel.sessionId ? presentation.channelBody : presentation.body;
         if (body === null) continue;
@@ -2668,6 +2697,7 @@ export class LakeSuperagent implements AgentHost {
           author: { kind: "specialist", name: worker.roleSnapshot.name, roleId: worker.roleId, workerId: worker.id,
             sessionId: worker.sessionId, taskId: goal.sharedTaskId ?? goal.id, channelSessionId: channel.sessionId,rootTurnId:pending.rootTurnId,
             execution:worker.roleSnapshot.execution??{kind:'native'} } };
+        if (source?.sessionId === target) message.replyToMessageId = source.id;
         if (!this.store.get("messages", message.id)) this.store.put("messages", message.id, message);
       }
       this.store.put("superReports", key, { key, workerId: worker.id, goalRevision: goal.revision, deliveredAt: now() });
@@ -2737,6 +2767,7 @@ export class LakeSuperagent implements AgentHost {
     const goal = this.ledger.get(taskId), worker = this.store.require<Worker>("superWorkers", goal.workerId);
     const alreadyTerminal=terminal(goal.status);
     if (alreadyTerminal&&!this.active.has(worker.id)&&!this.agents.isRunning(worker.sessionId)) return;
+    const sourceEventId = this.reportSourceEventId(worker, worker.state === 'queued' ? this.routedInputs(worker) : worker.invocationInputIds);
     const resume = this.resumeControl(worker);
     if (resume && worker.resumeControlId) this.store.put("superHumanControls", worker.resumeControlId, { ...resume, revokedAt: now() });
     worker.resumeControlId = undefined;
@@ -2755,7 +2786,7 @@ export class LakeSuperagent implements AgentHost {
     if(!alreadyTerminal&&!worker.inline){
       const key=digest([stopped.id,stopped.revision]);
       this.store.put('superPendingReports',key,{taskId:stopped.id,revision:stopped.revision,snapshot:structuredClone(stopped),
-        presentation:this.reportPresentation(stopped),rootTurnId:this.store.view(worker.sessionId).rootTurnId,createdAt:now()});
+        presentation:this.reportPresentation(stopped),rootTurnId:this.store.view(worker.sessionId).rootTurnId,createdAt:now(),sourceEventId});
     }
     this.deliverReports();
     this.agents.memory?.captureTask(stopped.id);
