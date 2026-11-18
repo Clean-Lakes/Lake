@@ -5,20 +5,22 @@ import {composerClipboardFragment,composerToken,replaceComposerRange,type Compos
 import {composerCaretCharacter,composerRangeOffsets,composerSelection,readComposerDocument,referenceKey,setComposerSelection} from './composerDocument';
 
 export type ComposerInputHandle={focus:(options?:FocusOptions)=>void;setSelectionRange:(start:number,end:number)=>void;readonly selectionStart:number;readonly selectionEnd:number;readonly value:string};
-type Props=Omit<HTMLAttributes<HTMLDivElement>,'onChange'|'onSelect'> & {value:string;references:ComposerReference[];renderReference:(ref:ComposerReference)=>ReactNode;disabled?:boolean;placeholder?:string;onChange:(value:string,references:ComposerReference[],caret:number)=>void};
+type Props=Omit<HTMLAttributes<HTMLDivElement>,'onChange'|'onSelect'> & {value:string;references:ComposerReference[];renderReference:(ref:ComposerReference)=>ReactNode;disabled?:boolean;placeholder?:string;onChange:(value:string,references:ComposerReference[],caret:number)=>void;onCaretMove?:(start:number,end:number)=>void};
 type Edit={value:string;references:ComposerReference[];start:number;end:number};
 const signature=(value:string,refs:ComposerReference[])=>JSON.stringify([value,refs.map(ref=>[referenceKey(ref),ref.label,ref.position])]);
-export const ComposerTextInput=forwardRef<ComposerInputHandle,Props>(function ComposerTextInput({value,references,renderReference,disabled=false,placeholder,onChange,onKeyDown,onPaste,onFocus,onBlur,onCompositionStart,onCompositionEnd,...props},forwardedRef) {
+export const ComposerTextInput=forwardRef<ComposerInputHandle,Props>(function ComposerTextInput({value,references,renderReference,disabled=false,placeholder,onChange,onCaretMove,onKeyDown,onPaste,onFocus,onBlur,onCompositionStart,onCompositionEnd,...props},forwardedRef) {
  const input=useRef<HTMLDivElement>(null),templates=useRef<HTMLDivElement>(null),guard=useRef(new CompositionGuard());
  const [composing,setComposing]=useState(false);
  const caret=useRef({start:0,end:0}),restore=useRef<{start:number;end:number}|null>(null);
  const edits=useRef<Edit[]>([{value,references,start:0,end:0}]),editIndex=useRef(0);
- const latest=useRef({value,references});latest.current={value,references};
+ const latest=useRef({value,references,onCaretMove});latest.current={value,references,onCaretMove};
  const known=useRef(new Map<string,ComposerReference>());for(const ref of references)known.current.set(referenceKey(ref),ref);
  function syncSelection(){const root=input.current,range=root&&composerSelection(root,latest.current.references);if(range){
   const native=root.ownerDocument.getSelection();
   if(!guard.current.ignores({key:''})&&range.start===range.end&&latest.current.value===''&&native?.anchorNode===root)setComposerSelection(root,range.start,range.end);
+  const moved=range.start!==caret.current.start||range.end!==caret.current.end;
   caret.current=range;
+  if(moved&&!guard.current.ignores({key:''}))latest.current.onCaretMove?.(range.start,range.end);
  }return range??caret.current;}
  function remember(value:string,refs:ComposerReference[],range:{start:number;end:number}) {
   const current=edits.current[editIndex.current]!;
