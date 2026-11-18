@@ -365,6 +365,14 @@ export class LakeServiceResources {
       },
     };
   }
+  /** Internal prepared-plan validation. HTTP callers still cannot borrow refs. */
+  validatePrepared(kind: string, settings: Settings) {
+    if (secretKeys.some(key => settings[key] !== undefined) || settings.clearCredential !== undefined)
+      throw new HttpError(400, '导入计划不能包含内联凭据');
+    const {config} = this.parse(kind, {}, settings);
+    if (settings.credentialRef) config.credentialRef = settings.credentialRef;
+    return config;
+  }
   create(projectId: string, input: any) {
     this.security.resourceConfiguration(projectId);
     this.store.project(projectId);

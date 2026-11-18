@@ -79,6 +79,12 @@ Node 命令须使用准备好的 24.14.0。测试经过真实 Agent SDK 源码�
 
 完整等价验收继续逐项进行；0.3.28 macOS 正式分发是用户明确选择当前 TS 水位后的例外，不将缺口标为已完成。其发布仍需独立验证准确生产 SHA、迁移、签名包与更新回退。合并、生产安装和发布继续遵守仓库原有授权流程。
 
+### 资源导入增量
+
+认证 UI 的 `resource-import-preview` / `resource-import` 两步接口支持 JSON、HexHub 明文结构导出、含表头 CSV/TSV 和明确的 SSH Host 配置。HexHub 按本机 MCP `list_assets` 的范围读取，只有与当前原生 assets 存储唯一匹配的连接才补充登录信息；不读取其他对象存储、Keychain 或过期 LevelDB 表。无法稳定读取本地存储时返回明确的仅清单预览。
+
+预览不连接现场、不创建资源；凭据进入当前 Home 的私有文件，30 分钟预览计划仅保存引用与指纹。提交校验选择、项目、策略、源清单、凭据和旧资源版本，再原子写入资源、目录、版本及重放回执。完整连接跳过，缺少登录信息的唯一旧连接保留 ID、名称、目录及其他设置；活动项目拒绝补充已有连接。配置导入不扩展 Worker 资源范围或旧策略。文件路径、凭据引用、SSH 代理/通配配置、整体加密导出、SQLite/Docker 及自然语言推断未在此增量接通。实际验证和限制见[资源导入记录](../../docs/validation/typescript-candidate/resource-import.md)。
+
 本轮准确源码 SHA、签名进程检查、界面截图与未验证项见[阶段验证记录](../../docs/validation/typescript-candidate/README.md)。
 
 ### 2026-11-07 切换缺口修复
