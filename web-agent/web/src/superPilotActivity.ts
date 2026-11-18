@@ -9,7 +9,7 @@ const finished=new Set<SuperWorker['task']['state']>(['completed','failed','canc
 export type SuperPilotActivity={
  status:WorkSession['status'];
  label:string;
- phase:SuperWorkerActivity['phase'];
+ phase:SuperWorkerActivity['phase']|'finishing';
  animated:boolean;
  motion:AvatarMotion;
  workerCount:number;
@@ -17,16 +17,22 @@ export type SuperPilotActivity={
 
 // This is a view of live host activity, never an inference from a task's last
 // status or report. Completing the Router reply does not complete its workers.
-export function superPilotActivity(workspace:SuperWorkspace|null|undefined,session:Pick<WorkSession,'id'|'projectId'>|null|undefined,connected=true):SuperPilotActivity|null {
+export function superPilotActivity(workspace:SuperWorkspace|null|undefined,session:Pick<WorkSession,'id'|'projectId'>|null|undefined,connected=true,presentedReports?:ReadonlySet<string>):SuperPilotActivity|null {
  if(!session||!workspace?.active||workspace.project.projectId!==session.projectId||workspace.project.routerSessionId!==session.id)return null;
- const workers=workspace.workers.filter((worker):worker is ActiveWorker=>!!worker.activity&&
-  worker.assignmentState!=='archived'&&worker.assignmentState!=='stopped'&&!finished.has(worker.task.state)&&
+ const scoped=workspace.workers.filter(worker=>worker.assignmentState!=='archived'&&worker.assignmentState!=='stopped'&&
   worker.task.sessionId===worker.sessionId&&(!worker.task.projectId||worker.task.projectId===session.projectId));
+ const workers=scoped.filter((worker):worker is ActiveWorker=>!!worker.activity&&!finished.has(worker.task.state));
  if(!workers.length){
   const rounds=workspace.conversations?.filter(round=>round.projectId===session.projectId&&round.sessionId===session.id&&['queued','running','summarizing'].includes(round.state))??[];
-  if(!rounds.length)return null;
-  const count=rounds.reduce((sum,round)=>sum+round.members.filter(member=>['queued','running'].includes(member.state)).length,0);
-  return {status:connected?'investigating':'idle',label:connected?rounds.some(round=>round.state==='summarizing')?'Pilot 正在汇总专员回应':`${count} 位专员尚未回应`:'进度暂未更新，正在重连',phase:'thinking',animated:connected,motion:connected?'working':'still',workerCount:count};
+  if(rounds.length){
+   const count=rounds.reduce((sum,round)=>sum+round.members.filter(member=>['queued','running'].includes(member.state)).length,0);
+   return {status:connected?'investigating':'idle',label:connected?rounds.some(round=>round.state==='summarizing')?'Pilot 正在汇总专员回应':`${count} 位专员尚未回应`:'进度暂未更新，正在重连',phase:'thinking',animated:connected,motion:connected?'working':'still',workerCount:count};
+  }
+  const closing=presentedReports&&scoped.filter(worker=>worker.task.state==='completed'&&worker.pilotReport&&
+   (!worker.pilotReport.executionSettled||!presentedReports.has(worker.pilotReport.messageId)));
+  if(!closing?.length)return null;
+  return {status:connected?'investigating':'idle',label:connected?'正在收尾专员回复':'进度暂未更新，正在重连',
+   phase:'finishing',animated:connected,motion:connected?'working':'still',workerCount:closing.length};
  }
  workers.sort((a,b)=>priority[a.activity.phase]-priority[b.activity.phase]||b.activity.updatedAt.localeCompare(a.activity.updatedAt)||a.sessionId.localeCompare(b.sessionId));
  const phase=workers[0].activity.phase;

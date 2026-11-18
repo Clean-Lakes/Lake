@@ -49,7 +49,7 @@ import {MarkdownCodeBlock} from './MarkdownCodeBlock';
 import {replyInfoComponents} from './ReplyInfoElements';
 import remarkGfm from "remark-gfm";
 import {ReplyDetailsSummary} from './ReplyDetailsSummary';
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { AIImage, AICard, AIView, AIPreset, TextFileAttachment, SessionSnapshot, TerminalSession, WorkspaceTag } from "../../shared/contracts";
 import { conversationTagSignature } from "./conversationTags";
 import {AssistantMarkdown, ObjectReferencesProvider, ReplyReferenceScope} from './AssistantMarkdown';
@@ -129,13 +129,13 @@ export function TranscriptMessage({message,sessionId,resources,arrive=false,pend
           {message.role==='user'&&!!message.text&&<UserMessageCopy text={message.text}/>}
         </div>;
 }
-type TranscriptProps = {connected?:boolean;proseInChannel?:boolean;pilotWorkspace?:SuperWorkspace|null;pilotConnected?:boolean;superTask?:SuperTask;onSpecialist?:(author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:(author:SpecialistReplyAuthor)=>void;assistantIdentity?:AssistantIdentity;onOpenMemory?:()=>void;onOpenPlans?:()=>void; refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean};
+type TranscriptProps = {connected?:boolean;proseInChannel?:boolean;pilotWorkspace?:SuperWorkspace|null;pilotConnected?:boolean;onPilotReportsPresented?:(sessionId:string,ids:readonly string[])=>void;superTask?:SuperTask;onSpecialist?:(author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:(author:SpecialistReplyAuthor)=>void;assistantIdentity?:AssistantIdentity;onOpenMemory?:()=>void;onOpenPlans?:()=>void; refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean};
 export function AITranscript(props: TranscriptProps) {
   const {snapshot} = props;
   const resources = useMemo(() => (snapshot.resources ?? []).filter(resource => !resource.projectId || resource.projectId === snapshot.session.projectId), [snapshot.resources, snapshot.session.projectId]);
   return <ObjectReferencesProvider key={snapshot.session.id} resources={resources} tasks={snapshot.ai?.agentRuns}><AITranscriptContent {...props}/></ObjectReferencesProvider>;
 }
-function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnected=true,superTask,onSpecialist,onInspectSpecialist,assistantIdentity,onOpenMemory,snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, connected = !disabled, mode = "conversation", refresh, onOpenPlans }: TranscriptProps) {
+function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnected=true,onPilotReportsPresented,superTask,onSpecialist,onInspectSpecialist,assistantIdentity,onOpenMemory,snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, connected = !disabled, mode = "conversation", refresh, onOpenPlans }: TranscriptProps) {
   const {rows:dispatchRows,onObservedTurn}=usePilotSpecialistRows(mode==='conversation'&&assistantIdentity?.pilot?pilotWorkspace:undefined,snapshot.session.id,snapshot.messages);
   // Restoring a session shows existing text immediately. Replies first observed
   // after mount reveal their first packet too (cards mount only once nonempty).
@@ -160,8 +160,18 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
   // A proven report replaces its observed live slot in the original user turn.
   // Exclude it from the timestamp-ordered transcript in the same render, so a
   // later user message cannot pull the conclusion into a different turn.
-  const slottedReports=new Set(dispatchRows.flatMap(row=>row.finalReport?[row.finalReport.id]:[]));
-  const entries = orderedTranscript(displaySnapshot, projected.cards, before).filter(entry=>!slottedReports.has(entry.message?.id??'')).filter(entry=>mode!=='conversation'||!isNativeAgentSource(entry.agentRun?.source)&&!(entry.message?.conversation?.kind==='summary'&&entry.message.conversation.summaryRequested!==true)).map(entry=>mode==='conversation'?conversationPlanEntry(entry,{planMode:snapshot.conversationMode==='plan',live:snapshot.ai?.status==='running',currentPlanId:snapshot.ai?.proposedPlan?.id}):entry);
+  const ordered=orderedTranscript(displaySnapshot, projected.cards, before);
+  const visibleSources=new Set(ordered.flatMap(entry=>entry.message?.role==='user'?[entry.id]:[]));
+  const slottedReports=new Set(dispatchRows.flatMap(row=>row.finalReport&&visibleSources.has(row.sourceMessageId)?[row.finalReport.id]:[]));
+  const onReportPresented=useCallback((id:string)=>onPilotReportsPresented?.(snapshot.session.id,[id]),[onPilotReportsPresented,snapshot.session.id]);
+  // Restored or fast replies that have no live slot enter the transcript in
+  // this commit. Slotted replies acknowledge after their replacement finishes.
+  const standaloneReportIds=JSON.stringify(onPilotReportsPresented&&mode==='conversation'?snapshot.messages.flatMap(message=>
+    message.role==='assistant'&&message.author?.kind==='specialist'&&!slottedReports.has(message.id)?[message.id]:[]):[]);
+  useEffect(()=>{
+    if(standaloneReportIds!=='[]')onPilotReportsPresented?.(snapshot.session.id,JSON.parse(standaloneReportIds));
+  },[onPilotReportsPresented,snapshot.session.id,standaloneReportIds]);
+  const entries = ordered.filter(entry=>!slottedReports.has(entry.message?.id??'')).filter(entry=>mode!=='conversation'||!isNativeAgentSource(entry.agentRun?.source)&&!(entry.message?.conversation?.kind==='summary'&&entry.message.conversation.summaryRequested!==true)).map(entry=>mode==='conversation'?conversationPlanEntry(entry,{planMode:snapshot.conversationMode==='plan',live:snapshot.ai?.status==='running',currentPlanId:snapshot.ai?.proposedPlan?.id}):entry);
   const loadOlderSRE=async()=>{onInspect?.();const session=snapshot.session.id;setLoadingSRE(true);try{const page=await api.sreTasks(session,sreCursor??snapshot.sre?.tasks.at(-1)?.id??'');if(selectedSession.current===session){setOlderSRE(old=>[...old,...page.items]);setSRECursor(page.nextCursor)}}catch(e){setError(readableError(e))}finally{setLoadingSRE(false)}};
   const visibleEntries = entries.filter(entry => !isFileChangeCard(entry.card));
   const lastBudgetCard=cards.filter(card=>!!card.content).at(-1);
@@ -278,7 +288,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources} arrive={entry.message!.id===latestUser?.id&&!restoredMessageIds.current.has(entry.message!.id)}/>)}
       {mode==='activity'&&<ReplyDuration assistantIdentity={assistantIdentity} {...timingProps}/>}
       {mode==='conversation'?<TurnExecutionDetails hideStatus={hideConversationStatus} processOnly={turnConversations.length>0&&!pilotTurnLive} assistantIdentity={assistantIdentity} hideIdentity={hideReplyIdentity} latest={latestUser?turn===currentTurn:turn===turns.at(-1)} latestTaskId={latestInspectorTaskId} canonicalGoalId={canonicalGoalId} sessionId={snapshot.session.id} {...timingProps} presentingReply={presentingReply} hideLive={turn.some(entry=>entry.sre?.task.pilot)} detailNotice={pilotLive?undefined:notices} details={pilotLive?[]:[...detailGroups.map(renderGroup),...compactionDiagnostics]} onInspect={onInspect}>{replyContent}</TurnExecutionDetails>:replyContent}
-      {mode==='conversation'&&turnDispatchRows.length>0&&<PilotSpecialistConversation rows={turnDispatchRows} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} connected={pilotConnected} onObservedTurn={onObservedTurn}/>}
+      {mode==='conversation'&&turnDispatchRows.length>0&&<PilotSpecialistConversation rows={turnDispatchRows} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} connected={pilotConnected} onObservedTurn={onObservedTurn} onReportPresented={onPilotReportsPresented?onReportPresented:undefined}/>}
       {turnConversations.length>0&&<PilotConversationProgress rounds={turnConversations} connected={pilotConnected} onSpecialist={onSpecialist}/>}
       <FileChanges live={turn===currentTurn&&(currentTiming?currentTiming.status==='running':liveConversation)} deferUntilEnd={mode==='conversation'} cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>
       <TaskProgress cards={turn.flatMap(entry => entry.card ? [entry.card] : [])} executionId={snapshot.superagent?.task.executionGoalId??snapshot.superagent?.task.taskId} legacyTurn historical={!liveConversation || (!!snapshot.superagent?.task && !hasCurrentTaskProgress(snapshot.superagent.task.state)) || turn!==(latestUser?currentTurn:turns.at(-1))}/>
