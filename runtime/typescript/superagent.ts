@@ -104,6 +104,7 @@ const strings = (value: unknown, max = 128): string[] => {
 const objectSchema = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required, additionalProperties: false });
 const str = { type: "string" }, integer = { type: "integer" };
 const array = (items: unknown) => ({ type: "array", items });
+const specialistReportMessageId = (reportKey: string, sessionId: string) => "report_" + digest([reportKey, sessionId]);
 function clip(value: string, maximum: number) {
   const bytes = Buffer.from(value); let end = Math.min(bytes.length, maximum);
   while (end > 0 && end < bytes.length && (bytes[end] & 0xc0) === 0x80) end--;
@@ -557,10 +558,21 @@ export class LakeSuperagent implements AgentHost {
       deadlineAt: goal.deadlineAt, summary: goal.summary, updatedAt: goal.updatedAt,
       ...(goal.status==="paused"&&goal.summary==="model_round_limit"&&{reason:"round_limit_removed",summary:"轮次限制已取消，可继续当前任务。"}) };
   }
-  private workerView(worker: Worker,runs?:ExternalRun[]): SuperWorker {
+  private workerView(worker: Worker,runs?:ExternalRun[],pilotSessionId?:string): SuperWorker {
     const sourceEvent = worker.sourceEventId ? this.store.get<InputEvent>("superInputs", worker.sourceEventId) : undefined;
+    const goal = this.ledger.get(worker.taskId);
+    // work_finish commits the goal before the invocation returns. Preserve the
+    // same report identity while it is queued and after it reaches Pilot.
+    let pilotReport:SuperWorker['pilotReport'];
+    if (pilotSessionId && !worker.inline && goal.status === 'completed' && worker.state !== 'stopped') {
+      const key = digest([goal.id, goal.revision]);
+      const messageId = specialistReportMessageId(key, pilotSessionId);
+      if (this.store.get('superReports', key) || this.store.get('superPendingReports', key)) {
+        pilotReport = {messageId, executionSettled:!this.active.has(worker.id)};
+      }
+    }
     return { id: worker.id, createdAt: worker.createdAt, roleId: worker.roleId, roleName: worker.roleSnapshot.name,
-      sessionId: worker.sessionId, task: this.taskView(this.ledger.get(worker.taskId)), assignmentState: worker.state,
+      sessionId: worker.sessionId, task: this.taskView(goal), assignmentState: worker.state, pilotReport,
       ...(sourceEvent?.external && { sourceExternal: true }),
       activity: this.workerActivity(worker),execution:this.workerExecution(worker,runs) };
   }
@@ -631,14 +643,14 @@ export class LakeSuperagent implements AgentHost {
           originRootTurnId: goal.originRootTurnId, summary: terminal(goal.status) ? goal.summary : "旧 Go 任务只读保留；未恢复执行。" } } as SuperWorker];
     });
   }
-  workers(projectId: string) {
+  workers(projectId: string,pilotSessionId?:string) {
     const runs=this.store.list<ExternalRun>('acpRuns').filter(run=>run.projectId===projectId);
-    return [...this.legacyWorkerViews(projectId), ...this.store.list<Worker>("superWorkers").filter((worker) => worker.projectId === projectId).map((worker) => this.workerView(worker,runs))];
+    return [...this.legacyWorkerViews(projectId), ...this.store.list<Worker>("superWorkers").filter((worker) => worker.projectId === projectId).map((worker) => this.workerView(worker,runs,pilotSessionId))];
   }
   workspace(projectId: string): SuperWorkspace {
     this.store.project(projectId);
     const project = this.store.get<SuperProject>("superProjects", projectId);
-    const workers=this.workers(projectId);
+    const workers=this.workers(projectId,project?.routerSessionId);
     return { pilotMessageRead: project ? conversationReadState(this.store, project.routerSessionId) : undefined, active: !!project, project: project ?? { projectId, routerSessionId: "", version: 0 }, workers, conversations:this.conversations.list(projectId),
       questions: this.specialistQuestions(projectId),
       channels: this.store.list<Channel>("superChannels").filter((channel) => channel.projectId === projectId && !this.role(projectId, channel.roleId, true).deletedAt)
@@ -2664,7 +2676,7 @@ export class LakeSuperagent implements AgentHost {
       this.store.transaction(() => { for (const target of [project.routerSessionId, channel.sessionId]) {
         const body = target === channel.sessionId ? presentation.channelBody : presentation.body;
         if (body === null) continue;
-        const message: Message = { id: "report_" + digest([key, target]), sessionId: target, role: "assistant", text: this.agents.redact(body), createdAt: pending.createdAt,
+        const message: Message = { id: specialistReportMessageId(key, target), sessionId: target, role: "assistant", text: this.agents.redact(body), createdAt: pending.createdAt,
           author: { kind: "specialist", name: worker.roleSnapshot.name, roleId: worker.roleId, workerId: worker.id,
             sessionId: worker.sessionId, taskId: goal.sharedTaskId ?? goal.id, channelSessionId: channel.sessionId,rootTurnId:pending.rootTurnId,
             execution:worker.roleSnapshot.execution??{kind:'native'} } };
