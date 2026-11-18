@@ -28,7 +28,7 @@ test('Pilot-to-specialist and specialist-to-Pilot boundaries receive spacing wit
  const snapshot={session:{id:'pilot'},resources:[],actions:[],specialists:[],evidence:[],messages} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:'Pilot',pilot:true},onSpecialist(){}}));
  assert.equal((html.match(/is-role-break/g)??[]).length,2);
- assert.equal((html.match(/aria-label="与知识库专员继续沟通"/g)??[]).length,1);
+ assert.equal((html.match(/aria-label="查看知识库专员的任务记录"/g)??[]).length,1);
  for(const text of messages.map(message=>message.text))assert.ok(html.includes(text));
 });
 test('Pilot sender grouping preserves text and stops at tools, errors, users and authored reports',()=>{
@@ -109,6 +109,6 @@ test('streaming and restored Pilot replies group without changing messages or sp
  }
  const reports={session:{id:'pilot'},resources:[],actions:[],specialists:[],evidence:[],messages:[1,2].map(n=>({id:'report-'+n,sessionId:'pilot',role:'assistant',text:'相同的结果',createdAt:at(n),author:{...author,taskId:'task-'+n,workerId:'worker-'+n}}))} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:reports,assistantIdentity:{name:'Pilot',pilot:true},onSpecialist(){}}));
- assert.equal((html.match(/aria-label="与知识库专员继续沟通"/g)||[]).length,2);
+ assert.equal((html.match(/aria-label="查看知识库专员的任务记录"/g)||[]).length,2);
  assert.ok(!html.includes('is-reply-continuation'));
 });

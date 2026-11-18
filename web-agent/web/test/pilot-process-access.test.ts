@@ -47,9 +47,11 @@ test('specialist process remains accessible in the live slot, adopted report and
   assert.match(html,/<\/div><\/div><div class="reply-duration reply-process-text specialist-process-link"/,'process entry stays outside the animated body');
   if(finalReport)assert.equal((html.replace(/<[^>]*>/g,'').match(/唯一最终结论/g)??[]).length,1);
  }
- const restored=pilot();restored.messages.push(report);restored.ai!.cards=[];
+ const restored=pilot();restored.messages.push({...report,replyToMessageId:user.id});
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:restored,pilotWorkspace:{...w,workers:[{...worker,task:{...worker.task,state:'completed'}}]},assistantIdentity:{name:'Pilot',pilot:true},onInspectSpecialist}));
  assert.equal((html.match(/data-specialist-process="task"/g)??[]).length,1,'cold history has no live slot but retains its exact process entry');
+ assert.match(html,/>Pilot 执行过程</);
+ assert.doesNotMatch(markup(pilot()),/>Pilot 执行过程</,'a lone Pilot entry keeps its concise label');
  assert.equal((html.replace(/<[^>]*>/g,'').match(/唯一最终结论/g)??[]).length,1);
 });
 
