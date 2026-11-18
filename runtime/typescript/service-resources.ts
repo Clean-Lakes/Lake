@@ -580,6 +580,8 @@ export class LakeServiceResources {
             await client.query("SELECT 1 AS lake_connection_test");
           } else if (input.kind === "redis") {
             const client = createClient({
+              // AUTH/PING also work on servers predating HELLO and RESP3.
+              RESP: 2,
               socket: {
                 host,
                 port: config.port,
