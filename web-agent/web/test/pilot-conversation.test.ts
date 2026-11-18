@@ -31,6 +31,7 @@ test('Lake Island follows dialogue even after the routing response, and stops wh
  assert.equal(superPilotActivity({...workspace,conversations:[{...round,state:'summarizing'}]},session)?.label,'Pilot 正在汇总专员回应');
  assert.equal(superPilotActivity({...workspace,conversations:[{...round,state:'completed'}]},session),null);
  assert.equal(superPilotActivity(workspace,session,false)?.animated,false);
+ assert.equal(superPilotActivity(workspace,session,false)?.idleLabel,'重连中');
  assert.equal(superPilotActivity(workspace,{id:'other',projectId:'project'}),null);
 });
 

@@ -23,11 +23,11 @@ export function SessionListTags({tags}:{tags:WorkspaceTag[]}) {
  </span>;
 }
 
-export function SessionStateBadge({session,label,status=session.status}:{session:WorkSession;label?:string;status?:WorkSession["status"]}) {
+export function SessionStateBadge({session,label,idleLabel,status=session.status}:{session:WorkSession;label?:string;idleLabel?:string;status?:WorkSession["status"]}) {
  const statuses={idle:"待命",investigating:"调查中",waiting_approval:"待确认",completed:"回复结束",failed:"需要关注"};
  const full=label??statuses[status];
  const badge=sessionBadgeState(status,label);
- return <span className={`session-state-badge state-${status}`} data-badge-state={badge.state} data-tone={badge.tone} title={full} aria-label={full}><Glyph name={badge.icon} size={13} className="session-state-icon"/><span className="session-state-label">{badge.label}</span></span>;
+ return <span className={`session-state-badge state-${status}`} data-badge-state={badge.state} data-tone={badge.tone} title={full} aria-label={full}><Glyph name={badge.icon} size={13} className="session-state-icon"/><span className="session-state-label">{badge.state==='idle'&&idleLabel?idleLabel:badge.label}</span></span>;
 }
 
 const sessionViews=[{value:"conversation",label:"对话",icon:"chat"},{value:"plans",label:"计划",icon:"document"},{value:"activity",label:"执行记录",icon:"terminal"},{value:"evidence",label:"证据",icon:"document"}] as const;
