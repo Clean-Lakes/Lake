@@ -3,10 +3,10 @@ import { join, isAbsolute, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import {createHash} from 'node:crypto';
 import { externalAgentId, externalAgentIds, externalProducts } from './catalog';
-import type { ExternalAgentId, ExternalAgentProfile, ExternalAgentStatus } from './types';
+import type { CodexConnectionProbe, ExternalAgentId, ExternalAgentProfile, ExternalAgentStatus } from './types';
 import { HttpError, LakeStore, now } from '../store';
 import { privateFile, privatePath } from './private';
-import { codexCatalog, codexCatalogRevision, codexModels, codexStartupArgs,tomlValue } from './codex-profile';
+import { codexCatalog, codexCatalogRevision, codexModels, codexStartupArgs,defaultCodexTaskModel,tomlValue } from './codex-profile';
 import {CodexLocalSource,codexHomePresent} from './codex-local';
 import {discoverCodexRuntime,validateCodexNode} from './runtime-paths';
 
@@ -63,11 +63,17 @@ export class ExternalAgentRegistry {
         !probe.authenticated?'本机 Codex 尚未登录，请先在 Codex 中完成登录后重新连接':undefined);
       return {...profile,name:externalProducts[id].name,installed,transportReady,assignmentReady:!assignmentBlocker,assignmentBlocker,
         configPath:join(source.home,'config.toml'),authMode:current?probe.authMode:undefined,
-        model:current?probe.model:undefined,modelProvider:current?probe.modelProvider:undefined,reasoningEffort:current?probe.reasoningEffort:undefined,
+        model:current?probe.model:undefined,defaultTaskModel:transportReady&&probe.authenticated?defaultCodexTaskModel(probe.model):undefined,
+        modelProvider:current?probe.modelProvider:undefined,reasoningEffort:current?probe.reasoningEffort:undefined,
         message:current?probe.message:undefined,capabilities:current?probe.capabilities:undefined};
     }));
   }
-  probe(projectId:string,agent:ExternalAgentId){return this.store.get<any>('acpProbes',this.key(projectId,agent));}
+  probe(projectId:string,agent:ExternalAgentId) {
+    const probe = this.store.get<CodexConnectionProbe>('acpProbes',this.key(projectId,agent));
+    // Old failures could describe the CLI's unrelated default model. Recheck
+    // them once using the connection-only probe.
+    return probe?.ready === false && probe.connectionVersion !== 1 ? undefined : probe;
+  }
   async save(projectId: string, agent: unknown, input: Record<string, unknown>) {
     const id=externalAgentId(agent), key=this.key(projectId,id), previous=this.mutations.get(key)??Promise.resolve();
     const work=previous.catch(()=>{}).then(async()=>{
@@ -103,19 +109,28 @@ export class ExternalAgentRegistry {
     await privatePath(home,'state');await privatePath(home,'logs');
     await privateFile(home,'models.json',JSON.stringify(codexCatalog));return home;
   }
-  async prepareLaunch(profile:ExternalAgentProfile,signal:AbortSignal,model?:string){
-    if(model!==undefined&&!codexModels.includes(model))throw new HttpError(400,'该模型不在当前 Codex 兼容目录中');
+  private async launchConfiguration(profile:ExternalAgentProfile,signal:AbortSignal,model?:string){
     const source=this.source();if(source.error)throw new HttpError(409,source.error);
     if(!codexHomePresent(source.home))throw new HttpError(409,'未找到本机 Codex 配置目录，请先在 Codex 中完成登录');
     const home=await this.prepareHome(profile),engine=join(this.runtimeRoot(),'node_modules/@openai/codex/bin/codex.js');
     const modelArgs=model===undefined?[]:['-c','model='+tomlValue(model)];
     const config=await this.local.inspect(profile.nodePath!,engine,home,[...codexStartupArgs(home,source.mcpIds,source.hooks),...modelArgs],signal);
-    if(!codexModels.includes(config.model))throw new HttpError(409,'本机 Codex 模型尚未通过当前工具兼容验证：'+config.model);
     if(model!==undefined&&config.model!==model)throw new HttpError(409,'未能确认专员指定的 Codex 模型，未启动任务');
     if(this.get(profile.projectId,profile.id).revision!==profile.revision)throw new HttpError(409,'本机 Codex 配置或账号已变化，请重新连接');
     return {home,command:profile.nodePath!,args:[engine,...codexStartupArgs(home,config.mcpIds,config.hooks),...modelArgs,'app-server'],
       disabledMcp:Object.fromEntries(config.mcpIds.map(name=>[name,{enabled:false}])),environment:config.environment,
       observed:{model:config.model,modelProvider:config.provider,reasoningEffort:config.reasoningEffort,authenticated:config.authenticated,authMode:config.authMode}};
+  }
+
+  prepareConnection(profile:ExternalAgentProfile,signal:AbortSignal) {
+    return this.launchConfiguration(profile,signal);
+  }
+
+  async prepareLaunch(profile:ExternalAgentProfile,signal:AbortSignal,model?:string) {
+    if(model!==undefined&&!codexModels.includes(model))throw new HttpError(400,'该模型不在当前 Codex 兼容目录中');
+    const prepared = await this.launchConfiguration(profile,signal,model);
+    const selected = model ?? defaultCodexTaskModel(prepared.observed.model);
+    return selected === prepared.observed.model ? prepared : this.launchConfiguration(profile,signal,selected);
   }
 
   async install(projectId: string, agent: unknown, npmPath: unknown, signal: AbortSignal) {

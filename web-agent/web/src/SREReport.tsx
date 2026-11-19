@@ -2,8 +2,8 @@ import {memo} from 'react';
 import type {AgentEvidence,SRERoleReport} from '../../shared/contracts';
 import {AssistantMarkdown} from './AssistantMarkdown';
 
-export const SREProse=memo(function SREProse({children}:{children:string;compact?:boolean}){
- return <div className="sre-prose"><AssistantMarkdown>{children}</AssistantMarkdown></div>;
+export const SREProse=memo(function SREProse({children,reveal,animateInitial}:{children:string;compact?:boolean;reveal?:boolean;animateInitial?:boolean}){
+ return <div className="sre-prose"><AssistantMarkdown reveal={reveal} animateInitial={animateInitial}>{children}</AssistantMarkdown></div>;
 });
 
 export function sreEvidenceText(text:string,evidence:AgentEvidence[]){

@@ -9,6 +9,8 @@ import type { MessageInput } from "./message-input";
 import { memoryContextUnavailable, memoryContextUnavailableNotice } from "./memory-errors";
 import {digest} from "./tasks";
 import {HttpError} from "./store";
+import {ExternalAgentRegistry} from './acp/registry';
+import {codexModels} from './acp/codex-profile';
 
 // Exercise the actual host and SQLite ledger with a controlled SDK boundary.
 // No model, credential, remote server or existing Dev data is accessed.
@@ -412,7 +414,8 @@ test('specialist creation persists a random available model, replays once and pr
 
 test('model-only specialist creation keeps the requested model and freezes its compatible Codex Agent',async t=>{
  const f=await fixture(t),profile={id:'codex',projectId:f.project.id,revision:7,enabled:true};
- (f.agents as any).external={registry:{get:()=>profile}};
+ const registry=new ExternalAgentRegistry(f.store,{codexHome:join(f.store.home,'codex')});
+ (f.agents as any).external={registry:Object.assign(registry,{get:()=>profile})};
  f.store.put('acpProbes',f.project.id+':codex',{revision:7,authentication:'codex-local',ready:true,authenticated:true,model:'gpt-6.1-sol'});
  const event=await f.admit('创建专员，使用 gpt-6.1-sol。');
  const saved=f.internal.manage(f.router,{event_id:event.id,part_key:'create',action:'create',role_key:'sol-checker',name:'Sol 检查员',duties:'检查项目',model_id:'gpt-6.1-sol',quote:event.payload});
@@ -420,6 +423,18 @@ test('model-only specialist creation keeps the requested model and freezes its c
  const work=await f.admit('检查项目。'),task=f.route(work,{action:'create',title:'检查项目',role_id:saved.id});
  assert.deepEqual(f.worker(task.taskId).roleSnapshot.execution,{...saved.execution,revision:7});
  assert.deepEqual(f.internal.listRoles(f.project.id).items.find((role:any)=>role.id===saved.id).execution,saved.execution);
+});
+
+test('Pilot freezes an unbound Worker to the compatible task default with an unrelated CLI model',async t=>{
+ const f=await fixture(t),profile={id:'codex',projectId:f.project.id,revision:1,enabled:true};
+ const registry=new ExternalAgentRegistry(f.store,{codexHome:join(f.store.home,'codex')});
+ (f.agents as any).external={registry:Object.assign(registry,{get:()=>profile})};
+ const execution={kind:'acp',agent:'codex'};
+ f.store.put('superRoles',f.role.id,{...f.role,execution});
+ f.store.put('acpProbes',f.project.id+':codex',{connectionVersion:1,revision:1,authentication:'codex-local',ready:true,authenticated:true,model:'gpt-6.2-astra'});
+ const event=await f.admit('检查隔离项目。'),task=f.route(event,{action:'create',title:'检查项目',role_id:f.role.id});
+ assert.deepEqual(f.worker(task.taskId).roleSnapshot.execution,{...execution,revision:1,model:{modelId:codexModels.at(-1)}});
+ assert.deepEqual(f.store.require<any>('superRoles',f.role.id).execution,execution);
 });
 
 test('implicit specialist creation saves its default once and an empty model pool cannot create a role',async t=>{
@@ -506,7 +521,8 @@ test('the shared avatar catalog is discoverable by Chinese name, alias and exact
 
 test('Pilot delegation reports a missing local Codex login after a successful connection without creating a task',async t=>{
   const f=await fixture(t);
-  (f.agents as any).external={registry:{get:()=>({id:'codex',projectId:f.project.id,revision:1,enabled:true})}};
+  const registry=new ExternalAgentRegistry(f.store,{codexHome:join(f.store.home,'codex')});
+  (f.agents as any).external={registry:Object.assign(registry,{get:()=>({id:'codex',projectId:f.project.id,revision:1,enabled:true})})};
   f.store.put('superRoles',f.role.id,{...f.role,execution:{kind:'acp',agent:'codex'}});
   f.store.put('acpProbes',f.project.id+':codex',{revision:1,ready:true,authentication:'codex-local',authenticated:false});
   const event=await f.admit('检查当前服务器状态');

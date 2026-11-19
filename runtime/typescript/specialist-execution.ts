@@ -1,7 +1,7 @@
 import {randomInt,createHash} from 'node:crypto';
 import type {ModelProvider} from '../../web-agent/shared/contracts';
 import type {AgentBackendRef,ExternalAgentStatus} from '../../web-agent/shared/external-agents';
-import {codexModels} from './acp/codex-profile';
+import {defaultCodexTaskModel} from './acp/codex-profile';
 import {providerConnection} from './provider-connection';
 import {HttpError} from './store';
 
@@ -21,10 +21,9 @@ export function specialistExecutionOptions(providers:ModelProvider[],external:Ex
     }
   }
   for(const agent of external){
-    // The ready probe identifies the compatible local model without guessing
-    // entitlement from every model name in the ordinary Lake model menu.
-    if(agent.id!=='codex'||!agent.enabled||!agent.installed||!agent.transportReady||!agent.assignmentReady||!agent.model||!codexModels.includes(agent.model))continue;
-    rows.push({agentName:'Codex',modelName:agent.model,execution:{kind:'acp',agent:'codex',model:{modelId:agent.model}}});
+    if(agent.id!=='codex'||!agent.enabled||!agent.installed||!agent.transportReady||!agent.assignmentReady)continue;
+    const model = defaultCodexTaskModel(agent.model);
+    rows.push({agentName:'Codex',modelName:model,execution:{kind:'acp',agent:'codex',model:{modelId:model}}});
   }
   return [...new Map(rows.map(row=>{
     const id=createHash('sha256').update(JSON.stringify(row.execution)).digest('hex');return [id,{...row,id}];

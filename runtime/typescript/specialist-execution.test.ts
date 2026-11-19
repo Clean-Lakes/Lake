@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import type {ModelProvider} from '../../web-agent/shared/contracts';
 import type {ExternalAgentStatus} from '../../web-agent/shared/external-agents';
 import {chooseSpecialistExecution,specialistExecutionOptions} from './specialist-execution';
+import {codexModels} from './acp/codex-profile';
 
 const provider=(id='one'):ModelProvider=>({id,name:id,baseURL:'https://example.invalid/v1',protocol:'openai',enabled:true,keyConfigured:true,
   models:[{id:'a',name:'native-a',enabled:true,supportsImageInput:false,supportsImageOutput:false},
@@ -18,8 +19,11 @@ test('specialist pool contains only configured text models and the ready pinned 
   assert.equal(options.length,3);assert.equal(new Set(options.map(option=>option.id)).size,3);
   assert.ok(options.every(option=>option.execution.model));
   assert.equal(JSON.stringify(options).includes('password'),false);assert.equal(JSON.stringify(options).includes('baseURL'),false);
-  for(const agent of [codex({enabled:false}),codex({assignmentReady:false}),codex({model:'unverified-model'})])
+  for(const agent of [codex({enabled:false}),codex({assignmentReady:false})])
     assert.equal(specialistExecutionOptions([],[agent]).length,0);
+  const fallback=specialistExecutionOptions([],[codex({model:'unverified-model'})]);
+  assert.equal(fallback[0]?.modelName,codexModels.at(-1));
+  assert.throws(()=>chooseSpecialistExecution(fallback,{kind:'acp',modelId:'unverified-model'}),/没有符合要求/);
   assert.equal(specialistExecutionOptions([{...provider('ollama'),protocol:'ollama',keyConfigured:false}]).length,2);
 });
 

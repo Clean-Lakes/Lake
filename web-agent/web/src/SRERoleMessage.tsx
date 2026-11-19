@@ -1,7 +1,6 @@
 import {DisclosureSummary} from './DisclosureSummary';
 import {sessionInspectorId,useSessionInspector} from './SessionInspectorContext';
 import {AssistantMarkdown} from './AssistantMarkdown';
-import {useSmoothText} from './useSmoothText';
 import {sreNeedsVerification,sreOperationLabel,sreReadCovered} from './sreOperationPolicy';
 import {useEffect,useRef,useState,type ReactNode} from 'react';
 import type {SessionSnapshot,SRETask,SRETranscriptEntry,AgentEvidence} from '../../shared/contracts';
@@ -22,11 +21,6 @@ function SREEvidence({task,evidence,register}:{task:SRETask;evidence:AgentEviden
  const [source,setSource]=useState(''),[cursor,setCursor]=useState<number|null>(0),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const load=async()=>{setBusy(true);setError('');try{const value=await api.sreEvidence(task.sessionId,task.id,evidence.id,cursor??0);setSource(old=>old+value.source);setCursor(value.nextCursor)}catch(e){setError(readableError(e))}finally{setBusy(false)}};
  return <details ref={register} className="sre-evidence-item" onToggle={e=>{if(e.currentTarget.open&&!source&&!busy)void load()}}><DisclosureSummary>{evidence.title}<small>{evidence.resourceName} · {new Date(evidence.collectedAt).toLocaleTimeString('zh-CN')}</small></DisclosureSummary><pre>{source||evidence.excerpt}</pre>{cursor!==null&&<button type="button" disabled={busy} onClick={()=>void load()}>{busy?'读取中…':'继续读取原文'}</button>}{error&&<p role="alert">{error}</p>}</details>
-}
-
-function LiveProse({text,active,animateInitial}:{text:string;active:boolean;animateInitial:boolean}){
- const visible=useSmoothText(text,active,animateInitial);
- return <SREProse>{visible}</SREProse>;
 }
 
 export function SRERoleMessage({task,entry,thread,snapshot,renderApproval,onUpdated,animateInitial=false,connected=true,detailsOnly=false}:{detailsOnly?:boolean;thread?:SRETranscriptEntry[];task:SRETask;entry:SRETranscriptEntry;snapshot:SessionSnapshot;renderApproval:(run:NonNullable<SessionSnapshot['ai']>['agentRuns'] extends (infer T)[]|undefined?T:never)=>ReactNode;onUpdated:()=>void;animateInitial?:boolean;connected?:boolean}){
@@ -52,8 +46,8 @@ export function SRERoleMessage({task,entry,thread,snapshot,renderApproval,onUpda
  const calmProgress=!thread&&!!snapshot.sre?.pilot&&entry.kind==='progress'&&entry.source!=='user';
  const stableProgress=useRef({id:entry.id,body,hidden:pilotWork?.repeatsDescription===true});
  if(stableProgress.current.id!==entry.id)stableProgress.current={id:entry.id,body,hidden:pilotWork?.repeatsDescription===true};
- const visibleBody=useSmoothText(body,live.active&&entry.source!=='user'&&!calmProgress);
- const visibleNarration=useSmoothText(run?.liveText??'',live.active,animateInitial);
+ const revealBody=live.active&&entry.source!=='user'&&!calmProgress;
+ const liveProse=entry.kind==='progress'?run?.liveText:undefined;
  const narration=run?.liveText||(entry.source==='model'?body:'');
  const showRecords=detailsOnly||['finding','result','verification','error'].includes(entry.kind);
  const approvalAnchor=task.messages?.find(m=>m.roleRunId===entry.roleRunId&&m.kind==='progress')??task.messages?.filter(m=>m.roleRunId===entry.roleRunId).at(-1);
@@ -73,7 +67,13 @@ export function SRERoleMessage({task,entry,thread,snapshot,renderApproval,onUpda
  return <article className={`sre-role-message${thread?' sre-role-conversation':''}${detailsOnly?' inspector-attempt-details':''} sre-role-${entry.roleId}${entry.kind==='status'?' sre-role-status':''}`} id={detailsOnly?undefined:`sre-message-${thread?.[0]?.id??entry.id}`} tabIndex={-1} data-role={entry.roleId}>
   {!detailsOnly&&<span className="sre-role-avatar">{entry.source==='user'?<Glyph name="chat" size={18}/>:<AgentIcon role={entry.roleId} size={22}/>}</span>}<div className="sre-role-content">{!detailsOnly&&<header><strong>{entry.source==='user'?'你':role.name}</strong><small>{entry.source==='user'?'计划与操作记录':role.description}</small><>{entry.toRoleId&&sreRoles[entry.toRoleId]&&<span className="sre-role-recipient"><Glyph name="arrow" size={12}/>{sreRoles[entry.toRoleId].name}</span>}</><time>{new Date(entry.createdAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</time>{(!!thread||['progress','status'].includes(entry.kind))&&<span className={`sre-role-live-state${live.active?' is-active':''}`} role="status"><StatusText text={live.label} active={live.active}/></span>}</header>}
    {!detailsOnly&&pilotWork&&<PilotAgentWork work={pilotWork} onInspectStep={useInspector?stepId=>{const planRun=task.runs.filter(value=>value.planRevisionId===pilotWork.plan.id).at(-1);const attempt=task.attempts.filter(value=>value.planRunId===planRun?.id&&value.stepId===stepId).at(-1);inspector.open({sessionId:task.sessionId,taskId:task.id,task,attemptId:attempt?.id,tab:attempt?'execution':'plan'});}:undefined}/>}
-   {!detailsOnly&&(calmProgress?(!stableProgress.current.hidden&&<div className="sre-role-body"><SREProse>{stableProgress.current.body}</SREProse></div>):(!pilotWork?.repeatsDescription||!!run?.liveText)&&<div className={`sre-role-body${entry.kind==='error'?' sre-role-error':''}`}>{thread?<AssistantMarkdown>{report?.summary??(entry.kind==='progress'&&run?.liveText?visibleNarration:visibleBody)}</AssistantMarkdown>:entry.kind==='progress'&&run?.liveText?<LiveProse key={run.liveTextId} text={sreEvidenceText(run.liveText,attempt?.evidence??[])} active={live.active} animateInitial={animateInitial}/>:report?<SREReport compact report={report} evidence={attempt?.evidence??[]} onEvidence={showEvidence}/>:nodeReply?<SRECheckpoint body={body}/>:<SREProse compact={['summary','finding'].includes(entry.kind)}>{visibleBody}</SREProse>}</div>)}
+   {!detailsOnly&&(calmProgress?(!stableProgress.current.hidden&&<div className="sre-role-body"><SREProse>{stableProgress.current.body}</SREProse></div>):(!pilotWork?.repeatsDescription||!!run?.liveText)&&<div className={`sre-role-body${entry.kind==='error'?' sre-role-error':''}`}>
+    {thread?<AssistantMarkdown reveal={!report&&(liveProse?live.active:revealBody)} animateInitial={!!liveProse&&animateInitial}>{report?.summary??(liveProse||body)}</AssistantMarkdown>
+     :liveProse?<SREProse key={run?.liveTextId} reveal={live.active} animateInitial={animateInitial}>{sreEvidenceText(liveProse,attempt?.evidence??[])}</SREProse>
+     :report?<SREReport compact report={report} evidence={attempt?.evidence??[]} onEvidence={showEvidence}/>
+     :nodeReply?<SRECheckpoint body={body}/>
+     :<SREProse compact={['summary','finding'].includes(entry.kind)} reveal={revealBody}>{body}</SREProse>}
+   </div>)}
    {showExecution&&!useInspector&&attempt&&<PilotResourceExecution task={task} attempt={attempt} snapshot={snapshot} run={run} active={live.active} connected={connected}/>}
    {!detailsOnly&&live.active&&run&&(!showExecution||useInspector)&&<SREActivity run={run} attempt={attempt} snapshotClock={!!snapshot.sre?.pilot} compact={!!thread} onInspect={useInspector?()=>openDetails():undefined}/>}
    {!useInspector&&calmProgress&&narration&&<details className="sre-live-record"><DisclosureSummary>运行详情</DisclosureSummary><SREProse>{sreEvidenceText(narration,attempt?.evidence??[])}</SREProse></details>}

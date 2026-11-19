@@ -52,7 +52,7 @@ import type {AgentBackendRef,AgentExecutionSummary,SpecialistAgentAssignment} fr
 import type {ExternalRun} from './acp/types';
 import {resolveCodexRunOrigins} from './acp/run-origin';
 import {externalExecutionName} from '../../web-agent/shared/external-agents';
-import {codexModels} from './acp/codex-profile';
+import {codexModels,defaultCodexTaskModel} from './acp/codex-profile';
 
 const questionResultBytes=131072;
 const questionResultBudget={maxInlineBytes:questionResultBytes,maxModelBytes:questionResultBytes,strategy:'truncate' as const,
@@ -735,7 +735,7 @@ export class LakeSuperagent implements AgentHost {
   }
   private executionOptions(projectId:string){
     const registry=this.agents.external?.registry,profile=registry?.get(projectId,'codex');
-    const probe=profile&&this.store.get<any>('acpProbes',projectId+':codex');
+    const probe=profile&&registry?.probe(projectId,'codex');
     const ready=process.platform==='darwin'&&!!profile?.enabled&&probe?.revision===profile.revision&&probe.authentication==='codex-local'&&probe.ready===true&&probe.authenticated===true;
     return specialistExecutionOptions(this.store.modelProviders(),profile?[{...profile,name:'Codex',installed:ready,transportReady:ready,assignmentReady:ready,model:probe?.model}]:[]);
   }
@@ -778,11 +778,14 @@ export class LakeSuperagent implements AgentHost {
     if(execution.kind==='native'&&execution.model)this.roleBackend(role.projectId,execution);
     if(execution.kind==='acp'){
       const profile=this.agents.external.registry.get(role.projectId,execution.agent);
-      const probe=this.store.get<{revision:number;ready:boolean;authentication?:string;authenticated?:boolean;message?:string}>('acpProbes',role.projectId+':codex');
+      const probe=this.agents.external.registry.probe(role.projectId,'codex');
       const blocker=!profile.enabled?'Codex 尚未启用':probe?.revision!==profile.revision?'Codex 当前连接配置尚未验证':
         probe.authentication!=='codex-local'?'本机 Codex 登录状态需要重新验证':!probe.ready?probe.message??'Codex 连接测试尚未通过':
         !probe.authenticated?'本机 Codex 尚未登录，请先在 Codex 中完成登录':undefined;
       if(blocker)throw new HttpError(409,`专员「${role.name}」的本机 Codex 执行配置不可用。${blocker}。请检查该专员的执行模型，或在模型菜单中重新测试本机 Codex。`);
+      if(execution.model&&!codexModels.includes(execution.model.modelId))
+        throw new HttpError(409,`专员「${role.name}」保存的模型 ${execution.model.modelId} 不在 Lake 的 Codex 兼容目录中，请更新该专员的执行模型。`);
+      return {...role,execution:{...execution,model:execution.model??{modelId:defaultCodexTaskModel(probe?.model)}}};
     }
     return {...role,execution};
   }
