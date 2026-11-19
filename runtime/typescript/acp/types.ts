@@ -11,7 +11,20 @@ export type ExternalAgentStatus = ExternalAgentProfile & {
   name: string; installed: boolean; transportReady: boolean; message?: string;
   assignmentReady?:boolean;assignmentBlocker?:string;
   capabilities?: Record<string, unknown>;
-  model?:string;modelProvider?:string;reasoningEffort?:string;configPath?:string;authMode?:'chatgpt'|'api_key'|'provider'|'none';
+  model?:string;defaultTaskModel?:string;modelProvider?:string;reasoningEffort?:string;configPath?:string;authMode?:'chatgpt'|'api_key'|'provider'|'none';
+};
+export type CodexConnectionProbe = {
+  connectionVersion?: 1;
+  revision: number;
+  authentication?: string;
+  ready: boolean;
+  authenticated?: boolean;
+  model?: string;
+  modelProvider?: string;
+  reasoningEffort?: string;
+  authMode?: ExternalAgentStatus['authMode'];
+  capabilities?: Record<string, unknown>;
+  message?: string;
 };
 export type ExternalRunState = 'starting' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted' | 'unknown';
 export type ExternalRun = {

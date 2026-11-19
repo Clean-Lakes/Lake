@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {TextReveal,TEXT_REVEAL_MAX_LAG_MS} from '../src/textReveal';
+import {createElement} from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {AssistantMarkdown} from '../src/AssistantMarkdown';
+import {remarkRevealTail} from '../src/markdownReveal';
 function fixture(initial=''){
  let now=0,id=0;const pending=new Map<number,FrameRequestCallback>(),values:string[]=[];
  const reveal=new TextReveal(initial,text=>values.push(text),{request:cb=>{pending.set(++id,cb);return id},cancel:n=>{pending.delete(n)},now:()=>now});
@@ -64,4 +68,36 @@ test('continuous packets cannot postpone an existing catch-up deadline',()=>{
  for(let i=0;i<20;i++){source+='增量正文👩🏽‍💻';f.reveal.update(source,true);f.frame(4);}
  assert.equal(f.values.at(-1),source,'80ms deadline catches up despite packets every 4ms');
  assert.equal(f.pending.size,0);
+});
+
+test('the display frame only owns the trailing literal text after a parsed reference',()=>{
+ const source='[历史链接](#history)\n\n**结论** 最后是中文 👩🏽‍💻';
+ const value=' 最后是中文 👩🏽‍💻';
+ const link={type:'link',children:[{type:'text',value:'历史链接'}]};
+ const emphasis={type:'strong',children:[{type:'text',value:'结论'}]};
+ const tree={type:'root',children:[
+  {type:'paragraph',children:[link]},
+  {type:'paragraph',position:{end:{offset:source.length}},children:[emphasis,{type:'text',value}]},
+ ]};
+ const before=structuredClone(tree);
+ remarkRevealTail()(tree,{value:source});
+ assert.deepEqual(tree.children[0],before.children[0]);
+ assert.deepEqual(tree.children[1]?.children[0],emphasis);
+ assert.deepEqual(tree.children[1]?.children[1],{
+  type:'lakeRevealTail',data:{hName:'lake-reveal-tail',hProperties:{'data-reveal-start':source.length-value.length}},
+  children:[{type:'text',value}],
+ });
+});
+
+test('streamed Markdown preserves the same markup for the complete reply',()=>{
+ const render=(children:string,reveal?:boolean)=>renderToStaticMarkup(createElement(AssistantMarkdown,{children,reveal}));
+ for(const source of [
+  '**结论** 已检查 👩🏽‍💻。',
+  '| 服务 | 状态 |\n| --- | --- |\n| 测试 | 正常 |\n\n[证据](#record) 已记录。',
+  '> 第一行\n> 尾部 *有强调*\n\n- 列表\n  - 最后是中文',
+  '```text\n&lt;literal&gt;\n```\n\n正文结束 &amp; 已保存。',
+ ]){
+  assert.equal(render(source,false),render(source));
+  assert.equal(render(source,true),render(source));
+ }
 });

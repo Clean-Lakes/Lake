@@ -14,6 +14,9 @@ export function isFileChangeCard(card?: AICard): boolean {
   const data = record(card?.data);
   return card?.type === "diff" && card.status === "completed" && !!card.title && typeof data.before === "string" && typeof data.after === "string";
 }
+export function isFileMutationCard(card: AICard): boolean {
+  return card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(card.title || "");
+}
 export function lineDelta(before: string, after: string): LineDelta | null {
   // Keep unusually expensive diffs from blocking a streaming conversation.
   const changes = diffLines(before, after, { timeout: 100 });
@@ -28,7 +31,7 @@ export function summarizeFileChanges(cards: AICard[]): { files: FileChange[]; de
     if (seen.has(card.id)) continue;
     seen.add(card.id);
     const data = record(card.data);
-    if (card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(card.title || "")) {
+    if (isFileMutationCard(card)) {
       const args = record(data.arguments);
       operations.set(text(args.path), { runtime: text(args.runtime), assetRef: text(args.asset_ref), containerId: text(args.container_id), target: text(data.target) });
     }

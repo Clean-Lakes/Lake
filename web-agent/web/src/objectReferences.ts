@@ -1,6 +1,8 @@
 import type {AgentRun, Resource} from '../../shared/contracts';
 import type {FileChange} from './file-changes-model';
 
+type ReferencedTask = Pick<AgentRun, 'id' | 'name' | 'status' | 'task'>;
+
 export type ObjectReference = {
   key: string;
   kind: 'resource' | 'software' | 'file' | 'task';
@@ -9,7 +11,7 @@ export type ObjectReference = {
   description: string;
   resource?: Resource;
   file?: FileChange;
-  task?: AgentRun;
+  task?: ReferencedTask;
 };
 export type ObjectCatalog = {aliases: Map<string, ObjectReference | null>};
 type ProseNode = {
@@ -42,7 +44,7 @@ function addAlias(catalog: ObjectCatalog, alias: string, reference: ObjectRefere
   catalog.aliases.set(key, previous === undefined || previous?.key === reference.key ? reference : null);
 }
 
-export function objectCatalog(resources: readonly Resource[] = [], files: readonly FileChange[] = [], tasks: readonly AgentRun[] = []): ObjectCatalog {
+export function objectCatalog(resources: readonly Resource[] = [], files: readonly FileChange[] = [], tasks: readonly ReferencedTask[] = []): ObjectCatalog {
   const catalog: ObjectCatalog = {aliases: new Map()};
   for (const resource of resources) {
     const reference: ObjectReference = {key: `resource:${resource.id}`, kind: 'resource', label: resource.name, icon: resource.kind === 'ssh' ? 'server' : resource.kind, description: `${resourceNames[resource.kind]} · ${resource.name}`, resource};

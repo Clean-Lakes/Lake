@@ -37,6 +37,8 @@ flowchart TD
 
 沿 Lake 已确认的本机登录合同，Codex 直接读取源 `CODEX_HOME`（默认 `~/.codex`）；Lake 不复制 auth.json，不更改用户 config.toml。SQLite、日志、模型目录和本次执行目录保留在当前 Lake Home 下。该准备策略与 Tutti 的私有 Home/凭据投影不同；本轮采用其调用分层，不改变已确认的凭据约定。
 
+连接测试只读取登录和配置并验证 App Server 初始化。任务创建时独立校验并固定专员绑定的模型。没有绑定时，采用固定目录允许的本机默认模型；目录无此模型时，使用 Lake 固定目录中的最新兼容模型，并在设置中显示。连接测试不创建模型轮次，旧版失败记录会在读取就绪状态时自动重新验证。
+
 固定模型目录和启动/线程覆盖关闭原生业务工具、继承 MCP、hooks、notify 和递归。仅本次运行的 `lake` MCP 服务连接私有 Unix socket。App Server 的 MCP 工具批准使用 `mcpServer/elicitation/request`；0.160.1 的 form 请求不携带 MCP 调用 ID，因此适配器在准确 thread/turn/server 下消费一条已观察、在本次允许目录内且尚未消费的工具调用。通用表单、URL 请求、原生工具、未知服务器、外来轮次、重复申请和失效宿主均不获准。该批准只允许进入私有桥，真实 I/O 仍经过同一个 ToolExecutor；没有持久批准或全局自动批准。
 
 ## 迁移与交付边界

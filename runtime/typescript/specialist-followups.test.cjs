@@ -112,9 +112,9 @@ test(`${backend} specialist consumes a Pilot supplement during ${boundary} in th
    await writeFile(join(root,'models.json'),JSON.stringify(models),{mode:0o600});return root;
   };
   const binary=process.env.LAKE_CODEX_TEST_MCP_BINARY;
-  if(binary){const launch=external.launch.bind(external);external.launch=(profile,directory,signal,mcp,model)=>{
+  if(binary){const launch=external.launch.bind(external);external.launch=(profile,directory,signal,mcp,model,purpose)=>{
    if(mcp){const end=mcp.args.indexOf('LAKE_TS_IMPORT_ONLY=0');assert.ok(end>=0);mcp={command:mcp.command,args:[...mcp.args.slice(0,end+1),binary,'--internal-acp-mcp',mcp.args.at(-1)]};}
-   return launch(profile,directory,signal,mcp,model);
+   return launch(profile,directory,signal,mcp,model,purpose);
   };}
   await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.execPath});
   await external.probe(project.id,'codex',AbortSignal.timeout(30000));

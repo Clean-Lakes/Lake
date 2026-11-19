@@ -7,7 +7,6 @@ import {ReplyIdentity} from './ReplyIdentity';
 import {AssistantMarkdown} from './AssistantMarkdown';
 import {ReplyProcessStatus} from './ReplyProcessStatus';
 import {usePageVisible} from './usePageVisible';
-import {useSmoothText} from './useSmoothText';
 import {conversationPlanEntry} from './planConversation';
 import {PlanReference,planMarkdown} from './PlanMode';
 import {MessageAttachments} from './MessageAttachments';
@@ -89,8 +88,7 @@ function PilotSpecialistReply({row,onSpecialist,onInspectSpecialist,connected,on
 function PilotReplyProse({text,active}:{text:string;active:boolean}){
  // Mount with the first received prefix. Only later suffixes enter the buffer,
  // so a real first packet never takes a detour through a temporary status.
- const shown=useSmoothText(text,active);
- return <div className="ai-card ai-message"><AssistantMarkdown>{shown}</AssistantMarkdown></div>;
+ return <div className="ai-card ai-message"><AssistantMarkdown reveal={active}>{text}</AssistantMarkdown></div>;
 }
 
 /** Public reply presentation is separate from the exact-worker live subscription. */
