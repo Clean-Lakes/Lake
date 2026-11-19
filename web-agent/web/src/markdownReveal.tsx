@@ -1,4 +1,4 @@
-import {createContext,useContext,type ReactNode} from 'react';
+import {createContext,useContext,useMemo,type ReactNode} from 'react';
 import type {ExtraProps} from 'react-markdown';
 import {useSmoothText} from './useSmoothText';
 
@@ -12,40 +12,49 @@ type ProseNode = {
   data?: {hName?: string; hProperties?: Record<string, unknown>};
 };
 
-const textContainers = new Set(['paragraph','heading','blockquote','list','listItem','strong','emphasis','delete']);
+const textContainers = new Set(['root','paragraph','heading','blockquote','list','listItem','strong','emphasis','delete']);
 const VisibleOffset = createContext<number | undefined>(undefined);
 
-/** Give frames just the trailing literal text to reveal. The parser owns formatting. */
-export function remarkRevealTail() {
-  return (tree: ProseNode, file: {value: unknown}) => {
-    let node = tree.children?.at(-1);
-    let end: number | undefined;
-    while (node && !node.data?.hName && textContainers.has(node.type)) {
-      end = node.position?.end.offset ?? end;
-      node = node.children?.at(-1);
+/** Preserve the playout cursor across paragraph and inline formatting boundaries. */
+export function remarkRevealText(paintedThrough:number) {
+  return () => (tree: ProseNode, file: {value: unknown}) => {
+    const source=String(file.value??'');
+    function visit(node:ProseNode,inheritedEnd?:number) {
+      const end=node.position?.end.offset??inheritedEnd;
+      if(node.data?.hName||end!==undefined&&end<=paintedThrough)return;
+      if(textContainers.has(node.type)){
+        const children=node.children??[];
+        for(let index=children.length-1;index>=0;index--){
+          const child=children[index]!;
+          if(child.position?.end.offset!==undefined&&child.position.end.offset<=paintedThrough)break;
+          visit(child,index===children.length-1?end:undefined);
+        }
+        return;
+      }
+      // Links, code, tables and decorated references keep their parser-owned
+      // structure. A literal text leaf can safely be sliced at source offsets.
+      if(node.type!=='text'||!node.value||end===undefined)return;
+      const value=node.value,start=end-value.length;
+      if(start<0||source.slice(start,end)!==value)return;
+      node.type='lakeRevealText';
+      node.data={hName:'lake-reveal-text',hProperties:{'data-reveal-start':start}};
+      node.children=[{type:'text',value}];
+      delete node.value;
     }
-    if (node?.type !== 'text' || !node.value || node.data?.hName) return;
-    const value = node.value;
-    end = node.position?.end.offset ?? end;
-    if (end === undefined || end < value.length) return;
-    const start = end - value.length;
-    if (String(file.value ?? '').slice(start, end) !== value) return;
-    node.type = 'lakeRevealTail';
-    node.data = {hName:'lake-reveal-tail', hProperties:{'data-reveal-start':start}};
-    node.children = [{type:'text',value}];
-    delete node.value;
+    visit(tree);
   };
 }
 
-export function MarkdownReveal({source,active,animateInitial,children}: MarkdownRevealOptions & {source: string; children: ReactNode}) {
+export function MarkdownReveal({source,active,animateInitial,render}: MarkdownRevealOptions & {source: string; render: (paintedThrough?:number)=>ReactNode}) {
   const visible = useSmoothText(source,active,animateInitial);
-  // The Markdown element is supplied by the parent. A display frame only
-  // updates the offset read by its text leaf.
-  return <VisibleOffset.Provider value={active ? visible.length : undefined}>{children}</VisibleOffset.Provider>;
+  // Only a real packet or parser input change can replace the parsed tree.
+  // Frame updates advance the offset read by its pending literal text leaves.
+  const prose=useMemo(()=>render(active?visible.length:undefined),[source,active,render]);
+  return <VisibleOffset.Provider value={active ? visible.length : undefined}>{prose}</VisibleOffset.Provider>;
 }
 
 export const markdownRevealComponents = {
-  'lake-reveal-tail': function RevealTail({node}: ExtraProps) {
+  'lake-reveal-text': function RevealText({node}: ExtraProps) {
     const offset = useContext(VisibleOffset);
     const start = node?.properties?.['data-reveal-start'];
     const text = node?.children.map(child=>child.type==='text'?child.value:'').join('')??'';

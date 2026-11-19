@@ -14,7 +14,7 @@ import {MarkdownCodeBlock} from './MarkdownCodeBlock';
 import {remarkReplyInfo} from './replyInfo';
 import {replyInfoComponents, ReplyInfoSpan} from './ReplyInfoElements';
 import {LiveTextMotionBoundary,LiveTextMotionText,remarkLiveTextMotion} from './liveTextMotion';
-import {MarkdownReveal,markdownRevealComponents,remarkRevealTail} from './markdownReveal';
+import {MarkdownReveal,markdownRevealComponents,remarkRevealText} from './markdownReveal';
 
 const emptyCatalog = objectCatalog();
 const References = createContext<{catalog: ObjectCatalog; open?: (reference: ObjectReference) => void}>({catalog: emptyCatalog});
@@ -119,7 +119,11 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({children, tags
   const decorateTags = useMemo(() => remarkConversationTags(tags), [signature]);
   const decorateObjects = useMemo(() => remarkObjectReferences(catalog), [catalog]);
   const proseClass=`ai-markdown assistant-prose${className ? ` ${className}` : ''}`;
-  const rendered=<Markdown remarkPlugins={[remarkGfm, remarkAssistantProse, remarkReplyInfo, decorateTags, decorateObjects,...(liveMotion===undefined?[]:[remarkLiveTextMotion]),...(reveal===undefined?[]:[remarkRevealTail])]} components={allowImages?components:textImageComponents} skipHtml>{children}</Markdown>;
-  const prose=reveal===undefined?rendered:<MarkdownReveal source={children} active={reveal} animateInitial={animateInitial}>{rendered}</MarkdownReveal>;
+  const render=(paintedThrough?:number)=><Markdown remarkPlugins={[
+    remarkGfm, remarkAssistantProse, remarkReplyInfo, decorateTags, decorateObjects,
+    ...(liveMotion===undefined?[]:[remarkLiveTextMotion]),
+    ...(paintedThrough===undefined?[]:[remarkRevealText(paintedThrough)]),
+  ]} components={allowImages?components:textImageComponents} skipHtml>{children}</Markdown>;
+  const prose=reveal===undefined?render():<MarkdownReveal source={children} active={reveal} animateInitial={animateInitial} render={render}/>;
   return liveMotion===undefined?<div className={proseClass}>{prose}</div>:<LiveTextMotionBoundary active={liveMotion} className={proseClass}>{prose}</LiveTextMotionBoundary>;
 });
