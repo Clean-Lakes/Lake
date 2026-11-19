@@ -1,4 +1,4 @@
-import {createContext, memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode} from 'react';
+import {createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import Markdown, {type Components,type ExtraProps} from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type {AICard, AgentRun, Resource, WorkspaceTag} from '../../shared/contracts';
@@ -105,17 +105,19 @@ const components: Components = {
 
 const textImageComponents:Components={...components,img:({alt})=>alt?<span>{alt}</span>:null};
 
-export const AssistantMarkdown = memo(function AssistantMarkdown({children, tags = [], className = '', allowImages = true,liveMotion,reveal,animateInitial}: {children: string; tags?: readonly WorkspaceTag[]; className?: string; allowImages?: boolean;liveMotion?:boolean;reveal?:boolean;animateInitial?:boolean}) {
+export const AssistantMarkdown = memo(function AssistantMarkdown({children, tags = [], className = '', allowImages = true,liveMotion,reveal,animateInitial,finishPending}: {children: string; tags?: readonly WorkspaceTag[]; className?: string; allowImages?: boolean;liveMotion?:boolean;reveal?:boolean;animateInitial?:boolean;finishPending?:boolean}) {
   const {catalog} = useContext(References);
   const signature = conversationTagSignature(tags);
   const decorateTags = useMemo(() => remarkConversationTags(tags), [signature]);
   const decorateObjects = useMemo(() => remarkObjectReferences(catalog), [catalog]);
   const proseClass=`ai-markdown assistant-prose${className ? ` ${className}` : ''}`;
-  const render=(paintedThrough?:number)=><Markdown remarkPlugins={[
+  const decorateMotion=liveMotion!==undefined;
+  const render=useCallback((paintedThrough?:number)=><Markdown remarkPlugins={[
     remarkGfm, remarkAssistantProse, remarkReplyInfo, decorateTags, decorateObjects,
-    ...(liveMotion===undefined?[]:[remarkLiveTextMotion]),
+    ...(decorateMotion?[remarkLiveTextMotion]:[]),
     ...(paintedThrough===undefined?[]:[remarkRevealText(paintedThrough)]),
-  ]} components={allowImages?components:textImageComponents} skipHtml>{children}</Markdown>;
-  const prose=reveal===undefined?render():<MarkdownReveal source={children} active={reveal} animateInitial={animateInitial} render={render}/>;
+  ]} components={allowImages?components:textImageComponents} skipHtml>{children}</Markdown>,
+  [children,decorateTags,decorateObjects,decorateMotion,allowImages]);
+  const prose=reveal===undefined?render():<MarkdownReveal source={children} active={reveal} animateInitial={animateInitial} finishPending={finishPending} render={render}/>;
   return liveMotion===undefined?<div className={proseClass}>{prose}</div>:<LiveTextMotionBoundary active={liveMotion} className={proseClass}>{prose}</LiveTextMotionBoundary>;
 });

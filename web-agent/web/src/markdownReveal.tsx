@@ -1,8 +1,8 @@
-import {createContext,useContext,useMemo,type ReactNode} from 'react';
+import {createContext,useContext,useLayoutEffect,useMemo,useRef,type ReactNode} from 'react';
 import type {ExtraProps} from 'react-markdown';
 import {useSmoothText} from './useSmoothText';
 
-export type MarkdownRevealOptions = {active: boolean; animateInitial?: boolean};
+export type MarkdownRevealOptions = {active: boolean; animateInitial?: boolean; finishPending?: boolean};
 
 type ProseNode = {
   type: string;
@@ -45,12 +45,15 @@ export function remarkRevealText(paintedThrough:number) {
   };
 }
 
-export function MarkdownReveal({source,active,animateInitial,render}: MarkdownRevealOptions & {source: string; render: (paintedThrough?:number)=>ReactNode}) {
-  const visible = useSmoothText(source,active,animateInitial);
-  // Only a real packet or parser input change can replace the parsed tree.
-  // Frame updates advance the offset read by its pending literal text leaves.
-  const prose=useMemo(()=>render(active?visible.length:undefined),[source,active,render]);
-  return <VisibleOffset.Provider value={active ? visible.length : undefined}>{prose}</VisibleOffset.Provider>;
+export function MarkdownReveal({source,active,animateInitial,finishPending,render}: MarkdownRevealOptions & {source: string; render: (paintedThrough?:number)=>ReactNode}) {
+  const visible = useSmoothText(source,active,{animateInitial,finishPending});
+  // Completion with the same source leaves the parsed text nodes mounted,
+  // even if references change and the Markdown needs to be parsed again.
+  const packet=useRef({source,paintedThrough:visible.length});
+  const paintedThrough=packet.current.source===source?packet.current.paintedThrough:visible.length;
+  useLayoutEffect(()=>{packet.current={source,paintedThrough};},[source,paintedThrough]);
+  const prose=useMemo(()=>render(paintedThrough<source.length?paintedThrough:undefined),[source,render,paintedThrough]);
+  return <VisibleOffset.Provider value={visible.length}>{prose}</VisibleOffset.Provider>;
 }
 
 export const markdownRevealComponents = {
