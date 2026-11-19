@@ -380,10 +380,18 @@ a { color: inherit; }
 .send-button:hover:not(:disabled) { background: var(--primary-hover); }
 .send-button:disabled { background: var(--surface-selected); color: var(--text-disabled); }
 .composer-foot { display: flex; align-items: center; flex-wrap: nowrap; color: var(--text-muted); font-size: var(--font-size-toolbar); margin-top: 8px; padding: 0; gap: 6px; min-width: 0; }
-.composer-input .send-button { width: 30px; height: 30px; background: transparent; color: var(--text-secondary); border-radius: var(--radius-composer-action); }
-.composer-input .send-button:not(.stop-button):hover:not(:disabled) { background: var(--surface-hover); color: var(--foreground); }
-.composer-input .send-button:disabled { background: transparent; color: var(--text-disabled); }
+.composer-input .send-button {
+  --composer-action-background: transparent;
+  width: 30px; height: 30px;
+  background: var(--composer-action-background); color: var(--text-secondary);
+  border-radius: var(--radius-composer-action);
+}
+.composer-input .send-button:hover:enabled { background: var(--composer-action-background); }
+.composer-input .send-button:not(.stop-button, [data-send-ready]):hover:enabled { --composer-action-background: var(--surface-hover); color: var(--foreground); }
+.composer-input .send-button[data-send-ready]:enabled { --composer-action-background: var(--foreground); color: var(--surface); }
+.composer-input .send-button:disabled { color: var(--text-disabled); }
 .composer-input .send-button:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
+.composer-input .send-button > .lucide-arrow-up { stroke-width: 2; }
 .composer-input .send-button.stop-button {
   --composer-action-background: var(--surface-hover);
   display: inline-flex;
@@ -814,9 +822,14 @@ a { color: inherit; }
 .image-drafts button { position: absolute; right: -4px; top: -4px; background: var(--surface); border: 1px solid var(--border); border-radius: 50%; width: 20px; height: 20px; }
 .image-attach-button { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 4px 5px; white-space: nowrap; background: none; border: 0; border-radius: var(--radius-control); font-size: var(--font-size-ui); color: var(--text-secondary); cursor: pointer; }
 .image-attach-button:disabled { opacity: .4; }
-.composer-input .composer-attach-button { flex:0 0 30px; justify-content:center; width:30px; height:30px; min-height:30px; padding:0; }
-.composer-input .composer-attach-button:hover:not(:disabled) { background:var(--surface-hover); color:var(--foreground); }
+.composer-input .composer-attach-button {
+  --composer-action-background: transparent;
+  flex: 0 0 30px; justify-content: center; width: 30px; height: 30px; min-height: 30px; padding: 0;
+  background: var(--composer-action-background);
+}
+.composer-input .composer-attach-button:hover:enabled { --composer-action-background: var(--surface-hover); color: var(--foreground); }
 .composer-input .composer-attach-button:focus-visible { outline:2px solid var(--focus-outline); outline-offset:2px; }
+.composer-input .composer-attach-button > svg { stroke-width: 2; }
 .ai-image { margin: 8px 0; }
 .ai-image img { display: block; max-width: 100%; max-height: 520px; object-fit: contain; border-radius: var(--radius-panel); }
 .ai-chat-message .ai-image { display: table; max-width: 100%; margin: 0; }
@@ -936,14 +949,12 @@ a { color: inherit; }
 .composer-permission-button:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
 .composer-foot > .composer-permission-button:not(.sre-mode-toggle) {
   --composer-action-background: transparent;
-  height: 30px;
-  padding: 0 8px;
-  gap: 5px;
+  justify-content: center;
+  width: 30px; height: 30px; padding: 0;
   border-radius: var(--radius-composer-action);
   background: var(--composer-action-background);
-  font-weight: var(--font-weight-normal);
-  line-height: 1;
 }
+.composer-foot > .composer-permission-button:not(.sre-mode-toggle) > svg { stroke-width: 2; }
 .composer-foot > .composer-permission-button:not(.sre-mode-toggle):hover { --composer-action-background: var(--surface-hover); }
 .composer-foot > .composer-permission-button:not(.sre-mode-toggle)[aria-expanded="true"] { --composer-action-background: var(--surface-selected); }
 .host-key-facts { display: grid; gap: 14px; margin: 22px 0; }
@@ -1190,8 +1201,7 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 @container lake-composer (max-width: 620px) {
  .composer-foot { justify-content:flex-start; flex-wrap:nowrap; gap:4px; padding-inline:0; }
  .composer-foot > :is(.image-attach-button,.composer-permission-button,.pilot-control) { flex-shrink:0; }
- .composer-foot .composer-permission-button { gap:4px; padding-inline:3px; }
- .composer-foot > .composer-permission-button:not(.sre-mode-toggle) { gap:4px; padding-inline:6px; }
+ .composer-foot .composer-permission-button.sre-mode-toggle { gap:4px; padding-inline:3px; }
  .composer-foot .composer-status { flex:1 1 0; flex-wrap:nowrap; gap:2px; min-width:72px; max-width:none; margin-left:auto; }
  .composer-foot .composer-status .model-switch-wrap { flex:0 1 auto; min-width:0; max-width:100%; }
  .composer-foot .composer-model-select.app-select { max-width:100%; }
@@ -1201,8 +1211,6 @@ input[type="checkbox"]{ accent-color: var(--primary); }
  .composer-foot .ai-context-trigger { padding-inline:3px; }
 }
 @container lake-composer (max-width: 480px) {
- .composer-foot .composer-tool-label { display:none; }
- .composer-foot > .composer-permission-button:not(.sre-mode-toggle) { justify-content:center; width:30px; padding:0; }
  .composer-input .send-button.stop-button { gap:4px; padding-inline:7px; }
  .composer-foot .composer-send-actions { gap:4px; }
  .composer-send-actions:has(.stop-button) .composer-send-feedback {
