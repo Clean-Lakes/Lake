@@ -145,8 +145,7 @@ a { color: inherit; }
 .permission-close:hover, .permission-toggle:hover:not([aria-disabled="true"]) { background: var(--surface-hover); color: var(--foreground); }
 .permission-popover > [aria-busy] { margin-top: 11px; }
 .permission-group + .permission-group { margin-top: 8px; padding-top: 9px; border-top: 1px solid var(--border); }
-.permission-group-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 6px 2px 4px; color: var(--permission-secondary); font-size: var(--font-size-toolbar); line-height: 1.5; }
-.permission-group-heading small { font: inherit; font-weight: var(--font-weight-normal); }
+.permission-group-heading { padding: 0 6px 2px 4px; color: var(--permission-secondary); font-size: var(--font-size-toolbar); line-height: 1.5; }
 .permission-row { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding-inline-start: 4px; font-size: var(--font-size-process); line-height: 1.5; }
 .permission-toggle { place-items: center end; width: 44px; height: 30px; padding-inline-end: 6px; }
 .permission-toggle[aria-disabled="true"] { cursor: default; }
@@ -164,7 +163,6 @@ a { color: inherit; }
 .permission-help dt { color: var(--foreground); font-weight: var(--font-weight-medium); }
 .permission-help dd { margin: 2px 0 0; line-height: 1.5; }
 .permission-note { margin: 0; color: var(--permission-secondary); font-size: var(--font-size-toolbar); line-height: 1.5; }
-.permission-scope { margin-inline: 4px; }
 .permission-locked { margin: 8px 4px 0; }
 @media (pointer: coarse) { .permission-close, .permission-toggle { width: 44px; height: 44px; } .permission-help > summary.lake-disclosure-summary { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .permission-toggle-track, .permission-toggle-track::after { transition: none; } }

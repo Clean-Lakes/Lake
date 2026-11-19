@@ -6,8 +6,8 @@ import {DisclosureSummary} from "./DisclosureSummary";
 import {permissionDefaults} from '../../shared/execution-preferences';
 export {permissionDefaults} from '../../shared/execution-preferences';
 
-const groups: Array<{title: string; hint?: string; fields: Array<{key: keyof typeof permissionDefaults; label: string; description: string}>}> = [
-  {title: "免确认操作", hint: "关闭后先询问", fields: [
+const groups: Array<{title: string; showTitle?: boolean; fields: Array<{key: keyof typeof permissionDefaults; label: string; description: string}>}> = [
+  {title: "免确认操作", fields: [
     {key: "silentReadFiles", label: "读取文件", description: "浏览、搜索和读取文件、技能及网页内容。"},
     {key: "silentWriteFiles", label: "写入文件", description: "上传和编辑文件；删除、移动按命令规则。"},
     {key: "silentReadSQL", label: "查询数据库", description: "执行只读 SQL，查看表结构。"},
@@ -15,15 +15,15 @@ const groups: Array<{title: string; hint?: string; fields: Array<{key: keyof typ
     {key: "silentCommands", label: "运行命令", description: "自动执行脚本和系统命令，包括修改、删除和移动；关闭后逐次确认。"},
     {key: "silentTerminalCreation", label: "建立终端连接", description: "新建或重连终端；首次 SSH 指纹仍需核对。"},
   ]},
-  {title: "操作范围", fields: [
+  {title: "操作范围", showTitle: true, fields: [
     {key: "blockUnreferencedAssets", label: "仅限引用资源", description: "只操作本轮 @ 选择或上下文引用的资源。"},
     {key: "denyLocalExecution", label: "禁用本机执行", description: "限制本机命令和终端，不影响 SSH 主机。"},
   ]},
 ];
 
-export function PermissionSettings({anchor, options, disabled, saving=false, error, onChange, onClose, pilot=false}: {
+export function PermissionSettings({anchor, options, disabled, saving=false, error, onChange, onClose}: {
   anchor: RefObject<HTMLButtonElement | null>;
-  options: Record<string, unknown>; pilot?: boolean; disabled: boolean; saving?: boolean; error?: string;
+  options: Record<string, unknown>; disabled: boolean; saving?: boolean; error?: string;
   onChange: (key: string, value: boolean) => void; onClose: () => void;
 }) {
   const panel = useRef<HTMLElement>(null);
@@ -93,7 +93,7 @@ export function PermissionSettings({anchor, options, disabled, saving=false, err
 
   return createPortal(
     <section ref={panel} className="permission-popover" role="dialog" aria-labelledby={`${id}-title`}
-      aria-describedby={pilot ? `${id}-scope` : undefined} style={position ?? {visibility: "hidden"}}>
+      style={position ?? {visibility: "hidden"}}>
       <header className="permission-header">
         <strong id={`${id}-title`}>执行偏好</strong>
         <span className="permission-save-state" role="status">{saving && "正在保存…"}</span>
@@ -102,15 +102,10 @@ export function PermissionSettings({anchor, options, disabled, saving=false, err
           anchor.current?.focus({preventScroll: true});
         }}><Glyph name="close" size={14}/></button>
       </header>
-      {pilot && <p id={`${id}-scope`} className="permission-note permission-scope">本项目的专员沿用此设置。</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
       <div aria-busy={saving}>
-        {groups.map((group, index) => <div className="permission-group" role="group" aria-labelledby={`${id}-group-${index}`}
-          aria-describedby={group.hint ? `${id}-hint-${index}` : undefined} key={group.title}>
-          <div className="permission-group-heading">
-            <span id={`${id}-group-${index}`}>{group.title}</span>
-            {group.hint && <small id={`${id}-hint-${index}`}>{group.hint}</small>}
-          </div>
+        {groups.map(group => <div className="permission-group" role="group" aria-label={group.title} key={group.title}>
+          {group.showTitle && <div className="permission-group-heading">{group.title}</div>}
           {group.fields.map(field => {
             const checked = Boolean(options[field.key] ?? permissionDefaults[field.key]);
             return <div className="permission-row" key={field.key}>
