@@ -9,8 +9,9 @@
 .model-settings-header h2 { margin: 0; font-size: 25px; letter-spacing: -.7px; }
 .model-settings-header p { margin: 9px 0 0; font-size: var(--font-size-ui); color: var(--text-secondary); }
 .model-settings-header .icon-button { font-size: 25px; line-height: 1; }
-.model-settings-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--border); padding: 0 30px; flex-shrink: 0; }
-.model-settings-tabs button { border: 0; background: none; color: var(--text-secondary); font-size: var(--font-size-ui); padding: 9px 2px 13px; border-bottom: 2px solid transparent; cursor: pointer; }
+.model-settings-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--border); padding: 0 30px; flex-shrink: 0; overflow-x: auto; }
+.model-settings-tabs button { flex: 0 0 auto; white-space: nowrap; border: 0; background: none; color: var(--text-secondary); font-size: var(--font-size-ui); padding: 9px 2px 13px; border-bottom: 2px solid transparent; cursor: pointer; }
+.model-settings-dialog .model-settings-tabs button:focus-visible { outline-offset: -2px; }
 .model-settings-tabs button[aria-selected="true"] { font-weight:var(--font-weight-semibold); color: var(--foreground); border-bottom-color: var(--foreground); }
 .memory-experimental-badge { display:inline-flex; align-items:center; vertical-align:middle; white-space:nowrap; font-size:var(--font-size-badge); font-weight:var(--font-weight-ui); line-height:1.5; padding:0 4px; border:1px solid var(--warning-border); border-radius:var(--radius-settings-badge); corner-shape:var(--corner-window); background:var(--warning-soft); color:var(--warning); }
 .model-settings-header h2 .memory-experimental-badge { margin-left:8px; }
@@ -25,7 +26,7 @@
 .provider-rail-title { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 10px; font-size: var(--font-size-ui); color: var(--text-secondary); }
 .provider-rail-title small { margin-left: 5px; }
 .provider-add { border: 1px solid var(--border); border-radius: var(--radius-control); padding: 10px; background: var(--surface); color: var(--foreground); font-size: var(--font-size-ui); cursor: pointer; margin-bottom: 12px; flex-shrink: 0; }
-.provider-list { overflow: auto; min-height: 0; }
+.provider-list { overflow: auto; min-height: 0; scroll-padding: 4px; }
 .provider-item { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; text-align: left; background: none; border: 1px solid transparent; border-radius: var(--radius-panel); padding: 12px 9px; cursor: pointer; margin-bottom: 4px; color: inherit; }
 .provider-item:hover { background: var(--surface-hover); }
 .provider-item.selected { background: var(--surface); border-color: var(--border); box-shadow: none; }
@@ -59,7 +60,7 @@
 .magpie-models .provider-model-heading { margin: 0 0 8px; }
 .magpie-models input { margin: 0 0 10px !important; }
 .provider-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
-.provider-connection-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px 16px; }
+.provider-connection-grid { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(0,1fr); gap: 14px 16px; }
 .provider-field-wide { grid-column: 1 / -1; }
 .model-settings-dialog .field-label { display: block; font-size: var(--font-size-ui); font-weight:var(--font-weight-medium); color: var(--text-secondary); margin: 0 0 15px; }
 .model-settings-dialog .provider-connection-grid > .field-label,.model-settings-dialog .provider-model-editor .field-label { min-width: 0; margin: 0; line-height: 1.5; }

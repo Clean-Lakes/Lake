@@ -116,6 +116,9 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
  // workspace, however, owns its result handoff over a lagging live snapshot.
  const interruptionLabel=status&&(status.phase==='waiting'||status.phase==='settled'&&status.state!=='回复结束')?status.state:undefined;
  const label=available?(updating?(row.continuity==='terminal'?row.activity.label:interruptionLabel??row.activity.label):snapshotLabel??row.activity.label):'进度暂未更新，正在重连';
+ const waitingLabel=status?.phase==='waiting'?status.state
+  :['waiting_approval','waiting_input','waiting_external'].includes(row.activity.phase)?row.activity.label:undefined;
+ const inlineWait=text&&available&&!report&&!awaitingReport&&!updating?waitingLabel:undefined;
  const planState=projected?.card?.type==='plan_reference'?(projected.card.data as {state:'saved'|'writing'|'incomplete'}).state:undefined;
  const contentState:PilotReplyContentState={
   binding:pilotSpecialistBinding(row),
@@ -129,7 +132,7 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
    {planState?<PlanReference state={planState}/>:text?<PilotReplyProse text={text} active={moving&&visible} animateInitial={livePacket}/>:report||awaitingReport?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
    {report&&<MessageAttachments message={report} sessionId={report.sessionId}/>}
   </PilotReplyContent>
-  <SpecialistProcessLink author={report?.author??row.author} reportId={report?.id} onInspect={onInspectSpecialist} active={moving&&visible}/>
+  <SpecialistProcessLink author={report?.author??row.author} reportId={report?.id} onInspect={onInspectSpecialist} active={moving&&visible} liveStatus={inlineWait}/>
   {!report&&text&&(!available||updating&&!awaitingReport)&&<small className="pilot-specialist-connection" role="status">{label}</small>}
  </section>;
 }

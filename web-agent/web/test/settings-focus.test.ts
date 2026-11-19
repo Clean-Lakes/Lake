@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {settingsTabStops,trapSettingsTab} from '../src/settingsFocus';
+import {navigateSettingsTabs,settingsTabStops,trapSettingsTab} from '../src/settingsFocus';
 
 // A small DOM seam deliberately retains rects for collapsed disclosure content,
 // reproducing the installed Chromium behavior without adding a DOM dependency.
@@ -72,4 +72,27 @@ test('settings retain keyboard focus with no available controls and respect hand
   assert.equal(f.press(),true);assert.equal(f.document.activeElement,f.dialog);
   control.disabled=false;control.focus();assert.equal(f.press(false,true),false);assert.equal(f.document.activeElement,control);
   f.document.activeElement=f.node('BUTTON');assert.equal(f.press(),true);assert.equal(f.document.activeElement,control,'outside focus returns inside the open modal');
+});
+
+test('settings arrows and edge keys activate the focused enabled category',()=>{
+  const f=fixture();
+  let selected='';
+  const tabs=['models','hidden','tools','appearance'].map(name=>Object.assign(f.node('BUTTON'),{click:()=>{selected=name;}}));
+  tabs[1]!.disabled=true;
+  const list={querySelectorAll:(selector:string)=>{
+    assert.equal(selector,'button[role="tab"]:not(:disabled)');
+    return tabs.filter(tab=>!tab.disabled);
+  }} as unknown as HTMLElement;
+  tabs[0]!.focus();
+  const press=(key:string,metaKey=false)=>{
+    let prevented=false;
+    navigateSettingsTabs({key,target:f.document.activeElement as unknown as EventTarget,altKey:false,ctrlKey:false,metaKey,defaultPrevented:false,preventDefault:()=>{prevented=true;}},list);
+    return prevented;
+  };
+  assert.equal(press('ArrowRight'),true);assert.equal(selected,'tools');assert.equal(f.document.activeElement,tabs[2]);
+  assert.equal(press('End'),true);assert.equal(selected,'appearance');
+  assert.equal(press('ArrowRight'),true);assert.equal(selected,'models');
+  assert.equal(press('ArrowLeft'),true);assert.equal(selected,'appearance');
+  assert.equal(press('Home'),true);assert.equal(selected,'models');
+  assert.equal(press('ArrowRight',true),false);assert.equal(press('Tab'),false);
 });
