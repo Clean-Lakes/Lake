@@ -45,14 +45,31 @@
   }
   :root:not(.lake-windows-chrome) .app-shell > .workspace.has-floating-header {
     --conversation-frame-inset: 8px;
+    --conversation-frame-radius: max(0px, calc(var(--radius-window) - var(--conversation-frame-inset)));
     --session-gutter: clamp(16px, 3.4cqw, 32px);
     --workbench-bottom-inset: 12px;
     --background: var(--surface-subtle);
     --paper: var(--background);
     margin: var(--conversation-frame-inset) var(--conversation-frame-inset) var(--conversation-frame-inset) 0;
     border: 1px solid var(--border);
-    border-radius: var(--radius-window);
+    border-radius: var(--conversation-frame-radius);
     corner-shape: var(--corner-window);
+  }
+  :root.lake-corner-fallback:not(.lake-windows-chrome) .app-shell > .workspace.has-floating-header {
+    /* Keep the border's layout space while using the shared continuous contour. */
+    border: 0;
+    padding: 1px;
+    border-radius: 0;
+    -webkit-mask-box-image: url('/window-corner-fill.svg') 22 fill / var(--conversation-frame-radius) / 0 stretch;
+  }
+  :root.lake-corner-fallback:not(.lake-windows-chrome) .app-shell > .workspace.has-floating-header::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    pointer-events: none;
+    background: var(--border);
+    -webkit-mask-box-image: url('/window-corner-stroke.svg') 22 fill / var(--conversation-frame-radius) / 0 stretch;
   }
   :root:not(.lake-windows-chrome) .workspace.has-floating-header > .workspace-header {
     top: var(--conversation-frame-inset);
