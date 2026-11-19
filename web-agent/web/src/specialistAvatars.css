@@ -143,6 +143,7 @@
 .super-role-avatar[data-role=coordinator].is-greeting .pilot-waterline { animation:lake-pilot-water-greet 650ms ease-out; }
 @keyframes lake-pilot-water-greet { 0%,100% { transform:translateY(0); } 35% { transform:translateY(-.7px); } 70% { transform:translateY(.2px); } }
 .super-role-avatar[data-hidden],.super-role-avatar[data-hidden] * { animation-play-state:paused!important; }
+.super-role-avatar[data-offscreen],.super-role-avatar[data-offscreen] * { animation-play-state:paused!important; }
 @media (prefers-reduced-motion:reduce) {
  .super-role-avatar,.super-role-avatar * { animation:none!important; }
 }

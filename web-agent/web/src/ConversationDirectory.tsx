@@ -37,12 +37,12 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
    let left=Math.max(bounds.left+4,bounds.right-76),top=Math.max(bounds.top+12,(heading?.top??bounds.top)+9);
    const compact=!!heading&&left<heading.right+8&&left+64>heading.left;
    if(compact){left=bounds.left+2;top=Math.max(bounds.top+12,heading!.bottom+10);}
-   if(root.current){root.current.style.left=`${left}px`;root.current.style.top=`${top}px`;root.current.toggleAttribute('data-compact',compact);}
    const positions=items.flatMap(item=>{
     const turn=document.getElementById(conversationTurnId(sessionId,item.id));
     return turn?[{id:item.id,top:turn.getBoundingClientRect().top}]:[];
    });
    const padding=Number.parseFloat(getComputedStyle(container!).scrollPaddingTop)||0;
+   if(root.current){root.current.style.left=`${left}px`;root.current.style.top=`${top}px`;root.current.toggleAttribute('data-compact',compact);}
    setSelected(activeDirectoryItem(positions,bounds.top+padding));
   }
   function schedule(){cancelAnimationFrame(frame);frame=requestAnimationFrame(update);}

@@ -1,12 +1,27 @@
 import {AgentIcon} from './AgentIcon';
 import {superWorkerAppearance,type AvatarMotion} from './superAgentPresentation';
-import {createContext,useContext,useEffect,useMemo,useRef,type CSSProperties,type ReactNode} from 'react';
+import {createContext,memo,useContext,useEffect,useMemo,useRef,type CSSProperties,type ReactNode} from 'react';
 import type {SpecialistChannelInfo} from '../../shared/contracts';
 import {isLakeAvatarName,type LakeAvatarName} from './lakeAvatarCatalog';
 import {lakeAvatarMotions} from './lakeAvatarMotion';
 import {usePageVisible} from './usePageVisible';
 
 const roleAvatars=createContext<ReadonlyMap<string,LakeAvatarName>>(new Map());
+let avatarViewport: IntersectionObserver | undefined;
+
+function observeAvatar(avatar: HTMLElement) {
+ if(typeof IntersectionObserver === 'undefined') return;
+ const observer = avatarViewport ??= new IntersectionObserver(entries => {
+  for (const {target, isIntersecting} of entries) {
+   target.toggleAttribute('data-offscreen', !isIntersecting);
+   if (!isIntersecting) target.classList.remove('is-greeting');
+  }
+ });
+ avatar.setAttribute('data-offscreen', '');
+ observer.observe(avatar);
+ return () => observer.unobserve(avatar);
+}
+
 /** Current project display metadata; never changes task snapshots or role IDs. */
 export function SpecialistAvatarProvider({channels,children}:{channels?:readonly SpecialistChannelInfo[];children:ReactNode}){
  const avatars=useMemo(()=>new Map((channels??[]).flatMap(channel=>channel.avatarId&&isLakeAvatarName(channel.avatarId)?[[channel.roleId,channel.avatarId] as const]:[])),[channels]);
@@ -31,12 +46,23 @@ export function greetRoleAvatar(container:HTMLElement) {
 }
 
 /** The same Lake ecosystem silhouette in navigation, the island and task details. */
-export function SuperRoleAvatar({name='',roleId,avatarId,pilot=false,size=22,motion='idle'}:{name?:string;roleId?:string;avatarId?:LakeAvatarName;pilot?:boolean;size?:number;motion?:AvatarMotion}) {
+export const SuperRoleAvatar = memo(function SuperRoleAvatar({name='',roleId,avatarId,pilot=false,size=22,motion='idle'}:{name?:string;roleId?:string;avatarId?:LakeAvatarName;pilot?:boolean;size?:number;motion?:AvatarMotion}) {
  const look=useSpecialistAppearance({name,roleId,avatarId});
  const avatarRef=useRef<HTMLSpanElement>(null);
- useEffect(()=>{const media=window.matchMedia('(prefers-reduced-motion: reduce)');const reset=()=>{if(media.matches)avatarRef.current?.classList.remove('is-greeting');};media.addEventListener('change',reset);return()=>media.removeEventListener('change',reset);},[]);
+ useEffect(() => {
+  const avatar = avatarRef.current;
+  if (!avatar) return;
+  const stop = observeAvatar(avatar);
+  const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const reset = () => { if (media.matches) avatar.classList.remove('is-greeting'); };
+  media.addEventListener('change', reset);
+  return () => {
+   stop?.();
+   media.removeEventListener('change', reset);
+  };
+ }, []);
  const visible=usePageVisible();
  const role=pilot?'coordinator':look.icon;
  const style={'--avatar-phase':`${look.phase}ms`,'--avatar-greet-time':`${pilot?650:lakeAvatarMotions[look.icon].greetMs}ms`} as CSSProperties;
  return <span ref={avatarRef} className="super-role-avatar" data-role={role} data-palette={pilot?'river':look.palette} data-variant={look.variant} data-motion={motion} data-hidden={!visible||undefined} style={style} aria-hidden="true" onAnimationEnd={event=>{if(event.target===event.currentTarget&&event.animationName==='lake-avatar-greet-done')event.currentTarget.classList.remove('is-greeting');}}><AgentIcon role={role} size={size}/></span>;
-}
+});
