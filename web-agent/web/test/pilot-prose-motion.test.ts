@@ -92,3 +92,15 @@ test('the process link preserves native keyboard activation and exact task navig
  assert.equal((html.replace(/<[^>]*>/g,'').match(/执行过程/g)??[]).length,1);
  assert.doesNotMatch(html,/role="status"|aria-live=/,'the accessible process button does not add a live announcement');
 });
+
+test('a settled specialist footer uses its own recorded elapsed time',()=>{
+ const {row}=progress();
+ const author={...row.author,durationMs:900003};
+ const html=renderToStaticMarkup(createElement(SpecialistProcessLink,{author,onInspect(){}}));
+ assert.match(html,/用时 15\s*分钟 0\s*秒/);
+ assert.match(processLink(html),/data-specialist-process="task"/);
+ const channel=renderToStaticMarkup(createElement(SpecialistProcessLink,{author}));
+ assert.match(channel,/用时 15\s*分钟 0\s*秒/);
+ assert.doesNotMatch(channel,/<button/);
+ assert.doesNotMatch(renderToStaticMarkup(createElement(SpecialistProcessLink,{author:row.author,onInspect(){}})),/用时/);
+});

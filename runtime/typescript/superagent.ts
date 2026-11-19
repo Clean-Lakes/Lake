@@ -21,7 +21,8 @@ import type { ToolEntry, ToolExecutionContext } from "./sdk";
 import type { AIApproval, AIQuestionRequest, GatewayInstructionStatus, Message, SessionSnapshot, SpecialistChannelInfo,
   SpecialistChannelPage, SpecialistQuestion, SuperProject, SuperTask, SuperWorker, SuperWorkspace } from "../../web-agent/shared/contracts";
 import type { GatewaySpecialistRef, GatewayConnection, GatewayMessage, GatewayMessageInput, GatewayMessagePage } from "../../web-agent/shared/contracts";
-import type { AgentHost, HostProfile, HostToolContext } from "./agent-host";
+import type { AgentHost, HostProfile, HostToolContext, TurnOutcome } from "./agent-host";
+import {TaskDeadlineReached} from "./task-deadline";
 import {chooseSpecialistExecution,specialistExecutionOptions,type SpecialistExecutionOption} from './specialist-execution';
 import { LakeAgents } from "./agent";
 import { HttpError, id, LakeStore, now, type StoredSession } from "./store";
@@ -71,7 +72,9 @@ type Worker = { inline?:boolean; preTaskModelRounds?:number; id: string; project
   targetResourceIds?: string[];
   sourceEventId: string; generation: number; state: "queued" | "active" | "parked" | "stopped";
   owner?: string; leaseUntil?: number; policyHash: string; createdAt: string; inputEventIds: string[]; deliveredInputIds?: string[]; invocationInputIds?: string[];
-  settledInputIds?: string[]; resumeControlId?: string };
+  settledInputIds?: string[]; resumeControlId?: string; lastInvocation?: {durationMs:number;rootTurnId?:string} };
+type PendingReport = {taskId:string;revision:number;snapshot:Goal;createdAt:string;rootTurnId?:string;durationMs?:number;
+  inputEventIds?:string[];sourceEventId?:string;presentation?:{body:string;channelBody:string|null}};
 type ResumeControl = { sessionId: string; goalId: string; command: "resume"; revision: number; at: string;
   consumedAt?: string; generation?: number; revokedAt?: string };
 type TaskPredecessor = { taskRef: { id: string; revision: number; hash: string }; roleId: string; title: string;
@@ -1398,6 +1401,7 @@ export class LakeSuperagent implements AgentHost {
         });
       }
       worker.state = "active"; worker.generation++; worker.owner = this.owner; worker.leaseUntil = Date.now() + 45000; worker.policyHash = this.policy(worker.projectId);
+      worker.lastInvocation=undefined;
       worker.invocationInputIds = retry?.inputIds ?? this.routedInputs(worker);
       const resume = this.resumeControl(worker);
       if (resume && worker.resumeControlId) {
@@ -1433,7 +1437,7 @@ export class LakeSuperagent implements AgentHost {
         followups: followups.map((event) => ({ id: event.id, text: event.payload })) });
       try { await this.agents.send(worker.sessionId, "[Task assignment] " + goal.title, { input, recordUser: false, recordAssistant: false,
         ignoreMemory: !!goal.readOnlyRecoveryOf || worker.invocationInputIds.some(eventId => this.store.get<InputEvent>("superInputs", eventId)?.ignoreMemory === true) }); }
-      catch (error) { this.workerFinished(worker.sessionId, String(error)); }
+      catch (error) { this.workerFinished(worker.sessionId, {error:String(error)}); }
     }
   }
   private contextActor(worker:Worker):TaskContextActor{return {projectId:worker.projectId,roleId:worker.roleId,taskId:worker.taskId,sessionId:worker.sessionId};}
@@ -1540,6 +1544,7 @@ export class LakeSuperagent implements AgentHost {
       return !["WebFetch","WebSearch","call_mcp_tool","list_mcp_tools"].includes(name);
     };
     return { runtimeMode:this.store.get<any>("agentPlans",worker.taskId)?.active?"plan":"build",version: `${worker.id}:${worker.generation}:host-v3:${managed}`, systemPrompt: superWorkerPrompt,
+      taskDeadline: worker.inline?undefined:()=>this.ledger.get(worker.taskId).deadlineAt,
       validateExecution:()=>this.validateWorker(worker.id,worker.generation),
       execution:worker.roleSnapshot.execution??{kind:'native'},
       requestFinalReport: () => this.requestFinalReport(worker),
@@ -1573,7 +1578,7 @@ export class LakeSuperagent implements AgentHost {
         if (terminal(goal.status)) throw new HttpError(409, "Canonical task is closed");
         if (Date.parse(goal.deadlineAt) <= Date.now()) {
           goal.status = "paused"; goal.summary = "deadline_reached";
-          this.ledger.save(goal); throw new HttpError(409, "Original task deadline reached");
+          this.ledger.save(goal); throw new TaskDeadlineReached("Original task deadline reached");
         }
         goal.modelRounds++; this.ledger.save(goal);
       },
@@ -2354,13 +2359,15 @@ export class LakeSuperagent implements AgentHost {
   /** Enrich old report display from its frozen Worker, without rewriting history. */
   private reportMessage(original:Message):Message {
     const message=stoppedReportProjection(this.store,original,id=>this.ledger.unresolved(id)),author=message.author;
-    if(!author?.taskId || (author.execution && (message.replyToMessageId || !message.id.startsWith('report_'))))return message;
+    const isReport=message.id.startsWith('report_')&&message.role==='assistant'&&!message.conversation;
+    const recoverDuration=isReport&&author?.execution?.kind==='acp'&&author.durationMs===undefined&&!!author.rootTurnId;
+    if(!author?.taskId || (!recoverDuration&&author.execution&&(message.replyToMessageId||!isReport)))return message;
     const worker=this.store.get<Worker>('superWorkers',author.workerId);
     const target=this.store.get<StoredSession>('sessions',message.sessionId);
     if(!worker||!target||worker.projectId!==target.projectId||worker.sessionId!==author.sessionId||worker.roleId!==author.roleId||
       (worker.taskId!==author.taskId&&!this.ledger.jointTask(author.taskId)?.memberIds.includes(worker.taskId)))return message;
     let result = message;
-    if (!message.replyToMessageId && message.id.startsWith('report_') && message.role === 'assistant' && !message.conversation) {
+    if (!message.replyToMessageId && isReport) {
       const source = this.reportSourceMessage(worker.projectId, this.reportSourceEventId(worker));
       if (source?.sessionId === message.sessionId) {
         const goal = this.store.get<Goal>('superGoals', worker.taskId);
@@ -2371,7 +2378,29 @@ export class LakeSuperagent implements AgentHost {
         }
       }
     }
-    return author.execution ? result : {...result,author:{...author,execution:worker.roleSnapshot.execution??{kind:'native'}}};
+    const durationMs=recoverDuration?this.legacyExternalDuration(worker,message):author.durationMs;
+    if(author.execution&&durationMs===author.durationMs)return result;
+    return {...result,author:{...author,execution:author.execution??worker.roleSnapshot.execution??{kind:'native'},durationMs}};
+  }
+  private legacyExternalDuration(worker:Worker,message:Message):number|undefined {
+    // Early versions could replace the worker view's root/start with a child's.
+    // Only the single invocation with its own root provider record is unambiguous.
+    const runs=this.store.db.prepare(`SELECT json_extract(run.value,'$.createdAt') AS startedAt,
+      json_extract(run.value,'$.updatedAt') AS finishedAt FROM records AS view
+      JOIN json_each(view.value,'$.cards') AS card
+      JOIN records AS run ON run.kind='acpRuns' AND run.id=json_extract(card.value,'$.data.external_run_id')
+      WHERE view.kind='views' AND view.id=? AND json_extract(view.value,'$.turns')=1
+        AND json_extract(view.value,'$.rootTurnId')=? AND json_extract(view.value,'$.turnFinishedAt')>=json_extract(run.value,'$.updatedAt')
+        AND json_extract(run.value,'$.purpose')='worker' AND json_extract(run.value,'$.childSessionId') IS NULL
+        AND json_extract(run.value,'$.projectId')=? AND json_extract(run.value,'$.taskId')=?
+        AND json_extract(run.value,'$.workerId')=? AND json_extract(run.value,'$.sessionId')=?
+        AND json_extract(run.value,'$.createdAt')<=? LIMIT 2`)
+      .all(worker.sessionId,message.author?.rootTurnId??"",worker.projectId,worker.taskId,worker.id,worker.sessionId,message.createdAt);
+    if(runs.length!==1)return;
+    const goal=this.ledger.get(worker.taskId),reports=workerReportKeys(this.store,goal);
+    if(reports.length!==1||message.id!=='report_'+digest([reports[0],message.sessionId]))return;
+    const duration=Date.parse(String(runs[0].finishedAt))-Date.parse(String(runs[0].startedAt));
+    if(Number.isFinite(duration)&&duration>=0)return duration;
   }
   decorate(snapshot: SessionSnapshot,taskId?:string): SessionSnapshot {
     snapshot.hostKeyTrust=this.ssh?.prompt(snapshot.session.id)??null;
@@ -2423,10 +2452,10 @@ export class LakeSuperagent implements AgentHost {
     }
     this.forwardFollowups(worker);
   }
-  settled(sessionId: string, outcome?: { response?: string; error?: string; failure?:TurnFailure }) {
+  settled(sessionId: string, outcome?: TurnOutcome) {
     if(this.conversations.settled(sessionId,outcome)){this.schedule();return;}
-    if (this.projectFor(sessionId)) {const actor=this.pilotActors.get(sessionId),worker=actor&&this.store.get<Worker>('superWorkers',actor.id);if(worker?.inline)this.workerFinished(sessionId,outcome?.error,outcome?.response);this.routerFinished(sessionId,outcome?.error,outcome?.response);}
-    else if (this.workerFor(sessionId)) this.workerFinished(sessionId, outcome?.error, outcome?.response, outcome?.failure);
+    if (this.projectFor(sessionId)) {const actor=this.pilotActors.get(sessionId),worker=actor&&this.store.get<Worker>('superWorkers',actor.id);if(worker?.inline)this.workerFinished(sessionId,outcome);this.routerFinished(sessionId,outcome?.error,outcome?.response);}
+    else if (this.workerFor(sessionId)) this.workerFinished(sessionId,outcome);
     this.schedule();
   }
   private routerFinished(sessionId: string, error?: string, response?: string) {
@@ -2472,8 +2501,13 @@ export class LakeSuperagent implements AgentHost {
     }
     this.batches.delete(sessionId); this.routing.delete(project.projectId); this.notify(sessionId, "specialist"); this.schedule();
   }
-  private workerFinished(sessionId: string, error?: string, response?: string, failure?:TurnFailure) {
+  private workerFinished(sessionId: string, outcome:TurnOutcome = {}) {
     const worker = this.workerFor(sessionId); if (!worker) return;
+    const {error,response,failure,timing}=outcome;
+    if(timing&&!worker.inline) {
+      const durationMs=Date.parse(timing.finishedAt)-Date.parse(timing.startedAt);
+      if(Number.isFinite(durationMs)&&durationMs>=0)worker.lastInvocation={durationMs,rootTurnId:timing.rootTurnId};
+    }
     this.active.delete(worker.id);
     worker.deliveredInputIds = [...new Set([...(worker.deliveredInputIds ?? []), ...(worker.invocationInputIds ?? [])])];
     worker.settledInputIds = [...new Set([...(worker.settledInputIds ?? []), ...(worker.invocationInputIds ?? [])])];
@@ -2484,9 +2518,10 @@ export class LakeSuperagent implements AgentHost {
     // A callback before that barrier must not freeze a provisional unknown.
     if (worker.state === "stopped") { this.changed(sessionId); this.schedule(); return; }
     const deferred = this.store.get<{ inputEventIds: string[] }>("superDeferredFinishes", digest([worker.id, worker.generation]));
-    if (!terminal(goal.status) && goal.status === "running") {
+    const expired=!terminal(goal.status)&&(outcome.deadlineReached||goal.summary==="deadline_reached");
+    if (expired || goal.status === "running") {
       goal.status = "paused";
-      goal.summary = error ? this.agents.redact(error) : deferred ? goal.summary : response?.trim() ? this.agents.redact(response.trim()).slice(0, 32768) : goal.summary || "这次检查还没完成。";
+      goal.summary = expired ? "deadline_reached" : error ? this.agents.redact(error) : deferred ? goal.summary : response?.trim() ? this.agents.redact(response.trim()).slice(0, 32768) : goal.summary || "这次检查还没完成。";
       this.ledger.save(goal);
     }
     if(worker.inline){
@@ -2514,11 +2549,15 @@ export class LakeSuperagent implements AgentHost {
     const reportKey = digest([goal.id, goal.revision]);
     // Freeze this invocation's public report separately from the completion ledger.
     // Never recover a reply from accumulated cards: it may belong to an older turn.
-    const reply = !error && this.store.view(sessionId).status === "completed" ? response?.trim() : undefined;
+    const reply = goal.summary==="deadline_reached" ? this.deadlineFindings(worker,goal,outcome)
+      : !error && this.store.view(sessionId).status === "completed" ? response?.trim() : undefined;
     const presentation = deferredFailure ? { body: deferredFailure, channelBody: deferredFailure } : this.reportPresentation(goal, reply, error);
-    const rootTurnId=this.store.view(sessionId).rootTurnId;
-    if (!this.store.get("superPendingReports", reportKey)) this.store.put("superPendingReports", reportKey, { taskId: goal.id, revision: goal.revision, snapshot: structuredClone(goal), presentation, rootTurnId, createdAt: now(),
-      inputEventIds:[...new Set([...(worker.settledInputIds??[]),...(worker.invocationInputIds??[])])] });
+    const pending=this.store.get<PendingReport>("superPendingReports",reportKey)??{
+      taskId:goal.id,revision:goal.revision,snapshot:structuredClone(goal),presentation,createdAt:now(),
+      inputEventIds:[...new Set([...(worker.settledInputIds??[]),...(worker.invocationInputIds??[])])],
+    };
+    this.store.put("superPendingReports",reportKey,{...pending,
+      rootTurnId:timing?.rootTurnId??this.store.view(sessionId).rootTurnId,durationMs:worker.lastInvocation?.durationMs});
     this.deliverReports();
     this.recordWorkerOutcome(worker,goal,error,failure);
     this.agents.memory?.captureTask(goal.id);
@@ -2651,6 +2690,37 @@ export class LakeSuperagent implements AgentHost {
     return control?.command === "resume" && control.goalId === worker.taskId && control.sessionId === worker.sessionId &&
       !control.consumedAt && !control.revokedAt ? control : undefined;
   }
+  private deadlineFindings(worker: Worker, goal: Goal, outcome: TurnOutcome) {
+    const timing=outcome.timing,view=this.store.view(worker.sessionId);
+    const deadline=Date.parse(goal.deadlineAt), started=Date.parse(timing?.startedAt??"");
+    const withinRun=(at?:string)=>{
+      const time=Date.parse(at??"");return time>=started&&time<=deadline;
+    };
+    const run=outcome.externalRunId?this.store.get<ExternalRun>("acpRuns",outcome.externalRunId):undefined;
+    const publicText=new Map<string,string>();
+    if(run?.purpose==="worker"&&run.projectId===worker.projectId&&run.taskId===goal.id&&run.workerId===worker.id&&
+        run.generation===worker.generation&&run.sessionId===worker.sessionId&&run.rootTurnId===timing?.rootTurnId) {
+      for(const event of run.events)if(event.publicTextId&&event.publicText?.trim()&&withinRun(event.at))publicText.set(event.publicTextId,event.publicText);
+    } else if(timing?.rootTurnId) {
+      for(const card of view.cards)if(card.type==="message"&&(card.data as {root_turn_id?:string})?.root_turn_id===timing.rootTurnId&&withinRun(card.at)&&card.content?.trim())publicText.set(card.id,card.content);
+    }
+    const prose=[...new Set([...publicText.values(),outcome.response??""].map(value=>value.trim()).filter(Boolean))]
+      .slice(-5).map(value=>clip(value,1600));
+    const childResults=(view.agentRuns??[]).filter(child=>child.workerId===worker.id&&child.taskId===goal.id&&child.sessionId===worker.sessionId&&
+      child.status==="completed"&&withinRun(child.startedAt)&&withinRun(child.finishedAt)&&child.summary?.trim())
+      .slice(-4).map(child=>clip(child.summary!.trim(),2400));
+    const receipts=this.store.db.prepare(`SELECT count(*) AS total FROM records WHERE kind='superOperations'
+      AND json_extract(value,'$.goalId')=? AND json_extract(value,'$.sessionId')=?
+      AND json_extract(value,'$.projectId')=? AND json_extract(value,'$.generation')=?
+      AND json_extract(value,'$.status')='succeeded' AND json_extract(value,'$.completedAt')<=?`)
+      .get(goal.id,worker.sessionId,worker.projectId,worker.generation,goal.deadlineAt);
+    const total=Number(receipts?.total??0);
+    return [
+      prose.length?["已收到的专员进展",...prose].join("\n\n"):"",
+      childResults.length?["已完成的子任务结果",...new Set(childResults)].join("\n\n"):"",
+      total?`已有 ${total} 条成功返回的工具回执，可在执行过程中查看。`:"",
+    ].filter(Boolean).join("\n\n");
+  }
   private reportPresentation(goal: Goal, reply?: string, error?: string) {
     if (goal.status === "completed") {
       const body = goal.summary?.trim() || "检查已完成。";
@@ -2694,8 +2764,9 @@ export class LakeSuperagent implements AgentHost {
   }
   private deliverReports() {
     if (this.closed) return;
-    for (const pending of this.store.list<{ taskId: string; revision: number; snapshot: Goal; presentation?: { body: string; channelBody: string | null }; rootTurnId?:string; createdAt: string;inputEventIds?:string[]; sourceEventId?:string }>("superPendingReports")) {
+    for (const pending of this.store.list<PendingReport>("superPendingReports")) {
       const goal = pending.snapshot, worker = this.store.require<Worker>("superWorkers", goal.workerId);
+      if (!worker.inline&&this.active.has(worker.id)) continue;
       const key = digest([worker.taskId, pending.revision]);
       if(worker.inline){this.store.transaction(()=>{this.recordGatewayTaskReport(worker,pending,goal.summary??'');this.store.put("superReports",key,{key,workerId:worker.id,goalRevision:goal.revision,deliveredAt:now(),inline:true});this.store.delete("superPendingReports",digest([pending.taskId,pending.revision]));});continue;}
     if (!this.store.get("superReports", key)) {
@@ -2708,7 +2779,7 @@ export class LakeSuperagent implements AgentHost {
         const message: Message = { id: specialistReportMessageId(key, target), sessionId: target, role: "assistant", text: this.agents.redact(body), createdAt: pending.createdAt,
           author: { kind: "specialist", name: worker.roleSnapshot.name, roleId: worker.roleId, workerId: worker.id,
             sessionId: worker.sessionId, taskId: goal.sharedTaskId ?? goal.id, channelSessionId: channel.sessionId,rootTurnId:pending.rootTurnId,
-            execution:worker.roleSnapshot.execution??{kind:'native'} } };
+            execution:worker.roleSnapshot.execution??{kind:'native'},durationMs:pending.durationMs } };
         if (source?.sessionId === target) message.replyToMessageId = source.id;
         if (!this.store.get("messages", message.id)) this.store.put("messages", message.id, message);
       }
@@ -2778,7 +2849,8 @@ export class LakeSuperagent implements AgentHost {
   private async stopTaskOnce(taskId: string, pause: boolean) {
     const goal = this.ledger.get(taskId), worker = this.store.require<Worker>("superWorkers", goal.workerId);
     const alreadyTerminal=terminal(goal.status);
-    if (alreadyTerminal&&!this.active.has(worker.id)&&!this.agents.isRunning(worker.sessionId)) return;
+    const running=this.agents.isRunning(worker.sessionId);
+    if (alreadyTerminal&&!this.active.has(worker.id)&&!running) return;
     const sourceEventId = this.reportSourceEventId(worker, worker.state === 'queued' ? this.routedInputs(worker) : worker.invocationInputIds);
     const resume = this.resumeControl(worker);
     if (resume && worker.resumeControlId) this.store.put("superHumanControls", worker.resumeControlId, { ...resume, revokedAt: now() });
@@ -2797,12 +2869,14 @@ export class LakeSuperagent implements AgentHost {
     if(!alreadyTerminal&&stopped.status!==state){stopped.status=state;this.ledger.save(stopped);}
     if(!alreadyTerminal&&!worker.inline){
       const key=digest([stopped.id,stopped.revision]);
+      const invocation=running?this.store.require<Worker>("superWorkers",worker.id).lastInvocation:undefined;
       this.store.put('superPendingReports',key,{taskId:stopped.id,revision:stopped.revision,snapshot:structuredClone(stopped),
-        presentation:this.reportPresentation(stopped),rootTurnId:this.store.view(worker.sessionId).rootTurnId,createdAt:now(),sourceEventId});
+        presentation:this.reportPresentation(stopped),rootTurnId:invocation?.rootTurnId??this.store.view(worker.sessionId).rootTurnId,
+        durationMs:invocation?.durationMs,createdAt:now(),sourceEventId});
     }
+    this.active.delete(worker.id);
     this.deliverReports();
     this.agents.memory?.captureTask(stopped.id);
-    this.active.delete(worker.id);
     this.changed(worker.sessionId);
     this.schedule();
   }

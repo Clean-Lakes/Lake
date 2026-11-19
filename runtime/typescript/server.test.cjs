@@ -1300,6 +1300,31 @@ test("timed Watchdog reviews a live SDK Worker and queues one guide; an actual r
   } finally {f.releaseWatchdogWorker();}
 });
 
+test('a native Worker reaches the task deadline while waiting for the model and returns its receipts',{timeout:20000},async t=>{
+ const f=await fixture(t,"super-watchdog-guide"),project="/api/projects/"+f.project.id;
+ const {routerSessionId}=await f.api(project+"/superagent","POST",{});
+ const send=f.app.agents.send.bind(f.app.agents);
+ f.app.agents.send=(sessionId,...args)=>{
+   const worker=f.app.store.list('superWorkers').find(worker=>worker.sessionId===sessionId&&!worker.inline);
+   if(worker){
+     const goal=f.app.store.require('superGoals',worker.taskId);
+     goal.deadlineAt=new Date(Date.now()+2000).toISOString();
+     f.app.store.put('superGoals',goal.id,goal);
+   }
+   return send(sessionId,...args);
+ };
+ await f.api("/api/sessions/"+routerSessionId+"/messages","POST",{text:"让项目检查员检查本项目目录，并报告结果。"},202);
+ await until(async()=>f.holdingWatchdogWorker,Boolean);
+ const {workers:[worker]}=await settledSubagentTask(f);
+ f.releaseWatchdogWorker();
+ assert.equal(worker.task.state,"paused");assert.equal(worker.task.summary,"deadline_reached");
+ const pilot=await f.api(`/api/sessions/${routerSessionId}/snapshot`);
+ const reply=pilot.messages.find(message=>message.author?.workerId===worker.id);
+ assert.match(reply.text,/已到截止时间/);
+ assert.match(reply.text,/条成功返回的工具回执/);
+ assert.ok(reply.author.durationMs>=1000&&reply.author.durationMs<5000);
+});
+
 test("Watchdog identifies a real provider 503 and retries the same SDK assignment after the service recovers", {timeout:30_000}, async t=>{
   const f=await fixture(t,"super-watchdog-outage"), project="/api/projects/"+f.project.id;
   const {routerSessionId}=await f.api(project+"/superagent","POST",{});
@@ -4038,6 +4063,7 @@ test('explicit specialist assignment dispatches the chosen ACP Worker without a 
  const replies=page.entries.filter(entry=>entry.reply?.state==='settled');
  assert.equal(replies.length,1,'ACP progress and the delivered report are one exact invocation reply');
  assert.match(replies[0].reply.turnId,/^acp_turn_/);assert.equal(page.entries.filter(entry=>entry.card?.type==='message'||entry.message?.role==='assistant').length,1);
+ assert.equal(replies[0].message.author.durationMs,Date.parse(run.updatedAt)-Date.parse(run.createdAt));
  assert.equal(page.channel.execution.kind,'native','one task assignment does not change the specialist default');
  const operation=f.app.store.list('superOperations')[0];assert.equal(operation.externalRunId,run.id);assert.equal(operation.status,'succeeded');
  const count=f.calls,again=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
@@ -4045,6 +4071,53 @@ test('explicit specialist assignment dispatches the chosen ACP Worker without a 
  await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',{...body,text:'不同的交付内容'},409);
  await f.restart();const replay=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
  assert.equal(replay.assignment.workerId,receipt.assignment.workerId);assert.equal(f.calls,count);assert.equal(f.app.store.list('acpRuns').length,1);
+});
+
+test('the real Worker deadline delivers known partial results to Pilot and the specialist channel',{timeout:30000},async t=>{
+ const {f,path,project,channel,body}=await specialistAssignmentFixture(t,{},'super-acp-deadline');
+ await f.enableCodexFixture();
+ await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0});
+ await f.api(path+'/external-agents/codex/probe','POST',{});
+ const workspace=await f.app.store.workspace(f.project.id);
+ await writeFile(join(workspace,'deadline-evidence.txt'),'SYNTHETIC_DEADLINE_EVIDENCE');
+ await writeFile(join(workspace,'child-evidence-a.txt'),'SYNTHETIC_COMPLETED_CHILD_FINDING');
+ const external=f.app.agents.external,runExternal=external.run.bind(external);
+ external.run=(agent,input,key,actor,prior)=>{
+   if(actor.purpose==='worker'){
+     const goal=f.app.store.require('superGoals',actor.taskId);
+     goal.deadlineAt=new Date(Date.now()+2500).toISOString();
+     f.app.store.put('superGoals',goal.id,goal);
+   }
+   return runExternal(agent,input,key,actor,prior);
+ };
+ const receipt=await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
+ const {workers:[worker]}=await settledSubagentTask(f);
+ const run=f.app.store.list('acpRuns').find(run=>run.purpose==='worker');
+ const operation=f.app.store.list('superOperations').find(operation=>operation.tool==='list_project_files');
+ assert.equal(run.stopReason,'deadline_reached');assert.equal(run.state,'unknown');
+ assert.equal(run.dispatchPhase,'sent');assert.equal(worker.task.state,'paused');
+ assert.equal(worker.task.summary,'deadline_reached');
+ assert.equal(operation.status,'succeeded');assert.equal(operation.externalRunId,run.id);
+ assert.match(JSON.stringify(operation.output),/deadline-evidence\.txt/);
+ assert.equal(f.app.store.list('superDeliveries').length,0,'a reached deadline is not an explicit final report');
+ const pilot=await f.api(`/api/sessions/${project.routerSessionId}/snapshot`);
+ const page=await f.api(`/api/sessions/${channel.sessionId}/channel`);
+ const settled=page.entries.filter(entry=>entry.reply?.state==='settled');
+ assert.equal(settled.length,1);
+ const reply=settled[0].message,paired=pilot.messages.find(message=>message.author?.workerId===receipt.assignment.workerId);
+ assert.equal(reply.text,paired.text);
+ assert.match(reply.text,/已到截止时间/);
+ assert.match(reply.text,/已取得样本 A。/);
+ assert.match(reply.text,/第二项仍在核对。/);
+ assert.match(reply.text,/已完成的子任务结果/);
+ assert.match(reply.text,/SYNTHETIC_COMPLETED_CHILD_FINDING/);
+ assert.match(reply.text,/2 条成功返回的工具回执/);
+ assert.equal(reply.author.durationMs,Date.parse(run.updatedAt)-Date.parse(run.createdAt));
+ assert.equal(reply.author.rootTurnId,run.rootTurnId);
+ assert.equal(paired.author.durationMs,reply.author.durationMs);
+ await f.restart();
+ const restored=await f.api(`/api/sessions/${project.routerSessionId}/snapshot`);
+ assert.deepEqual(restored.messages.filter(message=>message.author?.workerId===receipt.assignment.workerId),[paired]);
 });
 
 for(const legacy of [false,true])test(`direct ACP Worker ${legacy?'legacy cumulative':'message-scoped'} public prose survives tools and completion without changing its audit`,{timeout:30000},async t=>{

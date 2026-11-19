@@ -2,6 +2,11 @@ import type {ReplyTiming,SessionSnapshot} from "../../shared/contracts";
 import {formatElapsed} from "./activity";
 import {compareTime,replySourceMessageId,type TranscriptEntry} from "./timeline";
 
+export function specialistElapsed(milliseconds?:number):string|undefined {
+ if(typeof milliseconds!=="number"||!Number.isFinite(milliseconds)||milliseconds<0)return;
+ return milliseconds<1000?"不到 1 秒":formatElapsed(Math.floor(milliseconds/1000));
+}
+
 export function timingForTurn(turn:TranscriptEntry[],snapshot:SessionSnapshot):ReplyTiming|undefined {
  const user=turn.find(entry => entry.message?.role==="user")?.message;
  if (!user) return;

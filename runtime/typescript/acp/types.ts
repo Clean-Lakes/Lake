@@ -19,7 +19,7 @@ export type ExternalRun = {
   id: string; agent: StoredExternalAgentId; profileRevision: number; projectId: string;
   purpose?:'worker'|'child'|'segment'|'conversation';
   requestedModel?:string;model?:string;modelProvider?:string;reasoningEffort?:string;
-  taskId?: string; conversationId?:string; workerId: string; sessionId: string; childSessionId?: string; agentRunId?: string;
+  taskId?: string; conversationId?:string; workerId: string; sessionId: string; childSessionId?: string; agentRunId?: string; rootTurnId?:string;
   generation: number; scopeHash: string; contextId: string; requestKey: string; inputHash: string; state: ExternalRunState;
   dispatchPhase: 'not_sent' | 'dispatching' | 'sent' | 'answered';
   externalSessionId?: string; createdAt: string; updatedAt: string;
@@ -35,8 +35,8 @@ export type ExternalEvent = {
 /** Constructed by Lake's current task or conversation host. Never deserialized from tool arguments. */
 export type ExternalActor = {
   projectId: string; taskId?: string; conversationId?:string; workerId: string; sessionId: string;
-  childSessionId?: string; agentRunId?: string; generation: number;
-  deadlineAt: string; scopeHash: string; workspace: string; signal: AbortSignal;
+  childSessionId?: string; agentRunId?: string; generation: number; rootTurnId?:string;
+  readonly deadlineAt: string; scopeHash: string; workspace: string; signal: AbortSignal;
   purpose?: 'worker' | 'child' | 'segment' | 'conversation';
   systemPrompt?: string;
   model?:string;
@@ -47,6 +47,7 @@ export type ExternalActor = {
 };
 export type ExternalResult = {
   run_id: string; agent: string; state: ExternalRunState; summary: string;
+  stop_reason?: 'deadline_reached';
   public_reply?: {id:string;content:string};
   verification: 'insufficient'; limitations: string[];
 };
