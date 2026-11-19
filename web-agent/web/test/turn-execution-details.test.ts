@@ -9,9 +9,9 @@ import {canonicalExecutionSelected,TurnExecutionDetails} from '../src/TurnExecut
 const start='2026-11-16T03:00:00Z';
 const timing:ReplyTiming={messageId:'request',startedAt:start,finishedAt:'',status:'running'};
 const progress:AICard={id:'progress',type:'message',status:'completed',content:'已安排专员核对。',at:start};
-function renderStatus(cards:AICard[],view:Partial<AIView>={}){
+function renderStatus(cards:AICard[],view:Partial<AIView>={},clock=timing){
  return renderToStaticMarkup(createElement(TurnExecutionDetails,{
-  timing,cards,view:{session:'pilot',status:'running',turnStartedAt:start,cards,...view} as AIView,
+  timing:clock,cards,view:{session:'pilot',status:'running',turnStartedAt:start,cards,...view} as AIView,
   assistantIdentity:{name:'Pilot',pilot:true},presentingReply:true,
   details:[createElement('p',{key:'record'},'已保留的执行过程')],
   children:createElement('p',{},progress.content),
@@ -49,12 +49,20 @@ test('a displayed reply does not conceal live tools, waits or context compaction
  }
 });
 
-test('only an actual public reply stream uses the conclusion preview',t=>{
+test('a conclusion uses one compact footer while streaming and through settlement',t=>{
  t.mock.method(Date,'now',()=>Date.parse(start)+19000);
- const html=renderStatus([{...progress,status:'running'}]);
- assert.ok(html.includes('is-preview')&&html.includes('用时 19秒'));
- assert.ok(!html.includes('正在思考…')&&!html.includes('status-text--active'));
- assert.ok(html.includes('aria-expanded="false"')&&html.includes('已保留的执行过程'));
+ const streaming:AICard={...progress,status:'running'};
+ const preview=renderStatus([streaming]);
+ const settling=renderStatus([streaming],{status:'completed'});
+ const finished=renderStatus([progress],{status:'completed'},{...timing,status:'completed',finishedAt:'2026-11-16T03:00:24Z'});
+ assert.equal(settling,preview,'a completed view must wait for final timing in the same footer');
+ assert.ok(preview.includes('is-preview reply-footer')&&preview.includes('>19 秒</span>'));
+ assert.ok(finished.includes('is-finished reply-footer')&&finished.includes('>24 秒</span>'));
+ for(const html of [preview,finished]){
+  assert.doesNotMatch(html,/正在思考|status-text--active|is-revealed/);
+  assert.match(html,/<button[^>]+aria-label="查看执行过程"[^>]*>执行过程/);
+  assert.ok(html.includes('aria-expanded="false"')&&html.includes('已保留的执行过程'));
+ }
  const afterStream=renderStatus([progress]);
  assert.ok(afterStream.includes('正在思考…')&&!afterStream.includes('is-preview'),'completed public text alone is not a final answer while the turn is running');
 });

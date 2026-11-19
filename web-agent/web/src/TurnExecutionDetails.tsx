@@ -3,6 +3,7 @@ import {sessionInspectorId,useSessionInspector,type InspectorSelection} from './
 import {createContext,useId,useState,type ReactNode} from 'react';
 import {ReplyDuration,type ReplyDurationProps} from './ReplyDuration';
 import {ReplyFooter,ReplyProcessContext} from './ReplyFooter';
+import {replyElapsed} from './replyDurationState';
 import {turnStatus} from './turnStatus';
 import {quietCoordination} from './coordinationActivity';
 import {recoveredRouteFailures} from './routeDispatchPresentation';
@@ -19,7 +20,9 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
  const {live,phase,duration,state}=turnStatus(timing.timing,timing.view,timing.cards??[],timing.latestUserAt??'',Date.now());
  const [replyClock,setReplyClock]=useState({presenting:presentingReply,at:Date.now()});
  if(replyClock.presenting!==presentingReply)setReplyClock({presenting:presentingReply,at:Date.now()});
- const previewAt=live&&phase==='streaming'&&presentingReply&&!hideLive?replyClock.at:undefined;
+ // A completed view can arrive before its final timing record. Keep the
+ // conclusion footer in place while that record catches up.
+ const preview=live&&presentingReply&&!hideLive&&(phase==='streaming'||state==='回复结束');
  // Detail visibility belongs to the reader, never to a streaming/status update.
  const [open,setOpen]=useState(false);
  const recoveredRouting=recoveredRouteFailures(timing.cards??[]);
@@ -33,8 +36,9 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
  const pilot=timing.assistantIdentity?.pilot&&inspector&&sessionId&&summaryDisclosure?{sessionId,turnId:id,canonicalGoalId}:undefined;
  const combinedReportId=!live&&(pilot||!summaryDisclosure)?footerReportId:undefined;
  const footerStatus=foldFailure?undefined:settledStatus;
- const summary=live?<ReplyDuration {...timing} previewAt={previewAt} latestStep={latestStep} disclosure={summaryDisclosure}/>
-  :!combinedReportId&&<ReplyFooter status={footerStatus} duration={summaryDisclosure||!timing.assistantIdentity?.pilot?duration:undefined} action={summaryDisclosure&&{
+ const footerDuration=preview&&timing.timing?replyElapsed(timing.timing,replyClock.at):duration;
+ const summary=live&&!preview?<ReplyDuration {...timing} latestStep={latestStep} disclosure={summaryDisclosure}/>
+  :!combinedReportId&&<ReplyFooter preview={preview} status={preview?timing.detailNotice:footerStatus} duration={summaryDisclosure||!timing.assistantIdentity?.pilot?footerDuration:undefined} action={summaryDisclosure&&{
    text:timing.processLabel,controls:summaryDisclosure.controls,expanded:summaryDisclosure.open,side:summaryDisclosure.side,onClick:summaryDisclosure.onToggle
   }}/>;
  const notice=[foldFailure?settledStatus:undefined,timing.detailNotice].filter(Boolean).join(' · ');
