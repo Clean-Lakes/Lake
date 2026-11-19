@@ -8,6 +8,7 @@ export const resourceTypeOptions = [
   ["apisix", "APISIX"],
   ["prometheus", "Prometheus"],
   ["victoriametrics", "VictoriaMetrics (VM 时序库)"],
+  ["grafana", "Grafana"],
 ] as const;
 export type ResourceInputType = (typeof resourceTypeOptions)[number][0];
 export type ServiceDraft = {
@@ -64,7 +65,7 @@ export function serviceResourceType(
   )
     return resource.settings!.driver as "mysql" | "postgres";
   if (
-    ["redis", "apisix", "prometheus", "victoriametrics", "kubernetes"].includes(resource.kind)
+    ["redis", "apisix", "prometheus", "victoriametrics", "kubernetes", "grafana"].includes(resource.kind)
   )
     return resource.kind as ResourceInputType;
 }
@@ -101,6 +102,8 @@ export function serviceResourceInput(
   nativeConnections = true,
 ) {
   if (type === "ssh") throw new Error("SSH uses its own form");
+  if (type === "grafana")
+    return {kind: type, settings: {endpoint:v.endpoint.trim(), token:v.token.trim()}};
   const credential = {
     ...(v.clearCredential && nativeConnections
       ? { clearCredential: true }
@@ -193,5 +196,6 @@ export function resourceTypeLabel(
     apisix: "APISIX",
     prometheus: "Prometheus",
     victoriametrics: "VictoriaMetrics (VM 时序库)",
+    grafana: "Grafana",
   }[resource.kind];
 }

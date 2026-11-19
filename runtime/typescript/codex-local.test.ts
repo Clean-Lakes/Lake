@@ -8,6 +8,30 @@ import {CodexLocalSource} from './acp/codex-local';
 import {codexStartupArgs} from './acp/codex-profile';
 import {ExternalAgentRegistry} from './acp/registry';
 import {LakeStore} from './store';
+import {DatabaseSync} from 'node:sqlite';
+import {resolveCodexRunOrigins} from './acp/run-origin';
+import type {ExternalRun} from './acp/types';
+
+test('historical CLI attribution needs the exact project, thread, Lake client and run directory',async t=>{
+ const home=await mkdtemp(join(tmpdir(),'lake-cli-origin-')),data=join(home,'data');
+ t.after(()=>rm(home,{recursive:true,force:true}));
+ const run:ExternalRun={schemaVersion:1,id:'r',projectId:'p',workerId:'w',sessionId:'s',contextId:'context',externalSessionId:'thread',
+  agent:'codex',profileRevision:2,generation:1,scopeHash:'scope',requestKey:'request',inputHash:'input',state:'completed',
+  dispatchPhase:'answered',createdAt:'2026-11-18',updatedAt:'2026-11-18',events:[],usage:null};
+ assert.equal(resolveCodexRunOrigins(home,data,'p',[run])[0],run);
+ const folder=join(home,'external-agents','profiles','p','codex','state');
+ await mkdir(folder,{recursive:true});
+ const db=new DatabaseSync(join(folder,'state_5.sqlite'));
+ try{
+  db.exec('CREATE TABLE threads(id TEXT PRIMARY KEY, originator TEXT, cwd TEXT)');
+  const add=db.prepare('INSERT INTO threads VALUES(?,?,?)'),cwd=join(data,'external-agents','runs','context');
+  add.run('thread','lake',cwd);add.run('other-client','other',cwd);add.run('other-cwd','lake',join(data,'elsewhere'));
+ }finally{db.close();}
+ const inputs=[run,{...run,id:'wrong-client',externalSessionId:'other-client'},{...run,id:'wrong-cwd',externalSessionId:'other-cwd'},
+  {...run,id:'foreign',projectId:'another'},{...run,id:'absent',externalSessionId:'missing'},{...run,id:'retired',agent:'runtime-acp' as const}];
+ assert.deepEqual(resolveCodexRunOrigins(home,data,'p',inputs).map(r=>r.runtimeKind),['codex-app-server',undefined,undefined,undefined,undefined,undefined]);
+ assert.ok(inputs.every(r=>!r.runtimeKind),'reading a snapshot preserves original records');
+});
 
 async function fixture(t:{after(fn:()=>Promise<void>):void}){
  const home=await mkdtemp(join(tmpdir(),'lake-codex-local-')),source=join(home,'codex');await mkdir(source);

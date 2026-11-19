@@ -6,7 +6,7 @@ import { digest } from '../tasks';
 import type {AgentConnection,AgentLaunch} from './client';
 import {CodexAppServer} from './codex-app-server';
 import { ExternalAgentRegistry } from './registry';
-import { externalAgentId,externalControlTools } from './catalog';
+import { externalAgentId,externalControlTools,externalProducts } from './catalog';
 import {externalAgentName} from '../../../web-agent/shared/external-agents';
 import { openToolBridge } from './bridge';
 import {privatePath} from './private';
@@ -29,7 +29,7 @@ export class LakeExternalAgents {
     if(process.platform!=='darwin')throw new HttpError(409,'当前平台的 Codex 工具隔离尚未验证');
     if(!profile.nodePath)throw new HttpError(409,'请先配置 Codex 使用的 Node 运行时');
     const engine=JSON.parse(await readFile(join(this.registry.runtimeRoot(),'node_modules/@openai/codex/package.json'),'utf8'));
-    if(engine.version!=='0.160.1')throw new HttpError(409,'Codex 引擎版本不匹配，请重新安装固定版本');
+    if(engine.version!==externalProducts.codex.version)throw new HttpError(409,'Codex 引擎版本不匹配，请重新安装固定版本');
     await this.registry.validateNode(profile.nodePath);
     const prepared=await this.registry.prepareLaunch(profile,signal,model);
     const threadConfig={...codexConfig(prepared.home),...(model?{model}:{}),mcp_servers:{...prepared.disabledMcp,...(mcp?{lake:mcp}:{})}};
@@ -137,6 +137,7 @@ export class LakeExternalAgents {
       live.process=transport;
       const cancel=()=>{void transport.cancel().finally(()=>transport.close());};controller.signal.addEventListener('abort',cancel,{once:true});
       await transport.initialize(controller.signal);
+      run.runtimeKind=profile.runtimeKind;
       run.externalSessionId=await transport.openSession({cwd:directory,threadId:prior?.externalSessionId,systemPrompt:actor.systemPrompt},controller.signal);
       guard();run.state='running';run.dispatchPhase='dispatching';persist();event({kind:'status',status:'running'});
       const prompt=transport.exec(instruction,controller.signal,deadline);

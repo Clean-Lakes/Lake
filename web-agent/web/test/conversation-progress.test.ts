@@ -63,7 +63,7 @@ test('conversation keeps public replies visible and leaves process disclosure un
 test('stopped turns show one neutral status without hiding actual errors or activity records',()=>{
  const s={session:{id:'s'},messages:[user.message],actions:[],resources:[],replyTimings:[{messageId:'user',startedAt:at,finishedAt:'2026-10-18T08:00:04Z',status:'cancelled'}],ai:{session:'s',status:'cancelled',cardsOffset:0,cards:[card('stop','error','cancelled','context canceled').card,card('failure','error','failed','连接已中断，请检查网络').card]}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
- assert.ok(html.includes('已停止')&&html.includes('4秒'));
+ assert.ok(html.includes('已停止')&&html.includes('4 秒'));
  assert.ok(!html.includes('已停止本轮'));
  assert.ok(!html.includes('data-conversation-entry="stop"'));
  assert.ok(html.includes('连接已中断，请检查网络'));
@@ -250,7 +250,7 @@ test('recorded process remains available while generated prose retires the live 
 test('collapsed process retains commands and alerts without hiding prose or pending decision controls',()=>{
  const s={session:{id:'s'},messages:[user.message],actions:[],resources:[],replyTimings:[{messageId:user.message!.id,startedAt:at,finishedAt:'2026-10-18T08:09:54Z',status:'completed'}],ai:{session:'s',status:'completed',cardsOffset:0,cards:[card('tool','operation','failed').card,card('reply','message','completed','最终结果仍然可见').card]}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
- assert.ok(html.includes('用时 9分钟 54秒')&&html.includes('1 项失败'));
+ assert.ok(html.includes('用时 9 分钟 54 秒')&&html.includes('1 项失败'));
  assert.ok(html.includes('aria-expanded="false"')&&html.includes('执行详细过程'));
  const bodyStart=html.indexOf('class="turn-execution-details"'),replyEnd=html.indexOf('data-conversation-entry="reply"');
  assert.ok(replyEnd<bodyStart,'final reply remains above the elapsed line and process disclosure');

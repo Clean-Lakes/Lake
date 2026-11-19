@@ -20,12 +20,14 @@ import {superPilotActivity} from './superPilotActivity';
 import {useTerminalPopover} from './useTerminalPopover';
 import {WorkbenchIsland,useWideWorkbench} from './WorkbenchIsland';
 import {useInspectorWindow} from './inspectorWindow';
-import {SessionInspectorProvider,useSessionInspector} from './SessionInspectorContext';
-import {SessionInspector} from './SessionInspector';
+import {SessionInspectorProvider,useSessionInspector,type PilotProcessTarget,type ReplyProcessSources} from './SessionInspectorContext';
+import {ReplyProcessSelect,SessionInspector} from './SessionInspector';
 import {inspectorWorker,latestInspectorSelection} from './sessionInspectorModel';
 import {InspectionRequestGuard,matchesSpecialistInspection,selectedRoleInspection,snapshotInspectionTarget,specialistInspectionWorker,workerInspectionTarget} from './specialistInspection';
 import {ServiceResourceFields} from "./ServiceResourceFields";
 import {ServiceConfigEdit} from "./ServiceConfigEdit";
+import {GrafanaResourceWebhook} from "./GrafanaEventSource";
+import {GrafanaResourceRead} from "./GrafanaResourceRead";
 import {emptyServiceDraft, resourceTypeOptions, resourceTypeLabel, serviceResourceType, serviceResourceInput, type ResourceInputType} from "./serviceResourceModel";
 
 import {LakeLogo} from "./LakeLogo";
@@ -74,7 +76,7 @@ import { readImageSelection } from "./imageAttachments";
 import {clipboardFiles,partitionAttachments,attachmentCountLimit,fileSize} from "./fileAttachments";
 import { ResourceImport } from "./ResourceImport";
 import { SSHResourceFields, emptySSH } from "./SSHResourceFields";
-import type { SSHConnectionInput,SuperWorker,SpecialistChannelPage,SpecialistReplyAuthor } from "../../shared/contracts";
+import type { SSHConnectionInput,SuperWorker,SpecialistChannelInfo,SpecialistChannelPage,SpecialistReplyAuthor } from "../../shared/contracts";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import type {
   Action,
@@ -792,26 +794,26 @@ function AppContent() {
     inspector.open({...latestInspectorSelection(gatewayInspection,tab),followLatest:false});setGatewayInspection(null);
   },[gatewayInspection,sessionId,activeSnapshot?.session.id,inspector.open]);
   const inspectedSnapshot=roleInspection??activeSnapshot;
-  const inspectRoleTask=async(target:string,selectedWorker?:SuperWorker,requestedTab?:'plan'|'execution')=>{
+  const inspectRoleTask=async(target:string,selectedWorker?:SuperWorker,requestedTab?:'plan'|'execution',replySources?:ReplyProcessSources)=>{
     const expected=selectedWorker??roleWorkers.find(worker=>worker.sessionId===target);
     if(!expected||expected.sessionId!==target)return;
     const identity=workerInspectionTarget(expected,activeSnapshot?.session.projectId??'');
     if(!identity){handleFailure(new Error('任务不属于当前项目或执行身份已变化'));return;}
     const tab=requestedTab??(expected.task.summary&&!['running','queued','waiting_external','waiting_user'].includes(expected.task.state)?'plan':'execution');
-    if(roleInspection?.session.id===target&&roleInspection.superagent?.task.taskId===expected.task.taskId&&inspector.selection?.sessionId===target&&inspector.selection.tab===tab)return;
+    if(roleInspection?.session.id===target&&roleInspection.superagent?.task.taskId===expected.task.taskId&&inspector.selection?.sessionId===target&&inspector.selection.tab===tab&&inspector.selection.replySources?.pilot.turnId===replySources?.pilot.turnId)return;
     const request=roleInspectionRequest.current.begin(),selection=inspectionSelection.current;
     pendingRoleInspection.current={selection,current:request.current};
     try{const next=await api.snapshot(target,request.signal,expected.task.taskId);if(!request.current()||inspectionSelection.current!==selection)return;
       if(!matchesSpecialistInspection(next,identity))throw new Error('任务不属于当前项目或执行身份已变化');
       pendingRoleInspection.current=undefined;
-      setRoleInspection(next);inspector.open({...latestInspectorSelection(next,tab),followLatest:false});
+      setRoleInspection(next);inspector.open({...latestInspectorSelection(next,tab),followLatest:false,replySources});
     }catch(error){if(request.current()&&inspectionSelection.current===selection)handleFailure(error);}
     finally{if(pendingRoleInspection.current?.current===request.current)pendingRoleInspection.current=undefined;}
   };
-  const inspectSpecialist=(author:SpecialistReplyAuthor)=>{
+  const inspectSpecialist=(author:SpecialistReplyAuthor,pilot?:PilotProcessTarget)=>{
     const worker=specialistInspectionWorker(author,pilotWorkspace.workspace,activeSnapshot?.session.projectId??'');
     if(!worker){handleFailure(new Error('未找到这次专员任务，或任务身份已变化，请刷新后重试'));return;}
-    void inspectRoleTask(author.sessionId,worker,'execution');
+    void inspectRoleTask(author.sessionId,worker,'execution',pilot?{pilot,specialist:author}:undefined);
   };
   const refreshRoleInspection=async(signal?:AbortSignal)=>{
     if(!roleInspection)return;
@@ -945,6 +947,15 @@ function AppContent() {
   }, []);
   const pilotProjectId=sidebarProjectId??selectedProjectId??catalog?.projects[0]?.id;
   const pilotWorkspace=usePilotWorkspace(pilotProjectId,!!bootstrap?.authenticated&&!!catalog);
+  const openSpecialistOverview=(channel:SpecialistChannelInfo)=>{
+    roleInspectionRequest.current.cancel();
+    pendingRoleInspection.current=undefined;
+    setRoleInspection(null);
+    inspector.reset();
+    if(sessionId!==channel.sessionId||route.resourceId||isPlansPage)navigate({sessionId:channel.sessionId,resourceId:null});
+    else setMobileMenu(false);
+    void pilotWorkspace.readChannel(channel);
+  };
   const selectedSuperChannel=bootstrap?.backendRuntime==='typescript'?pilotWorkspace.workspace?.channels?.find(channel=>channel.sessionId===selectedSession?.id):undefined;
   const codexSettingsProject=bootstrap?.backendRuntime==='typescript'?(selectedSuperChannel?.projectId??(selectedSession?.workspaceRole==='router'?selectedSession.projectId:undefined)):undefined;
   const specialistModel=useSpecialistModel(selectedSuperChannel,settingsOpen,modelMenuOpen,codexSettingsProject);
@@ -954,7 +965,7 @@ function AppContent() {
     if(selected.canonicalGoalId===roleInspection?.superagent?.task.taskId)return;
     if(selected.canonicalGoalId===activeSnapshot?.superagent?.task.taskId){if(roleInspection){roleInspectionRequest.current.cancel();setRoleInspection(null);}return;}
     const target=selectedRoleInspection(selected,pilotWorkspace.workspace?.workers??[]);
-    if(target)void inspectRoleTask(sessionId,target.worker,target.tab);
+    if(target)void inspectRoleTask(sessionId,target.worker,target.tab,selected.replySources);
   },[sessionId,inspector.selection,pilotWorkspace.workspace?.workers,activeSnapshot?.superagent?.task.taskId]);
   const pilotWorkActive=bootstrap?.backendRuntime==='typescript'&&!!superPilotActivity(pilotWorkspace.workspace,selectedSession,sessionConnected);
   const currentAssignment=specialistModel.selected?{assignment:specialistModel.assignment(),checking:specialistModel.loading,blockedReason:specialistModel.blocker}:undefined;
@@ -1268,7 +1279,14 @@ function AppContent() {
       clearSubmitted(targetSession, composerDraft);
       if(currentAssignment)specialistModel.accepted();
       setMessageSubmission({session:targetSession,accepted:true});
-      if(accepted.pilotSessionId){await refreshCatalog();navigate({sessionId:accepted.pilotSessionId,resourceId:null});}else await refreshCurrent();
+      if (activeSession.current !== targetSession) return;
+      const destination = accepted.pilotSessionId;
+      if (destination && destination !== targetSession) {
+        await refreshCatalog();
+        if (activeSession.current === targetSession) navigate({sessionId:destination,resourceId:null});
+      } else {
+        await refreshCurrent();
+      }
     } catch (error) { handleFailure(error); }
     finally { messageSending.current=false;setMessageSubmission(null);setPendingOperation(""); }
   }
@@ -1390,7 +1408,7 @@ function AppContent() {
       await refreshCatalog();
       setSshProject(null); setSshParent(null); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft());
       navigate({ sessionId, resourceId: resource.id });
-      notify("资源已添加，可在项目会话中引用");
+      notify(resource.kind === "grafana" ? "Grafana 资源已添加" : "资源已添加，可在项目会话中引用");
     } catch (error) { setSshError(readableError(error)); }
     finally { setSshBusy(false); }
   }
@@ -1527,6 +1545,9 @@ function AppContent() {
   const selectedAgentBackend=selectedSuperChannel?.execution??selectedSuperWorker?.execution?.backend??activeSnapshot?.superagent?.execution?.backend;
   const avatarActivity=activeSnapshot?{sessionId:activeSnapshot.session.id,state:selectedSuperChannel&&roleReplyActivity?.sessionId===activeSnapshot.session.id?roleReplyActivity.state:conversationActivity(activeSnapshot.ai,selectedSession?.status)}:undefined;
   const superHeaderIdentity=sessionHeader&&(selectedRoleName||selectedSuperPilot);
+  const processNavigation=<ReplyProcessSelect sessionId={activeSnapshot?.session.id} onSpecialist={inspectSpecialist} onPilot={()=>{
+    roleInspectionRequest.current.cancel();pendingRoleInspection.current=undefined;setRoleInspection(null);
+  }}/>;
   const inspectedWorker=isSpecialistTasks?roleWorkers.find(worker=>worker.sessionId===inspectedSnapshot?.session.id):inspectorWorker(pilotWorkspace.workspace?.workers??[],inspectedSnapshot);
   const latestRoleReply=roleTasks?.sessionId===sessionId?roleTasks.page.entries.filter(entry=>entry.message?.role==='assistant'&&!entry.message.dispatch).at(-1):undefined;
   const roleResultRead=!!latestRoleReply&&latestRoleReply.sourceSessionId===inspectedSnapshot?.session.id&&latestRoleReply?.taskId===inspectedSnapshot?.superagent?.task.taskId&&!!inspectedSnapshot?.superagent?.task.summary&&latestRoleReply.message?.text.trim()===inspectedSnapshot.superagent.task.summary.trim();
@@ -1541,7 +1562,12 @@ function AppContent() {
         {sessionHeader && <span className="workspace-header-glass" aria-hidden="true"/>}
         {!sharedIsland&&headerSweep}
         <button className="icon-button mobile-only" aria-label="打开项目导航" onClick={() => setMobileMenu(true)}><Glyph name="menu" size={21}/></button>
-        <div className="breadcrumbs">{!sessionHeader&&<><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span></>}<strong>{superHeaderIdentity?<SuperRoleAvatar name={selectedRoleName} roleId={selectedRoleId} pilot={!!selectedSuperPilot} size={20} motion={pilotHeaderActivity?.motion??conversationAvatarMotion(avatarActivity?.state??'idle',activeSnapshot?.superagent?.task?.state??selectedSuperWorker?.task.state)}/>:<Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession ? selectedSession.icon??'chat' : 'document'} size={15}/>}<span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{superHeaderIdentity?(selectedRoleName??'Pilot'):selectedResource?.name ?? selectedSession?.title ?? "概览"}</span>{superHeaderIdentity&&!selectedSuperPilot&&<AgentBackendLogo backend={selectedAgentBackend}/>}</strong></div>
+        {selectedResource?.kind === "grafana" ? <div className="breadcrumbs">
+          <Glyph name="panel" size={17}/>
+          <button type="button" className="crumb-project grafana-project-crumb" title="返回工作台"
+            onClick={() => navigate({sessionId, resourceId: null})}>{projectList.find(project => project.id === selectedResource.projectId)?.name ?? "项目"}</button>
+        </div> :
+          <div className="breadcrumbs">{!sessionHeader&&<><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span></>}<strong>{superHeaderIdentity?<SuperRoleAvatar name={selectedRoleName} roleId={selectedRoleId} pilot={!!selectedSuperPilot} size={20} motion={pilotHeaderActivity?.motion??conversationAvatarMotion(avatarActivity?.state??'idle',activeSnapshot?.superagent?.task?.state??selectedSuperWorker?.task.state)}/>:<Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession ? selectedSession.icon??'chat' : 'document'} size={15}/>}<span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{superHeaderIdentity?(selectedRoleName??'Pilot'):selectedResource?.name ?? selectedSession?.title ?? "概览"}</span>{superHeaderIdentity&&!selectedSuperPilot&&<AgentBackendLogo backend={selectedAgentBackend}/>}</strong></div>}
         {selectedSession && !selectedResource && !isPlansPage && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} mode={headerPilotMode} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}} normal={<SessionStateBadge session={selectedSession} {...superHeaderPresentation}/>} onInspect={targetId => {
           if(!activeSnapshot||!headerPilot)return;
           const task=activeSnapshot.sre?.tasks.find(t=>t.id===headerPilot.taskId);
@@ -1637,7 +1663,7 @@ function AppContent() {
         </div>}
         {sidebarProject&&<PilotWorkspace showPilot={false} showHeading={false} activity={avatarActivity} pilotButton={sidebarPilotButton}
          pilotActivity={conversationActivity(undefined,catalog.sessions.find(row=>row.id===pilotWorkspace.workspace?.project.routerSessionId)?.status)} pilotDisabled={!bootstrap?.authenticated}
-         disabled={!connected} onDeleted={channel=>pilotWorkspace.removeRole(channel.roleId)} workspace={pilotWorkspace.workspace} error={pilotWorkspace.error} selectedId={sessionSelected ? route.sessionId : null} selectedRoleId={sessionSelected && selectedSession.projectId===pilotWorkspace.workspace?.project.projectId ? selectedSuperChannel?.roleId??activeSnapshot?.superagent?.roleId??selectedSuperWorker?.roleId : undefined} onPilot={()=>{const domain=pilotWorkspace.workspace;if(domain?.active)navigate({sessionId:domain.project.routerSessionId,resourceId:null});else void openProjectPilot(sidebarProject.id);}} onWorker={worker=>navigate({sessionId:worker.sessionId,resourceId:null})} onChannel={channel=>{void refreshCatalog().then(()=>navigate({sessionId:channel.sessionId,resourceId:null})).catch(handleFailure)}}/>}
+         disabled={!connected} onDeleted={channel=>pilotWorkspace.removeRole(channel.roleId)} workspace={pilotWorkspace.workspace} error={pilotWorkspace.error} selectedId={sessionSelected ? route.sessionId : null} selectedRoleId={sessionSelected && selectedSession.projectId===pilotWorkspace.workspace?.project.projectId ? selectedSuperChannel?.roleId??activeSnapshot?.superagent?.roleId??selectedSuperWorker?.roleId : undefined} onPilot={()=>{const domain=pilotWorkspace.workspace;if(domain?.active)navigate({sessionId:domain.project.routerSessionId,resourceId:null});else void openProjectPilot(sidebarProject.id);}} onWorker={worker=>navigate({sessionId:worker.sessionId,resourceId:null})} onChannel={openSpecialistOverview}/>}
         {pilotWorkspace.workspace?.active===false&&navigationProjects.map(project=>{
           const sessionsExpanded=!closedSessionGroups.includes(project.id);
           const sessions=catalog.sessions.filter(session=>(!session.workspaceRole||session.workspaceRole==='legacy')&&session.projectId===project.id&&(!selectedTag||session.tags?.some(tag=>tag.id===selectedTag)));
@@ -1663,7 +1689,9 @@ function AppContent() {
           return <div className="project-group" key={project.id}>
             <div className="project-contents">
               {showWorkflows && <button type="button" className="workflow-entry" onClick={() => setWorkflowProject(project)} disabled={!connected}><Glyph name="layers" size={15}/>运维工作流</button>}
-              {<ResourceTree navigationPanel selection={bulkSelection} onSelectAll={() => toggleBulkGroup(bulkCatalogTargets(catalog).filter(target => target.projectId === project.id && ["resource","folder"].includes(target.kind)))} onDelete={setNavigationDelete} project={project} resources={projectResources} nodes={catalog.resourceTree ?? []} disabled={!connected} refresh={refreshCatalog} onImport={() => { setImportHexhub(false); setImportProject(project); }} onAddResource={(parentId) => { setResourceKind("ssh"); setSshProject(project.id); setSshParent(parentId); setSshName(""); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft()); setSshError(""); }} renderResource={resource => {
+              {<ResourceTree navigationPanel
+                onEditConnection={pendingOperation ? undefined : setEditTerminalResource}
+                selection={bulkSelection} onSelectAll={() => toggleBulkGroup(bulkCatalogTargets(catalog).filter(target => target.projectId === project.id && ["resource","folder"].includes(target.kind)))} onDelete={setNavigationDelete} project={project} resources={projectResources} nodes={catalog.resourceTree ?? []} disabled={!connected} refresh={refreshCatalog} onImport={() => { setImportHexhub(false); setImportProject(project); }} onAddResource={(parentId) => { setResourceKind("ssh"); setSshProject(project.id); setSshParent(parentId); setSshName(""); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft()); setSshError(""); }} renderResource={resource => {
                 const terminalResourceRow=["local","ssh"].includes(resource.kind);
                 const addToConversationDisabled=!sessionConnected || !!pendingOperation || selectedSession?.projectId!==resource.projectId || !mentionable.some(item=>item.id===resource.id);
                 const addToConversationTitle=!selectedSession ? "请先打开一个对话" : selectedSession.projectId!==resource.projectId ? "请先打开此项目的对话" : "添加到对话";
@@ -1672,7 +1700,7 @@ function AppContent() {
                   <button id={`resource-trigger-${resource.id}`} className={`nav-row resource-row ${route.resourceId === resource.id || terminalOpen && terminalResource?.id === resource.id ? "active" : ""}`} onClick={() => { if (bulkMode) {if(resource.kind !== "local")toggleBulkTarget({kind:"resource",id:resource.id,projectId:resource.projectId,name:resource.name}); return;} if (["local", "ssh"].includes(resource.kind)) { setResourceTerminalMenu(current => current === resource.id ? null : resource.id); void refreshCatalog().catch(handleFailure); } else navigate({ sessionId: route.sessionId, resourceId: resource.id }); }} aria-expanded={["local", "ssh"].includes(resource.kind) ? resourceTerminalMenu === resource.id : undefined} aria-current={route.resourceId === resource.id ? "page" : undefined}>
                     <ResourceIcon kind={resource.kind}/><span className="nav-row-text"><strong>{resource.name}</strong></span>{connected && live.some(terminal=>terminal.status==="ready"||terminal.status==="busy") && <span className="resource-indicator available resource-connection-indicator" role="img" aria-label="终端已连接" title="终端已连接"/>}{connectingResources.includes(resource.id) && <span className="resource-inline-status">连接中</span>}
                   </button>
-                  {!isSpecialistTasks&&<button type="button" className="resource-terminal-button resource-add-to-chat" aria-label={`添加到对话：${resource.name}`} title={addToConversationTitle} disabled={addToConversationDisabled} onClick={()=>addResourceToConversation(resource)}><Glyph name="chatAdd" size={15}/></button>}
+                  {!isSpecialistTasks&&(resource.kind!=="grafana"||!!resource.settings?.credentialRef)&&<button type="button" className="resource-terminal-button resource-add-to-chat" aria-label={`添加到对话：${resource.name}`} title={addToConversationTitle} disabled={addToConversationDisabled} onClick={()=>addResourceToConversation(resource)}><Glyph name="chatAdd" size={15}/></button>}
                   {["local", "ssh"].includes(resource.kind) && <>
                     <button type="button" className="resource-terminal-button resource-terminal-quick" aria-label={`一键打开 ${resource.name} 的终端`} disabled={!connected || !persistentMode || !!pendingOperation || resource.status !== "available"} onClick={() => void openTerminalFromSidebar(resource.id)} title={connectingResources.includes(resource.id) ? "查看连接进度" : live.length ? "打开已有终端" : "创建并打开终端"}><Glyph name="terminal" size={15}/></button>
                     <button type="button" className="resource-terminal-button resource-terminal-manage" aria-label={`管理 ${resource.name} 的终端`} aria-expanded={resourceTerminalMenu === resource.id} disabled={!connected} onClick={() => { setResourceTerminalMenu(current => current === resource.id ? null : resource.id); void refreshCatalog().catch(handleFailure); }} title="管理终端"><Glyph name="more" size={16}/></button>
@@ -1744,7 +1772,7 @@ function AppContent() {
           }}/></div><div className="composer-foot"><input ref={attachmentInputRef} hidden type="file" multiple aria-label="选择文件或图片" onChange={event => void attachFiles(event.target.files)}/><button type="button" className="image-attach-button composer-attach-button" disabled={!sessionConnected || !!pendingOperation} title="添加任意文件或图片，也可拖入或粘贴文件" aria-label="添加附件" onClick={() => attachmentInputRef.current?.click()}><Glyph name="plus" size={18}/></button>{activeSnapshot?.ai && activeSnapshot.session.workspaceRole!=="role" && activeSnapshot.session.workspaceRole!=="worker" && <button type="button" ref={permissionButtonRef} className="composer-permission-button" aria-label="会话权限" title="会话权限" aria-haspopup="dialog" aria-expanded={permissionsOpen} onClick={() => setPermissionsOpen(current => !current)}><Glyph name="lakePermission" size={16}/><span className="composer-tool-label">权限</span></button>} {activeSnapshot&&!pilotWorkspace.workspace?.active&&<LakePilotControl key={activeSnapshot.session.projectId} snapshot={activeSnapshot} onUpdated={refreshCurrent} disabled={!sessionConnected||turnActive} disabledReason={!sessionConnected?"连接恢复后可切换 Lake Pilot。":"本轮运行中，结束后可切换 Lake Pilot。"}/> }<div className="composer-status"><div className="model-switch-wrap">
           <ComposerModelSelect key={sessionId} externalAgent={codexSettingsProject?{selected:specialistModel.selected,ready:!!specialistModel.agent?.assignmentReady,message:specialistModel.message,model:specialistModel.agent?.model,configurationOnly:!selectedSuperChannel}:undefined} onExternalAgentSelect={()=>{void specialistModel.select("codex").catch(handleFailure);}} onExternalAgentSettings={()=>{setModelMenuOpen(false);setSettingsInitialTab("agents");setSettingsOpen(true);}} contextUsage={activeSnapshot?.ai?{view:{session:activeSnapshot.ai.session,context:activeSnapshot.ai.context,usage:activeSnapshot.ai.usage},model:{modelId:bootstrap?.modelId},status:headerPilot?.status==='paused'?'idle':currentSessionStatus}:undefined} available={modelMenu} modelName={bootstrap?.modelName??null} selection={bootstrap?.modelSelection??undefined} configured={modelConfigured} open={modelMenuOpen} disabled={!!pendingOperation||reasoningSaving.size>0||specialistModel.saving} onOpenChange={open=>{if(open) void openModelMenu();else setModelMenuOpen(false);}} onSelect={model=>void (async()=>{if(selectedSuperChannel)await specialistModel.select("native");await switchModel(model);})().catch(handleFailure)} onSettings={()=>{setModelMenuOpen(false);void openSettings();}} reasoning={activeSnapshot?.ai ? {session:sessionId,modelId:bootstrap?.modelId,disabled:!sessionConnected || turnActive || !!pendingOperation,disabledReason:!sessionConnected?"连接恢复后可调整思考级别。":turnActive?"本轮运行中，结束后可调整思考级别。":"正在保存设置，请稍后调整思考级别。",onSaving:(saving,savingSession=sessionId) => setReasoningSaving(current=>{const next=new Set(current);if(saving)next.add(savingSession);else next.delete(savingSession);return next;})}:undefined}/>
         </div>{!specialistModel.selected&&activeSnapshot?.ai && <ContextUsage view={activeSnapshot.ai} model={bootstrap || undefined} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} compact presentation="warning"/>}</div><div className="composer-send-actions">{sendFeedback&&<span className="composer-send-feedback" role="status">{sendFeedback}</span>}{executionStoppable&&!sendFeedback&&<span className="composer-stop-scope">{stopPresentation.shortLabel}</span>}{executionStoppable && hasMessageDraft && <button type="button" className="send-button queued-stop-button" aria-label={stopPresentation.label} title={stopPresentation.title} aria-busy={stoppingTurn} disabled={stoppingTurn || !sessionConnected} onClick={() => void stopCurrentTurn()}><Glyph name="stop" size={15}/></button>}<button className={`send-button${composerStop ? " stop-button" : ""}`} type={composerStop ? "button" : "submit"} data-sending={sendFeedback?true:undefined} aria-label={sendFeedback??(composerStop ? stopPresentation.label : !modelConfigured&&!currentAssignment ? "发送前连接模型" : currentAssignment?.blockedReason?"配置 Codex":currentAssignment?"发送给 Codex":queueMode ? "加入待发送队列" : "发送消息")} title={sendFeedback??(composerStop ? stopPresentation.title : !modelConfigured&&!currentAssignment ? "先连接模型；保留草稿，不会自动发送" : currentAssignment?.blockedReason?currentAssignment.blockedReason:`${currentAssignment?"发送给 Codex":queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`)} aria-busy={!!sendFeedback||stoppingTurn} onClick={composerStop ? () => void stopCurrentTurn() : undefined} disabled={sendFeedback?true:composerStop ? stoppingTurn || !sessionConnected : !sessionConnected || !!pendingOperation || reasoningSaving.has(sessionId) || modeSaving.has(sessionId) || stoppingTurn || currentAssignment?.checking || specialistModel.saving || ((modelConfigured||!!currentAssignment) && (!hasMessageDraft || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)))}><Glyph name={sendFeedback?"loader":composerStop ? "stop" : !modelConfigured&&!currentAssignment ? "plug" : "return"} size={16}/></button></div></div></div></form></div>}
-      </div>{activeSnapshot&&<SessionInspector key={inspectedSnapshot!.session.id} snapshot={inspectedSnapshot!} taskPage={isSpecialistTasks} worker={inspectedWorker} taskMetadata={isSpecialistTasks?<SpecialistTaskMetadata snapshot={inspectedSnapshot!} worker={inspectedWorker}/>:undefined} taskControls={isSpecialistTasks?<SpecialistTaskControls snapshot={inspectedSnapshot!} connected={sessionConnected}/>:undefined} resultsFooter={isSpecialistTasks&&roleResultRead?<ConversationReadMarker session={sessionId} state={roleTasks?.page.channel.messageRead} enabled={sessionConnected}/>:undefined} taskNavigation={activeSnapshot.session.workspaceRole==='role'&&roleWorkers.length>0?<SpecialistTaskSelect workers={roleWorkers} sessionId={inspectedSnapshot!.session.id} onTask={id=>void inspectRoleTask(id)}/>:undefined} readOnly={isLegacyHistory} connected={sessionConnected&&!modeSaving.has(inspectedSnapshot!.session.id)} onUpdated={()=>{if(roleInspection)void refreshRoleInspection();else void refreshCurrent();}}/>}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
+      </div>{activeSnapshot&&<SessionInspector key={inspectedSnapshot!.session.id} snapshot={inspectedSnapshot!} taskPage={isSpecialistTasks} worker={inspectedWorker} taskMetadata={isSpecialistTasks?<SpecialistTaskMetadata snapshot={inspectedSnapshot!} worker={inspectedWorker}/>:undefined} taskControls={isSpecialistTasks?<SpecialistTaskControls snapshot={inspectedSnapshot!} connected={sessionConnected}/>:undefined} resultsFooter={isSpecialistTasks&&roleResultRead?<ConversationReadMarker session={sessionId} state={roleTasks?.page.channel.messageRead} enabled={sessionConnected}/>:undefined} taskNavigation={activeSnapshot.session.workspaceRole==='role'&&roleWorkers.length>0?<SpecialistTaskSelect workers={roleWorkers} sessionId={inspectedSnapshot!.session.id} onTask={id=>void inspectRoleTask(id)}/>:processNavigation} readOnly={isLegacyHistory} connected={sessionConnected&&!modeSaving.has(inspectedSnapshot!.session.id)} onUpdated={()=>{if(roleInspection)void refreshRoleInspection();else void refreshCurrent();}}/>}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
     </main>
     {terminalTabContext && <NavigationMenu title="终端" x={terminalTabContext.x} y={terminalTabContext.y} onClose={() => setTerminalTabContext(null)} actions={[
       {label: "打开终端", run: () => selectTerminalTab(terminalTabContext.terminal)},
@@ -1776,7 +1804,7 @@ function AppContent() {
         if (event.shiftKey && document.activeElement===first) {event.preventDefault();last?.focus();}
         if (!event.shiftKey && document.activeElement===last) {event.preventDefault();first?.focus();}
       }
-    }}><div className="modal-header"><span className="modal-icon"><Glyph name="server" size={20}/></span><button className="icon-button" aria-label="关闭" disabled={sshBusy} onClick={() => { setSshProject(null); setSshParent(null); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft()); }}><Glyph name="close"/></button></div><h2 id="ssh-title">新建资源</h2><p className="modal-description">添加主机、数据库、缓存、集群、网关或监控服务，供项目会话引用。{sshParent ? `资源会创建在「${sshParentName}」目录下。` : ""}</p><form onSubmit={createSsh}><label className="field-label">类型<AppSelect disabled={sshBusy} value={resourceKind} onChange={event => { const kind=event.target.value as ResourceInputType; setResourceKind(kind); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft(kind)); setSshError(""); }}>{resourceTypeOptions.map(([kind,label])=><option key={kind} value={kind}>{label}</option>)}</AppSelect></label>
+    }}><div className="modal-header"><span className="modal-icon"><Glyph name="server" size={20}/></span><button className="icon-button" aria-label="关闭" disabled={sshBusy} onClick={() => { setSshProject(null); setSshParent(null); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft()); }}><Glyph name="close"/></button></div><h2 id="ssh-title">新建资源</h2><p className="modal-description">添加主机、数据库、缓存、集群、网关或监控服务。{sshParent ? `资源会创建在「${sshParentName}」目录下。` : ""}</p><form onSubmit={createSsh}><label className="field-label">类型<AppSelect disabled={sshBusy} value={resourceKind} onChange={event => { const kind=event.target.value as ResourceInputType; setResourceKind(kind); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft(kind)); setSshError(""); }}>{resourceTypeOptions.filter(([kind]) => kind !== "grafana" || bootstrap?.backendRuntime === "typescript").map(([kind,label])=><option key={kind} value={kind}>{label}</option>)}</AppSelect></label>
       <label className="field-label">资源名称<input disabled={sshBusy} required maxLength={120} value={sshName} onChange={event => setSshName(event.target.value)} autoFocus/></label>
 {resourceKind === "ssh" ? <SSHResourceFields value={sshDraft} onChange={setSshDraft} disabled={sshBusy}/> : <ServiceResourceFields projectId={sshProject} key={resourceKind} type={resourceKind} nativeConnections={bootstrap?.backendRuntime==='typescript'} value={serviceSettings} onChange={setServiceSettings} disabled={sshBusy}/>}      {sshError && <p className="form-error" role="alert">{sshError}</p>}<div className="modal-actions"><button type="button" className="button secondary" onClick={() => { setSshProject(null); setSshParent(null); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft()); }} disabled={sshBusy}>取消</button><button type="submit" className="button primary" disabled={sshBusy}>{sshBusy ? "正在添加…" : "添加资源"}</button></div>
     </form></div></div>}
@@ -1799,6 +1827,10 @@ function ResourceDetail({ serviceEditing, resource, project, sessions, selectedS
   terminalList: TerminalSession[]; disabled: boolean; onBack: () => void; onNewSession: () => void;
   onSession: (sessionId: string) => void; onEdit: () => void;
 }) {
+  if (resource.kind === "grafana") return <div className="resource-detail grafana-resource-detail">
+    <GrafanaResourceRead key={resource.id + ":" + (resource.configurationRevision ?? 1)} resource={resource} disabled={disabled}/>
+    <GrafanaResourceWebhook key={resource.id} resource={resource} disabled={disabled} onEdit={onEdit}/>
+  </div>;
   const inScope = selectedSession?.projectId === resource.projectId;
   const available = resource.status === "available";
   const usingSessionIds = new Set(terminalList

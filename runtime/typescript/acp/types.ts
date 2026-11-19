@@ -1,9 +1,9 @@
 import type { ToolEntry } from '../sdk';
 
-import type {ExternalAgentId,StoredExternalAgentId} from '../../../web-agent/shared/external-agents';
+import type {ExternalAgentId,ExternalRuntimeKind,StoredExternalAgentId} from '../../../web-agent/shared/external-agents';
 export type {ExternalAgentId,AgentBackendRef} from '../../../web-agent/shared/external-agents';
 export type ExternalAgentProfile = {
-  schemaVersion: 3; runtimeKind:'codex-app-server';
+  schemaVersion: 3; runtimeKind:ExternalRuntimeKind;
   id: ExternalAgentId; projectId: string; revision: number; enabled: boolean;
   nodePath?: string; npmPath?:string; authentication:'codex-local';sourceFingerprint:string;updatedAt: string;
 };
@@ -16,6 +16,7 @@ export type ExternalAgentStatus = ExternalAgentProfile & {
 export type ExternalRunState = 'starting' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted' | 'unknown';
 export type ExternalRun = {
   schemaVersion: 1;
+  runtimeKind?:ExternalRuntimeKind;
   id: string; agent: StoredExternalAgentId; profileRevision: number; projectId: string;
   purpose?:'worker'|'child'|'segment'|'conversation';
   requestedModel?:string;model?:string;modelProvider?:string;reasoningEffort?:string;

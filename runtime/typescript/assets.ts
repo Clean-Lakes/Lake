@@ -12,6 +12,7 @@ type AssetSource = {
   sshRevision?: (resource: Resource) => string;
   executionRevision?:(resource:Resource)=>string;
   databaseRevision?: (resource:Resource)=>string;
+  grafanaRevision?: (resource:Resource)=>string;
   configurationPin?: (resource:Resource, revision:string)=>string|undefined;
 };
 type AssetEntry = Pick<Resource, "id" | "name" | "kind" | "status"> & {
@@ -153,6 +154,10 @@ export function listProjectAssets(source: AssetSource, input: AssetQuery = {}) {
     if(resource.kind==='database'&&resource.settings?.driver==='mysql'){
       entry.driver='mysql';if(typeof resource.settings.database==='string')entry.database=resource.settings.database;
       if(resource.status==='available'&&source.databaseRevision)try{entry.configuration_revision=source.databaseRevision(resource);entry.connectionState='configured; not a connectivity or health observation';}catch{entry.configuration_state='unavailable';}
+    }
+    if(resource.kind==='grafana'&&source.grafanaRevision){
+      try{entry.configuration_revision=source.grafanaRevision(resource);}
+      catch{entry.configuration_state='unavailable';}
     }
     if(entry.configuration_revision && source.configurationPin) entry.configuration_pin=source.configurationPin(resource,entry.configuration_revision);
     assets.push(entry);

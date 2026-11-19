@@ -128,7 +128,7 @@ test("each footer stays with its own user turn and multi-Agent replies keep one 
  assert.equal(timingForTurn([{id:"u",at:start,message:snapshot.messages[0]}],snapshot),timing);
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
  assert.equal((html.match(/aria-label="回答耗时"/g)||[]).length,2);
- assert.ok(html.includes("用时 1分钟 13秒"));assert.ok(html.includes("用时 4秒"));assert.ok(!html.includes("已处理"));
+ assert.ok(html.includes("用时 1 分钟 13 秒"));assert.ok(html.includes("用时 4 秒"));assert.ok(!html.includes("已处理"));
  const legacy={...snapshot,replyTimings:undefined};
  assert.equal(timingForTurn([{id:"u",at:start,message:snapshot.messages[0]}],legacy),undefined);
  assert.equal(timingForTurn([{id:"v",at:snapshot.messages[1]!.createdAt,message:snapshot.messages[1]}],legacy)?.finishedAt,snapshot.ai!.turnFinishedAt);
@@ -139,7 +139,7 @@ test("waiting for first model data already has visible motion, independent of id
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
  assert.ok(html.includes("turn-activity-mark") && html.includes("正在思考…"));
  const completed=renderToStaticMarkup(createElement(AITranscript,{snapshot:{...snapshot,replyTimings:[timing]}}));
- assert.ok(!completed.includes("reply-duration-spinner") && completed.includes("用时 1分钟 13秒")&&!completed.includes("reply-duration-clock"));
+ assert.ok(!completed.includes("reply-duration-spinner") && completed.includes("用时 1 分钟 13 秒")&&!completed.includes("reply-duration-clock"));
  assert.ok(!completed.includes("回复结束")&&!completed.includes("turn-status-mark"),"finished timing uses a quiet Chinese elapsed caption without an icon or repeated completion label");
 });
 
@@ -268,7 +268,7 @@ test('Pilot hides the running turn timer without reserving space and restores or
  const live=renderToStaticMarkup(createElement(TurnExecutionDetails,{hideLive:true,timing:{...timing,status:'running',finishedAt:''},details:[],children:body}));
  assert.equal(live,'<p>专员正文</p>');
  const ended=renderToStaticMarkup(createElement(TurnExecutionDetails,{hideLive:true,timing,details:[],children:body}));
- assert.ok(ended.includes('用时 1分钟 13秒')&&ended.includes('is-finished'));
+ assert.ok(ended.includes('用时 1 分钟 13 秒')&&ended.includes('is-finished'));
  assert.ok(ended.indexOf('专员正文')<ended.indexOf('用时'),'finished timing stays in the same slot after prose');
 });
 

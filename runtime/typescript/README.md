@@ -164,7 +164,7 @@ TS Dev 支持 MySQL、PostgreSQL、Redis、APISIX、Prometheus 和 VictoriaMetri
 
 专员页面已改为角色任务列表，派单及自然语言配置由 Pilot 完成。新专员的 Agent／模型默认规则见下文；旧无绑定专员保留 Codex 兼容默认。Codex 发送沿原显式新任务准入直接派发，不依赖 Router 推理；新 Worker 冻结当前执行配置，已有任务及原生偏好保持。原生 Worker 的 `Agent` 可选择 `codex-acp`，Worker 或已有原生 child 也可用 `run_external_agent(agent='codex')` 委派一段工作。外部 leaf 不再递归委派；任务仍最多 7 个逻辑 child。runtime-acp 生产启动与私有模型代理已删除，仅保留历史绑定的读取与明确拒绝，Lake 自身仍使用原公开 SDK。
 
-在模型菜单选择“配置 Codex”后启用，自动识别 Node 22.22+ / 24.14+ 和配套 npm，在当前 Home 的私有目录仅安装固定官方 Codex 引擎 0.160.1，并直接完成模型无关的 App Server 初始化。路径覆盖折叠在高级设置；主 TS 后端仍使用 Node 24.14.0。Codex 直接复用宿主 CODEX_HOME（默认 ~/.codex）的登录、默认模型、服务地址与思考强度；不再填写或保存项目独立 Key，也不依赖普通模型配置。登录文件由 Codex 原机制读取和刷新；Lake 不复制凭据、不修改本机 config.toml。用于工具托管的 SDK 在没有普通模型时采用不可推理的 Model 端口，原生 child 若需要推理会明确要求普通模型。Codex 原生执行工具关闭，继承的 MCP、hooks 与 notify 在启动和线程配置中关闭；私有模型目录在启动时注入。SQLite 与日志使用 Lake 私有目录。业务调用走每次执行的私有 MCP 桥及原 Lake 审批/账本。具体支持、版本、认证和平台限制见 [兼容记录](../../docs/validation/acp-agent-execution/compatibility.md)。
+在模型菜单选择“配置 Codex”后启用，自动识别 Node 22.22+ / 24.14+ 和配套 npm，在当前 Home 的私有目录安装固定的官方 Codex 引擎 0.170.0，完成本机登录和兼容模型连接检查。路径覆盖折叠在高级设置；主 TS 后端仍使用 Node 24.14.0。Codex 直接复用宿主 CODEX_HOME（默认 ~/.codex）的登录、默认模型、服务地址与思考强度；不再填写或保存项目独立 Key，也不依赖普通模型配置。登录文件由 Codex 原机制读取和刷新；Lake 不复制凭据、不修改本机 config.toml。用于工具托管的 SDK 在没有普通模型时采用不可推理的 Model 端口，原生 child 若需要推理会明确要求普通模型。Codex 原生执行工具关闭，继承的 MCP、hooks 与 notify 在启动和线程配置中关闭；私有模型目录在启动时注入。SQLite 与日志使用 Lake 私有目录。业务调用走每次执行的私有 MCP 桥及原 Lake 审批/账本。具体支持、版本、认证和平台限制见 [兼容记录](../../docs/validation/acp-agent-execution/compatibility.md)。
 
 调用层参考 Tutti 的进程／提供商适配／活动归一设计：`JsonRpcProcess` 管理子进程与按行 RPC，`CodexAppServer` 管理线程、轮次和传输批准，`LakeExternalAgents` 保留任务身份与工具桥。`turn/start` 应答只确认接收，完成来自准确轮次的终态通知。profile schema3 在迁移时递增 revision，旧执行绑定不被改写。历史 ACP 表名、`kind: acp` 和 `codex-acp` 子类型仅为兼容标识；生产路径不依赖 ACP SDK 或包装器。详情见[本机执行架构](../../docs/design/local-agent-runtime.md)。
 
@@ -172,7 +172,7 @@ TS Dev 支持 MySQL、PostgreSQL、Redis、APISIX、Prometheus 和 VictoriaMetri
 
 ## Pilot 自然语言专员配置
 
-2026-11-12 专员创建默认规则：Pilot 未指定 Agent／模型时，宿主从当前已配置可用组合中先随机 Agent，再随机其模型，并把准确引用保存到专员；只指定其中一项时随机其余部分。`route_work` 隐式新建角色沿同一规则。`list_specialist_execution_options` 提供有界分页目录，`manage_specialist` 支持 `model_id`／`provider_id` 或 execution.model 的明确选择。原生候选排除禁用、未配置凭据、未接入协议及图片输出模型；Codex 仅用当前就绪探针报告且属于固定兼容目录的模型。当前目录只有 gpt-6.1-sol，不从普通 Lake 模型菜单猜测 Codex 支持。空候选集不创建角色，实际调用失败也不静默重抽。
+2026-11-12 专员创建默认规则：Pilot 未指定 Agent／模型时，宿主从当前已配置可用组合中先随机 Agent，再随机其模型，并把准确引用保存到专员；只指定其中一项时随机其余部分。`route_work` 隐式新建角色沿同一规则。`list_specialist_execution_options` 提供有界分页目录，`manage_specialist` 支持 `model_id`／`provider_id` 或 execution.model 的明确选择。原生候选排除禁用、未配置凭据、未接入协议及图片输出模型；Codex 仅用当前就绪探针报告且属于固定兼容目录的模型。当前 Codex 兼容目录包含 gpt-6.1-sol 和 gpt-6.2-sol。引擎或兼容目录变化后，宿主重新检查对应项目的本机 Codex。空候选集不创建角色，实际调用失败也不静默重抽。
 
 原生 Worker 使用保存的 provider/model 引用，切换 Pilot 全局模型不改变它；Codex 使用单进程模型覆盖，登录、服务与 max 继续沿用本机配置，启动脚本按配置内容区分。重复创建返回原回执，更新省略字段保留，已有角色／任务不迁移或改派；旧无绑定专员保留原兼容默认。配置创建本身不制造业务任务，不修改资源权限、本机配置或全局模型。专员页面仍为任务列表，派单及自然语言配置由 Pilot 完成。
 

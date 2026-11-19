@@ -388,8 +388,11 @@ test("only current unfinished business work requests a final report, without cha
 test('specialist creation persists a random available model, replays once and preserves frozen Workers on later edits',async t=>{
  const f=await fixture(t),event=await f.admit('创建一个巡检专员，负责检查项目。');
  const input={event_id:event.id,part_key:'create',action:'create',role_key:'new-checker',name:'巡检专员',duties:'检查项目',quote:event.payload};
- const saved=f.internal.manage(f.router,input),binding=saved.execution;
+ const tool=f.internal.routerEntries(f.router).find((entry:any)=>entry.metadata.name==='manage_specialist')!;
+ const {savedExecution,...saved}=await tool.handler(input,{abortSignal:new AbortController().signal});
+ const binding=saved.execution;
  assert.equal(binding.kind,'native');assert.equal(binding.model.providerId,'fixture-models');assert.ok(['model-a','model-b'].includes(binding.model.modelId));
+ assert.deepEqual(savedExecution,{agentName:'Lake 原生',modelName:binding.model.modelId},'the reply can use the saved model name without another tool call');
  const provider=f.store.modelProvider('fixture-models')!;provider.enabled=false;f.store.put('providers',provider.id,provider);
  assert.deepEqual(f.internal.manage(f.router,input),saved,'the same creation returns its receipt even if the available pool changes');
  assert.equal(f.store.list('superRoleMutations').length,1);
@@ -507,7 +510,8 @@ test('Pilot delegation reports a missing local Codex login after a successful co
   f.store.put('superRoles',f.role.id,{...f.role,execution:{kind:'acp',agent:'codex'}});
   f.store.put('acpProbes',f.project.id+':codex',{revision:1,ready:true,authentication:'codex-local',authenticated:false});
   const event=await f.admit('检查当前服务器状态');
-  assert.throws(()=>f.route(event,{action:'create',role_id:f.role.id,title:'检查服务器'}),/本机 Codex 尚未登录/);
+  assert.throws(()=>f.route(event,{action:'create',role_id:f.role.id,title:'检查服务器'}),
+    /专员「项目检查员」的本机 Codex 执行配置不可用。本机 Codex 尚未登录/);
   assert.equal(f.store.list('superWorkers').length,0);
   assert.equal(f.store.list('superGoals').length,0);
 });
