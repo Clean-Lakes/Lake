@@ -1,12 +1,22 @@
+import { execFile } from "node:child_process";
 import { createHmac, X509Certificate } from "node:crypto";
 import { request as http } from "node:http";
 import { request as https } from "node:https";
 import { isIP } from "node:net";
+import type { TLSSocket } from "node:tls";
 import type { JumpServerLogin } from "../../web-agent/shared/contracts";
 import { HttpError } from "./store";
 
 export const uuid = /^[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}$/i;
 const invalid = () => new HttpError(502, "JumpServer 返回的授权数据不完整");
+const maximumReplySize = 12 * 1024 * 1024;
+const issuerErrors = new Set([
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+  "UNABLE_TO_GET_ISSUER_CERT",
+  "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "SELF_SIGNED_CERT_IN_CHAIN",
+]);
 export const validName = (v: unknown): v is string =>
   typeof v === "string" && !!v.trim() && v.length <= 512 && !/[\x00-\x1f\x7f]/.test(v);
 export const hostName = (v: unknown): v is string =>
@@ -39,14 +49,13 @@ function accountCurrent(value: unknown) {
   return Date.parse(iso)>Date.now();
 }
 
-function connectionError(error: NodeJS.ErrnoException) {
-  switch (error.code) {
-    case "UNABLE_TO_VERIFY_LEAF_SIGNATURE":
-    case "UNABLE_TO_GET_ISSUER_CERT":
-    case "UNABLE_TO_GET_ISSUER_CERT_LOCALLY":
-    case "DEPTH_ZERO_SELF_SIGNED_CERT":
-    case "SELF_SIGNED_CERT_IN_CHAIN":
-      return new HttpError(502, "JumpServer 的 HTTPS 证书未受信。请在「内部证书」导入可信的 CA 或服务器证书。");
+function untrustedCertificate() {
+  return new HttpError(502, "JumpServer 的 HTTPS 证书未受信。请在「内部证书」导入可信的 CA 或服务器证书。");
+}
+
+function connectionError(code?: string) {
+  if (issuerErrors.has(code ?? "")) return untrustedCertificate();
+  switch (code) {
     case "ERR_TLS_CERT_ALTNAME_INVALID":
       return new HttpError(502, "JumpServer 证书与 API 地址不匹配。请使用证书覆盖的域名或 IP。");
     case "CERT_HAS_EXPIRED":
@@ -55,6 +64,33 @@ function connectionError(error: NodeJS.ErrnoException) {
     default:
       return new HttpError(502, "无法连接 JumpServer，请核对 API 地址和网络。");
   }
+}
+
+function requestWithMacOSTrust(url: URL, method: string, headers: Record<string,string>, payload: string | undefined, signal: AbortSignal) {
+  // Curl config quoting keeps both headers and body on stdin. The process argv contains neither.
+  const config = [
+    "url = " + JSON.stringify(url.href),
+    "request = " + JSON.stringify(method),
+    ...Object.entries(headers).map(([key, value]) => "header = " + JSON.stringify(key + ": " + value)),
+  ];
+  if (payload !== undefined) config.push("data-binary = " + JSON.stringify(payload));
+  return new Promise<{status: number; body: Buffer}>((resolve, reject) => {
+    // Apple's built-in HTTPS client evaluates macOS trust. Disable per-user curl configuration and proxies.
+    const child = execFile("/usr/bin/curl", [
+      "-q", "--silent", "--globoff", "--path-as-is", "--noproxy", "*", "--proto", "=https",
+      "--max-time", "12", "--max-filesize", String(maximumReplySize), "--write-out", "\n%{http_code}", "--config", "-",
+    ], {encoding: "buffer", env: {LC_ALL: "C"}, maxBuffer: maximumReplySize + 4, signal}, (error, stdout) => {
+      if (error) {
+        reject(error.code === 60 || error.code === 51 ? untrustedCertificate() : connectionError());
+        return;
+      }
+      const footer = stdout.subarray(-4).toString("ascii");
+      if (!/^\n[1-5]\d{2}$/.test(footer)) { reject(invalid()); return; }
+      resolve({status: Number(footer.slice(1)), body: stdout.subarray(0, -4)});
+    });
+    child.stdin?.on("error", () => {});
+    child.stdin?.end(config.join("\n") + "\n");
+  });
 }
 
 export function loginConfiguration(input: JumpServerLogin): JumpServerLogin {
@@ -99,6 +135,7 @@ export class JumpServerAPI {
       headers.Authorization = 'Signature keyId="' + this.login.keyId + '",algorithm="hmac-sha256",headers="(request-target) accept date",signature="' + signature + '"';
     } else headers.Authorization = "Bearer " + this.login.secret;
     if (data) headers["Content-Type"] = "application/json";
+    const payload = data ? JSON.stringify(data) : undefined;
     const cancel = AbortSignal.any([signal, AbortSignal.timeout(12000)]);
     const secure = url.protocol === "https:";
     // An explicitly imported certificate can end the trust chain. TLS still checks the peer name and validity.
@@ -108,28 +145,49 @@ export class JumpServerAPI {
     } : {};
     return new Promise((resolve, reject) => {
       const send = secure ? https : http;
-      const req = send(url, {method, headers, signal:cancel, ...trust}, response => {
-        const status = response.statusCode ?? 500;
+      let peerAccepted = false;
+      const accept = (status: number, body: Buffer) => {
         if (status < 200 || status >= 300) {
-          response.resume();
           const forbidden = status === 401 || status === 403;
           reject(new HttpError(forbidden ? status : status === 404 ? 404 : 502, forbidden
             ? "JumpServer 已拒绝当前身份或操作，请核对凭据和授权"
             : "JumpServer 请求未完成（HTTP " + status + "）"));
           return;
         }
+        try { resolve(JSON.parse(body.toString("utf8"))); } catch { reject(invalid()); }
+      };
+      const req = send(url, {method, headers, signal:cancel, ...trust}, response => {
+        const status = response.statusCode ?? 500;
+        if (status < 200 || status >= 300) {
+          response.resume();
+          accept(status, Buffer.alloc(0));
+          return;
+        }
         const chunks: Buffer[] = [];
         let size = 0;
         response.on("data", (chunk: Buffer) => {
           size += chunk.length;
-          if (size > 12 * 1024 * 1024) { reject(invalid()); req.destroy(); }
+          if (size > maximumReplySize) { reject(invalid()); req.destroy(); }
           else chunks.push(chunk);
         });
         response.on("error", () => reject(invalid()));
-        response.on("end", () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString("utf8"))); } catch { reject(invalid()); } });
+        response.on("end", () => accept(status, Buffer.concat(chunks)));
       });
-      req.on("error", error => reject(connectionError(error)));
-      req.end(data ? JSON.stringify(data) : undefined);
+      req.once("socket", socket => {
+        if (!secure) return;
+        peerAccepted = (socket as TLSSocket).authorized === true;
+        if (!peerAccepted) socket.once("secureConnect", () => { peerAccepted = true; });
+      });
+      req.on("error", error => {
+        const code = (error as NodeJS.ErrnoException).code;
+        // Retry only an initial issuer failure, before the first request could have been sent.
+        if (process.platform === "darwin" && secure && !this.login.ca && !peerAccepted && !cancel.aborted && issuerErrors.has(code ?? "")) {
+          void requestWithMacOSTrust(url, method, headers, payload, cancel).then(result => accept(result.status, result.body), reject);
+          return;
+        }
+        reject(connectionError(code));
+      });
+      req.end(payload);
     });
   }
   async profile(signal: AbortSignal) {

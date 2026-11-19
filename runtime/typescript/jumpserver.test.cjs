@@ -3,7 +3,9 @@ const assert = require("node:assert/strict");
 const {createHmac,randomUUID} = require("node:crypto");
 const {createServer} = require("node:http");
 const {createServer: createHttpsServer} = require("node:https");
-const {execFileSync} = require("node:child_process");
+const childProcess = require("node:child_process");
+const {execFileSync} = childProcess;
+const {PassThrough} = require("node:stream");
 const fs = require("node:fs/promises");
 const {join} = require("node:path");
 const {tmpdir} = require("node:os");
@@ -95,6 +97,39 @@ test("HTTPS accepts an imported server certificate and still verifies the peer n
   assert.match((await preview({...login, ca: cert, origin: "https://localhost:" + port}, 502)).error, /证书与 API 地址不匹配/);
   assert.equal(requests, 4);
   assert.match((await preview({...login, ca: cert + key}, 400)).error, /公开证书/);
+
+  // Simulate macOS trusting this certificate without modifying the machine's trust store.
+  if (process.platform === "darwin") {
+    const execFile = childProcess.execFile;
+    const fallbackRequests = [];
+    t.mock.method(childProcess, "execFile", (command, args, options, callback) => {
+      if (command !== "/usr/bin/curl") return execFile(command, args, options, callback);
+      const stdin = new PassThrough();
+      let input = "";
+      stdin.setEncoding("utf8").on("data", chunk => { input += chunk; });
+      stdin.once("end", () => {
+        const settings = input.trimEnd().split("\n").map(line => JSON.parse(line.slice(line.indexOf(" = ") + 3)));
+        const [url, method, ...headers] = settings;
+        fallbackRequests.push({url, method, headers, args, env: options.env});
+        const value = new URL(url).pathname === "/api/v1/users/profile/" ? {id: f.user, username: "alice"} : [];
+        callback(null, Buffer.from(JSON.stringify(value) + "\n200"));
+      });
+      return {stdin};
+    });
+    assert.equal((await preview(login, 200)).userId, f.user);
+    assert.equal(requests, 4);
+    assert.deepEqual(fallbackRequests.map(call => new URL(call.url).pathname), ["/api/v1/users/profile/", "/api/v1/perms/users/self/nodes/"]);
+    for (const call of fallbackRequests) {
+      assert.equal(new URL(call.url).origin, login.origin);
+      assert.equal(call.method, "GET");
+      assert.ok(call.headers.includes("Authorization: Bearer " + f.login.secret));
+      assert.equal(call.args[0], "-q");
+      assert.deepEqual(call.args.slice(call.args.indexOf("--proto"), call.args.indexOf("--proto") + 2), ["--proto", "=https"]);
+      assert.deepEqual(call.args.slice(-2), ["--config", "-"]);
+      assert.ok(!call.args.some(arg => ["-k", "--insecure", "-L", "--location"].includes(arg)));
+      assert.ok(!JSON.stringify([call.args, call.env]).includes(f.login.secret));
+    }
+  }
 });
 
 test("personal mount reconciles complete pages, aliases, revocation and transient failures",async t=>{
