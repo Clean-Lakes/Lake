@@ -1,22 +1,30 @@
 import {useLayoutEffect,useRef,useState} from 'react';
 import {firstGrapheme,TextReveal} from './textReveal';
 
-export function useSmoothText(text:string,streaming:boolean,animateInitial=false){
+export function useSmoothText(text:string,streaming:boolean,{animateInitial=false,finishPending=false}:{
+ animateInitial?:boolean;finishPending?:boolean;
+}={}){
  const [shown,setShown]=useState(()=>streaming&&animateInitial?firstGrapheme(text):text);
- const displayed=useRef(shown);displayed.current=shown;
- const latest=useRef({text,streaming});latest.current={text,streaming};
+ const [playing,setPlaying]=useState(streaming);
+ const hasPendingSuffix=shown.length<text.length&&text.startsWith(shown);
+ // Success can arrive with the final packet still queued. Let the existing
+ // clock finish its suffix, without starting playback for completed history.
+ const play=streaming||finishPending&&playing&&hasPendingSuffix;
+ if(playing!==play)setPlaying(play);
+ if(!play&&shown!==text)setShown(text);
+ const visible=play&&hasPendingSuffix?shown:text;
+ const latest=useRef(text);
+ useLayoutEffect(()=>{latest.current=text;},[text]);
  const sync=useRef<()=>void>(()=>{});
  useLayoutEffect(()=>{
-  if(!streaming)return;
+  if(!play)return;
   const motion=window.matchMedia('(prefers-reduced-motion: reduce)');
-  const engine=new TextReveal(displayed.current,setShown);
-  sync.current=()=>engine.update(latest.current.text,latest.current.streaming&&!motion.matches&&!document.hidden);
+  const engine=new TextReveal(visible,setShown);
+  sync.current=()=>engine.update(latest.current,!motion.matches&&!document.hidden);
   motion.addEventListener('change',sync.current);document.addEventListener('visibilitychange',sync.current);
   sync.current();
   return()=>{engine.stop();motion.removeEventListener('change',sync.current);document.removeEventListener('visibilitychange',sync.current);sync.current=()=>{}};
- },[streaming]);
- useLayoutEffect(()=>sync.current(),[text,streaming]);
- // Completion, cancellation and replacement are visible in the same render,
- // including SSR. Frames never delay approvals, errors, or a final response.
- return !streaming||!text.startsWith(shown)?text:shown;
+ },[play]);
+ useLayoutEffect(()=>sync.current(),[text,play]);
+ return visible;
 }
