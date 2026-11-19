@@ -1324,7 +1324,7 @@ async function prepareCodexProtocolFixture(app,mode){
  const fs=require('node:fs/promises'),registry=app.agents.external.registry;
  const root=registry.runtimeRoot();await fs.mkdir(join(root,'node_modules/@openai/codex/bin'),{recursive:true});
  await fs.writeFile(registry.engineEntry(),'// owned protocol fixture; launch is overridden below');
- await fs.writeFile(join(root,'node_modules/@openai/codex/package.json'),JSON.stringify({version:'0.160.1'}));
+ await fs.writeFile(join(root,'node_modules/@openai/codex/package.json'),JSON.stringify({version:'0.170.0'}));
  app.agents.external.launch=async(_profile,directory,_signal,mcp)=>{
   const source=registry.local.current(),auth=JSON.parse(await fs.readFile(join(source.home,'auth.json'),'utf8'));
   return {executable:process.execPath,args:[join(__dirname,'test-fixtures/codex-app-server.cjs')],cwd:directory,env:{LAKE_TEST_ACP_SCENARIO:mode,LAKE_TEST_ACP_SOCKET:mcp?.args.at(-1),

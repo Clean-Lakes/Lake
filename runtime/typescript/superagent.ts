@@ -1290,7 +1290,12 @@ export class LakeSuperagent implements AgentHost {
   private schedule() {
     if (this.closed || this.scheduled) return;
     this.scheduled = true;
-    queueMicrotask(() => { this.scheduled = false; void this.pump(); });
+    // Yield so the server can write the durable input receipt before building
+    // the next routing context on the same event loop.
+    setImmediate(() => {
+      this.scheduled = false;
+      void this.pump();
+    });
   }
   messageQueueBusy(sessionId: string) {
     const session = this.store.session(sessionId), project = this.store.get<SuperProject>('superProjects', session.projectId);
@@ -1340,7 +1345,12 @@ export class LakeSuperagent implements AgentHost {
         const threadWorkerIds=new Set(threadWorkers.map(worker=>worker.id));
         const threadTaskIds=new Set(threadWorkers.flatMap(worker=>{const goal=this.ledger.get(worker.taskId);return [goal.id,...(goal.sharedTaskId?[goal.sharedTaskId]:[])];}));
         const sources = new Set(events.map((event) => event.sessionId));
-        const allMessages = this.store.list<Message>("messages").filter((message) => this.store.session(message.sessionId).projectId === project.projectId);
+        // The source sessions provide dialogue. Pilot also holds the durable
+        // copies of specialist reports used for source association and deduplication.
+        const historySessions = new Set([...sources, project.routerSessionId]);
+        const allMessages = [...historySessions]
+          .filter(sessionId => this.store.get<StoredSession>("sessions", sessionId)?.projectId === project.projectId)
+          .flatMap(sessionId => this.store.messages(sessionId));
         const messages: RouterMessage[] = allMessages.flatMap((message) => {
           if(external && !threadEvents.some(event=>event.messageId===message.id) &&
             !(message.sessionId===project.routerSessionId && message.conversation && threadEvents.some(event=>event.messageId===message.conversation!.sourceMessageId)) &&
@@ -1362,6 +1372,11 @@ export class LakeSuperagent implements AgentHost {
           if(reply)messages.push({id:'gateway_reply_'+event.id,projectId:project.projectId,sessionId:project.routerSessionId,
             role:'assistant',text:reply.text,createdAt:reply.createdAt});
         }
+        const unresolvedByGoal = new Map<string, number>();
+        for (const operation of this.store.list<Operation>("superOperations")) {
+          if (operation.status !== "unknown" && operation.status !== "dispatched") continue;
+          unresolvedByGoal.set(operation.goalId, (unresolvedByGoal.get(operation.goalId) ?? 0) + 1);
+        }
         const context = buildRouterContext({ projectId: project.projectId, now: now(),
           specialists:this.store.list<Role>("superRoles"),
           events: events.map((event) => {const parent=event.replyTo&&event.external?.connectionId ? this.gatewayEvent(event.external.connectionId,event.replyTo) : undefined;
@@ -1373,7 +1388,7 @@ export class LakeSuperagent implements AgentHost {
               roleId: worker.roleId!, hash: digest(goal), updatedAt: goal.updatedAt ?? worker.createdAt ?? "", createdAt: worker.createdAt,
               summary: this.agents.redact(worker.task.summary ?? ""), archived: worker.assignmentState === "archived",
               pendingApproval: this.pendingInteraction(worker.sessionId),
-              unresolvedOperations: this.store.list<Operation>("superOperations").filter((operation) => operation.goalId === goal.id && ["unknown", "dispatched"].includes(operation.status)).length,
+              unresolvedOperations: unresolvedByGoal.get(goal.id) ?? 0,
               resourceIds: [...new Set([...(goal.resourceIds ?? []), ...(goal.resourceBindings ?? []).map((binding: any) => binding.assetRef).filter(Boolean)])] as string[],
               blockers: (goal.items ?? []).filter((item: any) => item.reason && ["blocked", "failed", "waiting_user"].includes(item.status)).map((item: any) =>
                 ({ detail: this.agents.redact(item.reason), recordUpdatedAt: goal.updatedAt })) };
@@ -2010,7 +2025,10 @@ export class LakeSuperagent implements AgentHost {
           execution:objectSchema({kind:{type:'string',enum:['native','acp']},agent:{type:'string',enum:['codex']},model:objectSchema({modelId:str,providerId:str},['modelId'])},['kind']),model_id:str,provider_id:str,expected_revision: integer, quote: str }, ["event_id", "part_key", "action", "quote"]), async(a,context)=>{
             this.admitted(sessionId,a.event_id,text(a.quote,'quote',16384));context.abortSignal.throwIfAborted();
             const available=a.action==='create'||a.model_id!==undefined||a.execution!==undefined?await this.refreshedExecutionOptions(projectId):undefined;
-            context.abortSignal.throwIfAborted();return this.manage(sessionId,a,available);
+            context.abortSignal.throwIfAborted();
+            const saved=this.manage(sessionId,a,available);
+            const option=available?.find(item=>canonical(item.execution)===canonical(saved.execution));
+            return option?{...saved,savedExecution:{agentName:option.agentName,modelName:option.modelName}}:saved;
           }),
       this.entry("route_work", "Commit one exact admitted event part. Copy role_id verbatim from the current specialists catalog or list_specialists; never reconstruct IDs. If specialist_not_found, refresh the catalog and correct the same event/part, without changing its deliverable or scope. resource_ids may contain only IDs explicitly selected on this exact admitted event in selectedReferences.resourceIds. If that list is absent or empty, omit resource_ids entirely, including for a fresh check; never copy it from predecessor tasks, prior messages, resource metadata or memory. Use predecessor_task_id for historical target context, not as a new selection or permission. For an event selecting multiple resources, create must set resource_ids to its exact subset of selected IDs. Independent per-resource tasks may quote the same request if subsets are disjoint; for a single comparison include both IDs. Create requires title, quote and one recipient selector: role_id, new role_key, or role_ids for one shared task. Specify role_instructions for each contributor. Omit task_id for create; for assign supply the existing public task_id and additional roles. Followup, context_only and stop target the exact task and recipient role_id, using the public ID for a shared task. Use predecessor_task_id to link an earlier task. A finished source supplies historical context, including any partial findings. An unfinished ordinary source creates an independent read-only recheck for the same specialist, original explicit resource scope and deadline; it preserves original records and cannot replay original operation IDs. Invalid-memory followup uses the same safe recheck path. Inspect assignments in the receipt for the exact recipients. ask/respond omit task_id.",
         objectSchema({ event_id: str, part_key: str, action: { type: "string", enum: ["create", "assign", "followup", "context_only", "stop", "ask", "respond"] },

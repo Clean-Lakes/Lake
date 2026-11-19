@@ -388,8 +388,11 @@ test("only current unfinished business work requests a final report, without cha
 test('specialist creation persists a random available model, replays once and preserves frozen Workers on later edits',async t=>{
  const f=await fixture(t),event=await f.admit('创建一个巡检专员，负责检查项目。');
  const input={event_id:event.id,part_key:'create',action:'create',role_key:'new-checker',name:'巡检专员',duties:'检查项目',quote:event.payload};
- const saved=f.internal.manage(f.router,input),binding=saved.execution;
+ const tool=f.internal.routerEntries(f.router).find((entry:any)=>entry.metadata.name==='manage_specialist')!;
+ const {savedExecution,...saved}=await tool.handler(input,{abortSignal:new AbortController().signal});
+ const binding=saved.execution;
  assert.equal(binding.kind,'native');assert.equal(binding.model.providerId,'fixture-models');assert.ok(['model-a','model-b'].includes(binding.model.modelId));
+ assert.deepEqual(savedExecution,{agentName:'Lake 原生',modelName:binding.model.modelId},'the reply can use the saved model name without another tool call');
  const provider=f.store.modelProvider('fixture-models')!;provider.enabled=false;f.store.put('providers',provider.id,provider);
  assert.deepEqual(f.internal.manage(f.router,input),saved,'the same creation returns its receipt even if the available pool changes');
  assert.equal(f.store.list('superRoleMutations').length,1);
