@@ -32,6 +32,9 @@ export function useSpecialistModel(channel:SpecialistChannelInfo|undefined,setti
  },[current?.sessionId,current?.projectId,current?.roleId,current?.roleRevision]);
  const message=loading?'正在读取 Codex 配置':error||agent?.assignmentBlocker||(!agent?.assignmentReady?'请先配置 Codex':undefined);
  const blocker=selected?message:undefined;
+ const model=current?.execution?.kind==='acp'&&current.execution.agent==='codex'
+  ? current.execution.model?.modelId??agent?.defaultTaskModel??agent?.model
+  : agent?.defaultTaskModel??agent?.model;
  const assignment=():SpecialistAgentAssignment|undefined=>selected&&current?{requestId:request.current.id,roleRevision:current.roleRevision!,execution:{kind:'acp',agent:'codex',revision:agent?.revision}}:undefined;
- return {selected,agent,loading,saving,blocker,message,select,assignment,accepted:()=>{request.current.id=crypto.randomUUID();}};
+ return {selected,agent,loading,saving,blocker,message,model,select,assignment,accepted:()=>{request.current.id=crypto.randomUUID();}};
 }

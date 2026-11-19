@@ -17,6 +17,15 @@ export function activeDirectoryItem(positions:{id:string;top:number}[],viewportT
  return positions.filter(item=>item.top<=viewportTop+32).at(-1)?.id??positions[0]?.id??null;
 }
 
+function directoryItemAtScrollPosition(container: HTMLElement, items: ConversationDirectoryItem[], sessionId: string) {
+ const positions = items.flatMap(({id}) => {
+  const turn = document.getElementById(conversationTurnId(sessionId, id));
+  return turn ? [{id, top: turn.getBoundingClientRect().top}] : [];
+ });
+ const padding = Number.parseFloat(getComputedStyle(container).scrollPaddingTop) || 0;
+ return activeDirectoryItem(positions, container.getBoundingClientRect().top + padding);
+}
+
 export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOlder,loading=false}:{
  sessionId:string;items:ConversationDirectoryItem[];onJump:(id:string)=>void;onLatest:()=>void;
  onLoadOlder?:()=>void;loading?:boolean;
@@ -28,6 +37,12 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
  const rows=useRef(new Map<string,HTMLButtonElement>()),id=useId();
  const itemIds=JSON.stringify(items.map(item=>item.id));
  function close(restoreFocus=false){setOpen(false);if(restoreFocus)trigger.current?.focus({preventScroll:true});}
+ function toggle() {
+  if (open) { close(); return; }
+  const container = document.querySelector<HTMLElement>('.conversation');
+  if (container) setSelected(directoryItemAtScrollPosition(container, items, sessionId));
+  setOpen(true);
+ }
  useLayoutEffect(()=>{
   const container=document.querySelector<HTMLElement>('.conversation');if(!container)return;
   const header=document.querySelector<HTMLElement>('.island-conversation')??document.querySelector<HTMLElement>('.workspace > .workspace-header');
@@ -37,21 +52,17 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
    let left=Math.max(bounds.left+4,bounds.right-76),top=Math.max(bounds.top+12,(heading?.top??bounds.top)+9);
    const compact=!!heading&&left<heading.right+8&&left+64>heading.left;
    if(compact){left=bounds.left+2;top=Math.max(bounds.top+12,heading!.bottom+10);}
+   if(open)setSelected(directoryItemAtScrollPosition(container!,items,sessionId));
    if(root.current){root.current.style.left=`${left}px`;root.current.style.top=`${top}px`;root.current.toggleAttribute('data-compact',compact);}
-   const positions=items.flatMap(item=>{
-    const turn=document.getElementById(conversationTurnId(sessionId,item.id));
-    return turn?[{id:item.id,top:turn.getBoundingClientRect().top}]:[];
-   });
-   const padding=Number.parseFloat(getComputedStyle(container!).scrollPaddingTop)||0;
-   setSelected(activeDirectoryItem(positions,bounds.top+padding));
   }
   function schedule(){cancelAnimationFrame(frame);frame=requestAnimationFrame(update);}
   update();const observer=new ResizeObserver(schedule);observer.observe(container);
-  const content=container.querySelector('.timeline-list');if(content)observer.observe(content);
+  const content=open&&container.querySelector('.timeline-list');if(content)observer.observe(content);
   const headerObserver=new MutationObserver(schedule);if(header){observer.observe(header);headerObserver.observe(header,{attributes:true,attributeFilter:['style','data-ready','data-present']});}
-  container.addEventListener('scroll',schedule,{passive:true});window.addEventListener('resize',schedule);
+  if(open)container.addEventListener('scroll',schedule,{passive:true});
+  window.addEventListener('resize',schedule);
   return()=>{cancelAnimationFrame(frame);observer.disconnect();headerObserver.disconnect();container.removeEventListener('scroll',schedule);window.removeEventListener('resize',schedule);};
- },[sessionId,itemIds]);
+ },[sessionId,itemIds,open]);
  useLayoutEffect(()=>{
   if(!open)return;
   function measure(){
@@ -97,7 +108,7 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
   </footer>
  </section>;
  const navigation=<div className={`conversation-directory${open?' is-open':''}`} ref={root}>
-  <button ref={trigger} type="button" className="conversation-directory-trigger" aria-label="会话目录" title="会话目录" aria-haspopup="dialog" aria-expanded={open} aria-controls={open?id:undefined} onClick={()=>setOpen(value=>!value)}><Glyph name="listTasks" size={15}/><span>目录</span></button>
+  <button ref={trigger} type="button" className="conversation-directory-trigger" aria-label="会话目录" title="会话目录" aria-haspopup="dialog" aria-expanded={open} aria-controls={open?id:undefined} onClick={toggle}><Glyph name="listTasks" size={15}/><span>目录</span></button>
   {content}
  </div>;
  return typeof document==='undefined'?navigation:createPortal(navigation,document.body);

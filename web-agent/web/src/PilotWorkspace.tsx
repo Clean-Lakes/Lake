@@ -9,6 +9,13 @@ import {NavigationMenu} from './NavigationDelete';
 import {SpecialistDelete} from './SpecialistDelete';
 import {SidebarPilotEntry} from './SidebarPilotEntry';
 import {AgentBackendLogo,agentTypeName} from './AgentBackendLogo';
+import {reuseUnchanged} from './snapshotUpdates';
+
+function withSeenCursor(channel:SpecialistChannelInfo,cursor:string):SpecialistChannelInfo {
+ const state=channel.messageRead;
+ if(!state||cursor<=state.seenCursor)return channel;
+ return {...channel,messageRead:{...state,seenCursor:cursor}};
+}
 
 export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
  const [workspace,setWorkspace]=useState<SuperWorkspace|null>(null),[error,setError]=useState('');
@@ -23,7 +30,21 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
    try{
     let next=await api.superWorkspace(projectId,controller.signal);
     if(!next.active&&Date.now()>=nextActivation){nextActivation=Date.now()+15000;await api.ensureSuperWorkspace(projectId,controller.signal);next=await api.superWorkspace(projectId,controller.signal);}
-    if(generation.current===current){setWorkspace({...next,questions:next.questions?.filter(question=>!deletedRoles.current.has(question.author.roleId??'')),channels:next.channels?.filter(channel=>!deletedRoles.current.has(channel.roleId)),workers:next.workers.filter(worker=>!deletedRoles.current.has(worker.roleId))});if(next.active)setError('');}
+    if(generation.current===current){
+     setWorkspace(previous=>{
+      // A workspace poll started before an acknowledgement can arrive after it.
+      const seen=new Map(previous?.project.projectId===next.project.projectId
+       ? previous.channels?.map(channel=>[channel.sessionId,channel.messageRead?.seenCursor??''])
+       : undefined);
+      return reuseUnchanged(previous,{...next,
+       questions:next.questions?.filter(question=>!deletedRoles.current.has(question.author.roleId??'')),
+       channels:next.channels?.filter(channel=>!deletedRoles.current.has(channel.roleId))
+        .map(channel=>withSeenCursor(channel,seen.get(channel.sessionId)??'')),
+       workers:next.workers.filter(worker=>!deletedRoles.current.has(worker.roleId)),
+      });
+     });
+     if(next.active)setError('');
+    }
    }catch(reason){if(!controller.signal.aborted&&generation.current===current)setError(readableError(reason));}
    finally{busy=false;if(queued&&!controller.signal.aborted){queued=false;void refresh();}}
   };
@@ -42,7 +63,20 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
  },[routerId,connected]);
  useEffect(()=>{const refresh=()=>refreshRef.current();window.addEventListener('lake:conversation-read',refresh);return()=>window.removeEventListener('lake:conversation-read',refresh);},[]);
  const removeRole=(roleId:string)=>{deletedRoles.current.add(roleId);setWorkspace(current=>current?{...current,questions:current.questions?.filter(question=>question.author.roleId!==roleId),channels:current.channels?.filter(channel=>channel.roleId!==roleId),workers:current.workers.filter(worker=>worker.roleId!==roleId)}:current);void refreshRef.current();};
- return {workspace,error,removeRole,refresh:()=>refreshRef.current()};
+ const readChannel=async(channel:SpecialistChannelInfo)=>{
+  const state=channel.messageRead;
+  if(!state||!hasUnreadMessages(state))return;
+  try {
+   const {cursor}=await api.readConversation(channel.sessionId,state.cursor);
+   setWorkspace(current=>current?.project.projectId===channel.projectId?{
+    ...current,
+    channels:current.channels?.map(row=>row.sessionId===channel.sessionId?withSeenCursor(row,cursor):row),
+   }:current);
+  } catch {
+   // The visible overview can retry if the receipt could not be saved.
+  }
+ };
+ return {workspace,error,removeRole,readChannel,refresh:()=>refreshRef.current()};
 }
 
 type ReadMark = {requested: string; acknowledged: string; pending: boolean};

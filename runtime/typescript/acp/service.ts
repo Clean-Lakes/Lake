@@ -3,16 +3,17 @@ import { join } from 'node:path';
 import { isSea } from 'node:sea';
 import { LakeStore,HttpError,id,now } from '../store';
 import { digest } from '../tasks';
+import {TaskDeadlineReached,watchTaskDeadline} from '../task-deadline';
 import type {AgentConnection,AgentLaunch} from './client';
 import {CodexAppServer} from './codex-app-server';
 import { ExternalAgentRegistry } from './registry';
-import { externalAgentId,externalControlTools } from './catalog';
+import { externalAgentId,externalControlTools,externalProducts } from './catalog';
 import {externalAgentName} from '../../../web-agent/shared/external-agents';
 import { openToolBridge } from './bridge';
 import {privatePath} from './private';
 import {codexConfig,tomlValue} from './codex-profile';
 import {ExternalPublicText} from './public-text';
-import type { ExternalActor,ExternalAgentProfile,ExternalEvent,ExternalResult,ExternalRun } from './types';
+import type { CodexConnectionProbe,ExternalActor,ExternalAgentProfile,ExternalEvent,ExternalResult,ExternalRun } from './types';
 
 function ownLauncher(flag:string,args:string[]=[]){return {executable:process.execPath,args:isSea()?[flag,...args]:[__filename,flag,...args]};}
 export class LakeExternalAgents {
@@ -25,14 +26,16 @@ export class LakeExternalAgents {
       run.state=run.dispatchPhase==='not_sent'?'interrupted':'unknown';run.updatedAt=now();store.put('acpRuns',run.id,run);
     }
   }
-  private async launch(profile:ExternalAgentProfile,directory:string,signal:AbortSignal,mcp?:{command:string;args:string[]},model?:string):Promise<AgentLaunch>{
+  private async launch(profile:ExternalAgentProfile,directory:string,signal:AbortSignal,mcp?:{command:string;args:string[]},model?:string,purpose:'run'|'probe'='run'):Promise<AgentLaunch>{
     if(process.platform!=='darwin')throw new HttpError(409,'当前平台的 Codex 工具隔离尚未验证');
     if(!profile.nodePath)throw new HttpError(409,'请先配置 Codex 使用的 Node 运行时');
     const engine=JSON.parse(await readFile(join(this.registry.runtimeRoot(),'node_modules/@openai/codex/package.json'),'utf8'));
-    if(engine.version!=='0.160.1')throw new HttpError(409,'Codex 引擎版本不匹配，请重新安装固定版本');
+    if(engine.version!==externalProducts.codex.version)throw new HttpError(409,'Codex 引擎版本不匹配，请重新安装固定版本');
     await this.registry.validateNode(profile.nodePath);
-    const prepared=await this.registry.prepareLaunch(profile,signal,model);
-    const threadConfig={...codexConfig(prepared.home),...(model?{model}:{}),mcp_servers:{...prepared.disabledMcp,...(mcp?{lake:mcp}:{})}};
+    const prepared=purpose==='probe'
+      ? await this.registry.prepareConnection(profile,signal)
+      : await this.registry.prepareLaunch(profile,signal,model);
+    const threadConfig={...codexConfig(prepared.home),...(purpose==='run'?{model:prepared.observed.model}:{}),mcp_servers:{...prepared.disabledMcp,...(mcp?{lake:mcp}:{})}};
     return {executable:prepared.command,args:[...prepared.args.slice(0,-1),'-c','mcp_servers='+tomlValue(threadConfig.mcp_servers),'app-server'],
       cwd:directory,observed:prepared.observed,threadConfig,env:{...prepared.environment,TMPDIR:directory}};
   }
@@ -40,15 +43,20 @@ export class LakeExternalAgents {
     const profile=this.registry.get(projectId,agent),directory=await privatePath(this.store.data,'external-agents','probe',projectId,profile.id);
     let transport:AgentConnection|undefined;
     try{
-      const launch=await this.launch(profile,directory,signal);
+      const launch=await this.launch(profile,directory,signal,undefined,undefined,'probe');
       if(!launch.observed)throw new Error('未能确认本机 Codex 配置与登录状态');
       transport=new CodexAppServer(launch,()=>{});
       const capabilities=await transport.initialize(signal);
       if(this.registry.get(projectId,profile.id).revision!==profile.revision)throw new Error('本机 Codex 配置或账号已变化，请重新连接');
       const message=launch.observed.authenticated?'已连接本机 Codex，复用已有登录与配置':'本机 Codex 尚未登录，请先在 Codex 中完成登录后重新连接';
-      this.store.put('acpProbes',projectId+':'+profile.id,{revision:profile.revision,authentication:'codex-local',ready:true,...launch.observed,capabilities,message});
+      this.store.put<CodexConnectionProbe>('acpProbes',projectId+':'+profile.id,{connectionVersion:1,revision:profile.revision,authentication:'codex-local',ready:true,...launch.observed,capabilities,message});
       return {ok:true,capabilities};
-    }catch(error){const message=this.redact(error instanceof Error?error.message:'Codex 连接失败');this.store.put('acpProbes',projectId+':'+profile.id,{revision:profile.revision,authentication:'codex-local',ready:false,message});throw new HttpError(409,message);}
+    }catch(error){
+      const message=this.redact(error instanceof Error?error.message:'Codex 连接失败');
+      if(this.registry.get(projectId,profile.id).revision===profile.revision)
+        this.store.put<CodexConnectionProbe>('acpProbes',projectId+':'+profile.id,{connectionVersion:1,revision:profile.revision,authentication:'codex-local',ready:false,message});
+      throw new HttpError(409,message);
+    }
     finally{await transport?.close();}
   }
   async status(projectId:string){
@@ -74,6 +82,7 @@ export class LakeExternalAgents {
     return {agents:await this.registry.list(projectId)};
   }
   private result(run:ExternalRun):ExternalResult{const last=run.events.findLast(event=>event.kind==='text'&&event.publicTextId&&typeof event.publicText==='string');return {run_id:run.id,agent:externalAgentName(run.agent),state:run.state,summary:run.summary??run.error??'',
+    ...(run.stopReason==='deadline_reached'&&{stop_reason:'deadline_reached' as const}),
     ...(last&&{public_reply:{id:last.publicTextId!,content:last.publicText!}}),verification:'insufficient',
     limitations:['外部运行返回本次报告；请结合实际工具结果汇总原任务结论，如实说明失败或未知结果。']};}
   async run(agent:unknown,instruction:string,requestKey:string,actor:ExternalActor,resumeRunId?:string):Promise<ExternalResult>{
@@ -92,14 +101,13 @@ export class LakeExternalAgents {
     if(this.live.size>=4)throw new HttpError(409,'外部 Agent 正在处理其他工作，请稍后继续原任务');
     const runId=id();
     const run:ExternalRun={schemaVersion:1,id:runId,purpose:actor.purpose??'segment',contextId:prior?.contextId??runId,scopeHash:actor.scopeHash,agent:agentId,profileRevision:profile.revision,projectId:actor.projectId,taskId:actor.taskId,conversationId:actor.conversationId,workerId:actor.workerId,sessionId:actor.sessionId,
-      childSessionId:actor.childSessionId,agentRunId:actor.agentRunId,generation:actor.generation,requestKey,inputHash,...(actor.model?{requestedModel:actor.model}:{}),state:'starting',dispatchPhase:'not_sent',createdAt:now(),updatedAt:now(),events:[],usage:null};
+      childSessionId:actor.childSessionId,agentRunId:actor.agentRunId,rootTurnId:actor.rootTurnId,generation:actor.generation,requestKey,inputHash,...(actor.model?{requestedModel:actor.model}:{}),state:'starting',dispatchPhase:'not_sent',createdAt:now(),updatedAt:now(),events:[],usage:null};
     const controller=new AbortController(),stop=()=>controller.abort(actor.signal.reason);
     actor.signal.addEventListener('abort',stop,{once:true});
     const live:{process?:AgentConnection;controller:AbortController;scopeHash:string;guard?:()=>void}={controller,scopeHash:actor.scopeHash};this.live.set(run.id,live);
-    const deadline=Math.min(Date.parse(actor.deadlineAt)-Date.now(),15*60*1000);
-    if(!Number.isFinite(deadline)||deadline<=0){this.live.delete(run.id);actor.signal.removeEventListener('abort',stop);throw new HttpError(409,'原任务期限已到');}
-    const timer=setTimeout(()=>controller.abort(new Error('原任务期限已到')),deadline);
-    const guard=()=>{controller.signal.throwIfAborted();actor.guard();const current=this.registry.get(actor.projectId,agentId);if(!current.enabled||current.revision!==profile.revision)throw new HttpError(409,'外部 Agent 配置已变化');};
+    const stopDeadline=watchTaskDeadline(()=>actor.deadlineAt,controller);
+    const guard=()=>{controller.signal.throwIfAborted();actor.guard();if(Date.parse(actor.deadlineAt)<=Date.now())throw new TaskDeadlineReached();
+      const current=this.registry.get(actor.projectId,agentId);if(!current.enabled||current.revision!==profile.revision)throw new HttpError(409,'外部 Agent 配置已变化');};
     live.guard=guard;
     const fence=setInterval(()=>{try{guard();}catch(error){controller.abort(error);}},1000);
     let bridge:Awaited<ReturnType<typeof openToolBridge>>|undefined,submittedReport='',eventBytes=0;
@@ -121,11 +129,12 @@ export class LakeExternalAgents {
       return result;};
     persist();
     try{
+      guard();
       const directory=await privatePath(this.store.data,'external-agents','runs',run.contextId);
       if(agentId==='codex'&&actor.purpose!=='conversation')bridge=await openToolBridge(tools.map(tool=>({name:tool.metadata.name,description:tool.metadata.description??tool.metadata.name,inputSchema:tool.inputSchema as Record<string,unknown>})),invoke);
       const launcher=ownLauncher('--internal-acp-mcp');
       const mcp=bridge?{command:'/usr/bin/env',args:['-i','PATH='+process.env.PATH,'HOME='+directory,'TMPDIR='+directory,'LANG='+(process.env.LANG??'en_US.UTF-8'),'LAKE_TS_IMPORT_ONLY=0',launcher.executable,...launcher.args,bridge.socket]}:undefined;
-      const launch=await this.launch(profile,directory,controller.signal,mcp,actor.model);
+      const launch=await this.launch(profile,directory,controller.signal,mcp,actor.model??prior?.model);
       if(launch.observed){run.model=launch.observed.model;run.modelProvider=launch.observed.modelProvider;run.reasoningEffort=launch.observed.reasoningEffort;persist();}
       const transport:AgentConnection=new CodexAppServer(launch,update=>{
         if(controller.signal.aborted||!['dispatching','sent'].includes(run.dispatchPhase))return;
@@ -137,9 +146,10 @@ export class LakeExternalAgents {
       live.process=transport;
       const cancel=()=>{void transport.cancel().finally(()=>transport.close());};controller.signal.addEventListener('abort',cancel,{once:true});
       await transport.initialize(controller.signal);
+      run.runtimeKind=profile.runtimeKind;
       run.externalSessionId=await transport.openSession({cwd:directory,threadId:prior?.externalSessionId,systemPrompt:actor.systemPrompt},controller.signal);
       guard();run.state='running';run.dispatchPhase='dispatching';persist();event({kind:'status',status:'running'});
-      const prompt=transport.exec(instruction,controller.signal,deadline);
+      const prompt=transport.exec(instruction,controller.signal);
       run.dispatchPhase='sent';persist();
       const response=await prompt;guard();run.dispatchPhase='answered';run.stopReason=response.stopReason;
       if(response.error)run.error=this.redact(response.error);
@@ -147,10 +157,13 @@ export class LakeExternalAgents {
       if(!run.summary&&run.state==='completed'){run.state='failed';run.error='外部 Agent 没有返回业务报告';}
       persist();event({kind:'status',status:run.state});
       return this.result(run);
-    }catch(error){run.error=this.redact((error instanceof Error?error.message:'外部 Agent 执行失败')+((error as any)?.data?': '+JSON.stringify((error as any).data).slice(0,4096):'')+(live.process?.diagnostics()?': '+live.process.diagnostics().slice(-4096):''));
-      run.summary=this.redact(text.auditText).slice(0,32768);run.state=run.dispatchPhase==='not_sent'?(controller.signal.aborted?'cancelled':'failed'):'unknown';persist();event({kind:'status',status:run.state});
+    }catch(error){
+      if(error instanceof TaskDeadlineReached||controller.signal.reason instanceof TaskDeadlineReached)run.stopReason='deadline_reached';
+      run.error=this.redact((error instanceof Error?error.message:'外部 Agent 执行失败')+((error as any)?.data?': '+JSON.stringify((error as any).data).slice(0,4096):'')+(live.process?.diagnostics()?': '+live.process.diagnostics().slice(-4096):''));
+      run.summary=this.redact(text.auditText).slice(0,32768);
+      run.state=run.dispatchPhase==='not_sent'?(controller.signal.aborted||run.stopReason==='deadline_reached'?'cancelled':'failed'):'unknown';persist();event({kind:'status',status:run.state});
       if(run.state==='failed'&&!run.summary)throw new HttpError(409,run.error);return this.result(run);
-    }finally{clearTimeout(timer);clearInterval(fence);controller.abort(new Error('外部执行已结束'));actor.signal.removeEventListener('abort',stop);await bridge?.close();await live.process?.close();this.live.delete(run.id);}
+    }finally{stopDeadline();clearInterval(fence);controller.abort(new Error('外部执行已结束'));actor.signal.removeEventListener('abort',stop);await bridge?.close();await live.process?.close();this.live.delete(run.id);}
   }
   active(sessionId:string){return [...this.live.keys()].some(id=>this.store.get<ExternalRun>('acpRuns',id)?.sessionId===sessionId);}
   async steer(sessionId:string,input:string,inputId:string,agentRunId?:string){

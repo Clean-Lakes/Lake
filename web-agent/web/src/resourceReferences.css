@@ -36,6 +36,10 @@
  --resource-reference-background:var(--warning-soft);
  --resource-reference-foreground:var(--warning);
 }
+:is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon.kind-grafana) {
+ --resource-reference-background:var(--tag-orange-soft);
+ --resource-reference-foreground:var(--tag-orange);
+}
 :is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon:is(.kind-docker,.kind-kubernetes)) {
  --resource-reference-background:var(--tag-purple-soft);
  --resource-reference-foreground:var(--tag-purple);

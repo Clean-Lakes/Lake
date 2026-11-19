@@ -10,7 +10,7 @@ const tokens=(value:any):Tokens|undefined=>value&&Number.isSafeInteger(value.inp
   {inputTokens:value.inputTokens,outputTokens:value.outputTokens}:undefined;
 type McpGate={server:string;tools:ReadonlySet<string>;guard:()=>void};
 
-/** Official Codex 0.160.1 App Server. JSON-RPC version headers are omitted. */
+/** Official Codex App Server. JSON-RPC version headers are omitted. */
 export class CodexAppServer implements AgentConnection {
   private readonly rpc:JsonRpcProcess;
   private initialized=false;
@@ -36,7 +36,7 @@ export class CodexAppServer implements AgentConnection {
     await turn.confirmed;
     if(this.turn!==turn||turn.done||params?.threadId!==this.threadId||params.turnId!==turn.id||
       params.serverName!==this.mcp.server||!['form','openai/form','openaiForm'].includes(params.mode)||params._meta?.codex_approval_kind!=='mcp_tool_call')return cancelled;
-    // App Server 0.160.1 omits the MCP call ID from form elicitations. Consume
+    // App Server form elicitations can omit the MCP call ID. Consume
     // one observed call for this exact thread/turn/server. This admits only the
     // private transport; ToolExecutor checks the actual business action.
     const call=[...turn.mcpCalls.values()].find(call=>call.pending&&call.server===this.mcp!.server&&this.mcp!.tools.has(call.tool));
@@ -64,7 +64,7 @@ export class CodexAppServer implements AgentConnection {
     if(this.launch.observed&&typeof result.model==='string'&&result.model!==this.launch.observed.model)throw new Error('Codex 线程模型与冻结配置不一致');
     this.threadId=id;return id;
   }
-  async exec(text:string,signal:AbortSignal,timeout:number):Promise<AgentTurnResult> {
+  async exec(text:string,signal:AbortSignal):Promise<AgentTurnResult> {
     signal.throwIfAborted();
     if(!this.threadId||this.turn||this.broken)throw new Error('Codex 线程不可用或已有轮次运行');
     let turn!:Turn;
@@ -79,9 +79,8 @@ export class CodexAppServer implements AgentConnection {
     this.turn=turn;
     const abort=()=>turn.reject(signal.reason instanceof Error?signal.reason:new Error('Codex 轮次已取消'));
     signal.addEventListener('abort',abort,{once:true});
-    const timer=setTimeout(()=>turn.reject(new Error('Codex 轮次等待超时')),timeout);
     try {
-      const result=await this.rpc.request('turn/start',{threadId:this.threadId,input:[{type:'text',text}],approvalPolicy:'on-request',approvalsReviewer:'user'},signal,Math.min(timeout,120000));
+      const result=await this.rpc.request('turn/start',{threadId:this.threadId,input:[{type:'text',text}],approvalPolicy:'on-request',approvalsReviewer:'user'},signal,120000);
       if(typeof result?.turn?.id!=='string'||!result.turn.id)throw new Error('Codex 没有确认本次轮次');
       turn.id=result.turn.id;
       for(const item of turn.buffered)this.route(turn,item.method,item.params);
@@ -89,7 +88,7 @@ export class CodexAppServer implements AgentConnection {
       turn.confirm();
       return await completed;
     }catch(error){this.broken=true;turn.reject(error instanceof Error?error:new Error('Codex 轮次失败'));throw error;
-    }finally{clearTimeout(timer);signal.removeEventListener('abort',abort);if(this.turn===turn)this.turn=undefined;}
+    }finally{signal.removeEventListener('abort',abort);if(this.turn===turn)this.turn=undefined;}
   }
   private notification(method:string,params:any) {
     if(!params||params.threadId!==this.threadId)return;

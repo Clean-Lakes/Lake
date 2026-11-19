@@ -1,5 +1,6 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
+const {channel} = require('node:diagnostics_channel');
 const {mkdtemp, mkdir, writeFile, rm} = require('node:fs/promises');
 const {tmpdir} = require('node:os');
 const {join} = require('node:path');
@@ -68,7 +69,21 @@ for (const specialist of [false, true]) test(`${specialist ? 'specialist' : 'Pil
   const router = (await api(`/api/projects/${project.id}/superagent`, 'POST', {})).routerSessionId;
   role = {id: 'latency-otter', projectId: project.id, roleKey: 'latency', name: '首包核对专员', duties: '仅虚构数据', revision: 1, avatarId: 'otter', execution: {kind: 'native'}};
   if (specialist) app.store.put('superRoles', role.id, role);
-  await api(`/api/sessions/${router}/messages`, 'POST', {text: '验证本地首包。', ignoreProjectMemory: true});
+  const messageRoute = `/api/sessions/${router}/messages`;
+  const stages = [];
+  const responses = channel('http.server.response.finish');
+  const onReceipt = ({request, response}) => {
+    if (request.method === 'POST' && request.url === messageRoute && response.statusCode === 202)
+      stages.push('receipt');
+  };
+  responses.subscribe(onReceipt);
+  t.after(() => responses.unsubscribe(onReceipt));
+  const send = app.agents.send.bind(app.agents);
+  app.agents.send = (sessionId, ...args) => {
+    if (sessionId === router) stages.push('prepared');
+    return send(sessionId, ...args);
+  };
+  await api(messageRoute, 'POST', {text: '验证本地首包。', ignoreProjectMemory: true});
   if (specialist) {
     await until(() => routingHeld, Boolean, 'Pilot did not receive the routing receipt');
     const workspace = await api(`/api/projects/${project.id}/superagent`);
@@ -78,6 +93,7 @@ for (const specialist of [false, true]) test(`${specialist ? 'specialist' : 'Pil
     releaseRoute();
   }
   await until(() => held, Boolean, 'provider never received the invocation');
+  assert.deepEqual(stages, ['receipt', 'prepared'], 'durable receipt precedes Pilot context preparation');
   let sessionId = router;
   if (specialist) {
     assert.ok(workerRequest);

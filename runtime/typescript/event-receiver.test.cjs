@@ -99,6 +99,44 @@ test('Grafana batches, recoveries and repeat deliveries persist across restart w
   await f.receive(resolved);
 });
 
+test('Grafana resources own their Webhook through navigation changes and restart', async t => {
+  const f = await fixture(t);
+  const tree = `/api/projects/${f.project.id}/resource-tree`;
+  const {nodes} = await f.api(tree, {method: 'POST', data: {operation: 'create', name: '监控'}});
+  const folderId = nodes.find(node => node.name === '监控').id;
+  const resources = `/api/projects/${f.project.id}/resources`;
+  await f.api(resources, {method: 'POST', data: {kind: 'grafana', name: '无效', settings: {endpoint: 'https://example.invalid'}}, status: 400});
+  const resource = await f.api(resources, {method: 'POST', data: {kind: 'grafana', name: '告警面板', parentId: folderId}});
+  const setup = `/api/resources/${resource.id}/grafana-webhook`;
+  assert.equal(resource.kind, 'grafana');
+  assert.equal((await f.api('/api/catalog')).resourceTree.find(node => node.resourceId === resource.id).parentId, folderId);
+  assert.deepEqual(await f.api(setup), {source: null});
+  await f.api(setup, {method: 'POST', data: {projectId: 'other'}, status: 400});
+  const {source, token} = await f.api(setup, {method: 'POST', data: {}, status: 201});
+  assert.equal(source.id, resource.id);
+  assert.equal(source.projectId, f.project.id);
+  assert.deepEqual(await f.api(setup), {source});
+  await f.api(setup, {method: 'POST', data: {}, status: 409});
+  assert.deepEqual((await f.api(list)).eventSources.map(value => value.id), [f.source.id]);
+  const webhookPath = new URL(source.webhookUrl).pathname;
+  const deliver = (status = 200) => f.api(webhookPath, {method: 'POST', data: fixturePayload, token, status});
+  const first = await deliver();
+  await f.api(tree, {method: 'POST', data: {operation: 'rename', nodeId: resource.id, name: '业务告警'}});
+  const renamed = (await f.api(setup)).source;
+  assert.equal(renamed.name, '业务告警');
+  assert.equal(renamed.webhookUrl, source.webhookUrl);
+  await f.api(tree, {method: 'POST', data: {operation: 'delete', nodeId: folderId}});
+  await f.api(setup, {status: 404});
+  await deliver(404);
+  const history = `${settings}/${source.id}/deliveries`;
+  await f.api(history, {status: 404});
+  await f.api('/api/navigation-trash', {method: 'POST', data: {kind: 'folder', id: folderId}});
+  await f.restart();
+  assert.equal(new URL((await f.api(setup)).source.webhookUrl).pathname, webhookPath);
+  assert.deepEqual((await f.api(history)).deliveries.map(delivery => delivery.id), [first.id]);
+  await deliver();
+});
+
 test('source credentials are write-only, scoped and revocable during receipt', async t => {
   const f = await fixture(t);
   const {source: other, token: otherToken} = await f.createSource(await f.createProject('另一项目'), '其他告警');
@@ -164,7 +202,15 @@ test('malformed payloads and failed writes never produce a successful receipt', 
   await f.receive({...fixturePayload, alerts: []}, 400);
   await f.receive({...fixturePayload, alerts: [{status: 'unknown'}]}, 400);
   await f.receive({...fixturePayload, truncatedAlerts: -1}, 400);
-  await f.receive({...fixturePayload, title: 'x'.repeat(1024 * 1024)}, 413);
+  const declaredOversize = new Promise((resolve, reject) => {
+    const client = request(f.source.webhookUrl, {method:'POST', headers:{
+      Authorization:'Bearer ' + f.token, 'Content-Type':'application/json', 'Content-Length':1024 * 1024 + 1,
+    }}, response => { response.resume(); resolve(response.statusCode); });
+    client.on('error',reject);
+    // The server rejects the declared size before reading any body bytes.
+    client.end();
+  });
+  assert.equal(await declaredOversize, 413);
   const invalid = await fetch(f.source.webhookUrl, {
     method: 'POST', headers: {Authorization: 'Bearer ' + f.token, 'Content-Type': 'application/json'}, body: '{',
   });

@@ -31,7 +31,7 @@ export type Resource = {
   id: string;
   projectId: string;
   name: string;
-  kind: "local" | "ssh" | "database" | "docker" | "redis" | "kubernetes" | "apisix" | "prometheus" | "victoriametrics";
+  kind: "local" | "ssh" | "database" | "docker" | "redis" | "kubernetes" | "apisix" | "prometheus" | "victoriametrics" | "grafana";
   settings?: Record<string, unknown>;
   ssh?: SSHConnection;
   description: string;
@@ -421,7 +421,11 @@ export type LakeEventSource = {
   revision: number;
   webhookUrl: string;
   lastReceivedAt?: string;
+  contactPoint?: GrafanaWebhookContactPoint;
+  localReceiverReady?: boolean;
 };
+export type GrafanaWebhookContactPoint = {uid: string; name: string; receiverBase: string; localReceiver?: true; updatedAt: string};
+export type GrafanaWebhookInjectionInput = {revision: number};
 export type LakeEventSourceUpdate =
   | {expectedRevision: number; enabled: boolean}
   | {expectedRevision: number; rotateCredential: true};
@@ -436,6 +440,15 @@ export type GrafanaDelivery = {
 };
 export type GrafanaDeliveryPage = {deliveries: GrafanaDelivery[]; nextCursor?: string};
 export type GrafanaDeliveryDetail = GrafanaDelivery & {payload: Record<string, unknown>};
+export type GrafanaReadInput =
+  | {operation:'folders'|'dashboards';search?:string;page?:number}
+  | {operation:'dashboard';uid:string}
+  | {operation:'datasources'|'rules'|'alerts'}
+  | {operation:'metrics'|'logs';datasourceUid:string;expression:string;start:number;end:number};
+export type GrafanaReadResult =
+  | {operation:'folders'|'dashboards';items:{uid:string;title:string;folderTitle:string}[];nextPage?:number}
+  | {operation:'datasources';items:{uid:string;name:string;type:string}[]}
+  | {operation:'dashboard'|'rules'|'alerts'|'metrics'|'logs';data:unknown};
 export type GatewayMessageInput = {text:string;threadId:string;threadTitle?:string;clientMessageId:string;replyTo?:string};
 export type GatewayMessage = GatewayInstructionStatus & {text:string;createdAt:string;connectionId:string;threadId:string;threadTitle?:string;replyTo?:string};
 export type GatewayMessagePage = {messages:GatewayMessage[];nextCursor?:string};

@@ -2,7 +2,7 @@ import {createPortal} from 'react-dom';
 import {sessionInspectorId,useSessionInspector,type InspectorSelection} from './SessionInspectorContext';
 import {createContext,useId,useState,type ReactNode} from 'react';
 import {ReplyDuration,type ReplyDurationProps} from './ReplyDuration';
-import {ReplyFooter} from './ReplyFooter';
+import {ReplyFooter,ReplyProcessContext} from './ReplyFooter';
 import {turnStatus} from './turnStatus';
 import {quietCoordination} from './coordinationActivity';
 import {recoveredRouteFailures} from './routeDispatchPresentation';
@@ -11,7 +11,7 @@ export const RoutingRecoveryContext=createContext<ReadonlySet<string>>(new Set()
 export function canonicalExecutionSelected(selection:InspectorSelection|null|undefined,sessionId:string,canonicalGoalId:string){
  return selection?.sessionId===sessionId&&selection.canonicalGoalId===canonicalGoalId&&selection.tab==='execution';
 }
-export function TurnExecutionDetails({details,onInspect,presentingReply=false,hideLive=false,hideStatus=false,hideIdentity:_hideIdentity=false,sessionId,latest=false,latestTaskId,canonicalGoalId,children,progress:_progress,...timing}:{hideStatus?:boolean;hideIdentity?:boolean;latest?:boolean;latestTaskId?:string;canonicalGoalId?:string;progress?:{text:string;active:boolean};hideLive?:boolean;sessionId?:string;children?:ReactNode;details:ReactNode[];onInspect?:()=>void;presentingReply?:boolean}&ReplyDurationProps){
+export function TurnExecutionDetails({details,onInspect,presentingReply=false,hideLive=false,hideStatus=false,hideIdentity:_hideIdentity=false,sessionId,latest=false,latestTaskId,canonicalGoalId,children,specialistReplies,footerReportId,progress:_progress,...timing}:{hideStatus?:boolean;hideIdentity?:boolean;latest?:boolean;latestTaskId?:string;canonicalGoalId?:string;progress?:{text:string;active:boolean};hideLive?:boolean;sessionId?:string;children?:ReactNode;specialistReplies?:ReactNode;footerReportId?:string;details:ReactNode[];onInspect?:()=>void;presentingReply?:boolean}&ReplyDurationProps){
  const id=useId();
  const inspector=useSessionInspector();
  const selection=inspector?.selection;
@@ -30,13 +30,18 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
  }}:undefined;
  const settledStatus=state==='回复结束'?undefined:state;
  const foldFailure=!!summaryDisclosure&&settledStatus==='未完成';
+ const pilot=timing.assistantIdentity?.pilot&&inspector&&sessionId&&summaryDisclosure?{sessionId,turnId:id,canonicalGoalId}:undefined;
+ const combinedReportId=!live&&(pilot||!summaryDisclosure)?footerReportId:undefined;
+ const footerStatus=foldFailure?undefined:settledStatus;
  const summary=live?<ReplyDuration {...timing} previewAt={previewAt} latestStep={latestStep} disclosure={summaryDisclosure}/>
-  :<ReplyFooter status={foldFailure?undefined:settledStatus} duration={summaryDisclosure||!timing.assistantIdentity?.pilot?duration:undefined} action={summaryDisclosure&&{
+  :!combinedReportId&&<ReplyFooter status={footerStatus} duration={summaryDisclosure||!timing.assistantIdentity?.pilot?duration:undefined} action={summaryDisclosure&&{
    text:timing.processLabel,controls:summaryDisclosure.controls,expanded:summaryDisclosure.open,side:summaryDisclosure.side,onClick:summaryDisclosure.onToggle
   }}/>;
  const notice=[foldFailure?settledStatus:undefined,timing.detailNotice].filter(Boolean).join(' · ');
  const records=<>{notice&&<p className="execution-detail-note">{notice}</p>}{details.length?details:<p className="inspector-empty">本轮尚无执行记录。</p>}</>;
  const body=canonicalGoalId?null:inspector&&sessionId?inspecting&&inspector.host&&createPortal(<ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{records}</div></ExecutionDetailsOpen.Provider>,inspector.host)
   :details.length>0&&<div id={id} className={`turn-execution-details${open?' is-open':''}`} aria-hidden={!open} inert={!open} role="region" aria-label="执行详细过程"><div className="turn-execution-content"><div className="turn-execution-body"><ExecutionDetailsOpen.Provider value={open}>{records}</ExecutionDetailsOpen.Provider></div></div></div>;
- return <RoutingRecoveryContext.Provider value={recoveredRouting}>{children}{!hideStatus&&(!live||!hideLive)&&summary}{body}</RoutingRecoveryContext.Provider>;
+ return <RoutingRecoveryContext.Provider value={recoveredRouting}><ReplyProcessContext.Provider value={{pilot,footer:combinedReportId?{reportId:combinedReportId,status:footerStatus}:undefined}}>
+  {children}{!hideStatus&&(!live||!hideLive)&&summary}{specialistReplies}
+ </ReplyProcessContext.Provider>{body}</RoutingRecoveryContext.Provider>;
 }

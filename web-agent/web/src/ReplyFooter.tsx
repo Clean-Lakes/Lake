@@ -1,10 +1,14 @@
+import {createContext} from 'react';
 import {Glyph} from './Icons';
 import {LiveTextMotionLabel} from './liveTextMotion';
+import type {PilotProcessTarget} from './SessionInspectorContext';
 
 type FooterAction={
  text?:string; label?:string; controls:string; expanded?:boolean; side?:boolean; taskId?:string;
  liveMotion?:boolean; onClick:()=>void;
 };
+
+export const ReplyProcessContext=createContext<{pilot?:PilotProcessTarget;footer?:{reportId:string;status?:string}}>({});
 
 export function ReplyFooter({duration,status,action}:{duration?:string;status?:string;action?:FooterAction}) {
  const elapsed=duration?.replace(/(\d)(?=小时|分钟|秒)/g,'$1 ');

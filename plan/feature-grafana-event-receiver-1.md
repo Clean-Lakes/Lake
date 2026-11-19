@@ -12,17 +12,17 @@ tags: [feature, grafana, alerting, ingress]
 
 ![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
-在「接入渠道」添加 Grafana 来源，将每次有效投递保存到所属项目，供用户查看批次和逐条告警。首期范围截至收件和查看记录。运行环境为本机 Lake，网络部署地址后续确定。
+在项目下新建「Grafana」资源，在资源详情生成 Webhook 凭据并查看收到的批次和逐条告警。首期范围截至收件和查看记录。运行环境为本机 Lake，网络部署地址后续确定。
 
 ## 1. Requirements & Constraints
 
-- **REQ-001**: 一个来源固定绑定一个现有项目。提供新建、启停、凭据轮换、最近投递查询和投递详情。项目改变需新建来源。
+- **REQ-001**: 一个来源固定绑定资源及其所属项目。提供启停、凭据轮换、最近投递查询和投递详情。改名、移动及回收站恢复保留来源身份和投递记录。
 - **REQ-002**: 接受 `POST /api/ingress/v1/grafana/:sourceId` 的 Grafana 默认 Webhook JSON v1。验证批次及各告警的 `firing` 或 `resolved` 状态。保留 `alerts[]`、发送时的分组、截断数、上游时间和其他 JSON 字段。
 - **REQ-003**: 每次有效投递单独登记。SQLite 提交后才返回 HTTP 200 和投递 ID。接收列表按本机收件顺序分页。业务关联、合并、触发及派单留给后续阶段。
 - **SEC-001**: 每个来源生成独立 Bearer 凭据，数据库只保存校验摘要。凭据只在新建或轮换响应返回。收件前和入库前核对来源启停、凭据、配置版本、项目存在及 Lake 安全状态。管理和查询继续使用工作台认证。
 - **SEC-002**: 接收限制为 1 MiB、10 秒、JSON 最大 16 层。脱敏后保存结构化通知，详情以普通文本显示。项目与来源身份取自本机记录。接收过程不构造用户消息、模型输入、权限或任务。
 - **CON-001**: 沿用 Lake 的回环监听。Grafana 所在网络到 Lake 的部署配置由使用场景另定。
-- **GUD-001**: 复用接入渠道设置的列表和详情、AppSelect、Glyph 和主题圆角。检查浅色、深色、窄窗口和键盘焦点。
+- **GUD-001**: 从项目的资源列表进入，复用 AppSelect、Glyph、主题圆角和投递详情控件。早期独立来源仍在接入渠道管理。
 - **PAT-001**: 使用当前 TypeScript LakeStore 持久化投递。工作台的事件列表读取同一份记录。
 
 ## 2. Implementation Steps
@@ -44,6 +44,7 @@ tags: [feature, grafana, alerting, ingress]
 |------|-------------|-----------|------|
 | TASK-003 | 调整 `GatewaySettings.tsx` 的来源选择及添加流程。用 `GrafanaEventSource.tsx` 显示本机 URL、凭据控件、投递摘要及详情。在 `api.ts` 接入 API 并更新清单。依赖 TASK-002。 | true | 2026-11-18 |
 | TASK-004 | 增加端到端 HTTP 回归，在隔离环境用 Grafana 11.1.4 的测试通知验证接收。检查 Dev 界面，并记录接入步骤和实际验证。依赖 TASK-003。 | true | 2026-11-18 |
+| TASK-005 | 按用户反馈，将新增 Grafana 入口和 Webhook 管理放进 Items 资源详情。验证回收站、原有独立来源兼容性和已安装 Lake Dev。 | true | 2026-11-18 |
 
 ## 3. Alternatives
 

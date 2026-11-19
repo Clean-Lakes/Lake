@@ -13,7 +13,7 @@ export type AgentTurnResult = {stopReason:'end_turn'|'cancelled'|'failed';error?
 export interface AgentConnection {
   initialize(signal:AbortSignal):Promise<Record<string,unknown>>;
   openSession(options:{cwd:string;threadId?:string;systemPrompt?:string},signal:AbortSignal):Promise<string>;
-  exec(text:string,signal:AbortSignal,timeout:number):Promise<AgentTurnResult>;
+  exec(text:string,signal:AbortSignal):Promise<AgentTurnResult>;
   steer(text:string,inputId:string,signal:AbortSignal):Promise<boolean>;
   cancel():Promise<void>;
   diagnostics():string;
