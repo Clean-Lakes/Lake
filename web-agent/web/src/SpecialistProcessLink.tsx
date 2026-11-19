@@ -1,12 +1,24 @@
+import {useContext} from 'react';
 import type {SpecialistReplyAuthor} from '../../shared/contracts';
-import {Glyph} from './Icons';
-import {sessionInspectorId} from './SessionInspectorContext';
-import {LiveTextMotionLabel} from './liveTextMotion';
+import {sessionInspectorId,useSessionInspector,type InspectSpecialist} from './SessionInspectorContext';
+import {ReplyFooter,ReplyProcessContext} from './ReplyFooter';
 
-/** The task record stays accessible independently of the changing public prose. */
-export function SpecialistProcessLink({author,onInspect,active=false}:{author?:SpecialistReplyAuthor;onInspect?:(author:SpecialistReplyAuthor)=>void;active?:boolean}){
- if(!onInspect||!author?.taskId||!author.workerId||!author.roleId||!author.sessionId)return null;
- return <div className="reply-duration reply-process-text specialist-process-link">
-  <button type="button" className="turn-duration-disclosure" data-placement="side" data-specialist-process={author.taskId} aria-controls={sessionInspectorId} aria-label={`查看${author.name}的执行过程`} title="在右侧查看思考、公开进度和工具记录" onClick={()=>onInspect(author)}><LiveTextMotionLabel active={active} glow>执行过程</LiveTextMotionLabel><Glyph name="next" size={11} className="turn-duration-chevron"/></button>
- </div>;
+export function hasTaskProcess(author?:SpecialistReplyAuthor):author is SpecialistReplyAuthor & {taskId:string} {
+ return !!(author?.taskId&&author.workerId&&author.roleId&&author.sessionId);
+}
+
+/** Keep the same task button as live prose becomes a settled report. */
+export function SpecialistProcessLink({author,reportId,onInspect,active=false}:{author?:SpecialistReplyAuthor;reportId?:string;onInspect?:InspectSpecialist;active?:boolean}){
+ const {pilot,footer}=useContext(ReplyProcessContext);
+ const selection=useSessionInspector()?.selection;
+ if(!onInspect||!hasTaskProcess(author))return null;
+ const metadata=footer&&footer.reportId===reportId?footer.metadata:undefined;
+ const workerOpen=selection?.sessionId===author.sessionId&&selection.canonicalGoalId===author.taskId;
+ const sources=selection?.replySources;
+ const expanded=sources?!!pilot&&sources.pilot.turnId===pilot.turnId&&sources.pilot.sessionId===pilot.sessionId&&
+  sources.specialist.taskId===author.taskId&&sources.specialist.sessionId===author.sessionId:workerOpen;
+ return <ReplyFooter {...metadata} action={{
+  text:metadata?'查看执行过程':'执行过程',label:metadata?`查看执行过程，${author.name}`:`查看${author.name}的执行过程`,controls:sessionInspectorId,side:true,
+  taskId:author.taskId,expanded,liveMotion:metadata?undefined:active,onClick:()=>onInspect(author,pilot),
+ }}/>;
 }
