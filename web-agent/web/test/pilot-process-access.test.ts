@@ -7,6 +7,7 @@ import {AITranscript} from '../src/AIPanel';
 import {PilotSpecialistReplyView} from '../src/PilotSpecialistConversation';
 import {pilotDispatchRows} from '../src/pilotSpecialistReplies';
 import {SpecialistProcessLink} from '../src/SpecialistProcessLink';
+import {SessionInspectorProvider} from '../src/SessionInspectorContext';
 
 const at='2026-11-16T00:00:00Z';
 const user:Message={id:'human',sessionId:'pilot',role:'user',text:'核对样例',createdAt:at};
@@ -24,6 +25,17 @@ test('completed specialist consultation keeps the Pilot process entry when recor
  assert.match(html,/aria-label="思考与操作过程"/);
  const empty=pilot();empty.ai!.cards=[];
  assert.doesNotMatch(markup(empty),/turn-duration-disclosure/,'an empty completed consultation needs no synthetic record');
+});
+
+test('a Pilot router with its own persistent task can inspect the dispatch for this user turn',()=>{
+ const snapshot=pilot();
+ snapshot.superagent={roleId:'pilot:project',task:{taskId:'router-main',sessionId:'pilot',projectId:'project',title:'Pilot',state:'running',acceptanceState:'not_evaluated',revision:1,originRootTurnId:'router-root',deadlineAt:at}};
+ snapshot.ai!.cards=[{id:'dispatch-for-this-turn',type:'operation',title:'route_work',status:'completed',at,data:{source_message_id:user.id}}];
+ const html=markup(snapshot);
+ const details=html.slice(html.indexOf('aria-label="执行详细过程"'));
+ assert.match(details,/data-conversation-entry="dispatch-for-this-turn"/);
+ assert.match(details,/class="thinking-toggle"/);
+ assert.doesNotMatch(html.slice(0,html.indexOf('aria-label="执行详细过程"')),/data-conversation-entry="dispatch-for-this-turn"/);
 });
 
 test('a completed consultation cannot silence an actually thinking or waiting Pilot',()=>{
@@ -53,6 +65,30 @@ test('specialist process remains accessible in the live slot, adopted report and
  assert.match(html,/>Pilot 执行过程</);
  assert.doesNotMatch(markup(pilot()),/>Pilot 执行过程</,'a lone Pilot entry keeps its concise label');
  assert.equal((html.replace(/<[^>]*>/g,'').match(/唯一最终结论/g)??[]).length,1);
+});
+
+test('the settled footer binds the turn clock to the last report and keeps earlier task targets',()=>{
+ const snapshot=pilot();
+ const author={kind:'specialist' as const,name:'检查专员',roleId:'role',workerId:'worker',sessionId:'source',taskId:'task'};
+ const first:Message={id:'first',sessionId:'pilot',role:'assistant',text:'第一份报告',author,replyToMessageId:user.id,createdAt:'2026-11-16T00:00:12Z'};
+ const last:Message={...first,id:'last',text:'第二份报告',createdAt:'2026-11-16T00:00:28Z',author:{...author,taskId:'task-two',sessionId:'source-two',workerId:'worker-two'}};
+ snapshot.messages.push(first,last);
+ const render=()=>renderToStaticMarkup(createElement(SessionInspectorProvider,{children:createElement(AITranscript,{snapshot,assistantIdentity:{name:'Pilot',pilot:true},onInspectSpecialist(){}})}));
+ const noTime=render();
+ assert.match(noTime,/查看执行过程/);assert.doesNotMatch(noTime,/turn-status-elapsed/);
+ snapshot.replyTimings=[{messageId:user.id,startedAt:at,finishedAt:'2026-11-16T00:00:29Z',status:'completed'}];
+ const html=render();
+ assert.equal((html.match(/turn-duration-disclosure/g)??[]).length,2);
+ assert.equal((html.match(/turn-status-elapsed/g)??[]).length,1);
+ const positions=['第一份报告','data-specialist-process="task"','第二份报告','本轮用时 29 秒','data-specialist-process="task-two"'].map(text=>html.indexOf(text));
+ assert.ok(positions.every((n,i)=>n>=0&&(!i||n>positions[i-1]!)));
+ assert.doesNotMatch(html.match(/<button[^>]*data-specialist-process="task-two"[^>]*>[\s\S]*?<\/button>/)?.[0]??'',/用时/);
+ snapshot.messages=[user];snapshot.ai!.cards=[];
+ const timeOnly=render();assert.match(timeOnly,/>用时 29 秒</);assert.doesNotMatch(timeOnly,/turn-duration-disclosure|reply-footer-separator/);
+ snapshot.messages.push({...last,replyToMessageId:undefined});
+ const unbound=render();
+ assert.ok(unbound.indexOf('用时 29 秒')<unbound.indexOf('第二份报告'));
+ assert.doesNotMatch(unbound.slice(unbound.indexOf('第二份报告')),/turn-status-elapsed/);
 });
 
 test('channel conversation replies without a task never fabricate a task process target',()=>{

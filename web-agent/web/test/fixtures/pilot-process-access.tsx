@@ -3,8 +3,8 @@ import {useLayoutEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import type {AICard,Message,SessionSnapshot,SpecialistReplyAuthor,SuperWorker,SuperWorkspace,WorkSession} from '../../../shared/contracts';
 import {AITranscript} from '../../src/AIPanel';
-import {SessionInspector} from '../../src/SessionInspector';
-import {SessionInspectorProvider,useSessionInspector} from '../../src/SessionInspectorContext';
+import {ReplyProcessSelect,SessionInspector} from '../../src/SessionInspector';
+import {SessionInspectorProvider,useSessionInspector,type InspectSpecialist} from '../../src/SessionInspectorContext';
 import {SpecialistAvatarProvider} from '../../src/SuperRoleAvatar';
 import {matchesSpecialistInspection,specialistInspectionWorker,workerInspectionTarget} from '../../src/specialistInspection';
 import {initializeFocusModality} from '../../src/focusModality';
@@ -83,22 +83,22 @@ function pilotSnapshot(pilotDone:boolean):SessionSnapshot{
   {id:'pilot-public',type:'message',status:'completed',content:'已安排专员核对，我会继续检查结果是否完整。',at:'2026-11-16T08:00:03.000Z'},
   {id:'pilot-thought-after',type:'thinking',status:pilotDone?'completed':'running',content:'Pilot 后续思考样例：公开说明后仍在核对结果完整性。',at:'2026-11-16T08:00:04.000Z'},
  ];
- const report:Message={id:'native-report',sessionId:routerId,role:'assistant',author,text:conclusion,createdAt:'2026-11-16T08:00:06.000Z'};
+ const report:Message={id:'native-report',sessionId:routerId,role:'assistant',author,replyToMessageId:'current-user',text:conclusion,createdAt:'2026-11-16T08:00:06.000Z'};
  return {session:session(routerId,'router'),cursor,messages:[...history,{id:'current-user',sessionId:routerId,role:'user',text:'核对隔离样例，并保留思考和公开进度。',createdAt:at},...(finished()?[report]:[])],resources:[],actions:[],specialists:[],evidence:[],terminals:[],
-  replyTimings:[{messageId:'current-user',startedAt:started,finishedAt:pilotDone?'2026-11-16T08:00:07.000Z':'',status:pilotDone?'completed':'running'}],
+  replyTimings:[{messageId:'old-user',startedAt:history[0]!.createdAt,finishedAt:'2026-11-16T07:50:08.000Z',status:'completed'},{messageId:'current-user',startedAt:started,finishedAt:pilotDone?'2026-11-16T08:00:30.000Z':'',status:pilotDone?'completed':'running'}],
   ai:{session:routerId,profile:'fixture',turns:1,usage:{input:0,output:0,total:0},status:pilotDone?'completed':'running',turnStartedAt:started,cards,cardsOffset:0,totalCards:cards.length}};
 }
 type Baseline={slot:Element|null;identity:Element|null;body:Element|null;process:Element|null;history:Element|null;pilot:Element|null};
 function Fixture(){
  const inspector=useSessionInspector()!;
- const [current,setCurrent]=useState(stage),[revision,setRevision]=useState(cursor),[restoration,setRestoration]=useState(0),[pilotDone,setPilotDone]=useState(false),[qa,setQA]=useState('尚未捕获基线');
+ const [current,setCurrent]=useState(stage),[revision,setRevision]=useState(cursor),[restoration,setRestoration]=useState(0),[pilotDone,setPilotDone]=useState(stage==='restored'),[qa,setQA]=useState('尚未捕获基线');
  const box=useRef<HTMLDivElement>(null),baseline=useRef<Baseline|null>(null);
  const snapshot=pilotSnapshot(pilotDone),source=workerSnapshot(),owner=worker();
  const workspace:SuperWorkspace={active:true,project:{projectId,routerSessionId:routerId,version:1},workers:[owner],channels};
  const workerOpen=inspector.selection?.sessionId===sourceId;
- const inspectSpecialist=(reply:SpecialistReplyAuthor)=>{
+ const inspectSpecialist:InspectSpecialist=(reply,pilot)=>{
   const resolved=specialistInspectionWorker(reply,workspace,projectId),target=resolved&&workerInspectionTarget(resolved,projectId);
-  if(target&&matchesSpecialistInspection(source,target))inspector.open({sessionId:target.sessionId,canonicalGoalId:target.taskId,tab:'execution'});
+  if(target&&matchesSpecialistInspection(source,target))inspector.open({sessionId:target.sessionId,canonicalGoalId:target.taskId,tab:'execution',replySources:pilot?{pilot,specialist:reply}:undefined});
  };
  const nodes=():Baseline=>{
   const root=box.current!,slot=root.querySelector(`[data-worker-id="${author.workerId}"]`);
@@ -138,7 +138,7 @@ function Fixture(){
      <SpecialistAvatarProvider channels={channels}><AITranscript key={restoration} snapshot={snapshot} pilotWorkspace={workspace} pilotConnected={stage!=='disconnected'} assistantIdentity={{name:'Pilot',pilot:true}} onInspectSpecialist={inspectSpecialist}/></SpecialistAvatarProvider>
     </div>
    </div>
-   <SessionInspector key={workerOpen?sourceId:routerId} snapshot={workerOpen?source:snapshot} worker={workerOpen?owner:undefined} connected onUpdated={()=>{cursor++;setRevision(cursor);announce();}}/>
+   <SessionInspector key={workerOpen?sourceId:routerId} snapshot={workerOpen?source:snapshot} worker={workerOpen?owner:undefined} taskNavigation={<ReplyProcessSelect sessionId={routerId} onSpecialist={inspectSpecialist}/>} connected onUpdated={()=>{cursor++;setRevision(cursor);announce();}}/>
   </div>
  </main>;
 }
