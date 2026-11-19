@@ -824,7 +824,7 @@ function AppContent() {
       const next=await api.snapshot(identity.sessionId,signal,identity.taskId);
       if(signal?.aborted||!current()||!selected())return;
       if(!matchesSpecialistInspection(next,identity))throw new Error('任务不属于当前项目或执行身份已变化');
-      setRoleInspection(next);
+      setRoleInspection(previous=>reuseUnchanged(previous,next));
     }catch(error){if(!signal?.aborted&&current()&&selected())handleFailure(error);}
   };
   useEffect(()=>{

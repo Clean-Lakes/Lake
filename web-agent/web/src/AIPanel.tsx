@@ -89,6 +89,11 @@ function Chart({ card }: { card: AICard }) {
 }
 const noTags: WorkspaceTag[] = [];
 const cardMarkdownComponents:Components={...replyInfoComponents,pre:MarkdownCodeBlock,summary:ReplyDetailsSummary,table:({node,...props})=><div className="markdown-table-scroll"><table {...props}/></div>};
+const InterimReply = memo(function InterimReply({entryId, text}: {entryId: string; text: string}) {
+  return <div data-conversation-entry={entryId} className="turn-process-prose reply-process-text">
+    <div className="thinking-prose"><Markdown remarkPlugins={[remarkGfm]} skipHtml components={cardMarkdownComponents}>{text}</Markdown></div>
+  </div>;
+});
 function CompactionNotice({message}:{message:string}) {
  return <div className="ai-compaction-notice" role="status"><Glyph name="alert" size={14}/><span>{displayAiError(message)}</span></div>;
 }
@@ -261,7 +266,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       const replyMotion=(id:string)=>id===activeIdentity?conversationAvatarMotion(conversationActivity(snapshot.ai)):'idle';
       const renderGroup=({entries:group,progress,resource}:ConversationGroup)=>{
         const entry = group[0]!;
-        if(group.every(item=>interimProse.has(item.id)))return <div key={entry.id} data-conversation-entry={entry.id} className="turn-process-prose reply-process-text"><div className="thinking-prose"><Markdown remarkPlugins={[remarkGfm]} skipHtml components={cardMarkdownComponents}>{entry.card?.content??entry.message?.text??''}</Markdown></div></div>;
+        if(group.every(item=>interimProse.has(item.id)))return <InterimReply key={entry.id} entryId={entry.id} text={entry.card?.content??entry.message?.text??''}/>;
         // A Pilot router can own a task and still have separate per-turn dispatch records.
         if(mode==='conversation'&&progress&&snapshot.superagent?.task&&snapshot.session.workspaceRole!=='router')return null;
         if(proseInChannel&&mode==='conversation'&&group.every(channelBody))return null;

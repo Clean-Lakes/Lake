@@ -9,6 +9,7 @@ import {NavigationMenu} from './NavigationDelete';
 import {SpecialistDelete} from './SpecialistDelete';
 import {SidebarPilotEntry} from './SidebarPilotEntry';
 import {AgentBackendLogo,agentTypeName} from './AgentBackendLogo';
+import {reuseUnchanged} from './snapshotUpdates';
 
 function withSeenCursor(channel:SpecialistChannelInfo,cursor:string):SpecialistChannelInfo {
  const state=channel.messageRead;
@@ -35,12 +36,12 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
       const seen=new Map(previous?.project.projectId===next.project.projectId
        ? previous.channels?.map(channel=>[channel.sessionId,channel.messageRead?.seenCursor??''])
        : undefined);
-      return {...next,
+      return reuseUnchanged(previous,{...next,
        questions:next.questions?.filter(question=>!deletedRoles.current.has(question.author.roleId??'')),
        channels:next.channels?.filter(channel=>!deletedRoles.current.has(channel.roleId))
         .map(channel=>withSeenCursor(channel,seen.get(channel.sessionId)??'')),
        workers:next.workers.filter(worker=>!deletedRoles.current.has(worker.roleId)),
-      };
+      });
      });
      if(next.active)setError('');
     }
