@@ -157,15 +157,6 @@
       ]
     },
     {
-      "name": "createEventSource",
-      "routes": [
-        {
-          "method": "POST",
-          "path": "'/api/settings/event-sources'"
-        }
-      ]
-    },
-    {
       "name": "createGatewayConnection",
       "routes": [
         {
@@ -180,6 +171,15 @@
         {
           "method": "POST",
           "path": "\"/api/settings/gateway/tokens\""
+        }
+      ]
+    },
+    {
+      "name": "createGrafanaResourceWebhook",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/resources/${encodeURIComponent(id)}/grafana-webhook`"
         }
       ]
     },
@@ -508,6 +508,24 @@
       ]
     },
     {
+      "name": "grafanaRead",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/resources/${encodeURIComponent(id)}/grafana-read`"
+        }
+      ]
+    },
+    {
+      "name": "grafanaResourceWebhook",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "`/api/resources/${encodeURIComponent(id)}/grafana-webhook`"
+        }
+      ]
+    },
+    {
       "name": "hostKeyDecision",
       "routes": [
         {
@@ -531,6 +549,15 @@
         {
           "method": "POST",
           "path": "`/api/projects/${encodeURIComponent(projectId)}/resource-import`"
+        }
+      ]
+    },
+    {
+      "name": "injectGrafanaResourceWebhook",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/resources/${encodeURIComponent(id)}/grafana-webhook/inject`"
         }
       ]
     },
@@ -873,6 +900,15 @@
         {
           "method": "POST",
           "path": "`/api/projects/${encodeURIComponent(projectId)}/memory-jobs/${encodeURIComponent(jobId)}/retry`"
+        }
+      ]
+    },
+    {
+      "name": "revealGrafanaToken",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/resources/${encodeURIComponent(id)}/grafana-token`"
         }
       ]
     },

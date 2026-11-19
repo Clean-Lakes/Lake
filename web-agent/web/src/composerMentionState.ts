@@ -2,7 +2,7 @@ import type {MCPServerConfig,Resource,SkillConfig,SpecialistChannelInfo} from ".
 import {referencedExtensions, type MentionKind} from "../../shared/references";
 
 export type MentionOption={id:string;kind:MentionKind;name:string;detail:string;resourceKind?:Resource['kind'];fromJumpServer?:boolean};
-const resourceMentionLabels:Record<Resource['kind'],string>={ssh:'SSH 主机',jumpserver:'JumpServer 资产',database:'数据库',redis:'Redis',docker:'容器',local:'本机',kubernetes:'Kubernetes',apisix:'APISIX',prometheus:'Prometheus',victoriametrics:'VictoriaMetrics'};
+const resourceMentionLabels:Record<Resource['kind'],string>={ssh:'SSH 主机',jumpserver:'JumpServer 资产',database:'数据库',redis:'Redis',docker:'容器',local:'本机',kubernetes:'Kubernetes',apisix:'APISIX',prometheus:'Prometheus',victoriametrics:'VictoriaMetrics',grafana:'Grafana'};
 export function mentionTypeLabel(option:MentionOption):string {
  if(option.fromJumpServer)return "JumpServer";
  return option.kind==='resource'?(option.resourceKind&&resourceMentionLabels[option.resourceKind]||'资源'):option.kind==='skill'?'Skill':option.kind==='mcp'?'MCP':'专员';
@@ -21,7 +21,7 @@ export function nextMentionCategory(category:MentionCategory,options:MentionOpti
 export function mentionOptions(resources:Resource[],skills:SkillConfig[],servers:MCPServerConfig[],sreEnabled=false,specialists:Pick<SpecialistChannelInfo,'roleId'|'roleName'|'duties'>[]=[]):MentionOption[] {
  return [
   ...specialists.map(role=>({id:role.roleId,kind:'role' as const,name:role.roleName,detail:role.duties||'已创建的专员'})),
-  ...resources.map(r=>{
+  ...resources.filter(resource=>resource.kind!=='grafana'||!!resource.settings?.credentialRef).map(r=>{
    const status=r.status==="available"?"可用资源":"不可用资源";
    return {id:r.id,kind:"resource" as const,resourceKind:r.kind,fromJumpServer:!!r.jumpServer || r.kind==="jumpserver",
     name:r.name,detail:[r.description?.trim(),status].filter(Boolean).join(" · ")};

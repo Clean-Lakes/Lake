@@ -1,5 +1,5 @@
 import {pilotConfigurationToolNames} from './configuration-tool-names';
-import {agentBackendName} from '../../web-agent/shared/external-agents';
+import {externalExecutionName} from '../../web-agent/shared/external-agents';
 import {externalReplyTextUpdate} from './external-reply-events';
 import {prepareSessionArchive} from "./session-archive";
 import {finalReportBoundary} from "./final-report";
@@ -41,7 +41,8 @@ import type {
   LayeredMemoryActor,
 } from "../../web-agent/shared/contracts";
 import { HttpError, id, LakeStore, now } from "./store";
-import type { AgentHost, HostProfile, HostToolContext } from "./agent-host";
+import type { AgentHost, HostProfile, HostToolContext, TurnOutcome } from "./agent-host";
+import {TaskDeadlineReached,watchTaskDeadline} from "./task-deadline";
 import type { Operation } from "./tasks";
 import { lakeCommunicationPrompt } from "./super-prompts";
 import { LiveToolActivity } from "./activity";
@@ -50,16 +51,20 @@ connectAgentToolCatalog(builtInTools);
 import type { LakeMemory, NativeMemoryWork } from "./memory";
 import {LakeExternalAgents} from './acp/service';
 import {externalControlTools} from './acp/catalog';
-import type {ExternalActor,ExternalRun,ExternalEvent} from './acp/types';
+import type {ExternalActor,ExternalRun,ExternalEvent,ExternalResult} from './acp/types';
 
+class ExternalWorkerFailure extends HttpError {
+  constructor(readonly result:ExternalResult) { super(409,result.summary||'外部任务没有明确完成'); }
+}
 type Live = {
-  runtime: Pick<AgentRuntime,'close'|'removePendingInputById'> & {executeTurn:(input:string,unused?:undefined,options?:{abortSignal?:AbortSignal})=>Promise<{response?:string}>;steerTurn:(input:any)=>Promise<{kind:string}>};
+  runtime: Pick<AgentRuntime,'close'|'removePendingInputById'> & {executeTurn:(input:string,unused?:undefined,options?:{abortSignal?:AbortSignal})=>Promise<{response?:string;externalRunId?:string}>;steerTurn:(input:any)=>Promise<{kind:string}>};
   pendingTaskInputs:Set<string>;
   broker: ManualPermissionBroker;
   execution: import("./sdk").ExecutionPort;
   controller?: AbortController;
   completion?: Promise<void>;
   selection: string;
+  taskDeadline?: HostProfile["taskDeadline"];
   children?: { registry: InMemoryRuntimeTaskRegistry; active: () => boolean; cancel: () => Promise<void> };
 };
 const nativeControlTools = new Set(["Agent", "Task", "TaskOutput", "TaskStop", "SendMessage"]);
@@ -114,18 +119,20 @@ export class LakeAgents {
     const worker=this.store.get<any>('superWorkers',run.workerId);
     if(!worker||worker.generation!==run.generation||worker.taskId!==run.taskId)return;
     const view=this.store.view(sessionId);
+    const rootTurnId=run.rootTurnId??view.rootTurnId;
     const child=run.agentRunId?view.agentRuns?.find(item=>item.id===run.agentRunId&&item.childSessionId===run.childSessionId):undefined;
     const cards=child?(child.cards??=[]):view.cards;
     let card=cards.find(item=>item.id===run.id);
-    if(!card){card={id:run.id,type:'operation',title:agentBackendName({kind:'acp',agent:run.agent})+' · ACP',status:'running',content:'',at:run.createdAt,
-      data:{source:'external_agent',external_run_id:run.id,taskId:run.taskId,agentRunId:run.agentRunId,childSessionId:run.childSessionId,root_turn_id:view.rootTurnId}};cards.push(card);}
+    if(!card){card={id:run.id,type:'operation',status:'running',content:'',at:run.createdAt,
+      data:{source:'external_agent',external_run_id:run.id,taskId:run.taskId,agentRunId:run.agentRunId,childSessionId:run.childSessionId,root_turn_id:rootTurnId}};cards.push(card);}
     if(event.kind==='text'){
       card.content=event.text??'';
       if(event.publicTextId&&typeof event.publicText==='string')card.data={...(card.data??{}),external_reply:{id:event.publicTextId,content:this.redact(event.publicText)}};
     }
     if(event.kind==='status'){card.status=event.status==='completed'?'completed':['failed','cancelled','unknown','interrupted'].includes(event.status??'')?event.status!:'running';if(run.summary||run.error)card.content=run.summary||run.error||'';}
-    card.data={...(card.data??{}),external_agent:run.agent,external_state:run.state,external_usage:run.usage,external_events:run.events.filter(item=>item.kind==='tool'||item.kind==='tool_update').slice(-16)};
-    this.update(sessionId,view,externalReplyTextUpdate(run,event,{...card,content:this.redact(card.content??'')},view.rootTurnId));
+    card.title=externalExecutionName(run.agent,run.runtimeKind);
+    card.data={...(card.data??{}),external_agent:run.agent,external_runtime_kind:run.runtimeKind,external_state:run.state,external_usage:run.usage,external_events:run.events.filter(item=>item.kind==='tool'||item.kind==='tool_update').slice(-16)};
+    this.update(sessionId,view,externalReplyTextUpdate(run,event,{...card,content:this.redact(card.content??'')},rootTurnId));
   }
   private externalActor(sessionId:string,profile:HostProfile,runtime:AgentRuntime,context:Pick<HostToolContext,'toolCallId'|'abortSignal'|'lakeSubagent'>,purpose:ExternalActor['purpose']='segment'):ExternalActor{
     if(profile.conversation){
@@ -153,7 +160,8 @@ export class LakeAgents {
     const names=profile.allowlist.filter(name=>(!externalControlTools.has(name)||purpose==='worker'&&nativeControlTools.has(name))&&(!child||!childForbiddenTools.has(name)));
     const tools=names.map(name=>caller.getToolRegistry().get(name)).filter((entry):entry is ToolEntry=>!!entry);
     return {projectId:worker.projectId,taskId:goal.id,workerId:worker.id,sessionId,childSessionId:child?.sessionId,agentRunId:child?.id,
-      generation:worker.generation,deadlineAt:goal.deadlineAt,scopeHash:digest([worker.id,worker.generation,worker.policyHash,child?.sessionId]),workspace:'',
+      generation:worker.generation,rootTurnId:purpose==='worker'?this.store.view(sessionId).rootTurnId:undefined,
+      get deadlineAt(){return profile.taskDeadline?.()??goal.deadlineAt;},scopeHash:digest([worker.id,worker.generation,worker.policyHash,child?.sessionId]),workspace:'',
       ...(profile.execution?.kind==='acp'&&profile.execution.model?{model:profile.execution.model.modelId}:{}),
       signal:AbortSignal.any([controller.signal,context.abortSignal]),guard,tools,purpose,systemPrompt:purpose==='worker'?profile.systemPrompt+'\n'+lakeCommunicationPrompt:undefined,
       executeTool:async(name,input,callId,signal)=>{
@@ -170,7 +178,7 @@ export class LakeAgents {
   }
   private externalTool(sessionId:string,profile:HostProfile,runtime:()=>AgentRuntime,available:string[]):ToolEntry{
     const base=profile.tools[0];
-    return {...base,metadata:{...base.metadata,name:'run_external_agent',description:'Delegate a bounded segment of this task to an enabled external ACP agent. The host supplies task identity, tools and scope. Use agent codex. Review the external findings and actual tool results, then submit the original work_finish report. No separate acceptance or reconciliation is required.',readOnly:true,needsApproval:false,stopTurnOnSuccess:false},
+    return {...base,metadata:{...base.metadata,name:'run_external_agent',description:'Delegate a bounded segment of this task to an enabled external agent. The host supplies task identity, tools and scope. Use agent codex. Review the external findings and actual tool results, then submit the original work_finish report. No separate acceptance or reconciliation is required.',readOnly:true,needsApproval:false,stopTurnOnSuccess:false},
       permission:{...base.permission,needsApproval:false},resolvePermissionCapability:()=>({needsApproval:false}),
       inputSchema:{type:'object',properties:{agent:{type:'string',enum:available},instruction:{type:'string',minLength:1,maxLength:65536},resume_run_id:{type:'string'}},required:['agent','instruction'],additionalProperties:false},
       handler:async(input:any,context)=>{const actor=this.externalActor(sessionId,profile,runtime(),context);return this.external.run(input.agent,input.instruction,digest([actor.taskId,actor.generation,actor.childSessionId,context.toolCallId]),actor,input.resume_run_id);}};
@@ -956,7 +964,7 @@ export class LakeAgents {
       profiles: [
         { ...createBuiltInGeneralPurposeAgentProfile(), tools: profile.allowlist.filter((name) => !childForbiddenTools.has(name)) },
         { ...createBuiltInExploreAgentProfile(), tools: profile.allowlist.filter((name) => !childForbiddenTools.has(name) && !["Write", "Edit", "call_mcp_tool"].includes(name)) },
-        ...(hasExternal?externalAgents.map(agent=>({...createBuiltInGeneralPurposeAgentProfile(),name:'codex-acp',description:`Delegate one bounded child task to ${agent.name} over ACP. Its host tools stay scoped to this task.`,injectAgentsMd:false,tools:profile.allowlist.filter(name=>!childForbiddenTools.has(name)&&name!=='run_external_agent')})):[]),
+        ...(hasExternal?externalAgents.map(agent=>({...createBuiltInGeneralPurposeAgentProfile(),name:'codex-acp',description:`Delegate one bounded child task to ${agent.name} through its local CLI. Its host tools stay scoped to this task.`,injectAgentsMd:false,tools:profile.allowlist.filter(name=>!childForbiddenTools.has(name)&&name!=='run_external_agent')})):[]),
       ],
       getAllowedTools: () => profile.allowlist.filter((name) => !childForbiddenTools.has(name) && !["Write", "Edit", "call_mcp_tool"].includes(name)),
       emitParentEvent: (event, trace) => runtime.appendEvent(event, trace),
@@ -1036,13 +1044,14 @@ export class LakeAgents {
         const actor=this.externalActor(sessionId,profile,runtime,{toolCallId:id(),abortSignal:options?.abortSignal??new AbortController().signal},'worker');
         const prior=actor.purpose==='conversation'?undefined:this.store.list<ExternalRun>('acpRuns').filter(run=>run.taskId===actor.taskId&&run.workerId===actor.workerId&&run.generation===actor.generation&&!run.childSessionId&&run.state==='completed').at(-1);
         const result=await this.external.run(selected.agent,input,digest([actor.workerId,actor.generation,id()]),actor,prior?.id);
-        if(result.state!=='completed')throw new HttpError(409,result.summary||'外部任务没有明确完成');
+        if(result.state!=='completed')throw actor.purpose==='worker'?new ExternalWorkerFailure(result):new HttpError(409,result.summary||'外部任务没有明确完成');
         // Preserve the cumulative external run/operation audit, but do not
         // reintroduce earlier progress into the Worker's completed reply card.
-        return {response:actor.purpose==='worker'?result.public_reply?.content??result.summary:result.summary};
+        return actor.purpose==='worker'?{response:result.public_reply?.content??result.summary,externalRunId:result.run_id}:{response:result.summary};
       }};
     }
-    live = { runtime:activeRuntime, pendingTaskInputs:new Set(), broker, execution, selection: selectionKey, children };
+    live = { runtime:activeRuntime, pendingTaskInputs:new Set(), broker, execution, selection: selectionKey, children,
+      taskDeadline:externalWorker?undefined:profile?.taskDeadline };
     this.live.set(sessionId, live);
     return live;
   }
@@ -1070,7 +1079,7 @@ export class LakeAgents {
     view.status = "running";
     view.replyStatus = "running";
     view.turns++;
-    view.turnStartedAt = now();
+    const startedAt = view.turnStartedAt = now();
     view.turnFinishedAt = undefined;
     if(sourceMessageIds?.length)view.replyTimings=[...(view.replyTimings??[]).filter(timing=>!sourceMessageIds.includes(timing.messageId)),
       ...sourceMessageIds.map(messageId=>({messageId,startedAt:view.turnStartedAt!,finishedAt:'',status:'running' as const}))];
@@ -1078,11 +1087,18 @@ export class LakeAgents {
     const controller = new AbortController();
     live.controller = controller;
     live.completion = (async () => {
-      const outcome: { response?: string; error?: string; failure?: ReturnType<typeof describeTurnFailure> } = {};
+      const outcome: TurnOutcome = {};
+      const stopDeadline=live.taskDeadline&&watchTaskDeadline(live.taskDeadline,controller);
       try {
+        controller.signal.throwIfAborted();
         const result = await live.runtime.executeTurn(options.input ?? (text + (options.messageInput ? '\n[SELECTED REFERENCES — identities only, not authorization]\n' + JSON.stringify(options.messageInput) : '')), undefined, {
           abortSignal: controller.signal,
         });
+        outcome.externalRunId=result.externalRunId;
+        if(controller.signal.reason instanceof TaskDeadlineReached) {
+          if(result.response)outcome.response=this.redact(result.response);
+          throw controller.signal.reason;
+        }
         if (live.children?.active()) { await live.children.cancel(); throw new HttpError(409, "任务尚有未汇合的子智能体，已停止其后续执行；任务结果仍未完成"); }
         const final = this.store.view(sessionId);
         if (!controller.signal.aborted && result.response) outcome.response = this.redact(result.response);
@@ -1108,12 +1124,16 @@ export class LakeAgents {
         final.status = controller.signal.aborted ? "cancelled" : "completed";
         this.update(sessionId, final);
       } catch (error) {
-        const failure=describeTurnFailure(error,text=>this.redact(text));
-        if (!controller.signal.aborted) outcome.failure=failure;
+        if(error instanceof ExternalWorkerFailure)outcome.externalRunId=error.result.run_id;
+        const expired=error instanceof TaskDeadlineReached||controller.signal.reason instanceof TaskDeadlineReached||
+          error instanceof ExternalWorkerFailure&&error.result.stop_reason==='deadline_reached';
+        const failure=describeTurnFailure(expired?new TaskDeadlineReached():error,text=>this.redact(text));
+        if(expired)outcome.deadlineReached=true;
+        if (!controller.signal.aborted&&!expired) outcome.failure=failure;
         outcome.error = failure.message;
         const final = this.store.view(sessionId);
-        final.status = controller.signal.aborted ? "cancelled" : "failed";
-        if (!controller.signal.aborted)
+        final.status = controller.signal.aborted&&!expired ? "cancelled" : "failed";
+        if (final.status === "failed")
           final.cards.push({
             id: id(),
             type: "error",
@@ -1124,6 +1144,8 @@ export class LakeAgents {
           });
         this.update(sessionId, final);
       } finally {
+        stopDeadline?.();
+        const finishedAt=now();
         await live.children?.cancel();
         // The host owns fallback delivery. Remove only its unconsumed guides
         // from the SDK's retained queue before handing input to a new invocation.
@@ -1133,6 +1155,10 @@ export class LakeAgents {
         live.pendingTaskInputs.clear();
         this.toolActivity.clear(sessionId);
         const final = this.store.view(sessionId);
+        const externalRun=outcome.externalRunId?this.store.get<ExternalRun>('acpRuns',outcome.externalRunId):undefined;
+        outcome.timing=externalRun?{startedAt:externalRun.createdAt,finishedAt:externalRun.updatedAt,rootTurnId:externalRun.rootTurnId}:
+          {startedAt,finishedAt,rootTurnId:final.rootTurnId};
+        if(externalRun?.rootTurnId)final.rootTurnId=externalRun.rootTurnId;
         final.pending = undefined;
         final.pendingApprovals = [];
         final.turnFinishedAt = now();

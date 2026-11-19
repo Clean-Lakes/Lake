@@ -21,12 +21,15 @@ export class LakeResourceManagement {
   this.security.check();this.store.project(projectId);
   const name=text(input.name??(input.kind==='local'?'本机':undefined),'资源名称',160).trim();
   const description=this.description(input.description);
-  if(isServiceKind(input.kind,input.settings)){
+  const webhookOnly=input.kind==='grafana'&&(input.settings===undefined||(
+    input.settings&&typeof input.settings==='object'&&!Array.isArray(input.settings)&&!Object.keys(input.settings).length));
+  if(input.kind==='grafana'&&input.ssh!==undefined)throw new HttpError(400,'Grafana 资源只接受服务账号凭据');
+  if(isServiceKind(input.kind,input.settings)&&!webhookOnly){
    const resource=this.services.create(projectId,{...input,name});
    return description?this.store.put('resources',resource.id,{...resource,description}):resource;
   }
   const parentId=this.navigation.parent(projectId,input.parentId);
-  if(!['local','ssh'].includes(input.kind))throw new HttpError(501,'此资源类型的连接仍在迁移中');
+  if(!['local','ssh','grafana'].includes(input.kind))throw new HttpError(501,'此资源类型的连接仍在迁移中');
   const ssh=input.kind==='ssh'?this.ssh.prepare(input.ssh,undefined,allowIncompleteSSH):undefined;
   const complete=!ssh||!!(ssh.authMethod==='password'?ssh.credentialRef:ssh.identityFile);
   const resource:Resource={id:id(),projectId,name,kind:input.kind,description,status:complete?'available':'unavailable',

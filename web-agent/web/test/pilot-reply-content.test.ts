@@ -5,7 +5,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import type {SessionSnapshot} from '../../shared/contracts';
 import type {PilotSpecialistRow} from '../src/pilotSpecialistReplies';
 import {PilotSpecialistReplyView,shouldSubscribePilotReply} from '../src/PilotSpecialistConversation';
-import {TextReveal} from '../src/textReveal';
+import {TextReveal,TEXT_REVEAL_MAX_LAG_MS} from '../src/textReveal';
 import {changesPilotReplyContent,PILOT_REPLY_EXIT_MS,PILOT_REPLY_TRANSITION_MS,PilotReplyContent,PilotReplyContentTransition,type PilotReplyContentState} from '../src/PilotReplyContent';
 
 const content=(text:string,extra:Partial<PilotReplyContentState>={}):PilotReplyContentState=>({binding:'project/role/worker/task/source',kind:'prose',id:'first-card',text,...extra});
@@ -68,6 +68,18 @@ test('old text retires right to left before the one body commits and reveals new
  assert.equal(clips()[1]!.animation.onfinish,null);
 });
 
+test('the first live prose replaces a retiring status immediately',()=>{
+ const h=transitionHarness(),first=content('真实首字',{live:true});
+ h.transition.update(thinking,true);
+ h.transition.update(content('正在处理',{kind:'status',id:''}),true);
+ assert.equal(h.clips().length,1);
+ assert.equal(changesPilotReplyContent(thinking,first),false);
+ h.transition.update(first,true);
+ assert.equal(h.committed.at(-1),first);
+ assert.equal(h.clips().length,1);
+ assert.equal(h.clips()[0]!.animation.cancelled,1);
+});
+
 test('bursts and streamed suffixes during exit coalesce into the latest paragraph without restarting the exit',()=>{
  const {transition,committed,clips,finish}=transitionHarness(),first=content('首段'),latest=content('第二段已完整收到',{id:'second'});
  transition.update(thinking,true);transition.update(first,true);
@@ -86,7 +98,7 @@ test('the first revealed prefix stays intact while later suffixes use their orig
  const reveal=new TextReveal(first,text=>painted.push(text),{request:callback=>{pending=callback;return 1;},cancel:()=>{pending=undefined;},now:()=>0});
  const appended=first+'随后真实收到的追加内容';
  transition.update(content(appended),true);reveal.update(appended,true);
- for(const time of [16,32,80]){const frame=pending;pending=undefined;frame?.(time);}
+ for(const time of [16,32,TEXT_REVEAL_MAX_LAG_MS]){const frame=pending;pending=undefined;frame?.(time);}
  assert.equal(clips().length,2);assert.ok(painted.every(text=>text.startsWith(first)));assert.equal(painted.at(-1),appended);
 });
 

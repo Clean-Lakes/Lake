@@ -43,6 +43,15 @@ test("sent labels use icons, escaped names and no @ or remove control",()=>{
  assert.ok(html.includes('&lt;server&gt;'));
  assert.ok(!html.includes('@')&&!html.includes('<button')&&!html.includes('<server>'));
 });
+test("a sent Grafana reference displays the resource's Grafana mark",()=>{
+ const label='@南京Grafana';
+ const html=renderToStaticMarkup(createElement(MessageText,{
+  text:label+' 有多少仪表盘？',
+  mentions:[{kind:'resource',id:'grafana',label,start:0,end:label.length,resourceKind:'grafana'}],
+ }));
+ assert.match(html,/class="resource-kind-icon kind-grafana" data-glyph="grafana"/);
+ assert.match(html,/href="\/resource-icons\/grafana\.svg"/);
+});
 
 test("sent JumpServer references show the provider logo for the exact selected resource",()=>{
  const text="@同名主机";

@@ -3,7 +3,6 @@
 .pilot-specialist-reply-content { min-width:0; }
 .pilot-specialist-reply-body { display:flow-root; min-width:0; }
 .pilot-specialist-connection { display:block; margin-top:8px; color:var(--text-muted); font-size:12px; }
-.reply-duration.specialist-process-link { border:0; padding:0; margin-top:8px; }
 @media (prefers-reduced-motion:reduce) {
  .pilot-specialist-reply-content { clip-path:none!important; }
 }

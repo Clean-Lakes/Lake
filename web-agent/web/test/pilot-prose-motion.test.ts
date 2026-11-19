@@ -82,13 +82,23 @@ test('adopted final reports stop the process light even when a live snapshot arr
 });
 
 test('the process link preserves native keyboard activation and exact task navigation; cold history defaults to still',()=>{
- const {row}=progress();let selected:typeof row.author|undefined;
- const element=SpecialistProcessLink({author:row.author,active:true,onInspect:author=>{selected=author;}})!;
- const button=element.props.children;
- assert.equal(button.type,'button');assert.equal(button.props.type,'button');
- assert.equal(button.props.tabIndex,undefined);button.props.onClick();assert.equal(selected,row.author);
+ const {row}=progress();
  const html=renderToStaticMarkup(createElement(SpecialistProcessLink,{author:row.author,onInspect(){}}));
+ assert.match(processLink(html),/<button type="button"[^>]*data-specialist-process="task"[^>]*aria-controls="session-task-inspector"/);
+ assert.doesNotMatch(processLink(html),/tabindex=/i);
  assert.match(processLink(html),/data-live-motion="still" data-live-glow="still"/);
  assert.equal((html.replace(/<[^>]*>/g,'').match(/执行过程/g)??[]).length,1);
  assert.doesNotMatch(html,/role="status"|aria-live=/,'the accessible process button does not add a live announcement');
+});
+
+test('a settled specialist footer uses its own recorded elapsed time',()=>{
+ const {row}=progress();
+ const author={...row.author,durationMs:900003};
+ const html=renderToStaticMarkup(createElement(SpecialistProcessLink,{author,onInspect(){}}));
+ assert.match(html,/<\/button><span class="turn-status-elapsed"[^>]*>15 分钟 0 秒<\/span>/);
+ assert.match(processLink(html),/data-specialist-process="task"/);
+ const channel=renderToStaticMarkup(createElement(SpecialistProcessLink,{author}));
+ assert.match(channel,/用时 15\s*分钟 0\s*秒/);
+ assert.doesNotMatch(channel,/<button/);
+ assert.doesNotMatch(renderToStaticMarkup(createElement(SpecialistProcessLink,{author:row.author,onInspect(){}})),/用时/);
 });

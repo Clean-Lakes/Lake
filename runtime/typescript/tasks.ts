@@ -51,6 +51,7 @@ export type Operation = {
   hostConfigurationHash?: string;
   commandExecutionId?:string;networkURL?:string;
   databaseConfigurationHash?:string;databaseScope?:{database:string;schema:string;maxRows:number;maxDurationMS:number};
+  grafanaConfigurationHash?:string;
   agentRunId?: string; childSessionId?: string; originalCallId?: string;
   externalRunId?: string; externalSessionId?: string;
 };
@@ -294,7 +295,7 @@ export class TaskLedger {
   }
   async operation<T>(goalId: string, generation: number, policyHash: string, callId: string, tool: string,
     input: unknown, dispatch: () => Promise<T>, redact: <V>(value: V) => V,
-    binding: Pick<Operation, "resourceId" | "resourceRevision" | "readOnly" | "mcpServerId" | "mcpTool" | "remoteMcp" | "configurationHash" | "bindingHash" | "catalogHash" | "skillName" | "skillHash" | "hostConfigurationHash" | "commandExecutionId" | "networkURL" | "databaseConfigurationHash" | "databaseScope" | "agentRunId" | "childSessionId" | "originalCallId" | "externalRunId" | "externalSessionId"> = {}): Promise<T> {
+    binding: Pick<Operation, "resourceId" | "resourceRevision" | "readOnly" | "mcpServerId" | "mcpTool" | "remoteMcp" | "configurationHash" | "bindingHash" | "catalogHash" | "skillName" | "skillHash" | "hostConfigurationHash" | "commandExecutionId" | "networkURL" | "databaseConfigurationHash" | "databaseScope" | "grafanaConfigurationHash" | "agentRunId" | "childSessionId" | "originalCallId" | "externalRunId" | "externalSessionId"> = {}): Promise<T> {
     const current = this.get(goalId);
     // Historical results never gate a new call. Exact call identities remain idempotent.
     if (current.readOnlyRecoveryOf && binding.readOnly !== true)

@@ -36,8 +36,9 @@ function ResourceFolderDialog({editor,location,busy,blocked,error,returnFocus,on
   </dialog>,document.body);
 }
 function FolderIcon() { return <Glyph name="folder" size={16} className="resource-tree-folder-icon"/>; }
-export function ResourceTree({project, resources, nodes, disabled, renderResource, refresh, onAddResource, onImport, onJumpServer, onDelete, selection, onSelectAll, filtering = false, navigationPanel = false}: {
+export function ResourceTree({project, resources, nodes, disabled, renderResource, refresh, onAddResource, onImport, onJumpServer, onEditConnection, onDelete, selection, onSelectAll, filtering = false, navigationPanel = false}: {
   navigationPanel?: boolean;
+  onEditConnection?: (resource: Resource) => void;
   filtering?: boolean;
   selection?: BulkSelection; onSelectAll?: () => void;
   project: Project; resources: Resource[]; nodes: ResourceTreeNode[]; disabled: boolean;
@@ -283,6 +284,12 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
     {label:"新建子目录",icon:"folder" as const,disabled:blocked,run:()=>openEditor({parentId:contextNode.id,name:""},contextAnchor.current)},
     {label:"重命名",icon:"edit" as const,separatorBefore:true,run:()=>openEditor({id:contextNode.id,parentId:contextNode.parentId,name:contextNode.name},contextAnchor.current)}
    ] : []),
+   ...(contextResource?.kind === "grafana" ? [{
+    label: "编辑连接",
+    icon: "edit" as const,
+    disabled: blocked || !onEditConnection,
+    run: () => onEditConnection?.(contextResource),
+   }] : []),
    {label:"移动到…",icon:"arrow",run:()=>setMoving(contextNode.id)},
    {label:contextNode.kind==="folder"?"删除目录":"删除资源",icon:"trash",separatorBefore:true,danger:true,run:()=>onDelete({kind:contextNode.kind,id:contextResource?.id || contextNode.id,projectId:project.id,name:contextResource?.name || contextNode.name})}
   ]}/>}{navigationPanel&&actionHost?createPortal(heading,actionHost):heading}{(sectionExpanded || filtering || navigationPanel) && <div id={`project-resources-${project.id}`} className="resource-tree" ref={root} aria-label={`${project.name} 资源目录`}>

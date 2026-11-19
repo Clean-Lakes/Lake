@@ -37,7 +37,7 @@ for(const scenario of ['early','normal'])test('Codex routes exact thread/turn ou
  const activity:AgentActivity[]=[],adapter=new CodexAppServer(launch(scenario),event=>activity.push(event));t.after(()=>adapter.close());
  assert.equal((await adapter.initialize(signal())).runtime,'codex-app-server');
  const threadId=await adapter.openSession({cwd:process.cwd()},signal());assert.equal(threadId,'fixture-thread');
- const result=await adapter.exec('hello',signal(),2000);assert.equal(result.stopReason,'end_turn');
+ const result=await adapter.exec('hello',signal());assert.equal(result.stopReason,'end_turn');
  await delay(20);
  assert.deepEqual(activity.filter(event=>event.kind==='text').map(event=>event.text),['你','你好']);
  assert.deepEqual(activity.flatMap(event=>event.kind==='tool'||event.kind==='tool_update'?[[event.kind,event.title,event.status]]:[]),[['tool','Read','running'],['tool_update','Read','completed']]);
@@ -48,7 +48,7 @@ for(const scenario of ['early','normal'])test('Codex routes exact thread/turn ou
 test('Codex resumes one provider thread, excludes historical messages and subtracts historical token usage',async t=>{
  const activity:AgentActivity[]=[],adapter=new CodexAppServer(launch(),event=>activity.push(event));t.after(()=>adapter.close());
  await adapter.initialize(signal());await adapter.openSession({cwd:process.cwd(),threadId:'prior-thread'},signal());assert.equal(activity.length,0);
- assert.equal((await adapter.exec('resumed',signal(),2000)).stopReason,'end_turn');
+ assert.equal((await adapter.exec('resumed',signal())).stopReason,'end_turn');
  assert.ok(!JSON.stringify(activity).includes('DO_NOT_REPLAY'));
  assert.deepEqual(activity.find(event=>event.kind==='usage'),{kind:'usage',usage:{inputTokens:10,outputTokens:5}});
 });
@@ -56,7 +56,7 @@ test('Codex resumes one provider thread, excludes historical messages and subtra
 test('Codex refuses native approval and dynamic tool requests without forwarding business calls',async t=>{
  const adapter=new CodexAppServer(launch('approval'),()=>{});t.after(()=>adapter.close());
  await adapter.initialize(signal());await adapter.openSession({cwd:process.cwd()},signal());
- assert.equal((await adapter.exec('hello',signal(),2000)).stopReason,'end_turn');
+ assert.equal((await adapter.exec('hello',signal())).stopReason,'end_turn');
 });
 
 for(const state of ['allowed','unmanaged','revoked'])test('MCP transport approval is current, observed, single use and '+state,async t=>{
@@ -64,28 +64,31 @@ for(const state of ['allowed','unmanaged','revoked'])test('MCP transport approva
  const gate=state==='unmanaged'?undefined:{server:'lake',tools:new Set(['Read']),guard:()=>{guards++;if(state==='revoked')throw new Error('original task revoked');}};
  const adapter=new CodexAppServer(launch('mcp-'+state),()=>{},gate);t.after(()=>adapter.close());
  await adapter.initialize(signal());await adapter.openSession({cwd:process.cwd()},signal());
- assert.equal((await adapter.exec('hello',signal(),2000)).stopReason,'end_turn');
+ assert.equal((await adapter.exec('hello',signal())).stopReason,'end_turn');
  assert.equal(guards,state==='unmanaged'?0:1);
 });
 
 test('turn/start acknowledgement does not finish a turn; cancellation targets its confirmed identity',async t=>{
  const adapter=new CodexAppServer(launch('hold'),()=>{});t.after(()=>adapter.close());
  await adapter.initialize(signal());await adapter.openSession({cwd:process.cwd()},signal());
- let settled=false;const work=adapter.exec('hello',signal(),2000).finally(()=>{settled=true;});
+ let settled=false;const work=adapter.exec('hello',signal()).finally(()=>{settled=true;});
  await delay(50);assert.equal(settled,false);await adapter.cancel();assert.equal((await work).stopReason,'cancelled');
 });
 
 test('provider exit rejects the active turn instead of waiting for the final notification',async t=>{
  const adapter=new CodexAppServer(launch('exit'),()=>{});t.after(()=>adapter.close());
  await adapter.initialize(signal());await adapter.openSession({cwd:process.cwd()},signal());
- await assert.rejects(adapter.exec('hello',signal(),2000),/进程已退出/);
+ await assert.rejects(adapter.exec('hello',signal()),/进程已退出/);
 });
 
 test('an uncertain timed-out turn cannot be followed by another turn on the same connection',async t=>{
  const adapter=new CodexAppServer(launch('hold'),()=>{});t.after(()=>adapter.close());
  await adapter.initialize(signal());await adapter.openSession({cwd:process.cwd()},signal());
- await assert.rejects(adapter.exec('hello',signal(),30),/超时/);
- await assert.rejects(adapter.exec('do not replay',signal(),2000),/不可用/);
+ const controller=new AbortController();
+ const work=adapter.exec('hello',controller.signal);
+ controller.abort(new Error('原任务期限已到'));
+ await assert.rejects(work,/原任务期限已到/);
+ await assert.rejects(adapter.exec('do not replay',signal()),/不可用/);
 });
 
 for(const scenario of ['steer-normal','steer-early','steer-ack-only','steer-rejected','steer-wrong-ack'])
@@ -93,7 +96,7 @@ test('Codex supplement consumption uses the exact current user-message identity:
  const activity:AgentActivity[]=[],adapter=new CodexAppServer(launch(scenario),event=>activity.push(event));t.after(()=>adapter.close());
  await adapter.initialize(signal());await adapter.openSession({cwd:process.cwd()},signal());
  assert.equal(await adapter.steer('no active invocation','no-turn',signal()),false);
- const work=adapter.exec('original task',signal(),2000);await delay(30);
+ const work=adapter.exec('original task',signal());await delay(30);
  if(scenario==='steer-wrong-ack')await assert.rejects(adapter.steer('new human context','input-1',signal()),/对应的补充轮次/);
  else assert.equal(await adapter.steer('new human context','input-1',signal()),scenario!=='steer-rejected');
  if(scenario==='steer-ack-only')assert.equal(activity.filter(event=>event.kind==='input').length,0,'RPC admission is not consumption');

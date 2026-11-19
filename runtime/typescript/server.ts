@@ -62,7 +62,7 @@ export { LakeMemory } from "./memory";
 export {sessionArchiveName, legacySessionArchiveName} from "./session-archive";
 
 declare const __LAKE_VERSION__:string;
-export type ServerOptions = { codexHome?:string; home: string; data: string; port: number; staticRoot: string; development?: boolean; production?:boolean; importLegacy?: boolean; importOnly?:boolean; resourceImport?:HexHubImportOptions };
+export type ServerOptions = { codexHome?:string; home: string; data: string; port: number; staticRoot: string; development?: boolean; production?:boolean; importLegacy?: boolean; importOnly?:boolean; resourceImport?:HexHubImportOptions; grafanaReceiverBase?:string };
 const encode = (value: unknown) => JSON.stringify(value);
 const equal = (left: string, right: string) => {
   const a = Buffer.from(left),
@@ -265,6 +265,15 @@ export async function startLakeServer(options: ServerOptions) {
         throw new HttpError(401, "需要 Lake 访问凭据");
       }
       if (!store || !agents || !superagent) throw new HttpError(503, "服务正在启动");
+      if (path[1] === 'resources' && path[3] === 'grafana-token' && path.length === 4) {
+        if (method !== 'POST') throw new HttpError(405, '不支持此令牌读取方式');
+        if (!equal(token, cookie) || request.headers.origin !== origin)
+          throw new HttpError(403, '请在已登录的 Lake 工作台查看令牌');
+        const input = await body(request);
+        if (!services || draining) throw new HttpError(503, 'Lake 服务未就绪');
+        json(response, 200, services.revealGrafanaToken(path[2]!, input));
+        return;
+      }
       if (path[1] === 'settings' && path[2] === 'event-sources') {
         if (!eventReceiver || draining) throw new HttpError(503, 'Lake 接收端未就绪');
         if (path.length === 3 && method === 'POST') {
@@ -631,6 +640,37 @@ export async function startLakeServer(options: ServerOptions) {
           publishedRevision: 0,
         };
         if (method !== "GET") throw new HttpError(501, "新记忆流水线尚未接入");
+      } else if (path[1] === 'resources' && path[3] === 'grafana-webhook' && path[4] === 'inject' && path.length === 5) {
+        if (method !== 'POST') throw new HttpError(405, '不支持此 Grafana 注入方法');
+        if (!eventReceiver || draining) throw new HttpError(503, 'Lake 接收端未就绪');
+        const cancel = new AbortController(), abort = () => cancel.abort();
+        response.on('close', abort);
+        try {
+          result = await services!.injectGrafanaWebhook(path[2], data, eventReceiver,
+            {origin, receiverBase: options.grafanaReceiverBase}, cancel.signal);
+        } finally {
+          response.off('close', abort);
+        }
+      } else if (path[1] === 'resources' && path[3] === 'grafana-webhook' && path.length === 4) {
+        if (!eventReceiver || draining) throw new HttpError(503, 'Lake 接收端未就绪');
+        if (method === 'GET') result = {source: eventReceiver.resourceSource(path[2], origin)};
+        else if (method === 'POST') {
+          if (Object.keys(data).length) throw new HttpError(400, 'Webhook 通过当前 Grafana 资源绑定');
+          result = eventReceiver.bindResource(path[2], origin);
+          status = 201;
+        } else throw new HttpError(405, '不支持此 Grafana Webhook 操作');
+      } else if (path[1] === 'resources' && path[3] === 'grafana-read' && path.length === 4) {
+        if (method !== 'POST') throw new HttpError(405, '不支持此 Grafana 查询方法');
+        if (draining) throw new HttpError(503, 'Lake 正在退出');
+        const resource = store.require<Resource>('resources',path[2]);
+        const {revision, ...input} = data;
+        const cancel = new AbortController(), abort = () => cancel.abort();
+        response.on('close',abort);
+        try {
+          result = await services!.readGrafana(resource.projectId,resource.id,revision,input as import('../../web-agent/shared/contracts').GrafanaReadInput,cancel.signal);
+        } finally {
+          response.off('close',abort);
+        }
       } else if (path[1] === "resources") {
         const resource = store.require<Resource>("resources", path[2]);
         if (path[3] === "jumpserver-accounts" && path.length === 4 && resource.jumpServer) {
@@ -970,6 +1010,7 @@ export async function startLakeServer(options: ServerOptions) {
     await terminals?.close();
     await ssh?.close();
     services?.close();mysql?.close();
+    await eventReceiver?.close();
     await execution?.close();
     await extensions?.close();
     gateway?.close();
@@ -992,7 +1033,7 @@ export async function startLakeServer(options: ServerOptions) {
     });
     ssh=new LakeSSH(store,security,(session)=>{broadcast(store!.event(session,"session"));superagent?.changed(session);},value=>extensions!.scrub(value),value=>agents!.registerSecret(value),jumpServer);
     mysql=new LakeMySQL(store,security,value=>agents!.registerSecret(value),value=>agents!.redact(value));
-    services=new LakeServiceResources(store,security,value=>agents!.registerSecret(value));
+    services=new LakeServiceResources(store,security,value=>agents!.registerSecret(value),value=>agents!.redact(ssh!.scrub(extensions!.scrub(value))));
     terminals = new LakeTerminals(store, security, (value, live) => live ? agents!.redactLive(ssh!.scrub(extensions!.scrubLive(value),true)) : ssh!.scrub(value), broadcast,ssh);
     agents.guard = () => security!.check();
     if (options.importLegacy) {
@@ -1012,13 +1053,14 @@ export async function startLakeServer(options: ServerOptions) {
     // Preparation must not start Workers, Watchdog, queued inputs or Memory
     // extraction. The actual application launch owns those runtime services.
     if(options.importOnly)return {origin,token,store,agents,superagent,memory,mysql,services,execution,close};
-    eventReceiver = new LakeEventReceiver(store, security, value => ssh!.scrub(extensions!.scrub(value)));
+    eventReceiver = new LakeEventReceiver(store, security, value => ssh!.scrub(extensions!.scrub(value)), () => draining);
+    await eventReceiver.restoreLocalReceivers();
     execution=new LakeExecution(store,security,ssh,value=>agents!.redact(ssh!.scrub(value)));
     const resourceNavigation=new LakeResourceNavigation(store,(projectId,actorSessionId)=>store!.list<any>('sessions').some(session=>session.projectId===projectId&&session.id!==actorSessionId&&agents!.isRunning(session.id)));
     resourceManagement=new LakeResourceManagement(store,security,ssh,services,resourceNavigation);
     resourceImport=new LakeResourceImport(store,resourceManagement,value=>agents!.registerSecret(value),options.resourceImport);
     const configuration=new PilotConfiguration(store,security,extensions,resourceManagement,value=>agents!.redact(ssh!.scrub(extensions!.scrub(value))));
-    superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql,execution,Date.now,configuration);
+    superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql,execution,Date.now,configuration,services);
     memory = new LakeMemory(store, () => security!.check(), value => agents!.redact(ssh!.scrub(extensions!.scrub(value))));
     try { await memory.initialize(); } catch { memory.disable("记忆文件需要核实，当前暂停记忆功能；原记录保留，普通新任务仍可运行"); }
     agents.memory = memory;
@@ -1089,7 +1131,8 @@ async function main() {
   const port = Number(option("--port") ?? 4182);
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error("无效的端口");
   const root = isSea() ? join(dirname(process.execPath), "lake-runtime") : __dirname;
-  const app = await startLakeServer({ home, data, port, staticRoot: join(root, "web"), development: args.includes("--dev"), production:args.includes('--production'), importLegacy: args.includes("--migrate-legacy"),importOnly:args.includes('--import-only') });
+  const app = await startLakeServer({ home, data, port, staticRoot: join(root, "web"), development: args.includes("--dev"), production:args.includes('--production'), importLegacy: args.includes("--migrate-legacy"),importOnly:args.includes('--import-only'),
+    grafanaReceiverBase: process.env.LAKE_GRAFANA_RECEIVER_BASE_URL });
   if (args.includes("--import-only")) {
     console.log("Lake legacy catalog migration completed; original Go databases and execution ledgers retained");
     await app.close(); return;

@@ -1,7 +1,13 @@
 type RevealFrames = {request:(callback:FrameRequestCallback)=>number;cancel:(id:number)=>void;now:()=>number};
 const segmenter=new Intl.Segmenter(undefined,{granularity:'grapheme'});
-export const TEXT_REVEAL_MAX_LAG_MS=80;
-const MIN_GRAPHEMES_PER_SECOND=320;
+export const TEXT_REVEAL_MAX_LAG_MS=180;
+const BUFFER_WINDOW_MS=130;
+const MIN_GRAPHEMES_PER_SECOND=32;
+type TextPacket = {end:number;due:number};
+
+export function firstGrapheme(text:string):string {
+ return segmenter.segment(text)[Symbol.iterator]().next().value?.segment??'';
+}
 
 // Presentation only: canonical content and completion state never wait for frames.
 // Initial/restored text is immediate; only append updates of a live reply animate.
@@ -9,9 +15,10 @@ export class TextReveal {
  private source:string;
  private shown:string;
  private boundaries:number[]=[];
+ private packets:TextPacket[]=[];
  private frame:number|null=null;
- private previousTime:number|null=null;
- private deadline=0;
+ private previousTime=0;
+ private lastArrival:number|undefined;
  private credit=0;
  constructor(initial:string,private publish:(text:string)=>void,private frames:RevealFrames={request:cb=>window.requestAnimationFrame(cb),cancel:id=>window.cancelAnimationFrame(id),now:()=>performance.now()}){this.source=initial;this.shown=initial}
  update(text:string,animate:boolean){
@@ -20,36 +27,51 @@ export class TextReveal {
   this.source=text;
   // Segment only the pending suffix, keeping all previously visible text stable.
   this.boundaries=Array.from(segmenter.segment(text.slice(this.shown.length)),s=>this.shown.length+s.index+s.segment.length);
-  // Keep a fixed catch-up window while text is pending. Frequent packets must
-  // not keep extending the deadline and leave the display behind the source.
+  const receivedAt=this.frames.now();
+  this.packets.push({end:text.length,due:receivedAt+TEXT_REVEAL_MAX_LAG_MS});
   if(this.frame===null){
-   this.previousTime=this.frames.now();
-   this.deadline=this.previousTime+TEXT_REVEAL_MAX_LAG_MS;
+   if(this.lastArrival===undefined||receivedAt-this.lastArrival>=TEXT_REVEAL_MAX_LAG_MS)this.credit=1;
+   this.previousTime=receivedAt;
    this.frame=this.frames.request(this.tick);
   }
+  this.lastArrival=receivedAt;
  }
  flush(text=this.source){
   this.stop();this.source=text;
   if(this.shown!==text){this.shown=text;this.publish(text)}
  }
- stop(){if(this.frame!==null)this.frames.cancel(this.frame);this.frame=null;this.previousTime=null;this.credit=0}
+ stop(){
+  if(this.frame!==null)this.frames.cancel(this.frame);
+  this.frame=null;
+  this.packets=[];this.boundaries=[];this.lastArrival=undefined;this.credit=0;
+ }
  private tick=(time:number)=>{
   this.frame=null;
-  if(time>=this.deadline){this.flush();return}
-  const elapsed=this.previousTime===null?16.67:Math.max(0,time-this.previousTime);
-  this.previousTime=time;
+  const elapsed=Math.max(0,time-this.previousTime);
   const remaining=this.boundaries.length;
-  const catchUpRate=remaining*1000/Math.max(8,this.deadline-time);
-  this.credit+=Math.max(MIN_GRAPHEMES_PER_SECOND,catchUpRate)*Math.min(elapsed,64)/1000;
-  // A frame with pending graphemes always paints, including 120/144Hz panels.
-  const count=Math.min(remaining,Math.max(1,Math.floor(this.credit)));
+  // Keep a little received text in reserve to bridge uneven packet arrivals.
+  // Each packet also owns its deadline. Finishing an old packet never flushes
+  // younger text along with it or moves its deadline on a later arrival.
+  let rate=Math.max(MIN_GRAPHEMES_PER_SECOND,remaining*1000/BUFFER_WINDOW_MS);
+  let boundary=0,overdue=0;
+  for(const packet of this.packets){
+   while(this.boundaries[boundary]!<packet.end)boundary++;
+   const throughPacket=boundary+1;
+   if(packet.due<=time){overdue=throughPacket;continue;}
+   rate=Math.max(rate,throughPacket*1000/Math.max(1,packet.due-this.previousTime));
+   break;
+  }
+  this.previousTime=time;
+  this.credit+=rate*Math.min(elapsed,50)/1000;
+  const count=Math.min(remaining,Math.max(overdue,Math.floor(this.credit)));
   if(count>0){
    this.credit=Math.max(0,this.credit-count);
    const offset=this.boundaries[count-1]!;
    this.boundaries=this.boundaries.slice(count);
+   while(this.packets[0]&&this.packets[0].end<=offset)this.packets.shift();
    this.shown=this.source.slice(0,offset);this.publish(this.shown);
   }
-  if(this.shown!==this.source)this.frame=this.frames.request(this.tick);
-  else {this.previousTime=null;this.credit=0}
+  if(this.boundaries.length)this.frame=this.frames.request(this.tick);
+  else this.credit=Math.min(this.credit,1);
  };
 }

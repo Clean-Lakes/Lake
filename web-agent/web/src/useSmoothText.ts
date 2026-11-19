@@ -1,8 +1,8 @@
 import {useLayoutEffect,useRef,useState} from 'react';
-import {TextReveal} from './textReveal';
+import {firstGrapheme,TextReveal} from './textReveal';
 
 export function useSmoothText(text:string,streaming:boolean,animateInitial=false){
- const [shown,setShown]=useState(streaming&&animateInitial?'':text);
+ const [shown,setShown]=useState(()=>streaming&&animateInitial?firstGrapheme(text):text);
  const displayed=useRef(shown);displayed.current=shown;
  const latest=useRef({text,streaming});latest.current={text,streaming};
  const sync=useRef<()=>void>(()=>{});
