@@ -9,6 +9,7 @@ import {NavigationMenu} from './NavigationDelete';
 import {SpecialistDelete} from './SpecialistDelete';
 import {SidebarPilotEntry} from './SidebarPilotEntry';
 import {AgentBackendLogo,agentTypeName} from './AgentBackendLogo';
+import {reuseUnchanged} from './snapshotUpdates';
 
 export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
  const [workspace,setWorkspace]=useState<SuperWorkspace|null>(null),[error,setError]=useState('');
@@ -23,7 +24,15 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
    try{
     let next=await api.superWorkspace(projectId,controller.signal);
     if(!next.active&&Date.now()>=nextActivation){nextActivation=Date.now()+15000;await api.ensureSuperWorkspace(projectId,controller.signal);next=await api.superWorkspace(projectId,controller.signal);}
-    if(generation.current===current){setWorkspace({...next,questions:next.questions?.filter(question=>!deletedRoles.current.has(question.author.roleId??'')),channels:next.channels?.filter(channel=>!deletedRoles.current.has(channel.roleId)),workers:next.workers.filter(worker=>!deletedRoles.current.has(worker.roleId))});if(next.active)setError('');}
+    if(generation.current===current){
+     setWorkspace(previous=>reuseUnchanged(previous,{
+      ...next,
+      questions:next.questions?.filter(question=>!deletedRoles.current.has(question.author.roleId??'')),
+      channels:next.channels?.filter(channel=>!deletedRoles.current.has(channel.roleId)),
+      workers:next.workers.filter(worker=>!deletedRoles.current.has(worker.roleId)),
+     }));
+     if(next.active)setError('');
+    }
    }catch(reason){if(!controller.signal.aborted&&generation.current===current)setError(readableError(reason));}
    finally{busy=false;if(queued&&!controller.signal.aborted){queued=false;void refresh();}}
   };
