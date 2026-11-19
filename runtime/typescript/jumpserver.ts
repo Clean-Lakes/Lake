@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { open, unlink } from "node:fs/promises";
 import { join } from "node:path";
-import type { JumpServerBinding, JumpServerLogin, JumpServerMount, Resource, ResourceTreeNode } from "../../web-agent/shared/contracts";
+import type { JumpServerBinding, JumpServerEndpoint, JumpServerLogin, JumpServerMount, Resource, ResourceTreeNode } from "../../web-agent/shared/contracts";
 import { JumpServerAPI, hostName, loginConfiguration, uuid, type AuthorizedAccount, type Directory } from "./jumpserver-api";
 import { LakeStore, privateDirectory, HttpError, id, now } from "./store";
 import type { LakeSecurity } from "./security";
@@ -11,6 +11,10 @@ import { digest } from "./tasks";
 type Binding = JumpServerBinding & {credentialId: string};
 type Live = {bindingId: string; revision: number; resourceId: string; account: AuthorizedAccount; close: () => void};
 const stopped = () => new HttpError(409, "JumpServer 绑定或资源已变化，请重新连接");
+function validateEndpoint({kokoHost,kokoPort}: JumpServerEndpoint) {
+  if (!hostName(kokoHost) || !Number.isInteger(kokoPort) || kokoPort < 1 || kokoPort > 65535)
+    throw new HttpError(400,"请核对 KoKo SSH 地址和端口");
+}
 function scopedId(binding: string, name: string) {
   const bytes = createHash("sha1").update(Buffer.from(binding.replaceAll("-",""),"hex")).update(name).digest();
   bytes[6] = (bytes[6] & 15) | 80;
@@ -82,8 +86,8 @@ export class LakeJumpServer {
     this.security.resourceConfiguration(projectId,undefined,"network.fetch");
     const before = this.current(projectId);
     if (input.expectedRevision !== (before?.revision ?? 0)) throw stopped();
-    if (!hostName(input.kokoHost) || !Number.isInteger(input.kokoPort) || input.kokoPort < 1 || input.kokoPort > 65535 ||
-        input.nodeId !== null && !uuid.test(input.nodeId)) throw new HttpError(400,"请核对 KoKo SSH 地址、端口及挂载目录");
+    validateEndpoint(input);
+    if (input.nodeId !== null && !uuid.test(input.nodeId)) throw new HttpError(400,"请核对挂载目录");
     const login = loginConfiguration(input);
     this.registerSecret(login.secret);
     const api = new JumpServerAPI(login), profile = await api.profile(signal);
@@ -99,13 +103,27 @@ export class LakeJumpServer {
     const file = await open(path,"wx",0o600);
     try {
       try { await file.writeFile(JSON.stringify(login)); await file.sync(); } finally { await file.close(); }
-      if (signal.aborted || this.shutdown.signal.aborted || this.current(projectId)?.credentialId !== before?.credentialId) throw stopped();
+      const current = this.current(projectId);
+      if (signal.aborted || this.shutdown.signal.aborted || current?.credentialId !== before?.credentialId ||
+          current?.revision !== before?.revision) throw stopped();
       this.security.resourceConfiguration(projectId,undefined,"network.fetch");
       this.apply(binding,directory);
     } catch (error) { await unlink(path).catch(()=>{}); throw error; }
     if (before) { this.disconnect(before.id); await unlink(await this.secretPath(before.credentialId)).catch(()=>{}); }
     this.changed(projectId);
     return this.public(binding);
+  }
+  updateEndpoint(projectId: string, input: JumpServerEndpoint) {
+    this.security.resourceConfiguration(projectId);
+    const binding = this.current(projectId);
+    if (!binding || binding.revision !== input.expectedRevision) throw stopped();
+    validateEndpoint(input);
+    if (binding.kokoHost === input.kokoHost && binding.kokoPort === input.kokoPort) return this.public(binding);
+    const updated = {...binding, kokoHost:input.kokoHost, kokoPort:input.kokoPort, revision:binding.revision + 1};
+    this.store.put("jumpServerBindings",projectId,updated);
+    this.disconnect(binding.id);
+    this.changed(projectId);
+    return this.public(updated);
   }
   private apply(b: Binding, directory: Directory, remove = false) {
     const previous = this.store.list<Resource>("resources").filter(r=>r.jumpServer?.bindingId===b.id);
@@ -196,7 +214,8 @@ export class LakeJumpServer {
       return this.public(current);
     } catch (error) {
       // An older refresh must never change or close the replacement binding.
-      if (this.current(b.projectId)?.credentialId !== b.credentialId) throw stopped();
+      const current = this.current(b.projectId);
+      if (current?.credentialId !== b.credentialId || current.revision !== b.revision) throw stopped();
       this.disconnect(b.id);
       this.assertCurrent(b);
       const denied=error instanceof HttpError && [401,403].includes(error.status);

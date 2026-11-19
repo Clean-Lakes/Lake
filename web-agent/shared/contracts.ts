@@ -15,6 +15,7 @@ export type JumpServerPreview = { userId: string; username: string; nodes: {id: 
 export type JumpServerMount = JumpServerLogin & {
   userId: string; nodeId: string | null; kokoHost: string; kokoPort: number; expectedRevision: number;
 };
+export type JumpServerEndpoint = Pick<JumpServerMount,"kokoHost"|"kokoPort"|"expectedRevision">;
 export type JumpServerRef = { bindingId: string; assetId: string; endpointHash: string; accountId?: string; accountAlias?: string };
 export type JumpServerAudit = {bindingId:string;userId:string;orgId:string;assetId:string;accountId:string;accountAlias:string;connectionTokenId:string};
 export type SSHKeyDirectory = { directory: string; keys: { name: string; path: string }[] };

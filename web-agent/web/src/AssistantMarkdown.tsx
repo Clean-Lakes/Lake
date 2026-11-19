@@ -67,7 +67,7 @@ function InlineReference({reference}: {reference: ObjectReference}) {
   const {open} = useContext(References);
   const inspectable = !!open && !!(reference.resource || reference.file || reference.task);
   const className = `object-reference${reference.resource ? ' message-reference-token' : ''}`;
-  const content = <>{reference.resource ? <ResourceIcon kind={reference.resource.kind} size={12}/> : <Glyph name={reference.icon} size={12}/>}<span className="object-reference-label">{reference.label}</span></>;
+  const content = <>{reference.resource ? <ResourceIcon kind={reference.resource.jumpServer ? "jumpserver" : reference.resource.kind} size={12}/> : <Glyph name={reference.icon} size={12}/>}<span className="object-reference-label">{reference.label}</span></>;
   return inspectable ? <button type="button" className={className} data-object-kind={reference.kind} data-object-id={reference.key} title={reference.description} aria-label={`查看${reference.description}`} onClick={() => open(reference)}>{content}</button> : <span className={className} data-object-kind={reference.kind} title={reference.description}>{content}</span>;
 }
 

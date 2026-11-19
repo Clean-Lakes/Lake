@@ -8,6 +8,7 @@
 .sidebar.workspace-navigation .resource-folder-toggle > .resource-tree-folder-icon { color:var(--warning); }
 
 /* Draft references remain removable chips; sent references read as inline names. */
+.resource-kind-icon.kind-jumpserver { object-fit: contain; flex-shrink: 0; }
 :is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon) { border:0; }
 .composer-reference-token:has(> .resource-kind-icon) { padding:2px 6px; }
 .message-reference-token:has(> .resource-kind-icon) {
@@ -27,6 +28,10 @@
 :is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon:is(.kind-ssh,.kind-apisix)) {
  --resource-reference-background:var(--info-soft);
  --resource-reference-foreground:var(--info);
+}
+:is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon.kind-jumpserver) {
+ --resource-reference-background:var(--success-soft);
+ --resource-reference-foreground:var(--success);
 }
 :is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon:is(.kind-database,.kind-victoriametrics,.kind-prometheus)) {
  --resource-reference-background:var(--resource-database-background);

@@ -31,5 +31,6 @@ export function Glyph({name,size=18,className=""}:{name:string;size?:number;clas
  return <Icon size={size} strokeWidth={1.7} className={classes} aria-hidden="true"/>;
 }
 export function ResourceIcon({kind,size=16}:{kind:string;size?:number}) {
+ if(kind==="jumpserver")return <img src="/brand/jumpserver.png" width={size} height={size} className="resource-kind-icon kind-jumpserver" alt="" aria-hidden="true" draggable={false}/>;
  return <Glyph name={kind==="ssh"?"server":kind} size={size} className={`resource-kind-icon kind-${kind}`}/>;
 }

@@ -12,6 +12,7 @@
 .jumpserver-dialog .jumpserver-check { display:flex; align-items:center; }
 .jumpserver-dialog .jumpserver-endpoint { display:grid; grid-template-columns:minmax(0,1fr) 100px; gap:12px; }
 .jumpserver-actions { justify-content:flex-end; flex-wrap:wrap; margin-top:12px; }
+.jumpserver-dialog .jumpserver-sync-success { border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); }
 .jumpserver-dialog dl { display:grid; grid-template-columns:auto minmax(0,1fr); gap:10px 16px; }
 .jumpserver-dialog dt { color:var(--text-secondary); }
 .jumpserver-dialog dd { margin:0; overflow-wrap:anywhere; }

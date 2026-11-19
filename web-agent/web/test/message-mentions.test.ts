@@ -43,3 +43,16 @@ test("sent labels use icons, escaped names and no @ or remove control",()=>{
  assert.ok(html.includes('&lt;server&gt;'));
  assert.ok(!html.includes('@')&&!html.includes('<button')&&!html.includes('<server>'));
 });
+
+test("sent JumpServer references show the provider logo for the exact selected resource",()=>{
+ const text="@同名主机";
+ const mention:MessageMention={kind:"resource",id:"managed",label:text,start:0,end:text.length,resourceKind:"ssh"};
+ const host={id:"direct",name:"同名主机",kind:"ssh" as const};
+ const assets=[host,{...host,id:"managed",jumpServer:{bindingId:"binding",assetId:"remote",endpointHash:"endpoint"}}];
+ const html=renderToStaticMarkup(createElement(MessageText,{text,mentions:[mention],resources:assets}));
+ assert.match(html,/class="resource-kind-icon kind-jumpserver"/);
+ assert.match(html,/src="\/brand\/jumpserver\.png"/);
+ const direct=renderToStaticMarkup(createElement(MessageText,{text,mentions:[{...mention,id:"direct"}],resources:assets}));
+ assert.match(direct,/\bresource-kind-icon kind-ssh\b/);
+ assert.doesNotMatch(direct,/jumpserver\.png/);
+});

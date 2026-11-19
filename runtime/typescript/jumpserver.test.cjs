@@ -171,6 +171,32 @@ test("subtree, user identity and remote accounts remain scoped to this mount",as
   assert.equal(f.resources().length,0);
 });
 
+test("an authenticated endpoint edit keeps the binding, credentials and resource references", async t => {
+  const f = await fixture(t);
+  const binding = await f.bind();
+  const [resource] = f.resources();
+  const oldRevision = f.app.execution.revision(resource);
+  const input = {kokoHost:"127.0.0.1",kokoPort:31222,expectedRevision:binding.revision};
+  await f.api(f.base,"PATCH",{...input,kokoPort:0},400);
+  await f.api(f.base,"PATCH",{...input,expectedRevision:binding.revision + 1},409);
+
+  f.state.denied = true;
+  const updated = await f.api(f.base,"PATCH",input);
+  assert.equal(updated.id,binding.id);
+  assert.equal(updated.kokoPort,input.kokoPort);
+  assert.equal(updated.revision,binding.revision + 1);
+  assert.equal(updated.lastSync,binding.lastSync);
+  assert.equal(updated.assetCount,binding.assetCount);
+  assert.equal(f.resources()[0].id,resource.id);
+  assert.notEqual(f.app.execution.revision(f.resources()[0]),oldRevision);
+  await f.api(f.base,"PATCH",input,409);
+
+  f.state.denied = false;
+  const synced = await f.api(f.base+"/sync","POST",{});
+  assert.equal(synced.kokoPort,input.kokoPort);
+  assert.equal(synced.state,"ready");
+});
+
 test("two personal mounts namespace the same asset and a session may only use its project's reference",async t=>{
   const f=await fixture(t);
   const first=await f.bind();

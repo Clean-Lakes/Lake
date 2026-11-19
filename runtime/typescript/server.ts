@@ -54,7 +54,7 @@ import {LakeServiceResources} from './service-resources';
 import { LakeExtensions } from "./extensions";
 import {LakeSSH} from "./ssh";
 import {LakeJumpServer} from "./jumpserver";
-import type {JumpServerLogin, JumpServerMount} from "../../web-agent/shared/contracts";
+import type {JumpServerEndpoint, JumpServerLogin, JumpServerMount} from "../../web-agent/shared/contracts";
 import { LakeTerminals } from "./terminal";
 import { commandPolicy } from "../../web-agent/shared/command-policy";
 export { previewLegacyMigration, rollbackMigration, importLegacyMySQL, importLegacyMCP, importLegacyServices } from "./migration";
@@ -548,6 +548,7 @@ export async function startLakeServer(options: ServerOptions) {
         try {
           if (path.length === 4 && method === "GET") result = {binding:jumpServer!.view(projectId)};
           else if (path.length === 4 && method === "PUT") result = await jumpServer!.save(projectId,data as JumpServerMount,cancel.signal);
+          else if (path.length === 4 && method === "PATCH") result = jumpServer!.updateEndpoint(projectId,data as JumpServerEndpoint);
           else if (path.length === 4 && method === "DELETE") { await jumpServer!.remove(projectId,data.id,data.revision); result = {}; }
           else if (path.length === 5 && path[4] === "preview" && method === "POST") result = await jumpServer!.preview(projectId,data as JumpServerLogin,cancel.signal);
           else if (path.length === 5 && path[4] === "sync" && method === "POST") result = await jumpServer!.sync(projectId);

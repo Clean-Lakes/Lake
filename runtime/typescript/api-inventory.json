@@ -1403,6 +1403,15 @@
       ]
     },
     {
+      "name": "updateJumpServerEndpoint",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "`/api/projects/${encodeURIComponent(project)}/jumpserver`"
+        }
+      ]
+    },
+    {
       "name": "updateMessageQueue",
       "routes": [
         {

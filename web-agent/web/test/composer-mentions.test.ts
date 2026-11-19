@@ -6,7 +6,9 @@ import {composerMentionQuery,composerClipboardFragment,composerToken,replaceComp
 
 test("left and right cycle visible categories including empty categories",()=>{
  assert.equal(nextMentionCategory("all",[],{key:"ArrowRight"}),"resource");
- assert.equal(nextMentionCategory("resource",[],{key:"ArrowRight"}),"skill");
+ assert.equal(nextMentionCategory("resource",[],{key:"ArrowRight"}),"jumpserver");
+ assert.equal(nextMentionCategory("jumpserver",[],{key:"ArrowRight"}),"skill");
+ assert.equal(nextMentionCategory("jumpserver",[],{key:"ArrowLeft"}),"resource");
  assert.equal(nextMentionCategory("skill",[],{key:"ArrowRight"}),"mcp");
  assert.equal(nextMentionCategory("mcp",[],{key:"ArrowRight"}),"all");
  assert.equal(nextMentionCategory("all",[],{key:"ArrowLeft"}),"mcp");
@@ -65,6 +67,24 @@ test('same-name resource candidates retain their real types and distinct selecti
  assert.deepEqual(filterMentions(options,'数据库','resource').map(o=>o.id),['database']);
  const picked=selectComposerMention('@141',4,[],options[1]!);
  assert.deepEqual(composerMessage(picked.next,picked.references,kinds).resourceIds,['database']);
+});
+test("JumpServer separates managed assets in the menu and inserts an ordinary resource reference",()=>{
+ const host: Resource = {id:"direct",projectId:"project",name:"同名主机",kind:"ssh",description:"",status:"available"};
+ const jumpServer = {bindingId:"mount",assetId:"asset",endpointHash:"endpoint"};
+ const options=mentionOptions([
+  host,
+  {...host,id:"managed",jumpServer},
+  {...host,id:"browse",name:"控制台",kind:"jumpserver",status:"unavailable",jumpServer:{...jumpServer,assetId:"console"}},
+ ],[],[]);
+ assert.deepEqual(filterMentions(options,"","resource").map(option=>option.id),["direct"]);
+ assert.deepEqual(filterMentions(options,"","jumpserver").map(option=>option.id),["managed","browse"]);
+ assert.deepEqual(filterMentions(options,"SSH","all").map(option=>option.id),["direct","managed"]);
+ assert.deepEqual(filterMentions(options,"堡垒机","all").map(option=>option.id),["managed","browse"]);
+ assert.equal(mentionCategoryCount(options,"all"),3);
+ const managed=filterMentions(options,"同名","jumpserver")[0]!;
+ assert.equal(mentionTypeLabel(managed),"JumpServer");
+ const picked=selectComposerMention("@同名",3,[],managed);
+ assert.deepEqual(composerMessage(picked.next,picked.references,["direct","managed","browse"]).resourceIds,["managed"]);
 });
 test("mentions expose enabled Skills and MCP services without mixing same-name identities",()=>{
  const resources=[{id:"tools",name:"Team tools",status:"available"}] as Resource[];
