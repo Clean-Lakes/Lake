@@ -396,6 +396,9 @@ test('specialist creation persists a random available model, replays once and pr
  assert.equal(binding.kind,'native');assert.equal(binding.model.providerId,'fixture-models');assert.ok(['model-a','model-b'].includes(binding.model.modelId));
  assert.deepEqual(savedExecution,{agentName:'Lake 原生',modelName:binding.model.modelId},'the reply can use the saved model name without another tool call');
  const provider=f.store.modelProvider('fixture-models')!;provider.enabled=false;f.store.put('providers',provider.id,provider);
+ (f.agents as any).external={registry:{get:()=>({enabled:true})},status:async()=>{throw Error('replayed creation must not rediscover executors');}};
+ assert.deepEqual(await tool.handler(input,{abortSignal:new AbortController().signal}),{...saved,savedExecution});
+ delete (f.agents as any).external;
  assert.deepEqual(f.internal.manage(f.router,input),saved,'the same creation returns its receipt even if the available pool changes');
  assert.equal(f.store.list('superRoleMutations').length,1);
  const reopened=await LakeStore.open(f.store.home,f.store.data);try{assert.deepEqual(reopened.require<any>('superRoles',saved.id).execution,binding);}finally{reopened.db.close();}
@@ -423,6 +426,60 @@ test('model-only specialist creation keeps the requested model and freezes its c
  const work=await f.admit('检查项目。'),task=f.route(work,{action:'create',title:'检查项目',role_id:saved.id});
  assert.deepEqual(f.worker(task.taskId).roleSnapshot.execution,{...saved.execution,revision:7});
  assert.deepEqual(f.internal.listRoles(f.project.id).items.find((role:any)=>role.id===saved.id).execution,saved.execution);
+});
+
+test('Pilot creates a configured specialist and its first assignment atomically, then reuses its identity', async t => {
+  const f = await fixture(t);
+  const route = f.internal.routerEntries(f.router).find((entry: any) => entry.metadata.name === 'route_work');
+  const context = {abortSignal: new AbortController().signal};
+  let probes = 0;
+  (f.agents as any).external = {registry: {get: () => ({enabled: true})}, status: async () => {probes++; return [];}};
+  const event = await f.admit('请建一位名叫云杉的校对，使用原生 model-a，负责中文校对，并让它检查这段文字。');
+  const profile = {name: '云杉', duties: '中文校对', avatar_id: 'beaver', execution: {kind: 'native'}, model_id: 'model-a'};
+  const input = {event_id: event.id, part_key: 'proofread', quote: event.payload, reason: '校对要求', action: 'create',
+    role_key: 'proofreader', new_specialist: profile, title: '检查这段文字'};
+  const [receipt, retry] = await Promise.all([route.handler(input, context), route.handler(input, context)]);
+  assert.equal(retry.taskId, receipt.taskId);
+  assert.equal(receipt.assignments[0].roleName, '云杉');
+  assert.deepEqual(receipt.assignments[0].savedExecution, {agentName: 'Lake 原生', modelName: 'model-a'});
+  const saved = f.store.require<any>('superRoles', receipt.roleId);
+  assert.equal(saved.duties, profile.duties);
+  assert.equal(saved.avatarId, 'beaver');
+  assert.deepEqual(saved.execution, {kind:'native', model:{providerId:'fixture-models', modelId:'model-a'}});
+  assert.deepEqual(f.worker(receipt.taskId).roleSnapshot, saved);
+  assert.equal(f.store.list('superChannels').filter((channel:any) => channel.roleId === saved.id).length, 1);
+  assert.equal(f.store.list('superWorkers').length, 1);
+  f.settleRouter();
+
+  const next = await f.admit('请云杉再校对一段。');
+  const nextInput = {...input, event_id: next.id, quote: next.payload};
+  await assert.rejects(route.handler({...nextInput, new_specialist: {...profile, duties: '其他职责'}}, context), /role_key exists/);
+  const reused = await route.handler({...nextInput, new_specialist: undefined}, context);
+  assert.equal(reused.roleId, saved.id);
+  assert.notEqual(reused.taskId, receipt.taskId);
+  assert.deepEqual(f.store.require('superRoles', saved.id), saved);
+  const supplement = await f.admit('补充对第二段的检查要求。');
+  await route.handler({event_id: supplement.id, quote: supplement.payload, part_key: 'extra', reason: '补充', action: 'followup',
+    task_id: reused.taskId, role_id: saved.id}, context);
+  assert.equal(probes, 0, 'explicit native creation, reuse and followup never wait for Codex');
+
+  const invalid = await f.admit('请再建一个翻译并派单。');
+  await assert.rejects(route.handler({...input, event_id: invalid.id, quote: invalid.payload, role_key: 'translator',
+    resource_ids: ['outside-this-event']}, context), /subset/);
+  assert.equal(f.store.list<any>('superRoles').some(role => role.roleKey === 'translator'), false);
+  assert.equal(f.store.list('superWorkers').length, 2);
+});
+
+test('specialist directory searches full duties with stable pagination and project isolation', async t => {
+  const f = await fixture(t);
+  for (const id of ['a', 'b', 'hidden', 'retired']) f.store.put('superRoles', id, {...f.role, id, roleKey: id, name: '校对',
+    duties: '检查 PostgreSQL 慢查询', ...(id === 'hidden' && {projectId: 'other'}), ...(id === 'retired' && {deletedAt: 'yesterday'})});
+  const search = f.internal.routerEntries(f.router).find((entry: any) => entry.metadata.name === 'list_specialists');
+  const query = {query: 'ＰＯＳＴＧＲＥＳＱＬ', limit: 1};
+  const first = await search.handler(query, {}), next = await search.handler({...query, cursor: first.nextCursor}, {});
+  assert.deepEqual([...first.items, ...next.items].map(role => role.id), ['a', 'b']);
+  assert.equal(next.nextCursor, '');
+  assert.equal(next.items[0].duties, '检查 PostgreSQL 慢查询');
 });
 
 test('Pilot freezes an unbound Worker to the compatible task default with an unrelated CLI model',async t=>{

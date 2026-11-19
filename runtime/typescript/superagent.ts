@@ -28,7 +28,7 @@ import { LakeAgents } from "./agent";
 import { HttpError, id, LakeStore, now, type StoredSession } from "./store";
 import { canonical, digest, TaskLedger, terminal, text, type Goal, type Operation } from "./tasks";
 import { finalSummaryGuidance, superRouterPrompt, superWorkerPrompt } from "./super-prompts";
-import { buildRouterContext, projectRouterHistory, type RouterMessage } from "./router-context";
+import { buildRouterContext, normalizeSpecialistText, projectRouterHistory, type RouterMessage } from "./router-context";
 import type {MessageInput} from './message-input';
 import { listProjectAssets } from "./assets";
 import { loadLegacyView } from "./migration";
@@ -60,6 +60,7 @@ const questionResultBudget={maxInlineBytes:questionResultBytes,maxModelBytes:que
   preview:{maxBytes:questionResultBytes,direction:'head' as const}};
 
 type Role = { id: string; projectId: string; roleKey: string; name: string; duties: string; revision: number; avatarId?:LakeAvatarName; deletedAt?: string; execution?: import('./acp/types').AgentBackendRef };
+type RoleMutation = {eventId: string; hash: string; result: Role; savedExecution?: {agentName: string; modelName: string}};
 type Channel = { id: string; projectId: string; roleId: string; sessionId: string; revision: number; createdAt: string };
 type InputEvent = { id: string; projectId: string; sessionId: string; messageId: string; payload: string;
   selectedReferences?: MessageInput;
@@ -113,6 +114,20 @@ const strings = (value: unknown, max = 128): string[] => {
 const objectSchema = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required, additionalProperties: false });
 const str = { type: "string" }, integer = { type: "integer" };
 const array = (items: unknown) => ({ type: "array", items });
+const specialistProfileFields = {
+  name: str, duties: str, avatar_id: str, model_id: str, provider_id: str,
+  execution: objectSchema({kind: {type: "string", enum: ["native", "acp"]}, agent: {type: "string", enum: ["codex"]},
+    model: objectSchema({modelId: str, providerId: str}, ["modelId"])}, ["kind"]),
+};
+function validateSpecialistFields(input: Record<string, any>) {
+  if (input.name !== undefined) text(input.name, "name", 128);
+  if (input.duties !== undefined && (typeof input.duties !== "string" || Buffer.byteLength(input.duties) > 4096 || input.duties.includes("\0")))
+    throw new HttpError(400, "Invalid specialist duties");
+  if (input.avatar_id !== undefined && input.avatar_id !== "auto" && !isLakeAvatarName(input.avatar_id))
+    throw new HttpError(400, "请选择 list_specialist_avatars 返回的头像 ID，或 auto");
+  for (const field of ["model_id", "provider_id"]) if (input[field] !== undefined) text(input[field], field, 256);
+  if (input.provider_id !== undefined && input.model_id === undefined) throw new HttpError(400, "provider_id 需要同时指定 model_id");
+}
 const specialistReportMessageId = (reportKey: string, sessionId: string) => "report_" + digest([reportKey, sessionId]);
 function clip(value: string, maximum: number) {
   const bytes = Buffer.from(value); let end = Math.min(bytes.length, maximum);
@@ -549,10 +564,12 @@ export class LakeSuperagent implements AgentHost {
   private channelFor(sessionId: string) { return this.store.list<Channel>("superChannels").find((channel) => channel.sessionId === sessionId); }
   private projectFor(sessionId: string) { return this.store.list<SuperProject>("superProjects").find((project) => project.routerSessionId === sessionId); }
   private pendingInteraction(sessionId: string) {
+    const running = this.agents.isRunning(sessionId);
+    if (!running && !this.interactions.size) return false;
     const worker = this.workerFor(sessionId);
     if (!worker) return false;
     const owned = [...this.interactions.values()].some((entry) => entry.workerId === worker.id && entry.generation === worker.generation);
-    return owned || this.agents.isRunning(sessionId) && (!!this.store.view(sessionId).pending || !!this.ssh?.prompt(sessionId));
+    return owned || running && (!!this.store.view(sessionId).pending || !!this.ssh?.prompt(sessionId));
   }
   private memberState(goal: Goal): SuperTask["state"] {
     const states: Record<string, SuperTask["state"]> = { waiting_user: "waiting_user", waiting_external: "waiting_external",
@@ -708,9 +725,16 @@ export class LakeSuperagent implements AgentHost {
     const { disposition, error, ...immutable } = event;
     return immutable;
   }
-  private listRoles(projectId: string, cursor = "", limit = 20) {
+  private routingEvent(sessionId: string, input: Record<string, any>) {
+    const quote = ["create", "assign", "followup", "stop"].includes(input.action) ? text(input.quote, "quote", 16384) : undefined;
+    return this.admitted(sessionId, input.event_id, quote);
+  }
+  private listRoles(projectId: string, cursor = "", limit = 20, query?: string) {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) throw new HttpError(400, "limit must be 1 to 50");
-    const rows = this.store.list<Role>("superRoles").filter((role) => role.projectId === projectId && !role.deletedAt && role.id > cursor).sort((a, b) => a.id.localeCompare(b.id));
+    const term = query === undefined ? "" : normalizeSpecialistText(text(query, "query", 256).trim());
+    const rows = this.store.list<Role>("superRoles").filter(role => role.projectId === projectId && !role.deletedAt &&
+      role.id.localeCompare(cursor) > 0 && (!term || [role.id, role.name, role.roleKey, role.duties].some(value => normalizeSpecialistText(value ?? "").includes(term))))
+      .sort((a, b) => a.id.localeCompare(b.id));
     return { items: rows.slice(0, limit).map(role=>{
       const backend=this.roleExecution(role);
       return {...role,execution:backend.kind==='native'?backend:{kind:'acp',agent:backend.agent,...(backend.model?{model:backend.model}:{})}};
@@ -736,19 +760,26 @@ export class LakeSuperagent implements AgentHost {
     const profile=this.agents.external.registry.get(projectId,'codex');
     return {kind:'acp',agent:profile.id,...(model?{model}:{})};
   }
-  private executionOptions(projectId:string){
+  private executionOptions(projectId:string, kind?: AgentBackendRef["kind"]){
+    if (kind === "native") return specialistExecutionOptions(this.store.modelProviders());
     const registry=this.agents.external?.registry,profile=registry?.get(projectId,'codex');
     const probe=profile&&registry?.probe(projectId,'codex');
     const ready=process.platform==='darwin'&&!!profile?.enabled&&probe?.revision===profile.revision&&probe.authentication==='codex-local'&&probe.ready===true&&probe.authenticated===true;
-    return specialistExecutionOptions(this.store.modelProviders(),profile?[{...profile,name:'Codex',installed:ready,transportReady:ready,assignmentReady:ready,model:probe?.model}]:[]);
+    return specialistExecutionOptions(kind === "acp" ? [] : this.store.modelProviders(),profile?[{...profile,name:'Codex',installed:ready,transportReady:ready,assignmentReady:ready,model:probe?.model}]:[]);
   }
-  private async refreshedExecutionOptions(projectId:string){
-    await this.store.refreshModels();const external=await this.agents.external?.status(projectId)??[];
-    return specialistExecutionOptions(this.store.modelProviders(),external);
+  private async refreshExecutionSources(projectId: string, native: boolean, codex: boolean) {
+    const adapter = this.agents.external;
+    const [external] = await Promise.all([codex && adapter?.registry.get(projectId, "codex").enabled ? adapter.status(projectId) : undefined,
+      native ? this.store.refreshModels() : undefined]);
+    return external ?? [];
+  }
+  private async refreshedExecutionOptions(projectId: string, kind?: AgentBackendRef["kind"]) {
+    const external = await this.refreshExecutionSources(projectId, kind !== "acp", kind !== "native");
+    return specialistExecutionOptions(kind === "acp" ? [] : this.store.modelProviders(), external);
   }
   private creationExecution(projectId:string,input:Record<string,any>,available?:SpecialistExecutionOption[]):AgentBackendRef{
     const backend=input.execution===undefined?undefined:this.roleBackend(projectId,input.execution);
-    let options=available??this.executionOptions(projectId);
+    let options=available??this.executionOptions(projectId, backend?.kind);
     if(backend?.model)options=options.filter(option=>canonical(option.execution.model)===canonical(backend.model));
     return chooseSpecialistExecution(options,{kind:backend?.kind,agent:backend?.kind==='acp'?'codex':undefined,
       modelId:input.model_id,providerId:input.provider_id});
@@ -757,7 +788,7 @@ export class LakeSuperagent implements AgentHost {
     const backend=input.execution===undefined?role.execution:this.roleBackend(role.projectId,input.execution);
     if(input.model_id!==undefined||input.provider_id!==undefined){
       const current=backend??this.roleExecution(role);
-      return chooseSpecialistExecution(available??this.executionOptions(role.projectId),{kind:current.kind,agent:current.kind==='acp'?'codex':undefined,
+      return chooseSpecialistExecution(available??this.executionOptions(role.projectId, current.kind),{kind:current.kind,agent:current.kind==='acp'?'codex':undefined,
         modelId:input.model_id,providerId:input.provider_id??(current.kind==='native'?current.model?.providerId:undefined)});
     }
     const same=backend?.kind===role.execution?.kind&&(backend?.kind!=='acp'||role.execution?.kind==='acp'&&backend.agent===role.execution.agent);
@@ -792,53 +823,72 @@ export class LakeSuperagent implements AgentHost {
     }
     return {...role,execution};
   }
+  private roleByKey(projectId: string, roleKey: string) {
+    const role = this.store.get<Role>("superRoles", digest([projectId, roleKey]));
+    if (role) {
+      if (role.projectId !== projectId || role.roleKey !== roleKey) throw new HttpError(409, "Specialist identity conflict");
+      return role;
+    }
+    // Imported specialists can have IDs that predate the project/key digest.
+    return this.store.list<Role>("superRoles").find(row => row.projectId === projectId && row.roleKey === roleKey);
+  }
+  private roleForCreation(projectId: string, roleKey: string, profile: Record<string, any>, existing?: Role, available?: SpecialistExecutionOption[]): Role {
+    if (roleKey.trim() !== roleKey) throw new HttpError(400, "Create requires an immutable role_key");
+    if (profile.name === undefined || profile.duties === undefined) throw new HttpError(400, "Create requires specialist name and duties");
+    const avatarId = profile.avatar_id === "auto" ? undefined : profile.avatar_id;
+    if (!existing) return { id: digest([projectId, roleKey]), projectId, roleKey, name: profile.name, duties: profile.duties,
+      revision: 1, ...(avatarId && {avatarId}), execution: this.creationExecution(projectId, profile, available) };
+    this.role(projectId, existing.id);
+    const requested = profile.execution === undefined ? undefined : this.roleBackend(projectId, profile.execution);
+    const sameBackend = !requested || existing.execution?.kind === requested.kind &&
+      (requested.kind !== "acp" || existing.execution.kind === "acp" && existing.execution.agent === requested.agent) &&
+      (!requested.model || canonical(existing.execution.model) === canonical(requested.model));
+    const sameModel = profile.model_id === undefined || (available ?? this.executionOptions(projectId, existing.execution?.kind)).some(option =>
+      canonical(option.execution) === canonical(existing.execution) && (option.execution.model?.modelId === profile.model_id || option.modelName === profile.model_id) &&
+      (!profile.provider_id || option.execution.model?.providerId === profile.provider_id));
+    if (existing.name !== profile.name || existing.duties !== profile.duties || !sameBackend || !sameModel ||
+      profile.avatar_id !== undefined && existing.avatarId !== avatarId)
+      throw new HttpError(409, "role_key exists; update the exact role_id and revision");
+    return existing;
+  }
+  private savedExecutionLabel(role: Role) {
+    const backend = role.execution, model = backend?.model;
+    if (!backend || !model) return;
+    const provider = backend.kind === "native" && model.providerId ? this.store.modelProvider(model.providerId) : undefined;
+    return { agentName: backend.kind === "native" ? "Lake 原生" : "Codex",
+      modelName: provider?.models.find(item => item.id === model.modelId)?.name ?? model.modelId };
+  }
   private manage(sessionId: string, input: Record<string, any>,available?:SpecialistExecutionOption[]) {
     const event = this.admitted(sessionId, input.event_id, text(input.quote, "quote", 16384));
-    if(Object.keys(input).some(key=>!['event_id','part_key','action','role_id','role_key','name','duties','avatar_id','execution','model_id','provider_id','expected_revision','quote'].includes(key)))
+    if(Object.keys(input).some(key=>!['event_id','part_key','action','role_id','role_key','expected_revision','quote'].includes(key) && !Object.hasOwn(specialistProfileFields, key)))
       throw new HttpError(400,'Unsupported specialist configuration field');
     const part = text(input.part_key, "part_key", 128), has=(key:string)=>Object.hasOwn(input,key);
-    const name=has('name')?text(input.name,'name',128):undefined;
-    if(has('duties')&&(typeof input.duties!=="string"||Buffer.byteLength(input.duties)>4096||input.duties.includes("\0")))throw new HttpError(400,"Invalid specialist duties");
-    if(has('avatar_id')&&input.avatar_id!=='auto'&&(typeof input.avatar_id!=='string'||!isLakeAvatarName(input.avatar_id)))
-      throw new HttpError(400,'请选择 list_specialist_avatars 返回的头像 ID，或 auto');
-    for(const field of ['model_id','provider_id'])if(has(field))text(input[field],field,256);
-    if(has('provider_id')&&!has('model_id'))throw new HttpError(400,'provider_id 需要同时指定 model_id');
+    validateSpecialistFields(input);
     if(!['name','duties','avatar_id','execution','model_id'].some(has))throw new HttpError(400,'No specialist configuration changes supplied');
     const key = digest([event.id, part]), hash = digest(input);
     const result = this.store.transaction(() => {
-      const prior = this.store.get<{ hash: string; result: Role }>("superRoleMutations", key);
+      const prior = this.store.get<RoleMutation>("superRoleMutations", key);
       if (prior) { if (prior.hash !== hash) throw new HttpError(409, "Specialist decision conflict"); return prior.result; }
       if (this.store.list<{ eventId?: string }>("superRoleMutations").filter((mutation) => mutation.eventId === event.id).length >= 16)
         throw new HttpError(409, "Specialist mutation limit exceeded");
-      const requested=has('execution')?this.roleBackend(event.projectId,input.execution):undefined;
       let role: Role;
       if (input.action === "create") {
-        if(name===undefined||!has('duties'))throw new HttpError(400,'Create requires specialist name and duties');
         const roleKey = text(input.role_key, "role_key", 128);
-        if (has('role_id') || has('expected_revision') || roleKey.trim() !== roleKey) throw new HttpError(400, "Create requires an immutable role_key; omit role_id/revision");
-        const roleId = this.store.list<Role>("superRoles").find((role) => role.projectId === event.projectId && role.roleKey === roleKey)?.id ?? digest([event.projectId, roleKey]);
-        const existing = this.store.get<Role>("superRoles", roleId);
-        if (existing) {
-          this.role(event.projectId, roleId);
-          if (existing.name !== name || existing.duties !== input.duties || has('avatar_id')&&existing.avatarId!==(input.avatar_id==='auto'?undefined:input.avatar_id) ||
-            requested&&(existing.execution?.kind!==requested.kind||requested.kind==='acp'&&(existing.execution?.kind!=='acp'||existing.execution.agent!==requested.agent)||requested.model!==undefined&&canonical(existing.execution?.model)!==canonical(requested.model)) ||
-            has('model_id')&&!this.executionOptions(event.projectId).some(option=>canonical(option.execution)===canonical(existing.execution)&&(option.execution.model?.modelId===input.model_id||option.modelName===input.model_id)&&(!input.provider_id||option.execution.model?.providerId===input.provider_id)))throw new HttpError(409,"role_key exists; update the exact role_id and revision");
-          role = existing;
-        } else role = { id: roleId, projectId: event.projectId, roleKey, name, duties: input.duties, revision: 1,
-          ...(has('avatar_id')&&input.avatar_id!=='auto'?{avatarId:input.avatar_id}:{}),
-          execution:this.creationExecution(event.projectId,input,available) };
+        if (has('role_id') || has('expected_revision')) throw new HttpError(400, "Create requires an immutable role_key; omit role_id/revision");
+        role = this.roleForCreation(event.projectId, roleKey, input, this.roleByKey(event.projectId, roleKey), available);
       } else if (input.action === "update") {
         role = this.role(event.projectId, text(input.role_id, "role_id", 128));
         if (input.role_key || !Number.isSafeInteger(input.expected_revision) || role.revision !== input.expected_revision)
           throw new HttpError(409, "Stale specialist revision");
-        role = { ...role, ...(name!==undefined?{name}:{}), ...(has('duties')?{duties:input.duties}:{}),
+        role = { ...role, ...(has('name')?{name:input.name}:{}), ...(has('duties')?{duties:input.duties}:{}),
           ...(has('avatar_id')?{avatarId:input.avatar_id==='auto'?undefined:input.avatar_id}:{}),
           ...(['execution','model_id'].some(has)?{execution:this.updatedExecution(role,input,available)}:{}),revision:role.revision+1 };
       } else throw new HttpError(400, "Specialist action must be create or update");
       this.store.put("superRoles", role.id, role);
       const channel = this.ensureChannel(role);
       const session = this.store.session(channel.sessionId); session.title = role.name; this.store.put("sessions", session.id, session);
-      this.store.put("superRoleMutations", key, { eventId: event.id, hash, result: role });
+      this.store.put<RoleMutation>("superRoleMutations", key, { eventId: event.id, hash, result: role,
+        savedExecution: this.savedExecutionLabel(role) });
       return role;
     });
     this.notify(sessionId, "specialist"); return result;
@@ -859,7 +909,7 @@ export class LakeSuperagent implements AgentHost {
     if (input.role_ids != null) requested = strings(input.role_ids, 8);
     else if (input.role_id != null) requested = [text(input.role_id, "role_id", 128)];
     else if (input.role_key != null) {
-      const role = this.store.list<Role>("superRoles").find(role => role.projectId === projectId && role.roleKey === input.role_key);
+      const role = this.roleByKey(projectId, input.role_key);
       if (!role) throw new HttpError(409, "Original routing recipient cannot be verified");
       requested = [role.id];
     }
@@ -874,7 +924,7 @@ export class LakeSuperagent implements AgentHost {
     return this.store.list<Decision>("superDecisions").find(decision => ["create", "assign"].includes(decision.action) &&
       this.decisionAssignments(decision).some(assignment => assignment.workerId === worker.id));
   }
-  private assignmentRoles(projectId: string, input: Record<string, any>,available?:SpecialistExecutionOption[]) {
+  private existingRecipients(projectId: string, input: Record<string, any>): Role[] {
     if ([input.role_ids, input.role_id, input.role_key].filter(value => value != null).length !== 1)
       throw new HttpError(400, "Provide exactly one of role_id, role_ids or role_key");
     if (input.role_ids != null) {
@@ -883,11 +933,39 @@ export class LakeSuperagent implements AgentHost {
       return ids.map(id => this.role(projectId, id));
     }
     if (input.role_id != null) return [this.role(projectId, text(input.role_id, "role_id", 128))];
-    const roleKey = text(input.role_key, "role_key", 128);
-    const roleId = this.store.list<Role>("superRoles").find(role => role.projectId === projectId && role.roleKey === roleKey)?.id ?? digest([projectId, roleKey]);
-    const role = this.store.get<Role>("superRoles", roleId) ?? { id: roleId, projectId, roleKey, name: roleKey, duties: "", revision: 1,execution:this.creationExecution(projectId,{},available) };
-    if (role.deletedAt) throw new HttpError(410, "Specialist is retired");
+    const role = this.roleByKey(projectId, text(input.role_key, "role_key", 128));
+    return role ? [this.role(projectId, role.id)] : [];
+  }
+  private assignmentRoles(projectId: string, input: Record<string, any>, available?: SpecialistExecutionOption[]) {
+    const recipients = this.existingRecipients(projectId, input);
+    if (recipients.length && !input.new_specialist) return recipients;
+    const profile = input.new_specialist ?? {name: input.role_key, duties: ""};
+    const role = this.roleForCreation(projectId, input.role_key, profile, recipients[0], available);
     return [this.store.put("superRoles", role.id, role)];
+  }
+  private async routeFromTool(sessionId: string, input: Record<string, any>, signal: AbortSignal) {
+    signal.throwIfAborted();
+    const event = this.routingEvent(sessionId, input);
+    const key = digest([event.id, text(input.part_key, "part_key", 128)]);
+    let available: SpecialistExecutionOption[] | undefined;
+    if (!this.store.get("superDecisions", key)) {
+      let recipients: Role[] = [];
+      if (input.action === "create" || input.action === "assign") {
+        recipients = this.existingRecipients(event.projectId, input);
+        if (!recipients.length) available = await this.refreshedExecutionOptions(event.projectId, input.new_specialist?.execution?.kind);
+      } else if (input.action === "followup" && this.agents.memory) {
+        const taskId = text(input.task_id, "task_id", 128);
+        if (event.external?.connectionId) this.requireGatewayTask(event, taskId);
+        const goal = this.routedGoal(event.projectId, taskId, input.role_id ?? event.preferredRoleId);
+        const worker = this.store.require<Worker>("superWorkers", goal.workerId);
+        if (!worker.inline && this.agents.memory.needsFreshContext({kind: "worker", projectId: worker.projectId, roleId: worker.roleId, sessionId: worker.sessionId}))
+          recipients = [this.role(event.projectId, worker.roleId)];
+      }
+      if (recipients.length) await this.refreshExecutionSources(event.projectId,
+        recipients.some(role => role.execution?.kind === "native"), recipients.some(role => role.execution?.kind !== "native"));
+    }
+    signal.throwIfAborted();
+    return this.route(sessionId, input, available);
   }
   private roleInstructions(raw: unknown, roles: Role[]) {
     const instructions = new Map<string, string>();
@@ -992,6 +1070,13 @@ export class LakeSuperagent implements AgentHost {
     const action = text(input.action, "action", 32), reason = text(input.reason, "reason", 2048);
     if (!["create", "assign", "followup", "context_only", "stop", "ask", "respond"].includes(action)) throw new HttpError(400, "Invalid routing action");
     const assigning = action === "create" || action === "assign";
+    if (input.new_specialist !== undefined) {
+      const profile = input.new_specialist;
+      if (!assigning || input.role_key == null || !profile || typeof profile !== "object" || Array.isArray(profile) ||
+        Object.keys(profile).some(key => !Object.hasOwn(specialistProfileFields, key)))
+        throw new HttpError(400, "new_specialist requires role_key and supported specialist profile fields on create or assign");
+      validateSpecialistFields(profile);
+    }
     const refs = strings(input.evidence_task_ids, 8);
     if (action !== "create" && input.resource_ids !== undefined) throw new HttpError(400, "Only create sets resource_ids; existing assignments retain their original scope");
     if (action !== "create" && refs.length) throw new HttpError(400, "Historical evidence references are registered only for a new task");
@@ -999,7 +1084,7 @@ export class LakeSuperagent implements AgentHost {
     if (!assigning && [input.role_key, input.role_ids, input.role_instructions].some(value => value != null)) throw new HttpError(400, "Specify a single recipient by role_id");
     if (action === "create" && input.task_id != null) throw new HttpError(400, "Create must omit task_id");
     if (["ask", "respond"].includes(action) && (input.task_id != null || input.role_id != null)) throw new HttpError(400, "ask/respond must omit task_id and role_id");
-    const event = this.admitted(sessionId, input.event_id, ["create", "assign", "followup", "stop"].includes(action) ? text(input.quote, "quote", 16384) : undefined);
+    const event = this.routingEvent(sessionId, input);
     if(event.external?.connectionId)for(const taskId of [input.task_id,input.predecessor_task_id,...refs].filter(value=>value!=null))
       this.requireGatewayTask(event,text(taskId,'task_id',128));
     const part = text(input.part_key, "part_key", 128), key = digest([event.id, part]), hash = digest(input);
@@ -1154,7 +1239,8 @@ export class LakeSuperagent implements AgentHost {
       const state = this.pendingInteraction(worker.sessionId) ? "needs_input" : Date.parse(goal.deadlineAt) <= Date.now() ? "limit_reached"
         : worker.state === "active" ? "running" : worker.state === "queued" ? "queued" : "recorded";
       const {instruction: _instruction, ...recipient} = assignment;
-      return { ...recipient, ...(result.action==='followup'&&{supplement:{state:'recorded',consumed:false,
+      return { ...recipient, roleName: worker.roleSnapshot.name, ...(input.new_specialist && {savedExecution: this.savedExecutionLabel(worker.roleSnapshot)}),
+        ...(result.action==='followup'&&{supplement:{state:'recorded',consumed:false,
         meaning:'Recorded for this exact task. Delivery begins after this Pilot routing turn succeeds; do not claim the specialist has read it.'}}), dispatch: { state, observedAt, reason: state === "limit_reached" ? "deadline_reached" : undefined,
         unresolvedOperations: this.ledger.unresolved(goal.id), observation: "Point-in-time scheduling snapshot. Live activity records progress; each operation checks current permissions." } };
     });
@@ -1383,12 +1469,12 @@ export class LakeSuperagent implements AgentHost {
             role:'assistant',text:reply.text,createdAt:reply.createdAt});
         }
         const unresolvedByGoal = new Map<string, number>();
-        for (const operation of this.store.list<Operation>("superOperations")) {
-          if (operation.status !== "unknown" && operation.status !== "dispatched") continue;
-          unresolvedByGoal.set(operation.goalId, (unresolvedByGoal.get(operation.goalId) ?? 0) + 1);
-        }
+        for (const row of this.store.db.prepare(`SELECT json_extract(value,'$.goalId') AS goalId, count(*) AS total FROM records
+          WHERE kind='superOperations' AND json_extract(value,'$.status') IN ('unknown','dispatched') GROUP BY goalId`).all())
+          unresolvedByGoal.set(String(row.goalId), Number(row.total));
         const context = buildRouterContext({ projectId: project.projectId, now: now(),
-          specialists:this.store.list<Role>("superRoles"),
+          specialists: this.store.list<Role>("superRoles").filter(role => role.projectId === project.projectId && !role.deletedAt)
+            .map(role => ({id: role.id, projectId: role.projectId, name: this.agents.redact(role.name), revision: role.revision, duties: this.agents.redact(role.duties ?? "")})),
           events: events.map((event) => {const parent=event.replyTo&&event.external?.connectionId ? this.gatewayEvent(event.external.connectionId,event.replyTo) : undefined;
             return { ...event, hash: digest(this.eventObject(event)), ...(parent&&{replyContext:{messageId:parent.messageId,eventId:parent.id,text:parent.payload,
               pilotReply:this.store.get<GatewayReply>('superGatewayReplies',parent.id)?.text}}) };}), messages,
@@ -2016,7 +2102,7 @@ export class LakeSuperagent implements AgentHost {
           return round;
         }),
       ...(this.configuration?.entries(sessionId,(eventId,quote)=>this.admitted(sessionId,eventId,quote),()=>this.notify(sessionId,"session"))??[]),
-      this.entry("list_specialists", "List stable project specialist IDs, revisions, name, duties, optional avatarId and effective future-task execution. Metadata, not permissions.", objectSchema({ cursor: str, limit: integer }), (a) => this.listRoles(projectId, a.cursor, a.limit)),
+      this.entry("list_specialists", "Find current project specialists by name, stable key, ID or a keyword in their duties. Omit query to list all. Use the same query with nextCursor. Returns exact IDs, revisions, full duties, avatar and future-task execution.", objectSchema({ query: str, cursor: str, limit: integer }), a => this.listRoles(projectId, a.cursor, a.limit, a.query)),
       this.entry('list_specialist_execution_options','List configured available specialist Agent/model combinations. Copy execution for an exact choice; model_id may use modelName for a model-only choice. On creation omit every Agent/model field not explicitly requested by the human: the host randomly selects and saves missing choices once. Metadata never grants resource permissions.',objectSchema({cursor:str,limit:integer}),async(a,context)=>{
         const available=await this.refreshedExecutionOptions(projectId);context.abortSignal.throwIfAborted();
         const limit=a.limit??20;if(!Number.isSafeInteger(limit)||limit<1||limit>50)throw new HttpError(400,'limit must be 1 to 50');
@@ -2033,22 +2119,22 @@ export class LakeSuperagent implements AgentHost {
         return {items:exact.length?exact:lakeAvatarCatalog.filter(avatar=>names(avatar).some(value=>value.includes(query))),reset:'auto'};
       }),
       this.entry("manage_specialist", "Create or partially update a long-lived specialist from an exact admitted human quote, without creating work. Create requires immutable role_key, name and duties. Omit unrequested execution/model_id: the host randomly chooses available missing Agent/model choices once and persists them. A specified Agent restricts the random model; a specified model restricts compatible Agents. list_specialist_execution_options returns exact choices. Update requires exact role_id/expected_revision and preserves omitted fields. avatar_id is an exact list_specialist_avatars ID or auto. Model bindings affect future Workers, not global/Pilot model selection, local Codex files or existing Workers. Only announce saved choices after a successful receipt.",
-        objectSchema({ event_id: str, part_key: str, action: { enum: ["create", "update"], type: "string" }, role_id: str, role_key: str, name: str, duties: str,avatar_id:str,
-          execution:objectSchema({kind:{type:'string',enum:['native','acp']},agent:{type:'string',enum:['codex']},model:objectSchema({modelId:str,providerId:str},['modelId'])},['kind']),model_id:str,provider_id:str,expected_revision: integer, quote: str }, ["event_id", "part_key", "action", "quote"]), async(a,context)=>{
+        objectSchema({ event_id: str, part_key: str, action: { enum: ["create", "update"], type: "string" }, role_id: str, role_key: str,
+          ...specialistProfileFields, expected_revision: integer, quote: str }, ["event_id", "part_key", "action", "quote"]), async(a,context)=>{
             this.admitted(sessionId,a.event_id,text(a.quote,'quote',16384));context.abortSignal.throwIfAborted();
-            const available=a.action==='create'||a.model_id!==undefined||a.execution!==undefined?await this.refreshedExecutionOptions(projectId):undefined;
+            const key = digest([a.event_id, text(a.part_key, "part_key", 128)]);
+            const selecting = a.action === "create" || a.model_id !== undefined || a.execution !== undefined;
+            const available = selecting && !this.store.get("superRoleMutations", key) ? await this.refreshedExecutionOptions(projectId, a.execution?.kind) : undefined;
             context.abortSignal.throwIfAborted();
-            const saved=this.manage(sessionId,a,available);
-            const option=available?.find(item=>canonical(item.execution)===canonical(saved.execution));
-            return option?{...saved,savedExecution:{agentName:option.agentName,modelName:option.modelName}}:saved;
+            const saved = this.manage(sessionId, a, available);
+            const label = selecting && (this.store.require<RoleMutation>("superRoleMutations", key).savedExecution ?? this.savedExecutionLabel(saved));
+            return label ? {...saved, savedExecution: label} : saved;
           }),
-      this.entry("route_work", "Commit one exact admitted event part. Copy role_id verbatim from the current specialists catalog or list_specialists; never reconstruct IDs. If specialist_not_found, refresh the catalog and correct the same event/part, without changing its deliverable or scope. resource_ids may contain only IDs explicitly selected on this exact admitted event in selectedReferences.resourceIds. If that list is absent or empty, omit resource_ids entirely, including for a fresh check; never copy it from predecessor tasks, prior messages, resource metadata or memory. Use predecessor_task_id for historical target context, not as a new selection or permission. For an event selecting multiple resources, create must set resource_ids to its exact subset of selected IDs. Independent per-resource tasks may quote the same request if subsets are disjoint; for a single comparison include both IDs. Create requires title, quote and one recipient selector: role_id, new role_key, or role_ids for one shared task. Specify role_instructions for each contributor. Omit task_id for create; for assign supply the existing public task_id and additional roles. Followup, context_only and stop target the exact task and recipient role_id, using the public ID for a shared task. Use predecessor_task_id to link an earlier task. A finished source supplies historical context, including any partial findings. An unfinished ordinary source creates an independent read-only recheck for the same specialist, original explicit resource scope and deadline; it preserves original records and cannot replay original operation IDs. Invalid-memory followup uses the same safe recheck path. Inspect assignments in the receipt for the exact recipients. ask/respond omit task_id.",
+      this.entry("route_work", "Commit one exact admitted event part. Copy role_id verbatim from the current specialists catalog or list_specialists; never reconstruct IDs. If specialist_not_found, refresh the catalog and correct the same event/part, without changing its deliverable or scope. resource_ids may contain only IDs explicitly selected on this exact admitted event in selectedReferences.resourceIds. If that list is absent or empty, omit resource_ids entirely, including for a fresh check; never copy it from predecessor tasks, prior messages, resource metadata or memory. Use predecessor_task_id for historical target context, not as a new selection or permission. For an event selecting multiple resources, create must set resource_ids to its exact subset of selected IDs. Independent per-resource tasks may quote the same request if subsets are disjoint; for a single comparison include both IDs. Create requires title, quote and one recipient selector: role_id, role_key plus new_specialist for a missing role, or role_ids for one shared task. new_specialist saves a display name, reusable duties and explicitly requested avatar/Agent/model together with the assignment. Specify role_instructions for each contributor. Omit task_id for create; for assign supply the existing public task_id and additional roles. Followup, context_only and stop target the exact task and recipient role_id, using the public ID for a shared task. Use predecessor_task_id to link an earlier task. A finished source supplies historical context, including any partial findings. An unfinished ordinary source creates an independent read-only recheck for the same specialist, original explicit resource scope and deadline; it preserves original records and cannot replay original operation IDs. Invalid-memory followup uses the same safe recheck path. Inspect assignments in the receipt for the exact recipients. ask/respond omit task_id.",
         objectSchema({ event_id: str, part_key: str, action: { type: "string", enum: ["create", "assign", "followup", "context_only", "stop", "ask", "respond"] },
           task_id: str, predecessor_task_id: str, title: str, role_id: str, role_key: str, role_ids: array(str), resource_ids:array(str),
-          role_instructions: array(objectSchema({role_id: str, instruction: str}, ["role_id", "instruction"])), quote: str, reason: str, evidence_task_ids: array(str) }, ["event_id", "part_key", "action", "reason"]), async (a,context) => {
-            const available=['create','assign','followup'].includes(a.action)?await this.refreshedExecutionOptions(projectId):undefined;
-            context.abortSignal.throwIfAborted();return this.route(sessionId,a,available);
-          }),
+          new_specialist: objectSchema(specialistProfileFields, ["name", "duties"]),
+          role_instructions: array(objectSchema({role_id: str, instruction: str}, ["role_id", "instruction"])), quote: str, reason: str, evidence_task_ids: array(str) }, ["event_id", "part_key", "action", "reason"]), (a,context) => this.routeFromTool(sessionId, a, context.abortSignal)),
       this.entry("inspect_watchdog","Explain recent Watchdog findings for the current event. Supply a task_id to inspect all contributors, or include role_id for one. Each action has its own timing and evidence.",
         objectSchema({event_id:str,task_id:str,role_id:str},["event_id"]), a=>{
           const event=this.admitted(sessionId,a.event_id);

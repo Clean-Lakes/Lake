@@ -43,7 +43,7 @@ for (const specialist of [false, true]) test(`${specialist ? 'specialist' : 'Pil
           event_id: event.id, quote: event.text, part_key: 'check', action: 'create', role_id: role.id, title: '本地首包验收', reason: '仅虚构数据',
         })}}]});
         chunk(res, {}, 'tool_calls');
-      } else { routingHeld = true; await routeGate; blockProbe(); chunk(res, {content: '已安排。'}); chunk(res, {}, 'stop'); }
+      } else { routingHeld = true; await routeGate; chunk(res, {content: '已安排。'}); chunk(res, {}, 'stop'); }
     } else {
       workerRequest = specialist;
       chunk(res, {reasoning_content: '先核对。'});
@@ -64,11 +64,15 @@ for (const specialist of [false, true]) test(`${specialist ? 'specialist' : 'Pil
   await api('/api/settings/model', 'PUT', {url: `http://127.0.0.1:${provider.address().port}/v1/chat/completions`, name: 'fixture', apiKey: 'synthetic-latency-key'});
   // Real OAuth credentials can be much longer than an entire public sentence.
   app.agents.registerSecret('synthetic-oauth-' + 'x'.repeat(4096));
-  if (!specialist) blockProbe();
+  blockProbe();
   const project = await api('/api/projects', 'POST', {name: 'isolated response latency'});
   const router = (await api(`/api/projects/${project.id}/superagent`, 'POST', {})).routerSessionId;
   role = {id: 'latency-otter', projectId: project.id, roleKey: 'latency', name: '首包核对专员', duties: '仅虚构数据', revision: 1, avatarId: 'otter', execution: {kind: 'native'}};
-  if (specialist) app.store.put('superRoles', role.id, role);
+  if (specialist) {
+    app.store.put('superRoles', role.id, role);
+    const profile = app.agents.external.registry.get(project.id, 'codex');
+    app.store.put('acpProfiles', project.id + ':codex', {...profile, enabled: true});
+  }
   const messageRoute = `/api/sessions/${router}/messages`;
   const stages = [];
   const responses = channel('http.server.response.finish');
