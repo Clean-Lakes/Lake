@@ -13,7 +13,7 @@ export type ObjectReference = {
   file?: FileChange;
   task?: ReferencedTask;
 };
-export type ObjectCatalog = {aliases: Map<string, ObjectReference | null>};
+export type ObjectCatalog = {aliases: ReadonlyMap<string, ObjectReference | null>};
 type ProseNode = {
   type: string;
   value?: string;
@@ -35,34 +35,45 @@ const escapePattern = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\
 const softwarePattern = new RegExp(`(?:${software.map(([name]) => escapePattern(name)).join('|')})(?:[ \\t]+v?\\d+(?:\\.\\d+){0,3}(?:[-+][a-zA-Z0-9]+(?:[.-][a-zA-Z0-9]+)*)?)?`, 'gi');
 const pathPattern = /(?:[a-zA-Z]:[\\/]|\/|\.\.?\/)[^\s<>"'`，。；：、！？（）\[\]{}()]+/gu;
 const filePattern = /[\w.-]+\.(?:conf|config|log|json|ya?ml|toml|ini|env|md|txt|csv|sql|sh|tsx?|jsx?|py|go|html|css|xml)\b/gi;
-const resourceNames = {local: '本机', ssh: 'SSH 主机', database: '数据库', docker: '容器资源', redis: 'Redis 资源', kubernetes:'Kubernetes 集群', apisix:'APISIX 网关', prometheus:'Prometheus', victoriametrics:'VictoriaMetrics'};
+const resourceNames = {local: '本机', ssh: 'SSH 主机', database: '数据库', docker: '容器资源', redis: 'Redis 资源', kubernetes:'Kubernetes 集群', apisix:'APISIX 网关', prometheus:'Prometheus', victoriametrics:'VictoriaMetrics', grafana:'Grafana'};
 
-function addAlias(catalog: ObjectCatalog, alias: string, reference: ObjectReference) {
+function addAlias(aliases: Map<string, ObjectReference | null>, alias: string, reference: ObjectReference) {
   const key = alias.trim().toLowerCase();
   if (key.length < 2) return;
-  const previous = catalog.aliases.get(key);
-  catalog.aliases.set(key, previous === undefined || previous?.key === reference.key ? reference : null);
+  const previous = aliases.get(key);
+  aliases.set(key, previous === undefined || previous?.key === reference.key ? reference : null);
 }
 
 export function objectCatalog(resources: readonly Resource[] = [], files: readonly FileChange[] = [], tasks: readonly ReferencedTask[] = []): ObjectCatalog {
-  const catalog: ObjectCatalog = {aliases: new Map()};
+  const aliases = new Map<string, ObjectReference | null>();
   for (const resource of resources) {
     const reference: ObjectReference = {key: `resource:${resource.id}`, kind: 'resource', label: resource.name, icon: resource.kind === 'ssh' ? 'server' : resource.kind, description: `${resourceNames[resource.kind]} · ${resource.name}`, resource};
-    addAlias(catalog, resource.name, reference);
-    if (resource.id.length >= 8) addAlias(catalog, resource.id, reference);
+    addAlias(aliases, resource.name, reference);
+    if (resource.id.length >= 8) addAlias(aliases, resource.id, reference);
     const host = resource.ssh?.host ?? resource.settings?.host;
-    if (typeof host === 'string' && host.length >= 3 && /[.:]/.test(host)) addAlias(catalog, host, reference);
+    if (typeof host === 'string' && host.length >= 3 && /[.:]/.test(host)) addAlias(aliases, host, reference);
   }
   for (const file of files) {
     const reference: ObjectReference = {key: `file:${file.id}`, kind: 'file', label: file.path, icon: 'document', description: `会话文件 · ${file.path}`, file};
-    addAlias(catalog, file.path, reference);
-    addAlias(catalog, file.path.replaceAll('\\', '/').split('/').at(-1) ?? '', reference);
+    addAlias(aliases, file.path, reference);
+    addAlias(aliases, file.path.replaceAll('\\', '/').split('/').at(-1) ?? '', reference);
   }
   for (const task of tasks) {
     if (!task.name?.trim() || task.name.trim().length < 4) continue;
-    addAlias(catalog, task.name, {key: `task:${task.id}`, kind: 'task', label: task.name, icon: 'layers', description: `任务 · ${task.name}`, task});
+    addAlias(aliases, task.name, {key: `task:${task.id}`, kind: 'task', label: task.name, icon: 'layers', description: `任务 · ${task.name}`, task});
   }
-  return catalog;
+  return {aliases};
+}
+
+export function mergeObjectCatalog(parent: ObjectCatalog, own: ObjectCatalog): ObjectCatalog {
+  if (!own.aliases.size) return parent;
+  if (!parent.aliases.size) return own;
+  const aliases = new Map(parent.aliases);
+  for (const [name, reference] of own.aliases) {
+    const previous = aliases.get(name);
+    aliases.set(name, previous === undefined || previous?.key === reference?.key ? reference : null);
+  }
+  return {aliases};
 }
 
 // Tokens inside URLs, identifiers, paths and options are not prose references.
@@ -77,11 +88,21 @@ function boundary(text: string, start: number, end: number) {
 }
 
 export type ObjectMatch = {start: number; end: number; reference: ObjectReference};
+const aliasPatterns = new WeakMap<ObjectCatalog, RegExp | null>();
+
+function aliasPattern(catalog: ObjectCatalog) {
+  const cached = aliasPatterns.get(catalog);
+  if (cached !== undefined) return cached;
+  const aliases = [...catalog.aliases.keys()].sort((a, b) => b.length - a.length);
+  const pattern = aliases.length ? new RegExp(aliases.map(escapePattern).join('|'), 'gi') : null;
+  aliasPatterns.set(catalog, pattern);
+  return pattern;
+}
+
 export function objectMatches(text: string, catalog: ObjectCatalog): ObjectMatch[] {
   const candidates: (ObjectMatch & {priority: number})[] = [];
-  const aliases = [...catalog.aliases.keys()].sort((a, b) => b.length - a.length);
-  if (aliases.length) {
-    const pattern = new RegExp(aliases.map(escapePattern).join('|'), 'gi');
+  const pattern = aliasPattern(catalog);
+  if (pattern) {
     for (const match of text.matchAll(pattern)) {
       const start = match.index!, end = start + match[0].length;
       const reference = catalog.aliases.get(match[0].toLowerCase());

@@ -6,7 +6,7 @@ import { externalAgentId, externalAgentIds, externalProducts } from './catalog';
 import type { CodexConnectionProbe, ExternalAgentId, ExternalAgentProfile, ExternalAgentStatus } from './types';
 import { HttpError, LakeStore, now } from '../store';
 import { privateFile, privatePath } from './private';
-import { codexCatalog, codexModels, codexStartupArgs,defaultCodexTaskModel,tomlValue } from './codex-profile';
+import { codexCatalog, codexCatalogRevision, codexModels, codexStartupArgs,defaultCodexTaskModel,tomlValue } from './codex-profile';
 import {CodexLocalSource,codexHomePresent} from './codex-local';
 import {discoverCodexRuntime,validateCodexNode} from './runtime-paths';
 
@@ -19,7 +19,12 @@ export class ExternalAgentRegistry {
     for(const profile of store.list<any>('acpProfiles'))if(profile.id==='codex'&&[1,2].includes(profile.schemaVersion))this.get(profile.projectId,'codex');
   }
   source(){
-    try{return {...this.local.current(),error:undefined as string|undefined};}
+    try{
+      const source=this.local.current();
+      // A probe only applies to the engine and the Lake model catalog it tested.
+      const fingerprint=createHash('sha256').update(source.fingerprint+'\0'+externalProducts.codex.version+'\0'+codexCatalogRevision).digest('hex');
+      return {...source,fingerprint,error:undefined as string|undefined};
+    }
     catch(error){return {home:this.local.home,fingerprint:createHash('sha256').update('unavailable:'+this.local.home).digest('hex'),environment:{} as NodeJS.ProcessEnv,mcpIds:[],hooks:{},error:error instanceof Error?error.message:'无法读取本机 Codex 配置'};}
   }
   private key(projectId: string, id: ExternalAgentId) { this.store.require('projects', projectId); return projectId + ':' + id; }
@@ -140,7 +145,7 @@ export class ExternalAgentRegistry {
       const cache=await privatePath(this.store.home,'external-agents','npm-cache');
       // Install only the pinned official provider runtime; no protocol wrapper.
       await new Promise<void>((resolve,reject)=>{
-        const proc=spawn(node,[npm,'install','--prefix',root,'--ignore-scripts','--no-audit','--no-fund','--save-exact','@openai/codex@0.160.1'],
+        const proc=spawn(node,[npm,'install','--prefix',root,'--ignore-scripts','--no-audit','--no-fund','--save-exact',`@openai/codex@${externalProducts.codex.version}`],
           {env:{PATH:dirname(node)+(process.platform==='win32'?';':':')+(process.env.PATH??''),HOME:this.store.home,npm_config_cache:cache},stdio:'ignore',signal,shell:false});
         proc.once('error',reject);proc.once('exit',code=>code===0?resolve():reject(new Error('Codex 引擎安装失败，请检查运行时和网络')));
       });

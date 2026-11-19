@@ -3,6 +3,7 @@ import {MiniBox} from './MiniBox';
 import {isTerminalCommand,type MiniBoxScope} from './miniBoxModel';
 import {ExecutionDetailsOpen,RoutingRecoveryContext} from './TurnExecutionDetails';
 import {ExecutionIcon} from './ExecutionIcon';
+import {executionCardTitle} from '../../shared/external-agents';
 import {DisclosureSummary} from './DisclosureSummary';
 import { memo, useContext, useRef, useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
@@ -20,7 +21,7 @@ export const ToolStep = memo(function ToolStep({ card, onInspect, active=false, 
   return <li className={`thinking-step thinking-tool step-${recovered?'recovered':card.status}`}>
     <span className="thinking-step-marker"><ExecutionIcon card={card} active={active&&["running","completed","succeeded","success"].includes(card.status)} size={20}/></span>
     <details onToggle={event => { setOpen(event.currentTarget.open); if (event.currentTarget.open) onInspect?.(); }}>
-      <summary><span className="thinking-tool-label">{toolLabels[card.title || ""] || card.title || "执行操作"}</span>{!hideTarget && typeof data.target === "string" && <span className="thinking-tool-target">{data.target}</span>}<small>{state}</small><svg className="thinking-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></summary>
+      <summary><span className="thinking-tool-label">{toolLabels[card.title || ""] || executionCardTitle(card) || "执行操作"}</span>{!hideTarget && typeof data.target === "string" && <span className="thinking-tool-target">{data.target}</span>}<small>{state}</small><svg className="thinking-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></summary>
       {open && <div className="thinking-tool-detail">
         {command ? <><strong>命令</strong><pre>{command}</pre></> : card.data != null && <><strong>调用参数</strong><pre>{JSON.stringify(data.arguments ?? card.data, null, 2)}</pre></>}
         {card.content && <><strong>结果</strong><pre>{card.content}</pre></>}

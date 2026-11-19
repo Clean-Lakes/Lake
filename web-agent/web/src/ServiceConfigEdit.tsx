@@ -61,7 +61,7 @@ export function ServiceConfigEdit({
       }}
     >
       <section
-        className="modal terminal-config-dialog resource-create-dialog"
+        className={`modal terminal-config-dialog resource-create-dialog${type === "grafana" ? " grafana-config-dialog" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="service-config-title"
@@ -93,7 +93,7 @@ export function ServiceConfigEdit({
       >
         <div className="modal-header">
           <span className="modal-icon">
-            <Glyph name="server" size={20} />
+            <Glyph name={type === "grafana" ? "grafana" : "server"} size={20} />
           </span>
           <button
             type="button"
@@ -106,9 +106,9 @@ export function ServiceConfigEdit({
           </button>
         </div>
         <h2 id="service-config-title">编辑资源配置</h2>
-        <p className="modal-description">
+        {type !== "grafana" && <p className="modal-description">
           已有凭据不会回显，留空保留。保存不会自动连接服务。
-        </p>
+        </p>}
         <form onSubmit={save}>
           <label className="field-label">
             名称

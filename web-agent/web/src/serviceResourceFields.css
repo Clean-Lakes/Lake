@@ -20,3 +20,39 @@
 .kubeconfig-test-row .settings-note { margin:0; }
 .service-resource-fields .kubeconfig-test-success { color:var(--success); }
 @media(max-width:520px) { .kubeconfig-file-row,.kubeconfig-test-row { flex-wrap:wrap; }.kubeconfig-file-row input { flex-basis:100%; } }
+
+.grafana-saved-credential {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  margin: 14px 0 12px;
+  min-block-size: 37px;
+  box-sizing: border-box;
+  padding: 3px 8px 3px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-settings-control);
+  corner-shape: var(--corner-window);
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  font-size: var(--font-size-ui);
+}
+.grafana-saved-credential strong { color: var(--foreground); font-weight: var(--font-weight-medium); }
+.grafana-saved-credential .credential-saved { color: var(--success); }
+.grafana-token-mask { display: inline-block; margin-inline-start: 8px; letter-spacing: 1px; }
+.grafana-saved-credential-actions { display: flex; align-items: center; gap: 6px; }
+.grafana-saved-token {
+  grid-column: 1 / -1;
+  max-block-size: 6em;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  color: var(--foreground);
+  font: var(--font-size-toolbar)/1.5 var(--font-mono);
+  user-select: text;
+  padding-block-end: 4px;
+}
+.grafana-token-field { position: relative; }
+.grafana-token-field input { box-sizing: border-box; }
+.grafana-token-field .icon-button { position: absolute; inset-inline-end: 4px; inset-block-end: 4px; }
+.grafana-token-field:has(> button) input { padding-inline-end: 37px; }
+.grafana-config-dialog h2 { margin-bottom: 16px; }

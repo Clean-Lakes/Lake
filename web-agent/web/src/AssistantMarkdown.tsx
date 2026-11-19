@@ -1,11 +1,11 @@
-import {createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
+import {createContext, memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import Markdown, {type Components,type ExtraProps} from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type {AICard, AgentRun, Resource, WorkspaceTag} from '../../shared/contracts';
 import {remarkAssistantProse} from './assistantProse';
 import {remarkConversationTags, conversationTagSignature} from './conversationTags';
-import {objectCatalog, objectMatches, remarkObjectReferences, type ObjectCatalog, type ObjectReference} from './objectReferences';
-import {isFileChangeCard, isFileMutationCard, summarizeFileChanges, type FileChange} from './file-changes-model';
+import {mergeObjectCatalog, objectCatalog, objectMatches, remarkObjectReferences, type ObjectCatalog, type ObjectReference} from './objectReferences';
+import {fileChangeSourceCards, summarizeFileChanges, type FileChange} from './file-changes-model';
 import {sameCard} from './cardEquality';
 import {reuseUnchanged} from './snapshotUpdates';
 import {FilePreview} from './FilePreview';
@@ -50,31 +50,23 @@ export function ObjectReferencesProvider({resources, files, tasks, children}: {r
   const [previousTasks, setPreviousTasks] = useState(taskDetails);
   const referencedTasks = reuseUnchanged(previousTasks, taskDetails);
   if (referencedTasks !== previousTasks) setPreviousTasks(referencedTasks);
-  const catalog = useMemo(() => {
-    const own = objectCatalog(resources, files, referencedTasks);
-    if (!own.aliases.size) return parent.catalog;
-    const aliases = new Map(parent.catalog.aliases);
-    // A nested provider adds turn-scoped files. Shared aliases across objects
-    // remain ambiguous rather than silently selecting the most recent target.
-    for (const [name, reference] of own.aliases) {
-      const previous = aliases.get(name);
-      aliases.set(name, previous === undefined || previous?.key === reference?.key ? reference : null);
-    }
-    return {aliases};
-  }, [parent.catalog, resources, files, referencedTasks]);
+  const catalog = useMemo(() => mergeObjectCatalog(parent.catalog, objectCatalog(resources, files, referencedTasks)),
+    [parent.catalog, resources, files, referencedTasks]);
   const [selected, setSelected] = useState<ObjectReference | null>(null);
   const value = useMemo(() => ({catalog, open: setSelected}), [catalog]);
   return <References.Provider value={value}>{children}{selected?.file ? <FilePreview file={selected.file} files={[...files ?? []]} target={selected.file.target || '会话文件'} hrefFor={() => '#'} onOpen={file => setSelected({...selected, file, label: file.path})} onClose={() => setSelected(null)}/> : selected && <ReferenceDetails reference={selected} onClose={() => setSelected(null)}/>}</References.Provider>;
 }
 
 export function ReplyReferenceScope({cards, children}: {cards: AICard[]; children: ReactNode}) {
-  const changes = cards.filter(card => isFileChangeCard(card) || isFileMutationCard(card));
-  const [previous, setPrevious] = useState(changes);
-  const same = previous.length === changes.length && previous.every((card, index) => sameCard(card, changes[index]!));
-  const fileCards = same ? previous : changes;
-  if (!same) setPrevious(fileCards);
-  const files = useMemo(() => summarizeFileChanges(fileCards).files, [fileCards]);
-  return <ObjectReferencesProvider files={files}>{children}</ObjectReferencesProvider>;
+  const previous = useRef<{source: AICard[]; files: FileChange[]}>({source: [], files: []});
+  const source = useMemo(() => fileChangeSourceCards(cards), [cards]);
+  // Rebuilt turn arrays, streamed prose and sidebar state all share the same
+  // reference catalog until the file receipts in this turn actually change.
+  const unchanged = source.length === previous.current.source.length &&
+    source.every((card, index) => sameCard(previous.current.source[index]!, card));
+  const changes = unchanged ? previous.current : {source, files: summarizeFileChanges(source).files};
+  useLayoutEffect(() => { previous.current = changes; }, [changes]);
+  return <ObjectReferencesProvider files={changes.files}>{children}</ObjectReferencesProvider>;
 }
 
 function InlineReference({reference}: {reference: ObjectReference}) {

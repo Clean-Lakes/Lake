@@ -87,7 +87,7 @@ test('real Codex conversation uses a fresh identity, exposes no task transport a
  assert.equal(app.store.list('acpRuns').length,1);await unchanged();
 });
 
-test('real Codex exposes only managed tools and returns a result through the task socket',{skip:!adapter,timeout:90000},async t=>{
+test('real Codex GPT-6.2 Sol exposes only managed tools and returns a result through the task socket',{skip:!adapter,timeout:90000},async t=>{
  const home=await mkdtemp(join(tmpdir(),'lake-codex-test-')),web=join(home,'web');await mkdir(web);await writeFile(join(web,'index.html'),'fixture');
  await writeFile(join(home,'evidence.txt'),'ACTUAL_CODEX_HOST_EVIDENCE');
  const requests=[];let reads=0,chosen;
@@ -119,7 +119,7 @@ test('real Codex exposes only managed tools and returns a result through the tas
  const project=await response.json();assert.equal(response.status,200);
  const external=app.agents.external,registry=external.registry;
  await copyRuntime(registry);
- const unchanged=await localCodexProvider(registry,'http://127.0.0.1:'+provider.address().port+'/v1');
+ const unchanged=await localCodexProvider(registry,'http://127.0.0.1:'+provider.address().port+'/v1','gpt-6.2-sol');
  await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_TEST_NODE??process.execPath});
  await external.probe(project.id,'codex',AbortSignal.timeout(30000));await unchanged();
  const signal=AbortSignal.timeout(45000),events=[];
@@ -139,7 +139,7 @@ test('real Codex exposes only managed tools and returns a result through the tas
  assert.equal(resumed.state,'completed',JSON.stringify(resumed));
  assert.equal(resumed.summary.split('ACP_CODEX_REPORT').length,2,'thread/resume replay is history, not a new report chunk');
  assert.equal(reads,1,'loading a completed session must not replay its old tool');await unchanged();
- assert.ok(requests.every(request=>request.model==='gpt-6.1-sol'&&request.reasoning?.effort==='max'),'source model and reasoning must be inherited');
+ assert.ok(requests.every(request=>request.model==='gpt-6.2-sol'&&request.reasoning?.effort==='max'),'source model and reasoning must be inherited');
 });
 
 for(const pending of [false,true])test(pending?'real Codex submits partial findings despite an original unknown result without another inspection':'a specialist assigns real Codex, discovers the exact Lake directory and collects original task receipts',{skip:!adapter,timeout:90000},async t=>{

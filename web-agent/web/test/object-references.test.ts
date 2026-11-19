@@ -3,7 +3,8 @@ import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {AgentRun, Resource, SessionSnapshot} from '../../shared/contracts';
-import {objectCatalog, objectMatches} from '../src/objectReferences';
+import {mergeObjectCatalog, objectCatalog, objectMatches} from '../src/objectReferences';
+import {fileChangeSourceCards, summarizeFileChanges} from '../src/file-changes-model';
 import {AssistantMarkdown, ObjectReferencesProvider, ReplyReferenceScope} from '../src/AssistantMarkdown';
 import {AITranscript} from '../src/AIPanel';
 import {SRECheckpoint, SREProse, SREReport} from '../src/SREReport';
@@ -30,6 +31,33 @@ test('unique project resource names and full addresses bind to the same real ID'
   assert.equal((html.match(/<button/g) ?? []).length, 2);
   assert.ok(html.includes('141 只是文字'));
   assert.ok(!html.includes('role="dialog"'));
+});
+
+test('empty reply scopes reuse the parent catalog and changing scopes rebuild the matcher', () => {
+  const parent = objectCatalog(resources);
+  assert.equal(mergeObjectCatalog(parent, objectCatalog()), parent);
+  assert.equal(objectMatches('测试服务器', parent)[0]?.reference.resource?.id, host.id);
+  assert.equal(objectMatches('192.0.2.141', parent)[0]?.reference.resource?.id, host.id);
+
+  const other = {...host, id: 'other-host', name: '加长测试服务器', ssh: {...host.ssh!, host: '192.0.2.142'}};
+  const extended = mergeObjectCatalog(parent, objectCatalog([other]));
+  assert.equal(objectMatches('加长测试服务器', extended)[0]?.reference.resource?.id, other.id);
+  const renamed = mergeObjectCatalog(parent, objectCatalog([{...other, name: host.name}]));
+  assert.deepEqual(objectMatches('测试服务器', renamed), []);
+  assert.equal(objectMatches('测试服务器', parent)[0]?.reference.resource?.id, host.id);
+});
+
+test('file reference inputs omit live prose and preserve legacy targets and first receipt identity', () => {
+  const operation = {id: 'write', type: 'operation', title: 'write', status: 'completed', at,
+    data: {target: '测试主机', arguments: {path: '/tmp/state.txt', runtime: 'ssh'}}};
+  const diff = {id: 'diff', type: 'diff', title: '/tmp/state.txt', status: 'completed', at,
+    data: {before: 'old', after: 'new'}};
+  const prose = {id: 'reply', type: 'message', content: '正在回复', status: 'running', at};
+  const cards = [prose, operation, diff, {...diff, data: {...diff.data, after: 'duplicate'}}];
+  assert.deepEqual(fileChangeSourceCards(cards), [operation, diff]);
+  assert.deepEqual(fileChangeSourceCards([prose, operation]), []);
+  assert.deepEqual(summarizeFileChanges(fileChangeSourceCards(cards)), summarizeFileChanges(cards));
+  assert.equal(summarizeFileChanges(cards).files[0]?.target, '测试主机');
 });
 
 test('ambiguous names, shared addresses and missing resources never pick an arbitrary resource', () => {

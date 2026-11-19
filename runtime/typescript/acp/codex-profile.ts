@@ -1,6 +1,8 @@
+import {createHash} from 'node:crypto';
 import upstream from './codex-models.json';
 
-// OpenAI Codex rust-v0.160.1, codex-rs/models-manager/models.json (Apache-2.0).
+// OpenAI Codex models-manager/models.json (Apache-2.0), GPT-6.1 Sol from
+// rust-v0.160.1 and GPT-6.2 Sol from rust-v0.170.0.
 // Preserve the upstream model instructions and limits. The static catalog is
 // authoritative: native execution and delegation cannot be re-enabled by a
 // remote model-catalog refresh. Lake's task-scoped MCP tools own those actions.
@@ -10,6 +12,7 @@ export const codexCatalog = {models: upstream.models.map(model => ({...model,
   node_repl_disabled: true, multi_agent_version: 'v1',
 }))};
 export const codexModels: string[] = codexCatalog.models.map(model => model.slug);
+export const codexCatalogRevision=createHash('sha256').update(JSON.stringify(codexCatalog)).digest('hex');
 // An unbound Lake task can use the latest pinned compatible model when the
 // user's CLI default is outside the Lake catalog. Explicit bindings stay exact.
 export function defaultCodexTaskModel(localModel?: string): string {

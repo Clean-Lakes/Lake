@@ -14,8 +14,24 @@ import {SREPlanCard} from './SREPlanCard';
 import {SRERoleMessage} from './SRERoleMessage';
 import {sreRoles,sreStatus,sreStepStatus} from './sreTranscript';
 import {inspectorGoal,hasInspectorTask,inspectedTask,inspectedCanonicalTask,inspectedAttempt,inspectorAttempts,resolvedInspectorSelection} from './sessionInspectorModel';
-import {sessionInspectorId,useSessionInspector,type InspectorSelection} from './SessionInspectorContext';
+import {sessionInspectorId,useSessionInspector,type InspectSpecialist,type InspectorSelection} from './SessionInspectorContext';
+import {AppSelect} from './AppSelect';
 import {SpecialistTaskSteps} from './SpecialistTaskList';
+
+export function ReplyProcessSelect({sessionId,onSpecialist,onPilot}:{sessionId?:string;onSpecialist:InspectSpecialist;onPilot?:()=>void}){
+ const inspector=useSessionInspector();
+ const sources=inspector?.selection?.replySources;
+ if(!sources||sources.pilot.sessionId!==sessionId)return null;
+ return <label className="specialist-task-select"><span>记录来源</span>
+  <AppSelect aria-label="记录来源" value={inspector.selection?.sessionId===sources.specialist.sessionId?'specialist':'pilot'} onChange={event=>{
+   if(event.target.value==='specialist'){onSpecialist(sources.specialist,sources.pilot);return;}
+   onPilot?.();
+   inspector.open({...sources.pilot,tab:'execution',replySources:sources});
+  }}>
+   <option value="specialist">{sources.specialist.name}</option><option value="pilot">Pilot 协调记录</option>
+  </AppSelect>
+ </label>;
+}
 
 export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=false,taskNavigation,taskMetadata,taskControls,resultsFooter,taskPage=false}:{snapshot:SessionSnapshot;connected:boolean;onUpdated:()=>void;worker?:SuperWorker;readOnly?:boolean;taskNavigation?:ReactNode;taskMetadata?:ReactNode;taskControls?:ReactNode;resultsFooter?:ReactNode;taskPage?:boolean}){
  readOnly=readOnly||snapshot.session.workspaceRole==='legacy';

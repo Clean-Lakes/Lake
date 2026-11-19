@@ -11,6 +11,7 @@ import { createConnection } from "mysql2";
 import { Client } from "pg";
 import { createClient } from "@redis/client";
 import type {
+  GrafanaReadInput,
   Resource,
   ResourceTreeNode,
 } from "../../web-agent/shared/contracts";
@@ -18,6 +19,9 @@ import { LakeStore, HttpError, id, now } from "./store";
 import type { LakeSecurity } from "./security";
 import { digest, text } from "./tasks";
 import { kubeconfigLimit, normalizeKubernetesSettings, testKubernetesConnection } from "./kubernetes";
+import { GrafanaClient, redactGrafanaJson } from "./grafana";
+import type { LakeEventReceiver } from "./event-receiver";
+import { grafanaIngressPath } from "./grafana-ingress";
 
 const serviceKinds = [
   "database",
@@ -26,6 +30,7 @@ const serviceKinds = [
   "prometheus",
   "victoriametrics",
   "kubernetes",
+  "grafana",
 ];
 const secretKeys = ["password", "token", "apiKey", "kubeconfig"] as const;
 type Settings = Record<string, any>;
@@ -42,6 +47,11 @@ const field = (value: any, name: string, max = 256) => {
     throw new HttpError(400, `${name}格式无效`);
   return value.trim();
 };
+const loopbackHost = (host: string) => {
+  const hostname = host.replace(/\.$/, '');
+  return hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '[::1]' ||
+    /^127(?:\.\d{1,3}){3}$/.test(hostname) || /^\[::ffff:7f[0-9a-f]{2}:[0-9a-f]+\]$/.test(hostname);
+};
 export function isServiceKind(kind: string, settings?: Settings) {
   return (
     serviceKinds.includes(kind) &&
@@ -52,10 +62,13 @@ export function isServiceKind(kind: string, settings?: Settings) {
 /** Items configuration is not a connectivity observation or an execution grant. */
 export class LakeServiceResources {
   private probes = new Set<AbortController>();
+  private grafanaReads = new Set<AbortController>();
+  private grafanaInjections = new Map<string, AbortController>();
   constructor(
     readonly store: LakeStore,
     readonly security: LakeSecurity,
     readonly registerSecret: (value: string) => void,
+    private readonly redact: (value: string) => string = value => value,
   ) {
     this.cleanupCredentials();
   }
@@ -163,7 +176,7 @@ export class LakeServiceResources {
           ? ["host", "port", "username", "db", "tls"]
           : kind === "kubernetes"
             ? ["endpoint", "context", "namespace", "authMethod", "requestTimeout", "tlsMode"]
-          : kind === "apisix"
+          : kind === "apisix" || kind === "grafana"
             ? ["endpoint"]
             : ["endpoint", "username", "authMethod"];
     if (
@@ -242,7 +255,7 @@ export class LakeServiceResources {
       )
         throw new HttpError(400, "端点不能包含凭据、查询参数或片段");
       config.endpoint = url.href.replace(/\/$/, "");
-      if (kind !== "apisix") config.username = field(value.username, "用户名");
+      if (kind !== "apisix" && kind !== "grafana") config.username = field(value.username, "用户名");
     }
     let secrets = input.clearCredential
       ? {}
@@ -274,10 +287,18 @@ export class LakeServiceResources {
       )
         throw new HttpError(400, "请填写完整的认证信息");
     }
+    if (kind === "grafana") {
+      if (!secrets.token || /\s/.test(secrets.token))
+        throw new HttpError(400, "请填写 Grafana 服务账号令牌");
+      if (previous?.endpoint && previous.endpoint !== config.endpoint && !input.token)
+        throw new HttpError(400, "Grafana 地址已变更，请填写该地址的服务账号令牌");
+    }
     const allowedSecrets =
       kind === "apisix"
         ? ["apiKey"]
-        : ["prometheus", "victoriametrics"].includes(kind)
+        : kind === "grafana"
+          ? ["token"]
+          : ["prometheus", "victoriametrics"].includes(kind)
           ? ["password", "token"]
           : ["password"];
     if (
@@ -518,6 +539,7 @@ export class LakeServiceResources {
     if (signal?.aborted) abort();
     let policyFailure: unknown;
     let observation: Awaited<ReturnType<typeof testKubernetesConnection>> | undefined;
+    let grafanaMessage: string | undefined;
     const timeout = setTimeout(abort, input.kind === "kubernetes" ? config.requestTimeout * 1000 : 8000),
       guard = setInterval(() => {
         try {
@@ -546,6 +568,8 @@ export class LakeServiceResources {
           const host = String(config.host ?? "").replace(/^\[|\]$/g, "");
           if (input.kind === "kubernetes") {
             observation = await testKubernetesConnection(config, secrets, controller.signal, this.registerSecret);
+          } else if (input.kind === "grafana") {
+            grafanaMessage = await new GrafanaClient(config.endpoint, secrets.token!, controller.signal, validatePolicy).test();
           } else if (input.kind === "database" && config.driver === "mysql") {
             const connection = createConnection({
               host,
@@ -629,7 +653,7 @@ export class LakeServiceResources {
           throw new HttpError(409, "资源配置已变化，请刷新后测试");
       }
       return {
-        message: "连接和认证检查通过；这不代表业务服务整体健康。",
+        message: grafanaMessage ? this.redact(grafanaMessage.replaceAll(secrets.token!, '[REDACTED]')) : "连接和认证检查通过；这不代表业务服务整体健康。",
         ...observation,
         protocol: input.kind === "database" ? config.driver : input.kind,
         testedAt: now(),
@@ -655,6 +679,118 @@ export class LakeServiceResources {
   }
   close() {
     for (const probe of this.probes) probe.abort();
+    for (const read of this.grafanaReads) read.abort();
+    for (const injection of this.grafanaInjections.values()) injection.abort();
+  }
+  private grafanaConnection(resource: Resource) {
+    if (resource.kind !== 'grafana' || !resource.settings?.endpoint)
+      throw new HttpError(409, '请先配置此 Grafana 的地址和服务账号令牌');
+    const {config,secrets} = this.parse('grafana', {}, resource.settings);
+    return {endpoint:config.endpoint as string, token:secrets.token!, hash:digest([config.endpoint,secrets.token])};
+  }
+  revealGrafanaToken(resourceId: string, input: Record<string, unknown>) {
+    const {revision} = input;
+    if (Object.keys(input).length !== 1 || typeof revision !== 'number' ||
+        !Number.isSafeInteger(revision) || revision < 1)
+      throw new HttpError(400, 'Grafana 配置版本无效');
+    const resource = this.store.require<Resource>('resources', resourceId);
+    if (resource.kind !== 'grafana') throw new HttpError(404, 'Grafana 资源不存在');
+    this.security.resourceConfiguration(resource.projectId, resourceId);
+    if ((this.store.get<number>('resourceRevisions', resourceId) ?? 1) !== revision)
+      throw new HttpError(409, 'Grafana 连接配置已变化，请重新打开编辑窗口');
+    return {token: this.grafanaConnection(resource).token};
+  }
+  grafanaRevision(resource: Resource) {
+    return this.grafanaConnection(resource).hash;
+  }
+  async injectGrafanaWebhook(resourceId: string, input: Record<string, unknown>, receiver: LakeEventReceiver,
+    deployment: {origin: string; receiverBase?: string}, signal: AbortSignal) {
+    const resource = this.store.require<Resource>('resources', resourceId);
+    const projectId = resource.projectId;
+    const connection = this.grafanaConnection(resource);
+    if (Object.keys(input).some(key => key !== 'revision') ||
+        !Number.isSafeInteger(input.revision)) throw new HttpError(400, 'Grafana 注入配置无效');
+    const policy = this.security.resourceConfiguration(projectId, resourceId, 'network.fetch');
+    let sourceRevision: number | undefined;
+    const guard = () => {
+      signal.throwIfAborted();
+      const current = this.store.require<Resource>('resources', resourceId);
+      if (current.projectId !== projectId || (this.store.get<number>('resourceRevisions', resourceId) ?? 1) !== input.revision ||
+          this.grafanaRevision(current) !== connection.hash)
+        throw new HttpError(409, 'Grafana 连接配置已变化，请刷新后重新注入');
+      if (this.security.resourceConfiguration(projectId, resourceId, 'network.fetch') !== policy)
+        throw new HttpError(409, 'Grafana 项目权限已变化，请重新注入');
+      this.security.network(projectId, connection.endpoint, resourceId);
+      if (sourceRevision !== undefined) receiver.checkInjection(resourceId, sourceRevision);
+    };
+    guard();
+    const saved = receiver.resourceSource(resourceId, deployment.origin)?.contactPoint;
+    const publishedBase = deployment.receiverBase?.trim() || (saved?.localReceiver ? undefined : saved?.receiverBase);
+    const externalBase = publishedBase ? this.grafanaPublishedBase(publishedBase, connection.endpoint) : undefined;
+    if (this.grafanaInjections.has(connection.endpoint)) throw new HttpError(409, '此 Grafana 正在写入接入点');
+    const controller = new AbortController();
+    const requestSignal = AbortSignal.any([controller.signal, signal, AbortSignal.timeout(20000)]);
+    this.grafanaInjections.set(connection.endpoint, controller);
+    try {
+      const client = new GrafanaClient(connection.endpoint, connection.token, requestSignal, guard);
+      const resourceHash = digest(resource.id);
+      const uid = 'lake-' + resourceHash.slice(0, 30);
+      const ingressPath = grafanaIngressPath(resource.id);
+      const resourceName = resource.name.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 140);
+      const defaultName = saved?.name ?? `Lake · ${resourceName} · ${resourceHash.slice(0, 8)}`;
+      const {name, existing} = await client.planContactPoint(uid, defaultName, ingressPath);
+      if (name.length > 160 || /[\x00-\x1f\x7f]/.test(name) || this.redact(name) !== name)
+        throw new HttpError(409, 'Grafana 接入点名称无效');
+      const receiverBase = externalBase ?? await receiver.localReceiverBase(resourceId, connection.endpoint, requestSignal,
+        (url, token) => client.testContactPoint(url, token));
+      const prepared = await receiver.prepareInjection(resourceId, guard, externalBase ? undefined : receiverBase);
+      sourceRevision = prepared.revision;
+      await client.provisionContactPoint(uid, name, receiverBase + ingressPath, prepared.token, existing);
+      return {source: receiver.recordInjection(resourceId, prepared.revision,
+        {uid, name, receiverBase, ...(externalBase ? {} : {localReceiver: true})}, deployment.origin)};
+    } finally {
+      this.grafanaInjections.delete(connection.endpoint);
+    }
+  }
+  private grafanaPublishedBase(base: string, endpoint: string) {
+    let address: URL;
+    try { address = new URL(base); }
+    catch { throw new HttpError(409, 'Lake 部署的 Grafana 接收地址无效'); }
+    if (!['http:', 'https:'].includes(address.protocol) || !address.hostname || address.username || address.password ||
+        /[?#\\\s]/.test(base) || base.length > 2048 || address.port === '0' ||
+        ['0.0.0.0', '[::]'].includes(address.hostname) || this.redact(address.href) !== address.href)
+      throw new HttpError(409, 'Lake 部署的 Grafana 接收地址无效');
+    if (loopbackHost(address.hostname) && !loopbackHost(new URL(endpoint).hostname))
+      throw new HttpError(409, 'Grafana 在远端，Lake 需要使用 Grafana 可访问的接收地址');
+    return address.href.replace(/\/+$/, '');
+  }
+  async readGrafana(projectId: string, resourceId: string, revision: number, input: GrafanaReadInput, signal?: AbortSignal, authorize?: () => void) {
+    const resource = this.store.require<Resource>('resources',resourceId);
+    if (resource.projectId !== projectId || resource.kind !== 'grafana')
+      throw new HttpError(404, 'Grafana 资源不属于当前项目');
+    const policy = authorize ? undefined : this.security.resourceConfiguration(projectId,resourceId,'network.fetch');
+    authorize?.();
+    const connection = this.grafanaConnection(resource);
+    const guard = () => {
+      authorize?.();
+      if (!authorize && policy !== this.security.resourceConfiguration(projectId,resourceId,'network.fetch'))
+        throw new HttpError(409, 'Grafana 访问策略已变化，请重新读取');
+      const current = this.store.require<Resource>('resources',resourceId);
+      if (current.projectId !== projectId || (this.store.get<number>('resourceRevisions',resourceId) ?? 1) !== revision ||
+          this.grafanaRevision(current) !== connection.hash)
+        throw new HttpError(409, 'Grafana 资源配置已变化，请刷新后重试');
+    };
+    guard();
+    if (this.grafanaReads.size >= 8) throw new HttpError(429, 'Grafana 查询过多，请稍后重试');
+    const controller = new AbortController();
+    const requestSignal = AbortSignal.any([controller.signal, AbortSignal.timeout(15000), ...(signal ? [signal] : [])]);
+    this.grafanaReads.add(controller);
+    try {
+      const value = await new GrafanaClient(connection.endpoint,connection.token,requestSignal,guard).read(input);
+      return redactGrafanaJson(value, text => this.redact(text.replaceAll(connection.token,'[REDACTED]'))) as typeof value;
+    } finally {
+      this.grafanaReads.delete(controller);
+    }
   }
   private async testHTTP(
     kind: string,
