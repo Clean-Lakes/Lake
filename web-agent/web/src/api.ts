@@ -165,8 +165,18 @@ export const api = {
   deleteGatewayConnection:(id:string)=>request(`/api/settings/gateway/connections/${encodeURIComponent(id)}`,{method:"DELETE"}),
   gatewayMessages:(id:string,cursor?:string,signal?:AbortSignal)=>request<import('../../shared/contracts').GatewayMessagePage>(`/api/settings/gateway/connections/${encodeURIComponent(id)}/messages?limit=20${cursor?`&cursor=${encodeURIComponent(cursor)}`:''}`,{signal}),
   testGatewayConnection:(id:string)=>request<{ready:boolean;message:string;lastReceivedAt?:string}>(`/api/settings/gateway/connections/${encodeURIComponent(id)}/test`,{method:"POST",body:"{}"}),
-  createEventSource: (value: {name: string; projectId: string}) =>
-    post<import('../../shared/contracts').LakeEventSourceResult>('/api/settings/event-sources', value),
+  grafanaResourceWebhook: (id: string, signal?: AbortSignal) =>
+    request<{source: import('../../shared/contracts').LakeEventSource | null}>(`/api/resources/${encodeURIComponent(id)}/grafana-webhook`, {signal}),
+  createGrafanaResourceWebhook: (id: string) =>
+    post<import('../../shared/contracts').LakeEventSourceResult>(`/api/resources/${encodeURIComponent(id)}/grafana-webhook`, {}),
+  injectGrafanaResourceWebhook: (id: string, input: import('../../shared/contracts').GrafanaWebhookInjectionInput) =>
+    post<import('../../shared/contracts').LakeEventSourceResult>(`/api/resources/${encodeURIComponent(id)}/grafana-webhook/inject`, input),
+  revealGrafanaToken: (id: string, revision: number, signal: AbortSignal) =>
+    request<{token: string}>(`/api/resources/${encodeURIComponent(id)}/grafana-token`,
+      {method: 'POST', body: JSON.stringify({revision}), signal}),
+  grafanaRead: (id: string, revision: number, input: import('../../shared/contracts').GrafanaReadInput, signal?: AbortSignal) =>
+    request<import('../../shared/contracts').GrafanaReadResult>(`/api/resources/${encodeURIComponent(id)}/grafana-read`,
+      {method:'POST',body:JSON.stringify({...input,revision}),signal}),
   updateEventSource: (id: string, value: import('../../shared/contracts').LakeEventSourceUpdate) =>
     request<import('../../shared/contracts').LakeEventSourceResult>(`/api/settings/event-sources/${encodeURIComponent(id)}`, {method: 'PATCH', body: JSON.stringify(value)}),
   eventDeliveries: (id: string, cursor?: string, signal?: AbortSignal) =>

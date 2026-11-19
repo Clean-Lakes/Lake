@@ -1,0 +1,244 @@
+.grafana-project-crumb {
+  border: 0;
+  background: transparent;
+  padding: 2px 0;
+  font: inherit;
+}
+.grafana-project-crumb:hover { color: var(--foreground); }
+.resource-detail.grafana-resource-detail {
+  width: min(1160px, calc(100% - 56px));
+  container-type: inline-size;
+}
+.grafana-resource-header,
+.grafana-resource-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.grafana-resource-header { justify-content: space-between; }
+.grafana-resource-icon {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  background: var(--surface-muted);
+  border-radius: var(--radius-settings-icon);
+  corner-shape: var(--corner-window);
+}
+.grafana-resource-identity h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.grafana-resource-identity p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-ui);
+  overflow-wrap: anywhere;
+}
+.grafana-resource-detail .button,
+.grafana-resource-detail .provider-text-button {
+  border-radius: var(--radius-settings-control);
+  corner-shape: var(--corner-window);
+}
+.grafana-open { flex: none; text-decoration: none; }
+.grafana-overview {
+  padding: 25px 0 22px;
+  border-bottom: 1px solid var(--border);
+}
+.grafana-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.grafana-metric {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 2px 16px;
+  border-inline-start: 1px solid var(--border);
+}
+.grafana-metric:first-child { border-inline-start: 0; padding-inline-start: 0; }
+.grafana-metric-label { color: var(--text-secondary); font-size: var(--font-size-ui); }
+.grafana-metric strong {
+  margin-top: 4px;
+  font-size: 24px;
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.grafana-metric-button {
+  display: grid;
+  justify-items: start;
+  align-items: center;
+  grid-template-columns: auto 1fr;
+  text-align: start;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  width: calc(100% + 12px);
+  margin: -4px -6px;
+  padding: 4px 6px;
+  border-radius: var(--radius-settings-control);
+  corner-shape: var(--corner-window);
+}
+.grafana-metric-button:hover { background: var(--surface-hover); }
+.grafana-metric-button .grafana-metric-label { grid-column: span 2; }
+.grafana-metric-button > svg { margin: 4px 0 0 8px; color: var(--text-secondary); }
+.grafana-metric-button[aria-expanded="true"] > svg,
+.grafana-details-toggle[aria-expanded="true"] > svg { transform: rotate(90deg); }
+.grafana-metric-alerting { color: var(--danger); }
+.grafana-metric-alerting::before,
+.grafana-ingress-ready::before,
+.grafana-ingress-unavailable::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-inline-end: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: middle;
+}
+.grafana-active-alerts { margin-top: 16px; border-top: 1px solid var(--border); }
+.grafana-active-alert-list,
+.grafana-delivery-alerts { margin: 0; padding: 0; list-style: none; }
+.grafana-active-alert-list li,
+.grafana-delivery-alerts li { padding: 8px 0; overflow-wrap: anywhere; }
+.grafana-active-alert-list li + li,
+.grafana-delivery-alerts li + li { border-top: 1px solid var(--border); }
+.grafana-active-alert-list small,
+.grafana-delivery-alerts small { display: block; color: var(--text-secondary); margin-top: 3px; }
+
+.grafana-timeline {
+  padding: 21px 0 20px;
+  border-bottom: 1px solid var(--border);
+  --grafana-time-width: 62px;
+  --grafana-timeline-gap: 12px;
+}
+.grafana-timeline h2,
+.grafana-management h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: var(--font-weight-semibold);
+}
+.grafana-timeline .gateway-section-heading {
+  margin: 0 0 12px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--border);
+}
+.grafana-timeline-group + .grafana-timeline-group { margin-top: 16px; }
+.grafana-timeline-group h3 {
+  margin: 0 0 6px;
+  font-size: var(--font-size-ui);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+.grafana-timeline-group ol { list-style: none; margin: 0; padding: 0; }
+.grafana-timeline-group ol > li { position: relative; }
+.grafana-timeline-group ol > li::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset-block: 17px -8px;
+  inset-inline-start: calc(var(--grafana-time-width) + var(--grafana-timeline-gap) + 4px);
+  width: 1px;
+  background: var(--border-strong);
+}
+.grafana-timeline-group ol > li:last-child::before { inset-block-end: 8px; }
+.grafana-timeline-entry > .grafana-timeline-summary.lake-disclosure-summary {
+  display: grid;
+  grid-template-columns: var(--grafana-time-width) 9px minmax(0, 1fr) auto 12px;
+  align-items: start;
+  width: calc(100% + 10px);
+  box-sizing: border-box;
+  gap: var(--grafana-timeline-gap);
+  margin-inline: -5px;
+  padding: 9px 5px 12px;
+  min-width: 0;
+  border-radius: var(--radius-settings-control);
+  corner-shape: var(--corner-window);
+}
+.grafana-timeline-summary time { font-variant-numeric: tabular-nums; }
+.grafana-timeline-dot {
+  width: 9px;
+  height: 9px;
+  z-index: 1;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+.grafana-timeline-event { min-width: 0; overflow-wrap: anywhere; }
+.grafana-timeline-event strong { display: block; color: var(--foreground); font-size: 15px; }
+.grafana-timeline-event small {
+  display: inline-block;
+  margin-top: 5px;
+  padding: 2px 5px;
+  color: var(--text-secondary);
+  background: var(--surface-selected);
+  border-radius: var(--radius-settings-badge);
+}
+.grafana-timeline-action,
+.grafana-timeline-summary > .lake-disclosure-chevron { align-self: center; color: var(--primary); }
+.grafana-timeline-detail {
+  margin-inline-start: calc(var(--grafana-time-width) + 2 * var(--grafana-timeline-gap) + 9px);
+  padding-block: 0 10px;
+  min-width: 0;
+}
+.grafana-alert-labels { display: flex; flex-wrap: wrap; gap: 5px 10px; font-size: var(--font-size-caption); }
+.grafana-raw-notification { margin-top: 8px; }
+
+.grafana-management { padding-top: 20px; }
+.grafana-management-bar,
+.grafana-management-status,
+.grafana-management-switch,
+.grafana-management-actions,
+.grafana-detail-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px 14px;
+  min-width: 0;
+}
+.grafana-management-bar { margin-top: 14px; gap: 10px 23px; }
+.grafana-management-status .settings-note { margin: 0; }
+.grafana-management-switch { gap: 8px; border-inline-start: 1px solid var(--border); padding-inline-start: 21px; }
+.grafana-management-actions { margin-inline-start: auto; }
+.grafana-management-actions > button,
+.grafana-timeline .provider-text-button { display: inline-flex; align-items: center; gap: 6px; }
+.grafana-ingress-ready { color: var(--success); }
+.grafana-ingress-unavailable { color: var(--warning); }
+.grafana-management-details { border-top: 1px solid var(--border); margin-top: 11px; padding-top: 7px; }
+.grafana-receiver-configuration dl { margin: 0; }
+.grafana-receiver-configuration dl > div {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 6px 12px;
+  padding: 6px 0;
+}
+.grafana-receiver-configuration dt { color: var(--text-secondary); }
+.grafana-receiver-configuration dd { margin: 0; overflow-wrap: anywhere; }
+.grafana-detail-actions { margin-top: 8px; }
+.grafana-webhook-manual { margin-top: 10px; color: var(--text-secondary); }
+.grafana-webhook-manual > .button { margin-top: 8px; }
+
+@container (max-width: 585px) {
+  .grafana-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 12px; }
+  .grafana-metric:nth-child(4) { border-inline-start: 0; padding-inline-start: 0; }
+  .grafana-management-actions { margin-inline-start: 0; }
+}
+@container (max-width: 425px) {
+  .grafana-resource-header { flex-wrap: wrap; }
+  .grafana-timeline-entry > .grafana-timeline-summary.lake-disclosure-summary {
+    grid-template-columns: var(--grafana-time-width) 9px minmax(0, 1fr) 12px;
+  }
+  .grafana-timeline-action { display: none; }
+  .grafana-management-switch { border: 0; padding-inline-start: 0; }
+}
+@media (max-width: 680px) {
+  .resource-detail.grafana-resource-detail { width: calc(100% - 32px); }
+}

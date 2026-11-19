@@ -221,7 +221,7 @@ Agent 设置还可修改专员的新任务默认后端。未设置偏好的专�
 
 ## 接入渠道（MCP，TypeScript Dev）
 
-Grafana 告警使用同一设置页中的「Grafana Webhook」来源，接收记录可在对应连接下查看。 [Grafana 接入步骤](grafana-event-receiver.md)
+Grafana 告警通过项目中的「Grafana」资源接入。Webhook 配置和接收记录在资源详情中查看。 [Grafana 接入步骤](grafana-event-receiver.md)
 
 在设置 → 接入渠道添加连接，例如「我的 Codex」，选择消息所属项目及处理方式。默认「Pilot 自动路由」会按消息直接答复、追问或安排专员；固定专员适合明确限定角色的入口。连接创建后项目固定，如需切换项目应另建连接。
 

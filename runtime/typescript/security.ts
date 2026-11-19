@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { join, sep } from "node:path";
+import type { Resource } from "../../web-agent/shared/contracts";
 import { HttpError, LakeStore } from "./store";
 import { digest } from "./tasks";
 import type {DatabaseScope} from './mysql';
@@ -112,19 +113,65 @@ export class LakeSecurity {
     }
     return digest([projectId, legacy, this.authority()]);
   }
-  network(projectId:string,address:string):'allow'|'ask' {
+  private followsLegacyCatalog(projectId: string, policy: any, control: any): boolean {
+    if (policy.Mode !== "legacy" || policy.Confirmed !== true || control?.storeReady !== true || control.gate !== "open" ||
+        policy.StoreID !== control.storeID || policy.RecoveryEpoch !== control.recoveryEpoch) return false;
+    const path = join(this.store.data, "adk/sessions.sqlite");
+    try {
+      this.ownedFile(path, Number.MAX_SAFE_INTEGER);
+      const db = new DatabaseSync(path, {readOnly: true});
+      try {
+        // Same provenance as InheritSuperProjectAccess. Match the current Go
+        // policy and its host receipt, so a later manual revision ends inheritance.
+        const row = db.prepare(`
+          SELECT p.data FROM security_project_policies p
+          WHERE p.project_id = ? AND p.store_id = ? AND p.recovery_epoch = ?
+            AND p.revision = ? AND p.mode = 'legacy' AND p.confirmed = 1
+            AND EXISTS (
+              SELECT 1 FROM security_authority_events e
+              WHERE e.project_id = p.project_id AND e.object_id = p.project_id
+                AND e.store_id = p.store_id AND e.recovery_epoch = p.recovery_epoch
+                AND e.kind = 'policy.put' AND e.actor_id = 'host' AND e.action_id = ?
+                AND e.after_revision = p.revision AND e.before_revision = p.revision - 1
+                AND e.result = p.data
+            )
+        `).get(projectId, policy.StoreID, policy.RecoveryEpoch, policy.Revision, `superagent-catalog:${projectId}:${policy.Revision}`);
+        return typeof row?.data === "string" && digest(JSON.parse(row.data)) === digest(policy);
+      } finally { db.close(); }
+    } catch { return false; }
+  }
+  network(projectId:string,address:string,resourceId?:string):'allow'|'ask' {
     this.check();this.store.project(projectId);let url:URL;try{url=new URL(address);}catch{throw new HttpError(400,'网页地址无效');}
+    const resource=resourceId?this.store.require<Resource>('resources',resourceId):undefined;
+    if(resource&&resource.projectId!==projectId)
+      throw new HttpError(403,'读取资源不属于当前项目');
     if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw new HttpError(403,'网页读取仅允许不携带认证凭据的 HTTP(S) 地址');
     const legacy=this.store.get<any>('legacyProjectPolicies',projectId);if(!legacy)return 'allow';
     const policy=legacy.data;
     if(!policy||policy.SchemaVersion!==1||!policy.Confirmed||policy.ProjectID!==projectId||!['legacy','restricted','compatible'].includes(policy.Mode)||!Number.isSafeInteger(policy.Revision)||policy.Revision<1||!Array.isArray(policy.Rules))throw new HttpError(403,'原项目网络策略需要核实');
-    const path=join(this.store.home,'security/control.json');if(existsSync(path)){const control=JSON.parse(readFileSync(path,'utf8'));if(policy.StoreID!==control.storeID||policy.RecoveryEpoch!==control.recoveryEpoch)throw new HttpError(409,'原项目安全身份已失效');}
-    const rules=policy.Rules.filter((rule:any)=>rule.Capability==='network.fetch'&&!rule.ResourceIDs?.length);
-    if(!rules.length||rules.some((rule:any)=>rule.Effect==='deny'))throw new HttpError(403,'原项目策略未允许该网页读取');
-    let decision:'allow'|'ask'='allow';for(const rule of rules){
+    const path=join(this.store.home,'security/control.json');
+    const control=existsSync(path)?JSON.parse(readFileSync(path,'utf8')):undefined;
+    if(control&&(policy.StoreID!==control.storeID||policy.RecoveryEpoch!==control.recoveryEpoch))
+      throw new HttpError(409,'原项目安全身份已失效');
+    if(resourceId&&!(Array.isArray(policy.ResourceIDs)&&policy.ResourceIDs.includes(resourceId))){
+      // Follow the live project catalog only for the configured Grafana read.
+      if(resource?.kind!=='grafana'||resource.status!=='available'||resource.settings?.endpoint!==address||
+         !this.followsLegacyCatalog(projectId,policy,control))
+        throw new HttpError(403,'原项目策略未授权此资源');
+    }
+    const capabilities=resourceId?['resource.resolve','network.fetch']:['network.fetch'];
+    let decision:'allow'|'ask'='allow';
+    for(const capability of capabilities){
+      const rules=policy.Rules.filter((rule:any)=>rule.Capability===capability&&
+        (!rule.ResourceIDs?.length||resourceId&&rule.ResourceIDs.includes(resourceId)));
+      if(!rules.length||rules.some((rule:any)=>rule.Effect==='deny'))
+        throw new HttpError(403,resourceId?'原项目策略未允许该资源读取':'原项目策略未允许该网页读取');
+      for(const rule of rules){
       if(rule.Limits&&Object.values(rule.Limits).some(value=>Array.isArray(value)?value.length:!!value))throw new HttpError(403,'受限网络策略需要对应地址范围适配器');
       if(rule.Effect==='ask'){if(!['single','either'].includes(rule.Confirmation))throw new HttpError(409,'原网页策略需要专用任务授权');decision='ask';}else if(rule.Effect!=='allow')throw new HttpError(403,'原网页策略无效');
-    }return decision;
+      }
+    }
+    return decision;
   }
   command(projectId:string,resourceId:string,provenReadOnly=false):'allow'|'ask' {
     this.check();const resource=this.store.require<any>('resources',resourceId);
