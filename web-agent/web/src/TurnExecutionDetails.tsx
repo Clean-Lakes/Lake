@@ -2,6 +2,7 @@ import {createPortal} from 'react-dom';
 import {sessionInspectorId,useSessionInspector,type InspectorSelection} from './SessionInspectorContext';
 import {createContext,useId,useState,type ReactNode} from 'react';
 import {ReplyDuration,type ReplyDurationProps} from './ReplyDuration';
+import {ReplyFooter} from './ReplyFooter';
 import {turnStatus} from './turnStatus';
 import {quietCoordination} from './coordinationActivity';
 import {recoveredRouteFailures} from './routeDispatchPresentation';
@@ -15,7 +16,7 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
  const inspector=useSessionInspector();
  const selection=inspector?.selection;
  const inspecting=!!selection&&selection.sessionId===sessionId&&(selection.followLatest?latest&&!latestTaskId:selection.tab==='execution'&&selection.turnId===id);
- const {live,phase}=turnStatus(timing.timing,timing.view,timing.cards??[],timing.latestUserAt??'',Date.now());
+ const {live,phase,duration,state}=turnStatus(timing.timing,timing.view,timing.cards??[],timing.latestUserAt??'',Date.now());
  const [replyClock,setReplyClock]=useState({presenting:presentingReply,at:Date.now()});
  if(replyClock.presenting!==presentingReply)setReplyClock({presenting:presentingReply,at:Date.now()});
  const previewAt=live&&phase==='streaming'&&presentingReply&&!hideLive?replyClock.at:undefined;
@@ -27,9 +28,15 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
   if(inspector&&sessionId)inspector.open(canonicalGoalId?{sessionId,canonicalGoalId,tab:'execution'}:{sessionId,turnId:id,tab:'execution'});
   else {onInspect?.();setOpen(!open);}
  }}:undefined;
- // The status owns one fixed slot after prose in every lifecycle state.
- const summary=<ReplyDuration key="turn-duration" {...timing} previewAt={previewAt} latestStep={latestStep} disclosure={summaryDisclosure}/>;
- const body=canonicalGoalId?null:inspector&&sessionId?inspecting&&inspector.host&&createPortal(<ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{details.length?details:<p className="inspector-empty">本轮尚无执行记录。</p>}</div></ExecutionDetailsOpen.Provider>,inspector.host)
-  :details.length>0&&<div id={id} className={`turn-execution-details${open?' is-open':''}`} aria-hidden={!open} inert={!open} role="region" aria-label="执行详细过程"><div className="turn-execution-content"><div className="turn-execution-body"><ExecutionDetailsOpen.Provider value={open}>{details}</ExecutionDetailsOpen.Provider></div></div></div>;
+ const settledStatus=state==='回复结束'?undefined:state;
+ const foldFailure=!!summaryDisclosure&&settledStatus==='未完成';
+ const summary=live?<ReplyDuration {...timing} previewAt={previewAt} latestStep={latestStep} disclosure={summaryDisclosure}/>
+  :<ReplyFooter status={foldFailure?undefined:settledStatus} duration={summaryDisclosure||!timing.assistantIdentity?.pilot?duration:undefined} action={summaryDisclosure&&{
+   text:timing.processLabel,controls:summaryDisclosure.controls,expanded:summaryDisclosure.open,side:summaryDisclosure.side,onClick:summaryDisclosure.onToggle
+  }}/>;
+ const notice=[foldFailure?settledStatus:undefined,timing.detailNotice].filter(Boolean).join(' · ');
+ const records=<>{notice&&<p className="execution-detail-note">{notice}</p>}{details.length?details:<p className="inspector-empty">本轮尚无执行记录。</p>}</>;
+ const body=canonicalGoalId?null:inspector&&sessionId?inspecting&&inspector.host&&createPortal(<ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{records}</div></ExecutionDetailsOpen.Provider>,inspector.host)
+  :details.length>0&&<div id={id} className={`turn-execution-details${open?' is-open':''}`} aria-hidden={!open} inert={!open} role="region" aria-label="执行详细过程"><div className="turn-execution-content"><div className="turn-execution-body"><ExecutionDetailsOpen.Provider value={open}>{records}</ExecutionDetailsOpen.Provider></div></div></div>;
  return <RoutingRecoveryContext.Provider value={recoveredRouting}>{children}{!hideStatus&&(!live||!hideLive)&&summary}{body}</RoutingRecoveryContext.Provider>;
 }

@@ -62,7 +62,9 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    if(!view)return;
    const bounds=view.getBoundingClientRect(),base=shell.getBoundingClientRect();
    const composer=view.querySelector('.composer-input')?.getBoundingClientRect();
-   const available=Math.max(1,composer?.width??bounds.width-96),left=(composer?.left??bounds.left+48)-base.left;
+   const frameInset=parseFloat(getComputedStyle(view).getPropertyValue('--conversation-frame-inset'))||0;
+   const left=(frameInset?bounds.left+frameInset*2:composer?.left??bounds.left+48)-base.left;
+   const available=Math.max(1,frameInset?bounds.width-frameInset*4:composer?.width??bounds.width-96);
    const title=identity.querySelector<HTMLElement>('.crumb-title'),state=identity.querySelector<HTMLElement>('.header-morph-slot.is-visible .header-morph-content');
    const textWidth=(node:HTMLElement|null)=>{
     if(!node)return 0;
@@ -118,7 +120,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
     terminalWidth:Math.min(320,Math.max(260,terminalNameWidth+(terminalNumber?.offsetWidth??0)+(terminalCount?.offsetWidth??0)+112)),
    });
    const top=shell.closest('html.lake-windows-chrome')?52:12;
-   const source={...layout.conversation,top};
+   const source={...layout.conversation,top:frameInset?bounds.top-base.top+frameInset:top};
    shell.style.setProperty('--pane-rail-bottom',`${Math.max(12,base.bottom-(composer?.top??base.bottom)+12)}px`);
    write(identity,source);identity.dataset.ready='true';identity.dataset.present='true';identity.title=title?.textContent??'';
    if(terminalIsland.current)move('terminal',terminalIsland.current,layout.terminal?{...layout.terminal,top}:undefined,source,base);

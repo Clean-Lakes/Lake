@@ -34,6 +34,40 @@
 }
 .workspace.has-floating-header :is(.composer,.composer-session-controls) { width: var(--session-content-width); }
 .workspace.has-floating-header > .workspace-header + .system-banner { margin-top: 72px; }
+
+/* The conversation and its composer share one inset workbench surface. */
+@media (min-width: 768px) {
+  :root:not(.lake-windows-chrome) .app-shell:has(> .workspace.has-floating-header) {
+    background: color-mix(in srgb, var(--sidebar) 58%, var(--border));
+  }
+  :root:not(.lake-windows-chrome) .app-shell:has(> .workspace.has-floating-header) > .sidebar {
+    background: transparent;
+  }
+  :root:not(.lake-windows-chrome) .app-shell > .workspace.has-floating-header {
+    --conversation-frame-inset: 8px;
+    --session-gutter: clamp(16px, 3.4cqw, 32px);
+    --workbench-bottom-inset: 12px;
+    --background: var(--surface-subtle);
+    --paper: var(--background);
+    margin: var(--conversation-frame-inset) var(--conversation-frame-inset) var(--conversation-frame-inset) 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-window);
+    corner-shape: var(--corner-window);
+  }
+  :root:not(.lake-windows-chrome) .workspace.has-floating-header > .workspace-header {
+    top: var(--conversation-frame-inset);
+    left: calc(var(--conversation-frame-inset) * 2);
+  }
+  :root:not(.lake-windows-chrome) .workspace.has-floating-header .composer-input {
+    box-shadow: none;
+  }
+  :root:not(.lake-windows-chrome) .workspace.has-floating-header .composer-input:not(:focus-within,.attachment-drop-active) {
+    border-color: var(--border);
+  }
+  :root:not(.lake-windows-chrome) .app-shell:has(> .workspace.has-floating-header) > .workbench-splitter-sidebar:not(:hover,:focus-visible,.is-dragging)::after {
+    opacity: 0;
+  }
+}
 .sidebar-footer .desktop-update-trigger { flex: 0 0 28px; width: 28px; height: 28px; padding: 0; color: var(--text-secondary); }
 .session-nav-row.active ~ .session-actions-trigger { opacity: 1; }
 @media (max-width: 700px) {
