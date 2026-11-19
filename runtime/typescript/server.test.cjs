@@ -981,7 +981,8 @@ function superReply(request, mode, home) {
       const context = JSON.parse(raw.split('[CURRENT CONVERSATION WORKING SET]\n')[1]);
       if (!names.includes("route_work")) return call("route_work", {event_id:event.id, part_key:"host-check", action:"create",
         title:"检查服务器启动状态", quote:event.text, reason:"资源检查默认交给稳定专员",
-        ...(context.specialists.items.length ? {role_id:context.specialists.items[0].id} : {role_key:"服务器运维专员"})});
+        ...(context.specialists.items.length ? {role_id:context.specialists.items.find(role => role.duties.includes("服务器启动状态")).id}
+          : {role_key:"host-operations", new_specialist:{name:"服务器运维专员",duties:"检查服务器启动状态与系统运行情况"}})});
       return {content:"已安排服务器运维专员检查。"};
     }
     // Subagent regression scenarios require a native parent, even when their

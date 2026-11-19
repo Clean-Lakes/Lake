@@ -278,7 +278,12 @@ export class TaskLedger {
       throw new HttpError(409, "An active, confirmed task within its deadline is required");
   }
   unresolved(goalId: string) {
-    return this.store.list<Operation>("superOperations").some((operation) => operation.goalId === goalId && this.requiresReconciliation(operation));
+    const candidates = this.store.db.prepare(`SELECT value FROM records WHERE kind='superOperations' AND json_extract(value,'$.goalId')=?
+      AND json_extract(value,'$.status') IN ('unknown','dispatched')`);
+    for (const row of candidates.iterate(goalId)) {
+      if (this.requiresReconciliation(JSON.parse(String(row.value)))) return true;
+    }
+    return false;
   }
   requiresReconciliation(operation: Operation) {
     return ["unknown", "dispatched"].includes(operation.status) && this.effectResolution?.(operation)?.effects !== "none";

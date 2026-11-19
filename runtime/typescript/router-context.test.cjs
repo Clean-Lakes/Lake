@@ -192,3 +192,19 @@ test('current specialist catalog keeps exact IDs, filters scope/deletion and rem
  assert.match(value.context.specialists.meaning,/list_specialists/);assert.equal(JSON.stringify(original),before);
  const small=buildRouterContext({...original,maxBytes:4200});assert.ok(Buffer.byteLength(small.input)<=4200);assert.ok(parse(small).context.specialists.hasMore);
 });
+
+test('the first routing request surfaces named and duty-matched specialists outside the default page', () => {
+  const role = (id, name, duties) => ({id, projectId: 'project', name, duties, revision: 1});
+  const specialists = Array.from({length: 35}, (_, i) => role('a-' + i, '校对' + i, '整理出版资料'));
+  specialists.push(role('z-storage', '绿竹', '负责 PostgreSQL 慢查询和索引。' + '🌊'.repeat(200)),
+    role('z-named', '云杉', ''), role('z-channel', '小满', ''));
+  const input = source({specialists, events: [event({preferredRoleId: 'z-channel', payload: '让云杉和负责 ＰｏｓｔｇｒｅＳＱＬ 的同事一起分析慢查询。'})]});
+  const result = buildRouterContext(input), catalog = parse(result).context.specialists;
+  assert.deepEqual(catalog.items.slice(0, 3).map(row => row.id), ['z-channel', 'z-named', 'z-storage']);
+  const matched = catalog.items[2];
+  assert.match(matched.duties, /PostgreSQL 慢查询/);
+  assert.equal(matched.dutiesClipped, true);
+  assert.ok(Buffer.byteLength(matched.duties) <= 240 && !matched.duties.includes('�'));
+  assert.equal(catalog.hasMore, true);
+  assert.ok(Buffer.byteLength(result.input) <= 16384);
+});
