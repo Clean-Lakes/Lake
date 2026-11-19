@@ -4,6 +4,7 @@
 .jumpserver-dialog .jumpserver-project { color:var(--text-secondary); margin:4px 0 16px; }
 .jumpserver-dialog summary { cursor:pointer; color:var(--text-secondary); }
 .jumpserver-dialog details[open] > :is(label,textarea) { margin-top:8px; }
+.jumpserver-certificate-import { display:inline-flex; align-items:center; gap:6px; margin-top:6px; }
 .jumpserver-dialog fieldset { display:grid; gap:12px; border:0; padding:0; margin:0; min-width:0; }
 .jumpserver-dialog label { display:grid; gap:5px; font-size:var(--font-size-ui); }
 .jumpserver-dialog input:not([type=checkbox]),.jumpserver-dialog textarea { width:100%; min-width:0; box-sizing:border-box; padding:7px 9px; color:inherit; background:var(--background); border:1px solid var(--border); }

@@ -39,6 +39,24 @@ function accountCurrent(value: unknown) {
   return Date.parse(iso)>Date.now();
 }
 
+function connectionError(error: NodeJS.ErrnoException) {
+  switch (error.code) {
+    case "UNABLE_TO_VERIFY_LEAF_SIGNATURE":
+    case "UNABLE_TO_GET_ISSUER_CERT":
+    case "UNABLE_TO_GET_ISSUER_CERT_LOCALLY":
+    case "DEPTH_ZERO_SELF_SIGNED_CERT":
+    case "SELF_SIGNED_CERT_IN_CHAIN":
+      return new HttpError(502, "JumpServer 的 HTTPS 证书未受信。请在「内部证书」导入可信的 CA 或服务器证书。");
+    case "ERR_TLS_CERT_ALTNAME_INVALID":
+      return new HttpError(502, "JumpServer 证书与 API 地址不匹配。请使用证书覆盖的域名或 IP。");
+    case "CERT_HAS_EXPIRED":
+    case "CERT_NOT_YET_VALID":
+      return new HttpError(502, "JumpServer 的 HTTPS 证书超出有效期。请核对时钟及服务器证书。");
+    default:
+      return new HttpError(502, "无法连接 JumpServer，请核对 API 地址和网络。");
+  }
+}
+
 export function loginConfiguration(input: JumpServerLogin): JumpServerLogin {
   let url: URL;
   try { url = new URL(input.origin); } catch { throw new HttpError(400, "请输入完整的 JumpServer API 地址"); }
@@ -50,10 +68,19 @@ export function loginConfiguration(input: JumpServerLogin): JumpServerLogin {
       input.authMethod === "accessKey" && !uuid.test(input.keyId ?? "") ||
       typeof input.secret !== "string" || !input.secret || input.secret.length > 8192 || /[\x00-\x20\x7f]/.test(input.secret))
     throw new HttpError(400, "请核对组织 UUID 和个人 API 凭据");
+  const invalidCertificate = () => new HttpError(400, "请导入 PEM 格式的 CA 或服务器公开证书。");
+  if (input.ca != null && typeof input.ca !== "string") throw invalidCertificate();
   const ca = input.ca?.trim();
   if (ca) {
-    try { if (ca.length > 64000 || !ca.startsWith("-----BEGIN CERTIFICATE-----") || ca.includes("PRIVATE KEY")) throw Error(); new X509Certificate(ca); }
-    catch { throw new HttpError(400, "自签证书请提供 PEM 格式的 CA 公钥证书"); }
+    const block = /-----BEGIN CERTIFICATE-----[\r\n]+[A-Za-z0-9+/=\r\n]+-----END CERTIFICATE-----/g;
+    if (ca.length > 64000) throw invalidCertificate();
+    const certificates = ca.match(block);
+    if (!certificates || ca.replace(block, "").trim()) throw invalidCertificate();
+    try {
+      for (const certificate of certificates) new X509Certificate(certificate);
+    } catch {
+      throw invalidCertificate();
+    }
   }
   return {origin:url.origin, orgId:input.orgId.toLowerCase(), authMethod:input.authMethod, secret:input.secret,
     ...(input.authMethod === "accessKey" ? {keyId:input.keyId} : {}), ...(ca ? {ca} : {}), allowHttp:input.allowHttp === true};
@@ -73,9 +100,15 @@ export class JumpServerAPI {
     } else headers.Authorization = "Bearer " + this.login.secret;
     if (data) headers["Content-Type"] = "application/json";
     const cancel = AbortSignal.any([signal, AbortSignal.timeout(12000)]);
+    const secure = url.protocol === "https:";
+    // An explicitly imported certificate can end the trust chain. TLS still checks the peer name and validity.
+    const trust = secure ? {
+      rejectUnauthorized: true,
+      ...(this.login.ca && {ca: this.login.ca, allowPartialTrustChain: true}),
+    } : {};
     return new Promise((resolve, reject) => {
-      const send = url.protocol === "https:" ? https : http;
-      const req = send(url, {method, headers, ca:this.login.ca, signal:cancel}, response => {
+      const send = secure ? https : http;
+      const req = send(url, {method, headers, signal:cancel, ...trust}, response => {
         const status = response.statusCode ?? 500;
         if (status < 200 || status >= 300) {
           response.resume();
@@ -95,7 +128,7 @@ export class JumpServerAPI {
         response.on("error", () => reject(invalid()));
         response.on("end", () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString("utf8"))); } catch { reject(invalid()); } });
       });
-      req.on("error", () => reject(new HttpError(502, "无法连接 JumpServer，请核对地址、TLS 证书和网络")));
+      req.on("error", error => reject(connectionError(error)));
       req.end(data ? JSON.stringify(data) : undefined);
     });
   }

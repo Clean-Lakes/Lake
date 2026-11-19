@@ -30,6 +30,7 @@ export function JumpServerSettings({project,onClose,refresh}: {project:Project;o
   const [preview,setPreview]=useState<JumpServerPreview|null>(null),[node,setNode]=useState("");
   const [host,setHost]=useState(""),[port,setPort]=useState("2222");
   const [busy,setBusy]=useState(false),[error,setError]=useState("");
+  const certificateFile = useRef<HTMLInputElement>(null);
   const mounted=useRef(true);
   useEffect(()=>{
     mounted.current=true;
@@ -42,6 +43,13 @@ export function JumpServerSettings({project,onClose,refresh}: {project:Project;o
   },[project.id]);
   const change=(value:Partial<JumpServerLogin>)=>{setLogin(v=>({...v,...value}));setPreview(null);setError("");};
   const run=async(action:()=>Promise<void>)=>{setBusy(true);setError("");try {await action();} catch(e){if(mounted.current)setError(readableError(e));} finally {if(mounted.current)setBusy(false);}};
+  const importCertificate = async (file: File) => {
+    const message = "请选择 PEM 格式的 CA 或服务器公开证书。";
+    if (file.size > 64000) throw new Error(message);
+    const pem = (await file.text()).trim();
+    if (!pem.startsWith("-----BEGIN CERTIFICATE-----") || pem.includes("PRIVATE KEY")) throw new Error(message);
+    change({ca: pem});
+  };
   const submit=async()=>{
     const credentials={...login,orgId:binding?.orgId ?? (login.orgId.trim() || defaultOrganizationId)};
     if(!preview) {
@@ -73,7 +81,18 @@ export function JumpServerSettings({project,onClose,refresh}: {project:Project;o
       <details><summary>{binding?"查看绑定组织":"切换组织"}</summary>
         <label>组织 UUID<input value={binding?.orgId ?? login.orgId} readOnly={!!binding} placeholder="留空使用默认组织" onChange={e=>change({orgId:e.target.value})}/></label>
       </details>
-      {login.origin.startsWith("https:")&&<details><summary>内部 CA 证书</summary><textarea aria-label="CA 公钥证书 PEM" placeholder="-----BEGIN CERTIFICATE-----" value={login.ca??""} onChange={e=>change({ca:e.target.value})}/></details>}
+      {/^https:/i.test(login.origin.trim()) && <details>
+        <summary>内部证书</summary>
+        <textarea aria-label="CA 或服务器证书 PEM" placeholder="粘贴 CA 或服务器证书 PEM" value={login.ca ?? ""} rows={3} spellCheck={false} onChange={event => change({ca: event.target.value})}/>
+        <input ref={certificateFile} hidden type="file" accept=".pem,.crt,.cer" aria-label="选择证书文件" onChange={event => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void run(() => importCertificate(file));
+        }}/>
+        <button type="button" className="button secondary jumpserver-certificate-import" onClick={() => certificateFile.current?.click()}>
+          <Glyph name="document" size={14}/>导入 PEM 文件
+        </button>
+      </details>}
       {preview&&<><p role="status">已验证用户 <strong>{preview.username}</strong></p>
         <label>挂载授权目录<AppSelect value={node} onChange={e=>setNode(e.target.value)}><option value="">我的全部授权资产</option>{preview.nodes.map(n=><option key={n.id} value={n.id}>{n.name}</option>)}</AppSelect></label>
         <div className="jumpserver-endpoint"><label>KoKo SSH 地址<input required value={host} onChange={e=>setHost(e.target.value)}/></label>

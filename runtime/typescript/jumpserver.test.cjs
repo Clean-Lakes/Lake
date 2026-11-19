@@ -2,6 +2,8 @@ const {test} = require("node:test");
 const assert = require("node:assert/strict");
 const {createHmac,randomUUID} = require("node:crypto");
 const {createServer} = require("node:http");
+const {createServer: createHttpsServer} = require("node:https");
+const {execFileSync} = require("node:child_process");
 const fs = require("node:fs/promises");
 const {join} = require("node:path");
 const {tmpdir} = require("node:os");
@@ -58,6 +60,42 @@ async function fixture(t) {
   const resources=()=>app.store.catalog().resources.filter(r=>r.jumpServer);
   return {app,home,state,folder,asset,alias,target,account,user,login,project,base,bind,resources,api};
 }
+
+test("HTTPS accepts an imported server certificate and still verifies the peer name before sending credentials", async t => {
+  const f = await fixture(t);
+  const openssl = args => execFileSync("openssl", args, {cwd: f.home, stdio: "ignore", timeout: 15000});
+  openssl(["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=Test CA",
+    "-addext", "basicConstraints=critical,CA:TRUE", "-keyout", "ca.key", "-out", "ca.pem"]);
+  openssl(["req", "-new", "-newkey", "rsa:2048", "-nodes", "-subj", "/CN=127.0.0.1",
+    "-keyout", "server.key", "-out", "server.csr"]);
+  await fs.writeFile(join(f.home, "extensions"), "basicConstraints=critical,CA:FALSE\nextendedKeyUsage=serverAuth\nsubjectAltName=IP:127.0.0.1\n");
+  openssl(["x509", "-req", "-in", "server.csr", "-CA", "ca.pem", "-CAkey", "ca.key", "-set_serial", "1", "-days", "1",
+    "-extfile", "extensions", "-out", "server.pem"]);
+
+  const [key, cert, ca] = await Promise.all(["server.key", "server.pem", "ca.pem"].map(name => fs.readFile(join(f.home, name), "utf8")));
+  let requests = 0;
+  const endpoint = createHttpsServer({key, cert}, (req, res) => {
+    requests++;
+    assert.equal(req.headers.authorization, "Bearer " + f.login.secret);
+    const value = req.url === "/api/v1/users/profile/" ? {id: f.user, username: "alice"} : [];
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify(value));
+  });
+  await new Promise(resolve => endpoint.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise(resolve => endpoint.close(resolve)));
+  const port = endpoint.address().port;
+  const login = {...f.login, origin: "https://127.0.0.1:" + port};
+  const preview = (config, status) => f.api(f.base + "/preview", "POST", config, status);
+
+  assert.match((await preview(login, 502)).error, /HTTPS 证书未受信/);
+  assert.equal(requests, 0);
+  assert.equal((await preview({...login, ca}, 200)).userId, f.user);
+  assert.equal((await preview({...login, ca: cert}, 200)).userId, f.user);
+  assert.equal(requests, 4);
+  assert.match((await preview({...login, ca: cert, origin: "https://localhost:" + port}, 502)).error, /证书与 API 地址不匹配/);
+  assert.equal(requests, 4);
+  assert.match((await preview({...login, ca: cert + key}, 400)).error, /公开证书/);
+});
 
 test("personal mount reconciles complete pages, aliases, revocation and transient failures",async t=>{
   const f=await fixture(t);
