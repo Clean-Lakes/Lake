@@ -27,6 +27,17 @@ test('completed specialist consultation keeps the Pilot process entry when recor
  assert.doesNotMatch(markup(empty),/turn-duration-disclosure/,'an empty completed consultation needs no synthetic record');
 });
 
+test('a Pilot router with its own persistent task can inspect the dispatch for this user turn',()=>{
+ const snapshot=pilot();
+ snapshot.superagent={roleId:'pilot:project',task:{taskId:'router-main',sessionId:'pilot',projectId:'project',title:'Pilot',state:'running',acceptanceState:'not_evaluated',revision:1,originRootTurnId:'router-root',deadlineAt:at}};
+ snapshot.ai!.cards=[{id:'dispatch-for-this-turn',type:'operation',title:'route_work',status:'completed',at,data:{source_message_id:user.id}}];
+ const html=markup(snapshot);
+ const details=html.slice(html.indexOf('aria-label="执行详细过程"'));
+ assert.match(details,/data-conversation-entry="dispatch-for-this-turn"/);
+ assert.match(details,/class="thinking-toggle"/);
+ assert.doesNotMatch(html.slice(0,html.indexOf('aria-label="执行详细过程"')),/data-conversation-entry="dispatch-for-this-turn"/);
+});
+
 test('a completed consultation cannot silence an actually thinking or waiting Pilot',()=>{
  assert.match(markup(pilot('running')),/正在思考/);
  for(const [status,label] of [['waiting_approval','等待确认'],['waiting_input','等待你补充信息'],['waiting_external','等待外部结果'],['queued','排队等待']]){
