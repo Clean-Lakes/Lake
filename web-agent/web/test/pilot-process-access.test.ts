@@ -67,7 +67,7 @@ test('specialist process remains accessible in the live slot, adopted report and
  assert.equal((html.replace(/<[^>]*>/g,'').match(/唯一最终结论/g)??[]).length,1);
 });
 
-test('the settled footer binds the turn clock to the last report and keeps earlier task targets',()=>{
+test('each specialist footer uses its own duration and keeps the exact task target',()=>{
  const snapshot=pilot();
  const author={kind:'specialist' as const,name:'检查专员',roleId:'role',workerId:'worker',sessionId:'source',taskId:'task'};
  const first:Message={id:'first',sessionId:'pilot',role:'assistant',text:'第一份报告',author,replyToMessageId:user.id,createdAt:'2026-11-16T00:00:12Z'};
@@ -77,11 +77,14 @@ test('the settled footer binds the turn clock to the last report and keeps earli
  const noTime=render();
  assert.match(noTime,/查看执行过程/);assert.doesNotMatch(noTime,/turn-status-elapsed/);
  snapshot.replyTimings=[{messageId:user.id,startedAt:at,finishedAt:'2026-11-16T00:00:29Z',status:'completed'}];
+ assert.doesNotMatch(render(),/turn-status-elapsed/,'unknown specialist time never inherits the Pilot clock');
+ snapshot.messages=[user,{...first,author:{...first.author!,durationMs:13000}},{...last,author:{...last.author!,durationMs:82000}}];
  const html=render();
  assert.equal((html.match(/turn-duration-disclosure/g)??[]).length,2);
- assert.equal((html.match(/turn-status-elapsed/g)??[]).length,1);
- const positions=['第一份报告','data-specialist-process="task"','第二份报告','本轮用时 29 秒','data-specialist-process="task-two"'].map(text=>html.indexOf(text));
+ assert.equal((html.match(/turn-status-elapsed/g)??[]).length,2);
+ const positions=['第一份报告','本轮用时 13 秒','data-specialist-process="task"','第二份报告','本轮用时 1 分钟 22 秒','data-specialist-process="task-two"'].map(text=>html.indexOf(text));
  assert.ok(positions.every((n,i)=>n>=0&&(!i||n>positions[i-1]!)));
+ assert.doesNotMatch(html,/29 秒/);
  assert.doesNotMatch(html.match(/<button[^>]*data-specialist-process="task-two"[^>]*>[\s\S]*?<\/button>/)?.[0]??'',/用时/);
  snapshot.messages=[user];snapshot.ai!.cards=[];
  const timeOnly=render();assert.match(timeOnly,/>用时 29 秒</);assert.doesNotMatch(timeOnly,/turn-duration-disclosure|reply-footer-separator/);

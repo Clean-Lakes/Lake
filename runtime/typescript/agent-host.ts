@@ -21,6 +21,7 @@ export type HostProfile = {
   wrapExecution?: (execution: ExecutionPort) => ExecutionPort;
   taskId?: string;
   workerId?: string;
+  taskDeadline?: () => string;
   execution?: AgentBackendRef;
   conversation?: {id:string;participantId:string;deadlineAt:string};
   validateExecution?: () => void;
@@ -36,11 +37,19 @@ export type HostProfile = {
   /** Native child controls use the task lease, without creating business evidence. */
   invokeControl?: (entry: ToolEntry, input: unknown, context: HostToolContext) => Promise<unknown>;
 };
+export type TurnOutcome = {
+  response?: string;
+  error?: string;
+  failure?: import("./model-errors").TurnFailure;
+  deadlineReached?: true;
+  timing?: {startedAt:string;finishedAt:string;rootTurnId?:string};
+  externalRunId?:string;
+};
 export interface AgentHost {
   profile(sessionId: string): HostProfile | undefined;
   currentTask?(sessionId:string):string|undefined;
   /** Actual same-turn input consumption, never a steering queue acknowledgement. */
   inputsConsumed?(sessionId:string,inputIds:string[]):void;
   changed(sessionId: string): void;
-  settled(sessionId: string, outcome?: { response?: string; error?: string; failure?: import("./model-errors").TurnFailure }): void;
+  settled(sessionId: string, outcome?: TurnOutcome): void;
 }

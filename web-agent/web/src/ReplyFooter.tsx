@@ -9,8 +9,8 @@ type FooterAction={
  liveMotion?:boolean; onClick:()=>void;
 };
 
-// Only the last visible report may carry its parent turn's elapsed time.
-export const ReplyProcessContext=createContext<{pilot?:PilotProcessTarget; footer?:{reportId:string; metadata:FooterMetadata}}>({});
+// The selected specialist report can open the Pilot records too. Its elapsed time is local to the specialist.
+export const ReplyProcessContext=createContext<{pilot?:PilotProcessTarget; footer?:{reportId:string; metadata:Omit<FooterMetadata,'duration'>}}>({});
 
 export function ReplyFooter({duration,status,notice,action}:FooterMetadata & {action?:FooterAction}) {
  const elapsed=duration?.replace(/(\d)(?=小时|分钟|秒)/g,'$1 ');

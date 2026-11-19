@@ -30,9 +30,9 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
  }}:undefined;
  const pilot=timing.assistantIdentity?.pilot&&inspector&&sessionId&&summaryDisclosure?{sessionId,turnId:id,canonicalGoalId}:undefined;
  const combinedReportId=!live&&(pilot||!summaryDisclosure)?footerReportId:undefined;
- const metadata={duration,status:state==='回复结束'?undefined:state,notice:timing.detailNotice};
+ const metadata={status:state==='回复结束'?undefined:state,notice:timing.detailNotice};
  const summary=live?<ReplyDuration {...timing} previewAt={previewAt} latestStep={latestStep} disclosure={summaryDisclosure}/>
-  :!combinedReportId&&<ReplyFooter {...metadata} action={summaryDisclosure&&{text:timing.processLabel,controls:summaryDisclosure.controls,expanded:summaryDisclosure.open,side:summaryDisclosure.side,onClick:summaryDisclosure.onToggle}}/>;
+  :!combinedReportId&&<ReplyFooter {...metadata} duration={duration} action={summaryDisclosure&&{text:timing.processLabel,controls:summaryDisclosure.controls,expanded:summaryDisclosure.open,side:summaryDisclosure.side,onClick:summaryDisclosure.onToggle}}/>;
  const body=canonicalGoalId?null:inspector&&sessionId?inspecting&&inspector.host&&createPortal(<ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{details.length?details:<p className="inspector-empty">本轮尚无执行记录。</p>}</div></ExecutionDetailsOpen.Provider>,inspector.host)
   :details.length>0&&<div id={id} className={`turn-execution-details${open?' is-open':''}`} aria-hidden={!open} inert={!open} role="region" aria-label="执行详细过程"><div className="turn-execution-content"><div className="turn-execution-body"><ExecutionDetailsOpen.Provider value={open}>{details}</ExecutionDetailsOpen.Provider></div></div></div>;
  return <RoutingRecoveryContext.Provider value={recoveredRouting}><ReplyProcessContext.Provider value={{pilot,footer:combinedReportId?{reportId:combinedReportId,metadata}:undefined}}>

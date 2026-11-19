@@ -51,6 +51,12 @@ async function handle(message){
     }
     if(mode==='super-acp-worker-child')await invoke('Agent',{description:'读取独立任务证据',prompt:'读取 child-evidence-a.txt 并报告实际内容。',subagent_type:'codex-acp',run_in_background:false});
     else await invoke('list_project_files',{path:'.'});
+    if(mode==='super-acp-deadline'){
+     await invoke('Agent',{description:'读取独立任务证据',prompt:'读取 child-evidence-a.txt 并报告实际内容。',subagent_type:'codex-acp',run_in_background:false});
+     notify('item/agentMessage/delta',{itemId:'fixture-first-result',delta:'已取得样本 A。'});
+     notify('item/agentMessage/delta',{itemId:'fixture-next-result',delta:'第二项仍在核对。'});
+     return;
+    }
     report='已由独立 ACP Worker 读取实际项目文件。';if(mode!=='super-acp-public-text-unreported')await invoke('work_finish',{summary:report,outcome:'completed'});
     if(mode==='super-acp-public-text-finish-gate'){
      const {existsSync}=require('node:fs'),{setTimeout:delay}=require('node:timers/promises');

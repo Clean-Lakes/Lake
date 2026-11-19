@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { isSea } from 'node:sea';
 import { LakeStore,HttpError,id,now } from '../store';
 import { digest } from '../tasks';
+import {TaskDeadlineReached,watchTaskDeadline} from '../task-deadline';
 import type {AgentConnection,AgentLaunch} from './client';
 import {CodexAppServer} from './codex-app-server';
 import { ExternalAgentRegistry } from './registry';
@@ -81,6 +82,7 @@ export class LakeExternalAgents {
     return {agents:await this.registry.list(projectId)};
   }
   private result(run:ExternalRun):ExternalResult{const last=run.events.findLast(event=>event.kind==='text'&&event.publicTextId&&typeof event.publicText==='string');return {run_id:run.id,agent:externalAgentName(run.agent),state:run.state,summary:run.summary??run.error??'',
+    ...(run.stopReason==='deadline_reached'&&{stop_reason:'deadline_reached' as const}),
     ...(last&&{public_reply:{id:last.publicTextId!,content:last.publicText!}}),verification:'insufficient',
     limitations:['外部运行返回本次报告；请结合实际工具结果汇总原任务结论，如实说明失败或未知结果。']};}
   async run(agent:unknown,instruction:string,requestKey:string,actor:ExternalActor,resumeRunId?:string):Promise<ExternalResult>{
@@ -99,14 +101,13 @@ export class LakeExternalAgents {
     if(this.live.size>=4)throw new HttpError(409,'外部 Agent 正在处理其他工作，请稍后继续原任务');
     const runId=id();
     const run:ExternalRun={schemaVersion:1,id:runId,purpose:actor.purpose??'segment',contextId:prior?.contextId??runId,scopeHash:actor.scopeHash,agent:agentId,profileRevision:profile.revision,projectId:actor.projectId,taskId:actor.taskId,conversationId:actor.conversationId,workerId:actor.workerId,sessionId:actor.sessionId,
-      childSessionId:actor.childSessionId,agentRunId:actor.agentRunId,generation:actor.generation,requestKey,inputHash,...(actor.model?{requestedModel:actor.model}:{}),state:'starting',dispatchPhase:'not_sent',createdAt:now(),updatedAt:now(),events:[],usage:null};
+      childSessionId:actor.childSessionId,agentRunId:actor.agentRunId,rootTurnId:actor.rootTurnId,generation:actor.generation,requestKey,inputHash,...(actor.model?{requestedModel:actor.model}:{}),state:'starting',dispatchPhase:'not_sent',createdAt:now(),updatedAt:now(),events:[],usage:null};
     const controller=new AbortController(),stop=()=>controller.abort(actor.signal.reason);
     actor.signal.addEventListener('abort',stop,{once:true});
     const live:{process?:AgentConnection;controller:AbortController;scopeHash:string;guard?:()=>void}={controller,scopeHash:actor.scopeHash};this.live.set(run.id,live);
-    const deadline=Math.min(Date.parse(actor.deadlineAt)-Date.now(),15*60*1000);
-    if(!Number.isFinite(deadline)||deadline<=0){this.live.delete(run.id);actor.signal.removeEventListener('abort',stop);throw new HttpError(409,'原任务期限已到');}
-    const timer=setTimeout(()=>controller.abort(new Error('原任务期限已到')),deadline);
-    const guard=()=>{controller.signal.throwIfAborted();actor.guard();const current=this.registry.get(actor.projectId,agentId);if(!current.enabled||current.revision!==profile.revision)throw new HttpError(409,'外部 Agent 配置已变化');};
+    const stopDeadline=watchTaskDeadline(()=>actor.deadlineAt,controller);
+    const guard=()=>{controller.signal.throwIfAborted();actor.guard();if(Date.parse(actor.deadlineAt)<=Date.now())throw new TaskDeadlineReached();
+      const current=this.registry.get(actor.projectId,agentId);if(!current.enabled||current.revision!==profile.revision)throw new HttpError(409,'外部 Agent 配置已变化');};
     live.guard=guard;
     const fence=setInterval(()=>{try{guard();}catch(error){controller.abort(error);}},1000);
     let bridge:Awaited<ReturnType<typeof openToolBridge>>|undefined,submittedReport='',eventBytes=0;
@@ -128,6 +129,7 @@ export class LakeExternalAgents {
       return result;};
     persist();
     try{
+      guard();
       const directory=await privatePath(this.store.data,'external-agents','runs',run.contextId);
       if(agentId==='codex'&&actor.purpose!=='conversation')bridge=await openToolBridge(tools.map(tool=>({name:tool.metadata.name,description:tool.metadata.description??tool.metadata.name,inputSchema:tool.inputSchema as Record<string,unknown>})),invoke);
       const launcher=ownLauncher('--internal-acp-mcp');
@@ -147,7 +149,7 @@ export class LakeExternalAgents {
       run.runtimeKind=profile.runtimeKind;
       run.externalSessionId=await transport.openSession({cwd:directory,threadId:prior?.externalSessionId,systemPrompt:actor.systemPrompt},controller.signal);
       guard();run.state='running';run.dispatchPhase='dispatching';persist();event({kind:'status',status:'running'});
-      const prompt=transport.exec(instruction,controller.signal,deadline);
+      const prompt=transport.exec(instruction,controller.signal);
       run.dispatchPhase='sent';persist();
       const response=await prompt;guard();run.dispatchPhase='answered';run.stopReason=response.stopReason;
       if(response.error)run.error=this.redact(response.error);
@@ -155,10 +157,13 @@ export class LakeExternalAgents {
       if(!run.summary&&run.state==='completed'){run.state='failed';run.error='外部 Agent 没有返回业务报告';}
       persist();event({kind:'status',status:run.state});
       return this.result(run);
-    }catch(error){run.error=this.redact((error instanceof Error?error.message:'外部 Agent 执行失败')+((error as any)?.data?': '+JSON.stringify((error as any).data).slice(0,4096):'')+(live.process?.diagnostics()?': '+live.process.diagnostics().slice(-4096):''));
-      run.summary=this.redact(text.auditText).slice(0,32768);run.state=run.dispatchPhase==='not_sent'?(controller.signal.aborted?'cancelled':'failed'):'unknown';persist();event({kind:'status',status:run.state});
+    }catch(error){
+      if(error instanceof TaskDeadlineReached||controller.signal.reason instanceof TaskDeadlineReached)run.stopReason='deadline_reached';
+      run.error=this.redact((error instanceof Error?error.message:'外部 Agent 执行失败')+((error as any)?.data?': '+JSON.stringify((error as any).data).slice(0,4096):'')+(live.process?.diagnostics()?': '+live.process.diagnostics().slice(-4096):''));
+      run.summary=this.redact(text.auditText).slice(0,32768);
+      run.state=run.dispatchPhase==='not_sent'?(controller.signal.aborted||run.stopReason==='deadline_reached'?'cancelled':'failed'):'unknown';persist();event({kind:'status',status:run.state});
       if(run.state==='failed'&&!run.summary)throw new HttpError(409,run.error);return this.result(run);
-    }finally{clearTimeout(timer);clearInterval(fence);controller.abort(new Error('外部执行已结束'));actor.signal.removeEventListener('abort',stop);await bridge?.close();await live.process?.close();this.live.delete(run.id);}
+    }finally{stopDeadline();clearInterval(fence);controller.abort(new Error('外部执行已结束'));actor.signal.removeEventListener('abort',stop);await bridge?.close();await live.process?.close();this.live.delete(run.id);}
   }
   active(sessionId:string){return [...this.live.keys()].some(id=>this.store.get<ExternalRun>('acpRuns',id)?.sessionId===sessionId);}
   async steer(sessionId:string,input:string,inputId:string,agentRunId?:string){
