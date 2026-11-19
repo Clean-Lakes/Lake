@@ -30,62 +30,110 @@ export function PermissionSettings({anchor, options, disabled, saving=false, err
   const id = useId();
   const close = useRef(onClose);
   close.current = onClose;
-  const [position, setPosition] = useState({left: 0, top: 0, maxHeight: 360, ready: false});
+  const [position, setPosition] = useState<{left: number; top?: number; bottom?: number; maxHeight: number}>();
   useLayoutEffect(() => {
+    const trigger = anchor.current;
+    const content = panel.current;
+    if (!trigger || !content) return;
+
+    const composer = trigger.closest(".composer-input");
+    const gap = 10;
+    const edge = 12;
+    const minimumRoom = 160;
     const update = () => {
-      const trigger = anchor.current; const content = panel.current;
-      if (!trigger || !content) return;
-      const rect = trigger.getBoundingClientRect(); const gap = 10; const edge = 12;
-      const above = rect.top - gap - edge;
+      const rect = trigger.getBoundingClientRect();
+      const composerTop = composer?.getBoundingClientRect().top ?? rect.top;
+      const titlebarHeight = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--lake-titlebar-height")) || 0;
+      const topEdge = Math.max(edge, titlebarHeight);
       const below = window.innerHeight - rect.bottom - gap - edge;
-      const upward = above >= Math.min(content.scrollHeight, 360) || above >= below;
-      const maxHeight = Math.max(0, upward ? above : below);
-      const height = Math.min(content.scrollHeight, maxHeight);
-      setPosition({left: Math.max(edge, Math.min(rect.left - 8, window.innerWidth - content.offsetWidth - edge)),
-        top: Math.max(edge, upward ? rect.top - gap - height : rect.bottom + gap), maxHeight, ready: true});
+      // In short windows, the space above the button can still fit a scrollable panel.
+      const aboveAnchor = composerTop - gap - topEdge < minimumRoom && below < minimumRoom ? rect.top : composerTop;
+      const above = aboveAnchor - gap - topEdge;
+      const upward = above >= below;
+      const left = Math.max(edge, Math.min(rect.left - 8, window.innerWidth - content.offsetWidth - edge));
+      const top = upward ? undefined : rect.bottom + gap;
+      const bottom = upward ? window.innerHeight - aboveAnchor + gap : undefined;
+      const maxHeight = Math.max(0, Math.min(420, upward ? above : below));
+      setPosition(current => current?.left === left && current.top === top && current.bottom === bottom && current.maxHeight === maxHeight
+        ? current
+        : {left, top, bottom, maxHeight});
     };
-    const outside = (event: PointerEvent) => {
+    const dismissOutside = (event: Event) => {
       const target = event.target as Node;
-      if (!panel.current?.contains(target) && !anchor.current?.contains(target)) close.current();
+      if (!content.contains(target) && !trigger.contains(target)) close.current();
     };
     const keyboard = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); close.current(); anchor.current?.focus(); }
-    };
-    const focus = (event: FocusEvent) => {
-      const target = event.target as Node;
-      if (!panel.current?.contains(target) && !anchor.current?.contains(target)) close.current();
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      close.current();
+      trigger.focus({preventScroll: true});
     };
     update();
-    const focusFrame = requestAnimationFrame(() => panel.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({preventScroll: true}));
+    const focusFrame = requestAnimationFrame(() => content.querySelector<HTMLButtonElement>(".permission-close")?.focus({preventScroll: true}));
     const observer = new ResizeObserver(update);
-    if (panel.current) observer.observe(panel.current);
-    if (anchor.current) observer.observe(anchor.current);
+    observer.observe(trigger);
+    if (composer) observer.observe(composer);
     window.addEventListener("resize", update);
+    window.addEventListener("lake-chrome-resize", update);
     document.addEventListener("scroll", update, true);
-    document.addEventListener("pointerdown", outside);
+    document.addEventListener("pointerdown", dismissOutside);
     document.addEventListener("keydown", keyboard);
-    document.addEventListener("focusin", focus);
-    return () => { cancelAnimationFrame(focusFrame); observer.disconnect(); window.removeEventListener("resize", update);
-      document.removeEventListener("scroll", update, true); document.removeEventListener("pointerdown", outside);
-      document.removeEventListener("keydown", keyboard); document.removeEventListener("focusin", focus); };
+    document.addEventListener("focusin", dismissOutside);
+    return () => {
+      cancelAnimationFrame(focusFrame);
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+      window.removeEventListener("lake-chrome-resize", update);
+      document.removeEventListener("scroll", update, true);
+      document.removeEventListener("pointerdown", dismissOutside);
+      document.removeEventListener("keydown", keyboard);
+      document.removeEventListener("focusin", dismissOutside);
+    };
   }, [anchor]);
-  return createPortal(<section ref={panel} className="permission-popover" role="dialog" aria-label="会话权限" aria-busy={saving}
-    style={{left: position.left, top: position.top, maxHeight: position.maxHeight, visibility: position.ready ? "visible" : "hidden"}}>
-    <header><strong className="permission-heading"><Glyph name="waves" size={18}/>执行偏好</strong><span className="permission-save-state">自动保存</span><button type="button" className="permission-close" aria-label="关闭会话权限" onClick={() => {onClose(); anchor.current?.focus();}}><Glyph name="close" size={14}/></button></header>
-    {pilot && <p className="settings-note">本项目的专员统一沿用这里的设置。</p>}
-    {error && <p className="form-error" role="alert">{error}</p>}
-    {groups.map((group, index) => <div className="permission-group" role="group" aria-labelledby={`${id}-group-${index}`} key={group.title}>
-      <div className="permission-group-heading"><span id={`${id}-group-${index}`}>{group.title}</span>{group.hint && <small>{group.hint}</small>}</div>
-      <div className="permission-group-items">{group.fields.map(field => {
-        const checked = Boolean(options[field.key] ?? permissionDefaults[field.key]);
-        return <div className="permission-row" key={field.key}>
-          <div className="permission-copy"><span className="permission-label" id={`${id}-${field.key}`}>{field.label}</span></div>
-          <button type="button" className="permission-mode" role="switch" aria-labelledby={`${id}-${field.key}`} aria-describedby={`${id}-${field.key}-description`} aria-checked={checked} disabled={disabled} aria-disabled={disabled||saving} onClick={() => {if(!saving&&!disabled)onChange(field.key, !checked);}}>{checked ? "开启" : "关闭"}</button>
-        </div>;
-      })}</div>
-    </div>)}
-    <details className="permission-help"><DisclosureSummary>操作说明</DisclosureSummary><dl>{groups.flatMap(group=>group.fields).map(field=><div key={field.key}><dt>{field.label}</dt><dd id={`${id}-${field.key}-description`}>{field.description}</dd></div>)}</dl><p className="permission-note">允许免确认运行命令时，也会按需建立终端连接。</p></details>
-    {disabled && <p className="permission-note permission-locked" role="status">本轮结束或停止后可调整</p>}
 
-  </section>, document.body);
+  return createPortal(
+    <section ref={panel} className="permission-popover" role="dialog" aria-labelledby={`${id}-title`}
+      aria-describedby={pilot ? `${id}-scope` : undefined} style={position ?? {visibility: "hidden"}}>
+      <header className="permission-header">
+        <strong id={`${id}-title`}>执行偏好</strong>
+        <span className="permission-save-state" role="status">{saving && "正在保存…"}</span>
+        <button type="button" className="permission-close" aria-label="关闭执行偏好" onClick={() => {
+          onClose();
+          anchor.current?.focus({preventScroll: true});
+        }}><Glyph name="close" size={14}/></button>
+      </header>
+      {pilot && <p id={`${id}-scope`} className="permission-note permission-scope">本项目的专员沿用此设置。</p>}
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <div aria-busy={saving}>
+        {groups.map((group, index) => <div className="permission-group" role="group" aria-labelledby={`${id}-group-${index}`}
+          aria-describedby={group.hint ? `${id}-hint-${index}` : undefined} key={group.title}>
+          <div className="permission-group-heading">
+            <span id={`${id}-group-${index}`}>{group.title}</span>
+            {group.hint && <small id={`${id}-hint-${index}`}>{group.hint}</small>}
+          </div>
+          {group.fields.map(field => {
+            const checked = Boolean(options[field.key] ?? permissionDefaults[field.key]);
+            return <div className="permission-row" key={field.key}>
+              <span id={`${id}-${field.key}`}>{field.label}</span>
+              <button type="button" className="permission-toggle" role="switch" aria-labelledby={`${id}-${field.key}`}
+                aria-describedby={`${id}-${field.key}-description`} aria-checked={checked} disabled={disabled}
+                aria-disabled={disabled || saving} onClick={() => {
+                  if (!saving && !disabled) onChange(field.key, !checked);
+                }}><span className="permission-toggle-track" aria-hidden="true"/></button>
+            </div>;
+          })}
+        </div>)}
+      </div>
+      {disabled && <p className="permission-note permission-locked" role="status">本轮结束或停止后可调整</p>}
+      <details className="permission-help">
+        <DisclosureSummary>操作说明</DisclosureSummary>
+        <dl>{groups.flatMap(group => group.fields).map(field => <div key={field.key}>
+          <dt>{field.label}</dt>
+          <dd id={`${id}-${field.key}-description`}>{field.description}</dd>
+        </div>)}</dl>
+        <p className="permission-note">允许免确认运行命令时，也会按需建立终端连接。</p>
+      </details>
+    </section>,
+    document.body,
+  );
 }
