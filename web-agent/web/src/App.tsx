@@ -76,7 +76,7 @@ import { readImageSelection } from "./imageAttachments";
 import {clipboardFiles,partitionAttachments,attachmentCountLimit,fileSize} from "./fileAttachments";
 import { ResourceImport } from "./ResourceImport";
 import { SSHResourceFields, emptySSH } from "./SSHResourceFields";
-import type { SSHConnectionInput,SuperWorker,SpecialistChannelPage,SpecialistReplyAuthor } from "../../shared/contracts";
+import type { SSHConnectionInput,SuperWorker,SpecialistChannelInfo,SpecialistChannelPage,SpecialistReplyAuthor } from "../../shared/contracts";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import type {
   Action,
@@ -947,6 +947,15 @@ function AppContent() {
   }, []);
   const pilotProjectId=sidebarProjectId??selectedProjectId??catalog?.projects[0]?.id;
   const pilotWorkspace=usePilotWorkspace(pilotProjectId,!!bootstrap?.authenticated&&!!catalog);
+  const openSpecialistOverview=(channel:SpecialistChannelInfo)=>{
+    roleInspectionRequest.current.cancel();
+    pendingRoleInspection.current=undefined;
+    setRoleInspection(null);
+    inspector.reset();
+    if(sessionId!==channel.sessionId||route.resourceId||isPlansPage)navigate({sessionId:channel.sessionId,resourceId:null});
+    else setMobileMenu(false);
+    void pilotWorkspace.readChannel(channel);
+  };
   const selectedSuperChannel=bootstrap?.backendRuntime==='typescript'?pilotWorkspace.workspace?.channels?.find(channel=>channel.sessionId===selectedSession?.id):undefined;
   const codexSettingsProject=bootstrap?.backendRuntime==='typescript'?(selectedSuperChannel?.projectId??(selectedSession?.workspaceRole==='router'?selectedSession.projectId:undefined)):undefined;
   const specialistModel=useSpecialistModel(selectedSuperChannel,settingsOpen,modelMenuOpen,codexSettingsProject);
@@ -1270,7 +1279,14 @@ function AppContent() {
       clearSubmitted(targetSession, composerDraft);
       if(currentAssignment)specialistModel.accepted();
       setMessageSubmission({session:targetSession,accepted:true});
-      if(accepted.pilotSessionId){await refreshCatalog();navigate({sessionId:accepted.pilotSessionId,resourceId:null});}else await refreshCurrent();
+      if (activeSession.current !== targetSession) return;
+      const destination = accepted.pilotSessionId;
+      if (destination && destination !== targetSession) {
+        await refreshCatalog();
+        if (activeSession.current === targetSession) navigate({sessionId:destination,resourceId:null});
+      } else {
+        await refreshCurrent();
+      }
     } catch (error) { handleFailure(error); }
     finally { messageSending.current=false;setMessageSubmission(null);setPendingOperation(""); }
   }
@@ -1644,7 +1660,7 @@ function AppContent() {
         </div>}
         {sidebarProject&&<PilotWorkspace showPilot={false} showHeading={false} activity={avatarActivity} pilotButton={sidebarPilotButton}
          pilotActivity={conversationActivity(undefined,catalog.sessions.find(row=>row.id===pilotWorkspace.workspace?.project.routerSessionId)?.status)} pilotDisabled={!bootstrap?.authenticated}
-         disabled={!connected} onDeleted={channel=>pilotWorkspace.removeRole(channel.roleId)} workspace={pilotWorkspace.workspace} error={pilotWorkspace.error} selectedId={sessionSelected ? route.sessionId : null} selectedRoleId={sessionSelected && selectedSession.projectId===pilotWorkspace.workspace?.project.projectId ? selectedSuperChannel?.roleId??activeSnapshot?.superagent?.roleId??selectedSuperWorker?.roleId : undefined} onPilot={()=>{const domain=pilotWorkspace.workspace;if(domain?.active)navigate({sessionId:domain.project.routerSessionId,resourceId:null});else void openProjectPilot(sidebarProject.id);}} onWorker={worker=>navigate({sessionId:worker.sessionId,resourceId:null})} onChannel={channel=>{void refreshCatalog().then(()=>navigate({sessionId:channel.sessionId,resourceId:null})).catch(handleFailure)}}/>}
+         disabled={!connected} onDeleted={channel=>pilotWorkspace.removeRole(channel.roleId)} workspace={pilotWorkspace.workspace} error={pilotWorkspace.error} selectedId={sessionSelected ? route.sessionId : null} selectedRoleId={sessionSelected && selectedSession.projectId===pilotWorkspace.workspace?.project.projectId ? selectedSuperChannel?.roleId??activeSnapshot?.superagent?.roleId??selectedSuperWorker?.roleId : undefined} onPilot={()=>{const domain=pilotWorkspace.workspace;if(domain?.active)navigate({sessionId:domain.project.routerSessionId,resourceId:null});else void openProjectPilot(sidebarProject.id);}} onWorker={worker=>navigate({sessionId:worker.sessionId,resourceId:null})} onChannel={openSpecialistOverview}/>}
         {pilotWorkspace.workspace?.active===false&&navigationProjects.map(project=>{
           const sessionsExpanded=!closedSessionGroups.includes(project.id);
           const sessions=catalog.sessions.filter(session=>(!session.workspaceRole||session.workspaceRole==='legacy')&&session.projectId===project.id&&(!selectedTag||session.tags?.some(tag=>tag.id===selectedTag)));

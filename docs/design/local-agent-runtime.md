@@ -8,7 +8,7 @@ flowchart TD
     Service --> Contract[AgentConnection / AgentActivity]
     Contract --> Codex[CodexAppServer]
     Codex --> Transport[JsonRpcProcess]
-    Transport <-->|stdio NDJSON| Provider[codex app-server 0.160.1]
+    Transport <-->|stdio NDJSON| Provider[codex app-server 0.170.0]
     Provider --> Bridge[本次执行的私有 MCP 桥]
     Bridge --> Executor[原 ToolExecutor / Pilot 权限 / 操作账本]
 ```
@@ -37,16 +37,16 @@ flowchart TD
 
 沿 Lake 已确认的本机登录合同，Codex 直接读取源 `CODEX_HOME`（默认 `~/.codex`）；Lake 不复制 auth.json，不更改用户 config.toml。SQLite、日志、模型目录和本次执行目录保留在当前 Lake Home 下。该准备策略与 Tutti 的私有 Home/凭据投影不同；本轮采用其调用分层，不改变已确认的凭据约定。
 
-固定模型目录和启动/线程覆盖关闭原生业务工具、继承 MCP、hooks、notify 和递归。仅本次运行的 `lake` MCP 服务连接私有 Unix socket。App Server 的 MCP 工具批准使用 `mcpServer/elicitation/request`；0.160.1 的 form 请求不携带 MCP 调用 ID，因此适配器在准确 thread/turn/server 下消费一条已观察、在本次允许目录内且尚未消费的工具调用。通用表单、URL 请求、原生工具、未知服务器、外来轮次、重复申请和失效宿主均不获准。该批准只允许进入私有桥，真实 I/O 仍经过同一个 ToolExecutor；没有持久批准或全局自动批准。
+固定模型目录和启动/线程覆盖关闭原生业务工具、继承 MCP、hooks、notify 和递归。仅本次运行的 `lake` MCP 服务连接私有 Unix socket。App Server 的 MCP 工具批准使用 `mcpServer/elicitation/request`；form 请求可能不携带 MCP 调用 ID，因此适配器在准确 thread/turn/server 下消费一条已观察、在本次允许目录内且尚未消费的工具调用。通用表单、URL 请求、原生工具、未知服务器、外来轮次、重复申请和失效宿主均不获准。该批准只允许进入私有桥，真实 I/O 仍经过同一个 ToolExecutor；没有持久批准或全局自动批准。
 
 ## 迁移与交付边界
 
-profile 升级为 schema3，记录 `runtimeKind: codex-app-server`。schema1/schema2 迁移增加 revision，旧 Worker/run 和来源记录保持原样；新的配置不能静默续接旧执行。已安装的官方 0.160.1 引擎可沿原目录复用，无需保留第三方包装器才能运行。
+profile 升级为 schema3，记录 `runtimeKind: codex-app-server`。schema1/schema2 迁移增加 revision，旧 Worker/run 和来源记录保持原样；新的配置不能静默续接旧执行。官方引擎 0.170.0 安装在现有 Lake Home 的运行时目录。固定引擎和模型目录纳入连接版本。
 
 本批继续保持 macOS 的既有开放范围。Windows、Linux、真实远程业务系统以及其他提供商不因该抽象自动成为已验证能力。
 
 ## 参考
 
 - [Tutti 固定版本](https://github.com/tutti-os/tutti/tree/207beeea554435618dffd3b579d0ffe112b065c4)：提供商定义、受管理进程、App Server 会话和活动归一分层。
-- [Codex 0.160.1](https://github.com/openai/codex/tree/rust-v0.160.1)：使用该版本 `app-server generate-ts` 输出核对线程、轮次、通知和请求结构。
+- [Codex 0.170.0](https://github.com/openai/codex/tree/rust-v0.170.0) 提供固定 App Server 引擎和 GPT-6.2 Sol 模型元数据。
 - [当前任务报告合同](../security/task-confirmation.md)、[本机登录合同](../../plan/refactor-codex-local-login-1.md)、[迁移实施计划](../../plan/refactor-codex-app-server-1.md)。

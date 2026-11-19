@@ -5,7 +5,7 @@ import {externalAgentNames} from '../../../web-agent/shared/external-agents';
 
 /** External product names, not names of Lake's embedded backend. */
 export const externalProducts: Record<ExternalAgentId, { name: string; version: string }> = {
-  codex: { name: externalAgentNames.codex, version: '0.160.1' },
+  codex: { name: externalAgentNames.codex, version: '0.170.0' },
 };
 export const externalAgentIds = Object.keys(externalProducts) as ExternalAgentId[];
 export function externalAgentId(value: unknown): ExternalAgentId {
