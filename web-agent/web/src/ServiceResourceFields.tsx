@@ -1,6 +1,7 @@
 import { KubernetesResourceFields } from "./KubernetesResourceFields";
 import "./serviceResourceFields.css";
 import { AppSelect } from "./AppSelect";
+import { Glyph } from "./Icons";
 import { useEffect, useRef, useState } from "react";
 import type { Resource } from "../../shared/contracts";
 import { api, readableError } from "./api";
@@ -9,6 +10,60 @@ import {
   type ResourceInputType,
   type ServiceDraft,
 } from "./serviceResourceModel";
+function GrafanaSavedCredential({resource, addressChanged}: {resource: Resource; addressChanged: boolean}) {
+  const [token, setToken] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const pending = useRef<AbortController | null>(null);
+  const saved = !!resource.settings?.credentialRef;
+  useEffect(() => () => pending.current?.abort(), []);
+
+  async function toggleToken() {
+    if (token) {
+      setToken("");
+      return;
+    }
+    if (pending.current || addressChanged) return;
+    const request = new AbortController();
+    pending.current = request;
+    setLoading(true);
+    setError("");
+    try {
+      const result = await api.revealGrafanaToken(resource.id, resource.configurationRevision ?? 1, request.signal);
+      if (!request.signal.aborted) setToken(result.token);
+    } catch (cause) {
+      if (!request.signal.aborted) setError(readableError(cause));
+    } finally {
+      if (!request.signal.aborted) {
+        pending.current = null;
+        setLoading(false);
+      }
+    }
+  }
+
+  const action = token ? "隐藏已保存令牌" : "显示已保存令牌";
+  return <>
+    <div className="grafana-saved-credential">
+      <Glyph name="lock" size={15}/>
+      <div>
+        <strong>服务账号令牌</strong>
+        {saved && !token && <span className="grafana-token-mask" aria-hidden="true">••••••••</span>}
+      </div>
+      <div className="grafana-saved-credential-actions">
+        <span className={saved && !addressChanged ? "credential-saved" : undefined}>
+          {saved ? addressChanged ? "已为原地址保存" : "已保存" : "未配置"}
+        </span>
+        {saved && <button type="button" className="icon-button" title={action} aria-label={action}
+          aria-busy={loading || undefined} disabled={addressChanged} onClick={() => void toggleToken()}>
+          <Glyph name={token ? "eyeOff" : "eye"} size={16}/>
+        </button>}
+      </div>
+      {token && <code className="grafana-saved-token" tabIndex={0}>{token}</code>}
+    </div>
+    {error && <p className="form-error" role="alert">{error}</p>}
+  </>;
+}
+
 export function ServiceResourceFields({
   type,
   value,
@@ -29,6 +84,7 @@ export function ServiceResourceFields({
   const [testing, setTesting] = useState(false),
     [result, setResult] = useState(""),
     [error, setError] = useState("");
+  const [showGrafanaDraft, setShowGrafanaDraft] = useState(false);
   const controller = useRef<AbortController | null>(null),
     generation = useRef(0);
   const invalidate = () => {
@@ -83,11 +139,16 @@ export function ServiceResourceFields({
   }
   const database = type === "mysql" || type === "postgres";
   const metrics = type === "prometheus" || type === "victoriametrics";
+  const grafana = type === "grafana";
+  const hasGrafanaToken = !!existing?.settings?.credentialRef;
+  const needsGrafanaToken = !hasGrafanaToken ||
+    value.endpoint.trim().replace(/\/$/,'') !== existing?.settings?.endpoint;
   const endpoints = {
     kubernetes: "https://cluster.example.com:6443",
     apisix: "http://127.0.0.1:9180",
     prometheus: "http://127.0.0.1:9090",
     victoriametrics: "http://127.0.0.1:8428",
+    grafana: "https://grafana.example.com",
   };
   return (
     <fieldset disabled={disabled} className="service-resource-fields">
@@ -179,7 +240,7 @@ export function ServiceResourceFields({
       ) : (
         <>
           <label className="field-label">
-            {type === "apisix" ? "Admin API 地址" : "查询端点"}
+            {grafana ? "Grafana 地址" : type === "apisix" ? "Admin API 地址" : "查询端点"}
             <input
               required
               type="url"
@@ -188,6 +249,28 @@ export function ServiceResourceFields({
               placeholder={endpoints[type as keyof typeof endpoints]}
             />
           </label>
+          {grafana && <>
+            {existing && <GrafanaSavedCredential
+              key={`${existing.id}:${existing.configurationRevision ?? 1}:${needsGrafanaToken}:${disabled}`}
+              resource={existing} addressChanged={needsGrafanaToken}/>}
+            <div className="grafana-token-field">
+              <label className="field-label">
+                {hasGrafanaToken ? '更新服务账号令牌' : '服务账号令牌'}
+                <input type={showGrafanaDraft ? 'text' : 'password'} required={needsGrafanaToken}
+                  autoComplete="new-password" spellCheck={false}
+                  value={value.token} onChange={event => {
+                    set("token", event.target.value);
+                    if (!event.target.value) setShowGrafanaDraft(false);
+                  }}
+                  placeholder={needsGrafanaToken ? undefined : "留空沿用已保存令牌"}/>
+              </label>
+              {!!value.token && <button className="icon-button" type="button"
+                aria-label={showGrafanaDraft ? '隐藏新令牌' : '显示新令牌'}
+                onClick={() => setShowGrafanaDraft(show => !show)}><Glyph name={showGrafanaDraft ? 'eyeOff' : 'eye'} size={16}/></button>}
+            </div>
+            <p className="settings-note">{hasGrafanaToken && needsGrafanaToken ?
+              '为新 Grafana 地址填写对应的服务账号令牌。' : '访问范围由 Grafana 组织和服务账号权限决定。'}</p>
+          </>}
           {type === "victoriametrics" && (
             <p className="settings-note">
               单机填写服务地址；集群填写 vmselect 查询前缀，例如
@@ -270,12 +353,12 @@ export function ServiceResourceFields({
               )}
             </>
           )}
-          <p className="settings-note">端点不包含用户名、密码或查询参数。</p>
+          {!grafana && <p className="settings-note">端点不包含用户名、密码或查询参数。</p>}
         </>
       )}
       {type !== "kubernetes" && nativeConnections && (
         <>
-          {existing?.settings?.credentialRef && !metrics && (
+          {existing?.settings?.credentialRef && !metrics && !grafana && (
             <label className="check-row">
               <input
                 type="checkbox"
@@ -289,13 +372,13 @@ export function ServiceResourceFields({
             <button
               type="button"
               className="button secondary"
-              disabled={disabled || testing}
+              disabled={disabled || testing || grafana && (!value.endpoint.trim() || needsGrafanaToken && !value.token.trim())}
               onClick={() => void testConnection()}
             >
               {testing ? "正在测试…" : "测试连接"}
             </button>
             <span className="settings-note">
-              保存仅添加配置，不会自动连接。
+              {grafana ? '测试使用当前地址和令牌。' : '保存仅添加配置，不会自动连接。'}
             </span>
           </div>
           {result && (
@@ -310,7 +393,7 @@ export function ServiceResourceFields({
           )}
         </>
       )}
-      <p className="settings-note">凭据保存在本机私有存储中，不会回填页面。</p>
+      <p className="settings-note">{grafana ? "令牌保存在本机私有存储中。" : "凭据保存在本机私有存储中，不会回填页面。"}</p>
     </fieldset>
   );
 }

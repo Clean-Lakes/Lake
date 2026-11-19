@@ -1,10 +1,12 @@
 # Lake Super-agent 内核与三模块协作约定
 
-2026-11-18 Grafana 事件接入先交付本机收件。接入渠道内的 Grafana Webhook 来源固定绑定项目，独立 Bearer 凭据只用于投稿。Lake 按实际来源保存每次默认 JSON v1 通知，保留批次及每条告警的状态，提交投递记录后返回回执。事件保存在独立收件记录中，人工和 MCP 消息沿原 `superInputs`。规则、去重、Pilot/Worker 调度和网络部署后续另行设计。见[接入说明](docs/grafana-event-receiver.md)与[实施计划](plan/feature-grafana-event-receiver-1.md)。
+2026-11-18 Items 保存 Grafana 基础地址和私有服务账号令牌引用。资源详情自动读取目录、仪表盘、数据源、告警规则及活动告警概览。Pilot 和专员可查询仪表盘详情、实际指标和日志，仍使用原 Task/Worker 账本，按准确资源、配置版本、Lake 项目网络权限和 Grafana 组织授权执行。见[只读接入计划](plan/feature-grafana-read-1.md)与[接入说明](docs/grafana-event-receiver.md)。
 
-2026-11-17 资源连接迁移增量：TypeScript 的服务资源配置和显式连接测试可适配已确认、恢复身份一致、相关规则明确允许且无未支持范围限制的旧 legacy 项目策略；拒绝、ask、按资源身份限定的测试和策略变化继续阻止对应操作。只扩展 Items 的连接管理，不删除旧策略、不扩大其 ResourceIDs、不为 Worker/历史任务签发执行权限。Kubernetes 连接支持上传的内嵌 Kubeconfig 或端点/Token、上下文、命名空间及明确 TLS/超时设置；不执行插件、不读取外部凭据文件、不跟随凭据请求重定向。该增量不代表完整 Security 恢复或 Kubernetes Agent 操作工具已迁移。实施及真实安装状态见[计划](plan/feature-resource-policy-kubernetes-1.md)与[验证记录](docs/validation/typescript-candidate/resource-policy-kubernetes.md)。
+2026-11-18 Grafana 事件接入先交付本机收件。用户从资源详情注入接入点时，Lake 使用该资源现有的令牌和部署接收地址，或在内网启动专用 Webhook 监听并验证回调。来源固定绑定 Items 的资源 ID 及所属项目，收件前和提交前校验当前资源、项目和独立凭据。Lake 逐次保存默认 JSON v1 投递的批次和各条告警状态，SQLite 提交后返回回执。早期独立来源可继续从接入渠道查看和管理。人工和 MCP 消息沿原 `superInputs`。规则、去重和 Pilot/Worker 调度后续另行设计。见[接入说明](docs/grafana-event-receiver.md)与[实施计划](plan/feature-grafana-event-receiver-1.md)。
 
 2026-11-17 用户报告后续补充未被专员读取、仍重复提问。成功路由的补充沿同一 Task/Worker/代次送入当前执行：原生 SDK 以真实 guide drain、Codex App Server 以准确 thread/turn/clientUserMessageId 的 userMessage 事件确认消费，排队应答不算消费。专员等待业务缺失信息时，宿主将补充原文作为新上下文返回原问题，不伪造选项答案，由专员重新判断尚缺内容。计划确认、操作审批及终端接管不因补充而解除；未确认消费的输入仍沿原安全续接边界处理，停止、原期限、权限与历史操作不变。Pilot 只能根据已记录回执描述补充，不能把登记说成已读取。见[修复计划](plan/refactor-specialist-followups-1.md)。
+
+2026-11-17 资源连接迁移增量：TypeScript 的服务资源配置和显式连接测试可适配已确认、恢复身份一致、相关规则明确允许且无未支持范围限制的旧 legacy 项目策略；拒绝、ask、按资源身份限定的测试和策略变化继续阻止对应操作。只扩展 Items 的连接管理，不删除旧策略、不扩大其 ResourceIDs、不为 Worker/历史任务签发执行权限。Kubernetes 连接支持上传的内嵌 Kubeconfig 或端点/Token、上下文、命名空间及明确 TLS/超时设置；不执行插件、不读取外部凭据文件、不跟随凭据请求重定向。该增量不代表完整 Security 恢复或 Kubernetes Agent 操作工具已迁移。实施及真实安装状态见[计划](plan/feature-resource-policy-kubernetes-1.md)与[验证记录](docs/validation/typescript-candidate/resource-policy-kubernetes.md)。
 
 2026-11-16 用户要求采用 Tutti 的本地智能体调用设计。Codex 从第三方 codex-acp 包装器迁移为官方 `codex app-server` 直连：受管理进程传输、Codex 线程/轮次协议适配和提供商中立的活动/生命周期接口分层。配置探测与执行共用进程传输；通知必须匹配实际 thread/turn，RPC 应答不代表完成，恢复历史不重放。固定引擎保持 0.160.1，移除 ACP SDK 与适配器安装依赖。profile 升级 schema3/runtimeKind 并增加旧配置 revision，旧 Worker/run 与未知结果保留，不静默换用新传输。历史 `kind: acp`、表名与 `codex-acp` 子类型作为兼容标识保留。按已观察的当前 Lake MCP 调用单次允许进入私有工具桥，业务操作继续经过原 ToolExecutor、Pilot 权限及 Task/Worker 身份。CODEX_HOME 仍直接复用已有登录/配置，不复制凭据、不改写用户配置；原生工具、继承 MCP/hooks/notify 与递归仍关闭。Claude SDK 和其他 Agent 不在本批实现范围。见[本机执行架构](docs/design/local-agent-runtime.md)及[迁移计划](plan/refactor-codex-app-server-1.md)。本条替代下文“所有外部执行统一使用 ACP 传输”的旧约定，不更改任务报告和模块归属。
 

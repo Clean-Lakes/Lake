@@ -26,6 +26,8 @@ import {inspectorWorker,latestInspectorSelection} from './sessionInspectorModel'
 import {InspectionRequestGuard,matchesSpecialistInspection,selectedRoleInspection,snapshotInspectionTarget,specialistInspectionWorker,workerInspectionTarget} from './specialistInspection';
 import {ServiceResourceFields} from "./ServiceResourceFields";
 import {ServiceConfigEdit} from "./ServiceConfigEdit";
+import {GrafanaResourceWebhook} from "./GrafanaEventSource";
+import {GrafanaResourceRead} from "./GrafanaResourceRead";
 import {emptyServiceDraft, resourceTypeOptions, resourceTypeLabel, serviceResourceType, serviceResourceInput, type ResourceInputType} from "./serviceResourceModel";
 
 import {LakeLogo} from "./LakeLogo";
@@ -1390,7 +1392,7 @@ function AppContent() {
       await refreshCatalog();
       setSshProject(null); setSshParent(null); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft());
       navigate({ sessionId, resourceId: resource.id });
-      notify("资源已添加，可在项目会话中引用");
+      notify(resource.kind === "grafana" ? "Grafana 资源已添加" : "资源已添加，可在项目会话中引用");
     } catch (error) { setSshError(readableError(error)); }
     finally { setSshBusy(false); }
   }
@@ -1541,7 +1543,12 @@ function AppContent() {
         {sessionHeader && <span className="workspace-header-glass" aria-hidden="true"/>}
         {!sharedIsland&&headerSweep}
         <button className="icon-button mobile-only" aria-label="打开项目导航" onClick={() => setMobileMenu(true)}><Glyph name="menu" size={21}/></button>
-        <div className="breadcrumbs">{!sessionHeader&&<><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span></>}<strong>{superHeaderIdentity?<SuperRoleAvatar name={selectedRoleName} roleId={selectedRoleId} pilot={!!selectedSuperPilot} size={20} motion={pilotHeaderActivity?.motion??conversationAvatarMotion(avatarActivity?.state??'idle',activeSnapshot?.superagent?.task?.state??selectedSuperWorker?.task.state)}/>:<Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession ? selectedSession.icon??'chat' : 'document'} size={15}/>}<span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{superHeaderIdentity?(selectedRoleName??'Pilot'):selectedResource?.name ?? selectedSession?.title ?? "概览"}</span>{superHeaderIdentity&&!selectedSuperPilot&&<AgentBackendLogo backend={selectedAgentBackend}/>}</strong></div>
+        {selectedResource?.kind === "grafana" ? <div className="breadcrumbs">
+          <Glyph name="panel" size={17}/>
+          <button type="button" className="crumb-project grafana-project-crumb" title="返回工作台"
+            onClick={() => navigate({sessionId, resourceId: null})}>{projectList.find(project => project.id === selectedResource.projectId)?.name ?? "项目"}</button>
+        </div> :
+          <div className="breadcrumbs">{!sessionHeader&&<><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span></>}<strong>{superHeaderIdentity?<SuperRoleAvatar name={selectedRoleName} roleId={selectedRoleId} pilot={!!selectedSuperPilot} size={20} motion={pilotHeaderActivity?.motion??conversationAvatarMotion(avatarActivity?.state??'idle',activeSnapshot?.superagent?.task?.state??selectedSuperWorker?.task.state)}/>:<Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession ? selectedSession.icon??'chat' : 'document'} size={15}/>}<span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{superHeaderIdentity?(selectedRoleName??'Pilot'):selectedResource?.name ?? selectedSession?.title ?? "概览"}</span>{superHeaderIdentity&&!selectedSuperPilot&&<AgentBackendLogo backend={selectedAgentBackend}/>}</strong></div>}
         {selectedSession && !selectedResource && !isPlansPage && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} mode={headerPilotMode} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}} normal={<SessionStateBadge session={selectedSession} {...superHeaderPresentation}/>} onInspect={targetId => {
           if(!activeSnapshot||!headerPilot)return;
           const task=activeSnapshot.sre?.tasks.find(t=>t.id===headerPilot.taskId);
@@ -1663,7 +1670,9 @@ function AppContent() {
           return <div className="project-group" key={project.id}>
             <div className="project-contents">
               {showWorkflows && <button type="button" className="workflow-entry" onClick={() => setWorkflowProject(project)} disabled={!connected}><Glyph name="layers" size={15}/>运维工作流</button>}
-              {<ResourceTree navigationPanel selection={bulkSelection} onSelectAll={() => toggleBulkGroup(bulkCatalogTargets(catalog).filter(target => target.projectId === project.id && ["resource","folder"].includes(target.kind)))} onDelete={setNavigationDelete} project={project} resources={projectResources} nodes={catalog.resourceTree ?? []} disabled={!connected} refresh={refreshCatalog} onImport={() => { setImportHexhub(false); setImportProject(project); }} onAddResource={(parentId) => { setResourceKind("ssh"); setSshProject(project.id); setSshParent(parentId); setSshName(""); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft()); setSshError(""); }} renderResource={resource => {
+              {<ResourceTree navigationPanel
+                onEditConnection={pendingOperation ? undefined : setEditTerminalResource}
+                selection={bulkSelection} onSelectAll={() => toggleBulkGroup(bulkCatalogTargets(catalog).filter(target => target.projectId === project.id && ["resource","folder"].includes(target.kind)))} onDelete={setNavigationDelete} project={project} resources={projectResources} nodes={catalog.resourceTree ?? []} disabled={!connected} refresh={refreshCatalog} onImport={() => { setImportHexhub(false); setImportProject(project); }} onAddResource={(parentId) => { setResourceKind("ssh"); setSshProject(project.id); setSshParent(parentId); setSshName(""); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft()); setSshError(""); }} renderResource={resource => {
                 const terminalResourceRow=["local","ssh"].includes(resource.kind);
                 const addToConversationDisabled=!sessionConnected || !!pendingOperation || selectedSession?.projectId!==resource.projectId || !mentionable.some(item=>item.id===resource.id);
                 const addToConversationTitle=!selectedSession ? "请先打开一个对话" : selectedSession.projectId!==resource.projectId ? "请先打开此项目的对话" : "添加到对话";
@@ -1672,7 +1681,7 @@ function AppContent() {
                   <button id={`resource-trigger-${resource.id}`} className={`nav-row resource-row ${route.resourceId === resource.id || terminalOpen && terminalResource?.id === resource.id ? "active" : ""}`} onClick={() => { if (bulkMode) {if(resource.kind !== "local")toggleBulkTarget({kind:"resource",id:resource.id,projectId:resource.projectId,name:resource.name}); return;} if (["local", "ssh"].includes(resource.kind)) { setResourceTerminalMenu(current => current === resource.id ? null : resource.id); void refreshCatalog().catch(handleFailure); } else navigate({ sessionId: route.sessionId, resourceId: resource.id }); }} aria-expanded={["local", "ssh"].includes(resource.kind) ? resourceTerminalMenu === resource.id : undefined} aria-current={route.resourceId === resource.id ? "page" : undefined}>
                     <ResourceIcon kind={resource.kind}/><span className="nav-row-text"><strong>{resource.name}</strong></span>{connected && live.some(terminal=>terminal.status==="ready"||terminal.status==="busy") && <span className="resource-indicator available resource-connection-indicator" role="img" aria-label="终端已连接" title="终端已连接"/>}{connectingResources.includes(resource.id) && <span className="resource-inline-status">连接中</span>}
                   </button>
-                  {!isSpecialistTasks&&<button type="button" className="resource-terminal-button resource-add-to-chat" aria-label={`添加到对话：${resource.name}`} title={addToConversationTitle} disabled={addToConversationDisabled} onClick={()=>addResourceToConversation(resource)}><Glyph name="chatAdd" size={15}/></button>}
+                  {!isSpecialistTasks&&(resource.kind!=="grafana"||!!resource.settings?.credentialRef)&&<button type="button" className="resource-terminal-button resource-add-to-chat" aria-label={`添加到对话：${resource.name}`} title={addToConversationTitle} disabled={addToConversationDisabled} onClick={()=>addResourceToConversation(resource)}><Glyph name="chatAdd" size={15}/></button>}
                   {["local", "ssh"].includes(resource.kind) && <>
                     <button type="button" className="resource-terminal-button resource-terminal-quick" aria-label={`一键打开 ${resource.name} 的终端`} disabled={!connected || !persistentMode || !!pendingOperation || resource.status !== "available"} onClick={() => void openTerminalFromSidebar(resource.id)} title={connectingResources.includes(resource.id) ? "查看连接进度" : live.length ? "打开已有终端" : "创建并打开终端"}><Glyph name="terminal" size={15}/></button>
                     <button type="button" className="resource-terminal-button resource-terminal-manage" aria-label={`管理 ${resource.name} 的终端`} aria-expanded={resourceTerminalMenu === resource.id} disabled={!connected} onClick={() => { setResourceTerminalMenu(current => current === resource.id ? null : resource.id); void refreshCatalog().catch(handleFailure); }} title="管理终端"><Glyph name="more" size={16}/></button>
@@ -1776,7 +1785,7 @@ function AppContent() {
         if (event.shiftKey && document.activeElement===first) {event.preventDefault();last?.focus();}
         if (!event.shiftKey && document.activeElement===last) {event.preventDefault();first?.focus();}
       }
-    }}><div className="modal-header"><span className="modal-icon"><Glyph name="server" size={20}/></span><button className="icon-button" aria-label="关闭" disabled={sshBusy} onClick={() => { setSshProject(null); setSshParent(null); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft()); }}><Glyph name="close"/></button></div><h2 id="ssh-title">新建资源</h2><p className="modal-description">添加主机、数据库、缓存、集群、网关或监控服务，供项目会话引用。{sshParent ? `资源会创建在「${sshParentName}」目录下。` : ""}</p><form onSubmit={createSsh}><label className="field-label">类型<AppSelect disabled={sshBusy} value={resourceKind} onChange={event => { const kind=event.target.value as ResourceInputType; setResourceKind(kind); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft(kind)); setSshError(""); }}>{resourceTypeOptions.map(([kind,label])=><option key={kind} value={kind}>{label}</option>)}</AppSelect></label>
+    }}><div className="modal-header"><span className="modal-icon"><Glyph name="server" size={20}/></span><button className="icon-button" aria-label="关闭" disabled={sshBusy} onClick={() => { setSshProject(null); setSshParent(null); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft()); }}><Glyph name="close"/></button></div><h2 id="ssh-title">新建资源</h2><p className="modal-description">添加主机、数据库、缓存、集群、网关或监控服务。{sshParent ? `资源会创建在「${sshParentName}」目录下。` : ""}</p><form onSubmit={createSsh}><label className="field-label">类型<AppSelect disabled={sshBusy} value={resourceKind} onChange={event => { const kind=event.target.value as ResourceInputType; setResourceKind(kind); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft(kind)); setSshError(""); }}>{resourceTypeOptions.filter(([kind]) => kind !== "grafana" || bootstrap?.backendRuntime === "typescript").map(([kind,label])=><option key={kind} value={kind}>{label}</option>)}</AppSelect></label>
       <label className="field-label">资源名称<input disabled={sshBusy} required maxLength={120} value={sshName} onChange={event => setSshName(event.target.value)} autoFocus/></label>
 {resourceKind === "ssh" ? <SSHResourceFields value={sshDraft} onChange={setSshDraft} disabled={sshBusy}/> : <ServiceResourceFields projectId={sshProject} key={resourceKind} type={resourceKind} nativeConnections={bootstrap?.backendRuntime==='typescript'} value={serviceSettings} onChange={setServiceSettings} disabled={sshBusy}/>}      {sshError && <p className="form-error" role="alert">{sshError}</p>}<div className="modal-actions"><button type="button" className="button secondary" onClick={() => { setSshProject(null); setSshParent(null); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft()); }} disabled={sshBusy}>取消</button><button type="submit" className="button primary" disabled={sshBusy}>{sshBusy ? "正在添加…" : "添加资源"}</button></div>
     </form></div></div>}
@@ -1799,6 +1808,10 @@ function ResourceDetail({ serviceEditing, resource, project, sessions, selectedS
   terminalList: TerminalSession[]; disabled: boolean; onBack: () => void; onNewSession: () => void;
   onSession: (sessionId: string) => void; onEdit: () => void;
 }) {
+  if (resource.kind === "grafana") return <div className="resource-detail grafana-resource-detail">
+    <GrafanaResourceRead key={resource.id + ":" + (resource.configurationRevision ?? 1)} resource={resource} disabled={disabled}/>
+    <GrafanaResourceWebhook key={resource.id} resource={resource} disabled={disabled} onEdit={onEdit}/>
+  </div>;
   const inScope = selectedSession?.projectId === resource.projectId;
   const available = resource.status === "available";
   const usingSessionIds = new Set(terminalList
