@@ -28,14 +28,20 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
   if(inspector&&sessionId)inspector.open(canonicalGoalId?{sessionId,canonicalGoalId,tab:'execution'}:{sessionId,turnId:id,tab:'execution'});
   else {onInspect?.();setOpen(!open);}
  }}:undefined;
+ const settledStatus=state==='回复结束'?undefined:state;
+ const foldFailure=!!summaryDisclosure&&settledStatus==='未完成';
  const pilot=timing.assistantIdentity?.pilot&&inspector&&sessionId&&summaryDisclosure?{sessionId,turnId:id,canonicalGoalId}:undefined;
  const combinedReportId=!live&&(pilot||!summaryDisclosure)?footerReportId:undefined;
- const metadata={status:state==='回复结束'?undefined:state,notice:timing.detailNotice};
+ const footerStatus=foldFailure?undefined:settledStatus;
  const summary=live?<ReplyDuration {...timing} previewAt={previewAt} latestStep={latestStep} disclosure={summaryDisclosure}/>
-  :!combinedReportId&&<ReplyFooter {...metadata} duration={duration} action={summaryDisclosure&&{text:timing.processLabel,controls:summaryDisclosure.controls,expanded:summaryDisclosure.open,side:summaryDisclosure.side,onClick:summaryDisclosure.onToggle}}/>;
- const body=canonicalGoalId?null:inspector&&sessionId?inspecting&&inspector.host&&createPortal(<ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{details.length?details:<p className="inspector-empty">本轮尚无执行记录。</p>}</div></ExecutionDetailsOpen.Provider>,inspector.host)
-  :details.length>0&&<div id={id} className={`turn-execution-details${open?' is-open':''}`} aria-hidden={!open} inert={!open} role="region" aria-label="执行详细过程"><div className="turn-execution-content"><div className="turn-execution-body"><ExecutionDetailsOpen.Provider value={open}>{details}</ExecutionDetailsOpen.Provider></div></div></div>;
- return <RoutingRecoveryContext.Provider value={recoveredRouting}><ReplyProcessContext.Provider value={{pilot,footer:combinedReportId?{reportId:combinedReportId,metadata}:undefined}}>
-  {children}{(!hideStatus||!!duration&&!live)&&(!live||!hideLive)&&summary}{specialistReplies}
+  :!combinedReportId&&<ReplyFooter status={footerStatus} duration={summaryDisclosure||!timing.assistantIdentity?.pilot?duration:undefined} action={summaryDisclosure&&{
+   text:timing.processLabel,controls:summaryDisclosure.controls,expanded:summaryDisclosure.open,side:summaryDisclosure.side,onClick:summaryDisclosure.onToggle
+  }}/>;
+ const notice=[foldFailure?settledStatus:undefined,timing.detailNotice].filter(Boolean).join(' · ');
+ const records=<>{notice&&<p className="execution-detail-note">{notice}</p>}{details.length?details:<p className="inspector-empty">本轮尚无执行记录。</p>}</>;
+ const body=canonicalGoalId?null:inspector&&sessionId?inspecting&&inspector.host&&createPortal(<ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{records}</div></ExecutionDetailsOpen.Provider>,inspector.host)
+  :details.length>0&&<div id={id} className={`turn-execution-details${open?' is-open':''}`} aria-hidden={!open} inert={!open} role="region" aria-label="执行详细过程"><div className="turn-execution-content"><div className="turn-execution-body"><ExecutionDetailsOpen.Provider value={open}>{records}</ExecutionDetailsOpen.Provider></div></div></div>;
+ return <RoutingRecoveryContext.Provider value={recoveredRouting}><ReplyProcessContext.Provider value={{pilot,footer:combinedReportId?{reportId:combinedReportId,status:footerStatus}:undefined}}>
+  {children}{!hideStatus&&(!live||!hideLive)&&summary}{specialistReplies}
  </ReplyProcessContext.Provider>{body}</RoutingRecoveryContext.Provider>;
 }

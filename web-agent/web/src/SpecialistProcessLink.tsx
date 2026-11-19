@@ -14,13 +14,13 @@ export function SpecialistProcessLink({author,reportId,onInspect,active=false}:{
  const selection=useSessionInspector()?.selection;
  const duration=specialistElapsed(author?.durationMs);
  if(!onInspect||!hasTaskProcess(author))return <ReplyFooter duration={duration}/>;
- const metadata=footer&&footer.reportId===reportId?footer.metadata:undefined;
+ const status=footer&&footer.reportId===reportId?footer.status:undefined;
  const workerOpen=selection?.sessionId===author.sessionId&&selection.canonicalGoalId===author.taskId;
  const sources=selection?.replySources;
  const expanded=sources?!!pilot&&sources.pilot.turnId===pilot.turnId&&sources.pilot.sessionId===pilot.sessionId&&
   sources.specialist.taskId===author.taskId&&sources.specialist.sessionId===author.sessionId:workerOpen;
- return <ReplyFooter {...metadata} duration={duration} action={{
-  text:metadata?'查看执行过程':'执行过程',label:metadata?`查看执行过程，${author.name}`:`查看${author.name}的执行过程`,controls:sessionInspectorId,side:true,
-  taskId:author.taskId,expanded,liveMotion:metadata?undefined:active,onClick:()=>onInspect(author,pilot),
+ return <ReplyFooter status={status} duration={duration} action={{
+  label:`查看${author.name}的执行过程`,controls:sessionInspectorId,side:true,
+  taskId:author.taskId,expanded,liveMotion:active,onClick:()=>onInspect(author,pilot),
  }}/>;
 }

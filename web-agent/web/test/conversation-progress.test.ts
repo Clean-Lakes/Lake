@@ -94,7 +94,7 @@ test('all prose stays visible while one resource row retains all tool rounds',()
  assert.equal((html.match(/data-conversation-entry=/g)||[]).length,14);
  assert.equal((html.match(/class="thinking-timeline /g)||[]).length,1);
  assert.ok(!html.includes('reply-arrival'),'restored rows must not animate');
- assert.equal((html.match(/turn-status-text/g)||[]).length,1);
+ assert.equal((html.match(/turn-status-elapsed/g)||[]).length,1);
  const activity=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode:'activity'}));
  assert.equal((activity.match(/class="thinking-timeline /g)||[]).length,1);
 });
@@ -250,10 +250,13 @@ test('recorded process remains available while generated prose retires the live 
 test('collapsed process retains commands and alerts without hiding prose or pending decision controls',()=>{
  const s={session:{id:'s'},messages:[user.message],actions:[],resources:[],replyTimings:[{messageId:user.message!.id,startedAt:at,finishedAt:'2026-10-18T08:09:54Z',status:'completed'}],ai:{session:'s',status:'completed',cardsOffset:0,cards:[card('tool','operation','failed').card,card('reply','message','completed','最终结果仍然可见').card]}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
- assert.ok(html.includes('用时 9 分钟 54 秒')&&html.includes('1 项失败'));
  assert.ok(html.includes('aria-expanded="false"')&&html.includes('执行详细过程'));
  const bodyStart=html.indexOf('class="turn-execution-details"'),replyEnd=html.indexOf('data-conversation-entry="reply"');
  assert.ok(replyEnd<bodyStart,'final reply remains above the elapsed line and process disclosure');
+ const footer=html.slice(replyEnd,bodyStart);
+ assert.match(footer,/<button[^>]*aria-label="查看执行过程"[^>]*>[\s\S]*?<\/button><span class="turn-status-elapsed"[^>]*>9 分钟 54 秒<\/span>/);
+ assert.doesNotMatch(footer,/项失败/);
+ assert.match(html.slice(bodyStart),/1 项失败/);
  assert.ok(html.slice(bodyStart).includes('执行失败'),'recorded tool summary remains inside the hidden process body');
  assert.ok(html.slice(replyEnd,bodyStart).includes('最终结果仍然可见'));
 });

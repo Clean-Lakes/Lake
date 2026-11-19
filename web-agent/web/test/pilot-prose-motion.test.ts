@@ -95,7 +95,7 @@ test('a settled specialist footer uses its own recorded elapsed time',()=>{
  const {row}=progress();
  const author={...row.author,durationMs:900003};
  const html=renderToStaticMarkup(createElement(SpecialistProcessLink,{author,onInspect(){}}));
- assert.match(html,/用时 15\s*分钟 0\s*秒/);
+ assert.match(html,/<\/button><span class="turn-status-elapsed"[^>]*>15 分钟 0 秒<\/span>/);
  assert.match(processLink(html),/data-specialist-process="task"/);
  const channel=renderToStaticMarkup(createElement(SpecialistProcessLink,{author}));
  assert.match(channel,/用时 15\s*分钟 0\s*秒/);

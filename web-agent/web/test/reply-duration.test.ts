@@ -128,7 +128,7 @@ test("each footer stays with its own user turn and multi-Agent replies keep one 
  assert.equal(timingForTurn([{id:"u",at:start,message:snapshot.messages[0]}],snapshot),timing);
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
  assert.equal((html.match(/aria-label="回答耗时"/g)||[]).length,2);
- assert.ok(html.includes("用时 1 分钟 13 秒"));assert.ok(html.includes("用时 4 秒"));assert.ok(!html.includes("已处理"));
+ assert.ok(html.includes("1 分钟 13 秒"));assert.ok(html.includes("用时 4 秒"));assert.ok(!html.includes("已处理"));
  const legacy={...snapshot,replyTimings:undefined};
  assert.equal(timingForTurn([{id:"u",at:start,message:snapshot.messages[0]}],legacy),undefined);
  assert.equal(timingForTurn([{id:"v",at:snapshot.messages[1]!.createdAt,message:snapshot.messages[1]}],legacy)?.finishedAt,snapshot.ai!.turnFinishedAt);
@@ -263,13 +263,16 @@ test('side detail entry keeps a horizontal navigation arrow while inline disclos
  assert.ok(inline.includes('data-placement="inline"')&&inline.includes('收起执行详细过程'));
 });
 
-test('Pilot hides the running turn timer without reserving space and restores ordinary finished timing',()=>{
+test('Pilot shows timing beside execution history and leaves a plain acknowledgment without a footer',()=>{
  const body=createElement('p',{},'专员正文');
- const live=renderToStaticMarkup(createElement(TurnExecutionDetails,{hideLive:true,timing:{...timing,status:'running',finishedAt:''},details:[],children:body}));
+ const pilot={name:'Pilot',pilot:true};
+ const live=renderToStaticMarkup(createElement(TurnExecutionDetails,{assistantIdentity:pilot,hideLive:true,timing:{...timing,status:'running',finishedAt:''},details:[],children:body}));
  assert.equal(live,'<p>专员正文</p>');
- const ended=renderToStaticMarkup(createElement(TurnExecutionDetails,{hideLive:true,timing,details:[],children:body}));
- assert.ok(ended.includes('用时 1 分钟 13 秒')&&ended.includes('is-finished'));
- assert.ok(ended.indexOf('专员正文')<ended.indexOf('用时'),'finished timing stays in the same slot after prose');
+ const plain=renderToStaticMarkup(createElement(TurnExecutionDetails,{assistantIdentity:pilot,timing,details:[],children:body}));
+ assert.equal(plain,'<p>专员正文</p>');
+ const ended=renderToStaticMarkup(createElement(TurnExecutionDetails,{assistantIdentity:pilot,timing,details:[createElement('span',{key:'record'},'原始记录')],children:body}));
+ assert.match(ended,/<\/button><span class="turn-status-elapsed"[^>]*>1 分钟 13 秒<\/span>/);
+ assert.ok(ended.indexOf('专员正文')<ended.indexOf('查看执行过程'));
 });
 
 test('the elapsed and decision status owns one fixed slot after prose throughout the turn',t=>{

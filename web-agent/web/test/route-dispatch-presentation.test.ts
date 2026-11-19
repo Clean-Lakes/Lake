@@ -18,7 +18,7 @@ function render(cards:AICard[],nextUser=false){
  const snapshot={session:{id:'pilot'},messages,resources:[],actions:[],ai:{session:'pilot',status:'completed',cardsOffset:0,cards}} as SessionSnapshot;
  return renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:'Pilot',pilot:true}}));
 }
-const notices=(html:string)=>[...html.matchAll(/class="turn-execution-notice">([^<]*)</g)].map(match=>match[1]);
+const notices=(html:string)=>[...html.matchAll(/class="execution-detail-note">([^<]*)</g)].map(match=>match[1]);
 
 test('a followup handoff can explicitly create an independent readonly recheck for that exact source',()=>{
  const card={...route('recheck','completed',1),data:{arguments:{event_id:'event',part_key:'host',action:'followup',task_id:'source',role_id:'role'}}};
@@ -69,7 +69,7 @@ test('recovery requires an actual host dispatch receipt, not a successful conver
  assert.ok(recoveredRouteFailures([{...failed,data:followup.data},followup]).has('failed'));
 });
 
-test('the main failure caption excludes recovered routing only; raw process and other failures stay intact',()=>{
+test('folded execution details keep recovery and actual failures without changing the source',()=>{
  const cards=[route('failed','failed',1),route('success','completed',2)];
  const before=JSON.stringify(cards),html=render(cards);
  assert.deepEqual(notices(html),['1 项派单重试后已恢复']);
