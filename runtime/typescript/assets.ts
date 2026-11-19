@@ -54,20 +54,29 @@ function directoryIndex(source: AssetSource) {
     if (node.kind === "resource" && node.resourceId)
       leaves.set(node.resourceId, [...(leaves.get(node.resourceId) ?? []), node]);
   }
-  return (resource: Resource): { path: string; lineage: string[] } | { unavailable: true } => {
-    const candidates = leaves.get(resource.id) ?? [];
-    if (candidates.length > 1) return { unavailable: true };
-    const leaf = candidates[0];
-    if (leaf && duplicates.has(leaf.id)) return { unavailable: true };
+  const pathOf = (resource: Resource, leaf?: ResourceTreeNode): {path:string; lineage:string[]} | undefined => {
+    if (leaf && duplicates.has(leaf.id)) return;
     const parts = [resource.name], lineage = leaf ? [leaf.id] : [], seen = new Set(lineage);
     let parentId = leaf?.parentId;
     while (parentId) {
       const parent = nodes.get(parentId);
       if (!parent || parent.kind !== "folder" || typeof parent.name !== "string" || duplicates.has(parentId) || seen.has(parentId) || seen.size >= 32)
-        return { unavailable: true };
+        return;
+      if (resource.jumpServer && parent.bindingId !== resource.jumpServer.bindingId) return;
       seen.add(parentId); lineage.unshift(parentId); parts.unshift(parent.name); parentId = parent.parentId;
     }
     return { path: parts.join(" / "), lineage };
+  };
+  return (resource: Resource): {path:string; lineage:string[]; alternatives?:string[]} | {unavailable:true} => {
+    const candidates = leaves.get(resource.id) ?? [];
+    if (resource.jumpServer) {
+      if (!candidates.length || candidates.some(n=>n.bindingId !== resource.jumpServer!.bindingId)) return {unavailable:true};
+      const paths = candidates.map(n=>pathOf(resource,n));
+      if (paths.some(p=>!p)) return {unavailable:true};
+      const ordered = paths.filter(p=>!!p).sort((a,b)=>a.path.localeCompare(b.path) || a.lineage.join("/").localeCompare(b.lineage.join("/")));
+      return {...ordered[0], alternatives:ordered.slice(1).map(p=>p.path)};
+    }
+    return candidates.length > 1 ? {unavailable:true} : pathOf(resource,candidates[0]) ?? {unavailable:true};
   };
 }
 
@@ -113,7 +122,7 @@ export function listProjectAssets(source: AssetSource, input: AssetQuery = {}) {
   const matches = resources.filter((resource) => {
     const current = directories.get(resource.id)!;
     return assetRef ? resource.id === assetRef : !search || normalized(resource.name).includes(search) || normalized(resource.id).includes(search) ||
-      ("path" in current && normalizedPath(current.path).includes(normalizedPath(search)));
+      ("path" in current && [current.path,...current.alternatives??[]].some(p=>normalizedPath(p).includes(normalizedPath(search))));
   });
   let start = 0;
   if (cursorText) {
@@ -133,7 +142,7 @@ export function listProjectAssets(source: AssetSource, input: AssetQuery = {}) {
   for (const resource of matches.slice(start, start + limit)) {
     const entry: AssetEntry = { id: resource.id, asset_ref: resource.id, ...clipName(resource.name), kind: resource.kind, status: resource.status };
     const current = directories.get(resource.id)!;
-    if ("path" in current) Object.assign(entry, boundedPath(current.path));
+    if ("path" in current) Object.assign(entry, boundedPath(search ? [current.path,...current.alternatives??[]].find(p=>normalizedPath(p).includes(normalizedPath(search))) ?? current.path : current.path));
     else entry.path_state = "unavailable";
     if (resource.kind === "ssh" && resource.status === "available" && source.sshRevision) {
       try {

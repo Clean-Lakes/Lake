@@ -1,4 +1,6 @@
 export type SSHTarget = {
+  /** Authorized provider asset identity. A shared gateway key cannot identify or distinguish physical hosts. */
+  bastionAsset?: string;
   hostHash: string;
   endpointHash: string;
   addressFamily: number;
@@ -17,6 +19,7 @@ function pinnedAddress(target?:SSHTarget): target is SSHTarget {
  * old record cannot prove that any other target is independent. */
 export function sameSSHHost(first?:SSHTarget,second?:SSHTarget) {
   if (!first || !second) return false;
+  if (first.bastionAsset || second.bastionAsset) return !!first.bastionAsset && first.bastionAsset === second.bastionAsset;
   return (/^[a-f0-9]{64}$/.test(first.hostHash) && first.hostHash === second.hostHash) ||
     (/^[a-f0-9]{64}$/.test(first.endpointHash) && first.endpointHash === second.endpointHash) ||
     (Array.isArray(first.hostKeys) && Array.isArray(second.hostKeys) &&

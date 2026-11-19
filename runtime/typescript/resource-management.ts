@@ -39,6 +39,7 @@ export class LakeResourceManagement {
  }
  update(resource:Resource,input:Record<string,any>,allowIncompleteSSH=false){
   this.security.check();
+  if(resource.jumpServer)throw new HttpError(409,'请在 JumpServer 维护此资产，在 Lake 的堡垒机账号设置中选择账号');
   const name=input.name===undefined?resource.name:text(input.name,'资源名称',160).trim(),description=this.description(input.description,resource.description);
   if(isServiceKind(resource.kind,resource.settings)){
    const next=this.services.update(resource,{...input,name});
@@ -63,6 +64,7 @@ export class LakeResourceManagement {
   this.security.resourceConfiguration(projectId);this.store.project(projectId);
   for(const row of rows){
    const resource=row.resource;
+   if(resource.jumpServer || row.previous && this.store.get<Resource>('resources',resource.id)?.jumpServer)throw new HttpError(409,'导入不能改写 JumpServer 的资产连接');
    if(resource.projectId!==projectId)throw new HttpError(403,'导入资源不属于此项目');
    this.security.resourceConfiguration(projectId,row.previous?resource.id:undefined);
    if(row.previous&&digest(this.store.require<Resource>('resources',resource.id))!==row.previous)throw new HttpError(409,'已有资源已变化，请重新预览');

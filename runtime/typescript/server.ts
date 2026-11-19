@@ -53,6 +53,8 @@ import {openClaudeMemIndex} from './claude-mem';
 import {LakeServiceResources} from './service-resources';
 import { LakeExtensions } from "./extensions";
 import {LakeSSH} from "./ssh";
+import {LakeJumpServer} from "./jumpserver";
+import type {JumpServerEndpoint, JumpServerLogin, JumpServerMount} from "../../web-agent/shared/contracts";
 import { LakeTerminals } from "./terminal";
 import { commandPolicy } from "../../web-agent/shared/command-policy";
 export { previewLegacyMigration, rollbackMigration, importLegacyMySQL, importLegacyMCP, importLegacyServices } from "./migration";
@@ -166,6 +168,7 @@ export async function startLakeServer(options: ServerOptions) {
   let extensions: LakeExtensions | undefined;
   let terminals: LakeTerminals | undefined;
   let ssh:LakeSSH|undefined;
+  let jumpServer:LakeJumpServer|undefined;
   let mysql:LakeMySQL|undefined;
   let services:LakeServiceResources|undefined;
   let resourceManagement:LakeResourceManagement|undefined;
@@ -175,6 +178,7 @@ export async function startLakeServer(options: ServerOptions) {
   let draining = false;
   let closed = false;
   const clients = new Map<string, Set<ServerResponse>>();
+  const catalogStreams = new Set<ServerResponse>();
   const token = randomBytes(32).toString("hex");
   let origin = "";
   const broadcast = (event: any) => {
@@ -386,6 +390,13 @@ export async function startLakeServer(options: ServerOptions) {
           else throw new HttpError(405, "不支持此记忆操作");
         } else throw new HttpError(404, "记忆接口不存在");
       }
+      else if (path[1] === "jumpserver" && path[2] === "events" && path.length === 3 && method === "GET") {
+        response.writeHead(200,{"Content-Type":"text/event-stream","Cache-Control":"no-store"});
+        response.write("event: catalog\ndata: {}\n\n");
+        catalogStreams.add(response);
+        response.once("close",()=>catalogStreams.delete(response));
+        return;
+      }
       else if (path[1] === "catalog") result = store.catalog();
       else if (path[1] === "commands" && path[2] === "policy" && method === "POST") result = commandPolicy(String(data.command ?? ""));
       else if (path[1] === "superagent" && path[2] === "lifecycle") {
@@ -540,6 +551,19 @@ export async function startLakeServer(options: ServerOptions) {
         if (method !== 'POST') throw new HttpError(405, '不支持此资源目录请求');
         result = resourceNavigation.edit(path[2], data);
       }
+      else if (path[1] === "projects" && path[3] === "jumpserver") {
+        const projectId = path[2], cancel = new AbortController(), abort = () => cancel.abort();
+        response.once("close", abort);
+        try {
+          if (path.length === 4 && method === "GET") result = {binding:jumpServer!.view(projectId)};
+          else if (path.length === 4 && method === "PUT") result = await jumpServer!.save(projectId,data as JumpServerMount,cancel.signal);
+          else if (path.length === 4 && method === "PATCH") result = jumpServer!.updateEndpoint(projectId,data as JumpServerEndpoint);
+          else if (path.length === 4 && method === "DELETE") { await jumpServer!.remove(projectId,data.id,data.revision); result = {}; }
+          else if (path.length === 5 && path[4] === "preview" && method === "POST") result = await jumpServer!.preview(projectId,data as JumpServerLogin,cancel.signal);
+          else if (path.length === 5 && path[4] === "sync" && method === "POST") result = await jumpServer!.sync(projectId);
+          else throw new HttpError(405, "不支持此 JumpServer 绑定操作");
+        } finally { response.off("close", abort); }
+      }
       else if(path[1]==='projects'&&path.length===4&&['resource-import-preview','resource-import'].includes(path[3])){
         if(method!=='POST')throw new HttpError(405,'不支持此资源导入请求');
         const cancel=new AbortController(),abort=()=>cancel.abort();response.on('close',abort);
@@ -649,7 +673,16 @@ export async function startLakeServer(options: ServerOptions) {
         }
       } else if (path[1] === "resources") {
         const resource = store.require<Resource>("resources", path[2]);
-        if (path[3] === "terminal-context" && path.length === 4 && method === "POST") result = terminals!.context(resource.id);
+        if (path[3] === "jumpserver-accounts" && path.length === 4 && resource.jumpServer) {
+          const cancel = new AbortController(), abort = () => cancel.abort();
+          response.once("close", abort);
+          try {
+            if (method === "GET") result = {accounts:await jumpServer!.accounts(resource,cancel.signal)};
+            else if (method === "PUT") result = await jumpServer!.choose(resource,data.accountId,cancel.signal);
+            else throw new HttpError(405,"不支持此账号操作");
+          } finally { response.off("close", abort); }
+        }
+        else if (path[3] === "terminal-context" && path.length === 4 && method === "POST") result = terminals!.context(resource.id);
         else if (path[3] === "terminals" && method === "GET" && path.length === 4) result = { terminals: terminals!.resourceTerminals(resource.id) };
         else if (path[3] === "terminals" && method === "DELETE" && (path.length === 4 || path.length === 5)) {
           const entries = terminals!.resourceTerminals(resource.id).filter((terminal) => path.length === 4 || terminal.id === path[4]);
@@ -968,6 +1001,8 @@ export async function startLakeServer(options: ServerOptions) {
     closed = true;
     draining = true;
     resourceImport?.close();
+    for(const stream of catalogStreams)stream.end();
+    await jumpServer?.close();
     await messageQueue?.close();
     await superagent?.close();
     await memory?.close();
@@ -993,7 +1028,10 @@ export async function startLakeServer(options: ServerOptions) {
     security = new LakeSecurity(store);
     gateway = new LakeGateway(options.home, security);
     extensions = new LakeExtensions(store, security, (value) => agents!.redact(value));
-    ssh=new LakeSSH(store,security,(session)=>{broadcast(store!.event(session,"session"));superagent?.changed(session);},value=>extensions!.scrub(value),value=>agents!.registerSecret(value));
+    jumpServer = new LakeJumpServer(store,security,value=>agents!.registerSecret(value),()=>{
+      for (const stream of catalogStreams) stream.write("event: catalog\ndata: {}\n\n");
+    });
+    ssh=new LakeSSH(store,security,(session)=>{broadcast(store!.event(session,"session"));superagent?.changed(session);},value=>extensions!.scrub(value),value=>agents!.registerSecret(value),jumpServer);
     mysql=new LakeMySQL(store,security,value=>agents!.registerSecret(value),value=>agents!.redact(value));
     services=new LakeServiceResources(store,security,value=>agents!.registerSecret(value),value=>agents!.redact(ssh!.scrub(extensions!.scrub(value))));
     terminals = new LakeTerminals(store, security, (value, live) => live ? agents!.redactLive(ssh!.scrub(extensions!.scrubLive(value),true)) : ssh!.scrub(value), broadcast,ssh);

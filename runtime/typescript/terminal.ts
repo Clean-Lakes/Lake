@@ -40,7 +40,8 @@ export class LakeTerminals {
   private signature(resource: Resource) { return digest([resource.id, resource.projectId, resource.kind, resource.settings, resource.ssh, this.store.get("resourceRevisions", resource.id)]); }
   private projectTerminal(sessionId: string, terminalId: string) {
     const session = this.store.session(sessionId), terminal = this.store.require<TerminalSession>("terminals", terminalId);
-    if (this.store.session(terminal.sessionId).projectId !== session.projectId || this.resource(terminal.resourceId).projectId !== session.projectId) throw new HttpError(404, "终端不属于此项目");
+    const resource=this.store.get<Resource>("resources",terminal.resourceId);
+    if (this.store.session(terminal.sessionId).projectId !== session.projectId || (resource ? resource.projectId !== session.projectId : !terminal.jumpServerAudit || terminal.status !== "disconnected")) throw new HttpError(404, "终端不属于此项目");
     return terminal;
   }
   private permission(sessionId: string, terminal: TerminalSession) { return digest([terminal.generation, terminal.contextVersion, this.store.session(sessionId).options]); }
@@ -104,7 +105,11 @@ export class LakeTerminals {
       env.__lake_init = initialization;
       const args = shell === "bash" ? ["--noprofile", "--norc", "-i"] : shell === "zsh" ? ["-f", "-i"] : shell === "fish" ? ["--no-config", "--private", "-i"] : ["-i"];
       const command="/bin/sh -c "+quote("export __lake_init="+quote(initialization)+"; exec "+shell+" "+args.map(quote).join(" "));
-      const pty:TerminalDevice = remote?this.ssh!.terminal(sessionId,resource,command):(createRequire(join(root(), "server.cjs"))(join(root(), "native/node-pty")) as typeof import("node-pty")).spawn(program!, args, { cwd:cwd!, env, cols: 100, rows: 30, name: "xterm-256color" });
+      const pty:TerminalDevice = remote?this.ssh!.terminal(sessionId,resource,command,audit=>{
+        const live=this.live.get(terminal.id);
+        if(!live || live.closed)return;
+        terminal.jumpServerAudit=audit;terminal.status="ready";live.ready=true;clearTimeout(live.timer);this.emit(terminal);
+      }):(createRequire(join(root(), "server.cjs"))(join(root(), "native/node-pty")) as typeof import("node-pty")).spawn(program!, args, { cwd:cwd!, env, cols: 100, rows: 30, name: "xterm-256color" });
       let resolveExit!: () => void; const exited = new Promise<void>((resolve) => { resolveExit = resolve; });
       const live: Live = { pty, terminal, marker, signature: this.signature(resource), partial: "", raw: "", jobRaw: "", jobMarker: "", suppressEcho: false, jobStarted: false, inputPending: false, ready: false, closed: false, exited, resolveExit };
       this.live.set(terminal.id, live); this.emit(terminal);
@@ -112,7 +117,7 @@ export class LakeTerminals {
       pty.onExit(() => { this.finish(live); live.resolveExit(); });
       live.timer = setTimeout(() => { if (!live.ready) void this.stop(live); }, remote?150000:8000);
       if(!remote)pty.write('eval "$__lake_init"\r');
-      else { const launch=setInterval(()=>{if(live.closed||live.ready){clearInterval(launch);return;}try{pty.write('eval "$__lake_init"\r');clearInterval(launch);}catch{}},100);launch.unref(); }
+      else if(!resource.jumpServer){ const launch=setInterval(()=>{if(live.closed||live.ready){clearInterval(launch);return;}try{pty.write('eval "$__lake_init"\r');clearInterval(launch);}catch{}},100);launch.unref(); }
       return terminal;
     } finally { this.reservations--; }
   }
@@ -125,6 +130,11 @@ export class LakeTerminals {
   }
   private receive(live: Live, value: string) {
     if (live.closed) return;
+    if(live.terminal.jumpServerAudit){
+      this.plain(live,value);
+      clearTimeout(live.flush);live.flush=setTimeout(()=>this.save(live),25);
+      return;
+    }
     let source = live.partial + value; live.partial = "";
     if (!live.ready) {
       const marker = "\x1eLAKE_READY_" + live.marker + "\x1f", at = source.indexOf(marker);
@@ -207,6 +217,7 @@ export class LakeTerminals {
   command(sessionId: string, terminalId: string, data: Record<string, any>) {
     const terminal = this.access(sessionId, terminalId, true), live = this.live.get(terminalId)!;
     if (data.actor !== "user") throw new HttpError(403, "Agent 命令需要独立操作审批");
+    if (terminal.jumpServerAudit) throw new HttpError(409,"请直接在堡垒机交互终端中输入命令");
     if (terminal.holder !== "user" || terminal.status !== "ready" || live.job || live.inputPending) throw new HttpError(409, "请等待终端空闲并接管输入");
     if (typeof data.command !== "string" || !data.command.trim() || data.command.length > 16000 || /[\0\r\n\x1b]/.test(data.command)) throw new HttpError(400, "无效的命令");
     const policy = commandPolicy(data.command);

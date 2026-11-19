@@ -1,13 +1,14 @@
 import type {MCPServerConfig,Resource,SkillConfig,SpecialistChannelInfo} from "../../shared/contracts";
 import {referencedExtensions, type MentionKind} from "../../shared/references";
 
-export type MentionOption={id:string;kind:MentionKind;name:string;detail:string;resourceKind?:Resource['kind']};
-const resourceMentionLabels:Record<Resource['kind'],string>={ssh:'SSH 主机',database:'数据库',redis:'Redis',docker:'容器',local:'本机',kubernetes:'Kubernetes',apisix:'APISIX',prometheus:'Prometheus',victoriametrics:'VictoriaMetrics',grafana:'Grafana'};
+export type MentionOption={id:string;kind:MentionKind;name:string;detail:string;resourceKind?:Resource['kind'];fromJumpServer?:boolean};
+const resourceMentionLabels:Record<Resource['kind'],string>={ssh:'SSH 主机',jumpserver:'JumpServer 资产',database:'数据库',redis:'Redis',docker:'容器',local:'本机',kubernetes:'Kubernetes',apisix:'APISIX',prometheus:'Prometheus',victoriametrics:'VictoriaMetrics',grafana:'Grafana'};
 export function mentionTypeLabel(option:MentionOption):string {
+ if(option.fromJumpServer)return "JumpServer";
  return option.kind==='resource'?(option.resourceKind&&resourceMentionLabels[option.resourceKind]||'资源'):option.kind==='skill'?'Skill':option.kind==='mcp'?'MCP':'专员';
 }
-export type MentionCategory=MentionKind|"all";
-export const mentionCategories=[{kind:"all",label:"全部"},{kind:"role",label:"专员"},{kind:"resource",label:"资源"},{kind:"skill",label:"Skills"},{kind:"mcp",label:"MCP"}] as const;
+export type MentionCategory=MentionKind|"all"|"jumpserver";
+export const mentionCategories=[{kind:"all",label:"全部"},{kind:"role",label:"专员"},{kind:"resource",label:"资源"},{kind:"jumpserver",label:"JumpServer"},{kind:"skill",label:"Skills"},{kind:"mcp",label:"MCP"}] as const;
 export function visibleMentionCategories(options:MentionOption[]) {
  return mentionCategories.filter(group=>group.kind!=="role"||options.some(option=>option.kind==="role"));
 }
@@ -22,7 +23,8 @@ export function mentionOptions(resources:Resource[],skills:SkillConfig[],servers
   ...specialists.map(role=>({id:role.roleId,kind:'role' as const,name:role.roleName,detail:role.duties||'已创建的专员'})),
   ...resources.filter(resource=>resource.kind!=='grafana'||!!resource.settings?.credentialRef).map(r=>{
    const status=r.status==="available"?"可用资源":"不可用资源";
-   return {id:r.id,kind:"resource" as const,resourceKind:r.kind,name:r.name,detail:[r.description?.trim(),status].filter(Boolean).join(" · ")};
+   return {id:r.id,kind:"resource" as const,resourceKind:r.kind,fromJumpServer:!!r.jumpServer || r.kind==="jumpserver",
+    name:r.name,detail:[r.description?.trim(),status].filter(Boolean).join(" · ")};
   }),
   ...skills.filter(s=>s.enabled).map(s=>({id:s.name,kind:"skill" as const,name:s.name,detail:s.description||"可复用操作流程"})),
   ...servers.filter(s=>s.enabled).map(s=>({id:s.id,kind:"mcp" as const,name:s.name,detail:s.transport==="stdio"?"本机工具服务":"远程工具服务"})),
@@ -31,7 +33,14 @@ export function mentionOptions(resources:Resource[],skills:SkillConfig[],servers
 }
 export function filterMentions(options:MentionOption[],query:string,category:MentionCategory):MentionOption[] {
  const needle=query.trim().toLocaleLowerCase();
- return options.filter(o=>(category==="all"?o.kind!=="role":o.kind===category)&&`${o.name} ${o.detail} ${o.kind} ${mentionTypeLabel(o)}`.toLocaleLowerCase().includes(needle));
+ return options.filter(option=>{
+  const group = option.fromJumpServer ? "jumpserver" : option.kind;
+  if (category==="all" ? option.kind==="role" : group!==category) return false;
+  if (!needle) return true;
+  const protocol = option.resourceKind ? resourceMentionLabels[option.resourceKind] : "";
+  const source = option.fromJumpServer ? "堡垒机" : "";
+  return `${option.name} ${option.detail} ${option.kind} ${mentionTypeLabel(option)} ${protocol} ${source}`.toLocaleLowerCase().includes(needle);
+ });
 }
 export const mentionCategoryCount=(options:MentionOption[],category:MentionCategory)=>filterMentions(options,'',category).length;
 export function mentionInsertion(draft:string,caret:number,option:MentionOption) {

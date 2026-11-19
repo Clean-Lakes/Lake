@@ -20,6 +20,7 @@ export class LakeResourceNavigation {
       if (seen.has(cursor) || seen.size >= 32) throw new HttpError(409, '资源目录包含循环或超过 32 层');
       seen.add(cursor); const node = nodes.find(node => node.id === cursor);
       if (!node || node.kind !== 'folder') throw new HttpError(404, '父目录不属于当前项目');
+      if (node.bindingId) throw new HttpError(409, 'JumpServer 的授权目录由堡垒机维护');
       cursor = node.parentId;
     }
     return parentId;
@@ -33,6 +34,7 @@ export class LakeResourceNavigation {
   edit(projectId: string, input: Record<string, unknown>,actor?:{sessionId:string;eventId:string}) {
     const nodes = this.nodes(projectId);
     const node = nodes.find(node => node.id === input.nodeId);
+    if (node?.bindingId) throw new HttpError(409, '请在 JumpServer 维护授权目录');
     if (!['create', 'rename', 'move', 'update', 'delete'].includes(String(input.operation))) throw new HttpError(400, '资源目录操作无效');
     if (input.operation !== 'create' && (!node || node.builtin)) throw new HttpError(404, '目录节点不存在或不可修改');
     if (input.operation === 'delete') { this.archiveNode(projectId, node!,actor); return {nodes: this.nodes(projectId)}; }
@@ -93,6 +95,7 @@ export class LakeResourceNavigation {
     if (hiddenItem(this.store, String(kind), key)) return this.trash();
     if (kind === 'resource') {
       const resource = this.store.require<Resource>('resources', key);
+      if (resource.jumpServer) throw new HttpError(409, '请通过解除绑定移除 JumpServer 资产');
       this.archiveNode(resource.projectId, this.nodes(resource.projectId).find(node => node.resourceId === key)!);
     } else {
       const project = this.store.project(key); this.assertIdle(project.id);

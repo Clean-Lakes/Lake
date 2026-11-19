@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { join, sep } from "node:path";
-import type { Resource } from "../../web-agent/shared/contracts";
+import type { JumpServerBinding, Resource } from "../../web-agent/shared/contracts";
 import { HttpError, LakeStore } from "./store";
 import { digest } from "./tasks";
 import type {DatabaseScope} from './mysql';
@@ -140,6 +140,14 @@ export class LakeSecurity {
       } finally { db.close(); }
     } catch { return false; }
   }
+  private followsJumpServerCatalog(resource: Resource, policy: any, control: any): boolean {
+    const ref = resource.jumpServer;
+    if (resource.kind !== "ssh" || !ref || this.store.get("navigationTrash", "project:" + resource.projectId))
+      return false;
+    const binding = this.store.get<JumpServerBinding>("jumpServerBindings", resource.projectId);
+    return binding?.state === "ready" && binding.id === ref.bindingId && binding.projectId === resource.projectId &&
+      this.followsLegacyCatalog(resource.projectId, policy, control);
+  }
   network(projectId:string,address:string,resourceId?:string):'allow'|'ask' {
     this.check();this.store.project(projectId);let url:URL;try{url=new URL(address);}catch{throw new HttpError(400,'网页地址无效');}
     const resource=resourceId?this.store.require<Resource>('resources',resourceId):undefined;
@@ -174,12 +182,16 @@ export class LakeSecurity {
     return decision;
   }
   command(projectId:string,resourceId:string,provenReadOnly=false):'allow'|'ask' {
-    this.check();const resource=this.store.require<any>('resources',resourceId);
+    this.check();const resource=this.store.require<Resource>('resources',resourceId);
     if(resource.projectId!==projectId||!['local','ssh'].includes(resource.kind)||resource.status!=='available')throw new HttpError(403,'命令资源不属于当前项目或连接不可用');
     const legacy=this.store.get<any>('legacyProjectPolicies',projectId);if(!legacy)return 'allow';
     const policy=legacy.data;
-    if(!policy||policy.SchemaVersion!==1||!policy.Confirmed||policy.ProjectID!==projectId||!['legacy','restricted','compatible'].includes(policy.Mode)||!Number.isSafeInteger(policy.Revision)||policy.Revision<1||!Array.isArray(policy.Rules)||!policy.ResourceIDs?.includes(resourceId))throw new HttpError(403,'原项目策略不允许此命令资源');
-    const path=join(this.store.home,'security/control.json');if(existsSync(path)){const control=JSON.parse(readFileSync(path,'utf8'));if(policy.StoreID!==control.storeID||policy.RecoveryEpoch!==control.recoveryEpoch)throw new HttpError(409,'原项目安全身份已失效');}
+    if(!policy||policy.SchemaVersion!==1||!policy.Confirmed||policy.ProjectID!==projectId||!['legacy','restricted','compatible'].includes(policy.Mode)||!Number.isSafeInteger(policy.Revision)||policy.Revision<1||!Array.isArray(policy.Rules)||!Array.isArray(policy.ResourceIDs))throw new HttpError(403,'原项目策略不允许此命令资源');
+    const path=join(this.store.home,'security/control.json');
+    const control=existsSync(path)?JSON.parse(readFileSync(path,'utf8')):undefined;
+    if(control&&(policy.StoreID!==control.storeID||policy.RecoveryEpoch!==control.recoveryEpoch))throw new HttpError(409,'原项目安全身份已失效');
+    if(!policy.ResourceIDs.includes(resourceId)&&(!provenReadOnly||!this.followsJumpServerCatalog(resource,policy,control)))
+      throw new HttpError(403,'原项目策略不允许此命令资源');
     if(resource.kind==='local'&&policy.DenyLocal)throw new HttpError(403,'原项目策略禁止本机命令执行');
     let decision:'allow'|'ask'='allow';
     for(const capability of ['resource.resolve',...(resource.kind==='local'?['local.execute']:[]),provenReadOnly?'command.diagnostics':'terminal.execute']){
@@ -219,12 +231,16 @@ export class LakeSecurity {
     return {decision,maxRows,maxDurationMS};
   }
   host(projectId:string,resourceId:string):'allow'|'ask' {
-    this.check();const resource=this.store.require<any>('resources',resourceId);
+    this.check();const resource=this.store.require<Resource>('resources',resourceId);
     if(resource.projectId!==projectId||resource.kind!=='ssh'||resource.status!=='available')throw new HttpError(403,'主机不在当前项目或连接配置不可用');
     const legacy=this.store.get<any>('legacyProjectPolicies',projectId);if(!legacy)return 'allow';
     const policy=legacy.data;
-    if(!policy||policy.SchemaVersion!==1||!policy.Confirmed||policy.ProjectID!==projectId||!['legacy','restricted','compatible'].includes(policy.Mode)||!Number.isSafeInteger(policy.Revision)||policy.Revision<1||!Array.isArray(policy.Rules)||!Array.isArray(policy.ResourceIDs)||!policy.ResourceIDs.includes(resourceId))throw new HttpError(403,'原项目策略不允许此主机范围，或策略需核实');
-    const path=join(this.store.home,'security/control.json');if(existsSync(path)){const control=JSON.parse(readFileSync(path,'utf8'));if(policy.StoreID!==control.storeID||policy.RecoveryEpoch!==control.recoveryEpoch)throw new HttpError(409,'原项目安全身份已失效');}
+    if(!policy||policy.SchemaVersion!==1||!policy.Confirmed||policy.ProjectID!==projectId||!['legacy','restricted','compatible'].includes(policy.Mode)||!Number.isSafeInteger(policy.Revision)||policy.Revision<1||!Array.isArray(policy.Rules)||!Array.isArray(policy.ResourceIDs))throw new HttpError(403,'原项目策略不允许此主机范围，或策略需核实');
+    const path=join(this.store.home,'security/control.json');
+    const control=existsSync(path)?JSON.parse(readFileSync(path,'utf8')):undefined;
+    if(control&&(policy.StoreID!==control.storeID||policy.RecoveryEpoch!==control.recoveryEpoch))throw new HttpError(409,'原项目安全身份已失效');
+    if(!policy.ResourceIDs.includes(resourceId)&&!this.followsJumpServerCatalog(resource,policy,control))
+      throw new HttpError(403,'原项目策略不允许此主机范围，或策略需核实');
     let result:'allow'|'ask'='allow';
     for(const capability of ['command.diagnostics','resource.resolve']){
       const applicable=policy.Rules.filter((rule:any)=>rule.Capability===capability&&(!rule.ResourceIDs?.length||rule.ResourceIDs.includes(resourceId)));

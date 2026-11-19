@@ -190,6 +190,7 @@ export function resourceTypeLabel(
   return {
     local: "本机资源",
     ssh: "SSH 主机",
+    jumpserver: "JumpServer 资产",
     docker: "Docker",
     redis: "Redis",
     kubernetes: "Kubernetes (K8s)",
