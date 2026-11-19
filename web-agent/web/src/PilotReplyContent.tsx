@@ -1,13 +1,17 @@
 import {useEffect,useLayoutEffect,useMemo,useRef,useState,type ReactNode} from 'react';
 
-export type PilotReplyContentState={binding:string;kind:'prose'|'plan'|'status';id:string;text:string};
+export type PilotReplyContentState={binding:string;kind:'prose'|'plan'|'status';id:string;text:string;live?:boolean};
 export const PILOT_REPLY_TRANSITION_MS=160;
 export const PILOT_REPLY_EXIT_MS=80;
 const visibleClip='inset(0% 0% 0% 0%)',hiddenClip='inset(0% 100% 0% 0%)';
 
+function startsLiveProse(previous:PilotReplyContentState|undefined,next:PilotReplyContentState){
+ return previous?.kind==='status'&&next.kind==='prose'&&next.live===true;
+}
+
 /** Only a replacement needs a transition; received prefixes already stream smoothly. */
 export function changesPilotReplyContent(previous:PilotReplyContentState|undefined,next:PilotReplyContentState){
- if(!previous||previous.binding!==next.binding)return false;
+ if(!previous||previous.binding!==next.binding||startsLiveProse(previous,next))return false;
  if(previous.kind===next.kind&&previous.text===next.text)return false;
  return !(previous.kind==='prose'&&next.kind==='prose'&&previous.id===next.id&&next.text.startsWith(previous.text));
 }
@@ -27,7 +31,7 @@ export class PilotReplyContentTransition {
  constructor(private surface:ContentSurface,private visual:()=>VisualState,private commit:(next:PilotReplyContentState)=>void=()=>{},private settled:(next:PilotReplyContentState)=>void=()=>{}){}
  update(next:PilotReplyContentState,enabled:boolean,height?:number){
   this.target=next;
-  if(!enabled||this.current?.binding!==next.binding||typeof this.surface.animate!=='function'){
+  if(!enabled||this.current?.binding!==next.binding||startsLiveProse(this.current,next)||typeof this.surface.animate!=='function'){
    this.stop();this.current=next;this.height=height;this.commit(next);this.settled(next);return;
   }
   const changed=changesPilotReplyContent(this.current,next);

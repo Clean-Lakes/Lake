@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type {AgentExecutionSummary,ExternalAgentRunSummary} from '../../shared/external-agents';
 import {agentExecutionPresentation,externalRunPresentation} from '../src/agentExecutionState';
+import {executionCardTitle} from '../../shared/external-agents';
 
 const css=registerHooks({load(url,context,nextLoad){return url.endsWith('.css')?{format:'module',source:'export {};',shortCircuit:true}:nextLoad(url,context)}});
 const {AgentExecution}=await import('../src/AgentExecution');
@@ -13,6 +14,18 @@ css.deregister();
 
 const execution:AgentExecutionSummary={backend:{kind:'acp',agent:'codex',revision:2},source:'task_assignment',assignedAt:'2026-11-10T01:00:00Z',runs:[],totalRuns:0};
 const run:ExternalAgentRunSummary={id:'actual-run',agent:'codex',scope:'worker',state:'running',dispatchPhase:'sent',externalSessionId:'actual-session',createdAt:execution.assignedAt,updatedAt:execution.assignedAt,usage:null};
+test('CLI labels follow the actual Worker run and never a delegated segment or a legacy title',()=>{
+ const cli={...run,runtimeKind:'codex-app-server' as const};
+ const render=(runs:ExternalAgentRunSummary[])=>renderToStaticMarkup(createElement(AgentExecution,{execution:{...execution,runs,totalRuns:runs.length}}));
+ assert.match(render([cli]),/>CLI<\/small>/);
+ for(const runs of [[],[run],[{...cli,scope:'segment' as const}],[{...cli,agent:'runtime-acp' as const}]])assert.doesNotMatch(render(runs),/>CLI<|>ACP</);
+ const data={source:'external_agent',external_agent:'codex',external_run_id:run.id};
+ const card={id:run.id,type:'operation',title:'Codex · ACP',data,status:'completed',at:run.createdAt};
+ assert.equal(executionCardTitle(card),'Codex');
+ assert.equal(executionCardTitle({...card,data:{...data,external_runtime_kind:cli.runtimeKind}}),'Codex · CLI');
+ assert.equal(executionCardTitle({...card,data:{...data,external_runtime_kind:cli.runtimeKind,external_run_id:'another'}}),'Codex');
+ assert.equal(executionCardTitle({...card,data:{source:'user'}}),card.title);
+});
 test('a selected Codex executor without an actual run is never shown as called or complete',()=>{
  assert.equal(agentExecutionPresentation(execution).label,'Codex 尚未派发');
  const html=renderToStaticMarkup(createElement(AgentExecution,{execution,roleName:'数据库专员'}));

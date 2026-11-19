@@ -14,6 +14,22 @@ export function isFileChangeCard(card?: AICard): boolean {
   const data = record(card?.data);
   return card?.type === "diff" && card.status === "completed" && !!card.title && typeof data.before === "string" && typeof data.after === "string";
 }
+const fileMutationTools = new Set(["write", "edit", "multi_edit", "append", "delete"]);
+function isFileMutation(card: AICard) {
+  return card.type === "operation" && fileMutationTools.has(card.title ?? "");
+}
+
+/** Keep the inputs that can affect a turn's file references, including legacy target metadata. */
+export function fileChangeSourceCards(cards: readonly AICard[]): AICard[] {
+  if (!cards.some(isFileChangeCard)) return [];
+  const seen = new Set<string>();
+  return cards.filter(card => {
+    if (seen.has(card.id)) return false;
+    seen.add(card.id);
+    return isFileChangeCard(card) || isFileMutation(card);
+  });
+}
+
 export function lineDelta(before: string, after: string): LineDelta | null {
   // Keep unusually expensive diffs from blocking a streaming conversation.
   const changes = diffLines(before, after, { timeout: 100 });
@@ -28,7 +44,7 @@ export function summarizeFileChanges(cards: AICard[]): { files: FileChange[]; de
     if (seen.has(card.id)) continue;
     seen.add(card.id);
     const data = record(card.data);
-    if (card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(card.title || "")) {
+    if (isFileMutation(card)) {
       const args = record(data.arguments);
       operations.set(text(args.path), { runtime: text(args.runtime), assetRef: text(args.asset_ref), containerId: text(args.container_id), target: text(data.target) });
     }

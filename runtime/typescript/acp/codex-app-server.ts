@@ -10,7 +10,7 @@ const tokens=(value:any):Tokens|undefined=>value&&Number.isSafeInteger(value.inp
   {inputTokens:value.inputTokens,outputTokens:value.outputTokens}:undefined;
 type McpGate={server:string;tools:ReadonlySet<string>;guard:()=>void};
 
-/** Official Codex 0.160.1 App Server. JSON-RPC version headers are omitted. */
+/** Official Codex App Server. JSON-RPC version headers are omitted. */
 export class CodexAppServer implements AgentConnection {
   private readonly rpc:JsonRpcProcess;
   private initialized=false;
@@ -36,7 +36,7 @@ export class CodexAppServer implements AgentConnection {
     await turn.confirmed;
     if(this.turn!==turn||turn.done||params?.threadId!==this.threadId||params.turnId!==turn.id||
       params.serverName!==this.mcp.server||!['form','openai/form','openaiForm'].includes(params.mode)||params._meta?.codex_approval_kind!=='mcp_tool_call')return cancelled;
-    // App Server 0.160.1 omits the MCP call ID from form elicitations. Consume
+    // App Server form elicitations can omit the MCP call ID. Consume
     // one observed call for this exact thread/turn/server. This admits only the
     // private transport; ToolExecutor checks the actual business action.
     const call=[...turn.mcpCalls.values()].find(call=>call.pending&&call.server===this.mcp!.server&&this.mcp!.tools.has(call.tool));

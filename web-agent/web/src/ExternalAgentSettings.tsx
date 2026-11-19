@@ -45,7 +45,7 @@ export function ExternalAgentSettings({projectId,projectName,onBusyChange}:{proj
         </header>
         <p className="settings-note">自动识别本机运行路径，复用 Codex 已有登录与配置。模型、服务地址和思考强度跟随本机 Codex。</p>
         <fieldset className="external-agent-fields" disabled={!!busy}>
-          <div className="external-agent-local-config"><span className="field-label">本机 Codex</span><p>{agent.authMode==='chatgpt'?'ChatGPT 登录':agent.authMode==='api_key'?'Codex API 登录':agent.authMode==='provider'?'本机服务配置':'登录状态待确认'} · {agent.model||'本机默认模型'}{agent.reasoningEffort?` · ${agent.reasoningEffort}`:''}</p><small>{agent.configPath||'自动读取本机 Codex 配置'}</small></div>
+          <div className="external-agent-local-config"><span className="field-label">本机 Codex</span><p>{agent.authMode==='chatgpt'?'ChatGPT 登录':agent.authMode==='api_key'?'Codex API 登录':agent.authMode==='provider'?'本机服务配置':'登录状态待确认'} · {agent.model||'本机默认模型'}{agent.reasoningEffort?` · ${agent.reasoningEffort}`:''}</p><small>{agent.configPath||'自动读取本机 Codex 配置'}</small>{agent.defaultTaskModel&&agent.defaultTaskModel!==agent.model&&<small>Lake 新任务默认使用 {agent.defaultTaskModel}</small>}</div>
           <div className="external-agent-path-status"><Glyph name={agent.nodePath&&agent.npmPath?'check':'code'} size={16}/><span>{agent.nodePath&&agent.npmPath?'运行路径已自动识别':'启用后自动识别运行路径'}</span></div>
         </fieldset>
         <details className="external-agent-advanced"><summary>高级设置</summary><fieldset className="external-agent-fields" disabled={!!busy}>

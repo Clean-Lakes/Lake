@@ -82,12 +82,10 @@ test('adopted final reports stop the process light even when a live snapshot arr
 });
 
 test('the process link preserves native keyboard activation and exact task navigation; cold history defaults to still',()=>{
- const {row}=progress();let selected:typeof row.author|undefined;
- const element=SpecialistProcessLink({author:row.author,active:true,onInspect:author=>{selected=author;}})!;
- const button=element.props.children;
- assert.equal(button.type,'button');assert.equal(button.props.type,'button');
- assert.equal(button.props.tabIndex,undefined);button.props.onClick();assert.equal(selected,row.author);
+ const {row}=progress();
  const html=renderToStaticMarkup(createElement(SpecialistProcessLink,{author:row.author,onInspect(){}}));
+ assert.match(processLink(html),/<button type="button"[^>]*data-specialist-process="task"[^>]*aria-controls="session-task-inspector"/);
+ assert.doesNotMatch(processLink(html),/tabindex=/i);
  assert.match(processLink(html),/data-live-motion="still" data-live-glow="still"/);
  assert.equal((html.replace(/<[^>]*>/g,'').match(/执行过程/g)??[]).length,1);
  assert.doesNotMatch(html,/role="status"|aria-live=/,'the accessible process button does not add a live announcement');

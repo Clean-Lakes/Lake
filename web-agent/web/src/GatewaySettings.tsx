@@ -100,7 +100,6 @@ function GatewayMessages({connection,onTask,disabled,onReceipt}:{connection:Gate
 export function GatewaySettings({onBusyChange,projectId,onTask}:{onBusyChange:(value:boolean)=>void;projectId?:string;onTask?:(target:GatewayTaskTarget)=>Promise<void>}){
   const [catalog,setCatalog]=useState<GatewayConnections>(),[selected,setSelected]=useState(''),[loading,setLoading]=useState(true),[busy,setBusy]=useState(''),[error,setError]=useState(''),[feedback,setFeedback]=useState('');
   const [creating,setCreating]=useState(false),[name,setName]=useState(''),[project,setProject]=useState(projectId??''),[route,setRoute]=useState('pilot');
-  const [kind,setKind]=useState<'mcp'|'grafana'>('mcp');
   const [credential,setCredential]=useState<{sourceId:string;token:string}>();
   const [legacyDeleteId,setLegacyDeleteId]=useState('');
   const [rename,setRename]=useState(false),[newName,setNewName]=useState(''),[deleteConfirm,setDeleteConfirm]=useState(false),[configVisible,setConfigVisible]=useState(false);
@@ -133,18 +132,9 @@ export function GatewaySettings({onBusyChange,projectId,onTask}:{onBusyChange:(v
   }
   const update=(value:{name?:string;enabled?:boolean;routing?:GatewayRouting})=>connection&&run('save',()=>api.updateGatewayConnection(connection.id,{...value,expectedUpdatedAt:connection.updatedAt}),'连接已更新');
   const create=async()=>{
-    const options={name:name.trim(),projectId:project};
-    if(kind==='grafana'){
-      const result=await run('create',()=>api.createEventSource(options),'',false);
-      if(!result)return;
-      setCatalog(current=>current&&{...current,eventSources:[...(current.eventSources??[]),result.source]});
-      setCredential(result.token?{sourceId:result.source.id,token:result.token}:undefined);
-      setSelected(result.source.id);
-    }else{
-      const result=await run('create',()=>api.createGatewayConnection({...options,routing:routing(route)}),'连接已创建，复制接入配置到外部客户端即可使用');
-      if(!result)return;
-      setSelected(result.id);
-    }
+    const result=await run('create',()=>api.createGatewayConnection({name:name.trim(),projectId:project,routing:routing(route)}),'连接已创建，复制接入配置到外部客户端即可使用');
+    if(!result)return;
+    setSelected(result.id);
     setCreating(false);
     setName('');
     setRoute('pilot');
@@ -163,7 +153,7 @@ export function GatewaySettings({onBusyChange,projectId,onTask}:{onBusyChange:(v
   const available=catalog?.specialists.filter(role=>role.projectId===(creating?project:connection?.projectId))??[];
   const selectRouting=(value:string,change:(value:string)=>void,label='处理方式')=><label className="field-label">{label}<AppSelect value={value} disabled={!!busy} onChange={event=>change(event.target.value)}><option value="pilot">Pilot 自动路由</option>{available.map(role=><option key={role.roleId} value={role.roleId}>固定专员：{role.name}</option>)}{value!=='pilot'&&!available.some(role=>role.roleId===value)&&<option value={value}>原专员不可用</option>}</AppSelect><small>根据消息内容回复、追问或分派专员。</small></label>;
   return <section id="channels-settings-panel" role="tabpanel" aria-labelledby="channels-settings-tab" className="gateway-settings" onKeyDown={event=>{if(event.key!=='Escape'||busy)return;if(creating||rename||deleteConfirm||legacyDeleteId){event.preventDefault();event.stopPropagation();setCreating(false);setRename(false);setDeleteConfirm(false);setLegacyDeleteId('');event.currentTarget.querySelector<HTMLElement>('.gateway-rail-heading button')?.focus();}}}>
-    <aside className="gateway-rail" aria-label="接入连接"><div className="gateway-rail-heading"><h3>我的连接 <small>{entries.length}</small></h3><button type="button" className="button primary" disabled={loading||!!busy} onClick={()=>{setCreating(true);setRename(false);setName('');setKind('mcp');setRoute('pilot');setCredential(undefined);setError('');setFeedback('');}}><Glyph name="plus" size={14}/>添加连接</button></div>
+    <aside className="gateway-rail" aria-label="接入连接"><div className="gateway-rail-heading"><h3>我的连接 <small>{entries.length}</small></h3><button type="button" className="button primary" disabled={loading||!!busy} onClick={()=>{setCreating(true);setRename(false);setName('');setRoute('pilot');setCredential(undefined);setError('');setFeedback('');}}><Glyph name="plus" size={14}/>添加连接</button></div>
       {loading&&<p className="settings-note" role="status">正在读取接入渠道…</p>}
       <ul className="gateway-connections">
         {entries.map(entry=>{
@@ -176,7 +166,7 @@ export function GatewaySettings({onBusyChange,projectId,onTask}:{onBusyChange:(v
                 setSelected(entry.id);
                 setCreating(false);
               }}>
-              <span className="gateway-connection-icon"><Glyph name={grafana?'alert':'plug'} size={20}/></span>
+              <span className="gateway-connection-icon"><Glyph name={grafana?'grafana':'plug'} size={20}/></span>
               <span className="gateway-connection-copy">
                 <strong>{entry.name}</strong>
                 <small>{grafana?'Grafana':'MCP'} · {catalog?.projects.find(item=>item.id===entry.projectId)?.name??'原项目不可用'}</small>
@@ -187,28 +177,22 @@ export function GatewaySettings({onBusyChange,projectId,onTask}:{onBusyChange:(v
           </li>;
         })}
       </ul>
-      {!loading&&!entries.length&&<p className="settings-note">添加连接，让外部客户端或 Grafana 接入 Lake。</p>}
+      {!loading&&!entries.length&&<p className="settings-note">添加连接，让外部客户端接入 Lake。</p>}
       {!!catalog?.legacyTokens.length&&<details className="gateway-legacy"><summary>兼容接入 · {catalog.legacyTokens.length}</summary><p>原单专员配置继续使用原权限范围。</p>{catalog.legacyTokens.map(token=><div key={token.id}><strong>{token.name}</strong><small>{token.roles?.length?`限定 ${token.roles.length} 位专员`:'原全部专员范围'}</small><button className="provider-text-button" type="button" onClick={()=>void copy(gatewayCommandSnippet(catalog.command,token.id,token.roles?.length===1?token.roles[0]:undefined))}>复制旧命令<Glyph name="copy" size={13}/></button><button type="button" className="provider-text-button danger-text" disabled={!!busy} onClick={()=>setLegacyDeleteId(token.id)}>删除旧凭据</button>{legacyDeleteId===token.id&&<div className="gateway-legacy-confirm" role="group" aria-label={`确认删除旧凭据 ${token.name}`}><p>删除后原连接立即失效，任务记录保留。</p><button type="button" className="provider-text-button" disabled={!!busy} onClick={()=>setLegacyDeleteId('')}>取消</button><button type="button" className="provider-text-button danger-text" disabled={!!busy} onClick={()=>void run('delete-legacy',()=>api.deleteGatewayToken(token.id),'旧凭据已删除').then(result=>{if(result)setLegacyDeleteId('');})}>确认删除旧凭据</button></div>}</div>)}</details>}
     </aside>
     <div className="gateway-detail">
       {creating?<form className="gateway-create" onSubmit={event=>{event.preventDefault();void create();}}>
         <h3>添加连接</h3>
-        {catalog?.eventSources&&<label className="field-label">接入类型
-          <AppSelect label="接入类型" value={kind} disabled={!!busy} onChange={event=>setKind(event.target.value==='grafana'?'grafana':'mcp')}>
-            <option value="mcp">外部 Agent · MCP</option>
-            <option value="grafana">Grafana Webhook</option>
-          </AppSelect>
-        </label>}
         <label className="field-label">连接名称
           <input ref={nameInput} value={name} onChange={event=>setName(event.target.value)} maxLength={120} autoComplete="off"
-            placeholder={kind==='grafana'?'例如：支付平台告警':'例如：我的 Codex'} disabled={!!busy}/>
+            placeholder="例如：我的 Codex" disabled={!!busy}/>
         </label>
         <label className="field-label">所属项目
           <AppSelect label="所属项目" value={project} disabled={!!busy} onChange={event=>{setProject(event.target.value);setRoute('pilot');}}>
             {catalog?.projects.map(entry=><option key={entry.id} value={entry.id}>{entry.name}</option>)}
           </AppSelect>
         </label>
-        {kind==='mcp'&&selectRouting(route,setRoute)}
+        {selectRouting(route,setRoute)}
         {!catalog?.projects.length&&<p className="settings-note">请先在工作区创建项目。</p>}
         <div className="gateway-form-actions">
           <button className="button secondary" type="button" disabled={!!busy} onClick={()=>setCreating(false)}>取消</button>
@@ -228,7 +212,7 @@ export function GatewaySettings({onBusyChange,projectId,onTask}:{onBusyChange:(v
         <GatewayMessages key={connection.id} connection={connection} onTask={target=>void inspect(target)} disabled={!!busy} onReceipt={(id,at)=>setCatalog(current=>current?{...current,connections:current.connections.map(entry=>entry.id===id&&(!entry.lastReceivedAt||entry.lastReceivedAt<at)?{...entry,lastReceivedAt:at}:entry)}:current)}/>
         <footer className="gateway-connection-footer"><small>{connection.lastReceivedAt?`最近收件：${time(connection.lastReceivedAt)}`:'尚未收到客户端消息'}</small><button className="button secondary" type="button" disabled={!!busy||!connection.enabled} onClick={()=>void run('test',()=>api.testGatewayConnection(connection.id),'').then(value=>{if(value&&mounted.current&&selectedRef.current===connection.id)setFeedback((value as {message:string}).message);})}><Glyph name={busy==='test'?'loader':'plug'} size={14}/>测试接入</button></footer>
         <details className="gateway-manage" open={configVisible||rename||deleteConfirm||undefined} onToggle={event=>{if(!(event.currentTarget as HTMLDetailsElement).open){setConfigVisible(false);setRename(false);setDeleteConfirm(false);}}}><summary>连接配置与管理</summary><div className="gateway-manage-actions"><button className="provider-text-button" type="button" disabled={!!busy} onClick={()=>{setNewName(connection.name);setRename(true);setDeleteConfirm(false);}}>重命名</button><button className="provider-text-button" type="button" disabled={!!busy} onClick={()=>setConfigVisible(value=>!value)}>查看接入配置</button><button className="provider-text-button danger-text" type="button" disabled={!!busy} onClick={()=>{setDeleteConfirm(true);setRename(false);}}>删除连接</button></div>{rename&&<form onSubmit={event=>{event.preventDefault();void update({name:newName.trim()})?.then(result=>{if(result)setRename(false);});}}><label className="field-label">连接名称<input ref={nameInput} value={newName} onChange={event=>setNewName(event.target.value)} maxLength={120} disabled={!!busy}/></label><button className="button secondary" type="button" onClick={()=>setRename(false)}>取消</button><button className="button primary" type="submit" disabled={!!busy||!newName.trim()}>保存名称</button></form>}{deleteConfirm&&<div className="gateway-delete-confirm" role="group" aria-label="确认删除连接"><p>删除「{connection.name}」后将立即拒绝新接入，原消息及任务记录保留。</p><button type="button" autoFocus className="button secondary" disabled={!!busy} onClick={()=>setDeleteConfirm(false)}>取消</button><button type="button" className="button secondary danger-text" disabled={!!busy} onClick={()=>void run('delete',()=>api.deleteGatewayConnection(connection.id),'连接已删除，原任务记录保留')}>确认删除</button></div>}{configVisible&&<><p className="settings-note">将此配置加入外部客户端的 MCP 设置。启动 Lake 后可使用；凭据保存在本机私有目录。</p><pre className="gateway-config" tabIndex={0}>{gatewayClientConfig(catalog.command,connection)}</pre></>}</details>
-      </>:!loading&&<div className="gateway-empty"><Glyph name="plug" size={28}/><h3>接入渠道</h3><p>选择连接，查看收到的消息或告警。</p></div>}
+      </>:!loading&&<div className="gateway-empty"><Glyph name="plug" size={28}/><h3>接入渠道</h3><p>选择连接，查看收到的消息。</p></div>}
       {error&&<div className="gateway-feedback" role="alert"><p className="form-error">{error}</p>{!catalog&&<button type="button" className="button secondary" onClick={()=>{setLoading(true);void load().catch(cause=>setError(readableError(cause)));}}>重新读取</button>}</div>}<p className="gateway-feedback settings-note" role="status">{busy?'正在处理…':feedback}</p>
     </div>
   </section>;

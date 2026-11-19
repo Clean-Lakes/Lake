@@ -7,8 +7,9 @@ import {Glyph} from './Icons';
 export function AgentExecution({execution,roleName,waiting=false,onInspect,compact=false}:{execution?:AgentExecutionSummary;roleName?:string;waiting?:boolean;onInspect?:()=>void;compact?:boolean}){
  if(!execution)return null;
  const {backend,runs}=execution,state=agentExecutionPresentation(execution,waiting);
+ const workerRun=backend.kind==='acp'?[...runs].reverse().find(run=>run.scope==='worker'&&run.agent===backend.agent):undefined;
  return <section className={`agent-execution${compact?' is-compact':''}`} aria-label="Agent 分配与回传" data-execution-agent={backend.kind==='acp'?backend.agent:'native'}>
-  <div className="agent-execution-top"><div className="agent-execution-chain">{roleName&&<><span title={roleName}>{roleName}</span><Glyph name="chevron" size={12}/></>}<span>任务 Worker</span><Glyph name="chevron" size={12}/><span className="agent-execution-target"><ExecutionAgentIcon agent={backend.kind==='acp'?backend.agent:undefined} size={15}/><strong>{agentBackendName(backend)}</strong>{backend.kind==='acp'&&<small>ACP</small>}</span></div>
+  <div className="agent-execution-top"><div className="agent-execution-chain">{roleName&&<><span title={roleName}>{roleName}</span><Glyph name="chevron" size={12}/></>}<span>任务 Worker</span><Glyph name="chevron" size={12}/><span className="agent-execution-target"><ExecutionAgentIcon agent={backend.kind==='acp'?backend.agent:undefined} size={15}/><strong>{agentBackendName(backend)}</strong>{workerRun?.agent==='codex'&&workerRun.runtimeKind==='codex-app-server'&&<small title="codex app-server">CLI</small>}</span></div>
    <span className="agent-execution-status" data-tone={state.tone}><Glyph name={state.icon} size={12}/>{state.label}</span>
   </div>
   {runs.length>0&&<details className="agent-execution-runs"><summary><span>执行记录与回传</span><small>{execution.totalRuns} 次</small></summary><div className="agent-execution-run-list">{runs.map(run=>{

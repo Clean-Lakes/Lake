@@ -6,7 +6,7 @@ import {Glyph,ResourceIcon} from './Icons';
 import {ProviderIcon} from './ProviderIcon';
 import {AgentExecution} from './AgentExecution';
 import {ExecutionAgentIcon} from './ExecutionAgentIcon';
-import {agentBackendName} from '../../shared/external-agents';
+import {agentBackendName,executionCardTitle} from '../../shared/external-agents';
 import {ToolStep} from './ThinkingTimeline';
 import {MiniBox} from './MiniBox';
 import {isTerminalCommand,type MiniBoxScope} from './miniBoxModel';
@@ -40,7 +40,7 @@ function Calls({cards,paths}:{cards:AICard[];paths:Map<string,string>}){
  if(!calls.length)return null;
  return <ol className="thinking-steps worker-execution-calls">{calls.map(card=>{
   const data=card.data&&typeof card.data==='object'?card.data as Record<string,unknown>:{};
-  if(data.source==='external_agent')return <li key={card.id} className="worker-external-run"><Branch active={needsExecutionAttention(card.status)} summary={<>{data.external_agent==='codex'?<ProviderIcon brand="openai" size={15}/>:<Glyph name="code" size={15}/>}<span className="worker-execution-name">{card.title}</span><State status={card.status}/></>}><div className="worker-child-detail"><p className="settings-note">外部执行报告 · 业务结果以本任务实际工具回执为准</p><p className="settings-note">{data.external_usage&&typeof data.external_usage==='object'?`外部 token：输入 ${Number((data.external_usage as Record<string,unknown>).inputTokens)} · 输出 ${Number((data.external_usage as Record<string,unknown>).outputTokens)}`:'外部用量未报告'}</p>{card.content&&<div className="external-execution-report">{card.content}</div>}</div></Branch></li>;
+  if(data.source==='external_agent')return <li key={card.id} className="worker-external-run"><Branch active={needsExecutionAttention(card.status)} summary={<>{data.external_agent==='codex'?<ProviderIcon brand="openai" size={15}/>:<Glyph name="code" size={15}/>}<span className="worker-execution-name">{executionCardTitle(card)}</span><State status={card.status}/></>}><div className="worker-child-detail"><p className="settings-note">外部执行报告 · 业务结果以本任务实际工具回执为准</p><p className="settings-note">{data.external_usage&&typeof data.external_usage==='object'?`外部 token：输入 ${Number((data.external_usage as Record<string,unknown>).inputTokens)} · 输出 ${Number((data.external_usage as Record<string,unknown>).outputTokens)}`:'外部用量未报告'}</p>{card.content&&<div className="external-execution-report">{card.content}</div>}</div></Branch></li>;
   const path=typeof data.resource_id==='string'?paths.get(data.resource_id):undefined;
   const commands=typeof data.resource_id==='string'?groups.get(data.resource_id):undefined;
   if(mini&&commands){
@@ -54,7 +54,7 @@ function Calls({cards,paths}:{cards:AICard[];paths:Map<string,string>}){
 function Child({run,paths}:{run:AgentRun;paths:Map<string,string>}){
  const calls=(run.cards??[]).filter(executionCard),elapsed=duration(run),status=nativeRunState(run);
  const executor=run.execution?.kind==='acp'?run.execution:undefined;
- return <Branch active={needsExecutionAttention(status)} className="worker-child-run" summary={<>{executor?<ExecutionAgentIcon agent={executor.agent} size={15}/>:<Glyph name="layers" size={15}/>}<span className="worker-execution-name" title={run.task}>{run.name||run.task||'临时子智能体'}</span>{executor&&<small className="worker-child-executor">{agentBackendName(executor)} · ACP</small>}<small className="worker-execution-meta">{elapsed||`${run.toolCount??calls.length} 次调用`}</small><State status={status}/></>}>
+ return <Branch active={needsExecutionAttention(status)} className="worker-child-run" summary={<>{executor?<ExecutionAgentIcon agent={executor.agent} size={15}/>:<Glyph name="layers" size={15}/>}<span className="worker-execution-name" title={run.task}>{run.name||run.task||'临时子智能体'}</span>{executor&&<small className="worker-child-executor">{agentBackendName(executor)}</small>}<small className="worker-execution-meta">{elapsed||`${run.toolCount??calls.length} 次调用`}</small><State status={status}/></>}>
   <div className="worker-child-detail">
    <p className="worker-child-created"><Glyph name="clock" size={12}/><time dateTime={run.createdAt}>{time(run.createdAt)}</time>创建子智能体</p>
    {run.task&&run.task!==run.name&&<p className="worker-child-assignment">{run.task}</p>}

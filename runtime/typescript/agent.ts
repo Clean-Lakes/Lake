@@ -1,5 +1,5 @@
 import {pilotConfigurationToolNames} from './configuration-tool-names';
-import {agentBackendName} from '../../web-agent/shared/external-agents';
+import {externalExecutionName} from '../../web-agent/shared/external-agents';
 import {externalReplyTextUpdate} from './external-reply-events';
 import {prepareSessionArchive} from "./session-archive";
 import {finalReportBoundary} from "./final-report";
@@ -123,14 +123,15 @@ export class LakeAgents {
     const child=run.agentRunId?view.agentRuns?.find(item=>item.id===run.agentRunId&&item.childSessionId===run.childSessionId):undefined;
     const cards=child?(child.cards??=[]):view.cards;
     let card=cards.find(item=>item.id===run.id);
-    if(!card){card={id:run.id,type:'operation',title:agentBackendName({kind:'acp',agent:run.agent})+' · ACP',status:'running',content:'',at:run.createdAt,
+    if(!card){card={id:run.id,type:'operation',status:'running',content:'',at:run.createdAt,
       data:{source:'external_agent',external_run_id:run.id,taskId:run.taskId,agentRunId:run.agentRunId,childSessionId:run.childSessionId,root_turn_id:rootTurnId}};cards.push(card);}
     if(event.kind==='text'){
       card.content=event.text??'';
       if(event.publicTextId&&typeof event.publicText==='string')card.data={...(card.data??{}),external_reply:{id:event.publicTextId,content:this.redact(event.publicText)}};
     }
     if(event.kind==='status'){card.status=event.status==='completed'?'completed':['failed','cancelled','unknown','interrupted'].includes(event.status??'')?event.status!:'running';if(run.summary||run.error)card.content=run.summary||run.error||'';}
-    card.data={...(card.data??{}),external_agent:run.agent,external_state:run.state,external_usage:run.usage,external_events:run.events.filter(item=>item.kind==='tool'||item.kind==='tool_update').slice(-16)};
+    card.title=externalExecutionName(run.agent,run.runtimeKind);
+    card.data={...(card.data??{}),external_agent:run.agent,external_runtime_kind:run.runtimeKind,external_state:run.state,external_usage:run.usage,external_events:run.events.filter(item=>item.kind==='tool'||item.kind==='tool_update').slice(-16)};
     this.update(sessionId,view,externalReplyTextUpdate(run,event,{...card,content:this.redact(card.content??'')},rootTurnId));
   }
   private externalActor(sessionId:string,profile:HostProfile,runtime:AgentRuntime,context:Pick<HostToolContext,'toolCallId'|'abortSignal'|'lakeSubagent'>,purpose:ExternalActor['purpose']='segment'):ExternalActor{
@@ -177,7 +178,7 @@ export class LakeAgents {
   }
   private externalTool(sessionId:string,profile:HostProfile,runtime:()=>AgentRuntime,available:string[]):ToolEntry{
     const base=profile.tools[0];
-    return {...base,metadata:{...base.metadata,name:'run_external_agent',description:'Delegate a bounded segment of this task to an enabled external ACP agent. The host supplies task identity, tools and scope. Use agent codex. Review the external findings and actual tool results, then submit the original work_finish report. No separate acceptance or reconciliation is required.',readOnly:true,needsApproval:false,stopTurnOnSuccess:false},
+    return {...base,metadata:{...base.metadata,name:'run_external_agent',description:'Delegate a bounded segment of this task to an enabled external agent. The host supplies task identity, tools and scope. Use agent codex. Review the external findings and actual tool results, then submit the original work_finish report. No separate acceptance or reconciliation is required.',readOnly:true,needsApproval:false,stopTurnOnSuccess:false},
       permission:{...base.permission,needsApproval:false},resolvePermissionCapability:()=>({needsApproval:false}),
       inputSchema:{type:'object',properties:{agent:{type:'string',enum:available},instruction:{type:'string',minLength:1,maxLength:65536},resume_run_id:{type:'string'}},required:['agent','instruction'],additionalProperties:false},
       handler:async(input:any,context)=>{const actor=this.externalActor(sessionId,profile,runtime(),context);return this.external.run(input.agent,input.instruction,digest([actor.taskId,actor.generation,actor.childSessionId,context.toolCallId]),actor,input.resume_run_id);}};
@@ -963,7 +964,7 @@ export class LakeAgents {
       profiles: [
         { ...createBuiltInGeneralPurposeAgentProfile(), tools: profile.allowlist.filter((name) => !childForbiddenTools.has(name)) },
         { ...createBuiltInExploreAgentProfile(), tools: profile.allowlist.filter((name) => !childForbiddenTools.has(name) && !["Write", "Edit", "call_mcp_tool"].includes(name)) },
-        ...(hasExternal?externalAgents.map(agent=>({...createBuiltInGeneralPurposeAgentProfile(),name:'codex-acp',description:`Delegate one bounded child task to ${agent.name} over ACP. Its host tools stay scoped to this task.`,injectAgentsMd:false,tools:profile.allowlist.filter(name=>!childForbiddenTools.has(name)&&name!=='run_external_agent')})):[]),
+        ...(hasExternal?externalAgents.map(agent=>({...createBuiltInGeneralPurposeAgentProfile(),name:'codex-acp',description:`Delegate one bounded child task to ${agent.name} through its local CLI. Its host tools stay scoped to this task.`,injectAgentsMd:false,tools:profile.allowlist.filter(name=>!childForbiddenTools.has(name)&&name!=='run_external_agent')})):[]),
       ],
       getAllowedTools: () => profile.allowlist.filter((name) => !childForbiddenTools.has(name) && !["Write", "Edit", "call_mcp_tool"].includes(name)),
       emitParentEvent: (event, trace) => runtime.appendEvent(event, trace),

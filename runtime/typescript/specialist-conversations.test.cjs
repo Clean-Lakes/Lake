@@ -57,7 +57,7 @@ async function fixture(t,{count=6,failRole,hold=false,acp=false,summarize=false}
   const registry=app.agents.external.registry,root=registry.runtimeRoot();
   await mkdir(join(root,'node_modules/@openai/codex/bin'),{recursive:true});
   await writeFile(registry.engineEntry(),'// owned protocol fixture');
-  await writeFile(join(root,'node_modules/@openai/codex/package.json'),JSON.stringify({version:'0.160.1'}));
+  await writeFile(join(root,'node_modules/@openai/codex/package.json'),JSON.stringify({version:'0.170.0'}));
   app.agents.external.launch=async(_profile,directory,_signal,mcp,model)=>{
    launches.push({mcp,model});
    return {executable:process.execPath,args:[join(__dirname,'test-fixtures/codex-app-server.cjs')],cwd:directory,env:{LAKE_TEST_ACP_SCENARIO:'conversation',LAKE_TEST_ACP_SOCKET:mcp?.args.at(-1)},observed:{model:model??'gpt-6.1-sol',modelProvider:'fixture',reasoningEffort:'max',authenticated:true,authMode:'chatgpt'}};

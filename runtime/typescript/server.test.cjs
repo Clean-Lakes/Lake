@@ -1349,7 +1349,7 @@ async function prepareCodexProtocolFixture(app,mode){
  const fs=require('node:fs/promises'),registry=app.agents.external.registry;
  const root=registry.runtimeRoot();await fs.mkdir(join(root,'node_modules/@openai/codex/bin'),{recursive:true});
  await fs.writeFile(registry.engineEntry(),'// owned protocol fixture; launch is overridden below');
- await fs.writeFile(join(root,'node_modules/@openai/codex/package.json'),JSON.stringify({version:'0.160.1'}));
+ await fs.writeFile(join(root,'node_modules/@openai/codex/package.json'),JSON.stringify({version:'0.170.0'}));
  app.agents.external.launch=async(_profile,directory,_signal,mcp)=>{
   const source=registry.local.current(),auth=JSON.parse(await fs.readFile(join(source.home,'auth.json'),'utf8'));
   return {executable:process.execPath,args:[join(__dirname,'test-fixtures/codex-app-server.cjs')],cwd:directory,env:{LAKE_TEST_ACP_SCENARIO:mode,LAKE_TEST_ACP_SOCKET:mcp?.args.at(-1),
@@ -4057,9 +4057,12 @@ test('explicit specialist assignment dispatches the chosen ACP Worker without a 
  assert.equal(f.requests.length,0,'Codex dispatch and inference never call the Lake routing model');
  assert.equal(run.purpose,'worker');assert.equal(run.state,'completed');assert.equal(run.dispatchPhase,'answered');
  assert.equal(worker.execution.backend.agent,'codex');assert.equal(worker.execution.source,'task_assignment');
+ assert.equal(run.runtimeKind,'codex-app-server');assert.equal(worker.execution.runs[0].runtimeKind,run.runtimeKind);
  assert.equal(worker.execution.runs[0].id,run.id);assert.ok(worker.execution.runs[0].summary.includes('独立 ACP Worker'));
  const page=await f.api(`/api/sessions/${channel.sessionId}/channel`),snapshot=await f.api(`/api/sessions/${worker.sessionId}/snapshot`);
  assert.deepEqual(page.workers[0].execution,worker.execution);assert.deepEqual(snapshot.superagent.execution,worker.execution);
+ const runCard=snapshot.ai.cards.find(card=>card.id===run.id);
+ assert.equal(runCard.title,'Codex · CLI');assert.equal(runCard.data.external_runtime_kind,run.runtimeKind);
  const replies=page.entries.filter(entry=>entry.reply?.state==='settled');
  assert.equal(replies.length,1,'ACP progress and the delivered report are one exact invocation reply');
  assert.match(replies[0].reply.turnId,/^acp_turn_/);assert.equal(page.entries.filter(entry=>entry.card?.type==='message'||entry.message?.role==='assistant').length,1);

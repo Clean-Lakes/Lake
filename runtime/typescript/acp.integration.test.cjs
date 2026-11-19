@@ -14,12 +14,12 @@ async function startLakeServer(options){
  const app=await startSourceServer(options),binary=process.env.LAKE_CODEX_TEST_MCP_BINARY;
  if(binary){
   const external=app.agents.external,launch=external.launch.bind(external);
-  external.launch=(profile,directory,signal,mcp,model)=>{
+  external.launch=(profile,directory,signal,mcp,model,purpose)=>{
    if(mcp){
     const end=mcp.args.indexOf('LAKE_TS_IMPORT_ONLY=0');assert.ok(end>=0);
     mcp={command:mcp.command,args:[...mcp.args.slice(0,end+1),binary,'--internal-acp-mcp',mcp.args.at(-1)]};
    }
-   return launch(profile,directory,signal,mcp,model);
+   return launch(profile,directory,signal,mcp,model,purpose);
   };
  }
  return app;
@@ -87,7 +87,7 @@ test('real Codex conversation uses a fresh identity, exposes no task transport a
  assert.equal(app.store.list('acpRuns').length,1);await unchanged();
 });
 
-test('real Codex exposes only managed tools and returns a result through the task socket',{skip:!adapter,timeout:90000},async t=>{
+test('real Codex GPT-6.2 Sol exposes only managed tools and returns a result through the task socket',{skip:!adapter,timeout:90000},async t=>{
  const home=await mkdtemp(join(tmpdir(),'lake-codex-test-')),web=join(home,'web');await mkdir(web);await writeFile(join(web,'index.html'),'fixture');
  await writeFile(join(home,'evidence.txt'),'ACTUAL_CODEX_HOST_EVIDENCE');
  const requests=[];let reads=0,chosen;
@@ -119,7 +119,7 @@ test('real Codex exposes only managed tools and returns a result through the tas
  const project=await response.json();assert.equal(response.status,200);
  const external=app.agents.external,registry=external.registry;
  await copyRuntime(registry);
- const unchanged=await localCodexProvider(registry,'http://127.0.0.1:'+provider.address().port+'/v1');
+ const unchanged=await localCodexProvider(registry,'http://127.0.0.1:'+provider.address().port+'/v1','gpt-6.2-sol');
  await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_TEST_NODE??process.execPath});
  await external.probe(project.id,'codex',AbortSignal.timeout(30000));await unchanged();
  const signal=AbortSignal.timeout(45000),events=[];
@@ -139,7 +139,7 @@ test('real Codex exposes only managed tools and returns a result through the tas
  assert.equal(resumed.state,'completed',JSON.stringify(resumed));
  assert.equal(resumed.summary.split('ACP_CODEX_REPORT').length,2,'thread/resume replay is history, not a new report chunk');
  assert.equal(reads,1,'loading a completed session must not replay its old tool');await unchanged();
- assert.ok(requests.every(request=>request.model==='gpt-6.1-sol'&&request.reasoning?.effort==='max'),'source model and reasoning must be inherited');
+ assert.ok(requests.every(request=>request.model==='gpt-6.2-sol'&&request.reasoning?.effort==='max'),'source model and reasoning must be inherited');
 });
 
 for(const pending of [false,true])test(pending?'real Codex submits partial findings despite an original unknown result without another inspection':'a specialist assigns real Codex, discovers the exact Lake directory and collects original task receipts',{skip:!adapter,timeout:90000},async t=>{
@@ -184,7 +184,7 @@ for(const pending of [false,true])test(pending?'real Codex submits partial findi
  });
  await new Promise(resolve=>provider.listen(0,'127.0.0.1',resolve));
  const app=await startLakeServer({home,codexHome:join(home,'local-codex'),data:join(home,'data'),port:0,staticRoot:web});
- t.after(async()=>{await app.close();provider.closeAllConnections();await new Promise(resolve=>provider.close(resolve));});
+ t.after(async()=>{await app.close();provider.closeAllConnections();await new Promise(resolve=>provider.close(resolve));await rm(home,{recursive:true,force:true});});
  const api=async(path,method='GET',data,expected=200)=>{
   const res=await fetch(app.origin+path,{method,headers:{Authorization:'Bearer '+app.token,'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)});
   const body=await res.json();assert.equal(res.status,expected,JSON.stringify(body));return body;
@@ -202,13 +202,21 @@ for(const pending of [false,true])test(pending?'real Codex submits partial findi
  const superproject=await api(path+'/superagent','POST',{});
  await api(`/api/sessions/${superproject.routerSessionId}/ai/configure`,'POST',{silentReadFiles:true});
  const role={id:'e'.repeat(64),projectId:project.id,roleKey:'codex-inspector',name:'ACP 测试专员',duties:'分配执行 Agent 并收集工作区结果',revision:1};
- app.store.put('superRoles',role.id,role);await api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:1,execution:{kind:'native'}});
+ app.store.put('superRoles',role.id,role);
+ await api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:1,execution:{kind:'acp',agent:'codex',model:{modelId:'gpt-6.1-sol'}}});
  const channel=(await api(path+'/superagent')).channels[0],registry=app.agents.external.registry;
  await copyRuntime(registry);
- const unchanged=await localCodexProvider(registry,url);
+ const unchanged=await localCodexProvider(registry,url,'gpt-6.2-astra');
  await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_TEST_NODE??process.execPath});
- await api(path+'/external-agents/codex/probe','POST',{});
- const body={text:'请读取 CODEX_ASSIGNED_EVIDENCE.txt 并报告实际内容。',assignment:{requestId:'codex-assignment-0001',roleRevision:2,execution:{kind:'acp',agent:'codex',revision:1,model:{modelId:'gpt-6.1-sol'}}}};
+ const probeKey=project.id+':codex';
+ app.store.put('acpProbes',probeKey,{revision:1,authentication:'codex-local',ready:false,message:'本机 Codex 模型尚未通过当前工具兼容验证：gpt-6.2-astra'});
+ const {agents:[status]}=await api(path+'/external-agents');
+ assert.equal(status.assignmentReady,true);assert.equal(status.model,'gpt-6.2-astra');
+ const probe=app.store.get('acpProbes',probeKey);
+ assert.equal(probe.connectionVersion,1);assert.equal(probe.ready,true);
+ assert.ok(status.defaultTaskModel&&status.defaultTaskModel!==status.model);
+ assert.equal(requests.length,0,'connection testing must never start model inference');
+ const body={text:'请读取 CODEX_ASSIGNED_EVIDENCE.txt 并报告实际内容。',assignment:{requestId:'codex-assignment-0001',roleRevision:2,execution:{kind:'acp',agent:'codex',revision:1}}};
  const receipt=await api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
  let result;
  for(let attempt=0;attempt<400;attempt++){
@@ -265,7 +273,11 @@ test('real Codex uses a frozen role model over a different local default without
  const unchanged=await localCodexProvider(registry,'http://127.0.0.1:'+provider.address().port+'/v1','unverified-local-default');
  const profile=await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_TEST_NODE??process.execPath});
  const signal=AbortSignal.timeout(45000);
- await assert.rejects(registry.prepareLaunch(profile,signal),/未通过当前工具兼容验证/,'the local default cannot pass accidentally');
+ assert.equal((await registry.prepareConnection(profile,signal)).observed.model,'unverified-local-default');
+ const prepared=await registry.prepareLaunch(profile,signal);
+ const {models}=JSON.parse(await readFile(join(prepared.home,'models.json'),'utf8'));
+ assert.equal(prepared.observed.model,models.at(-1).slug);
+ await assert.rejects(registry.prepareLaunch(profile,signal,'unverified-local-default'),/不在当前 Codex 兼容目录/);
  const actor={projectId:project.id,taskId:'role-model-task',workerId:'role-model-worker',sessionId:'role-model-session',generation:1,deadlineAt:new Date(Date.now()+60000).toISOString(),scopeHash:'role-model-scope',workspace:home,model:'gpt-6.1-sol',signal,guard:()=>signal.throwIfAborted(),tools:[],executeTool:async()=>{throw Error('configuration fixture has no business tools');},event:()=>{}};
  const result=await external.run('codex','Report ROLE_MODEL_REPORT without using tools.','role-model-request',actor);
  if(providerError)throw providerError;
