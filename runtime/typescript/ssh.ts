@@ -13,6 +13,8 @@ import type {Resource,SSHConnection,SSHHostKeyTrust} from '../../web-agent/share
 import {HttpError,id,LakeStore} from './store';
 import type {LakeSecurity} from './security';
 import type {LakeJumpServer} from './jumpserver';
+import {checkKoKoExit} from './jumpserver-api';
+import type {JumpServerAudit} from '../../web-agent/shared/contracts';
 import {digest} from './tasks';
 
 export type TerminalDevice={pid?:number;readonly error?:string;write(data:string):void;resize(cols:number,rows:number):void;kill(signal?:string):void;
@@ -33,6 +35,8 @@ export class LakeSSH {
  private prompts=new Map<string,Prompt>();
  private clients=new Set<Client>();
  private peerKeys=new WeakMap<Client,string>();
+ private gatewayAudits=new WeakMap<Client,JumpServerAudit>();
+ gatewayAudit(connection:Client){return this.gatewayAudits.get(connection);}
  private secrets=new Set<string>();
  private closed=false;
  constructor(readonly store:LakeStore,readonly security:LakeSecurity,readonly notify:(session:string)=>void,readonly redact:(value:string)=>string,readonly registerSecret?:(value:string)=>void,readonly jumpServer?:LakeJumpServer){}
@@ -89,7 +93,13 @@ export class LakeSSH {
   return digest([resource.id,resource.projectId,config,files,this.store.get('resourceRevisions',resource.id)??1]);
  }
  mutationTarget(resource:Resource, connection?:Client):SSHTarget|undefined {
-  if(resource.jumpServer)return; // A KoKo host key authenticates the gateway, never the downstream machine.
+  if(resource.jumpServer){
+   const binding=this.jumpServer?.resource(resource);
+   const audit=connection && this.gatewayAudit(connection);
+   if(!binding || connection && (audit?.bindingId!==binding.id || audit?.assetId!==resource.jumpServer.assetId))return;
+   const identity=digest(["jumpserver",binding.origin,binding.orgId,resource.jumpServer.assetId]);
+   return {hostHash:identity,endpointHash:identity,addressFamily:0,hostKeys:[],bastionAsset:identity};
+  }
   if(resource.kind!=='ssh' || !resource.ssh) return;
   const config = this.configuration(resource.ssh);
   const raw = canonicalHost(config.host), family = isIP(raw);
@@ -103,7 +113,13 @@ export class LakeSSH {
   return {hostHash:digest(canonical), endpointHash:digest([canonical,config.port]),addressFamily:family,hostKeys};
  }
  prompt(session:string){return this.prompts.get(session)?.public??null;}
- revalidate(resource:Resource,revision:string,peer?:string){if(this.revision(resource)!==revision||peer&&!this.pins(this.configuration(resource.ssh)).some(pin=>fingerprint(pin.key)===peer))throw new HttpError(409,'SSH 连接配置、凭据或已验证的服务器身份已变化');}
+ private peerConfig(resource:Resource):SSHConnection {
+  if(!resource.jumpServer)return this.configuration(resource.ssh);
+  const binding=this.jumpServer?.resource(resource);
+  if(!binding)throw new HttpError(403,'JumpServer 绑定不存在');
+  return {host:binding.kokoHost,port:binding.kokoPort,username:'JumpServer',authMethod:'password'};
+ }
+ revalidate(resource:Resource,revision:string,peer?:string){if(this.revision(resource)!==revision||peer&&!this.pins(this.peerConfig(resource)).some(pin=>fingerprint(pin.key)===peer))throw new HttpError(409,'SSH 连接配置、凭据或已验证的服务器身份已变化');}
  private pinPath(config:SSHConnection){return join(this.store.home,'secrets','ssh-host-'+createHash('sha256').update(canonicalHost(config.host)+':'+config.port).digest('hex')+'.known_hosts');}
  private pinText(config:SSHConnection){const path=this.pinPath(config);return existsSync(path)?readFileSync(this.privateFile(path),'utf8'):'';}
  private pins(config:SSHConnection) {
@@ -120,7 +136,7 @@ export class LakeSSH {
   });
  }
  private authorize(session:string,resource:Resource,key:Buffer,signal:AbortSignal):Promise<boolean> {
-  const config=this.configuration(resource.ssh),pins=this.pins(config);
+  const config=this.peerConfig(resource),pins=this.pins(config);
   if(pins.some(pin=>pin.key.equals(key)))return Promise.resolve(true);
   if(this.prompts.has(session))throw new HttpError(409,'请先处理本会话现有 SSH 指纹确认');
   const parsed=utils.parseKey(key);if(parsed instanceof Error||Array.isArray(parsed))throw new HttpError(409,'SSH 主机公钥无效');
@@ -132,19 +148,19 @@ export class LakeSSH {
     public:{id:id(),resourceId:resource.id,host:config.host,port:config.port,algorithm:parsed.type,fingerprint:fingerprint(key),previousFingerprints:pins.map(pin=>fingerprint(pin.key)),changed:pins.length>0,scope:'lake'},resolve:accept=>finish(accept)};
    this.prompts.set(session,prompt);signal.addEventListener('abort',abort,{once:true});
    if(signal.aborted)abort();
-   else{
-    // The user chose automatic trust for first use and key changes alike.
+   else if(!resource.jumpServer || !pins.length){
+    // Keep the desktop trust preference for direct SSH. A changed bastion key awaits explicit confirmation.
     // Persist through the same fenced accept path before authentication.
     try{this.decide(session,{id:prompt.public.id,fingerprint:prompt.public.fingerprint,accept:true});}
     catch(error){finish(false,error as Error);}
-   }
+   } else this.notify(session);
   });
  }
  decide(session:string,data:Record<string,any>) {
   const prompt=this.prompts.get(session);
   if(!prompt||prompt.public.id!==data.id||prompt.public.fingerprint!==data.fingerprint||typeof data.accept!=='boolean')throw new HttpError(409,'SSH 指纹确认已失效');
   if(!data.accept){prompt.resolve(false);return {accepted:false};}this.security.check();
-  const resource=this.store.require<Resource>('resources',prompt.resourceId),config=this.configuration(resource.ssh);
+  const resource=this.store.require<Resource>('resources',prompt.resourceId),config=this.peerConfig(resource);
   if(this.store.session(session).projectId!==resource.projectId||prompt.revision!==this.revision(resource)||prompt.pinHash!==digest(this.pinText(config)))throw new HttpError(409,'SSH 配置或信任记录已变化，请重新连接');
   if(data.accept){const host=canonicalHost(config.host),peer=config.port===22?host:`[${host}]:${config.port}`;this.atomic(this.pinPath(config),`${peer} ${prompt.public.algorithm} ${prompt.key.toString('base64')}\n`);}
   prompt.resolve(data.accept);return {accepted:data.accept};
@@ -165,10 +181,26 @@ export class LakeSSH {
  async connect(session:string,resource:Resource,signal:AbortSignal):Promise<Client> {
   this.security.check();if(this.closed||signal.aborted)throw new HttpError(409,'SSH 连接已取消');
   if(resource.kind!=='ssh'||resource.projectId!==this.store.session(session).projectId||resource.status!=='available')throw new HttpError(403,'SSH 资源不在本项目或连接配置不可用');
-  if(resource.jumpServer)throw new HttpError(409,'JumpServer 终端传输尚未就绪');
-  const config=this.configuration(resource.ssh),revision=this.revision(resource),pins=this.pins(config),secret=config.credentialRef?readFileSync(this.privateFile(config.credentialRef,4096),'utf8'):undefined;
-  if(secret){if(/[\0\r\n]/.test(secret))throw new HttpError(409,'SSH 密码或口令文件无效');this.secrets.add(secret);this.registerSecret?.(secret);}
+  const revision=this.revision(resource);
+  const gateway=resource.jumpServer ? await this.jumpServer!.connect(resource,signal) : undefined;
+  const config=this.peerConfig(resource),pins=this.pins(config);
+  const secret=gateway?.password ?? (config.credentialRef?readFileSync(this.privateFile(config.credentialRef,4096),'utf8'):undefined);
+  if(signal.aborted || this.closed || revision!==this.revision(this.store.require<Resource>('resources',resource.id)))throw new HttpError(409,'SSH 连接资格已变化');
+  if(secret){
+   if(/[\0\r\n]/.test(secret))throw new HttpError(409,'SSH 密码或口令文件无效');
+   this.secrets.add(secret);
+   if(!gateway)this.registerSecret?.(secret);
+  }
   const conn=new Client();this.clients.add(conn);
+  if(gateway){
+   const release=gateway.track(()=>conn.destroy());
+   conn.once('close',()=>{
+    release();
+    // Terminal and execution output is scrubbed through this transport. Allow final buffered output to drain.
+    setTimeout(()=>this.secrets.delete(gateway.password),120000).unref();
+   });
+   this.gatewayAudits.set(conn,gateway.audit);
+  }
   return new Promise<Client>((resolve,reject)=>{
    let ready=false,ended=false,peer='';
    const handshake=new AbortController(),verificationSignal=AbortSignal.any([signal,handshake.signal]);
@@ -183,7 +215,7 @@ export class LakeSSH {
    const algorithms=pins.length?{serverHostKey:{prepend:[...new Set(pins.flatMap(pin=>pin.algorithm==='ssh-rsa'?['rsa-sha2-512','rsa-sha2-256','ssh-rsa']:[pin.algorithm]))]} as any}:undefined;
    const privateKey=config.authMethod==='key'?readFileSync(this.privateFile(config.identityFile!)):undefined;
    if(privateKey){this.secrets.add(privateKey.toString('utf8'));this.registerSecret?.(privateKey.toString('utf8'));}
-   conn.connect({host:config.host,port:config.port,username:config.username,readyTimeout:135000,keepaliveInterval:15000,keepaliveCountMax:2,algorithms,
+   conn.connect({host:config.host,port:config.port,username:gateway?.username ?? config.username,readyTimeout:135000,keepaliveInterval:15000,keepaliveCountMax:2,algorithms,
     authHandler:config.authMethod==='password'?['password']:['publickey'],password:config.authMethod==='password'?secret:undefined,
     privateKey,passphrase:config.authMethod==='key'?secret:undefined,
     hostVerifier:(key:Buffer,callback:(accepted:boolean)=>void)=>{clearTimeout(timer);void Promise.resolve().then(()=>this.authorize(session,resource,key,verificationSignal)).then(accepted=>{
@@ -195,15 +227,19 @@ export class LakeSSH {
    });
   });
  }
- terminal(session:string,resource:Resource,command:string):TerminalDevice {
+ terminal(session:string,resource:Resource,command:string,onGatewayReady?:(audit:JumpServerAudit)=>void):TerminalDevice {
   const events=new EventEmitter(),controller=new AbortController(),decoder=new StringDecoder('utf8');let channel:ClientChannel|undefined,conn:Client|undefined,ended=false,lastError:string|undefined;
   const finish=(code=0)=>{if(ended)return;ended=true;const last=decoder.end();if(last)events.emit('data',last);events.emit('exit',{exitCode:code});conn?.end();};
   void this.connect(session,resource,controller.signal).then(client=>{conn=client;let code=0;
-   client.exec(command,{pty:{term:'xterm-256color',cols:100,rows:30,width:0,height:0}},(error,stream)=>{
+   const window={term:'xterm-256color',cols:100,rows:30,width:0,height:0};
+   const opened=(error:Error|undefined,stream:ClientChannel)=>{
     if(error){lastError='SSH 无法启动远程 Shell';finish(1);return;}channel=stream;
     stream.on('data',(value:Buffer)=>events.emit('data',decoder.write(value)));stream.stderr.on('data',(value:Buffer)=>events.emit('data',decoder.write(value)));
     stream.on('exit',(value:number)=>{code=Number.isInteger(value)?value:1;});stream.once('close',()=>finish(code));stream.once('error',()=>finish(1));
-   });client.once('close',()=>finish(1));
+    const audit=this.gatewayAudit(client);if(audit)onGatewayReady?.(audit);
+   };
+   if(resource.jumpServer)client.shell(window,opened);else client.exec(command,{pty:window},opened);
+   client.once('close',()=>finish(1));
   }).catch(error=>{if(!ended){lastError=this.error(error).message;finish(1);}});
   return {get error(){return lastError;},write:data=>{if(!channel||ended)throw new HttpError(409,'SSH 终端尚未就绪');channel.write(data);},resize:(cols,rows)=>channel?.setWindow(rows,cols,0,0),
    kill:()=>{controller.abort();channel?.close();conn?.destroy();finish(1);},onData:callback=>events.on('data',callback),onExit:callback=>events.once('exit',callback)};
@@ -232,6 +268,7 @@ export class LakeSSH {
     const collect=(data:Buffer)=>{if(output.length+data.length>131072){finish(new HttpError(502,'SSH 只读结果超过上限'));return;}output=Buffer.concat([output,data]);};
     stream.on('data',collect);stream.stderr.on('data',collect);stream.on('exit',(value:number)=>{code=value;});
     stream.once('close',()=>{
+      if(resource.jumpServer){try{checkKoKoExit(code,output.toString('utf8'),'');}catch(error){finish(error);return;}}
       if(code!==0){finish(new HttpError(502,'SSH 只读检查未取得成功退出回执'));return;}
       try {
         const raw=output.toString('utf8'),data=this.scrub(raw);
@@ -242,7 +279,7 @@ export class LakeSSH {
         }
         finish(undefined,{command:state?'inspect_host directory_state '+state:network?'inspect_host '+JSON.stringify(network):command,
           resourceId:resource.id,metric,profileId:state?'lake.host.directory-state':scoped?'lake.host.directory-processes':'lake.host.'+profile,
-          profileVersion:1,configurationRevision:revision,hostFingerprint:this.peerKeys.get(conn),...(state && {authenticatedTarget}),
+          profileVersion:1,configurationRevision:revision,...(resource.jumpServer ? {jumpServerAudit:this.gatewayAudit(conn),gatewayFingerprint:this.peerKeys.get(conn)} : {hostFingerprint:this.peerKeys.get(conn)}),...(state && {authenticatedTarget}),
           exitCode:code,output:state?validateDirectoryState(data,state):data,observedAt:new Date().toISOString()});
       } catch(error){finish(error);}
     });

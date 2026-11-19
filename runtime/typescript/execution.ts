@@ -16,6 +16,7 @@ import type {
 import type { Resource } from "../../web-agent/shared/contracts";
 import type { LakeSSH } from "./ssh";
 import type { LakeSecurity } from "./security";
+import {checkKoKoExit, JumpServerUnknownResult} from "./jumpserver-api";
 import type { HostCommandView } from '../../web-agent/shared/contracts';
 import type { Operation } from './tasks';
 import { HttpError, LakeStore, id, now } from "./store";
@@ -55,6 +56,7 @@ export type ShellPlan = {
   risk: "readonly" | "write" | "dangerous";
 };
 type CommandRecord = {
+  jumpServerAudit?: import("../../web-agent/shared/contracts").JumpServerAudit;
   command?: string;
   authenticatedTarget?: SSHTarget;
   peerRejected?: true;
@@ -177,20 +179,22 @@ export class LakeExecution {
       )
     )
       throw new HttpError(403, "Shell 不允许读取或导出宿主认证凭据");
-    const parsedInspection = resource.kind==="ssh" && !input.run_in_background && !input.cwd && policy.risk!=="dangerous" ? compileNobodyInspection(command) : undefined;
+    if (resource.jumpServer && input.cwd) throw new HttpError(400,"KoKo 的 SSH exec 不支持独立工作目录，请采用绝对路径参数");
+    const parsedInspection = !resource.jumpServer && resource.kind==="ssh" && !input.run_in_background && !input.cwd && policy.risk!=="dangerous" ? compileNobodyInspection(command) : undefined;
     const inspection = parsedInspection && requestedInspectionRoot(parsedInspection.directory, requests) ? parsedInspection : undefined;
-    const delay = resource.kind === "ssh" && input.run_in_background && !input.cwd && policy.risk !== "dangerous"
+    const delay = !resource.jumpServer && resource.kind === "ssh" && input.run_in_background && !input.cwd && policy.risk !== "dangerous"
       ? compileNobodyDelay(command) : undefined;
-    const parsedService = resource.kind==="ssh" && !input.run_in_background && (!input.cwd || input.cwd==="/tmp") &&
+    const parsedService = !resource.jumpServer && resource.kind==="ssh" && !input.run_in_background && (!input.cwd || input.cwd==="/tmp") &&
       policy.risk!=="dangerous" ? compileServiceInspection(command) : undefined;
     const service=parsedService && requestedInspectionRoot(parsedService.directory,requests) ? parsedService : undefined;
-    const readOnly = policy.risk === "readonly" || !!inspection || !!delay || !!service;
+    // The gateway must receive the same command it reviews. Only a locally compiled command qualifies for the restricted diagnostics grant.
+    const readOnly = policy.risk === "readonly" && (!resource.jumpServer || command===policy.safeCommand) || !!inspection || !!delay || !!service;
     return {
       resource,
       revision,
       resourceRevision:
         this.store.get<number>("resourceRevisions", resource.id) ?? 1,
-      command: inspection?.command ?? service?.command ?? delay ?? policy.safeCommand ?? command,
+      command: resource.jumpServer ? command : inspection?.command ?? service?.command ?? delay ?? policy.safeCommand ?? command,
       ...(service && {serviceInspection:{directory:service.directory,profile:service.profile}}),
       ...(delay && {delayedOutput:true as const}),
       nobodyInspection:inspection,
@@ -618,9 +622,10 @@ export class LakeExecution {
           live.backgroundTaskId = taskId;
           record.backgroundTaskId = taskId;
           owner.handles.set(taskId, live);
-          const work = output.then(finish, (error) =>
-            finish(owner.failure(error, record.startedAt, signal)),
-          );
+          const work = output.then(finish, error=>{
+            if(error instanceof JumpServerUnknownResult){failReceipt(error);throw error;}
+            return finish(owner.failure(error,record.startedAt,signal));
+          });
           void work.catch(error=>failReceipt(error));
           const backgrounded = () => {
             record.publishedBackground = true;
@@ -785,6 +790,8 @@ export class LakeExecution {
         signal,
       );
     try {
+      const gatewayAudit=this.ssh.gatewayAudit?.(connection);
+      if(gatewayAudit)record.jumpServerAudit=gatewayAudit;
       const authenticated=this.ssh.mutationTarget?.(plan.resource,connection);
       if (authenticated) {
         record.authenticatedTarget=authenticated;
@@ -809,6 +816,7 @@ export class LakeExecution {
           }
           try{
           const completedAt = new Date();
+          if(gatewayAudit && !signal.aborted && !timedOut)checkKoKoExit(exitCode,stdout.toString("utf8"),stderr.toString("utf8"));
           resolve({
             status: signal.aborted
               ? "cancelled"
@@ -859,7 +867,8 @@ export class LakeExecution {
         } as CommandRecord);
         // The compiler enters a clean environment before running any Bash.
         // Wrapping this again would source the SSH account's BASH_ENV first.
-        const command = plan.nobodyInspection || plan.delayedOutput || plan.serviceInspection ? plan.command :
+        // KoKo filters and audits the actual SSH exec request.
+        const command = plan.nobodyInspection || plan.delayedOutput || plan.serviceInspection || gatewayAudit ? plan.command :
           (plan.cwd ? `cd -- ${quote(plan.cwd)} && ` : "") +
           `/bin/bash --noprofile --norc -c ${quote(plan.command)}`;
         record.sshDispatchPhase = "exec_requested";

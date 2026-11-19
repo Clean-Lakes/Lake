@@ -18,6 +18,27 @@ export type AuthorizedAccount = {id: string; alias: string; name: string};
 const keyOf = (v: any): unknown => typeof v === "string" ? v : v?.id;
 const enumValue = (v: any): unknown => typeof v === "string" ? v : v?.value;
 
+export class JumpServerUnknownResult extends HttpError {}
+export function checkKoKoExit(code: number | undefined, stdout: string, stderr: string) {
+  const output=(stdout+"\n"+stderr).trim();
+  if (output==="SSH Command not support ACL review ticket")
+    throw new HttpError(403,"KoKo 的非交互命令不支持复核工单，堡垒机已阻止执行");
+  if (/^(?:Not auth user\.|not ssh asset connection token|not found ctx id|Not support scp command|No support vscode like requested\.)$/i.test(output))
+    throw new HttpError(403,"KoKo 已拒绝这次 SSH 请求");
+  if (/^(?:ssh: |dial tcp |connect to .* (?:error|failed)|get connect token error)/i.test(output))
+    throw new JumpServerUnknownResult(502,"KoKo 连接资产失败，请在堡垒机核对会话记录");
+  // KoKo can close a denied command with no diagnostics or an implicit zero.
+  if (code===undefined || code===0 && !output)
+    throw new JumpServerUnknownResult(502,"KoKo 未返回可核实的命令结果，请在堡垒机会话审计中核对");
+}
+
+function accountCurrent(value: unknown) {
+  if (value == null) return true;
+  if (typeof value !== "string") return false;
+  const iso=value.replace(/^(\d{4})\/(\d{2})\/(\d{2}) (\d\d:\d\d:\d\d) ([+-]\d\d)(\d\d)$/,"$1-$2-$3T$4$5:$6");
+  return Date.parse(iso)>Date.now();
+}
+
 export function loginConfiguration(input: JumpServerLogin): JumpServerLogin {
   let url: URL;
   try { url = new URL(input.origin); } catch { throw new HttpError(400, "请输入完整的 JumpServer API 地址"); }
@@ -111,7 +132,10 @@ export class JumpServerAPI {
     const records = await this.list("perms/users/self/nodes/", signal);
     const nodes: DirectoryNode[] = [];
     for (const n of records) {
-      if (n?.org_id !== this.login.orgId || !uuid.test(n.id)) continue;
+      // These are virtual views in JumpServer, with literal text IDs instead of organizational node UUIDs.
+      if (n?.id === n?.key && ["favorite", "ungrouped"].includes(n?.id)) continue;
+      if (!uuid.test(n?.org_id) || !uuid.test(n?.id)) throw invalid();
+      if (n.org_id !== this.login.orgId) continue;
       if (!validName(n.key) || !validName(n.value ?? n.name)) throw invalid();
       nodes.push({id:n.id, key:n.key, name:n.value ?? n.name});
     }
@@ -124,14 +148,19 @@ export class JumpServerAPI {
     if (rootId && !root) return {nodes:[], assets:[]};
     const included = root ? nodes.filter(n=>n.id===root.id || n.key.startsWith(root.key + ":")) : nodes;
     const nodeIds = new Set(included.map(n=>n.id));
-    const records = await this.list("perms/users/self/assets/" + (root ? "?node_id=" + root.id : ""), signal);
+    // The active filter requests the exact queryset count. JumpServer's list serializer omits protocols.
+    const path = "perms/users/self/assets/?is_active=true" + (root ? "&node_id=" + root.id : "");
+    const [records, sshRecords] = await Promise.all([this.list(path, signal), this.list(path + "&protocols=ssh", signal)]);
+    if (sshRecords.some(a => !uuid.test(a?.id) || !uuid.test(a?.org_id))) throw invalid();
+    const sshIds = new Set(sshRecords.filter(a => a.org_id === this.login.orgId).map(a => a.id));
     const assets: DirectoryAsset[] = [];
     for (const a of records) {
       if (!uuid.test(a?.id) || !uuid.test(a?.org_id) || !validName(a.name) || !Array.isArray(a.nodes)) throw invalid();
       if (a.org_id !== this.login.orgId || a.is_active === false) continue;
       const parents = [...new Set<string>(a.nodes.map(keyOf).filter((v: unknown): v is string => typeof v === "string" && nodeIds.has(v)))];
       if (root && !parents.length) continue;
-      const ssh = Array.isArray(a.protocols) ? a.protocols.some((p: any)=>p?.name==="ssh" || p==="ssh") : ["host","device"].includes(String(enumValue(a.category)));
+      if (a.nodes.some((n: unknown) => !uuid.test(String(keyOf(n))))) throw invalid();
+      const ssh = sshIds.has(a.id);
       assets.push({id:a.id, name:a.name, endpoint:String(a.address ?? ""), nodes:parents, ssh});
     }
     if (new Set(assets.map(a=>a.id)).size !== assets.length) throw invalid();
@@ -144,13 +173,20 @@ export class JumpServerAPI {
       throw new HttpError(403,"此资产未授权 SSH 访问");
     if (!Array.isArray(a.permed_accounts)) throw invalid();
     return a.permed_accounts.filter((p: any)=>uuid.test(p?.id) && validName(p.alias) && Array.isArray(p.actions) &&
-      p.actions.some((action: any)=>enumValue(action)==="connect") && !["@INPUT","@USER"].includes(p.alias))
+      p.actions.some((action: any)=>enumValue(action)==="connect") && accountCurrent(p.date_expired) && !["@INPUT","@USER"].includes(p.alias))
       .map((p: any)=>({id:p.id, alias:p.alias, name:validName(p.name) ? p.name : p.alias}));
   }
-  async ticket(assetId: string, account: AuthorizedAccount, signal: AbortSignal) {
+  async ticket(userId: string, assetId: string, account: AuthorizedAccount, signal: AbortSignal) {
     const token = await this.request("authentication/connection-token/", signal, {asset:assetId, account:account.alias, protocol:"ssh", connect_method:"ssh_client"});
-    if (token?.is_active !== true || token.is_expired === true || token.is_reusable === true)
+    if (token?.is_active !== true || token.is_expired === true || token.is_reusable !== false)
       throw new HttpError(403, "JumpServer 连接未获准，需在堡垒机完成认证或审批");
+    if ((token.user != null && keyOf(token.user) !== userId) ||
+        (token.asset != null && keyOf(token.asset) !== assetId) ||
+        (token.org_id != null && token.org_id !== this.login.orgId) ||
+        (token.account != null && token.account !== account.alias) ||
+        (token.protocol != null && enumValue(token.protocol) !== "ssh") ||
+        (token.connect_method != null && enumValue(token.connect_method) !== "ssh_client"))
+      throw new HttpError(403, "JumpServer 返回的连接身份与当前绑定不一致");
     if (!uuid.test(token.id) || typeof token.value !== "string" || !token.value || token.value.length > 1024) throw invalid();
     return {id:token.id as string, password:token.value as string};
   }

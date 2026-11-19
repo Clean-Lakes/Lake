@@ -8,8 +8,8 @@ export function bulkCatalogTargets(catalog: Catalog): BulkTarget[] {
   return [
     ...catalog.projects.map(p => ({kind: "project" as const, id: p.id, projectId: p.id, name: p.name})),
     ...catalog.sessions.map(s => ({kind: "session" as const, id: s.id, projectId: s.projectId, name: s.title})),
-    ...catalog.resources.filter(r => r.kind !== "local").map(r => ({kind: "resource" as const, id: r.id, projectId: r.projectId, name: r.name})),
-    ...(catalog.resourceTree ?? []).filter(n => n.kind === "folder").map(n => ({kind: "folder" as const, id: n.id, projectId: n.projectId, name: n.name})),
+    ...catalog.resources.filter(r => r.kind !== "local" && !r.jumpServer).map(r => ({kind: "resource" as const, id: r.id, projectId: r.projectId, name: r.name})),
+    ...(catalog.resourceTree ?? []).filter(n => n.kind === "folder" && !n.bindingId).map(n => ({kind: "folder" as const, id: n.id, projectId: n.projectId, name: n.name})),
   ];
 }
 

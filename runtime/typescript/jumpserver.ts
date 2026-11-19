@@ -31,8 +31,10 @@ export class LakeJumpServer {
     this.timer.unref();
   }
   private refreshAll() {
-    for (const b of this.store.list<Binding>("jumpServerBindings"))
-      if (!this.store.get("navigationTrash","project:" + b.projectId)) void this.sync(b.projectId).catch(()=>{});
+    for (const b of this.store.list<Binding>("jumpServerBindings")) {
+      if (this.store.get("navigationTrash","project:" + b.projectId)) this.disconnect(b.id);
+      else void this.sync(b.projectId).catch(()=>{});
+    }
   }
   private current(projectId: string) { return this.store.get<Binding>("jumpServerBindings",projectId); }
   private public(binding: Binding): JumpServerBinding {
@@ -105,7 +107,7 @@ export class LakeJumpServer {
     this.changed(projectId);
     return this.public(binding);
   }
-  private apply(b: Binding, directory: Directory) {
+  private apply(b: Binding, directory: Directory, remove = false) {
     const previous = this.store.list<Resource>("resources").filter(r=>r.jumpServer?.bindingId===b.id);
     const old = new Map(previous.map(r=>[r.id,r]));
     const nodes: ResourceTreeNode[] = [], next = new Map<string,Resource>();
@@ -113,7 +115,7 @@ export class LakeJumpServer {
     const localNode = (nodeId: string)=>scopedId(b.id,"node/" + nodeId);
     const folder = (id: string, parentId: string|null, name: string) => nodes.push({id,parentId,name,
       bindingId:b.id, projectId:b.projectId, kind:"folder", resourceId:null, position:nodes.length});
-    folder(root,null,"JumpServer · " + b.username);
+    if (!remove) folder(root,null,this.rootName(b));
     for (const n of directory.nodes) {
       const parent = byKey.get(n.key.split(":").slice(0,-1).join(":"));
       folder(localNode(n.id),parent ? localNode(parent.id) : root,n.name);
@@ -129,6 +131,7 @@ export class LakeJumpServer {
           kind:"resource", name:asset.name, resourceId, position:nodes.length});
     }
     const priorNodes=this.store.list<ResourceTreeNode>("tree").filter(n=>n.bindingId===b.id);
+    const oldNodes = new Map(priorNodes.map(node => [node.id, node]));
     const entryIds=new Set(nodes.map(n=>n.id));
     const invalidated=new Set<string>();
     this.store.transaction(()=>{
@@ -138,13 +141,21 @@ export class LakeJumpServer {
       for (const r of next.values()) {
         const prev=old.get(r.id);
         if (!prev || digest([prev.kind,prev.jumpServer]) !== digest([r.kind,r.jumpServer])) { this.bump(r.id); invalidated.add(r.id); }
-        this.store.put("resources",r.id,r);
+        if (!prev || digest(prev) !== digest(r)) this.store.put("resources",r.id,r);
       }
       for (const n of priorNodes) if (!entryIds.has(n.id)) this.store.delete("tree",n.id);
-      for (const n of nodes) this.store.put("tree",n.id,n);
-      this.store.put("jumpServerBindings",b.projectId,b);
+      for (const n of nodes) {
+        const previousNode = oldNodes.get(n.id);
+        if (!previousNode || digest(previousNode) !== digest(n)) this.store.put("tree",n.id,n);
+      }
+      if (remove) this.store.delete("jumpServerBindings",b.projectId);
+      else this.store.put("jumpServerBindings",b.projectId,b);
     });
     for (const live of this.live) if (invalidated.has(live.resourceId)) live.close();
+  }
+  private rootName(b: Binding) {
+    const state = b.state === "offline" ? "（上次同步）" : b.state === "denied" ? "（授权失效）" : "";
+    return "JumpServer · " + b.username + state;
   }
   private bump(resourceId: string) {
     this.store.put("resourceRevisions",resourceId,(this.store.get<number>("resourceRevisions",resourceId) ?? 0)+1);
@@ -154,11 +165,7 @@ export class LakeJumpServer {
     this.security.resourceConfiguration(projectId);
     const b=this.current(projectId);
     if (!b || b.id!==bindingId || b.revision!==revision) throw stopped();
-    this.apply(b,{nodes:[],assets:[]});
-    this.store.transaction(()=>{
-      this.store.delete("tree",scopedId(b.id,"mount"));
-      this.store.delete("jumpServerBindings",projectId);
-    });
+    this.apply(b,{nodes:[],assets:[]},true);
     this.disconnect(b.id); this.changed(projectId);
     await unlink(await this.secretPath(b.credentialId)).catch(()=>{});
   }
@@ -188,12 +195,19 @@ export class LakeJumpServer {
       this.changed(b.projectId);
       return this.public(current);
     } catch (error) {
+      // An older refresh must never change or close the replacement binding.
+      if (this.current(b.projectId)?.credentialId !== b.credentialId) throw stopped();
+      this.disconnect(b.id);
       this.assertCurrent(b);
       const denied=error instanceof HttpError && [401,403].includes(error.status);
       const failed: Binding={...b,state:denied ? "denied" : "offline"};
       if (denied) { failed.assetCount=0; this.apply(failed,{nodes:[],assets:[]}); }
-      else this.store.put("jumpServerBindings",b.projectId,failed);
-      this.disconnect(b.id); this.changed(b.projectId);
+      else this.store.transaction(()=>{
+        const root=this.store.get<ResourceTreeNode>("tree",scopedId(b.id,"mount"));
+        if (root) this.store.put("tree",root.id,{...root,name:this.rootName(failed)});
+        this.store.put("jumpServerBindings",b.projectId,failed);
+      });
+      this.changed(b.projectId);
       throw error;
     }
   }
@@ -248,8 +262,7 @@ export class LakeJumpServer {
     const ref=current.jumpServer!;
     const account=ref.accountId ? accounts.find(a=>a.id===ref.accountId && a.alias===ref.accountAlias) : accounts.length===1 ? accounts[0] : undefined;
     if (!account) throw new HttpError(403,accounts.length ? "请在该资产的 JumpServer 账号设置中选择当前授权账号" : "没有获准连接的 SSH 账号");
-    const ticket=await api.ticket(ref.assetId,account,signal);
-    this.registerSecret(ticket.password);
+    const ticket=await api.ticket(b.userId,ref.assetId,account,signal);
     const check=()=>{
       this.assertCurrent(b);
       if (signal.aborted || this.revision(this.store.require<Resource>("resources",resource.id))!==initial) throw stopped();

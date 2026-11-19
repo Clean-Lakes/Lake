@@ -95,6 +95,14 @@ Node 命令须使用准备好的 24.14.0。测试经过真实 Agent SDK 源码�
 
 持续终端与 MCP/Skills 增量的实际范围、36 项隔离回归和 Dev 实测另见[验证记录](../../docs/validation/typescript-candidate/terminal-extensions.md)。本机 PTY 使用随包签名的 node-pty 1.1.0 原生 addon/启动程序，macOS 无需系统 Node；该记录保留当时的本机 PTY 水位；后续 SSH/确认入口修复见[SSH 增量记录](../../docs/validation/typescript-candidate/ssh-confirmation.md)，Agent 接管仍待移植。
 
+## JumpServer 个人授权目录
+
+在目标项目的「资源」页点「＋」→「JumpServer 资源来源」。填写 JumpServer 服务根地址、组织 UUID 和个人 Access Key 或 Bearer Token，验证返回的用户名后选择挂载目录，再填 KoKo 的 SSH 主机和端口。内部 CA 可以在此提供 PEM 公钥证书。绑定属于当前 Lake Home 和项目，个人凭据仅存入此 Home 的私有文件。
+
+目录每 30 秒核对一次，回到前台或展开挂载目录也会刷新。同一资产在多个目录下共享一个 Lake 资源 ID。直接授权且没有可见父目录的资产列在挂载根目录。分页或网络失败时保留上次完整目录，认证失效会清空资产。解除绑定会关闭相关终端并移除本机凭据。
+
+在资产的终端菜单选择登录账号。仅有一个有效授权账号时会自动采用。手动终端使用 KoKo 交互 shell，专员通过现有 Lake Security 和任务审批后使用独立 SSH exec。两者连接时都重新校验挂载范围、资产和账号，并向 JumpServer 申请一次性连接令牌。Lake 在本地终端或命令记录中保存连接令牌 ID，并在堡垒机审计中按用户、资产、账号及时间核对。KoKo 拒绝复核命令会收到失败回执，静默零退出无法区分成功与拒绝时显示结果待核实。
+
 ## 普通任务与对话续派
 
 ### 任务 Worker 的原生子智能体与第三联

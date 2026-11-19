@@ -41,7 +41,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   filtering?: boolean;
   selection?: BulkSelection; onSelectAll?: () => void;
   project: Project; resources: Resource[]; nodes: ResourceTreeNode[]; disabled: boolean;
-  renderResource: (resource: Resource) => ReactNode; refresh: () => Promise<unknown>; onAddResource: (parentId: string | null) => void; onImport: () => void; onJumpServer?: () => void; onDelete:(target:NavigationDeleteTarget)=>void;
+  renderResource: (resource: Resource, nodeId: string) => ReactNode; refresh: () => Promise<unknown>; onAddResource: (parentId: string | null) => void; onImport: () => void; onJumpServer?: () => void; onDelete:(target:NavigationDeleteTarget)=>void;
 }) {
   const actionHost=useContext(SidebarResourceActions);
   const tree = projectResourceTree(project.id, nodes, resources);
@@ -77,6 +77,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   const [drop, setDrop] = useState<{id: string; zone: "before" | "inside" | "after"} | null>(null);
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const blocked = disabled || busy || filtering;
+  const addBlocked = busy || filtering || (disabled && !onJumpServer);
   useEffect(()=>{
     if(!dragging||drop?.zone!=='inside'||drop.id==='root'||expandedFolders.includes(drop.id))return;
     const timer=setTimeout(()=>setExpandedFolders(values=>values.includes(drop.id)?values:[...values,drop.id]),600);
@@ -115,12 +116,13 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   const addControl = useRef<HTMLDivElement>(null);
   const addButton = useRef<HTMLButtonElement>(null);
   const addMenu = useRef<HTMLDivElement>(null);
+  const enabledMenuButtons = "button:not(:disabled)";
   // 指针打开菜单时不移动焦点：程序化 focus 会让首项呈现悬停底色，看起来像未悬停就已被选中。
   const addFocusTarget = useRef<"first" | "last" | null>("first");
   useEffect(() => {
     if (!addOpen) return;
-    if (blocked) { setAddOpen(false); return; }
-    const items = Array.from(addMenu.current?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+    if (addBlocked) { setAddOpen(false); return; }
+    const items = Array.from(addMenu.current?.querySelectorAll<HTMLButtonElement>(enabledMenuButtons) ?? []);
     const target = addFocusTarget.current;
     if (target) (target === "last" ? items.at(-1) : items[0])?.focus();
     const dismiss = (event: globalThis.PointerEvent) => { if (!addControl.current?.contains(event.target as Node)) setAddOpen(false); };
@@ -133,7 +135,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
     document.addEventListener("pointerdown", dismiss);
     document.addEventListener("keydown", key);
     return () => { document.removeEventListener("pointerdown", dismiss); document.removeEventListener("keydown", key); };
-  }, [addOpen, blocked]);
+  }, [addOpen, addBlocked]);
   const openEditor=(value:FolderEditor,anchor:HTMLButtonElement|null)=>{editorAnchor.current=anchor;setError("");setEditor(value);};
   const closeEditor=()=>{if(!busy){setEditor(null);setError("");}};
   const work = async (data: Parameters<typeof api.editResourceTree>[1]) => {
@@ -232,14 +234,14 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
           onDragStart={event => {dragSource.current = node.id;event.dataTransfer.setData("application/x-lake-resource-tree",node.id);event.dataTransfer.effectAllowed="move";setDragging(node.id);setError("");}} onDragEnd={() => {dragSource.current = null;setDragging(null);setDrop(null);}}><Glyph name="grip" size={12}/></button>}
         {node.kind === "folder" ? <div className="resource-folder-row">
           <button type="button" className="resource-folder-toggle" title={folderPath(node)} aria-expanded={expanded} onClick={() => {setExpandedFolders(values => expanded ? values.filter(id => id !== node.id) : [...values,node.id]); if(!expanded && node.bindingId) void api.syncJumpServer(project.id).catch(e=>setError(readableError(e)));}}>{depth > 0 && <Glyph name="chevron" size={11} className={expanded ? "folder-chevron open" : "folder-chevron"}/>}<FolderIcon/><span className="resource-folder-name">{node.name}</span><small className="resource-folder-count" title={`${childrenOf(node.id).length} 个子项`}>{childrenOf(node.id).length}</small></button>
-          <div className="resource-folder-actions"><button type="button" className="navigation-more-button" disabled={blocked} aria-label={`管理文件夹 ${folderPath(node)}`} aria-haspopup="menu" title="更多操作" onClick={event => {contextAnchor.current=event.currentTarget;const rect=event.currentTarget.getBoundingClientRect();setContext({id:node.id,x:rect.right-208,y:rect.bottom+6});}}><Glyph name="more" size={15}/></button></div>
-        </div> : resource && <><div className="resource-tree-resource-content">{renderResource(resource)}</div>{!["local", "ssh"].includes(resource.kind) && <button type="button" className="navigation-more-button resource-more-button" disabled={blocked} aria-label={`管理资源 ${resource.name}`} aria-haspopup="menu" title="更多操作" onClick={event=>{contextAnchor.current=event.currentTarget;const rect=event.currentTarget.getBoundingClientRect();setContext({id:node.id,x:rect.right-208,y:rect.bottom+6});}}><Glyph name="more" size={15}/></button>}</>}
+          {!node.bindingId && <div className="resource-folder-actions"><button type="button" className="navigation-more-button" disabled={blocked} aria-label={`管理文件夹 ${folderPath(node)}`} aria-haspopup="menu" title="更多操作" onClick={event => {contextAnchor.current=event.currentTarget;const rect=event.currentTarget.getBoundingClientRect();setContext({id:node.id,x:rect.right-208,y:rect.bottom+6});}}><Glyph name="more" size={15}/></button></div>}
+        </div> : resource && <><div className="resource-tree-resource-content">{renderResource(resource,node.id)}</div>{!node.bindingId && !["local", "ssh"].includes(resource.kind) && <button type="button" className="navigation-more-button resource-more-button" disabled={blocked} aria-label={`管理资源 ${resource.name}`} aria-haspopup="menu" title="更多操作" onClick={event=>{contextAnchor.current=event.currentTarget;const rect=event.currentTarget.getBoundingClientRect();setContext({id:node.id,x:rect.right-208,y:rect.bottom+6});}}><Glyph name="more" size={15}/></button>}</>}
       </div>
       {moving === node.id && !builtin && <div className="resource-move-panel" role="group" aria-label={`移动 ${resource?.name || node.name}`}>
         <div><button disabled={blocked || index === 0 || !!siblings[index-1]?.builtin} onClick={() => move(node.id,parent,siblings[index-1]?.id ?? null)}>上移</button><button disabled={blocked || index === siblings.length-1} onClick={() => move(node.id,parent,siblings[index+2]?.id ?? null)}>下移</button></div>
-        <label>移到目录<AppSelect aria-label={`将 ${resource?.name || node.name} 移到目录`} value="" disabled={blocked} onChange={event => {if(event.target.value) move(node.id,event.target.value === "root" ? null : event.target.value);}}><option value="">选择位置…</option><option value="root">资源根层</option>{tree.filter(folder => folder.kind === "folder" && canMoveInto(tree,node.id,folder.id)).map(folder => <option value={folder.id} key={folder.id}>{folderPath(folder)}</option>)}</AppSelect></label>
+        <label>移到目录<AppSelect aria-label={`将 ${resource?.name || node.name} 移到目录`} value="" disabled={blocked} onChange={event => {if(event.target.value) move(node.id,event.target.value === "root" ? null : event.target.value);}}><option value="">选择位置…</option><option value="root">资源根层</option>{tree.filter(folder => folder.kind === "folder" && !folder.bindingId && canMoveInto(tree,node.id,folder.id)).map(folder => <option value={folder.id} key={folder.id}>{folderPath(folder)}</option>)}</AppSelect></label>
       </div>}
-      {node.kind === "folder" && expanded && depth < 32 && <div className="resource-folder-children" style={depth>=4 ? {marginLeft:0,paddingLeft:0,borderLeft:0}:undefined}>{render(node.id,depth+1)}{!childrenOf(node.id).length && <div data-resource-drop-inside={node.id} className={`resource-folder-empty ${drop?.id === node.id ? "drop-inside" : ""}`} onDragOver={event => {if(dragSource.current && canMoveInto(tree,dragSource.current,node.id)){event.preventDefault();event.stopPropagation();setDrop({id:node.id,zone:"inside"});}}} onDrop={event => {event.preventDefault();event.stopPropagation();if(dragSource.current)move(dragSource.current,node.id);}}>拖动资源到这里</div>}</div>}
+      {node.kind === "folder" && expanded && depth < 32 && <div className="resource-folder-children" style={depth>=4 ? {marginLeft:0,paddingLeft:0,borderLeft:0}:undefined}>{render(node.id,depth+1)}{!childrenOf(node.id).length && node.bindingId && <div className="resource-folder-empty">没有已授权的资产</div>}{!childrenOf(node.id).length && !node.bindingId && <div data-resource-drop-inside={node.id} className={`resource-folder-empty ${drop?.id === node.id ? "drop-inside" : ""}`} onDragOver={event => {if(dragSource.current && canMoveInto(tree,dragSource.current,node.id)){event.preventDefault();event.stopPropagation();setDrop({id:node.id,zone:"inside"});}}} onDrop={event => {event.preventDefault();event.stopPropagation();if(dragSource.current)move(dragSource.current,node.id);}}>拖动资源到这里</div>}</div>}
     </div>;
   });
   function folderPath(folder: ResourceTreeNode) {
@@ -250,14 +252,14 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   const contextNode=context ? nodeMap.get(context.id) : undefined;
   const contextResource=contextNode?.resourceId ? resourceMap.get(contextNode.resourceId) : undefined;
   const heading=<div className={navigationPanel?"resource-panel-actions":"nav-heading resources-heading"}>{!navigationPanel&&<button type="button" className="nav-section-toggle" aria-label={`${sectionExpanded ? "折叠" : "展开"}${project.name}的资源`} aria-expanded={sectionExpanded} aria-controls={`project-resources-${project.id}`} onClick={() => setSectionExpanded(value => !value)}><Glyph name="chevron" size={13} className={`resource-section-chevron ${sectionExpanded ? "chevron-open" : ""}`}/><span className="resource-section-label">资源 <small>{resources.length}</small></span></button>}{selection && <button type="button" className="bulk-group-toggle" disabled={blocked || selection.disabled || !resources.length && !tree.length} aria-label={`全选 ${project.name} 的资源和文件夹`} onClick={onSelectAll}>全选</button>}<div hidden={!!selection} className="resource-add-control" ref={addControl} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setAddOpen(false); }}>
-    <button type="button" ref={addButton} className="nav-add resource-create-trigger" aria-label={`在${project.name}新建资源或目录`} title="新建资源或目录" aria-haspopup="menu" aria-expanded={addOpen} aria-controls={`resource-add-${project.id}`} disabled={blocked} onPointerDown={() => { addFocusTarget.current = null; }} onKeyDown={event => {
+    <button type="button" ref={addButton} className="nav-add resource-create-trigger" aria-label={`在${project.name}新建资源或目录`} title="新建资源或目录" aria-haspopup="menu" aria-expanded={addOpen} aria-controls={`resource-add-${project.id}`} disabled={addBlocked} onPointerDown={() => { addFocusTarget.current = null; }} onKeyDown={event => {
       // Enter/Space 交给按钮原生激活（随后触发 onClick），避免再手动切换造成双重开关。
       if (event.key === "Enter" || event.key === " ") { addFocusTarget.current = "first"; return; }
       if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
       event.preventDefault();
       addFocusTarget.current = event.key === "ArrowUp" ? "last" : "first";
       if (!addOpen) { setAddOpen(true); return; }
-      const items = Array.from(addMenu.current?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+      const items = Array.from(addMenu.current?.querySelectorAll<HTMLButtonElement>(enabledMenuButtons) ?? []);
       (event.key === "ArrowDown" ? items[0] : items.at(-1))?.focus();
     }} onClick={() => setAddOpen(value => !value)}><Glyph name="plus" size={16}/><span>新建</span></button>
     {addOpen && <div ref={addMenu} id={`resource-add-${project.id}`} className="resource-add-menu" role="menu" aria-label="新建资源或目录" onMouseDown={event => {
@@ -265,14 +267,14 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
       if (event.button === 0) event.preventDefault();
     }} onKeyDown={event => {
       if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
-        event.preventDefault(); const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button")); const index = items.indexOf(document.activeElement as HTMLButtonElement);
+        event.preventDefault(); const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>(enabledMenuButtons)); const index = items.indexOf(document.activeElement as HTMLButtonElement);
         items[event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (index + (event.key === "ArrowUp" ? -1 : 1) + items.length) % items.length]?.focus();
       }
     }}>
-      <button type="button" role="menuitem" onClick={() => { setAddOpen(false); onAddResource(null); }}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/><path d="M7 6.5h.01M7 17.5h.01M11 6.5h7M11 17.5h7"/></svg><span>新建资源</span></button>
+      <button type="button" role="menuitem" disabled={blocked} onClick={() => { setAddOpen(false); onAddResource(null); }}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/><path d="M7 6.5h.01M7 17.5h.01M11 6.5h7M11 17.5h7"/></svg><span>新建资源</span></button>
       {onJumpServer && <button type="button" role="menuitem" onClick={()=>{setAddOpen(false);onJumpServer();}}><Glyph name="server" size={16}/><span>JumpServer 资源来源</span></button>}
-      <button type="button" role="menuitem" onClick={() => { setAddOpen(false); onImport(); }}><FolderIcon/><span>导入资源</span></button>
-      <button type="button" role="menuitem" onClick={() => { setAddOpen(false); openEditor({parentId:null,name:""},addButton.current); }}><FolderIcon/>新建目录</button>
+      <button type="button" role="menuitem" disabled={blocked} onClick={() => { setAddOpen(false); onImport(); }}><FolderIcon/><span>导入资源</span></button>
+      <button type="button" role="menuitem" disabled={blocked} onClick={() => { setAddOpen(false); openEditor({parentId:null,name:""},addButton.current); }}><FolderIcon/>新建目录</button>
     </div>}
   </div></div>;
   return <>{context && contextNode && <NavigationMenu title={contextResource?.name || contextNode.name} anchor={contextAnchor} x={context.x} y={context.y} onClose={()=>setContext(null)} actions={[
