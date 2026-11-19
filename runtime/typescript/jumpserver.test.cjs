@@ -6,6 +6,7 @@ const {createServer: createHttpsServer} = require("node:https");
 const childProcess = require("node:child_process");
 const {execFileSync} = childProcess;
 const {PassThrough} = require("node:stream");
+const {DatabaseSync} = require("node:sqlite");
 const fs = require("node:fs/promises");
 const {join} = require("node:path");
 const {tmpdir} = require("node:os");
@@ -249,6 +250,41 @@ async function eventually(read, predicate) {
   while(Date.now()<until){ const value=await read();if(predicate(value))return value;await new Promise(resolve=>setTimeout(resolve,35)); }
   throw Error("timed out waiting for test gateway");
 }
+async function seedInheritedCatalog(f) {
+  const {store} = f.app, projectId = f.project.id;
+  const adk = join(store.data,"adk"), path = join(adk,"sessions.sqlite");
+  const storeID = "a".repeat(64), recoveryEpoch = "b".repeat(64);
+  await fs.mkdir(adk,{recursive:true,mode:0o700});
+  await fs.mkdir(join(f.home,"security"),{recursive:true,mode:0o700});
+  await fs.writeFile(join(f.home,"security/control.json"),JSON.stringify({
+    formatVersion:1,storeID,recoveryEpoch,gate:"open",storeReady:true,runtimeRoot:await fs.realpath(adk),
+  }),{mode:0o600});
+  const policy = {
+    SchemaVersion:1,ProjectID:projectId,Mode:"legacy",Revision:1,Confirmed:true,StoreID:storeID,RecoveryEpoch:recoveryEpoch,
+    ResourceIDs:store.catalog().resources.filter(r=>r.projectId===projectId&&!r.jumpServer).map(r=>r.id),
+    Rules:["resource.manage","resource.resolve","network.fetch","command.diagnostics","terminal.execute"].map(Capability=>({Capability,Effect:"allow"})),
+  };
+  const archived = {projectId,revision:1,mode:"legacy",readOnly:true,data:policy};
+  store.put("legacyProjectPolicies",projectId,archived);
+  const db = new DatabaseSync(path);
+  try {
+    await fs.chmod(path,0o600);
+    db.exec(`
+      CREATE TABLE security_schema_meta (id INTEGER, schema_version INTEGER,
+        minimum_reader_version INTEGER, store_id TEXT, recovery_epoch TEXT, migration_state TEXT);
+      CREATE TABLE security_project_policies (project_id TEXT PRIMARY KEY, revision INTEGER,
+        store_id TEXT, recovery_epoch TEXT, mode TEXT, confirmed INTEGER, data TEXT);
+      CREATE TABLE security_authority_events (project_id TEXT, object_id TEXT, kind TEXT, actor_id TEXT,
+        action_id TEXT, store_id TEXT, recovery_epoch TEXT, before_revision INTEGER, after_revision INTEGER, result TEXT);
+    `);
+    db.prepare("INSERT INTO security_schema_meta VALUES(1,1,3,?,?,'ready')").run(storeID,recoveryEpoch);
+    db.prepare("INSERT INTO security_project_policies VALUES(?,1,?,?,'legacy',1,?)")
+      .run(projectId,storeID,recoveryEpoch,JSON.stringify(policy));
+    db.prepare("INSERT INTO security_authority_events VALUES(?,?,'policy.put','host',?,?,?,0,1,?)")
+      .run(projectId,projectId,`superagent-catalog:${projectId}:1`,storeID,recoveryEpoch,JSON.stringify(policy));
+  } finally { db.close(); }
+  return {archived,path};
+}
 test("KoKo native shell and specialist exec use separate channels, audited tokens and current authorization",async t=>{
   const f=await fixture(t);
   const {createRequire}=require("node:module");
@@ -295,13 +331,39 @@ test("KoKo native shell and specialist exec use separate channels, audited token
   const audit=f.app.store.list("commandExecutions").at(-1).jumpServerAudit;
   assert.equal(audit.assetId,f.asset);assert.equal(audit.accountId,f.account);
   assert.ok(used.has(audit.connectionTokenId));assert.equal(used.size,2);
-  const metric=await execution.ssh.inspect(session.id,r,"disks",new AbortController().signal,()=>{});
+
+  const {archived,path:policyPath}=await seedInheritedCatalog(f);
+  assert.ok(!archived.data.ResourceIDs.includes(r.id));
+  const assertHost=()=>execution.security.host(f.project.id,r.id);
+  assert.equal(assertHost(),"allow");
+  assert.throws(()=>run("whoami"),{status:403});
+  assert.throws(()=>run("/usr/bin/whoami > /tmp/identity"),{status:403});
+  const probe="/usr/bin/whoami";
+  assert.equal((await run(probe)).status,"completed");
+  assert.equal(wire.at(-1),probe);
+  assert.equal(f.app.store.list("commandExecutions").at(-1).readOnly,true);
+  const metric=await execution.ssh.inspect(session.id,r,"disks",new AbortController().signal,assertHost);
   assert.equal(metric.jumpServerAudit.assetId,f.asset);assert.equal(metric.hostFingerprint,undefined);
-  mode="review";const blocked=await run("whoami");assert.notEqual(blocked.status,"completed");assert.match(blocked.stderr.text,/复核/);
-  mode="silent";await assert.rejects(run("whoami"),/未返回可核实/);
+  assert.deepEqual(f.app.store.get("legacyProjectPolicies",f.project.id),archived);
+
+  const ticketCount=f.state.tickets.length;
+  const direct={...r,id:randomUUID(),jumpServer:undefined};
+  f.app.store.put("resources",direct.id,direct);
+  assert.throws(()=>execution.security.host(f.project.id,direct.id),{status:403});
+  const db=new DatabaseSync(policyPath);
+  try {
+    db.prepare("UPDATE security_authority_events SET actor_id='local-user'").run();
+    assert.throws(assertHost,{status:403});
+    assert.throws(()=>run(probe),{status:403});
+    assert.equal(f.state.tickets.length,ticketCount);
+    db.prepare("UPDATE security_authority_events SET actor_id='host'").run();
+  } finally { db.close(); }
+
+  mode="review";const blocked=await run(probe);assert.notEqual(blocked.status,"completed");assert.match(blocked.stderr.text,/复核/);
+  mode="silent";await assert.rejects(run(probe),/未返回可核实/);
   assert.ok(f.app.store.list("commandExecutions").some(record=>record.status==="unknown"));
   const oldCount=wire.length;f.state.accounts=[];await f.api(f.base+"/sync","POST",{});
   await eventually(history,h=>h.terminal.status==="disconnected");
-  const denied=await run("whoami");assert.notEqual(denied.status,"completed");assert.equal(wire.length,oldCount);
+  const denied=await run(probe);assert.notEqual(denied.status,"completed");assert.equal(wire.length,oldCount);
   for(const {ticket} of f.state.tickets)assert.ok(!JSON.stringify(f.app.store.list("commandExecutions")).includes(ticket.value));
 });

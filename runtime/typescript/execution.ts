@@ -187,8 +187,10 @@ export class LakeExecution {
     const parsedService = !resource.jumpServer && resource.kind==="ssh" && !input.run_in_background && (!input.cwd || input.cwd==="/tmp") &&
       policy.risk!=="dangerous" ? compileServiceInspection(command) : undefined;
     const service=parsedService && requestedInspectionRoot(parsedService.directory,requests) ? parsedService : undefined;
-    // The gateway must receive the same command it reviews. Only a locally compiled command qualifies for the restricted diagnostics grant.
-    const readOnly = policy.risk === "readonly" && (!resource.jumpServer || command===policy.safeCommand) || !!inspection || !!delay || !!service;
+    // KoKo receives the original command. Exact, argument-free system probes
+    // can be proven read-only without rewriting the command or trusting PATH.
+    const fixedProbe = /^\/(?:usr\/)?bin\/(?:hostname|uptime|whoami)$/.test(command);
+    const readOnly = policy.risk === "readonly" && (!resource.jumpServer || command===policy.safeCommand || fixedProbe) || !!inspection || !!delay || !!service;
     return {
       resource,
       revision,
