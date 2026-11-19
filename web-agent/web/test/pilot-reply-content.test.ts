@@ -204,6 +204,22 @@ test('a retained slot cannot borrow public prose or waiting state from an unrela
  assert.doesNotMatch(html,/data-live-motion="active"|data-live-glow="active"/);
 });
 
+test('a specialist with visible prose exposes the current human wait beside its process link',()=>{
+ const row=replyRow();
+ for(const [status,label] of [['waiting_approval','等待确认'],['waiting_input','等待你补充信息']] as const){
+  const snapshot=replySnapshot(row);
+  snapshot.ai!.status=status;
+  const render=(available=true)=>renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row,snapshot,available,onInspectSpecialist:()=>{}}));
+  const waiting=render();
+  assert.match(waiting,/本次真实公开回复/);
+  assert.match(waiting,new RegExp('data-specialist-process="task"[^]*?</button><span role="status">'+label+'</span>'));
+  assert.doesNotMatch(waiting,/data-live-motion="active"/);
+  assert.doesNotMatch(render(false),new RegExp(label));
+  snapshot.ai!.cards=[];
+  assert.doesNotMatch(render(),/<\/button><span role="status">/,'the status already occupies the body when no prose has arrived');
+ }
+});
+
 
 test('height changes start only with the new paragraph, while entry growth releases stale height but keeps its reveal',()=>{
  const {transition,calls,clips,finish}=transitionHarness();

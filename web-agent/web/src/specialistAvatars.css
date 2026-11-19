@@ -134,11 +134,11 @@
 /* Keep the drop silhouette still and readable; only its inset lake water moves. */
 .super-role-avatar[data-role=coordinator] .pilot-waterline { transform-box:view-box; transform-origin:12px 15px; }
 .super-role-avatar[data-role=coordinator][data-motion=idle] .pilot-waterline { animation:lake-pilot-water-idle 6s ease-in-out var(--avatar-phase) infinite; }
-.super-role-avatar[data-role=coordinator][data-motion=working] .pilot-waterline { animation:lake-pilot-water-flow var(--live-light-period,3400ms) ease-in-out var(--avatar-phase) infinite; }
+.super-role-avatar[data-role=coordinator][data-motion=working] .pilot-waterline { animation:lake-pilot-water-flow 2.6s ease-in-out var(--avatar-phase) infinite; }
 @keyframes lake-pilot-water-idle { 0%,100% { opacity:.88; } 50% { opacity:1; } }
 @keyframes lake-pilot-water-flow {
- 0%,100% { transform:translate(0,0) rotate(-2deg); }
- 50% { transform:translate(.25px,-.35px) rotate(2deg); }
+ 0%,100% { transform:translateY(.95px) rotate(-2deg); }
+ 50% { transform:translateY(-.95px) rotate(2deg); }
 }
 .super-role-avatar[data-role=coordinator].is-greeting .pilot-waterline { animation:lake-pilot-water-greet 650ms ease-out; }
 @keyframes lake-pilot-water-greet { 0%,100% { transform:translateY(0); } 35% { transform:translateY(-.7px); } 70% { transform:translateY(.2px); } }

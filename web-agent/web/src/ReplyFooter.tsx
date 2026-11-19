@@ -10,9 +10,12 @@ type FooterAction={
 
 export const ReplyProcessContext=createContext<{pilot?:PilotProcessTarget;footer?:{reportId:string;status?:string}}>({});
 
-export function ReplyFooter({duration,status,action,preview=false}:{duration?:string;status?:string;action?:FooterAction;preview?:boolean}) {
+export function ReplyFooter({duration,status,liveStatus,action,preview=false}:{
+ duration?:string;status?:string;liveStatus?:string;action?:FooterAction;preview?:boolean;
+}) {
  const elapsed=duration?.replace(/(\d)(?=小时|分钟|秒)/g,'$1 ');
- if(!action&&!elapsed&&!status)return null;
+ const visibleStatus=liveStatus??status;
+ if(!action&&!elapsed&&!visibleStatus)return null;
  const specialist=!!action?.taskId;
  const label=action?.text??'执行过程';
  return <div className={specialist?'reply-duration reply-process-text specialist-process-link':`reply-duration reply-process-text turn-status ${preview?'is-preview':'is-finished'} reply-footer`} aria-label={elapsed?'回答耗时':undefined}>
@@ -23,6 +26,6 @@ export function ReplyFooter({duration,status,action,preview=false}:{duration?:st
    <Glyph name="next" size={11} className="turn-duration-chevron"/>
   </button>}
   {elapsed&&<span className="turn-status-elapsed" title={preview?'截至结论开始输出时的处理用时':'本次执行用时'}>{action?elapsed:`用时 ${elapsed}`}</span>}
-  {status&&<span>{status}</span>}
+  {visibleStatus&&<span role={liveStatus?'status':undefined}>{visibleStatus}</span>}
  </div>;
 }

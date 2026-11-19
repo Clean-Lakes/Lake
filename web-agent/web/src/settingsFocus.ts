@@ -29,3 +29,20 @@ export function trapSettingsTab(event:Pick<KeyboardEvent,'key'|'shiftKey'|'defau
     event.preventDefault();(event.shiftKey?last:first)!.focus();
   }
 }
+
+export function navigateSettingsTabs(
+  event:Pick<KeyboardEvent,'key'|'target'|'altKey'|'ctrlKey'|'metaKey'|'defaultPrevented'|'preventDefault'>,
+  tablist:HTMLElement,
+){
+  const {key}=event;
+  if(event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey||!['ArrowLeft','ArrowRight','Home','End'].includes(key))return;
+  const tabs=[...tablist.querySelectorAll<HTMLButtonElement>('button[role="tab"]:not(:disabled)')];
+  const current=tabs.findIndex(tab=>tab===event.target);
+  if(current<0)return;
+  const direction=key==='ArrowLeft'?-1:1;
+  const index=key==='Home'?0:key==='End'?tabs.length-1:(current+direction+tabs.length)%tabs.length;
+  const next=tabs[index]!;
+  event.preventDefault();
+  next.focus();
+  next.click();
+}
