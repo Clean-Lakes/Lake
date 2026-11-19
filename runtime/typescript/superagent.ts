@@ -48,6 +48,8 @@ import type {TurnFailure} from "./model-errors";
 import type {WatchdogFinding, WatchdogMode} from "../../web-agent/shared/contracts";
 import type {AgentBackendRef,AgentExecutionSummary,SpecialistAgentAssignment} from '../../web-agent/shared/external-agents';
 import type {ExternalRun} from './acp/types';
+import {resolveCodexRunOrigins} from './acp/run-origin';
+import {externalExecutionName} from '../../web-agent/shared/external-agents';
 import {codexModels} from './acp/codex-profile';
 
 const questionResultBytes=131072;
@@ -574,15 +576,17 @@ export class LakeSuperagent implements AgentHost {
     return { id: worker.id, createdAt: worker.createdAt, roleId: worker.roleId, roleName: worker.roleSnapshot.name,
       sessionId: worker.sessionId, task: this.taskView(goal), assignmentState: worker.state, pilotReport,
       ...(sourceEvent?.external && { sourceExternal: true }),
-      activity: this.workerActivity(worker),execution:this.workerExecution(worker,runs) };
+      activity: this.workerActivity(worker),execution:this.workerExecution(worker,this.workerRuns(worker,runs)) };
   }
-  private workerExecution(worker:Worker,externalRuns=this.store.list<ExternalRun>('acpRuns')):AgentExecutionSummary {
-    const backend=worker.roleSnapshot.execution??{kind:'native'};
-    const runs=externalRuns.filter(run=>run.schemaVersion===1&&run.projectId===worker.projectId&&
+  private workerRuns(worker:Worker,externalRuns=this.store.list<ExternalRun>('acpRuns')) {
+    return externalRuns.filter(run=>run.schemaVersion===1&&run.projectId===worker.projectId&&
       run.workerId===worker.id&&run.taskId===worker.taskId&&run.sessionId===worker.sessionId)
       .sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
+  }
+  private workerExecution(worker:Worker,runs:ExternalRun[]):AgentExecutionSummary {
+    const backend=worker.roleSnapshot.execution??{kind:'native'};
     return {backend,source:worker.explicitAgentAssignment?'task_assignment':'specialist_default',assignedAt:worker.createdAt,totalRuns:runs.length,
-      runs:runs.slice(-12).map(run=>({id:run.id,agent:run.agent,state:run.state,dispatchPhase:run.dispatchPhase,
+      runs:runs.slice(-12).map(run=>({id:run.id,agent:run.agent,runtimeKind:run.runtimeKind,state:run.state,dispatchPhase:run.dispatchPhase,
         externalSessionId:run.externalSessionId,childSessionId:run.childSessionId,
         scope:run.purpose??(run.childSessionId?'child':backend.kind==='acp'&&run.agent===backend.agent?'worker':'segment'),
         createdAt:run.createdAt,updatedAt:run.updatedAt,summary:run.summary&&this.agents.redact(run.summary).slice(0,32768),
@@ -2382,7 +2386,8 @@ export class LakeSuperagent implements AgentHost {
     const worker = exact?this.store.require<Worker>('superWorkers',exact.workerId):this.workerFor(snapshot.session.id);
     if (worker) {
       const goal = this.ledger.get(worker.taskId);
-      snapshot.superagent = { task: this.taskView(goal), goal: this.publicGoal(goal), roleId: worker.roleId,execution:this.workerExecution(worker) };
+      const runs=resolveCodexRunOrigins(this.store.home,this.store.data,worker.projectId,this.workerRuns(worker));
+      snapshot.superagent = { task: this.taskView(goal), goal: this.publicGoal(goal), roleId: worker.roleId,execution:this.workerExecution(worker,runs) };
       if(!worker.inline && snapshot.session.workspaceRole==="worker"){
         const channel=this.store.get<Channel>("superChannels",worker.roleId);
         if(channel?.projectId===goal.projectId) snapshot.superagent.deliveredReplies=workerDeliveries(this.store,goal,channel.sessionId)
@@ -2394,6 +2399,14 @@ export class LakeSuperagent implements AgentHost {
       snapshot.commandExecutions = this.execution?.views(snapshot.session.id, goal.id);
       if (snapshot.ai) {
         snapshot.ai = this.agents.executionView(snapshot.session.id, snapshot.ai);
+        const byId=new Map(runs.map(run=>[run.id,run]));
+        for(const card of [...snapshot.ai.cards,...(snapshot.ai.agentRuns??[]).flatMap(child=>child.cards??[])]){
+          const data=card.data as Record<string,unknown>|undefined,run=byId.get(card.id);
+          if(card.type!=='operation'||!run||data?.source!=='external_agent'||data.external_run_id!==run.id||
+            data.taskId!==run.taskId||data.agentRunId!==run.agentRunId||data.childSessionId!==run.childSessionId||data.external_agent!==run.agent)continue;
+          card.title=externalExecutionName(run.agent,run.runtimeKind);
+          card.data={...data,external_runtime_kind:run.runtimeKind};
+        }
         snapshot.ai.workGoals = [snapshot.superagent.goal!];
         if(taskId){snapshot.ai.cards=snapshot.ai.cards.filter(card=>(card.data as any)?.taskId===goal.id||(card.data as any)?.root_turn_id===goal.originRootTurnId);snapshot.ai.agentRuns=snapshot.ai.agentRuns?.filter(run=>run.taskId===goal.id);snapshot.ai.cardsOffset=0;snapshot.ai.totalCards=snapshot.ai.cards.length;snapshot.ai.rootTurnId=goal.originRootTurnId;}
       }

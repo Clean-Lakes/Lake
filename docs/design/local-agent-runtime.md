@@ -25,6 +25,8 @@ flowchart TD
 
 `acp/` 路径、`acpProfiles/acpProbes/acpRuns`、`kind: acp` 和 `codex-acp` 子类型保留为兼容标识；它们不表示当前 Codex 使用 ACP 协议。已移除 ACP SDK 依赖、第三方 codex-acp 安装、Shell 启动脚本以及适配器专用环境变量。
 
+任务详情按运行来源显示执行器。新记录在官方 App Server 完成初始化后写入运行类型。对于旧 Codex 记录，Lake 只读核对项目 CLI 线程索引中的线程 ID、启动方和执行目录。三者匹配时显示“CLI”，无法确认来源时只显示 Agent 名称。
+
 ## 会话与轮次
 
 每个运行独占一个进程。先发送 `initialize`，收到应答后发送 `initialized`；以 `thread/start` 创建任务线程，只有同一冻结执行身份下明确完成的运行才能使用 `thread/resume`。已有线程编号在持久运行中保存，不从模型参数接收。
