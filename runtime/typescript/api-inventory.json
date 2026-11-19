@@ -103,6 +103,15 @@
       ]
     },
     {
+      "name": "chooseJumpServerAccount",
+      "routes": [
+        {
+          "method": "PUT",
+          "path": "`/api/resources/${encodeURIComponent(resource)}/jumpserver-accounts`"
+        }
+      ]
+    },
+    {
       "name": "clearModelSettings",
       "routes": [
         {
@@ -544,6 +553,24 @@
       ]
     },
     {
+      "name": "jumpServerAccounts",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "`/api/resources/${encodeURIComponent(resource)}/jumpserver-accounts`"
+        }
+      ]
+    },
+    {
+      "name": "jumpServerBinding",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "`/api/projects/${encodeURIComponent(project)}/jumpserver`"
+        }
+      ]
+    },
+    {
       "name": "mcpServers",
       "routes": [
         {
@@ -679,6 +706,15 @@
       ]
     },
     {
+      "name": "previewJumpServer",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/projects/${encodeURIComponent(project)}/jumpserver/preview`"
+        }
+      ]
+    },
+    {
       "name": "previewResourceImport",
       "routes": [
         {
@@ -787,6 +823,15 @@
       ]
     },
     {
+      "name": "removeJumpServer",
+      "routes": [
+        {
+          "method": "DELETE",
+          "path": "`/api/projects/${encodeURIComponent(project)}/jumpserver`"
+        }
+      ]
+    },
+    {
       "name": "renameSession",
       "routes": [
         {
@@ -855,6 +900,15 @@
         {
           "method": "PUT",
           "path": "`/api/projects/${encodeURIComponent(project)}/external-agents/${encodeURIComponent(agent)}`"
+        }
+      ]
+    },
+    {
+      "name": "saveJumpServer",
+      "routes": [
+        {
+          "method": "PUT",
+          "path": "`/api/projects/${encodeURIComponent(project)}/jumpserver`"
         }
       ]
     },
@@ -1183,6 +1237,15 @@
         {
           "method": "GET",
           "path": "`/api/projects/${encodeURIComponent(project)}/superagent`"
+        }
+      ]
+    },
+    {
+      "name": "syncJumpServer",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/projects/${encodeURIComponent(project)}/jumpserver/sync`"
         }
       ]
     },

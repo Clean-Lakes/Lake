@@ -72,6 +72,7 @@ import { ModelSettings } from "./ModelSettings";
 import {gatewayTaskMatches,type GatewayTaskTarget} from "./GatewaySettings";
 import { readImageSelection } from "./imageAttachments";
 import {clipboardFiles,partitionAttachments,attachmentCountLimit,fileSize} from "./fileAttachments";
+import {JumpServerSettings, JumpServerAccounts} from "./JumpServerSettings";
 import { ResourceImport } from "./ResourceImport";
 import { SSHResourceFields, emptySSH } from "./SSHResourceFields";
 import type { SSHConnectionInput,SuperWorker,SpecialistChannelPage,SpecialistReplyAuthor } from "../../shared/contracts";
@@ -241,6 +242,8 @@ function AppContent() {
   const [tagProject, setTagProject] = useState<Project | null>(null);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   useEffect(()=>{if(selectedTag&&catalog&&!catalog.tags?.some(t=>t.id===selectedTag))setSelectedTag(null);},[catalog,selectedTag]);
+  const [jumpProject,setJumpProject]=useState<Project|null>(null);
+  const [jumpAccount,setJumpAccount]=useState<Resource|null>(null);
   const [importProject, setImportProject] = useState<Project | null>(null);
   const [importHexhub, setImportHexhub] = useState(false);
   const [sshName, setSshName] = useState("");
@@ -943,6 +946,20 @@ function AppContent() {
     setCatalog(data);
     return data;
   }, []);
+  useEffect(()=>{
+    if(!bootstrap?.authenticated || bootstrap.backendRuntime!=="typescript")return;
+    const events=new EventSource("/api/jumpserver/events",{withCredentials:true});
+    const update=()=>{void refreshCatalog().catch(()=>{});};
+    events.addEventListener("catalog",update);
+    return ()=>events.close();
+  },[bootstrap?.authenticated,bootstrap?.backendRuntime,refreshCatalog]);
+  const mountedJumpProjects=Array.from(new Set(catalog?.resourceTree?.filter(n=>n.bindingId).map(n=>n.projectId))).sort().join(",");
+  useEffect(()=>{
+    if(!mountedJumpProjects)return;
+    const sync=()=>{if(document.visibilityState==="visible") for(const id of mountedJumpProjects.split(","))void api.syncJumpServer(id).catch(()=>{});};
+    sync();window.addEventListener("focus",sync);document.addEventListener("visibilitychange",sync);
+    return ()=>{window.removeEventListener("focus",sync);document.removeEventListener("visibilitychange",sync);};
+  },[mountedJumpProjects]);
   const pilotProjectId=sidebarProjectId??selectedProjectId??catalog?.projects[0]?.id;
   const pilotWorkspace=usePilotWorkspace(pilotProjectId,!!bootstrap?.authenticated&&!!catalog);
   const selectedSuperChannel=bootstrap?.backendRuntime==='typescript'?pilotWorkspace.workspace?.channels?.find(channel=>channel.sessionId===selectedSession?.id):undefined;
@@ -1663,7 +1680,7 @@ function AppContent() {
           return <div className="project-group" key={project.id}>
             <div className="project-contents">
               {showWorkflows && <button type="button" className="workflow-entry" onClick={() => setWorkflowProject(project)} disabled={!connected}><Glyph name="layers" size={15}/>运维工作流</button>}
-              {<ResourceTree navigationPanel selection={bulkSelection} onSelectAll={() => toggleBulkGroup(bulkCatalogTargets(catalog).filter(target => target.projectId === project.id && ["resource","folder"].includes(target.kind)))} onDelete={setNavigationDelete} project={project} resources={projectResources} nodes={catalog.resourceTree ?? []} disabled={!connected} refresh={refreshCatalog} onImport={() => { setImportHexhub(false); setImportProject(project); }} onAddResource={(parentId) => { setResourceKind("ssh"); setSshProject(project.id); setSshParent(parentId); setSshName(""); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft()); setSshError(""); }} renderResource={resource => {
+              {<ResourceTree navigationPanel selection={bulkSelection} onSelectAll={() => toggleBulkGroup(bulkCatalogTargets(catalog).filter(target => target.projectId === project.id && ["resource","folder"].includes(target.kind)))} onDelete={setNavigationDelete} project={project} resources={projectResources} nodes={catalog.resourceTree ?? []} disabled={!connected} refresh={refreshCatalog} onJumpServer={bootstrap?.backendRuntime==="typescript"?()=>setJumpProject(project):undefined} onImport={() => { setImportHexhub(false); setImportProject(project); }} onAddResource={(parentId) => { setResourceKind("ssh"); setSshProject(project.id); setSshParent(parentId); setSshName(""); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft()); setSshError(""); }} renderResource={resource => {
                 const terminalResourceRow=["local","ssh"].includes(resource.kind);
                 const addToConversationDisabled=!sessionConnected || !!pendingOperation || selectedSession?.projectId!==resource.projectId || !mentionable.some(item=>item.id===resource.id);
                 const addToConversationTitle=!selectedSession ? "请先打开一个对话" : selectedSession.projectId!==resource.projectId ? "请先打开此项目的对话" : "添加到对话";
@@ -1758,7 +1775,7 @@ function AppContent() {
 
     {notice && <div className="toast" role="status"><Glyph name="check" size={17}/>{notice}<button aria-label="关闭提示" onClick={() => setNotice("")}><Glyph name="close" size={14}/></button></div>}
     {editTerminalResource && (serviceResourceType(editTerminalResource)?<ServiceConfigEdit key={editTerminalResource.id} resource={editTerminalResource} connected={connected} onClose={() => setEditTerminalResource(null)} onSaved={terminalResourceSaved}/>:<TerminalConfigEdit key={editTerminalResource.id} resource={editTerminalResource} connected={connected} onClose={() => setEditTerminalResource(null)} onSaved={terminalResourceSaved}/>)}
-    {resourceConfigContext && <NavigationMenu title={resourceConfigContext.resource.name} x={resourceConfigContext.x} y={resourceConfigContext.y} onClose={() => setResourceConfigContext(null)} actions={[{label:"编辑终端配置",run:()=>setEditTerminalResource(resourceConfigContext.resource)}, ...(resourceConfigContext.resource.kind !== "local" ? [{label:"删除资源",danger:true,run:()=>setNavigationDelete({kind:"resource" as const,id:resourceConfigContext.resource.id,projectId:resourceConfigContext.resource.projectId,name:resourceConfigContext.resource.name})}] : [])]}/>}
+    {resourceConfigContext && <NavigationMenu title={resourceConfigContext.resource.name} x={resourceConfigContext.x} y={resourceConfigContext.y} onClose={() => setResourceConfigContext(null)} actions={resourceConfigContext.resource.jumpServer ? [{label:"选择 JumpServer 登录账号",run:()=>setJumpAccount(resourceConfigContext.resource)}] : [{label:"编辑终端配置",run:()=>setEditTerminalResource(resourceConfigContext.resource)}, ...(resourceConfigContext.resource.kind !== "local" ? [{label:"删除资源",danger:true,run:()=>setNavigationDelete({kind:"resource" as const,id:resourceConfigContext.resource.id,projectId:resourceConfigContext.resource.projectId,name:resourceConfigContext.resource.name})}] : [])]}/>}
     {editSession && <SessionEdit key={editSession.id} session={editSession} connected={connected} onClose={() => setEditSession(null)} onSaved={sessionRenamed}/>}
     {deleteTarget && <div className="modal-scrim" onMouseDown={event => { if (event.target === event.currentTarget && !deleteBusy) setDeleteTarget(null); }}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="delete-session-title"><div className="modal-header"><span className="modal-icon danger-icon"><Glyph name="trash" size={20}/></span><button className="icon-button" aria-label="关闭" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}><Glyph name="close"/></button></div><h2 id="delete-session-title">删除会话</h2><p className="modal-description">将删除会话「{deleteTarget.title}」的对话、专员结论、证据、审批和命令记录。此操作不可恢复。</p>{deleteError && <p className="form-error" role="alert">{deleteError}</p>}<div className="modal-actions"><button type="button" className="button secondary" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>取消</button><button type="button" className="button danger" onClick={() => void confirmDeleteSession()} disabled={deleteBusy || !connected}>{deleteBusy ? "正在删除…" : "删除会话"}</button></div></div></div>}
     {tagProject && <TagManager project={tagProject} tags={catalog.tags??[]} onClose={()=>{setTagProject(null);if(selectedTag&&!catalog.tags?.some(t=>t.id===selectedTag))setSelectedTag(null);}} onRefresh={async()=>{await refreshCatalog();}}/>}
@@ -1767,6 +1784,8 @@ function AppContent() {
     {navigationDelete && <NavigationDelete target={navigationDelete} onClose={()=>setNavigationDelete(null)} onDeleted={async()=>{setResourceTerminalMenu(null);if(navigationDelete.kind==="project" && selectedSession?.projectId===navigationDelete.id)navigate({sessionId:null,resourceId:null});else if(navigationDelete.kind==="resource"&&route.resourceId===navigationDelete.id)navigate({sessionId:route.sessionId,resourceId:null});await refreshCatalog();if(navigationDelete.kind!=="project")await refreshCurrent();}}/>}
     {trashOpen && <NavigationTrash onClose={()=>setTrashOpen(false)} onRestored={async()=>{await refreshCatalog();await refreshCurrent();}}/>}
     {settingsOpen && <ModelSettings onGatewayTask={inspectGatewayTask} watchdogEnabled={bootstrap?.backendRuntime==='typescript'} memoryEngine={bootstrap?.memoryEngine} initialTab={settingsInitialTab} onClose={() => setSettingsOpen(false)} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut} onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {setSettingsOpen(false);setAgentOptionsOpen(true);} : undefined} onProjectMemory={selectedProjectId ? () => {const project=projectList.find(p=>p.id===selectedProjectId);if(project){setSettingsOpen(false);setMemoryProject(project);}} : undefined} projectId={selectedProjectId??sidebarProject?.id} projectName={projectList.find(project=>project.id===(selectedProjectId??sidebarProject?.id))?.name} ignoreProjectMemory={ignoreProjectMemory} onIgnoreProjectMemoryChange={setIgnoreProjectMemory}/>}
+    {jumpProject && <JumpServerSettings key={jumpProject.id} project={jumpProject} refresh={refreshCatalog} onClose={()=>setJumpProject(null)}/>}
+    {jumpAccount && <JumpServerAccounts key={jumpAccount.id} resource={jumpAccount} refresh={refreshCatalog} onClose={()=>setJumpAccount(null)}/>}
     {importProject && <ResourceImport project={importProject} hexhub={importHexhub} refresh={refreshCatalog} onClose={() => { setImportProject(null); setImportHexhub(false); }} onImported={notify}/>}
     {sshProject && <div className="modal-scrim"><div className="modal resource-create-dialog" role="dialog" aria-modal="true" aria-labelledby="ssh-title" onKeyDown={event => {
       if (event.key === "Escape" && !sshBusy) {event.stopPropagation();setSshProject(null);setSshParent(null);setSshDraft(emptySSH());setServiceSettings(emptyServiceDraft());}

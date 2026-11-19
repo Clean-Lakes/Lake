@@ -104,6 +104,13 @@ export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"model
 };
 
 export const api = {
+  jumpServerBinding: (project: string) => request<{binding: import("../../shared/contracts").JumpServerBinding | null}>(`/api/projects/${encodeURIComponent(project)}/jumpserver`),
+  previewJumpServer: (project: string, data: import("../../shared/contracts").JumpServerLogin) => post<import("../../shared/contracts").JumpServerPreview>(`/api/projects/${encodeURIComponent(project)}/jumpserver/preview`, data),
+  saveJumpServer: (project: string, data: import("../../shared/contracts").JumpServerMount) => request<import("../../shared/contracts").JumpServerBinding>(`/api/projects/${encodeURIComponent(project)}/jumpserver`,{method:"PUT",body:JSON.stringify(data)}),
+  syncJumpServer: (project: string) => post<import("../../shared/contracts").JumpServerBinding>(`/api/projects/${encodeURIComponent(project)}/jumpserver/sync`,{}),
+  removeJumpServer: (project: string, id:string, revision:number) => request(`/api/projects/${encodeURIComponent(project)}/jumpserver`,{method:"DELETE",body:JSON.stringify({id,revision})}),
+  jumpServerAccounts: (resource: string) => request<{accounts:{id:string;name:string;alias:string}[]}>(`/api/resources/${encodeURIComponent(resource)}/jumpserver-accounts`),
+  chooseJumpServerAccount: (resource: string, accountId:string) => request(`/api/resources/${encodeURIComponent(resource)}/jumpserver-accounts`,{method:"PUT",body:JSON.stringify({accountId})}),
   externalAgents:(project:string,signal?:AbortSignal)=>request<{agents:import('../../shared/external-agents').ExternalAgentStatus[]}>(`/api/projects/${encodeURIComponent(project)}/external-agents`,{signal}),
   saveExternalAgent:(project:string,agent:string,data:Record<string,unknown>)=>request(`/api/projects/${encodeURIComponent(project)}/external-agents/${encodeURIComponent(agent)}`,{method:'PUT',body:JSON.stringify(data)}),
   probeExternalAgent:(project:string,agent:string)=>post(`/api/projects/${encodeURIComponent(project)}/external-agents/${encodeURIComponent(agent)}/probe`,{}),

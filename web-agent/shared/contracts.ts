@@ -1,6 +1,21 @@
 import type {LakeAvatarName} from './specialist-avatars';
 export type SSHConnection = { shell?: "sh" | "bash" | "zsh" | "fish"; host: string; port: number; username: string; authMethod?: "key" | "password"; identityFile?: string; credentialRef?: string };
 export type SSHConnectionInput = SSHConnection & { password?: string; passphrase?: string; privateKey?: string };
+export type JumpServerBinding = {
+  id: string; projectId: string; revision: number; origin: string; orgId: string;
+  userId: string; username: string; nodeId: string | null; nodeName: string;
+  kokoHost: string; kokoPort: number; authMethod: "accessKey" | "bearer";
+  lastSync: string | null; state: "ready" | "offline" | "denied"; assetCount: number;
+};
+export type JumpServerLogin = {
+  origin: string; orgId: string; authMethod: "accessKey" | "bearer"; keyId?: string;
+  secret: string; ca?: string; allowHttp?: boolean;
+};
+export type JumpServerPreview = { userId: string; username: string; nodes: {id: string; name: string}[] };
+export type JumpServerMount = JumpServerLogin & {
+  userId: string; nodeId: string | null; kokoHost: string; kokoPort: number; expectedRevision: number;
+};
+export type JumpServerRef = { bindingId: string; assetId: string; endpointHash: string; accountId?: string; accountAlias?: string };
 export type SSHKeyDirectory = { directory: string; keys: { name: string; path: string }[] };
 
 export type Project = {
@@ -27,11 +42,12 @@ export type ProjectMemoryList = { settings: ProjectMemorySettings; items: Projec
 export type ProjectMemoryJob = {dispatchCount?:number;unknownAttempts?:number;knownTokens?:number; jobId: string; status: string; attempts: number; lastErrorCode: string; createdAt: string; updatedAt: string; usageJSON: string };
 
 export type Resource = {
+  jumpServer?: JumpServerRef;
   configurationRevision?: number;
   id: string;
   projectId: string;
   name: string;
-  kind: "local" | "ssh" | "database" | "docker" | "redis" | "kubernetes" | "apisix" | "prometheus" | "victoriametrics";
+  kind: "local" | "ssh" | "jumpserver" | "database" | "docker" | "redis" | "kubernetes" | "apisix" | "prometheus" | "victoriametrics";
   settings?: Record<string, unknown>;
   ssh?: SSHConnection;
   description: string;
@@ -270,7 +286,7 @@ export type SessionSnapshot = {
 
 export type CommandStopNotice = {entryId:string;terminalId:string;resourceId:string;resourceName:string;requestedAt:string;status:string;exitCode:number|null;finishedAt:string|null};
 
-export type ResourceTreeNode = { id: string; projectId: string; parentId: string | null; kind: "folder" | "resource"; name: string; resourceId: string | null; position: number; builtin?: boolean };
+export type ResourceTreeNode = { id: string; projectId: string; parentId: string | null; kind: "folder" | "resource"; name: string; resourceId: string | null; position: number; builtin?: boolean; bindingId?: string };
 
 export type SSHHostKeyTrust = { id: string; resourceId: string; host: string; port: number; algorithm: string; fingerprint: string; previousFingerprints: string[]; changed: boolean; scope: "lake" };
 

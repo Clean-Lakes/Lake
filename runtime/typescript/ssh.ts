@@ -12,6 +12,7 @@ import {isIP} from 'node:net';
 import type {Resource,SSHConnection,SSHHostKeyTrust} from '../../web-agent/shared/contracts';
 import {HttpError,id,LakeStore} from './store';
 import type {LakeSecurity} from './security';
+import type {LakeJumpServer} from './jumpserver';
 import {digest} from './tasks';
 
 export type TerminalDevice={pid?:number;readonly error?:string;write(data:string):void;resize(cols:number,rows:number):void;kill(signal?:string):void;
@@ -34,7 +35,7 @@ export class LakeSSH {
  private peerKeys=new WeakMap<Client,string>();
  private secrets=new Set<string>();
  private closed=false;
- constructor(readonly store:LakeStore,readonly security:LakeSecurity,readonly notify:(session:string)=>void,readonly redact:(value:string)=>string,readonly registerSecret?:(value:string)=>void){}
+ constructor(readonly store:LakeStore,readonly security:LakeSecurity,readonly notify:(session:string)=>void,readonly redact:(value:string)=>string,readonly registerSecret?:(value:string)=>void,readonly jumpServer?:LakeJumpServer){}
  private privateFile(value:string,maximum=1024*1024) {
   const root=join(this.store.home,'secrets'),path=isAbsolute(value)?value:resolve(root,value);
   const parent=lstatSync(root),info=lstatSync(path);
@@ -83,10 +84,12 @@ export class LakeSSH {
   }catch(error){rollback();throw error;}
  }
  revision(resource:Resource) {
+  if(resource.jumpServer){if(!this.jumpServer)throw new HttpError(409,'JumpServer 未就绪');return this.jumpServer.revision(resource);}
   const config=this.configuration(resource.ssh),files=[config.identityFile,config.credentialRef].filter(Boolean).map(value=>{const info=lstatSync(this.privateFile(value!));return [info.ino,info.size,info.mtimeMs,info.ctimeMs];});
   return digest([resource.id,resource.projectId,config,files,this.store.get('resourceRevisions',resource.id)??1]);
  }
  mutationTarget(resource:Resource, connection?:Client):SSHTarget|undefined {
+  if(resource.jumpServer)return; // A KoKo host key authenticates the gateway, never the downstream machine.
   if(resource.kind!=='ssh' || !resource.ssh) return;
   const config = this.configuration(resource.ssh);
   const raw = canonicalHost(config.host), family = isIP(raw);
@@ -162,6 +165,7 @@ export class LakeSSH {
  async connect(session:string,resource:Resource,signal:AbortSignal):Promise<Client> {
   this.security.check();if(this.closed||signal.aborted)throw new HttpError(409,'SSH 连接已取消');
   if(resource.kind!=='ssh'||resource.projectId!==this.store.session(session).projectId||resource.status!=='available')throw new HttpError(403,'SSH 资源不在本项目或连接配置不可用');
+  if(resource.jumpServer)throw new HttpError(409,'JumpServer 终端传输尚未就绪');
   const config=this.configuration(resource.ssh),revision=this.revision(resource),pins=this.pins(config),secret=config.credentialRef?readFileSync(this.privateFile(config.credentialRef,4096),'utf8'):undefined;
   if(secret){if(/[\0\r\n]/.test(secret))throw new HttpError(409,'SSH 密码或口令文件无效');this.secrets.add(secret);this.registerSecret?.(secret);}
   const conn=new Client();this.clients.add(conn);

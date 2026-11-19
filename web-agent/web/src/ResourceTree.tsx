@@ -36,12 +36,12 @@ function ResourceFolderDialog({editor,location,busy,blocked,error,returnFocus,on
   </dialog>,document.body);
 }
 function FolderIcon() { return <Glyph name="folder" size={16} className="resource-tree-folder-icon"/>; }
-export function ResourceTree({project, resources, nodes, disabled, renderResource, refresh, onAddResource, onImport, onDelete, selection, onSelectAll, filtering = false, navigationPanel = false}: {
+export function ResourceTree({project, resources, nodes, disabled, renderResource, refresh, onAddResource, onImport, onJumpServer, onDelete, selection, onSelectAll, filtering = false, navigationPanel = false}: {
   navigationPanel?: boolean;
   filtering?: boolean;
   selection?: BulkSelection; onSelectAll?: () => void;
   project: Project; resources: Resource[]; nodes: ResourceTreeNode[]; disabled: boolean;
-  renderResource: (resource: Resource) => ReactNode; refresh: () => Promise<unknown>; onAddResource: (parentId: string | null) => void; onImport: () => void; onDelete:(target:NavigationDeleteTarget)=>void;
+  renderResource: (resource: Resource) => ReactNode; refresh: () => Promise<unknown>; onAddResource: (parentId: string | null) => void; onImport: () => void; onJumpServer?: () => void; onDelete:(target:NavigationDeleteTarget)=>void;
 }) {
   const actionHost=useContext(SidebarResourceActions);
   const tree = projectResourceTree(project.id, nodes, resources);
@@ -210,7 +210,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   };
   const render = (parent: string | null, depth = 0): ReactNode => childrenOf(parent).map(node => {
     const resource = node.resourceId ? resourceMap.get(node.resourceId) : undefined;
-    const builtin = resource?.kind === "local";
+    const builtin = resource?.kind === "local" || !!node.bindingId;
     const expanded = filtering || expandedFolders.includes(node.id);
     const siblings = childrenOf(parent).filter(item=>item.kind===node.kind&&!item.builtin); const index = siblings.findIndex(item => item.id === node.id);
     return <div className={`resource-tree-node ${dragging === node.id ? "is-dragging" : ""}`} key={node.id}>
@@ -231,7 +231,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
           onPointerMove={pointerMove} onPointerUp={event=>pointerEnd(event)} onPointerCancel={event=>pointerEnd(event,true)} onLostPointerCapture={event=>pointerEnd(event,true)}
           onDragStart={event => {dragSource.current = node.id;event.dataTransfer.setData("application/x-lake-resource-tree",node.id);event.dataTransfer.effectAllowed="move";setDragging(node.id);setError("");}} onDragEnd={() => {dragSource.current = null;setDragging(null);setDrop(null);}}><Glyph name="grip" size={12}/></button>}
         {node.kind === "folder" ? <div className="resource-folder-row">
-          <button type="button" className="resource-folder-toggle" title={folderPath(node)} aria-expanded={expanded} onClick={() => setExpandedFolders(values => expanded ? values.filter(id => id !== node.id) : [...values,node.id])}>{depth > 0 && <Glyph name="chevron" size={11} className={expanded ? "folder-chevron open" : "folder-chevron"}/>}<FolderIcon/><span className="resource-folder-name">{node.name}</span><small className="resource-folder-count" title={`${childrenOf(node.id).length} 个子项`}>{childrenOf(node.id).length}</small></button>
+          <button type="button" className="resource-folder-toggle" title={folderPath(node)} aria-expanded={expanded} onClick={() => {setExpandedFolders(values => expanded ? values.filter(id => id !== node.id) : [...values,node.id]); if(!expanded && node.bindingId) void api.syncJumpServer(project.id).catch(e=>setError(readableError(e)));}}>{depth > 0 && <Glyph name="chevron" size={11} className={expanded ? "folder-chevron open" : "folder-chevron"}/>}<FolderIcon/><span className="resource-folder-name">{node.name}</span><small className="resource-folder-count" title={`${childrenOf(node.id).length} 个子项`}>{childrenOf(node.id).length}</small></button>
           <div className="resource-folder-actions"><button type="button" className="navigation-more-button" disabled={blocked} aria-label={`管理文件夹 ${folderPath(node)}`} aria-haspopup="menu" title="更多操作" onClick={event => {contextAnchor.current=event.currentTarget;const rect=event.currentTarget.getBoundingClientRect();setContext({id:node.id,x:rect.right-208,y:rect.bottom+6});}}><Glyph name="more" size={15}/></button></div>
         </div> : resource && <><div className="resource-tree-resource-content">{renderResource(resource)}</div>{!["local", "ssh"].includes(resource.kind) && <button type="button" className="navigation-more-button resource-more-button" disabled={blocked} aria-label={`管理资源 ${resource.name}`} aria-haspopup="menu" title="更多操作" onClick={event=>{contextAnchor.current=event.currentTarget;const rect=event.currentTarget.getBoundingClientRect();setContext({id:node.id,x:rect.right-208,y:rect.bottom+6});}}><Glyph name="more" size={15}/></button>}</>}
       </div>
@@ -270,6 +270,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
       }
     }}>
       <button type="button" role="menuitem" onClick={() => { setAddOpen(false); onAddResource(null); }}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/><path d="M7 6.5h.01M7 17.5h.01M11 6.5h7M11 17.5h7"/></svg><span>新建资源</span></button>
+      {onJumpServer && <button type="button" role="menuitem" onClick={()=>{setAddOpen(false);onJumpServer();}}><Glyph name="server" size={16}/><span>JumpServer 资源来源</span></button>}
       <button type="button" role="menuitem" onClick={() => { setAddOpen(false); onImport(); }}><FolderIcon/><span>导入资源</span></button>
       <button type="button" role="menuitem" onClick={() => { setAddOpen(false); openEditor({parentId:null,name:""},addButton.current); }}><FolderIcon/>新建目录</button>
     </div>}
