@@ -2,6 +2,8 @@
 .jumpserver-dialog header,.jumpserver-actions { display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .jumpserver-dialog h2,.jumpserver-dialog .jumpserver-project { margin:0; }
 .jumpserver-dialog .jumpserver-project { color:var(--text-secondary); margin:4px 0 16px; }
+.jumpserver-dialog summary { cursor:pointer; color:var(--text-secondary); }
+.jumpserver-dialog details[open] > :is(label,textarea) { margin-top:8px; }
 .jumpserver-dialog fieldset { display:grid; gap:12px; border:0; padding:0; margin:0; min-width:0; }
 .jumpserver-dialog label { display:grid; gap:5px; font-size:var(--font-size-ui); }
 .jumpserver-dialog input:not([type=checkbox]),.jumpserver-dialog textarea { width:100%; min-width:0; box-sizing:border-box; padding:7px 9px; color:inherit; background:var(--background); border:1px solid var(--border); }

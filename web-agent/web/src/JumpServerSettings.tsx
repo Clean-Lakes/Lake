@@ -5,6 +5,8 @@ import {AppSelect} from "./AppSelect";
 import {Glyph} from "./Icons";
 import "./jumpServer.css";
 
+const defaultOrganizationId = "00000000-0000-0000-0000-000000000002";
+
 function Dialog({title, children, close}: {title:string; children:ReactNode; close:()=>void}) {
   const ref=useRef<HTMLElement>(null);
   useEffect(()=>{const previous=document.activeElement;ref.current?.focus();return ()=>{if(previous instanceof HTMLElement && previous.isConnected)previous.focus();};},[]);
@@ -24,7 +26,7 @@ function Dialog({title, children, close}: {title:string; children:ReactNode; clo
 export function JumpServerSettings({project,onClose,refresh}: {project:Project;onClose:()=>void;refresh:()=>Promise<unknown>}) {
   const [binding,setBinding]=useState<JumpServerBinding|null>(null), [loading,setLoading]=useState(true);
   const [edit,setEdit]=useState(false), [confirmRemove,setConfirmRemove]=useState(false);
-  const [login,setLogin]=useState<JumpServerLogin>({origin:"",orgId:"00000000-0000-0000-0000-000000000002",authMethod:"accessKey",secret:""});
+  const [login,setLogin]=useState<JumpServerLogin>({origin:"",orgId:"",authMethod:"accessKey",secret:""});
   const [preview,setPreview]=useState<JumpServerPreview|null>(null),[node,setNode]=useState("");
   const [host,setHost]=useState(""),[port,setPort]=useState("2222");
   const [busy,setBusy]=useState(false),[error,setError]=useState("");
@@ -41,13 +43,14 @@ export function JumpServerSettings({project,onClose,refresh}: {project:Project;o
   const change=(value:Partial<JumpServerLogin>)=>{setLogin(v=>({...v,...value}));setPreview(null);setError("");};
   const run=async(action:()=>Promise<void>)=>{setBusy(true);setError("");try {await action();} catch(e){if(mounted.current)setError(readableError(e));} finally {if(mounted.current)setBusy(false);}};
   const submit=async()=>{
+    const credentials={...login,orgId:binding?.orgId ?? (login.orgId.trim() || defaultOrganizationId)};
     if(!preview) {
-      const p=await api.previewJumpServer(project.id,login);
+      const p=await api.previewJumpServer(project.id,credentials);
       setPreview(p);
       if(!host)setHost(new URL(login.origin).hostname.replace(/^\[|\]$/g,""));
       if(node && !p.nodes.some(n=>n.id===node))setNode("");
     } else {
-      const b=await api.saveJumpServer(project.id,{...login,userId:preview.userId,nodeId:node||null,kokoHost:host.trim(),kokoPort:Number(port),expectedRevision:binding?.revision??0});
+      const b=await api.saveJumpServer(project.id,{...credentials,userId:preview.userId,nodeId:node||null,kokoHost:host.trim(),kokoPort:Number(port),expectedRevision:binding?.revision??0});
       setLogin(v=>({...v,secret:"",keyId:"",ca:""}));setBinding(b);setPreview(null);setEdit(false);await refresh();
     }
   };
@@ -64,10 +67,12 @@ export function JumpServerSettings({project,onClose,refresh}: {project:Project;o
     </> : <form onSubmit={e=>{e.preventDefault();void run(submit);}}><fieldset disabled={busy}>
       <label>JumpServer API 地址<input required type="url" placeholder="https://jumpserver.example.com" value={login.origin} onChange={e=>change({origin:e.target.value})}/></label>
       {login.origin.startsWith("http://")&&<label className="jumpserver-check"><input type="checkbox" checked={!!login.allowHttp} onChange={e=>change({allowHttp:e.target.checked})}/>允许此内网 HTTP 连接，登录令牌将明文传输</label>}
-      <label>组织 UUID<input required value={login.orgId} onChange={e=>change({orgId:e.target.value})}/></label>
       <label>个人认证方式<AppSelect value={login.authMethod} onChange={e=>change({authMethod:e.target.value as JumpServerLogin["authMethod"],secret:""})}><option value="accessKey">Access Key</option><option value="bearer">Bearer Token</option></AppSelect></label>
       {login.authMethod==="accessKey"&&<label>Access Key ID<input required autoComplete="off" value={login.keyId??""} onChange={e=>change({keyId:e.target.value})}/></label>}
       <label>{login.authMethod==="accessKey"?"Access Key Secret":"个人 Token"}<input required type="password" autoComplete="off" value={login.secret} onChange={e=>change({secret:e.target.value})}/></label>
+      <details><summary>{binding?"查看绑定组织":"切换组织"}</summary>
+        <label>组织 UUID<input value={binding?.orgId ?? login.orgId} readOnly={!!binding} placeholder="留空使用默认组织" onChange={e=>change({orgId:e.target.value})}/></label>
+      </details>
       {login.origin.startsWith("https:")&&<details><summary>内部 CA 证书</summary><textarea aria-label="CA 公钥证书 PEM" placeholder="-----BEGIN CERTIFICATE-----" value={login.ca??""} onChange={e=>change({ca:e.target.value})}/></details>}
       {preview&&<><p role="status">已验证用户 <strong>{preview.username}</strong></p>
         <label>挂载授权目录<AppSelect value={node} onChange={e=>setNode(e.target.value)}><option value="">我的全部授权资产</option>{preview.nodes.map(n=><option key={n.id} value={n.id}>{n.name}</option>)}</AppSelect></label>
