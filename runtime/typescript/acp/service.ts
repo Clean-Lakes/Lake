@@ -137,6 +137,7 @@ export class LakeExternalAgents {
       live.process=transport;
       const cancel=()=>{void transport.cancel().finally(()=>transport.close());};controller.signal.addEventListener('abort',cancel,{once:true});
       await transport.initialize(controller.signal);
+      run.runtimeKind=profile.runtimeKind;
       run.externalSessionId=await transport.openSession({cwd:directory,threadId:prior?.externalSessionId,systemPrompt:actor.systemPrompt},controller.signal);
       guard();run.state='running';run.dispatchPhase='dispatching';persist();event({kind:'status',status:'running'});
       const prompt=transport.exec(instruction,controller.signal,deadline);
