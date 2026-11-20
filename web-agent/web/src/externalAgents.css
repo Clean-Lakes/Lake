@@ -10,9 +10,6 @@
 .external-agent-fields{border:0;margin:14px 0;padding:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
 .external-agent-fields input{width:100%;min-width:0}
 .external-agent-panel footer{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
-.external-role-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--border)}
-.external-role-row:last-child{border-bottom:0}
-.external-role-row .app-select{width:220px;max-width:65%}
 .model-settings-tabs{overflow-x:auto;gap:20px}
 .model-settings-tabs>button{white-space:nowrap;flex-shrink:0}
 .external-execution-report{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text-secondary);font-size:13px;line-height:1.7}

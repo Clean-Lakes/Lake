@@ -5,6 +5,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import type {Message,SessionSnapshot,SuperWorker,SuperWorkspace} from '../../shared/contracts';
 import {awaitingPilotReport,continuousPilotDispatchRows,pilotDispatchRows,pilotSpecialistBinding,pilotSpecialistPresentation,pilotSpecialistReply,type PilotSpecialistRow} from '../src/pilotSpecialistReplies';
 import {PilotSpecialistReplyView} from '../src/PilotSpecialistConversation';
+import {redundantJointReports} from '../src/pilotReportGroups';
 
 const at='2026-11-16T00:00:00Z';
 const user:Message={id:'question',sessionId:'pilot',role:'user',text:'检查服务器',createdAt:at};
@@ -150,6 +151,41 @@ test('reports for another owner or router cannot retire the retained reply',()=>
   const retained=advance(initial,workspace([item]),[user,wrong],roots)[0]!;
   assert.deepEqual(retained.reportedTurns,[]);assert.equal(retained.finalReport,undefined);assert.match(html(retained),/进度暂未更新/);
  }
+});
+
+test('a host-confirmed report replaces the same task slot across SDK invocations',()=>{
+ const item=worker(),initial=advance([],workspace([item])),row=initial[0]!;
+ const roots=new Map([[pilotSpecialistBinding(row),'sdk-root']]);
+ const result={...report(row,'finish-root'),replyToMessageId:user.id,text:'正式结论。'};
+ const beforeWorkspace=advance(initial,workspace([item]),[user,result],roots)[0]!;
+ assert.equal(beforeWorkspace.finalReport,result,'the report stream can lead the workspace stream');
+ assert.match(html(beforeWorkspace,snapshot(row)).replace(/<[^>]*>/g,''),/正式结论。/);
+ item.activity=undefined;item.assignmentState='parked';item.task={...item.task,state:'completed'};
+ item.pilotReport={messageId:result.id,executionSettled:true};
+ assert.equal(advance(initial,workspace([item]),[user,result])[0]!.finalReport,result);
+ const wrongSource={...result,replyToMessageId:'another-question'};
+ assert.equal(advance(initial,workspace([item]),[user,wrongSource],roots)[0]!.finalReport,undefined);
+});
+
+test('published stage prose keeps working motion and trims only its terminal full stop',()=>{
+ const item=worker(),row=advance([],workspace([item]))[0]!;
+ const live=snapshot(row),ai=live.ai!;
+ const rendered=html(row,{...live,ai:{...ai,status:'completed',replyStatus:'completed',
+  cards:ai.cards.map(card=>({...card,status:'completed',content:'先核对版本 1.4。正在查看样例记录。'}))}});
+ assert.match(rendered,/data-motion="working"/);
+ assert.match(rendered.replace(/<[^>]*>/g,''),/先核对版本 1\.4。正在查看样例记录(?!。)/);
+});
+
+test('hide a repeated joint receipt only when all copied originals are in the same user turn',()=>{
+ const [a,b]=advance([],workspace([worker(),worker('db')]));
+ const first={...report(a!),id:'first',replyToMessageId:user.id,text:'检查 A 完成。'};
+ const second={...report(b!),id:'second',replyToMessageId:user.id,text:'检查 B 完成。',author:{...b!.author,taskId:a!.worker.task.taskId}};
+ const aggregate:Message={id:'aggregate',sessionId:user.sessionId,role:'assistant',createdAt:at,
+  jointReport:{taskId:a!.worker.task.taskId,reportId:'aggregate-id'},text:'「核对」的 2 位专员均已提交报告。\n\n专员甲：检查 A 完成。\n\n专员乙：检查 B 完成。'};
+ assert.deepEqual([...redundantJointReports([first,second,aggregate])],['aggregate']);
+ assert.equal(redundantJointReports([first,aggregate]).size,0);
+ assert.equal(redundantJointReports([first,{...second,replyToMessageId:'another'},aggregate]).size,0);
+ assert.equal(redundantJointReports([first,second,{...aggregate,text:'这是 Pilot 独立写的结论。'}]).size,0);
 });
 
 test('final report projection requires an observed root and a formal specialist message without guessing from text',()=>{

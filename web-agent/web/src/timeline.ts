@@ -23,7 +23,7 @@ export function replySourceMessageId(snapshot:SessionSnapshot){
 }
 function entrySource(entry:TranscriptEntry){
  const source=(entry.card?.data as {source_message_id?:unknown}|undefined)?.source_message_id;
- return entry.sourceMessageId??entry.message?.replyToMessageId??(typeof source==='string'?source:undefined);
+ return entry.sourceMessageId??entry.message?.replyToMessageId??entry.message?.conversation?.sourceMessageId??(typeof source==='string'?source:undefined);
 }
 export function isCompactionFailureEntry(entry:Pick<TranscriptEntry,'card'|'message'>):boolean {
   const text=entry.card?.type==='error'?entry.card.content:entry.message?.role==='system'?entry.message.text:undefined;
@@ -67,7 +67,10 @@ export function orderedTranscript(snapshot: SessionSnapshot, cards: AICard[], be
     if(data?.root_turn_id&&typeof data.source_message_id==='string')rootSources.set(data.root_turn_id,data.source_message_id);
   }
   if(snapshot.ai?.rootTurnId&&snapshot.ai.sourceMessageIds?.[0])rootSources.set(snapshot.ai.rootTurnId,snapshot.ai.sourceMessageIds[0]);
-  const sources=new Set([...rootSources.values(),...snapshot.messages.flatMap(m=>m.replyToMessageId?[m.replyToMessageId]:[])]);
+  const sources=new Set([...rootSources.values(),...snapshot.messages.flatMap(message=>{
+    const source=message.replyToMessageId??message.conversation?.sourceMessageId;
+    return source?[source]:[];
+  })]);
   const entries: TranscriptEntry[] = [
     ...snapshot.messages.filter(m => (before === 0 || compareTime(m.createdAt, earliest) >= 0 || m.id === earlierUser || sources.has(m.id))).map(message => ({
       at: message.createdAt, id: message.id, message,

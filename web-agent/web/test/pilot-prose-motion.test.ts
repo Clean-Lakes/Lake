@@ -10,9 +10,11 @@ import {SpecialistProcessLink} from '../src/SpecialistProcessLink';
 const at='2026-11-16T00:00:00Z';
 const prose='已收到第一段公开进度，继续核对结果。';
 const processLink=(html:string)=>html.match(/<button\b[^>]*data-specialist-process="[^"]*"[\s\S]*?<\/button>/)?.[0]??'';
-const assertQuietProse=(html:string,text=prose)=>{
+const assertQuietProse=(html:string,text?:string)=>{
  const body=html.match(/<div class="ai-card ai-message">([\s\S]*?)<\/div>/)?.[1]??'';
- assert.ok(body.replace(/<[^>]*>/g,'').includes(text),'the public body stays readable as received');
+ const plain=body.replace(/<[^>]*>/g,'');
+ assert.ok(plain.includes(text??prose.slice(0,-1)),'the public body stays readable');
+ if(!text)assert.ok(!plain.includes(prose),'interim prose omits the closing full stop');
  assert.doesNotMatch(body,/data-live-(?:motion|glow)|live-text-motion-character/,'public prose has no continuous motion or glow hosts');
 };
 function progress(phase:'thinking'|'tool'='thinking'){
@@ -43,11 +45,30 @@ test('received public prose stays still while its process entry moves through th
  }
 });
 
+test('a worker completion snapshot arriving before the workspace keeps motion through the report handoff',()=>{
+ const props=progress('tool');
+ props.row.observedRootTurnId='current-root';
+ props.snapshot.superagent!.task={...props.row.worker.task,state:'completed'};
+ props.snapshot.ai!.status='completed';
+ props.snapshot.ai!.replyStatus='completed';
+ const html=render(props);
+ assertQuietProse(html);
+ assert.match(html,/<span class="response-avatar"[^>]*>[\s\S]*?data-motion="working"/);
+ assert.match(processLink(html),/data-live-motion="active" data-live-glow="active"/);
+});
+
 test('the process entry stops for a real wait, terminal state, disconnection, or hidden surface without removing prose',()=>{
  for(const status of ['waiting_approval','waiting_input','waiting_external','queued','completed','failed','cancelled','interrupted','paused'] as const){
   const props=progress('tool');props.snapshot.ai!.status=status;
   // A stale running reply projection must not override the authoritative wait.
-  if(status==='completed')props.snapshot.ai!.replyStatus='completed';
+  if(status==='completed'){
+   props.snapshot.ai!.replyStatus='completed';
+   props.row.activity.phase='updating';
+   props.row.continuity='terminal';
+   props.row.observedRootTurnId='current-root';
+   props.row.worker.task={...props.row.worker.task,state:'completed'};
+   props.snapshot.superagent!.task=props.row.worker.task;
+  }
   const html=render(props);
   assertQuietProse(html);
   assert.match(processLink(html),/data-live-motion="still" data-live-glow="still"/,status);
@@ -76,7 +97,7 @@ test('adopted final reports stop the process light even when a live snapshot arr
  const props=progress('tool'),final='本次检查已经完成。';
  props.row.finalReport={id:'report',sessionId:'pilot',role:'assistant',text:final,createdAt:at,author:{...props.row.author,rootTurnId:'current-root'}};
  const html=render(props);
- assertQuietProse(html,final);assert.doesNotMatch(html,new RegExp(prose));
+ assertQuietProse(html,final);assert.doesNotMatch(html,new RegExp(prose.slice(0,-1)));
  assert.match(processLink(html),/data-live-motion="still" data-live-glow="still"/);
  assert.doesNotMatch(html,/data-live-(?:motion|glow)="active"/);
 });

@@ -4,6 +4,7 @@ const { mkdtemp, mkdir, writeFile, readFile, access } = require("node:fs/promise
 const { tmpdir } = require("node:os");
 const { join } = require("node:path");
 const { createServer } = require("node:http");
+const { enableNativeSpecialistFixture } = require('./test-fixtures/native-specialists.cjs');
 process.env.LAKE_TS_IMPORT_ONLY = "1";
 const { startLakeServer, previewLegacyMigration, rollbackMigration, sessionArchiveName, legacySessionArchiveName } = require("../../bin/lake-runtime/server.cjs");
 
@@ -149,6 +150,7 @@ async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = 
   let app = await startLakeServer(options),usesCodexFixture=false;
   const explicitNativeRoles=()=>{
     if(!nativeSpecialists)return;
+    enableNativeSpecialistFixture(app.superagent);
     // These existing regression scenarios explicitly exercise native Workers.
     // Dedicated legacy-Codex scenarios opt out and verify compatibility defaults.
     const put=app.store.put.bind(app.store);
@@ -898,6 +900,13 @@ function superReply(request, mode, home) {
     return {content:'已派发给巡检专员。'};
   }
   if (mode === "super-joint-contribution") {
+    if(request.messages.some(message=>message.role==='system'&&content(message).includes('giving the outcome of a joint task'))){
+      assert.equal((request.tools??[]).length,0);
+      const input=request.messages.filter(message=>message.role==='user').map(content).join('\n');
+      assert.match(input,/已检查甲目录/);
+      assert.match(input,/已复核乙目录/);
+      return {content:'甲、乙两个目录均已完成本次核对。'};
+    }
     if (router) {
       const start = request.messages.findLastIndex(m => m.role === "user" && content(m).startsWith("[LAKE ADMITTED HUMAN EVENTS"));
       const event = JSON.parse(content(request.messages[start]).split("\n")[1])[0];
@@ -971,7 +980,7 @@ function superReply(request, mode, home) {
         assert.ok(!schema.required.includes('name')&&!schema.required.includes('duties'),'an avatar-only update must not force resubmission of other configuration');
         const role=result('list_specialists').items.find(role=>role.name==='牛马专员');
         return call('manage_specialist',{event_id:event.id,part_key:'configuration',action:create?'create':'update',quote:event.text,
-          ...(create?{role_key:'beaver-specialist',name:'牛马专员',duties:'核实当前项目证据',execution:{kind:'native'}}:{role_id:role.id,expected_revision:role.revision}),
+          ...(create?{role_key:'beaver-specialist',name:'牛马专员',duties:'核实当前项目证据'}:{role_id:role.id,expected_revision:role.revision}),
           avatar_id:reset?'auto':result('list_specialist_avatars').items[0].id,
           ...(event.text.includes('Codex')?{execution:{kind:'acp',agent:'codex'}}:{})});
       }
@@ -988,7 +997,7 @@ function superReply(request, mode, home) {
     // Subagent regression scenarios require a native parent, even when their
     // separate Codex child is enabled in the random specialist pool.
     if (!names.includes("manage_specialist")) return call("manage_specialist", { event_id: event.id, part_key: "specialist", action: "create", role_key: "project-inspector", name: "项目检查员", duties: "检查当前项目工作区，按实际证据报告", quote: event.text,
-      ...(mode.startsWith('super-subagent')?{execution:{kind:'native'}}:{}) });
+      ...(mode.startsWith('super-subagent')?{model_id:'fixture'}:{}) });
     if (mode === "super-meta") return { content: "已创建长期专员，没有创建执行任务。" };
     if (!names.includes("list_specialists")) return call("list_specialists", {});
     const roleId = request.messages.slice(currentStart).filter((message) => message.role === "tool").map(content).join("\n").match(/"id"\s*:\s*"([a-f0-9]{64})"/)?.[1];
@@ -1247,6 +1256,31 @@ test("two specialist channels share one task, retain their own evidence and rece
   assert.notEqual(a.task.executionGoalId,b.task.executionGoalId);
   assert.equal(a.task.collaboration.acceptanceId,undefined);
   assert.deepEqual(a.task.collaboration.participants.map(p=>[p.roleId,p.contributed]),[[a.roleId,true],[b.roleId,false]]);
+  const eventPath=`/api/sessions/${pilot}/events?after=${Number.MAX_SAFE_INTEGER}`;
+  await api(`${eventPath}&worker=${encodeURIComponent(f.session.id)}`,"GET",undefined,404);
+  const eventController=new AbortController();
+  try {
+    const events=await fetch(f.app.origin+eventPath+`&worker=${a.sessionId}&worker=${b.sessionId}`,{
+      headers:{Authorization:`Bearer ${f.app.token}`},signal:AbortSignal.any([eventController.signal,AbortSignal.timeout(5000)]),
+    });
+    assert.equal(events.status,200);
+    const reader=events.body.getReader(),decoder=new TextDecoder();
+    const receive=async(marker)=>{
+      let text='';
+      while(!text.includes(marker)){
+        const {value,done}=await reader.read();
+        assert.equal(done,false);
+        text+=decoder.decode(value,{stream:true});
+      }
+      return text;
+    };
+    await receive('event: worker-subscriptions');
+    const emitted=[f.session.id,a.sessionId,b.sessionId].map(id=>f.app.store.event(id,'session'));
+    for(const event of emitted)f.app.agents.publish(event);
+    const text=await receive(`id: ${emitted[2].seq}\n`);
+    assert.match(text,new RegExp(`id: ${emitted[1].seq}\\n`));
+    assert.doesNotMatch(text,new RegExp(`id: ${emitted[0].seq}\\n`));
+  } finally {eventController.abort();}
   for(const worker of [a,b]) {
     const channel=ws.channels.find(c=>c.roleId===worker.roleId);
     assert.deepEqual((await api("/api/sessions/"+channel.sessionId+"/channel/tasks")).map(w=>[w.task.taskId,w.id]),[[a.task.taskId,worker.id]]);
@@ -1259,6 +1293,12 @@ test("two specialist channels share one task, retain their own evidence and rece
   const completed=await until(()=>api(path), s=>s.workers.every(w=>w.task.collaboration?.state==="completed" && w.assignmentState==="parked"));
   const receipt=completed.workers[0].task.collaboration.reportId;
   assert.ok(receipt);
+  const finalized=await until(()=>api('/api/sessions/'+pilot+'/snapshot'),snapshot=>snapshot.messages.some(message=>message.jointReport?.kind==='summary'));
+  const conclusion=finalized.messages.find(message=>message.jointReport?.kind==='summary');
+  assert.deepEqual(conclusion.jointReport,{taskId:a.task.taskId,reportId:receipt,kind:'summary'});
+  assert.equal(conclusion.replyToMessageId,finalized.messages.find(message=>message.role==='user').id);
+  assert.equal(conclusion.text,'甲、乙两个目录均已完成本次核对。');
+  assert.equal(finalized.messages.filter(message=>message.author?.kind==='specialist'&&message.replyToMessageId===conclusion.replyToMessageId).length,2);
   const goalReceipts=f.app.store.list("superAcceptance").filter(row=>row.scope==="goal");
   assert.deepEqual(goalReceipts,[]);
   const ops=f.app.store.list("superOperations").filter(op=>op.tool==="list_project_files");
@@ -1270,7 +1310,8 @@ test("two specialist channels share one task, retain their own evidence and rece
     assert.deepEqual([...new Set(page.entries.flatMap(e=>e.message?.author?[e.message.author.roleId]:[]))],[channel.roleId]);
   }
   const pilotHistory=(await api("/api/sessions/"+pilot+"/snapshot")).messages;
-  assert.deepEqual(pilotHistory.filter(m=>m.jointReport).map(m=>m.jointReport.reportId),[receipt]);
+  assert.deepEqual(pilotHistory.filter(m=>m.jointReport&&!m.jointReport.kind).map(m=>m.jointReport.reportId),[receipt]);
+  assert.deepEqual(pilotHistory.filter(m=>m.jointReport?.kind==='summary').map(m=>m.id),[conclusion.id]);
   assert.deepEqual(new Set(pilotHistory.filter(m=>m.author?.taskId===a.task.taskId).map(m=>m.author.roleId)),new Set([a.roleId,b.roleId]));
 });
 
@@ -4332,17 +4373,22 @@ test('disabling the project ACP profile revokes a pending bridge write without a
  assert.equal(f.app.store.list('superAcceptance').length,0);
 });
 
-test('legacy specialists without an override retain Codex and never silently create an unconfigured native task',{timeout:30000},async t=>{
+test('a legacy Lake Agent specialist routes new work to Codex and rejects native assignment',{timeout:30000},async t=>{
  const f=await fixture(t,'super-acp-worker',false,false),path=`/api/projects/${f.project.id}`;
  const project=await f.api(path+'/superagent','POST',{});
- const role={id:'e'.repeat(64),projectId:f.project.id,roleKey:'project-inspector',name:'项目检查员',duties:'检查实际项目',revision:1};
+ const role={id:'e'.repeat(64),projectId:f.project.id,roleKey:'project-inspector',name:'项目检查员',duties:'检查实际项目',revision:1,
+   execution:{kind:'native',model:{providerId:'legacy-provider',modelId:'legacy-model'}}};
  f.app.store.put('superRoles',role.id,role);f.app.superagent.ensureChannel(role);
  const channel=(await f.api(path+'/superagent')).channels[0];assert.equal(channel.execution.agent,'codex');
+ assert.equal(channel.execution.model,undefined);
+ await f.api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:1,execution:{kind:'native'}},400);
+ await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',{text:'检查项目',assignment:{requestId:'reject-native-specialist',roleRevision:1,execution:{kind:'native'}}},400);
  await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',{text:'检查项目',assignment:{requestId:'default-codex-unready',roleRevision:1,execution:channel.execution}},409);
  assert.equal(f.app.store.list('superWorkers').length,0);
  await f.enableCodexFixture();await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0});await f.api(path+'/external-agents/codex/probe','POST',{});
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'请让项目检查员读取实际项目工作区。'},202);
  const result=await settledSubagentTask(f);assert.equal(result.workers[0].execution.backend.agent,'codex');assert.equal(result.workers[0].task.acceptanceState,"not_evaluated");
+ assert.deepEqual(f.app.store.get('superRoles',role.id).execution,role.execution);
  await f.api(path+'/external-agents/codex','PUT',{enabled:false,expectedRevision:1});
  assert.equal(f.app.store.list('superWorkers')[0].roleSnapshot.execution.revision,1,'new defaults cannot modify an existing frozen Worker');
 });

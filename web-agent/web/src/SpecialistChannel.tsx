@@ -6,7 +6,6 @@ import {Card,TranscriptMessage} from './AIPanel';
 import {conversationActivity} from './superAgentPresentation';
 import {isCompactionFallbackEntry} from './timeline';
 import {AppSelect} from './AppSelect';
-import {LoadingWaves} from './LoadingWaves';
 import {StatusText} from './StatusText';
 import {channelExecutionTimeline,currentChannelReplies,mergeChannelPage} from './specialistChannelProjection';
 import {conversationPlanEntry} from './planConversation';
@@ -39,7 +38,7 @@ export function SpecialistLiveReply({text,worker,snapshot,connected=true}:{text?
  const label=!connected?'进度暂未更新，正在重连':waiting?activity?.label??'等待确认后继续':text?.trim()||activity?.label||'正在思考…';
  const shown=useSmoothText(label,moving);
  return <div className={`specialist-live-reply${moving?' is-running':''}`} role="status" aria-live="polite" aria-atomic="true" data-phase={!connected?'disconnected':waiting?'waiting':moving?'running':'idle'}>
-  {moving&&<LoadingWaves/>}<SpecialistReplyTransition revision="progress" text={label} enabled={moving&&visible}><StatusText active={moving&&visible}>{shown}</StatusText></SpecialistReplyTransition>
+  <SpecialistReplyTransition revision="progress" text={label} enabled={moving&&visible}><StatusText active={moving&&visible}>{shown}</StatusText></SpecialistReplyTransition>
  </div>;
 }
 

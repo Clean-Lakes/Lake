@@ -75,6 +75,25 @@ test('each packet meets its own deadline while newly arrived text keeps its paci
  assert.equal(f.values.at(-1),latest);
 });
 
+test('a delayed display frame continues the reveal without dumping the received suffix',()=>{
+ const f=fixture('核');
+ const first='核对服务状态。'.repeat(18),next=first+'已记录实际结果。'.repeat(8);
+ f.reveal.update(first,true);
+ f.frame(240);
+ assert.ok(f.values[0]!.length>1&&f.values[0]!.length<first.length);
+ f.reveal.update(next,true);
+ for(let i=0;i<12;i++)f.frame();
+ assert.equal(f.values.at(-1),next);
+});
+
+test('a fresh short update after the last packet starts on the next high-refresh frame',()=>{
+ const f=fixture();
+ f.reveal.update('核',true);f.frame(1000/144);
+ f.frame(55);
+ f.reveal.update('核对',true);f.frame(1000/144);
+ assert.deepEqual(f.values,['核','核对']);
+});
+
 test('coalesced token bursts paint evenly across the gap and start on the first frame',()=>{
  const f=fixture(),paintTimes:number[]=[];
  let source='';
@@ -147,4 +166,8 @@ test('a new reply mounts with its first complete grapheme and a restored reply m
  assert.equal(initial,'<div class="ai-markdown assistant-prose"><p>👩🏽‍💻</p></div>');
  const restored=renderToStaticMarkup(createElement(AssistantMarkdown,{children:source,reveal:true,animateInitial:false}));
  assert.equal(restored,'<div class="ai-markdown assistant-prose"><p>'+source+'</p></div>');
+ const alreadyCompleted=renderToStaticMarkup(createElement(AssistantMarkdown,{children:source,reveal:false,finishPending:true,animateInitial:true}));
+ assert.equal(alreadyCompleted,initial,'the current reply can first arrive in a completed snapshot');
+ const restoredCompletion=renderToStaticMarkup(createElement(AssistantMarkdown,{children:source,reveal:false,finishPending:true}));
+ assert.equal(restoredCompletion,restored,'completed history never starts a new reveal');
 });

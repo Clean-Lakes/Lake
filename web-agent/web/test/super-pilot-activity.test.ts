@@ -133,3 +133,17 @@ test('multiple workers prefer actual tools to queues, exclude completed workers 
  const onlyQueued=superPilotActivity(workspace([queued,done]),router)!;
  assert.equal(onlyQueued.phase,'queued');assert.equal(onlyQueued.animated,false);
 });
+
+test('island includes every live role once, including a report still being presented',()=>{
+ const active=Array.from({length:6},(_,index)=>worker(index===3?'waiting_input':'thinking',{
+  id:`worker-${index}`,roleId:`role-${index}`,roleName:`专员 ${index}`,
+ }));
+ const closing=worker(undefined,{id:'report-worker',roleId:'report-role',roleName:'收尾专员',
+  task:{...task,state:'completed'},pilotReport:{messageId:'finished-report',executionSettled:true}});
+ const view=workspace([...active,{...active[0]!,id:'second-task'},closing]);
+ const pending=superPilotActivity(view,router,true,new Set())!;
+ assert.equal(pending.participants.length,7);
+ assert.equal(pending.participants.find(person=>person.key==='role-3')?.moving,false);
+ assert.equal(pending.participants.find(person=>person.key==='report-role')?.moving,true);
+ assert.equal(superPilotActivity(view,router,true,new Set(['finished-report']))!.participants.length,6);
+});

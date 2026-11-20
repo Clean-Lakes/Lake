@@ -1,5 +1,9 @@
 # Lake Super-agent 内核与三模块协作约定
 
+2026-11-20 Pilot 的纯文字召集使用独立并发容量，每项目 8 个，全局 16 个。多人召集全部收件人结清后，Pilot 依据实际回应给出简短结论。原始回应按同一人工来源和召集轮次归档，界面以多头像入口展开，失败原因可查看。
+
+2026-11-20 TypeScript 长期专员的新任务、协作回复和受托子任务统一使用本机 Codex App Server。新派单按当前已验证的连接冻结角色、模型与执行身份。旧 Lake Agent 绑定和回执仍可查看，旧执行不能续跑。Pilot 继续使用项目的对话模型。
+
 2026-11-18 Items 保存 Grafana 基础地址和私有服务账号令牌引用。资源详情自动读取目录、仪表盘、数据源、告警规则及活动告警概览。Pilot 和专员可查询仪表盘详情、实际指标和日志，仍使用原 Task/Worker 账本，按准确资源、配置版本、Lake 项目网络权限和 Grafana 组织授权执行。见[只读接入计划](plan/feature-grafana-read-1.md)与[接入说明](docs/grafana-event-receiver.md)。
 
 2026-11-18 Grafana 事件接入先交付本机收件。用户从资源详情注入接入点时，Lake 使用该资源现有的令牌和部署接收地址，或在内网启动专用 Webhook 监听并验证回调。来源固定绑定 Items 的资源 ID 及所属项目，收件前和提交前校验当前资源、项目和独立凭据。Lake 逐次保存默认 JSON v1 投递的批次和各条告警状态，SQLite 提交后返回回执。早期独立来源可继续从接入渠道查看和管理。人工和 MCP 消息沿原 `superInputs`。规则、去重和 Pilot/Worker 调度后续另行设计。见[接入说明](docs/grafana-event-receiver.md)与[实施计划](plan/feature-grafana-event-receiver-1.md)。

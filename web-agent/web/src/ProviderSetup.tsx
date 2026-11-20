@@ -39,8 +39,21 @@ export function ProviderModelPicker({available,current,onAdd,onCancel}: {availab
   return <div ref={pickerRef} className="provider-discovery" role="group" aria-labelledby="provider-discovery-title">
     <div className="provider-discovery-heading"><div><h4 id="provider-discovery-title">从 API 添加模型</h4><p>获取到 {names.length} 个模型，勾选需要添加的模型。</p></div><button type="button" className="provider-text-button" onClick={onCancel}>关闭</button></div>
     <input aria-label="搜索 API 模型" placeholder="搜索模型 ID…" value={query} onChange={event => setQuery(event.target.value)}/>
-    <div className="provider-discovery-toolbar"><div className="provider-discovery-selection"><button type="button" className="button secondary" disabled={!selectable.length || allVisibleSelected} onClick={selectVisible}><Glyph name="check" size={14}/>全选当前结果</button><button type="button" className="button secondary" disabled={!selected.size} title="取消所有待添加模型的勾选" onClick={() => setSelected(new Set())}><Glyph name="close" size={14}/>取消选择</button></div><span aria-live="polite">已选 {selected.size} 个</span></div>
-    <div className="provider-discovery-list" role="region" aria-label="API 返回的模型" tabIndex={0}>{visible.map(name => {const added=existing.has(name);return <label className={`provider-discovery-row ${added ? "already-added" : ""}`} key={name}><input type="checkbox" checked={added || selected.has(name)} disabled={added} onChange={() => toggle(name)}/><span title={name}>{name}</span>{added && <small>已添加</small>}</label>;})}{!visible.length && <div className="provider-model-empty">没有匹配的模型，试试其他关键词。</div>}</div>
+    <div className="provider-discovery-toolbar">
+      <div className="provider-discovery-selection">
+        <button type="button" className="button secondary" disabled={!selectable.length || allVisibleSelected} onClick={selectVisible}><Glyph name="check" size={14}/>全选当前结果</button>
+        <button type="button" className="button secondary" disabled={!selected.size} title="取消所有待添加模型的勾选" onClick={() => setSelected(new Set())}><Glyph name="close" size={14}/>全部取消</button>
+      </div>
+      <span aria-live="polite">已选 {selected.size} 个</span>
+    </div>
+    <div className="provider-discovery-list" role="region" aria-label="API 返回的模型" tabIndex={0}>
+      {visible.map(name => existing.has(name) ? (
+        <div className="provider-discovery-row already-added" key={name}><span title={name}>{name}</span><small>已添加</small></div>
+      ) : (
+        <label className="provider-discovery-row" key={name}><input type="checkbox" checked={selected.has(name)} onChange={() => toggle(name)}/><span title={name}>{name}</span></label>
+      ))}
+      {!visible.length && <div className="provider-model-empty">没有匹配的模型，试试其他关键词。</div>}
+    </div>
     {available.message && <p className="provider-discovery-note">{available.message}</p>}
     {selected.size>remaining && <p className="form-error" role="alert">每个供应商最多 256 个模型，还可添加 {remaining} 个，请减少选择。</p>}
     <div className="provider-discovery-actions"><span>添加后保存供应商生效</span><button type="button" className="button primary" disabled={!selected.size || selected.size>remaining} onClick={() => onAdd(names.filter(name => selected.has(name) && !existing.has(name)))}>添加所选模型{selected.size>0 ? `（${selected.size}）` : ""}</button></div>

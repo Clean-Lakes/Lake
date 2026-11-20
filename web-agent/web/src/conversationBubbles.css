@@ -74,12 +74,7 @@
   padding-inline-start:var(--reply-avatar-column,40px);
   border:0;
 }
-.ai-turn > .turn-status:not(.is-thinking) .turn-status-mark {
-  position:absolute;
-  inset-inline-start:0;
-}
-
-/* Original water animation stays transparent and independent from prose. */
+/* Keep the status text on the reading column even beside a thinking avatar. */
 .reply-duration.is-thinking { position:relative; min-height:32px; padding:0 0 0 var(--reply-avatar-column,40px); border:0; }
 .ai-turn > .turn-status.is-thinking { padding-inline-start:var(--reply-avatar-column,40px); }
 .ai-turn > .turn-status.is-thinking.without-avatar,

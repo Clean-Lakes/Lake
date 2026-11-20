@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-20",
+  "testedCommit": "2d2bc7711f175fd96f40aa310309851b6296cd00",
+  "runtime": "TypeScript",
+  "typescriptCheck": "passed",
+  "frontendTests": {
+    "passed": 986,
+    "failed": 0
+  },
+  "signedLakeDev": {
+    "install": "passed",
+    "nativeControlsVisible": true
+  },
+  "isolatedModelSettings": {
+    "configuredModels": 72,
+    "draftOnlyBeforeSave": true,
+    "persistedEnabledCounts": [
+      36,
+      72,
+      0,
+      72
+    ],
+    "modelDetailsPreserved": true,
+    "otherProviderPreserved": true,
+    "activeModelAfterAllOff": false,
+    "activeModelRestored": true,
+    "narrow": {
+      "width": 390,
+      "theme": "dark",
+      "fitted": true,
+      "canEnable": true,
+      "canDisable": false,
+      "keyboardFocused": true
+    }
+  },
+  "screenshots": [
+    "lake-provider-model-bulk-narrow.png"
+  ]
+}

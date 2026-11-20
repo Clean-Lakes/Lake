@@ -7,6 +7,7 @@ const {join} = require('node:path');
 const {createServer} = require('node:http');
 process.env.LAKE_TS_IMPORT_ONLY = '1';
 const {startLakeServer} = require('../../bin/lake-runtime/server.cjs');
+const {enableNativeSpecialistFixture} = require('./test-fixtures/native-specialists.cjs');
 
 const content = message => typeof message.content === 'string' ? message.content : (message.content ?? []).map(part => part.text ?? '').join('');
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -57,6 +58,7 @@ for (const specialist of [false, true]) test(`${specialist ? 'specialist' : 'Pil
   await new Promise(resolve => provider.listen(0, '127.0.0.1', resolve));
   t.after(async () => { releaseRoute(); release(); await app?.close(); provider.closeAllConnections(); await new Promise(resolve => provider.close(resolve)); await rm(home, {recursive: true, force: true}); });
   app = await startLakeServer({home, data: join(home, 'data'), staticRoot: web, codexHome, port: 0});
+  enableNativeSpecialistFixture(app.superagent);
   const api = async (path, method = 'GET', body) => {
     const response = await fetch(app.origin + path, {method, headers: {Authorization: 'Bearer ' + app.token, 'Content-Type': 'application/json'}, body: body === undefined ? undefined : JSON.stringify(body)});
     const result = await response.json(); assert.ok(response.ok, JSON.stringify(result)); return result;

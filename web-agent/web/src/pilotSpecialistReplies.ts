@@ -18,13 +18,21 @@ function workerReportedTurns(worker:SuperWorker,sessionId:string,messages:Messag
  return messages.flatMap(message=>message.sessionId===sessionId&&message.author?.workerId===worker.id&&message.author.sessionId===worker.sessionId&&message.author.taskId===worker.task.taskId&&message.author.roleId===worker.roleId&&message.author.rootTurnId?[message.author.rootTurnId]:[]);
 }
 
-/** A delivered report can replace only the invocation already seen in this slot. */
-function workerFinalReport(worker:SuperWorker,sessionId:string,messages:Message[],sourceMessageId:string,observedRootTurnId?:string){
- if(!observedRootTurnId)return;
- return [...messages].reverse().find(message=>message.role==='assistant'&&message.sessionId===sessionId&&
-  (!message.replyToMessageId||message.replyToMessageId===sourceMessageId)&&
-  message.author?.kind==='specialist'&&message.author.workerId===worker.id&&message.author.roleId===worker.roleId&&
-  message.author.sessionId===worker.sessionId&&message.author.taskId===worker.task.taskId&&message.author.rootTurnId===observedRootTurnId);
+/** A host report may be written by a different SDK invocation of the same task. */
+function workerFinalReport(row:PilotSpecialistRow,sessionId:string,messages:Message[],observedRootTurnId?:string){
+ const {worker,sourceMessageId}=row;
+ return [...messages].reverse().find(message=>{
+  const author=message.author;
+  if(message.role!=='assistant'||message.sessionId!==sessionId||(message.replyToMessageId&&message.replyToMessageId!==sourceMessageId)||
+     author?.kind!=='specialist'||author.workerId!==worker.id||author.roleId!==worker.roleId||
+     author.sessionId!==worker.sessionId||author.taskId!==worker.task.taskId)return false;
+  if(observedRootTurnId&&author.rootTurnId===observedRootTurnId)return true;
+  // Match the host's report ID, or its explicit source when the message update
+  // arrives before the workspace update carrying that ID.
+  return message.replyToMessageId===sourceMessageId&&(
+   message.id===worker.pilotReport?.messageId||!!observedRootTurnId&&!!author.rootTurnId&&Date.parse(message.createdAt)>=Date.parse(row.activity.updatedAt)
+  );
+ });
 }
 
 /** Committed source bindings place each live specialist in its original user turn. */
@@ -70,16 +78,16 @@ export function continuousPilotDispatchRows(previous:PilotSpecialistRow[],worksp
    const source=activity?.sourceSessionId===sessionId?activity.sourceMessageId:undefined;
    if(source?source!==old.sourceMessageId:dispatch&&dispatch.sourceMessageId!==old.sourceMessageId)return [];
    const terminal=['completed','failed','cancelled'].includes(worker.task.state)||worker.assignmentState==='stopped';
-   // A task may finish before its first SDK snapshot arrives. With no observed
-   // root there is no safe report handoff to wait for; keep the original removal.
-   if(terminal&&!observedRoots.get(pilotSpecialistBinding(old)))return [];
+   // A queued/fast reply can settle before its first visible SDK packet. A
+   // host report ID still proves the same display slot and its conclusion.
+   if(terminal&&!worker.pilotReport&&!observedRoots.get(pilotSpecialistBinding(old)))return [];
    const labels:Partial<Record<SuperWorker['task']['state'],string>>={completed:'执行结束',failed:'执行失败',cancelled:'已停止',waiting_user:'等待你补充信息',waiting_external:'等待外部结果',paused:'已暂停',blocked:'已暂停',queued:'等待开始'};
    const channel=workspace.channels?.find(item=>item.roleId===worker.roleId);
    row={...old,worker,continuity:terminal?'terminal':'updating',author:{...old.author,name:worker.roleName,channelSessionId:channel?.sessionId??dispatch?.channelSessionId??old.author.channelSessionId,execution:worker.execution?.backend},reportedTurns:workerReportedTurns(worker,sessionId,messages),
     activity:{phase:'updating',label:worker.assignmentState==='stopped'?'已停止':labels[worker.task.state]??'进度暂未更新',updatedAt:worker.task.updatedAt??old.activity.updatedAt,sourceSessionId:sessionId,sourceMessageId:old.sourceMessageId}};
   }
   const observedRootTurnId=observedRoots.get(pilotSpecialistBinding(row));
-  return [{...row,observedRootTurnId,finalReport:workerFinalReport(worker,sessionId,messages,row.sourceMessageId,observedRootTurnId)}];
+  return [{...row,observedRootTurnId,finalReport:workerFinalReport(row,sessionId,messages,observedRootTurnId)}];
  });
 }
 

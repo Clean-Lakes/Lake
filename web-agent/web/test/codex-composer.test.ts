@@ -11,27 +11,29 @@ Object.defineProperty(globalThis,'window',{configurable:true,value:{}});
 const props:ComposerModelSelectProps={available:{models:['gpt-6.1-terra'],entries:[{providerId:'provider',providerName:'Saved Codex provider',modelId:'gpt-6.1-terra',name:'gpt-6.1-terra',displayName:'gpt-6.1-terra'}],loading:false},modelName:'gpt-6.1-terra',configured:true,open:false,disabled:false,onOpenChange:()=>{},onSelect:()=>{},onSettings:()=>{}};
 
 test('a specialist configured for Codex shows the actual Agent in the existing model trigger',()=>{
- const html=renderToStaticMarkup(createElement(ComposerModelSelect,{...props,externalAgent:{selected:true,ready:true}}));
+ const html=renderToStaticMarkup(createElement(ComposerModelSelect,{...props,externalAgent:{ready:true}}));
  assert.match(html,/aria-label="选择模型：Codex · 独立 Agent"/);assert.match(html,/composer-model-name">Codex<\/span>/);
  assert.doesNotMatch(html,/执行分配|协调模型|agent-assignment-control/);
 });
 test('Codex remains selectable without a separate Lake inference model credential',()=>{
- const html=renderToStaticMarkup(createElement(ComposerModelSelect,{...props,available:{models:[],loading:false},configured:false,modelName:null,externalAgent:{selected:true,ready:false,message:'请先配置 Codex'}}));
+ const html=renderToStaticMarkup(createElement(ComposerModelSelect,{...props,available:{models:[],loading:false},configured:false,modelName:null,externalAgent:{ready:false,message:'请先配置 Codex'}}));
  assert.match(html,/选择模型：Codex/);assert.doesNotMatch(html,/composer-model-setup/);assert.match(html,/title="请先配置 Codex"/);
 });
-test('a native model choice retains its actual model without labeling it an independent Agent',()=>{
- const html=renderToStaticMarkup(createElement(ComposerModelSelect,{...props,externalAgent:{selected:false,ready:true}}));
- assert.match(html,/composer-model-name">gpt-6.1-terra<\/span>/);assert.doesNotMatch(html,/aria-label="选择模型：Codex · 独立 Agent"/);
-});
 test('Pilot Codex configuration keeps its native model and cannot select the specialist executor',()=>{
- const html=renderToStaticMarkup(createElement(ComposerModelSelect,{...props,externalAgent:{selected:false,ready:false,message:'本机 Codex 尚未登录',configurationOnly:true}}));
+ const html=renderToStaticMarkup(createElement(ComposerModelSelect,{...props,externalAgent:{ready:false,message:'本机 Codex 尚未登录',configurationOnly:true}}));
  assert.match(html,/composer-model-name">gpt-6.1-terra<\/span>/);
  assert.doesNotMatch(html,/独立 Agent|value="__lake_codex_agent__"/);
 });
 test('an unconfigured Pilot still connects its own model when Codex only supplies project settings',()=>{
- const html=renderToStaticMarkup(createElement(ComposerModelSelect,{...props,configured:false,externalAgent:{selected:false,ready:true,configurationOnly:true}}));
+ const html=renderToStaticMarkup(createElement(ComposerModelSelect,{...props,available:{models:[],entries:[],loading:false},modelName:null,configured:false,externalAgent:{ready:true,configurationOnly:true}}));
  assert.match(html,/composer-model-setup/);assert.match(html,/aria-label="连接模型"/);assert.match(html,/aria-haspopup="dialog"/);
  assert.doesNotMatch(html,/独立 Agent|value="__lake_codex_agent__"/);
+});
+test('Pilot opens the model selector when a configured provider still has enabled models but no current selection',()=>{
+ const html=renderToStaticMarkup(createElement(ComposerModelSelect,{...props,modelName:null,configured:false,externalAgent:{ready:true,configurationOnly:true}}));
+ assert.match(html,/aria-label="选择模型"/);
+ assert.match(html,/composer-model-name">选择模型<\/span>/);
+ assert.doesNotMatch(html,/composer-model-setup|连接模型|独立 Agent|value="__lake_codex_agent__"/);
 });
 test('a model provider named Codex cannot impersonate an independent Codex selection',()=>{
  const html=renderToStaticMarkup(createElement(ComposerModelSelect,props));

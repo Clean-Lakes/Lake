@@ -98,7 +98,9 @@ test('the first revealed prefix stays intact while later suffixes use their orig
  const reveal=new TextReveal(first,text=>painted.push(text),{request:callback=>{pending=callback;return 1;},cancel:()=>{pending=undefined;},now:()=>0});
  const appended=first+'随后真实收到的追加内容';
  transition.update(content(appended),true);reveal.update(appended,true);
- for(const time of [16,32,TEXT_REVEAL_MAX_LAG_MS]){const frame=pending;pending=undefined;frame?.(time);}
+ for(let time=16;time<TEXT_REVEAL_MAX_LAG_MS+16;time+=16){
+  const frame=pending;pending=undefined;frame?.(Math.min(time,TEXT_REVEAL_MAX_LAG_MS));
+ }
  assert.equal(clips().length,2);assert.ok(painted.every(text=>text.startsWith(first)));assert.equal(painted.at(-1),appended);
 });
 

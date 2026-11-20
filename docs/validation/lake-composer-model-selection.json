@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-20",
+  "testedCommit": "255eefefdefb6677bc01821aea01d252869b1f16",
+  "runtime": "TypeScript",
+  "typescriptCheck": "passed",
+  "frontendTests": {
+    "passed": 987,
+    "failed": 0
+  },
+  "isolatedComposer": {
+    "testedCommit": "afb9fb1aae950f389a479987653a15c32bc567a3",
+    "pickerWithEnabledModels": true,
+    "keyboardEnterOpensPicker": true,
+    "draftAfterChoice": true,
+    "modelCalls": 0,
+    "setupWhenNoEnabledModels": true,
+    "darkNarrowWidth": 390
+  },
+  "signedLakeDev": {
+    "install": "passed",
+    "sendButtonOpensNativePicker": true,
+    "nativeUnselectedModelLabel": "选择模型"
+  },
+  "screenshots": [
+    "lake-composer-model-selection.png"
+  ]
+}

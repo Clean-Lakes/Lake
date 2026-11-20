@@ -1,6 +1,6 @@
 import {hasUnreadMessages} from './ConversationReadMarker';
-import {useEffect,useRef,useState,type RefObject} from 'react';
-import type {SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
+import {useCallback,useEffect,useRef,useState,type RefObject} from 'react';
+import type {SessionEvent,SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {greetRoleAvatar,SuperRoleAvatar} from './SuperRoleAvatar';
 import {conversationAvatarMotion,superAvatarMotion,channelTaskPresentation,specialistTaskActivity,type ConversationActivity,type ConversationAvatarActivity} from './superAgentPresentation';
@@ -17,12 +17,27 @@ function withSeenCursor(channel:SpecialistChannelInfo,cursor:string):SpecialistC
  return {...channel,messageRead:{...state,seenCursor:cursor}};
 }
 
-export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
- const [workspace,setWorkspace]=useState<SuperWorkspace|null>(null),[error,setError]=useState('');
+type WorkerEventListener={receive:(event:SessionEvent)=>void;connection:(open:boolean)=>void};
+export type SubscribePilotWorkerEvents=(sessionId:string,listener:WorkerEventListener)=>()=>void;
+
+export function usePilotWorkspace(projectId:string|undefined,connected:boolean,visiblePilotSessionId?:string){
+ const [loadedWorkspace,setWorkspace]=useState<SuperWorkspace|null>(null),[error,setError]=useState('');
+ const workspace=loadedWorkspace?.project.projectId===projectId?loadedWorkspace:null;
  const generation=useRef(0),refreshRef=useRef<()=>Promise<void>>(async()=>{});
  const deletedRoles=useRef(new Set<string>());
+ const listeners=useRef(new Map<string,Set<WorkerEventListener>>());
+ const streamingWorkers=useRef<ReadonlySet<string>|null>(null);
+ const subscribeWorkerEvents=useCallback<SubscribePilotWorkerEvents>((sessionId,listener)=>{
+  let set=listeners.current.get(sessionId);
+  if(!set)listeners.current.set(sessionId,set=new Set());
+  set.add(listener);
+  if(streamingWorkers.current?.has(sessionId))listener.connection(true);
+  return()=>{set.delete(listener);if(!set.size)listeners.current.delete(sessionId);};
+ },[]);
+ useEffect(()=>{deletedRoles.current.clear();},[projectId]);
  useEffect(()=>{
-  const current=++generation.current;deletedRoles.current.clear();setWorkspace(null);setError('');
+  const current=++generation.current;setError('');
+  setWorkspace(previous=>previous?.project.projectId===projectId?previous:null);
   if(!projectId||!connected)return;
   const controller=new AbortController();let busy=false,queued=false,nextActivation=0;
   const refresh=async()=>{
@@ -53,14 +68,36 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
   return()=>{controller.abort();refreshRef.current=async()=>{};window.clearInterval(timer);};
  },[projectId,connected]);
  const routerId=workspace?.active?workspace.project.routerSessionId:undefined;
+ const shared=!!routerId&&routerId===visiblePilotSessionId;
+ const workerScope=JSON.stringify(shared?workspace!.workers.filter(worker=>!worker.parentWorkerId&&
+  (['active','queued'].includes(worker.assignmentState)||worker.pilotReport?.executionSettled===false)).map(worker=>worker.sessionId).sort():[]);
  const cursor=useRef(0);cursor.current=workspace?.cursor??0;
  useEffect(()=>{
   if(!routerId||!connected||typeof EventSource==='undefined')return;
-  const stream=new EventSource(api.eventsUrl(routerId,cursor.current),{withCredentials:true});
-  const refresh=()=>refreshRef.current();
-  stream.addEventListener('specialist',refresh);stream.addEventListener('message',refresh);stream.addEventListener('open',refresh);
-  return()=>stream.close();
- },[routerId,connected]);
+  const workers=new Set<string>(JSON.parse(workerScope));
+  const stream=new EventSource(api.eventsUrl(routerId,cursor.current,[...workers]),{withCredentials:true});
+  let timer:number|undefined;
+  const refresh=()=>{
+   if(timer!==undefined)return;
+   timer=window.setTimeout(()=>{timer=undefined;void refreshRef.current();},100);
+  };
+  const ready=(open:boolean)=>{
+   streamingWorkers.current=open?workers:null;
+   for(const id of workers)for(const listener of listeners.current.get(id)??[])listener.connection(open);
+  };
+  const receive=(incoming:MessageEvent<string>)=>{
+   let event:SessionEvent;
+   try{event=JSON.parse(incoming.data);}catch{if(incoming.type!=='session')refresh();return;}
+   if(!event)return;
+   if(event.sessionId===routerId){if(incoming.type!=='session')refresh();}
+   else if(workers.has(event.sessionId))for(const listener of listeners.current.get(event.sessionId)??[])listener.receive(event);
+  };
+  for(const type of ['specialist','message','session'])stream.addEventListener(type,receive as EventListener);
+  stream.addEventListener('open',refresh);
+  stream.addEventListener('worker-subscriptions',()=>ready(true));
+  stream.onerror=()=>ready(false);
+  return()=>{stream.close();ready(false);window.clearTimeout(timer);};
+ },[routerId,connected,workerScope]);
  useEffect(()=>{const refresh=()=>refreshRef.current();window.addEventListener('lake:conversation-read',refresh);return()=>window.removeEventListener('lake:conversation-read',refresh);},[]);
  const removeRole=(roleId:string)=>{deletedRoles.current.add(roleId);setWorkspace(current=>current?{...current,questions:current.questions?.filter(question=>question.author.roleId!==roleId),channels:current.channels?.filter(channel=>channel.roleId!==roleId),workers:current.workers.filter(worker=>worker.roleId!==roleId)}:current);void refreshRef.current();};
  const readChannel=async(channel:SpecialistChannelInfo)=>{
@@ -76,7 +113,7 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
    // The visible overview can retry if the receipt could not be saved.
   }
  };
- return {workspace,error,removeRole,readChannel,refresh:()=>refreshRef.current()};
+ return {workspace,error,removeRole,readChannel,refresh:()=>refreshRef.current(),subscribeWorkerEvents:shared?subscribeWorkerEvents:undefined};
 }
 
 type ReadMark = {requested: string; acknowledged: string; pending: boolean};

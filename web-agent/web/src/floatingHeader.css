@@ -87,12 +87,6 @@
     top: var(--conversation-frame-inset);
     left: calc(var(--conversation-frame-inset) * 2);
   }
-  :root:not(.lake-windows-chrome) .workspace.has-floating-header .composer-input {
-    box-shadow: none;
-  }
-  :root:not(.lake-windows-chrome) .workspace.has-floating-header .composer-input:not(:focus-within,.attachment-drop-active) {
-    border-color: var(--conversation-composer-border, var(--border));
-  }
   :root[data-theme="dark"]:not(.lake-windows-chrome) .workspace.has-floating-header .composer-input:not(.attachment-drop-active) {
     background-color: #2b2b2b;
   }

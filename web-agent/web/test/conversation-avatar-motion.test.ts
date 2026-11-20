@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import type {AIView,SessionSnapshot,SuperWorkspace} from '../../shared/contracts';
+import type {AIView,SessionSnapshot,SpecialistConversation,SuperWorkspace} from '../../shared/contracts';
 import {conversationActivity,conversationAvatarMotion} from '../src/superAgentPresentation';
 import {PilotWorkspace} from '../src/PilotWorkspace';
 import {AITranscript} from '../src/AIPanel';
@@ -48,4 +48,43 @@ test('thinking avatar and newest visible sender group animate; historical replie
  assert.match(report,/data-motion="idle"/);assert.doesNotMatch(report,/data-motion="working"/);
  const thinking=renderToStaticMarkup(createElement(ReplyDuration,{assistantIdentity:{name:'Pilot',pilot:true},view:view('running'),latestUserAt:start}));
  assert.match(thinking,/data-motion="working"/);
+});
+
+test('synthesis animates the existing Pilot identity only in the originating turn',()=>{
+ const at=(second:number)=>new Date(Date.UTC(2026,10,4,0,0,second)).toISOString();
+ const snapshot={session:{id:'pilot',title:'Pilot',projectId:'p',workspaceRole:'router',status:'completed'},resources:[],actions:[],evidence:[],
+  messages:[
+   {id:'source',sessionId:'pilot',role:'user',text:'再检查一次',createdAt:at(0)},
+   {id:'report',sessionId:'pilot',role:'assistant',text:'已完成核对。',createdAt:at(3),replyToMessageId:'source',
+    author:{kind:'specialist',name:'数据库专员',roleId:'db',workerId:'db-worker',sessionId:'db-session',taskId:'task'}},
+   {id:'next',sessionId:'pilot',role:'user',text:'再检查一次',createdAt:at(4)},
+  ],
+  ai:view('completed',{cards:[
+   {id:'handoff',type:'message',status:'completed',content:'已安排核对。',at:at(1),data:{source_message_id:'source'}},
+   {id:'next-reply',type:'message',status:'completed',content:'收到新的请求。',at:at(5),data:{source_message_id:'next'}},
+  ]}),
+ } as SessionSnapshot;
+ const round:SpecialistConversation={id:'round',kind:'task-summary',projectId:'p',sessionId:'pilot',sourceMessageId:'source',
+  state:'summarizing',title:'复测结论',createdAt:at(3),deadlineAt:at(30),members:[]};
+ const render=(change:Partial<SpecialistConversation>={},pilotConnected=true)=>{
+  const pilotWorkspace:SuperWorkspace={active:true,project:{projectId:'p',routerSessionId:'pilot',version:1},workers:[],
+   conversations:[{...round,...change}]};
+  return renderToStaticMarkup(createElement(AITranscript,{snapshot,pilotWorkspace,pilotConnected,assistantIdentity:{name:'Pilot',pilot:true}}));
+ };
+ for(const kind of ['task-summary',undefined] as const){
+  const html=render({kind});
+  assert.equal((html.match(/data-motion="working"/g)??[]).length,1);
+  assert.equal((html.match(/data-live-motion="active"/g)??[]).length,1);
+  assert.match(html,/data-conversation-entry="handoff"[^>]*><div class="response-identity"><span[^>]+><span[^>]+data-motion="working"/);
+ }
+ for(const change of [{state:'queued'},{state:'completed'},{state:'failed'},{state:'cancelled'},
+  {sourceMessageId:'missing'},{sessionId:'other-session'},{projectId:'other-project'}] as const){
+  assert.doesNotMatch(render(change),/data-motion="working"|data-live-motion="active"/);
+ }
+ const disconnected=render({},false);
+ assert.doesNotMatch(disconnected,/data-motion="working"|data-live-motion="active"/);
+ assert.match(disconnected,/data-motion="still"/);
+ snapshot.messages.push({id:'conclusion',sessionId:'pilot',role:'assistant',text:'复测完成。',createdAt:at(6),replyToMessageId:'source',
+  jointReport:{taskId:'task',reportId:'joint-report',kind:'summary'}});
+ assert.doesNotMatch(render(),/data-motion="working"|data-live-motion="active"/,'the conclusion can arrive ahead of the workspace snapshot');
 });

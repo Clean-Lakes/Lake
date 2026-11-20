@@ -6,6 +6,7 @@ const {tmpdir}=require('node:os');
 const {join}=require('node:path');
 process.env.LAKE_TS_IMPORT_ONLY='1';
 const {startLakeServer}=require('../../bin/lake-runtime/server.cjs');
+const {enableNativeSpecialistFixture} = require('./test-fixtures/native-specialists.cjs');
 
 const content=message=>typeof message.content==='string'?message.content:(message.content??[]).map(part=>part.text??'').join('');
 async function until(read,predicate){
@@ -49,6 +50,7 @@ async function fixture(t,{hold=false,holdRouter=false,routerAction='create',rout
  });
  await new Promise(resolve=>provider.listen(0,'127.0.0.1',resolve));
  const app=await startLakeServer({home,data:join(home,'data'),port:0,staticRoot:web});
+ enableNativeSpecialistFixture(app.superagent);
  t.after(async()=>{releaseRef.release();await app.close();await new Promise(resolve=>provider.close(resolve));await rm(home,{recursive:true,force:true});});
  const api=async(path,method='GET',body,expected=200,token)=>{
   const response=await fetch(app.origin+path,{method,headers:{Authorization:`Bearer ${token??app.token}`,...(body===undefined?{}:{'Content-Type':'application/json'})},body:body===undefined?undefined:JSON.stringify(body)});

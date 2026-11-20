@@ -43,7 +43,7 @@ test('queued, human confirmation, questions and external waits stay static; only
   assert.ok(html.includes('pilot-specialist-reply'),phase);
   assert.equal(html.includes('pilot-specialist-thinking-label'),phase==='thinking',phase);
   assert.equal(html.includes('data-live-glow="active"'),phase==='thinking'||phase==='tool',phase);
-  assert.equal(html.includes('turn-activity-mark'),phase==='tool',phase);assert.equal(html.includes('data-motion="working"'),phase==='tool'||phase==='thinking',phase);
+  assert.doesNotMatch(html,/turn-activity-mark/,phase);assert.equal(html.includes('data-motion="working"'),phase==='tool'||phase==='thinking',phase);
  }
  const offline=render(workspace(),false);
  assert.ok(offline.includes('进度暂未更新，正在重连'));assert.ok(!offline.includes('data-motion="working"')&&!offline.includes('turn-activity-mark'));

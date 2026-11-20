@@ -4,11 +4,13 @@ import {firstGrapheme,TextReveal} from './textReveal';
 export function useSmoothText(text:string,streaming:boolean,{animateInitial=false,finishPending=false}:{
  animateInitial?:boolean;finishPending?:boolean;
 }={}){
- const [shown,setShown]=useState(()=>streaming&&animateInitial?firstGrapheme(text):text);
- const [playing,setPlaying]=useState(streaming);
+ const initialPlayback=animateInitial&&(streaming||finishPending);
+ const [shown,setShown]=useState(()=>initialPlayback?firstGrapheme(text):text);
+ const [playing,setPlaying]=useState(streaming||initialPlayback);
  const hasPendingSuffix=shown.length<text.length&&text.startsWith(shown);
  // Success can arrive with the final packet still queued. Let the existing
- // clock finish its suffix, without starting playback for completed history.
+ // clock finish its suffix. A newly delivered complete reply can also use one
+ // playout when it first mounts, while restored history is already visible.
  const play=streaming||finishPending&&playing&&hasPendingSuffix;
  if(playing!==play)setPlaying(play);
  if(!play&&shown!==text)setShown(text);
