@@ -1,0 +1,112 @@
+// The real App and its two session streams, with local data only.
+import './readme-workbench';
+import type {AIView, Message, SessionEvent, SessionSnapshot, SuperWorker, SuperWorkspace} from '../../../shared/contracts';
+
+const router = 'demo-session-0', project = 'demo-project';
+const baseFetch = window.fetch.bind(window);
+const started = Date.now() - 60_000;
+const at = (offset: number) => new Date(started + offset).toISOString();
+const source: Message = {id:'output-request', sessionId:router, role:'user', text:'核对这批样例记录', createdAt:at(0)};
+const history: Message = {id:'output-history', sessionId:router, role:'assistant', text:'此前的样例记录。\n\n'.repeat(18), createdAt:at(-1000)};
+const opening = '我已安排专员核对样例';
+const conclusion = '样例记录一致，未发现遗漏。';
+const names = ['数据库专员','可观测性专员','发布专员','知识库专员','服务器运维排查专员'];
+type Stage = 'idle' | 'started' | 'working' | 'first-report' | 'closing' | 'finished';
+let stage: Stage = 'idle', cursor = 50;
+const streams = new Set<FixtureStream>();
+
+function workers(): SuperWorker[] {
+  if (stage === 'idle' || stage === 'started') return [];
+  return names.map((name, index) => {
+    const id = `output-worker-${index}`;
+    const completed = stage === 'closing' || stage === 'finished';
+    return {
+      id, roleId:`output-role-${index}`, roleName:name, sessionId:id,
+      assignmentState:completed ? 'parked' : 'active',
+      task:{taskId:'output-task', executionGoalId:id, projectId:project, sessionId:id, title:'核对样例记录', state:completed?'completed':'running', acceptanceState:'not_evaluated', revision:1, originRootTurnId:'output-root', deadlineAt:at(120_000)},
+      activity:completed ? undefined : {phase:index===0?'thinking':'tool',label:'正在核对记录',updatedAt:at(200),sourceMessageId:source.id,sourceSessionId:router},
+      pilotReport:completed ? {messageId:`output-report-${index}`,executionSettled:stage==='finished'||index===0} : undefined,
+    };
+  });
+}
+
+function reports(): Message[] {
+  return workers().flatMap((worker, index) => {
+    if (stage !== 'finished' && !((stage==='first-report'||stage==='closing') && index===0)) return [];
+    return [{id:`output-report-${index}`, sessionId:router, role:'assistant', text:`${worker.roleName}核对完成。`,
+      createdAt:at(800+index), replyToMessageId:source.id,
+      author:{kind:'specialist', name:worker.roleName, workerId:worker.id, roleId:worker.roleId, sessionId:worker.sessionId, taskId:worker.task.taskId, rootTurnId:`finish-root-${index}`}}];
+  });
+}
+
+function snapshot(base: SessionSnapshot, worker?: SuperWorker): SessionSnapshot {
+  const ended=stage==='finished', active=stage!=='idle'&&!ended;
+  const messages=worker ? [] : [history, source, ...reports()];
+  if (ended && !worker) messages.push({id:'rolled-up-report',sessionId:router,role:'assistant',createdAt:at(1000),
+    jointReport:{taskId:'output-task',reportId:'joint'},text:'「核对样例记录」的 5 位专员均已提交报告。\n\n'+reports().map(report=>`${report.author?.name}：${report.text}`).join('\n\n')});
+  const root=worker ? `stage-root-${worker.id}` : 'output-root';
+  const ai: AIView | undefined = stage==='idle' ? undefined : {
+    ...base.ai!, session:worker?.sessionId??router, rootTurnId:root,
+    status:worker||ended?'completed':'running', replyStatus:worker||ended?'completed':'running',
+    turnStartedAt:at(10), turnFinishedAt:worker||ended?at(1000):undefined, sourceMessageIds: worker?[]:[source.id],
+    pending:undefined, pendingApprovals:[], question:undefined, agentRuns:[], cardsOffset:0,
+    cards:worker?[{id:`stage-${worker.id}`,type:'message',status:'completed',at:at(300),content:'先核对版本 1.4。正在查看样例记录。',data:{root_turn_id:root}}]:stage==='started'?[]:[
+      {id:'pilot-opening',type:'message',status:ended?'completed':'running',at:at(100),content:opening,data:{root_turn_id:root,source_message_id:source.id}},
+      ...(ended?[{id:'pilot-verdict',type:'message' as const,status:'completed',at:at(1100),content:conclusion,data:{root_turn_id:root,source_message_id:source.id}}]:[]),
+    ], totalCards:0,
+  };
+  if(ai)ai.totalCards=ai.cards.length;
+  return {...base, cursor, messages, ai, superagent:worker?{roleId:worker.roleId, task:worker.task} as SessionSnapshot['superagent']:undefined,
+    session:{...base.session,id:worker?.sessionId??router,projectId:project,title:worker?.roleName??'Pilot',workspaceRole:worker?'worker':'router',status:active?'investigating':'completed'},
+    sre:undefined, actions:[], specialists:[], replyTimings:[], terminals:[]};
+}
+
+class FixtureStream extends EventTarget {
+  static OPEN=1;
+  readyState=1;
+  onopen: ((event: Event) => void) | null=null;
+  onmessage: ((event: MessageEvent<string>) => void) | null=null;
+  onerror: ((event: Event) => void) | null=null;
+  session: string;
+  constructor(value: string | URL) {
+    super();
+    const route=new URL(value,location.href).pathname;
+    this.session=decodeURIComponent(route.split('/')[3]??'');
+    streams.add(this);
+    queueMicrotask(()=>{const event=new Event('open');this.onopen?.(event);this.dispatchEvent(event);});
+  }
+  publish(event: SessionEvent) {
+    this.dispatchEvent(new MessageEvent(event.type,{data:JSON.stringify(event)}));
+  }
+  close() {streams.delete(this);}
+}
+window.EventSource=FixtureStream as unknown as typeof EventSource;
+const json=(value:unknown,status=200)=>Response.json(value,{status});
+window.fetch=async(input,init)=>{
+  const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href);
+  const path=url.pathname;
+  if (path.startsWith('/api/') && (init?.method??'GET')!=='GET') return json({error:'Read-only fixture'},405);
+  if (path===`/api/projects/${project}/superagent`) {
+    const value: SuperWorkspace={active:true,project:{projectId:project,routerSessionId:router,version:1},workers:workers(),cursor};
+    return json(value);
+  }
+  if (path.endsWith('/snapshot')) {
+    const id=decodeURIComponent(path.split('/')[3]??'');
+    const base: SessionSnapshot=await (await baseFetch(`/api/sessions/${router}/snapshot`)).json();
+    return json(snapshot(base,workers().find(worker=>worker.sessionId===id)));
+  }
+  const response=await baseFetch(input,init);
+  if (path==='/api/bootstrap') return json({...await response.json(),backendRuntime:'typescript',aiRuntime:'typescript'});
+  return response;
+};
+
+Object.assign(window,{pilotOutputQA:{advance(next:Stage){
+  stage=next;
+  const seq=++cursor;
+  for (const stream of streams) {
+    const live=next==='working'&&stream.session===router;
+    stream.publish({sessionId:stream.session,seq,type:live?'message':'specialist',
+      ...(live&&{textUpdate:{target:'card',cardType:'message',id:'pilot-opening',rootTurnId:'output-root',at:at(100),content:opening}})} as SessionEvent);
+    if(live)stream.publish({sessionId:router,seq:++cursor,type:'specialist'} as SessionEvent);
+  }
+}}});

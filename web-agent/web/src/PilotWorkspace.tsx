@@ -18,11 +18,14 @@ function withSeenCursor(channel:SpecialistChannelInfo,cursor:string):SpecialistC
 }
 
 export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
- const [workspace,setWorkspace]=useState<SuperWorkspace|null>(null),[error,setError]=useState('');
+ const [loadedWorkspace,setWorkspace]=useState<SuperWorkspace|null>(null),[error,setError]=useState('');
+ const workspace=loadedWorkspace?.project.projectId===projectId?loadedWorkspace:null;
  const generation=useRef(0),refreshRef=useRef<()=>Promise<void>>(async()=>{});
  const deletedRoles=useRef(new Set<string>());
+ useEffect(()=>{deletedRoles.current.clear();},[projectId]);
  useEffect(()=>{
-  const current=++generation.current;deletedRoles.current.clear();setWorkspace(null);setError('');
+  const current=++generation.current;setError('');
+  setWorkspace(previous=>previous?.project.projectId===projectId?previous:null);
   if(!projectId||!connected)return;
   const controller=new AbortController();let busy=false,queued=false,nextActivation=0;
   const refresh=async()=>{

@@ -82,7 +82,10 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const badgePadding=parseFloat(getComputedStyle(identity).getPropertyValue('--island-badge-padding'));
    const badgeWidth=badgeStyle?textWidth(badge!.querySelector('.session-state-label'))+(badge!.querySelector('.session-state-icon')?.getBoundingClientRect().width??0)+parseFloat(badgeStyle.columnGap||'0')+2*badgePadding+parseFloat(badgeStyle.borderLeftWidth)+parseFloat(badgeStyle.borderRightWidth):0;
    const disclosure=state?.querySelector<HTMLElement>('.header-inspector-toggle');
-   const normalStateWidth=badge?badgeWidth+(disclosure?disclosure.getBoundingClientRect().width+parseFloat(getComputedStyle(state!).columnGap||'0'):0):state?.getBoundingClientRect().width??0;
+   const roster=state?.querySelector<HTMLElement>('.pilot-active-specialists-trigger');
+   const stateGap=state?parseFloat(getComputedStyle(state).columnGap||'0'):0;
+   const normalStateWidth=badge?badgeWidth+(disclosure?disclosure.getBoundingClientRect().width+stateGap:0)+
+    (roster?Number(roster.dataset.preferredWidth)+stateGap:0):state?.getBoundingClientRect().width??0;
    const titleIcon=title?.previousElementSibling;
    const titleIconWidth=titleIcon ? titleIcon.getBoundingClientRect().width+parseFloat(getComputedStyle(title!.parentElement!).columnGap||'0') : 0;
    const pilotWidth=identity.querySelector('.header-pilot-state.is-visible')?parseFloat(getComputedStyle(identity).getPropertyValue('--pilot-state-width')):0;

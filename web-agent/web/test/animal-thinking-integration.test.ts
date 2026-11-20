@@ -129,7 +129,7 @@ test('Pilot shows animal-specific thinking text under its original identity, the
  snapshot.ai!.cards=[{id:'compact',type:'compaction',status:'running',at}];
  assert.doesNotMatch(html(),/animal-thinking-bubble|pilot-specialist-thinking-label/);assert.match(html(),/正在压缩上下文/);
  snapshot.ai!.cards=[{id:'reply',type:'message',status:'running',content:'这是本次检查结果。',at,data:{root_turn_id:'root'}}];
- assert.match(html().replace(/<[^>]*>/g,''),/这是本次检查结果。/);assert.doesNotMatch(html(),/animal-thinking-bubble|pilot-specialist-thinking-label|turn-activity-mark|正在生成回复/);
+ assert.match(html().replace(/<[^>]*>/g,''),/这是本次检查结果(?!。)/);assert.doesNotMatch(html(),/animal-thinking-bubble|pilot-specialist-thinking-label|turn-activity-mark|正在生成回复/);
  assert.match(html(),/data-live-motion="active"/);
  assert.equal((html().match(/data-live-glow="active"/g)??[]).length,1,'the public body stays quiet while the existing name keeps its glow');
  assert.equal(html().match(/<div class="response-identity">[\s\S]*?<\/div>/)?.[0],thinking.match(/<div class="response-identity">[\s\S]*?<\/div>/)?.[0],'the identity stays in the same parent and retains the same author while its content slot changes');
@@ -172,7 +172,7 @@ test('Pilot public prose keeps its original specialist entry and execution logo 
   assert.equal((html.match(/data-agent-type=/g)??[]).length,1);
   assert.ok(html.includes(`data-agent-type="${backend.kind==='native'?'native':'codex'}"`),'branding follows the real execution binding');
   assert.ok(html.indexOf('<button')<html.indexOf('class="ai-card ai-message"'));
-  assert.match(html.replace(/<[^>]*>/g,''),/这是专员真正公开的回复。/);
+  assert.match(html.replace(/<[^>]*>/g,''),/这是专员真正公开的回复(?!。)/);
   assert.match(html,/data-live-motion="active"/);
   assert.equal((html.match(/role="status"/g)??[]).length,0,'public prose does not add a synthetic thinking announcement');
  }
@@ -210,13 +210,16 @@ test('Pilot identity moves only during connected visible execution while public 
  const snapshot={session:{id:'worker',projectId:'project'},superagent:{roleId:row.worker.roleId,task:row.worker.task},cursor:1,ai:view({rootTurnId:'root',replyStatus:'running',cards:[{id:'reply',type:'message',status:'running',content,at,data:{root_turn_id:'root'}}]})} as SessionSnapshot;
  const renderReply=(extra:{available?:boolean;visible?:boolean}={})=>renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row,snapshot,...extra}));
  for(const phase of ['thinking','tool'] as const){row.activity.phase=phase;assert.match(renderReply(),/data-live-motion="active"/);}
- const assertStill=(html:string)=>{assert.ok(html.replace(/<[^>]*>/g,'').includes(content));assert.match(html,/data-live-motion="still"/);assert.doesNotMatch(html,/animal-thinking-bubble|turn-activity-mark|status-text--active|data-live-(?:motion|glow)="active"/);};
+ const assertStill=(html:string)=>{const plain=html.replace(/<[^>]*>/g,'');assert.ok(plain.includes(content.slice(0,-1)));assert.ok(!plain.includes(content));assert.match(html,/data-live-motion="still"/);assert.doesNotMatch(html,/animal-thinking-bubble|turn-activity-mark|status-text--active|data-live-(?:motion|glow)="active"/);};
  assertStill(renderReply({available:false}));assert.match(renderReply({available:false}),/进度暂未更新，正在重连/);
  assertStill(renderReply({visible:false}));
  for(const phase of ['waiting_approval','waiting_input','waiting_external'] as const){row.activity.phase=phase;assertStill(renderReply());}
  row.activity.phase='thinking';
  for(const status of ['queued','waiting_approval','waiting_input','waiting_external','paused','cancelled','failed','interrupted']){snapshot.ai!.status=status;assertStill(renderReply());}
- snapshot.ai!.status='completed';snapshot.ai!.replyStatus='completed';assertStill(renderReply());
+ snapshot.ai!.status='completed';snapshot.ai!.replyStatus='completed';assert.match(renderReply(),/data-live-motion="active"/,'an SDK segment finishing leaves the specialist animated while its task is active');
+ row.activity.phase='updating';row.continuity='terminal';row.observedRootTurnId='root';
+ row.worker.task.state='completed';assertStill(renderReply());
+ row.activity.phase='thinking';row.continuity=undefined;row.worker.task.state='running';
  snapshot.ai!.status='running';snapshot.ai!.replyStatus='running';snapshot.ai!.pendingApprovals=[{} as NonNullable<AIView['pending']>];assertStill(renderReply());
 });
 
