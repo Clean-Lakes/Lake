@@ -176,6 +176,11 @@ export function ModelSettings({initialTab="models",onClose:closeSettings,onChang
     const original=presetDefaults.current.get(selected) ?? catalog.providers.find(provider=>provider.id===selected);
     setDrafts(current=>{const next={...current[selected]!,...patch};return {...current,[selected]:{...next,dirty:!original || providerHasEdits(next,original)}};});setResult(null);
   }
+  function setAllModelsEnabled(enabled: boolean) {
+    if (!draft) return;
+    const models = draft.models.map(model => model.enabled===enabled ? model : {...model,enabled});
+    update({models});
+  }
   function selectSource(id:string) {setSelected(id);setSourcesExpanded(false);setEditor(null);setDiscovery(null);setError("");setResult(null);setDeleteConfirm(false);}
   function choose(id:string) {
     const fromRail=!!document.activeElement?.closest('#model-source-options');
@@ -306,7 +311,13 @@ export function ModelSettings({initialTab="models",onClose:closeSettings,onChang
           <label className="field-label">API Key<div className="provider-key-row"><input ref={keyInput} type="password" autoComplete="new-password" spellCheck={false} maxLength={4096} placeholder={draft.clearKey ? "保存后清除密钥" : draft.keyConfigured ? "已保存密钥，留空保持不变" : "输入密钥；本地模型可留空"} value={draft.apiKey} onChange={event => update({apiKey:event.target.value,clearKey:false})}/>{draft.keyConfigured && <button type="button" className="provider-text-button" onClick={() => update({clearKey:!draft.clearKey,apiKey:""})}>{draft.clearKey ? "撤销清除" : "清除"}</button>}</div></label>
         </div>
         <div className="provider-model-heading">
-          <h4>模型列表 <small>{draft.models.length}</small></h4>
+          <div>
+            <h4>模型列表 <small>{draft.models.length}</small></h4>
+            {draft.models.length>0 && <div className="provider-model-bulk" role="group" aria-label="批量设置模型状态">
+              <button type="button" className="button secondary" disabled={!!editor || !!discovery || !draft.models.some(model => !model.enabled)} onClick={() => setAllModelsEnabled(true)}><Glyph name="check" size={14}/>全部启用</button>
+              <button type="button" className="button secondary" disabled={!!editor || !!discovery || !draft.models.some(model => model.enabled)} onClick={() => setAllModelsEnabled(false)}><Glyph name="close" size={14}/>全部停用</button>
+            </div>}
+          </div>
           <div>
             {capabilityDetectionEnabled && <button type="button" className="provider-text-button" disabled={draft.isNew || draft.dirty || !!editor || !!discovery} onClick={() => void run("detect-capabilities",detectCapabilities)}>重新识别模型能力</button>}
             <button ref={modelsButton} type="button" className="provider-text-button" disabled={!draft.baseURL.trim() || !!editor || !!discovery} onClick={() => void run("discover",discover)}>{busy==="discover" ? "获取中…" : "从 API 选择模型"}</button>
