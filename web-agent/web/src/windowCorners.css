@@ -27,7 +27,12 @@
  corner-shape:var(--corner-window);
 }
 
-/* Compact desktop navigation scales the window curve without clipping its corners. */
+/* Scale the window curve for compact navigation and the input frame. */
+:root .composer-input {
+ --window-corner-radius:var(--radius-composer);
+ --window-corner-stroke-image:url('/window-corner-stroke-compact.svg');
+ --window-corner-stroke-slice:18;
+}
 :root .sidebar.workspace-navigation :is(.navigation-search,.session-nav-row,.resource-row,.resource-folder-toggle,.resource-tree-row,.resource-folder-row,.resource-nav-row,.pilot-workspace .nav-row) {
  --window-corner-radius:18px;
  --window-corner-stroke-image:url('/window-corner-stroke-compact.svg');
