@@ -59,6 +59,26 @@ test('Pilot waves and specialist border characters survive initial, empty-stream
  }
 });
 
+test('Pilot keeps one avatar when thinking continues after public narration',t=>{
+ t.mock.method(Date,'now',()=>Date.parse(start)+12000);
+ const assistantIdentity={name:'Pilot',pilot:true};
+ const narration:AICard={id:'narration',type:'message',status:'completed',content:'我先核对检查记录。',at:start};
+ const thinking:AICard={id:'thinking',type:'thinking',status:'running',at:start};
+ const render=(cards:AICard[])=>{
+  const snapshot={session:{id:'s'},messages:[{id:'u',sessionId:'s',role:'user',text:'查看检查记录',createdAt:start}],resources:[],actions:[],
+   ai:{session:'s',status:'running',turnStartedAt:start,cards,cardsOffset:0}} as SessionSnapshot;
+  return renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity}));
+ };
+ assert.match(render([thinking]),/class="turn-thinking-avatar"/);
+ const withNarration=render([narration,thinking]);
+ assert.match(withNarration,/我先核对检查记录。/);
+ assert.equal((withNarration.match(/class="response-avatar"/g)??[]).length,1);
+ assert.doesNotMatch(withNarration,/class="turn-thinking-avatar"|without-avatar/);
+ assert.match(withNarration,/turn-activity-mark/);
+ assert.match(withNarration,/已处理 12秒/);
+ assert.match(withNarration,/正在思考…/);
+});
+
 test('a direct specialist supplement shows its thinking character without saved timing or a new task root',t=>{
  t.mock.method(Date,'now',()=>Date.parse(start)+2000);
  const userAt=new Date(Date.parse(start)+1000).toISOString();
