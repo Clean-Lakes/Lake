@@ -5,6 +5,7 @@ import type {AIView, Message, SessionEvent, SessionSnapshot, SpecialistConversat
 const router = 'demo-session-0', project = 'demo-project';
 const baseFetch = window.fetch.bind(window);
 const dialogue = new URLSearchParams(location.search).has('dialogue');
+const dialogueHandoffMs = 14_010;
 const started = Date.now() - 60_000;
 const at = (offset: number) => new Date(started + offset).toISOString();
 const source: Message = {id:'output-request', sessionId:router, role:'user', text:'核对这批样例记录', createdAt:at(0)};
@@ -61,10 +62,10 @@ function snapshot(base: SessionSnapshot, worker?: SuperWorker): SessionSnapshot 
   if(dialogue&&stage!=='idle'){
     const round=dialogueRound();
     for(const member of round.members)if(member.replyMessageId)messages.push({id:member.replyMessageId,sessionId:router,role:'assistant',
-      createdAt:at(650+messages.length),text:`${member.roleName}已核对，样例正常。`,
+      createdAt:at(dialogueHandoffMs+650+messages.length),text:`${member.roleName}已核对，样例正常。`,
       author:{kind:'specialist',name:member.roleName,workerId:member.id,roleId:member.roleId,sessionId:member.sessionId,channelSessionId:member.channelSessionId,conversationId:round.id},
       conversation:{id:round.id,sourceMessageId:source.id,kind:'reply'}});
-    if(ended)messages.push({id:'dialogue-summary',sessionId:router,role:'assistant',createdAt:at(1000),text:'七位专员确认样例正常，有一位专员未能回应。',
+    if(ended)messages.push({id:'dialogue-summary',sessionId:router,role:'assistant',createdAt:at(dialogueHandoffMs+1000),text:'七位专员确认样例正常，有一位专员未能回应。',
       conversation:{id:round.id,sourceMessageId:source.id,kind:'summary',summaryRequested:true}});
   }
   if (ended && !worker && !dialogue) messages.push({id:'rolled-up-report',sessionId:router,role:'assistant',createdAt:at(1000),
@@ -81,14 +82,14 @@ function snapshot(base: SessionSnapshot, worker?: SuperWorker): SessionSnapshot 
     ], totalCards:0,
   };
   if(ai&&dialogue){
-    ai.status='completed';ai.replyStatus='completed';ai.turnFinishedAt=at(300);
+    ai.status='completed';ai.replyStatus='completed';ai.turnFinishedAt=at(dialogueHandoffMs);
     ai.cards=[{id:'pilot-opening',type:'message',status:'completed',at:at(200),content:'已邀请大家逐一回应。',data:{root_turn_id:root,source_message_id:source.id}},
       {id:'pilot-invite',type:'operation',title:'convene_specialists',status:'completed',at:at(150),content:'已召集八位专员',data:{root_turn_id:root}}];
   }
   if(ai)ai.totalCards=ai.cards.length;
   return {...base, cursor, messages, ai, superagent:worker?{roleId:worker.roleId, task:worker.task} as SessionSnapshot['superagent']:undefined,
     session:{...base.session,id:worker?.sessionId??router,projectId:project,title:worker?.roleName??'Pilot',workspaceRole:worker?'worker':'router',status:active?'investigating':'completed'},
-    sre:undefined, actions:[], specialists:[], replyTimings:dialogue&&ai?[{messageId:source.id,startedAt:at(10),finishedAt:at(300),status:'completed'}]:[], terminals:[]};
+    sre:undefined, actions:[], specialists:[], replyTimings:dialogue&&ai?[{messageId:source.id,startedAt:at(10),finishedAt:at(dialogueHandoffMs),status:'completed'}]:[], terminals:[]};
 }
 
 class FixtureStream extends EventTarget {

@@ -35,6 +35,7 @@ export function PilotConversationProgress({round,replies,process,connected=true,
   const missing=round.members.filter(member=>!['queued','running','replied'].includes(member.state));
   const pending=[...queued,...missing];
   const shown=running.length?running:reported;
+  const hasReportDisclosure=shown.length>0||replies.length>0;
   const headline=running.length?`${running.length} 位回复中`:reported.length||!live?`${reported.length} 份专员报告`:'正在召集';
   const waitingLabel=[queued.length?`${queued.length} 位排队`:'',missing.length?`${missing.length} 位未回应`:''].filter(Boolean).join(' · ');
   const state=!connected&&live?'正在重连':round.state==='summarizing'?'Pilot 正在总结':round.state==='cancelled'?'召集已停止':round.state==='interrupted'?'召集已中断':undefined;
@@ -57,7 +58,7 @@ export function PilotConversationProgress({round,replies,process,connected=true,
   </>;
   return <section className="pilot-conversation-progress" aria-label="专员协作" data-conversation-id={round.id} data-state={round.state}>
     <div className="pilot-conversation-bar">
-      {shown.length>0||replies.length>0?<button type="button" className="pilot-conversation-toggle" data-active={connected&&running.length>0||undefined}
+      {hasReportDisclosure?<button type="button" className="pilot-conversation-toggle" data-active={connected&&running.length>0||undefined}
         aria-expanded={repliesOpen} aria-controls={`${id}-replies`} aria-describedby={shown.length?`${id}-speakers`:undefined} onClick={()=>toggle('replies',repliesOpen)}>
         {status}<Glyph name="next" size={12} className="pilot-conversation-chevron"/>
       </button>:<span className="pilot-conversation-static">{status}</span>}
@@ -68,10 +69,10 @@ export function PilotConversationProgress({round,replies,process,connected=true,
       </button>}
       {running.length>0&&reported.length>0&&<span className="pilot-conversation-meta">{reported.length} 份已收到</span>}
       {state&&<span className="pilot-conversation-meta" role="status">{state}</span>}
-      {process&&<div className="pilot-conversation-process">{process}</div>}
     </div>
-    <div id={`${id}-replies`} hidden={!repliesOpen}>
-      <div ref={body} className="pilot-conversation-replies">{replies}</div>
+    <div ref={body} id={`${id}-replies`} hidden={hasReportDisclosure&&!repliesOpen}>
+      {process&&<div className="pilot-conversation-process">{process}</div>}
+      <div className="pilot-conversation-replies">{replies}</div>
       {repliesOpen&&!replies.length&&<Participants members={shown} roundId={round.id} onSpecialist={onSpecialist}/>}
     </div>
     <div id={`${id}-waiting`} hidden={!waitingOpen}>

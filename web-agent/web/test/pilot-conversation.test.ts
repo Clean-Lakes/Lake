@@ -4,6 +4,7 @@ import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {SpecialistConversation,SuperWorkspace,SessionSnapshot,Message} from '../../shared/contracts';
 import {PilotConversationProgress} from '../src/PilotConversationProgress';
+import {ReplyFooter} from '../src/ReplyFooter';
 import {superPilotActivity} from '../src/superPilotActivity';
 import {AITranscript} from '../src/AIPanel';
 
@@ -36,6 +37,21 @@ test('a stored authentication failure stays visible after completion and while o
   assert.equal((text.match(/模型服务鉴权失败（HTTP 401）/g)??[]).length,1);
   assert.doesNotMatch(text,/回应失败：|等待重新连接/);
  }
+});
+
+test('the report disclosure contains the execution process and duration',()=>{
+ const process=createElement(ReplyFooter,{duration:'14秒',action:{controls:'execution',onClick:()=>{}}});
+ const completed:SpecialistConversation={...round,state:'completed',members:[round.members[0]!]};
+ const html=renderToStaticMarkup(createElement(PilotConversationProgress,{round:completed,replies:['专员原话'],process}));
+ assert.match(html,/aria-expanded="false" aria-controls="([^"]+-replies)"/);
+ assert.match(html,/-replies" hidden=""><div class="pilot-conversation-process">/);
+ assert.match(html,/查看执行过程/);
+ assert.match(html,/>14 秒</);
+ assert.ok(html.indexOf('查看执行过程')<html.indexOf('专员原话'));
+ const failed:SpecialistConversation={...completed,members:[{...completed.members[0]!,state:'failed'}]};
+ const withoutReports=renderToStaticMarkup(createElement(PilotConversationProgress,{round:failed,replies:[],process}));
+ assert.doesNotMatch(withoutReports,/-replies" hidden=/);
+ assert.match(withoutReports,/查看执行过程/);
 });
 
 test('Lake Island follows dialogue even after the routing response, and stops when the round settles',()=>{
