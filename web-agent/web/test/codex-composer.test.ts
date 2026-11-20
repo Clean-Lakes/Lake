@@ -29,9 +29,15 @@ test('Pilot Codex configuration keeps its native model and cannot select the spe
  assert.doesNotMatch(html,/独立 Agent|value="__lake_codex_agent__"/);
 });
 test('an unconfigured Pilot still connects its own model when Codex only supplies project settings',()=>{
- const html=renderToStaticMarkup(createElement(ComposerModelSelect,{...props,configured:false,externalAgent:{selected:false,ready:true,configurationOnly:true}}));
+ const html=renderToStaticMarkup(createElement(ComposerModelSelect,{...props,available:{models:[],entries:[],loading:false},modelName:null,configured:false,externalAgent:{selected:false,ready:true,configurationOnly:true}}));
  assert.match(html,/composer-model-setup/);assert.match(html,/aria-label="连接模型"/);assert.match(html,/aria-haspopup="dialog"/);
  assert.doesNotMatch(html,/独立 Agent|value="__lake_codex_agent__"/);
+});
+test('Pilot opens the model selector when a configured provider still has enabled models but no current selection',()=>{
+ const html=renderToStaticMarkup(createElement(ComposerModelSelect,{...props,modelName:null,configured:false,externalAgent:{selected:false,ready:true,configurationOnly:true}}));
+ assert.match(html,/aria-label="选择模型"/);
+ assert.match(html,/composer-model-name">选择模型<\/span>/);
+ assert.doesNotMatch(html,/composer-model-setup|连接模型|独立 Agent|value="__lake_codex_agent__"/);
 });
 test('a model provider named Codex cannot impersonate an independent Codex selection',()=>{
  const html=renderToStaticMarkup(createElement(ComposerModelSelect,props));

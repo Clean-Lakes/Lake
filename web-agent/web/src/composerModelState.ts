@@ -1,5 +1,9 @@
 import type {AvailableModelEntry,AvailableModels} from "../../shared/contracts";
 
+export function hasComposerModelChoices(available: AvailableModels): boolean {
+  return (available.entries?.length ?? available.models.length) > 0;
+}
+
 // Keep supplied aliases; the technical provider route remains in the tooltip.
 export function composerModelLabel(label:string,name:string):string {
   return label===name?name.split('/').filter(Boolean).at(-1)??label:label;

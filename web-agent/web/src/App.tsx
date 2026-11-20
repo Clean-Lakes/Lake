@@ -60,6 +60,7 @@ import {composerMentionQuery,type ComposerMentionQuery,appendResourceMention,com
 import {ComposerTextInput,type ComposerInputHandle} from "./ComposerTextInput";
 import {AppSelect} from "./AppSelect";
 import {ComposerModelSelect} from "./ComposerModelSelect";
+import {hasComposerModelChoices} from "./composerModelState";
 import {useSpecialistModel} from "./useSpecialistModel";
 import {BulkCheckbox, BulkNavigationDelete, type BulkSelection} from "./BulkNavigationDelete";
 import {addBulkTargets, bulkCatalogTargets, bulkKey, orderBulkDeletion, type BulkTarget, type BulkDeleteResult} from "./bulkNavigation";
@@ -989,10 +990,13 @@ function AppContent() {
   },[sessionId,inspector.selection,pilotWorkspace.workspace?.workers,activeSnapshot?.superagent?.task.taskId]);
   const pilotWorkActive=bootstrap?.backendRuntime==='typescript'&&!!superPilotActivity(pilotWorkspace.workspace,selectedSession,sessionConnected);
   const currentAssignment=specialistModel.selected?{assignment:specialistModel.assignment(),checking:specialistModel.loading,blockedReason:specialistModel.blocker}:undefined;
+  const composerNeedsModel=!modelConfigured && !currentAssignment;
+  const hasModelChoices=hasComposerModelChoices(modelMenu);
+  const modelActionLabel=hasModelChoices?"选择模型":"连接模型";
   const executionStoppable=turnActive||pilotWorkActive;
   const composerStop=executionStoppable&&!hasMessageDraft&&!sendFeedback;
-  const composerSendGlyph=sendFeedback?"loader":!modelConfigured&&!currentAssignment?"plug":"up";
-  const composerSendReady=composerSendGlyph==="up"&&hasMessageDraft&&!currentAssignment?.blockedReason;
+  const composerSendGlyph=sendFeedback?"loader":composerNeedsModel&&!hasModelChoices?"plug":"up";
+  const composerSendReady=!composerNeedsModel&&composerSendGlyph==="up"&&hasMessageDraft&&!currentAssignment?.blockedReason;
   const stopPresentation=stopControlPresentation(activeSnapshot?.session.workspaceRole,bootstrap?.backendRuntime==='typescript',!!activeSnapshot?.superagent?.task.collaboration);
   const stopButtonContent = <><Glyph name="stop" size={12}/><span>{stopPresentation.shortLabel}</span></>;
   const openedPilotProjects=useRef(new Set<string>());
@@ -1072,7 +1076,7 @@ function AppContent() {
 
   const openSettings = useCallback(() => {setSettingsInitialTab("models");setSettingsOpen(true);}, []);
   async function openModelMenu() {
-    if (modelMenuOpen) { setModelMenuOpen(false); return; }
+    if (modelMenuOpen) return;
     setModelMenuOpen(true);
     setModelMenu(current=>({...current,loading:true,message:""}));
     try {
@@ -1286,7 +1290,12 @@ function AppContent() {
       try{await changeConversationMode(planCommand.prompt?'plan':activeSnapshot?.conversationMode==='plan'?'default':'plan');if(!planCommand.prompt){clearSubmitted(sessionId,composerDraft);setMention(null);return;}}
       catch(error){handleFailure(error);return;}
     }
-    if (!modelConfigured&&!currentAssignment) {setMention(null);void openSettings();return;}
+    if (composerNeedsModel) {
+      setMention(null);
+      if (hasModelChoices) void openModelMenu();
+      else openSettings();
+      return;
+    }
     if(currentAssignment?.checking||specialistModel.saving)return;
     if(currentAssignment?.blockedReason){setSettingsInitialTab("agents");setSettingsOpen(true);return;}
     if (!text && !imageDraft.length) return;
@@ -1832,8 +1841,8 @@ function AppContent() {
             type={composerStop ? "button" : "submit"}
             data-sending={sendFeedback ? true : undefined}
             data-send-ready={composerSendReady || undefined}
-            aria-label={sendFeedback ?? (composerStop ? stopPresentation.label : !modelConfigured && !currentAssignment ? "发送前连接模型" : currentAssignment?.blockedReason ? "配置 Codex" : currentAssignment ? "发送给 Codex" : queueMode ? "加入待发送队列" : "发送消息")}
-            title={sendFeedback ?? (composerStop ? stopPresentation.title : !modelConfigured && !currentAssignment ? "先连接模型；保留草稿，不会自动发送" : currentAssignment?.blockedReason ? currentAssignment.blockedReason : `${currentAssignment ? "发送给 Codex" : queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`)}
+            aria-label={sendFeedback ?? (composerStop ? stopPresentation.label : composerNeedsModel ? `发送前${modelActionLabel}` : currentAssignment?.blockedReason ? "配置 Codex" : currentAssignment ? "发送给 Codex" : queueMode ? "加入待发送队列" : "发送消息")}
+            title={sendFeedback ?? (composerStop ? stopPresentation.title : composerNeedsModel ? `先${modelActionLabel}，草稿会保留` : currentAssignment?.blockedReason ? currentAssignment.blockedReason : `${currentAssignment ? "发送给 Codex" : queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`)}
             aria-busy={!!sendFeedback || stoppingTurn}
             onClick={composerStop ? () => void stopCurrentTurn() : undefined}
             disabled={sendFeedback ? true : composerStop ? stoppingTurn || !sessionConnected : !sessionConnected || !!pendingOperation || reasoningSaving.has(sessionId) || modeSaving.has(sessionId) || stoppingTurn || currentAssignment?.checking || specialistModel.saving || ((modelConfigured || !!currentAssignment) && (!hasMessageDraft || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)))}

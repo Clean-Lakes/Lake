@@ -3,7 +3,7 @@ import type {AvailableModelEntry,AvailableModels,ReasoningSettings} from "../../
 import {AppSelect} from "./AppSelect";
 import {ProviderIcon} from "./ProviderIcon";
 import {Glyph} from "./Icons";
-import {currentComposerModel,composerModelLabel} from "./composerModelState";
+import {currentComposerModel,composerModelLabel,hasComposerModelChoices} from "./composerModelState";
 import {ReasoningSelector,type ReasoningSelectorProps} from "./ReasoningSelector";
 import {useNativeModelPanel} from "./nativeModelPanel";
 import {api} from "./api";
@@ -34,13 +34,14 @@ export function ComposerModelSelect({externalAgent,onExternalAgentSelect,onExter
     // setting after either surface finishes, including after it closes.
     if(!saving&&savingSession===session)setReasoningRevision(value=>value+1);
   }}:undefined;
-  const native=useNativeModelPanel({externalAgent,onExternalAgentSelect,onExternalAgentSettings,available,modelName,selection,configured:configured||!!externalAgent&&!externalAgent.configurationOnly,open,disabled,onOpenChange,onSelect,onSettings,reasoning:externalAgent?.selected?undefined:trackedReasoning,contextUsage:externalAgent?.selected?undefined:contextUsage},anchor);
+  const canChooseModel=configured || hasComposerModelChoices(available) || Boolean(externalAgent && !externalAgent.configurationOnly);
+  const native=useNativeModelPanel({externalAgent,onExternalAgentSelect,onExternalAgentSettings,available,modelName,selection,configured:canChooseModel,open,disabled,onOpenChange,onSelect,onSettings,reasoning:externalAgent?.selected?undefined:trackedReasoning,contextUsage:externalAgent?.selected?undefined:contextUsage},anchor);
   const [search,setSearch]=useState("");
   const [providerOpen,setProviderOpen]=useState(false);
   useEffect(()=>{if(!open)setProviderOpen(false);},[open]);
   const [source,setSource]=useState<string|null>(null);
   useEffect(()=>{setSource(externalAgent?.selected?'agent:codex':selection?'provider:'+selection.providerId:null);setSearch("");},[presentation,externalAgent?.selected]);
-  if (!configured&&(!externalAgent||externalAgent.configurationOnly)) return <button type="button" className="composer-model-setup" aria-label="连接模型" aria-haspopup="dialog" disabled={disabled} onClick={onSettings} title="打开模型设置"><Glyph name="settings" size={16}/><span>连接模型</span></button>;
+  if (!canChooseModel) return <button type="button" className="composer-model-setup" aria-label="连接模型" aria-haspopup="dialog" disabled={disabled} onClick={onSettings} title="打开模型设置"><Glyph name="settings" size={16}/><span>连接模型</span></button>;
   const modelRows=available.entries?.map(entry=>({value:JSON.stringify([entry.providerId,entry.modelId]),label:entry.displayName,name:entry.name,group:entry.providerName,groupId:'provider:'+entry.providerId,model:entry as AvailableModelEntry|string,external:false}))??available.models.map(name=>({value:name,label:name,name,group:"",groupId:"provider:",model:name as AvailableModelEntry|string,external:false}));
   const allRows=externalAgent&&!externalAgent.configurationOnly?[{value:codexModelValue,label:'Codex',name:'Codex CLI',group:'Codex · Agent',groupId:'agent:codex',model:codexModelValue,external:true},...modelRows]:modelRows;
   // Refreshing the catalog must not remove cached rows or resize an open panel.
@@ -56,10 +57,12 @@ export function ComposerModelSelect({externalAgent,onExternalAgentSelect,onExter
   const note=available.message&&(available.source==="magpie"||!available.models.length)?available.message:"";
   const label=externalAgent?.selected?'Codex':configured?(current?composerModelLabel(current.displayName,current.name):modelName?.split("/").pop()||"已配置"):"选择模型";
   const levelLabel=!externalAgent?.selected&&level&&level.session===session&&level.providerId===providerId?currentReasoningLabel(level.settings,modelId):undefined;
+  const hasCurrentModel=configured || externalAgent?.selected;
+  const accessibleLabel=hasCurrentModel ? `选择模型：${label}${levelLabel?` · 思考强度：${levelLabel}`:""}${externalAgent?.selected?' · 独立 Agent':current?.providerName?` · ${current.providerName}`:""}` : label;
   const triggerLabel=<span className="composer-model-current"><span className="composer-model-name">{label}</span>{levelLabel&&<span className="composer-model-effort" title={`思考强度：${levelLabel}`}>{levelLabel}</span>}</span>;
   const codexFooter=externalAgent&&<div className="composer-codex-footer">{externalAgent.configurationOnly&&<strong>专员 Codex</strong>}<p role="status">{externalAgent.ready?'已连接本机 Codex，复用已有登录与配置':externalAgent.message||'请先配置 Codex'}</p><button type="button" disabled={disabled} onClick={()=>{onOpenChange(false);onExternalAgentSettings?.();}}><Glyph name="settings" size={14}/>配置 Codex</button>{!externalAgent.configurationOnly&&<small>发送后创建独立任务，进度与结果回到当前专员。</small>}</div>;
-  return <span ref={anchor} className="composer-model-anchor"><AppSelect key={presentation} nativePopup={native} selectionLocked={disabled} className={`composer-model-select ${configured||externalAgent?.selected?"":"model-missing"}`} popupClassName="composer-model-popup" popupMinWidth={260} popupAlign="end" popupMaxHeight={420}
-    label={`选择模型：${label}${levelLabel?` · 思考强度：${levelLabel}`:""}${externalAgent?.selected?' · 独立 Agent':current?.providerName?` · ${current.providerName}`:""}`} title={externalAgent?.selected?externalAgent.message||'Codex 独立执行':modelName&&label!==modelName?`${label}\n${modelName}`:label} value={externalAgent?.selected?codexModelValue:current?JSON.stringify([current.providerId,current.modelId]):modelName||""} renderValue={triggerLabel}
+  return <span ref={anchor} className="composer-model-anchor"><AppSelect key={presentation} nativePopup={native} selectionLocked={disabled} className={`composer-model-select ${hasCurrentModel?"":"model-missing"}`} popupClassName="composer-model-popup" popupMinWidth={260} popupAlign="end" popupMaxHeight={420}
+    label={accessibleLabel} title={externalAgent?.selected?externalAgent.message||'Codex 独立执行':modelName&&label!==modelName?`${label}\n${modelName}`:label} value={externalAgent?.selected?codexModelValue:current?JSON.stringify([current.providerId,current.modelId]):modelName||""} renderValue={triggerLabel}
     icon={<ProviderIcon brand={externalAgent?.selected?'openai':modelBrand(modelName||"",current?.displayName,current?.providerName)} size={16}/>}
     open={open} aria-busy={disabled} onOpenChange={next=>{if(next&&disabled) return;if(next) {setSearch("");setSource(selectedSource);}onOpenChange(next);}}
     onChange={event=>{const row=rows.find(row=>row.value===event.target.value);if(row&&!disabled){if(row.external)onExternalAgentSelect?.();else onSelect(row.model);}}}
