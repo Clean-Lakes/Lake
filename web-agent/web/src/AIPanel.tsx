@@ -25,7 +25,7 @@ import {workerTranscriptCards,workerConversationTurns,isDeliveredWorkerInterim} 
 import {completedTurnInterimIds,isAssistantProse,trailingTurnReplyId} from './completedTurnProse';
 import {SettledReply} from './SettledReply';
 import {pilotReplyContinuations,replyRoleBreaks} from './replyGrouping';
-import {pilotDialogueCompletion,pilotHandoffInterimIds,recoveredRouteFailures} from './routeDispatchPresentation';
+import {pilotDialogueCompletion,pilotHandoffInterimIds,pilotTaskCompletion,recoveredRouteFailures} from './routeDispatchPresentation';
 import {OperationOutcomes} from './OperationOutcomes';
 import {MessageText} from './MessageText';
 import {StrategyCorrectionCard} from './StrategyCorrectionCard';
@@ -245,7 +245,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,subscribeWork
     {turns.map((turn, index) => {
       const canFoldPilotProcess=mode==='conversation'&&assistantIdentity?.pilot&&!(index===0&&before>0)&&!(turn===currentTurn&&(snapshot.ai?.pending||snapshot.ai?.question));
       const handoffInterim=canFoldPilotProcess?pilotHandoffInterimIds(turn):new Set<string>();
-      const dialogueCompletion=canFoldPilotProcess?pilotDialogueCompletion(turn):undefined;
+      const pilotCompletion=canFoldPilotProcess?pilotDialogueCompletion(turn)??pilotTaskCompletion(turn):undefined;
       const groups=mode==='conversation'?conversationDisplayGroups(sreConversationRoles(conversationTurnEntries(turn)),turn===currentTurn&&liveConversation,snapshot.resources):transcriptGroups(turn.filter(entry=>!isFileChangeCard(entry.card)&&activityEntry(entry))).map(entries=>({progress:false,entries}));
       const processGroups=mode==='conversation'?groups.filter(group=>group.progress):[];
       const activeReply=turn===currentTurn&&(!currentTiming||currentTiming.status==='running')?turn.filter(isAssistantProse).at(-1)?.id:undefined;
@@ -253,7 +253,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,subscribeWork
       const completed=timing?.status??(turn===currentTurn?snapshot.ai?.status:undefined);
       const executionEnded=['completed','failed','cancelled','interrupted'].includes(completed??'');
       const turnDispatchRows=dispatchRows.filter(row=>turn.some(entry=>entry.message?.id===row.sourceMessageId));
-      const turnConversations=mode==='conversation'&&assistantIdentity?.pilot?pilotWorkspace?.conversations?.filter(round=>round.projectId===snapshot.session.projectId&&round.sessionId===snapshot.session.id&&turn.some(entry=>entry.message?.id===round.sourceMessageId))??[]:[];
+      const turnConversations=mode==='conversation'&&assistantIdentity?.pilot?pilotWorkspace?.conversations?.filter(round=>round.kind!=='task-summary'&&round.projectId===snapshot.session.projectId&&round.sessionId===snapshot.session.id&&turn.some(entry=>entry.message?.id===round.sourceMessageId))??[]:[];
       const presentedReply=mode==='conversation'?trailingTurnReplyId(turn):undefined;
       const presentingReply=!!presentedReply&&(!completed||['running','completed'].includes(completed));
       const interimProse=mode==='conversation'&&!(index===0&&before>0)&&!(turn===currentTurn&&(snapshot.ai?.pending||snapshot.ai?.question))
@@ -279,13 +279,15 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,subscribeWork
       }
       const hiddenProse=new Set(turn.filter(entry=>isAssistantProse(entry)&&!(entry.message?.text.trim()||entry.card?.content?.trim())).map(entry=>entry.id));
       for(const id of interimProse)hiddenProse.add(id);
-      if(dialogueCompletion)hiddenProse.add(dialogueCompletion.summary.id);
+      if(pilotCompletion)hiddenProse.add(pilotCompletion.summary.id);
       const continuations=mode==='conversation'&&assistantIdentity?.pilot?pilotReplyContinuations(turn,hiddenProse,hiddenProcess):new Set<string>();
       const roleBreaks=mode==='conversation'&&!hideReplyIdentity?replyRoleBreaks(turn,hiddenProse,hiddenProcess):new Set<string>();
       const activeIdentity=activeReply&&continuations.has(activeReply)?turn.slice(0,turn.findIndex(entry=>entry.id===activeReply)).filter(entry=>isAssistantProse(entry)&&!hiddenProse.has(entry.id)&&!continuations.has(entry.id)).at(-1)?.id:activeReply;
       const replyMotion=(id:string)=>id===activeIdentity?conversationAvatarMotion(conversationActivity(snapshot.ai)):'idle';
       const renderGroup=({entries:group,progress,resource}:ConversationGroup)=>{
         const entry = group[0]!;
+        if(mode==='conversation'&&entry.message?.jointReport?.kind==='notice')
+          return <p key={entry.id} className="execution-detail-note" role="status">{entry.message.text}</p>;
         if(group.every(item=>interimProse.has(item.id)))return <InterimReply key={entry.id} entryId={entry.id} text={entry.card?.content??entry.message?.text??''}/>;
         // A Pilot router can own a task and still have separate per-turn dispatch records.
         if(mode==='conversation'&&progress&&snapshot.superagent?.task&&snapshot.session.workspaceRole!=='router')return null;
@@ -303,7 +305,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,subscribeWork
         if (entry.message) return entry.message.role==='user'?null:<TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message} roleBreak={!!entry.message.author&&roleBreaks.has(entry.id)} assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} hideIdentity={hideReplyIdentity} continued={continuations.has(entry.id)} motion={replyMotion(entry.id)}/>;
         if (entry.action) return <div key={entry.id}>{renderAction?.(entry.action)}</div>;
         const card=entry.card!;
-        const pilotSummary=dialogueCompletion?.acknowledgement.id===entry.id?dialogueCompletion.summary:undefined;
+        const pilotSummary=pilotCompletion?.acknowledgement.id===entry.id?pilotCompletion.summary:undefined;
         return <ReplyArrival key={entry.id} entryId={entry.id} continued={continuations.has(entry.id)} arrive={false}>{['text','message'].includes(card.type) && <ReplyIdentity identity={assistantIdentity} hidden={hideReplyIdentity} continued={continuations.has(entry.id)} motion={replyMotion(entry.id)}/>}<Card card={card} tags={snapshot.session.tags} animateInitial={connected&&turn===currentTurn&&!restoredText.current.has(card.id)} onOpenPlans={onOpenPlans} onOpenMemory={onOpenMemory} pilotSummary={pilotSummary} pilotConnected={pilotSummary?pilotConnected&&connected:undefined}/></ReplyArrival>;
       };
       const pilotLive=miniScope.live&&turn.some(entry=>entry.sre?.task.pilot);
@@ -314,8 +316,8 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,subscribeWork
       const canonicalGoalId=canonicalGoalForExecution(snapshot,timingProps.cards,pilotWorkspace?.workers.map(worker=>worker.task));
       const pilotTurnLive=turn===currentTurn&&turnStatus(timingProps.timing,timingProps.view,timingProps.cards,timingProps.latestUserAt,Date.now()).live;
       const executionDetails=[...detailGroups.map(renderGroup).filter(node=>node!=null),...compactionDiagnostics];
-      if(dialogueCompletion){
-        const {acknowledgement}=dialogueCompletion;
+      if(pilotCompletion){
+        const {acknowledgement}=pilotCompletion;
         executionDetails.push(<InterimReply key={acknowledgement.id} entryId={acknowledgement.id} text={acknowledgement.content??''}/>);
       }
       const hasPilotProcess=executionDetails.length>0||!!notices;
@@ -359,14 +361,14 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,subscribeWork
         </PilotReportGroup>;
       const collaboration=turnConversations.length?(footer:ReactNode)=>turnConversations.map((round,index)=>{
         const messages=dialogueReplies.get(round.id)??[];
-        const summaryDelivered=dialogueCompletion?.summary.conversation?.id===round.id;
+        const summaryDelivered=pilotCompletion?.summary.conversation?.id===round.id;
         return <PilotConversationProgress key={round.id} round={round} connected={pilotConnected}
           process={index===0?footer:undefined} onSpecialist={onSpecialist} onInspect={onInspect}
           summaryDelivered={summaryDelivered} replyMemberIds={summaryDelivered?new Set(messages.map(message=>message.author!.workerId)):undefined}
           replies={messages.map(message=><TranscriptMessage key={message.id} message={message} sessionId={snapshot.session.id}
             assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist}/>)}/>;
       }):undefined;
-      const replyGroups=visibleGroups.filter(group=>!dialogueGroups.has(group)&&!groupedReports.includes(group)&&group.entries[0]?.id!==dialogueCompletion?.summary.id);
+      const replyGroups=visibleGroups.filter(group=>!dialogueGroups.has(group)&&!groupedReports.includes(group)&&group.entries[0]?.id!==pilotCompletion?.summary.id);
       const hasPilotReplyAvatar=assistantIdentity?.pilot&&!hideReplyIdentity&&replyGroups.some(({entries:[entry]})=>
         entry&&isAssistantProse(entry)&&!continuations.has(entry.id));
       const replyContent=<>{replyGroups.map(group=>mode==='conversation'&&group.entries.every(isAssistantProse)?<SettledReply key={group.entries[0]!.id} roleBreak={roleBreaks.has(group.entries[0]!.id)} continued={continuations.has(group.entries[0]!.id)}>{renderGroup(group)}</SettledReply>:renderGroup(group))}</>;

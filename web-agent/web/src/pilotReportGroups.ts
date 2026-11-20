@@ -12,7 +12,7 @@ export function redundantJointReports(messages: readonly Message[]) {
   }
   const redundant = new Set<string>();
   for (const message of messages) {
-    if (!message.jointReport || message.images?.length || message.files?.length) continue;
+    if (!message.jointReport || message.jointReport.kind || message.images?.length || message.files?.length) continue;
     const header = message.text.split('\n\n', 1)[0];
     const expected = Number(header?.match(/」的 (\d+) 位专员均已提交报告。$/u)?.[1]);
     if (!(expected >= 2)) continue;

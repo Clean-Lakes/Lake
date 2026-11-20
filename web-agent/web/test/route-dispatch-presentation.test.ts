@@ -229,6 +229,17 @@ test('a finished Ops handoff archives the pre-check narration through the exact 
  assert.match(mainReply(handoffHTML({...snapshot,ai:{...snapshot.ai!,status:'running'}})),new RegExp(preface));
  const foreign={...snapshot,messages:snapshot.messages.map(message=>message.dispatch?{...message,dispatch:{...message.dispatch,workerId:'another-worker'}}:message)};
  assert.match(mainReply(handoffHTML(foreign)),new RegExp(preface));
+ const summarized:SessionSnapshot={...snapshot,messages:[...snapshot.messages,
+  {id:'next-question',sessionId:'pilot',role:'user',text:'另一项检查',createdAt:at(8)},
+  {id:'joint-conclusion',sessionId:'pilot',role:'assistant',text:'两个样例均完成核对。',createdAt:at(10),replyToMessageId:'user',
+   jointReport:{taskId:'task',reportId:'result',kind:'summary'}}]};
+ const result=handoffHTML(summarized),main=mainReply(result);
+ assert.match(main,/data-conversation-entry="after"[^>]+>[\s\S]*两个样例均完成核对。/);
+ assert.doesNotMatch(main,new RegExp(acknowledgement));
+ assert.equal((result.match(/两个样例均完成核对。/g)??[]).length,1);
+ assert.ok(result.indexOf('两个样例均完成核对。')<result.indexOf('另一项检查'));
+ assert.match(main,/2 份专员报告/);
+ assert.ok(result.includes(acknowledgement));
 });
 
 

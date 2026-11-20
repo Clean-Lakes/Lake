@@ -9,7 +9,7 @@ const rootOf = (entry: TranscriptEntry): string | undefined => {
 };
 
 export function isAssistantProse(entry: TranscriptEntry): boolean {
-  return entry.message?.role === 'assistant' && !entry.message.author && !entry.message.dispatch || !!entry.card && ['message', 'text'].includes(entry.card.type);
+  return entry.message?.role === 'assistant' && !entry.message.author && !entry.message.dispatch && entry.message.jointReport?.kind!=='notice' || !!entry.card && ['message', 'text'].includes(entry.card.type);
 }
 
 // The latest reply after a tool may be the final answer. Keep its streaming node

@@ -52,9 +52,10 @@ export function superPilotActivity(workspace:SuperWorkspace|null|undefined,sessi
  if(!workers.length){
   if(rounds.length){
    const count=roundMembers.length;
-   const summarizing=rounds.some(round=>round.state==='summarizing');
+   const summarizing=rounds.some(round=>round.kind==='task-summary'||round.state==='summarizing');
+   const taskSummary=rounds.some(round=>round.kind==='task-summary');
    if(!connected)return reconnecting('thinking',count,participants);
-   return {status:'investigating',label:summarizing?'Pilot 正在汇总专员回应':`${count} 位专员尚未回应`,
+   return {status:'investigating',label:summarizing?taskSummary?'Pilot 正在汇总专员报告':'Pilot 正在汇总专员回应':`${count} 位专员尚未回应`,
     activeLabel:summarizing?'汇总中':undefined,phase:summarizing?'summarizing':'thinking',animated:true,motion:'working',workerCount:count,participants};
   }
   if(!closing.length)return null;

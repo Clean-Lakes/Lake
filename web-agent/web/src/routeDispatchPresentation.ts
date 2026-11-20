@@ -54,6 +54,26 @@ export function pilotDialogueCompletion(turn:readonly TranscriptEntry[]) {
  if(summaries.length===1)return {acknowledgement:acknowledgements[0]!,summary:summaries[0]!};
 }
 
+/** A committed joint conclusion takes the original handoff's reply slot. */
+export function pilotTaskCompletion(turn:readonly TranscriptEntry[]) {
+ const user=turn[0]?.message;
+ if(user?.role!=='user')return;
+ const summaries=turn.flatMap(({message})=>message?.role==='assistant'&&!message.author&&!message.dispatch&&
+   message.jointReport?.kind==='summary'&&message.sessionId===user.sessionId&&message.replyToMessageId===user.id&&message.text.trim()?[message]:[]);
+ if(summaries.length!==1)return;
+ const summary=summaries[0]!;
+ const routes=turn.filter(({card})=>{
+  const receipt=card&&rootOf(card)&&confirmedRouteReceipt(card);
+  return receipt&&receipt.taskId===summary.jointReport!.taskId&&Array.isArray(receipt.assignments)&&receipt.assignments.length>1;
+ });
+ if(routes.length!==1)return;
+ const route=routes[0]!,root=rootOf(route.card!);
+ const after=turn.slice(turn.indexOf(route)+1).flatMap(({card})=>card&&rootOf(card)===root?[card]:[]);
+ if(after.some(card=>!settled.has(card.status)||!['text','message','thinking'].includes(card.type)))return;
+ const acknowledgements=after.filter(card=>['text','message'].includes(card.type)&&card.content?.trim());
+ if(acknowledgements.length===1)return {acknowledgement:acknowledgements[0]!,summary};
+}
+
 /** Retire only a proven Pilot handoff preamble, after its actual reply arrives.
  * Exact SDK root and host receipt bind both packets; text similarity is never
  * evidence. Original packets remain in the execution details and saved history. */

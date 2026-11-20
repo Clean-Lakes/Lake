@@ -5,6 +5,7 @@ import type {AIView, Message, SessionEvent, SessionSnapshot, SpecialistConversat
 const router = 'demo-session-0', project = 'demo-project';
 const baseFetch = window.fetch.bind(window);
 const dialogue = new URLSearchParams(location.search).has('dialogue');
+const taskSummary = new URLSearchParams(location.search).has('task-summary');
 const dialogueHandoffMs = 14_010;
 const started = Date.now() - 60_000;
 const at = (offset: number) => new Date(started + offset).toISOString();
@@ -32,7 +33,7 @@ function workers(): SuperWorker[] {
       assignmentState:completed ? 'parked' : 'active',
       task:{taskId:'output-task', executionGoalId:id, projectId:project, sessionId:id, title:'核对样例记录', state:completed?'completed':'running', acceptanceState:'not_evaluated', revision:1, originRootTurnId:'output-root', deadlineAt:at(120_000)},
       activity:completed ? undefined : {phase:index===0?'thinking':'tool',label:'正在核对记录',updatedAt:at(200),sourceMessageId:source.id,sourceSessionId:router},
-      pilotReport:completed ? {messageId:`output-report-${index}`,executionSettled:stage==='finished'||index===0} : undefined,
+      pilotReport:completed ? {messageId:`output-report-${index}`,executionSettled:stage==='finished'||taskSummary&&stage==='reports-delivered'||index===0} : undefined,
     };
   });
 }
@@ -75,6 +76,8 @@ function snapshot(base: SessionSnapshot, worker?: SuperWorker): SessionSnapshot 
   }
   if (ended && !worker && !dialogue) messages.push({id:'rolled-up-report',sessionId:router,role:'assistant',createdAt:at(1000),
     jointReport:{taskId:'output-task',reportId:'joint'},text:'「核对样例记录」的 5 位专员均已提交报告。\n\n'+reports().map(report=>`${report.author?.name}：${report.text}`).join('\n\n')});
+  if (taskSummary && stage==='finished' && !worker) messages.push({id:'task-conclusion',sessionId:router,role:'assistant',
+    text:conclusion,createdAt:at(1100),replyToMessageId:source.id,jointReport:{taskId:'output-task',reportId:'joint',kind:'summary'}});
   const root=worker ? `stage-root-${worker.id}` : 'output-root';
   const ai: AIView | undefined = stage==='idle' ? undefined : {
     ...base.ai!, session:worker?.sessionId??router, rootTurnId:root,
@@ -83,9 +86,15 @@ function snapshot(base: SessionSnapshot, worker?: SuperWorker): SessionSnapshot 
     pending:undefined, pendingApprovals:[], question:undefined, agentRuns:[], cardsOffset:0,
     cards:worker?[{id:`stage-${worker.id}`,type:'message',status:worker.task.state==='running'?'running':'completed',at:at(300),content:workerText.get(worker.sessionId)??'先核对版本 1.4。正在查看样例记录。',data:{root_turn_id:root}}]:stage==='started'?[]:[
       {id:'pilot-opening',type:'message',status:ended?'completed':'running',at:at(100),content:opening,data:{root_turn_id:root,source_message_id:source.id}},
-      ...(ended?[{id:'pilot-verdict',type:'message' as const,status:'completed',at:at(1100),content:conclusion,data:{root_turn_id:root,source_message_id:source.id}}]:[]),
+      ...(ended&&!taskSummary?[{id:'pilot-verdict',type:'message' as const,status:'completed',at:at(1100),content:conclusion,data:{root_turn_id:root,source_message_id:source.id}}]:[]),
     ], totalCards:0,
   };
+  if(ai&&taskSummary&&!worker&&workers().length){
+    const assignments=workers().map(({id,roleId,sessionId})=>({workerId:id,roleId,sessionId,dispatch:{state:'queued'}}));
+    ai.cards.unshift({id:'pilot-joint-route',type:'operation',title:'route_work',status:'completed',at:at(80),
+      data:{root_turn_id:root,source_message_id:source.id,arguments:{event_id:'ops-event',part_key:'check',action:'create',role_ids:assignments.map(item=>item.roleId)}},
+      content:JSON.stringify({id:'ops-receipt',eventId:'ops-event',partKey:'check',action:'create',taskId:'output-task',assignments})});
+  }
   if(ai&&dialogue){
     ai.status='completed';ai.replyStatus='completed';ai.turnFinishedAt=at(dialogueHandoffMs);
     ai.cards=[{id:'pilot-opening',type:'message',status:'completed',at:at(200),content:'已邀请大家逐一回应。',data:{root_turn_id:root,source_message_id:source.id}},
@@ -136,6 +145,9 @@ window.fetch=async(input,init)=>{
     if(network==='workspace-outage')return json({error:'模拟工作区刷新失败'},503);
     const value: SuperWorkspace={active:true,project:{projectId:project,routerSessionId:router,version:1},workers:workers(),
       ...(dialogue&&stage!=='idle'?{conversations:[dialogueRound()]}:{}),cursor};
+    if(taskSummary&&(stage==='reports-delivered'||stage==='finished'))value.conversations=[{
+      id:'ops-summary',kind:'task-summary',projectId:project,sessionId:router,sourceMessageId:source.id,title:'核对样例记录',
+      members:[],state:stage==='finished'?'completed':'summarizing',createdAt:at(1000),deadlineAt:at(120_000)}];
     return json(value);
   }
   if (path.endsWith('/snapshot')) {

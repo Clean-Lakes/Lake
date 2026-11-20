@@ -900,6 +900,13 @@ function superReply(request, mode, home) {
     return {content:'已派发给巡检专员。'};
   }
   if (mode === "super-joint-contribution") {
+    if(request.messages.some(message=>message.role==='system'&&content(message).includes('giving the outcome of a joint task'))){
+      assert.equal((request.tools??[]).length,0);
+      const input=request.messages.filter(message=>message.role==='user').map(content).join('\n');
+      assert.match(input,/已检查甲目录/);
+      assert.match(input,/已复核乙目录/);
+      return {content:'甲、乙两个目录均已完成本次核对。'};
+    }
     if (router) {
       const start = request.messages.findLastIndex(m => m.role === "user" && content(m).startsWith("[LAKE ADMITTED HUMAN EVENTS"));
       const event = JSON.parse(content(request.messages[start]).split("\n")[1])[0];
@@ -1286,6 +1293,12 @@ test("two specialist channels share one task, retain their own evidence and rece
   const completed=await until(()=>api(path), s=>s.workers.every(w=>w.task.collaboration?.state==="completed" && w.assignmentState==="parked"));
   const receipt=completed.workers[0].task.collaboration.reportId;
   assert.ok(receipt);
+  const finalized=await until(()=>api('/api/sessions/'+pilot+'/snapshot'),snapshot=>snapshot.messages.some(message=>message.jointReport?.kind==='summary'));
+  const conclusion=finalized.messages.find(message=>message.jointReport?.kind==='summary');
+  assert.deepEqual(conclusion.jointReport,{taskId:a.task.taskId,reportId:receipt,kind:'summary'});
+  assert.equal(conclusion.replyToMessageId,finalized.messages.find(message=>message.role==='user').id);
+  assert.equal(conclusion.text,'甲、乙两个目录均已完成本次核对。');
+  assert.equal(finalized.messages.filter(message=>message.author?.kind==='specialist'&&message.replyToMessageId===conclusion.replyToMessageId).length,2);
   const goalReceipts=f.app.store.list("superAcceptance").filter(row=>row.scope==="goal");
   assert.deepEqual(goalReceipts,[]);
   const ops=f.app.store.list("superOperations").filter(op=>op.tool==="list_project_files");
@@ -1297,7 +1310,8 @@ test("two specialist channels share one task, retain their own evidence and rece
     assert.deepEqual([...new Set(page.entries.flatMap(e=>e.message?.author?[e.message.author.roleId]:[]))],[channel.roleId]);
   }
   const pilotHistory=(await api("/api/sessions/"+pilot+"/snapshot")).messages;
-  assert.deepEqual(pilotHistory.filter(m=>m.jointReport).map(m=>m.jointReport.reportId),[receipt]);
+  assert.deepEqual(pilotHistory.filter(m=>m.jointReport&&!m.jointReport.kind).map(m=>m.jointReport.reportId),[receipt]);
+  assert.deepEqual(pilotHistory.filter(m=>m.jointReport?.kind==='summary').map(m=>m.id),[conclusion.id]);
   assert.deepEqual(new Set(pilotHistory.filter(m=>m.author?.taskId===a.task.taskId).map(m=>m.author.roleId)),new Set([a.roleId,b.roleId]));
 });
 

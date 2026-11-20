@@ -2986,8 +2986,17 @@ export class LakeSuperagent implements AgentHost {
       const reportId = item.reportId ?? item.acceptanceId;
       if (!joint || !reportId || (joint.reportId ?? joint.acceptanceId)!==reportId) continue;
       const members=joint.memberIds.map(id=>this.ledger.get(id));
+      // Each original report must have cleared its execution callback before
+      // the joint receipt starts the Pilot's conclusion.
+      if(members.some(member=>this.active.has(member.workerId)))continue;
       const pilot=this.store.require<SuperProject>("superProjects",joint.projectId).routerSessionId;
       const targets=[pilot,...members.map(member=>this.store.require<Channel>("superChannels",member.roleId).sessionId)];
+      const originals=members.map(member=>this.store.get<Message>('messages',specialistReportMessageId(digest([member.id,member.revision]),pilot)));
+      const sourceMessageId=originals[0]?.replyToMessageId;
+      const exactReports=originals.every((message,index)=>message?.author?.workerId===members[index]!.workerId&&message.author.taskId===joint.id&&
+        message.sessionId===pilot&&message.replyToMessageId===sourceMessageId&&!!message.text.trim());
+      const source=item.reportId&&sourceMessageId&&exactReports?this.store.list<InputEvent>('superInputs').find(event=>
+        event.projectId===joint.projectId&&event.sessionId===pilot&&event.messageId===sourceMessageId&&event.disposition==='routed'&&!event.external):undefined;
       // Stable receipt + destination makes delivery restart-safe. Member
       // findings already have an attributed report; deliver the combined report once.
       const deliveredAt=now();
@@ -3000,6 +3009,9 @@ export class LakeSuperagent implements AgentHost {
             text:`「${joint.title}」的 ${members.length} 位专员均已提交报告。\n\n${joint.summary ?? ""}`,
           });
         }
+        if(source&&members.length>1)this.conversations.queueTaskSummary({eventId:source.id,projectId:joint.projectId,sessionId:pilot,
+          sourceMessageId:source.messageId,quote:this.agents.redact(source.payload),title:joint.title,
+          taskSummary:{taskId:joint.id,reportId,reports:originals.map((message,index)=>({messageId:message!.id,outcome:members[index]!.reportedOutcome}))}});
         this.store.delete("superPendingJointReports",item.taskId);
       });
       for(const target of targets)this.notify(target,"message");

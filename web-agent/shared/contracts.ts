@@ -86,7 +86,7 @@ export type Message = {
   replyToMessageId?:string;
   conversation?: {id:string;sourceMessageId:string;kind:'reply'|'summary'|'notice';summaryRequested?:boolean};
   jointAcceptance?: {taskId:string;receiptId:string};
-  jointReport?: {taskId:string;reportId:string};
+  jointReport?: {taskId:string;reportId:string;kind?:'summary'|'notice'};
   author?: SpecialistReplyAuthor;
   external?: ExternalMessageOrigin;
   dispatch?: {id:string;sourceMessageId:string;workerId:string;sessionId:string;taskId:string;roleId:string;roleName:string;channelSessionId:string;instruction:string;action:'create'|'followup'};
@@ -422,6 +422,7 @@ export type SpecialistConversationMember = {
 };
 export type SpecialistConversation = {
   id:string;projectId:string;sessionId:string;sourceMessageId:string;title:string;
+  kind?:'task-summary';
   state:'queued'|'running'|'summarizing'|'completed'|'cancelled'|'interrupted'|'failed';
   createdAt:string;deadlineAt:string;members:SpecialistConversationMember[];summaryMessageId?:string;summaryRequested?:boolean;
 };
