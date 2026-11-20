@@ -33,7 +33,7 @@ test('completed tool turns archive only narration before the real final response
   assert.deepEqual([...completedTurnInterimIds(turn, true)], ['interim']);
   assert.equal(completedTurnInterimIds(turn, false).size, 0, 'live, failed, stopped and waiting turns keep partial prose');
   const streaming=turn.map(entry=>entry.id==='final'?{...entry,card:{...entry.card!,status:'running'}}:entry);
-  assert.deepEqual([...completedTurnInterimIds(streaming,false,'final')],['interim'],'retire the visible process before revealing its live answer');
+  assert.equal(completedTurnInterimIds(streaming,false,'final').size,0,'an active Ops result does not archive the earlier public progress');
   assert.equal(completedTurnInterimIds(turn.slice(0, 2), true).size, 0, 'no model final means no invented summary');
   assert.equal(completedTurnInterimIds([turn[0]!, turn[2]!], true).size, 0, 'ordinary conversation stays intact');
   assert.equal(completedTurnInterimIds([...turn, card('error', 'error')], true).size, 0, 'a later failure cannot be presented as completed');
@@ -52,10 +52,26 @@ test('a real tool reply replaces pre-tool narration in the body and preserves it
   const live = renderToStaticMarkup(createElement(AITranscript, {snapshot: {...snapshot, ai: {...snapshot.ai!, status: 'running'}}}));
   assert.ok(!live.includes('is-archived')&&!live.includes('过程播报')&&!live.includes('is-awaiting-reply'));
   for(const text of ['先核对测试节点。','最终结果：测试服务正常。'])assert.equal((live.split(text).length-1),1);
+  assert.ok(mainReply(live).includes('先核对测试节点。'),'public progress stays in the main transcript while Ops runs');
   assert.ok(!live.includes('turn-execution-details is-open'),'operation details stay closed until the reader opens them');
   assert.equal(renderToStaticMarkup(createElement(AITranscript,{snapshot:structuredClone(snapshot)})),html,'an unchanged restored snapshot does not switch prose projection');
   const activity = renderToStaticMarkup(createElement(AITranscript, {snapshot, mode: 'activity'}));
   assert.ok(!activity.includes('is-archived'));
+});
+
+test('Ops public progress remains available across interaction waits and closes when the turn ends',()=>{
+ const cards=turn.map((entry,index)=>({...entry.card!,at:`2026-10-21T00:00:0${index+1}Z`,
+   data:{root_turn_id:'ops-root'},...(entry.id==='tool'?{title:'inspect_host',content:'RAW_EXECUTION_RECORD'}:{})}));
+ for(const status of ['running','waiting_approval','waiting_external','waiting_input','paused','completed']){
+  const snapshot={session:{id:'pilot'},messages:[{id:'user',role:'user',text:'核对测试节点',createdAt:'2026-10-21T00:00:00Z'}],
+   actions:[],resources:[],ai:{status,cards,cardsOffset:0,rootTurnId:'ops-root'}} as unknown as SessionSnapshot;
+  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:'Pilot',pilot:true}}));
+  const body=mainReply(html);
+  assert.ok(body.includes('最终结果：测试服务正常。'),status);
+  assert.equal(body.includes('先核对测试节点。'),status!=='completed',status);
+  assert.ok(!body.includes('RAW_EXECUTION_RECORD'),status);
+  assert.equal((html.match(/先核对测试节点。/g)??[]).length,1,status);
+ }
 });
 
 

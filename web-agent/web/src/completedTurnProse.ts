@@ -1,4 +1,5 @@
 import type {TranscriptEntry} from './timeline';
+import {quietCoordination} from './coordinationActivity';
 
 const normalProseStatuses = new Set(['running', 'completed', 'success', 'succeeded']);
 const rootOf = (entry: TranscriptEntry): string | undefined => {
@@ -35,7 +36,11 @@ export function completedTurnInterimIds(turn: TranscriptEntry[], completed: bool
   const tools = turn.filter(entry => entry.card && ['operation', 'shell'].includes(entry.card.type) && entry.card.title !== 'ask_user_question');
   for (const root of new Set(tools.map(rootOf))) {
     const sameExecution = (entry: TranscriptEntry) => rootOf(entry) === root && (!!entry.card || root === undefined);
-    const lastTool = turn.lastIndexOf(tools.filter(sameExecution).at(-1)!);
+    const operations = tools.filter(sameExecution);
+    // Post-tool prose can be an intermediate result while Ops continues.
+    // Pure coordination can still retire its preamble when the reply arrives.
+    if (!completed && !ended && operations.some(entry=>!quietCoordination(entry.card!))) continue;
+    const lastTool = turn.lastIndexOf(operations.at(-1)!);
     let final = -1;
     turn.forEach((entry, index) => {
       if (sameExecution(entry) && isAssistantProse(entry) && (entry.message?.text.trim() ||

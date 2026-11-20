@@ -14,7 +14,7 @@ const opening = '我已安排专员核对样例';
 const conclusion = '样例记录一致，未发现遗漏。';
 const names = ['数据库专员','可观测性专员','发布专员','知识库专员','服务器运维排查专员'];
 if(dialogue)names.push('ACP 测试专员','河狸专员','巡检专员');
-type Stage = 'idle' | 'started' | 'working' | 'first-report' | 'second-report' | 'closing' | 'finished';
+type Stage = 'idle' | 'started' | 'working' | 'first-report' | 'second-report' | 'closing' | 'reports-delivered' | 'finished';
 let stage: Stage = 'idle', cursor = 50;
 const streams = new Set<FixtureStream>();
 
@@ -22,7 +22,7 @@ function workers(): SuperWorker[] {
   if (dialogue || stage === 'idle' || stage === 'started') return [];
   return names.map((name, index) => {
     const id = `output-worker-${index}`;
-    const completed = stage === 'closing' || stage === 'finished';
+    const completed = stage === 'closing' || stage === 'reports-delivered' || stage === 'finished';
     return {
       id, roleId:`output-role-${index}`, roleName:name, sessionId:id,
       assignmentState:completed ? 'parked' : 'active',
@@ -49,7 +49,7 @@ function dialogueRound():SpecialistConversation {
 
 function reports(): Message[] {
   return workers().flatMap((worker, index) => {
-    if (stage !== 'finished' && !((stage==='first-report'||stage==='closing') && index===0)) return [];
+    if (stage !== 'finished' && stage !== 'reports-delivered' && !((stage==='first-report'||stage==='closing') && index===0)) return [];
     return [{id:`output-report-${index}`, sessionId:router, role:'assistant', text:`${worker.roleName}核对完成。`,
       createdAt:at(800+index), replyToMessageId:source.id,
       author:{kind:'specialist', name:worker.roleName, workerId:worker.id, roleId:worker.roleId, sessionId:worker.sessionId, taskId:worker.task.taskId, rootTurnId:`finish-root-${index}`}}];
@@ -57,7 +57,7 @@ function reports(): Message[] {
 }
 
 function snapshot(base: SessionSnapshot, worker?: SuperWorker): SessionSnapshot {
-  const ended=stage==='finished', active=stage!=='idle'&&!ended;
+  const ended=stage==='finished'||stage==='reports-delivered', active=stage!=='idle'&&!ended;
   const messages=worker ? [] : [history, source, ...reports()];
   if(dialogue&&stage!=='idle'){
     const round=dialogueRound();

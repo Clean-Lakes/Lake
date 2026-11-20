@@ -248,13 +248,15 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       const groups=mode==='conversation'?conversationDisplayGroups(sreConversationRoles(conversationTurnEntries(turn)),turn===currentTurn&&liveConversation,snapshot.resources):transcriptGroups(turn.filter(entry=>!isFileChangeCard(entry.card)&&activityEntry(entry))).map(entries=>({progress:false,entries}));
       const processGroups=mode==='conversation'?groups.filter(group=>group.progress):[];
       const activeReply=turn===currentTurn&&(!currentTiming||currentTiming.status==='running')?turn.filter(isAssistantProse).at(-1)?.id:undefined;
-      const completed = timingForTurn(turn,snapshot)?.status ?? (turn===currentTurn?snapshot.ai?.status:undefined);
+      const timing=timingForTurn(turn,snapshot);
+      const completed=timing?.status??(turn===currentTurn?snapshot.ai?.status:undefined);
+      const executionEnded=['completed','failed','cancelled','interrupted'].includes(completed??'');
       const turnDispatchRows=dispatchRows.filter(row=>turn.some(entry=>entry.message?.id===row.sourceMessageId));
       const turnConversations=mode==='conversation'&&assistantIdentity?.pilot?pilotWorkspace?.conversations?.filter(round=>round.projectId===snapshot.session.projectId&&round.sessionId===snapshot.session.id&&turn.some(entry=>entry.message?.id===round.sourceMessageId))??[]:[];
       const presentedReply=mode==='conversation'?trailingTurnReplyId(turn):undefined;
       const presentingReply=!!presentedReply&&(!completed||['running','completed'].includes(completed));
       const interimProse=mode==='conversation'&&!(index===0&&before>0)&&!(turn===currentTurn&&(snapshot.ai?.pending||snapshot.ai?.question))
-        ?completedTurnInterimIds(turn,completed==='completed',presentedReply,!!completed&&!['running','waiting_approval'].includes(completed)):new Set<string>();
+        ?completedTurnInterimIds(turn,completed==='completed',presentedReply,executionEnded):new Set<string>();
       for(const id of handoffInterim)interimProse.add(id);
       for(const entry of turn)if(isDeliveredWorkerInterim(entry,projected.reported))interimProse.add(entry.id);
       const fallbackDiagnostic=turn.find(isCompactionFallbackEntry);
@@ -264,7 +266,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       const notices=[...(recoveredRouting.size?[["recovered","项派单重试后已恢复"]]:[]),['failed','项失败'],['pending','项待确认'],['unknown','项结果待核查'],['background_running','项后台执行中'],['not_executed','项未执行'],['interrupted','项已停止'],['cancelled','项已停止']].flatMap(([status,label])=>{const count=status==='recovered'?recoveredRouting.size:processGroups.flatMap(group=>group.entries).filter(entry=>entry.card?.status===status&&!(status==='failed'&&recoveredRouting.has(entry.id))).length;return count?[`${count} ${label}`]:[];}).join(' · ');
       const hasSpecialistProcess = mode === 'conversation' && assistantIdentity?.pilot && !!onInspectSpecialist &&
         (turnDispatchRows.length > 0 || turn.some(({message}) => hasTaskProcess(message?.author)));
-      const timingProps={connected,current:turn===currentTurn,timing:timingForTurn(turn,snapshot),view:turn===currentTurn?snapshot.ai:undefined,cards:turn.flatMap(entry=>entry.card?[entry.card]:[]),latestUserAt:turn.find(entry=>entry.message?.role==='user')?.at??'',
+      const timingProps={connected,current:turn===currentTurn,timing,view:turn===currentTurn?snapshot.ai:undefined,cards:turn.flatMap(entry=>entry.card?[entry.card]:[]),latestUserAt:turn.find(entry=>entry.message?.role==='user')?.at??'',
         processLabel:hasSpecialistProcess ? 'Pilot 执行过程' : undefined};
       const miniStartedAt=timingProps.timing?.startedAt||timingProps.latestUserAt||turn[0]!.at;
       const miniEndedAt=timingProps.timing?(timingProps.timing.finishedAt||undefined):turns[index+1]?.find(entry=>entry.message?.role==='user')?.at;
@@ -301,7 +303,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
         if (entry.action) return <div key={entry.id}>{renderAction?.(entry.action)}</div>;
         const card=entry.card!;
         const pilotSummary=dialogueCompletion?.acknowledgement.id===entry.id?dialogueCompletion.summary:undefined;
-        return <ReplyArrival key={entry.id} entryId={entry.id} continued={continuations.has(entry.id)} arrive={false}>{['text','message'].includes(card.type) && <ReplyIdentity identity={assistantIdentity} hidden={hideReplyIdentity} continued={continuations.has(entry.id)} motion={replyMotion(entry.id)}/>}<Card card={card} tags={snapshot.session.tags} animateInitial={!restoredText.current.has(card.id)} onOpenPlans={onOpenPlans} onOpenMemory={onOpenMemory} pilotSummary={pilotSummary} pilotConnected={pilotSummary?pilotConnected&&connected:undefined}/></ReplyArrival>;
+        return <ReplyArrival key={entry.id} entryId={entry.id} continued={continuations.has(entry.id)} arrive={false}>{['text','message'].includes(card.type) && <ReplyIdentity identity={assistantIdentity} hidden={hideReplyIdentity} continued={continuations.has(entry.id)} motion={replyMotion(entry.id)}/>}<Card card={card} tags={snapshot.session.tags} animateInitial={connected&&turn===currentTurn&&!restoredText.current.has(card.id)} onOpenPlans={onOpenPlans} onOpenMemory={onOpenMemory} pilotSummary={pilotSummary} pilotConnected={pilotSummary?pilotConnected&&connected:undefined}/></ReplyArrival>;
       };
       const pilotLive=miniScope.live&&turn.some(entry=>entry.sre?.task.pilot);
       // The actual post-tool reply keeps its key from its first chunk onward;
@@ -345,7 +347,8 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       const taskLabels=new Map((pilotWorkspace?.workers??[]).flatMap(worker=>
         (roleWorkers.get(worker.roleId)?.size??0)>1?[[worker.id,worker.task.title] as const]:[]));
       const fold=reports.length>1&&!pilotTurnLive&&!turnConversations.some(round=>['queued','running','summarizing'].includes(round.state))&&
-        turnDispatchRows.every(row=>row.finalReport&&(!onPilotReportsPresented||presentedPilotReports?.has(row.finalReport.id)));
+        turnDispatchRows.every(row=>row.finalReport&&['completed','failed','cancelled'].includes(row.worker.task.state)&&
+          row.worker.pilotReport?.executionSettled!==false&&(!onPilotReportsPresented||presentedPilotReports?.has(row.finalReport.id)));
       const lastMessage=reports.at(-1)??visibleGroups.at(-1)?.entries.at(-1)?.message;
       const footerReport=lastMessage?.role==='assistant'&&hasTaskProcess(lastMessage.author)&&onInspectSpecialist?lastMessage:undefined;
       const specialistReplies=(turnDispatchRows.length>0||savedReports.length>0)&&

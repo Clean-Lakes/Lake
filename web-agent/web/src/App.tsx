@@ -498,6 +498,7 @@ function AppContent() {
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     let textFrame:number|null=null;
     let textEvents:SessionEvent[]=[];
+    let requestedReplyRoot:string|undefined;
     let terminalRefreshTimer: ReturnType<typeof setTimeout> | null = null;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
     const requests = new AbortController();
@@ -569,6 +570,17 @@ function AppContent() {
             if(disposed)return;
             setSnapshot(current=>batch.reduce((value,item)=>applyLiveText(value,item)??value,current));
           });
+          return;
+        }
+        const text=event.textUpdate;
+        if(text?.target==='card'&&text.cardType==='message'&&text.rootTurnId&&text.rootTurnId!==requestedReplyRoot&&
+          text.rootTurnId!==liveSnapshot.current?.ai?.rootTurnId&&typeof text.content==='string'&&text.content.trim()){
+          // A fast first packet can arrive before the snapshot for its new root.
+          // Resolve that binding now rather than waiting for the general poll.
+          requestedReplyRoot=text.rootTurnId;
+          if(refreshTimer)clearTimeout(refreshTimer);
+          refreshTimer=null;
+          void refresh();
           return;
         }
         if (event.type === "terminal" && !terminalRefreshTimer) terminalRefreshTimer = setTimeout(() => {
