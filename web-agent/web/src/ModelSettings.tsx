@@ -39,9 +39,9 @@ const settingsTabs:readonly {key:string;label:string;panel?:string;icon?:"plug"|
 function Switch({checked,label,onChange,disabled=false}: {checked:boolean;label:string;onChange:(value:boolean)=>void;disabled?:boolean}) {
   return <button type="button" role="switch" aria-checked={checked} aria-label={label} className={`provider-switch ${checked ? "on" : ""}`} disabled={disabled} onClick={() => onChange(!checked)}><span/></button>;
 }
-export function ModelSettings({initialTab="models",onClose:closeSettings,onChanged,sendShortcut,onShortcutChange,onSessionConfig:openSessionConfig,onProjectMemory:openProjectMemory,projectId,projectName,ignoreProjectMemory,onIgnoreProjectMemoryChange,memoryEngine,watchdogEnabled=false,onGatewayTask:openGatewayTask}: {
+export function ModelSettings({initialTab="models",onClose:closeSettings,onChanged,sendShortcut,onShortcutChange,onSessionConfig:openSessionConfig,onProjectMemory:openProjectMemory,projectId,projectName,ignoreProjectMemory,onIgnoreProjectMemoryChange,memoryEngine,watchdogEnabled=false,capabilityDetectionEnabled=false,onGatewayTask:openGatewayTask}: {
   initialTab?:string;onClose:()=>void;onChanged:()=>Promise<void>;sendShortcut:SendShortcut;onShortcutChange:(value:SendShortcut)=>void;onSessionConfig?:()=>void;onProjectMemory?:()=>void;projectId?:string;projectName?:string;
-  ignoreProjectMemory:boolean;onIgnoreProjectMemoryChange:(value:boolean)=>void;memoryEngine?:'layered';watchdogEnabled?:boolean;onGatewayTask?:(target:GatewayTaskTarget)=>Promise<void>;
+  ignoreProjectMemory:boolean;onIgnoreProjectMemoryChange:(value:boolean)=>void;memoryEngine?:'layered';watchdogEnabled?:boolean;capabilityDetectionEnabled?:boolean;onGatewayTask?:(target:GatewayTaskTarget)=>Promise<void>;
 }) {
   const [tab,setTab] = useState(!watchdogEnabled&&initialTab==='channels'?'models':initialTab==='watchdog'&&!watchdogEnabled?'conversation':initialTab);
  const [extensionBusy,setExtensionBusy]=useState(false);
@@ -141,7 +141,7 @@ export function ModelSettings({initialTab="models",onClose:closeSettings,onChang
   }
   useEffect(() => {void load();}, []);
   useEffect(() => {
-    if (detection?.status !== "running") return;
+    if (!capabilityDetectionEnabled || detection?.status !== "running") return;
     let active=true;
     let pending=false;
     const timer=window.setInterval(async () => {
@@ -158,7 +158,7 @@ export function ModelSettings({initialTab="models",onClose:closeSettings,onChang
       finally { pending=false; }
     }, 1500);
     return () => {active=false;window.clearInterval(timer);};
-  }, [detection?.id,detection?.status]);
+  }, [capabilityDetectionEnabled,detection?.id,detection?.status]);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement|null;
     dialogRef.current?.focus();
@@ -206,6 +206,7 @@ export function ModelSettings({initialTab="models",onClose:closeSettings,onChang
     const next=await api.saveProvider(draft.isNew ? null : draft.id,providerPayload(draft));
     const saved=next.providers.find(provider => provider.id===next.savedProviderId)!;
     acceptCatalog(next,saved.id);await onChanged();
+    if (!capabilityDetectionEnabled) return saved;
     const status=await api.providerCapabilityStatus(saved.id);
     setDetection({id:saved.id,...status});
     if (status.status === "complete") await refreshDetectedProviders();
@@ -215,8 +216,11 @@ export function ModelSettings({initialTab="models",onClose:closeSettings,onChang
     if (isBusy) return;setBusy(kind);setError("");setResult(null);
     try {await action();} catch(e) {setError(readableError(e));} finally {setBusy("");}
   }
-  async function save() {await saveCurrent();setResult({ok:true,message:"供应商已保存；图片与思考级别能力会在后台识别。"});}
-  async function detectImages() {
+  async function save() {
+    await saveCurrent();
+    setResult({ok:true,message:capabilityDetectionEnabled ? "供应商已保存。图片与思考级别能力将在后台识别。" : "供应商已保存。"});
+  }
+  async function detectCapabilities() {
     if (!draft || draft.isNew || draft.dirty) throw new Error("请先保存供应商配置");
     const status=await api.detectProviderCapabilities(draft.id);
     setDetection({id:draft.id,...status});
@@ -301,8 +305,15 @@ export function ModelSettings({initialTab="models",onClose:closeSettings,onChang
           <label className="field-label">API 格式<AppSelect icon={<Glyph name="code" size={15}/>} value={draft.protocol} title={formats.find(([id])=>id===draft.protocol)?.[1]} onChange={event => update({protocol:event.target.value,baseURL:providerProtocolBaseURL(draft.baseURL,event.target.value)})}>{formats.map(([id,label]) => <option key={id} value={id}>{label}</option>)}</AppSelect></label>
           <label className="field-label">API Key<div className="provider-key-row"><input ref={keyInput} type="password" autoComplete="new-password" spellCheck={false} maxLength={4096} placeholder={draft.clearKey ? "保存后清除密钥" : draft.keyConfigured ? "已保存密钥，留空保持不变" : "输入密钥；本地模型可留空"} value={draft.apiKey} onChange={event => update({apiKey:event.target.value,clearKey:false})}/>{draft.keyConfigured && <button type="button" className="provider-text-button" onClick={() => update({clearKey:!draft.clearKey,apiKey:""})}>{draft.clearKey ? "撤销清除" : "清除"}</button>}</div></label>
         </div>
-        <div className="provider-model-heading"><h4>模型列表 <small>{draft.models.length}</small></h4><div><button type="button" className="provider-text-button" disabled={draft.isNew || draft.dirty || !!editor || !!discovery} onClick={() => void run("detect-images",detectImages)}>重新识别模型能力</button><button ref={modelsButton} type="button" className="provider-text-button" disabled={!draft.baseURL.trim() || !!editor || !!discovery} onClick={() => void run("discover",discover)}>{busy==="discover" ? "获取中…" : "从 API 选择模型"}</button><button type="button" className="provider-text-button" disabled={!!editor || !!discovery} onClick={() => startModel()}><Glyph name="plus" size={13}/>手动添加</button></div></div>
-        {detection?.id===draft.id && detection.status==="running" && <p className="settings-note" role="status">模型能力后台识别中：{detection.complete}/{detection.total}</p>}
+        <div className="provider-model-heading">
+          <h4>模型列表 <small>{draft.models.length}</small></h4>
+          <div>
+            {capabilityDetectionEnabled && <button type="button" className="provider-text-button" disabled={draft.isNew || draft.dirty || !!editor || !!discovery} onClick={() => void run("detect-capabilities",detectCapabilities)}>重新识别模型能力</button>}
+            <button ref={modelsButton} type="button" className="provider-text-button" disabled={!draft.baseURL.trim() || !!editor || !!discovery} onClick={() => void run("discover",discover)}>{busy==="discover" ? "获取中…" : "从 API 选择模型"}</button>
+            <button type="button" className="provider-text-button" disabled={!!editor || !!discovery} onClick={() => startModel()}><Glyph name="plus" size={13}/>手动添加</button>
+          </div>
+        </div>
+        {capabilityDetectionEnabled && detection?.id===draft.id && detection.status==="running" && <p className="settings-note" role="status">模型能力后台识别中：{detection.complete}/{detection.total}</p>}
         {((!editor && !discovery) || draft.models.length>0) && <div className="provider-model-list">{!draft.models.length && !editor && <div className="provider-model-empty">从 API 选择需要的模型，也可以手动添加模型 ID。</div>}{draft.models.map(model => <div className="provider-model-row" key={model.id}><div className="provider-model-name"><strong title={model.name}>{model.displayName || model.name}</strong>{model.displayName && <small>{model.name}</small>}</div><span className="provider-context" title="上下文窗口">{contextLabel(model.contextWindow)}</span><button type="button" className={`provider-use ${catalog.activeProviderId===draft.id && catalog.activeModelId===model.id ? "active" : ""}`} aria-label={`使用模型 ${model.name}`} title="用于聊天" disabled={!draft.enabled || !model.enabled || !!editor || !!discovery} onClick={() => void run("select",() => activate(model.id))}>{catalog.activeProviderId===draft.id && catalog.activeModelId===model.id ? "使用中" : "使用"}</button><button className="provider-row-icon" aria-label={`编辑模型 ${model.name}`} disabled={!!editor} onClick={() => startModel(model)}><Glyph name="edit" size={14}/></button><button className="provider-row-icon" aria-label={`删除模型 ${model.name}`} disabled={!!editor} onClick={() => update({models:draft.models.filter(item => item.id!==model.id)})}><Glyph name="trash" size={14}/></button><Switch label={`启用模型 ${model.name}`} checked={model.enabled} onChange={enabled => update({models:draft.models.map(item => item.id===model.id ? {...item,enabled} : item)})}/></div>)}</div>}
         {discovery && <ProviderModelPicker key={discovery.id} available={discovery.available} current={draft.models} onAdd={addDiscoveredModels} onCancel={() => setDiscovery(null)}/>}
         {editor && <ProviderModelEditor model={editor} editing={draft.models.some(model => model.id===editor.id)} onChange={setEditor} onCancel={() => {setEditor(null);setError("");}} onCommit={commitModel}/>}
