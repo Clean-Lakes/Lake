@@ -133,14 +133,14 @@ function ReplyArrival({entryId,arrive,continued=false,children}:{entryId:string;
   const [animate] = useState(arrive);
   return <div data-conversation-entry={entryId} className={`ai-response${continued?' is-reply-continuation':''}${animate?' reply-arrival':''}`}>{children}</div>;
 }
-export function TranscriptMessage({message,sessionId,resources,arrive=false,pendingImages,assistantIdentity,onSpecialist,onInspectSpecialist,hideIdentity=false,continued=false,roleBreak=false,motion='idle',taskLabel}:{taskLabel?:string;roleBreak?:boolean;continued?:boolean;motion?:AvatarMotion;hideIdentity?:boolean;onSpecialist?:(author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:InspectSpecialist;assistantIdentity?:AssistantIdentity;pendingImages?:number;message:SessionSnapshot["messages"][number];sessionId:string;resources?:SessionSnapshot["resources"];arrive?:boolean}) {
+export function TranscriptMessage({message,sessionId,resources,arrive=false,pendingImages,assistantIdentity,onSpecialist,onInspectSpecialist,hideIdentity=false,continued=false,roleBreak=false,motion='idle',nameMotion,taskLabel}:{taskLabel?:string;roleBreak?:boolean;continued?:boolean;motion?:AvatarMotion;nameMotion?:boolean;hideIdentity?:boolean;onSpecialist?:(author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:InspectSpecialist;assistantIdentity?:AssistantIdentity;pendingImages?:number;message:SessionSnapshot["messages"][number];sessionId:string;resources?:SessionSnapshot["resources"];arrive?:boolean}) {
  const [animate]=useState(()=>arrive&&!document.hidden&&!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
  // Handoffs belong to execution records, not the human-facing conversation.
  if(message.dispatch)return null;
  if(message.role==='system'&&isContextCompactionFailure(message.text||''))return <CompactionNotice message={message.text}/>;
  const attachments=<MessageAttachments message={message} sessionId={sessionId}/>;
    return <div className={`ai-chat-message ai-role-${message.role}${roleBreak?' is-role-break':''}${continued?' is-reply-continuation':''}${message.images?.length?" has-message-images":""}${animate?" user-message-arrival":""}`}>
-          {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <ReplyIdentity identity={assistantIdentity} author={message.author} onSpecialist={onSpecialist} hidden={hideIdentity} continued={continued} motion={motion}/> }{message.role === "user" && message.external && <small className="external-origin-badge" title={message.external.connectionName?`接入渠道：${message.external.connectionName}${message.external.threadTitle?` · 会话：${message.external.threadTitle}`:""}（MCP）`:"来自外部 Agent 的消息（MCP）"}><Glyph name="plug" size={12}/>{message.external.connectionName||"外部 Agent"}</small>}{taskLabel&&<small className="pilot-specialist-task-label">{taskLabel}</small>}{message.text && (message.role === 'assistant' ? <AssistantMarkdown>{planMarkdown(message.text)}</AssistantMarkdown> : <div className={message.role==='user'?'user-message-text':undefined}>{message.role === "system" ? displayAiError(message.text) : <MessageText text={message.text} mentions={message.mentions} resources={resources}/>}</div>)}
+          {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <ReplyIdentity identity={assistantIdentity} author={message.author} onSpecialist={onSpecialist} hidden={hideIdentity} continued={continued} motion={motion} nameMotion={nameMotion}/> }{message.role === "user" && message.external && <small className="external-origin-badge" title={message.external.connectionName?`接入渠道：${message.external.connectionName}${message.external.threadTitle?` · 会话：${message.external.threadTitle}`:""}（MCP）`:"来自外部 Agent 的消息（MCP）"}><Glyph name="plug" size={12}/>{message.external.connectionName||"外部 Agent"}</small>}{taskLabel&&<small className="pilot-specialist-task-label">{taskLabel}</small>}{message.text && (message.role === 'assistant' ? <AssistantMarkdown>{planMarkdown(message.text)}</AssistantMarkdown> : <div className={message.role==='user'?'user-message-text':undefined}>{message.role === "system" ? displayAiError(message.text) : <MessageText text={message.text} mentions={message.mentions} resources={resources}/>}</div>)}
           {attachments}
           {message.role==='assistant'&&<SpecialistProcessLink author={message.author} reportId={message.id} onInspect={onInspectSpecialist}/>}
           {pendingImages!==undefined&&<small className="supplement-delivery-status" role="status">补充已发送 · 等待接入{pendingImages>0?` · ${pendingImages} 张图片`:''}</small>}
@@ -253,7 +253,9 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,subscribeWork
       const completed=timing?.status??(turn===currentTurn?snapshot.ai?.status:undefined);
       const executionEnded=['completed','failed','cancelled','interrupted'].includes(completed??'');
       const turnDispatchRows=dispatchRows.filter(row=>turn.some(entry=>entry.message?.id===row.sourceMessageId));
-      const turnConversations=mode==='conversation'&&assistantIdentity?.pilot?pilotWorkspace?.conversations?.filter(round=>round.kind!=='task-summary'&&round.projectId===snapshot.session.projectId&&round.sessionId===snapshot.session.id&&turn.some(entry=>entry.message?.id===round.sourceMessageId))??[]:[];
+      const turnRounds=mode==='conversation'&&assistantIdentity?.pilot&&turn[0]?.message?.role==='user'
+        ?pilotWorkspace?.conversations?.filter(round=>round.projectId===snapshot.session.projectId&&round.sessionId===snapshot.session.id&&round.sourceMessageId===turn[0]!.id)??[]:[];
+      const turnConversations=turnRounds.filter(round=>round.kind!=='task-summary');
       const presentedReply=mode==='conversation'?trailingTurnReplyId(turn):undefined;
       const presentingReply=!!presentedReply&&(!completed||['running','completed'].includes(completed));
       const interimProse=mode==='conversation'&&!(index===0&&before>0)&&!(turn===currentTurn&&(snapshot.ai?.pending||snapshot.ai?.question))
@@ -282,8 +284,16 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,subscribeWork
       if(pilotCompletion)hiddenProse.add(pilotCompletion.summary.id);
       const continuations=mode==='conversation'&&assistantIdentity?.pilot?pilotReplyContinuations(turn,hiddenProse,hiddenProcess):new Set<string>();
       const roleBreaks=mode==='conversation'&&!hideReplyIdentity?replyRoleBreaks(turn,hiddenProse,hiddenProcess):new Set<string>();
-      const activeIdentity=activeReply&&continuations.has(activeReply)?turn.slice(0,turn.findIndex(entry=>entry.id===activeReply)).filter(entry=>isAssistantProse(entry)&&!hiddenProse.has(entry.id)&&!continuations.has(entry.id)).at(-1)?.id:activeReply;
-      const replyMotion=(id:string)=>id===activeIdentity?conversationAvatarMotion(conversationActivity(snapshot.ai)):'idle';
+      // The Router has already replied when the separate synthesis runs.
+      // Animate the existing Pilot identity in that exact source turn.
+      const summaryAnchor=canFoldPilotProcess&&pilotWorkspace?.active&&!pilotCompletion&&turnRounds.some(round=>round.state==='summarizing')
+        ?turn.filter(entry=>isAssistantProse(entry)&&!hiddenProse.has(entry.id)&&!hiddenProcess.has(entry.id)).at(-1):undefined;
+      const summarizingReply=summaryAnchor?.message?.jointReport||summaryAnchor?.message?.conversation?undefined:summaryAnchor?.id;
+      const workingReply=summarizingReply??activeReply;
+      const activeIdentity=workingReply&&continuations.has(workingReply)?turn.slice(0,turn.findIndex(entry=>entry.id===workingReply)).filter(entry=>isAssistantProse(entry)&&!hiddenProse.has(entry.id)&&!continuations.has(entry.id)).at(-1)?.id:workingReply;
+      const activity=summarizingReply?(connected&&pilotConnected?'running':'waiting'):conversationActivity(snapshot.ai);
+      const replyMotion=(id:string)=>id===activeIdentity?conversationAvatarMotion(activity):'idle';
+      const summaryNameMotion=(id:string)=>summarizingReply&&id===activeIdentity?activity==='running':undefined;
       const renderGroup=({entries:group,progress,resource}:ConversationGroup)=>{
         const entry = group[0]!;
         if(mode==='conversation'&&entry.message?.jointReport?.kind==='notice')
@@ -302,11 +312,11 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,subscribeWork
           return <AgentTaskList compact key={entry.id} runs={runs} resources={snapshot.resources || []} evidence={[...(snapshot.evidence || []), ...(snapshot.ai?.agentRuns || []).flatMap(run => (run.evidence || []).map(item => ({...item, specialistId:null, command:null})))]} live={live} disabled={disabled} stopping={stopping} onInspect={onInspect} onStopTurn={onStopTurn} onCancelRun={run => api.aiOperation(snapshot.session.id,"cancelAgent",{runId:run.id})} renderApproval={run => snapshot.ai && <AIPending attachments={snapshot.messages.flatMap(message=>message.files??[])} session={snapshot.session.id} runId={run.id} agentName={run.name} view={{...snapshot.ai,pending:run.pending}} refresh={() => api.aiView(snapshot.session.id)}/>}>{tools.length ? <ThinkingTimeline cards={tools} live={false} onInspect={onInspect}/> : null}</AgentTaskList>;
         }
         if (entry.card && ["thinking", "operation", "shell"].includes(entry.card.type)) return <ThinkingTimeline key={entry.id} cards={group.map(item => item.card!)} live={thinkingVisible && group.at(-1)?.id === visibleEntries.at(-1)?.id} onInspect={onInspect}/>;
-        if (entry.message) return entry.message.role==='user'?null:<TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message} roleBreak={!!entry.message.author&&roleBreaks.has(entry.id)} assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} hideIdentity={hideReplyIdentity} continued={continuations.has(entry.id)} motion={replyMotion(entry.id)}/>;
+        if (entry.message) return entry.message.role==='user'?null:<TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message} roleBreak={!!entry.message.author&&roleBreaks.has(entry.id)} assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} hideIdentity={hideReplyIdentity} continued={continuations.has(entry.id)} motion={replyMotion(entry.id)} nameMotion={summaryNameMotion(entry.id)}/>;
         if (entry.action) return <div key={entry.id}>{renderAction?.(entry.action)}</div>;
         const card=entry.card!;
         const pilotSummary=pilotCompletion?.acknowledgement.id===entry.id?pilotCompletion.summary:undefined;
-        return <ReplyArrival key={entry.id} entryId={entry.id} continued={continuations.has(entry.id)} arrive={false}>{['text','message'].includes(card.type) && <ReplyIdentity identity={assistantIdentity} hidden={hideReplyIdentity} continued={continuations.has(entry.id)} motion={replyMotion(entry.id)}/>}<Card card={card} tags={snapshot.session.tags} animateInitial={connected&&turn===currentTurn&&!restoredText.current.has(card.id)} onOpenPlans={onOpenPlans} onOpenMemory={onOpenMemory} pilotSummary={pilotSummary} pilotConnected={pilotSummary?pilotConnected&&connected:undefined}/></ReplyArrival>;
+        return <ReplyArrival key={entry.id} entryId={entry.id} continued={continuations.has(entry.id)} arrive={false}>{['text','message'].includes(card.type) && <ReplyIdentity identity={assistantIdentity} hidden={hideReplyIdentity} continued={continuations.has(entry.id)} motion={replyMotion(entry.id)} nameMotion={summaryNameMotion(entry.id)}/>}<Card card={card} tags={snapshot.session.tags} animateInitial={connected&&turn===currentTurn&&!restoredText.current.has(card.id)} onOpenPlans={onOpenPlans} onOpenMemory={onOpenMemory} pilotSummary={pilotSummary} pilotConnected={pilotSummary?pilotConnected&&connected:undefined}/></ReplyArrival>;
       };
       const pilotLive=miniScope.live&&turn.some(entry=>entry.sre?.task.pilot);
       // The actual post-tool reply keeps its key from its first chunk onward;

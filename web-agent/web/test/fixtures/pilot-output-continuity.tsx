@@ -1,5 +1,6 @@
 // The real App and its two session streams, with local data only.
 import './readme-workbench';
+import '../../src/assistantProse.css';
 import type {AIView, Message, SessionEvent, SessionSnapshot, SpecialistConversation, SuperWorker, SuperWorkspace} from '../../../shared/contracts';
 
 const router = 'demo-session-0', project = 'demo-project';
