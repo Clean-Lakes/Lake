@@ -1,6 +1,7 @@
-import type { Message, SpecialistConversation, SpecialistConversationMember } from '../../web-agent/shared/contracts';
+import type { AIView, Message, SpecialistConversation, SpecialistConversationMember } from '../../web-agent/shared/contracts';
 import type { LakeAgents } from './agent';
-import type { HostProfile } from './agent-host';
+import type { HostProfile, TurnOutcome } from './agent-host';
+import { describeTurnFailure, type TurnFailure } from './model-errors';
 import { HttpError, LakeStore, now } from './store';
 import { canonical, digest, text } from './tasks';
 import type {AgentBackendRef} from '../../web-agent/shared/external-agents';
@@ -15,6 +16,18 @@ type Round = Omit<SpecialistConversation, 'members'> & {
 };
 const waiting = (member:Member) => member.state === 'queued' || member.state === 'running';
 const open = (round:Round) => ['queued','running','summarizing'].includes(round.state);
+const previousFailureLabel = '回应失败，未收到完整回复';
+function modelFailureReason(failure?:TurnFailure) {
+  if(failure?.source!=='provider'&&failure?.source!=='network')return;
+  const status=failure.statusCode;
+  if(status===401)return '模型服务鉴权失败（HTTP 401）';
+  if(status===403)return '模型服务拒绝访问（HTTP 403）';
+  if(status===429)return '模型服务限流（HTTP 429）';
+  if(status&&Number.isInteger(status)&&status>=500&&status<=599)return `模型服务暂时不可用（HTTP ${status}）`;
+  if(status&&Number.isInteger(status)&&status>=400&&status<=499)return `模型服务拒绝请求（HTTP ${status}）`;
+  if(failure.phase==='stream')return '模型响应传输中断';
+  if(failure.source==='network')return '无法连接模型服务';
+}
 const bounded = (value:string, maximum:number) => {
   const bytes=Buffer.from(value);let end=Math.min(bytes.length,maximum);
   while(end>0&&end<bytes.length&&(bytes[end]&0xc0)===0x80)end--;
@@ -51,9 +64,9 @@ export class SpecialistConversations {
     for(const member of round.members)this.store.put('superConversationSessions',member.sessionId,{roundId:round.id,memberId:member.id});
     this.store.put('superConversationSessions',round.summarySessionId,{roundId:round.id});
   }
-  private changed(round:Round,message=false){
+  private changed(round:Round,members:readonly Member[]=[],message=false){
     this.ports.notify(round.sessionId,message);
-    for(const member of round.members)this.ports.notify(member.channelSessionId,message);
+    for(const member of members)this.ports.notify(member.channelSessionId,message);
   }
   private check(round:Round,member?:Member){
     if(this.closed||!open(round))throw new HttpError(409,'本次对话已结束');
@@ -111,11 +124,19 @@ export class SpecialistConversations {
       });
       this.session(round,round.summarySessionId,'Pilot · 对话汇总');this.index(round);this.save(round);
     });
-    this.changed(round);this.ports.schedule();return this.view(round);
+    this.changed(round,round.members);this.ports.schedule();return this.view(round);
   }
   private view(round:Round):SpecialistConversation {
     const {eventId,requestHash,quote,instruction,dialogue,summarySessionId,summaryDeadlineAt,members,...view}=round;
-    return {...view,members:members.map(({roleSnapshot,reply,...member})=>member)};
+    return {...view,members:members.map(({roleSnapshot,reply,...member})=>{
+      if(member.state==='failed'&&member.reason===previousFailureLabel){
+        const execution=this.store.get<AIView>('views',member.sessionId);
+        const diagnostic=execution?.status==='failed'?execution.cards.findLast(card=>
+          card.type==='error'&&(card.data as {root_turn_id?:string}|undefined)?.root_turn_id===execution.rootTurnId):undefined;
+        return {...member,reason:modelFailureReason((diagnostic?.data as {failure?:TurnFailure}|undefined)?.failure)??member.reason};
+      }
+      return member;
+    })};
   }
   list(projectId:string){const rounds=this.rounds().filter(round=>round.projectId===projectId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));return [...rounds.filter(open),...rounds.filter(round=>!open(round)).slice(0,40)].map(round=>this.view(round));}
   read(projectId:string,roundId:string){
@@ -169,8 +190,8 @@ export class SpecialistConversations {
           round=this.store.require<Round>('superConversations',round.id);if(!open(round))break;
           const member=round.members.find(member=>member.id===candidate.id)!;
           if(member.state!=='queued')continue;
-          try{this.check(round,member);}catch(error){member.state='failed';member.reason=error instanceof HttpError?this.agents.redact(bounded(error.message,512)):'当前项目或专员不可用';this.save(round);this.changed(round);continue;}
-          member.state='running';round.state='running';this.save(round);this.changed(round);
+          try{this.check(round,member);}catch(error){member.state='failed';member.reason=error instanceof HttpError?this.agents.redact(bounded(error.message,512)):'当前项目或专员不可用';this.save(round);this.changed(round,[member]);continue;}
+          member.state='running';round.state='running';this.save(round);this.changed(round,[member]);
           const input=canonical({conversationId:round.id,originalHumanRequest:round.quote,instruction:round.instruction,dialogue:round.dialogue,
             self:{roleId:member.roleId,name:member.roleName,number:round.members.findIndex(item=>item.id===member.id)+1},
             recipients:round.members.map(({roleId,roleName},index)=>({roleId,name:roleName,number:index+1}))});
@@ -193,10 +214,12 @@ export class SpecialistConversations {
     try{
       this.agents.memory?.setIgnored(sessionId,true);
       await this.agents.send(sessionId,'[Lake shared conversation]',{input,recordUser:false,recordAssistant:false,ignoreMemory:true});
-    }catch{this.settled(sessionId,{error:'对话模型未能启动'});}
+    }catch(error){
+      this.settled(sessionId,{error:'对话模型未能启动',failure:describeTurnFailure(error,value=>this.agents.redact(value))});
+    }
   }
-  changedSession(sessionId:string){const execution=this.execution(sessionId);if(!execution)return false;this.changed(execution.round);return true;}
-  settled(sessionId:string,outcome?:{response?:string;error?:string}){
+  ownsSession(sessionId:string){return !!this.store.get('superConversationSessions',sessionId);}
+  settled(sessionId:string,outcome?:TurnOutcome){
     const execution=this.execution(sessionId);if(!execution)return false;
     const {round,member}=execution;
     if(!open(round)||(member?member.state!=='running':round.state!=='summarizing'))return true;
@@ -216,7 +239,7 @@ export class SpecialistConversations {
           for(const target of [round.sessionId,member.channelSessionId])this.store.put<Message>('messages',target===round.sessionId?key:key+'_channel',{
             id:target===round.sessionId?key:key+'_channel',sessionId:target,role:'assistant',text:member.reply,author,createdAt:now(),
             conversation:{id:round.id,sourceMessageId:round.sourceMessageId,kind:'reply'}});
-        }else member.reason=member.state==='timed_out'?'等待回应超时':!valid?'当前项目、角色或来源已失效':outcome?.error?'回应失败，未收到完整回复':'没有收到完整回应';
+        }else member.reason=member.state==='timed_out'?'等待回应超时':!valid?'当前项目、角色或来源已失效':modelFailureReason(outcome?.failure)??'未收到完整回复';
       }else{
         round.state=success?'completed':'failed';
         const key='conversation_summary_'+digest(round.id).slice(0,32);round.summaryMessageId=key;
@@ -226,34 +249,36 @@ export class SpecialistConversations {
       }
       this.save(round);
     });
-    this.changed(round,true);this.ports.schedule();return true;
+    this.changed(round,member?[member]:[],!member||success);this.ports.schedule();return true;
   }
   async expire(){
     for(const snapshot of this.rounds().filter(open)){
       const round=this.store.require<Round>('superConversations',snapshot.id);if(!open(round))continue;
-      const aborts:string[]=[];let changed=false,notice=false;
+      const aborts:string[]=[],changedMembers:Member[]=[];let notice=false;
       if(this.time()>=Date.parse(round.deadlineAt))for(const member of round.members)if(waiting(member)){
         if(member.state==='running')aborts.push(member.sessionId);
-        member.state='timed_out';member.reason='等待回应超时';changed=true;
+        member.state='timed_out';member.reason='等待回应超时';changedMembers.push(member);
       }
       if(round.state==='summarizing'&&this.time()>=Date.parse(round.summaryDeadlineAt!)){
-        aborts.push(round.summarySessionId);round.state='failed';changed=true;notice=true;
+        aborts.push(round.summarySessionId);round.state='failed';notice=true;
         const key='conversation_summary_'+digest(round.id).slice(0,32);round.summaryMessageId=key;
         this.store.put<Message>('messages',key,{id:key,sessionId:round.sessionId,role:'assistant',createdAt:now(),text:'Pilot 汇总等待超时；各专员的实际回应和缺席状态已保留。',conversation:{id:round.id,sourceMessageId:round.sourceMessageId,kind:'notice'}});
       }
-      if(changed){this.save(round);this.changed(round,notice);}
+      if(changedMembers.length||notice){this.save(round);this.changed(round,changedMembers,notice);}
       await Promise.allSettled(aborts.map(session=>this.agents.abort(session)));
     }
   }
   private async stopRound(snapshot:Round,state:'cancelled'|'interrupted',roleId?:string){
     const round=this.store.require<Round>('superConversations',snapshot.id);if(!open(round))return;
-    const aborts:string[]=[];
+    const aborts:string[]=[],changedMembers:Member[]=[];
     for(const member of round.members)if(waiting(member)&&(!roleId||member.roleId===roleId)){
       if(member.state==='running')aborts.push(member.sessionId);
       member.state=state;member.reason=state==='cancelled'?'已停止，未收到回应':'运行已中断，未收到回应';
+      changedMembers.push(member);
     }
+    if(roleId&&!changedMembers.length)return;
     if(!roleId){if(round.state==='summarizing')aborts.push(round.summarySessionId);round.state=state;}
-    this.save(round);this.changed(round);
+    this.save(round);this.changed(round,changedMembers);
     await Promise.allSettled(aborts.map(session=>this.agents.abort(session)));
   }
   async stop(projectId:string,roleId?:string){

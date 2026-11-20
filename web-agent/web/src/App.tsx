@@ -552,6 +552,9 @@ function AppContent() {
         const event = JSON.parse(incoming.data) as SessionEvent;
         if (event.sessionId !== sessionId || typeof event.seq !== "number" || event.seq <= streamCursor.current) return;
         streamCursor.current = event.seq;
+        // The workspace stream owns the queue/attendance view. Only an actual
+        // reply should invalidate the Pilot transcript.
+        if (event.type === "specialist" && event.conversationProgress && liveSnapshot.current?.session.workspaceRole === "router") return;
         if(event.conversationMode==='plan'||event.conversationMode==='default'){
           setSnapshot(current=>applyConversationMode(current,sessionId,{mode:event.conversationMode!,cursor:event.seq}));
           return;

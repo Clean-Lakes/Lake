@@ -13,7 +13,7 @@ async function until(read,predicate){
  while(Date.now()<deadline){value=await read();if(predicate(value))return value;await new Promise(resolve=>setTimeout(resolve,20));}
  assert.fail('Timed out: '+JSON.stringify(value));
 }
-async function fixture(t,{count=6,failRole,hold=false,acp=false,summarize=false}={}){
+async function fixture(t,{count=6,failRole,hold=false,acp=false,summarize=false,streamReplies=false}={}){
  const home=await mkdtemp(join(tmpdir(),'lake-dialogue-sdk-')),web=join(home,'web');
  await mkdir(web);await writeFile(join(web,'index.html'),'<html>dialogue fixture</html>');
  const requests=[];let release;const gate=new Promise(resolve=>{release=resolve;});
@@ -22,8 +22,9 @@ async function fixture(t,{count=6,failRole,hold=false,acp=false,summarize=false}
   const request=JSON.parse(Buffer.concat(chunks).toString());requests.push(request);
   const system=request.messages.filter(message=>message.role==='system').map(content).join('\n');
   const input=content([...request.messages].reverse().find(message=>message.role==='user'));
+  const speaker=system.includes('personally responding in a shared conversation');
   let delta;
-  if(system.includes('personally responding in a shared conversation')){
+  if(speaker){
    const data=JSON.parse(input);
    if(hold)await gate;
    if(data.self.roleId===failRole){res.writeHead(401,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{message:'synthetic dialogue failure',type:'authentication_error'}}));return;}
@@ -37,7 +38,11 @@ async function fixture(t,{count=6,failRole,hold=false,acp=false,summarize=false}
    delta={tool_calls:[{index:0,id:'invite-'+event.id,type:'function',function:{name:'convene_specialists',arguments:JSON.stringify({event_id:event.id,part_key:'attendance',quote:event.text,instruction:'每位干员亲自回应',audience:'all',...(summarize?{summarize:true}:{})})}}]};
   }
   res.writeHead(200,{'Content-Type':'text/event-stream'});
-  res.write('data: '+JSON.stringify({id:'dialogue-fixture',object:'chat.completion.chunk',created:1,model:'fixture',choices:[{index:0,delta:{role:'assistant',...delta},finish_reason:null}]})+'\n\n');
+  const send=part=>res.write('data: '+JSON.stringify({id:'dialogue-fixture',object:'chat.completion.chunk',created:1,model:'fixture',choices:[{index:0,delta:part,finish_reason:null}]})+'\n\n');
+  if(speaker&&streamReplies){
+   send({role:'assistant'});
+   for(const character of delta.content){send({content:character});await new Promise(resolve=>setTimeout(resolve,2));}
+  }else send({role:'assistant',...delta});
   res.write('data: '+JSON.stringify({id:'dialogue-fixture',object:'chat.completion.chunk',created:1,model:'fixture',choices:[{index:0,delta:{},finish_reason:delta.tool_calls?'tool_calls':'stop'}],usage:{prompt_tokens:10,completion_tokens:3,total_tokens:13}})+'\n\n');
   res.end('data: [DONE]\n\n');
  });
@@ -93,9 +98,32 @@ test('a failed specialist remains absent without triggering a redundant summary 
  const f=await fixture(t,{count:3,failRole:'role-1'});await f.start();
  const state=await until(()=>f.api(f.path),state=>state.conversations?.[0]?.state==='completed'),round=state.conversations[0];
  assert.deepEqual(round.members.map(member=>member.state),['replied','failed','replied']);
+ assert.equal(round.members[1].reason,'模型服务鉴权失败（HTTP 401）');
  const messages=f.app.store.messages(f.pilot.routerSessionId).filter(message=>message.conversation?.id===round.id);
  assert.equal(messages.length,2);assert.ok(messages.every(message=>message.conversation.kind==='reply'&&message.author.roleId!=='role-1'));
  assert.equal(f.app.store.list('superAcceptance').length,0);
+ const saved=f.app.store.get('superConversations',round.id);
+ saved.members[1].reason='回应失败，未收到完整回复';
+ f.app.store.put('superConversations',round.id,saved);
+ const history=await f.api(f.path);
+ assert.equal(history.conversations[0].members[1].reason,'模型服务鉴权失败（HTTP 401）','older generic labels can use their exact stored diagnostic');
+ assert.equal(f.app.store.get('superConversations',round.id).members[1].reason,saved.members[1].reason,'reading the reason does not rewrite historical results');
+});
+
+test('eight streaming speakers publish only lifecycle changes and real replies to Pilot and the affected channels',async t=>{
+ const f=await fixture(t,{count:8,failRole:'role-3',streamReplies:true});await f.start();
+ const state=await until(()=>f.api(f.path),state=>state.conversations?.[0]?.state==='completed'),round=state.conversations[0];
+ assert.equal(round.members.filter(member=>member.state==='replied').length,7);
+ const routerEvents=f.app.store.events(f.pilot.routerSessionId,0);
+ const channelEvents=round.members.map(member=>f.app.store.events(member.channelSessionId,0));
+ const individual=round.members.flatMap(member=>f.app.store.events(member.sessionId,0));
+ const channelNotifications=channelEvents.map(events=>events.filter(event=>['message','specialist'].includes(event.type)));
+ t.diagnostic(JSON.stringify({router:routerEvents.length,channels:channelNotifications.flat().length,individual:individual.length}));
+ assert.ok(individual.some(event=>event.textUpdate),'the individual session still delivers model text');
+ assert.equal(routerEvents.filter(event=>event.conversationProgress).length,11);
+ assert.ok(routerEvents.filter(event=>event.type==='specialist').length<=15,'model deltas do not invalidate the Pilot transcript');
+ assert.ok(channelNotifications.every(events=>events.length===3),'each channel receives only its own queue, start and outcome');
+ assert.equal(channelNotifications.flat().filter(event=>event.type==='message').length,7);
 });
 
 test('configured ACP and native specialists reply together through separate identities without creating business tasks or MCP transports',async t=>{

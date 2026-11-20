@@ -60,9 +60,13 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
  useEffect(()=>{
   if(!routerId||!connected||typeof EventSource==='undefined')return;
   const stream=new EventSource(api.eventsUrl(routerId,cursor.current),{withCredentials:true});
-  const refresh=()=>refreshRef.current();
+  let timer:number|undefined;
+  const refresh=()=>{
+   if(timer!==undefined)return;
+   timer=window.setTimeout(()=>{timer=undefined;void refreshRef.current();},100);
+  };
   stream.addEventListener('specialist',refresh);stream.addEventListener('message',refresh);stream.addEventListener('open',refresh);
-  return()=>stream.close();
+  return()=>{stream.close();window.clearTimeout(timer);};
  },[routerId,connected]);
  useEffect(()=>{const refresh=()=>refreshRef.current();window.addEventListener('lake:conversation-read',refresh);return()=>window.removeEventListener('lake:conversation-read',refresh);},[]);
  const removeRole=(roleId:string)=>{deletedRoles.current.add(roleId);setWorkspace(current=>current?{...current,questions:current.questions?.filter(question=>question.author.roleId!==roleId),channels:current.channels?.filter(channel=>channel.roleId!==roleId),workers:current.workers.filter(worker=>worker.roleId!==roleId)}:current);void refreshRef.current();};

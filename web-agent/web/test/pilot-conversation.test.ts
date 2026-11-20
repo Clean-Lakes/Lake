@@ -15,13 +15,26 @@ const workspace:SuperWorkspace={active:true,project:{projectId:'project',routerS
 
 test('real replied counts and every outstanding specialist remain visible, including failures after summary',()=>{
  const html=renderToStaticMarkup(createElement(PilotConversationProgress,{rounds:[round]}));
- assert.match(html,/1 \/ 3 位专员已回应/);assert.match(html,/正在回复…/);assert.match(html,/等待回应/);
+ assert.match(html,/1 \/ 3 位专员已回应 · 1 位正在回复 · 1 位排队/);assert.match(html,/正在回复…/);assert.match(html,/等待回应/);
  assert.doesNotMatch(html,/数据库专员 ·|发布专员 ·/);assert.match(html,/reply-process-status reply-process-text/);
  const failed={...round,state:'completed' as const,members:round.members.map(member=>member.state==='running'?{...member,state:'timed_out' as const}:member)};
  const settled=renderToStaticMarkup(createElement(PilotConversationProgress,{rounds:[failed]}));
  assert.match(settled,/回应超时/);assert.doesNotMatch(settled,/Pilot 已汇总/);
  const offline=renderToStaticMarkup(createElement(PilotConversationProgress,{rounds:[round],connected:false}));
  assert.match(offline,/正在重连/);assert.doesNotMatch(offline,/status-text--active/);
+});
+
+test('a stored authentication failure stays visible after completion and while offline',()=>{
+ const failed:SpecialistConversation={...round,state:'completed',members:[
+  round.members[0]!,{...round.members[1]!,state:'failed',reason:'模型服务鉴权失败（HTTP 401）'},
+ ]};
+ for(const connected of [true,false]){
+  const html=renderToStaticMarkup(createElement(PilotConversationProgress,{rounds:[failed],connected}));
+  const text=html.replace(/<[^>]*>/g,'');
+  assert.match(text,/1 \/ 2 位专员已回应/);
+  assert.equal((text.match(/模型服务鉴权失败（HTTP 401）/g)??[]).length,1);
+  assert.doesNotMatch(text,/回应失败：|等待重新连接/);
+ }
 });
 
 test('Lake Island follows dialogue even after the routing response, and stops when the round settles',()=>{

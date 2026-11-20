@@ -232,7 +232,8 @@ export class LakeSuperagent implements AgentHost {
         if(snapshot.execution?.kind==='acp'&&digest(this.roleExecution(snapshot))!==digest(snapshot.execution))throw new HttpError(409,'专员冻结的 Agent 配置已变化');
         this.freezeRoleExecution(snapshot);
       },
-      notify:(session,message)=>{this.notify(session,'specialist');if(message)this.notify(session,'message');},schedule:()=>this.schedule(),
+      notify:(session,message)=>this.agents.publish(this.store.event(session,message?'message':'specialist',message?{}:{conversationProgress:true})),
+      schedule:()=>this.schedule(),
     });
     prepareWatchdogEvidence(store);
     this.watchdog = new TaskWatchdog(store, {
@@ -2614,7 +2615,9 @@ export class LakeSuperagent implements AgentHost {
     return snapshot;
   }
   changed(sessionId: string) {
-    if(this.conversations.changedSession(sessionId))return;
+    // A conversation member has its own stream. Pilot and the role channel
+    // only need the round's state changes and its committed public reply.
+    if(this.conversations.ownsSession(sessionId))return;
     const worker = this.workerFor(sessionId);
     if (!worker) return;
     const goal = this.ledger.get(worker.taskId), view = this.store.view(sessionId);

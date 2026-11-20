@@ -295,6 +295,7 @@ export type SSHHostKeyTrust = { id: string; resourceId: string; host: string; po
 
 export type SessionEvent = {
 	conversationMode?: ConversationMode;
+  conversationProgress?: true;
   seq: number;
   sessionId: string;
   type: "session" | "message" | "specialist" | "evidence" | "action" | "terminal";
