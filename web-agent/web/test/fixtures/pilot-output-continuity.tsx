@@ -15,7 +15,9 @@ const conclusion = '样例记录一致，未发现遗漏。';
 const names = ['数据库专员','可观测性专员','发布专员','知识库专员','服务器运维排查专员'];
 if(dialogue)names.push('ACP 测试专员','河狸专员','巡检专员');
 type Stage = 'idle' | 'started' | 'working' | 'first-report' | 'second-report' | 'closing' | 'reports-delivered' | 'finished';
+type Network = 'connected' | 'worker-stream-drop' | 'worker-outage' | 'workspace-outage';
 let stage: Stage = 'idle', cursor = 50;
+let network: Network = 'connected';
 const streams = new Set<FixtureStream>();
 
 function workers(): SuperWorker[] {
@@ -119,12 +121,14 @@ window.fetch=async(input,init)=>{
   const path=url.pathname;
   if (path.startsWith('/api/') && (init?.method??'GET')!=='GET') return json({error:'Read-only fixture'},405);
   if (path===`/api/projects/${project}/superagent`) {
+    if(network==='workspace-outage')return json({error:'模拟工作区刷新失败'},503);
     const value: SuperWorkspace={active:true,project:{projectId:project,routerSessionId:router,version:1},workers:workers(),
       ...(dialogue&&stage!=='idle'?{conversations:[dialogueRound()]}:{}),cursor};
     return json(value);
   }
   if (path.endsWith('/snapshot')) {
     const id=decodeURIComponent(path.split('/')[3]??'');
+    if(id!==router&&network==='worker-outage')return json({error:'模拟专员快照失败'},503);
     const base: SessionSnapshot=await (await baseFetch(`/api/sessions/${router}/snapshot`)).json();
     return json(snapshot(base,workers().find(worker=>worker.sessionId===id)));
   }
@@ -133,7 +137,21 @@ window.fetch=async(input,init)=>{
   return response;
 };
 
-Object.assign(window,{pilotOutputQA:{advance(next:Stage){
+Object.assign(window,{pilotOutputQA:{setNetwork(next:Network){
+  network=next;
+  const seq=++cursor;
+  for (const stream of streams) {
+    if (stream.session===router) {
+      stream.publish({sessionId:router,seq,type:'specialist'} as SessionEvent);
+    } else if (next==='worker-stream-drop'||next==='worker-outage') {
+      stream.readyState=0;
+      stream.onerror?.(new Event('error'));
+    } else if (stream.readyState===0) {
+      stream.readyState=1;
+      stream.onopen?.(new Event('open'));
+    }
+  }
+},advance(next:Stage){
   stage=next;
   const seq=++cursor;
   for (const stream of streams) {

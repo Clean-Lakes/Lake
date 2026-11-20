@@ -38,15 +38,26 @@ function useSpecialistReply(row:PilotSpecialistRow,connected:boolean,visible:boo
   if(!connected||!visible||!subscribe)return;
   const controller=new AbortController();let disposed=false,busy=false,queued=false,healthy=false;
   let latest=state?.binding===binding?state.snapshot:undefined,frame:number|undefined,timer:ReturnType<typeof setTimeout>|undefined,stream:EventSource|undefined;
+  let snapshotFailureSince:number|undefined;
   let events:SessionEvent[]=[];
   const refresh=async()=>{
    if(busy){queued=true;return;}busy=true;
    try{
-    const next=await loadPilotSpecialistSnapshot(row,controller.signal);
+    const next=await loadPilotSpecialistSnapshot(row,AbortSignal.any([controller.signal,AbortSignal.timeout(12000)]));
     if(disposed)return;
-    if(!next){latest=undefined;setState({binding,failed:true});return;}
-    if(!latest||next.cursor>=latest.cursor){latest=acceptSnapshot(latest??null,next);healthy=stream?.readyState===1;setState({binding,snapshot:latest,failed:false});}
-   }catch{if(!disposed){healthy=false;setState({binding,snapshot:latest,failed:true});}}
+    snapshotFailureSince=undefined;
+    healthy=stream?.readyState===1;
+    // A response for a superseded binding cannot replace this row's prose.
+    if(next&&(!latest||next.cursor>=latest.cursor))latest=acceptSnapshot(latest??null,next);
+    const snapshot=latest;
+    setState(current=>current?.binding===binding&&current.snapshot===snapshot&&!current.failed?current:{binding,snapshot,failed:false});
+   }catch{
+    if(disposed)return;
+    healthy=false;
+    const now=Date.now();
+    snapshotFailureSince??=now;
+    if(now-snapshotFailureSince>=1500)setState({binding,snapshot:latest,failed:true});
+   }
    finally{busy=false;if(queued&&!disposed){queued=false;void refresh();}}
   };
   const schedule=()=>{if(!timer)timer=setTimeout(()=>{timer=undefined;void refresh();},100);};
@@ -59,7 +70,9 @@ function useSpecialistReply(row:PilotSpecialistRow,connected:boolean,visible:boo
      if(frame===undefined)frame=requestAnimationFrame(()=>{
       frame=undefined;if(disposed)return;
       for(const item of events)latest=applyLiveText(latest??null,item)??latest;
-      events=[];setState({binding,snapshot:latest,failed:false,livePacket:true});
+      events=[];snapshotFailureSince=undefined;
+      healthy=stream?.readyState===1;
+      setState({binding,snapshot:latest,failed:false,livePacket:true});
      });
     }else schedule();
    }catch{schedule();}
@@ -68,7 +81,8 @@ function useSpecialistReply(row:PilotSpecialistRow,connected:boolean,visible:boo
   stream=typeof EventSource==='undefined'?undefined:new EventSource(api.eventsUrl(row.worker.sessionId,latest?.cursor??0),{withCredentials:true});
   if(stream){
    stream.onopen=()=>{healthy=true;void refresh();};
-   stream.onerror=()=>{healthy=false;setState({binding,snapshot:latest,failed:true});void refresh();};
+   // An interrupted event stream may still have a working snapshot fallback.
+   stream.onerror=()=>{healthy=false;void refresh();};
    stream.onmessage=receive;
    for(const type of ['session','specialist'])stream.addEventListener(type,receive as EventListener);
   }

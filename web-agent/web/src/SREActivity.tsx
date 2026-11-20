@@ -40,7 +40,7 @@ export function SREActivity({run,attempt,snapshotClock=false,compact=false,onIns
  const elapsed=Number.isFinite(seconds)?seconds>=60?`${Math.floor(seconds/60)}分${seconds%60}秒`:`${seconds}秒`:'';
  const evidence=Math.max(run.evidence?.length??0,attempt?.evidence?.length??0);
  if(compact){
-  const content=<><Glyph name="waves" size={18}/><StatusText active text={sreActivityLabel(run)}/>{(run.toolCount??0)>0&&<span> · {run.toolCount} 项操作</span>}{evidence>0&&<span> · {evidence} 项证据</span>}{onInspect&&<Glyph name="next" size={11}/>}</>;
+  const content=<><StatusText active text={sreActivityLabel(run)}/>{(run.toolCount??0)>0&&<span> · {run.toolCount} 项操作</span>}{evidence>0&&<span> · {evidence} 项证据</span>}{onInspect&&<Glyph name="next" size={11}/>}</>;
   return <div className="reply-duration turn-status is-live sre-conversation-activity" aria-label="专员正在执行">{onInspect?<button type="button" className="turn-duration-disclosure" data-placement="side" aria-controls={sessionInspectorId} title="在右侧查看执行详细过程" onClick={onInspect}>{content}</button>:content}</div>;
  }
  return <div className={`sre-live-activity${snapshotClock?' is-stable':''}`} aria-label="专员正在执行"><span className="sre-activity-orbit" aria-hidden="true"/><span role="status"><StatusText active text={sreActivityLabel(run)}/></span>{elapsed&&<time title={snapshotClock?'最近一次活动时的运行用时':undefined} aria-label={`${snapshotClock?'最近活动时':''}已运行${elapsed}`}>{elapsed}</time>}{(run.toolCount??0)>0&&<span>已调用 {run.toolCount} 次工具</span>}{evidence>0&&<span>已采集 {evidence} 项证据</span>}</div>

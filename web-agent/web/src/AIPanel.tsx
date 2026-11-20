@@ -154,7 +154,7 @@ export function AITranscript(props: TranscriptProps) {
     <PilotReportFoldScope><AITranscriptContent {...props}/></PilotReportFoldScope>
   </ObjectReferencesProvider>;
 }
-function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnected=true,presentedPilotReports,onPilotReportsPresented,superTask,onSpecialist,onInspectSpecialist,assistantIdentity,onOpenMemory,snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, connected = !disabled, mode = "conversation", refresh, onOpenPlans }: TranscriptProps) {
+function AITranscriptContent({ proseInChannel=false,pilotWorkspace,presentedPilotReports,onPilotReportsPresented,superTask,onSpecialist,onInspectSpecialist,assistantIdentity,onOpenMemory,snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, connected = !disabled, pilotConnected = connected, mode = "conversation", refresh, onOpenPlans }: TranscriptProps) {
   const {rows:dispatchRows,onObservedTurn}=usePilotSpecialistRows(mode==='conversation'&&assistantIdentity?.pilot?pilotWorkspace:undefined,snapshot.session.id,snapshot.messages);
   // Restoring a session shows existing text immediately. Replies first observed
   // after mount reveal their first packet too (cards mount only once nonempty).
@@ -359,7 +359,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       const collaboration=turnConversations.length?(footer:ReactNode)=>turnConversations.map((round,index)=>{
         const messages=dialogueReplies.get(round.id)??[];
         const summaryDelivered=dialogueCompletion?.summary.conversation?.id===round.id;
-        return <PilotConversationProgress key={round.id} round={round} connected={pilotConnected&&connected}
+        return <PilotConversationProgress key={round.id} round={round} connected={pilotConnected}
           process={index===0?footer:undefined} onSpecialist={onSpecialist} onInspect={onInspect}
           summaryDelivered={summaryDelivered} replyMemberIds={summaryDelivered?new Set(messages.map(message=>message.author!.workerId)):undefined}
           replies={messages.map(message=><TranscriptMessage key={message.id} message={message} sessionId={snapshot.session.id}

@@ -207,6 +207,30 @@ test('joint handoff folds only with all requested members and each exact forward
  assert.equal(recoveredRouteFailures([failed,cards[1]!]).size,0);
 });
 
+test('a finished Ops handoff archives the pre-check narration through the exact joint forwarding records',()=>{
+ const members=['host','database'].map(id=>({roleId:`role-${id}`,workerId:`worker-${id}`,sessionId:`session-${id}`,dispatch:{state:'queued'}}));
+ const preface='我先核对上一次的检查记录。',acknowledgement='已安排两位专员重新检查。';
+ const cards=[prose('before',1,preface),bound({id:'history',type:'operation',title:'read_super_object',status:'completed',at:at(2),content:'原检查记录'}),
+  bound({...route('dispatch','completed',3),content:JSON.stringify({...receipt(),id:'receipt',assignments:members})}),prose('after',5,acknowledgement)];
+ const snapshot=handoffSnapshot(cards);
+ for(const [index,member] of members.entries()){
+  const {roleId,workerId,sessionId}=member,roleName=index===0?'运维专员':'数据库专员';
+  snapshot.messages.push({id:`forward-${index}`,sessionId:'pilot',role:'assistant',text:'内部分派记录',createdAt:at(4),
+   dispatch:{id:'receipt',sourceMessageId:'user',workerId,roleId,sessionId,taskId:'task',roleName,channelSessionId:`channel-${index}`,instruction:'核对样例',action:'create'}});
+  snapshot.messages.push({id:`report-${index}`,sessionId:'pilot',role:'assistant',text:`样例 ${index+1} 已核对。`,createdAt:at(6+index),replyToMessageId:'user',
+   author:{kind:'specialist',name:roleName,roleId,workerId,sessionId,taskId:'task'}});
+ }
+ const original=JSON.stringify(snapshot),html=handoffHTML(snapshot);
+ assert.match(mainReply(html),new RegExp(acknowledgement));
+ assert.doesNotMatch(mainReply(html),new RegExp(preface));
+ assert.match(html,/data-conversation-entry="before" class="turn-process-prose/);
+ assert.match(mainReply(html),/2 份专员报告/);
+ assert.equal(JSON.stringify(snapshot),original);
+ assert.match(mainReply(handoffHTML({...snapshot,ai:{...snapshot.ai!,status:'running'}})),new RegExp(preface));
+ const foreign={...snapshot,messages:snapshot.messages.map(message=>message.dispatch?{...message,dispatch:{...message.dispatch,workerId:'another-worker'}}:message)};
+ assert.match(mainReply(handoffHTML(foreign)),new RegExp(preface));
+});
+
 
 test('corrected recipient recovery requires the host proof and matching later receipt in the same root and request',()=>{
  const failed=bound({...route('typo','failed',1),content:'记录不存在',data:{arguments:{event_id:'event',part_key:'host',action:'create',role_id:'mistyped',title:'检查',quote:'检查服务器',resource_ids:['host']},routingRecovery:{kind:'corrected_missing_specialist',recoveredBy:'corrected'}}});

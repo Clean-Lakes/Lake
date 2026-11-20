@@ -14,10 +14,10 @@ const operation=(title='route_work',status='running'):AICard=>({id:'route',at,ty
 const snapshot=(cards:AICard[]):SessionSnapshot=>({session:{id:'pilot',workspaceRole:'router'},messages:[{id:'u',sessionId:'pilot',role:'user',text:'再试试',createdAt:at}],resources:[],actions:[],ai:{session:'pilot',status:'running',turnStartedAt:at,cards,cardsOffset:0}} as SessionSnapshot);
 const render=(s:SessionSnapshot,mode:'conversation'|'activity'='conversation')=>renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode,assistantIdentity:{name:'Pilot',pilot:true}}));
 
-test('exact host coordination waits with water waves, keeps audit closed and never creates an execution reply bubble',()=>{
+test('exact host coordination shows thinking, keeps audit closed and never creates an execution reply bubble',()=>{
  for(const title of ['route_work','list_specialists','manage_specialist','search_super_tasks','read_super_object','work_begin','work_read','work_update','work_wait','work_finish'])for(const status of ['running','completed']){
   const card=operation(title,status),s=snapshot([card]),before=JSON.stringify(s),html=render(s);
-  assert.ok(html.includes('正在思考…')&&html.includes('turn-activity-mark'),title+' '+status);
+  assert.ok(html.includes('正在思考…')&&html.includes('status-text--active')&&!html.includes('turn-activity-mark'),title+' '+status);
   assert.ok(!html.includes('turn-progress-reply')&&!html.includes('turn-current-step'),title+' '+status);
   assert.ok(html.includes('class="turn-execution-details" aria-hidden="true" inert=""'),'internal records remain closed until explicitly requested');
   assert.ok(!html.includes('class="turn-execution-details is-open"'));

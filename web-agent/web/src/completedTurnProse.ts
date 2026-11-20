@@ -1,5 +1,6 @@
 import type {TranscriptEntry} from './timeline';
 import {quietCoordination} from './coordinationActivity';
+import {confirmedRouteReceipt,matchesPilotForwarding} from './routeDispatchPresentation';
 
 const normalProseStatuses = new Set(['running', 'completed', 'success', 'succeeded']);
 const rootOf = (entry: TranscriptEntry): string | undefined => {
@@ -33,6 +34,7 @@ export function trailingTurnReplyId(turn:TranscriptEntry[]):string|undefined {
 export function completedTurnInterimIds(turn: TranscriptEntry[], completed: boolean, presentedReplyId?:string, ended=false): Set<string> {
   const ids = new Set<string>();
   if ((!completed&&!presentedReplyId&&!ended) || turn.some(entry => entry.agentRun || entry.sre) || turn.filter(entry => entry.message?.role === 'user').length > 1) return ids;
+  const user = turn.find(entry => entry.message?.role === 'user')?.message;
   const tools = turn.filter(entry => entry.card && ['operation', 'shell'].includes(entry.card.type) && entry.card.title !== 'ask_user_question');
   for (const root of new Set(tools.map(rootOf))) {
     const sameExecution = (entry: TranscriptEntry) => rootOf(entry) === root && (!!entry.card || root === undefined);
@@ -47,9 +49,12 @@ export function completedTurnInterimIds(turn: TranscriptEntry[], completed: bool
         (entry.card?.status === 'completed' || entry.id === presentedReplyId || ended) && entry.card?.content?.trim())) final = index;
     });
     if (final <= lastTool || !ended && turn.slice(final + 1).some(entry => entry.card?.type === 'error' || entry.action)) continue;
+    const receipts = (completed||ended) && root && user
+      ? operations.map(entry => confirmedRouteReceipt(entry.card!)).filter(receipt => receipt !== undefined) : [];
     for (const [index, entry] of turn.slice(0, lastTool).entries()) {
       if (!sameExecution(entry) || !isAssistantProse(entry) || entry.card && !normalProseStatuses.has(entry.card.status)) continue;
-      if (turn.slice(index + 1, final).some(other => other.message?.author || other.message?.dispatch ||
+      if (turn.slice(index + 1, final).some(other => other.message?.author ||
+        other.message?.dispatch && !(user && receipts.some(receipt => matchesPilotForwarding(other.message!,user,receipt))) ||
         other.message?.role === 'system' || other.card && !sameExecution(other))) continue;
       ids.add(entry.id);
     }

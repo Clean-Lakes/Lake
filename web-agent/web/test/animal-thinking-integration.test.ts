@@ -92,7 +92,7 @@ test('typed queued and waiting states remain accurate and static even with an ol
 test('Pilot and ordinary Lake without a specialist identity keep their original water feedback',t=>{
  t.mock.method(Date,'now',()=>now);
  for(const assistantIdentity of [undefined,{name:'Pilot',pilot:true}]){
-  const html=render({assistantIdentity});assert.match(html,/turn-activity-mark/);assert.match(html,/正在思考/);assert.doesNotMatch(html,/animal-thinking-bubble/);
+  const html=render({assistantIdentity});assert.match(html,/status-text--active/);assert.doesNotMatch(html,/turn-activity-mark/);assert.match(html,/正在思考/);assert.doesNotMatch(html,/animal-thinking-bubble/);
  }
 });
 
