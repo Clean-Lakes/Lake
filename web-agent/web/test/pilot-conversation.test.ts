@@ -44,14 +44,29 @@ test('the report disclosure contains the execution process and duration',()=>{
  const completed:SpecialistConversation={...round,state:'completed',members:[round.members[0]!]};
  const html=renderToStaticMarkup(createElement(PilotConversationProgress,{round:completed,replies:['专员原话'],process}));
  assert.match(html,/aria-expanded="false" aria-controls="([^"]+-replies)"/);
- assert.match(html,/-replies" hidden=""><div class="pilot-conversation-process">/);
+ assert.match(html,/-replies" class="pilot-report-body" aria-hidden="true" inert=""><div class="pilot-report-items"><div class="pilot-conversation-process">/);
  assert.match(html,/查看执行过程/);
  assert.match(html,/>14 秒</);
  assert.ok(html.indexOf('查看执行过程')<html.indexOf('专员原话'));
  const failed:SpecialistConversation={...completed,members:[{...completed.members[0]!,state:'failed'}]};
  const withoutReports=renderToStaticMarkup(createElement(PilotConversationProgress,{round:failed,replies:[],process}));
- assert.doesNotMatch(withoutReports,/-replies" hidden=/);
+ assert.doesNotMatch(withoutReports,/-replies" class="pilot-report-body" aria-hidden=/);
  assert.match(withoutReports,/查看执行过程/);
+});
+
+test('the report list can fold at synthesis only after the delivered replies are present',()=>{
+ const summarizing:SpecialistConversation={...round,state:'summarizing',members:round.members.map(member=>({...member,state:'replied'}))};
+ const partial=renderToStaticMarkup(createElement(PilotConversationProgress,{round:summarizing,replies:['第一份','第二份']}));
+ assert.match(partial,/aria-expanded="true" aria-controls="[^"]+-replies"/);
+ const delivered=renderToStaticMarkup(createElement(PilotConversationProgress,{round:summarizing,replies:['第一份','第二份','第三份']}));
+ assert.match(delivered,/aria-expanded="false" aria-controls="[^"]+-replies"/);
+ assert.match(delivered,/3 份专员报告/);
+ assert.match(delivered,/Pilot 正在总结/);
+ const workspaceBehind=renderToStaticMarkup(createElement(PilotConversationProgress,{round,summaryDelivered:true,
+   replyMemberIds:new Set(['a','b']),replies:['第一份','第二份']}));
+ assert.match(workspaceBehind,/aria-expanded="false" aria-controls="[^"]+-replies"/);
+ assert.match(workspaceBehind,/2 份专员报告/);
+ assert.doesNotMatch(workspaceBehind,/位回复中|位排队/);
 });
 
 test('Lake Island follows dialogue even after the routing response, and stops when the round settles',()=>{

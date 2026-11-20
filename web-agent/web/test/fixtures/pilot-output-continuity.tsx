@@ -14,7 +14,7 @@ const opening = '我已安排专员核对样例';
 const conclusion = '样例记录一致，未发现遗漏。';
 const names = ['数据库专员','可观测性专员','发布专员','知识库专员','服务器运维排查专员'];
 if(dialogue)names.push('ACP 测试专员','河狸专员','巡检专员');
-type Stage = 'idle' | 'started' | 'working' | 'first-report' | 'closing' | 'finished';
+type Stage = 'idle' | 'started' | 'working' | 'first-report' | 'second-report' | 'closing' | 'finished';
 let stage: Stage = 'idle', cursor = 50;
 const streams = new Set<FixtureStream>();
 
@@ -38,7 +38,7 @@ function dialogueRound():SpecialistConversation {
   return {id:'dialogue-round',projectId:project,sessionId:router,sourceMessageId:source.id,title:'专员回应样例',
     state:stage==='finished'?'completed':settled?'summarizing':'running',createdAt:at(10),deadlineAt:at(120_000),summaryRequested:true,
     members:names.map((roleName,index)=>{
-      const replied=settled&&index!==7||stage==='first-report'&&index===0;
+      const replied=settled&&index!==7||stage==='first-report'&&index===0||stage==='second-report'&&index<2;
       const failed=settled&&index===7;
       return {id:`speaker-${index}`,roleId:`role-${index}`,roleName,sessionId:`speaker-session-${index}`,channelSessionId:`role-session-${index}`,
         state:replied?'replied':failed?'failed':stage==='started'&&index>1?'queued':'running',

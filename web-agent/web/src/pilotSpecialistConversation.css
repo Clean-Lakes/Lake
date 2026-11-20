@@ -3,20 +3,26 @@
 .pilot-specialist-reply-content { min-width:0; }
 .pilot-specialist-reply-body { display:flow-root; min-width:0; }
 .pilot-specialist-connection { display:block; margin-top:8px; color:var(--text-muted); font-size:12px; }
-.pilot-report-body { display:grid; grid-template-rows:1fr; min-width:0; }
+.pilot-report-fold { position:relative; min-width:0; }
+.pilot-report-body { display:grid; grid-template-rows:1fr; min-width:0; transition:grid-template-rows 200ms ease, margin-top 200ms ease, visibility 0s; }
 .pilot-report-items { display:grid; min-width:0; min-height:0; gap:24px; }
-.pilot-report-toggle:not([hidden]) + .pilot-report-body { margin-top:16px; transition:grid-template-rows 200ms ease, margin-top 200ms ease, visibility 0s; }
-.pilot-report-toggle:not([hidden]) + .pilot-report-body[aria-hidden=true] { grid-template-rows:0fr; margin-top:0; visibility:hidden; transition-delay:0s,0s,200ms; }
-.pilot-report-toggle:not([hidden]) + .pilot-report-body > .pilot-report-items { overflow:clip; overflow-clip-margin:4px; }
-.pilot-report-toggle:not([hidden]) { display:inline-flex; align-items:center; gap:8px; max-width:calc(100% - var(--reply-avatar-column,40px)); min-height:34px; margin-inline-start:var(--reply-avatar-column,40px); padding:3px 9px; border:0; border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); background:var(--surface-muted); color:var(--foreground); font-size:var(--font-size-process); }
+.pilot-report-strip:has(> .pilot-report-toggle):not([hidden]) + .pilot-report-body:not([aria-hidden=true]) { margin-top:16px; }
+.pilot-report-body[aria-hidden=true] { grid-template-rows:0fr; visibility:hidden; transition-delay:0s,0s,200ms; }
+.pilot-report-body > .pilot-report-items { overflow:clip; overflow-clip-margin:4px; }
+.pilot-report-fold[data-folding] > .pilot-report-body { display:block; overflow:clip; visibility:visible; transition:none; }
+.pilot-report-fold[data-folding] > .pilot-report-strip { overflow:clip; }
+.pilot-report-fold [data-avatar-landing] { visibility:hidden; }
+.pilot-report-flight { position:absolute; inset:0; z-index:1; pointer-events:none; }
+.pilot-report-flight > .super-role-avatar { position:absolute; transform-origin:top left; }
+.pilot-report-toggle { display:inline-flex; align-items:center; gap:8px; max-width:calc(100% - var(--reply-avatar-column,40px)); min-height:34px; margin-inline-start:var(--reply-avatar-column,40px); padding:3px 9px; border:0; border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); background:var(--surface-muted); color:var(--foreground); font-size:var(--font-size-process); }
 .pilot-report-toggle:hover { background:var(--surface-hover); }
 .pilot-report-toggle:focus-visible { outline:2px solid var(--focus-outline); outline-offset:2px; }
-.pilot-report-toggle:not([hidden]) > .task-specialist-avatars { display:flex; width:auto; min-height:0; gap:2px; }
+.pilot-report-toggle > .task-specialist-avatars { display:flex; width:auto; min-height:0; gap:2px; }
 .pilot-report-chevron { flex:none; color:var(--text-muted); transition:transform 160ms ease; }
 .pilot-report-toggle[aria-expanded=true] .pilot-report-chevron { transform:rotate(90deg); }
 .ai-chat-message .pilot-specialist-task-label { margin:-3px 0 4px; color:var(--text-muted); font-size:var(--font-size-toolbar); }
 @media (prefers-reduced-motion:reduce) {
  .pilot-specialist-reply-content { clip-path:none!important; }
- .pilot-report-toggle:not([hidden]) + .pilot-report-body { transition:none; }
+ .pilot-report-body { transition:none; }
  .pilot-report-chevron { transition:none; }
 }

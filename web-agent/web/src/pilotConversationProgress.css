@@ -1,11 +1,14 @@
 .pilot-conversation-progress {
   min-width:0;
-  max-width:var(--reply-body-width,720px);
-  margin-inline-start:var(--reply-avatar-column,40px);
+  max-width:calc(var(--reply-body-width,720px) + var(--reply-avatar-column,40px));
   color:var(--foreground);
   font-size:var(--font-size-process);
 }
 .pilot-conversation-bar { display:flex; flex-wrap:wrap; align-items:center; gap:4px 6px; min-width:0; }
+.pilot-conversation-progress :is(.pilot-conversation-bar,.pilot-conversation-process,.pilot-conversation-waiting,.pilot-report-items > .pilot-conversation-participants) {
+  margin-inline-start:var(--reply-avatar-column,40px);
+}
+.pilot-conversation-progress .pilot-report-items { gap:0; }
 .pilot-conversation-toggle,.pilot-conversation-static {
   display:inline-flex; align-items:center; gap:6px; min-height:31px; max-width:100%;
   padding:4px 8px; border:0; border-radius:var(--radius-settings-control); corner-shape:var(--corner-window);
@@ -29,7 +32,7 @@
 .pilot-conversation-process { margin-block-start:6px; }
 .pilot-conversation-meta { margin:0; color:var(--text-muted); }
 .pilot-conversation-replies:not(:empty) { display:grid; gap:12px; padding-block:10px 2px; }
-.pilot-conversation-replies { --reply-avatar-column:30px; --reply-avatar-size:20px; }
+.pilot-conversation-replies { --reply-avatar-size:20px; }
 .pilot-conversation-replies .response-identity { font-size:var(--font-size-process); }
 .pilot-conversation-participants { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; margin:0; padding:7px 0 1px; list-style:none; }
 .pilot-conversation-participants li { display:flex; flex-wrap:wrap; align-items:center; gap:2px 6px; min-width:0; color:var(--text-muted); }
