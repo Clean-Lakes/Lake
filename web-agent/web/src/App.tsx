@@ -978,7 +978,8 @@ function AppContent() {
     void pilotWorkspace.readChannel(channel);
   };
   const selectedSuperChannel=bootstrap?.backendRuntime==='typescript'?pilotWorkspace.workspace?.channels?.find(channel=>channel.sessionId===selectedSession?.id):undefined;
-  const codexSettingsProject=bootstrap?.backendRuntime==='typescript'?(selectedSuperChannel?.projectId??(selectedSession?.workspaceRole==='router'?selectedSession.projectId:undefined)):undefined;
+  const specialistComposer=bootstrap?.backendRuntime==='typescript'&&(!!selectedSuperChannel||selectedSession?.workspaceRole==='role');
+  const codexSettingsProject=bootstrap?.backendRuntime==='typescript'&&(specialistComposer||selectedSession?.workspaceRole==='router')?selectedSession?.projectId:undefined;
   const specialistModel=useSpecialistModel(selectedSuperChannel,settingsOpen,modelMenuOpen,codexSettingsProject);
   useEffect(()=>{
     const selected=inspector.selection;if(!selected||selected.sessionId!==sessionId)return;
@@ -989,7 +990,9 @@ function AppContent() {
     if(target)void inspectRoleTask(sessionId,target.worker,target.tab,selected.replySources);
   },[sessionId,inspector.selection,pilotWorkspace.workspace?.workers,activeSnapshot?.superagent?.task.taskId]);
   const pilotWorkActive=bootstrap?.backendRuntime==='typescript'&&!!superPilotActivity(pilotWorkspace.workspace,selectedSession,sessionConnected);
-  const currentAssignment=specialistModel.selected?{assignment:specialistModel.assignment(),checking:specialistModel.loading,blockedReason:specialistModel.blocker}:undefined;
+  const codexAssignment=specialistModel.assignment();
+  const currentAssignment=specialistComposer?{assignment:codexAssignment,checking:specialistModel.loading||!selectedSuperChannel?.roleRevision,
+    blockedReason:codexAssignment?undefined:specialistModel.message??"正在读取专员配置"}:undefined;
   const composerNeedsModel=!modelConfigured && !currentAssignment;
   const hasModelChoices=hasComposerModelChoices(modelMenu);
   const modelActionLabel=hasModelChoices?"选择模型":"连接模型";
@@ -1078,6 +1081,7 @@ function AppContent() {
   async function openModelMenu() {
     if (modelMenuOpen) return;
     setModelMenuOpen(true);
+    if (specialistComposer) return;
     setModelMenu(current=>({...current,loading:true,message:""}));
     try {
       const [available,current] = await Promise.all([api.availableModels(),api.bootstrap()]);
@@ -1296,7 +1300,7 @@ function AppContent() {
       else openSettings();
       return;
     }
-    if(currentAssignment?.checking||specialistModel.saving)return;
+    if(currentAssignment?.checking)return;
     if(currentAssignment?.blockedReason){setSettingsInitialTab("agents");setSettingsOpen(true);return;}
     if (!text && !imageDraft.length) return;
     if (imageDraft.length && !bootstrap?.supportsImageInput) { handleFailure(new Error("当前模型未启用图片输入，请切换到支持图片的模型后发送。")); return; }
@@ -1824,8 +1828,8 @@ function AppContent() {
             <Glyph name="shieldOutline" size={16}/>
           </button>}
           {activeSnapshot&&!pilotWorkspace.workspace?.active&&<LakePilotControl key={activeSnapshot.session.projectId} snapshot={activeSnapshot} onUpdated={refreshCurrent} disabled={!sessionConnected||turnActive} disabledReason={!sessionConnected?"连接恢复后可切换 Lake Pilot。":"本轮运行中，结束后可切换 Lake Pilot。"}/> }<div className="composer-status"><div className="model-switch-wrap">
-          <ComposerModelSelect key={sessionId} externalAgent={codexSettingsProject?{selected:specialistModel.selected,ready:!!specialistModel.agent?.assignmentReady,message:specialistModel.message,model:specialistModel.model,configurationOnly:!selectedSuperChannel}:undefined} onExternalAgentSelect={()=>{void specialistModel.select("codex").catch(handleFailure);}} onExternalAgentSettings={()=>{setModelMenuOpen(false);setSettingsInitialTab("agents");setSettingsOpen(true);}} contextUsage={activeSnapshot?.ai?{view:{session:activeSnapshot.ai.session,context:activeSnapshot.ai.context,usage:activeSnapshot.ai.usage},model:{modelId:bootstrap?.modelId},status:headerPilot?.status==='paused'?'idle':currentSessionStatus}:undefined} available={modelMenu} modelName={bootstrap?.modelName??null} selection={bootstrap?.modelSelection??undefined} configured={modelConfigured} open={modelMenuOpen} disabled={!!pendingOperation||reasoningSaving.size>0||specialistModel.saving} onOpenChange={open=>{if(open) void openModelMenu();else setModelMenuOpen(false);}} onSelect={model=>void (async()=>{if(selectedSuperChannel)await specialistModel.select("native");await switchModel(model);})().catch(handleFailure)} onSettings={()=>{setModelMenuOpen(false);void openSettings();}} reasoning={activeSnapshot?.ai ? {session:sessionId,modelId:bootstrap?.modelId,disabled:!sessionConnected || turnActive || !!pendingOperation,disabledReason:!sessionConnected?"连接恢复后可调整思考级别。":turnActive?"本轮运行中，结束后可调整思考级别。":"正在保存设置，请稍后调整思考级别。",onSaving:(saving,savingSession=sessionId) => setReasoningSaving(current=>{const next=new Set(current);if(saving)next.add(savingSession);else next.delete(savingSession);return next;})}:undefined}/>
-        </div>{!specialistModel.selected&&activeSnapshot?.ai && <ContextUsage view={activeSnapshot.ai} model={bootstrap || undefined} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} compact presentation="warning"/>}</div><div className="composer-send-actions">
+          <ComposerModelSelect key={sessionId} externalAgent={codexSettingsProject?{ready:!!specialistModel.agent?.assignmentReady,message:specialistModel.message,model:specialistModel.model,configurationOnly:!specialistComposer}:undefined} onExternalAgentSettings={()=>{setModelMenuOpen(false);setSettingsInitialTab("agents");setSettingsOpen(true);}} contextUsage={activeSnapshot?.ai?{view:{session:activeSnapshot.ai.session,context:activeSnapshot.ai.context,usage:activeSnapshot.ai.usage},model:{modelId:bootstrap?.modelId},status:headerPilot?.status==='paused'?'idle':currentSessionStatus}:undefined} available={modelMenu} modelName={bootstrap?.modelName??null} selection={bootstrap?.modelSelection??undefined} configured={modelConfigured} open={modelMenuOpen} disabled={!!pendingOperation||reasoningSaving.size>0} onOpenChange={open=>{if(open) void openModelMenu();else setModelMenuOpen(false);}} onSelect={model=>void switchModel(model).catch(handleFailure)} onSettings={()=>{setModelMenuOpen(false);void openSettings();}} reasoning={activeSnapshot?.ai ? {session:sessionId,modelId:bootstrap?.modelId,disabled:!sessionConnected || turnActive || !!pendingOperation,disabledReason:!sessionConnected?"连接恢复后可调整思考级别。":turnActive?"本轮运行中，结束后可调整思考级别。":"正在保存设置，请稍后调整思考级别。",onSaving:(saving,savingSession=sessionId) => setReasoningSaving(current=>{const next=new Set(current);if(saving)next.add(savingSession);else next.delete(savingSession);return next;})}:undefined}/>
+        </div>{!specialistComposer&&activeSnapshot?.ai && <ContextUsage view={activeSnapshot.ai} model={bootstrap || undefined} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} compact presentation="warning"/>}</div><div className="composer-send-actions">
           {sendFeedback && <span className="composer-send-feedback" role="status">{sendFeedback}</span>}
           {executionStoppable && hasMessageDraft && <button
             type="button"
@@ -1845,7 +1849,7 @@ function AppContent() {
             title={sendFeedback ?? (composerStop ? stopPresentation.title : composerNeedsModel ? `先${modelActionLabel}，草稿会保留` : currentAssignment?.blockedReason ? currentAssignment.blockedReason : `${currentAssignment ? "发送给 Codex" : queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`)}
             aria-busy={!!sendFeedback || stoppingTurn}
             onClick={composerStop ? () => void stopCurrentTurn() : undefined}
-            disabled={sendFeedback ? true : composerStop ? stoppingTurn || !sessionConnected : !sessionConnected || !!pendingOperation || reasoningSaving.has(sessionId) || modeSaving.has(sessionId) || stoppingTurn || currentAssignment?.checking || specialistModel.saving || ((modelConfigured || !!currentAssignment) && (!hasMessageDraft || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)))}
+            disabled={sendFeedback ? true : composerStop ? stoppingTurn || !sessionConnected : !sessionConnected || !!pendingOperation || reasoningSaving.has(sessionId) || modeSaving.has(sessionId) || stoppingTurn || currentAssignment?.checking || ((modelConfigured || !!currentAssignment) && (!hasMessageDraft || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)))}
           >{composerStop ? stopButtonContent : <Glyph name={composerSendGlyph} size={composerSendGlyph==="up"?17:16}/>}</button>
         </div></div></div></form></div>}
       </div>{activeSnapshot&&<SessionInspector key={inspectedSnapshot!.session.id} snapshot={inspectedSnapshot!} taskPage={isSpecialistTasks} worker={inspectedWorker} taskMetadata={isSpecialistTasks?<SpecialistTaskMetadata snapshot={inspectedSnapshot!} worker={inspectedWorker}/>:undefined} taskControls={isSpecialistTasks?<SpecialistTaskControls snapshot={inspectedSnapshot!} connected={sessionConnected}/>:undefined} resultsFooter={isSpecialistTasks&&roleResultRead?<ConversationReadMarker session={sessionId} state={roleTasks?.page.channel.messageRead} enabled={sessionConnected}/>:undefined} taskNavigation={activeSnapshot.session.workspaceRole==='role'&&roleWorkers.length>0?<SpecialistTaskSelect workers={roleWorkers} sessionId={inspectedSnapshot!.session.id} onTask={id=>void inspectRoleTask(id)}/>:processNavigation} readOnly={isLegacyHistory} connected={sessionConnected&&!modeSaving.has(inspectedSnapshot!.session.id)} onUpdated={()=>{if(roleInspection)void refreshRoleInspection();else void refreshCurrent();}}/>}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}

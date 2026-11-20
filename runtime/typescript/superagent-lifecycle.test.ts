@@ -11,6 +11,7 @@ import {digest} from "./tasks";
 import {HttpError} from "./store";
 import {ExternalAgentRegistry} from './acp/registry';
 import {codexModels} from './acp/codex-profile';
+const {enableNativeSpecialistFixture}=require('./test-fixtures/native-specialists.cjs');
 
 // Exercise the actual host and SQLite ledger with a controlled SDK boundary.
 // No model, credential, remote server or existing Dev data is accessed.
@@ -24,6 +25,7 @@ async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date
     send: async (sessionId: string, _text: string, options: any) => { requests.push({ sessionId, input: options.input.startsWith('{')?JSON.parse(options.input):options.input,sourceMessageIds:options.sourceMessageIds }); },
     steer: async (_sessionId:string,_input:string,_inputId:string) => { steering++; return true; }, abort: async (sessionId:string) => {aborted.push(sessionId);} };
   const host = new LakeSuperagent(store, agents as any, undefined, undefined, undefined, undefined, undefined, clock), internal = host as any;
+  enableNativeSpecialistFixture(host);
   internal.schedule = () => {};
   t.after(async () => { await host.close(); store.db.close(); await rm(home, { recursive: true, force: true }); });
   const project = store.createProject("isolated lifecycle"), router = host.ensure(project.id).routerSessionId;
@@ -345,9 +347,9 @@ test('Pilot shared dialogue runs independent replies and an explicitly requested
   const f=await fixture(t),event=await f.admit('全部干员亲自回应，最后由 Pilot 综合意见。');
   const invite=f.host.profile(f.router)!.tools.find(entry=>entry.metadata.name==='convene_specialists')!;
   const input={event_id:event.id,part_key:'attendance',quote:event.payload,instruction:'请每位干员亲自回应',audience:'all',summarize:true};
-  const round:any=await invite.handler(input,{} as any);
+  const round:any=await invite.handler(input,{abortSignal:new AbortController().signal} as any);
   assert.equal(round.members.length,1);assert.equal(round.members[0].roleId,f.role.id);
-  assert.equal((await invite.handler(input,{} as any) as any).id,round.id);
+  assert.equal((await invite.handler(input,{abortSignal:new AbortController().signal} as any) as any).id,round.id);
   assert.equal(f.requests.length,0);
   f.settleRouter();await f.activate();
   assert.equal(f.requests.length,1);assert.equal(f.requests[0].sessionId,round.members[0].sessionId);
@@ -368,7 +370,7 @@ test('Pilot shared dialogue runs independent replies and an explicitly requested
 test('Pilot stop cancels dialogue speakers and prevents a late response or summary',async t=>{
   const f=await fixture(t),event=await f.admit('全部干员报数！');
   const invite=f.host.profile(f.router)!.tools.find(entry=>entry.metadata.name==='convene_specialists')!;
-  const round:any=await invite.handler({event_id:event.id,part_key:'attendance',quote:event.payload,instruction:'报数',audience:'all'},{} as any);
+  const round:any=await invite.handler({event_id:event.id,part_key:'attendance',quote:event.payload,instruction:'报数',audience:'all'},{abortSignal:new AbortController().signal} as any);
   f.settleRouter();await f.activate();await f.host.stopWorkspace(f.project.id,f.router);
   f.store.put('views',round.members[0].sessionId,{...f.store.view(round.members[0].sessionId),status:'completed'});
   f.host.settled(round.members[0].sessionId,{response:'迟到的报到'});await f.activate();
@@ -989,6 +991,28 @@ test("cold restart and unrelated conversation never resume an interrupted worker
     assert.equal(f.worker().state, "parked"); assert.equal(recovered.ledger.get(initial.taskId).status, "paused");
     assert.equal(f.requests.length, 1); assert.equal(f.store.list("superAcceptance").length, 0);
   } finally { await recovered.close(); }
+});
+
+test('a queued legacy Lake Agent assignment is parked and cannot be resumed as Codex', async t => {
+  const f = await fixture(t);
+  const event = await f.admit('检查当前项目文件。');
+  const {taskId} = f.route(event, {action: 'create', title: '检查当前项目文件', role_id: f.role.id});
+  f.settleRouter();
+  const original = f.worker(taskId);
+  await f.host.close();
+
+  const host = new LakeSuperagent(f.store, f.agents as any);
+  try {
+    await (host as any).pump();
+    const goal = host.ledger.get(taskId);
+    assert.equal(goal.status, 'paused');
+    assert.equal(f.worker(taskId).state, 'parked');
+    assert.deepEqual(f.worker(taskId).roleSnapshot, original.roleSnapshot);
+    assert.equal(f.requests.filter(request => request.sessionId === original.sessionId).length, 0);
+    await assert.rejects(host.control(goal.sessionId, {goalId: goal.id, revision: goal.revision, command: 'resume'}), /发起新的 Codex 任务/);
+  } finally {
+    await host.close();
+  }
 });
 
 for (const limit of ["deadline"]) test(`deferred completion preserves the original ${limit} limit and reports it`, async (t) => {

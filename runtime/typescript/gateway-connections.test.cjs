@@ -5,11 +5,13 @@ const {tmpdir}=require('node:os');
 const {join}=require('node:path');
 process.env.LAKE_TS_IMPORT_ONLY='1';
 const {startLakeServer}=require('../../bin/lake-runtime/server.cjs');
+const {enableNativeSpecialistFixture} = require('./test-fixtures/native-specialists.cjs');
 
 async function fixture(t){
  const home=await mkdtemp(join(tmpdir(),'lake-channel-http-')),web=join(home,'web');
  await mkdir(web);await writeFile(join(web,'index.html'),'<html>channel transport fixture</html>');
  const app=await startLakeServer({home,data:join(home,'custom data'),port:0,staticRoot:web});
+ enableNativeSpecialistFixture(app.superagent);
  // These transport/admission tests hold scheduling; the gateway runtime suite
  // separately exercises real Pilot and Worker turns with a model fixture.
  app.superagent.schedule=()=>{};

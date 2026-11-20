@@ -4,6 +4,7 @@ const { mkdtemp, mkdir, writeFile, readFile, access } = require("node:fs/promise
 const { tmpdir } = require("node:os");
 const { join } = require("node:path");
 const { createServer } = require("node:http");
+const { enableNativeSpecialistFixture } = require('./test-fixtures/native-specialists.cjs');
 process.env.LAKE_TS_IMPORT_ONLY = "1";
 const { startLakeServer, previewLegacyMigration, rollbackMigration, sessionArchiveName, legacySessionArchiveName } = require("../../bin/lake-runtime/server.cjs");
 
@@ -149,6 +150,7 @@ async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = 
   let app = await startLakeServer(options),usesCodexFixture=false;
   const explicitNativeRoles=()=>{
     if(!nativeSpecialists)return;
+    enableNativeSpecialistFixture(app.superagent);
     // These existing regression scenarios explicitly exercise native Workers.
     // Dedicated legacy-Codex scenarios opt out and verify compatibility defaults.
     const put=app.store.put.bind(app.store);
@@ -971,7 +973,7 @@ function superReply(request, mode, home) {
         assert.ok(!schema.required.includes('name')&&!schema.required.includes('duties'),'an avatar-only update must not force resubmission of other configuration');
         const role=result('list_specialists').items.find(role=>role.name==='牛马专员');
         return call('manage_specialist',{event_id:event.id,part_key:'configuration',action:create?'create':'update',quote:event.text,
-          ...(create?{role_key:'beaver-specialist',name:'牛马专员',duties:'核实当前项目证据',execution:{kind:'native'}}:{role_id:role.id,expected_revision:role.revision}),
+          ...(create?{role_key:'beaver-specialist',name:'牛马专员',duties:'核实当前项目证据'}:{role_id:role.id,expected_revision:role.revision}),
           avatar_id:reset?'auto':result('list_specialist_avatars').items[0].id,
           ...(event.text.includes('Codex')?{execution:{kind:'acp',agent:'codex'}}:{})});
       }
@@ -988,7 +990,7 @@ function superReply(request, mode, home) {
     // Subagent regression scenarios require a native parent, even when their
     // separate Codex child is enabled in the random specialist pool.
     if (!names.includes("manage_specialist")) return call("manage_specialist", { event_id: event.id, part_key: "specialist", action: "create", role_key: "project-inspector", name: "项目检查员", duties: "检查当前项目工作区，按实际证据报告", quote: event.text,
-      ...(mode.startsWith('super-subagent')?{execution:{kind:'native'}}:{}) });
+      ...(mode.startsWith('super-subagent')?{model_id:'fixture'}:{}) });
     if (mode === "super-meta") return { content: "已创建长期专员，没有创建执行任务。" };
     if (!names.includes("list_specialists")) return call("list_specialists", {});
     const roleId = request.messages.slice(currentStart).filter((message) => message.role === "tool").map(content).join("\n").match(/"id"\s*:\s*"([a-f0-9]{64})"/)?.[1];
@@ -4332,17 +4334,22 @@ test('disabling the project ACP profile revokes a pending bridge write without a
  assert.equal(f.app.store.list('superAcceptance').length,0);
 });
 
-test('legacy specialists without an override retain Codex and never silently create an unconfigured native task',{timeout:30000},async t=>{
+test('a legacy Lake Agent specialist routes new work to Codex and rejects native assignment',{timeout:30000},async t=>{
  const f=await fixture(t,'super-acp-worker',false,false),path=`/api/projects/${f.project.id}`;
  const project=await f.api(path+'/superagent','POST',{});
- const role={id:'e'.repeat(64),projectId:f.project.id,roleKey:'project-inspector',name:'项目检查员',duties:'检查实际项目',revision:1};
+ const role={id:'e'.repeat(64),projectId:f.project.id,roleKey:'project-inspector',name:'项目检查员',duties:'检查实际项目',revision:1,
+   execution:{kind:'native',model:{providerId:'legacy-provider',modelId:'legacy-model'}}};
  f.app.store.put('superRoles',role.id,role);f.app.superagent.ensureChannel(role);
  const channel=(await f.api(path+'/superagent')).channels[0];assert.equal(channel.execution.agent,'codex');
+ assert.equal(channel.execution.model,undefined);
+ await f.api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:1,execution:{kind:'native'}},400);
+ await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',{text:'检查项目',assignment:{requestId:'reject-native-specialist',roleRevision:1,execution:{kind:'native'}}},400);
  await f.api(`/api/sessions/${channel.sessionId}/messages`,'POST',{text:'检查项目',assignment:{requestId:'default-codex-unready',roleRevision:1,execution:channel.execution}},409);
  assert.equal(f.app.store.list('superWorkers').length,0);
  await f.enableCodexFixture();await f.api(path+'/external-agents/codex','PUT',{enabled:true,expectedRevision:0});await f.api(path+'/external-agents/codex/probe','POST',{});
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'请让项目检查员读取实际项目工作区。'},202);
  const result=await settledSubagentTask(f);assert.equal(result.workers[0].execution.backend.agent,'codex');assert.equal(result.workers[0].task.acceptanceState,"not_evaluated");
+ assert.deepEqual(f.app.store.get('superRoles',role.id).execution,role.execution);
  await f.api(path+'/external-agents/codex','PUT',{enabled:false,expectedRevision:1});
  assert.equal(f.app.store.list('superWorkers')[0].roleSnapshot.execution.revision,1,'new defaults cannot modify an existing frozen Worker');
 });

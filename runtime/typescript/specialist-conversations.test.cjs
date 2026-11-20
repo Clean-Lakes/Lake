@@ -6,6 +6,7 @@ const {tmpdir}=require('node:os');
 const {join}=require('node:path');
 process.env.LAKE_TS_IMPORT_ONLY='1';
 const {startLakeServer}=require('../../bin/lake-runtime/server.cjs');
+const {enableNativeSpecialistFixture} = require('./test-fixtures/native-specialists.cjs');
 
 const content=message=>typeof message.content==='string'?message.content:(message.content??[]).map(part=>part.text??'').join('');
 async function until(read,predicate){
@@ -50,6 +51,7 @@ async function fixture(t,{count=6,failRole,hold=false,acp=false,summarize=false,
  const codexHome=join(home,'local-codex');
  if(acp){await mkdir(codexHome);await writeFile(join(codexHome,'config.toml'),'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "max"\n');await writeFile(join(codexHome,'auth.json'),JSON.stringify({tokens:{access_token:'synthetic-protocol-token'}}),{mode:0o600});}
  const app=await startLakeServer({home,codexHome,data:join(home,'data'),port:0,staticRoot:web});
+ if(!acp)enableNativeSpecialistFixture(app.superagent);
  t.after(async()=>{release();await app.close();await new Promise(resolve=>provider.close(resolve));await rm(home,{recursive:true,force:true});});
  const api=async(path,method='GET',body,expected=200)=>{
   const response=await fetch(app.origin+path,{method,headers:{Authorization:`Bearer ${app.token}`,...(body===undefined?{}:{'Content-Type':'application/json'})},body:body===undefined?undefined:JSON.stringify(body)});
@@ -126,25 +128,26 @@ test('eight streaming speakers publish only lifecycle changes and real replies t
  assert.equal(channelNotifications.flat().filter(event=>event.type==='message').length,7);
 });
 
-test('configured ACP and native specialists reply together through separate identities without creating business tasks or MCP transports',async t=>{
+test('all specialists, including a legacy native role, reply through separate Codex sessions',async t=>{
  const f=await fixture(t,{count:3,acp:true});await f.start();
  const state=await until(()=>f.api(f.path),state=>state.conversations?.[0]?.state==='completed'),round=state.conversations[0];
  assert.deepEqual(round.members.map(member=>member.state),['replied','replied','replied']);
- const runs=f.app.store.list('acpRuns');assert.equal(runs.length,2);
- assert.equal(new Set(runs.map(run=>run.externalSessionId)).size,2);
+ const runs=f.app.store.list('acpRuns');assert.equal(runs.length,3);
+ assert.equal(new Set(runs.map(run=>run.externalSessionId)).size,3);
  for(const run of runs){
   assert.equal(run.purpose,'conversation');assert.equal(run.conversationId,round.id);assert.equal(run.taskId,undefined);
   const member=round.members.find(member=>member.sessionId===run.sessionId);assert.ok(member);
   assert.equal(run.workerId,member.id);assert.equal(run.requestedModel,'gpt-6.1-sol');assert.equal(run.state,'completed');
  }
  assert.ok(f.launches.every(launch=>launch.mcp===undefined));
- assert.equal(f.launches.filter(launch=>launch.model==='gpt-6.1-sol').length,2);
+ assert.equal(f.launches.filter(launch=>launch.model==='gpt-6.1-sol').length,3);
  const replies=f.app.store.messages(f.pilot.routerSessionId).filter(message=>message.conversation?.id===round.id);
  assert.equal(replies.length,3);assert.ok(replies.every(message=>message.conversation.kind==='reply'));
- assert.equal(replies.filter(message=>message.author?.execution?.kind==='acp').length,2);
+ assert.equal(replies.filter(message=>message.author?.execution?.kind==='acp').length,3);
  for(const table of ['superGoals','superWorkers','superOperations','superAcceptance'])assert.equal(f.app.store.list(table).length,0,table);
  const native=f.requests.filter(request=>request.messages.some(message=>message.role==='system'&&content(message).includes('personally responding in a shared conversation')));
- assert.equal(native.length,1,'ACP speakers must not be silently routed through the native model');
+ assert.equal(native.length,0);
+ assert.equal(f.app.store.get('superRoles',f.roles.at(-1).id).execution.kind,'native','the stored legacy binding is retained');
 });
 
 test('only an explicit request for synthesis creates a separate Pilot summary with requested provenance',async t=>{

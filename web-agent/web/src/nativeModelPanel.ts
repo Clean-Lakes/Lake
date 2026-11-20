@@ -1,7 +1,7 @@
 import {useEffect,useId,useLayoutEffect,useRef,useState,type RefObject} from "react";
 import type {ComposerModelSelectProps} from "./ComposerModelSelect";
 import type {ReasoningSelectorProps} from "./ReasoningSelector";
-import {codexModelValue,codexSettingsValue} from './composerAgentModel';
+import {codexSettingsValue} from './composerAgentModel';
 
 type Bridge={role:"workbench"|"panel";command:(message:Record<string,unknown>)=>Promise<unknown>};
 declare global {interface Window {lakeNativeModelPanel?:Bridge;}}
@@ -37,8 +37,8 @@ export function useNativeModelPanel(props:ComposerModelSelectProps,anchor:RefObj
       if(detail.kind==="settings") current.onSettings();
       if(detail.kind==="close") {current.onOpenChange(false);if(detail.restoreFocus) anchor.current?.querySelector("button")?.focus({preventScroll:true});}
       if(detail.kind==="select"&&!current.disabled) {
-        if(detail.value===codexModelValue&&current.externalAgent&&!current.externalAgent.configurationOnly){current.onExternalAgentSelect?.();current.onOpenChange(false);return;}
         if(detail.value===codexSettingsValue&&current.externalAgent){current.onExternalAgentSettings?.();current.onOpenChange(false);return;}
+        if(current.externalAgent&&!current.externalAgent.configurationOnly)return;
         const row=current.available.entries?.find(entry=>JSON.stringify([entry.providerId,entry.modelId])===detail.value);
         if(row) current.onSelect(row);
         else if(!current.available.entries&&current.available.models.includes(detail.value||"")) current.onSelect(detail.value!);

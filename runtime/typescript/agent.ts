@@ -711,6 +711,7 @@ export class LakeAgents {
       throw new HttpError(409, "同一任务累计最多 7 个临时子智能体；请复用已有结果继续原任务");
     if(request.agentType==='runtime-acp'||previous?.execution?.kind==='acp'&&previous.execution.agent!=='codex')throw new HttpError(409,'该子任务的外部 Agent 已移除，不能切换或重放旧执行');
     const externalChild=request.agentType==='codex-acp'?'codex':undefined;
+    if(profile.execution?.kind==='acp'&&!externalChild)throw new HttpError(409,'Codex 专员的子任务也必须使用 Codex');
     if(previous&&(previous.execution?.kind==='acp'?previous.execution.agent!==externalChild:!!externalChild))throw new HttpError(409,'已有子任务不能切换执行后端');
     const run: AgentRun = previous ?? { id: request.agentId, sessionId: parentId, source: externalChild?'acp_subagent':'native_subagent',execution:externalChild?{kind:'acp',agent:externalChild}:{kind:'native'},
       taskId: profile.taskId, workerId: profile.workerId, childSessionId: request.sessionId,
@@ -962,8 +963,10 @@ export class LakeAgents {
     const childPort = profile?.subagents && runtimeTasks ? createExploreSubagentPort({
       runtimeTaskRegistry: runtimeTasks, outputRootDir: join(this.store.data, "subagents"),
       profiles: [
-        { ...createBuiltInGeneralPurposeAgentProfile(), tools: profile.allowlist.filter((name) => !childForbiddenTools.has(name)) },
-        { ...createBuiltInExploreAgentProfile(), tools: profile.allowlist.filter((name) => !childForbiddenTools.has(name) && !["Write", "Edit", "call_mcp_tool"].includes(name)) },
+        ...(externalWorker ? [] : [
+          { ...createBuiltInGeneralPurposeAgentProfile(), tools: profile.allowlist.filter((name) => !childForbiddenTools.has(name)) },
+          { ...createBuiltInExploreAgentProfile(), tools: profile.allowlist.filter((name) => !childForbiddenTools.has(name) && !["Write", "Edit", "call_mcp_tool"].includes(name)) },
+        ]),
         ...(hasExternal?externalAgents.map(agent=>({...createBuiltInGeneralPurposeAgentProfile(),name:'codex-acp',description:`Delegate one bounded child task to ${agent.name} through its local CLI. Its host tools stay scoped to this task.`,injectAgentsMd:false,tools:profile.allowlist.filter(name=>!childForbiddenTools.has(name)&&name!=='run_external_agent')})):[]),
       ],
       getAllowedTools: () => profile.allowlist.filter((name) => !childForbiddenTools.has(name) && !["Write", "Edit", "call_mcp_tool"].includes(name)),
