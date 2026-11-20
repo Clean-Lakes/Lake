@@ -52,6 +52,7 @@ import {workGoalPresentation} from './workGoalPresentation';
 import {ComposerMentions,useMentionExtensions,mentionOptionId} from "./ComposerMentions";
 import {LakePilotControl} from './LakePilotControl';
 import {PilotHeaderState} from './PilotHeaderState';
+import {PilotActiveSpecialists} from './PilotActiveSpecialists';
 import {pilotIslandModel} from './pilotIslandModel';
 import './pilotIsland.css';
 import './pilot.css';
@@ -1558,6 +1559,7 @@ function AppContent() {
   const presentedReports=conversationMode==='conversation'&&pilotReports?.sessionId===sessionId?pilotReports?.ids:
     new Set(conversationMode==='conversation'?[]:activeSnapshot?.messages.map(message=>message.id));
   const pilotHeaderActivity=selectedSuperPilot?superPilotActivity(pilotWorkspace.workspace,selectedSession,pilotActivityConnected,presentedReports):null;
+  const pilotParticipants=sessionHeader?pilotHeaderActivity?.participants:undefined;
   const roleRunningCount=specialistTaskActivity(roleWorkers).runningCount;
   const superHeaderPresentation=pilotHeaderActivity??(selectedSuperChannel&&roleReplyActivity?.sessionId===sessionId&&roleReplyActivity.state!=='idle'?{status:roleReplyActivity.state==='running'?'investigating' as const:'waiting_approval' as const,label:roleReplyActivity.state==='running'?(roleRunningCount>1?`${roleRunningCount} 项执行中`:'处理中'):'需要处理'}:superTaskHeaderPresentation(activeSnapshot?.superagent?.task??selectedSuperWorker?.task,activeSnapshot)??currentSessionPresentation);
   const selectedRoleName=selectedSuperChannel?.roleName??selectedSuperWorker?.roleName??pilotWorkspace.workspace?.channels?.find(channel=>channel.roleId===activeSnapshot?.superagent?.roleId)?.roleName;
@@ -1591,8 +1593,16 @@ function AppContent() {
           <button type="button" className="crumb-project grafana-project-crumb" title="返回工作台"
             onClick={() => navigate({sessionId, resourceId: null})}>{projectList.find(project => project.id === selectedResource.projectId)?.name ?? "项目"}</button>
         </div> :
-          <div className="breadcrumbs">{!sessionHeader&&<><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span></>}<strong>{superHeaderIdentity?<SuperRoleAvatar name={selectedRoleName} roleId={selectedRoleId} pilot={!!selectedSuperPilot} size={20} motion={pilotHeaderActivity?.motion??conversationAvatarMotion(avatarActivity?.state??'idle',activeSnapshot?.superagent?.task?.state??selectedSuperWorker?.task.state)}/>:<Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession ? selectedSession.icon??'chat' : 'document'} size={15}/>}<span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{superHeaderIdentity?(selectedRoleName??'Pilot'):selectedResource?.name ?? selectedSession?.title ?? "概览"}</span>{superHeaderIdentity&&!selectedSuperPilot&&<AgentBackendLogo backend={selectedAgentBackend}/>}</strong></div>}
-        {selectedSession && !selectedResource && !isPlansPage && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} mode={headerPilotMode} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}} normal={<SessionStateBadge session={selectedSession} {...superHeaderPresentation}/>} participants={pilotHeaderActivity?.participants} onInspect={targetId => {
+          <div className={`breadcrumbs${pilotParticipants?.length?' has-pilot-participants':''}`}>
+            {!sessionHeader&&<><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span></>}
+            <strong>
+              {superHeaderIdentity?<SuperRoleAvatar name={selectedRoleName} roleId={selectedRoleId} pilot={!!selectedSuperPilot} size={20} motion={pilotHeaderActivity?.motion??conversationAvatarMotion(avatarActivity?.state??'idle',activeSnapshot?.superagent?.task?.state??selectedSuperWorker?.task.state)}/>:<Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession ? selectedSession.icon??'chat' : 'document'} size={15}/>}
+              <span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{superHeaderIdentity?(selectedRoleName??'Pilot'):selectedResource?.name ?? selectedSession?.title ?? "概览"}</span>
+              {superHeaderIdentity&&!selectedSuperPilot&&<AgentBackendLogo backend={selectedAgentBackend}/>}
+            </strong>
+            {pilotParticipants&&<PilotActiveSpecialists key={sessionId} participants={pilotParticipants}/>}
+          </div>}
+        {selectedSession && !selectedResource && !isPlansPage && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} mode={headerPilotMode} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}} normal={<SessionStateBadge session={selectedSession} {...superHeaderPresentation}/>} onInspect={targetId => {
           if(!activeSnapshot||!headerPilot)return;
           const task=activeSnapshot.sre?.tasks.find(t=>t.id===headerPilot.taskId);
           const entry=task?.messages?.find(m=>`sre-message-${m.id}`===targetId);

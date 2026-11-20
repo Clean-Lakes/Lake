@@ -80,12 +80,14 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const badgeStyle=badge?getComputedStyle(badge):null;
    // Budget the shared padding token rather than constrained badge geometry.
    const badgePadding=parseFloat(getComputedStyle(identity).getPropertyValue('--island-badge-padding'));
-   const badgeWidth=badgeStyle?textWidth(badge!.querySelector('.session-state-label'))+(badge!.querySelector('.session-state-icon')?.getBoundingClientRect().width??0)+parseFloat(badgeStyle.columnGap||'0')+2*badgePadding+parseFloat(badgeStyle.borderLeftWidth)+parseFloat(badgeStyle.borderRightWidth):0;
+   const badgeLabelWidth=textWidth(badge?.querySelector('.session-state-label')??null)+(parseFloat(badgeStyle?.columnGap??'')||0);
+   const badgeIcon=badge?.querySelector('.session-state-icon');
+   // A spinning icon's painted bounds change as it rotates. Use its layout width.
+   const badgeIconWidth=badgeIcon?(parseFloat(getComputedStyle(badgeIcon).width)||0):0;
+   const badgeWidth=badgeStyle?badgeLabelWidth+badgeIconWidth+2*badgePadding+parseFloat(badgeStyle.borderLeftWidth)+parseFloat(badgeStyle.borderRightWidth):0;
    const disclosure=state?.querySelector<HTMLElement>('.header-inspector-toggle');
-   const roster=state?.querySelector<HTMLElement>('.pilot-active-specialists-trigger');
    const stateGap=state?parseFloat(getComputedStyle(state).columnGap||'0'):0;
-   const normalStateWidth=badge?badgeWidth+(disclosure?disclosure.getBoundingClientRect().width+stateGap:0)+
-    (roster?Number(roster.dataset.preferredWidth)+stateGap:0):state?.getBoundingClientRect().width??0;
+   const normalStateWidth=badge?badgeWidth+(disclosure?disclosure.getBoundingClientRect().width+stateGap:0):state?.getBoundingClientRect().width??0;
    const titleIcon=title?.previousElementSibling;
    const titleIconWidth=titleIcon ? titleIcon.getBoundingClientRect().width+parseFloat(getComputedStyle(title!.parentElement!).columnGap||'0') : 0;
    const pilotWidth=identity.querySelector('.header-pilot-state.is-visible')?parseFloat(getComputedStyle(identity).getPropertyValue('--pilot-state-width')):0;
@@ -114,7 +116,17 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const inset=parseFloat(islandStyle.getPropertyValue('--island-header-inset'));
    const gap=parseFloat(islandStyle.getPropertyValue('--island-header-gap'));
    const taskControlWidth=taskTrigger?.offsetWidth??0;
-   const conversationWidth=titleWidth+(pilotWidth||normalStateWidth)+taskControlWidth+2*inset+gap*(taskTrigger?2:1)+parseFloat(islandStyle.borderLeftWidth)+parseFloat(islandStyle.borderRightWidth);
+   const roster=identity.querySelector<HTMLElement>('.pilot-active-specialists-trigger');
+   const rosterWidth=Number(roster?.dataset.preferredWidth??0);
+   const rosterGap=roster?.parentElement?(parseFloat(getComputedStyle(roster.parentElement).columnGap)||0):0;
+   const preferredWidth=titleWidth+rosterWidth+rosterGap+(pilotWidth||normalStateWidth)+taskControlWidth+2*inset+gap*(taskTrigger?2:1)+parseFloat(islandStyle.borderLeftWidth)+parseFloat(islandStyle.borderRightWidth);
+   // Choose the avatar count from the pane budget, independent of the resulting island width.
+   const compactRoster=!!roster&&available<Math.ceil(preferredWidth);
+   const rosterFittedWidth=compactRoster?preferredWidth-rosterWidth+Number(roster.dataset.compactWidth):preferredWidth;
+   const compactStatus=compactRoster&&!!badge&&!pilotWidth&&available<Math.ceil(rosterFittedWidth);
+   identity.toggleAttribute('data-compact-pilot-roster',compactRoster);
+   identity.toggleAttribute('data-compact-pilot-status',compactStatus);
+   const conversationWidth=rosterFittedWidth-(compactStatus?badgeLabelWidth:0);
    const layout=workbenchIslandLayout({
     conversation:{left,width:available,inset:0},
     terminal:terminalPane,
