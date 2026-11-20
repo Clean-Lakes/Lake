@@ -1256,7 +1256,6 @@ input[type="checkbox"]{ accent-color: var(--primary); }
  .composer-foot[data-running] .composer-model-select.app-select > .app-select-trigger {
   justify-content:center; width:30px; padding:0;
  }
- .composer-foot[data-running] .composer-model-select.app-select > .app-select-trigger > .app-select-icon { display:flex; }
  .composer-foot[data-running] .composer-model-select .app-select-trigger > :is(.app-select-value,.app-select-chevron) { display:none; }
  .composer-foot[data-running] .composer-model-setup { justify-content:center; width:30px; padding:0; }
  .composer-foot[data-running] .composer-model-setup > span { display:none; }

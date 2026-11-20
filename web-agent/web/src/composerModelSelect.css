@@ -7,7 +7,6 @@
   border-radius: var(--radius-composer-action);
   corner-shape: var(--corner-window);
 }
-.composer-foot .composer-model-select.app-select > .app-select-trigger > .app-select-icon { display: none; }
 .composer-model-select.app-select > .app-select-trigger > .app-select-chevron { width: 11px; height: 11px; stroke-width: 2.2; }
 .composer-model-select.app-select > .app-select-trigger:hover:not(:disabled),.composer-model-select.app-select > .app-select-trigger[aria-expanded="true"] { background: var(--surface-hover); }
 .composer-model-select.app-select > .app-select-trigger[aria-expanded="true"]:not(:focus-visible) { outline: none; }
