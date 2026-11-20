@@ -3,6 +3,7 @@ import {conversationActivity,conversationAvatarMotion,type AvatarMotion} from '.
 import {ReplyIdentity,type AssistantIdentity} from './ReplyIdentity';
 import type {SpecialistReplyAuthor,SuperTask,SuperWorkspace} from '../../shared/contracts';
 import {PilotSpecialistConversation} from './PilotSpecialistConversation';
+import type {SubscribePilotWorkerEvents} from './PilotWorkspace';
 import {PilotReportGroup} from './PilotReportGroup';
 import {PilotReportFoldScope} from './PilotReportFold';
 import {usePilotSummaryHandoff} from './usePilotSummaryHandoff';
@@ -146,7 +147,7 @@ export function TranscriptMessage({message,sessionId,resources,arrive=false,pend
           {message.role==='user'&&!!message.text&&<UserMessageCopy text={message.text}/>}
         </div>;
 }
-type TranscriptProps = {connected?:boolean;proseInChannel?:boolean;pilotWorkspace?:SuperWorkspace|null;pilotConnected?:boolean;presentedPilotReports?:ReadonlySet<string>;onPilotReportsPresented?:(sessionId:string,ids:readonly string[])=>void;superTask?:SuperTask;onSpecialist?:(author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:InspectSpecialist;assistantIdentity?:AssistantIdentity;onOpenMemory?:()=>void;onOpenPlans?:()=>void; refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean};
+type TranscriptProps = {connected?:boolean;proseInChannel?:boolean;pilotWorkspace?:SuperWorkspace|null;pilotConnected?:boolean;subscribeWorkerEvents?:SubscribePilotWorkerEvents;presentedPilotReports?:ReadonlySet<string>;onPilotReportsPresented?:(sessionId:string,ids:readonly string[])=>void;superTask?:SuperTask;onSpecialist?:(author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:InspectSpecialist;assistantIdentity?:AssistantIdentity;onOpenMemory?:()=>void;onOpenPlans?:()=>void; refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean};
 export function AITranscript(props: TranscriptProps) {
   const {snapshot} = props;
   const resources = useMemo(() => (snapshot.resources ?? []).filter(resource => !resource.projectId || resource.projectId === snapshot.session.projectId), [snapshot.resources, snapshot.session.projectId]);
@@ -154,7 +155,7 @@ export function AITranscript(props: TranscriptProps) {
     <PilotReportFoldScope><AITranscriptContent {...props}/></PilotReportFoldScope>
   </ObjectReferencesProvider>;
 }
-function AITranscriptContent({ proseInChannel=false,pilotWorkspace,presentedPilotReports,onPilotReportsPresented,superTask,onSpecialist,onInspectSpecialist,assistantIdentity,onOpenMemory,snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, connected = !disabled, pilotConnected = connected, mode = "conversation", refresh, onOpenPlans }: TranscriptProps) {
+function AITranscriptContent({ proseInChannel=false,pilotWorkspace,subscribeWorkerEvents,presentedPilotReports,onPilotReportsPresented,superTask,onSpecialist,onInspectSpecialist,assistantIdentity,onOpenMemory,snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, connected = !disabled, pilotConnected = connected, mode = "conversation", refresh, onOpenPlans }: TranscriptProps) {
   const {rows:dispatchRows,onObservedTurn}=usePilotSpecialistRows(mode==='conversation'&&assistantIdentity?.pilot?pilotWorkspace:undefined,snapshot.session.id,snapshot.messages);
   // Restoring a session shows existing text immediately. Replies first observed
   // after mount reveal their first packet too (cards mount only once nonempty).
@@ -353,7 +354,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,presentedPilo
       const footerReport=lastMessage?.role==='assistant'&&hasTaskProcess(lastMessage.author)&&onInspectSpecialist?lastMessage:undefined;
       const specialistReplies=(turnDispatchRows.length>0||savedReports.length>0)&&
         <PilotReportGroup members={participants} count={reports.length} fold={fold} connected={pilotConnected&&connected} onInspect={onInspect}>
-          <PilotSpecialistConversation rows={turnDispatchRows} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} connected={pilotConnected} onObservedTurn={onObservedTurn} onReportPresented={onPilotReportsPresented?onReportPresented:undefined} taskLabels={taskLabels}/>
+          <PilotSpecialistConversation rows={turnDispatchRows} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} connected={pilotConnected} subscribeWorkerEvents={subscribeWorkerEvents} onObservedTurn={onObservedTurn} onReportPresented={onPilotReportsPresented?onReportPresented:undefined} taskLabels={taskLabels}/>
           {savedReports.map(message=><TranscriptMessage key={message.id} message={message} sessionId={snapshot.session.id} assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} hideIdentity={hideReplyIdentity} taskLabel={taskLabels.get(message.author!.workerId)}/>)}
         </PilotReportGroup>;
       const collaboration=turnConversations.length?(footer:ReactNode)=>turnConversations.map((round,index)=>{

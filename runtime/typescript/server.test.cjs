@@ -1249,6 +1249,31 @@ test("two specialist channels share one task, retain their own evidence and rece
   assert.notEqual(a.task.executionGoalId,b.task.executionGoalId);
   assert.equal(a.task.collaboration.acceptanceId,undefined);
   assert.deepEqual(a.task.collaboration.participants.map(p=>[p.roleId,p.contributed]),[[a.roleId,true],[b.roleId,false]]);
+  const eventPath=`/api/sessions/${pilot}/events?after=${Number.MAX_SAFE_INTEGER}`;
+  await api(`${eventPath}&worker=${encodeURIComponent(f.session.id)}`,"GET",undefined,404);
+  const eventController=new AbortController();
+  try {
+    const events=await fetch(f.app.origin+eventPath+`&worker=${a.sessionId}&worker=${b.sessionId}`,{
+      headers:{Authorization:`Bearer ${f.app.token}`},signal:AbortSignal.any([eventController.signal,AbortSignal.timeout(5000)]),
+    });
+    assert.equal(events.status,200);
+    const reader=events.body.getReader(),decoder=new TextDecoder();
+    const receive=async(marker)=>{
+      let text='';
+      while(!text.includes(marker)){
+        const {value,done}=await reader.read();
+        assert.equal(done,false);
+        text+=decoder.decode(value,{stream:true});
+      }
+      return text;
+    };
+    await receive('event: worker-subscriptions');
+    const emitted=[f.session.id,a.sessionId,b.sessionId].map(id=>f.app.store.event(id,'session'));
+    for(const event of emitted)f.app.agents.publish(event);
+    const text=await receive(`id: ${emitted[2].seq}\n`);
+    assert.match(text,new RegExp(`id: ${emitted[1].seq}\\n`));
+    assert.doesNotMatch(text,new RegExp(`id: ${emitted[0].seq}\\n`));
+  } finally {eventController.abort();}
   for(const worker of [a,b]) {
     const channel=ws.channels.find(c=>c.roleId===worker.roleId);
     assert.deepEqual((await api("/api/sessions/"+channel.sessionId+"/channel/tasks")).map(w=>[w.task.taskId,w.id]),[[a.task.taskId,worker.id]]);

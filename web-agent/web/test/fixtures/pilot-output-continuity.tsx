@@ -19,6 +19,8 @@ type Network = 'connected' | 'worker-stream-drop' | 'worker-outage' | 'workspace
 let stage: Stage = 'idle', cursor = 50;
 let network: Network = 'connected';
 const streams = new Set<FixtureStream>();
+const workerText=new Map<string,string>();
+let workerSnapshotReads=0;
 
 function workers(): SuperWorker[] {
   if (dialogue || stage === 'idle' || stage === 'started') return [];
@@ -60,6 +62,7 @@ function reports(): Message[] {
 
 function snapshot(base: SessionSnapshot, worker?: SuperWorker): SessionSnapshot {
   const ended=stage==='finished'||stage==='reports-delivered', active=stage!=='idle'&&!ended;
+  const replyRunning=worker?worker.task.state==='running':active;
   const messages=worker ? [] : [history, source, ...reports()];
   if(dialogue&&stage!=='idle'){
     const round=dialogueRound();
@@ -75,10 +78,10 @@ function snapshot(base: SessionSnapshot, worker?: SuperWorker): SessionSnapshot 
   const root=worker ? `stage-root-${worker.id}` : 'output-root';
   const ai: AIView | undefined = stage==='idle' ? undefined : {
     ...base.ai!, session:worker?.sessionId??router, rootTurnId:root,
-    status:worker||ended?'completed':'running', replyStatus:worker||ended?'completed':'running',
-    turnStartedAt:at(10), turnFinishedAt:worker||ended?at(1000):undefined, sourceMessageIds: worker?[]:[source.id],
+    status:replyRunning?'running':'completed', replyStatus:replyRunning?'running':'completed',
+    turnStartedAt:at(10), turnFinishedAt:replyRunning?undefined:at(1000), sourceMessageIds: worker?[]:[source.id],
     pending:undefined, pendingApprovals:[], question:undefined, agentRuns:[], cardsOffset:0,
-    cards:worker?[{id:`stage-${worker.id}`,type:'message',status:'completed',at:at(300),content:'先核对版本 1.4。正在查看样例记录。',data:{root_turn_id:root}}]:stage==='started'?[]:[
+    cards:worker?[{id:`stage-${worker.id}`,type:'message',status:worker.task.state==='running'?'running':'completed',at:at(300),content:workerText.get(worker.sessionId)??'先核对版本 1.4。正在查看样例记录。',data:{root_turn_id:root}}]:stage==='started'?[]:[
       {id:'pilot-opening',type:'message',status:ended?'completed':'running',at:at(100),content:opening,data:{root_turn_id:root,source_message_id:source.id}},
       ...(ended?[{id:'pilot-verdict',type:'message' as const,status:'completed',at:at(1100),content:conclusion,data:{root_turn_id:root,source_message_id:source.id}}]:[]),
     ], totalCards:0,
@@ -102,17 +105,26 @@ class FixtureStream extends EventTarget {
   onmessage: ((event: MessageEvent<string>) => void) | null=null;
   onerror: ((event: Event) => void) | null=null;
   session: string;
+  workers: Set<string>;
   constructor(value: string | URL) {
     super();
-    const route=new URL(value,location.href).pathname;
-    this.session=decodeURIComponent(route.split('/')[3]??'');
+    const url=new URL(value,location.href);
+    this.session=decodeURIComponent(url.pathname.split('/')[3]??'');
+    this.workers=new Set(url.searchParams.getAll('worker'));
     streams.add(this);
-    queueMicrotask(()=>{const event=new Event('open');this.onopen?.(event);this.dispatchEvent(event);});
+    queueMicrotask(()=>this.connect());
+  }
+  connect() {
+    if(this.readyState===2)return;
+    this.readyState=1;
+    const event=new Event('open');this.onopen?.(event);this.dispatchEvent(event);
+    if(this.workers.size)this.dispatchEvent(new MessageEvent('worker-subscriptions',{data:'{}'}));
   }
   publish(event: SessionEvent) {
+    if(this.readyState!==1||event.sessionId!==this.session&&!this.workers.has(event.sessionId))return;
     this.dispatchEvent(new MessageEvent(event.type,{data:JSON.stringify(event)}));
   }
-  close() {streams.delete(this);}
+  close() {this.readyState=2;streams.delete(this);}
 }
 window.EventSource=FixtureStream as unknown as typeof EventSource;
 const json=(value:unknown,status=200)=>Response.json(value,{status});
@@ -128,6 +140,7 @@ window.fetch=async(input,init)=>{
   }
   if (path.endsWith('/snapshot')) {
     const id=decodeURIComponent(path.split('/')[3]??'');
+    if(id!==router)workerSnapshotReads++;
     if(id!==router&&network==='worker-outage')return json({error:'模拟专员快照失败'},503);
     const base: SessionSnapshot=await (await baseFetch(`/api/sessions/${router}/snapshot`)).json();
     return json(snapshot(base,workers().find(worker=>worker.sessionId===id)));
@@ -137,19 +150,27 @@ window.fetch=async(input,init)=>{
   return response;
 };
 
-Object.assign(window,{pilotOutputQA:{setNetwork(next:Network){
+Object.assign(window,{pilotOutputQA:{transport(){
+  return {workerScopes:[...streams].filter(stream=>stream.workers.size).map(stream=>[...stream.workers]),
+    workerSnapshotReads,directWorkers:[...streams].filter(stream=>stream.session.startsWith('output-worker-')).length};
+},workerText(index:number,text:string){
+  const worker=workers()[index];
+  if(!worker)return;
+  workerText.set(worker.sessionId,text);
+  const event={sessionId:worker.sessionId,seq:++cursor,type:'message',textUpdate:{target:'card',cardType:'message',id:`stage-${worker.id}`,rootTurnId:`stage-root-${worker.id}`,at:at(300),content:text}} as SessionEvent;
+  for(const stream of streams)stream.publish(event);
+},setNetwork(next:Network){
   network=next;
   const seq=++cursor;
   for (const stream of streams) {
-    if (stream.session===router) {
-      stream.publish({sessionId:router,seq,type:'specialist'} as SessionEvent);
-    } else if (next==='worker-stream-drop'||next==='worker-outage') {
+    const workerStream=stream.workers.size||stream.session.startsWith('output-worker-');
+    if (workerStream&&(next==='worker-stream-drop'||next==='worker-outage')) {
       stream.readyState=0;
       stream.onerror?.(new Event('error'));
     } else if (stream.readyState===0) {
-      stream.readyState=1;
-      stream.onopen?.(new Event('open'));
+      stream.connect();
     }
+    if(stream.session===router)stream.publish({sessionId:router,seq,type:'specialist'} as SessionEvent);
   }
 },advance(next:Stage){
   stage=next;
@@ -159,5 +180,6 @@ Object.assign(window,{pilotOutputQA:{setNetwork(next:Network){
     stream.publish({sessionId:stream.session,seq,type:live?'message':'specialist',
       ...(live&&{textUpdate:{target:'card',cardType:'message',id:'pilot-opening',rootTurnId:'output-root',at:at(100),content:opening}})} as SessionEvent);
     if(live)stream.publish({sessionId:router,seq:++cursor,type:'specialist'} as SessionEvent);
+    for(const sessionId of stream.workers)stream.publish({sessionId,seq,type:'specialist'} as SessionEvent);
   }
 }}});

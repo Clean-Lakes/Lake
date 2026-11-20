@@ -182,8 +182,10 @@ export async function startLakeServer(options: ServerOptions) {
   const token = randomBytes(32).toString("hex");
   let origin = "";
   const broadcast = (event: any) => {
-    for (const response of clients.get(event.sessionId) ?? [])
-      response.write(`id: ${event.seq}\nevent: ${event.type}\ndata: ${encode(event)}\n\n`);
+    const listeners=clients.get(event.sessionId);
+    if(!listeners?.size)return;
+    const packet=`id: ${event.seq}\nevent: ${event.type}\ndata: ${encode(event)}\n\n`;
+    for (const response of listeners) response.write(packet);
   };
   const json = (response: ServerResponse, status: number, value: unknown) => {
     response.writeHead(status, {
@@ -740,6 +742,14 @@ export async function startLakeServer(options: ServerOptions) {
         else if (path[3] === "events" && path.length === 4 && method === "GET") {
           const after = Number(url.searchParams.get("after") ?? 0);
           if (!Number.isSafeInteger(after) || after < 0) throw new HttpError(400, "无效的事件游标");
+          const workers = [...new Set(url.searchParams.getAll('worker'))];
+          if (workers.length) {
+            if (session.workspaceRole!=='router') throw new HttpError(404, '专员事件须从项目 Pilot 订阅');
+            const workspace=superagent.workspace(session.projectId);
+            const allowed=new Set(workspace.workers.filter(worker=>!worker.parentWorkerId).map(worker=>worker.sessionId));
+            if (!workspace.active||workspace.project.routerSessionId!==sessionId||workers.some(worker=>!allowed.has(worker)))
+              throw new HttpError(404, '此专员会话不在当前 Pilot 工作区');
+          }
           response.writeHead(200, {
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-store",
@@ -748,16 +758,23 @@ export async function startLakeServer(options: ServerOptions) {
           response.write(": connected\n\n");
           for (const event of store.events(sessionId, after))
             response.write(`id: ${event.seq}\nevent: ${event.type}\ndata: ${encode(event)}\n\n`);
-          let set = clients.get(sessionId);
-          if (!set) {
-            set = new Set();
-            clients.set(sessionId, set);
+          const subscriptions=[sessionId,...workers];
+          for (const id of subscriptions) {
+            let set=clients.get(id);
+            if(!set)clients.set(id,set=new Set());
+            set.add(response);
           }
-          set.add(response);
+          // Workers catch up with their own snapshots so their cursors remain
+          // independent of the Router cursor in the URL.
+          if(workers.length)response.write('event: worker-subscriptions\ndata: {}\n\n');
           const heartbeat = setInterval(() => response.write(": heartbeat\n\n"), 15000);
-          response.on("close", () => {
+          response.once("close", () => {
             clearInterval(heartbeat);
-            set!.delete(response);
+            for(const id of subscriptions){
+              const set=clients.get(id);
+              set?.delete(response);
+              if(!set?.size)clients.delete(id);
+            }
           });
           return;
         } else if (path[3] === "messages" && path.length === 4 && method === "POST") {
@@ -1014,7 +1031,7 @@ export async function startLakeServer(options: ServerOptions) {
     await execution?.close();
     await extensions?.close();
     gateway?.close();
-    for (const set of clients.values()) for (const response of set) response.end();
+    for (const response of new Set([...clients.values()].flatMap(set=>[...set]))) response.end();
     await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
     store?.close();
     await unlink(join(options.data, "runtime.json")).catch(() => {});

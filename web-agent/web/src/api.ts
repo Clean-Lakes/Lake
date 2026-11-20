@@ -322,8 +322,11 @@ export const api = {
     post<unknown>(`/api/sessions/${encodeURIComponent(sessionId)}/terminals/${encodeURIComponent(terminalId)}/resize`, { cols, rows }),
   terminalDisconnect: (sessionId: string, terminalId: string) =>
     post<unknown>(`/api/sessions/${encodeURIComponent(sessionId)}/terminals/${encodeURIComponent(terminalId)}/disconnect`, {}),
-  eventsUrl: (sessionId: string, cursor: number) =>
-    `/api/sessions/${encodeURIComponent(sessionId)}/events?after=${encodeURIComponent(String(cursor))}`,
+  eventsUrl: (sessionId: string, cursor: number, workers:readonly string[]=[]) => {
+    const query=new URLSearchParams({after:String(cursor)});
+    for(const worker of workers)query.append('worker',worker);
+    return `/api/sessions/${encodeURIComponent(sessionId)}/events?${query}`;
+  },
 };
 
 export function readableError(error: unknown): string {

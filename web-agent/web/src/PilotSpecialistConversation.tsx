@@ -18,6 +18,7 @@ import {useSpecialistAppearance} from './SuperRoleAvatar';
 import {lakeAvatarThinking} from './lakeAvatarThinking';
 import {LiveTextMotionLabel} from './liveTextMotion';
 import {PilotReplyContent,type PilotReplyContentState} from './PilotReplyContent';
+import type {SubscribePilotWorkerEvents} from './PilotWorkspace';
 
 export async function loadPilotSpecialistSnapshot(row:PilotSpecialistRow,signal?:AbortSignal){
  // Task-scoped inspector snapshots replace the SDK invocation root with the
@@ -31,12 +32,12 @@ export function shouldSubscribePilotReply(row:PilotSpecialistRow){
  return !(row.continuity==='terminal'&&(row.finalReport||row.observedRootTurnId&&row.reportedTurns.includes(row.observedRootTurnId)));
 }
 
-function useSpecialistReply(row:PilotSpecialistRow,connected:boolean,visible:boolean){
+function useSpecialistReply(row:PilotSpecialistRow,connected:boolean,visible:boolean,subscribeWorkerEvents?:SubscribePilotWorkerEvents){
  const binding=pilotSpecialistBinding(row),subscribe=shouldSubscribePilotReply(row);
  const [state,setState]=useState<{binding:string;snapshot?:SessionSnapshot;failed:boolean;livePacket?:boolean}>();
  useEffect(()=>{
   if(!connected||!visible||!subscribe)return;
-  const controller=new AbortController();let disposed=false,busy=false,queued=false,healthy=false;
+  const controller=new AbortController();let disposed=false,busy=false,queued=false,healthy=false,streamOpen=false;
   let latest=state?.binding===binding?state.snapshot:undefined,frame:number|undefined,timer:ReturnType<typeof setTimeout>|undefined,stream:EventSource|undefined;
   let snapshotFailureSince:number|undefined;
   let events:SessionEvent[]=[];
@@ -46,7 +47,7 @@ function useSpecialistReply(row:PilotSpecialistRow,connected:boolean,visible:boo
     const next=await loadPilotSpecialistSnapshot(row,AbortSignal.any([controller.signal,AbortSignal.timeout(12000)]));
     if(disposed)return;
     snapshotFailureSince=undefined;
-    healthy=stream?.readyState===1;
+    healthy=streamOpen;
     // A response for a superseded binding cannot replace this row's prose.
     if(next&&(!latest||next.cursor>=latest.cursor))latest=acceptSnapshot(latest??null,next);
     const snapshot=latest;
@@ -61,9 +62,8 @@ function useSpecialistReply(row:PilotSpecialistRow,connected:boolean,visible:boo
    finally{busy=false;if(queued&&!disposed){queued=false;void refresh();}}
   };
   const schedule=()=>{if(!timer)timer=setTimeout(()=>{timer=undefined;void refresh();},100);};
-  const receive=(incoming:MessageEvent<string>)=>{
+  const receive=(event:SessionEvent)=>{
    try{
-    const event=JSON.parse(incoming.data) as SessionEvent;
     if(event.sessionId!==row.worker.sessionId||typeof event.seq!=='number'||latest&&event.seq<=latest.cursor)return;
     if(event.textUpdate&&applyLiveText(latest??null,event)){
      events.push(event);
@@ -71,32 +71,36 @@ function useSpecialistReply(row:PilotSpecialistRow,connected:boolean,visible:boo
       frame=undefined;if(disposed)return;
       for(const item of events)latest=applyLiveText(latest??null,item)??latest;
       events=[];snapshotFailureSince=undefined;
-      healthy=stream?.readyState===1;
+      healthy=streamOpen;
       setState({binding,snapshot:latest,failed:false,livePacket:true});
      });
     }else schedule();
    }catch{schedule();}
   };
-  void refresh();
-  stream=typeof EventSource==='undefined'?undefined:new EventSource(api.eventsUrl(row.worker.sessionId,latest?.cursor??0),{withCredentials:true});
-  if(stream){
-   stream.onopen=()=>{healthy=true;void refresh();};
-   // An interrupted event stream may still have a working snapshot fallback.
-   stream.onerror=()=>{healthy=false;void refresh();};
-   stream.onmessage=receive;
-   for(const type of ['session','specialist'])stream.addEventListener(type,receive as EventListener);
+  const connection=(open:boolean)=>{streamOpen=open;healthy=open;if(open)void refresh();};
+  const unsubscribe=subscribeWorkerEvents?.(row.worker.sessionId,{receive,connection});
+  if(!busy)void refresh();
+  if(!subscribeWorkerEvents&&typeof EventSource!=='undefined'){
+   stream=new EventSource(api.eventsUrl(row.worker.sessionId,latest?.cursor??0),{withCredentials:true});
+   const receiveMessage=(incoming:MessageEvent<string>)=>{
+    try{receive(JSON.parse(incoming.data));}catch{schedule();}
+   };
+   stream.onopen=()=>connection(true);
+   stream.onerror=()=>{connection(false);void refresh();};
+   stream.onmessage=receiveMessage;
+   for(const type of ['session','specialist'])stream.addEventListener(type,receiveMessage as EventListener);
   }
   const poll=setInterval(()=>{if(!healthy)void refresh();},2000);
-  return()=>{disposed=true;controller.abort();stream?.close();clearInterval(poll);if(timer)clearTimeout(timer);if(frame!==undefined)cancelAnimationFrame(frame);};
- },[binding,connected,visible,subscribe]);
+  return()=>{disposed=true;controller.abort();unsubscribe?.();stream?.close();clearInterval(poll);if(timer)clearTimeout(timer);if(frame!==undefined)cancelAnimationFrame(frame);};
+ },[binding,connected,visible,subscribe,subscribeWorkerEvents]);
  return state?.binding===binding?state:undefined;
 }
 
 type ObservedTurn=(row:PilotSpecialistRow,root:string)=>void;
 type ReportPresented=(id:string)=>void;
 
-function PilotSpecialistReply({row,onSpecialist,onInspectSpecialist,connected,onObservedTurn,onReportPresented,taskLabel}:{row:PilotSpecialistRow;onSpecialist?: (author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:InspectSpecialist;connected:boolean;onObservedTurn?:ObservedTurn;onReportPresented?:ReportPresented;taskLabel?:string}){
- const visible=usePageVisible(),state=useSpecialistReply(row,connected,visible);
+function PilotSpecialistReply({row,onSpecialist,onInspectSpecialist,connected,onObservedTurn,onReportPresented,taskLabel,subscribeWorkerEvents}:{row:PilotSpecialistRow;onSpecialist?: (author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:InspectSpecialist;connected:boolean;onObservedTurn?:ObservedTurn;onReportPresented?:ReportPresented;taskLabel?:string;subscribeWorkerEvents?:SubscribePilotWorkerEvents}){
+ const visible=usePageVisible(),state=useSpecialistReply(row,connected,visible,subscribeWorkerEvents);
  return <PilotSpecialistReplyView row={row} snapshot={state?.snapshot} livePacket={state?.livePacket} available={connected&&!state?.failed} visible={visible} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} onObservedTurn={onObservedTurn} onReportPresented={onReportPresented} taskLabel={taskLabel}/>;
 }
 
@@ -164,7 +168,7 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
  </section>;
 }
 
-export function PilotSpecialistConversation({rows,onSpecialist,onInspectSpecialist,connected=true,onObservedTurn,onReportPresented,taskLabels}:{rows:PilotSpecialistRow[];onSpecialist?: (author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:InspectSpecialist;connected?:boolean;onObservedTurn?:ObservedTurn;onReportPresented?:ReportPresented;taskLabels?:ReadonlyMap<string,string>}){
+export function PilotSpecialistConversation({rows,onSpecialist,onInspectSpecialist,connected=true,onObservedTurn,onReportPresented,taskLabels,subscribeWorkerEvents}:{rows:PilotSpecialistRow[];onSpecialist?: (author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:InspectSpecialist;connected?:boolean;onObservedTurn?:ObservedTurn;onReportPresented?:ReportPresented;taskLabels?:ReadonlyMap<string,string>;subscribeWorkerEvents?:SubscribePilotWorkerEvents}){
  if(!rows.length)return null;
- return <div className="pilot-specialist-conversation">{rows.map(row=><PilotSpecialistReply key={row.worker.id} row={row} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} connected={connected} onObservedTurn={onObservedTurn} onReportPresented={onReportPresented} taskLabel={taskLabels?.get(row.worker.id)}/>)}</div>;
+ return <div className="pilot-specialist-conversation">{rows.map(row=><PilotSpecialistReply key={row.worker.id} row={row} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} connected={connected} onObservedTurn={onObservedTurn} onReportPresented={onReportPresented} taskLabel={taskLabels?.get(row.worker.id)} subscribeWorkerEvents={subscribeWorkerEvents}/>)}</div>;
 }
