@@ -2,8 +2,6 @@
   min-width:0;
   max-width:var(--reply-body-width,720px);
   margin-inline-start:var(--reply-avatar-column,40px);
-  padding-block-start:7px;
-  border-block-start:1px solid var(--border);
   color:var(--foreground);
   font-size:var(--font-size-process);
 }
@@ -28,7 +26,7 @@
 }
 .pilot-conversation-avatar+.pilot-conversation-avatar { margin-inline-start:-3px; }
 .pilot-conversation-overflow { padding-inline:3px; color:var(--text-muted); font-size:var(--font-size-toolbar); }
-.pilot-conversation-process { margin-inline-start:auto; min-width:0; }
+.pilot-conversation-process { min-width:0; }
 .pilot-conversation-process .reply-duration { gap:0 8px; }
 .pilot-conversation-meta { margin:0; color:var(--text-muted); }
 .pilot-conversation-replies:not(:empty) { display:grid; gap:12px; padding-block:10px 2px; }
@@ -40,6 +38,5 @@
 .pilot-conversation-participants li button { padding:2px 4px; border:0; border-radius:var(--radius-settings-control); background:transparent; color:var(--foreground); font:inherit; }
 .pilot-conversation-participants li button:hover { background:var(--surface-hover); }
 .pilot-conversation-participants small { font:inherit; overflow-wrap:anywhere; }
-@media (max-width:480px) { .pilot-conversation-process { margin-inline-start:0; } }
 @media (pointer:coarse) { .pilot-conversation-toggle,.pilot-conversation-participants button { min-height:44px; } }
 @media (prefers-reduced-motion:reduce) { .pilot-conversation-chevron { transition:none; } }
