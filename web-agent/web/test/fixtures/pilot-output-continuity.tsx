@@ -1,9 +1,10 @@
 // The real App and its two session streams, with local data only.
 import './readme-workbench';
-import type {AIView, Message, SessionEvent, SessionSnapshot, SuperWorker, SuperWorkspace} from '../../../shared/contracts';
+import type {AIView, Message, SessionEvent, SessionSnapshot, SpecialistConversation, SuperWorker, SuperWorkspace} from '../../../shared/contracts';
 
 const router = 'demo-session-0', project = 'demo-project';
 const baseFetch = window.fetch.bind(window);
+const dialogue = new URLSearchParams(location.search).has('dialogue');
 const started = Date.now() - 60_000;
 const at = (offset: number) => new Date(started + offset).toISOString();
 const source: Message = {id:'output-request', sessionId:router, role:'user', text:'核对这批样例记录', createdAt:at(0)};
@@ -11,12 +12,13 @@ const history: Message = {id:'output-history', sessionId:router, role:'assistant
 const opening = '我已安排专员核对样例';
 const conclusion = '样例记录一致，未发现遗漏。';
 const names = ['数据库专员','可观测性专员','发布专员','知识库专员','服务器运维排查专员'];
+if(dialogue)names.push('ACP 测试专员','河狸专员','巡检专员');
 type Stage = 'idle' | 'started' | 'working' | 'first-report' | 'closing' | 'finished';
 let stage: Stage = 'idle', cursor = 50;
 const streams = new Set<FixtureStream>();
 
 function workers(): SuperWorker[] {
-  if (stage === 'idle' || stage === 'started') return [];
+  if (dialogue || stage === 'idle' || stage === 'started') return [];
   return names.map((name, index) => {
     const id = `output-worker-${index}`;
     const completed = stage === 'closing' || stage === 'finished';
@@ -28,6 +30,20 @@ function workers(): SuperWorker[] {
       pilotReport:completed ? {messageId:`output-report-${index}`,executionSettled:stage==='finished'||index===0} : undefined,
     };
   });
+}
+
+function dialogueRound():SpecialistConversation {
+  const settled=stage==='closing'||stage==='finished';
+  return {id:'dialogue-round',projectId:project,sessionId:router,sourceMessageId:source.id,title:'专员回应样例',
+    state:stage==='finished'?'completed':settled?'summarizing':'running',createdAt:at(10),deadlineAt:at(120_000),summaryRequested:true,
+    members:names.map((roleName,index)=>{
+      const replied=settled&&index!==7||stage==='first-report'&&index===0;
+      const failed=settled&&index===7;
+      return {id:`speaker-${index}`,roleId:`role-${index}`,roleName,sessionId:`speaker-session-${index}`,channelSessionId:`role-session-${index}`,
+        state:replied?'replied':failed?'failed':stage==='started'&&index>1?'queued':'running',
+        ...(replied ? {replyMessageId:`speaker-reply-${index}`} : {}),
+        ...(failed ? {reason:'模型服务限流（HTTP 429）'} : {})};
+    })};
 }
 
 function reports(): Message[] {
@@ -42,7 +58,16 @@ function reports(): Message[] {
 function snapshot(base: SessionSnapshot, worker?: SuperWorker): SessionSnapshot {
   const ended=stage==='finished', active=stage!=='idle'&&!ended;
   const messages=worker ? [] : [history, source, ...reports()];
-  if (ended && !worker) messages.push({id:'rolled-up-report',sessionId:router,role:'assistant',createdAt:at(1000),
+  if(dialogue&&stage!=='idle'){
+    const round=dialogueRound();
+    for(const member of round.members)if(member.replyMessageId)messages.push({id:member.replyMessageId,sessionId:router,role:'assistant',
+      createdAt:at(650+messages.length),text:`${member.roleName}已核对，样例正常。`,
+      author:{kind:'specialist',name:member.roleName,workerId:member.id,roleId:member.roleId,sessionId:member.sessionId,channelSessionId:member.channelSessionId,conversationId:round.id},
+      conversation:{id:round.id,sourceMessageId:source.id,kind:'reply'}});
+    if(ended)messages.push({id:'dialogue-summary',sessionId:router,role:'assistant',createdAt:at(1000),text:'七位专员确认样例正常，有一位专员未能回应。',
+      conversation:{id:round.id,sourceMessageId:source.id,kind:'summary',summaryRequested:true}});
+  }
+  if (ended && !worker && !dialogue) messages.push({id:'rolled-up-report',sessionId:router,role:'assistant',createdAt:at(1000),
     jointReport:{taskId:'output-task',reportId:'joint'},text:'「核对样例记录」的 5 位专员均已提交报告。\n\n'+reports().map(report=>`${report.author?.name}：${report.text}`).join('\n\n')});
   const root=worker ? `stage-root-${worker.id}` : 'output-root';
   const ai: AIView | undefined = stage==='idle' ? undefined : {
@@ -55,10 +80,15 @@ function snapshot(base: SessionSnapshot, worker?: SuperWorker): SessionSnapshot 
       ...(ended?[{id:'pilot-verdict',type:'message' as const,status:'completed',at:at(1100),content:conclusion,data:{root_turn_id:root,source_message_id:source.id}}]:[]),
     ], totalCards:0,
   };
+  if(ai&&dialogue){
+    ai.status='completed';ai.replyStatus='completed';ai.turnFinishedAt=at(300);
+    ai.cards=[{id:'pilot-opening',type:'message',status:'completed',at:at(200),content:'已邀请大家逐一回应。',data:{root_turn_id:root,source_message_id:source.id}},
+      {id:'pilot-invite',type:'operation',title:'convene_specialists',status:'completed',at:at(150),content:'已召集八位专员',data:{root_turn_id:root}}];
+  }
   if(ai)ai.totalCards=ai.cards.length;
   return {...base, cursor, messages, ai, superagent:worker?{roleId:worker.roleId, task:worker.task} as SessionSnapshot['superagent']:undefined,
     session:{...base.session,id:worker?.sessionId??router,projectId:project,title:worker?.roleName??'Pilot',workspaceRole:worker?'worker':'router',status:active?'investigating':'completed'},
-    sre:undefined, actions:[], specialists:[], replyTimings:[], terminals:[]};
+    sre:undefined, actions:[], specialists:[], replyTimings:dialogue&&ai?[{messageId:source.id,startedAt:at(10),finishedAt:at(300),status:'completed'}]:[], terminals:[]};
 }
 
 class FixtureStream extends EventTarget {
@@ -87,7 +117,8 @@ window.fetch=async(input,init)=>{
   const path=url.pathname;
   if (path.startsWith('/api/') && (init?.method??'GET')!=='GET') return json({error:'Read-only fixture'},405);
   if (path===`/api/projects/${project}/superagent`) {
-    const value: SuperWorkspace={active:true,project:{projectId:project,routerSessionId:router,version:1},workers:workers(),cursor};
+    const value: SuperWorkspace={active:true,project:{projectId:project,routerSessionId:router,version:1},workers:workers(),
+      ...(dialogue&&stage!=='idle'?{conversations:[dialogueRound()]}:{}),cursor};
     return json(value);
   }
   if (path.endsWith('/snapshot')) {

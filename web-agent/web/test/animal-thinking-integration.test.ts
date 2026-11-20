@@ -224,8 +224,8 @@ test('Pilot identity moves only during connected visible execution while public 
 });
 
 test('discussion member running is not enough evidence to invent animal thinking',()=>{
- const html=renderToStaticMarkup(createElement(PilotConversationProgress,{rounds:[{id:'round',projectId:'project',sessionId:'pilot',sourceMessageId:'user',state:'running',members:[{id:'member',roleId:'role-a',roleName:'同名专员',sessionId:'worker',state:'running',avatarId:'otter'}]}] as never}));
- assert.match(html,/正在回复/);assert.doesNotMatch(html,/animal-thinking-bubble/);
+ const html=renderToStaticMarkup(createElement(PilotConversationProgress,{round:{id:'round',projectId:'project',sessionId:'pilot',sourceMessageId:'user',state:'running',members:[{id:'member',roleId:'role-a',roleName:'同名专员',sessionId:'worker',state:'running',avatarId:'otter'}]} as never,replies:[]}));
+ assert.match(html,/1 位回复中/);assert.doesNotMatch(html,/animal-thinking-bubble/);
 });
 
 test('Pilot live snapshots stop every work loop for pending cards, child waits and explicit terminal states',t=>{

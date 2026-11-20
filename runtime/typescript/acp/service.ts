@@ -14,12 +14,14 @@ import {privatePath} from './private';
 import {codexConfig,tomlValue} from './codex-profile';
 import {ExternalPublicText} from './public-text';
 import type { CodexConnectionProbe,ExternalActor,ExternalAgentProfile,ExternalEvent,ExternalResult,ExternalRun } from './types';
+import {maxExternalConversationRuns} from './types';
 
 function ownLauncher(flag:string,args:string[]=[]){return {executable:process.execPath,args:isSea()?[flag,...args]:[__filename,flag,...args]};}
+type LiveRun={process?:AgentConnection;controller:AbortController;scopeHash:string;conversation:boolean;guard?:()=>void};
 export class LakeExternalAgents {
   readonly registry:ExternalAgentRegistry;
   private probes=new Map<string,{controller:AbortController;work:Promise<unknown>}>();
-  private live=new Map<string,{process?:AgentConnection;controller:AbortController;scopeHash:string;guard?:()=>void}>();
+  private live=new Map<string,LiveRun>();
   constructor(readonly store:LakeStore,readonly redact:(text:string,live?:boolean)=>string,readonly registerSecret:(value:string)=>void,codexHome?:string){
     this.registry=new ExternalAgentRegistry(store,{codexHome,registerSecret});
     for(const run of store.list<ExternalRun>('acpRuns'))if(run.schemaVersion===1&&['starting','running'].includes(run.state)){
@@ -98,13 +100,15 @@ export class LakeExternalAgents {
     const prior=resumeRunId?this.store.require<ExternalRun>('acpRuns',resumeRunId):undefined;
     if(prior&&(prior.schemaVersion!==1||prior.projectId!==actor.projectId||prior.taskId!==actor.taskId||prior.workerId!==actor.workerId||prior.generation!==actor.generation||prior.scopeHash!==actor.scopeHash||prior.sessionId!==actor.sessionId||prior.childSessionId!==actor.childSessionId||prior.agent!==agentId||prior.requestedModel!==actor.model||prior.profileRevision!==profile.revision||prior.dispatchPhase!=='answered'||prior.state!=='completed'||!prior.contextId||!prior.externalSessionId))throw new HttpError(409,'只能继续同一执行身份与模型下已明确结束的外部会话');
     if(prior&&[...this.live.keys()].some(key=>this.store.get<ExternalRun>('acpRuns',key)?.contextId===prior.contextId))throw new HttpError(409,'该外部会话仍在运行');
-    if(this.live.size>=4)throw new HttpError(409,'外部 Agent 正在处理其他工作，请稍后继续原任务');
+    const conversation=actor.purpose==='conversation';
+    const active=[...this.live.values()].filter(run=>run.conversation===conversation).length;
+    if(active>=(conversation?maxExternalConversationRuns:4))throw new HttpError(409,'外部 Agent 正在处理其他工作，请稍后继续原任务');
     const runId=id();
     const run:ExternalRun={schemaVersion:1,id:runId,purpose:actor.purpose??'segment',contextId:prior?.contextId??runId,scopeHash:actor.scopeHash,agent:agentId,profileRevision:profile.revision,projectId:actor.projectId,taskId:actor.taskId,conversationId:actor.conversationId,workerId:actor.workerId,sessionId:actor.sessionId,
       childSessionId:actor.childSessionId,agentRunId:actor.agentRunId,rootTurnId:actor.rootTurnId,generation:actor.generation,requestKey,inputHash,...(actor.model?{requestedModel:actor.model}:{}),state:'starting',dispatchPhase:'not_sent',createdAt:now(),updatedAt:now(),events:[],usage:null};
     const controller=new AbortController(),stop=()=>controller.abort(actor.signal.reason);
     actor.signal.addEventListener('abort',stop,{once:true});
-    const live:{process?:AgentConnection;controller:AbortController;scopeHash:string;guard?:()=>void}={controller,scopeHash:actor.scopeHash};this.live.set(run.id,live);
+    const live:LiveRun={controller,scopeHash:actor.scopeHash,conversation};this.live.set(run.id,live);
     const stopDeadline=watchTaskDeadline(()=>actor.deadlineAt,controller);
     const guard=()=>{controller.signal.throwIfAborted();actor.guard();if(Date.parse(actor.deadlineAt)<=Date.now())throw new TaskDeadlineReached();
       const current=this.registry.get(actor.projectId,agentId);if(!current.enabled||current.revision!==profile.revision)throw new HttpError(409,'外部 Agent 配置已变化');};

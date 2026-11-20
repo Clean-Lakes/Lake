@@ -65,3 +65,4 @@ export type ExternalResult = {
   public_reply?: {id:string;content:string};
   verification: 'insufficient'; limitations: string[];
 };
+export const maxExternalConversationRuns = 16;

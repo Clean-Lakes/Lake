@@ -1492,14 +1492,14 @@ export class LakeSuperagent implements AgentHost {
         catch (error) { this.routerFinished(project.routerSessionId, String(error)); }
       }
     }
-    await this.conversations.pump(()=>4-this.active.size,projectId=>2-[...this.active].filter(id=>this.store.require<Worker>('superWorkers',id).projectId===projectId).length);
+    await this.conversations.pump();
     const retries=this.dueWatchdogRetries();
     const queued = this.store.list<Worker>("superWorkers").filter((worker) => !worker.inline&&!this.stoppingProjects.has(worker.projectId)&& !this.active.has(worker.id) &&
       (worker.state === "queued" && this.dispatchReady(worker) || retries.has(worker.id)));
     queued.sort((a, b) => Number(a.projectId === this.lastProject) - Number(b.projectId === this.lastProject) || a.createdAt.localeCompare(b.createdAt));
     for (const worker of queued) {
-      if (this.active.size+this.conversations.running() >= 4) break;
-      if ([...this.active].filter((id) => this.store.require<Worker>("superWorkers", id).projectId === worker.projectId).length+this.conversations.running(worker.projectId) >= 2) continue;
+      if (this.active.size >= 4) break;
+      if ([...this.active].filter((id) => this.store.require<Worker>("superWorkers", id).projectId === worker.projectId).length >= 2) continue;
       const goal = this.ledger.get(worker.taskId), retry=retries.get(worker.id);
       if (terminal(goal.status) || Date.parse(goal.deadlineAt) <= Date.now()) continue;
       try { this.role(worker.projectId, worker.roleId); } catch { continue; }
@@ -2090,7 +2090,7 @@ export class LakeSuperagent implements AgentHost {
   private routerEntries(sessionId: string) {
     const projectId = this.store.session(sessionId).projectId;
     return [
-      this.entry('convene_specialists','Invite persistent specialists to personally reply in the current shared conversation. Use for roll call, introductions, asking everyone or selected specialists to speak, and text-only group discussion. audience=all freezes every current specialist, including beyond the bounded catalog; otherwise pass exact role_ids. Copy the exact human event_id and quote; use one stable part_key. Each recipient runs independently; the host tracks actual replies and missing/failed/timed-out states. Roll calls, introductions and ordinary discussion end with the members replies and a compact status; omit summarize or set false. Set summarize=true only when the human explicitly requested an integrated conclusion or comparison. Never add a repeated roster or duties summary. Confirm the invitation once, then stop this turn; never answer on behalf of recipients or claim attendance from the catalog. No business task or resource execution is created. Use route_work separately for resource work.',
+      this.entry('convene_specialists','Invite persistent specialists to personally reply in the current shared conversation. Use for roll call, introductions, asking everyone or selected specialists to speak, and text-only group discussion. audience=all freezes every current specialist, including beyond the bounded catalog; otherwise pass exact role_ids. Copy the exact human event_id and quote; use one stable part_key. Each recipient runs independently; the host tracks actual replies and missing/failed/timed-out states. In Pilot, a multi-speaker round ends with a brief conclusion from the actual replies. Leave summarize unset for this default, set it false only when the human asks to skip the conclusion, and true when explicitly asked to synthesize. The conclusion avoids repeating the roster and duties. Confirm the invitation once, then stop this turn; never answer on behalf of recipients or claim attendance from the catalog. No business task or resource execution is created. Use route_work separately for resource work.',
         objectSchema({event_id:str,part_key:str,quote:str,instruction:str,audience:{type:'string',enum:['all']},role_ids:array(str),timeout_seconds:integer,summarize:{type:'boolean'}},['event_id','part_key','quote','instruction']),async(a,context)=>{
           const event=this.admitted(sessionId,a.event_id,text(a.quote,'quote',16384));
           const project=this.store.require<SuperProject>('superProjects',projectId);
@@ -2104,7 +2104,8 @@ export class LakeSuperagent implements AgentHost {
           if(this.stoppingProjects.has(projectId))throw new HttpError(409,'当前项目正在停止');
           const roles=ids?ids.map(id=>this.role(projectId,id)):this.store.list<Role>('superRoles').filter(role=>role.projectId===projectId&&!role.deletedAt).sort((a,b)=>a.id.localeCompare(b.id));
           return this.conversations.start({eventId:event.id,partKey:text(a.part_key,'part_key',128),projectId,sessionId,sourceMessageId:event.messageId,
-            quote:a.quote,instruction:a.instruction,roles,requestHash:digest(a),timeoutSeconds:a.timeout_seconds,summaryRequested:a.summarize,
+            quote:a.quote,instruction:a.instruction,roles,requestHash:digest(a),timeoutSeconds:a.timeout_seconds,
+            summaryRequested:a.summarize??(!event.external?.connectionId&&roles.length>1),
             ...(event.external?.connectionId&&{dialogue:this.gatewayDialogue(event)})});
         }),
       this.entry('inspect_specialist_conversation','Read the host-tracked recipient and response states of a shared conversation in this project. A reply receipt establishes attendance only, never business task acceptance.',

@@ -1,35 +1,81 @@
-import type {SpecialistConversation,SpecialistReplyAuthor} from '../../shared/contracts';
-import {ReplyProcessStatus} from './ReplyProcessStatus';
-import {ReplyIdentity} from './ReplyIdentity';
+import {useId,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
+import type {SpecialistConversation,SpecialistConversationMember,SpecialistReplyAuthor} from '../../shared/contracts';
+import {Glyph} from './Icons';
+import {SuperRoleAvatar} from './SuperRoleAvatar';
 
-const labels={queued:'等待回应',running:'正在回复…',replied:'已回应',failed:'回应失败',timed_out:'回应超时',cancelled:'已停止',interrupted:'回应中断'} as const;
-const roundLabels={queued:'正在召集',running:'正在收尾',summarizing:'正在综合意见',completed:'',cancelled:'召集已停止',interrupted:'召集已中断',failed:'综合意见未完成'} as const;
+const memberLabels={queued:'排队',running:'回复中',replied:'已回复',failed:'回应失败',timed_out:'回应超时',cancelled:'已停止',interrupted:'回应中断'};
+type Pane='replies'|'waiting'|null;
 
-export function conversationNeedsStatus(round:SpecialistConversation){
- return round.state!=='completed'||round.members.some(member=>member.state!=='replied');
+function Participants({members,roundId,onSpecialist}:{members:readonly SpecialistConversationMember[];roundId:string;onSpecialist?:(author:SpecialistReplyAuthor)=>void}) {
+  return <ul className="pilot-conversation-participants">{members.map(member=>{
+    const detail=member.reason??memberLabels[member.state];
+    const name=<><SuperRoleAvatar name={member.roleName} roleId={member.roleId} avatarId={member.avatarId} size={20}/><span>{member.roleName}</span></>;
+    return <li key={member.id} data-state={member.state}>
+      {onSpecialist?<button type="button" onClick={()=>onSpecialist({kind:'specialist',name:member.roleName,roleId:member.roleId,
+        workerId:member.id,sessionId:member.sessionId,channelSessionId:member.channelSessionId,conversationId:roundId,execution:member.execution,avatarId:member.avatarId})}>{name}</button>:<span>{name}</span>}
+      {member.state!=='running'&&member.state!=='queued'&&<small>{detail}</small>}
+    </li>;
+  })}</ul>;
 }
 
-export function PilotConversationProgress({rounds,connected=true,onSpecialist}:{rounds:SpecialistConversation[];connected?:boolean;onSpecialist?:(author:SpecialistReplyAuthor)=>void}){
- const visible=rounds.filter(conversationNeedsStatus);
- if(!visible.length)return null;
- return <div className="pilot-conversation-progress" role="status" aria-live="polite" aria-label="专员回应进展">
-  {visible.map(round=>{
-   const count=round.members.filter(member=>member.state==='replied').length;
-   const active=connected&&['queued','running','summarizing'].includes(round.state);
-   const running=round.members.filter(member=>member.state==='running').length;
-   const queued=round.members.filter(member=>member.state==='queued').length;
-   const lineup=round.state==='running'?[running&&`${running} 位正在回复`,queued&&`${queued} 位排队`].filter(Boolean).join(' · '):'';
-   const label=connected?(lineup||roundLabels[round.state]):'正在重连';
-   return <div key={round.id} data-conversation-id={round.id} data-state={round.state}>
-    <ReplyProcessStatus active={active} mark={active?'loading':round.state==='completed'&&count===round.members.length?'check':round.members.some(member=>['failed','timed_out','interrupted'].includes(member.state))?'alert':'clock'} className="pilot-conversation-status">{count} / {round.members.length} 位专员已回应{label&&` · ${label}`}</ReplyProcessStatus>
-    {round.members.filter(member=>member.state!=='replied').map(member=>{
-     const author:SpecialistReplyAuthor={kind:'specialist',name:member.roleName,roleId:member.roleId,workerId:member.id,sessionId:member.sessionId,channelSessionId:member.channelSessionId,conversationId:round.id,execution:member.execution,avatarId:member.avatarId};
-     return <section className="ai-chat-message ai-role-assistant pilot-specialist-reply" key={member.id} data-role-id={member.roleId} data-state={member.state} title={member.reason}>
-      <ReplyIdentity identity={{name:'Pilot',pilot:true}} author={author} authorMotion={connected&&member.state==='running'?'working':'still'} onSpecialist={onSpecialist}/>
-      <ReplyProcessStatus active={connected&&member.state==='running'} mark={['failed','timed_out','interrupted'].includes(member.state)?'alert':member.state==='running'&&connected?'loading':'clock'}>{!connected&&['queued','running'].includes(member.state)?'等待重新连接':member.state==='failed'&&member.reason?member.reason:labels[member.state]}</ReplyProcessStatus>
-     </section>;
-    })}
-   </div>;
-  })}
- </div>;
+export function PilotConversationProgress({round,replies,process,connected=true,onSpecialist,onInspect}:{
+  round:SpecialistConversation;
+  replies:readonly ReactNode[];
+  process?:ReactNode;
+  connected?:boolean;
+  onSpecialist?:(author:SpecialistReplyAuthor)=>void;
+  onInspect?:()=>void;
+}) {
+  const id=useId(), body=useRef<HTMLDivElement>(null);
+  const [pane,setPane]=useState<Pane>();
+  const live=['queued','running','summarizing'].includes(round.state);
+  const running=round.members.filter(member=>member.state==='running');
+  const reported=round.members.filter(member=>member.state==='replied');
+  const queued=round.members.filter(member=>member.state==='queued');
+  const missing=round.members.filter(member=>!['queued','running','replied'].includes(member.state));
+  const pending=[...queued,...missing];
+  const shown=running.length?running:reported;
+  const headline=running.length?`${running.length} 位回复中`:reported.length||!live?`${reported.length} 份专员报告`:'正在召集';
+  const waitingLabel=[queued.length?`${queued.length} 位排队`:'',missing.length?`${missing.length} 位未回应`:''].filter(Boolean).join(' · ');
+  const state=!connected&&live?'正在重连':round.state==='summarizing'?'Pilot 正在总结':round.state==='cancelled'?'召集已停止':round.state==='interrupted'?'召集已中断':undefined;
+  const visibleBody=body.current;
+  const selection=!live&&pane===undefined&&visibleBody?window.getSelection():null;
+  const keepReading=!live&&pane===undefined&&!!visibleBody&&(visibleBody.contains(document.activeElement)||
+    visibleBody.contains(selection?.anchorNode??null)||visibleBody.contains(selection?.focusNode??null));
+  const repliesOpen=pane==='replies'||pane===undefined&&(live&&replies.length>0||keepReading);
+  const waitingOpen=pane==='waiting';
+  useLayoutEffect(()=>{if(keepReading)setPane('replies');},[keepReading]);
+  const toggle=(next:Exclude<Pane,null>,open:boolean)=>{onInspect?.();setPane(open?null:next);};
+  const status=<>
+    {!!shown.length&&<span className="pilot-conversation-avatars" aria-hidden="true">
+      {shown.slice(0,3).map(member=><span className="pilot-conversation-avatar" key={member.id} title={member.roleName}>
+        <SuperRoleAvatar name={member.roleName} roleId={member.roleId} avatarId={member.avatarId} size={20} motion={connected&&member.state==='running'?'working':'still'}/>
+      </span>)}
+      {shown.length>3&&<span className="pilot-conversation-overflow">+{shown.length-3}</span>}
+    </span>}
+    <span>{headline}</span>
+  </>;
+  return <section className="pilot-conversation-progress" aria-label="专员协作" data-conversation-id={round.id} data-state={round.state}>
+    <div className="pilot-conversation-bar">
+      {shown.length>0||replies.length>0?<button type="button" className="pilot-conversation-toggle" data-active={connected&&running.length>0||undefined}
+        aria-expanded={repliesOpen} aria-controls={`${id}-replies`} aria-describedby={shown.length?`${id}-speakers`:undefined} onClick={()=>toggle('replies',repliesOpen)}>
+        {status}<Glyph name="next" size={12} className="pilot-conversation-chevron"/>
+      </button>:<span className="pilot-conversation-static">{status}</span>}
+      {shown.length>0&&<span className="visually-hidden" id={`${id}-speakers`}>{shown.map(member=>member.roleName).join('、')}</span>}
+      {(waitingLabel||waitingOpen)&&<button type="button" className="pilot-conversation-toggle is-secondary" data-missing={missing.length>0||undefined}
+        aria-expanded={waitingOpen} aria-controls={`${id}-waiting`} onClick={()=>toggle('waiting',waitingOpen)}>
+        {waitingLabel||'排队情况'}<Glyph name="next" size={12} className="pilot-conversation-chevron"/>
+      </button>}
+      {running.length>0&&reported.length>0&&<span className="pilot-conversation-meta">{reported.length} 份已收到</span>}
+      {state&&<span className="pilot-conversation-meta" role="status">{state}</span>}
+      {process&&<div className="pilot-conversation-process">{process}</div>}
+    </div>
+    <div id={`${id}-replies`} hidden={!repliesOpen}>
+      <div ref={body} className="pilot-conversation-replies">{replies}</div>
+      {repliesOpen&&!replies.length&&<Participants members={shown} roundId={round.id} onSpecialist={onSpecialist}/>}
+    </div>
+    <div id={`${id}-waiting`} hidden={!waitingOpen}>
+      {pending.length>0?<Participants members={pending} roundId={round.id} onSpecialist={onSpecialist}/>:<p className="pilot-conversation-meta">当前没有排队专员</p>}
+    </div>
+  </section>;
 }

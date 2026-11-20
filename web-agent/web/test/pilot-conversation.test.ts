@@ -13,15 +13,16 @@ const round:SpecialistConversation={id:'round',projectId:'project',sessionId:'pi
  {id:'c',roleId:'c',roleName:'发布专员',sessionId:'speaker-c',channelSessionId:'channel-c',state:'queued'}]};
 const workspace:SuperWorkspace={active:true,project:{projectId:'project',routerSessionId:'pilot',version:1},workers:[],conversations:[round]};
 
-test('real replied counts and every outstanding specialist remain visible, including failures after summary',()=>{
- const html=renderToStaticMarkup(createElement(PilotConversationProgress,{rounds:[round]}));
- assert.match(html,/1 \/ 3 位专员已回应 · 1 位正在回复 · 1 位排队/);assert.match(html,/正在回复…/);assert.match(html,/等待回应/);
- assert.doesNotMatch(html,/数据库专员 ·|发布专员 ·/);assert.match(html,/reply-process-status reply-process-text/);
+test('the round groups waiting specialists behind one control and keeps recorded failures',()=>{
+ const html=renderToStaticMarkup(createElement(PilotConversationProgress,{round,replies:[]}));
+ assert.match(html,/1 位回复中/);assert.match(html,/1 位排队/);assert.match(html,/1 份已收到/);
+ assert.doesNotMatch(html,/正在回复…|等待回应/);
+ assert.match(html,/-waiting" hidden=""/);
  const failed={...round,state:'completed' as const,members:round.members.map(member=>member.state==='running'?{...member,state:'timed_out' as const}:member)};
- const settled=renderToStaticMarkup(createElement(PilotConversationProgress,{rounds:[failed]}));
- assert.match(settled,/回应超时/);assert.doesNotMatch(settled,/Pilot 已汇总/);
- const offline=renderToStaticMarkup(createElement(PilotConversationProgress,{rounds:[round],connected:false}));
- assert.match(offline,/正在重连/);assert.doesNotMatch(offline,/status-text--active/);
+ const settled=renderToStaticMarkup(createElement(PilotConversationProgress,{round:failed,replies:[]}));
+ assert.match(settled,/回应超时/);assert.match(settled,/1 份专员报告/);
+ const offline=renderToStaticMarkup(createElement(PilotConversationProgress,{round,replies:[],connected:false}));
+ assert.match(offline,/正在重连/);assert.doesNotMatch(offline,/data-active="true"/);
 });
 
 test('a stored authentication failure stays visible after completion and while offline',()=>{
@@ -29,9 +30,9 @@ test('a stored authentication failure stays visible after completion and while o
   round.members[0]!,{...round.members[1]!,state:'failed',reason:'模型服务鉴权失败（HTTP 401）'},
  ]};
  for(const connected of [true,false]){
-  const html=renderToStaticMarkup(createElement(PilotConversationProgress,{rounds:[failed],connected}));
+  const html=renderToStaticMarkup(createElement(PilotConversationProgress,{round:failed,replies:[],connected}));
   const text=html.replace(/<[^>]*>/g,'');
-  assert.match(text,/1 \/ 2 位专员已回应/);
+  assert.match(text,/1 份专员报告/);assert.match(text,/1 位未回应/);
   assert.equal((text.match(/模型服务鉴权失败（HTTP 401）/g)??[]).length,1);
   assert.doesNotMatch(text,/回应失败：|等待重新连接/);
  }
@@ -58,6 +59,8 @@ test('progress stays with its originating turn and actual speakers retain their 
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,pilotWorkspace:workspace,assistantIdentity:{name:'Pilot',pilot:true}}));
  assert.match(html,/<strong>运维专员<\/strong>/);assert.ok(html.indexOf('data-conversation-id="round"')<html.indexOf('class="user-message-text">另一个问题'));
  assert.equal((html.match(/data-conversation-id="round"/g)??[]).length,1);
+ assert.equal((html.match(/1，运维专员到！/g)??[]).length,1);
+ assert.ok(html.indexOf('pilot-conversation-replies')<html.indexOf('1，运维专员到！'));
 });
 
 test('automatic conversation summaries stay in storage while requested synthesis and real speaker replies remain visible',()=>{

@@ -8,7 +8,7 @@ import {pilotReportParticipants,redundantJointReports} from './pilotReportGroups
 import {hasTaskProcess,SpecialistProcessLink} from './SpecialistProcessLink';
 import type {InspectSpecialist} from './SessionInspectorContext';
 import {usePilotSpecialistRows} from './usePilotSpecialistRows';
-import {PilotConversationProgress,conversationNeedsStatus} from './PilotConversationProgress';
+import {PilotConversationProgress} from './PilotConversationProgress';
 import {pendingUserSupplements} from "./messageQueue";
 import {latestInspectorSelection,canonicalGoalForExecution} from './sessionInspectorModel';
 import {MiniBoxCompletionNotice} from './MiniBox';
@@ -295,10 +295,22 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       const pilotTurnLive=turn===currentTurn&&turnStatus(timingProps.timing,timingProps.view,timingProps.cards,timingProps.latestUserAt,Date.now()).live;
       const executionDetails=[...detailGroups.map(renderGroup).filter(node=>node!=null),...compactionDiagnostics];
       const hasPilotProcess=executionDetails.length>0||!!notices;
-      const hideConversationStatus=turnConversations.length>0&&!turnConversations.some(conversationNeedsStatus)&&!turnDispatchRows.length&&!canonicalGoalId&&!pilotTurnLive&&!hasPilotProcess;
+      const hideConversationStatus=turnConversations.length>0&&!turnDispatchRows.length&&!canonicalGoalId&&!pilotTurnLive&&!hasPilotProcess;
       const visibleGroups=groups.filter(group=>!detailGroups.includes(group)&&!(proseInChannel&&group.entries.every(channelBody)));
+      const dialogueGroups=new Set<ConversationGroup>();
+      const dialogueReplies=new Map<string,SessionSnapshot['messages']>();
+      for(const group of visibleGroups){
+        const message=group.entries[0]?.message,reference=message?.conversation;
+        if(group.entries.length!==1||reference?.kind!=='reply'||message?.author?.kind!=='specialist')continue;
+        const round=turnConversations.find(round=>round.id===reference.id&&round.sourceMessageId===reference.sourceMessageId);
+        if(!round)continue;
+        dialogueGroups.add(group);
+        const replies=dialogueReplies.get(round.id)??[];
+        replies.push(message);
+        dialogueReplies.set(round.id,replies);
+      }
       const candidateReports=mode==='conversation'&&assistantIdentity?.pilot&&turn.some(entry=>entry.message?.role==='user')
-        ?visibleGroups.filter(group=>group.entries.length===1&&group.entries[0]?.message?.role==='assistant'&&group.entries[0].message.author?.kind==='specialist'):[];
+        ?visibleGroups.filter(group=>!dialogueGroups.has(group)&&group.entries.length===1&&group.entries[0]?.message?.role==='assistant'&&group.entries[0].message.author?.kind==='specialist'):[];
       const groupedReports=turnDispatchRows.length||candidateReports.length>1?candidateReports:[];
       const savedReports=groupedReports.map(group=>group.entries[0]!.message!);
       const reports=[...turnDispatchRows.flatMap(row=>row.finalReport?[row.finalReport]:[]),...savedReports];
@@ -320,12 +332,15 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
           <PilotSpecialistConversation rows={turnDispatchRows} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} connected={pilotConnected} onObservedTurn={onObservedTurn} onReportPresented={onPilotReportsPresented?onReportPresented:undefined} taskLabels={taskLabels}/>
           {savedReports.map(message=><TranscriptMessage key={message.id} message={message} sessionId={snapshot.session.id} assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} hideIdentity={hideReplyIdentity} taskLabel={taskLabels.get(message.author!.workerId)}/>)}
         </PilotReportGroup>;
-      const replyContent=<>{visibleGroups.filter(group=>!groupedReports.includes(group)).map(group=>mode==='conversation'&&group.entries.every(isAssistantProse)?<SettledReply key={group.entries[0]!.id} roleBreak={roleBreaks.has(group.entries[0]!.id)} continued={continuations.has(group.entries[0]!.id)}>{renderGroup(group)}</SettledReply>:renderGroup(group))}</>;
+      const collaboration=turnConversations.length?(footer:ReactNode)=>turnConversations.map((round,index)=><PilotConversationProgress
+        key={round.id} round={round} connected={pilotConnected} process={index===0?footer:undefined} onSpecialist={onSpecialist} onInspect={onInspect}
+        replies={(dialogueReplies.get(round.id)??[]).map(message=><TranscriptMessage key={message.id} message={message} sessionId={snapshot.session.id}
+          assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist}/>)}/>):undefined;
+      const replyContent=<>{visibleGroups.filter(group=>!dialogueGroups.has(group)&&!groupedReports.includes(group)).map(group=>mode==='conversation'&&group.entries.every(isAssistantProse)?<SettledReply key={group.entries[0]!.id} roleBreak={roleBreaks.has(group.entries[0]!.id)} continued={continuations.has(group.entries[0]!.id)}>{renderGroup(group)}</SettledReply>:renderGroup(group))}</>;
       return <ReplyReferenceScope key={turn[0]!.id} cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}><div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)}>
       {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources} arrive={entry.message!.id===latestUser?.id&&!restoredMessageIds.current.has(entry.message!.id)}/>)}
       {mode==='activity'&&<ReplyDuration assistantIdentity={assistantIdentity} {...timingProps}/>}
-      {mode==='conversation'?<TurnExecutionDetails footerReportId={footerReport?.id} specialistReplies={specialistReplies} hideStatus={hideConversationStatus} processOnly={turnConversations.length>0&&!pilotTurnLive} assistantIdentity={assistantIdentity} hideIdentity={hideReplyIdentity} latest={latestUser?turn===currentTurn:turn===turns.at(-1)} latestTaskId={latestInspectorTaskId} canonicalGoalId={canonicalGoalId} sessionId={snapshot.session.id} {...timingProps} presentingReply={presentingReply} hideLive={turn.some(entry=>entry.sre?.task.pilot)} detailNotice={pilotLive?undefined:notices} details={pilotLive?[]:executionDetails} onInspect={onInspect}>{replyContent}</TurnExecutionDetails>:replyContent}
-      {turnConversations.length>0&&<PilotConversationProgress rounds={turnConversations} connected={pilotConnected} onSpecialist={onSpecialist}/>}
+      {mode==='conversation'?<TurnExecutionDetails footerReportId={footerReport?.id} specialistReplies={specialistReplies} collaboration={collaboration} hideStatus={hideConversationStatus} assistantIdentity={assistantIdentity} hideIdentity={hideReplyIdentity} latest={latestUser?turn===currentTurn:turn===turns.at(-1)} latestTaskId={latestInspectorTaskId} canonicalGoalId={canonicalGoalId} sessionId={snapshot.session.id} {...timingProps} presentingReply={presentingReply} hideLive={turn.some(entry=>entry.sre?.task.pilot)} detailNotice={pilotLive?undefined:notices} details={pilotLive?[]:executionDetails} onInspect={onInspect}>{replyContent}</TurnExecutionDetails>:replyContent}
       <FileChanges live={turn===currentTurn&&(currentTiming?currentTiming.status==='running':liveConversation)} deferUntilEnd={mode==='conversation'} cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>
       <TaskProgress cards={turn.flatMap(entry => entry.card ? [entry.card] : [])} executionId={snapshot.superagent?.task.executionGoalId??snapshot.superagent?.task.taskId} legacyTurn historical={!liveConversation || (!!snapshot.superagent?.task && !hasCurrentTaskProgress(snapshot.superagent.task.state)) || turn!==(latestUser?currentTurn:turns.at(-1))}/>
       {mode==='conversation'&&!(turn===currentTurn&&liveConversation)&&<MiniBoxCompletionNotice notices={snapshot.commandStopNotices??[]} startedAt={miniStartedAt} endedAt={miniEndedAt}/>}
