@@ -102,8 +102,10 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
  const candidate=row.finalReport;
  const report=candidate&&(!entry?.reply?.turnId||entry.reply.turnId===candidate.author?.rootTurnId||
   candidate.id===row.worker.pilotReport?.messageId||candidate.replyToMessageId===row.sourceMessageId&&Date.parse(candidate.createdAt)>=Date.parse(entry.createdAt))?candidate:undefined;
+ const executing=row.activity.phase==='thinking'||row.activity.phase==='tool';
+ // The worker can finish before the workspace learns that its report is pending.
  const working=!report&&available&&status?.phase!=='waiting'&&
-  (awaitingReport?!!row.worker.pilotReport:['thinking','tool'].includes(row.activity.phase)&&
+  (awaitingReport?(executing||!!row.worker.pilotReport):executing&&
     (status?.phase!=='settled'||status.state==='回复结束'));
  const workedBinding=useRef('');
  useLayoutEffect(()=>{if(working)workedBinding.current=binding;},[working,binding]);

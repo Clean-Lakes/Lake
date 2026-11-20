@@ -45,6 +45,18 @@ test('received public prose stays still while its process entry moves through th
  }
 });
 
+test('a worker completion snapshot arriving before the workspace keeps motion through the report handoff',()=>{
+ const props=progress('tool');
+ props.row.observedRootTurnId='current-root';
+ props.snapshot.superagent!.task={...props.row.worker.task,state:'completed'};
+ props.snapshot.ai!.status='completed';
+ props.snapshot.ai!.replyStatus='completed';
+ const html=render(props);
+ assertQuietProse(html);
+ assert.match(html,/<span class="response-avatar"[^>]*>[\s\S]*?data-motion="working"/);
+ assert.match(processLink(html),/data-live-motion="active" data-live-glow="active"/);
+});
+
 test('the process entry stops for a real wait, terminal state, disconnection, or hidden surface without removing prose',()=>{
  for(const status of ['waiting_approval','waiting_input','waiting_external','queued','completed','failed','cancelled','interrupted','paused'] as const){
   const props=progress('tool');props.snapshot.ai!.status=status;
