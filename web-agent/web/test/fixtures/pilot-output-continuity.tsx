@@ -84,7 +84,8 @@ function snapshot(base: SessionSnapshot, worker?: SuperWorker): SessionSnapshot 
   if(ai&&dialogue){
     ai.status='completed';ai.replyStatus='completed';ai.turnFinishedAt=at(dialogueHandoffMs);
     ai.cards=[{id:'pilot-opening',type:'message',status:'completed',at:at(200),content:'已邀请大家逐一回应。',data:{root_turn_id:root,source_message_id:source.id}},
-      {id:'pilot-invite',type:'operation',title:'convene_specialists',status:'completed',at:at(150),content:'已召集八位专员',data:{root_turn_id:root}}];
+      {id:'pilot-invite',type:'operation',title:'convene_specialists',status:'completed',at:at(150),content:JSON.stringify(dialogueRound()),
+        data:{root_turn_id:root,source_message_id:source.id}}];
   }
   if(ai)ai.totalCards=ai.cards.length;
   return {...base, cursor, messages, ai, superagent:worker?{roleId:worker.roleId, task:worker.task} as SessionSnapshot['superagent']:undefined,

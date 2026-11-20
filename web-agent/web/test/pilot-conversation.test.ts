@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import type {SpecialistConversation,SuperWorkspace,SessionSnapshot,Message} from '../../shared/contracts';
+import type {AICard,SpecialistConversation,SuperWorkspace,SessionSnapshot,Message} from '../../shared/contracts';
 import {PilotConversationProgress} from '../src/PilotConversationProgress';
 import {ReplyFooter} from '../src/ReplyFooter';
 import {superPilotActivity} from '../src/superPilotActivity';
@@ -88,4 +88,42 @@ test('automatic conversation summaries stay in storage while requested synthesis
  const before=JSON.stringify(snapshot),html=renderToStaticMarkup(createElement(AITranscript,{snapshot,pilotWorkspace:workspace,assistantIdentity:{name:'Pilot',pilot:true}}));
  assert.doesNotMatch(html,/AUTOMATIC_REPEATED_ROSTER/);assert.match(html,/REQUESTED_INTEGRATED_CONCLUSION/);assert.match(html,/ORDINARY_PILOT_REPLY/);
  assert.equal(JSON.stringify(snapshot),before);
+});
+
+test('a dialogue conclusion replaces its acknowledgement in the original Pilot message even after a later user turn',()=>{
+ const at=(second:number)=>new Date(Date.parse(round.createdAt)+second*1000).toISOString();
+ const user:Message={id:'human',sessionId:'pilot',role:'user',text:'请专员报到',createdAt:at(0)};
+ const later:Message={...user,id:'later',text:'另一个独立问题',createdAt:at(4)};
+ const answer:Message={...later,id:'later-answer',role:'assistant',text:'这里是独立回答',createdAt:at(5),replyToMessageId:later.id};
+ const summary:Message={id:'conclusion',sessionId:'pilot',role:'assistant',text:'专员们已经报到。',createdAt:at(9),
+  conversation:{id:round.id,sourceMessageId:user.id,kind:'summary',summaryRequested:true}};
+ const data={root_turn_id:'invite-root',source_message_id:user.id};
+ const cards:AICard[]=[
+  {id:'invite',type:'operation',title:'convene_specialists',status:'completed',at:at(1),content:JSON.stringify(round),data},
+  {id:'acknowledgement',type:'message',status:'completed',at:at(2),content:'已经请大家逐一回应。',data},
+ ];
+ const snapshot={session:{id:'pilot',projectId:'project',workspaceRole:'router'},messages:[user,later,answer],resources:[],actions:[],
+  ai:{session:'pilot',status:'completed',cards,cardsOffset:0}} as unknown as SessionSnapshot;
+ const render=(value:SessionSnapshot)=>renderToStaticMarkup(createElement(AITranscript,{snapshot:value,assistantIdentity:{name:'Pilot',pilot:true}}));
+ const readBody=(html:string)=>html.split('class="turn-execution-details')[0]!;
+ assert.match(readBody(render(snapshot)),/data-conversation-entry="acknowledgement".*已经请大家逐一回应。/);
+ const completed={...snapshot,messages:[...snapshot.messages,summary]};
+ const saved=JSON.stringify(completed),html=render(completed),body=readBody(html);
+ assert.match(body,/data-conversation-entry="acknowledgement".*专员们已经报到。/);
+ assert.doesNotMatch(body,/已经请大家逐一回应。/);
+ assert.equal((body.match(/<strong>Pilot<\/strong>/g)??[]).length,1);
+ assert.match(html,/turn-process-prose[^]*已经请大家逐一回应。/);
+ assert.ok(html.indexOf(summary.text)<html.indexOf(later.text));
+ assert.match(html,/这里是独立回答/);
+ assert.equal(JSON.stringify(completed),saved);
+
+ for(const result of [
+  {...summary,conversation:{...summary.conversation!,id:'another-round'}},
+  {...summary,conversation:{...summary.conversation!,kind:'notice' as const}},
+ ]){
+  assert.match(readBody(render({...snapshot,messages:[...snapshot.messages,result]})),/已经请大家逐一回应。/);
+ }
+ const mixed={...completed,ai:{...completed.ai!,cards:[{id:'lookup',type:'operation',title:'inspect_host',
+  status:'completed',at:at(0.5),data},...cards]}};
+ assert.match(readBody(render(mixed)),/已经请大家逐一回应。/);
 });

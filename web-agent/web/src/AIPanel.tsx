@@ -22,7 +22,7 @@ import {workerTranscriptCards,workerConversationTurns,isDeliveredWorkerInterim} 
 import {completedTurnInterimIds,isAssistantProse,trailingTurnReplyId} from './completedTurnProse';
 import {SettledReply} from './SettledReply';
 import {pilotReplyContinuations,replyRoleBreaks} from './replyGrouping';
-import {pilotHandoffInterimIds,recoveredRouteFailures} from './routeDispatchPresentation';
+import {pilotDialogueCompletion,pilotHandoffInterimIds,recoveredRouteFailures} from './routeDispatchPresentation';
 import {OperationOutcomes} from './OperationOutcomes';
 import {MessageText} from './MessageText';
 import {StrategyCorrectionCard} from './StrategyCorrectionCard';
@@ -230,7 +230,9 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
     {mode === "activity" && !turns.length && !snapshot.ai?.operationOutcomes?.some(operation => operation.status === "unknown") && <div className="record-empty"><h2>暂无执行记录</h2><p>工具调用、子 Agent 任务和文件变更会按轮次保留在这里。</p></div>}
     {error && <p role="alert">{error}</p>}
     {turns.map((turn, index) => {
-      const handoffInterim=mode==='conversation'&&assistantIdentity?.pilot&&!(index===0&&before>0)&&!(turn===currentTurn&&(snapshot.ai?.pending||snapshot.ai?.question))?pilotHandoffInterimIds(turn):new Set<string>();
+      const canFoldPilotProcess=mode==='conversation'&&assistantIdentity?.pilot&&!(index===0&&before>0)&&!(turn===currentTurn&&(snapshot.ai?.pending||snapshot.ai?.question));
+      const handoffInterim=canFoldPilotProcess?pilotHandoffInterimIds(turn):new Set<string>();
+      const dialogueCompletion=canFoldPilotProcess?pilotDialogueCompletion(turn):undefined;
       const groups=mode==='conversation'?conversationDisplayGroups(sreConversationRoles(conversationTurnEntries(turn)),turn===currentTurn&&liveConversation,snapshot.resources):transcriptGroups(turn.filter(entry=>!isFileChangeCard(entry.card)&&activityEntry(entry))).map(entries=>({progress:false,entries}));
       const processGroups=mode==='conversation'?groups.filter(group=>group.progress):[];
       const activeReply=turn===currentTurn&&(!currentTiming||currentTiming.status==='running')?turn.filter(isAssistantProse).at(-1)?.id:undefined;
@@ -262,6 +264,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       }
       const hiddenProse=new Set(turn.filter(entry=>isAssistantProse(entry)&&!(entry.message?.text.trim()||entry.card?.content?.trim())).map(entry=>entry.id));
       for(const id of interimProse)hiddenProse.add(id);
+      if(dialogueCompletion)hiddenProse.add(dialogueCompletion.summary.id);
       const continuations=mode==='conversation'&&assistantIdentity?.pilot?pilotReplyContinuations(turn,hiddenProse,hiddenProcess):new Set<string>();
       const roleBreaks=mode==='conversation'&&!hideReplyIdentity?replyRoleBreaks(turn,hiddenProse,hiddenProcess):new Set<string>();
       const activeIdentity=activeReply&&continuations.has(activeReply)?turn.slice(0,turn.findIndex(entry=>entry.id===activeReply)).filter(entry=>isAssistantProse(entry)&&!hiddenProse.has(entry.id)&&!continuations.has(entry.id)).at(-1)?.id:activeReply;
@@ -284,7 +287,9 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
         if (entry.card && ["thinking", "operation", "shell"].includes(entry.card.type)) return <ThinkingTimeline key={entry.id} cards={group.map(item => item.card!)} live={thinkingVisible && group.at(-1)?.id === visibleEntries.at(-1)?.id} onInspect={onInspect}/>;
         if (entry.message) return entry.message.role==='user'?null:<TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message} roleBreak={!!entry.message.author&&roleBreaks.has(entry.id)} assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} hideIdentity={hideReplyIdentity} continued={continuations.has(entry.id)} motion={replyMotion(entry.id)}/>;
         if (entry.action) return <div key={entry.id}>{renderAction?.(entry.action)}</div>;
-        return <ReplyArrival key={entry.id} entryId={entry.id} continued={continuations.has(entry.id)} arrive={false}>{entry.card&&['text','message'].includes(entry.card.type) && <ReplyIdentity identity={assistantIdentity} hidden={hideReplyIdentity} continued={continuations.has(entry.id)} motion={replyMotion(entry.id)}/>}<Card card={entry.card!} tags={snapshot.session.tags} animateInitial={!restoredText.current.has(entry.card!.id)} onOpenPlans={onOpenPlans} onOpenMemory={onOpenMemory}/></ReplyArrival>;
+        const card=dialogueCompletion?.acknowledgement.id===entry.id
+          ?{...dialogueCompletion.acknowledgement,content:dialogueCompletion.summary.text}:entry.card!;
+        return <ReplyArrival key={entry.id} entryId={entry.id} continued={continuations.has(entry.id)} arrive={false}>{['text','message'].includes(card.type) && <ReplyIdentity identity={assistantIdentity} hidden={hideReplyIdentity} continued={continuations.has(entry.id)} motion={replyMotion(entry.id)}/>}<Card card={card} tags={snapshot.session.tags} animateInitial={!restoredText.current.has(card.id)} onOpenPlans={onOpenPlans} onOpenMemory={onOpenMemory}/></ReplyArrival>;
       };
       const pilotLive=miniScope.live&&turn.some(entry=>entry.sre?.task.pilot);
       // The actual post-tool reply keeps its key from its first chunk onward;
@@ -294,6 +299,10 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       const canonicalGoalId=canonicalGoalForExecution(snapshot,timingProps.cards,pilotWorkspace?.workers.map(worker=>worker.task));
       const pilotTurnLive=turn===currentTurn&&turnStatus(timingProps.timing,timingProps.view,timingProps.cards,timingProps.latestUserAt,Date.now()).live;
       const executionDetails=[...detailGroups.map(renderGroup).filter(node=>node!=null),...compactionDiagnostics];
+      if(dialogueCompletion){
+        const {acknowledgement}=dialogueCompletion;
+        executionDetails.push(<InterimReply key={acknowledgement.id} entryId={acknowledgement.id} text={acknowledgement.content??''}/>);
+      }
       const hasPilotProcess=executionDetails.length>0||!!notices;
       const hideConversationStatus=turnConversations.length>0&&!turnDispatchRows.length&&!canonicalGoalId&&!pilotTurnLive&&!hasPilotProcess;
       const visibleGroups=groups.filter(group=>!detailGroups.includes(group)&&!(proseInChannel&&group.entries.every(channelBody)));
@@ -336,7 +345,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
         key={round.id} round={round} connected={pilotConnected} process={index===0?footer:undefined} onSpecialist={onSpecialist} onInspect={onInspect}
         replies={(dialogueReplies.get(round.id)??[]).map(message=><TranscriptMessage key={message.id} message={message} sessionId={snapshot.session.id}
           assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist}/>)}/>):undefined;
-      const replyContent=<>{visibleGroups.filter(group=>!dialogueGroups.has(group)&&!groupedReports.includes(group)).map(group=>mode==='conversation'&&group.entries.every(isAssistantProse)?<SettledReply key={group.entries[0]!.id} roleBreak={roleBreaks.has(group.entries[0]!.id)} continued={continuations.has(group.entries[0]!.id)}>{renderGroup(group)}</SettledReply>:renderGroup(group))}</>;
+      const replyContent=<>{visibleGroups.filter(group=>!dialogueGroups.has(group)&&!groupedReports.includes(group)&&group.entries[0]?.id!==dialogueCompletion?.summary.id).map(group=>mode==='conversation'&&group.entries.every(isAssistantProse)?<SettledReply key={group.entries[0]!.id} roleBreak={roleBreaks.has(group.entries[0]!.id)} continued={continuations.has(group.entries[0]!.id)}>{renderGroup(group)}</SettledReply>:renderGroup(group))}</>;
       return <ReplyReferenceScope key={turn[0]!.id} cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}><div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)}>
       {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources} arrive={entry.message!.id===latestUser?.id&&!restoredMessageIds.current.has(entry.message!.id)}/>)}
       {mode==='activity'&&<ReplyDuration assistantIdentity={assistantIdentity} {...timingProps}/>}

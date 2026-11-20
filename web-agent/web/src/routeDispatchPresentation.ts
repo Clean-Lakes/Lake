@@ -11,6 +11,31 @@ const settled=new Set(['completed','succeeded','success']);
 const handoffTools=new Set(['list_specialists','manage_specialist','search_super_tasks','route_work']);
 const rootOf=(card:AICard)=>{const root=record(card.data)?.root_turn_id;return typeof root==='string'&&root.trim()?root:undefined};
 
+/** A text-only invitation's conclusion replaces its acknowledgement in the
+ * transcript. The host receipt binds the reply to the exact user and round. */
+export function pilotDialogueCompletion(turn:readonly TranscriptEntry[]) {
+ const user=turn[0]?.message;
+ if(user?.role!=='user'||turn.some(entry=>entry.action||entry.agentRun||entry.sre||entry.message?.dispatch))return;
+ const cards=turn.flatMap(entry=>entry.card?[entry.card]:[]);
+ if(cards.some(card=>!rootOf(card)))return;
+ const invitations=cards.filter(card=>card.type==='operation'&&card.title==='convene_specialists');
+ if(invitations.length!==1)return;
+ const invitation=invitations[0]!,receipt=record(invitation.content),root=rootOf(invitation);
+ if(!root||!settled.has(invitation.status)||typeof receipt?.id!=='string'||!receipt.id||
+   receipt.sessionId!==user.sessionId||receipt.sourceMessageId!==user.id)return;
+ const invocation=cards.filter(card=>rootOf(card)===root);
+ const invitationIndex=invocation.indexOf(invitation);
+ if(invocation.some((card,index)=>!settled.has(card.status)||
+   !['message','text','thinking'].includes(card.type)&&card!==invitation&&
+   !(index<invitationIndex&&card.type==='operation'&&card.title==='list_specialists')))return;
+ const acknowledgements=invocation.slice(invitationIndex+1).filter(card=>['message','text'].includes(card.type)&&card.content?.trim());
+ if(acknowledgements.length!==1)return;
+ const summaries=turn.flatMap(({message})=>message?.role==='assistant'&&!message.author&&!message.dispatch&&
+   message.sessionId===user.sessionId&&message.conversation?.kind==='summary'&&message.conversation.summaryRequested===true&&
+   message.conversation.id===receipt.id&&message.conversation.sourceMessageId===user.id&&message.text.trim()?[message]:[]);
+ if(summaries.length===1)return {acknowledgement:acknowledgements[0]!,summary:summaries[0]!};
+}
+
 /** Retire only a proven Pilot handoff preamble, after its actual reply arrives.
  * Exact SDK root and host receipt bind both packets; text similarity is never
  * evidence. Original packets remain in the execution details and saved history. */
