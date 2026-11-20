@@ -42,7 +42,7 @@ export function NativeModelPanelPage() {
   },[]);
   if(!state) return null;
   const relay=(event:Omit<NativeModelPanelEvent,"id">)=>{void nativePanelCommand({action:"event",event:{id:state.id,...event}});};
-  return <ComposerModelSelect {...state} disabled={state.disabled||saving} configured open onOpenChange={()=>{}} onSettings={()=>relay({kind:"settings"})} onProviderMenu={async request=>await nativePanelCommand({action:"providers",...request}) as string|null}
+  return <ComposerModelSelect {...state} disabled={state.disabled||saving} configured={!!state.modelName} open onOpenChange={()=>{}} onSettings={()=>relay({kind:"settings"})} onProviderMenu={async request=>await nativePanelCommand({action:"providers",...request}) as string|null}
     onExternalAgentSelect={()=>relay({kind:'select',value:codexModelValue})} onExternalAgentSettings={()=>relay({kind:'select',value:codexSettingsValue})}
     onSelect={model=>relay({kind:"select",value:typeof model==="string"?model:JSON.stringify([model.providerId,model.modelId])})}
     reasoning={state.reasoning?{...state.reasoning,onSaving:saving=>{setSaving(saving);relay({kind:"saving",saving,session:state.reasoning!.session});}}:undefined}/>;
