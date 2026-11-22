@@ -604,6 +604,7 @@ export class LakeSuperagent implements AgentHost {
     }
     return { id: worker.id, createdAt: worker.createdAt, roleId: worker.roleId, roleName: worker.roleSnapshot.name,
       sessionId: worker.sessionId, task: this.taskView(goal), assignmentState: worker.state, pilotReport,
+      ...(pilotSessionId && sourceEvent?.sessionId === pilotSessionId && {pilotSourceMessageId:sourceEvent.messageId}),
       ...(sourceEvent?.external && { sourceExternal: true }),
       activity: this.workerActivity(worker),execution:this.workerExecution(worker,this.workerRuns(worker,runs)) };
   }
@@ -1344,11 +1345,14 @@ export class LakeSuperagent implements AgentHost {
     const channel = this.channelFor(sessionId), worker = this.workerFor(sessionId);
     const preferredRoleId = gatewayReceipt?.preferredRoleId ?? channel?.roleId ?? (worker?.inline?undefined:worker?.roleId);
     if (preferredRoleId) this.role(source.projectId, preferredRoleId);
+    let taskReference: Message["taskReference"];
     if (explicitTaskId) {
       const goal = this.ledger.get(explicitTaskId);
       if (goal.projectId !== source.projectId || goal.sharedTaskId && goal.sharedTaskId !== explicitTaskId)
         throw new HttpError(404, "Explicit task not found in this channel");
       if (preferredRoleId) this.routedGoal(source.projectId, explicitTaskId, preferredRoleId);
+      if (sessionId === project.routerSessionId)
+        taskReference = {taskId:explicitTaskId,title:this.agents.redact(this.ledger.jointTask(explicitTaskId)?.title ?? goal.title)};
     }
     // No await or observer notification may separate the idempotency check,
     // accepted input and durable receipt. A failed receipt rolls back the input.
@@ -1359,7 +1363,7 @@ export class LakeSuperagent implements AgentHost {
         if (prior.hash !== gatewayReceipt!.hash) throw new HttpError(409, "同一 clientRequestId 的指令内容已变化；请改用新的幂等键发送新指令");
         return { message: this.store.require<Message>("messages", prior.messageId), duplicate: true };
       }
-      const message = this.store.addMessage(sessionId, "user", this.agents.redact(value), {mentions: selectedReferences?.mentions, ...(external&&{external})});
+      const message = this.store.addMessage(sessionId, "user", this.agents.redact(value), {mentions: selectedReferences?.mentions, ...(external&&{external}), ...(taskReference&&{taskReference})});
       if (selectedReferences) this.store.put('messageInputs', message.id, {messageId: message.id, projectId: source.projectId, sessionId, ...selectedReferences});
       if (selectedReferences?.resourceIds.length) this.store.put('sessionResourceReferences', sessionId, {resourceIds: selectedReferences.resourceIds, sourceMessageId: message.id});
       const event: InputEvent = { id: id(), projectId: source.projectId, sessionId, messageId: message.id, payload: this.agents.redact(value),
@@ -1595,8 +1599,10 @@ export class LakeSuperagent implements AgentHost {
     if(previous?.inputEventIds.includes(batch.eventIds[0]))return previous;
     const source=this.store.require<InputEvent>('superInputs',batch.eventIds[0]);
     const explicit=source.explicitTaskId?this.store.get<Goal>('superGoals',source.explicitTaskId):undefined;
-    const old=explicit?this.store.require<Worker>('superWorkers',explicit.workerId):undefined;
-    if(old?.inline&&(terminal(explicit!.status)||Date.parse(explicit!.deadlineAt)<=Date.now()))throw new HttpError(409,'原 Pilot 任务已结清或达到处理上限');
+    // Closed Pilot tasks can provide history for a reply even when their
+    // execution can no longer be resumed.
+    const old=explicit&&!terminal(explicit.status)&&Date.parse(explicit.deadlineAt)>Date.now()?
+      this.store.require<Worker>('superWorkers',explicit.workerId):undefined;
     const worker:Worker=old?.inline?{...old,generation:old.generation+1,state:'active',owner:this.owner,leaseUntil:Date.now()+45000,policyHash:this.policy(project.projectId),inputEventIds:[...old.inputEventIds,...batch.eventIds],invocationInputIds:batch.eventIds}:
       {inline:true,id:'pilot_worker_'+key.slice(0,32),taskId:'pilot_task_'+key.slice(0,32),sessionId:project.routerSessionId,projectId:project.projectId,roleId:'pilot:'+project.projectId,
        roleSnapshot:{id:'pilot:'+project.projectId,projectId:project.projectId,roleKey:'pilot',name:'Pilot',duties:'按用户当前请求自主调查、执行与验证',revision:1},sourceEventId:source.id,generation:1,state:'active',owner:this.owner,leaseUntil:Date.now()+45000,policyHash:this.policy(project.projectId),createdAt:now(),inputEventIds:batch.eventIds,invocationInputIds:batch.eventIds};
@@ -1607,7 +1613,11 @@ export class LakeSuperagent implements AgentHost {
     if(this.store.get<Worker>('superWorkers',worker.id)?.generation===worker.generation)return;
     const source=this.store.require<InputEvent>('superInputs',batch.eventIds[0]),session=this.store.session(worker.sessionId);
     if(batch.eventIds.some(id=>!!this.store.require<InputEvent>('superInputs',id).preferredRoleId))throw new HttpError(403,'专员频道的要求须在对应独立任务中执行');
-    if(source.explicitTaskId&&!this.store.require<Worker>('superWorkers',this.ledger.get(source.explicitTaskId).workerId).inline)throw new HttpError(403,'此输入属于已有独立任务，请继续该任务');
+    if(source.explicitTaskId&&source.explicitTaskId!==worker.taskId){
+      const original=this.ledger.get(source.explicitTaskId);
+      if(!this.store.require<Worker>('superWorkers',original.workerId).inline)throw new HttpError(403,'此输入属于已有独立任务，请继续该任务');
+      throw new HttpError(409,'原 Pilot 任务已结清或达到处理上限');
+    }
     const existing=this.store.get<Goal>('superGoals',worker.taskId);
     if(existing&&(terminal(existing.status)||Date.parse(existing.deadlineAt)<=Date.now()))throw new HttpError(409,'原任务已结清或达到处理上限');
     if(!this.store.get('superGoals',worker.taskId))this.ledger.create({id:worker.taskId,sessionId:worker.sessionId,projectId:worker.projectId,workerId:worker.id,roleId:worker.roleId,sourceEventId:source.id,originRootTurnId:this.store.view(worker.sessionId).rootTurnId??'super_'+worker.id,userText:source.payload,title:clip(source.payload,1000),status:'running',deadlineAt:new Date(Date.parse(source.receivedAt)+86400000).toISOString(),mode:session.options.conversationMode==='plan'?'plan':'default',executionMode:session.options.conversationMode==='plan'?'explicit_plan':'host_managed'});
@@ -1631,7 +1641,13 @@ export class LakeSuperagent implements AgentHost {
       return {...common,get taskId(){return worker.taskId;},get workerId(){return worker.id;},version:'pilot:agent:'+worker.id+':'+worker.generation,systemPrompt:superRouterPrompt,
         memoryActor:{kind:'pilot',projectId:project.projectId},tools:[...this.routerEntries(sessionId),...common.tools],allowlist:[...routerTools,...common.allowlist],
         projectRequest:request=>this.projectRouterRequest(project.projectId,request),
-        beforeModel:()=>{if(this.store.get('superWorkers',worker.id))common.beforeModel?.();else worker.preTaskModelRounds=(worker.preTaskModelRounds??0)+1;},
+        beforeModel:()=>{
+          // Selecting an earlier task supplies context before an actual
+          // followup or tool invocation registers this generation.
+          const current=this.store.get<Worker>('superWorkers',worker.id);
+          if(current&&current.generation>=worker.generation)common.beforeModel?.();
+          else worker.preTaskModelRounds=(worker.preTaskModelRounds??0)+1;
+        },
         invokeControl:async(entry,input,context)=>{this.ensurePilotTask(worker);return common.invokeControl!(entry,input,context);},
         invoke:async(entry,input,context)=>{if(routerTools.includes(entry.metadata.name))return entry.handler(input,context);this.ensurePilotTask(worker);return common.invoke!(entry,input,context);}};
     }
@@ -2645,7 +2661,11 @@ export class LakeSuperagent implements AgentHost {
   }
   settled(sessionId: string, outcome?: TurnOutcome) {
     if(this.conversations.settled(sessionId,outcome)){this.schedule();return;}
-    if (this.projectFor(sessionId)) {const actor=this.pilotActors.get(sessionId),worker=actor&&this.store.get<Worker>('superWorkers',actor.id);if(worker?.inline)this.workerFinished(sessionId,outcome);this.routerFinished(sessionId,outcome?.error,outcome?.response);}
+    if (this.projectFor(sessionId)) {
+      const actor=this.pilotActors.get(sessionId),worker=actor&&this.store.get<Worker>('superWorkers',actor.id);
+      if(worker?.inline&&worker.generation===actor?.generation)this.workerFinished(sessionId,outcome);
+      this.routerFinished(sessionId,outcome?.error,outcome?.response);
+    }
     else if (this.workerFor(sessionId)) this.workerFinished(sessionId,outcome);
     this.schedule();
   }
