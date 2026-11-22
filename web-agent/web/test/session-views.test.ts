@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { AITranscript } from "../src/AIPanel";
 import { SessionListTags, SessionActions, SessionStateBadge } from "../src/SessionPresentation";
 import { ConversationDirectory, activeDirectoryItem, conversationDirectoryItems, conversationTurnId } from "../src/ConversationDirectory";
-import {pilotDirectoryTasks} from "../src/PilotTaskDirectory";
+import {PilotTaskReferenceChip,pilotDirectoryTasks,pilotTaskParticipants} from "../src/PilotTaskDirectory";
 import type { Message, SessionSnapshot, SuperWorker, SuperWorkspace, WorkspaceTag } from "../../shared/contracts";
 
 const at="2026-10-14T02:00:00Z";
@@ -180,10 +180,14 @@ test("Pilot task directory groups collaborators by public task identity and keep
   const old=worker('old','prior','2026-10-10T02:00:00Z');
   const first=worker('first','joint',at),second=worker('second','joint',at);
   first.pilotReport={messageId:'member-report',executionSettled:true};
-  const foreign=worker('foreign','private',at);
+  first.task.collaboration={state:'completed',acceptanceState:'not_evaluated',participants:[
+    {workerId:second.id,sessionId:second.sessionId,roleId:second.roleId,roleName:second.roleName,state:'completed',contributed:true},
+  ]};
+  const repeated={...worker('repeat','joint',at),roleId:first.roleId};
+  const foreign=worker('foreign','joint',at);
   foreign.task.projectId='other';
   const workspace:SuperWorkspace={active:true,project:{projectId:session.projectId,routerSessionId:session.id,version:1},
-    workers:[first,old,second,foreign,{...worker('child','child-task',at),parentWorkerId:first.id}]};
+    workers:[first,old,second,repeated,foreign,{...worker('child','joint',at),parentWorkerId:first.id}]};
   const messages:Message[]=[
     {id:'original',sessionId:session.id,role:'user',text:'检查主机',createdAt:at},
     {id:'member-report',sessionId:session.id,role:'assistant',text:'节点状态正常。',createdAt:at,
@@ -196,6 +200,14 @@ test("Pilot task directory groups collaborators by public task identity and keep
   assert.equal(tasks[0]?.summary,'主机可达，查询还待验证。');
   assert.equal(tasks[0]?.reports,1);
   assert.equal(tasks[0]?.sourceMessageId,'original');
+  const members=pilotTaskParticipants(workspace,session,'joint');
+  assert.deepEqual(members,tasks[0]?.members);
+  assert.deepEqual(members.map(member=>member.roleId),['first','second'],'deduplicates roles within the exact task');
+  assert.deepEqual(pilotTaskParticipants(workspace,session,'prior').map(member=>member.roleId),['old'],'keeps same-title tasks separate');
+  assert.deepEqual(pilotTaskParticipants(workspace,{...session,id:'other-pilot'},'joint'),[]);
+  const chip=renderToStaticMarkup(createElement(PilotTaskReferenceChip,{task:tasks[0]!,members,compact:true,onClear:()=>{}}));
+  assert.match(chip,/data-role-id="first".*data-role-id="second"/);
+  assert.match(chip,/aria-label="移除任务续接"/);
   assert.deepEqual(pilotDirectoryTasks({workspace,session:{...session,id:'other-pilot'},messages,resources:[]}),[]);
   const html=renderToStaticMarkup(createElement(ConversationDirectory,{sessionId:session.id,items:[],onJump:()=>{},onLatest:()=>{},
     taskDirectory:{workspace,session,messages,resources:[],onContinue:()=>{}}}));

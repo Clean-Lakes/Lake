@@ -344,6 +344,16 @@ a { color: inherit; }
 .empty-icon { display: grid; place-items: center; width: 46px; height: 46px; background: var(--surface-hover); border-radius: var(--radius-panel); color: var(--text-secondary); }
 .timeline-empty h2 { margin: 17px 0 7px; color: var(--foreground); font-size: 20px; font-weight:var(--font-weight-semibold); }
 .timeline-empty p { margin: 0; max-width: 440px; color: var(--text-secondary); font-size: var(--font-size-ui); line-height: 1.8; }
+.timeline-list:has(> .timeline-empty.is-pilot) { height:100%; }
+.timeline-empty.is-pilot { align-items:center; text-align:center; }
+.timeline-empty.is-pilot h2 { margin:9px 0 0; font-size:var(--font-size-ui); }
+.pilot-empty-shore { position:relative; display:grid; place-items:center; width:116px; height:75px; }
+.pilot-empty-shore::before {
+  content:""; position:absolute; inset:auto 12px 9px; height:1px;
+  background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--info) 26%,transparent),transparent);
+}
+.pilot-empty-shore > .super-role-avatar { width:58px; height:58px; filter:saturate(.72); }
+.pilot-empty-shore > .super-role-avatar > svg { width:100%; height:100%; }
 .empty-hint { margin-top: 11px; font-size: var(--font-size-ui); color: var(--text-secondary); }
 .terminal-drawer { flex: 0 0 auto; min-height: 47px; width: min(790px, calc(100% - 52px)); margin: 0 0 0 var(--session-gutter, 24px); border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface-subtle); overflow: hidden; }
 .terminal-drawer.drawer-open { max-height: min(48vh, 480px); overflow-y: auto; scrollbar-width: thin; }

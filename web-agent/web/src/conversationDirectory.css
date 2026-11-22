@@ -44,7 +44,6 @@
 .conversation-task-search > input::placeholder { color:var(--text-muted); }
 .conversation-task-row { align-items:center; justify-content:space-between; padding:7px 8px; }
 .conversation-task-row[aria-pressed=true] { background:var(--surface-selected); }
-.conversation-task-row > svg { flex:none; color:var(--text-muted); }
 .conversation-task-row-text { display:grid; min-width:0; gap:3px; }
 .conversation-task-title { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-weight:var(--font-weight-medium); }
 .conversation-task-meta,.conversation-task-preview-meta,.conversation-task-empty { color:var(--text-muted); font-size:var(--font-size-toolbar); }
@@ -70,6 +69,7 @@
  color:var(--info); background:var(--info-soft); font-size:var(--font-size-toolbar); line-height:1.4;
 }
 .pilot-task-reference.is-draft { min-height:24px; padding-inline-end:4px; border-radius:var(--radius-composer-reference); }
+.pilot-task-reference .task-specialist-avatars { --inline-task-avatar-size:16px; }
 .pilot-task-reference small { font-size:inherit; white-space:nowrap; }
 .pilot-task-reference-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pilot-task-reference > svg,.pilot-task-reference > button { flex:none; }
@@ -86,6 +86,13 @@
 .composer-foot > .pilot-task-reference.is-compact:is(:hover,:focus-within) { background:var(--surface-hover); }
 @container lake-composer (max-width:460px) {
  .pilot-task-reference.is-compact .pilot-task-reference-status { display:none; }
+}
+@container lake-composer (max-width:370px) {
+ .composer-foot > .pilot-task-reference.is-compact { gap:2px; padding-inline:0; }
+ .pilot-task-reference.is-compact .task-specialist-avatars { --inline-task-avatar-size:15px; }
+ .pilot-task-reference.is-compact .task-specialist-avatar:nth-child(n+3),
+ .pilot-task-reference.is-compact .task-specialist-overflow:not(.is-narrow) { display:none; }
+ .pilot-task-reference.is-compact .task-specialist-overflow.is-narrow { display:flex; }
 }
 @media(pointer:coarse) {
  .conversation-task-actions > .conversation-task-continue,.conversation-task-search > input { min-height:44px; }
