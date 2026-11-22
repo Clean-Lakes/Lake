@@ -161,7 +161,7 @@ test('a host-confirmed report replaces the same task slot across SDK invocations
  assert.equal(beforeWorkspace.finalReport,result,'the report stream can lead the workspace stream');
  const rendered=html(beforeWorkspace,snapshot(row));
  assert.match(rendered.replace(/<[^>]*>/g,''),/正式结论。/);
- assert.doesNotMatch(rendered,/class="specialist-reply-feather"/);
+ assert.doesNotMatch(rendered,/class="specialist-reply-cursor"/);
  item.activity=undefined;item.assignmentState='parked';item.task={...item.task,state:'completed'};
  item.pilotReport={messageId:result.id,executionSettled:true};
  assert.equal(advance(initial,workspace([item]),[user,result])[0]!.finalReport,result);
@@ -176,10 +176,26 @@ test('published stage prose keeps working motion and trims only its terminal ful
   cards:ai.cards.map(card=>({...card,status:'completed',content:'先核对版本 1.4。正在查看样例记录。'}))}});
  assert.match(rendered,/data-motion="working"/);
  assert.match(rendered.replace(/<[^>]*>/g,''),/先核对版本 1\.4。正在查看样例记录(?!。)/);
- assert.match(rendered,/class="specialist-reply-feather-tail">录<span class="specialist-reply-feather" aria-hidden="true"/);
+ assert.match(rendered,/class="specialist-reply-cursor-tail">录<span class="specialist-reply-cursor" data-cursor-avatar="[a-z-]+" aria-hidden="true"/);
 
  const paused=renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row,snapshot:live,available:false}));
- assert.doesNotMatch(paused,/class="specialist-reply-feather"/);
+ assert.doesNotMatch(paused,/class="specialist-reply-cursor"/);
+});
+
+test('Pilot uses the speaking specialist’s avatar for the cursor and removes it on delivery',()=>{
+ for(const [avatar,feature] of [['rabbit','ear'],['kingfisher','plume'],['owl','eyes'],['beaver','artwork']] as const){
+  const initial=advance([],workspace())[0]!;
+  const row={...initial,author:{...initial.author,avatarId:avatar}};
+  const live=snapshot(row);
+  const rendered=html(row,live);
+  assert.match(rendered,new RegExp(`class="super-role-avatar" data-role="${avatar}"`));
+  assert.match(rendered,new RegExp(`class="specialist-reply-cursor" data-cursor-avatar="${avatar}" aria-hidden="true"`));
+  assert.match(rendered,new RegExp(`class="specialist-cursor-${feature}"`));
+  if(avatar==='beaver')assert.match(rendered,/class="specialist-cursor-artwork" data-family="otter" data-part="tail"/);
+  const delivered=html({...row,finalReport:{...report(row),text:'核对已完成。'}},live);
+  assert.doesNotMatch(delivered,/class="specialist-reply-cursor"/);
+  assert.match(delivered,/核对已完成。/);
+ }
 });
 
 test('hide a repeated joint receipt only when all copied originals are in the same user turn',()=>{
