@@ -23,7 +23,12 @@
 .header-state-area{display:flex;align-items:center;flex:0 0 auto;min-width:0}
 .header-morph-slot{display:block;overflow:hidden;flex:0 0 auto;opacity:0;transition:width 280ms cubic-bezier(.22,1,.36,1),opacity 120ms ease}
 .header-morph-slot.is-visible{opacity:1}
-.header-morph-content{display:flex;align-items:center;width:max-content;min-height:32px}
+.header-morph-content{display:flex;align-items:center;width:max-content;min-height:32px;gap:var(--header-status-gap,normal)}
+.header-morph-content:has(> .session-state-badge[data-icon-only]){
+ --header-status-gap:1px;
+ padding-inline-start:7px;
+}
+.header-morph-content > .session-state-badge[data-icon-only] + .header-inspector-toggle{margin-inline-start:0}
 :root { --pilot-roster-duration:300ms; --pilot-roster-ease:cubic-bezier(.22,.8,.28,1); }
 
 /* Status ink and a soft tint share the existing glass contour. Keep the

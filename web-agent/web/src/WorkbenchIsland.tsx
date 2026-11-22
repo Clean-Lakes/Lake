@@ -79,9 +79,10 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    // own container query. Otherwise a compact 114px state expands the island,
    // its natural state shrinks it below 300px, and ResizeObserver oscillates.
    const badge=state?.querySelector<HTMLElement>('.session-state-badge')??null;
+   const iconOnly=badge?.hasAttribute('data-icon-only');
    const badgeStyle=badge?getComputedStyle(badge):null;
    // Budget the shared padding token rather than constrained badge geometry.
-   const badgePadding=badge?.hasAttribute('data-icon-only')?0:parseFloat(getComputedStyle(identity).getPropertyValue('--island-badge-padding'));
+   const badgePadding=parseFloat(getComputedStyle(identity).getPropertyValue('--island-badge-padding'));
    const badgeLabel=badge?.querySelector<HTMLElement>('.session-state-label')??null;
    const badgeLabelWidth=badgeLabel?textWidth(badgeLabel)+(parseFloat(badgeStyle?.columnGap??'')||0):0;
    const badgeIcon=badge?.querySelector('.session-state-icon');
@@ -90,7 +91,8 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const badgeWidth=badgeStyle?badgeLabelWidth+badgeIconWidth+2*badgePadding+parseFloat(badgeStyle.borderLeftWidth)+parseFloat(badgeStyle.borderRightWidth):0;
    const disclosure=state?.querySelector<HTMLElement>('.header-inspector-toggle');
    const stateGap=state?parseFloat(getComputedStyle(state).columnGap||'0'):0;
-   const normalStateWidth=badge?badgeWidth+(disclosure?disclosure.getBoundingClientRect().width+stateGap:0):state?.getBoundingClientRect().width??0;
+   // The icon-only group's controls are intrinsic, including its leading inset.
+   const normalStateWidth=badge&&!iconOnly?badgeWidth+(disclosure?disclosure.getBoundingClientRect().width+stateGap:0):state?.getBoundingClientRect().width??0;
    const titleIcon=title?.previousElementSibling;
    const titleIconWidth=titleIcon ? titleIcon.getBoundingClientRect().width+parseFloat(getComputedStyle(title!.parentElement!).columnGap||'0') : 0;
    const pilotWidth=identity.querySelector('.header-pilot-state.is-visible')?parseFloat(getComputedStyle(identity).getPropertyValue('--pilot-state-width')):0;
