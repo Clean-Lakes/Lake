@@ -27,6 +27,26 @@ function badge(s:SessionSnapshot,w=workspace(),connected=true) {
  return renderToStaticMarkup(createElement(SessionStateBadge,{session:s.session,...presentation}));
 }
 
+test('Pilot icon-only badges expose every state without rendering a visible label',()=>{
+ const session=snapshot().session;
+ const cases=[
+  ['idle','待命','idle'],
+  ['investigating','正在复测主机','working'],
+  ['waiting_approval','待确认查询范围','approval'],
+  ['idle','任务已暂停','paused'],
+  ['idle','任务已取消','stopped'],
+  ['completed','回复结束','ended'],
+  ['failed','变更待核实','attention'],
+ ] as const;
+ for(const [status,label,state] of cases){
+  const html=renderToStaticMarkup(createElement(SessionStateBadge,{session,status,label,iconOnly:true}));
+  assert.match(html,new RegExp(`data-badge-state="${state}"`));
+  assert.ok(html.includes(`role="img" title="${label}" aria-label="${label}"`));
+  assert.match(html,/pilot-status-mark/);
+  assert.doesNotMatch(html,/session-state-label/);
+ }
+});
+
 test('a completed delegation cannot inherit the Router historical inline pause',()=>{
  const s=snapshot(),before=JSON.stringify(s);
  assert.equal(workGoalPresentation(s),undefined);

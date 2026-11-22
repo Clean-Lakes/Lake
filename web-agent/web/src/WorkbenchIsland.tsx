@@ -81,8 +81,9 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const badge=state?.querySelector<HTMLElement>('.session-state-badge')??null;
    const badgeStyle=badge?getComputedStyle(badge):null;
    // Budget the shared padding token rather than constrained badge geometry.
-   const badgePadding=parseFloat(getComputedStyle(identity).getPropertyValue('--island-badge-padding'));
-   const badgeLabelWidth=textWidth(badge?.querySelector('.session-state-label')??null)+(parseFloat(badgeStyle?.columnGap??'')||0);
+   const badgePadding=badge?.hasAttribute('data-icon-only')?0:parseFloat(getComputedStyle(identity).getPropertyValue('--island-badge-padding'));
+   const badgeLabel=badge?.querySelector<HTMLElement>('.session-state-label')??null;
+   const badgeLabelWidth=badgeLabel?textWidth(badgeLabel)+(parseFloat(badgeStyle?.columnGap??'')||0):0;
    const badgeIcon=badge?.querySelector('.session-state-icon');
    // A spinning icon's painted bounds change as it rotates. Use its layout width.
    const badgeIconWidth=badgeIcon?(parseFloat(getComputedStyle(badgeIcon).width)||0):0;
@@ -128,7 +129,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const compactRoster=!!roster&&rosterPreferred>0&&available<Math.ceil(baseWidth+rosterPreferred+rosterGap);
    const rosterWidth=rosterOpen?(compactRoster?Number(roster.dataset.compactWidth):rosterPreferred)+rosterGap:0;
    const rosterFittedWidth=baseWidth+rosterWidth;
-   const compactStatus=rosterOpen&&compactRoster&&!!badge&&!pilotWidth&&available<Math.ceil(rosterFittedWidth);
+   const compactStatus=rosterOpen&&compactRoster&&badgeLabelWidth>0&&!pilotWidth&&available<Math.ceil(rosterFittedWidth);
    identity.toggleAttribute('data-compact-pilot-roster',compactRoster);
    identity.toggleAttribute('data-compact-pilot-status',compactStatus);
    const conversationWidth=rosterFittedWidth-(compactStatus?badgeLabelWidth:0);

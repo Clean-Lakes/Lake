@@ -10,11 +10,17 @@ function PresentationDialog({title,onClose,children,returnFocus}:{title:string;o
  useEffect(()=>{const previous=document.activeElement as HTMLElement|null;dialog.current?.showModal();return()=>{dialog.current?.close();(returnFocus?.current??previous)?.focus();};},[returnFocus]);
  return <dialog ref={dialog} className="presentation-dialog" aria-label={title} onCancel={event=>{event.preventDefault();onClose();}}><div className="presentation-dialog-head"><h2>{title}</h2><button type="button" className="icon-button" aria-label={`关闭${title}`} onClick={onClose}><Glyph name="close"/></button></div>{children}</dialog>;
 }
-export function SessionStateBadge({session,label,idleLabel,activeLabel,status=session.status}:{session:WorkSession;label?:string;idleLabel?:string;activeLabel?:string;status?:WorkSession["status"]}) {
+export function SessionStateBadge({session,label,idleLabel,activeLabel,status=session.status,iconOnly=false}:{session:WorkSession;label?:string;idleLabel?:string;activeLabel?:string;status?:WorkSession["status"];iconOnly?:boolean}) {
  const statuses={idle:"待命",investigating:"调查中",waiting_approval:"待确认",completed:"回复结束",failed:"需要关注"};
  const full=label??statuses[status];
  const badge=sessionBadgeState(status,label);
- return <span className={`session-state-badge state-${status}`} data-badge-state={badge.state} data-tone={badge.tone} title={full} aria-label={full}><Glyph name={badge.icon} size={13} className="session-state-icon"/><span className="session-state-label">{badge.state==='idle'&&idleLabel?idleLabel:badge.state==='working'&&activeLabel?activeLabel:badge.label}</span></span>;
+ const standalone=badge.state==='working'||badge.state==='idle'||badge.state==='attention';
+ const pilotIcon=badge.state==='approval'?'shieldOutline':badge.state==='attention'?'circleAlert':badge.icon;
+ return <span className={`session-state-badge state-${status}`} data-badge-state={badge.state} data-tone={badge.tone}
+  data-icon-only={iconOnly||undefined} role={iconOnly?'img':undefined} title={full} aria-label={full}>
+  {iconOnly?<span className="session-state-icon pilot-status-mark" data-ring={!standalone||undefined} aria-hidden="true"><Glyph name={pilotIcon} size={standalone?16:10}/></span>:
+   <><Glyph name={badge.icon} size={13} className="session-state-icon"/><span className="session-state-label">{badge.state==='idle'&&idleLabel?idleLabel:badge.state==='working'&&activeLabel?activeLabel:badge.label}</span></>}
+ </span>;
 }
 
 const sessionViews=[{value:"conversation",label:"对话",icon:"chat"},{value:"plans",label:"计划",icon:"document"},{value:"activity",label:"执行记录",icon:"terminal"},{value:"evidence",label:"证据",icon:"document"}] as const;

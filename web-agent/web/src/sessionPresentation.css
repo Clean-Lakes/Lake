@@ -18,6 +18,21 @@
 .session-state-badge[data-tone="attention"],.session-status-dot[data-tone="attention"] { --session-state-color:var(--warning); }
 .session-state-badge[data-tone="neutral"] { background:var(--surface-selected); }
 .session-state-badge[data-tone="attention"] { background:var(--warning-soft); }
+.session-state-badge[data-icon-only] { gap:0; padding:0; background:transparent; }
+.session-state-badge[data-icon-only][data-badge-state="attention"] { --session-state-color:var(--danger); }
+.pilot-status-mark { position:relative; display:grid; place-items:center; inline-size:16px; block-size:16px; }
+.pilot-status-mark[data-ring]::before,
+.session-state-badge[data-badge-state="working"] .pilot-status-mark::before {
+ position:absolute;
+ inset:1px;
+ border:1px solid currentColor;
+ border-radius:50%;
+ pointer-events:none;
+ content:"";
+}
+.session-state-badge[data-badge-state="working"] .pilot-status-mark::before {
+ border-color:color-mix(in srgb,currentColor 24%,transparent);
+}
 .session-status-dot { display:inline-block; flex:0 0 6px; width:6px; height:6px; border-radius:50%; background:var(--session-state-color); box-shadow:0 0 4px color-mix(in srgb,var(--session-state-color) 30%,transparent); }
 .session-status-dot[data-pilot="true"][data-tone="neutral"] { --session-state-color:var(--text-muted); }
 .session-status-dot[data-tone="failed"] { --session-state-color:var(--danger); }
