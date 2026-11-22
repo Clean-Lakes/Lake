@@ -5,7 +5,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { AITranscript } from "../src/AIPanel";
 import { SessionListTags, SessionActions, SessionStateBadge } from "../src/SessionPresentation";
 import { ConversationDirectory, activeDirectoryItem, conversationDirectoryItems, conversationTurnId } from "../src/ConversationDirectory";
-import type { SessionSnapshot, WorkspaceTag } from "../../shared/contracts";
+import {pilotDirectoryTasks} from "../src/PilotTaskDirectory";
+import type { Message, SessionSnapshot, SuperWorker, SuperWorkspace, WorkspaceTag } from "../../shared/contracts";
 
 const at="2026-10-14T02:00:00Z";
 function snapshot(): SessionSnapshot {
@@ -167,6 +168,38 @@ test("active directory entry follows reading position in either scroll direction
   assert.equal(activeDirectoryItem(positions,1400),"delivery");
   assert.equal(activeDirectoryItem(positions,100),"start");
   assert.equal(activeDirectoryItem([],0),null);
+});
+
+test("Pilot task directory groups collaborators by public task identity and keeps same-title older tasks",()=>{
+  const session={id:'pilot',projectId:'project'};
+  const worker=(id:string,taskId:string,updatedAt:string):SuperWorker=>({
+    id,sessionId:id,roleId:id,roleName:'运维专员',assignmentState:'parked',pilotSourceMessageId:'original',
+    task:{taskId,sessionId:id,projectId:session.projectId,title:'服务器状态复测',state:'completed',
+      acceptanceState:'not_evaluated',revision:1,originRootTurnId:'worker-turn',deadlineAt:at,updatedAt,summary:'专员报告'},
+  });
+  const old=worker('old','prior','2026-10-10T02:00:00Z');
+  const first=worker('first','joint',at),second=worker('second','joint',at);
+  first.pilotReport={messageId:'member-report',executionSettled:true};
+  const foreign=worker('foreign','private',at);
+  foreign.task.projectId='other';
+  const workspace:SuperWorkspace={active:true,project:{projectId:session.projectId,routerSessionId:session.id,version:1},
+    workers:[first,old,second,foreign,{...worker('child','child-task',at),parentWorkerId:first.id}]};
+  const messages:Message[]=[
+    {id:'original',sessionId:session.id,role:'user',text:'检查主机',createdAt:at},
+    {id:'member-report',sessionId:session.id,role:'assistant',text:'节点状态正常。',createdAt:at,
+      author:{kind:'specialist',name:first.roleName,workerId:first.id,roleId:first.roleId,sessionId:first.sessionId,taskId:'joint'}},
+    {id:'joint-report',sessionId:session.id,role:'assistant',text:'两位专员已提交报告。',createdAt:at,jointReport:{taskId:'joint',reportId:'joint'}},
+    {id:'conclusion',sessionId:session.id,role:'assistant',text:'主机可达，查询还待验证。',createdAt:at,jointReport:{taskId:'joint',reportId:'joint',kind:'summary'}},
+  ];
+  const tasks=pilotDirectoryTasks({workspace,session,messages,resources:[]});
+  assert.deepEqual(tasks.map(task=>task.taskId),['joint','prior']);
+  assert.equal(tasks[0]?.summary,'主机可达，查询还待验证。');
+  assert.equal(tasks[0]?.reports,1);
+  assert.equal(tasks[0]?.sourceMessageId,'original');
+  assert.deepEqual(pilotDirectoryTasks({workspace,session:{...session,id:'other-pilot'},messages,resources:[]}),[]);
+  const html=renderToStaticMarkup(createElement(ConversationDirectory,{sessionId:session.id,items:[],onJump:()=>{},onLatest:()=>{},
+    taskDirectory:{workspace,session,messages,resources:[],onContinue:()=>{}}}));
+  assert.match(html,/aria-label="会话目录"/);
 });
 
 test("reviewed plans render only their list entry in the conversation", () => {

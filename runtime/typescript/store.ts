@@ -305,7 +305,7 @@ export class LakeStore {
     const start = Math.max(0, end - limit);
     return { ...view, cards: view.cards.slice(start, end), cardsOffset: start, totalCards: total };
   }
-  addMessage(sessionId: string, role: Message["role"], text: string, metadata: Pick<Message, 'mentions' | 'images' | 'files' | 'external' | 'replyToMessageId'> = {}) {
+  addMessage(sessionId: string, role: Message["role"], text: string, metadata: Pick<Message, 'mentions' | 'images' | 'files' | 'external' | 'replyToMessageId' | 'taskReference'> = {}) {
     const message: Message = { ...metadata, id: id(), sessionId, role, text, createdAt: now() };
     return this.put("messages", message.id, message);
   }
