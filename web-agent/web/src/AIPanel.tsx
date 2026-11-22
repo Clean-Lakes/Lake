@@ -216,7 +216,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,subscribeWork
   const latestUser = snapshot.messages.filter(message => message.role === "user").at(-1);
   const replyUser=snapshot.messages.find(message=>message.id===replySourceMessageId(snapshot));
   const latestUserAt = replyUser?.createdAt || "";
-  const latestInspectorTaskId=latestInspectorSelection(snapshot).taskId;
+  const latestInspectorTarget=latestInspectorSelection(snapshot);
   const currentTurn=replyUser?turns.find(turn=>turn.some(entry=>entry.message?.id===replyUser.id))??[]:[];
   const currentTiming=timingForTurn(currentTurn,snapshot);
   const liveConversation=['running','waiting_approval'].includes(snapshot.ai?.status||'')&&(!currentTiming||currentTiming.status==='running');
@@ -324,6 +324,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,subscribeWork
       const interimGroups=groups.filter(group=>group.entries.every(entry=>interimProse.has(entry.id)));
       const detailGroups=groups.filter(group=>processGroups.includes(group)||interimGroups.includes(group));
       const canonicalGoalId=canonicalGoalForExecution(snapshot,timingProps.cards,pilotWorkspace?.workers.map(worker=>worker.task));
+      const detailsInHeader=!!timingProps.view&&!latestInspectorTarget.taskId&&latestInspectorTarget.canonicalGoalId===canonicalGoalId;
       const pilotTurnLive=turn===currentTurn&&turnStatus(timingProps.timing,timingProps.view,timingProps.cards,timingProps.latestUserAt,Date.now()).live;
       const executionDetails=[...detailGroups.map(renderGroup).filter(node=>node!=null),...compactionDiagnostics];
       if(pilotCompletion){
@@ -385,7 +386,14 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,subscribeWork
       return <ReplyReferenceScope key={turn[0]!.id} cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}><div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)}>
       {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources} arrive={entry.message!.id===latestUser?.id&&!restoredMessageIds.current.has(entry.message!.id)}/>)}
       {mode==='activity'&&<ReplyDuration assistantIdentity={assistantIdentity} {...timingProps}/>}
-      {mode==='conversation'?<TurnExecutionDetails footerReportId={footerReport?.id} specialistReplies={specialistReplies} collaboration={collaboration} hideStatus={hideConversationStatus} assistantIdentity={assistantIdentity} hideIdentity={hideReplyIdentity} latest={latestUser?turn===currentTurn:turn===turns.at(-1)} latestTaskId={latestInspectorTaskId} canonicalGoalId={canonicalGoalId} sessionId={snapshot.session.id} {...timingProps} showThinkingAvatar={!hasPilotReplyAvatar} presentingReply={presentingReply} hideLive={turn.some(entry=>entry.sre?.task.pilot)} detailNotice={pilotLive?undefined:notices} details={pilotLive?[]:executionDetails} onInspect={onInspect}>{replyContent}</TurnExecutionDetails>:replyContent}
+      {mode==='conversation'?<TurnExecutionDetails {...timingProps}
+        sessionId={snapshot.session.id} latest={latestUser?turn===currentTurn:turn===turns.at(-1)}
+        latestTaskId={latestInspectorTarget.taskId} canonicalGoalId={canonicalGoalId} detailsInHeader={detailsInHeader}
+        assistantIdentity={assistantIdentity} hideIdentity={hideReplyIdentity} showThinkingAvatar={!hasPilotReplyAvatar}
+        presentingReply={presentingReply} hideStatus={hideConversationStatus} hideLive={turn.some(entry=>entry.sre?.task.pilot)}
+        detailNotice={pilotLive?undefined:notices} details={pilotLive?[]:executionDetails} onInspect={onInspect}
+        footerReportId={footerReport?.id} specialistReplies={specialistReplies} collaboration={collaboration}
+      >{replyContent}</TurnExecutionDetails>:replyContent}
       <FileChanges live={turn===currentTurn&&(currentTiming?currentTiming.status==='running':liveConversation)} deferUntilEnd={mode==='conversation'} cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>
       <TaskProgress cards={turn.flatMap(entry => entry.card ? [entry.card] : [])} executionId={snapshot.superagent?.task.executionGoalId??snapshot.superagent?.task.taskId} legacyTurn historical={!liveConversation || (!!snapshot.superagent?.task && !hasCurrentTaskProgress(snapshot.superagent.task.state)) || turn!==(latestUser?currentTurn:turns.at(-1))}/>
       {mode==='conversation'&&!(turn===currentTurn&&liveConversation)&&<MiniBoxCompletionNotice notices={snapshot.commandStopNotices??[]} startedAt={miniStartedAt} endedAt={miniEndedAt}/>}
