@@ -46,3 +46,8 @@
 .workspace-menu-error { margin:12px 10px; color:var(--danger); font-size:var(--font-size-ui); overflow-wrap:anywhere; }
 .workspace-utilities-separator { height: 1px; margin: 5px 2px; background: var(--border); }
 @media(pointer:coarse) { .workspace-utility-action,.workspace-project-options > button { min-height:44px; } .workspace-menu-back { width:44px; height:44px; } .workspace-menu-form input { font-size:16px; } }
+@media(max-height:260px) {
+ .workspace-menu-page { overflow-y:auto; overscroll-behavior:contain; }
+ .workspace-menu-page .workspace-menu-scroll { flex:none; overflow:visible; }
+ .workspace-menu-form { flex:none; }
+}
