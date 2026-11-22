@@ -1,8 +1,9 @@
-import {useMemo,useState} from 'react';
+import {useId,useMemo,useState} from 'react';
 import type {Message,PilotTaskReference,Resource,SuperWorker,SuperWorkspace,WorkSession} from '../../shared/contracts';
 import {Glyph} from './Icons';
-import {specialistTaskTime} from './specialistTaskListModel';
+import {specialistTaskMembers,specialistTaskTime,type SpecialistTaskMember} from './specialistTaskListModel';
 import {superTaskPresentation} from './superAgentPresentation';
+import {TaskSpecialistAvatars} from './TaskSpecialistAvatars';
 
 export type PilotTaskDirectoryData = {
  workspace:SuperWorkspace|null;
@@ -14,10 +15,16 @@ export type PilotTaskDirectoryData = {
  onContinue:(task:PilotTaskReference)=>void;
 };
 
-export function PilotTaskReferenceChip({task,onClear,compact=false}:{task:PilotTaskReference;onClear?:()=>void;compact?:boolean}){
+export function PilotTaskReferenceChip({task,onClear,compact=false,members=[]}:{
+ task:PilotTaskReference;
+ onClear?:()=>void;
+ compact?:boolean;
+ members?:readonly SpecialistTaskMember[];
+}){
+ const authors=useId();
  return <span className={`pilot-task-reference${onClear?' is-draft':''}${compact?' is-compact':''}`} title={compact?`续接中 · ${task.title}`:task.title}
-  role={compact?'group':undefined} aria-label={compact?`续接中 · ${task.title}`:undefined}>
-  <Glyph name="return" size={13}/>
+  role={onClear?'group':undefined} aria-label={onClear?`续接中 · ${task.title}`:undefined} aria-describedby={members.length?authors:undefined}>
+  {members.length?<TaskSpecialistAvatars members={members} descriptionId={authors} inline/>:<Glyph name="return" size={13}/>}
   {compact?<span className="pilot-task-reference-status" aria-hidden="true">续接中</span>:
    <>{onClear&&<small>续接</small>}<span className="pilot-task-reference-title">{task.title}</span></>}
   {onClear&&<button type="button" aria-label="移除任务续接" onClick={onClear}><Glyph name="close" size={12}/></button>}
@@ -30,18 +37,39 @@ type DirectoryTask = PilotTaskReference & {
  label:string;
  summary?:string;
  reports:number;
+ members:SpecialistTaskMember[];
  archived:boolean;
  searchText:string;
 };
 
 const normalize = (value:string) => value.normalize('NFKC').toLowerCase().replace(/\s+/g,'');
 
-export function pilotDirectoryTasks({workspace,session,messages,resources}:Pick<PilotTaskDirectoryData,'workspace'|'session'|'messages'|'resources'>):DirectoryTask[] {
+function pilotTaskWorkers(workspace:SuperWorkspace|null,session:PilotTaskDirectoryData['session']){
  if(!workspace?.active||workspace.project.projectId!==session.projectId||workspace.project.routerSessionId!==session.id)return [];
+ return workspace.workers.filter(({parentWorkerId,sessionId,task})=>
+  !parentWorkerId&&task.sessionId===sessionId&&(!task.projectId||task.projectId===session.projectId));
+}
+
+function taskParticipants(workers:readonly SuperWorker[]){
+ const participants=new Map<string,SpecialistTaskMember>();
+ for(const worker of workers){
+  for(const member of specialistTaskMembers(worker,false)){
+   if(!participants.has(member.key))participants.set(member.key,{...member,moving:false});
+  }
+ }
+ return [...participants.values()].sort((a,b)=>a.key.localeCompare(b.key));
+}
+
+export function pilotTaskParticipants(workspace:SuperWorkspace|null,session:PilotTaskDirectoryData['session'],taskId:string){
+ return taskParticipants(pilotTaskWorkers(workspace,session).filter(worker=>worker.task.taskId===taskId));
+}
+
+export function pilotDirectoryTasks({workspace,session,messages,resources}:Pick<PilotTaskDirectoryData,'workspace'|'session'|'messages'|'resources'>):DirectoryTask[] {
+ const activeWorkers=pilotTaskWorkers(workspace,session);
+ if(!activeWorkers.length)return [];
  const groups=new Map<string,SuperWorker[]>();
- for(const worker of workspace.workers){
+ for(const worker of activeWorkers){
   const task=worker.task;
-  if(worker.parentWorkerId||task.sessionId!==worker.sessionId||task.projectId&&task.projectId!==session.projectId)continue;
   const group=groups.get(task.taskId);
   if(group)group.push(worker);
   else groups.set(task.taskId,[worker]);
@@ -86,8 +114,9 @@ export function pilotDirectoryTasks({workspace,session,messages,resources}:Pick<
   const updatedAt=time(worker);
   const date=Date.parse(updatedAt);
   const dateSearch=Number.isFinite(date)?new Date(date).toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric'}):'';
-  return {taskId,title:task.title,sourceMessageId:origin?.role==='user'?origin.id:undefined,updatedAt,label,summary,reports:reports.size,archived,
-   searchText:normalize([task.title,summary,origin?.text,updatedAt,dateSearch,...names,...workers.map(member=>member.roleName)].join(' '))};
+  const members=taskParticipants(workers);
+  return {taskId,title:task.title,sourceMessageId:origin?.role==='user'?origin.id:undefined,updatedAt,label,summary,reports:reports.size,members,archived,
+   searchText:normalize([task.title,summary,origin?.text,updatedAt,dateSearch,...names,...members.map(member=>member.name)].join(' '))};
  }).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)||a.taskId.localeCompare(b.taskId));
 }
 
@@ -99,6 +128,7 @@ export function PilotTaskDirectory({data,onContinue,onLocate,visibleSources}:{
 }){
  const [query,setQuery]=useState('');
  const [selection,setSelection]=useState(data.currentTaskId);
+ const id=useId();
  const {workspace,session,messages,resources}=data;
  const rows=useMemo(()=>pilotDirectoryTasks({workspace,session,messages,resources}),[workspace,session,messages,resources]);
  const search=normalize(query);
@@ -111,14 +141,17 @@ export function PilotTaskDirectory({data,onContinue,onLocate,visibleSources}:{
    <input type="search" aria-label="搜索任务或资源" placeholder="搜索任务或资源" value={query} onChange={event=>setQuery(event.target.value)}/>
   </label>
   {results.length?<nav className="conversation-directory-list conversation-task-list" aria-label="Pilot 任务">
-   {results.map(task=><button type="button" className="conversation-directory-item conversation-task-row" key={task.taskId}
-    aria-pressed={selected?.taskId===task.taskId} title={task.title} onClick={()=>setSelection(task.taskId)}>
-    <span className="conversation-task-row-text">
-     <span className="conversation-task-title">{task.title}</span>
-     <span className="conversation-task-meta">{task.updatedAt&&<>{specialistTaskTime(task.updatedAt)}<span aria-hidden="true"> · </span></>}{task.label}</span>
-    </span>
-    <Glyph name="next" size={13}/>
-   </button>)}
+   {results.map((task,index)=>{
+    const authors=`${id}-participants-${index}`;
+    return <button type="button" className="conversation-directory-item conversation-task-row" key={task.taskId}
+     aria-describedby={authors} aria-pressed={selected?.taskId===task.taskId} title={task.title} onClick={()=>setSelection(task.taskId)}>
+     <span className="conversation-task-row-text">
+      <span className="conversation-task-title">{task.title}</span>
+      <span className="conversation-task-meta">{task.updatedAt&&<>{specialistTaskTime(task.updatedAt)}<span aria-hidden="true"> · </span></>}{task.label}</span>
+     </span>
+     <TaskSpecialistAvatars members={task.members} descriptionId={authors} inline/>
+    </button>;
+   })}
   </nav>:<p className="conversation-task-empty" role="status">{data.error?'任务暂未加载':!workspace?'正在读取任务…':search?'没有匹配的任务':'暂无任务'}</p>}
   {selected&&<section className="conversation-task-preview" aria-label={selected.title} aria-live="polite">
    <div className="conversation-task-preview-meta"><span>上次结论</span>{selected.reports>0&&<span>{selected.reports} 份专员报告</span>}</div>

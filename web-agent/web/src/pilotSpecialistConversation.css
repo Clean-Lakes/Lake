@@ -11,9 +11,6 @@
 .pilot-report-body > .pilot-report-items { overflow:clip; overflow-clip-margin:4px; }
 .pilot-report-fold[data-folding] > .pilot-report-body { display:block; overflow:clip; visibility:visible; transition:none; }
 .pilot-report-fold[data-folding] > .pilot-report-strip { overflow:clip; }
-.pilot-report-fold [data-avatar-landing] { visibility:hidden; }
-.pilot-report-flight { position:absolute; inset:0; z-index:1; pointer-events:none; }
-.pilot-report-flight > .super-role-avatar { position:absolute; transform-origin:top left; }
 .pilot-report-toggle { display:inline-flex; align-items:center; gap:8px; max-width:calc(100% - var(--reply-avatar-column,40px)); min-height:34px; margin-inline-start:var(--reply-avatar-column,40px); padding:3px 9px; border:0; border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); background:var(--surface-muted); color:var(--foreground); font-size:var(--font-size-process); }
 .pilot-report-toggle:hover { background:var(--surface-hover); }
 .pilot-report-toggle:focus-visible { outline:2px solid var(--focus-outline); outline-offset:2px; }
