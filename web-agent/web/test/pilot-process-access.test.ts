@@ -46,6 +46,29 @@ test('a completed consultation cannot silence an actually thinking or waiting Pi
  }
 });
 
+test('the current Pilot status leaves the operation preview to the status island',t=>{
+ t.mock.method(Date,'now',()=>Date.parse(at)+23000);
+ const snapshot=pilot('running');
+ snapshot.replyTimings=[{messageId:user.id,startedAt:at,finishedAt:'',status:'running'}];
+ const operation={id:'check',type:'operation' as const,title:'fixture_tool',status:'failed',at};
+ const render=()=>renderToStaticMarkup(createElement(SessionInspectorProvider,{children:createElement(AITranscript,{snapshot,assistantIdentity:{name:'Pilot',pilot:true}})}));
+ for(const [status,label] of [['failed','正在思考…'],['running','正在执行工具…'],['pending','等待确认']]){
+  snapshot.ai!.cards=[{...operation,status:status!}];
+  const html=render();
+  assert.match(html,/已处理 23秒/);
+  assert.ok(html.includes(label!));
+  assert.doesNotMatch(html,/turn-current-step|turn-execution-notice|turn-duration-disclosure/);
+ }
+ snapshot.ai!.cards=[operation];
+ const standalone=markup(snapshot);
+ assert.match(standalone,/turn-duration-disclosure/);
+ assert.match(standalone,/1 项失败/,'the folded records retain the original failure');
+ assert.doesNotMatch(standalone,/turn-current-step|turn-execution-notice/);
+
+ snapshot.superagent={roleId:'pilot:project',task:{taskId:'router-main',sessionId:'pilot',projectId:'project',title:'Pilot',state:'running',acceptanceState:'not_evaluated',revision:1,originRootTurnId:'router-root',deadlineAt:at}};
+ assert.match(render(),/turn-duration-disclosure/,'a header pointing to a different task cannot replace this turn’s entry');
+});
+
 test('specialist process remains accessible in the live slot, adopted report and restored history',()=>{
  const worker={id:'worker',roleId:'role',roleName:'检查专员',sessionId:'source',assignmentState:'active',task:{taskId:'task',sessionId:'source',projectId:'project',title:'样例检查',state:'running' as const,acceptanceState:'not_evaluated' as const,revision:1,originRootTurnId:'task-origin',deadlineAt:at},activity:{phase:'thinking' as const,label:'正在分析',updatedAt:at,sourceSessionId:'pilot',sourceMessageId:user.id}};
  const w={...workspace,workers:[worker],conversations:[]};
