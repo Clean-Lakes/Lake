@@ -10,9 +10,16 @@ test('an empty composer offers a starter or a follow-up without any model reques
   assert.equal(localComposerCompletion('检查样例服务的', true), '');
 });
 
+test('short verification questions have a local follow-up after a reply', () => {
+  assert.equal(localComposerCompletion('真的吗?', true), ' 可以说一下判断依据吗？');
+  assert.equal(localComposerCompletion('真的吗？', true), '可以说一下判断依据吗？');
+  assert.equal(localComposerCompletion('你确定吗? ', true), '可以说一下判断依据吗？');
+  assert.equal(localComposerCompletion('真的吗?', false), '');
+});
+
 test('draft completions accept short prose and exclude references, commands and credential text', () => {
-  for (const text of ['帮', '请核对 ', '请先检查\n再确认']) assert.ok(completableDraft(text), text);
-  for (const text of ['', ' ', '已经查完。', '/plan 检查', '@服务', '检查\ufffc', '再核对\n', 'api_key: synthetic',
+  for (const text of ['帮', '请核对 ', '请先检查\n再确认', '真的吗?', '样例服务正常吗？ ']) assert.ok(completableDraft(text), text);
+  for (const text of ['', ' ', '？?', '已经查完。', '完成了！', '/plan 检查', '@服务', '检查\ufffc', '再核对\n', 'api_key: synthetic', 'api_key: synthetic?',
     '{"password":"synthetic"}', '访问令牌：synthetic', 'Bearer synthetic', '-----BEGIN PRIVATE KEY-----', 'a'.repeat(2001)])
     assert.equal(completableDraft(text), false, text);
 });

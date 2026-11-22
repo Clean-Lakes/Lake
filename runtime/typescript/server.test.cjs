@@ -110,8 +110,11 @@ async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = 
         });
         if (res.destroyed) return;
       }
-      delta = {content: draft === '输出含凭据' ? '{"suffix":"synthetic-secret-no-real-credential"}' :
-        JSON.stringify({suffix: '运行状态和最近一次异常。'})};
+      const suffix = {
+        '输出含凭据': 'synthetic-secret-no-real-credential',
+        '样例服务运行正常吗？': '可以列出核对指标吗？',
+      }[draft] ?? '运行状态和最近一次异常。';
+      delta = {content: JSON.stringify({suffix})};
     }
     if (request.stream !== true) {
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -259,6 +262,9 @@ test('draft completion uses only current text, cancels stale requests, and never
   assert.deepEqual(request.messages.map(message=>message.role), ['system','user']);
   assert.deepEqual(JSON.parse(request.messages[1].content), {draft:'查看样例服务'});
   assert.ok(!request.tools?.length);
+  assert.deepEqual(await complete('样例服务运行正常吗？'), {suffix:'可以列出核对指标吗？',modelId});
+  assert.match(f.requests.at(-1).messages[0].content, /follow-up question/);
+  assert.equal((await complete('这是样例结果吗?')).suffix, '', 'a statement is not a follow-up question');
   assert.deepEqual(f.app.store.messages(f.session.id), []);
 });
 
