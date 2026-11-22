@@ -27,10 +27,11 @@ export function initialWorkspaceSelection(catalog: WorkspaceCatalog, route: Work
     ?? defaultWorkspaceSession(catalog.sessions, projectId);
   const resource = catalog.resources.find(item => item.id === route.resourceId && item.projectId === projectId);
   const sessionId = session?.id ?? null;
+  const canShowPlans = sessionId === route.sessionId && session && isUserWorkspaceSession(session) && !resource;
   return {projectId, route: {
     sessionId, resourceId: resource?.id ?? null,
-    ...(isWorkspacePageView(route.view)?{view:route.view}:
-      route.view==='plans'&&sessionId===route.sessionId&&session&&isUserWorkspaceSession(session)&&!resource?{view:'plans' as const}:{}),
+    ...(isWorkspacePageView(route.view) ? {view:route.view, ...(route.returnView && canShowPlans ? {returnView:route.returnView} : {})} :
+      route.view === 'plans' && canShowPlans ? {view:'plans' as const} : {}),
   }};
 }
 

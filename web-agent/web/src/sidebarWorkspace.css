@@ -73,40 +73,6 @@
 .workspace-rail-button { margin-block-start:auto; }
 .sidebar-rail-button :is(.workspace-update-dot,.sidebar-specialist-attention) { position:absolute; inset-block-start:5px; inset-inline-end:5px; width:6px; height:6px; border-radius:50%; pointer-events:none; }
 .workspace-update-dot { background:var(--danger); }
-.navigation-context-menu.workspace-actions-menu {
- --workspace-menu-radius:18px;
- width:184px;
- min-width:0;
- max-height:calc(100dvh - 72px);
- border-radius:var(--workspace-menu-radius);
- transform-origin:24px bottom;
- animation:workspace-actions-enter 260ms cubic-bezier(.22,1,.36,1) both;
-}
-.navigation-context-menu.workspace-actions-menu > small { display:none; }
-.navigation-context-menu.workspace-actions-menu > button {
- border-radius:calc(var(--workspace-menu-radius) - 5px);
- min-height:36px;
- color:var(--foreground);
-}
-.navigation-context-menu.workspace-actions-menu > button > svg { color:var(--pilot-header-muted); }
-.navigation-context-menu.workspace-actions-menu > button[aria-current="page"] {
- background:var(--info-soft);
- font-weight:var(--font-weight-semibold);
-}
-.navigation-context-menu.workspace-actions-menu > button[aria-current="page"] > svg { color:var(--info); }
-.navigation-context-menu.workspace-actions-menu > button:focus-visible { outline:2px solid var(--focus-outline); outline-offset:-2px; }
-.workspace-actions-menu .menu-action-label { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-.workspace-actions-menu .menu-action-label > small { margin:0; color:var(--text-muted); }
-@keyframes workspace-actions-enter {
- from { opacity:0; transform:translate3d(0,12px,0) scale(.96); }
- to { opacity:1; transform:translate3d(0,0,0) scale(1); }
-}
-@media(prefers-reduced-motion:reduce) {
- .navigation-context-menu.workspace-actions-menu { animation:none; }
-}
-@media(pointer:coarse) {
- .navigation-context-menu.workspace-actions-menu > button { min-height:44px; }
-}
 .sidebar-specialist-attention { background:var(--success); }
 .sidebar-content-header { position:relative; z-index:3; display:flex; flex:none; align-items:center; gap:4px; min-height:28px; margin:0 var(--sidebar-edge-inset) 6px; padding:0 4px 0 8px; }
 .sidebar-content-title { display:flex; flex:1; align-items:center; gap:7px; min-width:0; color:var(--text-secondary); }

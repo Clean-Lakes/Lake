@@ -1,37 +1,26 @@
-import {useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode} from 'react';
+import {useMemo, useRef, useState, type KeyboardEvent, type ReactNode} from 'react';
 import type {Project, Resource} from '../../shared/contracts';
 import {BulkCheckbox, type BulkSelection} from './BulkNavigationDelete';
 import {Glyph} from './Icons';
 
 const projectDate = new Intl.DateTimeFormat('zh-CN', {year: 'numeric', month: 'long', day: 'numeric'});
 
-export function WorkspacePageHeader({id, title, metadata, description, actions, onOpenNavigation, onBack}: {
+export function WorkspacePageHeader({id, title, actions, onClose}: {
   id: string;
-  title: ReactNode;
-  metadata?: ReactNode;
-  description?: string;
+  title: string;
   actions?: ReactNode;
-  onOpenNavigation: () => void;
-  onBack?: () => void;
+  onClose: () => void;
 }) {
-  const heading = useRef<HTMLHeadingElement>(null);
-  useLayoutEffect(() => heading.current?.focus({preventScroll: true}), [id]);
-  return <header className="workspace-header workspace-page-header">
-    <div className="workspace-page-title-row">
-      <button type="button" className="icon-button mobile-only" aria-label="打开项目导航" onClick={onOpenNavigation}>
-        <Glyph name="menu" size={21}/>
+  return <header className="workspace-page-header">
+    <div className="workspace-console-breadcrumb">
+      <span aria-hidden="true">控制台</span><span aria-hidden="true">/</span>
+      <h1 id={id} title={title}>{title}</h1>
+    </div>
+    <div className="workspace-page-header-actions">
+      {actions}
+      <button type="button" className="icon-button workspace-console-close" title="关闭控制台" aria-label="关闭控制台" onClick={onClose}>
+        <Glyph name="close" size={17}/>
       </button>
-      <div className="workspace-page-heading">
-        <div className="workspace-page-heading-line">
-          <h1 id={id} ref={heading} tabIndex={-1}>{title}</h1>
-          {metadata}
-        </div>
-        {description && <p>{description}</p>}
-      </div>
-      <div className="workspace-page-header-actions">
-        {onBack && <button type="button" className="icon-button mobile-only" aria-label="返回上一页" onClick={onBack}><Glyph name="previous" size={17}/></button>}
-        {actions}
-      </div>
     </div>
   </header>;
 }
@@ -61,7 +50,7 @@ function CurrentProject({project, resourceCount, canDelete, onDelete}: {
 }
 
 export function WorkspacePage({projects, project, resources, connected, bulkSelection, bulkSelectedCount,
-  onOpenNavigation, onOpenProject, onCreateProject, onDeleteProject, onToggleBulk,
+  onClose, onOpenProject, onCreateProject, onDeleteProject, onToggleBulk,
   onClearSelection, onDeleteSelected}: {
   projects: readonly Project[];
   project?: Project;
@@ -69,7 +58,7 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
   connected: boolean;
   bulkSelection?: BulkSelection;
   bulkSelectedCount: number;
-  onOpenNavigation: () => void;
+  onClose: () => void;
   onOpenProject: (project: Project) => void;
   onCreateProject: () => void;
   onDeleteProject: (project: Project) => void;
@@ -104,13 +93,17 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
       onOpenProject(match);
     }
   };
-  return <section id="workspace-page" className="workspace-page workspace-project-page" aria-labelledby="workspace-page-title">
-    <WorkspacePageHeader id="workspace-page-title" title="切换项目" onOpenNavigation={onOpenNavigation} metadata={
-      <span className="workspace-directory-count" role="status">
-        {needle ? `${visibleProjects.length} / ${projects.length}` : projects.length} 项
-      </span>
-    } actions={<>
-      {!!projects.length && <>
+  return <section id="workspace-page" className="workspace-page workspace-project-page" role="tabpanel" aria-labelledby="workspace-console-tab">
+    <WorkspacePageHeader id="workspace-page-title" title="项目" onClose={onClose} actions={
+      <button type="button" className="button primary" aria-label="新建项目" title="新建项目" disabled={!connected} onClick={onCreateProject}>
+        <Glyph name="plus" size={15}/><span>新建项目</span>
+      </button>
+    }/>
+    {!!projects.length && <div className="workspace-project-toolbar">
+        <h2>切换项目</h2>
+        <span className="workspace-directory-count" role="status">
+          {needle ? `${visibleProjects.length} / ${projects.length}` : projects.length} 项
+        </span>
         <div className="workspace-project-search">
           <Glyph name="search" size={16}/>
           <input ref={search} type="search" aria-label="搜索项目" placeholder="搜索项目" value={query}
@@ -120,14 +113,11 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
             onClick={() => {setQuery(''); search.current?.focus();}}><Glyph name="close" size={14}/></button>}
         </div>
         <button type="button" className="workspace-text-button workspace-bulk-toggle" aria-pressed={!!bulkSelection}
+          aria-label={bulkSelection ? '完成' : '批量管理'} title={bulkSelection ? '完成' : '批量管理'}
           disabled={!connected && !bulkSelection} onClick={onToggleBulk}>
-          <Glyph name={bulkSelection ? 'check' : 'listTasks'} size={16}/>{bulkSelection ? '完成' : '批量管理'}
+          <Glyph name={bulkSelection ? 'check' : 'listTasks'} size={16}/><span>{bulkSelection ? '完成' : '批量管理'}</span>
         </button>
-      </>}
-      <button type="button" className="button primary" disabled={!connected} onClick={onCreateProject}>
-        <Glyph name="plus" size={16}/>新建项目
-      </button>
-    </>}/>
+      </div>}
     <div className="workspace-page-layout">
       <div className="workspace-project-directory">
         {bulkSelection && <div className="workspace-bulk-actions" aria-label="项目批量管理">
@@ -139,14 +129,13 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
         </div>}
         <div className={`workspace-project-sheet${bulkSelection ? ' is-bulk-selecting' : ''}`}>
           {visibleProjects.length ? <>
-            <div className="workspace-project-sheet-heading" aria-hidden="true"><span>项目名称</span><span>资源</span></div>
             <ul ref={list} className="workspace-projects-list" aria-label="项目列表">{visibleProjects.map(item => {
               const current = item.id === project?.id || undefined;
               const row = <>
                 <span className="workspace-project-row-icon"><Glyph name="folder" size={17}/></span>
                 <span className="workspace-project-name">{item.name}</span>
                 <span className="workspace-project-resource-count">
-                  {resourceCounts.get(item.id) ?? 0}<span className="visually-hidden"> 项资源</span>
+                  {resourceCounts.get(item.id) ?? 0}<span> 项资源</span>
                 </span>
                 <span className="workspace-project-indicator" aria-hidden="true">
                   {current ? <Glyph name="check" size={14}/> : !bulkSelection && <Glyph name="next" size={15}/>}

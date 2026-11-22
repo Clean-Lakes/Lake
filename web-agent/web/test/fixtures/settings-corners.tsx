@@ -1,7 +1,10 @@
 // Real settings component with fictional providers; no live settings or credentials.
-import React from 'react';
+import {useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {ModelSettings} from '../../src/ModelSettings';
+import {WorkspaceConsole} from '../../src/WorkspaceConsole';
+import {WorkspacePageHeader} from '../../src/WorkspacePage';
+import {consoleCategories, type ConsolePage} from '../../src/workspaceConsoleTabs';
 import type {GatewayConnection} from '../../../shared/contracts';
 import type {ExternalAgentStatus} from '../../../shared/external-agents';
 import '../../src/styles.css';
@@ -66,4 +69,25 @@ window.fetch=async(input,init)=>{
  }
  return new Response(JSON.stringify({error:'Fixture blocks unknown requests'}),{status:404,headers:{'Content-Type':'application/json'}});
 };
-createRoot(document.getElementById('root')!).render(<main className="workspace is-workspace-page" style={{height:'100dvh'}}><ModelSettings initialTab={params.get('tab')??'models'} watchdogEnabled projectId={projectId} projectName={projectName} onOpenNavigation={()=>{}} onChanged={async()=>{}} sendShortcut="enter" onShortcutChange={()=>{}} ignoreProjectMemory={false} onIgnoreProjectMemoryChange={()=>{}}/></main>);
+function SettingsFixture() {
+ const consoleRef=useRef<HTMLDialogElement>(null);
+ const [open,setOpen]=useState(true),[busy,setBusy]=useState(false);
+ const [page,setPage]=useState<ConsolePage>(()=>consoleCategories(true,'').flatMap(group=>group.items)
+  .find(item=>item.key===params.get('tab'))?.key??'models');
+ const close=()=>setOpen(false);
+ return <>
+  <main className="workspace" style={{height:'100dvh',padding:'30px'}}>
+   <h1>Pilot</h1>
+   <p>用测试项目验证控制台界面。</p>
+   <textarea aria-label="对话草稿" defaultValue="保留正在写的草稿"/>
+   <button type="button" onClick={()=>setOpen(true)}>打开控制台</button>
+  </main>
+  <WorkspaceConsole dialogRef={consoleRef} open={open} page={page} typescriptBackend busy={busy} onPage={setPage} onClose={close}>
+   {page==='workspace'||page==='updates' ? <section className="workspace-page"><WorkspacePageHeader id="fixture-title" title={page==='workspace'?'项目':'检查更新'} onClose={close}/></section> :
+    <ModelSettings tab={page} onTabChange={setPage} projectId={projectId} projectName={projectName} onClose={close}
+     onBusyChange={setBusy} onChanged={async()=>{}} sendShortcut="enter" onShortcutChange={()=>{}}
+     ignoreProjectMemory={false} onIgnoreProjectMemoryChange={()=>{}}/>}
+  </WorkspaceConsole>
+ </>;
+}
+createRoot(document.getElementById('root')!).render(<SettingsFixture/>);

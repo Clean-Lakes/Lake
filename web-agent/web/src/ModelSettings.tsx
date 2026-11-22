@@ -16,8 +16,9 @@ import {contextLabel, discoveredModels, providerDraft, providerHasEdits, provide
 import {parseSendShortcut, type SendShortcut} from "./composerKeyboard";
 import {ProviderQuickSetup,ProviderModelPicker} from "./ProviderSetup";
 import {type ProviderPreset} from "./providerPresets";
-import {navigateSettingsTabs,trapSettingsTab} from './settingsFocus';
+import {trapSettingsTab} from './settingsFocus';
 import {WorkspacePageHeader} from './WorkspacePage';
+import {consoleCategoryLabel, type SettingsPage} from './workspaceConsoleTabs';
 import "./modelSettings.css";
 import "./externalAgents.css";
 import "./gatewaySettings.css";
@@ -25,31 +26,20 @@ import "./gatewaySettings.css";
 const formats = [["openai","OpenAI · Chat Completions"],["openai-response","OpenAI · Responses"],["claude","Anthropic · Messages"],["gemini","Gemini · Generate Content"],["azure-gpt","Azure OpenAI"],["ollama","Ollama"]];
 const magpieSelection = "__magpie__";
 const newProviderSelection = "__new_provider__";
-const settingsTabs:readonly {key:string;label:string;title?:string;description:string;panel?:string;requiresWatchdog?:boolean}[] = [
-  {key:"channels",label:"接入渠道",description:"让外部客户端向 Lake 发送消息，由 Pilot 统一处理。",requiresWatchdog:true},
-  {key:"agents",label:"Agent 执行器",description:"配置 Lake 调用的执行 Agent，统一收集任务过程与结果。"},
-  {key:"models",label:"Pilot 模型",title:"模型设置",description:"配置供应商与模型，在聊天中随时切换。",panel:"model"},
-  {key:"mcp",label:"MCP 工具",description:"连接外部工具，在对话中按需调用。"},
-  {key:"skills",label:"Skills",title:"Skills 设置",description:"管理可复用的操作流程与本机技能目录。"},
-  {key:"memory",label:"记忆",description:"管理 Lake 记住的偏好，以及回答时如何使用。"},
-  {key:"conversation",label:"对话",title:"对话设置",description:"配置发送快捷键、文字补齐和会话偏好。"},
-  {key:"watchdog",label:"巡检",title:"巡检设置",description:"统一管理当前项目的任务巡检。",requiresWatchdog:true},
-  {key:"appearance",label:"外观",title:"外观设置",description:"选择工作台主题，立即生效并自动保存。"},
-];
 
 function Switch({checked,label,onChange,disabled=false}: {checked:boolean;label:string;onChange:(value:boolean)=>void;disabled?:boolean}) {
   return <button type="button" role="switch" aria-checked={checked} aria-label={label} className={`provider-switch ${checked ? "on" : ""}`} disabled={disabled} onClick={() => onChange(!checked)}><span/></button>;
 }
 export type SettingsNavigationHandle = {confirmLeave: () => boolean | Promise<boolean>};
 
-export function ModelSettings({initialTab="models",navigationGuard,onOpenNavigation,onBack,onChanged,sendShortcut,onShortcutChange,completionEnabled,onCompletionEnabledChange,onSessionConfig:openSessionConfig,onProjectMemory:openProjectMemory,projectId,projectName,ignoreProjectMemory,onIgnoreProjectMemoryChange,memoryEngine,watchdogEnabled=false,capabilityDetectionEnabled=false,onGatewayTask:openGatewayTask}: {
-  initialTab?:string;navigationGuard?:Ref<SettingsNavigationHandle>;onOpenNavigation:()=>void;onBack?:()=>void;
+export function ModelSettings({tab,onTabChange,navigationGuard,onClose,onBusyChange,onChanged,sendShortcut,onShortcutChange,completionEnabled,onCompletionEnabledChange,onSessionConfig:openSessionConfig,onProjectMemory:openProjectMemory,projectId,projectName,ignoreProjectMemory,onIgnoreProjectMemoryChange,memoryEngine,capabilityDetectionEnabled=false,onGatewayTask:openGatewayTask}: {
+  tab:SettingsPage;onTabChange:(tab:SettingsPage)=>void;navigationGuard?:Ref<SettingsNavigationHandle>;onClose:()=>void;onBusyChange:(busy:boolean)=>void;
   onChanged:()=>Promise<void>;sendShortcut:SendShortcut;onShortcutChange:(value:SendShortcut)=>void;onSessionConfig?:()=>void;onProjectMemory?:()=>void;projectId?:string;projectName?:string;
   completionEnabled?:boolean;onCompletionEnabledChange?:(value:boolean)=>void;
-  ignoreProjectMemory:boolean;onIgnoreProjectMemoryChange:(value:boolean)=>void;memoryEngine?:'layered';watchdogEnabled?:boolean;capabilityDetectionEnabled?:boolean;onGatewayTask?:(target:GatewayTaskTarget)=>Promise<void>;
+  ignoreProjectMemory:boolean;onIgnoreProjectMemoryChange:(value:boolean)=>void;memoryEngine?:'layered';capabilityDetectionEnabled?:boolean;onGatewayTask?:(target:GatewayTaskTarget)=>Promise<void>;
 }) {
-  const [tab,setTab] = useState(!watchdogEnabled&&initialTab==='channels'?'models':initialTab==='watchdog'&&!watchdogEnabled?'conversation':initialTab);
- const [extensionBusy,setExtensionBusy]=useState(false);
+  const [extensionBusy,setExtensionBusy]=useState(false);
+  const [actionsHost,setActionsHost]=useState<HTMLDivElement|null>(null);
   const [catalog,setCatalog] = useState<ProviderCatalog>({providers:[],activeProviderId:"",activeModelId:""});
   const [magpieModel,setMagpieModel] = useState<{name:string}|null>(null);
   const [magpieModels,setMagpieModels] = useState<AvailableModels|null>(null);
@@ -64,7 +54,6 @@ export function ModelSettings({initialTab="models",navigationGuard,onOpenNavigat
   const [deleteConfirm,setDeleteConfirm] = useState(false);
   const [detection,setDetection] = useState<{id:string;status:string;total:number;complete:number}|null>(null);
   const pageRef = useRef<HTMLElement>(null);
-  const tabsRef = useRef<HTMLDivElement>(null);
   const providerListRef = useRef<HTMLDivElement>(null);
   const discardDialog = useRef<HTMLDialogElement>(null);
   const decision = useRef<((discard:boolean)=>void)|null>(null);
@@ -83,6 +72,10 @@ export function ModelSettings({initialTab="models",navigationGuard,onOpenNavigat
   const onGatewayTask=openGatewayTask && ((target:GatewayTaskTarget)=>leave(()=>openGatewayTask(target)));
   const draft = drafts[selected];
   const isBusy = !!busy||extensionBusy;
+  useLayoutEffect(()=>{
+    onBusyChange(isBusy);
+    return ()=>onBusyChange(false);
+  },[isBusy,onBusyChange]);
   function confirmDiscard() {
     const prompt=discardDialog.current;
     if (!prompt || decision.current) return false;
@@ -108,15 +101,6 @@ export function ModelSettings({initialTab="models",navigationGuard,onOpenNavigat
     else if (focusSource.current && sourceToggle.current?.getClientRects().length) sourceToggle.current.focus();
     presetFocus.current=null;focusSource.current=false;
   },[selected,sourcesExpanded]);
-  useLayoutEffect(()=>{
-    const tabs=tabsRef.current;
-    if(!tabs)return;
-    const revealSelected=()=>tabs.querySelector('[aria-selected="true"]')?.scrollIntoView({block:"nearest",inline:"nearest"});
-    revealSelected();
-    const resize=new ResizeObserver(revealSelected);
-    resize.observe(tabs);
-    return ()=>resize.disconnect();
-  },[tab]);
   useLayoutEffect(()=>{
     const list=providerListRef.current;
     if(tab!=="models"||!list)return;
@@ -298,24 +282,16 @@ export function ModelSettings({initialTab="models",navigationGuard,onOpenNavigat
     update({models});setEditor(null);setError("");
   }
   const rows=Object.values(drafts);
-  const category=settingsTabs.find(item=>item.key===tab);
   return <section ref={pageRef} id="workspace-settings-page" className="workspace-page model-settings-page" aria-labelledby="model-settings-title">
-    <WorkspacePageHeader id="model-settings-title" title={<>{category?.title ?? category?.label ?? "设置"}{tab==="memory"&&<span className="memory-experimental-badge" aria-label="实验功能">实验</span>}</>}
-      description={tab==="memory"&&memoryEngine==='layered'?"管理用户、项目和专员的长期知识，以及如何使用。":category?.description}
-      onOpenNavigation={onOpenNavigation} onBack={onBack}/>
-    <div ref={tabsRef} className="model-settings-tabs" role="tablist" aria-label="设置分类" onKeyDown={event=>navigateSettingsTabs(event,event.currentTarget)}>
-      {settingsTabs.filter(item=>watchdogEnabled||!item.requiresWatchdog).map(({key,label,panel=key})=><button
-        key={key} type="button" role="tab" id={panel+"-settings-tab"} aria-controls={panel+"-settings-panel"}
-        aria-selected={tab===key} tabIndex={tab===key?0:-1} disabled={isBusy} onClick={()=>setTab(key)}>
-        {label}
-      </button>)}
-    </div>
-    {tab==="channels"?<GatewaySettings onBusyChange={setExtensionBusy} projectId={projectId} onTask={onGatewayTask}/>:tab==="agents"?<ExternalAgentSettings key={projectId??"none"} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="watchdog"&&watchdogEnabled?<WatchdogSettings key={projectId??'none'} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="memory"?<MemorySettings memoryEngine={memoryEngine} onProjectMemory={onProjectMemory} key={projectId||'global'} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="mcp"?<MCPSettings onBusyChange={setExtensionBusy}/>:tab==="skills"?<SkillSettings onBusyChange={setExtensionBusy}/>:tab==="appearance" ? <AppearanceSettings/> : tab==="conversation" ? <section id="conversation-settings-panel" role="tabpanel" aria-labelledby="conversation-settings-tab" className="model-conversation"><div className="model-conversation-memory"><label className="field-label">发送快捷键<AppSelect icon={<Glyph name="return" size={15}/>} value={sendShortcut} onChange={event => onShortcutChange(parseSendShortcut(event.target.value))}><option value="enter">Enter 发送，Shift + Enter 换行</option><option value="command-enter">Command / Ctrl + Enter 发送，Enter 换行</option></AppSelect></label><p className="settings-note">立即生效并自动保存。输入法确认候选词时不会发送消息。</p></div>
+    <WorkspacePageHeader id="model-settings-title" title={consoleCategoryLabel(tab) ?? '设置'} onClose={onClose}
+      actions={tab==='channels' ? <div ref={setActionsHost} className="workspace-console-page-action"/> :
+        tab==='memory' ? <span className="memory-experimental-badge" aria-label="实验功能">实验</span> : undefined}/>
+    {tab==="channels"?<GatewaySettings actionsHost={actionsHost} onBusyChange={setExtensionBusy} projectId={projectId} onTask={onGatewayTask}/>:tab==="agents"?<ExternalAgentSettings key={projectId??"none"} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="watchdog"?<WatchdogSettings key={projectId??'none'} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="memory"?<MemorySettings memoryEngine={memoryEngine} onProjectMemory={onProjectMemory} key={projectId||'global'} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="mcp"?<MCPSettings onBusyChange={setExtensionBusy}/>:tab==="skills"?<SkillSettings onBusyChange={setExtensionBusy}/>:tab==="appearance" ? <AppearanceSettings/> : tab==="conversation" ? <section id="conversation-settings-panel" role="tabpanel" aria-labelledby="conversation-settings-tab" className="model-conversation"><div className="model-conversation-memory"><label className="field-label">发送快捷键<AppSelect icon={<Glyph name="return" size={15}/>} value={sendShortcut} onChange={event => onShortcutChange(parseSendShortcut(event.target.value))}><option value="enter">Enter 发送，Shift + Enter 换行</option><option value="command-enter">Command / Ctrl + Enter 发送，Enter 换行</option></AppSelect></label><p className="settings-note">立即生效并自动保存。输入法确认候选词时不会发送消息。</p></div>
       {onCompletionEnabledChange&&<div className="model-conversation-memory">
         <h3>文字补齐</h3>
         <label><input type="checkbox" checked={!!completionEnabled} onChange={event=>onCompletionEnabledChange(event.target.checked)}/>自动建议文字</label>
         <p className="settings-note">空框提供起步建议。输入停顿后可续写草稿或建议一句追问。按 Tab 接受，Esc 忽略。</p>
-      </div>}{onProjectMemory && <div className="model-conversation-memory"><h3>项目记忆</h3><p className="settings-note">{projectName} · 管理记忆内容和使用方式</p><button type="button" className="button secondary" onClick={memoryEngine==='layered'?()=>setTab('memory'):onProjectMemory}>配置项目记忆</button></div>}{onSessionConfig && <div className="model-conversation-memory"><h3>当前会话</h3><label><input type="checkbox" checked={ignoreProjectMemory} onChange={event => onIgnoreProjectMemoryChange(event.target.checked)}/>本轮忽略记忆</label><p className="settings-note">下一条消息不读取或采集用户/项目记忆，发送后自动取消；不删除原对话。</p><button className="button secondary" onClick={onSessionConfig}>当前会话配置</button></div>}</section> : <div id="model-settings-panel" role="tabpanel" aria-labelledby="model-settings-tab" className="model-settings-body">
+      </div>}{onProjectMemory && <div className="model-conversation-memory"><h3>项目记忆</h3><p className="settings-note">{projectName} · 管理记忆内容和使用方式</p><button type="button" className="button secondary" onClick={memoryEngine==='layered'?()=>onTabChange('memory'):onProjectMemory}>配置项目记忆</button></div>}{onSessionConfig && <div className="model-conversation-memory"><h3>当前会话</h3><label><input type="checkbox" checked={ignoreProjectMemory} onChange={event => onIgnoreProjectMemoryChange(event.target.checked)}/>本轮忽略记忆</label><p className="settings-note">下一条消息不读取或采集用户/项目记忆，发送后自动取消；不删除原对话。</p><button className="button secondary" onClick={onSessionConfig}>当前会话配置</button></div>}</section> : <div id="model-settings-panel" role="tabpanel" aria-labelledby="model-settings-tab" className="model-settings-body">
       <aside className="provider-rail" data-compact={!!selected} data-expanded={sourcesExpanded}>
         <button ref={sourceToggle} type="button" className="provider-source-toggle" aria-expanded={sourcesExpanded} aria-controls="model-source-options" onClick={()=>setSourcesExpanded(value=>!value)}><span>模型来源</span><strong>{draft?.name || (selected===magpieSelection ? 'Magpie' : '添加供应商')}</strong><Glyph name="chevron" size={14}/></button>
         <div id="model-source-options" className="provider-source-options"><div className="provider-rail-title"><span>模型来源 <small>{rows.length+1}</small></span><button className="icon-button" aria-label="刷新模型来源" title="刷新模型来源" disabled={loading || isBusy} onClick={() => void load()}><Glyph name="refresh" size={14}/></button></div><button type="button" className={`provider-item magpie-provider-item ${selected===magpieSelection ? "selected" : ""}`} aria-current={selected===magpieSelection||undefined} disabled={isBusy} onClick={() => choose(magpieSelection)}><span className="provider-avatar magpie-avatar"><img src="/magpie.svg" alt=""/></span><span className="provider-item-copy"><strong>Magpie</strong><small>{magpieModel ? `${catalog.activeProviderId==="magpie" ? "当前使用" : "已接入"} · ${magpieModel.name}` : "未接入此 Lake 实例"}</small></span><span className={`provider-state ${magpieModel ? "enabled" : ""}`} title={magpieModel ? "已接入" : "未接入"}/></button><button className="provider-add" disabled={loading || isBusy} onClick={() => choose(newProviderSelection)}><Glyph name="plus" size={14}/>添加供应商</button><div ref={providerListRef} className="provider-list" aria-label="供应商列表">

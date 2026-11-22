@@ -35,11 +35,13 @@ export function navigateSettingsTabs(
   tablist:HTMLElement,
 ){
   const {key}=event;
-  if(event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey||!['ArrowLeft','ArrowRight','Home','End'].includes(key))return;
-  const tabs=[...tablist.querySelectorAll<HTMLButtonElement>('button[role="tab"]:not(:disabled)')];
+  const vertical=tablist.getAttribute('aria-orientation')==='vertical';
+  const previous=vertical?'ArrowUp':'ArrowLeft',following=vertical?'ArrowDown':'ArrowRight';
+  if(event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey||![previous,following,'Home','End'].includes(key))return;
+  const tabs=[...tablist.querySelectorAll<HTMLButtonElement>('button[role="tab"]:not(:disabled):not([hidden])')];
   const current=tabs.findIndex(tab=>tab===event.target);
   if(current<0)return;
-  const direction=key==='ArrowLeft'?-1:1;
+  const direction=key===previous?-1:1;
   const index=key==='Home'?0:key==='End'?tabs.length-1:(current+direction+tabs.length)%tabs.length;
   const next=tabs[index]!;
   event.preventDefault();

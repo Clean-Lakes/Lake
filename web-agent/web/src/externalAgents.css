@@ -10,10 +10,8 @@
 .external-agent-fields{border:0;margin:14px 0;padding:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
 .external-agent-fields input{width:100%;min-width:0}
 .external-agent-panel footer{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
-.model-settings-tabs{overflow-x:auto;gap:20px}
-.model-settings-tabs>button{white-space:nowrap;flex-shrink:0}
 .external-execution-report{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text-secondary);font-size:13px;line-height:1.7}
-@media(max-width:600px){.external-agent-fields{grid-template-columns:minmax(0,1fr)}.external-agent-panel{padding:14px}}
+@container workspace-page (max-width:600px){.external-agent-fields{grid-template-columns:minmax(0,1fr)}.external-agent-panel{padding:14px}}
 
 .model-settings-page .external-agent-fields .field-label{margin:0}
 

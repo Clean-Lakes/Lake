@@ -54,6 +54,13 @@ export function useWorkspaceHistory(onPop: (projectId: string | null) => void, c
     return () => window.removeEventListener('popstate', pop);
   }, []);
 
+  const replace = useCallback((to: Location) => {
+    const history = window.history;
+    const entry = readEntry(history.state, timeline.current);
+    const state = entry ? {...history.state, [field]: {...entry, projectId: to.projectId}} : history.state;
+    history.replaceState(state, '', to.url);
+  }, []);
+
   const push = useCallback((from: Location, to: Location) => {
     if (from.url.href === to.url.href && from.projectId === to.projectId) return;
     const history = window.history;
@@ -76,5 +83,5 @@ export function useWorkspaceHistory(onPop: (projectId: string | null) => void, c
     }
   };
 
-  return {available, push, step};
+  return {available, push, replace, step};
 }

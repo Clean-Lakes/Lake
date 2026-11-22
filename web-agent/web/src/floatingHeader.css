@@ -37,17 +37,17 @@
 
 /* Conversations and specialist task lists share the same inset workbench surface. */
 @media (min-width: 768px) {
-  :root:not(.lake-windows-chrome) .app-shell:has(> .workspace:is(.has-floating-header, .has-specialist-task-list, .is-workspace-page)) {
+  :root:not(.lake-windows-chrome) .app-shell:has(> .workspace:is(.has-floating-header, .has-specialist-task-list)) {
     --workbench-sidebar-background: color-mix(in srgb, var(--sidebar) 58%, var(--border));
     --workbench-content-background: var(--conversation-frame-background, var(--surface-subtle));
     background: var(--workbench-chrome-background, var(--workbench-sidebar-background));
   }
-  :root[data-theme="dark"]:not(.lake-windows-chrome) .app-shell:has(> .workspace:is(.has-floating-header, .has-specialist-task-list, .is-workspace-page)) {
+  :root[data-theme="dark"]:not(.lake-windows-chrome) .app-shell:has(> .workspace:is(.has-floating-header, .has-specialist-task-list)) {
     --conversation-frame-background: #181818;
     --conversation-frame-border: #3b3b3b;
     --workbench-sidebar-background: #262626;
   }
-  :root:not(.lake-windows-chrome) .app-shell:has(> .workspace:is(.has-floating-header, .has-specialist-task-list, .is-workspace-page)) > .sidebar {
+  :root:not(.lake-windows-chrome) .app-shell:has(> .workspace:is(.has-floating-header, .has-specialist-task-list)) > .sidebar {
     background: transparent;
   }
   :root:not(.lake-windows-chrome) .app-shell:where(:not(.has-docked-conversation)) > .workspace:is(.has-floating-header, .has-specialist-task-list) {
@@ -92,7 +92,7 @@
   :root[data-theme="dark"]:not(.lake-windows-chrome) .workspace.has-floating-header .composer-input:not(.attachment-drop-active) {
     background-color: #2b2b2b;
   }
-  :root:not(.lake-windows-chrome) .app-shell:has(> .workspace:is(.has-floating-header, .has-specialist-task-list, .is-workspace-page)) > .workbench-splitter-sidebar:not(:hover,:focus-visible,.is-dragging)::after {
+  :root:not(.lake-windows-chrome) .app-shell:has(> .workspace:is(.has-floating-header, .has-specialist-task-list)) > .workbench-splitter-sidebar:not(:hover,:focus-visible,.is-dragging)::after {
     opacity: 0;
   }
 }
@@ -193,11 +193,9 @@ html.lake-windows-chrome .conversation-header-backdrop { top:48px; }
  .conversation-header-backdrop { -webkit-backdrop-filter:none; backdrop-filter:none; }
 }
 
-/* Standalone conversations and the workspace page run to the window edge. */
-.app-shell:is(.has-docked-conversation,:has(> .workspace.is-workspace-page)) {
- --conversation-frame-radius:max(8px,calc(var(--radius-window) - 8px));
-}
+/* Standalone conversations run to the window edge. */
 .app-shell.has-docked-conversation {
+ --conversation-frame-radius:max(8px,calc(var(--radius-window) - 8px));
  --conversation-header-inset:16px;
  --conversation-header-actions-offset:76px;
  --conversation-island-top:12px;
@@ -228,22 +226,22 @@ html.lake-windows-chrome .conversation-header-backdrop { top:48px; }
  pointer-events:none;
 }
 @media (min-width:701px) {
- :is(.workbench-conversation-surface,.workspace.is-workspace-page) {
+ .workbench-conversation-surface {
   border-inline-start:1px solid var(--conversation-frame-border,var(--border));
   border-start-start-radius:var(--conversation-frame-radius);
   border-end-start-radius:var(--conversation-frame-radius);
   corner-shape:var(--corner-window);
  }
- :root .app-shell.has-collapsed-sidebar > :is(.workbench-conversation-surface,.workspace.is-workspace-page) { border-inline-start-color:transparent; }
+ :root .app-shell.has-collapsed-sidebar > .workbench-conversation-surface { border-inline-start-color:transparent; }
  /* Both ends of the divider share the native fallback contour. */
- :root.lake-corner-fallback :is(.workbench-conversation-surface,.workspace.is-workspace-page) {
+ :root.lake-corner-fallback .workbench-conversation-surface {
   --conversation-frame-mask-width:var(--conversation-frame-radius) 0 var(--conversation-frame-radius) var(--conversation-frame-radius);
   border-inline-start-color:transparent;
   border-start-start-radius:0;
   border-end-start-radius:0;
   -webkit-mask-box-image:url('/window-corner-fill.svg') 22 fill / var(--conversation-frame-mask-width) / 0 stretch;
  }
- :root.lake-corner-fallback :is(.workbench-conversation-surface,.workspace.is-workspace-page)::after {
+ :root.lake-corner-fallback .workbench-conversation-surface::after {
   content:"";
   position:absolute;
   inset:0 0 0 -1px;
@@ -254,10 +252,10 @@ html.lake-windows-chrome .conversation-header-backdrop { top:48px; }
   -webkit-mask-box-image:url('/window-corner-stroke.svg') 22 fill / var(--conversation-frame-mask-width) / 0 stretch;
   transition:opacity var(--workbench-sidebar-duration) var(--workbench-sidebar-ease);
  }
- :root.lake-corner-fallback .app-shell.has-collapsed-sidebar > :is(.workbench-conversation-surface,.workspace.is-workspace-page)::after { opacity:0; }
+ :root.lake-corner-fallback .app-shell.has-collapsed-sidebar > .workbench-conversation-surface::after { opacity:0; }
 }
 @media (prefers-reduced-motion:reduce) {
- :root.lake-corner-fallback :is(.workbench-conversation-surface,.workspace.is-workspace-page)::after { transition:none; }
+ :root.lake-corner-fallback .workbench-conversation-surface::after { transition:none; }
 }
 .app-shell.has-docked-conversation .conversation { scroll-padding-top:var(--conversation-header-clearance); }
 .app-shell.has-docked-conversation .timeline-list { padding-top:var(--conversation-header-clearance); }

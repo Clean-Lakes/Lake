@@ -1,5 +1,6 @@
 .desktop-update-layout { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
 .desktop-update-content,.desktop-update-details { min-width: 0; padding: 20px var(--workspace-gutter); }
+.desktop-update-version { margin: 0 0 12px; color: var(--pilot-header-muted); font-size: var(--font-size-process); }
 .desktop-update-details { border-top: 1px solid var(--border); background: var(--surface-subtle); }
 @container workspace-page (min-width:610px) {
   .desktop-update-layout {

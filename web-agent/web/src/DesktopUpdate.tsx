@@ -10,8 +10,8 @@ import {checkReleaseAnnouncement,repositoryURL,releasesURL,type UpdateState,type
 declare global {interface Window {lakeWindowsDesktop?:UpdateBridge;lakeDesktopUpdates?:UpdateBridge}}
 const processing = new Set(["checking","downloading","verifying","installing"]);
 
-export function DesktopUpdate({visible,onUnreadChange,onOpenNavigation,onBack}:{
-  visible:boolean;onUnreadChange?:(unread:boolean)=>void;onOpenNavigation:()=>void;onBack:()=>void;
+export function DesktopUpdate({visible,onUnreadChange,onClose}:{
+  visible:boolean;onUnreadChange?:(unread:boolean)=>void;onClose:()=>void;
 }) {
   const [bridge] = useState(() => window.lakeDesktopUpdates??window.lakeWindowsDesktop);
   const [state,setState] = useState<UpdateState>({status:"idle",currentVersion:packageInfo.version,message:"检查 Lake 更新"});
@@ -47,13 +47,15 @@ export function DesktopUpdate({visible,onUnreadChange,onOpenNavigation,onBack}:{
     catch {setState(previous=>({...previous,status:"error",message:"无法检查更新，请稍后重试或打开发布页"}));}
   }
   if(!visible)return null;
-  return <section id="workspace-updates-page" className="workspace-page desktop-update-page" aria-labelledby="desktop-update-title">
-      <WorkspacePageHeader id="desktop-update-title" title="Lake 更新" description={`当前版本 v${state.currentVersion||"—"} · ${bridge?.development?"本地测试版":platform}`}
-        onOpenNavigation={onOpenNavigation} onBack={onBack} actions={
-          <button type="button" className="button primary" disabled={busy} onClick={()=>void command(available&&!readonly?"install":"check")}>{busy?state.status==="downloading"?"下载中…":"正在处理…":available&&!readonly?"下载并安装":"重新检查"}</button>
-        }/>
+  const actionLabel=busy?state.status==="downloading"?"下载中…":"正在处理…":available&&!readonly?"下载并安装":"重新检查";
+  return <section id="workspace-updates-page" className="workspace-page desktop-update-page" role="tabpanel" aria-labelledby="updates-console-tab">
+      <WorkspacePageHeader id="desktop-update-title" title="检查更新" onClose={onClose} actions={
+        <button type="button" className="button primary" aria-label={actionLabel} title={actionLabel} disabled={busy}
+          onClick={()=>void command(available&&!readonly?"install":"check")}><Glyph name={available&&!readonly?'down':'refresh'} size={15}/><span>{actionLabel}</span></button>
+      }/>
       <div className="desktop-update-layout">
         <div className="desktop-update-content">
+          <p className="desktop-update-version">当前版本 v{state.currentVersion||"—"} · {bridge?.development?"本地测试版":platform}</p>
           <div className="desktop-update-status-card">
             <div className={`desktop-update-status status-${state.status}`} aria-live="polite">
               <span className="desktop-update-symbol" aria-hidden="true"><Glyph className={busy?"spinning":undefined} name={busy?'refresh':available?'down':state.status==='error'?'alert':state.status==='current'?'check':'refresh'} size={20}/></span>

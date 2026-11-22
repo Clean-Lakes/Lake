@@ -73,6 +73,8 @@ import {WorkspacePage} from "./WorkspacePage";
 import { ActivityIndicator } from "./ActivityIndicator";
 import { PendingMessages } from "./PendingMessages";
 import { ModelSettings, type SettingsNavigationHandle } from "./ModelSettings";
+import {WorkspaceConsole} from './WorkspaceConsole';
+import {availableSettingsPage, type ConsolePage, type SettingsPage} from './workspaceConsoleTabs';
 import {gatewayTaskMatches,type GatewayTaskTarget} from "./GatewaySettings";
 import { readImageSelection } from "./imageAttachments";
 import {clipboardFiles,partitionAttachments,attachmentCountLimit,fileSize} from "./fileAttachments";
@@ -296,7 +298,11 @@ function AppContent() {
     const available = new Set(bulkCatalogTargets(catalog).map(bulkKey));
     setBulkSelected(current => current.every(target => available.has(bulkKey(target))) ? current : current.filter(target => available.has(bulkKey(target))));
   }, [catalog]);
-  const [settingsInitialTab,setSettingsInitialTab] = useState("models");
+  const [settingsTab,setSettingsTab] = useState<SettingsPage>('models');
+  const [settingsBusy,setSettingsBusy] = useState(false);
+  const consoleRef = useRef<HTMLDialogElement>(null);
+  const typescriptBackend = bootstrap?.backendRuntime === 'typescript';
+  const activeSettingsTab = availableSettingsPage(settingsTab, typescriptBackend);
   const [navigationSearchOpen, setNavigationSearchOpen] = useState(false);
   const newSessionButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -305,10 +311,10 @@ function AppContent() {
       if(event.key.toLowerCase()==="n"){
         if(/Mac/.test(navigator.platform)?!event.metaKey:!event.ctrlKey)return;
         const button=newSessionButton.current;
-        if(!button||button.disabled||button.closest('[hidden],[inert]')||document.querySelector('dialog[open],[role="dialog"],.modal-scrim'))return;
+        if(!button||button.disabled||button.closest('[hidden],[inert]')||document.querySelector('dialog[open],[role="dialog"]:not(dialog),.modal-scrim'))return;
         event.preventDefault();button.click();return;
       }
-      if(event.key.toLowerCase()!=="k" || document.querySelector('dialog[open],[role="dialog"],.modal-scrim'))return;
+      if(event.key.toLowerCase()!=="k" || document.querySelector('dialog[open],[role="dialog"]:not(dialog),.modal-scrim'))return;
       event.preventDefault();
       setNavigationSearchOpen(true);
     };
@@ -358,7 +364,7 @@ function AppContent() {
     return () => { document.removeEventListener("pointerdown", dismiss); document.removeEventListener("focusin", dismiss); document.removeEventListener("keydown", key); };
   }, [resourceTerminalMenu]);
   const [terminalOpen, setTerminalOpen] = useState(false);
-  const terminalVisible=terminalOpen&&!isWorkspacePage;
+  const terminalVisible=terminalOpen;
   const [terminalContext, setTerminalContext] = useState<{sessionId: string; resourceId: string} | null>(null);
   const activeTerminalContext = useRef(terminalContext);
   activeTerminalContext.current = terminalContext;
@@ -481,7 +487,7 @@ function AppContent() {
     if(permission===true)action();
     else if(permission!==false)void permission.then(allowed=>{if(allowed)action();});
   },[confirmSettingsNavigation]);
-  const {available: historyAvailable, push: pushHistory, step: stepHistory} = useWorkspaceHistory(projectId => {
+  const {available: historyAvailable, push: pushHistory, replace: replaceHistory, step: stepHistory} = useWorkspaceHistory(projectId => {
     let next = initialRoute();
     if (catalog) {
       const saved = projectId ?? sidebarProjectId;
@@ -501,7 +507,7 @@ function AppContent() {
   },confirmSettingsNavigation);
   const navigationContext = useRef({catalog, sidebarProjectId});
   navigationContext.current = {catalog, sidebarProjectId};
-  const commitNavigation = useCallback((next: WorkspaceRoute, projectId?: string | null) => {
+  const commitNavigation = useCallback((next: WorkspaceRoute, projectId?: string | null, replaceEntry = false) => {
     const current = routeRef.current;
     const {catalog, sidebarProjectId} = navigationContext.current;
     const fromProject = catalog ? initialSidebarProject(catalog, current, sidebarProjectId) ?? null : sidebarProjectId;
@@ -509,44 +515,49 @@ function AppContent() {
       ? catalog ? initialSidebarProject(catalog, next, fromProject) ?? null : fromProject
       : projectId;
     const href = window.location.href;
-    pushHistory({url: workspaceURL(href, current), projectId: fromProject}, {url: workspaceURL(href, next), projectId: toProject});
+    const location = {url: workspaceURL(href, next), projectId: toProject};
+    if (replaceEntry) replaceHistory(location);
+    else pushHistory({url: workspaceURL(href, current), projectId: fromProject}, location);
     routeRef.current = next;
     setRoute(next);
     setMobileMenu(false);
-  }, [pushHistory]);
+  }, [pushHistory, replaceHistory]);
   const navigate=useCallback((next:WorkspaceRoute,projectId?:string|null)=>{
     if(routeRef.current.view==='settings')afterSettings(()=>commitNavigation(next,projectId));
     else commitNavigation(next,projectId);
   },[afterSettings,commitNavigation]);
-  const openWorkbenchPage=useCallback((view:WorkspacePageView,tab='models')=>{
+  const openWorkbenchPage=useCallback((view:WorkspacePageView,tab:SettingsPage='models')=>{
     const current=routeRef.current;
     if(current.view===view){
-      setMobileMenu(false);
-      const title=view==='workspace'?'workspace-page-title':view==='settings'?'model-settings-title':'desktop-update-title';
-      document.getElementById(title)?.focus({preventScroll:true});
+      if(view==='settings')setSettingsTab(tab);
       return;
     }
     afterSettings(()=>{
-      const box=conversationRef.current;
-      if(box&&current.sessionId)conversationResume.current.set(current.sessionId,{top:box.scrollTop,following:conversationScroll.current.following});
       setResourceTerminalMenu(null);setResourceConfigContext(null);
       setAgentOptionsOpen(false);setPermissionsOpen(false);setModelMenuOpen(false);setAttachmentDragOver(false);
-      if(view==='settings')setSettingsInitialTab(tab);
-      commitNavigation({...current,view});
+      if(view==='settings')setSettingsTab(tab);
+      const returnView=current.view==='plans'?'plans':current.returnView;
+      commitNavigation({...current,view,returnView},undefined,isWorkspacePageView(current.view));
     });
   },[afterSettings,commitNavigation]);
-  const openSettings=useCallback((tab='models')=>openWorkbenchPage('settings',tab),[openWorkbenchPage]);
-  const openWorkspacePage=()=>openWorkbenchPage('workspace');
-  const backFromWorkbenchPage=()=>{
-    if(historyAvailable.back)stepHistory(-1);
-    else openWorkspacePage();
+  const openSettings=useCallback((tab:SettingsPage='models')=>openWorkbenchPage('settings',tab),[openWorkbenchPage]);
+  const selectConsolePage=(page:ConsolePage)=>{
+    if(page==='workspace'||page==='updates')openWorkbenchPage(page);
+    else openSettings(page);
+  };
+  const closeWorkbenchConsole=()=>{
+    if(historyAvailable.back){stepHistory(-1);return;}
+    afterSettings(()=>{
+      const {sessionId,resourceId,returnView}=routeRef.current;
+      commitNavigation({sessionId,resourceId,view:returnView},undefined,true);
+    });
   };
   useEffect(()=>{
     const openUpdates=()=>openWorkbenchPage('updates');
     window.addEventListener('lake-open-updates',openUpdates);
     return ()=>window.removeEventListener('lake-open-updates',openUpdates);
   },[openWorkbenchPage]);
-  const isPlansPage=route.view==='plans'&&!route.resourceId&&!!route.sessionId&&!!catalog?.sessions.some(session=>session.id===route.sessionId&&isUserWorkspaceSession(session));
+  const isPlansPage=(route.view==='plans'||route.returnView==='plans')&&!route.resourceId&&!!route.sessionId&&!!catalog?.sessions.some(session=>session.id===route.sessionId&&isUserWorkspaceSession(session));
   const openSessionPlans=useCallback((targetSession:string)=>{
     const box=conversationRef.current;
     if(box&&activeSession.current===targetSession)conversationResume.current.set(targetSession,{top:box.scrollTop,following:conversationScroll.current.following});
@@ -853,7 +864,7 @@ function AppContent() {
   const currentSessionPresentation = selectedSession ? workGoalPresentation(activeSnapshot)??sreSessionPresentation(selectedSession,activeSnapshot?.sre?.tasks,activeSnapshot?.ai?.turnStartedAt) : {};
   const currentSessionStatus = currentSessionPresentation.status ?? selectedSession?.status;
   const selectedResource = catalog?.resources.find(item => item.id === route.resourceId);
-  useEffect(()=>{inspector.reset();},[sessionId,route.resourceId,isPlansPage,isWorkspacePage]);
+  useEffect(()=>{inspector.reset();},[sessionId,route.resourceId,isPlansPage]);
   const [pilotReports,setPilotReports]=useState<{sessionId:string;ids:ReadonlySet<string>}|null>(null);
   const onPilotReportsPresented=useCallback((id:string,ids:readonly string[])=>{
     if(id!==sessionId)return;
@@ -872,7 +883,7 @@ function AppContent() {
   const pendingRoleInspection=useRef<{selection:typeof inspector.selection;current:()=>boolean}|undefined>(undefined);
   const inspectionSelection=useRef(inspector.selection);inspectionSelection.current=inspector.selection;
   const [gatewayInspection,setGatewayInspection]=useState<SessionSnapshot|null>(null);
-  useLayoutEffect(()=>{roleInspectionRequest.current.cancel();pendingRoleInspection.current=undefined;setRoleInspection(null);},[sessionId,activeSnapshot?.session.projectId,route.resourceId,isPlansPage,isWorkspacePage]);
+  useLayoutEffect(()=>{roleInspectionRequest.current.cancel();pendingRoleInspection.current=undefined;setRoleInspection(null);},[sessionId,activeSnapshot?.session.projectId,route.resourceId,isPlansPage]);
   useLayoutEffect(()=>{
     const pending=pendingRoleInspection.current;
     if(pending&&inspector.selection!==pending.selection){roleInspectionRequest.current.cancel();pendingRoleInspection.current=undefined;}
@@ -939,7 +950,7 @@ function AppContent() {
     const timer=window.setInterval(()=>void refresh(),1000);
     return()=>{controller.abort();window.clearInterval(timer);};
   },[sessionId,roleInspection?.session.id,roleInspection?.superagent?.task.taskId,inspector.selection?.sessionId]);
-  const inspectorOpen=!!inspectedSnapshot&&inspector.selection?.sessionId===inspectedSnapshot.session.id&&!selectedResource&&!isPlansPage&&!isWorkspacePage;
+  const inspectorOpen=!!inspectedSnapshot&&inspector.selection?.sessionId===inspectedSnapshot.session.id&&!selectedResource&&!isPlansPage;
   const headerPilot = !selectedResource && !isPlansPage ? pilotIslandModel(activeSnapshot) : null;
   const headerPilotMode: 'auto'|'manual'|undefined = !selectedResource&&!isPlansPage&&activeSnapshot?.sre?.pilot?.enabled&&(!activeSnapshot.ai?.profile||activeSnapshot.ai.profile==='core')?(activeSnapshot.sre.pilot.autoAdvance?'auto':'manual'):undefined;
   const inspectorAvailable=(activeSnapshot?.session.workspaceRole==='role'?roleWorkers.length>0:!!(activeSnapshot?.ai??inspectedSnapshot?.ai))&&!selectedResource&&!isPlansPage;
@@ -1020,7 +1031,7 @@ function AppContent() {
 
   useLayoutEffect(() => {
     const container = conversationRef.current;
-    if (!container || !activeSnapshot || route.resourceId || isPlansPage || isWorkspacePage || isSpecialistTasks) {
+    if (!container || !activeSnapshot || route.resourceId || isPlansPage || isSpecialistTasks) {
       conversationScroll.current = { key: "", following: true };
       return;
     }
@@ -1042,12 +1053,12 @@ function AppContent() {
       motion.removeEventListener("change", updateMotion);
       stopObserving(); follower.stop(); conversationFollower.current = null;
     };
-  }, [activeSnapshot?.session.id, route.resourceId,isPlansPage,isWorkspacePage,isSpecialistTasks]);
+  }, [activeSnapshot?.session.id, route.resourceId,isPlansPage,isSpecialistTasks]);
 
   useLayoutEffect(()=>{
-    if(!sessionId||!historyDataReady||route.resourceId||isPlansPage||isWorkspacePage||historyVisible.current===sessionId)return;
+    if(!sessionId||!historyDataReady||route.resourceId||isPlansPage||historyVisible.current===sessionId)return;
     return prepareSessionEntrance(()=>conversationFollower.current?.jump(),()=>setHistoryVisibleId(sessionId));
-  },[sessionId,historyDataReady,route.resourceId,isPlansPage,isWorkspacePage]);
+  },[sessionId,historyDataReady,route.resourceId,isPlansPage]);
 
   // Completion can add final text; continue the existing smooth follow without
   // jumping or opting a reader of earlier messages back into following.
@@ -1209,7 +1220,7 @@ function AppContent() {
       if (projectRemoved || sessionRemoved || resourceRemoved) {
         const selection = initialWorkspaceSelection(fresh, current, sidebarProjectId);
         setSidebarProjectId(selection.projectId);
-        navigate(selection.route, selection.projectId);
+        commitNavigation(selection.route, selection.projectId, true);
       }
       return;
     }
@@ -1306,8 +1317,8 @@ function AppContent() {
         if (!name) return;
         const project = await api.createProject(name);
         await refreshCatalog();
-        setSidebarProjectId(project.id);
-        if(routeRef.current.view==='workspace'){setBulkMode(false);setBulkSelected([]);navigate({sessionId:null,resourceId:null,view:'workspace'},project.id);}
+        if(routeRef.current.view==='workspace'){setBulkMode(false);setBulkSelected([]);}
+        else setSidebarProjectId(project.id);
         notify(`已创建项目「${project.name}」`);
       } else {
         const session = await api.createSession(dialog.projectId);
@@ -1736,7 +1747,7 @@ function AppContent() {
 
   const projectList = [...catalog.projects].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const sidebarProject = projectList.find(project => project.id === (sidebarProjectId ?? selectedProjectId)) ?? projectList[0];
-  const sessionSelected=!!selectedSession&&!selectedResource&&!isPlansPage&&!isWorkspacePage;
+  const sessionSelected=!!selectedSession&&!selectedResource&&!isPlansPage;
   const sessionHeader=sessionSelected&&!isSpecialistTasks;
   const selectedSuperWorker=pilotWorkspace.workspace?.active&&selectedSession?.workspaceRole==='worker'?pilotWorkspace.workspace.workers.find(worker=>worker.sessionId===selectedSession?.id):undefined;
   const presentedReports=conversationMode==='conversation'&&pilotReports?.sessionId===sessionId?pilotReports?.ids:
@@ -1873,9 +1884,41 @@ function AppContent() {
     readOnly={isLegacyHistory} connected={sessionConnected&&!modeSaving.has(inspectedSnapshot.session.id)}
     onUpdated={()=>{if(roleInspection)void refreshRoleInspection();else void refreshCurrent();}}/>;
 
+  const noticeView = notice && <div className="toast" role="status"><Glyph name="check" size={17}/>{notice}<button aria-label="关闭提示" onClick={() => setNotice("")}><Glyph name="close" size={14}/></button></div>;
+  const workspaceOverlayOpen = Boolean(memoryProject || bulkConfirmation || navigationDelete || dialog);
+  const workspaceOverlays = <>
+    {memoryProject && <ProjectMemory key={memoryProject.id} project={memoryProject} onClose={() => setMemoryProject(null)}/>}
+    {bulkConfirmation && <BulkNavigationDelete targets={bulkConfirmation} onClose={() => setBulkConfirmation(null)} onProcessed={bulkProcessed} onBusy={busy => setPendingOperation(current => busy ? "bulk-delete" : current === "bulk-delete" ? "" : current)}/>}
+    {navigationDelete && <NavigationDelete target={navigationDelete} onClose={()=>setNavigationDelete(null)} onDeleted={async()=>{setResourceTerminalMenu(null);if(navigationDelete.kind==="project"&&routeRef.current.view==="workspace"&&sidebarProject?.id===navigationDelete.id){
+      setSidebarProjectId(null);setBulkMode(false);setBulkSelected([]);
+      commitNavigation({sessionId:null,resourceId:null,view:"workspace"},null,true);
+    }else if(navigationDelete.kind==="project" && selectedSession?.projectId===navigationDelete.id)navigate({sessionId:null,resourceId:null});else if(navigationDelete.kind==="resource"&&route.resourceId===navigationDelete.id)navigate({sessionId:route.sessionId,resourceId:null});await refreshCatalog();if(navigationDelete.kind!=="project")await refreshCurrent();}}/>}
+    {dialog && <div className="modal-scrim" onMouseDown={event => { if (event.target === event.currentTarget && !dialogBusy) setDialog(null); }}>
+      <section className="modal workbench-dialog" role="dialog" aria-modal="true" aria-labelledby="create-dialog-title" onKeyDown={event=>{
+        if(event.key==='Escape'&&!dialogBusy&&!event.nativeEvent.isComposing){event.preventDefault();setDialog(null);}
+      }}>
+        <header className="workbench-dialog-header">
+          <div><h2 id="create-dialog-title">{dialog.kind === "project" ? "新建项目" : "开启新会话"}</h2>
+            <p>{dialog.kind === "project" ? "将相关会话和资源放在同一个项目下。" : "名称会根据对话内容自动生成，可通过 @ 引用项目中的任意资源。"}</p></div>
+          <button type="button" className="icon-button" aria-label="关闭" onClick={() => setDialog(null)} disabled={dialogBusy}><Glyph name="close" size={16}/></button>
+        </header>
+        <form className="workbench-dialog-form" onSubmit={submitDialog}>
+          {(dialog.kind === "project" || dialogError) && <div className="workbench-dialog-body">
+            {dialog.kind === "project" && <label className="field-label">项目名称<input autoFocus maxLength={80} placeholder="例如：线上服务" value={draftProject} onChange={event => setDraftProject(event.target.value)}/></label>}
+            {dialogError && <p className="form-error" role="alert">{dialogError}</p>}
+          </div>}
+          <footer className="workbench-dialog-footer">
+            <button type="button" className="button secondary" onClick={() => setDialog(null)} disabled={dialogBusy}>取消</button>
+            <button type="submit" className="button primary" autoFocus={dialog.kind === "session"} disabled={dialogBusy || !connected || (dialog.kind === "project" && !draftProject.trim())}>{dialogBusy ? "正在创建…" : dialog.kind === "project" ? "创建项目" : "创建会话"}<Glyph name="arrow" size={16}/></button>
+          </footer>
+        </form>
+      </section>
+    </div>}
+  </>;
+
   return <SpecialistAvatarProvider channels={pilotWorkspace.workspace?.channels}><WorkbenchShell
     className={`app-shell has-workbench-navigation${terminalVisible ? " terminal-is-open" : ""}${detachedConversation?" has-workbench-conversation":""}${dockedConversation?" has-docked-conversation":""}${sharedIsland?" has-workbench-island":""}`}
-    compact={compactNavigation} railOnly={isWorkspacePage} inspectorOpen={inspectorOpen} back={historyAvailable.back} forward={historyAvailable.forward} onStep={stepHistory}>
+    compact={compactNavigation} inspectorOpen={inspectorOpen} back={historyAvailable.back} forward={historyAvailable.forward} onStep={stepHistory}>
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
     {mobileMenu && <button className="mobile-scrim" aria-label="关闭项目导航" onClick={() => setMobileMenu(false)}/>}
     {navigationSearchOpen && <WorkspaceSearch projects={projectList} sessions={catalog.sessions} resources={catalog.resources} canCreate={!!sidebarProject && connected && !pendingOperation} onClose={() => setNavigationSearchOpen(false)} onNewSession={() => afterSettings(()=>{
@@ -1894,23 +1937,20 @@ function AppContent() {
     <aside className={`sidebar workspace-navigation ${mobileMenu ? "sidebar-open" : ""} ${bulkMode && !isWorkspacePage ? "is-bulk-selecting" : ""}`} aria-label="项目导航" inert={compactNavigation && !mobileMenu} aria-hidden={compactNavigation && !mobileMenu}>
       <SidebarWorkspaceNavigation projectId={sidebarProject?.id}
        contentId="lake-project-navigation"
-       header={isWorkspacePage ? <div className="workspace-sidebar-mobile-actions mobile-only">{closeNavigation}</div> : <>
+       header={<>
         <div className="sidebar-brand-row">
          <span className="brand" aria-label="Lake"><strong>Lake</strong></span>
          <div className="sidebar-brand-actions">{navigationSearchTrigger}{closeNavigation}</div>
         </div>
         {bulkMode && <div className="bulk-navigation-toolbar"><button type="button" onClick={()=>{setBulkMode(false);setBulkSelected([]);}}>完成</button><span>已选 {bulkSelected.length} 项</span><button type="button" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkSelected([])}>清空</button><button type="button" className="danger-text" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}>删除所选</button></div>}
        </>}
-       workspace={{view:isWorkspacePageView(route.view)?route.view:undefined,modelConfigured,unreadUpdate:workspaceUpdateUnread,
-        onProjects:openWorkspacePage,onSettings:()=>openSettings(),onUpdates:()=>openWorkbenchPage('updates')}}
+       workspace={{open:isWorkspacePage,unreadUpdate:workspaceUpdateUnread,onOpen:()=>openWorkbenchPage('workspace')}}
        empty={<WelcomeSidebar disabled={!connected} onCreate={openProjectDialog}/>}
        selectionId={route.resourceId?`resource:${route.resourceId}`:`session:${route.sessionId??''}`} selectedPanel={route.resourceId?'resources':'specialists'}
        onSelectPanel={(panel,select)=>afterSettings(()=>{
         select();
-        if(!isWorkspacePage&&(panel==='resources'||!route.resourceId))return;
-        const resourceId=panel==='resources'?route.resourceId:null;
-        commitNavigation({sessionId:sessionId??defaultWorkspaceSession(catalog.sessions,sidebarProject?.id??null)?.id??null,resourceId});
-        if(isWorkspacePage&&compactNavigation&&!resourceId)setMobileMenu(true);
+        if(panel==='resources'||!route.resourceId)return;
+        commitNavigation({sessionId:sessionId??defaultWorkspaceSession(catalog.sessions,sidebarProject?.id??null)?.id??null,resourceId:null});
        })}
        resourceCount={catalog.resources.filter(resource=>resource.projectId===sidebarProject?.id).length}
        attention={pilotWorkspace.workspace?.channels?.some(channel=>channel.needsConfirmation===true||hasUnreadMessages(channel.messageRead))}
@@ -1985,30 +2025,7 @@ function AppContent() {
     {detachedConversation&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={sharedIsland?terminalHeading:null}
       terminalOpen={sharedIsland&&terminalOpen} pilotTone={pilotTone}/>}
     {dockedConversation&&<div className="workbench-conversation-surface" aria-hidden="true"/>}
-    <main className={`workspace${inspectorOpen?" has-session-inspector":""}${isWorkspacePage?" is-workspace-page":!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":sessionSelected?" has-specialist-task-list":""}`} onDragOver={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="none";return;}if(selectedSession&&!isLegacyHistory&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.stopPropagation();return;}if(!selectedSession||isLegacyHistory||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
-      <DesktopUpdate visible={route.view==='updates'} onUnreadChange={setWorkspaceUpdateUnread}
-        onOpenNavigation={()=>setMobileMenu(true)} onBack={backFromWorkbenchPage}/>
-      {isSettingsPage?<ModelSettings navigationGuard={settingsNavigation}
-        onOpenNavigation={()=>setMobileMenu(true)} onBack={backFromWorkbenchPage}
-        completionEnabled={completionEnabled} onCompletionEnabledChange={setCompletionEnabled} onGatewayTask={inspectGatewayTask} watchdogEnabled={bootstrap?.backendRuntime==='typescript'} capabilityDetectionEnabled={bootstrap?.backendRuntime==='go'}
-        memoryEngine={bootstrap?.memoryEngine} initialTab={settingsInitialTab} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut}
-        onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {commitNavigation({sessionId,resourceId:null});setAgentOptionsOpen(true);} : undefined}
-        onProjectMemory={selectedProjectId ? () => {const project=projectList.find(p=>p.id===selectedProjectId);if(project)setMemoryProject(project);} : undefined}
-        projectId={selectedProjectId??sidebarProject?.id} projectName={projectList.find(project=>project.id===(selectedProjectId??sidebarProject?.id))?.name}
-        ignoreProjectMemory={ignoreProjectMemory} onIgnoreProjectMemoryChange={setIgnoreProjectMemory}/>:route.view==='workspace'?<WorkspacePage project={sidebarProject} projects={projectList} resources={catalog.resources}
-        connected={workspaceConnected} bulkSelection={bulkSelection} bulkSelectedCount={bulkSelected.length}
-        onOpenNavigation={()=>setMobileMenu(true)} onCreateProject={openProjectDialog}
-        onOpenProject={project => {
-          const current = project.id === sidebarProject?.id;
-          const defaultSession = defaultWorkspaceSession(catalog.sessions, project.id)?.id ?? null;
-          setSidebarProjectId(project.id);
-          navigate({sessionId: current ? sessionId ?? defaultSession : defaultSession,
-            resourceId: current ? route.resourceId : null}, project.id);
-        }}
-        onDeleteProject={project=>setNavigationDelete({kind:"project",id:project.id,projectId:project.id,name:project.name})}
-        onToggleBulk={() => {setBulkMode(!bulkMode);setBulkSelected([]);}}
-        onClearSelection={() => setBulkSelected([])}
-        onDeleteSelected={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}/>:route.view==='updates'?null:<>
+    <main className={`workspace${inspectorOpen?" has-session-inspector":""}${!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":sessionSelected?" has-specialist-task-list":""}`} onDragOver={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="none";return;}if(selectedSession&&!isLegacyHistory&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.stopPropagation();return;}if(!selectedSession||isLegacyHistory||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
       {!detachedConversation&&(isSpecialistTasks?<header className="specialist-mobile-heading"><button type="button" className="icon-button" aria-label="打开项目导航" onClick={()=>setMobileMenu(true)}><Glyph name="menu" size={21}/></button><span>专员任务</span></header>:workspaceHeading)}
 
       {!persistentMode && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>服务端不支持持续终端。请核对服务端版本。</span></div>}
@@ -2100,8 +2117,35 @@ function AppContent() {
           ><Glyph name={composerSendGlyph} size={composerSendGlyph==="up"?17:16}/></button>}
         </div></div></div></div></form></div>}
       </div>{inspectorView}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
-      </>}
     </main>
+    <WorkspaceConsole dialogRef={consoleRef} open={isWorkspacePage} typescriptBackend={typescriptBackend}
+      page={route.view==='updates'?'updates':isSettingsPage?activeSettingsTab:'workspace'} busy={isSettingsPage&&settingsBusy}
+      onPage={selectConsolePage} onClose={closeWorkbenchConsole} overlay={isWorkspacePage&&workspaceOverlayOpen?workspaceOverlays:undefined}
+      notice={isWorkspacePage?noticeView:undefined}>
+      <DesktopUpdate visible={route.view==='updates'} onUnreadChange={setWorkspaceUpdateUnread}
+        onClose={closeWorkbenchConsole}/>
+      {isSettingsPage?<ModelSettings navigationGuard={settingsNavigation} tab={activeSettingsTab} onTabChange={setSettingsTab} onBusyChange={setSettingsBusy}
+        onClose={closeWorkbenchConsole}
+        completionEnabled={completionEnabled} onCompletionEnabledChange={setCompletionEnabled} onGatewayTask={inspectGatewayTask} capabilityDetectionEnabled={bootstrap?.backendRuntime==='go'}
+        memoryEngine={bootstrap?.memoryEngine} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut}
+        onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {commitNavigation({sessionId,resourceId:null});setAgentOptionsOpen(true);} : undefined}
+        onProjectMemory={selectedProjectId ? () => {const project=projectList.find(p=>p.id===selectedProjectId);if(project)setMemoryProject(project);} : undefined}
+        projectId={selectedProjectId??sidebarProject?.id} projectName={projectList.find(project=>project.id===(selectedProjectId??sidebarProject?.id))?.name}
+        ignoreProjectMemory={ignoreProjectMemory} onIgnoreProjectMemoryChange={setIgnoreProjectMemory}/>:route.view==='workspace'?<WorkspacePage project={sidebarProject} projects={projectList} resources={catalog.resources}
+        connected={workspaceConnected} bulkSelection={bulkSelection} bulkSelectedCount={bulkSelected.length}
+        onClose={closeWorkbenchConsole} onCreateProject={openProjectDialog}
+        onOpenProject={project => {
+          const current = project.id === sidebarProject?.id;
+          const defaultSession = defaultWorkspaceSession(catalog.sessions, project.id)?.id ?? null;
+          if (current) {closeWorkbenchConsole();return;}
+          setSidebarProjectId(project.id);
+          commitNavigation({sessionId: defaultSession, resourceId: null}, project.id, true);
+        }}
+        onDeleteProject={project=>setNavigationDelete({kind:"project",id:project.id,projectId:project.id,name:project.name})}
+        onToggleBulk={() => {setBulkMode(!bulkMode);setBulkSelected([]);}}
+        onClearSelection={() => setBulkSelected([])}
+        onDeleteSelected={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}/>:null}
+    </WorkspaceConsole>
     {terminalTabContext && <NavigationMenu title="终端" x={terminalTabContext.x} y={terminalTabContext.y} onClose={() => setTerminalTabContext(null)} actions={[
       {label: "打开终端", run: () => selectTerminalTab(terminalTabContext.terminal)},
       {label: "新建终端", disabled: !!pendingOperation || connectingResources.includes(terminalTabContext.terminal.resourceId), run: () => { void openTerminalFor(terminalTabContext.terminal.resourceId, true); }},
@@ -2112,17 +2156,12 @@ function AppContent() {
     {terminalContext && resourceTerminalSnapshot?.hostKeyTrust && <HostKeyTrust session={terminalContext.sessionId} prompt={resourceTerminalSnapshot.hostKeyTrust} disabled={!terminalConnected} refresh={refreshResourceTerminal}/>}
     {activeSnapshot?.hostKeyTrust && (!terminalContext || terminalContext.sessionId !== activeSnapshot.session.id) && <HostKeyTrust session={activeSnapshot.session.id} prompt={activeSnapshot.hostKeyTrust} disabled={!sessionConnected} refresh={refreshCurrent}/>}
 
-    {notice && <div className="toast" role="status"><Glyph name="check" size={17}/>{notice}<button aria-label="关闭提示" onClick={() => setNotice("")}><Glyph name="close" size={14}/></button></div>}
+    {!isWorkspacePage && noticeView}
     {editTerminalResource && (serviceResourceType(editTerminalResource)?<ServiceConfigEdit key={editTerminalResource.id} resource={editTerminalResource} connected={connected} onClose={() => setEditTerminalResource(null)} onSaved={terminalResourceSaved}/>:<TerminalConfigEdit key={editTerminalResource.id} resource={editTerminalResource} connected={connected} onClose={() => setEditTerminalResource(null)} onSaved={terminalResourceSaved}/>)}
     {resourceConfigContext && <NavigationMenu title={resourceConfigContext.resource.name} x={resourceConfigContext.x} y={resourceConfigContext.y} onClose={() => setResourceConfigContext(null)} actions={resourceConfigContext.resource.jumpServer ? [{label:"选择 JumpServer 登录账号",run:()=>setJumpAccount(resourceConfigContext.resource)}] : [{label:"编辑终端配置",run:()=>setEditTerminalResource(resourceConfigContext.resource)}, ...(resourceConfigContext.resource.kind !== "local" ? [{label:"删除资源",danger:true,run:()=>setNavigationDelete({kind:"resource" as const,id:resourceConfigContext.resource.id,projectId:resourceConfigContext.resource.projectId,name:resourceConfigContext.resource.name})}] : [])]}/>}
     {editSession && <SessionEdit key={editSession.id} session={editSession} connected={connected} onClose={() => setEditSession(null)} onSaved={sessionRenamed}/>}
     {deleteTarget && <div className="modal-scrim" onMouseDown={event => { if (event.target === event.currentTarget && !deleteBusy) setDeleteTarget(null); }}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="delete-session-title"><div className="modal-header"><span className="modal-icon danger-icon"><Glyph name="trash" size={20}/></span><button className="icon-button" aria-label="关闭" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}><Glyph name="close"/></button></div><h2 id="delete-session-title">删除会话</h2><p className="modal-description">将删除会话「{deleteTarget.title}」的对话、专员结论、证据、审批和命令记录。此操作不可恢复。</p>{deleteError && <p className="form-error" role="alert">{deleteError}</p>}<div className="modal-actions"><button type="button" className="button secondary" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>取消</button><button type="button" className="button danger" onClick={() => void confirmDeleteSession()} disabled={deleteBusy || !connected}>{deleteBusy ? "正在删除…" : "删除会话"}</button></div></div></div>}
-    {memoryProject && <ProjectMemory key={memoryProject.id} project={memoryProject} onClose={() => setMemoryProject(null)}/>}
-    {bulkConfirmation && <BulkNavigationDelete targets={bulkConfirmation} onClose={() => setBulkConfirmation(null)} onProcessed={bulkProcessed} onBusy={busy => setPendingOperation(current => busy ? "bulk-delete" : current === "bulk-delete" ? "" : current)}/>}
-    {navigationDelete && <NavigationDelete target={navigationDelete} onClose={()=>setNavigationDelete(null)} onDeleted={async()=>{setResourceTerminalMenu(null);if(navigationDelete.kind==="project"&&routeRef.current.view==="workspace"&&sidebarProject?.id===navigationDelete.id){
-      setSidebarProjectId(null);setBulkMode(false);setBulkSelected([]);
-      navigate({sessionId:null,resourceId:null,view:"workspace"});
-    }else if(navigationDelete.kind==="project" && selectedSession?.projectId===navigationDelete.id)navigate({sessionId:null,resourceId:null});else if(navigationDelete.kind==="resource"&&route.resourceId===navigationDelete.id)navigate({sessionId:route.sessionId,resourceId:null});await refreshCatalog();if(navigationDelete.kind!=="project")await refreshCurrent();}}/>}
+    {!isWorkspacePage && workspaceOverlays}
     {jumpProject && <JumpServerSettings key={jumpProject.id} project={jumpProject} refresh={refreshCatalog} onClose={()=>setJumpProject(null)}/>}
     {jumpAccount && <JumpServerAccounts key={jumpAccount.id} resource={jumpAccount} refresh={refreshCatalog} onClose={()=>setJumpAccount(null)}/>}
     {importProject && <ResourceImport project={importProject} hexhub={importHexhub} refresh={refreshCatalog} onClose={() => { setImportProject(null); setImportHexhub(false); }} onImported={notify}/>}
@@ -2138,25 +2177,6 @@ function AppContent() {
       <label className="field-label">资源名称<input disabled={sshBusy} required maxLength={120} value={sshName} onChange={event => setSshName(event.target.value)} autoFocus/></label>
 {resourceKind === "ssh" ? <SSHResourceFields value={sshDraft} onChange={setSshDraft} disabled={sshBusy}/> : <ServiceResourceFields projectId={sshProject} key={resourceKind} type={resourceKind} nativeConnections={bootstrap?.backendRuntime==='typescript'} value={serviceSettings} onChange={setServiceSettings} disabled={sshBusy}/>}      {sshError && <p className="form-error" role="alert">{sshError}</p>}<div className="modal-actions"><button type="button" className="button secondary" onClick={() => { setSshProject(null); setSshParent(null); setSshDraft(emptySSH()); setServiceSettings(emptyServiceDraft()); }} disabled={sshBusy}>取消</button><button type="submit" className="button primary" disabled={sshBusy}>{sshBusy ? "正在添加…" : "添加资源"}</button></div>
     </form></div></div>}
-    {dialog && <div className="modal-scrim" onMouseDown={event => { if (event.target === event.currentTarget && !dialogBusy) setDialog(null); }}>
-      <section className="modal workbench-dialog" role="dialog" aria-modal="true" aria-labelledby="create-dialog-title">
-        <header className="workbench-dialog-header">
-          <div><h2 id="create-dialog-title">{dialog.kind === "project" ? "新建项目" : "开启新会话"}</h2>
-            <p>{dialog.kind === "project" ? "将相关会话和资源放在同一个项目下。" : "名称会根据对话内容自动生成，可通过 @ 引用项目中的任意资源。"}</p></div>
-          <button type="button" className="icon-button" aria-label="关闭" onClick={() => setDialog(null)} disabled={dialogBusy}><Glyph name="close" size={16}/></button>
-        </header>
-        <form className="workbench-dialog-form" onSubmit={submitDialog}>
-          {(dialog.kind === "project" || dialogError) && <div className="workbench-dialog-body">
-            {dialog.kind === "project" && <label className="field-label">项目名称<input autoFocus maxLength={80} placeholder="例如：线上服务" value={draftProject} onChange={event => setDraftProject(event.target.value)}/></label>}
-            {dialogError && <p className="form-error" role="alert">{dialogError}</p>}
-          </div>}
-          <footer className="workbench-dialog-footer">
-            <button type="button" className="button secondary" onClick={() => setDialog(null)} disabled={dialogBusy}>取消</button>
-            <button type="submit" className="button primary" autoFocus={dialog.kind === "session"} disabled={dialogBusy || !connected || (dialog.kind === "project" && !draftProject.trim())}>{dialogBusy ? "正在创建…" : dialog.kind === "project" ? "创建项目" : "创建会话"}<Glyph name="arrow" size={16}/></button>
-          </footer>
-        </form>
-      </section>
-    </div>}
     {dangerousAction && <div className="modal-scrim"><div className="modal command-confirm" role="dialog" aria-modal="true" aria-labelledby="danger-action-title"><div className="modal-header"><span className="modal-icon command-icon"><Glyph name="alert" size={20}/></span><button className="icon-button" aria-label="关闭" onClick={() => setDangerousAction(null)} disabled={!!pendingOperation}><Glyph name="close"/></button></div><h2 id="danger-action-title">再次确认危险操作</h2><p className="modal-description">{dangerousAction.riskReason}</p><div className="confirm-facts"><div><span>目标资源</span><strong>{resourceLabel(resourceMap.get(dangerousAction.resourceId))}</strong></div><div><span>可能的影响</span><strong>{dangerousAction.impact}</strong></div></div><pre className="confirm-command-text">{dangerousAction.command}</pre><label className="danger-confirm-field">请输入「{dangerConfirmation(resourceMap.get(dangerousAction.resourceId)?.name ?? "")}」确认目标<input autoFocus value={dangerText} onChange={event => setDangerText(event.target.value)} autoComplete="off"/></label><div className="modal-actions"><button className="button secondary" onClick={() => setDangerousAction(null)} disabled={!!pendingOperation}>返回核对</button><button className="button approval-button" onClick={() => void decide(dangerousAction.id, "approve", dangerText)} disabled={!!pendingOperation || !sessionConnected || dangerText !== dangerConfirmation(resourceMap.get(dangerousAction.resourceId)?.name ?? "")}>确认危险操作<Glyph name="arrow" size={16}/></button></div></div></div>}
     {confirmedCommand !== null && <div className="modal-scrim"><div className="modal command-confirm" role="dialog" aria-modal="true" aria-labelledby="confirm-command-title"><div className="modal-header"><span className="modal-icon command-icon"><Glyph name="terminal" size={20}/></span><button className="icon-button" aria-label="关闭" onClick={() => setConfirmedCommand(null)} disabled={commandBusy}><Glyph name="close"/></button></div><h2 id="confirm-command-title">{dangerStage ? "再次确认危险操作" : "核对变更命令"}</h2><p className="modal-description">{confirmedPolicy?.riskReason} 本次确认只适用于这一条命令。</p><div className="confirm-facts"><div><span>会话</span><strong>{terminalContext ? "资源终端" : selectedSession?.title}</strong></div><div><span>目标资源</span><strong>{resourceLabel(terminalResource)}</strong></div><div><span>发起者</span><strong>你</strong></div></div><div className="confirm-command-label">完整命令</div><pre className="confirm-command-text">{confirmedCommand}</pre>{dangerStage && <label className="danger-confirm-field">请输入「{dangerConfirmation(terminalResource?.name ?? "")}」确认目标<input autoFocus value={dangerText} onChange={event => setDangerText(event.target.value)} autoComplete="off"/></label>}<div className="modal-actions"><button className="button secondary" onClick={() => setConfirmedCommand(null)} disabled={commandBusy}>返回修改</button><button className="button primary" onClick={() => void runCommand(confirmedCommand, dangerStage ? dangerText : undefined)} disabled={commandBusy || !terminalConnected || !persistentMode || currentTerminal?.holder !== "user" || currentTerminal.status !== "ready" || (dangerStage && dangerText !== dangerConfirmation(terminalResource?.name ?? ""))}>{commandBusy ? "正在提交…" : confirmedPolicy?.risk === "dangerous" && !dangerStage ? "继续确认风险" : "确认并执行"}<Glyph name="arrow" size={16}/></button></div></div></div>}
   </WorkbenchShell></SpecialistAvatarProvider>;
