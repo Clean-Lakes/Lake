@@ -18,9 +18,8 @@ export function useSpecialistModel(channel:SpecialistChannelInfo|undefined,setti
   return()=>controller.abort();
  },[projectId,settingsOpen,menuOpen]);
  const message=loading?'正在读取 Codex 配置':error||agent?.assignmentBlocker||(!agent?.assignmentReady?'请先配置 Codex':undefined);
- const model=channel?.execution?.kind==='acp'&&channel.execution.agent==='codex'
-  ? channel.execution.model?.modelId??agent?.defaultTaskModel??agent?.model
-  : agent?.defaultTaskModel??agent?.model;
+ const savedModel=channel?.execution?.kind==='acp'&&channel.execution.agent==='codex'?channel.execution.model?.modelId:undefined;
+ const model=agent?.modelOverride??savedModel??agent?.defaultTaskModel??agent?.model;
  const assignment=():SpecialistAgentAssignment|undefined=>channel?.roleRevision&&agent?.assignmentReady&&agent.projectId===projectId
   ? {requestId:request.current.id,roleRevision:channel.roleRevision,execution:{kind:'acp',agent:'codex',revision:agent.revision}}
   : undefined;

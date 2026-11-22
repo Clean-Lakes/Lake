@@ -3,21 +3,41 @@ import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {ModelSettings} from '../../src/ModelSettings';
 import type {GatewayConnection} from '../../../shared/contracts';
+import type {ExternalAgentStatus} from '../../../shared/external-agents';
 import '../../src/styles.css';
 import '../../src/appSelect.css';
 import '../../src/providerIcon.css';
 import '../../src/extensionSettings.css';
-const dark=new URLSearchParams(location.search).has('dark');
+const params=new URLSearchParams(location.search);
+const dark=params.has('dark');
 document.documentElement.dataset.theme=dark?'dark':'light';
 const providers=[
  {id:'mimo',name:'小米 MiMo',baseURL:'https://api.xiaomimimo.com/v1',protocol:'openai',enabled:true,keyConfigured:false,models:['mimo-v2.6-flash','mimo-v2.6-pro'].map(id=>({id,name:id,enabled:true,supportsImageInput:false,supportsImageOutput:false}))},
  {id:'deepseek',name:'DeepSeek',baseURL:'https://api.deepseek.com/v1',protocol:'openai-response',enabled:true,keyConfigured:false,models:['deepseek-flash','deepseek-v4-pro'].map(id=>({id,name:id,enabled:true,contextWindow:1050000,supportsImageInput:true,supportsImageOutput:false}))},
 ];
 const catalog={providers,activeProviderId:'deepseek',activeModelId:'deepseek-flash'};
-const projectId='settings-layout-fixture',connection:GatewayConnection={id:'fixture-client',name:'研发使用',projectId,enabled:true,routing:{mode:'pilot'},createdAt:'2026-11-16T00:00:00Z',updatedAt:'2026-11-16T00:00:00Z'};
+const projectId=params.has('other-project')?'other-settings-fixture':'settings-layout-fixture';
+const projectName=params.has('other-project')?'第二个测试项目':'隔离设置验收';
+const connection:GatewayConnection={id:'fixture-client',name:'研发使用',projectId,enabled:true,routing:{mode:'pilot'},createdAt:'2026-11-16T00:00:00Z',updatedAt:'2026-11-16T00:00:00Z'};
+const agentPath=`/api/projects/${projectId}/external-agents`;
+const preferenceKey=`fixture-codex-overrides:${projectId}`;
+const agent:ExternalAgentStatus={id:'codex',projectId,name:'Codex',revision:1,enabled:true,installed:true,transportReady:true,assignmentReady:true,
+ modelOptions:['gpt-6.1-sol','gpt-6.2-sol'],reasoningEffortOptions:['low','medium','high','xhigh','max','ultra'],
+ configPath:'/fixture/codex/config.toml',authMode:'chatgpt',updatedAt:connection.createdAt,
+ ...JSON.parse(sessionStorage.getItem(preferenceKey)??'{}')};
+const agentStatus=()=>{
+ const model=agent.modelOverride??'gpt-6.2-sol';
+ return {...agent,model,defaultTaskModel:model,reasoningEffort:agent.reasoningEffortOverride??'max'};
+};
 window.fetch=async(input,init)=>{
  const path=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href).pathname;
  const json=(data:unknown)=>new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json'}});
+ if(path===agentPath+'/codex/prepare'&&init?.method==='POST'){
+  const {modelOverride,reasoningEffortOverride}=JSON.parse(String(init.body));
+  Object.assign(agent,{modelOverride:modelOverride??undefined,reasoningEffortOverride:reasoningEffortOverride??undefined,revision:agent.revision+1});
+  sessionStorage.setItem(preferenceKey,JSON.stringify({modelOverride:agent.modelOverride,reasoningEffortOverride:agent.reasoningEffortOverride,revision:agent.revision}));
+  return json({agents:[agentStatus()]});
+ }
  if(init?.method&&init.method!=='GET') return new Response(JSON.stringify({error:'Read-only fictional fixture'}),{status:405,headers:{'Content-Type':'application/json'}});
  if(path==='/api/settings/providers')return json(catalog);
  if(path==='/api/settings/model')return json({name:'deepseek-flash',managedBy:'manual'});
@@ -25,7 +45,7 @@ window.fetch=async(input,init)=>{
  if(path==='/api/settings/model/state')return json({providers:catalog,settings:{name:'deepseek-flash',managedBy:'manual'},available:{models:[],entries:[]}});
  if(path==='/api/settings/gateway/connections')return json({connections:[connection],command:{program:'lake',home:'/fixture/lake-dev'},projects:[{id:projectId,name:'隔离设置验收'}],specialists:[],legacyTokens:[]});
  if(path==='/api/settings/gateway/connections/fixture-client/messages')return json({messages:[]});
- if(path===`/api/projects/${projectId}/external-agents`)return json({agents:[]});
+ if(path===agentPath)return json({agents:[agentStatus()]});
  if(path===`/api/projects/${projectId}/superagent`)return json({active:true,project:{projectId,routerSessionId:'fixture-pilot',version:1},workers:[],channels:[]});
  if(path===`/api/projects/${projectId}/watchdog`)return json({mode:'off'});
  if(path==='/api/settings/mcp')return json({servers:[]});
@@ -37,4 +57,4 @@ window.fetch=async(input,init)=>{
  }
  return new Response(JSON.stringify({error:'Fixture blocks unknown requests'}),{status:404,headers:{'Content-Type':'application/json'}});
 };
-createRoot(document.getElementById('root')!).render(<ModelSettings initialTab={new URLSearchParams(location.search).get('tab')??'models'} watchdogEnabled projectId={projectId} projectName="隔离设置验收" onClose={()=>{}} onChanged={async()=>{}} sendShortcut="enter" onShortcutChange={()=>{}} ignoreProjectMemory={false} onIgnoreProjectMemoryChange={()=>{}}/>);
+createRoot(document.getElementById('root')!).render(<ModelSettings initialTab={params.get('tab')??'models'} watchdogEnabled projectId={projectId} projectName={projectName} onClose={()=>{}} onChanged={async()=>{}} sendShortcut="enter" onShortcutChange={()=>{}} ignoreProjectMemory={false} onIgnoreProjectMemoryChange={()=>{}}/>);

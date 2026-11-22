@@ -37,7 +37,9 @@ export class LakeExternalAgents {
     const prepared=purpose==='probe'
       ? await this.registry.prepareConnection(profile,signal)
       : await this.registry.prepareLaunch(profile,signal,model);
-    const threadConfig={...codexConfig(prepared.home),...(purpose==='run'?{model:prepared.observed.model}:{}),mcp_servers:{...prepared.disabledMcp,...(mcp?{lake:mcp}:{})}};
+    const threadConfig={...codexConfig(prepared.home),
+      ...(purpose==='run'?{model:prepared.observed.model,model_reasoning_effort:profile.reasoningEffortOverride}:{}),
+      mcp_servers:{...prepared.disabledMcp,...(mcp?{lake:mcp}:{})}};
     return {executable:prepared.command,args:[...prepared.args.slice(0,-1),'-c','mcp_servers='+tomlValue(threadConfig.mcp_servers),'app-server'],
       cwd:directory,observed:prepared.observed,threadConfig,env:{...prepared.environment,TMPDIR:directory}};
   }
