@@ -40,6 +40,24 @@ test("explicit session and resource links take precedence over a saved project",
     {projectId:'older',route:{sessionId:'s7',resourceId:'host'}});
 });
 
+test("startup prefers Pilot but preserves explicit task and legacy links", () => {
+  const catalog = {projects:[{id:'p'},{id:'q'}],resources:[{id:'host',projectId:'p'}],sessions:[
+    {id:'pilot',projectId:'p',workspaceRole:'router',updatedAt:'2026-01-01'},
+    {id:'legacy',projectId:'p',workspaceRole:'legacy',updatedAt:'2026-01-02'},
+    {id:'role',projectId:'p',workspaceRole:'role',updatedAt:'2026-01-03'},
+    {id:'worker',projectId:'p',workspaceRole:'worker',updatedAt:'2026-01-04'},
+    {id:'internal',projectId:'p',workspaceRole:'conversation',updatedAt:'2026-01-05'},
+    {id:'foreign',projectId:'q',workspaceRole:'worker',updatedAt:'2026-01-06'},
+  ]} as unknown as Catalog;
+  const select=(sessionId:string|null,resourceId:string|null=null,view?:'plans')=>initialWorkspaceSelection(catalog,{sessionId,resourceId,view});
+  assert.deepEqual(select(null),{projectId:'p',route:{sessionId:'pilot',resourceId:null}});
+  assert.equal(select('missing').route.sessionId,'pilot');
+  assert.equal(select('internal').route.sessionId,'pilot');
+  assert.equal(select('legacy').route.sessionId,'legacy');
+  for(const id of ['role','worker']) assert.deepEqual(select(id,null,'plans').route,{sessionId:id,resourceId:null});
+  assert.deepEqual(select('foreign','host'),{projectId:'p',route:{sessionId:'pilot',resourceId:'host'}});
+});
+
 test("deleted preferences and stale links fall back safely while empty selected projects stay selected", () => {
   const catalog = {projects:[{id:'current'},{id:'older'},{id:'empty'}],sessions,resources:[]} as unknown as Catalog;
   assert.deepEqual(initialWorkspaceSelection(catalog,{sessionId:'deleted',resourceId:'deleted',view:'plans'},'gone'),

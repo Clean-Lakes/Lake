@@ -3,24 +3,33 @@ import type {WorkspaceRoute} from "./workspaceRoute";
 
 type WorkspaceCatalog = Pick<Catalog, "projects" | "resources" | "sessions">;
 
+export function isUserWorkspaceSession({workspaceRole}: Pick<WorkSession, "workspaceRole">) {
+  return workspaceRole === undefined || workspaceRole === "router" || workspaceRole === "legacy";
+}
+
+export function defaultWorkspaceSession(sessions: WorkSession[], projectId: string | null) {
+  const candidates = sessions.filter(session => session.projectId === projectId && isUserWorkspaceSession(session));
+  candidates.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return candidates.find(session => session.workspaceRole === "router") ?? candidates[0];
+}
+
 export function initialSidebarProject(catalog: WorkspaceCatalog, route: WorkspaceRoute, savedProjectId?: string | null) {
   const resource = catalog.resources.find(item => item.id === route.resourceId);
-  const session = catalog.sessions.find(item => item.id === route.sessionId);
+  const session = catalog.sessions.find(item => item.id === route.sessionId && item.workspaceRole !== 'conversation');
   const saved = catalog.projects.find(item => item.id === savedProjectId);
-  const recent = [...catalog.sessions].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  const recent = catalog.sessions.filter(isUserWorkspaceSession).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
   return resource?.projectId ?? session?.projectId ?? saved?.id ?? recent?.projectId ?? catalog.projects[0]?.id;
 }
 
 export function initialWorkspaceSelection(catalog: WorkspaceCatalog, route: WorkspaceRoute, savedProjectId?: string | null) {
   const projectId = initialSidebarProject(catalog, route, savedProjectId) ?? null;
-  const sessions = catalog.sessions.filter(item => item.projectId === projectId);
-  const session = sessions.find(item => item.id === route.sessionId)
-    ?? [...sessions].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  const session = catalog.sessions.find(item => item.projectId === projectId && item.id === route.sessionId && item.workspaceRole !== 'conversation')
+    ?? defaultWorkspaceSession(catalog.sessions, projectId);
   const resource = catalog.resources.find(item => item.id === route.resourceId && item.projectId === projectId);
   const sessionId = session?.id ?? null;
   return {projectId, route: {
     sessionId, resourceId: resource?.id ?? null,
-    ...(route.view === 'plans' && sessionId === route.sessionId && !resource ? {view: 'plans' as const} : {}),
+    ...(route.view === 'plans' && sessionId === route.sessionId && session && isUserWorkspaceSession(session) && !resource ? {view: 'plans' as const} : {}),
   }};
 }
 
