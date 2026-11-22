@@ -159,7 +159,9 @@ test('a host-confirmed report replaces the same task slot across SDK invocations
  const result={...report(row,'finish-root'),replyToMessageId:user.id,text:'正式结论。'};
  const beforeWorkspace=advance(initial,workspace([item]),[user,result],roots)[0]!;
  assert.equal(beforeWorkspace.finalReport,result,'the report stream can lead the workspace stream');
- assert.match(html(beforeWorkspace,snapshot(row)).replace(/<[^>]*>/g,''),/正式结论。/);
+ const rendered=html(beforeWorkspace,snapshot(row));
+ assert.match(rendered.replace(/<[^>]*>/g,''),/正式结论。/);
+ assert.doesNotMatch(rendered,/class="specialist-reply-feather"/);
  item.activity=undefined;item.assignmentState='parked';item.task={...item.task,state:'completed'};
  item.pilotReport={messageId:result.id,executionSettled:true};
  assert.equal(advance(initial,workspace([item]),[user,result])[0]!.finalReport,result);
@@ -174,6 +176,10 @@ test('published stage prose keeps working motion and trims only its terminal ful
   cards:ai.cards.map(card=>({...card,status:'completed',content:'先核对版本 1.4。正在查看样例记录。'}))}});
  assert.match(rendered,/data-motion="working"/);
  assert.match(rendered.replace(/<[^>]*>/g,''),/先核对版本 1\.4。正在查看样例记录(?!。)/);
+ assert.match(rendered,/class="specialist-reply-feather-tail">录<span class="specialist-reply-feather" aria-hidden="true"/);
+
+ const paused=renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row,snapshot:live,available:false}));
+ assert.doesNotMatch(paused,/class="specialist-reply-feather"/);
 });
 
 test('hide a repeated joint receipt only when all copied originals are in the same user turn',()=>{

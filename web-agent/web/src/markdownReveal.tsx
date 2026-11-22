@@ -1,5 +1,6 @@
 import {createContext,useContext,useLayoutEffect,useMemo,useRef,type ReactNode} from 'react';
 import type {ExtraProps} from 'react-markdown';
+import {SpecialistReplyFeather,SpecialistReplyFeatherTail} from './SpecialistReplyFeather';
 import {useSmoothText} from './useSmoothText';
 
 export type MarkdownRevealOptions = {active: boolean; animateInitial?: boolean; finishPending?: boolean};
@@ -13,7 +14,17 @@ type ProseNode = {
 };
 
 const textContainers = new Set(['root','paragraph','heading','blockquote','list','listItem','strong','emphasis','delete']);
+const inlineContainers = new Set(['paragraph','heading','strong','emphasis','delete']);
+const invisibleTailNodes = new Set(['definition','html','break']);
 const VisibleOffset = createContext<number | undefined>(undefined);
+
+function wrapRevealText(node:ProseNode,start?:number) {
+  node.type='lakeRevealText';
+  const properties:Record<string,unknown>=start===undefined?{}:{'data-reveal-start':start};
+  node.data={hName:'lake-reveal-text',hProperties:properties};
+  node.children=[{type:'text',value:node.value}];
+  delete node.value;
+}
 
 /** Preserve the playout cursor across paragraph and inline formatting boundaries. */
 export function remarkRevealText(paintedThrough:number) {
@@ -36,12 +47,34 @@ export function remarkRevealText(paintedThrough:number) {
       if(node.type!=='text'||!node.value||end===undefined)return;
       const value=node.value,start=end-value.length;
       if(start<0||source.slice(start,end)!==value)return;
-      node.type='lakeRevealText';
-      node.data={hName:'lake-reveal-text',hProperties:{'data-reveal-start':start}};
-      node.children=[{type:'text',value}];
-      delete node.value;
+      wrapRevealText(node,start);
     }
     visit(tree);
+  };
+}
+
+/** Attach to the last prose leaf, keeping formatted inline nodes and the reveal clock intact. */
+export function remarkSpecialistReplyFeather() {
+  return (node:ProseNode) => {
+    while (textContainers.has(node.type) && !node.data?.hName) {
+      const children = node.children ?? [];
+      let index = children.length - 1;
+      while (index >= 0 && (invisibleTailNodes.has(children[index]!.type) ||
+        children[index]!.type === 'text' && !children[index]!.value?.trim())) index--;
+      const tail = children[index];
+      if (!tail) return;
+
+      if (tail.type === 'text') wrapRevealText(tail);
+      if (tail.type === 'lakeRevealText') {
+        tail.data!.hProperties!['data-specialist-feather'] = true;
+        return;
+      }
+      if (inlineContainers.has(node.type) && !textContainers.has(tail.type)) {
+        children.splice(index + 1, 0, {type:'lakeSpecialistFeather',data:{hName:'lake-specialist-feather'}});
+        return;
+      }
+      node = tail;
+    }
   };
 }
 
@@ -61,6 +94,8 @@ export const markdownRevealComponents = {
     const offset = useContext(VisibleOffset);
     const start = node?.properties?.['data-reveal-start'];
     const text = node?.children.map(child=>child.type==='text'?child.value:'').join('')??'';
-    return offset === undefined || typeof start !== 'number' ? text : text.slice(0,Math.max(0,offset-start));
-  }
+    const shown = offset === undefined || typeof start !== 'number' ? text : text.slice(0,Math.max(0,offset-start));
+    return node?.properties?.['data-specialist-feather'] ? <SpecialistReplyFeatherTail>{shown}</SpecialistReplyFeatherTail> : shown;
+  },
+  'lake-specialist-feather': SpecialistReplyFeather,
 };

@@ -164,7 +164,7 @@ test('task rounds show their exact start times and frozen speakers without inven
 
 test("one SDK invocation replaces progress in place and the final host report replaces all narration", () => {
   const first = card("first", "正在连接两端数据库"),
-    second = card("second", "已取得库表清单，正在核对差异");
+    second = card("second", "已取得库表清单，正在核对差异。");
   const s = snapshot([
     first,
     card("tool", "RAW_TOOL_RECEIPT", "operation"),
@@ -181,6 +181,8 @@ test("one SDK invocation replaces progress in place and the final host report re
   assert.match(html, /已取得库表清单/);
   assert.doesNotMatch(html, /正在连接两端|RAW_TOOL_RECEIPT/);
   assert.match(html, /status-text--active/);
+  assert.match(html, /class="specialist-reply-feather-tail">异<span class="specialist-reply-feather" aria-hidden="true"/);
+  assert.doesNotMatch(html.replace(/<[^>]*>/g, ""), /正在核对差异。/);
   const ended = specialistReplies(
     [
       ...raw(s.ai!.cards),
@@ -199,7 +201,7 @@ test("one SDK invocation replaces progress in place and the final host report re
   assert.equal(ended[0].reply?.state, "settled");
   assert.equal(ended[0].message?.author?.taskId, "task");
   assert.match(render(ended), /已核对两端/);
-  assert.doesNotMatch(render(ended), /正在核对差异|status-text--active/);
+  assert.doesNotMatch(render(ended), /正在核对差异|status-text--active|class="specialist-reply-feather"/);
   assert.equal(
     JSON.stringify(s),
     original,
@@ -341,7 +343,7 @@ test("waiting, disconnected and inactive replies stop animation while actual mod
     draw(true, waiting),
     draw(true, { ...s, ai: { ...s.ai!, status: "completed" } }),
   ])
-    assert.doesNotMatch(html, /status-text--active|reply-duration-spinner/);
+    assert.doesNotMatch(html, /status-text--active|reply-duration-spinner|class="specialist-reply-feather"/);
   assert.match(draw(true, waiting), /等待确认/);
   assert.match(draw(false, s), /正在重连/);
 });

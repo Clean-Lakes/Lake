@@ -14,7 +14,7 @@ import {MarkdownCodeBlock} from './MarkdownCodeBlock';
 import {remarkReplyInfo} from './replyInfo';
 import {replyInfoComponents, ReplyInfoSpan} from './ReplyInfoElements';
 import {LiveTextMotionBoundary,LiveTextMotionText,remarkLiveTextMotion} from './liveTextMotion';
-import {MarkdownReveal,markdownRevealComponents,remarkRevealText} from './markdownReveal';
+import {MarkdownReveal,markdownRevealComponents,remarkRevealText,remarkSpecialistReplyFeather} from './markdownReveal';
 
 const emptyCatalog = objectCatalog();
 const References = createContext<{catalog: ObjectCatalog; open?: (reference: ObjectReference) => void}>({catalog: emptyCatalog});
@@ -105,7 +105,7 @@ const components: Components = {
 
 const textImageComponents:Components={...components,img:({alt})=>alt?<span>{alt}</span>:null};
 
-export const AssistantMarkdown = memo(function AssistantMarkdown({children, tags = [], className = '', allowImages = true,liveMotion,reveal,animateInitial,finishPending}: {children: string; tags?: readonly WorkspaceTag[]; className?: string; allowImages?: boolean;liveMotion?:boolean;reveal?:boolean;animateInitial?:boolean;finishPending?:boolean}) {
+export const AssistantMarkdown = memo(function AssistantMarkdown({children, tags = [], className = '', allowImages = true,liveMotion,reveal,animateInitial,finishPending,interimFeather=false}: {children: string; tags?: readonly WorkspaceTag[]; className?: string; allowImages?: boolean;liveMotion?:boolean;reveal?:boolean;animateInitial?:boolean;finishPending?:boolean;interimFeather?:boolean}) {
   const {catalog} = useContext(References);
   const signature = conversationTagSignature(tags);
   const decorateTags = useMemo(() => remarkConversationTags(tags), [signature]);
@@ -116,8 +116,9 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({children, tags
     remarkGfm, remarkAssistantProse, remarkReplyInfo, decorateTags, decorateObjects,
     ...(decorateMotion?[remarkLiveTextMotion]:[]),
     ...(paintedThrough===undefined?[]:[remarkRevealText(paintedThrough)]),
+    ...(interimFeather?[remarkSpecialistReplyFeather]:[]),
   ]} components={allowImages?components:textImageComponents} skipHtml>{children}</Markdown>,
-  [children,decorateTags,decorateObjects,decorateMotion,allowImages]);
+  [children,decorateTags,decorateObjects,decorateMotion,allowImages,interimFeather]);
   const prose=reveal===undefined?render():<MarkdownReveal source={children} active={reveal} animateInitial={animateInitial} finishPending={finishPending} render={render}/>;
   return liveMotion===undefined?<div className={proseClass}>{prose}</div>:<LiveTextMotionBoundary active={liveMotion} className={proseClass}>{prose}</LiveTextMotionBoundary>;
 });
