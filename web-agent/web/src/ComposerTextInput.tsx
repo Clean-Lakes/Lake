@@ -149,6 +149,6 @@ export const ComposerTextInput=forwardRef<ComposerInputHandle,Props>(function Co
     if((event.key==='Backspace'||event.key==='Delete')&&range.start!==range.end&&value.slice(range.start,range.end).includes(composerToken)){event.preventDefault();apply(range.start,range.end,'');return;}
     if(event.key==='Enter'){event.preventDefault();apply(range.start,range.end,'\n');return;}
    }}/>
-  <span id={statusId} className="visually-hidden" role="status">{suffix?`补齐建议：${suffix}。按 Tab 接受，Escape 忽略。`:''}</span>
+  <span id={statusId} className="visually-hidden" role="status">{suffix?`补齐建议「${suffix.trim()}」。按 Tab 接受，Escape 忽略。`:''}</span>
  </div>;
 });
