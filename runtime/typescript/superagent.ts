@@ -798,7 +798,8 @@ export class LakeSuperagent implements AgentHost {
   private roleExecution(role:Role,freezeModel=false):AgentBackendRef {
     const registry=this.agents.external.registry,profile=registry.get(role.projectId,'codex');
     const saved=role.execution?.kind==='acp'&&role.execution.agent==='codex'?role.execution.model:undefined;
-    const model=saved??(freezeModel?{modelId:defaultCodexTaskModel(registry.probe(role.projectId,'codex')?.model)}:undefined);
+    const projectModel=freezeModel?profile.modelOverride:undefined;
+    const model=projectModel?{modelId:projectModel}:saved??(freezeModel?{modelId:defaultCodexTaskModel(registry.probe(role.projectId,'codex')?.model)}:undefined);
     return {kind:'acp',agent:'codex',revision:profile.revision,...(model?{model:structuredClone(model)}:{})};
   }
   private freezeRoleExecution(role:Role):Role {

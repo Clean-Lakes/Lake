@@ -3,6 +3,8 @@ import type {ExternalAgentStatus} from '../../shared/external-agents';
 import {api,readableError} from './api';
 import {Glyph} from './Icons';
 import {ProviderIcon} from './ProviderIcon';
+import {AppSelect} from './AppSelect';
+import {reasoningLabels} from './reasoningLabels';
 import './externalAgents.css';
 
 type Draft=ExternalAgentStatus & {npmPath:string;dirty:boolean};
@@ -17,7 +19,7 @@ export function ExternalAgentSettings({projectId,projectName,onBusyChange}:{proj
     const catalog=await api.externalAgents(projectId,signal);
     if(signal?.aborted||!mounted.current)return;
     setAgents(current=>catalog.agents.map(agent=>{
-      const draft=current.find(row=>row.id===agent.id);
+      const draft=current.find(row=>row.id===agent.id&&row.projectId===agent.projectId);
       return draft?.dirty&&draft.revision===agent.revision?draft:{...agent,npmPath:agent.npmPath??'',dirty:false};
     }));
   }
@@ -31,7 +33,10 @@ export function ExternalAgentSettings({projectId,projectName,onBusyChange}:{proj
     catch(cause){try{await load();}catch{}if(mounted.current)setError(readableError(cause));}
     finally{flight.current=false;if(mounted.current)setBusy('');}
   }
-  const save=(agent:Draft)=>api.prepareExternalAgent(projectId!,{enabled:agent.enabled,expectedRevision:agent.revision,nodePath:agent.nodePath??'',npmPath:agent.npmPath});
+  const save=(agent:Draft)=>api.prepareExternalAgent(projectId!,{
+    enabled:agent.enabled,expectedRevision:agent.revision,nodePath:agent.nodePath??'',npmPath:agent.npmPath,
+    modelOverride:agent.modelOverride??null,reasoningEffortOverride:agent.reasoningEffortOverride??null,
+  });
   return <section id="agents-settings-panel" role="tabpanel" aria-labelledby="agents-settings-tab" className="model-conversation external-agent-settings">
     {!projectId?<p className="settings-note">请先选择项目，再配置外部 Agent。</p>:<>
       <div className="external-agent-heading"><strong>{projectName||'当前项目'}</strong><span>Codex 连接</span><button className="button secondary" disabled={!!busy} onClick={()=>void run('refresh',()=>load(),'配置已刷新')}>刷新</button></div>
@@ -41,9 +46,27 @@ export function ExternalAgentSettings({projectId,projectName,onBusyChange}:{proj
         <header><span className="external-agent-mark"><ProviderIcon brand="openai" size={23}/></span><div><h3>Codex</h3><small>{agent.assignmentReady?'已就绪':agent.transportReady?(agent.enabled&&agent.assignmentBlocker||'Codex 连接已验证'):agent.installed?'Codex 引擎可用':'启用后自动准备'}</small></div>
           <button className={`provider-switch ${agent.enabled?'on':''}`} type="button" role="switch" aria-label="启用 Codex" aria-checked={agent.enabled} disabled={!!busy} onClick={()=>void run(agent.id,()=>agent.enabled?api.saveExternalAgent(projectId,agent.id,{enabled:false,expectedRevision:agent.revision}):save({...agent,enabled:true}),'Codex 配置已更新')}><span/></button>
         </header>
-        <p className="settings-note">自动识别本机运行路径，复用 Codex 已有登录与配置。模型、服务地址和思考强度跟随本机 Codex。</p>
+        <p className="settings-note">复用本机 Codex 的登录与服务。手动选择适用于当前项目的后续专员任务。</p>
         <fieldset className="external-agent-fields" disabled={!!busy}>
-          <div className="external-agent-local-config"><span className="field-label">本机 Codex</span><p>{agent.authMode==='chatgpt'?'ChatGPT 登录':agent.authMode==='api_key'?'Codex API 登录':agent.authMode==='provider'?'本机服务配置':'登录状态待确认'} · {agent.model||'本机默认模型'}{agent.reasoningEffort?` · ${agent.reasoningEffort}`:''}</p><small>{agent.configPath||'自动读取本机 Codex 配置'}</small>{agent.defaultTaskModel&&agent.defaultTaskModel!==agent.model&&<small>Lake 新任务默认使用 {agent.defaultTaskModel}</small>}</div>
+          <div className="external-agent-local-config">
+            <span className="field-label">当前连接</span>
+            <p>{[agent.authMode==='chatgpt'?'ChatGPT 登录':agent.authMode==='api_key'?'Codex API 登录':agent.authMode==='provider'?'本机服务配置':'登录状态待确认',
+              agent.model,agent.reasoningEffort].filter(Boolean).join(' · ')}</p>
+            <small>{agent.configPath||'自动读取本机 Codex 配置'}</small>
+            {agent.defaultTaskModel&&agent.defaultTaskModel!==agent.model&&<small>Lake 新任务默认使用 {agent.defaultTaskModel}</small>}
+          </div>
+          <label className="field-label">模型
+            <AppSelect label="Codex 模型" value={agent.modelOverride??''} onChange={event=>update(agent.id,{modelOverride:event.target.value||undefined})}>
+              <option value="">跟随本机 Codex</option>
+              {agent.modelOptions?.map(model=><option key={model} value={model}>{model}</option>)}
+            </AppSelect>
+          </label>
+          <label className="field-label">思考强度
+            <AppSelect label="Codex 思考强度" value={agent.reasoningEffortOverride??''} onChange={event=>update(agent.id,{reasoningEffortOverride:event.target.value||undefined})}>
+              <option value="">跟随本机 Codex</option>
+              {agent.reasoningEffortOptions?.map(effort=><option key={effort} value={effort}>{reasoningLabels[effort]??effort}</option>)}
+            </AppSelect>
+          </label>
           <div className="external-agent-path-status"><Glyph name={agent.nodePath&&agent.npmPath?'check':'code'} size={16}/><span>{agent.nodePath&&agent.npmPath?'运行路径已自动识别':'启用后自动识别运行路径'}</span></div>
         </fieldset>
         <details className="external-agent-advanced"><summary>高级设置</summary><fieldset className="external-agent-fields" disabled={!!busy}>

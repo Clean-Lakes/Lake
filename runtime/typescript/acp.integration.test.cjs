@@ -249,13 +249,14 @@ test('real Codex reads a cached API login and detects logout without a Lake key 
  await rm(join(codexHome,'auth.json'));status=(await app.agents.external.status(project.id))[0];assert.equal(status.revision,2);assert.equal(status.assignmentReady,false);assert.match(status.assignmentBlocker,/本机 Codex 尚未登录/);
 });
 
-test('real Codex uses a frozen role model over a different local default without changing login or max',{skip:!adapter,timeout:90000},async t=>{
+test('real Codex uses the project selections for new tasks of an existing specialist',{skip:!adapter,timeout:90000},async t=>{
  const home=await mkdtemp(join(tmpdir(),'lake-codex-role-model-')),web=join(home,'web');await mkdir(web);await writeFile(join(web,'index.html'),'fixture');
  const requests=[];let providerError;
+ let expectedModel='gpt-6.1-sol',expectedEffort='max';
  const provider=createServer(async(req,res)=>{
   try{
    const chunks=[];for await(const chunk of req)chunks.push(chunk);const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
-   assert.equal(body.model,'gpt-6.1-sol');assert.equal(body.reasoning?.effort,'max');
+   assert.equal(body.model,expectedModel);assert.equal(body.reasoning?.effort,expectedEffort);
    const item={id:'role_model_report',type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:'ROLE_MODEL_REPORT: configuration fixture only',annotations:[]}]};
    const response={id:'role_model_response',object:'response',status:'completed',output:[item],usage:{input_tokens:10,output_tokens:5,total_tokens:15}};
    res.writeHead(200,{'Content-Type':'text/event-stream'});
@@ -285,5 +286,36 @@ test('real Codex uses a frozen role model over a different local default without
  const run=app.store.list('acpRuns')[0];assert.equal(run.requestedModel,'gpt-6.1-sol');assert.equal(run.model,'gpt-6.1-sol');assert.equal(run.reasoningEffort,'max');
  await assert.rejects(external.run('codex','Report ROLE_MODEL_REPORT without using tools.','role-model-request',{...actor,model:'different-model'}),/身份或输入不匹配/);
  await assert.rejects(external.run('codex','Continue this report.','role-model-resume',{...actor,model:'different-model'},result.run_id),/同一执行身份与模型/);
- assert.equal(app.store.list('acpRuns').length,1);await unchanged();
+ assert.equal(app.store.list('acpRuns').length,1);
+
+ app.superagent.ensure(project.id);
+ const originalRole={id:'c'.repeat(64),projectId:project.id,roleKey:'fixture-role',name:'Fixture specialist',duties:'Report the test observation',revision:1};
+ app.store.put('superRoles',originalRole.id,originalRole);
+ const role=app.superagent.setRoleExecution(project.id,originalRole.id,{expectedRevision:1,execution:{kind:'acp',agent:'codex',model:{modelId:'gpt-6.1-sol'}}});
+ expectedModel='gpt-6.2-sol';expectedEffort='high';
+ const count=requests.length;
+ const response=await fetch(app.origin+`/api/projects/${project.id}/external-agents/codex/prepare`,{method:'POST',
+  headers:{Authorization:'Bearer '+app.token,'Content-Type':'application/json'},body:JSON.stringify({enabled:true,expectedRevision:profile.revision,
+   modelOverride:expectedModel,reasoningEffortOverride:expectedEffort})});
+ const settings=await response.json();
+ assert.equal(response.status,200,JSON.stringify(settings));
+ const [projectAgent]=settings.agents;
+ assert.equal(projectAgent.assignmentReady,true);
+ assert.deepEqual([projectAgent.model,projectAgent.reasoningEffort],[expectedModel,expectedEffort]);
+ assert.equal(requests.length,count,'saving settings only verifies the connection');
+ const [channel]=app.superagent.workspace(project.id).channels;
+ const receipt=await app.superagent.send(channel.sessionId,'Report the isolated test observation.',undefined,false,undefined,{
+  requestId:'project-codex-settings-01',roleRevision:role.revision,execution:{kind:'acp',agent:'codex',revision:projectAgent.revision}});
+ let projectRun;
+ for(let attempt=0;attempt<400;attempt++){
+  projectRun=app.store.list('acpRuns').find(run=>run.workerId===receipt.assignment.workerId);
+  if(projectRun&&projectRun.state!=='starting'&&projectRun.state!=='running')break;
+  await new Promise(resolve=>setTimeout(resolve,50));
+ }
+ if(providerError)throw providerError;
+ assert.equal(projectRun?.state,'completed',projectRun?.summary);
+ assert.deepEqual([projectRun.requestedModel,projectRun.model,projectRun.reasoningEffort],[expectedModel,expectedModel,expectedEffort]);
+ assert.deepEqual(app.store.get('superRoles',role.id).execution,role.execution);
+ assert.ok(requests.length>count);
+ await unchanged();
 });

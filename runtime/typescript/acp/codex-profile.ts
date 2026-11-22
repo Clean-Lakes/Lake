@@ -12,6 +12,10 @@ export const codexCatalog = {models: upstream.models.map(model => ({...model,
   node_repl_disabled: true, multi_agent_version: 'v1',
 }))};
 export const codexModels: string[] = codexCatalog.models.map(model => model.slug);
+// A project effort also applies to specialists with their own compatible model.
+export const codexReasoningEfforts: string[] = codexCatalog.models[0]!.supported_reasoning_levels
+  .map(level => level.effort)
+  .filter(effort => codexCatalog.models.every(model => model.supported_reasoning_levels.some(level => level.effort === effort)));
 export const codexCatalogRevision=createHash('sha256').update(JSON.stringify(codexCatalog)).digest('hex');
 // An unbound Lake task can use the latest pinned compatible model when the
 // user's CLI default is outside the Lake catalog. Explicit bindings stay exact.

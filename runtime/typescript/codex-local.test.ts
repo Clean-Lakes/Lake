@@ -112,3 +112,50 @@ test('role model overrides keep local login and max intact and concurrent launch
  assert.deepEqual([await readFile(f.config,'utf8'),await readFile(f.auth,'utf8')],before);
  await assert.rejects(registry.prepareLaunch(profile,signal,'unverified-model'),/兼容目录/);
 });
+
+test('project Codex selections persist independently and clearing either value restores inheritance',async t=>{
+ const f=await fixture(t),store=await LakeStore.open(join(f.home,'lake'),join(f.home,'data'));
+ t.after(async()=>{store.db.close();});
+ const first=store.createProject('project defaults'),second=store.createProject('local defaults');
+ const registry=new ExternalAgentRegistry(store,{codexHome:f.source});
+ const before=[await readFile(f.config,'utf8'),await readFile(f.auth,'utf8')];
+ registry.local.inspect=async(_node,_engine,_directory,overrides)=>{
+  const value=(key:string)=>{
+   const match=overrides.find(arg=>arg.startsWith(key+'='));
+   return match?parse('value = '+match.slice(key.length+1)).value as string:undefined;
+  };
+  return {model:value('model')??'gpt-6.1-sol',provider:'openai',reasoningEffort:value('model_reasoning_effort')??'max',
+   authenticated:true,authMode:'chatgpt',mcpIds:[],hooks:{},environment:f.local.current().environment};
+ };
+ const save=(expectedRevision:number,values:Record<string,unknown>)=>registry.save(first.id,'codex',{expectedRevision,enabled:false,...values});
+ const signal=new AbortController().signal;
+ const profile=await save(0,{modelOverride:'gpt-6.2-sol',reasoningEffortOverride:'high'});
+ await assert.rejects(save(0,{modelOverride:null}),/请刷新后重试/);
+ await assert.rejects(save(1,{modelOverride:'unsupported-model'}),/不在当前 Codex 兼容目录/);
+ await assert.rejects(save(1,{reasoningEffortOverride:'unsupported-effort'}),/不受当前 Codex 模型支持/);
+ const newRegistry=new ExternalAgentRegistry(store,{codexHome:f.source});
+ const listed=(await newRegistry.list(first.id))[0]!;
+ assert.equal(listed.modelOverride,'gpt-6.2-sol');
+ assert.equal(listed.reasoningEffortOverride,'high');
+ assert.ok(listed.modelOptions?.includes('gpt-6.1-sol')&&listed.reasoningEffortOptions?.includes('ultra'));
+ const [configured,inherited,bound]=await Promise.all([
+  registry.prepareConnection(profile,signal),registry.prepareLaunch(registry.get(second.id,'codex'),signal),
+  registry.prepareLaunch(profile,signal,'gpt-6.1-sol'),
+ ]);
+ assert.deepEqual([configured.observed.model,configured.observed.reasoningEffort],['gpt-6.2-sol','high']);
+ assert.deepEqual([inherited.observed.model,inherited.observed.reasoningEffort],['gpt-6.1-sol','max']);
+ assert.deepEqual([bound.observed.model,bound.observed.reasoningEffort],['gpt-6.1-sol','high']);
+ assert.ok(configured.args.includes('model_reasoning_effort="high"')&&!inherited.args.some(arg=>arg.startsWith('model_reasoning_effort=')));
+ const followedModel=await save(1,{modelOverride:null});
+ assert.equal(followedModel.modelOverride,undefined);
+ assert.equal(followedModel.reasoningEffortOverride,'high');
+ await f.login('account-b','new');
+ const reloaded=registry.get(first.id,'codex');
+ assert.equal(reloaded.reasoningEffortOverride,'high');
+ const followedBoth=await save(reloaded.revision,{reasoningEffortOverride:null});
+ assert.equal(followedBoth.reasoningEffortOverride,undefined);
+ assert.equal((await registry.prepareLaunch(followedBoth,signal)).observed.reasoningEffort,'max');
+ assert.equal(await readFile(f.config,'utf8'),before[0]);
+ await f.login('account-a','initial');
+ assert.equal(await readFile(f.auth,'utf8'),before[1]);
+});
