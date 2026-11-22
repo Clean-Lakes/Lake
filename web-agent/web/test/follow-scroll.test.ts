@@ -65,6 +65,24 @@ test("reduced motion and initial session placement reach the bottom without anim
   assert.equal(initial.box.scrollTop, 500); assert.equal(initial.callbacks.size, 0);
 });
 
+test("changing motion preference stops live easing and preserves paused reading", () => {
+  const f = fixture();
+  f.follower.request(); f.frame(0);
+  assert.equal(f.follower.animating, true);
+  f.follower.setReducedMotion(true);
+  assert.equal(f.box.scrollTop, 500);
+  assert.equal(f.callbacks.size, 0);
+  f.follower.setReducedMotion(false);
+  f.box.scrollHeight += 200;
+  f.follower.request(); f.frame(16.67);
+  assert.ok(f.box.scrollTop > 500 && f.box.scrollTop < 700);
+  f.pause();
+  const position = f.box.scrollTop;
+  f.follower.setReducedMotion(true);
+  assert.equal(f.box.scrollTop, position);
+  assert.equal(f.callbacks.size, 0);
+});
+
 test("device-pixel rounding still reaches the exact tail and stops scheduling frames", () => {
   const f = fixture(); let top = 0;
   Object.defineProperty(f.box, "scrollTop", {get: () => top, set: value => {top = Math.round(value);}});

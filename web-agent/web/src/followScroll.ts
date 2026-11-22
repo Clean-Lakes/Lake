@@ -31,6 +31,10 @@ export class FollowScroll {
   get animating() { return this.frame !== null; }
   constructor(private box: ScrollBox, private following: () => boolean,
     private frames: Frames = {request: callback => window.requestAnimationFrame(callback), cancel: id => window.cancelAnimationFrame(id)}, private reducedMotion = false) {}
+  setReducedMotion(reduced: boolean) {
+    this.reducedMotion = reduced;
+    if (reduced) this.jump();
+  }
   request() {
     if (!this.following() || this.frame !== null) return;
     // Cursor/activity updates are not necessarily new content. Avoid starting

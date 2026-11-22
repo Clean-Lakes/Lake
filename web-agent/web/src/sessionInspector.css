@@ -158,7 +158,8 @@ html.lake-windows-chrome .session-inspector { padding-top:52px; }
 }
 .workspace.inspector-window-sizing .session-layout > .session-view { flex:0 0 var(--inspector-main-width); width:var(--inspector-main-width); }
 .workspace.inspector-window-sizing > .workspace-header { max-width:calc(var(--inspector-main-width) - var(--session-content-start) - 16px); }
-.workspace.inspector-window-sizing .session-inspector.is-closing { position:relative; right:auto; top:auto; bottom:auto; }
+.workspace.inspector-window-sizing.inspector-window-docked .session-inspector.is-closing { position:relative; right:auto; top:auto; bottom:auto; }
+.workspace.inspector-window-sizing:not(.inspector-window-docked) .session-inspector { position:absolute; inset:0 0 0 auto; width:min(var(--inspector-preferred-width, 382px),100%); z-index:26; }
 
 .inspector-execution-outcome { margin:0 0 22px; padding:0 0 18px; border-top:0; border-bottom:1px solid var(--border); }
 

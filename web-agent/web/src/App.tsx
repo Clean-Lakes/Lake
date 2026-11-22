@@ -856,7 +856,7 @@ function AppContent() {
     return()=>{controller.abort();window.clearInterval(timer);};
   },[sessionId,roleInspection?.session.id,roleInspection?.superagent?.task.taskId,inspector.selection?.sessionId]);
   const inspectorOpen=!!inspectedSnapshot&&inspector.selection?.sessionId===inspectedSnapshot.session.id&&!selectedResource&&!isPlansPage;
-  useInspectorWindow(inspectorOpen);
+  const attachInspectorView = useInspectorWindow(inspectorOpen);
   // The DOM now has its final pane classes. Apply the shared width budget
   // before paint, rather than flashing one frame with the previous budget.
   useLayoutEffect(()=>{window.dispatchEvent(new Event('lake-workbench-layout'));},[terminalOpen,inspectorOpen]);
@@ -940,14 +940,19 @@ function AppContent() {
     }
     const key = activeSnapshot.session.id;
     if (conversationScroll.current.key !== key) conversationScroll.current = { key, following: true };
-    const follower = new FollowScroll(container, () => conversationScroll.current.following,
-      undefined, window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const follower = new FollowScroll(container, () => conversationScroll.current.following, undefined, motion.matches);
+    const updateMotion = (event: MediaQueryListEvent) => follower.setReducedMotion(event.matches);
+    motion.addEventListener("change", updateMotion);
     conversationFollower.current = follower;
     const resume=conversationResume.current.get(key);
     if(resume){conversationResume.current.delete(key);conversationScroll.current={key,following:resume.following};container.scrollTop=resume.top;if(resume.following)follower.jump();}
     else follower.jump();
     const stopObserving = observeConversationGrowth(container, () => historyVisible.current===key?follower.request():follower.jump());
-    return () => { stopObserving(); follower.stop(); conversationFollower.current = null; };
+    return () => {
+      motion.removeEventListener("change", updateMotion);
+      stopObserving(); follower.stop(); conversationFollower.current = null;
+    };
   }, [activeSnapshot?.session.id, route.resourceId,isPlansPage,isSpecialistTasks]);
 
   useLayoutEffect(()=>{
@@ -1816,7 +1821,7 @@ function AppContent() {
       {activeSnapshot?.ai?.memoryStatus === "backlog_full" && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>项目记忆待处理队列已满，本轮未自动学习。请在项目记忆中查看任务状态。</span>{selectedProjectId && <button onClick={() => {const project = projectList.find(item => item.id === selectedProjectId); if (project) setMemoryProject(project);}}>查看项目记忆</button>}</div>}
 
       {selectedResource ? <><ResourceDetail serviceEditing={bootstrap?.backendRuntime==='typescript'} resource={selectedResource} pilotSessionId={pilotWorkspace.workspace?.active&&pilotWorkspace.workspace.project.projectId===selectedResource.projectId?pilotWorkspace.workspace.project.routerSessionId:undefined} project={projectList.find(project => project.id === selectedResource.projectId)} sessions={catalog.sessions.filter(session => session.projectId === selectedResource.projectId)} selectedSession={selectedSession} terminalList={resourceTerminals} disabled={!connected || !!pendingOperation} onBack={() => navigate({ sessionId, resourceId: null })} onNewSession={() => openSessionDialog(selectedResource.projectId)} onSession={id => navigate({ sessionId: id, resourceId: null })} onEdit={() => selectedResource.jumpServer ? setJumpAccount(selectedResource) : setEditTerminalResource(selectedResource)} />
-        </> : sessionId && selectedSession ? isPlansPage ? <SessionPlansPage key={sessionId} session={selectedSession} snapshot={activeSnapshot} error={visibleSessionError} disabled={!sessionConnected||turnActive||!!pendingOperation||modeSaving.has(sessionId)} onBack={returnToConversation} onRetry={()=>setSessionReload(value=>value+1)} onRevise={()=>{returnToConversation();requestAnimationFrame(()=>messageInputRef.current?.focus());}} onExecuted={async()=>{await refreshCurrent();returnToConversation();}}/> : <div className={`session-layout${isSpecialistTasks?" is-specialist-tasks":""}`}><div className="session-view">
+        </> : sessionId && selectedSession ? isPlansPage ? <SessionPlansPage key={sessionId} session={selectedSession} snapshot={activeSnapshot} error={visibleSessionError} disabled={!sessionConnected||turnActive||!!pendingOperation||modeSaving.has(sessionId)} onBack={returnToConversation} onRetry={()=>setSessionReload(value=>value+1)} onRevise={()=>{returnToConversation();requestAnimationFrame(()=>messageInputRef.current?.focus());}} onExecuted={async()=>{await refreshCurrent();returnToConversation();}}/> : <div className={`session-layout${isSpecialistTasks?" is-specialist-tasks":""}`}><div className="session-view" ref={attachInspectorView}>
         <span className="conversation-header-backdrop" aria-hidden="true"/>
         <div className="conversation-stage" aria-busy={historyPending}>{historyPending&&<SessionLoading/>}<section id="session-view-panel" tabIndex={-1} ref={conversationRef} onWheel={event => { if (pausesConversationFollow(event.currentTarget,event.deltaY,conversationScroll.current.following)) pauseFollowing(); }} onPointerDown={event => {
           // Only grabbing the native scrollbar pauses on pointer-down. Clicking
