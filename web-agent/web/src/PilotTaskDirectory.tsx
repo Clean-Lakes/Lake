@@ -14,11 +14,12 @@ export type PilotTaskDirectoryData = {
  onContinue:(task:PilotTaskReference)=>void;
 };
 
-export function PilotTaskReferenceChip({task,onClear}:{task:PilotTaskReference;onClear?:()=>void}){
- return <span className={`pilot-task-reference${onClear?' is-draft':''}`} title={task.title}>
+export function PilotTaskReferenceChip({task,onClear,compact=false}:{task:PilotTaskReference;onClear?:()=>void;compact?:boolean}){
+ return <span className={`pilot-task-reference${onClear?' is-draft':''}${compact?' is-compact':''}`} title={compact?`续接中 · ${task.title}`:task.title}
+  role={compact?'group':undefined} aria-label={compact?`续接中 · ${task.title}`:undefined}>
   <Glyph name="return" size={13}/>
-  {onClear&&<small>续接</small>}
-  <span className="pilot-task-reference-title">{task.title}</span>
+  {compact?<span className="pilot-task-reference-status" aria-hidden="true">续接中</span>:
+   <>{onClear&&<small>续接</small>}<span className="pilot-task-reference-title">{task.title}</span></>}
   {onClear&&<button type="button" aria-label="移除任务续接" onClick={onClear}><Glyph name="close" size={12}/></button>}
  </span>;
 }
