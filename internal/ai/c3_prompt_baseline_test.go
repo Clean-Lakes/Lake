@@ -9,7 +9,8 @@ import (
 )
 
 // Initially frozen before removing optimization slots; intentionally refreshed
-// for native Kubernetes action/preflight instructions. Only host OS text varies.
+// for native Kubernetes instructions and retirement of project scheduling.
+// Only host OS text varies.
 func TestC3PromptAssemblyMatchesPreCleanupBytes(t *testing.T) {
 	raw, err := os.ReadFile("testdata/c3-prompt-baseline.json")
 	if err != nil {

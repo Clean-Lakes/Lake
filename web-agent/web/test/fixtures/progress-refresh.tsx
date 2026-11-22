@@ -31,7 +31,7 @@ if(specialistConfig){
  tool.title='manage_specialist';tool.data={root_turn_id:'turn',arguments:{action:specialistConfig==='codex'?'update':'create',name:'K8s 专员'}};
 }
 cards.push({id:'empty-thought',type:'thinking',status:query.has('reasoning')?'completed':'running',at:stamp(query.has('reasoning')?111.5:110.5),content:query.has('reasoning')?'先核对演示主机的实际状态。':''});
-const state={session:{id:'fixture',projectId:'p',title:'进度更新稳定性',status:'investigating',createdAt:stamp(0),updatedAt:stamp(0),tags:[]},cursor:1,messages,resources:[],resourceTree:[],specialists:[],evidence:[],actions:[],terminals:[],ai:{session:'fixture',status:'running',rootTurnId:'turn',turnStartedAt:new Date().toISOString(),cards,cardsOffset:0,totalCards:cards.length,turns:12,usage:{input:0,output:0,total:0}},messageQueue:{paused:false,revision:0,lastError:'',items:[]},sre:{enabled:false,tasks:[]}} as unknown as SessionSnapshot;
+const state={session:{id:'fixture',projectId:'p',title:'进度更新稳定性',status:'investigating',createdAt:stamp(0),updatedAt:stamp(0)},cursor:1,messages,resources:[],resourceTree:[],specialists:[],evidence:[],actions:[],terminals:[],ai:{session:'fixture',status:'running',rootTurnId:'turn',turnStartedAt:new Date().toISOString(),cards,cardsOffset:0,totalCards:cards.length,turns:12,usage:{input:0,output:0,total:0}},messageQueue:{paused:false,revision:0,lastError:'',items:[]},sre:{enabled:false,tasks:[]}} as unknown as SessionSnapshot;
 if(query.has('reference-time')){
  const user=state.messages.at(-1)!;
  const stopped=query.has('stopped');
@@ -74,7 +74,7 @@ window.EventSource=FixtureStream as unknown as typeof EventSource;
 window.fetch=async(input)=>{
  const path=new URL(String(input),location.href).pathname;let value:unknown={};
  if(path==='/api/bootstrap')value={authenticated:true,modelConfigured:true,modelName:'演示模型',modelId:'fixture',aiRuntime:'adk',terminalMode:'pty'};
- else if(path==='/api/catalog')value={projects:[{id:'p',name:'隔离测试',createdAt:stamp(0)}],sessions:[state.session],resources:[],resourceTree:[],tags:[],terminals:[]};
+ else if(path==='/api/catalog')value={projects:[{id:'p',name:'隔离测试',createdAt:stamp(0)}],sessions:[state.session],resources:[],resourceTree:[],terminals:[]};
  else if(path.endsWith('/superagent'))value={active:false,project:{projectId:'p',routerSessionId:'fixture',version:1},workers:[],channels:[]};
  else if(path.endsWith('/snapshot')){metrics.snapshots++;value=state}
  else if(path.includes('/reasoning'))value={levels:[],effort:'',modelId:'fixture'};
