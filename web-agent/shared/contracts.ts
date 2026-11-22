@@ -67,14 +67,12 @@ export type WorkSession = {
   createdAt: string;
   updatedAt: string;
   icon?: string;
-  tags?: WorkspaceTag[];
   presentationRevision?: number;
   pinned?: boolean;
   navigationPosition?: number;
   navigationRevision?: number;
 };
 
-export type WorkspaceTag = {id: string; projectId: string; name: string; color: "gray" | "green" | "blue" | "purple" | "orange" | "red"};
 
 export type MessageMention = {kind: "resource" | "skill" | "mcp" | "role"; id: string; label: string; start: number; end: number; resourceKind?: Resource["kind"]};
 
@@ -212,7 +210,6 @@ export type TerminalEntry = {
 };
 
 export type Catalog = {
-  tags?: WorkspaceTag[];
   projects: Project[];
   resources: Resource[];
   resourceTree?: ResourceTreeNode[];
@@ -487,6 +484,3 @@ export type GatewayInstructionStatus = {
   error?:string;
 };
 export type SRESnapshot = {featureVersion:number;enabled:boolean;tasks:SRETask[];pilot?:PilotSettings};
-
-export type ScheduleExecution={id:string;scheduled_at:string;started_at?:string;finished_at?:string;status:string;error?:string;task_id?:string;session_id?:string};
-export type ScheduledTask={id:string;project_id:string;session_id:string;name:string;at:string;interval_seconds:number;kind:'reminder'|'workflow';message?:string;workflow_id?:string;version?:number;enabled:boolean;revision:number;status:string;last_at?:string;error?:string;task_id?:string;history_count:number;history?:ScheduleExecution[]};

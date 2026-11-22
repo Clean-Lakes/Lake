@@ -23,7 +23,7 @@ const securityEnforcedReaderVersion = 2
 
 var securityRequiredExecutionFamilies = [...]string{
 	"@invoke", "@web_bridge", "@stdio", "@pilot", "@child", "@sre", "@observation",
-	"@workflow", "@schedule", "@mcp", "@terminal_agent", "@memory_background", "@provider_continuation",
+	"@workflow", "@mcp", "@terminal_agent", "@memory_background", "@provider_continuation",
 }
 
 type SecurityEnforcementReadiness struct {

@@ -1,6 +1,6 @@
 # Lake 执行入口与执行保护
 
-基础清单始于 develop `be656805d345466f11bbb9c2c4af92e670da7420`，本轮在同一清单上完成任务闭环。工具名和分类见 [JSON 清单](tool-entrypoints.json)，纯领域注册见 `internal/security/capability.go`。`TestSecurityEntrypointInventory` 对照真实目录；`security_enforcement_coverage.go` 静态列出 **94 个工具 + 13 类入口 = 107 项**，新增或退役入口会使精确覆盖检查失败。
+基础清单始于 develop `be656805d345466f11bbb9c2c4af92e670da7420`，本轮在同一清单上完成任务闭环。工具名和分类见 [JSON 清单](tool-entrypoints.json)，纯领域注册见 `internal/security/capability.go`。`TestSecurityEntrypointInventory` 对照真实目录；`security_enforcement_coverage.go` 静态列出 **90 个工具 + 12 类入口 = 102 项**，新增或退役入口会使精确覆盖检查失败。
 
 覆盖表示入口接受统一保护，不能据此认为所有操作都有受限执行适配器。不支持的复合动作会明确拒绝；无法证明的动作保持 opaque，restricted 拒绝，compatible 仅可精确单次审批。实际验证和限制见[实施记录](../validation/lake-security-task-closure.md)。
 
@@ -17,7 +17,6 @@
 | SRE / `@sre` | 真实 SRE attempt 映射有限任务，队列和协作消息不签权限 | 原执行尝试和证据，不另开执行账本 |
 | observation / `@observation` | 登记探针、有界实际读取，任意 SQL/命令输出不能冒充受信验收 | 当前目标/步骤/尝试和真实观察证据 |
 | workflow / `@workflow` | 冻结模板、版本、资源和验收契约；每 run 关联任务 | 重启/续接不刷新绝对 TTL，不继承聊天单次审批 |
-| schedule / `@schedule` | 独立 config/authority/status revision；原 dueAt 唯一 occurrence；授权有次数和期限 | ADK 内领取、扣次及任务登记原子化，Web run 幂等投影；恢复不追补 |
 | MCP / `@mcp` | 实际 server、tool、binding、config/catalog/credential revision；自报 readonly 无效 | opaque 不支持任务通配，stdio server 还受本机禁令约束 |
 | agent terminal / `@terminal_agent` | 原终端 generation、context revision、owner 和单写者；人工入口另行鉴权 | 写入前登记原 handle；只取消精确 agent 操作，不误杀人工终端 |
 | provider continuation / `@provider_continuation` | 绑定原任务/owner/root，入场、等 slot 后、实际请求前复验；TTL 覆盖排队与网络 | 结束目标的合法最终总结去掉工具；过期、暂停或旧 owner 不可续派发 |

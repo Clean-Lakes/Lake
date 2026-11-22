@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -21,6 +22,21 @@ func TestSuperProjectIntakePrioritizesActualHumansAcrossSources(t *testing.T) {
 	}
 	if _, _, err := e.ReceiveSuperEvent(ctx, b, SuperEventInput{SourceEventID: "stop", Kind: "stop", Payload: "Stop that task"}); err != nil {
 		t.Fatal(err)
+	}
+	db, err := e.superStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldSource := superSourceRow{ID: "old-schedule", ProjectID: b.ProjectID, Kind: "schedule", ActorRef: "host-workflow-runtime", Revision: "one", Enabled: true}
+	if err := db.Create(&oldSource).Error; err != nil {
+		t.Fatal(err)
+	}
+	oldEvent := superEventRow{ID: "old-occurrence", SourceID: oldSource.ID, ProjectID: oldSource.ProjectID, SourceKind: oldSource.Kind, SourceRevision: oldSource.Revision, ActorRef: oldSource.ActorRef, Kind: "workflow", Disposition: "pending", ReceivedAt: time.Now().Add(-time.Hour)}
+	if err := db.Create(&oldEvent).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := superSourceForEvent(db, oldEvent.ID, b.ProjectID); !errors.Is(err, errScheduleRetired) {
+		t.Fatal("historical schedule event was eligible for routing", err)
 	}
 	rows, err := e.PendingSuperProjectEvents(ctx, b.ProjectID, 16)
 	if err != nil || len(rows) != 3 || rows[0].SourceEventID != "stop" || rows[1].SourceEventID != "human" || rows[2].SourceID != observer.SourceID || rows[2].SourceKind != "observer" {

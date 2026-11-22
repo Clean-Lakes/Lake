@@ -1,9 +1,8 @@
 import {createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import Markdown, {type Components,type ExtraProps} from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type {AICard, AgentRun, Resource, WorkspaceTag} from '../../shared/contracts';
+import type {AICard, AgentRun, Resource} from '../../shared/contracts';
 import {remarkAssistantProse} from './assistantProse';
-import {remarkConversationTags, conversationTagSignature} from './conversationTags';
 import {mergeObjectCatalog, objectCatalog, objectMatches, remarkObjectReferences, type ObjectCatalog, type ObjectReference} from './objectReferences';
 import {fileChangeSourceCards, summarizeFileChanges, type FileChange} from './file-changes-model';
 import {sameCard} from './cardEquality';
@@ -105,20 +104,18 @@ const components: Components = {
 
 const textImageComponents:Components={...components,img:({alt})=>alt?<span>{alt}</span>:null};
 
-export const AssistantMarkdown = memo(function AssistantMarkdown({children, tags = [], className = '', allowImages = true,liveMotion,reveal,animateInitial,finishPending,interimFeather=false}: {children: string; tags?: readonly WorkspaceTag[]; className?: string; allowImages?: boolean;liveMotion?:boolean;reveal?:boolean;animateInitial?:boolean;finishPending?:boolean;interimFeather?:boolean}) {
+export const AssistantMarkdown = memo(function AssistantMarkdown({children, className = '', allowImages = true,liveMotion,reveal,animateInitial,finishPending,interimFeather=false}: {children: string; className?: string; allowImages?: boolean;liveMotion?:boolean;reveal?:boolean;animateInitial?:boolean;finishPending?:boolean;interimFeather?:boolean}) {
   const {catalog} = useContext(References);
-  const signature = conversationTagSignature(tags);
-  const decorateTags = useMemo(() => remarkConversationTags(tags), [signature]);
   const decorateObjects = useMemo(() => remarkObjectReferences(catalog), [catalog]);
   const proseClass=`ai-markdown assistant-prose${className ? ` ${className}` : ''}`;
   const decorateMotion=liveMotion!==undefined;
   const render=useCallback((paintedThrough?:number)=><Markdown remarkPlugins={[
-    remarkGfm, remarkAssistantProse, remarkReplyInfo, decorateTags, decorateObjects,
+    remarkGfm, remarkAssistantProse, remarkReplyInfo, decorateObjects,
     ...(decorateMotion?[remarkLiveTextMotion]:[]),
     ...(paintedThrough===undefined?[]:[remarkRevealText(paintedThrough)]),
     ...(interimFeather?[remarkSpecialistReplyFeather]:[]),
   ]} components={allowImages?components:textImageComponents} skipHtml>{children}</Markdown>,
-  [children,decorateTags,decorateObjects,decorateMotion,allowImages,interimFeather]);
+  [children,decorateObjects,decorateMotion,allowImages,interimFeather]);
   const prose=reveal===undefined?render():<MarkdownReveal source={children} active={reveal} animateInitial={animateInitial} finishPending={finishPending} render={render}/>;
   return liveMotion===undefined?<div className={proseClass}>{prose}</div>:<LiveTextMotionBoundary active={liveMotion} className={proseClass}>{prose}</LiveTextMotionBoundary>;
 });

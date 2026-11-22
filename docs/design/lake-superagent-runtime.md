@@ -11,7 +11,7 @@
 | 普通与 Plan | `internal/web/agent.go:runTurn` | `internal/ai/adk_driver.go:runOfficialADK` | WorkGoal、work_closure；Plan 不自动执行变更 |
 | Pilot/SRE | `internal/web/sre_service.go:launchSRE/followSREHandoff` | `internal/ai/adk_sre_workflow.go:runSREPlanSteps/executeADKPlan` | 现有 SRETask；统一接管前保持原 owner |
 | 保存工作流 | `internal/web/workflows.go`、`tool_bridge.go` | 同一官方 ADK | 原定义、真实尝试与操作 |
-| 日程 | `internal/web/schedules.go:executeSchedule` | 原 schedule authority 与 ADK | 原 occurrence/grant；不复用聊天审批 |
+| 历史日程 | [历史调度记录](../security/schedule-authority.md) | 保留审计与恢复数据 | 原 occurrence/grant |
 | 外部等待 | `internal/ai/adk_work_wait.go:resumeWorkGoal/runMachineInput` | 原 checkpoint、function-response 与句柄 | 原 WorkGoal、nativeOperation |
 | 用户补充 | `internal/ai/user_supplements.go:AdmitSupplement/applySupplements` | 安全步骤接入、SDK 接纳后消费 | 原 root 与真实来源消息 |
 | 所有资源工具 | `internal/ai/security_execution.go:invoke` | 原生审批、派发屏障、原执行器 | nativeOperation/nativeEvidence、Security owner |
@@ -22,7 +22,7 @@
 - `PlanLegacyWorkImport` 保持纯检查；`ApplyLegacyWorkImport` 对排空后的旧 WorkGoal 建唯一 alias，保留原 ID、期限和账本。缺乏可核验来源、原句柄或验收的历史仅只读；纯 SRE 历史使用只读归档，不伪造操作或通过验收。
 - 任务、步骤、尝试、操作和验收沿原账本；新增事件/Worker/投递元数据不得建立第二完成权威。
 - 已接入项目单一 Pilot、任务专员、实际用户来源、持久收件箱与回执、同修订任务详情及原终端入口。新项目通过宿主工作区激活；仍有旧活动任务的项目保留原 owner，拒绝双写。当前构建尚未完成 Dev 安装及原生端到端验收。
-- 已迁移域的保存工作流/日程 occurrence 登记到同一 Worker 准入，仍使用原 Security task、WorkGoal、定义、子作用域与官方 SRE 图。定义变化、许可到期或日程撤销会阻止后续派发；原生步骤/目标验收是完成权威。旧 SRE HTTP 写入口停止独立接单，普通/Plan/专用输入转给 Pilot。
+- 已迁移域的保存工作流登记到同一 Worker 准入，仍使用原 Security task、WorkGoal、定义、子作用域与官方 SRE 图。定义变化或许可到期会阻止后续派发；原生步骤/目标验收是完成权威。旧 SRE HTTP 写入口停止独立接单，普通/Plan/专用输入转给 Pilot。
 - 构建观察只接原受监管 Shell 操作及句柄；通用外部构建平台尚无当前 Security 只读 profile，`ObserveBuildRun` 明确返回 unavailable，不自动调用通用 MCP。资产范围 Memory 接口与原生完整故障矩阵仍受依赖/验证限制，见[实施计划](../../plan/architecture-lake-superagent-1.md)。
 
 ## 与历史方案的差异
@@ -43,7 +43,7 @@ Assignment lease 为 45 秒，15 秒续租。真实问题、子图及外部等�
 
 Worker 续办需要区分历史阻塞描述和当前工具结果。暂停任务的新人工输入、运行中收到的人工补充均提示重新读取原任务和当前目录，激活实际步骤，使用相关的受控只读检查核实技术限制；无关 MCP 目录不证明数据库/主机受阻。可纠正的参数、别名与资源定位错误应先自行修正；只有当前检查仍缺少必要信息或授权时才向用户说明具体条件，不凭旧摘要编造管理员要求。该约束改善工具选择与表达，不承诺模型必然自行解题，也不替代 Security 决定或授权未知副作用重试。
 
-Pilot 每批最多 16 项，按真实人工控制/输入、日程、观察、告警优先。模型路由有 90 秒调用期限、每事件最多 3 次持久尝试和退避；新输入不被旧失败阻塞。直接回复与源事件结算同事务进入 outbox，宿主消息用固定 ID 幂等写入；任意外部通知渠道的 uncertain send 不允许盲目重发。
+Pilot 每批最多 16 项，按真实人工控制/输入、观察、告警优先。模型路由有 90 秒调用期限、每事件最多 3 次持久尝试和退避；新输入不被旧失败阻塞。直接回复与源事件结算同事务进入 outbox，宿主消息用固定 ID 幂等写入；任意外部通知渠道的 uncertain send 不允许盲目重发。
 
 ## Memory 兼容边界
 

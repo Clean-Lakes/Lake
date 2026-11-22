@@ -73,9 +73,9 @@ python3 scripts/check_typescript_parity.py --report
 python3 scripts/check_typescript_parity.py
 ```
 
-Node 命令须使用准备好的 24.14.0。测试经过真实 Agent SDK 源码与本地模型 HTTP 夹具，覆盖鉴权、Origin、单 Home、聊天/流式投影、写入批准与拒绝、取消不派发、重启历史和凭据隔离。会话置顶/排序、图标和标签已移植现有合同，并验证项目范围、乐观版本、并发冲突、持久化以及不改变活动时间；这些候选测试仍不代表原生 Lake Dev 的完整验收。
+Node 命令须使用准备好的 24.14.0。测试经过真实 Agent SDK 源码与本地模型 HTTP 夹具，覆盖鉴权、Origin、单 Home、聊天/流式投影、写入批准与拒绝、取消不派发、重启历史和凭据隔离。会话置顶/排序和图标支持项目范围、乐观版本和持久化，并验证并发冲突以及不改变活动时间；这些候选测试仍不代表原生 Lake Dev 的完整验收。
 
-`api-inventory.json` 从现有前端 TypeScript AST 提取完整 API 操作表；`parity.json` 记录逐项与领域验收。最后一个检查目前**必须失败**：候选测试不等于功能等价。资产/SSH/数据库/终端、Pilot/专员/频道、任务/权限账本、工作流/日程、记忆、附件、MCP/Skills、队列/补充/压缩、历史迁移、CLI/Magpie、macOS/Windows 与 Lake Dev 主题/窄窗均需补齐。候选 API 的 501、空只读目录或关闭的开关不能作为已迁移证据。
+`api-inventory.json` 从现有前端 TypeScript AST 提取完整 API 操作表；`parity.json` 记录逐项与领域验收。最后一个检查目前**必须失败**：候选测试不等于功能等价。资产/SSH/数据库/终端、Pilot/专员/频道、任务/权限账本、工作流、记忆、附件、MCP/Skills、队列/补充/压缩、历史迁移、CLI/Magpie、macOS/Windows 与 Lake Dev 主题/窄窗均需补齐。候选 API 的 501、空只读目录或关闭的开关不能作为已迁移证据。
 
 完整等价验收继续逐项进行；0.3.28 macOS 正式分发是用户明确选择当前 TS 水位后的例外，不将缺口标为已完成。其发布仍需独立验证准确生产 SHA、迁移、签名包与更新回退。合并、生产安装和发布继续遵守仓库原有授权流程。
 
@@ -91,7 +91,7 @@ Node 命令须使用准备好的 24.14.0。测试经过真实 Agent SDK 源码�
 
 已增量接通原安全 epoch 下的 MCP 继承/绑定迁移、原生自动记忆提取、准确资源引用、Plan 模式与原计划确认、持久消息队列、目录编辑/回收站、原 PostgreSQL/Redis 配置及工作流模板保留。模型思考能力优先使用供应商明确元数据，兼容旧版按准确模型版本匹配的 OpenAI/Claude/DeepSeek 注册表，可通过原 UI 选择，按供应商/地址/协议/模型身份校验，并冻结到任务及其子执行；默认不添加推理参数，未知模型不猜测能力。模型目录返回前端要求的名称数组，保留服务明确报告的上下文和思考能力；Gemini/Ollama 使用对应的 OpenAI 兼容入口。
 
-队列支持暂停、编辑、排序、移除及空闲后继续发送；重启暂停未发送输入，准入结果不明时保留且不重发。准确的同轮补充协议尚未接通，因此返回 `pushSupported=false` 并禁用队列推送按钮。附件/图片、上下文压缩/回退/文件恢复、资源导入、Kubernetes 与旧本机执行适配、直接 PostgreSQL/Redis 查询、工作流运行/日程、完整安全恢复、CLI/平台能力仍有缺口。现有 API 不以空成功伪装支持；已保存配置不等于实际连接成功。完整切换门禁继续关闭，后续验证和未完成条目须与[修复记录](../../docs/validation/typescript-candidate/cutover-repair-2026-11-07.md)一起评审。
+队列支持暂停、编辑、排序、移除及空闲后继续发送；重启暂停未发送输入，准入结果不明时保留且不重发。准确的同轮补充协议尚未接通，因此返回 `pushSupported=false` 并禁用队列推送按钮。附件/图片、上下文压缩/回退/文件恢复、资源导入、Kubernetes 与旧本机执行适配、直接 PostgreSQL/Redis 查询、工作流运行、完整安全恢复、CLI/平台能力仍有缺口。现有 API 不以空成功伪装支持；已保存配置不等于实际连接成功。完整切换门禁继续关闭，后续验证和未完成条目须与[修复记录](../../docs/validation/typescript-candidate/cutover-repair-2026-11-07.md)一起评审。
 
 持续终端与 MCP/Skills 增量的实际范围、36 项隔离回归和 Dev 实测另见[验证记录](../../docs/validation/typescript-candidate/terminal-extensions.md)。本机 PTY 使用随包签名的 node-pty 1.1.0 原生 addon/启动程序，macOS 无需系统 Node；该记录保留当时的本机 PTY 水位；后续 SSH/确认入口修复见[SSH 增量记录](../../docs/validation/typescript-candidate/ssh-confirmation.md)，Agent 接管仍待移植。
 
@@ -152,7 +152,7 @@ Pilot、专员 Worker 与临时 child 共享公开 Agent SDK 文件、Bash、搜
 
 原生 Enter/ExitPlanMode 连接实际 SDK mode 和 Lake 审批；批准计划不扩大命令、文件或资源权限。模式切换重新注册工具时同样保留宿主包装。Todo 以 Task + 实际 SDK Session 存储，直接 Pilot 历史任务通过准确 taskId 检查，避免多任务共用展示入口导致错读回执。合格 Pilot 执行经验进入现有项目 Memory，专员仍归 RoleID，child 通过父任务回流。
 
-`GET /api/agent-capabilities` 列出固定上游完整工具清单及实际连接状态。Cron/OffPeak、动态工作流、浏览器插件和跨会话上下文读取等还需要相应 Lake 宿主服务及范围适配，不注册成可成功调用的假工具。未连接项不被称为已完成，完整 TS 产品等价门禁保持原状态。准确检查、签名 Dev 来源和未验证项见[本批记录](../../docs/validation/typescript-candidate/agent-capabilities.md)。
+`GET /api/agent-capabilities` 列出固定上游完整工具清单及实际连接状态。Lake 已移除项目定时任务，Cron/OffPeak 不接入。动态工作流、浏览器插件和跨会话上下文读取还需要相应 Lake 宿主服务及范围适配，不注册成可成功调用的假工具。未连接项不被称为已完成，完整 TS 产品等价门禁保持原状态。准确检查、签名 Dev 来源和未验证项见[本批记录](../../docs/validation/typescript-candidate/agent-capabilities.md)。
 
 普通命令/只读数据库免确认的缺省值与现有 Web 设置共用 shared/execution-preferences.ts，显式关闭仍询问。程序发现和有限容器查询包装按实际内部命令判断，不因 command 或 exec 这几个字一律升级；危险动作、动态或未识别脚本保留确认。此判定只影响追加确认，不构成 readonly 证据或 TaskGrant，仍受当前权限策略约束；历史 unknown 不阻止新调用。验证见上面的本批记录。
 

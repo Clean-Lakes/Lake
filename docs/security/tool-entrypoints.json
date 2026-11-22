@@ -247,22 +247,6 @@
       "family": "workflow-schedule"
     },
     {
-      "name": "schedule_create",
-      "family": "workflow-schedule"
-    },
-    {
-      "name": "schedule_delete",
-      "family": "workflow-schedule"
-    },
-    {
-      "name": "schedule_list",
-      "family": "workflow-schedule"
-    },
-    {
-      "name": "schedule_update",
-      "family": "workflow-schedule"
-    },
-    {
       "name": "scp_transfer",
       "family": "transfer"
     },

@@ -1,7 +1,6 @@
 import type {MCPServerConfig,MCPToolCatalog,SkillConfig,SkillCatalog} from "../../shared/contracts";
 import {displayAiError} from "./aiErrors";
 import type { CommandPolicy } from "../../shared/command-policy";
-import type { WorkspaceTag } from "../../shared/contracts";
 import type { LayeredMemoryScope, LayeredMemorySettings, LayeredMemoryView } from "../../shared/contracts";
 import type {
   SSHConnectionInput,
@@ -149,9 +148,6 @@ export const api = {
  plans:(session:string)=>request<{plans:import('../../shared/contracts').ProposedPlan[]}>(`/api/sessions/${encodeURIComponent(session)}/ai/plans`),
  setConversationMode:(session:string,mode:import('../../shared/contracts').ConversationMode)=>post<import('../../shared/contracts').ConversationModeUpdate>(`/api/sessions/${encodeURIComponent(session)}/ai/mode`,{mode}),
  executePlan:(session:string,planId:string)=>post<SendMessageResult>(`/api/sessions/${encodeURIComponent(session)}/ai/executePlan`,{planId}),
- schedules:(project:string,signal?:AbortSignal)=>request<{items:import('../../shared/contracts').ScheduledTask[]}>(`/api/projects/${encodeURIComponent(project)}/schedules`,{signal}),
- schedule:(project:string,id:string,signal?:AbortSignal)=>request<import('../../shared/contracts').ScheduledTask>(`/api/projects/${encodeURIComponent(project)}/schedules/${encodeURIComponent(id)}`,{signal}),
- setScheduleEnabled:(project:string,id:string,enabled:boolean,expectedRevision:number)=>request<import('../../shared/contracts').ScheduledTask>(`/api/projects/${encodeURIComponent(project)}/schedules/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify({enabled,expectedRevision})}),
 	getSREEnabled:(project:string,signal?:AbortSignal)=>request<{enabled:boolean}>(`/api/projects/${encodeURIComponent(project)}/sre`,{signal}),
 	getPilotSettings:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').PilotSettings>(`/api/projects/${encodeURIComponent(project)}/pilot`,{signal}),
 	setPilotSettings:(project:string,updates:{enabled?:boolean;autoAdvance?:boolean;expectedRevision:number})=>request<import('../../shared/contracts').PilotSettings>(`/api/projects/${encodeURIComponent(project)}/pilot`,{method:'PUT',body:JSON.stringify(updates)}),
@@ -199,10 +195,7 @@ export const api = {
   skill:(name:string)=>request<{skill:SkillConfig;content:string}>(`/api/settings/skills/${encodeURIComponent(name)}`),
   saveSkill:(name:string,value:{content?:string;enabled?:boolean;create?:boolean})=>request(`/api/settings/skills/${encodeURIComponent(name)}`,{method:"PUT",body:JSON.stringify(value)}),
   skillRoot:(path:string,remove=false)=>request("/api/settings/skills/roots",{method:remove?"DELETE":"POST",body:JSON.stringify({path})}),
-  createTag: (project:string,data:{name:string;color:string}) => post<WorkspaceTag>(`/api/projects/${encodeURIComponent(project)}/tags`,data),
-  updateTag: (id:string,data:{name:string;color:string}) => request<WorkspaceTag>(`/api/tags/${encodeURIComponent(id)}`,{method:"PUT",body:JSON.stringify(data)}),
-  deleteTag: (id:string) => request(`/api/tags/${encodeURIComponent(id)}`,{method:"DELETE"}),
-  saveSessionPresentation: (session:WorkSession,icon:string,tagIds:string[]) => request<WorkSession>(`/api/sessions/${encodeURIComponent(session.id)}/presentation`,{method:"PUT",body:JSON.stringify({icon,tagIds,revision:session.presentationRevision??0})}),
+  saveSessionPresentation: (session:WorkSession,icon:string) => request<WorkSession>(`/api/sessions/${encodeURIComponent(session.id)}/presentation`,{method:"PUT",body:JSON.stringify({icon,revision:session.presentationRevision??0})}),
  commandPolicy: (command:string) => post<CommandPolicy>("/api/commands/policy",{command}),
   bootstrap: (token?: string) =>
     request<Bootstrap>("/api/bootstrap", token ? { headers: { Authorization: `Bearer ${token}` } } : {}),

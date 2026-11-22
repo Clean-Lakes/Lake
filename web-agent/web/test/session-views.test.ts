@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AITranscript } from "../src/AIPanel";
-import { SessionListTags, SessionActions, SessionStateBadge } from "../src/SessionPresentation";
+import { SessionActions, SessionStateBadge } from "../src/SessionPresentation";
 import { ConversationDirectory, activeDirectoryItem, conversationDirectoryItems, conversationTurnId } from "../src/ConversationDirectory";
 import {PilotTaskReferenceChip,pilotDirectoryTasks,pilotTaskParticipants} from "../src/PilotTaskDirectory";
-import type { Message, SessionSnapshot, SuperWorker, SuperWorkspace, WorkspaceTag } from "../../shared/contracts";
+import type { Message, SessionSnapshot, SuperWorker, SuperWorkspace } from "../../shared/contracts";
 
 const at="2026-10-14T02:00:00Z";
 function snapshot(): SessionSnapshot {
@@ -38,74 +38,26 @@ test("evidence shows recorded reports and deduplicates evidence without exposing
   assert.ok(!html.includes("其他会话的证据") && !html.includes("本轮回答"));
 });
 
-const tags: WorkspaceTag[] = [
-  {id:"mongo", projectId:"p", name:"MongoDB", color:"purple"},
-  {id:"ops", projectId:"p", name:"运维排查", color:"green"},
-];
-
-test("conversation uses assigned tag colors in prose and leaves code, links and identifiers intact", () => {
+test("archived tag associations do not decorate replies or change resource references", () => {
   const s=snapshot();
-  s.session.tags=tags;
+  Object.assign(s.session, {tags:[{id:"ops",projectId:"p",name:"运维排查",color:"green"}]});
   s.ai!.cards=[{id:"reply",type:"message",status:"completed",at,content:[
     "## MongoDB 当前状态",
-    "本次**运维排查**：mongodb 运行正常。",
-    "`MongoDB`、MongoDBBackup、/etc/MongoDB/conf、MongoDB.log 保持原样。",
+    "本次**运维排查**完成。",
     "[MongoDB 官网](https://example.com/MongoDB)",
-    "```sh\necho MongoDB\n```",
   ].join("\n\n")}];
   const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
-  assert.equal((html.match(/conversation-tag color-purple/g)||[]).length,2);
-  assert.equal((html.match(/conversation-tag color-green/g)||[]).length,1);
-  assert.ok(html.includes('<strong><span class="conversation-tag color-green"'));
+  assert.doesNotMatch(html,/conversation-tag|data-tag-id/);
+  assert.match(html,/<strong>运维排查<\/strong>/);
   assert.ok(html.includes('data-object-kind="software"') && html.includes('>MongoDB</span>'));
-  assert.ok(html.includes('>MongoDB 官网</a>'));
-  const shell=html.match(/<code class="language-sh[^\"]*">([\s\S]*?)<\/code>/)?.[1];
-  assert.ok(shell);
-  assert.equal(shell.replace(/<\/?span\b[^>]*>/g,''),'echo MongoDB\n');
-  assert.ok(!shell.includes('conversation-tag'));
-  assert.ok(html.replace(/<[^>]*>/g,'').includes('MongoDBBackup、/etc/MongoDB/conf、MongoDB.log'));
-});
-
-test("removing, recoloring and renaming session tags changes existing replies without adding unrelated tags", () => {
-  const s=snapshot();
-  s.ai!.cards=[{id:"reply",type:"text",status:"completed",at,content:"MongoDB 运维排查"}];
-  s.session.tags=[tags[0]!];
-  const render=()=>renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
-  assert.ok(render().includes("color-purple"));
-  assert.ok(!render().includes("color-green"));
-  s.session.tags=[{...tags[0]!,color:"orange"}];
-  assert.ok(render().includes("color-orange"));
-  s.session.tags=[{...tags[0]!,name:"数据库"}];
-  assert.ok(!render().includes("conversation-tag"));
-  s.session.tags=[];
-  assert.ok(!render().includes("conversation-tag"));
-});
-
-test("overlapping and regex-like tag names keep the displayed text and prefer the full tag", () => {
-  const s=snapshot();
-  s.session.tags=[...tags,{id:"mongo-long",projectId:"p",name:"MongoDB 集群",color:"blue"},{id:"cpp",projectId:"p",name:"C++",color:"orange"}];
-  s.ai!.cards=[{id:"reply",type:"text",status:"completed",at,content:"MongoDB 集群与 C++：运维排查"}];
-  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
-  assert.ok(html.includes('color-blue" data-tag-id="mongo-long">MongoDB 集群</span>'));
-  assert.ok(html.includes('color-orange" data-tag-id="cpp">C++</span>'));
-  assert.ok(!html.includes('color-purple'));
-});
-
-test("sidebar uses the same colors, bounds visible tags and names the full set for accessibility", () => {
-  const list=[...tags,{id:"extra",projectId:"p",name:"备份",color:"blue" as const}];
-  const html=renderToStaticMarkup(createElement(SessionListTags,{tags:list}));
-  assert.ok(html.includes('会话标签：MongoDB、运维排查、备份'));
-  assert.ok(html.includes('color-purple') && html.includes('color-green'));
-  assert.ok(!html.includes('color-blue'));
-  assert.ok(html.includes('title="备份">+1</span>'));
-  assert.equal(renderToStaticMarkup(createElement(SessionListTags,{tags:[]})),"");
+  assert.ok(html.includes(">MongoDB 官网</a>"));
 });
 
 test("session chrome is inline in the breadcrumb: status and a menu button replace the title and tab rows", () => {
-  const session={id:"s",projectId:"p",title:"隆泰的ftp服务器在哪里",status:"completed" as const,resourceIds:[],createdAt:at,updatedAt:at,tags};
+  const session={id:"s",projectId:"p",title:"隆泰的ftp服务器在哪里",status:"completed" as const,resourceIds:[],createdAt:at,updatedAt:at};
   const badge=renderToStaticMarkup(createElement(SessionStateBadge,{session}));
   assert.ok(badge.includes('class="session-state-badge state-completed"')&&badge.includes("回复结束"), "status renders inline for the breadcrumb");
-  const actions=renderToStaticMarkup(createElement(SessionActions,{session,tags,disabled:false,view:"conversation",hasViews:true,onView:()=>{},onSaved:()=>{},onRefresh:async()=>{},onEdit:()=>{}}));
+  const actions=renderToStaticMarkup(createElement(SessionActions,{session,disabled:false,view:"conversation",hasViews:true,onView:()=>{},onSaved:()=>{},onRefresh:async()=>{},onEdit:()=>{}}));
   assert.ok(actions.includes('aria-haspopup="menu"'), "the views and presentation edits live behind a menu");
   assert.ok(!actions.includes("session-page-header")&&!actions.includes("session-view-tabs")&&!actions.includes("role=\"tablist\""), "no title row and no tab row");
   assert.ok(!actions.includes("session-view-bar"), "no extra bar under the breadcrumb");
@@ -113,8 +65,8 @@ test("session chrome is inline in the breadcrumb: status and a menu button repla
 });
 
 test("presentation edits stay reachable from the menu trigger without a dedicated header row", () => {
-  const session={id:"s",projectId:"p",title:"T",status:"idle" as const,resourceIds:[],createdAt:at,updatedAt:at,tags};
-  const html=renderToStaticMarkup(createElement(SessionActions,{session,tags,disabled:false,view:"conversation",hasViews:false,onView:()=>{},onSaved:()=>{},onRefresh:async()=>{},onEdit:()=>{}}));
+  const session={id:"s",projectId:"p",title:"T",status:"idle" as const,resourceIds:[],createdAt:at,updatedAt:at};
+  const html=renderToStaticMarkup(createElement(SessionActions,{session,disabled:false,view:"conversation",hasViews:false,onView:()=>{},onSaved:()=>{},onRefresh:async()=>{},onEdit:()=>{}}));
   assert.ok(html.includes("session-actions-trigger"), "the menu trigger is the only chrome left");
   assert.ok(!html.includes("<h1"), "the session title is no longer duplicated in a heading");
   assert.ok(html.includes('aria-label="会话操作"'), "the trigger is labelled");
