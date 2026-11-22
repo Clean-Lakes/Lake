@@ -777,6 +777,13 @@ export async function startLakeServer(options: ServerOptions) {
             }
           });
           return;
+        } else if (path[3] === "completion" && path.length === 4 && method === "POST") {
+          if (draining) throw new HttpError(503, "服务正在退出");
+          const cancel = new AbortController(), abort = () => cancel.abort();
+          response.on('close', abort);
+          if (response.destroyed) abort();
+          try { result = await agents.completeDraft(sessionId, data, cancel.signal); }
+          finally { response.off('close', abort); }
         } else if (path[3] === "messages" && path.length === 4 && method === "POST") {
           if (draining) throw new HttpError(503, "服务正在退出");
           if (
