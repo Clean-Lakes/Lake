@@ -294,6 +294,7 @@ export type SSHHostKeyTrust = { id: string; resourceId: string; host: string; po
 export type SessionEvent = {
 	conversationMode?: ConversationMode;
   conversationProgress?: true;
+  pilotSummaryText?: {roundId:string;text:string};
   seq: number;
   sessionId: string;
   type: "session" | "message" | "specialist" | "evidence" | "action" | "terminal";
@@ -424,6 +425,7 @@ export type SpecialistConversation = {
   kind?:'task-summary';
   state:'queued'|'running'|'summarizing'|'completed'|'cancelled'|'interrupted'|'failed';
   createdAt:string;deadlineAt:string;members:SpecialistConversationMember[];summaryMessageId?:string;summaryRequested?:boolean;
+  summary?: {id:string;taskId?:string;preview?:{seq:number;text:string}};
 };
 export type SpecialistQuestion = {author:SpecialistReplyAuthor;taskTitle:string;request:AIQuestionRequest};
 export type SuperWorkspace = {pilotMessageRead?:ConversationReadState;active:boolean;project:SuperProject;workers:SuperWorker[];questions?:SpecialistQuestion[];channels?:SpecialistChannelInfo[];conversations?:SpecialistConversation[];cursor?:number};

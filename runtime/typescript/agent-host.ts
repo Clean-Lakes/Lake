@@ -1,6 +1,6 @@
 import type { ToolEntry, ToolExecutionContext } from "./sdk";
 import type { ExecutionPort, FileSystemPort, HttpClientPort, PermissionRuleset } from "./sdk";
-import type { LayeredMemoryActor } from "../../web-agent/shared/contracts";
+import type { LayeredMemoryActor, SessionEvent } from "../../web-agent/shared/contracts";
 import type {AgentBackendRef} from './acp/types';
 
 /** Host-issued child attribution; never accepted from model arguments. */
@@ -50,6 +50,6 @@ export interface AgentHost {
   currentTask?(sessionId:string):string|undefined;
   /** Actual same-turn input consumption, never a steering queue acknowledgement. */
   inputsConsumed?(sessionId:string,inputIds:string[]):void;
-  changed(sessionId: string): void;
+  changed(sessionId: string, event?:SessionEvent): void;
   settled(sessionId: string, outcome?: TurnOutcome): void;
 }

@@ -12,7 +12,7 @@ import {Glyph, ResourceIcon} from './Icons';
 import {MarkdownCodeBlock} from './MarkdownCodeBlock';
 import {remarkReplyInfo} from './replyInfo';
 import {replyInfoComponents, ReplyInfoSpan} from './ReplyInfoElements';
-import {LiveTextMotionBoundary,LiveTextMotionText,remarkLiveTextMotion} from './liveTextMotion';
+import {LiveTextMotionBoundary,LiveTextMotionText,pilotSummaryCursorComponents,remarkLiveTextMotion,remarkPilotSummaryCursor} from './liveTextMotion';
 import {MarkdownReveal,markdownRevealComponents,remarkRevealText,remarkSpecialistReplyCursor} from './markdownReveal';
 import type {LakeAvatarName} from './lakeAvatarCatalog';
 
@@ -80,7 +80,7 @@ function InlineReference({reference}: {reference: ObjectReference}) {
 const liveTextComponents={
   'lake-live-text':function LiveTextSpan({node}:ExtraProps){
     const start=node?.properties?.['data-live-text-start'];
-    return <LiveTextMotionText text={node?.children.map(child=>child.type==='text'?child.value:'').join('')??''} start={typeof start==='number'?start:0}/>;
+    return <LiveTextMotionText text={node?.children.map(child=>child.type==='text'?child.value:'').join('')??''} start={typeof start==='number'?start:0} pilotCursor={node?.properties?.['data-pilot-cursor']==='true'}/>;
   },
 };
 
@@ -88,6 +88,7 @@ const liveTextComponents={
 const components: Components = {
   ...replyInfoComponents,
   ...liveTextComponents,
+  ...pilotSummaryCursorComponents,
   ...markdownRevealComponents,
   pre: MarkdownCodeBlock,
   table: ({node, ...props}) => <div className="markdown-table-scroll"><table {...props}/></div>,
@@ -105,7 +106,7 @@ const components: Components = {
 
 const textImageComponents:Components={...components,img:({alt})=>alt?<span>{alt}</span>:null};
 
-export const AssistantMarkdown = memo(function AssistantMarkdown({children, className = '', allowImages = true,liveMotion,reveal,animateInitial,finishPending,cursorAvatar}: {children: string; className?: string; allowImages?: boolean;liveMotion?:boolean;reveal?:boolean;animateInitial?:boolean;finishPending?:boolean;cursorAvatar?:LakeAvatarName}) {
+export const AssistantMarkdown = memo(function AssistantMarkdown({children, className = '', allowImages = true,liveMotion,reveal,animateInitial,finishPending,cursorAvatar,pilotCursor=false}: {children: string; className?: string; allowImages?: boolean;liveMotion?:boolean;reveal?:boolean;animateInitial?:boolean;finishPending?:boolean;cursorAvatar?:LakeAvatarName;pilotCursor?:boolean}) {
   const {catalog} = useContext(References);
   const decorateObjects = useMemo(() => remarkObjectReferences(catalog), [catalog]);
   const proseClass=`ai-markdown assistant-prose${className ? ` ${className}` : ''}`;
@@ -115,8 +116,9 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({children, clas
     ...(decorateMotion?[remarkLiveTextMotion]:[]),
     ...(paintedThrough===undefined?[]:[remarkRevealText(paintedThrough)]),
     ...(cursorAvatar?[remarkSpecialistReplyCursor(cursorAvatar)]:[]),
+    ...(pilotCursor?[remarkPilotSummaryCursor]:[]),
   ]} components={allowImages?components:textImageComponents} skipHtml>{children}</Markdown>,
-  [children,decorateObjects,decorateMotion,allowImages,cursorAvatar]);
+  [children,decorateObjects,decorateMotion,allowImages,cursorAvatar,pilotCursor]);
   const prose=reveal===undefined?render():<MarkdownReveal source={children} active={reveal} animateInitial={animateInitial} finishPending={finishPending} render={render}/>;
   return liveMotion===undefined?<div className={proseClass}>{prose}</div>:<LiveTextMotionBoundary active={liveMotion} className={proseClass}>{prose}</LiveTextMotionBoundary>;
 });

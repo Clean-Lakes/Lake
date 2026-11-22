@@ -4,7 +4,7 @@ import {PilotReportFolds, readingPilotReport} from './PilotReportFold';
 type Summary = {id: string; roundId: string; connected: boolean};
 type Shown = {id?: string; fromHeight?: number};
 
-/** Present a delivered summary in the already mounted acknowledgement. */
+/** Present the first summary text in the already mounted acknowledgement. */
 export function usePilotSummaryHandoff({id, roundId, connected}: Partial<Summary>) {
   const body = useRef<HTMLDivElement>(null);
   const arrived = useRef<string>(undefined);

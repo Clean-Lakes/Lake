@@ -89,7 +89,13 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean,v
    let event:SessionEvent;
    try{event=JSON.parse(incoming.data);}catch{if(incoming.type!=='session')refresh();return;}
    if(!event)return;
-   if(event.sessionId===routerId){if(incoming.type!=='session')refresh();}
+   if(event.sessionId===routerId){
+    if(event.pilotSummaryText){
+     for(const listener of listeners.current.get(event.pilotSummaryText.roundId)??[])listener.receive(event);
+     return;
+    }
+    if(incoming.type!=='session')refresh();
+   }
    else if(workers.has(event.sessionId))for(const listener of listeners.current.get(event.sessionId)??[])listener.receive(event);
   };
   for(const type of ['specialist','message','session'])stream.addEventListener(type,receive as EventListener);

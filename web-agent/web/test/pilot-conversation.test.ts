@@ -132,6 +132,19 @@ test('a dialogue conclusion replaces its acknowledgement in the original Pilot m
  assert.match(html,/这里是独立回答/);
  assert.equal(JSON.stringify(completed),saved);
 
+ const workspaceDuring={...workspace,conversations:[{...round,state:'summarizing' as const,summaryRequested:true,
+  summary:{id:summary.id,preview:{seq:42,text:'专员们已经'}}}]};
+ const during=renderToStaticMarkup(createElement(AITranscript,{snapshot,pilotWorkspace:workspaceDuring,assistantIdentity:{name:'Pilot',pilot:true}}));
+ assert.equal((during.match(/data-pilot-summary="conclusion"/g)??[]).length,1);
+ assert.match(readBody(during),/data-live-motion="active".*pilot-summary-cursor/);
+ assert.match(readBody(during).replace(/<[^>]*>/g,''),/专员们已经/);
+ assert.ok(during.indexOf('data-pilot-summary="conclusion"')<during.indexOf(later.text));
+
+ const stale=renderToStaticMarkup(createElement(AITranscript,{snapshot:completed,pilotWorkspace:workspaceDuring,assistantIdentity:{name:'Pilot',pilot:true}}));
+ assert.equal((stale.match(/data-pilot-summary="conclusion"/g)??[]).length,1);
+ assert.match(readBody(stale),/专员们已经报到。/);
+ assert.doesNotMatch(readBody(stale),/pilot-summary-cursor/);
+
  for(const result of [
   {...summary,conversation:{...summary.conversation!,id:'another-round'}},
   {...summary,conversation:{...summary.conversation!,kind:'notice' as const}},
