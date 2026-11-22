@@ -71,7 +71,10 @@ func beginSecurityTask(tx *gorm.DB, storeID, epoch string, in SecurityTaskStart,
 	if in.SourceKind == "" {
 		in.SourceKind = "user_message"
 	}
-	validSource := in.SourceKind == "user_message" && in.SourceMessageID != "" || in.Kind == "workflow" && in.SourceKind == "workflow_run" && in.SourceEventID != "" || in.Kind == "schedule" && in.SourceKind == "schedule_occurrence" && in.SourceEventID != ""
+	if in.Kind == "schedule" || in.SourceKind == "schedule_occurrence" {
+		return security.SecurityTask{}, errScheduleRetired
+	}
+	validSource := in.SourceKind == "user_message" && in.SourceMessageID != "" || in.Kind == "workflow" && in.SourceKind == "workflow_run" && in.SourceEventID != ""
 	if !validSecurityAction(a) || a.TaskID != "" || a.ExpectedRevision != 0 || !validSource || len(in.SourceMessageID) > 256 || len(in.SourceEventID) > 256 || in.ExpectedGoalRevision < 1 || storeID == "" || epoch == "" || now.IsZero() {
 		return security.SecurityTask{}, errSecurityAction
 	}

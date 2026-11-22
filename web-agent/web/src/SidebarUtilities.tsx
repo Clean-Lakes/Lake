@@ -1,19 +1,17 @@
 import {useEffect,useId,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 import {createPortal} from 'react-dom';
-import type {Project,WorkSession,WorkspaceTag} from '../../shared/contracts';
+import type {Project} from '../../shared/contracts';
 import {Glyph} from './Icons';
-import {TagNavigation} from './SessionPresentation';
 import {DesktopUpdate} from './DesktopUpdate';
 import {readableError} from './api';
 import {workspaceMenuParent,workspaceMenuPosition,type WorkspaceMenuView} from './workspaceMenu';
 import './sidebarUtilities.css';
 
 /** One anchored surface, with local pages for switching and managing projects. */
-export function SidebarUtilities({projects,projectId,projectSelection,onSelectProject,onCreateProject,onDeleteProject,onToggleBulk,bulkMode,tags,sessions,selectedTag,onSelectTag,onManageTags,onSession,onSettings,onTrash,onSchedules,booting,connected,modelConfigured}:{
+export function SidebarUtilities({projects,projectId,projectSelection,onSelectProject,onCreateProject,onDeleteProject,onToggleBulk,bulkMode,onSettings,onTrash,booting,connected,modelConfigured}:{
  projects:Project[];projectId?:string;projectSelection?:ReactNode;onSelectProject:(id:string)=>void;
  onCreateProject:(name:string)=>Promise<void>;onDeleteProject:(project:Project)=>Promise<void>;onToggleBulk:()=>void;bulkMode:boolean;
- tags:WorkspaceTag[];sessions:WorkSession[];selectedTag:string|null;onSelectTag:(tag:string|null)=>void;
- onManageTags:()=>void;onSession:(id:string)=>void;onSettings:()=>void;onTrash:()=>void;onSchedules?:()=>void;
+ onSettings:()=>void;onTrash:()=>void;
  booting:boolean;connected:boolean;modelConfigured:boolean;
 }){
  const [open,setOpen]=useState(false),[view,setView]=useState<WorkspaceMenuView>('home');
@@ -25,7 +23,7 @@ export function SidebarUtilities({projects,projectId,projectSelection,onSelectPr
  const trigger=useRef<HTMLButtonElement>(null),panel=useRef<HTMLDivElement>(null);
  const homeContent=useRef<HTMLDivElement>(null),contentHeight=useRef(432);
  const panelId=useId(),nameId=useId(),errorId=useId();
- const selected=tags.find(tag=>tag.id===selectedTag),currentProject=projects.find(project=>project.id===projectId);
+ const currentProject=projects.find(project=>project.id===projectId);
  function close(restoreFocus=false){if(operation.current)return;setOpen(false);if(restoreFocus)trigger.current?.focus({preventScroll:true});}
  function act(action:()=>void){if(operation.current)return;close(true);action();}
  function page(next:WorkspaceMenuView){if(operation.current)return;setError('');setView(next);}
@@ -89,7 +87,7 @@ export function SidebarUtilities({projects,projectId,projectSelection,onSelectPr
  const errorMessage=error&&<p id={errorId} className="workspace-menu-error" role="alert">{error}</p>;
  return <>
   <div className="sidebar-utilities"><button ref={trigger} type="button" className="workspace-utilities-trigger" aria-label={unreadUpdate?'工作区，有新版本':'工作区'} aria-haspopup="dialog" aria-expanded={open} aria-controls={present?panelId:undefined} onKeyDown={event=>{if(open&&event.key==='Escape'){event.preventDefault();close(true);}}} onClick={()=>{if(open)close();else{setView('home');setError('');setPresent(true);setOpen(true);}}}>
-   <span className="workspace-utilities-icon"><Glyph name="workspace" size={16}/></span><span>工作区</span>{selected&&<small title={`标签筛选：${selected.name}`}>{selected.name}</small>}<span className="workspace-utilities-tail">{unreadUpdate&&<span className="workspace-utilities-update-dot" aria-hidden="true"/>}<Glyph name="chevron" size={13} className={open?'is-open':''}/></span>
+   <span className="workspace-utilities-icon"><Glyph name="workspace" size={16}/></span><span>工作区</span><span className="workspace-utilities-tail">{unreadUpdate&&<span className="workspace-utilities-update-dot" aria-hidden="true"/>}<Glyph name="chevron" size={13} className={open?'is-open':''}/></span>
   </button></div>
   <DesktopUpdate hideTrigger onUnreadChange={setUnreadUpdate}/>
   {present&&createPortal(<div ref={panel} id={panelId} role="dialog" aria-label="工作区操作" aria-busy={!!busy} aria-hidden={!open} inert={!open} data-state={open?'open':'closing'} className="workspace-utilities-popover" style={position} onKeyDown={event=>{
@@ -105,9 +103,6 @@ export function SidebarUtilities({projects,projectId,projectSelection,onSelectPr
      <div className="workspace-menu-label">当前项目</div>
      <div className="workspace-current-project">{projectSelection}<button type="button" className="workspace-utility-action workspace-project-entry" aria-label={`切换项目：${currentProject?.name??'选择项目'}`} onClick={()=>page('projects')}><span title={currentProject?.name}>{currentProject?.name??'选择项目'}</span><Glyph name="next" size={14}/></button></div>
      <div className="workspace-utilities-separator"/>
-     <TagNavigation defaultExpanded tags={tags} sessions={sessions} selected={selectedTag} onSelect={onSelectTag} onManage={()=>act(onManageTags)} onSession={id=>act(()=>onSession(id))}/>
-     <div className="workspace-utilities-separator"/>
-     {onSchedules&&<button type="button" className="workspace-utility-action" disabled={!connected} onClick={()=>act(onSchedules)}><Glyph name="clock" size={15}/><span>定时任务</span></button>}
      <button type="button" className="workspace-utility-action" disabled={booting} onClick={()=>act(onSettings)}><Glyph name="settings" size={15}/><span>设置</span>{!modelConfigured&&<small>待配置</small>}</button>
      <button type="button" className="workspace-utility-action" onClick={()=>act(()=>window.dispatchEvent(new Event('lake-open-updates')))}><Glyph name="refresh" size={15}/><span>检查更新</span>{unreadUpdate&&<small>新版本</small>}</button>
      <button type="button" className="workspace-utility-action" disabled={!connected} onClick={()=>act(onTrash)}><Glyph name="trash" size={15}/><span>已删除</span></button>

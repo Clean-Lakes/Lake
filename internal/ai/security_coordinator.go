@@ -145,6 +145,9 @@ func loadSecurityEvaluation(tx *gorm.DB, o security.PreparedOperation, owner Exe
 		return in, err
 	}
 	in.Task = task.task()
+	if task.Kind == "schedule" {
+		return in, errScheduleRetired
+	}
 	if err := ValidateSecurityScheduleTaskSource(tx, o.TaskID, o.StoreID, o.RecoveryEpoch, now); err != nil {
 		return in, err
 	}

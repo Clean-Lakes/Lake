@@ -5,7 +5,7 @@ import type {WorkSession} from '../../../shared/contracts';
 import {SessionStatusDot} from '../../src/SessionStatusDot';
 import {SessionStateBadge} from '../../src/SessionPresentation';
 import {SessionNavigation} from '../../src/SessionNavigation';
-import {SessionActions,SessionListTags} from '../../src/SessionPresentation';
+import {SessionActions} from '../../src/SessionPresentation';
 import {sortSessionNavigation} from '../../src/sessionNavigationModel';
 import {Glyph} from '../../src/Icons';
 import '../../src/styles.css';
@@ -29,9 +29,9 @@ function Fixture(){
    <div className="project-scroll" style={{margin:0,padding:0}}>
     <SessionNavigation sessions={sessions} selectedId={selected} showAll={all} bulkMode={bulk} disabled={busy} onMove={move} onShowAll={()=>setAll(!all)} renderSession={session=><div className="nav-row-wrap">
      <button type="button" className={`nav-row session-nav-row${selected===session.id?' active':''}`} onClick={()=>setSelected(session.id)}>
-      <Glyph name="chat" size={16}/><span className="nav-row-text"><strong>{session.title}</strong><SessionListTags tags={session.tags??[]}/></span><SessionStatusDot session={session}/>
+      <Glyph name="chat" size={16}/><span className="nav-row-text"><strong>{session.title}</strong></span><SessionStatusDot session={session}/>
      </button>
-     <SessionActions session={session} tags={[]} view="" hasViews={false} disabled={busy} onSaved={()=>{}} onRefresh={async()=>{}} onEdit={()=>{}} className="session-more" label={`管理会话 ${session.title}`} onView={()=>{}}
+     <SessionActions session={session} view="" hasViews={false} disabled={busy} onSaved={()=>{}} onRefresh={async()=>{}} onEdit={()=>{}} className="session-more" label={`管理会话 ${session.title}`} onView={()=>{}}
       onPin={()=>void move(session,!session.pinned,sortSessionNavigation(sessions.filter(s=>!!s.pinned!==!!session.pinned))[0]?.id??null).catch(e=>setError(e.message))}/>
     </div>}/>
    </div>

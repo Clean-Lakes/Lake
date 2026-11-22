@@ -1,13 +1,17 @@
 package web
 
 import (
+	"bytes"
 	"context"
-	"github.com/Clean-Lakes/Lake/internal/ai"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/Clean-Lakes/Lake/internal/ai"
 )
 
 func TestProjectToolsHistoryAndWorkflowScope(t *testing.T) {
@@ -80,66 +84,44 @@ func TestWorkflowToolTaskOwnershipAndPermissions(t *testing.T) {
 		t.Fatal("local restriction bypassed")
 	}
 }
-func TestScheduleCRUDClaimAndRestart(t *testing.T) {
-	b, h := fixture(t)
-	id, _ := newSession(t, h)
-	project := stringOf(b.Store.Session(id)["projectId"])
-	ctx := context.Background()
-	args := Object{"name": "Follow-up", "at": time.Now().Add(time.Hour).Format(time.RFC3339), "kind": "reminder", "message": "检查测试结果", "interval_seconds": 60}
-	value, err := b.scheduleTool(ctx, id, project, "schedule_create", args, true)
-	if err != nil {
+func TestRetiredSchedulesRemainArchivedAndCannotRun(t *testing.T) {
+	home := t.TempDir()
+	b, h := fixtureAtHome(t, home)
+	session, _ := newSession(t, h)
+	project := stringOf(b.Store.Session(session)["projectId"])
+	archive := filepath.Join(b.Store.Dir, "tool-schedules.json")
+	h.Close()
+	b.Close()
+
+	// Earlier startup would mark this enabled, missed occurrence and rewrite the file.
+	data := []byte(jsonText([]Object{{
+		"id": "old-reminder", "project_id": project, "session_id": session,
+		"name": "Old reminder", "kind": "reminder", "message": "must not replay",
+		"enabled": true, "revision": 1, "at": time.Now().Add(-time.Hour).Format(time.RFC3339),
+	}}))
+	if err := os.WriteFile(archive, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	row := object(value)
-	if _, err = b.scheduleTool(ctx, id, project, "schedule_update", Object{"schedule_id": row["id"], "expected_revision": 0, "name": "bad"}, true); err == nil {
-		t.Fatal("revision conflict ignored")
+
+	b, h = fixtureAtHome(t, home)
+	path := "/api/projects/" + project + "/schedules"
+	apiTest(t, h, "GET", path, nil, 404)
+	apiTest(t, h, "GET", path+"/old-reminder", nil, 404)
+	apiTest(t, h, "PATCH", path+"/old-reminder", Object{"enabled": true, "expectedRevision": 1}, 404)
+	apiTest(t, h, "POST", path+"/old-reminder/grant", Object{}, 404)
+	for _, tool := range []string{"schedule_create", "schedule_list", "schedule_update", "schedule_delete"} {
+		if projectTool(tool) {
+			t.Fatalf("retired project tool %s is still registered", tool)
+		}
 	}
-	rows, err := b.scheduleTool(ctx, id, project, "schedule_list", Object{}, false)
-	if err != nil || len(rows.([]Object)) != 1 {
-		t.Fatal(err)
+	if messages := objects(b.Store.Snapshot(session)["messages"]); len(messages) != 0 {
+		t.Fatal("old reminder replayed", messages)
 	}
-	when := time.Now().Add(2 * time.Hour)
-	b.tickSchedules(when)
-	b.tickSchedules(when)
-	messages := objects(b.Store.Snapshot(id)["messages"])
-	if len(messages) != 1 || stringOf(messages[0]["text"]) != "提醒「Follow-up」：检查测试结果" {
-		t.Fatal("duplicate or missing reminder", messages)
-	}
-	b.scheduleMu.Lock()
-	persisted, err := b.readSchedules()
-	b.scheduleMu.Unlock()
-	if err != nil || persisted[0].Enabled != true || persisted[0].Revision != 1 || persisted[0].StatusRevision < 3 {
-		t.Fatal(persisted, err)
-	}
-	foreign, _ := newSession(t, h)
-	otherProject := stringOf(b.Store.Session(foreign)["projectId"])
-	if _, err = b.scheduleTool(ctx, foreign, otherProject, "schedule_delete", Object{"schedule_id": row["id"], "expected_revision": 1}, true); err == nil {
-		t.Fatal("foreign schedule deleted")
-	}
-	if _, err = b.scheduleTool(ctx, id, project, "schedule_delete", Object{"schedule_id": row["id"], "expected_revision": 1}, true); err != nil {
-		t.Fatal(err)
-	}
-	// Restart normalization skips missed occurrences rather than replaying external effects.
-	b.scheduleMu.Lock()
-	err = b.writeSchedules([]toolSchedule{{ID: ident(), Project: project, Session: id, Name: "Missed", Kind: "reminder", Message: "must not replay", At: time.Now().Add(-time.Hour).Format(time.RFC3339), Enabled: true, Revision: 1}})
-	b.scheduleMu.Unlock()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = b.startScheduler(); err != nil {
-		t.Fatal(err)
-	}
-	b.scheduleMu.Lock()
-	persisted, err = b.readSchedules()
-	b.scheduleMu.Unlock()
-	if err != nil || persisted[0].Enabled || persisted[0].Status != "missed" {
-		t.Fatal(persisted, err)
-	}
-	b.tickSchedules(time.Now())
-	if len(objects(b.Store.Snapshot(id)["messages"])) != 1 {
-		t.Fatal("missed reminder replayed")
+	if saved, err := os.ReadFile(archive); err != nil || !bytes.Equal(saved, data) {
+		t.Fatal("scheduler history was changed", err)
 	}
 }
+
 func TestQuestionHTTPRouteCollectsRealAnswers(t *testing.T) {
 	b, h := fixture(t)
 	id, _ := newSession(t, h)

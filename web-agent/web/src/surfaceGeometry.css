@@ -21,7 +21,7 @@
  .resource-import-rows, .project-memory-list, .theme-choice, .theme-preview,
  .extension-item, .extension-tools, .extension-root-default, .mcp-editor-card,
  .mcp-server-row, .mcp-scope-value, .mcp-mode-tabs, .mcp-mode-tabs > button, .memory-resource-picker,
- .workflow-step, .workflow-finish, .tag-delete-confirm, .file-approval-preview) {
+ .workflow-step, .workflow-finish, .file-approval-preview) {
  corner-shape: var(--corner-window);
 }
 

@@ -534,7 +534,7 @@ func (s *Store) Catalog() Object {
 		for _, r := range s.rows("SELECT id FROM sessions WHERE " + sidebarVisibleSessionsSQL + " ORDER BY createdAt DESC,rowid DESC") {
 			sessions = append(sessions, s.session(stringOf(r["id"])))
 		}
-		return Object{"tags": s.rows("SELECT t.* FROM workspaceTags t WHERE NOT EXISTS(SELECT 1 FROM navigationTrash d WHERE d.kind='project' AND d.id=t.projectId) ORDER BY name,id"), "projects": s.rows("SELECT * FROM projects WHERE " + activeProjectsSQL + " ORDER BY createdAt,id"), "resources": resources, "resourceTree": s.rows("SELECT * FROM resourceTree WHERE NOT EXISTS(SELECT 1 FROM navigationTrash d WHERE d.kind='project' AND d.id=resourceTree.projectId) ORDER BY position,id"), "sessions": sessions, "terminals": s.rows("SELECT t.id,t.sessionId,t.resourceId,t.status,t.holder,t.contextVersion,t.createdAt,s.title AS sessionTitle FROM terminals t JOIN sessions s ON s.id=t.sessionId WHERE t.status!='disconnected' ORDER BY t.createdAt,t.rowid")}
+		return Object{"projects": s.rows("SELECT * FROM projects WHERE " + activeProjectsSQL + " ORDER BY createdAt,id"), "resources": resources, "resourceTree": s.rows("SELECT * FROM resourceTree WHERE NOT EXISTS(SELECT 1 FROM navigationTrash d WHERE d.kind='project' AND d.id=resourceTree.projectId) ORDER BY position,id"), "sessions": sessions, "terminals": s.rows("SELECT t.id,t.sessionId,t.resourceId,t.status,t.holder,t.contextVersion,t.createdAt,s.title AS sessionTitle FROM terminals t JOIN sessions s ON s.id=t.sessionId WHERE t.status!='disconnected' ORDER BY t.createdAt,t.rowid")}
 	}).(Object)
 }
 func (s *Store) Project(id string) Object {

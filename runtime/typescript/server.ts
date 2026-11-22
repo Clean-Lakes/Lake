@@ -535,16 +535,9 @@ export async function startLakeServer(options: ServerOptions) {
         } else if (path[4] === "mcp-bindings" && path.length === 5 && method === "GET") result = extensions!.bindings(path[2]);
         else if (path[4] === "mcp-bindings" && path.length === 6 && method === "PUT") result = extensions!.setBinding(path[2], path[5], data);
         else throw new HttpError(405, "不支持此项目 MCP 绑定操作");
-      } else if (path[1] === "projects" && path.length === 4 && path[3] === "tags" && method === "POST") {
-        result = navigation.createTag(path[2], data);
-        status = 201;
       } else if (path[1] === "projects" && path.length === 4 && path[3] === "session-navigation" && method === "POST")
         result = navigation.move(path[2], data);
-      else if (path[1] === "tags" && path.length === 3) {
-        if (method === "PUT") result = navigation.updateTag(path[2], data);
-        else if (method === "DELETE") result = navigation.deleteTag(path[2]);
-        else throw new HttpError(405, "不支持此请求方法");
-      } else if(path[1]==="agent-capabilities"&&path.length===2&&method==="GET")result={upstreamVersion:"3.17.2",tools:agentCapabilityCatalog({nativeWebSearch:nativeSearchSupported(selected().provider?.protocol,selected().model?.supportsNativeWebSearch)}),resourceExecution:{local:process.platform==="darwin",ssh:!!execution}};
+      else if(path[1]==="agent-capabilities"&&path.length===2&&method==="GET")result={upstreamVersion:"3.17.2",tools:agentCapabilityCatalog({nativeWebSearch:nativeSearchSupported(selected().provider?.protocol,selected().model?.supportsNativeWebSearch)}),resourceExecution:{local:process.platform==="darwin",ssh:!!execution}};
       else if (path[1] === "projects" && path.length === 2 && method === "POST")
         result = store.createProject(String(data.name ?? ""));
       else if (path[1] === "projects" && path[3] === "sessions" && method === "POST")
@@ -627,10 +620,6 @@ export async function startLakeServer(options: ServerOptions) {
         else if (path.length === 5 && method === 'DELETE') result = workflows.remove(path[2], path[4], data.version);
         else if (path.length === 6 && path[5] === 'run' && method === 'POST') throw new HttpError(501, '工作流只读执行和冻结权限绑定尚未接入，模板已保留，未启动运行');
         else throw new HttpError(405, '不支持此工作流请求');
-      } else if (path[1] === "projects" && path[3] === 'schedules') {
-        store.project(path[2]);
-        if (method !== "GET") throw new HttpError(501, "工作流与日程尚未迁移完成");
-        result = { items: [], templates: [], runs: [] };
       } else if (path[1] === "projects" && path[3] === "memory-settings") {
         result = {
           projectId: path[2],

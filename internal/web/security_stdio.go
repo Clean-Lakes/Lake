@@ -71,7 +71,6 @@ func (h *securityStdioHost) Close() error {
 		cancel()
 	}
 	h.server.workers.Wait()
-	h.server.schedulerWorkers.Wait()
 	h.server.Terminals.Shutdown()
 	h.server.Extensions.Close()
 	return h.server.Store.Close()

@@ -141,7 +141,7 @@ func (e *Engine) offerPilotDirections(ctx context.Context, s *session, c Config,
 
 func pilotInternalTool(name string) bool {
 	switch name {
-	case "pilot_read_recovery", "pilot_offer_directions", "sre_team_read", "sre_team_update", "ask_user_question", "todo_read", "todo_write", "read_evidence", "read_tool_result", "read_session_context", "load_skill", "list_assets", "list_resource_groups", "list_mcp_servers", "list_project_memories", "read_project_memory", "list_workflows", "get_workflow_run", "schedule_list", "task_output", "shell_output", "wait_shell", "read_terminal_screen":
+	case "pilot_read_recovery", "pilot_offer_directions", "sre_team_read", "sre_team_update", "ask_user_question", "todo_read", "todo_write", "read_evidence", "read_tool_result", "read_session_context", "load_skill", "list_assets", "list_resource_groups", "list_mcp_servers", "list_project_memories", "read_project_memory", "list_workflows", "get_workflow_run", "task_output", "shell_output", "wait_shell", "read_terminal_screen":
 		return true
 	}
 	return false

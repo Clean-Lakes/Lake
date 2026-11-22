@@ -55,8 +55,7 @@ import {replyInfoComponents} from './ReplyInfoElements';
 import remarkGfm from "remark-gfm";
 import {ReplyDetailsSummary} from './ReplyDetailsSummary';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import type { AIImage, AICard, AIView, AIPreset, Message, TextFileAttachment, SessionSnapshot, TerminalSession, WorkspaceTag } from "../../shared/contracts";
-import { conversationTagSignature } from "./conversationTags";
+import type { AIImage, AICard, AIView, AIPreset, Message, TextFileAttachment, SessionSnapshot, TerminalSession } from "../../shared/contracts";
 import {AssistantMarkdown, ObjectReferencesProvider, ReplyReferenceScope} from './AssistantMarkdown';
 import { isCompactionFallbackEntry, isCompactionFailureEntry, orderedTranscript, replySourceMessageId, transcriptGroups, transcriptTurns } from "./timeline";
 import { FileChanges } from "./FileChanges";
@@ -91,7 +90,6 @@ function Chart({ card }: { card: AICard }) {
     {data.type === "doughnut" && <circle cx={320} cy={140} r={65} fill="var(--surface)"/>}
   </svg><details><DisclosureSummary>查看数据</DisclosureSummary><table><thead><tr><th>项目</th>{series.map((item, i) => <th key={i}>{item.name || "数值"}</th>)}</tr></thead><tbody>{data.labels.map((label, i) => <tr key={i}><td>{label}</td>{series.map((item, j) => <td key={j}>{item.values[i]}</td>)}</tr>)}</tbody></table></details></figure>;
 }
-const noTags: WorkspaceTag[] = [];
 const cardMarkdownComponents:Components={...replyInfoComponents,pre:MarkdownCodeBlock,summary:ReplyDetailsSummary,table:({node,...props})=><div className="markdown-table-scroll"><table {...props}/></div>};
 const InterimReply = memo(function InterimReply({entryId, text}: {entryId: string; text: string}) {
   return <div data-conversation-entry={entryId} className="turn-process-prose reply-process-text">
@@ -101,7 +99,7 @@ const InterimReply = memo(function InterimReply({entryId, text}: {entryId: strin
 function CompactionNotice({message}:{message:string}) {
  return <div className="ai-compaction-notice" role="status"><Glyph name="alert" size={14}/><span>{displayAiError(message)}</span></div>;
 }
-export const Card = memo(function Card({ card, streaming,tags = noTags, animateInitial = false,onOpenPlans,onOpenMemory,pilotSummary,pilotConnected }: { card: AICard; streaming?:boolean; tags?: WorkspaceTag[]; animateInitial?:boolean;onOpenPlans?:()=>void;onOpenMemory?:()=>void;pilotSummary?:Message;pilotConnected?:boolean }) {
+export const Card = memo(function Card({ card, streaming, animateInitial = false,onOpenPlans,onOpenMemory,pilotSummary,pilotConnected }: { card: AICard; streaming?:boolean; animateInitial?:boolean;onOpenPlans?:()=>void;onOpenMemory?:()=>void;pilotSummary?:Message;pilotConnected?:boolean }) {
   const handoff=usePilotSummaryHandoff({id:pilotSummary?.id,roundId:pilotSummary?.conversation?.id,
     connected:pilotConnected&&pilotSummary?.text!==card.content});
   const summary=handoff.visible?pilotSummary:undefined;
@@ -118,12 +116,12 @@ export const Card = memo(function Card({ card, streaming,tags = noTags, animateI
   if (card.type === "chart") return <Chart card={card}/>;
   if (card.type === "diff") { const data = card.data as { before: string; after: string }; return <details className="ai-diff"><DisclosureSummary>文件变更 · {card.title}</DisclosureSummary><div className="ai-diff-columns"><pre>{data.before || "（新文件）"}</pre><pre>{data.after || "（空文件或删除）"}</pre></div></details>; }
   if (card.type === "operation") return <details className="ai-operation"><DisclosureSummary><span>{card.title}</span><small>{card.status === "pending" ? "等待确认" : card.status === "running" ? "执行中" : card.status === "failed" ? "未完成" : "已结束"}</small></DisclosureSummary><pre>{JSON.stringify(card.data, null, 2)}</pre>{card.content && <pre>{card.content}</pre>}</details>;
-  return <div ref={handoff.body} className={`ai-card ai-${card.type}`}>{assistantText ? <AssistantMarkdown key={summary?.id} tags={tags}
+  return <div ref={handoff.body} className={`ai-card ai-${card.type}`}>{assistantText ? <AssistantMarkdown key={summary?.id}
     reveal={summary?handoff.reveal&&!!pilotConnected:streaming!==false&&card.status==="running"}
     animateInitial={summary?handoff.reveal:animateInitial} finishPending={!summary&&streaming!==false&&card.status==='completed'}>
     {visibleContent}
   </AssistantMarkdown> : <div className="ai-markdown"><Markdown remarkPlugins={[remarkGfm]} skipHtml components={cardMarkdownComponents}>{visibleContent}</Markdown></div>}{card.status === "running" && !assistantText && <span className="ai-stream-dot"/>}</div>;
-}, (previous, next) => previous.streaming===next.streaming&&sameCard(previous.card, next.card) && conversationTagSignature(previous.tags) === conversationTagSignature(next.tags)&&previous.onOpenPlans===next.onOpenPlans&&
+}, (previous, next) => previous.streaming===next.streaming&&sameCard(previous.card, next.card)&&previous.onOpenPlans===next.onOpenPlans&&
   previous.pilotSummary?.id===next.pilotSummary?.id&&previous.pilotSummary?.text===next.pilotSummary?.text&&previous.pilotConnected===next.pilotConnected);
 
 // Animate a reply's first appearance, including a completed first packet.
@@ -316,7 +314,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,subscribeWork
         if (entry.action) return <div key={entry.id}>{renderAction?.(entry.action)}</div>;
         const card=entry.card!;
         const pilotSummary=pilotCompletion?.acknowledgement.id===entry.id?pilotCompletion.summary:undefined;
-        return <ReplyArrival key={entry.id} entryId={entry.id} continued={continuations.has(entry.id)} arrive={false}>{['text','message'].includes(card.type) && <ReplyIdentity identity={assistantIdentity} hidden={hideReplyIdentity} continued={continuations.has(entry.id)} motion={replyMotion(entry.id)} nameMotion={summaryNameMotion(entry.id)}/>}<Card card={card} tags={snapshot.session.tags} animateInitial={connected&&turn===currentTurn&&!restoredText.current.has(card.id)} onOpenPlans={onOpenPlans} onOpenMemory={onOpenMemory} pilotSummary={pilotSummary} pilotConnected={pilotSummary?pilotConnected&&connected:undefined}/></ReplyArrival>;
+        return <ReplyArrival key={entry.id} entryId={entry.id} continued={continuations.has(entry.id)} arrive={false}>{['text','message'].includes(card.type) && <ReplyIdentity identity={assistantIdentity} hidden={hideReplyIdentity} continued={continuations.has(entry.id)} motion={replyMotion(entry.id)} nameMotion={summaryNameMotion(entry.id)}/>}<Card card={card} animateInitial={connected&&turn===currentTurn&&!restoredText.current.has(card.id)} onOpenPlans={onOpenPlans} onOpenMemory={onOpenMemory} pilotSummary={pilotSummary} pilotConnected={pilotSummary?pilotConnected&&connected:undefined}/></ReplyArrival>;
       };
       const pilotLive=miniScope.live&&turn.some(entry=>entry.sre?.task.pilot);
       // The actual post-tool reply keeps its key from its first chunk onward;

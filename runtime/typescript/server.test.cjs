@@ -1641,47 +1641,56 @@ for(const mode of ['model-error-http','model-error-stream'])test(`Pilot retains 
   assert.equal(f.app.store.list('superInputs').find(item=>item.id===input.id).disposition,'blocked','a fresh request does not replay the blocked input');
 });
 
-test("session tags and icons preserve project scope, revisions, activity and restart state", async (t) => {
+test("retired workspace tags stay in storage while session icons remain editable", async (t) => {
   const f = await fixture(t);
-  const other = await f.api("/api/projects", "POST", { name: "Other" });
-  const create = (project, name) => f.api(`/api/projects/${project}/tags`, "POST", { name, color: "purple" }, 201);
-  const tag = await create(f.project.id, "Database");
-  const foreign = await create(other.id, "External");
-  const path = `/api/sessions/${f.session.id}/presentation`;
+  const sessionPath = `/api/sessions/${f.session.id}`;
+  const path = `${sessionPath}/presentation`;
   const save = (data, status = 200) => f.api(path, "PUT", data, status);
-  const before = (await f.api(`/api/sessions/${f.session.id}/snapshot`)).session;
-  await save({ icon: "database", tagIds: [foreign.id], revision: 0 }, 404);
-  await save({ icon: "javascript:alert(1)", tagIds: [], revision: 0 }, 400);
-  await save({ icon: "database", tagIds: [tag.id, tag.id], revision: 0 }, 400);
-  await save({ icon: "database", tagIds: [], revision: "0" }, 400);
-  await save({ icon: "database", tagIds: [], revision: -1 }, 400);
+  const tag = { id: "old-tag", projectId: f.project.id, name: "Database", color: "purple" };
+  const legacy = { ...f.app.store.session(f.session.id), tags: [tag] };
+  f.app.store.put("tags", tag.id, tag);
+  f.app.store.put("sessions", f.session.id, legacy);
+  f.app.store.put("sessionPresentation", f.session.id, { icon: "chat", revision: 0, tagIds: [tag.id] });
+  const before = (await f.api(`${sessionPath}/snapshot`)).session;
+  const catalog = await f.api("/api/catalog");
+  assert.ok(!("tags" in before));
+  assert.ok(!("tags" in catalog));
+  assert.ok(!("tags" in catalog.sessions.find(({ id }) => id === f.session.id)));
+  await f.api(`/api/projects/${f.project.id}/tags`, "POST", { name: "New tag", color: "blue" }, 404);
+  await f.api(`/api/tags/${tag.id}`, "PUT", { name: "Data", color: "blue" }, 404);
+  await f.api(`/api/tags/${tag.id}`, "DELETE", undefined, 404);
+  await save({ icon: "database", tagIds: [], revision: 0 }, 410);
+  await save({ icon: "javascript:alert(1)", revision: 0 }, 400);
+  await save({ icon: "database", revision: "0" }, 400);
+  await save({ icon: "database", revision: -1 }, 400);
   assert.equal(f.app.store.cursor(f.session.id), 0, "rejected edits must not emit events");
-  let saved = await save({ icon: "database", tagIds: [tag.id], revision: 0 });
-  assert.deepEqual(saved.tags, [tag]);
+  let saved = await save({ icon: "database", revision: 0 });
+  assert.ok(!("tags" in saved));
   assert.equal(saved.icon, "database");
   assert.equal(saved.presentationRevision, 1);
   assert.equal(saved.updatedAt, before.updatedAt);
   assert.equal(saved.status, before.status);
-  await save({ icon: "chat", tagIds: [], revision: 0 }, 409);
-  await f.restart();
-  saved = (await f.api(`/api/sessions/${f.session.id}/snapshot`)).session;
-  assert.deepEqual(saved.tags, [tag]);
-  assert.equal(saved.presentationRevision, 1);
-  const edited = await f.api(`/api/tags/${tag.id}`, "PUT", { name: "Data", color: "blue" });
-  assert.deepEqual((await f.api(`/api/sessions/${f.session.id}/snapshot`)).session.tags, [edited]);
+  await save({ icon: "chat", revision: 0 }, 409);
   // A model update holding an older session snapshot cannot overwrite metadata.
-  f.app.store.put("sessions", before.id, { ...before, options: f.app.store.session(before.id).options });
+  f.app.store.put("sessions", before.id, legacy);
   assert.equal(f.app.store.session(before.id).icon, "database");
-  await f.api(`/api/tags/${tag.id}`, "DELETE");
-  saved = (await f.api(`/api/sessions/${f.session.id}/snapshot`)).session;
-  assert.deepEqual(saved.tags, []);
+  await f.restart();
+  saved = (await f.api(`${sessionPath}/snapshot`)).session;
+  assert.ok(!("tags" in saved));
+  assert.equal(saved.icon, "database");
   assert.equal(saved.presentationRevision, 1);
-  await save({ icon: "chat", tagIds: [tag.id], revision: 1 }, 404);
-  await f.api(`/api/projects/${other.id}/tags`, "POST", { name: "External", color: "red" }, 409);
-  await f.api(`/api/projects/${other.id}/tags`, "POST", { name: "Invalid", color: "url(evil)" }, 400);
-  await f.api(`/api/projects/${other.id}/tags`, "POST", { name: " ".repeat(41) + "x", color: "blue" }, 400);
-  assert.equal((await f.api("/api/catalog")).tags.length, 1);
-  assert.equal(f.app.store.events(f.session.id, 0).length, 3);
+  assert.deepEqual(f.app.store.get("tags", tag.id), tag);
+  assert.deepEqual(f.app.store.get("sessionPresentation", f.session.id).tagIds, [tag.id]);
+  assert.equal(f.app.store.events(f.session.id, 0).length, 1);
+});
+
+test("retired workspace schedule routes are unavailable", async (t) => {
+  const f = await fixture(t);
+  const path = `/api/projects/${f.project.id}/schedules`;
+  await f.api(path, "GET", undefined, 404);
+  await f.api(`${path}/old-schedule`, "GET", undefined, 404);
+  await f.api(`${path}/old-schedule`, "PATCH", { enabled: true, expectedRevision: 1 }, 404);
+  await f.api(`${path}/old-schedule/grant`, "POST", {}, 404);
 });
 
 test("session pinning and ordering preserve activity, enforce group scope and reject stale concurrent moves", async (t) => {
@@ -1736,21 +1745,22 @@ test("session pinning and ordering preserve activity, enforce group scope and re
 
 test("invalid JSON bodies cannot enter persistent navigation mutations", async (t) => {
   const f = await fixture(t);
+  const url = `${f.app.origin}/api/sessions/${f.session.id}/presentation`;
   for (const body of ["null", "[]", "true", "", "{oops"]) {
-    const response = await fetch(`${f.app.origin}/api/projects/${f.project.id}/tags`, {
-      method: "POST",
+    const response = await fetch(url, {
+      method: "PUT",
       headers: { Authorization: `Bearer ${f.app.token}`, "Content-Type": "application/json" },
       body,
     });
     assert.equal(response.status, 400);
   }
-  const response = await fetch(`${f.app.origin}/api/projects/${f.project.id}/tags`, {
-    method: "POST",
+  const response = await fetch(url, {
+    method: "PUT",
     headers: { Authorization: `Bearer ${f.app.token}`, "Content-Type": "text/plain" },
-    body: JSON.stringify({ name: "Wrong content type", color: "blue" }),
+    body: JSON.stringify({ icon: "database", revision: 0 }),
   });
   assert.equal(response.status, 415);
-  assert.deepEqual((await f.api("/api/catalog")).tags, []);
+  assert.equal(f.app.store.session(f.session.id).presentationRevision, 0);
 });
 
 test("explicit TS Dev imports model configuration once without copying credentials or touching the Go database", async (t) => {

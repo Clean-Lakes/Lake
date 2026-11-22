@@ -220,15 +220,6 @@
       ]
     },
     {
-      "name": "createTag",
-      "routes": [
-        {
-          "method": "POST",
-          "path": "`/api/projects/${encodeURIComponent(project)}/tags`"
-        }
-      ]
-    },
-    {
       "name": "createTerminal",
       "routes": [
         {
@@ -315,15 +306,6 @@
         {
           "method": "DELETE",
           "path": "`/api/projects/${encodeURIComponent(project)}/superagent/specialists/${encodeURIComponent(role)}`"
-        }
-      ]
-    },
-    {
-      "name": "deleteTag",
-      "routes": [
-        {
-          "method": "DELETE",
-          "path": "`/api/tags/${encodeURIComponent(id)}`"
         }
       ]
     },
@@ -1025,24 +1007,6 @@
       ]
     },
     {
-      "name": "schedule",
-      "routes": [
-        {
-          "method": "GET",
-          "path": "`/api/projects/${encodeURIComponent(project)}/schedules/${encodeURIComponent(id)}`"
-        }
-      ]
-    },
-    {
-      "name": "schedules",
-      "routes": [
-        {
-          "method": "GET",
-          "path": "`/api/projects/${encodeURIComponent(project)}/schedules`"
-        }
-      ]
-    },
-    {
       "name": "selectProviderModel",
       "routes": [
         {
@@ -1102,15 +1066,6 @@
         {
           "method": "PUT",
           "path": "`/api/projects/${encodeURIComponent(project)}/superagent/specialists/${encodeURIComponent(role)}/execution`"
-        }
-      ]
-    },
-    {
-      "name": "setScheduleEnabled",
-      "routes": [
-        {
-          "method": "PATCH",
-          "path": "`/api/projects/${encodeURIComponent(project)}/schedules/${encodeURIComponent(id)}`"
         }
       ]
     },
@@ -1453,15 +1408,6 @@
         {
           "method": "POST",
           "path": "`/api/sessions/${encodeURIComponent(sessionId)}/message-queue`"
-        }
-      ]
-    },
-    {
-      "name": "updateTag",
-      "routes": [
-        {
-          "method": "PUT",
-          "path": "`/api/tags/${encodeURIComponent(id)}`"
         }
       ]
     },

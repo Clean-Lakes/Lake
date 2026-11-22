@@ -17,6 +17,14 @@ func TestSuperWorkflowRegistersOriginalGoalAndOneInvocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	db, err := e.superStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldSource := superSourceRow{ID: hash(js([]any{"workflow-source", binding.ProjectID, binding.WorkflowID, binding.DefinitionRevision})), ProjectID: binding.ProjectID, Kind: "schedule", ActorRef: "host-workflow-runtime", Revision: hash(js([]any{binding.TemplateDigest, binding.DefinitionRevision})), Enabled: true}
+	if err := db.Create(&oldSource).Error; err != nil {
+		t.Fatal(err)
+	}
 	first, err := e.RegisterSuperWorkflow(ctx, binding)
 	if err != nil {
 		t.Fatal(err)
@@ -25,7 +33,10 @@ func TestSuperWorkflowRegistersOriginalGoalAndOneInvocation(t *testing.T) {
 	if err != nil || second.WorkerID != first.WorkerID || first.TaskID != binding.GoalID || first.SessionID != binding.SessionID {
 		t.Fatal(first, second, err)
 	}
-	db, _ := e.superStore()
+	var archived superSourceRow
+	if err := db.First(&archived, "id = ?", oldSource.ID).Error; err != nil || archived.Kind != "schedule" {
+		t.Fatal("manual workflow changed archived schedule source", err)
+	}
 	var goals int64
 	if err = db.Model(&nativeWorkGoal{}).Count(&goals).Error; err != nil || goals != 1 {
 		t.Fatal("workflow created a second goal", goals, err)
