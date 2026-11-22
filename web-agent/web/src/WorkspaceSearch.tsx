@@ -1,6 +1,7 @@
 import {useEffect, useMemo, useRef, useState} from "react";
 import type {Project, Resource, WorkSession} from "../../shared/contracts";
 import {Glyph, ResourceIcon} from "./Icons";
+import {isUserWorkspaceSession} from "./sidebarState";
 import "./workspaceSearch.css";
 
 type SearchEntry = {kind: "session" | "resource"; id: string; projectId: string; label: string; projectName: string; icon: string};
@@ -25,7 +26,7 @@ export function WorkspaceSearch({projects, sessions, resources, canCreate, onCho
     const words = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
     const matches = (label: string, projectId: string) => names.has(projectId) && words.every(word => `${label} ${names.get(projectId)}`.toLocaleLowerCase().includes(word));
     return {
-      chats: sessions.filter(session => matches(session.title, session.projectId)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, words.length ? 30 : 9).map(session => ({kind: "session" as const, id: session.id, projectId: session.projectId, label: session.title, projectName: names.get(session.projectId)!, icon: session.icon ?? "chat"})),
+      chats: sessions.filter(session => isUserWorkspaceSession(session) && matches(session.title, session.projectId)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, words.length ? 30 : 9).map(session => ({kind: "session" as const, id: session.id, projectId: session.projectId, label: session.title, projectName: names.get(session.projectId)!, icon: session.icon ?? "chat"})),
       assets: words.length ? resources.filter(resource => matches(resource.name, resource.projectId)).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 20).map(resource => ({kind: "resource" as const, id: resource.id, projectId: resource.projectId, label: resource.name, projectName: names.get(resource.projectId)!, icon: resource.kind})) : [],
     };
   }, [projects, sessions, resources, query]);

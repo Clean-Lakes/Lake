@@ -1,4 +1,10 @@
 import test from "node:test";
+import {isUserWorkspaceSession} from "../src/sidebarState";
+
+test("workspace search candidates retain Pilot and exclude internal specialist sessions", () => {
+  const roles = ['worker', 'role', 'conversation', 'router', 'legacy', undefined] as const;
+  assert.deepEqual(roles.map(workspaceRole => ({workspaceRole})).filter(isUserWorkspaceSession).map(s => s.workspaceRole), ['router', 'legacy', undefined]);
+});
 import assert from "node:assert/strict";
 import { resourceSearchNodes } from "../src/navigationSearch.ts";
 import type { Resource, ResourceTreeNode } from "../../shared/contracts.ts";

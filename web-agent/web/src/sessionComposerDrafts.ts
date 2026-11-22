@@ -36,5 +36,7 @@ export function useSessionComposerDraft(session: string | null) {
     const field = <K extends keyof ComposerDraft>(key: K) => (value: SetStateAction<ComposerDraft[K]>) => setDrafts(current => updateSessionDraft(current, session, key, value));
     return {setMessageDraft: field('message'), setMentionRefs: field('references'), setImageDraft: field('images'), setFileDraft: field('files'), setIgnoreProjectMemory: field('ignoreProjectMemory')};
   }, [session]);
-  return {draft: sessionDraft(drafts, session), ...setters, clearSubmitted: (id: string, submitted: ComposerDraft) => setDrafts(current => clearSubmittedDraft(current, id, submitted))};
+  return {draft: sessionDraft(drafts, session), ...setters,
+    setMessageDraftFor: (id: string, value: SetStateAction<string>) => setDrafts(current => updateSessionDraft(current, id, 'message', value)),
+    clearSubmitted: (id: string, submitted: ComposerDraft) => setDrafts(current => clearSubmittedDraft(current, id, submitted))};
 }
