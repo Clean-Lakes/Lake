@@ -1,4 +1,4 @@
-import type {AICard,Message} from '../../shared/contracts';
+import type {AICard,Message,SpecialistConversation} from '../../shared/contracts';
 import type {TranscriptEntry} from './timeline';
 
 import {record,routingCall,confirmsDispatch} from '../../shared/route-dispatch';
@@ -29,49 +29,73 @@ export function matchesPilotForwarding(message:Message,user:Message,receipt:Reco
  return receipt.workerId===entry.workerId&&(!receipt.roleId||receipt.roleId===entry.roleId)&&(!receipt.sessionId||receipt.sessionId===entry.sessionId);
 }
 
-/** A text-only invitation's conclusion replaces its acknowledgement in the
- * transcript. The host receipt binds the reply to the exact user and round. */
-export function pilotDialogueCompletion(turn:readonly TranscriptEntry[]) {
- const user=turn[0]?.message;
- if(user?.role!=='user'||turn.some(entry=>entry.action||entry.agentRun||entry.sre||entry.message?.dispatch))return;
+function dialogueAcknowledgements(turn:readonly TranscriptEntry[],user:Message,roundId:string) {
+ if(turn.some(entry=>entry.action||entry.agentRun||entry.sre||entry.message?.dispatch))return;
  const cards=turn.flatMap(entry=>entry.card?[entry.card]:[]);
  if(cards.some(card=>!rootOf(card)))return;
  const invitations=cards.filter(card=>card.type==='operation'&&card.title==='convene_specialists');
  if(invitations.length!==1)return;
  const invitation=invitations[0]!,receipt=record(invitation.content),root=rootOf(invitation);
- if(!root||!settled.has(invitation.status)||typeof receipt?.id!=='string'||!receipt.id||
+ if(!root||!settled.has(invitation.status)||receipt?.id!==roundId||
    receipt.sessionId!==user.sessionId||receipt.sourceMessageId!==user.id)return;
  const invocation=cards.filter(card=>rootOf(card)===root);
  const invitationIndex=invocation.indexOf(invitation);
  if(invocation.some((card,index)=>!settled.has(card.status)||
    !['message','text','thinking'].includes(card.type)&&card!==invitation&&
    !(index<invitationIndex&&card.type==='operation'&&card.title==='list_specialists')))return;
- const acknowledgements=invocation.slice(invitationIndex+1).filter(card=>['message','text'].includes(card.type)&&card.content?.trim());
- if(acknowledgements.length!==1)return;
- const summaries=turn.flatMap(({message})=>message?.role==='assistant'&&!message.author&&!message.dispatch&&
-   message.sessionId===user.sessionId&&message.conversation?.kind==='summary'&&message.conversation.summaryRequested===true&&
-   message.conversation.id===receipt.id&&message.conversation.sourceMessageId===user.id&&message.text.trim()?[message]:[]);
- if(summaries.length===1)return {acknowledgement:acknowledgements[0]!,summary:summaries[0]!};
+ return invocation.slice(invitationIndex+1).filter(card=>['message','text'].includes(card.type)&&card.content?.trim());
 }
 
-/** A committed joint conclusion takes the original handoff's reply slot. */
-export function pilotTaskCompletion(turn:readonly TranscriptEntry[]) {
- const user=turn[0]?.message;
- if(user?.role!=='user')return;
- const summaries=turn.flatMap(({message})=>message?.role==='assistant'&&!message.author&&!message.dispatch&&
-   message.jointReport?.kind==='summary'&&message.sessionId===user.sessionId&&message.replyToMessageId===user.id&&message.text.trim()?[message]:[]);
- if(summaries.length!==1)return;
- const summary=summaries[0]!;
+function taskAcknowledgements(turn:readonly TranscriptEntry[],taskId:string) {
  const routes=turn.filter(({card})=>{
   const receipt=card&&rootOf(card)&&confirmedRouteReceipt(card);
-  return receipt&&receipt.taskId===summary.jointReport!.taskId&&Array.isArray(receipt.assignments)&&receipt.assignments.length>1;
+  return receipt&&receipt.taskId===taskId&&Array.isArray(receipt.assignments)&&receipt.assignments.length>1;
  });
  if(routes.length!==1)return;
  const route=routes[0]!,root=rootOf(route.card!);
  const after=turn.slice(turn.indexOf(route)+1).flatMap(({card})=>card&&rootOf(card)===root?[card]:[]);
  if(after.some(card=>!settled.has(card.status)||!['text','message','thinking'].includes(card.type)))return;
- const acknowledgements=after.filter(card=>['text','message'].includes(card.type)&&card.content?.trim());
- if(acknowledgements.length===1)return {acknowledgement:acknowledgements[0]!,summary};
+ return after.filter(card=>['text','message'].includes(card.type)&&card.content?.trim());
+}
+
+export type PilotSummarySlot = {
+ id:string;
+ round?:SpecialistConversation;
+ final?:Message;
+ acknowledgement?:AICard;
+ acknowledgements?:AICard[];
+};
+
+/** Draft packets and the saved message claim one slot, including when either
+ * the conversation snapshot or its final message arrives first. */
+export function pilotSummarySlots(turn:readonly TranscriptEntry[],rounds:readonly SpecialistConversation[],replaceAcknowledgement:boolean):PilotSummarySlot[] {
+ const user=turn[0]?.message;
+ if(user?.role!=='user')return [];
+ const slots=new Map<string,PilotSummarySlot>();
+ for(const {message} of turn){
+  if(message?.role!=='assistant'||message.author||message.dispatch||message.sessionId!==user.sessionId||!message.text.trim())continue;
+  const dialogue=message.conversation;
+  if(dialogue?.kind==='summary'&&dialogue.summaryRequested===true&&dialogue.sourceMessageId===user.id||
+    message.jointReport?.kind==='summary'&&message.replyToMessageId===user.id)slots.set(message.id,{id:message.id,final:message});
+ }
+ for(const round of rounds){
+  const id=round.summary?.id??round.summaryMessageId;
+  if(!id||round.sessionId!==user.sessionId||round.sourceMessageId!==user.id||
+    !['summarizing','completed'].includes(round.state))continue;
+  slots.set(id,{...slots.get(id),id,round});
+ }
+ const claimed=new Set<string>();
+ return [...slots.values()].map(slot=>{
+  if(!replaceAcknowledgement)return slot;
+  const {round,final}=slot;
+  const taskId=round?.summary?.taskId??final?.jointReport?.taskId;
+  const roundId=final?.conversation?.id??(round?.kind!=='task-summary'?round?.id:undefined);
+  const acknowledgements=taskId?taskAcknowledgements(turn,taskId):roundId?dialogueAcknowledgements(turn,user,roundId):undefined;
+  const acknowledgement=acknowledgements?.at(-1);
+  if(!acknowledgement||claimed.has(acknowledgement.id))return slot;
+  claimed.add(acknowledgement.id);
+  return {...slot,acknowledgement,acknowledgements};
+ });
 }
 
 /** Retire only a proven Pilot handoff preamble, after its actual reply arrives.

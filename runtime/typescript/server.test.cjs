@@ -29,6 +29,8 @@ async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = 
   const backgroundChildGate = new Promise((resolve) => { releaseBackgroundChild = resolve; });
   let releaseWatchdogWorker, holdingWatchdogWorker=false;
   const watchdogGate=new Promise(resolve=>{releaseWatchdogWorker=resolve;});
+  let finishJointSummary;
+  const jointSummaryGate=new Promise(resolve=>{finishJointSummary=resolve;});
   const requests = [];
   const requestAuthorizations = [];
   const target = join(home, "approved.txt");
@@ -109,14 +111,17 @@ async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = 
     }
     res.writeHead(200, { "Content-Type": "text/event-stream" });
     const echo = mode === 'magpie-secret' ? req.headers.authorization?.replace(/^Bearer /, '') : undefined;
+    const streamingJointSummary=mode==='super-joint-contribution'&&delta.content==='甲、乙两个目录均已完成本次核对。';
     const deltas = echo ? [{content: 'prefix ' + echo.slice(0, 13)}, {content: echo.slice(13) + ' suffix'}] :
       mode === "secret"
         ? [{ content: "prefix synthetic-secret-" }, { content: "no-real-credential suffix" }]
-        : [delta];
-    for (const delta of deltas)
+        : streamingJointSummary?[{content:'甲、乙两个目录'},{content:'均已完成本次核对。'}]:[delta];
+    for (const [index, delta] of deltas.entries()){
       res.write(
         `data: ${JSON.stringify({ id: "fixture", object: "chat.completion.chunk", created: 1, model: "fixture", choices: [{ index: 0, delta: { role: "assistant", ...delta }, finish_reason: null }] })}\n\n`,
       );
+      if(streamingJointSummary&&index===0)await jointSummaryGate;
+    }
     res.write(
       `data: ${JSON.stringify({ id: "fixture", object: "chat.completion.chunk", created: 1, model: "fixture", choices: [{ index: 0, delta: {}, finish_reason: tool ? "tool_calls" : "stop" }], usage: { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 } })}\n\n`,
     );
@@ -160,6 +165,7 @@ async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = 
   t.after(async () => {
     releaseBackgroundChild();
     releaseWatchdogWorker();
+    finishJointSummary();
     await app.close();
     await new Promise((resolve) => provider.close(resolve));
   });
@@ -204,6 +210,7 @@ async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = 
     enableCodexFixture:async()=>{usesCodexFixture=true;await prepareCodexProtocolFixture(app,mode);},
     get holdingWatchdogWorker(){return holdingWatchdogWorker;},
     releaseWatchdogWorker,
+    finishJointSummary,
     requestAuthorizations,
     gatewayURL: `http://127.0.0.1:${provider.address().port}/v1`,
     failWorkerRequests() { failWorkerRequests = true; },
@@ -1289,12 +1296,42 @@ test("two specialist channels share one task, retain their own evidence and rece
   }
   const question=(await api("/api/sessions/"+b.sessionId+"/ai")).question;
   await api("/api/sessions/"+a.sessionId+"/ai/answer","POST",{id:question.id,answers:{review:["提交"]}},409);
-  await api("/api/sessions/"+b.sessionId+"/ai/answer","POST",{id:question.id,answers:{review:["提交"]}});
+  const summaryStream=new AbortController();
+  const summaryEvents=await fetch(f.app.origin+eventPath,{headers:{Authorization:`Bearer ${f.app.token}`},
+    signal:AbortSignal.any([summaryStream.signal,AbortSignal.timeout(15000)])});
+  let packet;
+  const firstSummary=async()=>{
+    let buffer='';
+    const decoder=new TextDecoder();
+    for await(const chunk of summaryEvents.body){
+      buffer+=decoder.decode(chunk,{stream:true});
+      const frames=buffer.split('\n\n');buffer=frames.pop();
+      for(const frame of frames){
+        const data=frame.split('\n').find(line=>line.startsWith('data: '));
+        const event=data&&JSON.parse(data.slice(6));
+        if(event?.pilotSummaryText)return event;
+      }
+    }
+  };
+  try{
+    await api("/api/sessions/"+b.sessionId+"/ai/answer","POST",{id:question.id,answers:{review:["提交"]}});
+    packet=await firstSummary();
+    assert.equal(packet.sessionId,pilot);
+    assert.equal(packet.conversationProgress,true);
+    assert.equal(packet.pilotSummaryText.text,'甲、乙两个目录');
+    const during=await api(path),round=during.conversations.find(item=>item.id===packet.pilotSummaryText.roundId);
+    assert.equal(round.state,'summarizing');
+    assert.deepEqual(round.summary.preview,{seq:packet.seq,text:packet.pilotSummaryText.text});
+    assert.equal((await api('/api/sessions/'+pilot+'/snapshot')).messages.some(message=>message.jointReport?.kind==='summary'),false);
+  }finally{summaryStream.abort();f.finishJointSummary();}
   const completed=await until(()=>api(path), s=>s.workers.every(w=>w.task.collaboration?.state==="completed" && w.assignmentState==="parked"));
   const receipt=completed.workers[0].task.collaboration.reportId;
   assert.ok(receipt);
   const finalized=await until(()=>api('/api/sessions/'+pilot+'/snapshot'),snapshot=>snapshot.messages.some(message=>message.jointReport?.kind==='summary'));
   const conclusion=finalized.messages.find(message=>message.jointReport?.kind==='summary');
+  const done=(await api(path)).conversations.find(round=>round.id===packet.pilotSummaryText.roundId);
+  assert.equal(done.summary.id,conclusion.id);
+  assert.equal(done.summary.preview,undefined);
   assert.deepEqual(conclusion.jointReport,{taskId:a.task.taskId,reportId:receipt,kind:'summary'});
   assert.equal(conclusion.replyToMessageId,finalized.messages.find(message=>message.role==='user').id);
   assert.equal(conclusion.text,'甲、乙两个目录均已完成本次核对。');

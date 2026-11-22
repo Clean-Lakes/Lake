@@ -60,21 +60,27 @@ test('synthesis animates the existing Pilot identity only in the originating tur
    {id:'next',sessionId:'pilot',role:'user',text:'再检查一次',createdAt:at(4)},
   ],
   ai:view('completed',{cards:[
-   {id:'handoff',type:'message',status:'completed',content:'已安排核对。',at:at(1),data:{source_message_id:'source'}},
-   {id:'next-reply',type:'message',status:'completed',content:'收到新的请求。',at:at(5),data:{source_message_id:'next'}},
+   {id:'handoff',type:'message',status:'completed',content:'已安排核对。',at:at(2),data:{source_message_id:'source',root_turn_id:'source-root'}},
+   {id:'next-reply',type:'message',status:'completed',content:'收到新的请求。',at:at(5),data:{source_message_id:'next',root_turn_id:'next-root'}},
   ]}),
  } as SessionSnapshot;
  const round:SpecialistConversation={id:'round',kind:'task-summary',projectId:'p',sessionId:'pilot',sourceMessageId:'source',
-  state:'summarizing',title:'复测结论',createdAt:at(3),deadlineAt:at(30),members:[]};
+  state:'summarizing',title:'复测结论',createdAt:at(3),deadlineAt:at(30),summaryRequested:true,members:[]};
  const render=(change:Partial<SpecialistConversation>={},pilotConnected=true)=>{
+  const current={...round,...change},task=current.kind==='task-summary';
+  const assignments=['db','ops'].map(roleId=>({roleId,workerId:roleId+'-worker',sessionId:roleId+'-session',dispatch:{state:'queued'}}));
+  const operation={id:'route',type:'operation',status:'completed',at:at(1),title:task?'route_work':'convene_specialists',
+   content:JSON.stringify(task?{eventId:'event',partKey:'check',action:'create',taskId:'task',assignments}:current),
+   data:{...snapshot.ai!.cards[0]!.data as object,arguments:{event_id:'event',part_key:'check',action:'create',role_ids:['db','ops']}}};
   const pilotWorkspace:SuperWorkspace={active:true,project:{projectId:'p',routerSessionId:'pilot',version:1},workers:[],
-   conversations:[{...round,...change}]};
-  return renderToStaticMarkup(createElement(AITranscript,{snapshot,pilotWorkspace,pilotConnected,assistantIdentity:{name:'Pilot',pilot:true}}));
+   conversations:[{...current,summary:{id:'conclusion',taskId:task?'task':undefined}}]};
+  const view={...snapshot,ai:{...snapshot.ai!,cards:[operation,...snapshot.ai!.cards]}};
+  return renderToStaticMarkup(createElement(AITranscript,{snapshot:view,pilotWorkspace,pilotConnected,assistantIdentity:{name:'Pilot',pilot:true}}));
  };
  for(const kind of ['task-summary',undefined] as const){
   const html=render({kind});
   assert.equal((html.match(/data-motion="working"/g)??[]).length,1);
-  assert.equal((html.match(/data-live-motion="active"/g)??[]).length,1);
+  assert.equal((html.match(/data-live-motion="active"/g)??[]).length,2);
   assert.match(html,/data-conversation-entry="handoff"[^>]*><div class="response-identity"><span[^>]+><span[^>]+data-motion="working"/);
  }
  for(const change of [{state:'queued'},{state:'completed'},{state:'failed'},{state:'cancelled'},

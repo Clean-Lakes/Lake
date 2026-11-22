@@ -18,7 +18,7 @@ import { overlapsPrivateStorage } from "./local-shell-profile";
 import { setTimeout as delay } from "node:timers/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import type { ToolEntry, ToolExecutionContext } from "./sdk";
-import type { AIApproval, AIQuestionRequest, GatewayInstructionStatus, Message, SessionSnapshot, SpecialistChannelInfo,
+import type { AIApproval, AIQuestionRequest, GatewayInstructionStatus, Message, SessionEvent, SessionSnapshot, SpecialistChannelInfo,
   SpecialistChannelPage, SpecialistQuestion, SuperProject, SuperTask, SuperWorker, SuperWorkspace } from "../../web-agent/shared/contracts";
 import type { GatewaySpecialistRef, GatewayConnection, GatewayMessage, GatewayMessageInput, GatewayMessagePage } from "../../web-agent/shared/contracts";
 import type { AgentHost, HostProfile, HostToolContext, TurnOutcome } from "./agent-host";
@@ -2626,10 +2626,11 @@ export class LakeSuperagent implements AgentHost {
     }
     return snapshot;
   }
-  changed(sessionId: string) {
-    // A conversation member has its own stream. Pilot and the role channel
-    // only need the round's state changes and its committed public reply.
-    if(this.conversations.ownsSession(sessionId))return;
+  changed(sessionId: string, event?:SessionEvent) {
+    if(this.conversations.ownsSession(sessionId)){
+      this.conversations.publishSummaryText(event);
+      return;
+    }
     const worker = this.workerFor(sessionId);
     if (!worker) return;
     const goal = this.ledger.get(worker.taskId), view = this.store.view(sessionId);

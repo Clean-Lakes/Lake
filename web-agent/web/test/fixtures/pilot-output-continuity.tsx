@@ -22,7 +22,8 @@ let stage: Stage = 'idle', cursor = 50;
 let network: Network = 'connected';
 const streams = new Set<FixtureStream>();
 const workerText=new Map<string,string>();
-let workerSnapshotReads=0;
+let workerSnapshotReads=0,pilotSnapshotReads=0;
+let summaryPreview:{seq:number;text:string}|undefined;
 
 function workers(): SuperWorker[] {
   if (dialogue || stage === 'idle' || stage === 'started') return [];
@@ -43,6 +44,7 @@ function dialogueRound():SpecialistConversation {
   const settled=stage==='closing'||stage==='finished';
   return {id:'dialogue-round',projectId:project,sessionId:router,sourceMessageId:source.id,title:'专员回应样例',
     state:stage==='finished'?'completed':settled?'summarizing':'running',createdAt:at(10),deadlineAt:at(120_000),summaryRequested:true,
+    summary:{id:'dialogue-summary',preview:settled&&stage!=='finished'?summaryPreview:undefined},
     members:names.map((roleName,index)=>{
       const replied=settled&&index!==7||stage==='first-report'&&index===0||stage==='second-report'&&index<2;
       const failed=settled&&index===7;
@@ -148,12 +150,14 @@ window.fetch=async(input,init)=>{
       ...(dialogue&&stage!=='idle'?{conversations:[dialogueRound()]}:{}),cursor};
     if(taskSummary&&(stage==='reports-delivered'||stage==='finished'))value.conversations=[{
       id:'ops-summary',kind:'task-summary',projectId:project,sessionId:router,sourceMessageId:source.id,title:'核对样例记录',
-      members:[],state:stage==='finished'?'completed':'summarizing',createdAt:at(1000),deadlineAt:at(120_000)}];
+      members:[],state:stage==='finished'?'completed':'summarizing',createdAt:at(1000),deadlineAt:at(120_000),summaryRequested:true,
+      summary:{id:'task-conclusion',taskId:'output-task',preview:stage==='finished'?undefined:summaryPreview}}];
     return json(value);
   }
   if (path.endsWith('/snapshot')) {
     const id=decodeURIComponent(path.split('/')[3]??'');
     if(id!==router)workerSnapshotReads++;
+    else pilotSnapshotReads++;
     if(id!==router&&network==='worker-outage')return json({error:'模拟专员快照失败'},503);
     const base: SessionSnapshot=await (await baseFetch(`/api/sessions/${router}/snapshot`)).json();
     return json(snapshot(base,workers().find(worker=>worker.sessionId===id)));
@@ -165,7 +169,13 @@ window.fetch=async(input,init)=>{
 
 Object.assign(window,{pilotOutputQA:{transport(){
   return {workerScopes:[...streams].filter(stream=>stream.workers.size).map(stream=>[...stream.workers]),
-    workerSnapshotReads,directWorkers:[...streams].filter(stream=>stream.session.startsWith('output-worker-')).length};
+    workerSnapshotReads,pilotSnapshotReads,directWorkers:[...streams].filter(stream=>stream.session.startsWith('output-worker-')).length};
+},summaryText(text:string){
+  const seq=++cursor;
+  summaryPreview={seq,text};
+  const event:SessionEvent={sessionId:router,seq,type:'specialist',createdAt:at(1200),conversationProgress:true,
+    pilotSummaryText:{roundId:dialogue?'dialogue-round':'ops-summary',text}};
+  for(const stream of streams)stream.publish(event);
 },workerText(index:number,text:string){
   const worker=workers()[index];
   if(!worker)return;

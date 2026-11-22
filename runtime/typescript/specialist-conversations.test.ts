@@ -13,8 +13,9 @@ async function fixture(t:{after(fn:()=>Promise<void>):void},count=3){
  const roles:ConversationRole[]=Array.from({length:count},(_,i)=>({id:`role-${i}`,projectId:project.id,name:`干员${i+1}`,duties:'回应本人的讨论',revision:1}));
  for(const role of roles)store.put('superRoles',role.id,role);
  const requests:{sessionId:string;input:any}[]=[],aborts:string[]=[],notices:string[]=[];
- let clock=Date.now(),denied=false,sendGate:Promise<void>|undefined,abortGate:Promise<void>|undefined;
- const agents={redact:(v:string)=>v,publish(){},send:async(sessionId:string,_text:string,options:any)=>{requests.push({sessionId,input:JSON.parse(options.input)});const gate=sendGate;sendGate=undefined;await gate;},abort:async(sessionId:string)=>{aborts.push(sessionId);const gate=abortGate;abortGate=undefined;await gate;}};
+ let clock=Date.now(),denied=false,pilotRunning=false,sendGate:Promise<void>|undefined,abortGate:Promise<void>|undefined;
+ const agents={redact:(v:string)=>v,publish(){},isRunning:(sessionId:string)=>sessionId===pilot.id&&pilotRunning,
+  send:async(sessionId:string,_text:string,options:any)=>{requests.push({sessionId,input:JSON.parse(options.input)});const gate=sendGate;sendGate=undefined;await gate;},abort:async(sessionId:string)=>{aborts.push(sessionId);const gate=abortGate;abortGate=undefined;await gate;}};
  const ports:ConstructorParameters<typeof SpecialistConversations>[2]={clock:()=>clock,check:()=>{if(denied)throw new HttpError(403,'denied');},channel:(role:ConversationRole)=>{
   const id='channel-'+role.id;if(!store.get('sessions',id))store.put('sessions',id,{...store.createSession(project.id),id});return id;
  },notify:(session:string)=>notices.push(session),schedule(){}};
@@ -28,6 +29,7 @@ async function fixture(t:{after(fn:()=>Promise<void>):void},count=3){
  const settle=(sessionId:string,response?:string,error?:string)=>{store.put('views',sessionId,{...store.view(sessionId),status:error?'failed':'completed'});host.settled(sessionId,{response,error});};
  t.after(async()=>{await host.close();store.db.close();await rm(home,{recursive:true,force:true});});
  return {store,project,pilot,roles,event,input,requests,aborts,notices,ports,get host(){return host;},start,admit,pump,settle,
+  routeRunning:(running:boolean)=>{pilotRunning=running;store.put('views',pilot.id,{...store.view(pilot.id),sourceMessageIds:[event.messageId]});},
   tick:(ms:number)=>{clock+=ms;},deny:()=>{denied=true;},restart:()=>{host=new SpecialistConversations(store,agents as any,ports);},
   holdSend:()=>{let release!:()=>void;sendGate=new Promise<void>(resolve=>{release=resolve;});return release;},
   holdAbort:()=>{let release!:()=>void;abortGate=new Promise<void>(resolve=>{release=resolve;});return release;}};
@@ -42,7 +44,9 @@ test('a frozen invitation wakes independent speakers within shared capacity, del
  for(const request of f.requests){const profile=f.host.profile(request.sessionId)!;assert.deepEqual(profile.allowlist,[]);assert.deepEqual(profile.tools,[]);assert.equal(profile.subagents,false);await assert.rejects(profile.invoke!({} as any,{},{} as any),/没有资源执行权限/);}
  f.settle(round.members[1].sessionId,'2，干员2到！');await f.pump();assert.equal(f.requests.length,3);
  f.settle(round.members[0].sessionId,'1，干员1到！');await f.pump();assert.equal(f.requests.length,3,'summary waits for the last recipient');
- f.settle(round.members[2].sessionId,'3，干员3到！');await f.pump();
+ f.routeRunning(true);f.settle(round.members[2].sessionId,'3，干员3到！');await f.pump();
+ assert.equal(f.requests.length,3,'summary waits until the original Pilot reply settles');
+ f.routeRunning(false);await f.pump();
  const summary=f.requests.at(-1)!;assert.equal(summary.input.replied,3);assert.equal(summary.input.total,3);
  const replies=f.store.messages(f.pilot.id);assert.equal(replies.length,3);
  assert.deepEqual(new Set(replies.map(m=>m.author?.roleId)),new Set(f.roles.map(r=>r.id)));

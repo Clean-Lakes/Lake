@@ -1,4 +1,4 @@
-import type { AIView, Message, SpecialistConversation, SpecialistConversationMember } from '../../web-agent/shared/contracts';
+import type { AIView, Message, SessionEvent, SpecialistConversation, SpecialistConversationMember } from '../../web-agent/shared/contracts';
 import type { LakeAgents } from './agent';
 import type { HostProfile, TurnOutcome } from './agent-host';
 import { describeTurnFailure, type TurnFailure } from './model-errors';
@@ -11,7 +11,7 @@ import {maxExternalConversationRuns} from './acp/types';
 export type ConversationRole = { id:string; projectId:string; name:string; duties:string; revision:number; deletedAt?:string;execution?:AgentBackendRef;avatarId?:LakeAvatarName };
 type Member = SpecialistConversationMember & { roleSnapshot:ConversationRole; reply?:string };
 type TaskSummary = {taskId:string;reportId:string;reports:{messageId:string;outcome?:'completed'|'partial'}[]};
-type Round = Omit<SpecialistConversation, 'members'> & {
+type Round = Omit<SpecialistConversation, 'members'|'summary'> & {
   eventId:string; requestHash:string; quote:string; instruction:string; members:Member[];
   dialogue?:{speaker:string;text:string}[];
   taskSummary?:TaskSummary;
@@ -19,6 +19,7 @@ type Round = Omit<SpecialistConversation, 'members'> & {
 };
 const waiting = (member:Member) => member.state === 'queued' || member.state === 'running';
 const open = (round:Round) => ['queued','running','summarizing'].includes(round.state);
+const summaryId = (round:Round) => 'conversation_summary_'+digest(round.id).slice(0,32);
 const previousFailureLabel = '回应失败，未收到完整回复';
 function modelFailureReason(failure?:TurnFailure) {
   if(failure?.source!=='provider'&&failure?.source!=='network')return;
@@ -160,7 +161,9 @@ export class SpecialistConversations {
   }
   private view(round:Round):SpecialistConversation {
     const {eventId,requestHash,quote,instruction,dialogue,taskSummary,summarySessionId,summaryDeadlineAt,members,...view}=round;
-    return {...view,members:members.map(({roleSnapshot,reply,...member})=>{
+    const text=this.summaryText(round);
+    return {...view,summary:round.summaryRequested?{id:summaryId(round),taskId:taskSummary?.taskId,
+      preview:text?{seq:this.store.cursor(summarySessionId),text}:undefined}:undefined,members:members.map(({roleSnapshot,reply,...member})=>{
       if(member.state==='failed'&&member.reason===previousFailureLabel){
         const execution=this.store.get<AIView>('views',member.sessionId);
         const diagnostic=execution?.status==='failed'?execution.cards.findLast(card=>
@@ -235,7 +238,7 @@ export class SpecialistConversations {
         if(!open(round)||round.state==='summarizing'||round.members.some(waiting))continue;
         if(!round.summaryRequested){round.state='completed';this.save(round);this.changed(round);continue;}
         if(globalCapacity()-this.running()<=0||projectCapacity(round.projectId)-this.running(round.projectId)<=0)continue;
-        if(round.taskSummary&&this.agents.isRunning(round.sessionId)&&this.store.view(round.sessionId).sourceMessageIds?.includes(round.sourceMessageId))continue;
+        if(this.agents.isRunning(round.sessionId)&&this.store.view(round.sessionId).sourceMessageIds?.includes(round.sourceMessageId))continue;
         try{this.check(round);}catch{await this.stopRound(round,'interrupted');continue;}
         round.state='summarizing';round.summaryDeadlineAt=new Date(this.time()+120000).toISOString();this.save(round);this.changed(round);
         const input=canonical(round.taskSummary?{taskId:round.taskSummary.taskId,reportId:round.taskSummary.reportId,
@@ -255,8 +258,27 @@ export class SpecialistConversations {
     }
   }
   ownsSession(sessionId:string){return !!this.store.get('superConversationSessions',sessionId);}
+  private summaryText(round:Round) {
+    if(round.state!=='summarizing')return;
+    const view=this.store.get<AIView>('views',round.summarySessionId);
+    if(!view?.rootTurnId||!['running','completed'].includes(view.status))return;
+    const parts=view.cards.filter(card=>card.type==='message'&&(card.data as {root_turn_id?:string}|undefined)?.root_turn_id===view.rootTurnId);
+    const text=view.status==='completed'?parts.at(-1)?.content??'':parts.map(card=>card.content).join('');
+    return bounded(text,32768).trimStart();
+  }
+  publishSummaryText(event?:SessionEvent) {
+    const update=event?.textUpdate;
+    if(!event||update?.target!=='card'||update.cardType!=='message')return;
+    const execution=this.execution(event.sessionId);
+    if(!execution||execution.member)return;
+    const {round}=execution,text=this.summaryText(round);
+    // The native text packet is already stored on the summary session. Relay
+    // only public prose. Workspace snapshots supply the latest prefix on reconnect.
+    if(text)this.agents.publish({seq:event.seq,sessionId:round.sessionId,type:'specialist',createdAt:event.createdAt,
+      conversationProgress:true,pilotSummaryText:{roundId:round.id,text}});
+  }
   private saveSummary(round:Round,reply:string|undefined,failure:string){
-    const key='conversation_summary_'+digest(round.id).slice(0,32);round.summaryMessageId=key;
+    const key=summaryId(round);round.summaryMessageId=key;
     const kind=reply?'summary':'notice';
     const metadata=round.taskSummary?{replyToMessageId:round.sourceMessageId,
       jointReport:{taskId:round.taskSummary.taskId,reportId:round.taskSummary.reportId,kind} as const}:

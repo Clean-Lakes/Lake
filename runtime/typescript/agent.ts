@@ -199,8 +199,9 @@ export class LakeAgents {
               ? "completed"
               : "idle";
     this.store.put("sessions", sessionId, session);
-    this.publish(this.store.event(sessionId, "session", extra));
-    this.host?.changed(sessionId);
+    const event=this.store.event(sessionId, "session", extra);
+    this.publish(event);
+    this.host?.changed(sessionId,event);
   }
   private card(view: AIView, cardId: string, type: string, title = "") {
     let card = view.cards.find((card) => card.id === cardId);
