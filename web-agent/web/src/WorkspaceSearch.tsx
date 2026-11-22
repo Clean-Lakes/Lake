@@ -51,7 +51,7 @@ export function WorkspaceSearch({projects, sessions, resources, canCreate, onCho
     if (entry) { dismiss(); onChoose(entry); }
     else if (index === entries.length && canCreate) { dismiss(); onNewSession(); }
   };
-  const row = (entry: SearchEntry, index: number) => <button key={`${entry.kind}-${entry.id}`} id={`workspace-search-option-${index}`} role="option" aria-selected={selected === index} type="button" tabIndex={-1} className="workspace-search-row" onPointerMove={() => setActive(index)} onClick={() => choose(index)}>
+  const row = (entry: SearchEntry, index: number) => <button key={`${entry.kind}-${entry.id}`} id={`workspace-search-option-${index}`} role="option" aria-selected={selected === index} type="button" tabIndex={-1} className="workspace-search-row" onClick={() => choose(index)}>
     {entry.kind === "resource" ? <ResourceIcon kind={entry.icon} size={17}/> : <Glyph name={entry.icon} size={17}/>}
     <span className="workspace-search-label">{entry.label}</span><span className="workspace-search-project">{entry.projectName}</span>
     {selected === index && <kbd>↵</kbd>}
@@ -80,7 +80,7 @@ export function WorkspaceSearch({projects, sessions, resources, canCreate, onCho
       {!!chats.length && <div role="group" aria-labelledby="workspace-search-chats"><div className="workspace-search-group" id="workspace-search-chats">{query.trim() ? "会话" : "最近会话"}</div>{chats.map((entry, index) => row(entry, index))}</div>}
       {!!assets.length && <div role="group" aria-labelledby="workspace-search-assets"><div className="workspace-search-group" id="workspace-search-assets">资源</div>{assets.map((entry, index) => row(entry, chats.length + index))}</div>}
       {!entries.length && <p className="workspace-search-empty" role="status">{query.trim() ? "没有找到匹配的会话或资源" : "还没有会话"}</p>}
-      {canCreate && <div role="group" aria-labelledby="workspace-search-actions"><div className="workspace-search-group" id="workspace-search-actions">快捷操作</div><button type="button" role="option" id={`workspace-search-option-${entries.length}`} aria-selected={selected === entries.length} tabIndex={-1} className="workspace-search-row" onPointerMove={() => setActive(entries.length)} onClick={() => choose(entries.length)}><Glyph name="edit" size={17}/><span className="workspace-search-label">新对话</span><kbd>{/Mac/.test(navigator.platform) ? "⌘N" : "Ctrl N"}</kbd></button></div>}
+      {canCreate && <div role="group" aria-labelledby="workspace-search-actions"><div className="workspace-search-group" id="workspace-search-actions">快捷操作</div><button type="button" role="option" id={`workspace-search-option-${entries.length}`} aria-selected={selected === entries.length} tabIndex={-1} className="workspace-search-row" onClick={() => choose(entries.length)}><Glyph name="edit" size={17}/><span className="workspace-search-label">新对话</span><kbd>{/Mac/.test(navigator.platform) ? "⌘N" : "Ctrl N"}</kbd></button></div>}
     </div>
   </dialog>;
 }
