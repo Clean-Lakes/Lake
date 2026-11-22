@@ -100,6 +100,19 @@ async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = 
     if (mode === "memory-native-error" && nativeMemory && JSON.stringify(request.messages).includes("You are now acting as the memory extraction subagent")) {
       res.writeHead(401,{"Content-Type":"application/json"});res.end(JSON.stringify({error:{message:"synthetic-memory-provider-failure",type:"authentication_error"}}));return;
     }
+    if (mode === 'draft-completion') {
+      const content = request.messages.at(-1).content;
+      const draft = JSON.parse(typeof content === 'string' ? content : content.map(part => part.text).join('')).draft;
+      if (draft === '较早的草稿') {
+        await new Promise(resolve => {
+          const timer = setTimeout(resolve, 1800);
+          res.once('close', () => { clearTimeout(timer); resolve(); });
+        });
+        if (res.destroyed) return;
+      }
+      delta = {content: draft === '输出含凭据' ? '{"suffix":"synthetic-secret-no-real-credential"}' :
+        JSON.stringify({suffix: '运行状态和最近一次异常。'})};
+    }
     if (request.stream !== true) {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({id:"fixture",object:"chat.completion",created:1,model:"fixture",choices:[{index:0,
@@ -226,6 +239,28 @@ async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = 
     },
   };
 }
+
+test('draft completion uses only current text, cancels stale requests, and never submits a message', async t => {
+  const f = await fixture(t, 'draft-completion');
+  const {modelId} = await f.api('/api/bootstrap');
+  const endpoint = `/api/sessions/${f.session.id}/completion`;
+  const complete = (text, expectedModel = modelId) => f.api(endpoint, 'POST', {text, modelId: expectedModel});
+  for (const text of ['', '密码。', 'api_key=synthetic', 'synthetic-secret-no-real-credential', '@数据库'])
+    assert.equal((await complete(text)).suffix, '');
+  assert.equal((await complete('查看样例服务','stale-model')).suffix, '');
+  assert.equal(f.calls, 0, 'ineligible drafts and stale selections never reach the provider');
+
+  const prior = complete('较早的草稿');
+  await until(() => f.calls, count => count === 1);
+  assert.deepEqual(await complete('查看样例服务'), {suffix:'运行状态和最近一次异常。',modelId});
+  assert.equal((await prior).suffix, '', 'a newer draft supersedes the in-flight request');
+  assert.equal((await complete('输出含凭据')).suffix, '');
+  const request = f.requests[1];
+  assert.deepEqual(request.messages.map(message=>message.role), ['system','user']);
+  assert.deepEqual(JSON.parse(request.messages[1].content), {draft:'查看样例服务'});
+  assert.ok(!request.tools?.length);
+  assert.deepEqual(f.app.store.messages(f.session.id), []);
+});
 
 async function writeMagpie(f, updates = {}) {
   const value = {model: 'magpie-first', baseURL: f.gatewayURL, key: 'synthetic-magpie-private-only', contextWindow: 64000, maxOutput: 2048,
