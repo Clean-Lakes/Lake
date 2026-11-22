@@ -5,6 +5,8 @@ import {createHash} from 'node:crypto';
 import {JsonRpcProcess} from './process';
 import {parse} from 'smol-toml';
 import {HttpError} from '../store';
+import {isCodexModelId,isCodexReasoningEffort} from './codex-profile';
+import type {CodexModelOption} from './types';
 
 const hash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const object=(value:unknown):Record<string,any>=>value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,any>:{};
@@ -12,7 +14,30 @@ function merge(base:Record<string,any>,override:Record<string,any>){
   const result={...base};for(const [key,value] of Object.entries(override))result[key]=value&&typeof value==='object'&&!Array.isArray(value)?merge(object(result[key]),value):value;return result;
 }
 export type CodexLocalInfo={home:string;fingerprint:string;environment:NodeJS.ProcessEnv;mcpIds:string[];hooks:Record<string,unknown>};
-export type CodexLocalConfiguration={model:string;provider:string;reasoningEffort?:string;authenticated:boolean;authMode:'chatgpt'|'api_key'|'provider'|'none';mcpIds:string[];hooks:Record<string,unknown>;environment:NodeJS.ProcessEnv};
+export type CodexLocalConfiguration={model:string;models?:CodexModelOption[];provider:string;reasoningEffort?:string;authenticated:boolean;authMode:'chatgpt'|'api_key'|'provider'|'none';mcpIds:string[];hooks:Record<string,unknown>;environment:NodeJS.ProcessEnv};
+
+async function listModels(connection:JsonRpcProcess,signal:AbortSignal) {
+  const models=new Map<string,CodexModelOption>(),cursors=new Set<string>();
+  let cursor:string|undefined,defaultModel:string|undefined;
+  do {
+    const page=await connection.request('model/list',{limit:100,cursor},signal);
+    for(const raw of Array.isArray(page?.data)?page.data:[]){
+      const option=object(raw),id=option.model??option.id;
+      if(!isCodexModelId(id)||option.hidden===true||models.has(id))continue;
+      const efforts=Array.isArray(option.supportedReasoningEfforts)?option.supportedReasoningEfforts:[];
+      const reasoningEfforts=[...new Set(efforts.map(item=>object(item).reasoningEffort).filter(isCodexReasoningEffort))];
+      const defaultReasoningEffort=isCodexReasoningEffort(option.defaultReasoningEffort)?option.defaultReasoningEffort:undefined;
+      models.set(id,{id,reasoningEfforts,defaultReasoningEffort});
+      if(option.isDefault===true)defaultModel=id;
+    }
+    cursor=typeof page?.nextCursor==='string'&&page.nextCursor?page.nextCursor:undefined;
+    if(cursor){
+      if(cursors.has(cursor))throw new Error('Codex 模型列表重复返回同一页');
+      cursors.add(cursor);
+    }
+  }while(cursor);
+  return {models:[...models.values()],defaultModel};
+}
 
 /** Local secrets are registered in memory only. No source config/auth body is persisted. */
 export class CodexLocalSource {
@@ -61,7 +86,8 @@ export class CodexLocalSource {
       const value=process.env[name];if(value){env[name]=value;this.registerSecret(value);}
     }
   }
-  async inspect(node:string,engine:string,directory:string,overrides:string[],signal:AbortSignal):Promise<CodexLocalConfiguration>{
+  async inspect(node:string,engine:string,directory:string,overrides:string[],signal:AbortSignal,
+    options:{discoverModels?:boolean;knownDefaultModel?:string}={}):Promise<CodexLocalConfiguration>{
     const source=this.current(),env:NodeJS.ProcessEnv={...source.environment,TMPDIR:directory};
     const connection=new JsonRpcProcess({executable:node,args:[engine,...overrides,'app-server'],cwd:directory,env});
     try{
@@ -73,12 +99,24 @@ export class CodexLocalSource {
       this.providerEnvironment(providerConfig,env);
       if(providerConfig.env_key&&!env[providerConfig.env_key])throw new HttpError(409,'本机 Codex provider 所需的环境凭据不可用，请检查本机 Codex 配置');
       const account=await connection.request('account/read',{refreshToken:false},signal);
-      let model=typeof config.model==='string'?config.model:'';
-      if(!model){const models=await connection.request('model/list',{},signal);model=models.data?.find((item:any)=>item.isDefault)?.id??'';}
-      if(!model)throw new HttpError(409,'本机 Codex 没有返回可用的默认模型');
       const authenticated=account.requiresOpenaiAuth===false||!!account.account;
       const authMode=account.account?.type==='chatgpt'?'chatgpt':account.account?.type==='apiKey'?'api_key':account.requiresOpenaiAuth===false?'provider':'none';
-      return {model,provider,reasoningEffort:typeof config.model_reasoning_effort==='string'?config.model_reasoning_effort:undefined,authenticated,authMode,mcpIds:Object.keys(object(config.mcp_servers)),hooks:object(config.hooks),environment:env};
+      let model=isCodexModelId(config.model)?config.model:undefined;
+      let models:CodexModelOption[]|undefined;
+      if((options.discoverModels&&authenticated)||(!model&&!options.knownDefaultModel)){
+        try {
+          const catalog=await listModels(connection,AbortSignal.any([signal,AbortSignal.timeout(12_000)]));
+          models=catalog.models;
+          model??=catalog.defaultModel;
+        }catch{
+          signal.throwIfAborted();
+          // A configured default is usable even when the provider has no catalog.
+        }
+      }
+      model??=options.knownDefaultModel;
+      if(!model)throw new HttpError(409,'本机 Codex 没有返回可用的默认模型');
+      return {model,models,provider,reasoningEffort:isCodexReasoningEffort(config.model_reasoning_effort)?config.model_reasoning_effort:undefined,
+        authenticated,authMode,mcpIds:Object.keys(object(config.mcp_servers)),hooks:object(config.hooks),environment:env};
     }finally{await connection.close();}
   }
 }

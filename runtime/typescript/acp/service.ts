@@ -13,7 +13,7 @@ import { openToolBridge } from './bridge';
 import {privatePath} from './private';
 import {codexConfig,tomlValue} from './codex-profile';
 import {ExternalPublicText} from './public-text';
-import type { CodexConnectionProbe,ExternalActor,ExternalAgentProfile,ExternalEvent,ExternalResult,ExternalRun } from './types';
+import type { CodexConnectionProbe,CodexModelOption,ExternalActor,ExternalAgentProfile,ExternalEvent,ExternalResult,ExternalRun } from './types';
 import {maxExternalConversationRuns} from './types';
 
 function ownLauncher(flag:string,args:string[]=[]){return {executable:process.execPath,args:isSea()?[flag,...args]:[__filename,flag,...args]};}
@@ -28,7 +28,8 @@ export class LakeExternalAgents {
       run.state=run.dispatchPhase==='not_sent'?'interrupted':'unknown';run.updatedAt=now();store.put('acpRuns',run.id,run);
     }
   }
-  private async launch(profile:ExternalAgentProfile,directory:string,signal:AbortSignal,mcp?:{command:string;args:string[]},model?:string,purpose:'run'|'probe'='run'):Promise<AgentLaunch>{
+  private async launch(profile:ExternalAgentProfile,directory:string,signal:AbortSignal,mcp?:{command:string;args:string[]},model?:string,purpose:'run'|'probe'='run'):
+    Promise<AgentLaunch & {localModel:string;models:CodexModelOption[]}>{
     if(process.platform!=='darwin')throw new HttpError(409,'当前平台的 Codex 工具隔离尚未验证');
     if(!profile.nodePath)throw new HttpError(409,'请先配置 Codex 使用的 Node 运行时');
     const engine=JSON.parse(await readFile(join(this.registry.runtimeRoot(),'node_modules/@openai/codex/package.json'),'utf8'));
@@ -37,11 +38,12 @@ export class LakeExternalAgents {
     const prepared=purpose==='probe'
       ? await this.registry.prepareConnection(profile,signal)
       : await this.registry.prepareLaunch(profile,signal,model);
-    const threadConfig={...codexConfig(prepared.home),
+    const threadConfig={...codexConfig(prepared.home,prepared.catalogPath),
       ...(purpose==='run'?{model:prepared.observed.model,model_reasoning_effort:profile.reasoningEffortOverride}:{}),
       mcp_servers:{...prepared.disabledMcp,...(mcp?{lake:mcp}:{})}};
     return {executable:prepared.command,args:[...prepared.args.slice(0,-1),'-c','mcp_servers='+tomlValue(threadConfig.mcp_servers),'app-server'],
-      cwd:directory,observed:prepared.observed,threadConfig,env:{...prepared.environment,TMPDIR:directory}};
+      cwd:directory,observed:prepared.observed,threadConfig,env:{...prepared.environment,TMPDIR:directory},
+      models:prepared.models,localModel:prepared.localModel};
   }
   async probe(projectId:string,agent:unknown,signal:AbortSignal){
     const profile=this.registry.get(projectId,agent),directory=await privatePath(this.store.data,'external-agents','probe',projectId,profile.id);
@@ -53,7 +55,8 @@ export class LakeExternalAgents {
       const capabilities=await transport.initialize(signal);
       if(this.registry.get(projectId,profile.id).revision!==profile.revision)throw new Error('本机 Codex 配置或账号已变化，请重新连接');
       const message=launch.observed.authenticated?'已连接本机 Codex，复用已有登录与配置':'本机 Codex 尚未登录，请先在 Codex 中完成登录后重新连接';
-      this.store.put<CodexConnectionProbe>('acpProbes',projectId+':'+profile.id,{connectionVersion:1,revision:profile.revision,authentication:'codex-local',ready:true,...launch.observed,capabilities,message});
+      this.store.put<CodexConnectionProbe>('acpProbes',projectId+':'+profile.id,{connectionVersion:1,revision:profile.revision,authentication:'codex-local',ready:true,
+        ...launch.observed,localModel:launch.localModel,models:launch.models,capabilities,message});
       return {ok:true,capabilities};
     }catch(error){
       const message=this.redact(error instanceof Error?error.message:'Codex 连接失败');

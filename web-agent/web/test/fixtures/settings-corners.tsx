@@ -21,17 +21,25 @@ const projectName=params.has('other-project')?'第二个测试项目':'隔离设
 const connection:GatewayConnection={id:'fixture-client',name:'研发使用',projectId,enabled:true,routing:{mode:'pilot'},createdAt:'2026-11-16T00:00:00Z',updatedAt:'2026-11-16T00:00:00Z'};
 const agentPath=`/api/projects/${projectId}/external-agents`;
 const preferenceKey=`fixture-codex-overrides:${projectId}`;
+const localModel='gpt-6.2-sol';
+const standardEfforts=['low','medium','high','xhigh','max','ultra'];
+const modelEffortOptions={
+ 'gpt-6.2-sol':standardEfforts,'gpt-6.2-astra':standardEfforts,'gpt-6.1-sol':standardEfforts,'gpt-6.1-terra':standardEfforts,
+ 'gpt-6-astra':standardEfforts,'gpt-6-sol':standardEfforts,'gpt-6-luna':standardEfforts.slice(0,-1),
+ 'gpt-5.6-sol':standardEfforts,'gpt-5.6-terra':standardEfforts,'gpt-5.6-luna':standardEfforts.slice(0,-1),
+};
 const agent:ExternalAgentStatus={id:'codex',projectId,name:'Codex',revision:1,enabled:true,installed:true,transportReady:true,assignmentReady:true,
- modelOptions:['gpt-6.1-sol','gpt-6.2-sol'],reasoningEffortOptions:['low','medium','high','xhigh','max','ultra'],
+ localModel,modelOptions:Object.keys(modelEffortOptions),modelEffortOptions,
  configPath:'/fixture/codex/config.toml',authMode:'chatgpt',updatedAt:connection.createdAt,
  ...JSON.parse(sessionStorage.getItem(preferenceKey)??'{}')};
 const agentStatus=()=>{
- const model=agent.modelOverride??'gpt-6.2-sol';
+ const model=agent.modelOverride??localModel;
  return {...agent,model,defaultTaskModel:model,reasoningEffort:agent.reasoningEffortOverride??'max'};
 };
 window.fetch=async(input,init)=>{
  const path=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href).pathname;
  const json=(data:unknown)=>new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json'}});
+ if(path===agentPath+'/codex/probe'&&init?.method==='POST')return json({ok:true});
  if(path===agentPath+'/codex/prepare'&&init?.method==='POST'){
   const {modelOverride,reasoningEffortOverride}=JSON.parse(String(init.body));
   Object.assign(agent,{modelOverride:modelOverride??undefined,reasoningEffortOverride:reasoningEffortOverride??undefined,revision:agent.revision+1});
