@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import type {ModelProvider} from '../../web-agent/shared/contracts';
 import type {ExternalAgentStatus} from '../../web-agent/shared/external-agents';
 import {chooseSpecialistExecution,specialistExecutionOptions} from './specialist-execution';
-import {codexModels} from './acp/codex-profile';
 
 const provider=(id='one'):ModelProvider=>({id,name:id,baseURL:'https://example.invalid/v1',protocol:'openai',enabled:true,keyConfigured:true,
   models:[{id:'a',name:'native-a',enabled:true,supportsImageInput:false,supportsImageOutput:false},
@@ -11,7 +10,7 @@ const provider=(id='one'):ModelProvider=>({id,name:id,baseURL:'https://example.i
 const codex=(patch:Partial<ExternalAgentStatus>={}):ExternalAgentStatus=>({id:'codex',projectId:'p',name:'Codex',revision:1,enabled:true,installed:true,transportReady:true,assignmentReady:true,model:'gpt-6.1-sol',updatedAt:'2026-11-12T00:00:00Z',...patch});
 const group=(execution:{kind:string;agent?:string})=>execution.kind==='native'?'native':execution.agent;
 
-test('specialist pool contains only configured text models and the ready pinned Codex model',()=>{
+test('specialist pool contains configured text models and models from the ready Codex connection',()=>{
   const normal=provider(),disabled={...provider('disabled'),enabled:false},missing={...provider('no-key'),keyConfigured:false};
   const unsupported={...provider('unsupported'),protocol:'not-an-adapter'},badURL={...provider('invalid-url'),baseURL:'https://user:password@example.invalid'};
   normal.models.push({...normal.models[0],id:'off',enabled:false},{...normal.models[0],id:'image',supportsImageOutput:true});
@@ -21,9 +20,10 @@ test('specialist pool contains only configured text models and the ready pinned 
   assert.equal(JSON.stringify(options).includes('password'),false);assert.equal(JSON.stringify(options).includes('baseURL'),false);
   for(const agent of [codex({enabled:false}),codex({assignmentReady:false})])
     assert.equal(specialistExecutionOptions([],[agent]).length,0);
-  const fallback=specialistExecutionOptions([],[codex({model:'unverified-model'})]);
-  assert.equal(fallback[0]?.modelName,codexModels.at(-1));
-  assert.throws(()=>chooseSpecialistExecution(fallback,{kind:'acp',modelId:'unverified-model'}),/没有符合要求/);
+  const discovered=specialistExecutionOptions([],[codex({model:'provider/local-model',modelOptions:['gpt-6.2-astra']})]);
+  assert.equal(chooseSpecialistExecution(discovered).model?.modelId,'provider/local-model');
+  assert.equal(chooseSpecialistExecution(discovered,{modelId:'gpt-6.2-astra'}).model?.modelId,'gpt-6.2-astra');
+  assert.throws(()=>chooseSpecialistExecution(discovered,{modelId:'unknown'}),/没有符合要求/);
   assert.equal(specialistExecutionOptions([{...provider('ollama'),protocol:'ollama',keyConfigured:false}]).length,2);
 });
 

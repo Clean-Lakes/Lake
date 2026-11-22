@@ -10,6 +10,11 @@ export type ExternalAgentProfile = CodexProjectOverrides & {
 export type ExternalAgentStatus = ExternalAgentProfile & PublicAgentStatus & {
   capabilities?: Record<string, unknown>;
 };
+export type CodexModelOption = {
+  id: string;
+  reasoningEfforts: string[];
+  defaultReasoningEffort?: string;
+};
 export type CodexConnectionProbe = {
   connectionVersion?: 1;
   revision: number;
@@ -17,6 +22,8 @@ export type CodexConnectionProbe = {
   ready: boolean;
   authenticated?: boolean;
   model?: string;
+  localModel?: string;
+  models?: CodexModelOption[];
   modelProvider?: string;
   reasoningEffort?: string;
   authMode?: ExternalAgentStatus['authMode'];

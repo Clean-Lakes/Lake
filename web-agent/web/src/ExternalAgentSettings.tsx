@@ -8,6 +8,12 @@ import {reasoningLabels} from './reasoningLabels';
 import './externalAgents.css';
 
 type Draft=ExternalAgentStatus & {npmPath:string;dirty:boolean};
+function modelEfforts(agent:ExternalAgentStatus,model=agent.modelOverride??agent.localModel??agent.model){
+  const options=agent.modelEffortOptions;
+  if(!options)return agent.reasoningEffortOptions??[];
+  return model&&Object.hasOwn(options,model)?options[model]:[];
+}
+
 export function ExternalAgentSettings({projectId,projectName,onBusyChange}:{projectId?:string;projectName?:string;onBusyChange:(value:boolean)=>void}){
   const [agents,setAgents]=useState<Draft[]>([]);
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(''),[error,setError]=useState(''),[message,setMessage]=useState('');
@@ -20,13 +26,20 @@ export function ExternalAgentSettings({projectId,projectName,onBusyChange}:{proj
     if(signal?.aborted||!mounted.current)return;
     setAgents(current=>catalog.agents.map(agent=>{
       const draft=current.find(row=>row.id===agent.id&&row.projectId===agent.projectId);
-      return draft?.dirty&&draft.revision===agent.revision?draft:{...agent,npmPath:agent.npmPath??'',dirty:false};
+      if(draft?.dirty&&draft.revision===agent.revision)return {...agent,npmPath:draft.npmPath,nodePath:draft.nodePath,
+        modelOverride:draft.modelOverride,reasoningEffortOverride:draft.reasoningEffortOverride,dirty:true};
+      return {...agent,npmPath:agent.npmPath??'',dirty:false};
     }));
   }
   useEffect(()=>{const cancel=new AbortController();setLoading(true);setError('');
     void load(cancel.signal).catch(cause=>{if(!cancel.signal.aborted)setError(readableError(cause));}).finally(()=>{if(!cancel.signal.aborted)setLoading(false);});
     return()=>cancel.abort();},[projectId]);
   const update=(id:string,patch:Partial<Draft>)=>setAgents(rows=>rows.map(row=>row.id===id?{...row,...patch,dirty:true}:row));
+  const selectModel=(agent:Draft,value:string)=>{
+    const modelOverride=value||undefined,effort=agent.reasoningEffortOverride;
+    const options=modelEfforts(agent,modelOverride??agent.localModel??agent.model);
+    update(agent.id,{modelOverride,reasoningEffortOverride:effort&&options.length&&!options.includes(effort)?undefined:effort});
+  };
   async function run(key:string,work:()=>Promise<unknown>,success:string){
     if(flight.current)return;flight.current=true;setBusy(key);setError('');setMessage('');
     try{await work();await load();if(mounted.current)setMessage(success);}
@@ -37,9 +50,13 @@ export function ExternalAgentSettings({projectId,projectName,onBusyChange}:{proj
     enabled:agent.enabled,expectedRevision:agent.revision,nodePath:agent.nodePath??'',npmPath:agent.npmPath,
     modelOverride:agent.modelOverride??null,reasoningEffortOverride:agent.reasoningEffortOverride??null,
   });
+  const refresh=async()=>{
+    const connected=agents.find(agent=>agent.projectId===projectId&&agent.enabled&&agent.installed);
+    if(connected)await api.probeExternalAgent(connected.projectId,connected.id);
+  };
   return <section id="agents-settings-panel" role="tabpanel" aria-labelledby="agents-settings-tab" className="model-conversation external-agent-settings">
     {!projectId?<p className="settings-note">请先选择项目，再配置外部 Agent。</p>:<>
-      <div className="external-agent-heading"><strong>{projectName||'当前项目'}</strong><span>Codex 连接</span><button className="button secondary" disabled={!!busy} onClick={()=>void run('refresh',()=>load(),'配置已刷新')}>刷新</button></div>
+      <div className="external-agent-heading"><strong>{projectName||'当前项目'}</strong><span>Codex 连接</span><button className="button secondary" disabled={!!busy} onClick={()=>void run('refresh',refresh,'配置已刷新')}>刷新</button></div>
       <p className="settings-note">专员的任务和协作回复统一使用此项目的 Codex 连接。修改连接配置会停止当前 Codex 调用。</p>
       {loading&&<p role="status">正在读取配置…</p>}
       {agents.map(agent=><article className="external-agent-panel" key={agent.id}>
@@ -53,18 +70,20 @@ export function ExternalAgentSettings({projectId,projectName,onBusyChange}:{proj
             <p>{[agent.authMode==='chatgpt'?'ChatGPT 登录':agent.authMode==='api_key'?'Codex API 登录':agent.authMode==='provider'?'本机服务配置':'登录状态待确认',
               agent.model,agent.reasoningEffort].filter(Boolean).join(' · ')}</p>
             <small>{agent.configPath||'自动读取本机 Codex 配置'}</small>
-            {agent.defaultTaskModel&&agent.defaultTaskModel!==agent.model&&<small>Lake 新任务默认使用 {agent.defaultTaskModel}</small>}
           </div>
           <label className="field-label">模型
-            <AppSelect label="Codex 模型" value={agent.modelOverride??''} onChange={event=>update(agent.id,{modelOverride:event.target.value||undefined})}>
+            <AppSelect label="Codex 模型" value={agent.modelOverride??''} onChange={event=>selectModel(agent,event.target.value)}>
               <option value="">跟随本机 Codex</option>
               {agent.modelOptions?.map(model=><option key={model} value={model}>{model}</option>)}
+              {agent.modelOverride&&!agent.modelOptions?.includes(agent.modelOverride)&&<option value={agent.modelOverride}>{agent.modelOverride}</option>}
             </AppSelect>
           </label>
           <label className="field-label">思考强度
             <AppSelect label="Codex 思考强度" value={agent.reasoningEffortOverride??''} onChange={event=>update(agent.id,{reasoningEffortOverride:event.target.value||undefined})}>
               <option value="">跟随本机 Codex</option>
-              {agent.reasoningEffortOptions?.map(effort=><option key={effort} value={effort}>{reasoningLabels[effort]??effort}</option>)}
+              {modelEfforts(agent).map(effort=><option key={effort} value={effort}>{reasoningLabels[effort]??effort}</option>)}
+              {agent.reasoningEffortOverride&&!modelEfforts(agent).includes(agent.reasoningEffortOverride)&&
+                <option value={agent.reasoningEffortOverride}>{reasoningLabels[agent.reasoningEffortOverride]??agent.reasoningEffortOverride}</option>}
             </AppSelect>
           </label>
           <div className="external-agent-path-status"><Glyph name={agent.nodePath&&agent.npmPath?'check':'code'} size={16}/><span>{agent.nodePath&&agent.npmPath?'运行路径已自动识别':'启用后自动识别运行路径'}</span></div>

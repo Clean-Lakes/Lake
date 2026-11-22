@@ -53,7 +53,7 @@ import type {AgentBackendRef,AgentExecutionSummary,SpecialistAgentAssignment} fr
 import type {ExternalRun} from './acp/types';
 import {resolveCodexRunOrigins} from './acp/run-origin';
 import {externalExecutionName} from '../../web-agent/shared/external-agents';
-import {codexModels,defaultCodexTaskModel} from './acp/codex-profile';
+import {isCodexModelId} from './acp/codex-profile';
 
 const questionResultBytes=131072;
 const questionResultBudget={maxInlineBytes:questionResultBytes,maxModelBytes:questionResultBytes,strategy:'truncate' as const,
@@ -748,7 +748,7 @@ export class LakeSuperagent implements AgentHost {
       if(!value.model||typeof value.model!=='object'||Array.isArray(value.model)||Object.keys(value.model).some(key=>!['modelId','providerId'].includes(key)))throw new HttpError(400,'模型引用无效');
       const ref=value.model as Record<string,unknown>;
       model={modelId:text(ref.modelId,'modelId',256),...(ref.providerId!==undefined?{providerId:text(ref.providerId,'providerId',256)}:{})};
-      if(model.providerId!==undefined||!codexModels.includes(model.modelId))throw new HttpError(400,'该模型不在当前 Codex 兼容目录中');
+      if(model.providerId!==undefined||!isCodexModelId(model.modelId))throw new HttpError(400,'Codex 模型引用无效');
     }
     const profile=this.agents.external.registry.get(projectId,'codex');
     return {kind:'acp',agent:profile.id,...(model?{model}:{})};
@@ -761,7 +761,8 @@ export class LakeSuperagent implements AgentHost {
     const registry=this.agents.external?.registry,profile=registry?.get(projectId,'codex');
     const probe=profile&&registry?.probe(projectId,'codex');
     const ready=process.platform==='darwin'&&!!profile?.enabled&&probe?.revision===profile.revision&&probe.authentication==='codex-local'&&probe.ready===true&&probe.authenticated===true;
-    return specialistExecutionOptions([],profile?[{...profile,name:'Codex',installed:ready,transportReady:ready,assignmentReady:ready,model:probe?.model}]:[]);
+    return specialistExecutionOptions([],profile?[{...profile,name:'Codex',installed:ready,transportReady:ready,assignmentReady:ready,
+      model:probe?.model,modelOptions:probe?.models?.map(option=>option.id)}]:[]);
   }
   private async refreshSpecialistConnection(projectId: string) {
     const adapter = this.agents.external;
@@ -776,7 +777,7 @@ export class LakeSuperagent implements AgentHost {
     let options=available??this.executionOptions(projectId, backend?.kind);
     if(backend?.model)options=options.filter(option=>canonical(option.execution.model)===canonical(backend.model));
     return chooseSpecialistExecution(options,{kind:backend?.kind,agent:backend?.kind==='acp'?'codex':undefined,
-      modelId:input.model_id,providerId:input.provider_id});
+      modelId:input.model_id??backend?.model?.modelId,providerId:input.provider_id});
   }
   private updatedExecution(role:Role,input:Record<string,any>,available?:SpecialistExecutionOption[]):AgentBackendRef|undefined{
     const backend=input.execution===undefined?role.execution:this.roleBackend(role.projectId,input.execution);
@@ -799,8 +800,10 @@ export class LakeSuperagent implements AgentHost {
   private roleExecution(role:Role,freezeModel=false):AgentBackendRef {
     const registry=this.agents.external.registry,profile=registry.get(role.projectId,'codex');
     const saved=role.execution?.kind==='acp'&&role.execution.agent==='codex'?role.execution.model:undefined;
+    const probe=freezeModel?registry.probe(role.projectId,'codex'):undefined;
+    const localModel=probe?.localModel??probe?.model;
     const projectModel=freezeModel?profile.modelOverride:undefined;
-    const model=projectModel?{modelId:projectModel}:saved??(freezeModel?{modelId:defaultCodexTaskModel(registry.probe(role.projectId,'codex')?.model)}:undefined);
+    const model=projectModel?{modelId:projectModel}:saved??(localModel?{modelId:localModel}:undefined);
     return {kind:'acp',agent:'codex',revision:profile.revision,...(model?{model:structuredClone(model)}:{})};
   }
   private freezeRoleExecution(role:Role):Role {
@@ -812,8 +815,8 @@ export class LakeSuperagent implements AgentHost {
         probe.authentication!=='codex-local'?'本机 Codex 登录状态需要重新验证':!probe.ready?probe.message??'Codex 连接测试尚未通过':
         !probe.authenticated?'本机 Codex 尚未登录，请先在 Codex 中完成登录':undefined;
       if(blocker)throw new HttpError(409,`专员「${role.name}」的本机 Codex 执行配置不可用。${blocker}。请检查该专员的执行模型，或在模型菜单中重新测试本机 Codex。`);
-      if(execution.model&&!codexModels.includes(execution.model.modelId))
-        throw new HttpError(409,`专员「${role.name}」保存的模型 ${execution.model.modelId} 不在 Lake 的 Codex 兼容目录中，请更新该专员的执行模型。`);
+      if(execution.model&&(execution.model.providerId!==undefined||!isCodexModelId(execution.model.modelId)))
+        throw new HttpError(409,`专员「${role.name}」的 Codex 模型引用无效，请更新该专员的执行模型。`);
       return {...role,execution};
     }
     throw new HttpError(409,'专员仅支持 Codex 执行');

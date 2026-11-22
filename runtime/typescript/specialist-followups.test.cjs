@@ -27,6 +27,7 @@ test(`${backend} specialist consumes a Pilot supplement during ${boundary} in th
  const firstGate=new Promise(resolve=>{releaseFirst=resolve;});
  const observed=[];
  const provider=createServer(async(req,res)=>{
+  if(req.method==='GET'&&req.url?.split('?')[0].endsWith('/models')){res.writeHead(404);res.end();return;}
   try{
    const chunks=[];for await(const chunk of req)chunks.push(chunk);const body=JSON.parse(Buffer.concat(chunks)),requestId=++sequence;
    const codex=Array.isArray(body.input),messages=codex?body.input:body.messages;
@@ -108,10 +109,10 @@ test(`${backend} specialist consumes a Pilot supplement during ${boundary} in th
   await mkdir(source,{recursive:true});
   await writeFile(join(source,'config.toml'),`model = "gpt-6.1-sol"\nmodel_reasoning_effort = "max"\nmodel_provider = "fixture"\n[model_providers.fixture]\nname = "Isolated followup fixture"\nbase_url = "http://127.0.0.1:${provider.address().port}/codex/v1"\nwire_api = "responses"\nrequires_openai_auth = false\n`,{mode:0o600});
   await writeFile(join(source,'auth.json'),'{}',{mode:0o600});
-  const prepare=registry.prepareHome.bind(registry);registry.prepareHome=async profile=>{
-   const root=await prepare(profile),models=JSON.parse(await readFile(join(root,'models.json'),'utf8'));
+  const prepare=registry.prepareModelCatalog.bind(registry);registry.prepareModelCatalog=async (...args)=>{
+   const path=await prepare(...args),models=JSON.parse(await readFile(path,'utf8'));
    for(const model of models.models){model.prefer_websockets=false;model.use_responses_lite=false;}
-   await writeFile(join(root,'models.json'),JSON.stringify(models),{mode:0o600});return root;
+   await writeFile(path,JSON.stringify(models),{mode:0o600});return path;
   };
   const binary=process.env.LAKE_CODEX_TEST_MCP_BINARY;
   if(binary){const launch=external.launch.bind(external);external.launch=(profile,directory,signal,mcp,model,purpose)=>{

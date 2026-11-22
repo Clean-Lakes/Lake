@@ -10,7 +10,6 @@ import { memoryContextUnavailable, memoryContextUnavailableNotice } from "./memo
 import {digest} from "./tasks";
 import {HttpError} from "./store";
 import {ExternalAgentRegistry} from './acp/registry';
-import {codexModels} from './acp/codex-profile';
 const {enableNativeSpecialistFixture}=require('./test-fixtures/native-specialists.cjs');
 
 // Exercise the actual host and SQLite ledger with a controlled SDK boundary.
@@ -484,7 +483,7 @@ test('specialist directory searches full duties with stable pagination and proje
   assert.equal(next.items[0].duties, '检查 PostgreSQL 慢查询');
 });
 
-test('Pilot freezes an unbound Worker to the compatible task default with an unrelated CLI model',async t=>{
+test('Pilot freezes an unbound Worker to the exact local Codex default',async t=>{
  const f=await fixture(t),profile={id:'codex',projectId:f.project.id,revision:1,enabled:true};
  const registry=new ExternalAgentRegistry(f.store,{codexHome:join(f.store.home,'codex')});
  (f.agents as any).external={registry:Object.assign(registry,{get:()=>profile})};
@@ -492,7 +491,7 @@ test('Pilot freezes an unbound Worker to the compatible task default with an unr
  f.store.put('superRoles',f.role.id,{...f.role,execution});
  f.store.put('acpProbes',f.project.id+':codex',{connectionVersion:1,revision:1,authentication:'codex-local',ready:true,authenticated:true,model:'gpt-6.2-astra'});
  const event=await f.admit('检查隔离项目。'),task=f.route(event,{action:'create',title:'检查项目',role_id:f.role.id});
- assert.deepEqual(f.worker(task.taskId).roleSnapshot.execution,{...execution,revision:1,model:{modelId:codexModels.at(-1)}});
+ assert.deepEqual(f.worker(task.taskId).roleSnapshot.execution,{...execution,revision:1,model:{modelId:'gpt-6.2-astra'}});
  assert.deepEqual(f.store.require<any>('superRoles',f.role.id).execution,execution);
 });
 
