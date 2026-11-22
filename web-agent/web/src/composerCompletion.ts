@@ -11,6 +11,9 @@ export const draftCompletionDelay = 650;
 
 export function localComposerCompletion(draft: string, hasPreviousReply: boolean): string {
   if (!draft) return starters[hasPreviousReply ? 3 : 0]!;
+  if (hasPreviousReply && /^(?:真的[吗么]|你?确定吗|是这样吗)[？?]+$/.test(draft.trim())) {
+    return `${draft.endsWith('?') ? ' ' : ''}可以说一下判断依据吗？`;
+  }
   const prefix = draft.toLocaleLowerCase();
   const match = starters.find(text => text.length > draft.length && text.toLocaleLowerCase().startsWith(prefix));
   return match?.slice(draft.length) ?? '';

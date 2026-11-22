@@ -1,5 +1,5 @@
 import {forwardRef,useEffect,useId,useImperativeHandle,useLayoutEffect,useRef,useState,type ClipboardEvent,type HTMLAttributes,type ReactNode} from 'react';
-import {completableDraft,completionSuffix} from '../../shared/draftCompletion';
+import {completableDraft,completionSuffix,draftEndsWithQuestion} from '../../shared/draftCompletion';
 import {api} from './api';
 import {draftCompletionDelay,emptyCompletionDelay,localComposerCompletion} from './composerCompletion';
 import {Glyph} from './Icons';
@@ -33,10 +33,12 @@ export const ComposerTextInput=forwardRef<ComposerInputHandle,Props>(function Co
   const controller=new AbortController();
   const show=(suffix:string)=>setSuggestion({draft:value,sessionId,modelId,hasPreviousReply,suffix});
   const timer=setTimeout(()=>{
+   const question=draftEndsWithQuestion(value);
    const local=localComposerCompletion(value,hasPreviousReply);
    if(local)show(local);
-   if(value&&modelId)void api.completeDraft(sessionId,value,modelId,controller.signal).then(result=>{
-    if(!controller.signal.aborted&&result.modelId===modelId&&completionSuffix(result.suffix))show(result.suffix);
+   if(value&&modelId&&!(question&&local))void api.completeDraft(sessionId,value,modelId,controller.signal).then(result=>{
+    if(!controller.signal.aborted&&result.modelId===modelId&&completionSuffix(result.suffix)&&
+      (!question||draftEndsWithQuestion(result.suffix)))show(result.suffix);
    }).catch(()=>{});
   },value?draftCompletionDelay:emptyCompletionDelay);
   return()=>{clearTimeout(timer);controller.abort();};
@@ -149,6 +151,6 @@ export const ComposerTextInput=forwardRef<ComposerInputHandle,Props>(function Co
     if((event.key==='Backspace'||event.key==='Delete')&&range.start!==range.end&&value.slice(range.start,range.end).includes(composerToken)){event.preventDefault();apply(range.start,range.end,'');return;}
     if(event.key==='Enter'){event.preventDefault();apply(range.start,range.end,'\n');return;}
    }}/>
-  <span id={statusId} className="visually-hidden" role="status">{suffix?`补齐建议「${suffix.trim()}」。按 Tab 接受，Escape 忽略。`:''}</span>
+  <span id={statusId} className="visually-hidden" role="status">{suffix?`补齐建议「${suffix.trim()}」，按 Tab 接受，Escape 忽略。`:''}</span>
  </div>;
 });

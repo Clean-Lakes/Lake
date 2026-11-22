@@ -2,10 +2,14 @@ export const draftCompletionLimit = 2000;
 
 const credentialText = /-----BEGIN|(?:\b(?:api[_ -]?key|access[_ -]?token|password|secret|token|private[_ -]?key)|密码|口令|密钥|访问令牌)["']?\s*[:=：]|\bbearer\s+\S+|\b(?:sk-|gh[pousr]_|github_pat_|xox[baprs]-)[\w-]{8,}|https?:\/\/[^/\s:@]+:[^/\s@]+@|\[(?:PRIVATE KEY )?REDACTED\]/i;
 
+export function draftEndsWithQuestion(text: string): boolean {
+  return /[？?]$/.test(text.trimEnd());
+}
+
 export function completableDraft(text: string): boolean {
   const trimmed = text.trim();
   return trimmed.length > 0 && Array.from(text).length <= draftCompletionLimit &&
-    !/[。！？.!?]\s*$|\n[ \t]*$/.test(text) && !trimmed.startsWith('/') &&
+    !/[。！.!]$|^[？?]+$/.test(trimmed) && !/\n[ \t]*$/.test(text) && !trimmed.startsWith('/') &&
     !/[\x00@\ufffc]|```/.test(text) && !credentialText.test(text);
 }
 

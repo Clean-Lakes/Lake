@@ -300,7 +300,7 @@ export function ModelSettings({initialTab="models",onClose:closeSettings,onChang
       {onCompletionEnabledChange&&<div className="model-conversation-memory">
         <h3>文字补齐</h3>
         <label><input type="checkbox" checked={!!completionEnabled} onChange={event=>onCompletionEnabledChange(event.target.checked)}/>自动建议文字</label>
-        <p className="settings-note">空框提供起步或追问建议。输入停顿后使用当前模型续写。按 Tab 接受，Esc 忽略。</p>
+        <p className="settings-note">空框提供起步建议。输入停顿后可续写草稿或建议一句追问。按 Tab 接受，Esc 忽略。</p>
       </div>}{onProjectMemory && <div className="model-conversation-memory"><h3>项目记忆</h3><p className="settings-note">{projectName} · 管理记忆内容和使用方式</p><button type="button" className="button secondary" onClick={memoryEngine==='layered'?()=>setTab('memory'):onProjectMemory}>配置项目记忆</button></div>}{onSessionConfig && <div className="model-conversation-memory"><h3>当前会话</h3><label><input type="checkbox" checked={ignoreProjectMemory} onChange={event => onIgnoreProjectMemoryChange(event.target.checked)}/>本轮忽略记忆</label><p className="settings-note">下一条消息不读取或采集用户/项目记忆，发送后自动取消；不删除原对话。</p><button className="button secondary" onClick={onSessionConfig}>当前会话配置</button></div>}</section> : <div id="model-settings-panel" role="tabpanel" aria-labelledby="model-settings-tab" className="model-settings-body">
       <aside className="provider-rail" data-compact={!!selected} data-expanded={sourcesExpanded}>
         <button ref={sourceToggle} type="button" className="provider-source-toggle" aria-expanded={sourcesExpanded} aria-controls="model-source-options" onClick={()=>setSourcesExpanded(value=>!value)}><span>模型来源</span><strong>{draft?.name || (selected===magpieSelection ? 'Magpie' : '添加供应商')}</strong><Glyph name="chevron" size={14}/></button>
