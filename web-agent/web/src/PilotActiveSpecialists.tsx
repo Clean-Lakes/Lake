@@ -1,24 +1,36 @@
-import {useId, useLayoutEffect, useState} from 'react';
+import {useId, useLayoutEffect, useRef, useState, type CSSProperties} from 'react';
 import {createPortal} from 'react-dom';
 import {SuperRoleAvatar} from './SuperRoleAvatar';
 import {useTerminalPopover} from './useTerminalPopover';
 import type {PilotParticipant} from './superPilotActivity';
 
-export function PilotActiveSpecialists({participants}: {participants: readonly PilotParticipant[]}) {
+export function PilotActiveSpecialists({participants, visible = true}: {participants: readonly PilotParticipant[]; visible?: boolean}) {
   const [open, setOpen] = useState(false);
   const id = useId();
-  const count = participants.length;
-  const hasParticipants = count > 0;
-  const {trigger, menu} = useTerminalPopover(open && hasParticipants, () => setOpen(false));
-  const preview = participants.slice(0, 4);
+  const expanded = visible && participants.length > 0;
+  const retained = useRef(participants);
+  useLayoutEffect(() => { if (expanded) retained.current = participants; }, [expanded, participants]);
+  const shown = expanded ? participants : retained.current;
+  const count = shown.length;
+  const {trigger, menu} = useTerminalPopover(open && expanded, () => setOpen(false));
+  const preview = shown.slice(0, 4);
   const remaining = count - preview.length;
   const compactCount = Math.min(2, count);
   const compactRemaining = count - compactCount;
+  const preferredWidth = count ? 10 + preview.length * 18 + (remaining > 0 ? 26 : 0) : 0;
+  const compactWidth = count ? 10 + compactCount * 18 + (compactRemaining > 0 ? 26 : 0) : 0;
 
   useLayoutEffect(() => {
+    const anchor = trigger.current;
+    if (!expanded) {
+      if (open || document.activeElement === anchor) {
+        anchor?.closest('.workspace-header')?.querySelector<HTMLButtonElement>('.header-morph-slot.is-visible .header-inspector-toggle')?.focus({preventScroll:true});
+      }
+      if (open) setOpen(false);
+      return;
+    }
     if (!open) return;
-    if (!hasParticipants) {setOpen(false); return;}
-    const anchor = trigger.current, panel = menu.current;
+    const panel = menu.current;
     if (!anchor || !panel) return;
     const island = anchor.closest('.workspace-header') ?? anchor;
     const place = () => {
@@ -34,25 +46,27 @@ export function PilotActiveSpecialists({participants}: {participants: readonly P
     observer.observe(anchor);
     window.addEventListener('resize', place);
     return () => {observer.disconnect(); window.removeEventListener('resize', place);};
-  }, [open, hasParticipants, trigger, menu]);
+  }, [open, expanded, trigger, menu]);
 
-  if (!count) return null;
-  const names = participants.map(person => person.name).join('、');
+  const names = shown.map(person => person.name).join('、');
   return <>
-    <button ref={trigger} type="button" className="pilot-active-specialists-trigger" title={names}
-      data-preferred-width={10 + preview.length * 18 + (remaining > 0 ? 26 : 0)}
-      data-compact-width={10 + compactCount * 18 + (compactRemaining > 0 ? 26 : 0)}
-      aria-label={`查看参与协作的 ${count} 位专员：${names}`} aria-haspopup="dialog" aria-expanded={open}
-      aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>
-      <span className="pilot-active-specialists-strip" aria-hidden="true">
-        {preview.map(person => <span className="pilot-active-specialist-avatar" key={person.key}>
-          <SuperRoleAvatar roleId={person.roleId} name={person.name} motion={person.moving ? 'working' : 'still'} size={20}/>
-        </span>)}
-        {remaining > 0 && <span className="pilot-active-specialists-count">+{remaining}</span>}
-        {compactRemaining > 0 && <span className="pilot-active-specialists-count" data-compact>+{compactRemaining}</span>}
-      </span>
-    </button>
-    {open && createPortal(<div ref={menu} id={id} className="pilot-active-specialists-panel" role="dialog"
+    <div className="pilot-active-specialists-slot" data-pilot-roster-open={expanded}
+      data-preferred-width={preferredWidth} data-compact-width={compactWidth}
+      style={{'--pilot-roster-wide-width':`${preferredWidth}px`,'--pilot-roster-compact-width':`${compactWidth}px`} as CSSProperties}
+      inert={!expanded} aria-hidden={!expanded}>
+      {count > 0 && <button ref={trigger} type="button" className="pilot-active-specialists-trigger" title={names} disabled={!expanded}
+        aria-label={`查看参与协作的 ${count} 位专员：${names}`} aria-haspopup="dialog" aria-expanded={open && expanded}
+        aria-controls={open && expanded ? id : undefined} onClick={() => setOpen(!open)}>
+        <span className="pilot-active-specialists-strip" aria-hidden="true">
+          {preview.map(person => <span className="pilot-active-specialist-avatar" key={person.key}>
+            <SuperRoleAvatar roleId={person.roleId} name={person.name} motion={expanded && person.moving ? 'working' : 'still'} size={20}/>
+          </span>)}
+          {remaining > 0 && <span className="pilot-active-specialists-count">+{remaining}</span>}
+          {compactRemaining > 0 && <span className="pilot-active-specialists-count" data-compact>+{compactRemaining}</span>}
+        </span>
+      </button>}
+    </div>
+    {open && expanded && createPortal(<div ref={menu} id={id} className="pilot-active-specialists-panel" role="dialog"
       aria-label="参与协作的专员" tabIndex={-1}>
       <ul>{participants.map(person => <li key={person.key}>
         <SuperRoleAvatar roleId={person.roleId} name={person.name} motion={person.moving ? 'working' : 'still'} size={24}/>

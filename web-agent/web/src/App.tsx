@@ -53,6 +53,7 @@ import {ComposerMentions,useMentionExtensions,mentionOptionId} from "./ComposerM
 import {LakePilotControl} from './LakePilotControl';
 import {PilotHeaderState} from './PilotHeaderState';
 import {PilotActiveSpecialists} from './PilotActiveSpecialists';
+import {sessionBadgeState} from './sessionBadgeState';
 import {pilotIslandModel} from './pilotIslandModel';
 import './pilotIsland.css';
 import './pilot.css';
@@ -1621,7 +1622,8 @@ function AppContent() {
   const presentedReports=conversationMode==='conversation'&&pilotReports?.sessionId===sessionId?pilotReports?.ids:
     new Set(conversationMode==='conversation'?[]:activeSnapshot?.messages.map(message=>message.id));
   const pilotHeaderActivity=selectedSuperPilot?superPilotActivity(pilotWorkspace.workspace,selectedSession,pilotActivityConnected,presentedReports):null;
-  const pilotParticipants=sessionHeader?pilotHeaderActivity?.participants:undefined;
+  const pilotParticipants=sessionHeader&&selectedSuperPilot?(pilotHeaderActivity?.participants??[]):undefined;
+  const showPilotParticipants=pilotHeaderActivity?.phase!=='summarizing';
   const roleRunningCount=specialistTaskActivity(roleWorkers).runningCount;
   const superHeaderPresentation=pilotHeaderActivity??(selectedSuperChannel&&roleReplyActivity?.sessionId===sessionId&&roleReplyActivity.state!=='idle'?{status:roleReplyActivity.state==='running'?'investigating' as const:'waiting_approval' as const,label:roleReplyActivity.state==='running'?(roleRunningCount>1?`${roleRunningCount} 项执行中`:'处理中'):'需要处理'}:superTaskHeaderPresentation(activeSnapshot?.superagent?.task??selectedSuperWorker?.task,activeSnapshot)??currentSessionPresentation);
   const selectedRoleName=selectedSuperChannel?.roleName??selectedSuperWorker?.roleName??pilotWorkspace.workspace?.channels?.find(channel=>channel.roleId===activeSnapshot?.superagent?.roleId)?.roleName;
@@ -1646,7 +1648,9 @@ function AppContent() {
     (!isLegacyHistory && !activeSnapshot.specialists?.length));
   const sharedIsland=sessionHeader&&wideWorkbench;
   const headerSweep=sessionHeader&&<HeaderSweep key={`sweep-${selectedSession.id}`} active={pilotHeaderActivity?.animated??(avatarActivity?.state==='running')}/>;
-  const workspaceHeading=<header className={`workspace-header${specialistMenu?' has-specialist-tasks':''}${headerPilot||headerPilotMode ? ' has-pilot-island' : ''}${headerPilotMode&&!headerPilot?' has-pilot-mode':''}`}>
+  const pilotTone=sessionHeader&&selectedSuperPilot&&!headerPilot&&!headerPilotMode?
+    sessionBadgeState(superHeaderPresentation?.status??selectedSession.status,superHeaderPresentation?.label).tone:undefined;
+  const workspaceHeading=<header className={`workspace-header${specialistMenu?' has-specialist-tasks':''}${headerPilot||headerPilotMode ? ' has-pilot-island' : ''}${headerPilotMode&&!headerPilot?' has-pilot-mode':''}`} data-pilot-island-tone={pilotTone}>
         {sessionHeader && <span className="workspace-header-glass" aria-hidden="true"/>}
         {!sharedIsland&&headerSweep}
         <button className="icon-button mobile-only" aria-label="打开项目导航" onClick={() => setMobileMenu(true)}><Glyph name="menu" size={21}/></button>
@@ -1655,14 +1659,14 @@ function AppContent() {
           <button type="button" className="crumb-project grafana-project-crumb" title="返回工作台"
             onClick={() => navigate({sessionId, resourceId: null})}>{projectList.find(project => project.id === selectedResource.projectId)?.name ?? "项目"}</button>
         </div> :
-          <div className={`breadcrumbs${pilotParticipants?.length?' has-pilot-participants':''}`}>
+          <div className={`breadcrumbs${showPilotParticipants&&pilotParticipants?.length?' has-pilot-participants':''}`}>
             {!sessionHeader&&<><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span></>}
             <strong>
               {superHeaderIdentity?<SuperRoleAvatar name={selectedRoleName} roleId={selectedRoleId} pilot={!!selectedSuperPilot} size={20} motion={pilotHeaderActivity?.motion??conversationAvatarMotion(avatarActivity?.state??'idle',activeSnapshot?.superagent?.task?.state??selectedSuperWorker?.task.state)}/>:<Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession ? selectedSession.icon??'chat' : 'document'} size={15}/>}
               <span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{superHeaderIdentity?(selectedRoleName??'Pilot'):selectedResource?.name ?? selectedSession?.title ?? "概览"}</span>
               {superHeaderIdentity&&!selectedSuperPilot&&<AgentBackendLogo backend={selectedAgentBackend}/>}
             </strong>
-            {pilotParticipants&&<PilotActiveSpecialists key={sessionId} participants={pilotParticipants}/>}
+            {pilotParticipants&&<PilotActiveSpecialists key={sessionId} participants={pilotParticipants} visible={showPilotParticipants}/>}
           </div>}
         {selectedSession && !selectedResource && !isPlansPage && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} mode={headerPilotMode} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}} normal={<SessionStateBadge session={selectedSession} {...superHeaderPresentation}/>} onInspect={targetId => {
           if(!activeSnapshot||!headerPilot)return;
@@ -1821,7 +1825,7 @@ function AppContent() {
 
     </aside>
 
-    {sharedIsland&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={terminalHeading} inspectorOpen={inspectorOpen} terminalOpen={terminalOpen}/>}
+    {sharedIsland&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={terminalHeading} inspectorOpen={inspectorOpen} terminalOpen={terminalOpen} pilotTone={pilotTone}/>}
     <main className={`workspace${window.lakeInspectorWindow?"":" web-inspector-layout"}${inspectorOpen?" has-session-inspector":""}${!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":sessionSelected?" has-specialist-task-list":""}`} onDragOver={event=>{if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="none";return;}if(selectedSession&&!isLegacyHistory&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.stopPropagation();return;}if(!selectedSession||isLegacyHistory||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
       {!sharedIsland&&(isSpecialistTasks?<header className="specialist-mobile-heading"><button type="button" className="icon-button" aria-label="打开项目导航" onClick={()=>setMobileMenu(true)}><Glyph name="menu" size={21}/></button><span>专员任务</span></header>:workspaceHeading)}
 
