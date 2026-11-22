@@ -940,14 +940,19 @@ function AppContent() {
     }
     const key = activeSnapshot.session.id;
     if (conversationScroll.current.key !== key) conversationScroll.current = { key, following: true };
-    const follower = new FollowScroll(container, () => conversationScroll.current.following,
-      undefined, window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const follower = new FollowScroll(container, () => conversationScroll.current.following, undefined, motion.matches);
+    const updateMotion = (event: MediaQueryListEvent) => follower.setReducedMotion(event.matches);
+    motion.addEventListener("change", updateMotion);
     conversationFollower.current = follower;
     const resume=conversationResume.current.get(key);
     if(resume){conversationResume.current.delete(key);conversationScroll.current={key,following:resume.following};container.scrollTop=resume.top;if(resume.following)follower.jump();}
     else follower.jump();
     const stopObserving = observeConversationGrowth(container, () => historyVisible.current===key?follower.request():follower.jump());
-    return () => { stopObserving(); follower.stop(); conversationFollower.current = null; };
+    return () => {
+      motion.removeEventListener("change", updateMotion);
+      stopObserving(); follower.stop(); conversationFollower.current = null;
+    };
   }, [activeSnapshot?.session.id, route.resourceId,isPlansPage,isSpecialistTasks]);
 
   useLayoutEffect(()=>{
