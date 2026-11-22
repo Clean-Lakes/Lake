@@ -27,7 +27,7 @@ const newProviderSelection = "__new_provider__";
 const settingsTabs:readonly {key:string;label:string;panel?:string;icon?:"plug"|"book";requiresWatchdog?:boolean}[] = [
   {key:"channels",label:"接入渠道",requiresWatchdog:true},
   {key:"agents",label:"Agent 执行器"},
-  {key:"models",label:"模型",panel:"model"},
+  {key:"models",label:"Pilot 模型",panel:"model"},
   {key:"mcp",label:"MCP 工具",icon:"plug"},
   {key:"skills",label:"Skills",icon:"book"},
   {key:"memory",label:"记忆"},
