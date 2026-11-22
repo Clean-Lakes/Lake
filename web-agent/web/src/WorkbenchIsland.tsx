@@ -13,7 +13,7 @@ type IslandFlight={open?:boolean;target?:IslandBox;animation?:Animation;deadline
 const sameBox=(a:IslandBox|undefined,b:IslandBox)=>!!a&&Math.abs(a.left-b.left)<.5&&Math.abs(a.top-b.top)<.5&&Math.abs(a.width-b.width)<.5;
 
 /** The terminal island separates from the conversation; the inspector owns its card header. */
-export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,terminalOpen}:{conversation:ReactNode;terminal:ReactNode;activity:ReactNode;inspectorOpen:boolean;terminalOpen:boolean}){
+export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,terminalOpen,pilotTone}:{conversation:ReactNode;terminal:ReactNode;activity:ReactNode;inspectorOpen:boolean;terminalOpen:boolean;pilotTone?:string}){
  const root=useRef<HTMLDivElement>(null),conversationIsland=useRef<HTMLDivElement>(null),terminalIsland=useRef<HTMLDivElement>(null);
  const open=useRef({terminal:terminalOpen});
  open.current={terminal:terminalOpen};
@@ -22,6 +22,8 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
   const element=root.current,shell=element?.closest<HTMLElement>('.app-shell'),identity=conversationIsland.current;
   if(!element||!shell||!identity)return;
   let frame=0;
+  let previousRoster:HTMLElement|null=null, previousRosterWidth=0, previousIslandWidth=0;
+  let rosterAnimation:Animation|undefined;
   const reduced=matchMedia('(prefers-reduced-motion:reduce)');
   const textMetrics=document.createElement('canvas').getContext('2d');
   const flights:Record<'terminal',IslandFlight>={terminal:{}};
@@ -77,17 +79,20 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    // own container query. Otherwise a compact 114px state expands the island,
    // its natural state shrinks it below 300px, and ResizeObserver oscillates.
    const badge=state?.querySelector<HTMLElement>('.session-state-badge')??null;
+   const iconOnly=badge?.hasAttribute('data-icon-only');
    const badgeStyle=badge?getComputedStyle(badge):null;
    // Budget the shared padding token rather than constrained badge geometry.
    const badgePadding=parseFloat(getComputedStyle(identity).getPropertyValue('--island-badge-padding'));
-   const badgeLabelWidth=textWidth(badge?.querySelector('.session-state-label')??null)+(parseFloat(badgeStyle?.columnGap??'')||0);
+   const badgeLabel=badge?.querySelector<HTMLElement>('.session-state-label')??null;
+   const badgeLabelWidth=badgeLabel?textWidth(badgeLabel)+(parseFloat(badgeStyle?.columnGap??'')||0):0;
    const badgeIcon=badge?.querySelector('.session-state-icon');
    // A spinning icon's painted bounds change as it rotates. Use its layout width.
    const badgeIconWidth=badgeIcon?(parseFloat(getComputedStyle(badgeIcon).width)||0):0;
    const badgeWidth=badgeStyle?badgeLabelWidth+badgeIconWidth+2*badgePadding+parseFloat(badgeStyle.borderLeftWidth)+parseFloat(badgeStyle.borderRightWidth):0;
    const disclosure=state?.querySelector<HTMLElement>('.header-inspector-toggle');
    const stateGap=state?parseFloat(getComputedStyle(state).columnGap||'0'):0;
-   const normalStateWidth=badge?badgeWidth+(disclosure?disclosure.getBoundingClientRect().width+stateGap:0):state?.getBoundingClientRect().width??0;
+   // The icon-only group's controls are intrinsic, including its leading inset.
+   const normalStateWidth=badge&&!iconOnly?badgeWidth+(disclosure?disclosure.getBoundingClientRect().width+stateGap:0):state?.getBoundingClientRect().width??0;
    const titleIcon=title?.previousElementSibling;
    const titleIconWidth=titleIcon ? titleIcon.getBoundingClientRect().width+parseFloat(getComputedStyle(title!.parentElement!).columnGap||'0') : 0;
    const pilotWidth=identity.querySelector('.header-pilot-state.is-visible')?parseFloat(getComputedStyle(identity).getPropertyValue('--pilot-state-width')):0;
@@ -116,14 +121,17 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const inset=parseFloat(islandStyle.getPropertyValue('--island-header-inset'));
    const gap=parseFloat(islandStyle.getPropertyValue('--island-header-gap'));
    const taskControlWidth=taskTrigger?.offsetWidth??0;
-   const roster=identity.querySelector<HTMLElement>('.pilot-active-specialists-trigger');
-   const rosterWidth=Number(roster?.dataset.preferredWidth??0);
-   const rosterGap=roster?.parentElement?(parseFloat(getComputedStyle(roster.parentElement).columnGap)||0):0;
-   const preferredWidth=titleWidth+rosterWidth+rosterGap+(pilotWidth||normalStateWidth)+taskControlWidth+2*inset+gap*(taskTrigger?2:1)+parseFloat(islandStyle.borderLeftWidth)+parseFloat(islandStyle.borderRightWidth);
+   const roster=identity.querySelector<HTMLElement>('.pilot-active-specialists-slot');
+   const rosterOpen=roster?.dataset.pilotRosterOpen==='true';
+   const rosterPreferred=Number(roster?.dataset.preferredWidth??0);
+   const rosterGap=roster?(parseFloat(getComputedStyle(roster).getPropertyValue('--pilot-roster-gap'))||0):0;
+   const baseWidth=titleWidth+(pilotWidth||normalStateWidth)+taskControlWidth+2*inset+gap*(taskTrigger?2:1)+parseFloat(islandStyle.borderLeftWidth)+parseFloat(islandStyle.borderRightWidth);
    // Choose the avatar count from the pane budget, independent of the resulting island width.
-   const compactRoster=!!roster&&available<Math.ceil(preferredWidth);
-   const rosterFittedWidth=compactRoster?preferredWidth-rosterWidth+Number(roster.dataset.compactWidth):preferredWidth;
-   const compactStatus=compactRoster&&!!badge&&!pilotWidth&&available<Math.ceil(rosterFittedWidth);
+   // Retiring avatars keep their fitted arrangement while the slot closes.
+   const compactRoster=!!roster&&rosterPreferred>0&&available<Math.ceil(baseWidth+rosterPreferred+rosterGap);
+   const rosterWidth=rosterOpen?(compactRoster?Number(roster.dataset.compactWidth):rosterPreferred)+rosterGap:0;
+   const rosterFittedWidth=baseWidth+rosterWidth;
+   const compactStatus=rosterOpen&&compactRoster&&badgeLabelWidth>0&&!pilotWidth&&available<Math.ceil(rosterFittedWidth);
    identity.toggleAttribute('data-compact-pilot-roster',compactRoster);
    identity.toggleAttribute('data-compact-pilot-status',compactStatus);
    const conversationWidth=rosterFittedWidth-(compactStatus?badgeLabelWidth:0);
@@ -137,9 +145,17 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const top=shell.closest('html.lake-windows-chrome')?52:12;
    const source={...layout.conversation,top:frameInset?bounds.top-base.top+frameInset:top};
    shell.style.setProperty('--pane-rail-bottom',`${Math.max(12,base.bottom-(composer?.top??base.bottom)+12)}px`);
+   const skipMotion=reduced.matches||document.hidden||document.documentElement.classList.contains('workbench-resizing');
+   const resizeRoster=!!roster&&roster===previousRoster&&rosterWidth!==previousRosterWidth&&source.width!==previousIslandWidth&&!skipMotion;
+   const fromWidth=resizeRoster?identity.getBoundingClientRect().width:source.width;
+   if(source.width!==previousIslandWidth||skipMotion){rosterAnimation?.cancel();rosterAnimation=undefined;}
    write(identity,source);identity.dataset.ready='true';identity.dataset.present='true';identity.title=title?.textContent??'';
+   if(resizeRoster&&Math.abs(source.width-fromWidth)>.5)rosterAnimation=identity.animate([
+    {width:`${fromWidth}px`},{width:`${source.width}px`},
+   ],{duration:parseFloat(islandStyle.getPropertyValue('--pilot-roster-duration')),easing:islandStyle.getPropertyValue('--pilot-roster-ease').trim()});
+   previousRoster=roster;previousRosterWidth=rosterWidth;previousIslandWidth=source.width;
    if(terminalIsland.current)move('terminal',terminalIsland.current,layout.terminal?{...layout.terminal,top}:undefined,source,base);
-   const candidates=new Set<Element>([shell,identity,...shell.querySelectorAll('.workspace,.session-layout > .session-view,.session-inspector,.terminal-side-panel,.composer-input,.composer-dock,.header-morph-content,.crumb-title,.terminal-island-title')]);
+   const candidates=new Set<Element>([shell,...shell.querySelectorAll('.workspace,.session-layout > .session-view,.session-inspector,.terminal-side-panel,.composer-input,.composer-dock,.header-morph-content,.crumb-title,.terminal-island-title')]);
    for(const node of observed)if(!candidates.has(node)){observer.unobserve(node);observed.delete(node);}
    for(const node of candidates)if(!observed.has(node)){observed.add(node);observer.observe(node);}
   };
@@ -154,13 +170,13 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
     return !target?.closest('.terminal-session,.conversation,.session-inspector-scroll');
    }))schedule();
   });
-  content.observe(shell,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['class']});
-  window.addEventListener('resize',schedule);reduced.addEventListener('change',schedule);measure();
-  return()=>{scheduleLayout.current=()=>{};content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);reduced.removeEventListener('change',schedule);for(const flight of Object.values(flights))flight.animation?.cancel();shell.style.removeProperty('--pane-rail-bottom');};
+  content.observe(shell,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['class','data-pilot-roster-open','data-preferred-width']});
+  window.addEventListener('resize',schedule);document.addEventListener('visibilitychange',schedule);reduced.addEventListener('change',schedule);measure();
+  return()=>{scheduleLayout.current=()=>{};content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);document.removeEventListener('visibilitychange',schedule);reduced.removeEventListener('change',schedule);rosterAnimation?.cancel();for(const flight of Object.values(flights))flight.animation?.cancel();shell.style.removeProperty('--pane-rail-bottom');};
  },[]);
  useLayoutEffect(()=>scheduleLayout.current(),[inspectorOpen,terminalOpen]);
  return <div ref={root} className="lake-workbench-islands" role="group" aria-label="Lake Island 工作台">
-  <div ref={conversationIsland} className="lake-workbench-island island-conversation"><span className="workspace-header-glass" aria-hidden="true"/>{activity}{conversation}</div>
+  <div ref={conversationIsland} className="lake-workbench-island island-conversation" data-pilot-island-tone={pilotTone}><span className="workspace-header-glass" aria-hidden="true"/>{activity}{conversation}</div>
   <div ref={terminalIsland} className="lake-workbench-island island-terminal" data-open={terminalOpen} inert={!terminalOpen} aria-hidden={!terminalOpen}><span className="workspace-header-glass" aria-hidden="true"/>{terminal}</div>
  </div>;
 }

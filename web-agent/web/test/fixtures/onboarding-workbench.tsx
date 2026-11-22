@@ -33,7 +33,7 @@ window.fetch=async(input,init)=>{
  else if(path.endsWith('/messages')&&init?.method==='POST'){counts.sent++;value=snapshot}
  else if((init?.method??'GET')!=='GET'){counts.blocked++;metrics();return new Response(JSON.stringify({error:'演示仅支持模型选择；不执行操作'}),{status:405,headers:{'Content-Type':'application/json'}})}
  else if(path==='/api/bootstrap')value={authenticated:true,modelConfigured:configured,modelName:configured?model.displayName:null,modelId:configured?model.id:null,modelSelection:configured?selection:null,aiRuntime:'go',terminalMode:'pty'};
- else if(path==='/api/catalog')value={projects:noProject?[]:[project],sessions:noProject?[]:[session],resources:[],resourceTree:[],tags:[],terminals:[]};
+ else if(path==='/api/catalog')value={projects:noProject?[]:[project],sessions:noProject?[]:[session],resources:[],resourceTree:[],terminals:[]};
  else if(path.endsWith('/snapshot'))value=snapshot;
  else if(path==='/api/settings/providers')value=catalog();
  else if(path==='/api/settings/model')value={source:configured?'settings':'none',configured,url:'',name:configured?model.name:'',keyConfigured:false,protocol:'openai'};

@@ -39,9 +39,9 @@ flowchart TD
 
 沿 Lake 已确认的本机登录合同，Codex 直接读取源 `CODEX_HOME`（默认 `~/.codex`）；Lake 不复制 auth.json，不更改用户 config.toml。SQLite、日志、模型目录和本次执行目录保留在当前 Lake Home 下。该准备策略与 Tutti 的私有 Home/凭据投影不同；本轮采用其调用分层，不改变已确认的凭据约定。
 
-连接测试只读取登录和配置并验证 App Server 初始化。任务创建时独立校验并固定专员绑定的模型。没有绑定时，采用固定目录允许的本机默认模型；目录无此模型时，使用 Lake 固定目录中的最新兼容模型，并在设置中显示。连接测试不创建模型轮次，旧版失败记录会在读取就绪状态时自动重新验证。
+连接测试读取登录、配置和 App Server 返回的模型列表。「Agent 执行器」显示本机 Codex 的可选模型和各模型支持的思考强度。两项默认跟随本机 Codex。刷新或重新连接可再次读取目录。只配置了默认模型的服务也可使用该模型。保存后只为该项目的进程与线程注入选定值。新任务优先固定项目选定的模型。模型设为跟随时，使用专员已有绑定或本机默认。修改设置会使该项目的旧连接版本失效。连接测试不创建模型轮次，旧版失败记录会在读取就绪状态时自动重新验证。
 
-固定模型目录和启动/线程覆盖关闭原生业务工具、继承 MCP、hooks、notify 和递归。仅本次运行的 `lake` MCP 服务连接私有 Unix socket。App Server 的 MCP 工具批准使用 `mcpServer/elicitation/request`；form 请求可能不携带 MCP 调用 ID，因此适配器在准确 thread/turn/server 下消费一条已观察、在本次允许目录内且尚未消费的工具调用。通用表单、URL 请求、原生工具、未知服务器、外来轮次、重复申请和失效宿主均不获准。该批准只允许进入私有桥，真实 I/O 仍经过同一个 ToolExecutor；没有持久批准或全局自动批准。
+执行进程使用与选中模型对应的静态目录。Lake 使用固定引擎的模型元数据或生成保守的元数据，结合启动和线程覆盖关闭原生业务工具、继承 MCP、hooks、notify 和递归。仅本次运行的 `lake` MCP 服务连接私有 Unix socket。App Server 的 MCP 工具批准使用 `mcpServer/elicitation/request`；form 请求可能不携带 MCP 调用 ID，因此适配器在准确 thread/turn/server 下消费一条已观察、在本次允许目录内且尚未消费的工具调用。通用表单、URL 请求、原生工具、未知服务器、外来轮次、重复申请和失效宿主均不获准。该批准只允许进入私有桥，真实 I/O 仍经过同一个 ToolExecutor；没有持久批准或全局自动批准。
 
 ## 迁移与交付边界
 
@@ -52,5 +52,5 @@ profile 升级为 schema3，记录 `runtimeKind: codex-app-server`。schema1/sch
 ## 参考
 
 - [Tutti 固定版本](https://github.com/tutti-os/tutti/tree/207beeea554435618dffd3b579d0ffe112b065c4)：提供商定义、受管理进程、App Server 会话和活动归一分层。
-- [Codex 0.170.0](https://github.com/openai/codex/tree/rust-v0.170.0) 提供固定 App Server 引擎和 GPT-6.2 Sol 模型元数据。
+- [Codex 0.170.0](https://github.com/openai/codex/tree/rust-v0.170.0) 提供固定 App Server 引擎及随附的模型元数据。
 - [当前任务报告合同](../security/task-confirmation.md)、[本机登录合同](../../plan/refactor-codex-local-login-1.md)、[迁移实施计划](../../plan/refactor-codex-app-server-1.md)。

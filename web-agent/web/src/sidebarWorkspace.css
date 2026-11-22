@@ -137,9 +137,6 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar.workspace-navigation .resource-row { min-height: 36px; padding: 6px 8px; border-radius: var(--sidebar-row-radius); }
 .sidebar.workspace-navigation .resource-row .nav-row-text strong { font-size: var(--font-size-ui); font-weight:var(--font-weight-ui); }
 .sidebar.workspace-navigation .resource-more-button { top: 50%; transform: translateY(-50%); padding: 0; width: 26px; height: 26px; }
-.sidebar.workspace-navigation .sidebar-tags { padding: 8px 13px 0; }
-.sidebar.workspace-navigation .sidebar-tags-toggle { padding: 6px 7px; }
-.sidebar.workspace-navigation .sidebar-tags-toggle small { font-size: var(--font-size-ui); }
 .sidebar.workspace-navigation .sidebar-footer { padding: 0 13px 12px; }
 .sidebar.workspace-navigation .sidebar-settings { min-height: 32px; padding: 7px; border-radius:var(--sidebar-row-radius); }
 /* Icon targets share the row curvature, clamped to a circle at their own size. */

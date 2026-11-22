@@ -30,7 +30,7 @@ if(new URLSearchParams(location.search).has('mention-types')){
  resources.find(resource=>resource.id==='gateway')!.kind='local';
 }
 if(new URLSearchParams(location.search).has('scrollbar'))resources.push(...Array.from({length:30},(_,i)=>({id:`demo-host-${i}`,projectId:project.id,name:`演示主机 ${i+1}`,kind:'ssh' as const,description:'滚动条验证用虚构资源',status:'available' as const})));
-const sessions=['订单服务发布回滚','网关延迟排查','数据库连接数巡检'].map((title,i)=>({id:`demo-session-${i}`,projectId:project.id,title,status:'completed',resourceIds:resources.map(r=>r.id),createdAt:at(0),updatedAt:at(30-i),icon:'chat',tags:[]})) as WorkSession[];
+const sessions=['订单服务发布回滚','网关延迟排查','数据库连接数巡检'].map((title,i)=>({id:`demo-session-${i}`,projectId:project.id,title,status:'completed',resourceIds:resources.map(r=>r.id),createdAt:at(0),updatedAt:at(30-i),icon:'chat'})) as WorkSession[];
 if(new URLSearchParams(location.search).has('sidebar-backgrounds'))sessions.push(...Array.from({length:13},(_,i)=>({...sessions[0]!,id:`extra-session-${i}`,title:`演示会话 ${i+4}`,updatedAt:at(10)})));
 const session=sessions[0]!;
 const tree=[{id:'apps',projectId:project.id,parentId:null,kind:'folder',name:'应用服务',resourceId:null,position:0},{id:'data',projectId:project.id,parentId:null,kind:'folder',name:'数据服务',resourceId:null,position:1},...resources.map((r,i)=>({id:'node-'+r.id,projectId:project.id,parentId:['postgres','redis'].includes(r.id)?'data':'apps',kind:'resource',name:r.name,resourceId:r.id,position:i}))];
@@ -65,7 +65,7 @@ if(new URLSearchParams(location.search).has('responsive-approval')){
  snapshot.ai!.pending={id:'responsive-file',kind:'file_write',target:'演示服务器 · 192.0.2.216',risk:'write',call:{id:'responsive-call',name:'write',arguments:JSON.stringify({path:'/tmp/routeinfo.py',content:'print("fixture only")\n'})}} as import('../../../shared/contracts').AIApproval;
 }
 const model={id:'demo-model',providerId:'demo-provider',providerName:'DeepSeek',modelId:'deepseek-chat',name:'DeepSeek',displayName:'DeepSeek',protocol:'openai'};
-const catalog={projects:[project],sessions,resources,resourceTree:tree,tags:[],terminals:[]};
+const catalog={projects:[project],sessions,resources,resourceTree:tree,terminals:[]};
 const bootstrap={authenticated:true,modelConfigured:true,modelName:'DeepSeek',modelId:model.modelId,modelSelection:model,terminalMode:'pty',supportsImageInput:false,aiRuntime:'go'};
 if(new URLSearchParams(location.search).has('compaction-failure')){
  session.title='主机资源状态检查';session.status='failed';

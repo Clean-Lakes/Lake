@@ -147,12 +147,6 @@ test('SRE and ordinary replies share labels and retain long results without auto
   assert.ok(report.includes('Nginx'));
 });
 
-test('existing session classification tags keep their own identity', () => {
-  const html = renderToStaticMarkup(createElement(AssistantMarkdown, {tags: [{id: 'tag', projectId: 'project', name: 'MongoDB', color: 'purple'}], children: 'MongoDB 当前状态'}));
-  assert.ok(html.includes('conversation-tag color-purple'));
-  assert.ok(!html.includes('data-object-kind="software"'));
-});
-
 test('shared rendering preserves code copy, commit copy and explicit fact formatting', () => {
   const html = render('提交：`abc123456789`\n\n测试：12 项测试通过\n\n```sh\necho PostgreSQL\n```');
   assert.ok(html.includes('reply-info-facts'));

@@ -21,6 +21,7 @@ import {
   SpecialistChannelEntries,
   SpecialistLiveReply,
 } from "../src/SpecialistChannel";
+import {SpecialistAvatarProvider} from "../src/SuperRoleAvatar";
 
 const at = "2026-11-06T08:00:00Z";
 const worker: SuperWorker = {
@@ -164,7 +165,7 @@ test('task rounds show their exact start times and frozen speakers without inven
 
 test("one SDK invocation replaces progress in place and the final host report replaces all narration", () => {
   const first = card("first", "正在连接两端数据库"),
-    second = card("second", "已取得库表清单，正在核对差异");
+    second = card("second", "已取得库表清单，正在核对差异。");
   const s = snapshot([
     first,
     card("tool", "RAW_TOOL_RECEIPT", "operation"),
@@ -181,6 +182,8 @@ test("one SDK invocation replaces progress in place and the final host report re
   assert.match(html, /已取得库表清单/);
   assert.doesNotMatch(html, /正在连接两端|RAW_TOOL_RECEIPT/);
   assert.match(html, /status-text--active/);
+  assert.match(html, /class="specialist-reply-cursor-tail">异<span class="specialist-reply-cursor" data-cursor-avatar="[a-z-]+" aria-hidden="true"/);
+  assert.doesNotMatch(html.replace(/<[^>]*>/g, ""), /正在核对差异。/);
   const ended = specialistReplies(
     [
       ...raw(s.ai!.cards),
@@ -199,7 +202,7 @@ test("one SDK invocation replaces progress in place and the final host report re
   assert.equal(ended[0].reply?.state, "settled");
   assert.equal(ended[0].message?.author?.taskId, "task");
   assert.match(render(ended), /已核对两端/);
-  assert.doesNotMatch(render(ended), /正在核对差异|status-text--active/);
+  assert.doesNotMatch(render(ended), /正在核对差异|status-text--active|class="specialist-reply-cursor"/);
   assert.equal(
     JSON.stringify(s),
     original,
@@ -341,9 +344,22 @@ test("waiting, disconnected and inactive replies stop animation while actual mod
     draw(true, waiting),
     draw(true, { ...s, ai: { ...s.ai!, status: "completed" } }),
   ])
-    assert.doesNotMatch(html, /status-text--active|reply-duration-spinner/);
+    assert.doesNotMatch(html, /status-text--active|reply-duration-spinner|class="specialist-reply-cursor"/);
   assert.match(draw(true, waiting), /等待确认/);
   assert.match(draw(false, s), /正在重连/);
+});
+
+test("a channel cursor uses the configured avatar for its worker", () => {
+  const live = createElement(SpecialistLiveReply, {snapshot: snapshot([]), worker, text: "正在读取数据。"});
+  const html = renderToStaticMarkup(createElement(SpecialistAvatarProvider, {
+    channels: [{
+      id: "channel", roleId: worker.roleId, roleName: worker.roleName, projectId: "project",
+      sessionId: "channel-session", avatarId: "owl", revision: 1, createdAt: at,
+    }],
+    children: live,
+  }));
+  assert.match(html, /class="specialist-reply-cursor" data-cursor-avatar="owl" aria-hidden="true"/);
+  assert.match(html, /class="specialist-cursor-eyes"/);
 });
 
 test("historical root metadata compacts narration without deleting unbound legacy records or plans", () => {

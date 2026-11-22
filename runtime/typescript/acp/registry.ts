@@ -3,12 +3,19 @@ import { join, isAbsolute, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import {createHash} from 'node:crypto';
 import { externalAgentId, externalAgentIds, externalProducts } from './catalog';
-import type { CodexConnectionProbe, ExternalAgentId, ExternalAgentProfile, ExternalAgentStatus } from './types';
+import type { CodexConnectionProbe, CodexModelOption, ExternalAgentId, ExternalAgentProfile, ExternalAgentStatus } from './types';
 import { HttpError, LakeStore, now } from '../store';
 import { privateFile, privatePath } from './private';
-import { codexCatalog, codexCatalogRevision, codexModels, codexStartupArgs,defaultCodexTaskModel,tomlValue } from './codex-profile';
+import { codexCatalogRevision, codexModelCatalog, codexStartupArgs, isCodexModelId, isCodexReasoningEffort, tomlValue } from './codex-profile';
 import {CodexLocalSource,codexHomePresent} from './codex-local';
 import {discoverCodexRuntime,validateCodexNode} from './runtime-paths';
+
+function projectOverride(input:unknown,current:string|undefined,isValid:(value:unknown)=>value is string,invalid:string){
+  if(input===undefined)return current;
+  if(input===null)return undefined;
+  if(!isValid(input))throw new HttpError(400,invalid);
+  return input;
+}
 
 export class ExternalAgentRegistry {
   private mutations = new Map<string, Promise<unknown>>();
@@ -34,7 +41,8 @@ export class ExternalAgentRegistry {
     if(current&&![1,2,3].includes(current.schemaVersion))throw new HttpError(409,'外部 Agent 配置版本不受当前版本支持');
     if(current&&(current.schemaVersion!==3||current.runtimeKind!=='codex-app-server'||current.sourceFingerprint!==source.fingerprint)){
       const profile:ExternalAgentProfile={schemaVersion:3,runtimeKind:'codex-app-server',id,projectId,revision:current.revision+1,enabled:current.enabled,
-        nodePath:current.nodePath,npmPath:current.npmPath,authentication:'codex-local',sourceFingerprint:source.fingerprint,updatedAt:now()};
+        nodePath:current.nodePath,npmPath:current.npmPath,modelOverride:current.modelOverride,reasoningEffortOverride:current.reasoningEffortOverride,
+        authentication:'codex-local',sourceFingerprint:source.fingerprint,updatedAt:now()};
       return this.store.put('acpProfiles',key,profile);
     }
     return current??{schemaVersion:3,runtimeKind:'codex-app-server',id,projectId,revision:0,enabled:false,authentication:'codex-local',sourceFingerprint:source.fingerprint,updatedAt:now()};
@@ -55,6 +63,11 @@ export class ExternalAgentRegistry {
       const probe=this.probe(projectId,id),source=this.source();
       const current=probe?.revision===profile.revision&&probe.authentication==='codex-local';
       const transportReady=installed&&current&&probe.ready===true;
+      const localModel=current?(probe.localModel??probe.model):undefined;
+      const models=current?probe.models??[]:[];
+      const modelOptions=[...new Set([...models.map(model=>model.id),localModel,profile.modelOverride].filter(isCodexModelId))];
+      const modelEffortOptions=Object.fromEntries(models.map(model=>[model.id,model.reasoningEfforts]));
+      const model=profile.modelOverride??localModel;
       const assignmentBlocker=!profile.enabled?'尚未启用，请在 Agent 设置中启用并保存':
         process.platform!=='darwin'?'当前平台的 Codex 执行尚未开放':source.error??
         (!codexHomePresent(source.home)?'未找到本机 Codex 配置目录，请先在本机 Codex 完成登录':
@@ -63,7 +76,8 @@ export class ExternalAgentRegistry {
         !probe.authenticated?'本机 Codex 尚未登录，请先在 Codex 中完成登录后重新连接':undefined);
       return {...profile,name:externalProducts[id].name,installed,transportReady,assignmentReady:!assignmentBlocker,assignmentBlocker,
         configPath:join(source.home,'config.toml'),authMode:current?probe.authMode:undefined,
-        model:current?probe.model:undefined,defaultTaskModel:transportReady&&probe.authenticated?defaultCodexTaskModel(probe.model):undefined,
+        model:current?probe.model:undefined,localModel,defaultTaskModel:transportReady&&probe.authenticated?model:undefined,
+        modelOptions,modelEffortOptions,reasoningEffortOptions:models.find(option=>option.id===model)?.reasoningEfforts??[],
         modelProvider:current?probe.modelProvider:undefined,reasoningEffort:current?probe.reasoningEffort:undefined,
         message:current?probe.message:undefined,capabilities:current?probe.capabilities:undefined};
     }));
@@ -78,8 +92,19 @@ export class ExternalAgentRegistry {
     const id=externalAgentId(agent), key=this.key(projectId,id), previous=this.mutations.get(key)??Promise.resolve();
     const work=previous.catch(()=>{}).then(async()=>{
       const current=this.get(projectId,id);
-      if(input.expectedRevision!==current.revision)throw new HttpError(409,'外部 Agent 配置已变化，请刷新后重试');
+      const stale='外部 Agent 配置已变化，请刷新后重试';
+      if(input.expectedRevision!==current.revision)throw new HttpError(409,stale);
       if(typeof input.enabled!=='boolean')throw new HttpError(400,'需要明确是否启用 Agent');
+      if(input.apiKey!==undefined)throw new HttpError(400,'Codex 已复用本机登录，请在本机 Codex 中管理认证');
+      if(input.model!==undefined)throw new HttpError(400,'请通过项目的 Codex 模型选项设置模型');
+      const modelOverride=projectOverride(input.modelOverride,current.modelOverride,isCodexModelId,'Codex 模型 ID 无效');
+      const reasoningEffortOverride=projectOverride(input.reasoningEffortOverride,current.reasoningEffortOverride,isCodexReasoningEffort,'Codex 思考强度无效');
+      if(reasoningEffortOverride&&(modelOverride!==current.modelOverride||reasoningEffortOverride!==current.reasoningEffortOverride)){
+        const probe=this.probe(projectId,id);
+        const model=modelOverride??probe?.localModel??probe?.model;
+        const efforts=probe?.revision===current.revision?probe.models?.find(option=>option.id===model)?.reasoningEfforts:undefined;
+        if(efforts?.length&&!efforts.includes(reasoningEffortOverride))throw new HttpError(400,'所选模型不支持这个思考强度');
+      }
       let nodePath=current.nodePath;
       let npmPath=current.npmPath;
       if(input.nodePath!==undefined){
@@ -95,9 +120,9 @@ export class ExternalAgentRegistry {
         else npmPath=await realpath(input.npmPath);
       }
       if(input.autoDetect===true||input.enabled&&(!nodePath||!npmPath))({nodePath,npmPath}=await discoverCodexRuntime(nodePath,npmPath));
-      if(input.apiKey!==undefined)throw new HttpError(400,'Codex 已复用本机登录，请在本机 Codex 中管理认证');
-      if(input.model!==undefined)throw new HttpError(400,'模型跟随本机 Codex 配置，请在 Codex 中修改');
-      const profile:ExternalAgentProfile={...current,nodePath,npmPath,enabled:input.enabled,revision:current.revision+1,updatedAt:now()};
+      if(this.get(projectId,id).revision!==current.revision)throw new HttpError(409,stale);
+      const profile:ExternalAgentProfile={...current,nodePath,npmPath,modelOverride,reasoningEffortOverride,
+        enabled:input.enabled,revision:current.revision+1,updatedAt:now()};
       return this.store.put('acpProfiles',key,profile);
     });
     this.mutations.set(key,work);
@@ -107,30 +132,47 @@ export class ExternalAgentRegistry {
   async prepareHome(profile:ExternalAgentProfile){
     const home=await privatePath(this.store.home,'external-agents','profiles',profile.projectId,profile.id);
     await privatePath(home,'state');await privatePath(home,'logs');
-    await privateFile(home,'models.json',JSON.stringify(codexCatalog));return home;
+    return home;
   }
-  private async launchConfiguration(profile:ExternalAgentProfile,signal:AbortSignal,model?:string){
+  private async prepareModelCatalog(home:string,model:string,option?:CodexModelOption){
+    const contents=JSON.stringify(codexModelCatalog(model,option));
+    const file='models-'+createHash('sha256').update(contents).digest('hex')+'.json';
+    await privateFile(home,file,contents);
+    return join(home,file);
+  }
+  private async launchConfiguration(profile:ExternalAgentProfile,signal:AbortSignal,discoverModels:boolean,model?:string){
     const source=this.source();if(source.error)throw new HttpError(409,source.error);
     if(!codexHomePresent(source.home))throw new HttpError(409,'未找到本机 Codex 配置目录，请先在 Codex 中完成登录');
-    const home=await this.prepareHome(profile),engine=join(this.runtimeRoot(),'node_modules/@openai/codex/bin/codex.js');
-    const modelArgs=model===undefined?[]:['-c','model='+tomlValue(model)];
-    const config=await this.local.inspect(profile.nodePath!,engine,home,[...codexStartupArgs(home,source.mcpIds,source.hooks),...modelArgs],signal);
-    if(model!==undefined&&config.model!==model)throw new HttpError(409,'未能确认专员指定的 Codex 模型，未启动任务');
+    const requested=model??profile.modelOverride;
+    if(requested!==undefined&&!isCodexModelId(requested))throw new HttpError(400,'Codex 模型 ID 无效');
+    const home=await this.prepareHome(profile),engine=this.engineEntry();
+    const probe=this.probe(profile.projectId,profile.id);
+    const current=probe?.revision===profile.revision&&probe.authentication==='codex-local'?probe:undefined;
+    // This process only reads config, account and model metadata. Actual
+    // threads always start with a sanitized, immutable catalog for their model.
+    const config=await this.local.inspect(profile.nodePath!,engine,home,codexStartupArgs(home,source.mcpIds,source.hooks),signal,
+      {discoverModels,knownDefaultModel:current?.localModel});
+    const selected=requested??config.model;
+    const models=config.models??current?.models??[];
+    const option=models.find(item=>item.id===selected);
+    const effort=profile.reasoningEffortOverride;
+    const catalogPath=await this.prepareModelCatalog(home,selected,option);
+    const overrides=['-c','model='+tomlValue(selected),
+      ...(effort===undefined?[]:['-c','model_reasoning_effort='+tomlValue(effort)])];
     if(this.get(profile.projectId,profile.id).revision!==profile.revision)throw new HttpError(409,'本机 Codex 配置或账号已变化，请重新连接');
-    return {home,command:profile.nodePath!,args:[engine,...codexStartupArgs(home,config.mcpIds,config.hooks),...modelArgs,'app-server'],
+    return {home,catalogPath,localModel:config.model,models,command:profile.nodePath!,
+      args:[engine,...codexStartupArgs(home,config.mcpIds,config.hooks,catalogPath),...overrides,'app-server'],
       disabledMcp:Object.fromEntries(config.mcpIds.map(name=>[name,{enabled:false}])),environment:config.environment,
-      observed:{model:config.model,modelProvider:config.provider,reasoningEffort:config.reasoningEffort,authenticated:config.authenticated,authMode:config.authMode}};
+      observed:{model:selected,modelProvider:config.provider,reasoningEffort:effort??config.reasoningEffort??option?.defaultReasoningEffort,
+        authenticated:config.authenticated,authMode:config.authMode}};
   }
 
   prepareConnection(profile:ExternalAgentProfile,signal:AbortSignal) {
-    return this.launchConfiguration(profile,signal);
+    return this.launchConfiguration(profile,signal,true);
   }
 
-  async prepareLaunch(profile:ExternalAgentProfile,signal:AbortSignal,model?:string) {
-    if(model!==undefined&&!codexModels.includes(model))throw new HttpError(400,'该模型不在当前 Codex 兼容目录中');
-    const prepared = await this.launchConfiguration(profile,signal,model);
-    const selected = model ?? defaultCodexTaskModel(prepared.observed.model);
-    return selected === prepared.observed.model ? prepared : this.launchConfiguration(profile,signal,selected);
+  prepareLaunch(profile:ExternalAgentProfile,signal:AbortSignal,model?:string) {
+    return this.launchConfiguration(profile,signal,false,model);
   }
 
   async install(projectId: string, agent: unknown, npmPath: unknown, signal: AbortSignal) {

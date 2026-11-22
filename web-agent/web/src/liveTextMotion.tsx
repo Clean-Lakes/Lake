@@ -1,6 +1,7 @@
 import {Fragment,useRef,type CSSProperties,type ReactNode} from 'react';
 import {usePageVisible} from './usePageVisible';
 import {useSynchronizedLight} from './synchronizedLight';
+import {AgentIcon} from './AgentIcon';
 
 export const LIVE_TEXT_MOTION_LIMIT=24;
 // Keep the offset-based stagger bounded as streamed prose grows.
@@ -8,6 +9,34 @@ const phaseWindowMs=2800;
 const segmenter=new Intl.Segmenter(undefined,{granularity:'grapheme'});
 type TextNode={type:string;value?:string;children?:TextNode[];data?:{hName?:string;hProperties?:Record<string,unknown>}};
 const opaque=new Set(['code','inlineCode','link','linkReference','image','imageReference','html','definition','table']);
+
+export function remarkPilotSummaryCursor(){
+ return (tree:TextNode)=>{
+  let block=tree;
+  while(block.type!=='paragraph'&&block.type!=='heading'){
+   const tail=block.children?.slice().reverse().find(child=>!['definition','html'].includes(child.type));
+   if(!tail)return;
+   if(opaque.has(tail.type)){
+    block={type:'paragraph',data:{hProperties:{className:'pilot-summary-cursor-line'}},children:[]};
+    tree.children?.push(block);
+    break;
+   }
+   block=tail;
+  }
+  const tail=block.children?.at(-1);
+  if(tail?.type==='liveTextMotion'&&tail.data?.hProperties){
+   tail.data.hProperties['data-pilot-cursor']='true';
+   return;
+  }
+  block.children?.push({type:'pilotSummaryCursor',data:{hName:'lake-pilot-summary-cursor'}});
+ };
+}
+
+function PilotSummaryCursor(){
+ return <span className="pilot-summary-cursor" aria-hidden="true"><AgentIcon role="coordinator" size={15}/></span>;
+}
+
+export const pilotSummaryCursorComponents={'lake-pilot-summary-cursor':PilotSummaryCursor};
 
 function readableTail(text:string,limit=LIVE_TEXT_MOTION_LIMIT){
  const readable:number[]=[];
@@ -61,14 +90,16 @@ export function liveTextMotionParts(text:string,start:number){
 }
 
 /** Inline spans preserve normal line breaking, selectable text and one readable copy. */
-export function LiveTextMotionText({text,start,end=text.length,glow=false}:{text:string;start:number;end?:number;glow?:boolean}){
+export function LiveTextMotionText({text,start,end=text.length,glow=false,pilotCursor=false}:{text:string;start:number;end?:number;glow?:boolean;pilotCursor?:boolean}){
  const parts=liveTextMotionParts(text.slice(0,end),start),count=parts.filter(part=>part.moving).length;
+ const tail=pilotCursor?parts.slice().reverse().find(part=>part.moving):undefined;
  let index=0;
  // Later glyphs peak later, from left to right. Center the bounded wave on
  // the header's mid-cycle peak; UTF-16 offsets remain keys, never light phases.
  return <span className="live-text-motion-text"><Fragment key="prefix">{text.slice(0,start)}</Fragment>{parts.map(part=>{
   const phase=part.moving&&glow?(index++-(count-1)/2)*73:-(part.offset*73%phaseWindowMs);
-  return <Fragment key={part.offset}>{part.moving?<span className="live-text-motion-character" data-text-offset={part.offset} style={{'--live-text-phase':`${phase}ms`} as CSSProperties}>{part.text}</span>:part.text}</Fragment>;
+  const glyph=part.moving?<span className="live-text-motion-character" data-text-offset={part.offset} style={{'--live-text-phase':`${phase}ms`} as CSSProperties}>{part.text}</span>:part.text;
+  return <Fragment key={part.offset}>{tail===part?<span className="pilot-summary-cursor-tail">{glyph}<PilotSummaryCursor/></span>:glyph}</Fragment>;
  })}<Fragment key="suffix">{text.slice(end)}</Fragment></span>;
 }
 

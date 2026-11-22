@@ -114,9 +114,9 @@ html.lake-windows-chrome .app-shell.has-workbench-island { --pane-rail-top:124px
 html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .terminal-screen .xterm { padding-top:116px; }
 html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .xterm-viewport { top:116px; }
 .lake-workbench-island .header-state-area { margin-left:0; }
-.lake-workbench-island .header-normal-state .header-morph-content { display:flex; align-items:center; gap:4px; }
+.lake-workbench-island .header-normal-state .header-morph-content { display:flex; align-items:center; gap:var(--header-status-gap,4px); }
 .lake-workbench-island { --island-badge-padding:8px; }
-.lake-workbench-island .session-state-badge { white-space:nowrap; padding-inline:var(--island-badge-padding); }
+.lake-workbench-island .session-state-badge:not([data-icon-only]) { white-space:nowrap; padding-inline:var(--island-badge-padding); }
 
 /* Keep the session identity visible on tight rails. The status text shares
    the remaining space and can truncate, while its disclosure stays reachable. */
@@ -129,7 +129,7 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .xter
  .lake-workbench-island .crumb-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
  .lake-workbench-island .header-state-area { min-width:0; max-width:100%; }
  .lake-workbench-island .header-normal-state.is-visible { flex:0 1 auto; min-width:0; max-width:100%; }
- .lake-workbench-island .header-normal-state .header-morph-content { display:flex; width:max-content; min-width:0; gap:4px; }
+ .lake-workbench-island .header-normal-state .header-morph-content { display:flex; width:max-content; min-width:0; gap:var(--header-status-gap,4px); }
  /* Outrank the WKWebView corner fallback, which otherwise restores visible overflow. */
  .lake-workbench-island .header-normal-state .session-state-badge { min-width:0; display:inline-flex; overflow:hidden; }
  :root.lake-corner-fallback .lake-workbench-island .header-morph-slot.header-normal-state .session-state-badge { overflow:hidden; }

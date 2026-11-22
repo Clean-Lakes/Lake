@@ -10,6 +10,10 @@ export function firstGrapheme(text:string):string {
  return segmenter.segment(text)[Symbol.iterator]().next().value?.segment??'';
 }
 
+export function lastGrapheme(text:string) {
+ return segmenter.segment(text).containing(text.length-1);
+}
+
 // Presentation only: canonical content and completion state never wait for frames.
 // Initial/restored text is immediate; only append updates of a live reply animate.
 export class TextReveal {

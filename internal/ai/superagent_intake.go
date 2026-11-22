@@ -57,7 +57,7 @@ func (b SuperSourceBinding) valid() bool {
 		}
 	}
 	switch b.Kind {
-	case "user", "schedule", "workflow", "observer", "alert":
+	case "user", "workflow", "observer", "alert":
 		return true
 	}
 	return false
@@ -235,8 +235,8 @@ func (e *Engine) ConfirmSuperEventContext(ctx context.Context, b SuperSourceBind
 	})
 }
 
-// Stable project-wide intake: actual human controls/inputs precede scheduled
-// work and observations. Disabled or revised sources cannot keep a queue alive.
+// Stable project-wide intake: actual human controls/inputs precede observations.
+// Disabled, revised and retired sources stay out of the delivery queue.
 func (e *Engine) PendingSuperProjectEvents(ctx context.Context, projectID string, limit int) ([]SuperEvent, error) {
 	if projectID == "" || limit < 1 || limit > 16 {
 		return nil, errSuperBinding
@@ -246,7 +246,11 @@ func (e *Engine) PendingSuperProjectEvents(ctx context.Context, projectID string
 		return nil, err
 	}
 	var rows []superEventRow
-	err = db.WithContext(ctx).Table("superagent_events AS event").Select("event.*").Joins("JOIN superagent_sources AS source ON source.id=event.source_id AND source.project_id=event.project_id AND source.revision=event.source_revision AND source.actor_ref=event.actor_ref AND source.enabled=1").Where("event.project_id = ? AND event.disposition = ? AND event.routing_attempts < ? AND event.retry_at <= ?", projectID, "pending", 3, time.Now().UTC()).Order("CASE WHEN source.kind='user' AND event.kind IN ('stop','approval') THEN 0 WHEN source.kind='user' THEN 1 WHEN source.kind='schedule' THEN 2 WHEN source.kind='observer' THEN 3 ELSE 4 END, event.received_at, event.id").Limit(limit).Scan(&rows).Error
+	err = db.WithContext(ctx).Table("superagent_events AS event").Select("event.*").
+		Joins("JOIN superagent_sources AS source ON source.id=event.source_id AND source.project_id=event.project_id AND source.revision=event.source_revision AND source.actor_ref=event.actor_ref AND source.enabled=1").
+		Where("event.project_id = ? AND event.disposition = ? AND event.routing_attempts < ? AND event.retry_at <= ?", projectID, "pending", 3, time.Now().UTC()).
+		Where("source.kind <> ? AND COALESCE(event.source_kind, '') <> ?", "schedule", "schedule").
+		Order("CASE WHEN source.kind='user' AND event.kind IN ('stop','approval') THEN 0 WHEN source.kind='user' THEN 1 WHEN source.kind='observer' THEN 2 ELSE 3 END, event.received_at, event.id").Limit(limit).Scan(&rows).Error
 	out := make([]SuperEvent, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, row.event())
@@ -262,6 +266,9 @@ func superSourceForEvent(tx *gorm.DB, eventID, projectID string) (SuperSourceBin
 	var row superSourceRow
 	if err := tx.First(&row, "id = ? AND project_id = ? AND revision = ? AND actor_ref = ? AND enabled = ?", event.SourceID, projectID, event.SourceRevision, event.ActorRef, true).Error; err != nil {
 		return SuperSourceBinding{}, err
+	}
+	if row.Kind == "schedule" || event.SourceKind == "schedule" {
+		return SuperSourceBinding{}, errScheduleRetired
 	}
 	return SuperSourceBinding{SourceID: row.ID, ProjectID: row.ProjectID, Kind: row.Kind, ActorRef: row.ActorRef, Revision: row.Revision}, nil
 }

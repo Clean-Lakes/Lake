@@ -1,9 +1,8 @@
 import {createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import Markdown, {type Components,type ExtraProps} from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type {AICard, AgentRun, Resource, WorkspaceTag} from '../../shared/contracts';
+import type {AICard, AgentRun, Resource} from '../../shared/contracts';
 import {remarkAssistantProse} from './assistantProse';
-import {remarkConversationTags, conversationTagSignature} from './conversationTags';
 import {mergeObjectCatalog, objectCatalog, objectMatches, remarkObjectReferences, type ObjectCatalog, type ObjectReference} from './objectReferences';
 import {fileChangeSourceCards, summarizeFileChanges, type FileChange} from './file-changes-model';
 import {sameCard} from './cardEquality';
@@ -13,8 +12,9 @@ import {Glyph, ResourceIcon} from './Icons';
 import {MarkdownCodeBlock} from './MarkdownCodeBlock';
 import {remarkReplyInfo} from './replyInfo';
 import {replyInfoComponents, ReplyInfoSpan} from './ReplyInfoElements';
-import {LiveTextMotionBoundary,LiveTextMotionText,remarkLiveTextMotion} from './liveTextMotion';
-import {MarkdownReveal,markdownRevealComponents,remarkRevealText} from './markdownReveal';
+import {LiveTextMotionBoundary,LiveTextMotionText,pilotSummaryCursorComponents,remarkLiveTextMotion,remarkPilotSummaryCursor} from './liveTextMotion';
+import {MarkdownReveal,markdownRevealComponents,remarkRevealText,remarkSpecialistReplyCursor} from './markdownReveal';
+import type {LakeAvatarName} from './lakeAvatarCatalog';
 
 const emptyCatalog = objectCatalog();
 const References = createContext<{catalog: ObjectCatalog; open?: (reference: ObjectReference) => void}>({catalog: emptyCatalog});
@@ -80,7 +80,7 @@ function InlineReference({reference}: {reference: ObjectReference}) {
 const liveTextComponents={
   'lake-live-text':function LiveTextSpan({node}:ExtraProps){
     const start=node?.properties?.['data-live-text-start'];
-    return <LiveTextMotionText text={node?.children.map(child=>child.type==='text'?child.value:'').join('')??''} start={typeof start==='number'?start:0}/>;
+    return <LiveTextMotionText text={node?.children.map(child=>child.type==='text'?child.value:'').join('')??''} start={typeof start==='number'?start:0} pilotCursor={node?.properties?.['data-pilot-cursor']==='true'}/>;
   },
 };
 
@@ -88,6 +88,7 @@ const liveTextComponents={
 const components: Components = {
   ...replyInfoComponents,
   ...liveTextComponents,
+  ...pilotSummaryCursorComponents,
   ...markdownRevealComponents,
   pre: MarkdownCodeBlock,
   table: ({node, ...props}) => <div className="markdown-table-scroll"><table {...props}/></div>,
@@ -105,19 +106,19 @@ const components: Components = {
 
 const textImageComponents:Components={...components,img:({alt})=>alt?<span>{alt}</span>:null};
 
-export const AssistantMarkdown = memo(function AssistantMarkdown({children, tags = [], className = '', allowImages = true,liveMotion,reveal,animateInitial,finishPending}: {children: string; tags?: readonly WorkspaceTag[]; className?: string; allowImages?: boolean;liveMotion?:boolean;reveal?:boolean;animateInitial?:boolean;finishPending?:boolean}) {
+export const AssistantMarkdown = memo(function AssistantMarkdown({children, className = '', allowImages = true,liveMotion,reveal,animateInitial,finishPending,cursorAvatar,pilotCursor=false}: {children: string; className?: string; allowImages?: boolean;liveMotion?:boolean;reveal?:boolean;animateInitial?:boolean;finishPending?:boolean;cursorAvatar?:LakeAvatarName;pilotCursor?:boolean}) {
   const {catalog} = useContext(References);
-  const signature = conversationTagSignature(tags);
-  const decorateTags = useMemo(() => remarkConversationTags(tags), [signature]);
   const decorateObjects = useMemo(() => remarkObjectReferences(catalog), [catalog]);
   const proseClass=`ai-markdown assistant-prose${className ? ` ${className}` : ''}`;
   const decorateMotion=liveMotion!==undefined;
   const render=useCallback((paintedThrough?:number)=><Markdown remarkPlugins={[
-    remarkGfm, remarkAssistantProse, remarkReplyInfo, decorateTags, decorateObjects,
+    remarkGfm, remarkAssistantProse, remarkReplyInfo, decorateObjects,
     ...(decorateMotion?[remarkLiveTextMotion]:[]),
     ...(paintedThrough===undefined?[]:[remarkRevealText(paintedThrough)]),
+    ...(cursorAvatar?[remarkSpecialistReplyCursor(cursorAvatar)]:[]),
+    ...(pilotCursor?[remarkPilotSummaryCursor]:[]),
   ]} components={allowImages?components:textImageComponents} skipHtml>{children}</Markdown>,
-  [children,decorateTags,decorateObjects,decorateMotion,allowImages]);
+  [children,decorateObjects,decorateMotion,allowImages,cursorAvatar,pilotCursor]);
   const prose=reveal===undefined?render():<MarkdownReveal source={children} active={reveal} animateInitial={animateInitial} finishPending={finishPending} render={render}/>;
   return liveMotion===undefined?<div className={proseClass}>{prose}</div>:<LiveTextMotionBoundary active={liveMotion} className={proseClass}>{prose}</LiveTextMotionBoundary>;
 });

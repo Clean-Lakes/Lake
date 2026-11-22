@@ -51,7 +51,7 @@ v1 包含目标状态、确定性决策、项目策略、任务临时授权、�
 | 持久化 | [adk_session.go](../../internal/ai/adk_session.go) 的 `adkStore` 迁移原生表；[storage/sqlite.go](../../internal/agent/storage/sqlite.go) 提供私有 SQLite 与一致备份 | 安全权威数据放同一个 ADK store；web 资源库继续负责资源目录 |
 | 子任务/Pilot | [agent_scope.go](../../internal/ai/agent_scope.go) 的 `scopedChildConfig`，以及 [adk_sre_roles.go](../../internal/ai/adk_sre_roles.go)、[adk_observation_roles.go](../../internal/ai/adk_observation_roles.go) | 复用父级实时收窄、角色约束、只读调查机制，叠加任务授权交集 |
 | 会话与 MCP 工具 | [session_tools.go](../../internal/ai/session_tools.go) 的 `invokeSessionTool`；[extensions.go](../../internal/web/extensions.go) 的 `extensionBridge` 已校验配置版本 | 把提前分流入口也纳入同一能力注册表；MCP 绑定实际 server/tool/config revision |
-| 工作流/定时 | [tool_bridge.go](../../internal/web/tool_bridge.go)、[workflows.go](../../internal/web/workflows.go)、[schedules.go](../../internal/web/schedules.go) 已检查资源、工作流版本及继承权限 | 使用明确的运行身份和任务授权；定时运行不能复用聊天单次审批 |
+| 工作流 | [tool_bridge.go](../../internal/web/tool_bridge.go)、[workflows.go](../../internal/web/workflows.go) 检查资源、工作流版本及继承权限 | 使用明确的运行身份和任务授权。旧调度数据按[历史调度记录](../security/schedule-authority.md)保存 |
 | 终端 | [terminal_access.go](../../internal/web/terminal_access.go) 校验会话、generation、permission version；[terminal.go](../../internal/web/terminal.go) 管理 execute/input/interrupt/close | 每个 agent 终端动作校验，不只校验首次打开；保留人类手动终端与借用语义 |
 | 现有前端兼容边界 | [PermissionSettings.tsx](../../web-agent/web/src/PermissionSettings.tsx)、[contracts.ts](../../web-agent/shared/contracts.ts)、[approvalPresentation.ts](../../web-agent/web/src/approvalPresentation.ts) | 仅作为现有协议/显示能力依据，不列入改动文件；后端输出兼容现有字段和交互 |
 

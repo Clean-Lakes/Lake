@@ -13,6 +13,8 @@ import {useSmoothText} from './useSmoothText';
 import {usePageVisible} from './usePageVisible';
 import {SpecialistTaskList} from './SpecialistTaskList';
 import {specialistTaskRows} from './specialistTaskListModel';
+import {SpecialistReplyCursorTail,specialistInterimText} from './SpecialistReplyCursor';
+import {useSpecialistAppearance} from './SuperRoleAvatar';
 export {mergeChannelEntries} from './specialistChannelProjection';
 export {SpecialistTaskControls} from './SpecialistTaskControls';
 
@@ -32,13 +34,18 @@ export function SpecialistTaskSelect({workers,sessionId,onTask}:{workers:SuperWo
 
 export function SpecialistLiveReply({text,worker,snapshot,connected=true}:{text?:string;worker?:SuperWorker;snapshot?:SessionSnapshot;connected?:boolean}){
  const visible=usePageVisible();
+ const roleId=worker?.roleId??snapshot?.superagent?.roleId;
+ const {icon}=useSpecialistAppearance({roleId,name:worker?.roleName});
  const activity=worker?.activity;
  const waiting=conversationActivity(snapshot?.ai)==='waiting'||!!activity&&['waiting_approval','waiting_input','waiting_external','queued'].includes(activity.phase);
  const moving=connected&&!waiting&&conversationActivity(snapshot?.ai)==='running';
- const label=!connected?'进度暂未更新，正在重连':waiting?activity?.label??'等待确认后继续':text?.trim()||activity?.label||'正在思考…';
+ const interim=specialistInterimText(text?.trim()??'');
+ const label=!connected?'进度暂未更新，正在重连':waiting?activity?.label??'等待确认后继续':interim||activity?.label||'正在思考…';
  const shown=useSmoothText(label,moving);
  return <div className={`specialist-live-reply${moving?' is-running':''}`} role="status" aria-live="polite" aria-atomic="true" data-phase={!connected?'disconnected':waiting?'waiting':moving?'running':'idle'}>
-  <SpecialistReplyTransition revision="progress" text={label} enabled={moving&&visible}><StatusText active={moving&&visible}>{shown}</StatusText></SpecialistReplyTransition>
+  <SpecialistReplyTransition revision="progress" text={label} enabled={moving&&visible}>
+   <StatusText active={moving&&visible}>{moving&&interim&&(roleId||worker?.roleName)?<SpecialistReplyCursorTail avatar={icon}>{shown}</SpecialistReplyCursorTail>:shown}</StatusText>
+  </SpecialistReplyTransition>
  </div>;
 }
 

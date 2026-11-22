@@ -8,7 +8,7 @@ import (
 )
 
 func projectTool(name string) bool {
-	return set("read_session_context list_workflows get_workflow_run run_workflow save_workflow schedule_create schedule_list schedule_update schedule_delete task_output task_stop")[name]
+	return set("read_session_context list_workflows get_workflow_run run_workflow save_workflow task_output task_stop")[name]
 }
 func (b *Server) projectToolBridge(ctx context.Context, id, name string, args Object, approved bool) (any, error) {
 	if ctx.Err() != nil {
@@ -128,7 +128,7 @@ func (b *Server) projectToolBridge(ctx context.Context, id, name string, args Ob
 		}
 		return b.workflowRunView(run), nil
 	default:
-		return b.scheduleTool(ctx, id, project, name, args, approved)
+		return nil, errors.New("unknown project tool")
 	}
 }
 func (b *Server) resolveToolAsset(id, ref string) string {

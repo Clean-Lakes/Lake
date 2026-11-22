@@ -19,7 +19,14 @@ export function executionCardTitle(card:AICard){
 }
 export type AgentModelRef = {modelId:string;providerId?:string};
 export type AgentBackendRef = {kind:'native';model?:AgentModelRef} | {kind:'acp';agent:StoredExternalAgentId;revision?:number;model?:AgentModelRef};
-export type ExternalAgentStatus = {id:ExternalAgentId;projectId:string;revision:number;enabled:boolean;name:string;installed:boolean;transportReady:boolean;assignmentReady?:boolean;assignmentBlocker?:string;nodePath?:string;npmPath?:string;model?:string;defaultTaskModel?:string;modelProvider?:string;reasoningEffort?:string;configPath?:string;authMode?:'chatgpt'|'api_key'|'provider'|'none';message?:string;updatedAt:string};
+export type CodexProjectOverrides = {modelOverride?:string;reasoningEffortOverride?:string};
+export type ExternalAgentStatus = CodexProjectOverrides & {
+ id:ExternalAgentId;projectId:string;revision:number;enabled:boolean;name:string;installed:boolean;transportReady:boolean;
+ assignmentReady?:boolean;assignmentBlocker?:string;nodePath?:string;npmPath?:string;
+ model?:string;localModel?:string;defaultTaskModel?:string;modelOptions?:string[];modelEffortOptions?:Record<string,string[]>;modelProvider?:string;
+ reasoningEffort?:string;reasoningEffortOptions?:string[];configPath?:string;authMode?:'chatgpt'|'api_key'|'provider'|'none';
+ message?:string;updatedAt:string;
+};
 
 /** Operator input for a new task in one exact specialist channel. Never a tool permission. */
 export type SpecialistAgentAssignment = {requestId:string;roleRevision:number;execution:AgentBackendRef};

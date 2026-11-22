@@ -1,26 +1,65 @@
-import {forwardRef,useEffect,useImperativeHandle,useLayoutEffect,useRef,useState,type ClipboardEvent,type HTMLAttributes,type ReactNode} from 'react';
+import {forwardRef,useEffect,useId,useImperativeHandle,useLayoutEffect,useRef,useState,type ClipboardEvent,type HTMLAttributes,type ReactNode} from 'react';
+import {completableDraft,completionSuffix,draftEndsWithQuestion} from '../../shared/draftCompletion';
+import {api} from './api';
+import {draftCompletionDelay,emptyCompletionDelay,localComposerCompletion} from './composerCompletion';
 import {Glyph} from './Icons';
 import {CompositionGuard} from './composerKeyboard';
 import {composerClipboardFragment,composerToken,replaceComposerRange,type ComposerReference} from './composerMentionState';
 import {composerCaretCharacter,composerRangeOffsets,composerSelection,readComposerDocument,referenceKey,setComposerSelection} from './composerDocument';
+import {usePageVisible} from './usePageVisible';
 
 export type ComposerInputHandle={focus:(options?:FocusOptions)=>void;setSelectionRange:(start:number,end:number)=>void;readonly selectionStart:number;readonly selectionEnd:number;readonly value:string};
-type Props=Omit<HTMLAttributes<HTMLDivElement>,'onChange'|'onSelect'> & {value:string;references:ComposerReference[];renderReference:(ref:ComposerReference)=>ReactNode;disabled?:boolean;placeholder?:string;onChange:(value:string,references:ComposerReference[],caret:number)=>void;onCaretMove?:(start:number,end:number)=>void};
+type Completion = {sessionId:string;modelId?:string;hasPreviousReply:boolean};
+type Props=Omit<HTMLAttributes<HTMLDivElement>,'onChange'|'onSelect'> & {value:string;references:ComposerReference[];renderReference:(ref:ComposerReference)=>ReactNode;disabled?:boolean;placeholder?:string;completion?:Completion;onChange:(value:string,references:ComposerReference[],caret:number)=>void;onCaretMove?:(start:number,end:number)=>void};
 type Edit={value:string;references:ComposerReference[];start:number;end:number};
 const signature=(value:string,refs:ComposerReference[])=>JSON.stringify([value,refs.map(ref=>[referenceKey(ref),ref.label,ref.position])]);
-export const ComposerTextInput=forwardRef<ComposerInputHandle,Props>(function ComposerTextInput({value,references,renderReference,disabled=false,placeholder,onChange,onCaretMove,onKeyDown,onPaste,onFocus,onBlur,onCompositionStart,onCompositionEnd,...props},forwardedRef) {
+export const ComposerTextInput=forwardRef<ComposerInputHandle,Props>(function ComposerTextInput({value,references,renderReference,disabled=false,placeholder,completion,onChange,onCaretMove,onKeyDown,onPaste,onFocus,onBlur,onCompositionStart,onCompositionEnd,...props},forwardedRef) {
  const input=useRef<HTMLDivElement>(null),templates=useRef<HTMLDivElement>(null),guard=useRef(new CompositionGuard());
  const [composing,setComposing]=useState(false);
+ const [focused,setFocused]=useState(false);
+ const [selection,setSelection]=useState({start:0,end:0});
+ const [suggestion,setSuggestion]=useState<{draft:string;sessionId:string;modelId?:string;hasPreviousReply:boolean;suffix:string}>();
+ const [dismissed,setDismissed]=useState<string>();
+ const statusId=useId();
+ const pageVisible=usePageVisible();
+ const {sessionId,modelId,hasPreviousReply=false}=completion??{};
+ const eligible=!!sessionId&&focused&&pageVisible&&!disabled&&!composing&&!references.length&&
+  selection.start===value.length&&selection.end===value.length&&(value===''||completableDraft(value));
+ const suffix=eligible&&dismissed!==value&&suggestion?.draft===value&&suggestion.sessionId===sessionId&&
+  suggestion.modelId===modelId&&suggestion.hasPreviousReply===hasPreviousReply?suggestion.suffix:'';
+ useEffect(()=>{
+  setSuggestion(undefined);
+  if(!eligible||dismissed===value||!sessionId)return;
+  const controller=new AbortController();
+  const show=(suffix:string)=>setSuggestion({draft:value,sessionId,modelId,hasPreviousReply,suffix});
+  const timer=setTimeout(()=>{
+   const question=draftEndsWithQuestion(value);
+   const local=localComposerCompletion(value,hasPreviousReply);
+   if(local)show(local);
+   if(value&&modelId&&!(question&&local))void api.completeDraft(sessionId,value,modelId,controller.signal).then(result=>{
+    if(!controller.signal.aborted&&result.modelId===modelId&&completionSuffix(result.suffix)&&
+      (!question||draftEndsWithQuestion(result.suffix)))show(result.suffix);
+   }).catch(()=>{});
+  },value?draftCompletionDelay:emptyCompletionDelay);
+  return()=>{clearTimeout(timer);controller.abort();};
+ },[eligible,dismissed,value,sessionId,modelId,hasPreviousReply]);
  const caret=useRef({start:0,end:0}),restore=useRef<{start:number;end:number}|null>(null);
  const edits=useRef<Edit[]>([{value,references,start:0,end:0}]),editIndex=useRef(0);
  const latest=useRef({value,references,onCaretMove});latest.current={value,references,onCaretMove};
  const known=useRef(new Map<string,ComposerReference>());for(const ref of references)known.current.set(referenceKey(ref),ref);
  function syncSelection(){const root=input.current,range=root&&composerSelection(root,latest.current.references);if(range){
-  const native=root.ownerDocument.getSelection();
-  if(!guard.current.ignores({key:''})&&range.start===range.end&&latest.current.value===''&&native?.anchorNode===root)setComposerSelection(root,range.start,range.end);
+  if(root.ownerDocument.activeElement===root)setFocused(true);
+  const native=root.ownerDocument.getSelection(), ghost=root.querySelector('[data-composer-suggestion]');
+  const afterGhost=ghost&&native?.anchorNode&&(ghost.contains(native.anchorNode)||
+   native.anchorNode===root&&native.anchorOffset>Array.prototype.indexOf.call(root.childNodes,ghost));
+  if(!guard.current.ignores({key:''})&&range.start===range.end&&(afterGhost||latest.current.value===''&&native?.anchorNode===root))
+   setComposerSelection(root,range.start,range.end);
   const moved=range.start!==caret.current.start||range.end!==caret.current.end;
   caret.current=range;
-  if(moved&&!guard.current.ignores({key:''}))latest.current.onCaretMove?.(range.start,range.end);
+  if(moved){
+   setSelection(range);
+   if(!guard.current.ignores({key:''}))latest.current.onCaretMove?.(range.start,range.end);
+  }
  }return range??caret.current;}
  function remember(value:string,refs:ComposerReference[],range:{start:number;end:number}) {
   const current=edits.current[editIndex.current]!;
@@ -28,14 +67,21 @@ export const ComposerTextInput=forwardRef<ComposerInputHandle,Props>(function Co
   edits.current=edits.current.slice(0,editIndex.current+1);edits.current.push({value,references:refs,...range});
   if(edits.current.length>100)edits.current.shift();editIndex.current=edits.current.length-1;
  }
- function publish(next:string,refs:ComposerReference[],range:{start:number;end:number},move=false,record=true){if(record)remember(next,refs,range);caret.current=range;if(move)restore.current=range;onChange(next,refs,range.end);}
+ function publish(next:string,refs:ComposerReference[],range:{start:number;end:number},move=false,record=true){
+  if(next!==latest.current.value)setDismissed(undefined);
+  if(record)remember(next,refs,range);
+  caret.current=range;setSelection(range);
+  if(move)restore.current=range;
+  onChange(next,refs,range.end);
+ }
  function apply(start:number,end:number,text:string,inserted:ComposerReference[]=[]){const current=latest.current;const next=replaceComposerRange(current.value,current.references,start,end,text,inserted);publish(next.next,next.references,{start:next.position,end:next.position},true);}
- function undo(redo=false){const next=editIndex.current+(redo?1:-1);if(next<0||next>=edits.current.length)return;editIndex.current=next;const entry=edits.current[next]!;restore.current={start:entry.start,end:entry.end};caret.current=restore.current;onChange(entry.value,entry.references,entry.end);}
- useImperativeHandle(forwardedRef,()=>({focus:options=>input.current?.focus(options),setSelectionRange:(start,end)=>{caret.current={start,end};if(input.current)setComposerSelection(input.current,start,end);Object.assign(edits.current[editIndex.current]!,{start,end});},get selectionStart(){return caret.current.start},get selectionEnd(){return caret.current.end},get value(){return latest.current.value}}),[]);
+ function undo(redo=false){const next=editIndex.current+(redo?1:-1);if(next<0||next>=edits.current.length)return;editIndex.current=next;const entry=edits.current[next]!;restore.current={start:entry.start,end:entry.end};caret.current=restore.current;setSelection(restore.current);setDismissed(entry.value);onChange(entry.value,entry.references,entry.end);}
+ useImperativeHandle(forwardedRef,()=>({focus:options=>{input.current?.focus(options);syncSelection();},setSelectionRange:(start,end)=>{caret.current={start,end};setSelection(caret.current);if(input.current)setComposerSelection(input.current,start,end);Object.assign(edits.current[editIndex.current]!,{start,end});},get selectionStart(){return caret.current.start},get selectionEnd(){return caret.current.end},get value(){return latest.current.value}}),[]);
  useEffect(()=>{const changed=()=>{if(input.current?.ownerDocument.activeElement===input.current)syncSelection();};document.addEventListener('selectionchange',changed);return()=>document.removeEventListener('selectionchange',changed);},[]);
  useLayoutEffect(()=>{
   const root=input.current;if(!root||composing)return;
   const active=root.ownerDocument.activeElement===root;
+  if(active)setFocused(true);
   const current=readComposerDocument(root,references),wanted=signature(value,references);
   remember(value,references,caret.current);
   const boundary=root.querySelector('[data-composer-caret]'),needsBoundary=value===''||value.endsWith(composerToken);
@@ -55,16 +101,30 @@ export const ComposerTextInput=forwardRef<ComposerInputHandle,Props>(function Co
    if(value.endsWith('\n')){const placeholder=root.ownerDocument.createElement('br');placeholder.dataset.composerPlaceholder='';fragment.appendChild(placeholder);}root.replaceChildren(fragment);documentChanged=true;
   }
   root.querySelectorAll<HTMLButtonElement>('[data-remove-composer-token]').forEach(button=>{button.disabled=disabled;});
+  const existing=root.querySelector('[data-composer-suggestion]');
+  const suggestionChanged=(existing?.textContent??'')!==suffix;
+  if(suggestionChanged){
+   existing?.remove();
+   if(suffix){
+    const ghost=root.ownerDocument.createElement('span');
+    ghost.dataset.composerSuggestion='';
+    ghost.className='composer-inline-suggestion';
+    ghost.contentEditable='false';
+    ghost.setAttribute('aria-hidden','true');
+    ghost.textContent=suffix;
+    root.appendChild(ghost);
+   }
+  }
   if(restore.current){const range=restore.current;restore.current=null;root.focus({preventScroll:true});setComposerSelection(root,range.start,range.end);}
-  else if(savedSelection&&documentChanged)setComposerSelection(root,Math.min(value.length,savedSelection.start),Math.min(value.length,savedSelection.end));
- },[value,references,composing,disabled]);
+  else if(savedSelection&&(documentChanged||suggestionChanged))setComposerSelection(root,Math.min(value.length,savedSelection.start),Math.min(value.length,savedSelection.end));
+ },[value,references,suffix,composing,disabled]);
  function copy(event:ClipboardEvent<HTMLDivElement>,cut=false){const range=syncSelection();if(range.start===range.end){event.preventDefault();return;}const part=replaceComposerRange(value,references,range.end,value.length,'');const clipped=replaceComposerRange(part.next,part.references,0,range.start,'');const refs=new Map(clipped.references.map(ref=>[ref.position,ref]));const text=[...clipped.next.split('')].map((char,index)=>char===composerToken?refs.get(index)?.label.slice(1)??'':char).join('');event.clipboardData.setData('text/plain',text);event.clipboardData.setData('application/x-lake-composer',JSON.stringify({version:1,value:clipped.next,references:clipped.references.map(ref=>({kind:ref.kind,resourceId:ref.resourceId,position:ref.position}))}));event.preventDefault();if(cut&&!disabled)apply(range.start,range.end,'');}
  return <div className="composer-text">
   <div ref={templates} hidden aria-hidden="true">{references.map(ref=><span key={`${referenceKey(ref)}:${ref.position}`} className="composer-reference-token" contentEditable={false} data-composer-token={referenceKey(ref)} title={ref.label.slice(1)}>{renderReference(ref)}<button type="button" tabIndex={-1} data-remove-composer-token="" aria-label={`移除引用 ${ref.label.slice(1)}`} disabled={disabled}><Glyph name="close" size={11}/></button></span>)}</div>
-  <div {...props} ref={input} className="composer-rich-input" contentEditable={!disabled} suppressContentEditableWarning role={props.role??'textbox'} aria-label={props['aria-label']??'给 Lake 的消息'} aria-multiline="true" aria-disabled={disabled} aria-autocomplete={props['aria-autocomplete']??'none'} data-placeholder={placeholder} data-empty={!value}
+  <div {...props} ref={input} className="composer-rich-input" contentEditable={!disabled} suppressContentEditableWarning role={props.role??'textbox'} aria-label={props['aria-label']??'给 Lake 的消息'} aria-multiline="true" aria-disabled={disabled} aria-autocomplete={props['aria-autocomplete']??(completion?'inline':'none')} aria-describedby={[props['aria-describedby'],suffix?statusId:undefined].filter(Boolean).join(' ')||undefined} data-placeholder={placeholder} data-empty={!composing&&!value&&!suffix} data-composing={composing||undefined} data-empty-suggestion={!value&&!!suffix||undefined}
    onInput={()=>{if(!input.current)return;const next=readComposerDocument(input.current,latest.current.references);const range=composerSelection(input.current,next.references)??caret.current;publish(next.value,next.references,range,false,!composing);}}
    onBeforeInput={event=>{const range=syncSelection();if((event.nativeEvent as InputEvent).isComposing)return;Object.assign(edits.current[editIndex.current]!,range);const type=(event.nativeEvent as InputEvent).inputType;if(type==='historyUndo'||type==='historyRedo'){event.preventDefault();undo(type==='historyRedo');}else if(type==='insertParagraph'||type==='insertLineBreak'){event.preventDefault();apply(range.start,range.end,'\n');}else if(type?.startsWith('delete')){const target=(event.nativeEvent as InputEvent).getTargetRanges?.()[0];const deleting=target&&input.current?composerRangeOffsets(input.current,references,target):null;if(deleting){event.preventDefault();apply(deleting.start,deleting.end,'');}}}}
-   onFocus={event=>{syncSelection();onFocus?.(event);}} onBlur={event=>{setComposing(false);guard.current=new CompositionGuard();onBlur?.(event);}}
+   onFocus={event=>{setFocused(true);syncSelection();onFocus?.(event);}} onBlur={event=>{setFocused(false);setDismissed(undefined);setComposing(false);guard.current=new CompositionGuard();onBlur?.(event);}}
    onMouseUp={()=>syncSelection()} onKeyUp={()=>syncSelection()}
    onCompositionStart={event=>{guard.current.start();setComposing(true);onCompositionStart?.(event);}} onCompositionEnd={event=>{guard.current.end();setComposing(false);if(input.current){const next=readComposerDocument(input.current,latest.current.references);publish(next.value,next.references,composerSelection(input.current,next.references)??caret.current);}onCompositionEnd?.(event);}}
    onMouseDown={event=>{if((event.target as Element).closest('[data-remove-composer-token]'))event.preventDefault();}}
@@ -78,10 +138,19 @@ export const ComposerTextInput=forwardRef<ComposerInputHandle,Props>(function Co
     const range=caret.current;
     if((event.metaKey||event.ctrlKey)&&!event.altKey&&event.key.toLowerCase()==='z'){event.preventDefault();undo(event.shiftKey);return;}
     if(event.ctrlKey&&!event.metaKey&&!event.altKey&&event.key.toLowerCase()==='y'){event.preventDefault();undo(true);return;}
+    if(event.key==='Escape'&&suffix){event.preventDefault();event.stopPropagation();setDismissed(value);return;}
+    if(event.key==='Tab'&&suffix&&range.start===value.length&&range.end===value.length&&
+        !event.shiftKey&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.repeat){
+     event.preventDefault();
+     apply(range.start,range.end,suffix);
+     setDismissed(value+suffix);
+     return;
+    }
     if(event.key==='Backspace'&&range.start===range.end&&value[range.start-1]===composerToken){event.preventDefault();apply(range.start-1,range.end,'');return;}
     if(event.key==='Delete'&&range.start===range.end&&value[range.start]===composerToken){event.preventDefault();apply(range.start,range.end+1,'');return;}
     if((event.key==='Backspace'||event.key==='Delete')&&range.start!==range.end&&value.slice(range.start,range.end).includes(composerToken)){event.preventDefault();apply(range.start,range.end,'');return;}
     if(event.key==='Enter'){event.preventDefault();apply(range.start,range.end,'\n');return;}
    }}/>
+  <span id={statusId} className="visually-hidden" role="status">{suffix?`补齐建议「${suffix.trim()}」，按 Tab 接受，Escape 忽略。`:''}</span>
  </div>;
 });

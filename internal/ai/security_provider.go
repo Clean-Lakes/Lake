@@ -207,6 +207,9 @@ func (b *securityProviderBinding) validate(ctx context.Context, driver *session,
 			if task.StoreID != storeID || task.RecoveryEpoch != epoch || task.GoalRevision != b.goalRevision || task.State != security.TaskActive || !task.ExpiresAt.After(now) {
 				return errExecutionOwner
 			}
+			if task.Kind == "schedule" {
+				return errScheduleRetired
+			}
 			if err := ValidateSecurityScheduleTaskSource(tx, task.ID, storeID, epoch, now); err != nil {
 				return err
 			}

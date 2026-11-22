@@ -6,8 +6,6 @@
 .workspace-utilities-tail { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; margin-left: auto; }
 .workspace-utilities-tail > svg { transform: rotate(-90deg); transition:transform 180ms ease; }
 .workspace-utilities-tail > svg.is-open { transform: rotate(0); }
-.workspace-utilities-trigger > small { min-width: 0; max-width: 50%; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-ui); color: var(--text-muted); }
-.workspace-utilities-trigger:has(>small) > .workspace-utilities-tail { margin-left: 0; }
 .workspace-utilities-icon { display: grid; place-items: center; position: relative; flex: 0 0 auto; }
 .workspace-utilities-update-dot { flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--danger); }
 .workspace-utilities-popover { position:fixed; z-index:120; display:flex; padding:6px; overflow:hidden; border:1px solid var(--border); border-radius:18px; background:var(--surface); color:var(--foreground); box-shadow:var(--shadow-popover); }
@@ -47,11 +45,9 @@
 .workspace-menu-form .button { width:100%; border-radius:var(--radius-settings-control); }
 .workspace-menu-error { margin:12px 10px; color:var(--danger); font-size:var(--font-size-ui); overflow-wrap:anywhere; }
 .workspace-utilities-separator { height: 1px; margin: 5px 2px; background: var(--border); }
-.workspace-utilities-popover .sidebar-tags { border: 0; padding: 0; }
-.workspace-utilities-popover .sidebar-tags-toggle { color:var(--text-secondary); min-height:36px; padding:8px 10px; gap:9px; }
-.workspace-utilities-popover .sidebar-tags-toggle > span { flex: 1; }
-.workspace-utilities-popover .sidebar-tags-toggle small { margin-left: auto; }
-.workspace-utilities-popover .sidebar-tags-toggle > svg:last-child { width: 13px; }
-.workspace-utilities-popover .sidebar-tag-list { max-height:none; overflow:visible; margin-bottom:0; }
-.workspace-utilities-popover .tag-nav-row { min-height:36px; }
-@media(pointer:coarse) { .workspace-utility-action,.workspace-project-options > button,.workspace-utilities-popover .tag-nav-row { min-height:44px; } .workspace-menu-back { width:44px; height:44px; } .workspace-menu-form input { font-size:16px; } }
+@media(pointer:coarse) { .workspace-utility-action,.workspace-project-options > button { min-height:44px; } .workspace-menu-back { width:44px; height:44px; } .workspace-menu-form input { font-size:16px; } }
+@media(max-height:260px) {
+ .workspace-menu-page { overflow-y:auto; overscroll-behavior:contain; }
+ .workspace-menu-page .workspace-menu-scroll { flex:none; overflow:visible; }
+ .workspace-menu-form { flex:none; }
+}

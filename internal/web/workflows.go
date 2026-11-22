@@ -60,7 +60,7 @@ func workflowSecuritySteps(template workflowTemplate) []ai.SecurityWorkflowStep 
 	return append(steps, ai.SecurityWorkflowStep{ID: summary, Title: "汇总工作流调查事实、缺失证据和建议", Role: string(ai.SRECoordinator), ResourceIDs: refs, DependsOn: []string{previous}})
 }
 
-// A committed ADK run/occurrence is materialized before its one-way execution
+// A committed ADK run is materialized before its one-way execution
 // claim. Repeated delivery returns the same Web identity, never a second run.
 func (b *Server) startBoundWorkflowRun(binding ai.SecurityWorkflowRunBinding, inherited Object) Object {
 	if b.Models.Active() == nil {
@@ -68,7 +68,7 @@ func (b *Server) startBoundWorkflowRun(binding ai.SecurityWorkflowRunBinding, in
 	}
 	template := b.Store.Workflow(binding.ProjectID, binding.WorkflowID)
 	if int64(template.Version) != binding.TemplateVersion || workflowSecurityDigest(template) != binding.TemplateDigest {
-		fail(409, "工作流模板已变化，原调度未派发")
+		fail(409, "工作流模板已变化，本次执行未派发")
 	}
 	b.workflowMu.Lock()
 	defer b.workflowMu.Unlock()
@@ -79,12 +79,7 @@ func (b *Server) startBoundWorkflowRun(binding ai.SecurityWorkflowRunBinding, in
 	if _, active, err := b.Engine.SuperProject(b.Context, binding.ProjectID); err != nil {
 		aiFailure(err)
 	} else if active {
-		var err error
-		if binding.SourceKind == "schedule_occurrence" {
-			_, err = b.ReceiveScheduleOccurrence(b.Context, binding)
-		} else {
-			_, err = b.Engine.RegisterSuperWorkflow(b.Context, binding)
-		}
+		_, err := b.Engine.RegisterSuperWorkflow(b.Context, binding)
 		aiFailure(err)
 		b.ensureSuperWorkerSession(binding.ProjectID, binding.SessionID, template.Name)
 	}
@@ -199,8 +194,8 @@ func (s *Store) CreateWorkflowRun(project, id string, version int) Object {
 	return s.CreateWorkflowRunWithID(project, id, version, ident(), ident())
 }
 
-// CreateWorkflowRunWithID materializes an already committed occurrence. Its
-// identity is supplied by the trusted scheduler, never model arguments.
+// CreateWorkflowRunWithID materializes an already committed run. Its identity
+// is assigned by the host.
 func (s *Store) CreateWorkflowRunWithID(project, id string, version int, runID, sessionID string) Object {
 	return s.update(func() any {
 		if !workflowIdentifier.MatchString(runID) || !workflowIdentifier.MatchString(sessionID) {

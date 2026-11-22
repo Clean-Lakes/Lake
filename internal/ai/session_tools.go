@@ -194,7 +194,7 @@ func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, ca
 	if e.Bridge == nil {
 		return nil, errors.New("此工具需要 Lake 工作台")
 	}
-	mutation := call.Name == "run_workflow" || call.Name == "save_workflow" || strings.HasPrefix(call.Name, "schedule_") && call.Name != "schedule_list"
+	mutation := call.Name == "run_workflow" || call.Name == "save_workflow"
 	if mutation {
 		silent := c.Permissions != nil && c.Permissions.SilentWriteFiles
 		if call.Name == "run_workflow" {

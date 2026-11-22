@@ -16,12 +16,14 @@ async function until(read,check){
 test('HTTP Pilot admits B/C during an active SDK turn, preserves paused drafts and binds each reply to its actual source',async t=>{
  const home=await mkdtemp(join(tmpdir(),'lake-pilot-continuous-'));
  let releaseA;const gateA=new Promise(resolve=>{releaseA=resolve;});
- const requests=[];let firstClosed=false,finishedA=false;
+ const requests=[],taskIndexes=[];let firstClosed=false,finishedA=false;
  const provider=createServer(async(req,res)=>{
   const chunks=[];for await(const chunk of req)chunks.push(chunk);
   const body=JSON.parse(Buffer.concat(chunks).toString());
   const admitted=[...body.messages].reverse().find(message=>message.role==='user'&&content(message).startsWith('[LAKE ADMITTED HUMAN EVENTS'));
-  const events=JSON.parse(content(admitted).split('\n')[1]);requests.push(events);
+  const lines=content(admitted).split('\n');
+  const events=JSON.parse(lines[1]);requests.push(events);
+  taskIndexes.push(JSON.parse(lines[lines.indexOf('[CURRENT TASK INDEX]')+1]));
   const first=events[0].text.startsWith('A：');
   if(first){res.once('close',()=>{if(!finishedA)firstClosed=true;});await gateA;}
   if(res.destroyed)return;
@@ -77,4 +79,35 @@ test('HTTP Pilot admits B/C during an active SDK turn, preserves paused drafts a
   ended.messages.filter(m=>m.replyToMessageId).map(m=>[m.replyToMessageId,m.text]));
  assert.equal(restored.messageQueue.items.length,1);assert.equal(restored.messageQueue.paused,true);
  assert.equal(requests.length,3,'restoring the sources does not replay model calls or paused drafts');
+
+ // Two historical direct tasks with identical titles must not compete with
+ // the user's selected ID. Reading either record leaves its execution alone.
+ const origin=app.store.list('superInputs').find(event=>event.messageId===a.id);
+ const roleId='pilot:'+project.id;
+ function historicalTask(taskId,status,summary,createdAt){
+  const workerId='worker-'+taskId;
+  app.store.put('superWorkers',workerId,{inline:true,id:workerId,taskId,sessionId:session,projectId:project.id,roleId,
+    roleSnapshot:{id:roleId,projectId:project.id,roleKey:'pilot',name:'Pilot',duties:'测试任务',revision:1},
+    createdAt,sourceEventId:origin.id,generation:1,state:'parked',inputEventIds:[origin.id],settledInputIds:[origin.id],policyHash:'fixture'});
+  return app.superagent.ledger.create({id:taskId,sessionId:session,projectId:project.id,workerId,roleId,sourceEventId:origin.id,
+    originRootTurnId:'history-'+taskId,title:'复测记录',status,summary,mode:'default',deadlineAt:new Date(Date.now()+60000).toISOString()});
+ }
+ const prior=historicalTask('older-finished','completed','旧任务结论','2026-10-01T00:00:00.000Z');
+ const paused=historicalTask('newer-paused','paused','当前暂停进度','2026-10-02T00:00:00.000Z');
+ const workspace=await api(`/api/projects/${project.id}/superagent`);
+ assert.equal(workspace.workers.find(worker=>worker.task.taskId===prior.id).pilotSourceMessageId,a.id);
+ for(const [target,text] of [[prior,'上次得出什么结论？'],[prior,'再解释一下。'],[paused,'上次暂停在哪一步？'],[null,'新话题。']]){
+  const sent=await api(`/api/sessions/${session}/messages`,'POST',{text,...(target&&{taskId:target.id})},202);
+  assert.deepEqual(sent.taskReference,target?{taskId:target.id,title:target.title}:undefined);
+  const settled=await until(()=>api(`/api/sessions/${session}/snapshot`),view=>view.messages.some(message=>message.replyToMessageId===sent.id));
+  assert.deepEqual(settled.messages.find(message=>message.id===sent.id).taskReference,sent.taskReference);
+  assert.equal(requests.at(-1)[0].explicitTaskID,target?.id);
+  if(target) assert.equal(taskIndexes.at(-1)[0].summary,target.summary);
+ }
+ for(const goal of [prior,paused]){
+  assert.equal(app.superagent.ledger.get(goal.id).status,goal.status);
+  assert.equal(app.superagent.ledger.get(goal.id).revision,goal.revision);
+  assert.equal(app.store.get('superWorkers',goal.workerId).generation,1);
+ }
+ assert.equal(app.store.list('superGoals').length,2);
 });

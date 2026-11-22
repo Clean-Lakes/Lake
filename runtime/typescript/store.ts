@@ -16,7 +16,6 @@ import type {
   SessionSnapshot,
   WorkSession,
   ResourceTreeNode,
-  WorkspaceTag,
 } from "../../web-agent/shared/contracts";
 
 export const now = () => new Date().toISOString();
@@ -181,20 +180,15 @@ export class LakeStore {
     return this.require<Project>("projects", projectId);
   }
   session(sessionId: string) {
-    const session = this.require<StoredSession>("sessions", sessionId);
+    // Older versions wrote decorated sessions back along with their raw fields.
+    const { tags: _legacyTags, ...session } = this.require<StoredSession & { tags?: unknown }>("sessions", sessionId);
     const presentation = this.get<Presentation>("sessionPresentation", sessionId);
     const position = this.get<Position>("sessionNavigation", sessionId);
-    const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
-    const tags = (presentation?.tagIds ?? [])
-      .map((id) => this.get<WorkspaceTag>("tags", id))
-      .filter((tag): tag is WorkspaceTag => !!tag && tag.projectId === session.projectId)
-      .sort((a, b) => compare(a.name, b.name) || compare(a.id, b.id));
     // Derived metadata cannot be replaced by a stale model/runtime session write.
     return {
       ...session,
       icon: presentation?.icon ?? "chat",
       presentationRevision: presentation?.revision ?? 0,
-      tags,
       pinned: position?.pinned ?? false,
       navigationPosition: position?.position,
       navigationRevision: this.get<number>("navigationRevisions", session.projectId) ?? 0,
@@ -240,7 +234,6 @@ export class LakeStore {
         const { options, ...session } = this.session(id);
         return session;
       }),
-      tags: this.list("tags"),
       terminals: this.list<import("../../web-agent/shared/contracts").TerminalSession>("terminals").map((terminal) => ({ ...terminal, sessionTitle: this.session(terminal.sessionId).title })),
     };
   }
@@ -305,7 +298,7 @@ export class LakeStore {
     const start = Math.max(0, end - limit);
     return { ...view, cards: view.cards.slice(start, end), cardsOffset: start, totalCards: total };
   }
-  addMessage(sessionId: string, role: Message["role"], text: string, metadata: Pick<Message, 'mentions' | 'images' | 'files' | 'external' | 'replyToMessageId'> = {}) {
+  addMessage(sessionId: string, role: Message["role"], text: string, metadata: Pick<Message, 'mentions' | 'images' | 'files' | 'external' | 'replyToMessageId' | 'taskReference'> = {}) {
     const message: Message = { ...metadata, id: id(), sessionId, role, text, createdAt: now() };
     return this.put("messages", message.id, message);
   }

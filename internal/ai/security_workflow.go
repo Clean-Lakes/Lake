@@ -264,15 +264,17 @@ func (e *Engine) SecurityWorkflowDefinition(ctx context.Context, projectID, work
 	return LoadSecurityWorkflowDefinitionTx(db.WithContext(ctx), storeID, epoch, projectID, workflowID, version, digest)
 }
 
-// CreateSecurityWorkflowRunTx creates only durable application records. The
-// scheduler may consume an occurrence and issue its task grant in this same
-// transaction. No Web run, owner, model or external I/O starts before commit.
+// CreateSecurityWorkflowRunTx creates only durable application records.
+// No Web run, owner, model or external I/O starts before commit.
 func CreateSecurityWorkflowRunTx(tx *gorm.DB, storeID, epoch string, in SecurityWorkflowRunInput, now time.Time) (SecurityWorkflowRunBinding, error) {
 	var out SecurityWorkflowRunBinding
+	if in.SourceKind == "schedule_occurrence" {
+		return out, errScheduleRetired
+	}
 	if !identifier.MatchString(in.RunID) || !identifier.MatchString(in.SessionID) || in.ProjectID == "" || in.WorkflowID == "" || in.ActorID == "" || in.ActionID == "" || in.SourceEventID == "" || now.IsZero() {
 		return out, errSecurityAction
 	}
-	if in.SourceKind != "workflow_run" && in.SourceKind != "schedule_occurrence" {
+	if in.SourceKind != "workflow_run" {
 		return out, errSecurityAction
 	}
 	requestHash := hash(js(in))
@@ -336,11 +338,7 @@ func CreateSecurityWorkflowRunTx(tx *gorm.DB, storeID, epoch string, in Security
 	if err = tx.Create(&workContractRevision{ID: hash("workflow-contract\x00" + in.RunID), SessionID: in.SessionID, ActionID: "workflow-contract:" + in.RunID, GoalID: goalID, GoalRevision: 1, PlanRevision: 1, Actor: in.ActorID, RequestHash: hash(js(contract)), Data: js(contract), At: now}).Error; err != nil {
 		return out, err
 	}
-	kind := "workflow"
-	if in.SourceKind == "schedule_occurrence" {
-		kind = "schedule"
-	}
-	task, err := beginSecurityTask(tx, storeID, epoch, SecurityTaskStart{Action: SecurityTaskAction{ActorID: in.ActorID, ActionID: in.ActionID, ProjectID: in.ProjectID, SessionID: in.SessionID, GoalID: goalID}, Kind: kind, SourceMessageID: in.SourceMessageID, SourceKind: in.SourceKind, SourceEventID: in.SourceEventID, ExpectedGoalRevision: 1, ExpiresAt: in.ExpiresAt}, now)
+	task, err := beginSecurityTask(tx, storeID, epoch, SecurityTaskStart{Action: SecurityTaskAction{ActorID: in.ActorID, ActionID: in.ActionID, ProjectID: in.ProjectID, SessionID: in.SessionID, GoalID: goalID}, Kind: "workflow", SourceMessageID: in.SourceMessageID, SourceKind: in.SourceKind, SourceEventID: in.SourceEventID, ExpectedGoalRevision: 1, ExpiresAt: in.ExpiresAt}, now)
 	if err != nil {
 		return out, err
 	}
@@ -502,6 +500,9 @@ func (e *Engine) ActivateSecurityWorkflowRun(ctx context.Context, runID string) 
 		}
 		if err := json.Unmarshal([]byte(row.Data), &binding); err != nil {
 			return err
+		}
+		if binding.SourceKind == "schedule_occurrence" {
+			return errScheduleRetired
 		}
 		task, err := verifySecurityTaskTx(tx, binding.Task.ID, binding.SessionID, binding.GoalID, binding.RootTurnID, time.Now().UTC())
 		if err != nil {

@@ -38,6 +38,24 @@ div.ai-markdown.assistant-prose:has(> .reply-info-facts) > :is(h1,h2,h3,h4) { fo
 :is(.assistant-prose,.live-text-motion-label)[data-live-motion=active] .live-text-motion-character { animation-name:lake-live-text-rise; animation-play-state:running; }
 @keyframes lake-live-text-rise { 0%,12%,100% { top:0; } 6% { top:-1px; } }
 .assistant-prose[data-live-motion=active] .live-text-motion-character { animation-name:lake-live-prose-rise; }
+.pilot-summary-cursor,.assistant-prose:not([data-live-motion=active]) .pilot-summary-cursor-line { display:none; }
+.pilot-summary-cursor-tail { white-space:nowrap; }
+.assistant-prose[data-live-motion=active] .pilot-summary-cursor {
+ display:inline-flex;
+ margin-inline-start:3px;
+ vertical-align:-.18em;
+ color:var(--info);
+ pointer-events:none;
+ user-select:none;
+ opacity:.85;
+}
+@media (prefers-reduced-motion:no-preference) {
+ .assistant-prose[data-live-motion=active] .pilot-summary-cursor { animation:lake-summary-cursor 1.25s ease-in-out infinite; }
+}
+@keyframes lake-summary-cursor {
+ 0%,100% { transform:translateY(0) scale(.88); opacity:.46; }
+ 42% { transform:translateY(-1.3px) scale(1); opacity:1; filter:drop-shadow(0 0 2.5px color-mix(in srgb,var(--info) 68%,transparent)); }
+}
 @keyframes lake-live-prose-rise { 0%,100% { top:0; } 50% { top:-1px; } }
 /* Opaque glyph color carries the highlight even inside a clipped author name.
    Combining the lift and light keeps one clock per glyph; no text-clip mask. */

@@ -48,9 +48,9 @@ const workers:SuperWorker[]=titles.map((title,index)=>{
   task:{taskId:`readme-task-${index}`,sessionId:`readme-task-session-${index}`,projectId,title,state:'completed',acceptanceState:'not_evaluated',revision:1,originRootTurnId:`readme-task-root-${index}`,deadlineAt:'2026-11-13T03:00:00Z',updatedAt:createdAt,resources:[],summary:reports[index]??'演示检查记录已保存。'},
   execution:{backend:channel.execution!,source:'task_assignment',assignedAt:createdAt,totalRuns:channel.execution?.kind==='acp'?1:0,runs:channel.execution?.kind==='acp'?[{id:`readme-run-${index}`,agent:'codex',scope:'worker',state:'completed',dispatchPhase:'answered',createdAt,updatedAt:createdAt,usage:null}]:[]}};
 });
-const sessions:WorkSession[]=[{id:pilot,projectId,title:'Pilot',workspaceRole:'router',status:'completed',resourceIds:[],createdAt:at,updatedAt:at,icon:'chat',tags:[]},
- ...channels.map(channel=>({id:channel.sessionId,projectId,title:channel.roleName,workspaceRole:'role',status:'completed',resourceIds:[],createdAt:at,updatedAt:at,icon:'chat',tags:[]})),
- ...workers.map(worker=>({id:worker.sessionId,projectId,title:worker.task.title,workspaceRole:'worker',status:'completed',resourceIds:[],createdAt:worker.createdAt!,updatedAt:worker.createdAt!,icon:'chat',tags:[]}))] as WorkSession[];
+const sessions:WorkSession[]=[{id:pilot,projectId,title:'Pilot',workspaceRole:'router',status:'completed',resourceIds:[],createdAt:at,updatedAt:at,icon:'chat'},
+ ...channels.map(channel=>({id:channel.sessionId,projectId,title:channel.roleName,workspaceRole:'role',status:'completed',resourceIds:[],createdAt:at,updatedAt:at,icon:'chat'})),
+ ...workers.map(worker=>({id:worker.sessionId,projectId,title:worker.task.title,workspaceRole:'worker',status:'completed',resourceIds:[],createdAt:worker.createdAt!,updatedAt:worker.createdAt!,icon:'chat'}))] as WorkSession[];
 const messages:Message[]=[
  {id:'readme-question',sessionId:pilot,role:'user',text:'请三位专员分别只读核对订单服务、近期发布和数据库连接，结果直接在这里回复。',createdAt:at},
  {id:'readme-pilot-reply',sessionId:pilot,role:'assistant',text:'已交给服务器、发布和数据库专员，各自核对后会在这里回复。',createdAt:at},
@@ -75,7 +75,7 @@ window.fetch=async(input,init)=>{
  const method=init?.method??(input instanceof Request?input.method:'GET');
  if(method!=='GET'){rejectedWrites.push(path);return json({error:'README 演示仅展示虚构记录，不执行操作'},405);}
  if(path==='/api/bootstrap')return json({authenticated:true,modelConfigured:true,modelName:model.name,modelId:model.modelId,modelSelection:model,terminalMode:'pty',supportsImageInput:false,backendRuntime:'typescript',aiRuntime:'typescript'});
- if(path==='/api/catalog')return json({projects:[project],sessions,resources,resourceTree,tags:[],terminals:[]});
+ if(path==='/api/catalog')return json({projects:[project],sessions,resources,resourceTree,terminals:[]});
  if(path.endsWith('/superagent'))return json({active:true,project:{projectId,routerSessionId:pilot,version:1},channels,workers,cursor:1,pilotMessageRead:read});
  if(path.endsWith('/external-agents'))return json({agents:[{id:'codex',name:'Codex',projectId,revision:1,enabled:true,installed:true,transportReady:true,assignmentReady:true,model:model.name,authMode:'chatgpt',updatedAt:at}]});
  if(path.endsWith('/snapshot'))return json(snapshot(sessions.find(session=>session.id===path.split('/')[3])??sessions[0]));

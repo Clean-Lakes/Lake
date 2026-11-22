@@ -29,6 +29,8 @@ async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = 
   const backgroundChildGate = new Promise((resolve) => { releaseBackgroundChild = resolve; });
   let releaseWatchdogWorker, holdingWatchdogWorker=false;
   const watchdogGate=new Promise(resolve=>{releaseWatchdogWorker=resolve;});
+  let finishJointSummary;
+  const jointSummaryGate=new Promise(resolve=>{finishJointSummary=resolve;});
   const requests = [];
   const requestAuthorizations = [];
   const target = join(home, "approved.txt");
@@ -100,6 +102,22 @@ async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = 
     if (mode === "memory-native-error" && nativeMemory && JSON.stringify(request.messages).includes("You are now acting as the memory extraction subagent")) {
       res.writeHead(401,{"Content-Type":"application/json"});res.end(JSON.stringify({error:{message:"synthetic-memory-provider-failure",type:"authentication_error"}}));return;
     }
+    if (mode === 'draft-completion') {
+      const content = request.messages.at(-1).content;
+      const draft = JSON.parse(typeof content === 'string' ? content : content.map(part => part.text).join('')).draft;
+      if (draft === '较早的草稿') {
+        await new Promise(resolve => {
+          const timer = setTimeout(resolve, 1800);
+          res.once('close', () => { clearTimeout(timer); resolve(); });
+        });
+        if (res.destroyed) return;
+      }
+      const suffix = {
+        '输出含凭据': 'synthetic-secret-no-real-credential',
+        '样例服务运行正常吗？': '可以列出核对指标吗？',
+      }[draft] ?? '运行状态和最近一次异常。';
+      delta = {content: JSON.stringify({suffix})};
+    }
     if (request.stream !== true) {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({id:"fixture",object:"chat.completion",created:1,model:"fixture",choices:[{index:0,
@@ -109,14 +127,17 @@ async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = 
     }
     res.writeHead(200, { "Content-Type": "text/event-stream" });
     const echo = mode === 'magpie-secret' ? req.headers.authorization?.replace(/^Bearer /, '') : undefined;
+    const streamingJointSummary=mode==='super-joint-contribution'&&delta.content==='甲、乙两个目录均已完成本次核对。';
     const deltas = echo ? [{content: 'prefix ' + echo.slice(0, 13)}, {content: echo.slice(13) + ' suffix'}] :
       mode === "secret"
         ? [{ content: "prefix synthetic-secret-" }, { content: "no-real-credential suffix" }]
-        : [delta];
-    for (const delta of deltas)
+        : streamingJointSummary?[{content:'甲、乙两个目录'},{content:'均已完成本次核对。'}]:[delta];
+    for (const [index, delta] of deltas.entries()){
       res.write(
         `data: ${JSON.stringify({ id: "fixture", object: "chat.completion.chunk", created: 1, model: "fixture", choices: [{ index: 0, delta: { role: "assistant", ...delta }, finish_reason: null }] })}\n\n`,
       );
+      if(streamingJointSummary&&index===0)await jointSummaryGate;
+    }
     res.write(
       `data: ${JSON.stringify({ id: "fixture", object: "chat.completion.chunk", created: 1, model: "fixture", choices: [{ index: 0, delta: {}, finish_reason: tool ? "tool_calls" : "stop" }], usage: { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 } })}\n\n`,
     );
@@ -160,6 +181,7 @@ async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = 
   t.after(async () => {
     releaseBackgroundChild();
     releaseWatchdogWorker();
+    finishJointSummary();
     await app.close();
     await new Promise((resolve) => provider.close(resolve));
   });
@@ -204,6 +226,7 @@ async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = 
     enableCodexFixture:async()=>{usesCodexFixture=true;await prepareCodexProtocolFixture(app,mode);},
     get holdingWatchdogWorker(){return holdingWatchdogWorker;},
     releaseWatchdogWorker,
+    finishJointSummary,
     requestAuthorizations,
     gatewayURL: `http://127.0.0.1:${provider.address().port}/v1`,
     failWorkerRequests() { failWorkerRequests = true; },
@@ -226,6 +249,31 @@ async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = 
     },
   };
 }
+
+test('draft completion uses only current text, cancels stale requests, and never submits a message', async t => {
+  const f = await fixture(t, 'draft-completion');
+  const {modelId} = await f.api('/api/bootstrap');
+  const endpoint = `/api/sessions/${f.session.id}/completion`;
+  const complete = (text, expectedModel = modelId) => f.api(endpoint, 'POST', {text, modelId: expectedModel});
+  for (const text of ['', '密码。', 'api_key=synthetic', 'synthetic-secret-no-real-credential', '@数据库'])
+    assert.equal((await complete(text)).suffix, '');
+  assert.equal((await complete('查看样例服务','stale-model')).suffix, '');
+  assert.equal(f.calls, 0, 'ineligible drafts and stale selections never reach the provider');
+
+  const prior = complete('较早的草稿');
+  await until(() => f.calls, count => count === 1);
+  assert.deepEqual(await complete('查看样例服务'), {suffix:'运行状态和最近一次异常。',modelId});
+  assert.equal((await prior).suffix, '', 'a newer draft supersedes the in-flight request');
+  assert.equal((await complete('输出含凭据')).suffix, '');
+  const request = f.requests[1];
+  assert.deepEqual(request.messages.map(message=>message.role), ['system','user']);
+  assert.deepEqual(JSON.parse(request.messages[1].content), {draft:'查看样例服务'});
+  assert.ok(!request.tools?.length);
+  assert.deepEqual(await complete('样例服务运行正常吗？'), {suffix:'可以列出核对指标吗？',modelId});
+  assert.match(f.requests.at(-1).messages[0].content, /follow-up question/);
+  assert.equal((await complete('这是样例结果吗?')).suffix, '', 'a statement is not a follow-up question');
+  assert.deepEqual(f.app.store.messages(f.session.id), []);
+});
 
 async function writeMagpie(f, updates = {}) {
   const value = {model: 'magpie-first', baseURL: f.gatewayURL, key: 'synthetic-magpie-private-only', contextWindow: 64000, maxOutput: 2048,
@@ -1289,12 +1337,42 @@ test("two specialist channels share one task, retain their own evidence and rece
   }
   const question=(await api("/api/sessions/"+b.sessionId+"/ai")).question;
   await api("/api/sessions/"+a.sessionId+"/ai/answer","POST",{id:question.id,answers:{review:["提交"]}},409);
-  await api("/api/sessions/"+b.sessionId+"/ai/answer","POST",{id:question.id,answers:{review:["提交"]}});
+  const summaryStream=new AbortController();
+  const summaryEvents=await fetch(f.app.origin+eventPath,{headers:{Authorization:`Bearer ${f.app.token}`},
+    signal:AbortSignal.any([summaryStream.signal,AbortSignal.timeout(15000)])});
+  let packet;
+  const firstSummary=async()=>{
+    let buffer='';
+    const decoder=new TextDecoder();
+    for await(const chunk of summaryEvents.body){
+      buffer+=decoder.decode(chunk,{stream:true});
+      const frames=buffer.split('\n\n');buffer=frames.pop();
+      for(const frame of frames){
+        const data=frame.split('\n').find(line=>line.startsWith('data: '));
+        const event=data&&JSON.parse(data.slice(6));
+        if(event?.pilotSummaryText)return event;
+      }
+    }
+  };
+  try{
+    await api("/api/sessions/"+b.sessionId+"/ai/answer","POST",{id:question.id,answers:{review:["提交"]}});
+    packet=await firstSummary();
+    assert.equal(packet.sessionId,pilot);
+    assert.equal(packet.conversationProgress,true);
+    assert.equal(packet.pilotSummaryText.text,'甲、乙两个目录');
+    const during=await api(path),round=during.conversations.find(item=>item.id===packet.pilotSummaryText.roundId);
+    assert.equal(round.state,'summarizing');
+    assert.deepEqual(round.summary.preview,{seq:packet.seq,text:packet.pilotSummaryText.text});
+    assert.equal((await api('/api/sessions/'+pilot+'/snapshot')).messages.some(message=>message.jointReport?.kind==='summary'),false);
+  }finally{summaryStream.abort();f.finishJointSummary();}
   const completed=await until(()=>api(path), s=>s.workers.every(w=>w.task.collaboration?.state==="completed" && w.assignmentState==="parked"));
   const receipt=completed.workers[0].task.collaboration.reportId;
   assert.ok(receipt);
   const finalized=await until(()=>api('/api/sessions/'+pilot+'/snapshot'),snapshot=>snapshot.messages.some(message=>message.jointReport?.kind==='summary'));
   const conclusion=finalized.messages.find(message=>message.jointReport?.kind==='summary');
+  const done=(await api(path)).conversations.find(round=>round.id===packet.pilotSummaryText.roundId);
+  assert.equal(done.summary.id,conclusion.id);
+  assert.equal(done.summary.preview,undefined);
   assert.deepEqual(conclusion.jointReport,{taskId:a.task.taskId,reportId:receipt,kind:'summary'});
   assert.equal(conclusion.replyToMessageId,finalized.messages.find(message=>message.role==='user').id);
   assert.equal(conclusion.text,'甲、乙两个目录均已完成本次核对。');
@@ -1641,47 +1719,56 @@ for(const mode of ['model-error-http','model-error-stream'])test(`Pilot retains 
   assert.equal(f.app.store.list('superInputs').find(item=>item.id===input.id).disposition,'blocked','a fresh request does not replay the blocked input');
 });
 
-test("session tags and icons preserve project scope, revisions, activity and restart state", async (t) => {
+test("retired workspace tags stay in storage while session icons remain editable", async (t) => {
   const f = await fixture(t);
-  const other = await f.api("/api/projects", "POST", { name: "Other" });
-  const create = (project, name) => f.api(`/api/projects/${project}/tags`, "POST", { name, color: "purple" }, 201);
-  const tag = await create(f.project.id, "Database");
-  const foreign = await create(other.id, "External");
-  const path = `/api/sessions/${f.session.id}/presentation`;
+  const sessionPath = `/api/sessions/${f.session.id}`;
+  const path = `${sessionPath}/presentation`;
   const save = (data, status = 200) => f.api(path, "PUT", data, status);
-  const before = (await f.api(`/api/sessions/${f.session.id}/snapshot`)).session;
-  await save({ icon: "database", tagIds: [foreign.id], revision: 0 }, 404);
-  await save({ icon: "javascript:alert(1)", tagIds: [], revision: 0 }, 400);
-  await save({ icon: "database", tagIds: [tag.id, tag.id], revision: 0 }, 400);
-  await save({ icon: "database", tagIds: [], revision: "0" }, 400);
-  await save({ icon: "database", tagIds: [], revision: -1 }, 400);
+  const tag = { id: "old-tag", projectId: f.project.id, name: "Database", color: "purple" };
+  const legacy = { ...f.app.store.session(f.session.id), tags: [tag] };
+  f.app.store.put("tags", tag.id, tag);
+  f.app.store.put("sessions", f.session.id, legacy);
+  f.app.store.put("sessionPresentation", f.session.id, { icon: "chat", revision: 0, tagIds: [tag.id] });
+  const before = (await f.api(`${sessionPath}/snapshot`)).session;
+  const catalog = await f.api("/api/catalog");
+  assert.ok(!("tags" in before));
+  assert.ok(!("tags" in catalog));
+  assert.ok(!("tags" in catalog.sessions.find(({ id }) => id === f.session.id)));
+  await f.api(`/api/projects/${f.project.id}/tags`, "POST", { name: "New tag", color: "blue" }, 404);
+  await f.api(`/api/tags/${tag.id}`, "PUT", { name: "Data", color: "blue" }, 404);
+  await f.api(`/api/tags/${tag.id}`, "DELETE", undefined, 404);
+  await save({ icon: "database", tagIds: [], revision: 0 }, 410);
+  await save({ icon: "javascript:alert(1)", revision: 0 }, 400);
+  await save({ icon: "database", revision: "0" }, 400);
+  await save({ icon: "database", revision: -1 }, 400);
   assert.equal(f.app.store.cursor(f.session.id), 0, "rejected edits must not emit events");
-  let saved = await save({ icon: "database", tagIds: [tag.id], revision: 0 });
-  assert.deepEqual(saved.tags, [tag]);
+  let saved = await save({ icon: "database", revision: 0 });
+  assert.ok(!("tags" in saved));
   assert.equal(saved.icon, "database");
   assert.equal(saved.presentationRevision, 1);
   assert.equal(saved.updatedAt, before.updatedAt);
   assert.equal(saved.status, before.status);
-  await save({ icon: "chat", tagIds: [], revision: 0 }, 409);
-  await f.restart();
-  saved = (await f.api(`/api/sessions/${f.session.id}/snapshot`)).session;
-  assert.deepEqual(saved.tags, [tag]);
-  assert.equal(saved.presentationRevision, 1);
-  const edited = await f.api(`/api/tags/${tag.id}`, "PUT", { name: "Data", color: "blue" });
-  assert.deepEqual((await f.api(`/api/sessions/${f.session.id}/snapshot`)).session.tags, [edited]);
+  await save({ icon: "chat", revision: 0 }, 409);
   // A model update holding an older session snapshot cannot overwrite metadata.
-  f.app.store.put("sessions", before.id, { ...before, options: f.app.store.session(before.id).options });
+  f.app.store.put("sessions", before.id, legacy);
   assert.equal(f.app.store.session(before.id).icon, "database");
-  await f.api(`/api/tags/${tag.id}`, "DELETE");
-  saved = (await f.api(`/api/sessions/${f.session.id}/snapshot`)).session;
-  assert.deepEqual(saved.tags, []);
+  await f.restart();
+  saved = (await f.api(`${sessionPath}/snapshot`)).session;
+  assert.ok(!("tags" in saved));
+  assert.equal(saved.icon, "database");
   assert.equal(saved.presentationRevision, 1);
-  await save({ icon: "chat", tagIds: [tag.id], revision: 1 }, 404);
-  await f.api(`/api/projects/${other.id}/tags`, "POST", { name: "External", color: "red" }, 409);
-  await f.api(`/api/projects/${other.id}/tags`, "POST", { name: "Invalid", color: "url(evil)" }, 400);
-  await f.api(`/api/projects/${other.id}/tags`, "POST", { name: " ".repeat(41) + "x", color: "blue" }, 400);
-  assert.equal((await f.api("/api/catalog")).tags.length, 1);
-  assert.equal(f.app.store.events(f.session.id, 0).length, 3);
+  assert.deepEqual(f.app.store.get("tags", tag.id), tag);
+  assert.deepEqual(f.app.store.get("sessionPresentation", f.session.id).tagIds, [tag.id]);
+  assert.equal(f.app.store.events(f.session.id, 0).length, 1);
+});
+
+test("retired workspace schedule routes are unavailable", async (t) => {
+  const f = await fixture(t);
+  const path = `/api/projects/${f.project.id}/schedules`;
+  await f.api(path, "GET", undefined, 404);
+  await f.api(`${path}/old-schedule`, "GET", undefined, 404);
+  await f.api(`${path}/old-schedule`, "PATCH", { enabled: true, expectedRevision: 1 }, 404);
+  await f.api(`${path}/old-schedule/grant`, "POST", {}, 404);
 });
 
 test("session pinning and ordering preserve activity, enforce group scope and reject stale concurrent moves", async (t) => {
@@ -1736,21 +1823,22 @@ test("session pinning and ordering preserve activity, enforce group scope and re
 
 test("invalid JSON bodies cannot enter persistent navigation mutations", async (t) => {
   const f = await fixture(t);
+  const url = `${f.app.origin}/api/sessions/${f.session.id}/presentation`;
   for (const body of ["null", "[]", "true", "", "{oops"]) {
-    const response = await fetch(`${f.app.origin}/api/projects/${f.project.id}/tags`, {
-      method: "POST",
+    const response = await fetch(url, {
+      method: "PUT",
       headers: { Authorization: `Bearer ${f.app.token}`, "Content-Type": "application/json" },
       body,
     });
     assert.equal(response.status, 400);
   }
-  const response = await fetch(`${f.app.origin}/api/projects/${f.project.id}/tags`, {
-    method: "POST",
+  const response = await fetch(url, {
+    method: "PUT",
     headers: { Authorization: `Bearer ${f.app.token}`, "Content-Type": "text/plain" },
-    body: JSON.stringify({ name: "Wrong content type", color: "blue" }),
+    body: JSON.stringify({ icon: "database", revision: 0 }),
   });
   assert.equal(response.status, 415);
-  assert.deepEqual((await f.api("/api/catalog")).tags, []);
+  assert.equal(f.app.store.session(f.session.id).presentationRevision, 0);
 });
 
 test("explicit TS Dev imports model configuration once without copying credentials or touching the Go database", async (t) => {

@@ -24,17 +24,23 @@ func checkSuperWorkflowTx(tx *gorm.DB, w superWorkerRow, now time.Time) error {
 	if definition.Revision != run.DefinitionRevision {
 		return errSuperConflict
 	}
-	if _, err := verifySecurityTaskTx(tx, run.TaskID, run.SessionID, run.GoalID, run.RootTurnID, now); err != nil {
+	task, err := verifySecurityTaskTx(tx, run.TaskID, run.SessionID, run.GoalID, run.RootTurnID, now)
+	if err != nil {
 		return err
+	}
+	if task.Kind == "schedule" {
+		return errScheduleRetired
 	}
 	return ValidateSecurityScheduleTaskSource(tx, run.TaskID, run.StoreID, run.RecoveryEpoch, now)
 }
 
-// The occurrence/action has already created its canonical goal, task, frozen
-// definition and scoped authority. Register identity only; never ask the Router
-// to reinterpret a schedule as a new human request or create a second goal.
+// The action already created its canonical goal, task, frozen definition and
+// scoped authority. Register the existing identity with the Router.
 func (e *Engine) RegisterSuperWorkflow(ctx context.Context, binding SecurityWorkflowRunBinding) (SuperRouteResult, error) {
 	var out SuperRouteResult
+	if binding.SourceKind == "schedule_occurrence" {
+		return out, errScheduleRetired
+	}
 	db, err := e.superStore()
 	if err != nil {
 		return out, err
@@ -65,13 +71,17 @@ func (e *Engine) RegisterSuperWorkflow(ctx context.Context, binding SecurityWork
 		if err := tx.First(&goal, "id = ? AND session_id = ?", binding.GoalID, binding.SessionID).Error; err != nil {
 			return err
 		}
-		kind := "workflow"
-		if binding.SourceKind == "schedule_occurrence" {
-			kind = "schedule"
-		}
+		const kind = "workflow"
 		source := superSourceRow{ID: hash(js([]any{"workflow-source", binding.ProjectID, binding.WorkflowID, binding.DefinitionRevision})), ProjectID: binding.ProjectID, Kind: kind, ActorRef: "host-workflow-runtime", Revision: hash(js([]any{binding.TemplateDigest, binding.DefinitionRevision})), Enabled: true}
 		var priorSource superSourceRow
-		if lookup := tx.First(&priorSource, "id = ?", source.ID).Error; errors.Is(lookup, gorm.ErrRecordNotFound) {
+		lookup := tx.First(&priorSource, "id = ?", source.ID).Error
+		if lookup == nil && priorSource.Kind == "schedule" && priorSource.ProjectID == source.ProjectID {
+			// Older schedules shared the manual workflow source ID. Leave its history intact.
+			source.ID = hash(js([]string{"manual-workflow-source", source.ID}))
+			priorSource = superSourceRow{}
+			lookup = tx.First(&priorSource, "id = ?", source.ID).Error
+		}
+		if errors.Is(lookup, gorm.ErrRecordNotFound) {
 			if err := tx.Create(&source).Error; err != nil {
 				return err
 			}

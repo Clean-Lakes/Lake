@@ -67,14 +67,12 @@ export type WorkSession = {
   createdAt: string;
   updatedAt: string;
   icon?: string;
-  tags?: WorkspaceTag[];
   presentationRevision?: number;
   pinned?: boolean;
   navigationPosition?: number;
   navigationRevision?: number;
 };
 
-export type WorkspaceTag = {id: string; projectId: string; name: string; color: "gray" | "green" | "blue" | "purple" | "orange" | "red"};
 
 export type MessageMention = {kind: "resource" | "skill" | "mcp" | "role"; id: string; label: string; start: number; end: number; resourceKind?: Resource["kind"]};
 
@@ -82,6 +80,7 @@ export type SpecialistReplyAuthor = {kind:'specialist';name:string;roleId?:strin
 /** An instruction that entered Lake from an external developer agent client. */
 export type ExternalMessageOrigin = {kind:'mcp';connectionId?:string;connectionName?:string;threadId?:string;threadTitle?:string;clientMessageId?:string};
 export type Message = {
+  taskReference?: PilotTaskReference;
   /** Host-owned reply association; a later user message never owns this reply. */
   replyToMessageId?:string;
   conversation?: {id:string;sourceMessageId:string;kind:'reply'|'summary'|'notice';summaryRequested?:boolean};
@@ -211,7 +210,6 @@ export type TerminalEntry = {
 };
 
 export type Catalog = {
-  tags?: WorkspaceTag[];
   projects: Project[];
   resources: Resource[];
   resourceTree?: ResourceTreeNode[];
@@ -296,6 +294,7 @@ export type SSHHostKeyTrust = { id: string; resourceId: string; host: string; po
 export type SessionEvent = {
 	conversationMode?: ConversationMode;
   conversationProgress?: true;
+  pilotSummaryText?: {roundId:string;text:string};
   seq: number;
   sessionId: string;
   type: "session" | "message" | "specialist" | "evidence" | "action" | "terminal";
@@ -408,9 +407,10 @@ export type TaskCollaboration = {
   participants: TaskParticipant[]; state: SuperTaskState; acceptanceState: SuperTaskAcceptance; acceptanceId?: string; reportId?: string;
 };
 export type SuperTask = {taskId:string;executionGoalId?:string;collaboration?:TaskCollaboration;sessionId:string;projectId?:string;title:string;state:SuperTaskState;acceptanceState:SuperTaskAcceptance;reportedOutcome?:'completed'|'partial';revision:number;originRootTurnId:string;deadlineAt:string;updatedAt?:string;reason?:string;summary?:string;resources?:{runtime:string;assetRef?:string;terminalId?:string}[]};
+export type PilotTaskReference = Pick<SuperTask,'taskId'|'title'>;
 export type SuperProject = {projectId:string;routerSessionId:string;version:number};
 export type SuperWorkerActivity = {phase:'queued'|'thinking'|'tool'|'waiting_approval'|'waiting_input'|'waiting_external';label:string;toolName?:string;updatedAt:string;sourceMessageId?:string;sourceSessionId?:string};
-export type SuperWorker = {id:string;createdAt?:string;roleId:string;roleName:string;sessionId:string;task:SuperTask;assignmentState:string;parentWorkerId?:string;sourceExternal?:boolean;activity?:SuperWorkerActivity;pilotReport?:{messageId:string;executionSettled:boolean};execution?:import('./external-agents').AgentExecutionSummary};
+export type SuperWorker = {id:string;createdAt?:string;roleId:string;roleName:string;sessionId:string;task:SuperTask;assignmentState:string;parentWorkerId?:string;sourceExternal?:boolean;pilotSourceMessageId?:string;activity?:SuperWorkerActivity;pilotReport?:{messageId:string;executionSettled:boolean};execution?:import('./external-agents').AgentExecutionSummary};
 export type SpecialistChannelInfo = {avatarId?:import('./specialist-avatars').LakeAvatarName;execution?:AgentBackendRef;messageRead?:ConversationReadState;id:string;projectId:string;roleId:string;roleName:string;duties?:string;roleRevision?:number;sessionId:string;revision:number;createdAt:string;needsConfirmation?:boolean;running?:boolean;preparing?:boolean;completionCursor?:string;seenCompletionCursor?:string};
 export type SpecialistChannelEntry = {id:string;sourceSessionId:string;taskId?:string;workerId?:string;createdAt:string;message?:Message;card?:AICard;reply?:{turnId:string;state:'working'|'settled'}};
 export type SpecialistChannelPage = {replyPresentation?:'invocation';channel:SpecialistChannelInfo;entries:SpecialistChannelEntry[];nextCursor:string;workers:SuperWorker[];active:SessionSnapshot[];routing:boolean;queued:number};
@@ -425,6 +425,7 @@ export type SpecialistConversation = {
   kind?:'task-summary';
   state:'queued'|'running'|'summarizing'|'completed'|'cancelled'|'interrupted'|'failed';
   createdAt:string;deadlineAt:string;members:SpecialistConversationMember[];summaryMessageId?:string;summaryRequested?:boolean;
+  summary?: {id:string;taskId?:string;preview?:{seq:number;text:string}};
 };
 export type SpecialistQuestion = {author:SpecialistReplyAuthor;taskTitle:string;request:AIQuestionRequest};
 export type SuperWorkspace = {pilotMessageRead?:ConversationReadState;active:boolean;project:SuperProject;workers:SuperWorker[];questions?:SpecialistQuestion[];channels?:SpecialistChannelInfo[];conversations?:SpecialistConversation[];cursor?:number};
@@ -485,6 +486,3 @@ export type GatewayInstructionStatus = {
   error?:string;
 };
 export type SRESnapshot = {featureVersion:number;enabled:boolean;tasks:SRETask[];pilot?:PilotSettings};
-
-export type ScheduleExecution={id:string;scheduled_at:string;started_at?:string;finished_at?:string;status:string;error?:string;task_id?:string;session_id?:string};
-export type ScheduledTask={id:string;project_id:string;session_id:string;name:string;at:string;interval_seconds:number;kind:'reminder'|'workflow';message?:string;workflow_id?:string;version?:number;enabled:boolean;revision:number;status:string;last_at?:string;error?:string;task_id?:string;history_count:number;history?:ScheduleExecution[]};

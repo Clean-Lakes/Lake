@@ -5,6 +5,14 @@ import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {AssistantMarkdown} from '../src/AssistantMarkdown';
 import {remarkRevealText} from '../src/markdownReveal';
+
+test('a specialist cursor keeps the final grapheme and leaves inline links intact',()=>{
+ const render=(children:string)=>renderToStaticMarkup(createElement(AssistantMarkdown,{children,cursorAvatar:'rabbit'}));
+ const formatted=render('正在核对 **记录👩🏽‍💻**');
+ assert.match(formatted,/class="specialist-reply-cursor-tail">👩🏽‍💻<span class="specialist-reply-cursor"/);
+ const link=render('正在核对 [记录](https://example.com)');
+ assert.match(link,/<a[^>]*>记录<\/a><span class="specialist-reply-cursor"/);
+});
 function fixture(initial=''){
  let now=0,id=0;const pending=new Map<number,FrameRequestCallback>(),values:string[]=[];
  const reveal=new TextReveal(initial,text=>values.push(text),{request:cb=>{pending.set(++id,cb);return id},cancel:n=>{pending.delete(n)},now:()=>now});

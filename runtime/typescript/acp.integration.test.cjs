@@ -31,18 +31,32 @@ async function copyRuntime(registry){
  await assert.rejects(access(join(registry.runtimeRoot(),'node_modules/@agentclientprotocol/codex-acp')),'direct App Server must run without the retired wrapper');
 }
 
-async function localCodexProvider(registry,url,model){
+function respondToModelDiscovery(req,res){
+ if(req.method!=='GET'||!req.url?.split('?')[0].endsWith('/models'))return false;
+ res.writeHead(404);res.end();
+ return true;
+}
+
+async function localCodexProvider(registry,url,model,listedModel){
  const source=registry.local.home;await mkdir(source,{recursive:true});
  const trap=join(source,'MCP_TRAP_EXECUTED'),notify=join(source,'NOTIFY_TRAP_EXECUTED'),hook=join(source,'HOOK_TRAP_EXECUTED'),command=[process.execPath,'-e',"require('fs').writeFileSync("+JSON.stringify(trap)+",'unexpected')"];
  await writeFile(join(source,'config.toml'),'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "max"\nmodel_provider = "fixture"\nnotify = '+JSON.stringify([process.execPath,'-e',"require('fs').writeFileSync("+JSON.stringify(notify)+",'unexpected')"])+ '\n[model_providers.fixture]\nname = "Isolated Responses fixture"\nbase_url = "'+url+'"\nwire_api = "responses"\nrequires_openai_auth = false\n[mcp_servers.inherited_trap]\ncommand = '+JSON.stringify(process.execPath)+'\nargs = '+JSON.stringify(command.slice(1))+'\nenabled = true\n[hooks]\nSessionStart = [{hooks = [{type = "command", command = "touch '+hook+'"}]}]\n',{mode:0o600});
  if(model!==undefined){const path=join(source,'config.toml');await writeFile(path,(await readFile(path,'utf8')).replace('model = "gpt-6.1-sol"','model = '+JSON.stringify(model)),{mode:0o600});}
+ if(listedModel){
+  const catalog=join(source,'fixture-models.json'),config=join(source,'config.toml');
+  const {models}=JSON.parse(await readFile(join(__dirname,'acp','codex-models.json'),'utf8'));
+  const stock=models.find(model=>model.slug==='gpt-6.1-sol');
+  await writeFile(catalog,JSON.stringify({models:[stock,{...stock,slug:listedModel,default_reasoning_level:'high',
+   supported_reasoning_levels:[{effort:'low',description:''},{effort:'high',description:''}]}]}),{mode:0o600});
+  await writeFile(config,'model_catalog_json = '+JSON.stringify(catalog)+'\n'+await readFile(config,'utf8'),{mode:0o600});
+ }
  await writeFile(join(source,'auth.json'),'{}',{mode:0o600});
  const before=await readFile(join(source,'config.toml'),'utf8'),auth=await readFile(join(source,'auth.json'),'utf8');
- const prepare=registry.prepareHome.bind(registry);
- registry.prepareHome=async profile=>{
-  const root=await prepare(profile),models=JSON.parse(await readFile(join(root,'models.json'),'utf8'));
+ const prepare=registry.prepareModelCatalog.bind(registry);
+ registry.prepareModelCatalog=async (...args)=>{
+  const path=await prepare(...args),models=JSON.parse(await readFile(path,'utf8'));
   for(const model of models.models){model.prefer_websockets=false;model.use_responses_lite=false;}
-  await writeFile(join(root,'models.json'),JSON.stringify(models),{mode:0o600});return root;
+  await writeFile(path,JSON.stringify(models),{mode:0o600});return path;
  };
  return async()=>{assert.equal(await readFile(join(source,'config.toml'),'utf8'),before);assert.equal(await readFile(join(source,'auth.json'),'utf8'),auth);for(const file of [trap,notify,hook])await assert.rejects(access(file),'inherited extension must not execute: '+file);};
 }
@@ -52,6 +66,7 @@ test('real Codex conversation uses a fresh identity, exposes no task transport a
  const home=await mkdtemp(join(tmpdir(),'lake-codex-conversation-')),web=join(home,'web');await mkdir(web);await writeFile(join(web,'index.html'),'fixture');
  const requests=[];let providerError;
  const provider=createServer(async(req,res)=>{
+  if(respondToModelDiscovery(req,res))return;
   try{
    const chunks=[];for await(const chunk of req)chunks.push(chunk);const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
    const tools=(body.tools??[]).flatMap(tool=>tool.type==='namespace'?(tool.tools??[]).map(item=>({...item,namespace:tool.name})):[tool]);
@@ -92,6 +107,7 @@ test('real Codex GPT-6.2 Sol exposes only managed tools and returns a result thr
  await writeFile(join(home,'evidence.txt'),'ACTUAL_CODEX_HOST_EVIDENCE');
  const requests=[];let reads=0,chosen;
  const provider=createServer(async(req,res)=>{
+  if(respondToModelDiscovery(req,res))return;
   const chunks=[];for await(const chunk of req)chunks.push(chunk);
   const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
   const tools=(body.tools??[]).flatMap(tool=>tool.type==='namespace'?(tool.tools??[]).map(item=>({...item,namespace:tool.name})):[tool]);
@@ -146,6 +162,7 @@ for(const pending of [false,true])test(pending?'real Codex submits partial findi
  const home=await mkdtemp(join(tmpdir(),'lake-codex-assignment-')),web=join(home,'web');await mkdir(web);await writeFile(join(web,'index.html'),'fixture');
  const requests=[];let fixtureError,originalUnknown;
  const provider=createServer(async(req,res)=>{
+  if(respondToModelDiscovery(req,res))return;
   try{
    const chunks=[];for await(const chunk of req)chunks.push(chunk);const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
    assert.ok(Array.isArray(body.input),'the explicit Codex assignment must never call a Lake routing model');
@@ -203,7 +220,7 @@ for(const pending of [false,true])test(pending?'real Codex submits partial findi
  await api(`/api/sessions/${superproject.routerSessionId}/ai/configure`,'POST',{silentReadFiles:true});
  const role={id:'e'.repeat(64),projectId:project.id,roleKey:'codex-inspector',name:'ACP 测试专员',duties:'分配执行 Agent 并收集工作区结果',revision:1};
  app.store.put('superRoles',role.id,role);
- await api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:1,execution:{kind:'acp',agent:'codex',model:{modelId:'gpt-6.1-sol'}}});
+ await api(path+`/superagent/specialists/${role.id}/execution`,'PUT',{expectedRevision:1,execution:{kind:'acp',agent:'codex',model:{modelId:'gpt-6.2-astra'}}});
  const channel=(await api(path+'/superagent')).channels[0],registry=app.agents.external.registry;
  await copyRuntime(registry);
  const unchanged=await localCodexProvider(registry,url,'gpt-6.2-astra');
@@ -214,7 +231,7 @@ for(const pending of [false,true])test(pending?'real Codex submits partial findi
  assert.equal(status.assignmentReady,true);assert.equal(status.model,'gpt-6.2-astra');
  const probe=app.store.get('acpProbes',probeKey);
  assert.equal(probe.connectionVersion,1);assert.equal(probe.ready,true);
- assert.ok(status.defaultTaskModel&&status.defaultTaskModel!==status.model);
+ assert.equal(status.defaultTaskModel,'gpt-6.2-astra');
  assert.equal(requests.length,0,'connection testing must never start model inference');
  const body={text:'请读取 CODEX_ASSIGNED_EVIDENCE.txt 并报告实际内容。',assignment:{requestId:'codex-assignment-0001',roleRevision:2,execution:{kind:'acp',agent:'codex',revision:1}}};
  const receipt=await api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
@@ -227,19 +244,19 @@ for(const pending of [false,true])test(pending?'real Codex submits partial findi
  const worker=result.workers[0],run=app.store.list('acpRuns')[0];
  assert.equal(worker?.task.state,'completed',JSON.stringify({worker,run}));assert.equal(worker.task.acceptanceState,'not_evaluated');
  assert.equal(worker.execution.backend.agent,'codex');assert.equal(worker.execution.runs[0].state,'completed');assert.equal(run.purpose,'worker');
- assert.equal(worker.execution.backend.model.modelId,'gpt-6.1-sol');assert.equal(run.requestedModel,'gpt-6.1-sol');assert.equal(run.model,'gpt-6.1-sol');
+ assert.equal(worker.execution.backend.model.modelId,'gpt-6.2-astra');assert.equal(run.requestedModel,'gpt-6.2-astra');assert.equal(run.model,'gpt-6.2-astra');
  const observed=app.store.list('superOperations').find(operation=>operation.tool==='Read');assert.equal(observed.externalRunId,run.id);assert.equal(observed.status,'succeeded');
  if(pending){assert.deepEqual(app.store.get('superOperations',originalUnknown.id),originalUnknown);assert.equal(app.store.list('superOperations').length,2);assert.equal(app.store.list('superAcceptance').length,0);assert.equal(requests.length,4);}
  const page=await api(`/api/sessions/${channel.sessionId}/channel`);assert.equal(page.workers[0].execution.runs[0].id,run.id);
  assert.ok(page.workers[0].execution.runs[0].summary.includes('ACP_CODEX_ASSIGNED_REPORT'));
  const count=requests.length,again=await api(`/api/sessions/${channel.sessionId}/messages`,'POST',body,202);
  assert.equal(again.assignment.workerId,receipt.assignment.workerId);assert.equal(requests.length,count);assert.equal(app.store.list('superWorkers').length,1);await unchanged();
- assert.ok(requests.every(request=>request.model==='gpt-6.1-sol'&&request.reasoning?.effort==='max'));
+ assert.ok(requests.every(request=>request.model==='gpt-6.2-astra'&&request.reasoning?.effort==='max'));
 });
 
 test('real Codex reads a cached API login and detects logout without a Lake key or model request',{skip:!adapter,timeout:90000},async t=>{
  const home=await mkdtemp(join(tmpdir(),'lake-codex-auth-')),web=join(home,'web'),codexHome=join(home,'local-codex');await mkdir(web);await mkdir(codexHome);await writeFile(join(web,'index.html'),'fixture');
- await writeFile(join(codexHome,'config.toml'),'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "max"\n');
+ await writeFile(join(codexHome,'config.toml'),'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "max"\n[features]\napi_key_model_discovery = false\n');
  await writeFile(join(codexHome,'auth.json'),JSON.stringify({auth_mode:'apikey',OPENAI_API_KEY:'synthetic-cached-native-api-login'}),{mode:0o600});
  const app=await startLakeServer({home,codexHome,data:join(home,'data'),port:0,staticRoot:web});t.after(()=>app.close());
  const project=app.store.createProject('cached native auth'),registry=app.agents.external.registry;await copyRuntime(registry);
@@ -249,13 +266,17 @@ test('real Codex reads a cached API login and detects logout without a Lake key 
  await rm(join(codexHome,'auth.json'));status=(await app.agents.external.status(project.id))[0];assert.equal(status.revision,2);assert.equal(status.assignmentReady,false);assert.match(status.assignmentBlocker,/本机 Codex 尚未登录/);
 });
 
-test('real Codex uses a frozen role model over a different local default without changing login or max',{skip:!adapter,timeout:90000},async t=>{
+test('real Codex uses the project selections for new tasks of an existing specialist',{skip:!adapter,timeout:90000},async t=>{
  const home=await mkdtemp(join(tmpdir(),'lake-codex-role-model-')),web=join(home,'web');await mkdir(web);await writeFile(join(web,'index.html'),'fixture');
  const requests=[];let providerError;
+ let expectedModel='gpt-6.1-sol',expectedEffort='max';
  const provider=createServer(async(req,res)=>{
+  if(respondToModelDiscovery(req,res))return;
   try{
    const chunks=[];for await(const chunk of req)chunks.push(chunk);const body=JSON.parse(Buffer.concat(chunks));requests.push(body);
-   assert.equal(body.model,'gpt-6.1-sol');assert.equal(body.reasoning?.effort,'max');
+   assert.equal(body.model,expectedModel);assert.equal(body.reasoning?.effort,expectedEffort);
+   const tools=(body.tools??[]).flatMap(tool=>tool.type==='namespace'?tool.tools??[]:[tool]);
+   assert.ok(!tools.some(tool=>/apply_patch|exec_command|shell_command|spawn_agent|js_repl/.test(tool.name)),JSON.stringify(tools));
    const item={id:'role_model_report',type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:'ROLE_MODEL_REPORT: configuration fixture only',annotations:[]}]};
    const response={id:'role_model_response',object:'response',status:'completed',output:[item],usage:{input_tokens:10,output_tokens:5,total_tokens:15}};
    res.writeHead(200,{'Content-Type':'text/event-stream'});
@@ -270,14 +291,19 @@ test('real Codex uses a frozen role model over a different local default without
  const app=await startLakeServer({home,codexHome:join(home,'local-codex'),data:join(home,'data'),port:0,staticRoot:web});
  t.after(async()=>{await app.close();provider.closeAllConnections();await new Promise(resolve=>provider.close(resolve));await rm(home,{recursive:true,force:true});});
  const project=app.store.createProject('frozen role model'),external=app.agents.external,registry=external.registry;await copyRuntime(registry);
- const unchanged=await localCodexProvider(registry,'http://127.0.0.1:'+provider.address().port+'/v1','unverified-local-default');
+ const localDefault='fixture/local-default',listedModel='fixture/extra-codex';
+ const unchanged=await localCodexProvider(registry,'http://127.0.0.1:'+provider.address().port+'/v1',localDefault,listedModel);
  const profile=await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_TEST_NODE??process.execPath});
  const signal=AbortSignal.timeout(45000);
- assert.equal((await registry.prepareConnection(profile,signal)).observed.model,'unverified-local-default');
+ const status=(await external.status(project.id))[0];
+ assert.equal(status.assignmentReady,true,status.assignmentBlocker);
+ assert.equal(status.model,localDefault);
+ assert.deepEqual(new Set(status.modelOptions),new Set(['gpt-6.1-sol',localDefault,listedModel]));
+ assert.deepEqual(status.modelEffortOptions[listedModel],['low','high']);
  const prepared=await registry.prepareLaunch(profile,signal);
- const {models}=JSON.parse(await readFile(join(prepared.home,'models.json'),'utf8'));
- assert.equal(prepared.observed.model,models.at(-1).slug);
- await assert.rejects(registry.prepareLaunch(profile,signal,'unverified-local-default'),/不在当前 Codex 兼容目录/);
+ const {models}=JSON.parse(await readFile(prepared.catalogPath,'utf8'));
+ assert.equal(prepared.observed.model,localDefault);
+ assert.equal(models[0].slug,localDefault);
  const actor={projectId:project.id,taskId:'role-model-task',workerId:'role-model-worker',sessionId:'role-model-session',generation:1,deadlineAt:new Date(Date.now()+60000).toISOString(),scopeHash:'role-model-scope',workspace:home,model:'gpt-6.1-sol',signal,guard:()=>signal.throwIfAborted(),tools:[],executeTool:async()=>{throw Error('configuration fixture has no business tools');},event:()=>{}};
  const result=await external.run('codex','Report ROLE_MODEL_REPORT without using tools.','role-model-request',actor);
  if(providerError)throw providerError;
@@ -285,5 +311,36 @@ test('real Codex uses a frozen role model over a different local default without
  const run=app.store.list('acpRuns')[0];assert.equal(run.requestedModel,'gpt-6.1-sol');assert.equal(run.model,'gpt-6.1-sol');assert.equal(run.reasoningEffort,'max');
  await assert.rejects(external.run('codex','Report ROLE_MODEL_REPORT without using tools.','role-model-request',{...actor,model:'different-model'}),/身份或输入不匹配/);
  await assert.rejects(external.run('codex','Continue this report.','role-model-resume',{...actor,model:'different-model'},result.run_id),/同一执行身份与模型/);
- assert.equal(app.store.list('acpRuns').length,1);await unchanged();
+ assert.equal(app.store.list('acpRuns').length,1);
+
+ app.superagent.ensure(project.id);
+ const originalRole={id:'c'.repeat(64),projectId:project.id,roleKey:'fixture-role',name:'Fixture specialist',duties:'Report the test observation',revision:1};
+ app.store.put('superRoles',originalRole.id,originalRole);
+ const role=app.superagent.setRoleExecution(project.id,originalRole.id,{expectedRevision:1,execution:{kind:'acp',agent:'codex',model:{modelId:'gpt-6.1-sol'}}});
+ expectedModel=listedModel;expectedEffort='high';
+ const count=requests.length;
+ const response=await fetch(app.origin+`/api/projects/${project.id}/external-agents/codex/prepare`,{method:'POST',
+  headers:{Authorization:'Bearer '+app.token,'Content-Type':'application/json'},body:JSON.stringify({enabled:true,expectedRevision:profile.revision,
+   modelOverride:expectedModel,reasoningEffortOverride:expectedEffort})});
+ const settings=await response.json();
+ assert.equal(response.status,200,JSON.stringify(settings));
+ const [projectAgent]=settings.agents;
+ assert.equal(projectAgent.assignmentReady,true);
+ assert.deepEqual([projectAgent.model,projectAgent.reasoningEffort],[expectedModel,expectedEffort]);
+ assert.equal(requests.length,count,'saving settings only verifies the connection');
+ const [channel]=app.superagent.workspace(project.id).channels;
+ const receipt=await app.superagent.send(channel.sessionId,'Report the isolated test observation.',undefined,false,undefined,{
+  requestId:'project-codex-settings-01',roleRevision:role.revision,execution:{kind:'acp',agent:'codex',revision:projectAgent.revision}});
+ let projectRun;
+ for(let attempt=0;attempt<400;attempt++){
+  projectRun=app.store.list('acpRuns').find(run=>run.workerId===receipt.assignment.workerId);
+  if(projectRun&&projectRun.state!=='starting'&&projectRun.state!=='running')break;
+  await new Promise(resolve=>setTimeout(resolve,50));
+ }
+ if(providerError)throw providerError;
+ assert.equal(projectRun?.state,'completed',projectRun?.summary);
+ assert.deepEqual([projectRun.requestedModel,projectRun.model,projectRun.reasoningEffort],[expectedModel,expectedModel,expectedEffort]);
+ assert.deepEqual(app.store.get('superRoles',role.id).execution,role.execution);
+ assert.ok(requests.length>count);
+ await unchanged();
 });

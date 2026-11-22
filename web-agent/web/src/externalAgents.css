@@ -55,4 +55,4 @@
 .external-agent-advanced{margin:12px 0;color:var(--text-secondary);font-size:12px}
 .external-agent-advanced>summary{cursor:pointer}
 
-.external-agent-local-config{grid-column:1/-1;min-width:0}.external-agent-local-config p{margin:6px 0}.external-agent-local-config small{color:var(--text-secondary);overflow-wrap:anywhere}
+.external-agent-local-config{grid-column:1/-1;min-width:0}.external-agent-local-config p{margin:6px 0}.external-agent-local-config small{display:block;color:var(--text-secondary);overflow-wrap:anywhere}

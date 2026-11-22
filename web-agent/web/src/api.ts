@@ -1,7 +1,6 @@
 import type {MCPServerConfig,MCPToolCatalog,SkillConfig,SkillCatalog} from "../../shared/contracts";
 import {displayAiError} from "./aiErrors";
 import type { CommandPolicy } from "../../shared/command-policy";
-import type { WorkspaceTag } from "../../shared/contracts";
 import type { LayeredMemoryScope, LayeredMemorySettings, LayeredMemoryView } from "../../shared/contracts";
 import type {
   SSHConnectionInput,
@@ -149,9 +148,6 @@ export const api = {
  plans:(session:string)=>request<{plans:import('../../shared/contracts').ProposedPlan[]}>(`/api/sessions/${encodeURIComponent(session)}/ai/plans`),
  setConversationMode:(session:string,mode:import('../../shared/contracts').ConversationMode)=>post<import('../../shared/contracts').ConversationModeUpdate>(`/api/sessions/${encodeURIComponent(session)}/ai/mode`,{mode}),
  executePlan:(session:string,planId:string)=>post<SendMessageResult>(`/api/sessions/${encodeURIComponent(session)}/ai/executePlan`,{planId}),
- schedules:(project:string,signal?:AbortSignal)=>request<{items:import('../../shared/contracts').ScheduledTask[]}>(`/api/projects/${encodeURIComponent(project)}/schedules`,{signal}),
- schedule:(project:string,id:string,signal?:AbortSignal)=>request<import('../../shared/contracts').ScheduledTask>(`/api/projects/${encodeURIComponent(project)}/schedules/${encodeURIComponent(id)}`,{signal}),
- setScheduleEnabled:(project:string,id:string,enabled:boolean,expectedRevision:number)=>request<import('../../shared/contracts').ScheduledTask>(`/api/projects/${encodeURIComponent(project)}/schedules/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify({enabled,expectedRevision})}),
 	getSREEnabled:(project:string,signal?:AbortSignal)=>request<{enabled:boolean}>(`/api/projects/${encodeURIComponent(project)}/sre`,{signal}),
 	getPilotSettings:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').PilotSettings>(`/api/projects/${encodeURIComponent(project)}/pilot`,{signal}),
 	setPilotSettings:(project:string,updates:{enabled?:boolean;autoAdvance?:boolean;expectedRevision:number})=>request<import('../../shared/contracts').PilotSettings>(`/api/projects/${encodeURIComponent(project)}/pilot`,{method:'PUT',body:JSON.stringify(updates)}),
@@ -199,10 +195,7 @@ export const api = {
   skill:(name:string)=>request<{skill:SkillConfig;content:string}>(`/api/settings/skills/${encodeURIComponent(name)}`),
   saveSkill:(name:string,value:{content?:string;enabled?:boolean;create?:boolean})=>request(`/api/settings/skills/${encodeURIComponent(name)}`,{method:"PUT",body:JSON.stringify(value)}),
   skillRoot:(path:string,remove=false)=>request("/api/settings/skills/roots",{method:remove?"DELETE":"POST",body:JSON.stringify({path})}),
-  createTag: (project:string,data:{name:string;color:string}) => post<WorkspaceTag>(`/api/projects/${encodeURIComponent(project)}/tags`,data),
-  updateTag: (id:string,data:{name:string;color:string}) => request<WorkspaceTag>(`/api/tags/${encodeURIComponent(id)}`,{method:"PUT",body:JSON.stringify(data)}),
-  deleteTag: (id:string) => request(`/api/tags/${encodeURIComponent(id)}`,{method:"DELETE"}),
-  saveSessionPresentation: (session:WorkSession,icon:string,tagIds:string[]) => request<WorkSession>(`/api/sessions/${encodeURIComponent(session.id)}/presentation`,{method:"PUT",body:JSON.stringify({icon,tagIds,revision:session.presentationRevision??0})}),
+  saveSessionPresentation: (session:WorkSession,icon:string) => request<WorkSession>(`/api/sessions/${encodeURIComponent(session.id)}/presentation`,{method:"PUT",body:JSON.stringify({icon,revision:session.presentationRevision??0})}),
  commandPolicy: (command:string) => post<CommandPolicy>("/api/commands/policy",{command}),
   bootstrap: (token?: string) =>
     request<Bootstrap>("/api/bootstrap", token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
@@ -214,6 +207,9 @@ export const api = {
   navigationTrash: () => request<{items:NavigationTrashItem[]}>("/api/navigation-trash"),
   deleteNavigation: (kind:"project" | "resource",id:string) => post<{items:NavigationTrashItem[]}>("/api/navigation-delete",{kind,id}),
   restoreNavigation: (kind:NavigationTrashItem["kind"],id:string) => post<{items:NavigationTrashItem[]}>("/api/navigation-trash",{kind,id}),
+  completeDraft: (session: string, text: string, modelId: string, signal: AbortSignal) =>
+    request<{suffix: string; modelId?: string}>(`/api/sessions/${encodeURIComponent(session)}/completion`,
+      {method: "POST", body: JSON.stringify({text, modelId}), signal}),
   catalog: (signal?: AbortSignal) => request<Catalog>("/api/catalog", { signal }),
   modelCapacity: () => request<{modelId?: string; limit: number; source?: string}>("/api/settings/model/capacity"),
   providers: () => request<ProviderCatalog>("/api/settings/providers"),
@@ -277,8 +273,8 @@ export const api = {
   renameSession: (sessionId: string, title: string) => request<WorkSession>(`/api/sessions/${encodeURIComponent(sessionId)}`, {method: "PATCH", body: JSON.stringify({title})}),
   deleteSession: (sessionId: string) =>
     request<void>(`/api/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" }),
-  sendMessage: (sessionId: string, text: string, resourceIds: string[] = [], images: AIImage[] = [], references: Record<string, unknown>[] = [], terminalReuse?: {terminalId: string; generation: string}, files: TextFileAttachment[] = [], enqueue = false, ignoreProjectMemory = false, mentions: MessageMention[] = [], assignment?:import('../../shared/external-agents').SpecialistAgentAssignment) =>
-    post<SendMessageResult>(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, { text, mentions, ...(assignment?{assignment}:{}), ...(ignoreProjectMemory ? {ignoreProjectMemory:true} : {}), ...(enqueue ? {enqueue:true} : {}), ...(files.length ? {files} : {}), ...(terminalReuse ? {terminalReuse} : {}), ...(references.length ? { references } : {}), ...(images.length ? { images } : {}), ...(resourceIds.length ? { resourceIds } : {}) }),
+  sendMessage: (sessionId: string, text: string, resourceIds: string[] = [], images: AIImage[] = [], references: Record<string, unknown>[] = [], terminalReuse?: {terminalId: string; generation: string}, files: TextFileAttachment[] = [], enqueue = false, ignoreProjectMemory = false, mentions: MessageMention[] = [], assignment?:import('../../shared/external-agents').SpecialistAgentAssignment, taskId?:string) =>
+    post<SendMessageResult>(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, { text, mentions, ...(taskId?{taskId}:{}), ...(assignment?{assignment}:{}), ...(ignoreProjectMemory ? {ignoreProjectMemory:true} : {}), ...(enqueue ? {enqueue:true} : {}), ...(files.length ? {files} : {}), ...(terminalReuse ? {terminalReuse} : {}), ...(references.length ? { references } : {}), ...(images.length ? { images } : {}), ...(resourceIds.length ? { resourceIds } : {}) }),
   messageQueue: (sessionId: string) => request<MessageQueue>(`/api/sessions/${encodeURIComponent(sessionId)}/message-queue`),
   updateMessageQueue: (sessionId: string, data: QueueOperation) => post<MessageQueue>(`/api/sessions/${encodeURIComponent(sessionId)}/message-queue`, data),
   decide: (actionId: string, decision: "approve" | "reject", confirmation?: string) =>

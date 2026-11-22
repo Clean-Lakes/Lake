@@ -33,7 +33,7 @@ import {emptyServiceDraft, resourceTypeOptions, resourceTypeLabel, serviceResour
 import {LakeLogo} from "./LakeLogo";
 import {WelcomePage,WelcomeSidebar} from "./WelcomePage";
 import {useSessionComposerDraft} from "./sessionComposerDrafts";
-import {ScheduledTasks} from "./ScheduledTasks";
+import {PilotTaskReferenceChip,pilotTaskParticipants} from './PilotTaskDirectory';
 import {MessageText} from './MessageText';
 import {SidebarScrollArea} from './SidebarScrollArea';
 import {SidebarWorkspaceNavigation} from './SidebarWorkspaceNavigation';
@@ -53,6 +53,7 @@ import {ComposerMentions,useMentionExtensions,mentionOptionId} from "./ComposerM
 import {LakePilotControl} from './LakePilotControl';
 import {PilotHeaderState} from './PilotHeaderState';
 import {PilotActiveSpecialists} from './PilotActiveSpecialists';
+import {sessionBadgeState} from './sessionBadgeState';
 import {pilotIslandModel} from './pilotIslandModel';
 import './pilotIsland.css';
 import './pilot.css';
@@ -79,8 +80,8 @@ import {clipboardFiles,partitionAttachments,attachmentCountLimit,fileSize} from 
 import {JumpServerSettings, JumpServerAccounts} from "./JumpServerSettings";
 import { ResourceImport } from "./ResourceImport";
 import { SSHResourceFields, emptySSH } from "./SSHResourceFields";
-import type { SSHConnectionInput,SuperWorker,SpecialistChannelInfo,SpecialistChannelPage,SpecialistReplyAuthor } from "../../shared/contracts";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
+import type { PilotTaskReference,SSHConnectionInput,SuperWorker,SpecialistChannelInfo,SpecialistChannelPage,SpecialistReplyAuthor } from "../../shared/contracts";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type {
   Action,
   Catalog,
@@ -102,7 +103,7 @@ import {readWorkspaceRoute,workspaceURL,type WorkspaceRoute} from "./workspaceRo
 import { AIControls, AITranscript } from "./AIPanel";
 import { Glyph, ResourceIcon, type GlyphName } from "./Icons";
 import {HeaderSweep} from "./HeaderSweep";
-import { SessionActions, SessionListTags, TagManager, SessionStateBadge } from "./SessionPresentation";
+import { SessionActions, SessionStateBadge } from "./SessionPresentation";
 import "./sessionPresentation.css";
 import "./conversationDirectory.css";
 import { ContextUsage } from "./ContextUsage";
@@ -120,6 +121,7 @@ import {savedWorkspaceProject,saveWorkspaceProject} from './workspaceProjectPref
 import {SessionNavigation} from "./SessionNavigation";
 import {sortSessionNavigation} from "./sessionNavigationModel";
 import { CompositionGuard, isSendKey, parseSendShortcut, sendShortcutStorageKey, type SendShortcut } from "./composerKeyboard";
+import {composerCompletionStorageKey} from './composerCompletion';
 import { HostKeyTrust } from "./HostKeyTrust";
 import { conversationActive, sessionConnection, type StreamState } from "./connection";
 import {continuousPilotInput,queuesComposerMessage} from './messageQueue';
@@ -241,12 +243,8 @@ function AppContent() {
   const [serviceSettings, setServiceSettings] = useState(emptyServiceDraft());
   const [sshProject, setSshProject] = useState<string | null>(null);
   const [sshParent, setSshParent] = useState<string | null>(null);
-  const [scheduleProject,setScheduleProject]=useState<Project|null>(null);
   const [workflowProject, setWorkflowProject] = useState<Project | null>(null);
   const [memoryProject, setMemoryProject] = useState<Project | null>(null);
-  const [tagProject, setTagProject] = useState<Project | null>(null);
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  useEffect(()=>{if(selectedTag&&catalog&&!catalog.tags?.some(t=>t.id===selectedTag))setSelectedTag(null);},[catalog,selectedTag]);
   const [jumpProject,setJumpProject]=useState<Project|null>(null);
   const [jumpAccount,setJumpAccount]=useState<Resource|null>(null);
   const [importProject, setImportProject] = useState<Project | null>(null);
@@ -257,6 +255,7 @@ function AppContent() {
   const [sshBusy, setSshBusy] = useState(false);
   const inputQueue = useRef<TerminalInputQueue | null>(null);
   const {draft: composerDraft, setMessageDraft, setMessageDraftFor, setMentionRefs, setImageDraft, setFileDraft, setIgnoreProjectMemory, clearSubmitted} = useSessionComposerDraft(route.sessionId);
+  const [pilotTaskReferences,setPilotTaskReferences]=useState<ReadonlyMap<string,PilotTaskReference&{sent:boolean}>>(()=>new Map());
   const {message: messageDraft, references: mentionRefs, images: imageDraft, files: fileDraft, ignoreProjectMemory} = composerDraft;
   const attachmentReading = useRef(false);
   const attachmentEpoch = useRef(0);
@@ -270,6 +269,12 @@ function AppContent() {
     try { return parseSendShortcut(localStorage.getItem(sendShortcutStorageKey)); } catch { return "enter"; }
   });
   useEffect(() => { try { localStorage.setItem(sendShortcutStorageKey, sendShortcut); } catch {} }, [sendShortcut]);
+  const [completionEnabled,setCompletionEnabled]=useState(()=>{
+    try {return localStorage.getItem(composerCompletionStorageKey)!=='off';} catch {return true;}
+  });
+  useEffect(()=>{
+    try {localStorage.setItem(composerCompletionStorageKey,completionEnabled?'on':'off');} catch {}
+  },[completionEnabled]);
   const sendShortcutLabel = sendShortcut === "command-enter" ? "Command / Ctrl + Enter" : "Enter";
   const [navigationDelete,setNavigationDelete]=useState<NavigationDeleteTarget|null>(null);
   const [bulkMode, setBulkMode] = useState(false);
@@ -992,6 +997,11 @@ function AppContent() {
     bootstrap?.backendRuntime==='typescript'&&!selectedResource?sessionId??undefined:undefined);
   const selectedSuperPilot=selectedSession?.workspaceRole==='router'||!!(pilotWorkspace.workspace?.active&&
     pilotWorkspace.workspace.project.projectId===selectedSession?.projectId&&pilotWorkspace.workspace.project.routerSessionId===selectedSession?.id);
+  const pilotTaskContinuation=selectedSuperPilot&&bootstrap?.backendRuntime==='typescript'&&canCompose;
+  const pilotTaskReference=pilotTaskContinuation&&sessionId?pilotTaskReferences.get(sessionId):undefined;
+  const pilotTaskMembers=useMemo(()=>selectedSession&&pilotTaskReference?
+    pilotTaskParticipants(pilotWorkspace.workspace,selectedSession,pilotTaskReference.taskId):[],
+  [selectedSession,pilotTaskReference,pilotWorkspace.workspace]);
   const pilotWorkspaceConnected=sessionConnected&&!pilotWorkspace.error;
   const [pilotLiveSession,setPilotLiveSession]=useState<string|null>(null);
   useEffect(()=>{
@@ -1034,6 +1044,11 @@ function AppContent() {
   const composerShowsSend=!executionStoppable||hasMessageDraft||!!sendFeedback;
   const composerSendGlyph=sendFeedback?"loader":composerNeedsModel&&!hasModelChoices?"plug":"up";
   const composerSendReady=!composerNeedsModel&&composerSendGlyph==="up"&&hasMessageDraft&&!currentAssignment?.blockedReason;
+  const composerCompletion=sessionId&&completionEnabled&&!mention&&!queueMode&&!pendingApproval&&!imageDraft.length&&!fileDraft.length?{
+    sessionId,
+    modelId:modelConfigured&&!currentAssignment?(bootstrap?.modelId??undefined):undefined,
+    hasPreviousReply:!!activeSnapshot?.messages.some(message=>message.role==='assistant'&&message.text.trim()),
+  }:undefined;
   const stopPresentation=stopControlPresentation(activeSnapshot?.session.workspaceRole,bootstrap?.backendRuntime==='typescript',!!activeSnapshot?.superagent?.task.collaboration);
   const openedPilotProjects=useRef(new Set<string>());
   useEffect(()=>{
@@ -1153,23 +1168,44 @@ function AppContent() {
   async function createWorkspaceProject(name:string) {
     const project=await api.createProject(name);
     await refreshCatalog();
-    setSidebarProjectId(project.id);setSelectedTag(null);setBulkMode(false);setBulkSelected([]);
+    setSidebarProjectId(project.id);setBulkMode(false);setBulkSelected([]);
     navigate({sessionId:null,resourceId:null});
     notify(`已创建项目「${project.name}」`);
   }
   async function deleteWorkspaceProject(project:Project) {
     await api.deleteNavigation("project",project.id);
-    setResourceTerminalMenu(null);setSelectedTag(null);setBulkMode(false);setBulkSelected([]);
+    setResourceTerminalMenu(null);setBulkMode(false);setBulkSelected([]);
     if(selectedSession?.projectId===project.id)navigate({sessionId:null,resourceId:null});
     if(sidebarProjectId===project.id)setSidebarProjectId(null);
     await refreshCatalog();
     notify(`项目「${project.name}」已移至“已删除”`);
   }
-  async function openProjectPilot(projectId:string, task?:{taskId:string;title:string}){
+  function updatePilotTaskReference(targetSession:string,task?:PilotTaskReference) {
+    setPilotTaskReferences(current=>{
+      const next=new Map(current);
+      if(task)next.set(targetSession,{...task,sent:false});
+      else next.delete(targetSession);
+      return next;
+    });
+  }
+  function selectPilotTask(task?:PilotTaskReference) {
+    if(!pilotTaskContinuation||!sessionId)return;
+    const input=messageInputRef.current;
+    const start=input?.selectionStart,end=input?.selectionEnd;
+    updatePilotTaskReference(sessionId,task);
+    requestAnimationFrame(()=>{
+      if(activeSession.current!==sessionId)return;
+      const editor=messageInputRef.current;
+      editor?.focus({preventScroll:true});
+      if(start!==undefined&&end!==undefined)editor?.setSelectionRange(start,end);
+    });
+  }
+  async function openProjectPilot(projectId:string, task?:PilotTaskReference){
     try {
       const domain=await api.ensureSuperWorkspace(projectId);
       await refreshCatalog();
-      if(task){
+      if(task&&bootstrap?.backendRuntime==='typescript')updatePilotTaskReference(domain.routerSessionId,{taskId:task.taskId,title:task.title});
+      else if(task){
         const reference=`${task.title} (${task.taskId})`;
         setMessageDraftFor(domain.routerSessionId,draft=>draft.includes(reference)?draft:draft?`${draft}\n\n${reference}`:`${reference}\n`);
       }
@@ -1360,8 +1396,13 @@ function AppContent() {
     setPendingOperation("message");
     conversationScroll.current.following = true;
     try {
-      const accepted=await api.sendMessage(targetSession, text, payload.resourceIds, imageDraft, payload.references, undefined, fileDraft, currentAssignment?false:queueMode, ignoreProjectMemory, payload.mentions,currentAssignment?.assignment);
+      const accepted=await api.sendMessage(targetSession, text, payload.resourceIds, imageDraft, payload.references, undefined, fileDraft, currentAssignment?false:queueMode, ignoreProjectMemory, payload.mentions,currentAssignment?.assignment,pilotTaskReference?.taskId);
       clearSubmitted(targetSession, composerDraft);
+      if(pilotTaskReference&&!pilotTaskReference.sent){
+        // A late acknowledgement applies only to the selection used to send.
+        setPilotTaskReferences(current=>current.get(targetSession)===pilotTaskReference?
+          new Map(current).set(targetSession,{...pilotTaskReference,sent:true}):current);
+      }
       if(currentAssignment)specialistModel.accepted();
       setMessageSubmission({session:targetSession,accepted:true});
       if (activeSession.current !== targetSession) return;
@@ -1621,7 +1662,8 @@ function AppContent() {
   const presentedReports=conversationMode==='conversation'&&pilotReports?.sessionId===sessionId?pilotReports?.ids:
     new Set(conversationMode==='conversation'?[]:activeSnapshot?.messages.map(message=>message.id));
   const pilotHeaderActivity=selectedSuperPilot?superPilotActivity(pilotWorkspace.workspace,selectedSession,pilotActivityConnected,presentedReports):null;
-  const pilotParticipants=sessionHeader?pilotHeaderActivity?.participants:undefined;
+  const pilotParticipants=sessionHeader&&selectedSuperPilot?(pilotHeaderActivity?.participants??[]):undefined;
+  const showPilotParticipants=pilotHeaderActivity?.phase!=='summarizing';
   const roleRunningCount=specialistTaskActivity(roleWorkers).runningCount;
   const superHeaderPresentation=pilotHeaderActivity??(selectedSuperChannel&&roleReplyActivity?.sessionId===sessionId&&roleReplyActivity.state!=='idle'?{status:roleReplyActivity.state==='running'?'investigating' as const:'waiting_approval' as const,label:roleReplyActivity.state==='running'?(roleRunningCount>1?`${roleRunningCount} 项执行中`:'处理中'):'需要处理'}:superTaskHeaderPresentation(activeSnapshot?.superagent?.task??selectedSuperWorker?.task,activeSnapshot)??currentSessionPresentation);
   const selectedRoleName=selectedSuperChannel?.roleName??selectedSuperWorker?.roleName??pilotWorkspace.workspace?.channels?.find(channel=>channel.roleId===activeSnapshot?.superagent?.roleId)?.roleName;
@@ -1638,15 +1680,25 @@ function AppContent() {
   const specialistMenu=sessionHeader&&!!activeSnapshot&&(selectedSession.workspaceRole==='role'||selectedSession.workspaceRole==='worker');
   const menuTask=roleInspection?.superagent??activeSnapshot?.superagent;
   const sidebarSessionsExpanded=!closedSessionGroups.includes(sidebarProject?.id??"");
-  const navigationProjects = projectList.filter(project => project.id === sidebarProject?.id && (!selectedTag || catalog.tags?.some(tag=>tag.id===selectedTag&&tag.projectId===project.id)));
+  const navigationProjects = projectList.filter(project => project.id === sidebarProject?.id);
   const itemList = activeSnapshot ? timelineItems(activeSnapshot) : [];
+  const hasConversationItems=!!(itemList.length||activeSnapshot?.ai?.cards.length||activeSnapshot?.superagent||activeSnapshot?.sre?.tasks.length||activeSnapshot?.ai?.operationOutcomes?.length);
+  const emptyConversation=<div className={selectedSuperPilot?"timeline-empty is-pilot":"timeline-empty"}>
+    {selectedSuperPilot?<div className="pilot-empty-shore" aria-hidden="true">
+      <SuperRoleAvatar avatarId="kingfisher" size={58} motion="still"/>
+    </div>:<div className="empty-icon"><Glyph name="chat" size={25}/></div>}
+    <h2>从一个问题开始</h2>
+    {!selectedSuperPilot&&<p>描述你看到的故障或想核实的现象。Lake 会把调查过程、证据和需要确认的操作留在这里。</p>}
+  </div>;
   // An empty AI view is normal before the first reply. Do not replace the
   // already mounted message tree when the engine starts publishing cards.
   const useConversationTranscript = !!activeSnapshot && (!!activeSnapshot.ai ||
     (!isLegacyHistory && !activeSnapshot.specialists?.length));
   const sharedIsland=sessionHeader&&wideWorkbench;
   const headerSweep=sessionHeader&&<HeaderSweep key={`sweep-${selectedSession.id}`} active={pilotHeaderActivity?.animated??(avatarActivity?.state==='running')}/>;
-  const workspaceHeading=<header className={`workspace-header${specialistMenu?' has-specialist-tasks':''}${headerPilot||headerPilotMode ? ' has-pilot-island' : ''}${headerPilotMode&&!headerPilot?' has-pilot-mode':''}`}>
+  const pilotTone=sessionHeader&&selectedSuperPilot&&!headerPilot&&!headerPilotMode?
+    sessionBadgeState(superHeaderPresentation?.status??selectedSession.status,superHeaderPresentation?.label).tone:undefined;
+  const workspaceHeading=<header className={`workspace-header${specialistMenu?' has-specialist-tasks':''}${headerPilot||headerPilotMode ? ' has-pilot-island' : ''}${headerPilotMode&&!headerPilot?' has-pilot-mode':''}`} data-pilot-island-tone={pilotTone}>
         {sessionHeader && <span className="workspace-header-glass" aria-hidden="true"/>}
         {!sharedIsland&&headerSweep}
         <button className="icon-button mobile-only" aria-label="打开项目导航" onClick={() => setMobileMenu(true)}><Glyph name="menu" size={21}/></button>
@@ -1655,16 +1707,16 @@ function AppContent() {
           <button type="button" className="crumb-project grafana-project-crumb" title="返回工作台"
             onClick={() => navigate({sessionId, resourceId: null})}>{projectList.find(project => project.id === selectedResource.projectId)?.name ?? "项目"}</button>
         </div> :
-          <div className={`breadcrumbs${pilotParticipants?.length?' has-pilot-participants':''}`}>
+          <div className={`breadcrumbs${showPilotParticipants&&pilotParticipants?.length?' has-pilot-participants':''}`}>
             {!sessionHeader&&<><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span></>}
             <strong>
               {superHeaderIdentity?<SuperRoleAvatar name={selectedRoleName} roleId={selectedRoleId} pilot={!!selectedSuperPilot} size={20} motion={pilotHeaderActivity?.motion??conversationAvatarMotion(avatarActivity?.state??'idle',activeSnapshot?.superagent?.task?.state??selectedSuperWorker?.task.state)}/>:<Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession ? selectedSession.icon??'chat' : 'document'} size={15}/>}
               <span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{superHeaderIdentity?(selectedRoleName??'Pilot'):selectedResource?.name ?? selectedSession?.title ?? "概览"}</span>
               {superHeaderIdentity&&!selectedSuperPilot&&<AgentBackendLogo backend={selectedAgentBackend}/>}
             </strong>
-            {pilotParticipants&&<PilotActiveSpecialists key={sessionId} participants={pilotParticipants}/>}
+            {pilotParticipants&&<PilotActiveSpecialists key={sessionId} participants={pilotParticipants} visible={showPilotParticipants}/>}
           </div>}
-        {selectedSession && !selectedResource && !isPlansPage && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} mode={headerPilotMode} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}} normal={<SessionStateBadge session={selectedSession} {...superHeaderPresentation}/>} onInspect={targetId => {
+        {selectedSession && !selectedResource && !isPlansPage && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} mode={headerPilotMode} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}} normal={<SessionStateBadge session={selectedSession} {...superHeaderPresentation} iconOnly={selectedSuperPilot}/>} onInspect={targetId => {
           if(!activeSnapshot||!headerPilot)return;
           const task=activeSnapshot.sre?.tasks.find(t=>t.id===headerPilot.taskId);
           const entry=task?.messages?.find(m=>`sre-message-${m.id}`===targetId);
@@ -1723,11 +1775,10 @@ function AppContent() {
   </section>;
 
   return <SpecialistAvatarProvider channels={pilotWorkspace.workspace?.channels}><div className={`app-shell ${terminalOpen ? "terminal-is-open" : ""}${sharedIsland?" has-workbench-island":""}`}>
-    {scheduleProject&&<ScheduledTasks key={scheduleProject.id} project={scheduleProject} onClose={()=>setScheduleProject(null)} onOpenSession={async id=>{await refreshCatalog();setScheduleProject(null);navigate({sessionId:id,resourceId:null});}}/>}
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
     {mobileMenu && <button className="mobile-scrim" aria-label="关闭项目导航" onClick={() => setMobileMenu(false)}/>}
     {navigationSearchOpen && <WorkspaceSearch projects={projectList} sessions={catalog.sessions} resources={catalog.resources} canCreate={!!sidebarProject && connected && !pendingOperation} onClose={() => setNavigationSearchOpen(false)} onNewSession={() => {if(sidebarProject)openSessionDialog(sidebarProject.id);}} onChoose={entry => {
-      setSidebarProjectId(entry.projectId);setSelectedTag(null);setBulkMode(false);setBulkSelected([]);
+      setSidebarProjectId(entry.projectId);setBulkMode(false);setBulkSelected([]);
       setClosedSessionGroups(items => items.filter(id => id !== entry.projectId));
       if(entry.kind === "session") navigate({sessionId:entry.id,resourceId:null});
       else {
@@ -1762,16 +1813,16 @@ function AppContent() {
          disabled={!connected} onDeleted={channel=>pilotWorkspace.removeRole(channel.roleId)} workspace={pilotWorkspace.workspace} error={pilotWorkspace.error} selectedId={sessionSelected ? route.sessionId : null} selectedRoleId={sessionSelected && selectedSession.projectId===pilotWorkspace.workspace?.project.projectId ? selectedSuperChannel?.roleId??activeSnapshot?.superagent?.roleId??selectedSuperWorker?.roleId : undefined} onPilot={()=>{const domain=pilotWorkspace.workspace;if(domain?.active)navigate({sessionId:domain.project.routerSessionId,resourceId:null});else void openProjectPilot(sidebarProject.id);}} onWorker={worker=>navigate({sessionId:worker.sessionId,resourceId:null})} onChannel={openSpecialistOverview}/>}
         {pilotWorkspace.workspace?.active===false&&navigationProjects.map(project=>{
           const sessionsExpanded=!closedSessionGroups.includes(project.id);
-          const sessions=catalog.sessions.filter(session=>(!session.workspaceRole||session.workspaceRole==='legacy')&&session.projectId===project.id&&(!selectedTag||session.tags?.some(tag=>tag.id===selectedTag)));
+          const sessions=catalog.sessions.filter(session=>(!session.workspaceRole||session.workspaceRole==='legacy')&&session.projectId===project.id);
           const allSessions=allSessionGroups.includes(project.id);
           return <div key={project.id}>
               {bulkMode&&pilotWorkspace.workspace?.active===false&&<div className="nav-heading"><button type="button" className="nav-section-toggle" aria-label={`${sessionsExpanded ? "折叠" : "展开"}${project.name}的会话`} aria-expanded={sessionsExpanded} aria-controls={`project-sessions-${project.id}`} onClick={() => setClosedSessionGroups(items => sessionsExpanded ? [...items, project.id] : items.filter(id => id !== project.id))}><Glyph name="chevron" size={13} className={sessionsExpanded ? "chevron-open" : ""}/><span>{allSessions?"全部会话":"最近会话"} <small className="session-group-count">{sessions.length}</small></span></button>{bulkMode && <button className="bulk-group-toggle" type="button" disabled={!connected || !!pendingOperation || !sessions.length} aria-label={`全选 ${project.name} 的会话`} onClick={() => toggleBulkGroup(sessions.map(session => ({kind:"session",id:session.id,projectId:project.id,name:session.title})))}>全选</button>}</div>}
               {pilotWorkspace.workspace?.active===false&&<div id={`project-sessions-${project.id}`} hidden={!sessionsExpanded}><SessionNavigation sessions={sessions} selectedId={route.sessionId} showAll={allSessions} bulkMode={bulkMode} disabled={!connected||!!pendingOperation||sessionNavigationBusy} onMove={moveSessionNavigation} onShowAll={()=>setAllSessionGroups(items=>allSessions?items.filter(id=>id!==project.id):[...items,project.id])} renderSession={session => <div className={`nav-row-wrap ${bulkMode ? "bulk-session-row" : ""}`} key={session.id} onContextMenu={event => {event.preventDefault(); if (connected) {setSessionContext({session, x: event.clientX, y: event.clientY});}}}>
                 <BulkCheckbox target={{kind:"session",id:session.id,projectId:session.projectId,name:session.title}} selection={bulkSelection}/>
                 <button className={`nav-row session-nav-row ${route.sessionId === session.id && !route.resourceId ? "active" : ""}`} onClick={() => bulkMode ? toggleBulkTarget({kind:"session",id:session.id,projectId:session.projectId,name:session.title}) : navigate({ sessionId: session.id, resourceId: null })} aria-current={route.sessionId === session.id && !route.resourceId ? "page" : undefined}>
-                  <Glyph name={session.icon??"chat"} size={16}/><span className="nav-row-text"><strong>{session.title}</strong><SessionListTags tags={session.tags??[]}/><small>{sessionLabels[session.status]}</small></span><SessionStatusDot session={session.id===selectedSession?.id?selectedSession:session} snapshot={session.id===selectedSession?.id?activeSnapshot:snapshotCache.current.get(session.id)}/>
+                  <Glyph name={session.icon??"chat"} size={16}/><span className="nav-row-text"><strong>{session.title}</strong><small>{sessionLabels[session.status]}</small></span><SessionStatusDot session={session.id===selectedSession?.id?selectedSession:session} snapshot={session.id===selectedSession?.id?activeSnapshot:snapshotCache.current.get(session.id)}/>
                 </button>
-                <SessionActions session={session} tags={catalog.tags??[]} className="session-more" label={`管理会话 ${session.title}`} disabled={!connected||!!pendingOperation||sessionNavigationBusy} onPin={()=>void moveSessionNavigation(session,!session.pinned,sortSessionNavigation(catalog.sessions.filter(s=>s.projectId===session.projectId&&!!s.pinned===!session.pinned))[0]?.id??null).catch(handleFailure)}
+                <SessionActions session={session} className="session-more" label={`管理会话 ${session.title}`} disabled={!connected||!!pendingOperation||sessionNavigationBusy} onPin={()=>void moveSessionNavigation(session,!session.pinned,sortSessionNavigation(catalog.sessions.filter(s=>s.projectId===session.projectId&&!!s.pinned===!session.pinned))[0]?.id??null).catch(handleFailure)}
                   menuPosition={sessionContext?.session.id===session.id?sessionContext:null} onMenuChange={position=>setSessionContext(position?{session,...position}:null)}
                   view={session.id===selectedSession?.id?(isPlansPage?'plans':conversationMode):''} hasViews={session.id===selectedSession?.id&&!!activeSnapshot?.ai} onView={value=>{if(value==='plans'){openSessionPlans(session.id);return;}if(isPlansPage)navigate({sessionId:session.id,resourceId:null});pauseFollowing();setConversationMode(value as "conversation"|"activity"|"evidence");conversationRef.current?.scrollTo({top:0});setMobileMenu(false);}}
                   onEdit={()=>setEditSession(session)} onDelete={()=>{setDeleteError("");setDeleteTarget(session);}} onRefresh={async()=>{await refreshCatalog();}}
@@ -1817,11 +1868,19 @@ function AppContent() {
           </div>;
         }) : <WelcomeSidebar disabled={!connected} onCreate={openProjectDialog}/>}
       </SidebarWorkspaceNavigation>:<SidebarScrollArea><WelcomeSidebar disabled={!connected} onCreate={openProjectDialog}/></SidebarScrollArea>}
-      <SidebarUtilities projects={projectList} projectId={sidebarProject?.id} projectSelection={sidebarProject&&<BulkCheckbox target={{kind:"project",id:sidebarProject.id,projectId:sidebarProject.id,name:sidebarProject.name}} selection={bulkSelection}/>} onSelectProject={id=>{setSidebarProjectId(id);setNavigationSearchOpen(false);setSelectedTag(null);setBulkMode(false);setBulkSelected([]);const session=catalog.sessions.filter(item=>item.projectId===id).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];navigate({sessionId:session?.id??null,resourceId:null});}} onCreateProject={createWorkspaceProject} onDeleteProject={deleteWorkspaceProject} bulkMode={bulkMode} onToggleBulk={()=>{setBulkMode(value=>!value);setBulkSelected([]);}} tags={(catalog.tags??[]).filter(tag=>tag.projectId===sidebarProject?.id)} sessions={catalog.sessions} selectedTag={selectedTag} onSelectTag={setSelectedTag} onManageTags={()=>{const project=sidebarProject;if(project)setTagProject(project);else openProjectDialog();}} onSession={id=>navigate({sessionId:id,resourceId:null})} onSettings={()=>void openSettings()} onTrash={()=>setTrashOpen(true)} onSchedules={sidebarProject?()=>setScheduleProject(sidebarProject):undefined} booting={booting} connected={connected} modelConfigured={modelConfigured}/>
+      <SidebarUtilities projects={projectList} projectId={sidebarProject?.id}
+        projectSelection={sidebarProject&&<BulkCheckbox target={{kind:"project",id:sidebarProject.id,projectId:sidebarProject.id,name:sidebarProject.name}} selection={bulkSelection}/>}
+        onSelectProject={id=>{
+          setSidebarProjectId(id);setNavigationSearchOpen(false);setBulkMode(false);setBulkSelected([]);
+          const session=catalog.sessions.filter(item=>item.projectId===id).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];
+          navigate({sessionId:session?.id??null,resourceId:null});
+        }} onCreateProject={createWorkspaceProject} onDeleteProject={deleteWorkspaceProject} bulkMode={bulkMode}
+        onToggleBulk={()=>{setBulkMode(value=>!value);setBulkSelected([]);}}
+        onSettings={()=>void openSettings()} onTrash={()=>setTrashOpen(true)} booting={booting} connected={connected} modelConfigured={modelConfigured}/>
 
     </aside>
 
-    {sharedIsland&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={terminalHeading} inspectorOpen={inspectorOpen} terminalOpen={terminalOpen}/>}
+    {sharedIsland&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={terminalHeading} inspectorOpen={inspectorOpen} terminalOpen={terminalOpen} pilotTone={pilotTone}/>}
     <main className={`workspace${window.lakeInspectorWindow?"":" web-inspector-layout"}${inspectorOpen?" has-session-inspector":""}${!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":sessionSelected?" has-specialist-task-list":""}`} onDragOver={event=>{if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="none";return;}if(selectedSession&&!isLegacyHistory&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.stopPropagation();return;}if(!selectedSession||isLegacyHistory||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
       {!sharedIsland&&(isSpecialistTasks?<header className="specialist-mobile-heading"><button type="button" className="icon-button" aria-label="打开项目导航" onClick={()=>setMobileMenu(true)}><Glyph name="menu" size={21}/></button><span>专员任务</span></header>:workspaceHeading)}
 
@@ -1851,13 +1910,15 @@ function AppContent() {
             <SpecialistTaskControls snapshot={activeSnapshot} connected={sessionConnected}/>
             <button type="button" className="button secondary" onClick={reopenInspector} disabled={!inspectorAvailable}>执行过程</button>
             <button type="button" className="button secondary" onClick={()=>void openProjectPilot(selectedSession.projectId,activeSnapshot.superagent?.task)}>前往 Pilot 继续沟通<Glyph name="arrow" size={14}/></button>
-          </section> : (itemList.length || !!activeSnapshot.ai?.cards.length || !!activeSnapshot.superagent || !!activeSnapshot.sre?.tasks.length || !!activeSnapshot.ai?.operationOutcomes?.length) ? <div className="timeline-list">
-            {useConversationTranscript ? <AITranscript key={sessionId} pilotWorkspace={selectedSuperPilot?pilotWorkspace.workspace:undefined} pilotConnected={pilotActivityConnected} subscribeWorkerEvents={pilotWorkspace.subscribeWorkerEvents} presentedPilotReports={presentedReports} onPilotReportsPresented={selectedSuperPilot?onPilotReportsPresented:undefined} connected={!isLegacyHistory&&sessionConnected} superTask={selectedSuperWorker?.task} onInspectSpecialist={inspectSpecialist} onSpecialist={author=>{const worker=pilotWorkspace.workspace?.workers.find(row=>row.id===author.workerId);const channel=pilotWorkspace.workspace?.channels?.find(row=>row.roleId===worker?.roleId);void api.superWorkspace(selectedSession.projectId).then(()=>refreshCatalog()).then(()=>navigate({sessionId:author.channelSessionId??channel?.sessionId??author.sessionId,resourceId:null})).catch(handleFailure);}} assistantIdentity={selectedSuperWorker?{name:selectedSuperWorker.roleName,roleId:selectedSuperWorker.roleId}:selectedSuperPilot?{name:"Pilot",pilot:true}:undefined} onOpenMemory={()=>{setSettingsInitialTab("memory");setSettingsOpen(true)}} refresh={refreshCurrent} snapshot={activeSnapshot} mode={conversationMode} onOpenPlans={openPlans} onInspect={inspectConversation} onStopTurn={() => void stopCurrentTurn()} stopping={stoppingTurn} disabled={isLegacyHistory||!sessionConnected || modeSaving.has(sessionId)} renderAction={action => <TimelineNode entry={{ kind: "action", at: action.createdAt, id: action.id, item: action }} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={isLegacyHistory||!sessionConnected || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })}/>} /> : itemList.map(entry => <TimelineNode key={`${entry.kind}:${entry.id}`} entry={entry} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || messageBlocked || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })} />)}
+          </section> : (hasConversationItems||pilotTaskContinuation) ? <div className="timeline-list">
+            {!hasConversationItems&&emptyConversation}
+            {useConversationTranscript ? <AITranscript key={sessionId} pilotWorkspace={selectedSuperPilot?pilotWorkspace.workspace:undefined} pilotConnected={pilotActivityConnected} pilotTaskDirectory={pilotTaskContinuation?{currentTaskId:pilotTaskReference?.taskId,error:pilotWorkspace.error,onContinue:selectPilotTask}:undefined} subscribeWorkerEvents={pilotWorkspace.subscribeWorkerEvents} presentedPilotReports={presentedReports} onPilotReportsPresented={selectedSuperPilot?onPilotReportsPresented:undefined} connected={!isLegacyHistory&&sessionConnected} superTask={selectedSuperWorker?.task} onInspectSpecialist={inspectSpecialist} onSpecialist={author=>{const worker=pilotWorkspace.workspace?.workers.find(row=>row.id===author.workerId);const channel=pilotWorkspace.workspace?.channels?.find(row=>row.roleId===worker?.roleId);void api.superWorkspace(selectedSession.projectId).then(()=>refreshCatalog()).then(()=>navigate({sessionId:author.channelSessionId??channel?.sessionId??author.sessionId,resourceId:null})).catch(handleFailure);}} assistantIdentity={selectedSuperWorker?{name:selectedSuperWorker.roleName,roleId:selectedSuperWorker.roleId}:selectedSuperPilot?{name:"Pilot",pilot:true}:undefined} onOpenMemory={()=>{setSettingsInitialTab("memory");setSettingsOpen(true)}} refresh={refreshCurrent} snapshot={activeSnapshot} mode={conversationMode} onOpenPlans={openPlans} onInspect={inspectConversation} onStopTurn={() => void stopCurrentTurn()} stopping={stoppingTurn} disabled={isLegacyHistory||!sessionConnected || modeSaving.has(sessionId)} renderAction={action => <TimelineNode entry={{ kind: "action", at: action.createdAt, id: action.id, item: action }} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={isLegacyHistory||!sessionConnected || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })}/>} /> : itemList.map(entry => <TimelineNode key={`${entry.kind}:${entry.id}`} entry={entry} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || messageBlocked || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })} />)}
             {selectedSession.status === "investigating" && !activeSnapshot.ai && <div className="timeline-item item-thinking" role="status" aria-live="polite"><span className="timeline-point"><Glyph name="spark" size={15}/></span><div className="timeline-content"><div className="thinking-line"><span className="thinking-dots" aria-hidden="true"><i/><i/><i/></span><span>正在处理…</span></div></div></div>}
-          </div> : <div className="timeline-empty"><div className="empty-icon"><Glyph name="chat" size={25}/></div><h2>从一个问题开始</h2><p>描述你看到的故障或想核实的现象。Lake 会把调查过程、证据和需要确认的操作留在这里。</p></div>}
+          </div> : emptyConversation}
           {activeSnapshot?.session.workspaceRole==='router'&&<ConversationReadMarker session={activeSnapshot.session.id} state={activeSnapshot.messageRead} enabled={sessionConnected&&!historyPending}/>}
         </section></div>
         {isLegacyHistory?<div className="pilot-history-notice"><span>历史记录只读，原操作与证据保留。</span><button type="button" className="button secondary" onClick={()=>void openProjectPilot(selectedSession.projectId)}>前往 Pilot 继续沟通<Glyph name="arrow" size={14}/></button></div>:!canCompose?null:<div className="composer-dock">{!isSpecialistTasks&&<ConversationLatest key={`${sessionId}:${conversationMode}`} container={conversationRef} onJump={jumpToLatest}/>}{activeSnapshot?.ai && <div className="composer-session-controls">{selectedSuperPilot&&<PilotSpecialistQuestions questions={pilotWorkspace.workspace?.questions} connected={pilotWorkspaceConnected} onAnswered={pilotWorkspace.refresh}/>}<AIControls snapshot={activeSnapshot} refresh={refreshCurrent} optionsOpen={agentOptionsOpen} onCloseOptions={() => setAgentOptionsOpen(false)} permissionsOpen={permissionsOpen&&activeSnapshot.session.workspaceRole!=="role"&&activeSnapshot.session.workspaceRole!=="worker"} permissionAnchor={permissionButtonRef} onClosePermissions={() => setPermissionsOpen(false)}/></div>}<PendingMessages key={sessionId} supplementRootTurnId={conversationMode==='conversation'?activeSnapshot?.ai?.rootTurnId:undefined} sessionId={sessionId} queue={activeSnapshot?.messageQueue ?? {paused:false,revision:0,lastError:"",items:[]}} disabled={!sessionConnected} active={turnActive} sendShortcut={sendShortcut} resourceIds={mentionedResourceIds} onUpdated={messageQueue => setSnapshot(current => current?.session.id===sessionId && messageQueue.revision>=(current.messageQueue?.revision ?? 0) ? {...current,messageQueue} : current)}/>{activeSnapshot?.conversationMode==='plan'&&<p className="plan-mode-hint" role="status">Plan 模式 · 只读调查与制定方案，确认计划后再执行。{activeSnapshot.sre?.enabled?'SRE 协作将在退出 Plan 模式后恢复。':''}</p>}<form className="composer" onSubmit={sendMessage}><label htmlFor="message-input" className="visually-hidden">{"给 Lake 的消息"}</label><div className={`composer-input${attachmentDragOver?" attachment-drop-active":""}`}>
+          {pilotTaskReference&&!pilotTaskReference.sent&&<div className="composer-task-context" aria-live="polite"><PilotTaskReferenceChip task={pilotTaskReference} members={pilotTaskMembers} onClear={()=>selectPilotTask()}/></div>}
           {mention && <ComposerMentions options={mentionMatches} allOptions={allMentionOptions} index={mentionIndex} category={mentionCategory} onActive={index=>setMention(current=>current&&current.index!==index?{...current,index}:current)} onCategory={kind=>{setMentionCategory(kind);setMention({...mention,index:0});}} onSelect={insertMention} loading={mentionExtensions.loading} error={mentionExtensions.error} onReload={mentionExtensions.reload} onClose={()=>setMention(null)} onImport={()=>{const target=projectList.find(item=>item.id===selectedSession?.projectId);setMention(null);if(target){setImportHexhub(true);setImportProject(target);}}}/>}
           {attachmentUploading&&<p className="attachment-upload-status" role="status">正在上传：{attachmentUploading}</p>}{attachmentDragOver&&<p className="attachment-upload-status" role="status">松开以添加文件 · 每个最多 512 MiB</p>}{fileDraft.length > 0 && <div className="text-file-drafts">{fileDraft.map(file => <span key={file.sourceId}><Glyph name="file" size={13}/>
             <span className="attachment-draft-name" title={file.name}>{file.name}</span>
@@ -1865,7 +1926,7 @@ function AppContent() {
             <button type="button" aria-label={`移除 ${file.name}`} onClick={() => {
               setFileDraft(files => files.filter(item => item.sourceId !== file.sourceId));
               attachmentButtonRef.current?.focus();
-            }}><Glyph name="close" size={14}/></button></span>)}</div>}{imageDraft.length > 0 && <div className="image-drafts">{imageDraft.map(image => <figure key={image.id}><img src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name || "待发送图片"}/><figcaption title={image.name}>{image.name || "剪贴板图片"}</figcaption><button type="button" aria-label={`移除 ${image.name || "图片"}`} onClick={() => setImageDraft(images => images.filter(item => item.id !== image.id))}><Glyph name="close" size={14}/></button></figure>)}</div>}{modelConfigured && imageDraft.length > 0 && !bootstrap?.supportsImageInput && <p className="composer-image-hint" role="status">当前模型不接受图片输入，请切换模型或在模型设置中手动调整。</p>}<div className="composer-body"><ComposerTextInput key={sessionId} references={mentionRefs} renderReference={ref=><>{ref.kind==="role"?<RoleMentionAvatar id={ref.resourceId} name={ref.label.slice(1)} size={14}/>:ref.kind==="resource"?<ResourceIcon kind={resourceMap.get(ref.resourceId)?.jumpServer ? "jumpserver" : resourceMap.get(ref.resourceId)?.kind ?? "ssh"} size={13}/>:<Glyph name={ref.kind==="skill"?"book":"plug"} size={13}/>}<span>{ref.label.slice(1)}</span>{ref.kind!=="resource"&&<small>{ref.kind==="role"?"专员":ref.kind==="skill"?"Skill":"MCP"}</small>}</>} id="message-input" ref={messageInputRef} aria-label={"给 Lake 的消息"} role="combobox" aria-haspopup="listbox" aria-autocomplete={mention?"list":"none"} aria-expanded={!!mention} aria-controls={mention?"composer-mention-options":undefined} aria-activedescendant={mention&&mentionMatches[mentionIndex]?mentionOptionId(mentionMatches[mentionIndex]!):undefined} placeholder={queueMode ? "继续输入，稍后发送…" : continuousPilot&&turnActive ? "继续发送新任务或补充要求…" : activeSnapshot?.conversationMode === "plan" ? "描述目标或修改意见，Lake 会先制定计划…" : pendingApproval ? "可以继续讨论，操作由确认按钮单独处理" : "想让 Lake 帮你做什么？"} value={messageDraft} onPaste={event => { const files = clipboardFiles(event.clipboardData); if (!files.length) return; event.preventDefault(); void attachFiles(files); }} onCaretMove={moveMentionCaret} onChange={(value,refs,caret)=>{setMessageDraft(value);setMentionRefs(refs);syncMention(value,caret);}} disabled={!sessionConnected || !!pendingOperation} onCompositionStart={() => messageComposition.current.start()} onCompositionEnd={() => messageComposition.current.end()} onBlur={() => { messageComposition.current = new CompositionGuard(); }} onKeyDown={event => {
+            }}><Glyph name="close" size={14}/></button></span>)}</div>}{imageDraft.length > 0 && <div className="image-drafts">{imageDraft.map(image => <figure key={image.id}><img src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name || "待发送图片"}/><figcaption title={image.name}>{image.name || "剪贴板图片"}</figcaption><button type="button" aria-label={`移除 ${image.name || "图片"}`} onClick={() => setImageDraft(images => images.filter(item => item.id !== image.id))}><Glyph name="close" size={14}/></button></figure>)}</div>}{modelConfigured && imageDraft.length > 0 && !bootstrap?.supportsImageInput && <p className="composer-image-hint" role="status">当前模型不接受图片输入，请切换模型或在模型设置中手动调整。</p>}<div className="composer-body"><ComposerTextInput key={sessionId} completion={composerCompletion} references={mentionRefs} renderReference={ref=><>{ref.kind==="role"?<RoleMentionAvatar id={ref.resourceId} name={ref.label.slice(1)} size={14}/>:ref.kind==="resource"?<ResourceIcon kind={resourceMap.get(ref.resourceId)?.jumpServer ? "jumpserver" : resourceMap.get(ref.resourceId)?.kind ?? "ssh"} size={13}/>:<Glyph name={ref.kind==="skill"?"book":"plug"} size={13}/>}<span>{ref.label.slice(1)}</span>{ref.kind!=="resource"&&<small>{ref.kind==="role"?"专员":ref.kind==="skill"?"Skill":"MCP"}</small>}</>} id="message-input" ref={messageInputRef} aria-label={"给 Lake 的消息"} role="combobox" aria-haspopup="listbox" aria-autocomplete={mention?"list":undefined} aria-expanded={!!mention} aria-controls={mention?"composer-mention-options":undefined} aria-activedescendant={mention&&mentionMatches[mentionIndex]?mentionOptionId(mentionMatches[mentionIndex]!):undefined} placeholder={queueMode ? "继续输入，稍后发送…" : activeSnapshot?.conversationMode === "plan" ? "描述目标或修改意见，Lake 会先制定计划…" : pendingApproval ? "可以继续讨论，操作由确认按钮单独处理" : pilotTaskReference ? "接着问这项任务…" : continuousPilot&&turnActive ? "继续发送新任务或补充要求…" : "想让 Lake 帮你做什么？"} value={messageDraft} onPaste={event => { const files = clipboardFiles(event.clipboardData); if (!files.length) return; event.preventDefault(); void attachFiles(files); }} onCaretMove={moveMentionCaret} onChange={(value,refs,caret)=>{setMessageDraft(value);setMentionRefs(refs);syncMention(value,caret);}} disabled={!sessionConnected || !!pendingOperation} onCompositionStart={() => messageComposition.current.start()} onCompositionEnd={() => messageComposition.current.end()} onBlur={() => { messageComposition.current = new CompositionGuard(); }} onKeyDown={event => {
             if (messageComposition.current.ignores(event.nativeEvent)) return;
             if (mention) {
               if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setMention(null); return; }
@@ -1886,6 +1947,7 @@ function AppContent() {
             <Glyph name="shieldOutline" size={16}/>
           </button>}
           {activeSnapshot&&!pilotWorkspace.workspace?.active&&<LakePilotControl key={activeSnapshot.session.projectId} snapshot={activeSnapshot} onUpdated={refreshCurrent} disabled={!sessionConnected||turnActive} disabledReason={!sessionConnected?"连接恢复后可切换 Lake Pilot。":"本轮运行中，结束后可切换 Lake Pilot。"}/> }
+          {pilotTaskReference?.sent&&<PilotTaskReferenceChip task={pilotTaskReference} members={pilotTaskMembers} compact onClear={()=>selectPilotTask()}/>}
           <div className="composer-foot-actions"><div className="composer-status"><div className="model-switch-wrap">
           <ComposerModelSelect key={sessionId} externalAgent={codexSettingsProject?{ready:!!specialistModel.agent?.assignmentReady,message:specialistModel.message,model:specialistModel.model,configurationOnly:!specialistComposer}:undefined} onExternalAgentSettings={()=>{setModelMenuOpen(false);setSettingsInitialTab("agents");setSettingsOpen(true);}} contextUsage={activeSnapshot?.ai?{view:{session:activeSnapshot.ai.session,context:activeSnapshot.ai.context,usage:activeSnapshot.ai.usage},model:{modelId:bootstrap?.modelId},status:headerPilot?.status==='paused'?'idle':currentSessionStatus}:undefined} available={modelMenu} modelName={bootstrap?.modelName??null} selection={bootstrap?.modelSelection??undefined} configured={modelConfigured} open={modelMenuOpen} disabled={!!pendingOperation||reasoningSaving.size>0} onOpenChange={open=>{if(open) void openModelMenu();else setModelMenuOpen(false);}} onSelect={model=>void switchModel(model).catch(handleFailure)} onSettings={()=>{setModelMenuOpen(false);void openSettings();}} reasoning={activeSnapshot?.ai ? {session:sessionId,modelId:bootstrap?.modelId,disabled:!sessionConnected || turnActive || !!pendingOperation,disabledReason:!sessionConnected?"连接恢复后可调整思考级别。":turnActive?"本轮运行中，结束后可调整思考级别。":"正在保存设置，请稍后调整思考级别。",onSaving:(saving,savingSession=sessionId) => setReasoningSaving(current=>{const next=new Set(current);if(saving)next.add(savingSession);else next.delete(savingSession);return next;})}:undefined}/>
         </div>{!specialistComposer&&activeSnapshot?.ai && <ContextUsage view={activeSnapshot.ai} model={bootstrap || undefined} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} compact presentation="warning"/>}</div><div className="composer-send-actions">
@@ -1927,12 +1989,11 @@ function AppContent() {
     {resourceConfigContext && <NavigationMenu title={resourceConfigContext.resource.name} x={resourceConfigContext.x} y={resourceConfigContext.y} onClose={() => setResourceConfigContext(null)} actions={resourceConfigContext.resource.jumpServer ? [{label:"选择 JumpServer 登录账号",run:()=>setJumpAccount(resourceConfigContext.resource)}] : [{label:"编辑终端配置",run:()=>setEditTerminalResource(resourceConfigContext.resource)}, ...(resourceConfigContext.resource.kind !== "local" ? [{label:"删除资源",danger:true,run:()=>setNavigationDelete({kind:"resource" as const,id:resourceConfigContext.resource.id,projectId:resourceConfigContext.resource.projectId,name:resourceConfigContext.resource.name})}] : [])]}/>}
     {editSession && <SessionEdit key={editSession.id} session={editSession} connected={connected} onClose={() => setEditSession(null)} onSaved={sessionRenamed}/>}
     {deleteTarget && <div className="modal-scrim" onMouseDown={event => { if (event.target === event.currentTarget && !deleteBusy) setDeleteTarget(null); }}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="delete-session-title"><div className="modal-header"><span className="modal-icon danger-icon"><Glyph name="trash" size={20}/></span><button className="icon-button" aria-label="关闭" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}><Glyph name="close"/></button></div><h2 id="delete-session-title">删除会话</h2><p className="modal-description">将删除会话「{deleteTarget.title}」的对话、专员结论、证据、审批和命令记录。此操作不可恢复。</p>{deleteError && <p className="form-error" role="alert">{deleteError}</p>}<div className="modal-actions"><button type="button" className="button secondary" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>取消</button><button type="button" className="button danger" onClick={() => void confirmDeleteSession()} disabled={deleteBusy || !connected}>{deleteBusy ? "正在删除…" : "删除会话"}</button></div></div></div>}
-    {tagProject && <TagManager project={tagProject} tags={catalog.tags??[]} onClose={()=>{setTagProject(null);if(selectedTag&&!catalog.tags?.some(t=>t.id===selectedTag))setSelectedTag(null);}} onRefresh={async()=>{await refreshCatalog();}}/>}
     {memoryProject && <ProjectMemory key={memoryProject.id} project={memoryProject} onClose={() => setMemoryProject(null)}/>}
     {bulkConfirmation && <BulkNavigationDelete targets={bulkConfirmation} onClose={() => setBulkConfirmation(null)} onProcessed={bulkProcessed} onBusy={busy => setPendingOperation(current => busy ? "bulk-delete" : current === "bulk-delete" ? "" : current)}/>}
     {navigationDelete && <NavigationDelete target={navigationDelete} onClose={()=>setNavigationDelete(null)} onDeleted={async()=>{setResourceTerminalMenu(null);if(navigationDelete.kind==="project" && selectedSession?.projectId===navigationDelete.id)navigate({sessionId:null,resourceId:null});else if(navigationDelete.kind==="resource"&&route.resourceId===navigationDelete.id)navigate({sessionId:route.sessionId,resourceId:null});await refreshCatalog();if(navigationDelete.kind!=="project")await refreshCurrent();}}/>}
     {trashOpen && <NavigationTrash onClose={()=>setTrashOpen(false)} onRestored={async()=>{await refreshCatalog();await refreshCurrent();}}/>}
-    {settingsOpen && <ModelSettings onGatewayTask={inspectGatewayTask} watchdogEnabled={bootstrap?.backendRuntime==='typescript'} capabilityDetectionEnabled={bootstrap?.backendRuntime==='go'}
+    {settingsOpen && <ModelSettings completionEnabled={completionEnabled} onCompletionEnabledChange={setCompletionEnabled} onGatewayTask={inspectGatewayTask} watchdogEnabled={bootstrap?.backendRuntime==='typescript'} capabilityDetectionEnabled={bootstrap?.backendRuntime==='go'}
       memoryEngine={bootstrap?.memoryEngine} initialTab={settingsInitialTab} onClose={() => setSettingsOpen(false)} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut} onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {setSettingsOpen(false);setAgentOptionsOpen(true);} : undefined} onProjectMemory={selectedProjectId ? () => {const project=projectList.find(p=>p.id===selectedProjectId);if(project){setSettingsOpen(false);setMemoryProject(project);}} : undefined} projectId={selectedProjectId??sidebarProject?.id} projectName={projectList.find(project=>project.id===(selectedProjectId??sidebarProject?.id))?.name} ignoreProjectMemory={ignoreProjectMemory} onIgnoreProjectMemoryChange={setIgnoreProjectMemory}/>}
     {jumpProject && <JumpServerSettings key={jumpProject.id} project={jumpProject} refresh={refreshCatalog} onClose={()=>setJumpProject(null)}/>}
     {jumpAccount && <JumpServerAccounts key={jumpAccount.id} resource={jumpAccount} refresh={refreshCatalog} onClose={()=>setJumpAccount(null)}/>}

@@ -52,8 +52,6 @@ type Server struct {
 	progressSummaryMu    sync.Mutex
 	progressSummaries    map[string]*progressSummaryState
 	progressRunning      int
-	scheduleMu           sync.Mutex
-	schedulerWorkers     sync.WaitGroup
 	workflowMu           sync.Mutex
 	workflowCancels      map[string]context.CancelFunc
 	messageMu            sync.Mutex
@@ -239,10 +237,6 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	}
 	store.RecoverSRETasks()
 	server.reconcileStaleSREStatuses()
-	if err = server.startScheduler(); err != nil {
-		server.Close()
-		return nil, err
-	}
 	server.Engine.StartWorkManager()
 	runtimeReady = true
 	return server, nil
@@ -362,7 +356,6 @@ func (b *Server) Close() {
 		if b.Terminals != nil {
 			b.Terminals.Shutdown()
 		}
-		b.schedulerWorkers.Wait()
 		b.workers.Wait()
 		if server != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -522,9 +515,6 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if b.sreRoute(w, r, name, method) {
-		return
-	}
-	if b.scheduleRoute(w, r, name, method) {
 		return
 	}
 	if b.workflowRoute(w, r, name, method) {

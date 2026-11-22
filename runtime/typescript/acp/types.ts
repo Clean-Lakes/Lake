@@ -1,17 +1,19 @@
 import type { ToolEntry } from '../sdk';
 
-import type {ExternalAgentId,ExternalRuntimeKind,StoredExternalAgentId} from '../../../web-agent/shared/external-agents';
+import type {CodexProjectOverrides,ExternalAgentId,ExternalAgentStatus as PublicAgentStatus,ExternalRuntimeKind,StoredExternalAgentId} from '../../../web-agent/shared/external-agents';
 export type {ExternalAgentId,AgentBackendRef} from '../../../web-agent/shared/external-agents';
-export type ExternalAgentProfile = {
+export type ExternalAgentProfile = CodexProjectOverrides & {
   schemaVersion: 3; runtimeKind:ExternalRuntimeKind;
   id: ExternalAgentId; projectId: string; revision: number; enabled: boolean;
   nodePath?: string; npmPath?:string; authentication:'codex-local';sourceFingerprint:string;updatedAt: string;
 };
-export type ExternalAgentStatus = ExternalAgentProfile & {
-  name: string; installed: boolean; transportReady: boolean; message?: string;
-  assignmentReady?:boolean;assignmentBlocker?:string;
+export type ExternalAgentStatus = ExternalAgentProfile & PublicAgentStatus & {
   capabilities?: Record<string, unknown>;
-  model?:string;defaultTaskModel?:string;modelProvider?:string;reasoningEffort?:string;configPath?:string;authMode?:'chatgpt'|'api_key'|'provider'|'none';
+};
+export type CodexModelOption = {
+  id: string;
+  reasoningEfforts: string[];
+  defaultReasoningEffort?: string;
 };
 export type CodexConnectionProbe = {
   connectionVersion?: 1;
@@ -20,6 +22,8 @@ export type CodexConnectionProbe = {
   ready: boolean;
   authenticated?: boolean;
   model?: string;
+  localModel?: string;
+  models?: CodexModelOption[];
   modelProvider?: string;
   reasoningEffort?: string;
   authMode?: ExternalAgentStatus['authMode'];
