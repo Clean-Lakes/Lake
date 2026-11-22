@@ -1,6 +1,7 @@
 import {createContext,useContext,useLayoutEffect,useMemo,useRef,type ReactNode} from 'react';
 import type {ExtraProps} from 'react-markdown';
-import {SpecialistReplyFeather,SpecialistReplyFeatherTail} from './SpecialistReplyFeather';
+import {isLakeAvatarName,type LakeAvatarName} from './lakeAvatarCatalog';
+import {SpecialistReplyCursor,SpecialistReplyCursorTail} from './SpecialistReplyCursor';
 import {useSmoothText} from './useSmoothText';
 
 export type MarkdownRevealOptions = {active: boolean; animateInitial?: boolean; finishPending?: boolean};
@@ -54,8 +55,8 @@ export function remarkRevealText(paintedThrough:number) {
 }
 
 /** Attach to the last prose leaf, keeping formatted inline nodes and the reveal clock intact. */
-export function remarkSpecialistReplyFeather() {
-  return (node:ProseNode) => {
+export function remarkSpecialistReplyCursor(avatar: LakeAvatarName) {
+  return () => (node:ProseNode) => {
     while (textContainers.has(node.type) && !node.data?.hName) {
       const children = node.children ?? [];
       let index = children.length - 1;
@@ -66,11 +67,11 @@ export function remarkSpecialistReplyFeather() {
 
       if (tail.type === 'text') wrapRevealText(tail);
       if (tail.type === 'lakeRevealText') {
-        tail.data!.hProperties!['data-specialist-feather'] = true;
+        tail.data!.hProperties!['data-cursor-avatar'] = avatar;
         return;
       }
       if (inlineContainers.has(node.type) && !textContainers.has(tail.type)) {
-        children.splice(index + 1, 0, {type:'lakeSpecialistFeather',data:{hName:'lake-specialist-feather'}});
+        children.splice(index + 1, 0, {type:'lakeSpecialistCursor',data:{hName:'lake-specialist-cursor',hProperties:{'data-cursor-avatar':avatar}}});
         return;
       }
       node = tail;
@@ -89,13 +90,22 @@ export function MarkdownReveal({source,active,animateInitial,finishPending,rende
   return <VisibleOffset.Provider value={visible.length}>{prose}</VisibleOffset.Provider>;
 }
 
+function cursorAvatar(node: ExtraProps['node']) {
+  const value = node?.properties?.['data-cursor-avatar'];
+  return typeof value === 'string' && isLakeAvatarName(value) ? value : undefined;
+}
+
 export const markdownRevealComponents = {
   'lake-reveal-text': function RevealText({node}: ExtraProps) {
     const offset = useContext(VisibleOffset);
     const start = node?.properties?.['data-reveal-start'];
     const text = node?.children.map(child=>child.type==='text'?child.value:'').join('')??'';
     const shown = offset === undefined || typeof start !== 'number' ? text : text.slice(0,Math.max(0,offset-start));
-    return node?.properties?.['data-specialist-feather'] ? <SpecialistReplyFeatherTail>{shown}</SpecialistReplyFeatherTail> : shown;
+    const avatar = cursorAvatar(node);
+    return avatar ? <SpecialistReplyCursorTail avatar={avatar}>{shown}</SpecialistReplyCursorTail> : shown;
   },
-  'lake-specialist-feather': SpecialistReplyFeather,
+  'lake-specialist-cursor': function InlineCursor({node}: ExtraProps) {
+    const avatar = cursorAvatar(node);
+    return avatar ? <SpecialistReplyCursor avatar={avatar}/> : null;
+  },
 };
