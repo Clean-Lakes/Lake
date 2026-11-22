@@ -33,7 +33,7 @@ function render(phase: Phase, text = '', resources: Resource[] = []) {
   const messages = [history,request];
   if (persisted || phase === 'completed') messages.push({id:'saved',sessionId,role:'assistant',text,createdAt:at(33000),replyToMessageId:request.id});
   const snapshot = {
-    session:{id:sessionId,projectId:'project',workspaceRole:'router',title:'Pilot',tags:[]}, messages, resources, actions:[],
+    session:{id:sessionId,projectId:'project',workspaceRole:'router',title:'Pilot'}, messages, resources, actions:[],
     ai:{session:sessionId,cards,cardsOffset:0,rootTurnId:'turn',sourceMessageIds:[request.id],status:persisted?'completed':status,replyStatus:status},
     replyTimings:[{messageId:request.id,startedAt:at(0),finishedAt:ended?at(33000):'',status}],
   } as SessionSnapshot;
