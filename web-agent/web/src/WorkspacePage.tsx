@@ -1,4 +1,4 @@
-import {useLayoutEffect, useMemo, useRef, useState} from 'react';
+import {useLayoutEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import type {Project, Resource} from '../../shared/contracts';
 import {BulkCheckbox, type BulkSelection} from './BulkNavigationDelete';
 import {Glyph} from './Icons';
@@ -41,7 +41,7 @@ function CurrentProject({project, resourceCount, connected, onOpen, onDelete}: {
 }) {
   const createdAt = new Date(project.createdAt);
   return <section id="workspace-current-project" className="workspace-current-project" aria-labelledby="workspace-current-project-title">
-    <div className="workspace-current-project-label"><Glyph name="lakeFolder" size={20}/>当前项目</div>
+    <div className="workspace-current-project-label">当前项目</div>
     <h2 id="workspace-current-project-title" aria-live="polite">{project.name}</h2>
     <dl className="workspace-project-facts">
       <div><dt>资源</dt><dd>{resourceCount} 项</dd></div>
@@ -61,7 +61,7 @@ function CurrentProject({project, resourceCount, connected, onOpen, onDelete}: {
 }
 
 export function WorkspacePage({projects, project, resources, connected, bulkSelection, bulkSelectedCount,
-  onOpenNavigation, onOpenProject, onSelectProject, onCreateProject, onDeleteProject, onToggleBulk,
+  navigationSearch, onOpenNavigation, onOpenProject, onSelectProject, onCreateProject, onDeleteProject, onToggleBulk,
   onClearSelection, onDeleteSelected}: {
   projects: readonly Project[];
   project?: Project;
@@ -69,6 +69,7 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
   connected: boolean;
   bulkSelection?: BulkSelection;
   bulkSelectedCount: number;
+  navigationSearch?: ReactNode;
   onOpenNavigation: () => void;
   onOpenProject: () => void;
   onSelectProject: (project: Project) => void;
@@ -94,74 +95,79 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
 
   return <div id="workspace-page" className="workspace-page" aria-labelledby="workspace-page-title">
     <header className="workspace-header workspace-page-header">
-      <div className="workspace-page-frame workspace-page-title-row">
+      <div className="workspace-page-title-row">
         <button type="button" className="icon-button mobile-only" aria-label="打开项目导航" onClick={onOpenNavigation}>
           <Glyph name="menu" size={21}/>
         </button>
         <h1 id="workspace-page-title" ref={heading} tabIndex={-1}>工作区</h1>
-        <button type="button" className="button primary" disabled={!connected} onClick={onCreateProject}>
-          <Glyph name="plus" size={16}/>新建项目
-        </button>
+        <div className="workspace-page-header-actions">
+          {navigationSearch}
+          <button type="button" className="button primary" disabled={!connected} onClick={onCreateProject}>
+            <Glyph name="plus" size={16}/>新建项目
+          </button>
+        </div>
       </div>
     </header>
-    <div className="workspace-page-scroll">
-      <div className="workspace-page-frame workspace-page-layout">
-        {project && <CurrentProject project={project} resourceCount={resourceCounts.get(project.id) ?? 0}
-          connected={connected && !bulkSelection} onOpen={onOpenProject} onDelete={() => onDeleteProject(project)}/>}
-        <section className="workspace-project-directory" aria-labelledby="workspace-projects-title">
+    <div className="workspace-page-layout">
+      {project && <CurrentProject project={project} resourceCount={resourceCounts.get(project.id) ?? 0}
+        connected={connected && !bulkSelection} onOpen={onOpenProject} onDelete={() => onDeleteProject(project)}/>}
+      <section className="workspace-project-directory" aria-labelledby="workspace-projects-title">
+        <div className="workspace-directory-toolbar">
           <div className="workspace-directory-heading">
             <h2 id="workspace-projects-title" tabIndex={-1}>项目</h2>
             <span className="workspace-directory-count" role="status">
               {needle ? `${visibleProjects.length} / ${projects.length}` : projects.length} 项
             </span>
-            {!!projects.length && <button type="button" className="workspace-text-button" aria-pressed={!!bulkSelection}
+          </div>
+          {!!projects.length && <>
+            <div className="workspace-project-search">
+              <Glyph name="search" size={16}/>
+              <input ref={search} type="search" aria-label="搜索项目" placeholder="搜索项目" value={query}
+                onChange={event => setQuery(event.target.value)}/>
+              {query && <button type="button" className="icon-button" aria-label="清除项目搜索"
+                onClick={() => {setQuery(''); search.current?.focus();}}><Glyph name="close" size={14}/></button>}
+            </div>
+            <button type="button" className="workspace-text-button" aria-pressed={!!bulkSelection}
               disabled={!connected && !bulkSelection} onClick={onToggleBulk}>
               <Glyph name={bulkSelection ? 'check' : 'listTasks'} size={16}/>{bulkSelection ? '完成' : '批量管理'}
-            </button>}
-          </div>
-          {!!projects.length && <div className="workspace-project-search">
-            <Glyph name="search" size={16}/>
-            <input ref={search} type="search" aria-label="搜索项目" placeholder="搜索项目" value={query}
-              onChange={event => setQuery(event.target.value)}/>
-            {query && <button type="button" className="icon-button" aria-label="清除项目搜索"
-              onClick={() => {setQuery(''); search.current?.focus();}}><Glyph name="close" size={14}/></button>}
+            </button>
+          </>}
+        </div>
+        {bulkSelection && <div className="workspace-bulk-actions" aria-label="项目批量管理">
+          <span role="status">已选 {bulkSelectedCount} 项</span>
+          <button type="button" className="workspace-text-button" disabled={!bulkSelectedCount || !connected}
+            onClick={onClearSelection}>清空</button>
+          <button type="button" className="workspace-text-button danger-text" disabled={!bulkSelectedCount || !connected}
+            onClick={onDeleteSelected}>删除所选…</button>
+        </div>}
+        <div className={`workspace-project-sheet${bulkSelection ? ' is-bulk-selecting' : ''}`}>
+          {visibleProjects.length ? <>
+            <div className="workspace-project-sheet-heading" aria-hidden="true"><span>项目名称</span><span>资源</span></div>
+            <ul className="workspace-projects-list" aria-label="项目列表">{visibleProjects.map(item => {
+              const current = item.id === project?.id;
+              return <li className="workspace-project-list-item" key={item.id}>
+                {bulkSelection && <label className="workspace-project-select">
+                  <BulkCheckbox target={{kind: 'project', id: item.id, projectId: item.id, name: item.name}} selection={bulkSelection}/>
+                </label>}
+                <button type="button" className="workspace-project-row" aria-current={current ? 'true' : undefined}
+                  title={item.name} onClick={() => onSelectProject(item)}>
+                  <span className="workspace-project-row-icon"><Glyph name="folder" size={17}/></span>
+                  <span className="workspace-project-name">{item.name}</span>
+                  <span className="workspace-project-resource-count">
+                    {resourceCounts.get(item.id) ?? 0}<span className="visually-hidden"> 项资源</span>
+                  </span>
+                  <span className="workspace-project-selected" aria-hidden="true">
+                    {current && <Glyph name="check" size={14}/>}
+                  </span>
+                </button>
+              </li>;
+            })}</ul>
+          </> : <div className="workspace-projects-empty">
+            <Glyph name={needle ? 'search' : 'lakeFolder'} size={24}/>
+            <p>{needle ? '没有匹配的项目' : '暂无项目'}</p>
           </div>}
-          {bulkSelection && <div className="workspace-bulk-actions" aria-label="项目批量管理">
-            <span role="status">已选 {bulkSelectedCount} 项</span>
-            <button type="button" className="workspace-text-button" disabled={!bulkSelectedCount || !connected}
-              onClick={onClearSelection}>清空</button>
-            <button type="button" className="workspace-text-button danger-text" disabled={!bulkSelectedCount || !connected}
-              onClick={onDeleteSelected}>删除所选…</button>
-          </div>}
-          <div className={`workspace-project-sheet${bulkSelection ? ' is-bulk-selecting' : ''}`}>
-            {visibleProjects.length ? <>
-              <div className="workspace-project-sheet-heading" aria-hidden="true"><span>项目名称</span><span>资源</span></div>
-              <ul className="workspace-projects-list" aria-label="项目列表">{visibleProjects.map(item => {
-                const current = item.id === project?.id;
-                return <li className="workspace-project-list-item" key={item.id}>
-                  {bulkSelection && <label className="workspace-project-select">
-                    <BulkCheckbox target={{kind: 'project', id: item.id, projectId: item.id, name: item.name}} selection={bulkSelection}/>
-                  </label>}
-                  <button type="button" className="workspace-project-row" aria-current={current ? 'true' : undefined}
-                    title={item.name} onClick={() => onSelectProject(item)}>
-                    <span className="workspace-project-row-icon"><Glyph name="folder" size={17}/></span>
-                    <span className="workspace-project-name">{item.name}</span>
-                    <span className="workspace-project-resource-count">
-                      {resourceCounts.get(item.id) ?? 0}<span className="visually-hidden"> 项资源</span>
-                    </span>
-                    <span className="workspace-project-selected" aria-hidden="true">
-                      {current && <Glyph name="check" size={14}/>}
-                    </span>
-                  </button>
-                </li>;
-              })}</ul>
-            </> : <div className="workspace-projects-empty">
-              <Glyph name={needle ? 'search' : 'lakeFolder'} size={24}/>
-              <p>{needle ? '没有匹配的项目' : '暂无项目'}</p>
-            </div>}
-          </div>
-        </section>
-      </div>
+        </div>
+      </section>
     </div>
   </div>;
 }

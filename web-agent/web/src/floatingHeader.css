@@ -50,7 +50,7 @@
   :root:not(.lake-windows-chrome) .app-shell:has(> .workspace:is(.has-floating-header, .has-specialist-task-list, .is-workspace-page)) > .sidebar {
     background: transparent;
   }
-  :root:not(.lake-windows-chrome) .app-shell:where(:not(.has-docked-conversation)) > .workspace:is(.has-floating-header, .has-specialist-task-list, .is-workspace-page) {
+  :root:not(.lake-windows-chrome) .app-shell:where(:not(.has-docked-conversation)) > .workspace:is(.has-floating-header, .has-specialist-task-list) {
     --conversation-frame-inset: 8px;
     --conversation-frame-radius: max(0px, calc(var(--radius-window) - var(--conversation-frame-inset)));
     --background: var(--workbench-content-background);
@@ -69,14 +69,14 @@
     --user-message-background: #303030;
     --conversation-composer-border: #3d3d3d;
   }
-  :root.lake-corner-fallback:not(.lake-windows-chrome) .app-shell:where(:not(.has-docked-conversation)) > .workspace:is(.has-floating-header, .has-specialist-task-list, .is-workspace-page) {
+  :root.lake-corner-fallback:not(.lake-windows-chrome) .app-shell:where(:not(.has-docked-conversation)) > .workspace:is(.has-floating-header, .has-specialist-task-list) {
     /* Keep the border's layout space while using the shared continuous contour. */
     border: 0;
     padding: 1px;
     border-radius: 0;
     -webkit-mask-box-image: url('/window-corner-fill.svg') 22 fill / var(--conversation-frame-radius) / 0 stretch;
   }
-  :root.lake-corner-fallback:not(.lake-windows-chrome) .app-shell:where(:not(.has-docked-conversation)) > .workspace:is(.has-floating-header, .has-specialist-task-list, .is-workspace-page)::after {
+  :root.lake-corner-fallback:not(.lake-windows-chrome) .app-shell:where(:not(.has-docked-conversation)) > .workspace:is(.has-floating-header, .has-specialist-task-list)::after {
     content: "";
     position: absolute;
     inset: 0;
@@ -193,9 +193,11 @@ html.lake-windows-chrome .conversation-header-backdrop { top:48px; }
  .conversation-header-backdrop { -webkit-backdrop-filter:none; backdrop-filter:none; }
 }
 
-/* A conversation by itself runs to the window edge beside the navigation. */
-.app-shell.has-docked-conversation {
+/* Standalone conversations and the workspace page run to the window edge. */
+.app-shell:is(.has-docked-conversation,:has(> .workspace.is-workspace-page)) {
  --conversation-frame-radius:max(8px,calc(var(--radius-window) - 8px));
+}
+.app-shell.has-docked-conversation {
  --conversation-header-inset:16px;
  --conversation-header-actions-offset:76px;
  --conversation-island-top:12px;
@@ -224,34 +226,38 @@ html.lake-windows-chrome .conversation-header-backdrop { top:48px; }
  inset:0;
  background:var(--workbench-chrome-background);
  pointer-events:none;
- border-inline-start:1px solid var(--conversation-frame-border,var(--border));
- border-start-start-radius:var(--conversation-frame-radius);
- border-end-start-radius:var(--conversation-frame-radius);
- corner-shape:var(--corner-window);
 }
-:root .app-shell.has-collapsed-sidebar > .workbench-conversation-surface { border-inline-start-color:transparent; }
-/* Both ends of the divider share the native fallback contour. */
-:root.lake-corner-fallback .workbench-conversation-surface {
- --conversation-frame-mask-width:var(--conversation-frame-radius) 0 var(--conversation-frame-radius) var(--conversation-frame-radius);
- border-inline-start-color:transparent;
- border-start-start-radius:0;
- border-end-start-radius:0;
- -webkit-mask-box-image:url('/window-corner-fill.svg') 22 fill / var(--conversation-frame-mask-width) / 0 stretch;
+@media (min-width:701px) {
+ :is(.workbench-conversation-surface,.workspace.is-workspace-page) {
+  border-inline-start:1px solid var(--conversation-frame-border,var(--border));
+  border-start-start-radius:var(--conversation-frame-radius);
+  border-end-start-radius:var(--conversation-frame-radius);
+  corner-shape:var(--corner-window);
+ }
+ :root .app-shell.has-collapsed-sidebar > :is(.workbench-conversation-surface,.workspace.is-workspace-page) { border-inline-start-color:transparent; }
+ /* Both ends of the divider share the native fallback contour. */
+ :root.lake-corner-fallback :is(.workbench-conversation-surface,.workspace.is-workspace-page) {
+  --conversation-frame-mask-width:var(--conversation-frame-radius) 0 var(--conversation-frame-radius) var(--conversation-frame-radius);
+  border-inline-start-color:transparent;
+  border-start-start-radius:0;
+  border-end-start-radius:0;
+  -webkit-mask-box-image:url('/window-corner-fill.svg') 22 fill / var(--conversation-frame-mask-width) / 0 stretch;
+ }
+ :root.lake-corner-fallback :is(.workbench-conversation-surface,.workspace.is-workspace-page)::after {
+  content:"";
+  position:absolute;
+  inset:0 0 0 -1px;
+  z-index:30;
+  pointer-events:none;
+  background:var(--conversation-frame-border,var(--border));
+  clip-path:inset(0 calc(100% - var(--conversation-frame-radius)) 0 0);
+  -webkit-mask-box-image:url('/window-corner-stroke.svg') 22 fill / var(--conversation-frame-mask-width) / 0 stretch;
+  transition:opacity var(--workbench-sidebar-duration) var(--workbench-sidebar-ease);
+ }
+ :root.lake-corner-fallback .app-shell.has-collapsed-sidebar > :is(.workbench-conversation-surface,.workspace.is-workspace-page)::after { opacity:0; }
 }
-:root.lake-corner-fallback .workbench-conversation-surface::after {
- content:"";
- position:absolute;
- inset:0 0 0 -1px;
- z-index:30;
- pointer-events:none;
- background:var(--conversation-frame-border,var(--border));
- clip-path:inset(0 calc(100% - var(--conversation-frame-radius)) 0 0);
- -webkit-mask-box-image:url('/window-corner-stroke.svg') 22 fill / var(--conversation-frame-mask-width) / 0 stretch;
- transition:opacity var(--workbench-sidebar-duration) var(--workbench-sidebar-ease);
-}
-:root.lake-corner-fallback .app-shell.has-collapsed-sidebar > .workbench-conversation-surface::after { opacity:0; }
 @media (prefers-reduced-motion:reduce) {
- :root.lake-corner-fallback .workbench-conversation-surface::after { transition:none; }
+ :root.lake-corner-fallback :is(.workbench-conversation-surface,.workspace.is-workspace-page)::after { transition:none; }
 }
 .app-shell.has-docked-conversation .conversation { scroll-padding-top:var(--conversation-header-clearance); }
 .app-shell.has-docked-conversation .timeline-list { padding-top:var(--conversation-header-clearance); }

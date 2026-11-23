@@ -3,6 +3,7 @@
  --sidebar-row-radius:var(--radius-window); --sidebar-edge-inset:8px; --sidebar-content-inset:16px;
  --sidebar-icon-column:22px; --sidebar-icon-gap:9px; --sidebar-rail-button-size:36px;
  --sidebar-brand-height:56px; --sidebar-brand-margin:6px; border-right:0;
+ --sidebar-rail-top:calc(var(--sidebar-brand-margin) + (var(--sidebar-brand-height) - var(--sidebar-rail-button-size)) / 2);
 }
 .sidebar.workspace-navigation .sidebar-brand-row {
   min-height: var(--sidebar-brand-height);
@@ -51,7 +52,6 @@
 .lake-native .sidebar.workspace-navigation { --sidebar-chrome-inset:var(--lake-titlebar-height,0px); }
 .sidebar-workspace-navigation,.sidebar-navigation-viewport,.sidebar-navigation-content { display:flex; flex:1 1 auto; min-height:0; flex-direction:column; }
 .sidebar-navigation-rail {
- --sidebar-rail-top:calc(var(--sidebar-brand-margin) + (var(--sidebar-brand-height) - var(--sidebar-rail-button-size)) / 2);
  --sidebar-rail-bottom:12px;
  position:absolute; inset-block:var(--sidebar-chrome-inset,0px) 0; inset-inline-start:0;
  width:var(--sidebar-rail-width); display:flex; flex-direction:column; align-items:center; gap:8px;
