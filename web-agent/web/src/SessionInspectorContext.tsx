@@ -6,7 +6,12 @@ export type PilotProcessTarget={sessionId:string;turnId:string;canonicalGoalId?:
 export type ReplyProcessSources={pilot:PilotProcessTarget;specialist:SpecialistReplyAuthor};
 export type InspectSpecialist=(author:SpecialistReplyAuthor,pilot?:PilotProcessTarget)=>void;
 export type InspectorSelection={sessionId:string;canonicalGoalId?:string;taskId?:string;task?:SRETask;attemptId?:string;evidenceId?:string;turnId?:string;replySources?:ReplyProcessSources;followLatest?:boolean;view?:'pilot-activity';automatic?:boolean;tab:'plan'|'execution'};
-type InspectorState={selection:InspectorSelection|null;lastSelection:InspectorSelection|null;host:HTMLDivElement|null;open:(target:InspectorSelection)=>void;close:()=>void;focusOpener:(ifLost?:boolean)=>void;reset:()=>void;setHost:(node:HTMLDivElement|null)=>void};
+type InspectorState={
+ selection:InspectorSelection|null;lastSelection:InspectorSelection|null;
+ host:HTMLDivElement|null;summaryHost:HTMLDivElement|null;
+ open:(target:InspectorSelection)=>void;close:()=>void;focusOpener:(ifLost?:boolean)=>void;reset:()=>void;
+ setHost:(node:HTMLDivElement|null)=>void;setSummaryHost:(node:HTMLDivElement|null)=>void;
+};
 const InspectorContext=createContext<InspectorState|null>(null);
 export const useSessionInspector=()=>useContext(InspectorContext);
 export const sessionInspectorId='session-task-inspector';
@@ -28,6 +33,7 @@ export function retainConversation(){
 
 export function SessionInspectorProvider({children}:{children:ReactNode}){
  const [selection,setSelection]=useState<InspectorSelection|null>(null),[lastSelection,setLastSelection]=useState<InspectorSelection|null>(null),[host,setHost]=useState<HTMLDivElement|null>(null);
+ const [summaryHost,setSummaryHost]=useState<HTMLDivElement|null>(null);
  const opener=useRef<HTMLElement|null>(null),frame=useRef<number|undefined>(undefined);
  useEffect(()=>()=>{if(frame.current)cancelAnimationFrame(frame.current);},[]);
  const open=useCallback((target:InspectorSelection)=>{
@@ -52,6 +58,6 @@ export function SessionInspectorProvider({children}:{children:ReactNode}){
   });
  },[focusOpener]);
  const reset=useCallback(()=>{if(frame.current)cancelAnimationFrame(frame.current);setSelection(null);setLastSelection(null);opener.current=null;},[]);
- const value=useMemo(()=>({selection,lastSelection,host,setHost,open,close,focusOpener,reset}),[selection,lastSelection,host,open,close,focusOpener,reset]);
+ const value=useMemo(()=>({selection,lastSelection,host,summaryHost,setHost,setSummaryHost,open,close,focusOpener,reset}),[selection,lastSelection,host,summaryHost,open,close,focusOpener,reset]);
  return <InspectorContext.Provider value={value}>{children}</InspectorContext.Provider>;
 }

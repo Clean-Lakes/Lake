@@ -48,7 +48,12 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
  },[visible]);
  const target=selection??retained.current;
  const followTurn=selection?.followLatest?snapshot.messages?.filter(message=>message.role==='user').at(-1)?.id:undefined;
- useLayoutEffect(()=>{const scroll=panel.current?.querySelector('.session-inspector-scroll');if(scroll)scroll.scrollTop=0;},[selection?.sessionId,selection?.turnId,selection?.taskId,selection?.canonicalGoalId,followTurn]);
+ const selectedSessionId=selection?.sessionId;
+ useLayoutEffect(()=>{
+  if(!selectedSessionId)return;
+  const scroll=panel.current?.querySelector('.session-inspector-scroll');
+  if(scroll)scroll.scrollTop=0;
+ },[selectedSessionId,selection?.turnId,selection?.taskId,selection?.canonicalGoalId,followTurn]);
  const task=target?inspectedTask(snapshot,target):undefined;
  const plan=task?.plans?.at(-1);
  const canonical=target?inspectedCanonicalTask(snapshot,target):undefined;
@@ -70,9 +75,13 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
  </div>;
  return <aside ref={panel} id={sessionInspectorId} tabIndex={-1} className={`session-inspector${selection?' is-open':' is-closing'}${waitingForWindow?' is-waiting':''}`} inert={!visible} aria-hidden={!visible} aria-label="任务检查" onKeyDown={event=>{if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();event.stopPropagation();inspector.close();}}}>
   <div className={`session-inspector-card${pilotOverview?' pilot-execution-card':''}`}>
-   <header className="session-inspector-heading">{pilotOverview?<strong className="worker-inspector-title">执行过程</strong>:<><Glyph name="document" size={17}/>{goal?<strong className="worker-inspector-title">任务详情</strong>:tabs}</>}<button type="button" className="icon-button" aria-label="关闭任务检查" onClick={inspector.close}><Glyph name="close" size={16}/></button></header>
+   <header className={`session-inspector-heading${pilotOverview?' pilot-execution-heading':''}`}>
+    {pilotOverview?<><strong className="worker-inspector-title">执行过程</strong><div className="pilot-execution-summary-host" ref={inspector.setSummaryHost}/></>:
+      <><Glyph name="document" size={17}/>{goal?<strong className="worker-inspector-title">任务详情</strong>:tabs}</>}
+    <button type="button" className="icon-button" aria-label="关闭任务检查" onClick={inspector.close}><Glyph name="close" size={16}/></button>
+   </header>
   <ObjectReferencesProvider resources={snapshot.resources} tasks={snapshot.ai?.agentRuns}>
-   <div className="session-inspector-scroll">
+   <div className="session-inspector-scroll" tabIndex={pilotOverview?0:undefined} role={pilotOverview?'region':undefined} aria-label={pilotOverview?'执行记录':undefined}>
     {pilotOverview?<><div ref={inspector.setHost} className="inspector-turn-host pilot-execution-host"/><p className="inspector-empty pilot-execution-empty">本轮尚无执行记录。</p></>:<>
     {taskNavigation}
     {goal&&canonical&&<><SuperTaskInspector task={canonical} goal={goal} worker={worker} summaryOnly hideStatus={taskPage}/>{taskMetadata}{taskControls}{tabs}</>}

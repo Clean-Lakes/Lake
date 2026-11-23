@@ -1,4 +1,5 @@
 import {useRef} from 'react';
+import {createPortal} from 'react-dom';
 import type {Message,SuperWorkspace,WorkSession} from '../../shared/contracts';
 import {AssistantMarkdown} from './AssistantMarkdown';
 import {DisclosureSummary} from './DisclosureSummary';
@@ -6,7 +7,7 @@ import {HeaderSweep} from './HeaderSweep';
 import {Glyph} from './Icons';
 import {SuperRoleAvatar} from './SuperRoleAvatar';
 import {superTaskPresentation} from './superAgentPresentation';
-import type {InspectSpecialist} from './SessionInspectorContext';
+import {useSessionInspector,type InspectSpecialist} from './SessionInspectorContext';
 import {latestPilotTaskAssignments,pilotExecutionSteps} from './pilotExecutionOverviewModel';
 import type {PilotSummarySlot} from './routeDispatchPresentation';
 import type {TranscriptEntry} from './timeline';
@@ -15,6 +16,7 @@ export function PilotExecutionOverview({workspace,session,source,messages,turn,s
  workspace?:SuperWorkspace|null;session:Pick<WorkSession,'id'|'projectId'>;turn:readonly TranscriptEntry[];
  source?:Message;messages:readonly Message[];summaries:readonly PilotSummarySlot[];active:boolean;onInspect?:InspectSpecialist;
 }){
+ const summaryHost=useSessionInspector()?.summaryHost;
  const assignments=latestPilotTaskAssignments(workspace,session,source,messages);
  const task=assignments[0]?.worker.task;
  const taskState=task?.collaboration??task;
@@ -25,12 +27,12 @@ export function PilotExecutionOverview({workspace,session,source,messages,turn,s
  const animated=useRef(current);
  if(current)animated.current=current;
  return <div className="pilot-execution-overview">
-  {task&&status&&<header className="pilot-execution-task">
-   <div><small>最新任务</small><span className="pilot-execution-state" data-tone={complete?'success':status.tone}>
+  {task&&status&&summaryHost&&createPortal(<>
+   <span className="pilot-execution-state pilot-execution-task-status" data-tone={complete?'success':status.tone}>
     {complete&&<span className="pilot-status-mark" data-ring aria-hidden="true"><Glyph name="check" size={10}/></span>}{status.label}
-   </span></div>
-   <h3>{task.title}</h3>
-  </header>}
+   </span>
+   <h3 className="pilot-execution-task-title" title={task.title}><span className="visually-hidden">最新任务 </span>{task.title}</h3>
+  </>,summaryHost)}
   <section className="pilot-execution-workers" aria-label="Worker 详情">
    <div className="pilot-execution-section-heading"><h3>Worker 详情</h3>{assignments.length>0&&<small>{assignments.length} 位专员</small>}</div>
    {assignments.length?<div className="pilot-execution-worker-list" key={task?.taskId}>
@@ -55,7 +57,7 @@ export function PilotExecutionOverview({workspace,session,source,messages,turn,s
    </div>:<p className="inspector-empty">本轮尚无关联 Worker。</p>}
   </section>
   <section className="pilot-execution-steps" aria-label="Pilot 操作过程">
-   <div className="pilot-execution-section-heading"><SuperRoleAvatar pilot size={18} motion="still"/><h3>Pilot 操作过程</h3></div>
+   <div className="pilot-execution-section-heading"><h3>Pilot 操作过程</h3></div>
    {steps.length?<ol>{steps.map(step=><li key={step.id}>
     <span className="pilot-execution-step-icon"><Glyph name={step.icon} size={15}/></span>
     <div className="pilot-execution-step-content">
