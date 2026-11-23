@@ -34,7 +34,7 @@
     }
     @media(min-width:701px) {
       .app-shell.has-docked-conversation[data-sidebar-sliding] {
-        grid-template-columns:var(--sidebar-rail-width,44px) minmax(0,1fr) 0px;
+        grid-template-columns:var(--sidebar-rail-width,52px) minmax(0,1fr) 0px;
       }
     }
     @media(max-width:700px) { .workbench-splitter { display:none; } }
@@ -57,7 +57,7 @@
     const auxiliaryMin = inspectorOpen && terminalOpen ? 240 : 280;
     const sidebarMax = Math.max(200, Math.min(420, width - conversationMin - (terminalOpen ? auxiliaryMin : 0) - (inspectorOpen ? auxiliaryMin : 0)));
     const expandedSidebarWidth = clamp(preferred.sidebar, 200, sidebarMax);
-    const railWidth = parseFloat(getComputedStyle(shell).getPropertyValue('--sidebar-rail-width')) || 44;
+    const railWidth = parseFloat(getComputedStyle(shell).getPropertyValue('--sidebar-rail-width')) || 52;
     const sidebar = sidebarCollapsed ? railWidth : expandedSidebarWidth;
     const terminalMax = Math.max(auxiliaryMin, Math.min(900, width - sidebar - conversationMin - (inspectorOpen ? auxiliaryMin : 0)));
     const terminal = terminalOpen ? clamp(preferred.terminal, auxiliaryMin, terminalMax) : 0;

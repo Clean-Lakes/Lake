@@ -1,7 +1,7 @@
 /* Lightweight workspace: conversations and resources share one quiet sidebar. */
 .sidebar.workspace-navigation {
  --sidebar-row-radius:var(--radius-window); --sidebar-edge-inset:8px; --sidebar-content-inset:16px;
- --sidebar-icon-column:22px; --sidebar-icon-gap:9px; --sidebar-rail-button-size:32px;
+ --sidebar-icon-column:22px; --sidebar-icon-gap:9px; --sidebar-rail-button-size:36px;
  --sidebar-brand-height:56px; --sidebar-brand-margin:6px; border-right:0;
 }
 .sidebar.workspace-navigation .sidebar-brand-row {
@@ -52,8 +52,8 @@
 .sidebar-navigation-rail {
  --sidebar-rail-top:calc(var(--sidebar-brand-margin) + (var(--sidebar-brand-height) - var(--sidebar-rail-button-size)) / 2);
  position:absolute; inset-block:var(--sidebar-chrome-inset,0px) 0; inset-inline-start:0;
- width:var(--sidebar-rail-width); display:flex; flex-direction:column; align-items:center; gap:10px;
- padding-block-start:var(--sidebar-rail-top); padding-inline-end:1px;
+ width:var(--sidebar-rail-width); display:flex; flex-direction:column; align-items:center; gap:8px;
+ padding-block-start:var(--sidebar-rail-top);
 }
 .sidebar-navigation-rail::after {
  content:""; position:absolute; inset-block:var(--sidebar-rail-top) 32px; inset-inline-end:0;
@@ -65,7 +65,7 @@
  color:var(--text-secondary); background:transparent;
 }
 .sidebar-rail-button:hover { background:var(--surface-hover); }
-.sidebar-rail-button[aria-pressed="true"] { color:var(--info); background:var(--surface-selected); }
+.sidebar-rail-button[aria-pressed="true"] { color:var(--info); background:color-mix(in srgb,currentColor 10%,transparent); }
 .sidebar-rail-button:focus-visible { outline-offset:-2px; }
 .workspace-rail-button { position:relative; }
 .workspace-update-dot { position:absolute; inset-block-start:5px; inset-inline-end:5px; width:6px; height:6px; border-radius:50%; background:var(--danger); }

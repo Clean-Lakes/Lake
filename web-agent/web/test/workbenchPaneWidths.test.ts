@@ -5,6 +5,7 @@ import {runInNewContext} from 'node:vm';
 
 // Exercise the shipped browser/native script through its resize and splitter events.
 const source=readFileSync(new URL('../src/workbenchLayout.js',import.meta.url),'utf8');
+const railWidth=52;
 function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sidebarDuration='420ms',railReadingLeft?:number){
  const properties=new Map<string,string>(),callbacks=new Map<number,(time:number)=>void>(),events=new Map<string,Function>();
  let nextFrame=0;
@@ -23,10 +24,10 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sid
  });
  const sidebarWidth=()=>parseFloat(properties.get('--sidebar-width')||'280');
  const surface=animatedNode(sidebarWidth);
- const toggle=animatedNode(()=>sidebarWidth()>44?86:150);
+ const toggle=animatedNode(()=>sidebarWidth()>railWidth?86:150);
  const composer=railReadingLeft===undefined?null:animatedNode(()=>railReadingLeft,'composer');
  const island=composer&&animatedNode(()=>{
-  const settled=(railReadingLeft??0)+(sidebarWidth()-44)/2;
+  const settled=(railReadingLeft??0)+(sidebarWidth()-railWidth)/2;
   return parseFloat(properties.get('--workbench-island-navigation-left')??String(settled));
  },'island');
  const handles=new Map<string,any>();
@@ -45,7 +46,7 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sid
  }};
  const window={lakeWorkbenchWidths:saved,addEventListener:(type:string,callback:Function)=>events.set(type,callback)};
  const getComputedStyle=(_node:unknown,pseudo?:string)=>({
-  getPropertyValue:(name:string)=>name==='--workbench-sidebar-duration'?sidebarDuration:'44px',
+  getPropertyValue:(name:string)=>name==='--workbench-sidebar-duration'?sidebarDuration:`${railWidth}px`,
   transitionDuration:pseudo==='::before'?'0.42s':'0s',
   transitionTimingFunction:'ease',
  });
@@ -91,7 +92,7 @@ test('collapsing to the icon rail returns width to the workbench and preserves t
  page.resize(1232);
  const expanded=page.widths();
  page.collapseSidebar(true);
- assert.deepEqual(page.widths(),[44,400,372]);
+ assert.deepEqual(page.widths(),[railWidth,400,364]);
  assert.equal(page.properties.get('--sidebar-expanded-width'),`${expanded[0]}px`);
  page.collapseSidebar(false);
  assert.deepEqual(page.widths(),expanded);
@@ -118,9 +119,9 @@ test('the docked island and composer share their left edge throughout both slide
  assert.deepEqual(transforms('island'),transforms('composer'));
  page.flush();
  page.collapseSidebar(false);
- assert.equal(page.properties.get('--workbench-island-navigation-left'),'428px');
- assert.deepEqual(transforms('island'),['translate3d(-130px,0px,0)','translate3d(0px,0,0)']);
- assert.deepEqual(transforms('composer'),['translate3d(0px,0px,0)','translate3d(130px,0,0)']);
+ assert.equal(page.properties.get('--workbench-island-navigation-left'),'424px');
+ assert.deepEqual(transforms('island'),['translate3d(-126px,0px,0)','translate3d(0px,0,0)']);
+ assert.deepEqual(transforms('composer'),['translate3d(0px,0px,0)','translate3d(126px,0,0)']);
 });
 
 test('the sidebar and toggle start together on the first frame even after a long input task',()=>{
