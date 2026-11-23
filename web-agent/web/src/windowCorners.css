@@ -39,7 +39,7 @@
 }
 @media(pointer:coarse) {
  :root .sidebar.workspace-navigation :is(.navigation-search,.session-nav-row,.resource-row,.resource-folder-toggle,.resource-tree-row,.resource-folder-row,.resource-nav-row,.pilot-workspace .nav-row) {
-  &:not(.pilot-worker-row) { min-height:44px; }
+  &:not(.pilot-worker-row,.sidebar-pilot-entry) { min-height:44px; }
   --window-corner-radius:var(--radius-window);
   --window-corner-stroke-image:url('/window-corner-stroke.svg');
   --window-corner-stroke-slice:22;

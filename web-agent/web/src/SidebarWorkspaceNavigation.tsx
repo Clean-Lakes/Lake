@@ -13,8 +13,8 @@ function initialPanel(projectId:string|undefined,selected:NavigationPanel):Navig
 }
 
 /** Both lists stay mounted so switching preserves their scroll and folder state. */
-export function SidebarWorkspaceNavigation({projectId,pilot,specialists,children,resourceCount,selectionId,selectedPanel,attention=false,onSelectPanel,workspace,empty}:{
- projectId?:string;pilot:ReactNode;specialists:ReactNode;children:ReactNode;resourceCount:number;
+export function SidebarWorkspaceNavigation({projectId,specialists,children,resourceCount,selectionId,selectedPanel,attention=false,onSelectPanel,workspace,empty}:{
+ projectId?:string;specialists:ReactNode;children:ReactNode;resourceCount:number;
  selectionId:string;selectedPanel:NavigationPanel;attention?:boolean;onSelectPanel?:(panel:NavigationPanel)=>void;workspace?:WorkspaceNavigation;empty?:ReactNode;
 }) {
  const id=useId();
@@ -41,7 +41,6 @@ export function SidebarWorkspaceNavigation({projectId,pilot,specialists,children
    </button>}
   </nav>
   {projectId?<><section key={`specialists:${projectId}`} className="sidebar-navigation-panel" id={`${id}-specialists-panel`} aria-labelledby={`${id}-specialists-title`} hidden={!specialistsOpen}>
-   {specialistsOpen&&<div className="sidebar-pinned-pilot">{pilot}</div>}
    <div className="sidebar-content-header">
     <div className="sidebar-content-title">
      <h2 id={`${id}-specialists-title`}>专员</h2>

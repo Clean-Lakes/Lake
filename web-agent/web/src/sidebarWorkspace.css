@@ -69,9 +69,6 @@
 .sidebar-rail-button:focus-visible { outline-offset:-2px; }
 .workspace-rail-button { position:relative; }
 .workspace-update-dot { position:absolute; inset-block-start:5px; inset-inline-end:5px; width:6px; height:6px; border-radius:50%; background:var(--danger); }
-.sidebar-pinned-pilot { flex:none; margin:4px var(--sidebar-edge-inset) 8px; }
-.sidebar.workspace-navigation .sidebar-pinned-pilot .sidebar-pilot-entry { width:100%; min-height:48px; padding:4px var(--sidebar-row-inset); gap:var(--sidebar-icon-gap); border-radius:var(--radius-sidebar-pilot); corner-shape:var(--corner-window); }
-.sidebar-pinned-pilot .super-role-avatar { flex:0 0 var(--sidebar-icon-column); width:var(--sidebar-icon-column); }
 .sidebar-content-header { position:relative; z-index:3; display:flex; flex:none; align-items:center; gap:4px; min-height:28px; margin:0 var(--sidebar-edge-inset) 6px; padding:0 4px 0 8px; }
 .sidebar-content-title { display:flex; flex:1; align-items:center; gap:7px; min-width:0; color:var(--text-secondary); }
 .sidebar-content-title h2 { margin:0; font-size:var(--font-size-ui); font-weight:var(--font-weight-medium); }

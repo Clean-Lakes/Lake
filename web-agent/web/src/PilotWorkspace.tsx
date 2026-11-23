@@ -164,7 +164,7 @@ function useCompletionReads(workspace: SuperWorkspace | null, viewedRole: string
 }
 
 type PilotWorkspaceProps = {
- showPilot?:boolean;showHeading?:boolean;
+ showHeading?:boolean;
  workspace: SuperWorkspace | null; error: string; selectedId: string | null; selectedRoleId?: string;
  activity?:ConversationAvatarActivity; pilotButton?:RefObject<HTMLButtonElement|null>;
  pilotActivity?:ConversationActivity;pilotDisabled?:boolean;
@@ -172,7 +172,7 @@ type PilotWorkspaceProps = {
  disabled?:boolean; onDeleted?:(channel:SpecialistChannelInfo)=>void;
 };
 
-export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,showPilot=true,showHeading=true}: PilotWorkspaceProps) {
+export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,showHeading=true}: PilotWorkspaceProps) {
  const [context,setContext]=useState<{channel:SpecialistChannelInfo;x:number;y:number}|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null);
  const anchor=useRef<HTMLButtonElement|null>(null);
  useEffect(()=>{setContext(null);setDeleting(null);},[workspace?.project.projectId]);
@@ -184,11 +184,11 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
  const routerId=workspace?.active?workspace.project.routerSessionId:undefined;
  const entries = channels ? channels.map(channel => ({channel, workers: roots.filter(worker => worker.roleId === channel.roleId)})) :
   roots.map(worker => ({channel: undefined, workers: [worker]}));
- return <section className="pilot-workspace" aria-label="专员">
+ return <section className="pilot-workspace" aria-label={showHeading?'专员':undefined}>
   {showHeading&&<div className="nav-heading"><span>专员</span><small>{entries.length+1}</small></div>}
-  {showPilot&&<SidebarPilotEntry buttonRef={pilotButton} selected={!!routerId&&selectedId===routerId}
+  <SidebarPilotEntry buttonRef={pilotButton} selected={!!routerId&&selectedId===routerId}
    activity={routerId&&activity?.sessionId===routerId?activity.state:pilotActivity} messageRead={workspace?.active?workspace.pilotMessageRead:undefined}
-   disabled={pilotDisabled} onPilot={onPilot}/>}
+   disabled={pilotDisabled} onPilot={onPilot}/>
   {error&&<p className="pilot-workspace-error" role="status">{error}</p>}
   {entries.length ? entries.map(({channel, workers}) => {
    const aggregate=specialistTaskActivity(workers),worker = aggregate.worker, task = worker?.task;
@@ -226,6 +226,13 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
    </button>;
   }) : null}
   {context&&<NavigationMenu title={context.channel.roleName} x={context.x} y={context.y} anchor={anchor} onClose={()=>setContext(null)} actions={[{label:'删除专员',icon:'trash',danger:true,disabled:disabled||context.channel.roleRevision===undefined,run:()=>setDeleting(context.channel)}]}/>}
-  {deleting&&<SpecialistDelete channel={deleting} returnFocus={anchor} onClose={()=>setDeleting(null)} onDeleted={()=>{onDeleted?.(deleting);if(deleting.roleId===viewedRole){onPilot();anchor.current=pilotButton?.current??null;}}}/>}
+  {deleting&&<SpecialistDelete channel={deleting} returnFocus={anchor} onClose={()=>setDeleting(null)} onDeleted={()=>{
+   onDeleted?.(deleting);
+   if(deleting.roleId===viewedRole){
+    onPilot();
+    anchor.current=pilotButton?.current??null;
+    anchor.current?.scrollIntoView({block:'nearest'});
+   }
+  }}/>}
  </section>;
 }

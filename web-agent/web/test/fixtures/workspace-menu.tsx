@@ -27,7 +27,7 @@ function Preview(){
   <aside className={`sidebar workspace-navigation${navigationOpen?' sidebar-open':''}`} aria-label="项目导航">
    <div className="sidebar-brand-row"><span className="brand"><strong>Lake</strong></span>
     <button type="button" className="mobile-only icon-button" aria-label="关闭导航" onClick={()=>setNavigationOpen(false)}><Glyph name="close"/></button></div>
-   <SidebarWorkspaceNavigation projectId={current?.id} pilot={null} specialists={null} resourceCount={0} selectionId={current?.id??''} selectedPanel="specialists"
+   <SidebarWorkspaceNavigation projectId={current?.id} specialists={null} resourceCount={0} selectionId={current?.id??''} selectedPanel="specialists"
     workspace={{active:true,unreadUpdate:false,onOpen:()=>setNavigationOpen(false),navigation:<WorkspaceSidebar connected modelConfigured unreadUpdate={false}
      onProjects={()=>setNavigationOpen(false)} onSettings={()=>setAction('设置')} onUpdates={()=>setAction('检查更新')} onTrash={()=>setAction('已删除')}/>}}>
     {null}
