@@ -1,14 +1,16 @@
-export type WorkspaceRoute={sessionId:string|null;resourceId:string|null;view?:'plans'};
+export type WorkspaceRoute={sessionId:string|null;resourceId:string|null;view?:'plans'|'workspace'};
 
 export function readWorkspaceRoute(search:string):WorkspaceRoute {
  const params=new URLSearchParams(search);
  const sessionId=params.get('session'),resourceId=params.get('resource');
- return {sessionId,resourceId,...(sessionId&&!resourceId&&params.get('view')==='plans'?{view:'plans' as const}:{})};
+ const view=params.get('view');
+ return {sessionId,resourceId,...(view==='workspace'||view==='plans'&&sessionId&&!resourceId?{view}:{})};
 }
 
 export function workspaceURL(href:string,route:WorkspaceRoute):URL {
  const url=new URL(href);
- for(const [key,value] of [['session',route.sessionId],['resource',route.resourceId],['view',route.sessionId&&!route.resourceId?route.view:undefined]]){
+ const view=route.view==='workspace'||route.sessionId&&!route.resourceId?route.view:undefined;
+ for(const [key,value] of [['session',route.sessionId],['resource',route.resourceId],['view',view]]){
   if(value)url.searchParams.set(key!,value);else url.searchParams.delete(key!);
  }
  return url;

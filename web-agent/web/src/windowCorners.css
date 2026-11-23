@@ -10,7 +10,6 @@
  .sidebar.workspace-navigation .resource-folder-row,
  .sidebar.workspace-navigation .resource-nav-row,
  .sidebar.workspace-navigation .sidebar-settings,
- .workspace-utilities-trigger,
  .workspace.has-floating-header > .workspace-header,
  .lake-workbench-island,
  .island-module-glass,
@@ -40,7 +39,7 @@
 }
 @media(pointer:coarse) {
  :root .sidebar.workspace-navigation :is(.navigation-search,.session-nav-row,.resource-row,.resource-folder-toggle,.resource-tree-row,.resource-folder-row,.resource-nav-row,.pilot-workspace .nav-row) {
-  &:not(.pilot-worker-row) { min-height:44px; }
+  &:not(.pilot-worker-row,.sidebar-pilot-entry) { min-height:44px; }
   --window-corner-radius:var(--radius-window);
   --window-corner-stroke-image:url('/window-corner-stroke.svg');
   --window-corner-stroke-slice:22;
@@ -73,7 +72,6 @@
  .sidebar.workspace-navigation .resource-folder-row,
  .sidebar.workspace-navigation .resource-nav-row,
  .sidebar.workspace-navigation .sidebar-settings,
- .workspace-utilities-trigger,
  .workspace.has-floating-header > .workspace-header,
  .lake-workbench-island,
  .island-module-glass,
@@ -96,6 +94,10 @@
  background-clip:text;
  border-image:linear-gradient(transparent,transparent) 1;
  overflow:visible;
+ &:where(.workspace.has-floating-header > .workspace-header,.lake-workbench-island) {
+  /* Extend the masked stroke over the reserved border so it meets the shadow. */
+  --window-corner-inset:-1px;
+ }
  &::before,&::after {
   content:"";
   position:absolute;
@@ -120,9 +122,6 @@
 }
 :root.lake-corner-fallback :is(
  .sidebar.workspace-navigation .navigation-search,
- .workspace-utilities-trigger,
- .workspace.has-floating-header > .workspace-header,
- .lake-workbench-island,
  .island-module-glass,
  .composer-input,
  .markdown-code-block,
@@ -139,7 +138,6 @@
  .sidebar.workspace-navigation .resource-folder-row,
  .sidebar.workspace-navigation .resource-nav-row,
  .sidebar.workspace-navigation .sidebar-settings,
- .workspace-utilities-trigger,
  .composer-input,
  .ai-role-user:not(.has-message-images),
  .ai-role-user.has-message-images > .user-message-text,

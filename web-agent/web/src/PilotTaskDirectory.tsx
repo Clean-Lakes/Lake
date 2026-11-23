@@ -4,6 +4,7 @@ import {Glyph} from './Icons';
 import {specialistTaskMembers,specialistTaskTime,type SpecialistTaskMember} from './specialistTaskListModel';
 import {superTaskPresentation} from './superAgentPresentation';
 import {TaskSpecialistAvatars} from './TaskSpecialistAvatars';
+import {pilotTaskWorkers} from './pilotExecutionOverviewModel';
 
 export type PilotTaskDirectoryData = {
  workspace:SuperWorkspace|null;
@@ -44,11 +45,6 @@ type DirectoryTask = PilotTaskReference & {
 
 const normalize = (value:string) => value.normalize('NFKC').toLowerCase().replace(/\s+/g,'');
 
-function pilotTaskWorkers(workspace:SuperWorkspace|null,session:PilotTaskDirectoryData['session']){
- if(!workspace?.active||workspace.project.projectId!==session.projectId||workspace.project.routerSessionId!==session.id)return [];
- return workspace.workers.filter(({parentWorkerId,sessionId,task})=>
-  !parentWorkerId&&task.sessionId===sessionId&&(!task.projectId||task.projectId===session.projectId));
-}
 
 function taskParticipants(workers:readonly SuperWorker[]){
  const participants=new Map<string,SpecialistTaskMember>();

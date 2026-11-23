@@ -29,7 +29,8 @@ export function initialWorkspaceSelection(catalog: WorkspaceCatalog, route: Work
   const sessionId = session?.id ?? null;
   return {projectId, route: {
     sessionId, resourceId: resource?.id ?? null,
-    ...(route.view === 'plans' && sessionId === route.sessionId && session && isUserWorkspaceSession(session) && !resource ? {view: 'plans' as const} : {}),
+    ...(route.view==='workspace'?{view:'workspace' as const}:
+      route.view==='plans'&&sessionId===route.sessionId&&session&&isUserWorkspaceSession(session)&&!resource?{view:'plans' as const}:{}),
   }};
 }
 

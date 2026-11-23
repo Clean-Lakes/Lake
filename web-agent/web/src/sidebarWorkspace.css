@@ -1,8 +1,12 @@
 /* Lightweight workspace: conversations and resources share one quiet sidebar. */
-.sidebar.workspace-navigation { --sidebar-row-radius:var(--radius-window); --sidebar-edge-inset:8px; --sidebar-content-inset:16px; --sidebar-icon-column:22px; --sidebar-icon-gap:9px; border-right:0; }
+.sidebar.workspace-navigation {
+ --sidebar-row-radius:var(--radius-window); --sidebar-edge-inset:8px; --sidebar-content-inset:16px;
+ --sidebar-icon-column:22px; --sidebar-icon-gap:9px; --sidebar-rail-button-size:32px;
+ --sidebar-brand-height:56px; --sidebar-brand-margin:6px; border-right:0;
+}
 .sidebar.workspace-navigation .sidebar-brand-row {
-  min-height: 56px;
-  margin: 6px var(--sidebar-edge-inset);
+  min-height: var(--sidebar-brand-height);
+  margin: var(--sidebar-brand-margin) var(--sidebar-edge-inset);
   padding: 0 clamp(4px, calc(10% - 13px), 12px);
   gap: 8px;
   border: 0;
@@ -40,23 +44,40 @@
 .sidebar-brand-actions { display:flex; align-items:center; gap:2px; margin-left:auto; flex:none; }
 .sidebar.workspace-navigation .sidebar-search-trigger { width:32px; height:32px; padding:0; color:var(--pilot-header-muted); }
 .sidebar-navigation-gap { flex:0 0 0; margin:8px 13px 16px; }
-.sidebar-workspace-navigation { display:flex; flex:1 1 auto; min-height:0; flex-direction:column; }
-.sidebar-pinned-pilot { flex:none; margin:4px var(--sidebar-edge-inset) 8px; }
-.sidebar.workspace-navigation .sidebar-pinned-pilot .sidebar-pilot-entry { width:100%; min-height:48px; padding:4px var(--sidebar-row-inset); gap:var(--sidebar-icon-gap); border-radius:var(--radius-sidebar-pilot); corner-shape:var(--corner-window); }
-.sidebar-pinned-pilot .super-role-avatar { flex:0 0 var(--sidebar-icon-column); width:var(--sidebar-icon-column); }
-.sidebar-content-header { position:relative; z-index:3; display:flex; flex:none; align-items:center; gap:4px; margin:0 var(--sidebar-edge-inset) 6px; padding:0 4px; }
-.sidebar-content-tabs { display:flex; flex:1; min-width:0; gap:4px; }
-.sidebar-content-tab { display:flex; align-items:center; justify-content:center; gap:7px; flex:1; min-width:0; min-height:28px; padding:4px 8px; border:0; border-radius:var(--radius-sidebar-tab); corner-shape:var(--corner-window); background:transparent; color:var(--text-secondary); font:inherit; cursor:pointer; }
-.sidebar-content-tab[aria-selected="true"] { background:var(--surface-hover); color:var(--foreground); font-weight:var(--font-weight-medium); }
-.sidebar-content-tab:hover { background:var(--surface-hover); }
-.sidebar-content-tab:focus-visible { outline:2px solid var(--focus-outline); outline-offset:-2px; }
-.sidebar-content-tab small { color:var(--text-muted); font-size:var(--font-size-ui); font-weight:var(--font-weight-ui); }
+.sidebar.workspace-navigation:has(.sidebar-navigation-rail) {
+ padding-inline-start:var(--sidebar-rail-width);
+}
+.lake-native .sidebar.workspace-navigation { --sidebar-chrome-inset:var(--lake-titlebar-height,0px); }
+.sidebar-workspace-navigation,.sidebar-navigation-viewport,.sidebar-navigation-content { display:flex; flex:1 1 auto; min-height:0; flex-direction:column; }
+.sidebar-navigation-rail {
+ --sidebar-rail-top:calc(var(--sidebar-brand-margin) + (var(--sidebar-brand-height) - var(--sidebar-rail-button-size)) / 2);
+ position:absolute; inset-block:var(--sidebar-chrome-inset,0px) 0; inset-inline-start:0;
+ width:var(--sidebar-rail-width); display:flex; flex-direction:column; align-items:center; gap:10px;
+ padding-block-start:var(--sidebar-rail-top); padding-inline-end:1px;
+}
+.sidebar-navigation-rail::after {
+ content:""; position:absolute; inset-block:var(--sidebar-rail-top) 32px; inset-inline-end:0;
+ inline-size:1px; background:var(--border); pointer-events:none;
+}
+.sidebar-rail-button {
+ display:grid; place-items:center; flex:none; width:var(--sidebar-rail-button-size); height:var(--sidebar-rail-button-size); padding:0;
+ border:0; border-radius:var(--radius-settings-control); corner-shape:var(--corner-window);
+ color:var(--text-secondary); background:transparent;
+}
+.sidebar-rail-button:hover { background:var(--surface-hover); }
+.sidebar-rail-button[aria-pressed="true"] { color:var(--info); background:var(--surface-selected); }
+.sidebar-rail-button:focus-visible { outline-offset:-2px; }
+.workspace-rail-button { position:relative; }
+.workspace-update-dot { position:absolute; inset-block-start:5px; inset-inline-end:5px; width:6px; height:6px; border-radius:50%; background:var(--danger); }
+.sidebar-content-header { position:relative; z-index:3; display:flex; flex:none; align-items:center; gap:4px; min-height:28px; margin:0 var(--sidebar-edge-inset) 6px; padding:0 4px 0 8px; }
+.sidebar-content-title { display:flex; flex:1; align-items:center; gap:7px; min-width:0; color:var(--text-secondary); }
+.sidebar-content-title h2 { margin:0; font-size:var(--font-size-ui); font-weight:var(--font-weight-medium); }
+.sidebar-content-title small { color:var(--text-muted); font-size:var(--font-size-ui); }
 .sidebar-specialist-attention { width:6px; height:6px; border-radius:50%; background:var(--success); flex:none; }
-.sidebar-navigation-panel { display:flex; flex:1 1 auto; min-height:0; }
+.sidebar-navigation-panel { display:flex; flex:1 1 auto; flex-direction:column; min-height:0; }
 .sidebar-navigation-panel[hidden] { display:none; }
 .sidebar.workspace-navigation .sidebar-navigation-panel .pilot-workspace { padding-top:0; }
-.sidebar-resource-actions { flex:0 0 28px; width:28px; visibility:hidden; }
-.sidebar-resource-actions.is-active { visibility:visible; }
+.sidebar-resource-actions { flex:0 0 28px; width:28px; }
 .sidebar.workspace-navigation .resource-panel-actions { display:flex; justify-content:flex-end; align-items:center; min-height:28px; margin:0; padding:0; border:0; font-size:var(--font-size-ui); }
 .sidebar.workspace-navigation .sidebar-resource-actions .resource-create-trigger { width:28px; min-height:28px; height:28px; padding:0; border-radius:var(--radius-sidebar-tab); corner-shape:var(--corner-window); }
 .sidebar-resource-actions:has(.bulk-group-toggle) { flex-basis:36px; width:36px; }
@@ -64,13 +85,14 @@
 .sidebar-resource-actions .resource-add-menu { border-radius:var(--radius-settings-panel); corner-shape:var(--corner-window); }
 .sidebar-resource-actions .resource-add-menu > button { border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); }
 @media(pointer:coarse) {
- .sidebar-content-tab { min-height:44px; }
+ .sidebar.workspace-navigation { --sidebar-rail-button-size:44px; }
  .sidebar-resource-actions,.sidebar-resource-actions:has(.bulk-group-toggle) { flex-basis:44px; width:44px; }
  .sidebar.workspace-navigation .sidebar-resource-actions .resource-create-trigger,.sidebar-resource-actions .bulk-group-toggle { width:44px; height:44px; min-height:44px; }
 }
 @media(pointer:coarse) { .sidebar.workspace-navigation .sidebar-search-trigger { width: 44px; height: 44px; } }
 .sidebar.workspace-navigation .navigation-search-key { font-size: var(--font-size-ui); }
-html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { height:48px; min-height:48px; margin-block:0; padding-block:0; }
+html.lake-windows-chrome .sidebar.workspace-navigation { --sidebar-brand-height:48px; --sidebar-brand-margin:0px; }
+html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { height:var(--sidebar-brand-height); padding-block:0; }
 @media(pointer:coarse) {
  .sidebar.workspace-navigation .project-switcher { min-height: 44px; }
  .sidebar.workspace-navigation .sidebar-project-picker .icon-button { width: 40px; height: 44px; }
@@ -184,9 +206,6 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar.workspace-navigation .project-contents:has(> [id^="project-sessions-"][hidden]) .resources-heading { margin-top:8px; padding-top:0; }
 
 /* A quiet footer keeps its own space below the scrollable resource list. */
-.sidebar.workspace-navigation .sidebar-utilities { margin-inline:var(--sidebar-edge-inset); }
-.sidebar.workspace-navigation .workspace-utilities-trigger { padding-inline:9px; padding-left:calc(var(--sidebar-content-inset) - var(--sidebar-edge-inset) - 1px); }
-.sidebar.workspace-navigation .workspace-utilities-icon { flex:0 0 var(--sidebar-icon-column); width:var(--sidebar-icon-column); }
 
 /* Edge controls keep a complete focus outline inside the clipped sidebar. */
 .sidebar.workspace-navigation :is(.session-drag-handle,.resource-drag-handle):focus-visible { outline-offset:-2px; }

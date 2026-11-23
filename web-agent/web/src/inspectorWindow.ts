@@ -1,10 +1,13 @@
-import {useCallback,useLayoutEffect,useRef} from 'react';
+import {useCallback,useLayoutEffect,useRef,useState} from 'react';
+import {inspectorExitMs,retainConversation,useSessionInspector} from './SessionInspectorContext';
 
-declare global {interface Window {lakeInspectorWindow?:{setOpen:(open:boolean)=>Promise<{addedWidth:number}>};}}
+declare global {interface Window {lakeInspectorWindow?:{setOpen:(open:boolean)=>Promise<{addedWidth:number;viewportWidth?:number}>};}}
 
-/** Native macOS grows the window. Hold the visible conversation through that animation. */
+/** Keep the conversation in place until WKWebView receives the final window bounds. */
 export function useInspectorWindow(open:boolean){
- const revision=useRef(0),requested=useRef(false);
+ const requested=useRef(false);
+ const [ready,setReady]=useState(false);
+ const focusOpener=useSessionInspector()?.focusOpener;
  const view=useRef<HTMLDivElement|null>(null);
  const settled=useRef<{width:number;docked:boolean}|null>(null);
  const measure=useCallback(()=>{
@@ -29,21 +32,46 @@ export function useInspectorWindow(open:boolean){
   const bridge=window.lakeInspectorWindow;
   const workspace=document.querySelector<HTMLElement>('.workspace');
   if(!bridge||!workspace||!open&&!requested.current)return;
-  requested.current=open;
-  const version=++revision.current;
   const layout=settled.current;
   if(layout){
    workspace.style.setProperty('--inspector-main-width',`${layout.width}px`);
    workspace.classList.add('inspector-window-sizing');
    workspace.classList.toggle('inspector-window-docked',layout.docked);
   }
-  void bridge.setOpen(open).catch(()=>undefined).finally(()=>{
-   if(revision.current!==version)return;
+  let active=true,frame=0,timer=0;
+  const settle=()=>{
+   if(!active)return;
+   const restore=retainConversation();
    workspace.classList.remove('inspector-window-sizing','inspector-window-docked');
    workspace.style.removeProperty('--inspector-main-width');
+   window.dispatchEvent(new Event('lake-workbench-layout'));
+   restore();
    measure();
-  });
- },[open,measure]);
- useLayoutEffect(()=>()=>{revision.current++;if(requested.current)void window.lakeInspectorWindow?.setOpen(false).catch(()=>{});},[]);
- return attachView;
+   if(open)setReady(true);
+   else frame=requestAnimationFrame(()=>focusOpener?.(true));
+  };
+  const waitForViewport=(width?:number)=>{
+   if(!active)return;
+   if(document.hidden){settle();return;}
+   // The native reply can arrive before WebKit has applied the new viewport.
+   // Keep a short fallback for an independent window resize racing the request.
+   const deadline=performance.now()+100;
+   const paint=(now:number)=>{
+    if(width&&Math.abs(innerWidth-width)>1&&now<deadline){frame=requestAnimationFrame(paint);return;}
+    settle();
+   };
+   frame=requestAnimationFrame(paint);
+  };
+  const request=()=>{
+   if(!open)setReady(false);
+   requested.current=open;
+   void bridge.setOpen(open).then(result=>waitForViewport(result.viewportWidth),()=>waitForViewport());
+  };
+  if(!open&&!document.hidden&&!matchMedia('(prefers-reduced-motion: reduce)').matches&&workspace.querySelector('.session-inspector.is-closing')){
+   timer=window.setTimeout(request,inspectorExitMs);
+  }else request();
+  return()=>{active=false;cancelAnimationFrame(frame);window.clearTimeout(timer);};
+ },[open,measure,focusOpener]);
+ useLayoutEffect(()=>()=>{if(requested.current)void window.lakeInspectorWindow?.setOpen(false).catch(()=>{});},[]);
+ return {attachView,waitingForWindow:open&&!!window.lakeInspectorWindow&&!ready};
 }

@@ -65,7 +65,7 @@ export function latestInspectorSelection(snapshot:SessionSnapshot,tab:InspectorS
 
 export function resolvedInspectorSelection(snapshot:SessionSnapshot,selection:InspectorSelection|null):InspectorSelection|null {
  if(!selection||selection.sessionId!==snapshot.session.id)return null;
- if(!selection.followLatest)return selection;
+ if(!selection.followLatest||selection.view==='pilot-activity')return selection;
  const current=latestInspectorSelection(snapshot,selection.tab);
  return selection.automatic===undefined?current:{...current,automatic:selection.automatic};
 }

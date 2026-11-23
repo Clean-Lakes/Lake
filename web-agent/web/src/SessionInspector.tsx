@@ -14,7 +14,7 @@ import {SREPlanCard} from './SREPlanCard';
 import {SRERoleMessage} from './SRERoleMessage';
 import {sreRoles,sreStatus,sreStepStatus} from './sreTranscript';
 import {inspectorGoal,hasInspectorTask,inspectedTask,inspectedCanonicalTask,inspectedAttempt,inspectorAttempts,resolvedInspectorSelection} from './sessionInspectorModel';
-import {sessionInspectorId,useSessionInspector,type InspectSpecialist,type InspectorSelection} from './SessionInspectorContext';
+import {inspectorExitMs,sessionInspectorId,useSessionInspector,type InspectSpecialist,type InspectorSelection} from './SessionInspectorContext';
 import {AppSelect} from './AppSelect';
 import {SpecialistTaskSteps} from './SpecialistTaskList';
 
@@ -33,21 +33,27 @@ export function ReplyProcessSelect({sessionId,onSpecialist,onPilot}:{sessionId?:
  </label>;
 }
 
-export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=false,taskNavigation,taskMetadata,taskControls,resultsFooter,taskPage=false}:{snapshot:SessionSnapshot;connected:boolean;onUpdated:()=>void;worker?:SuperWorker;readOnly?:boolean;taskNavigation?:ReactNode;taskMetadata?:ReactNode;taskControls?:ReactNode;resultsFooter?:ReactNode;taskPage?:boolean}){
+export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=false,taskNavigation,taskMetadata,taskControls,resultsFooter,taskPage=false,waitingForWindow=false}:{snapshot:SessionSnapshot;connected:boolean;onUpdated:()=>void;worker?:SuperWorker;readOnly?:boolean;taskNavigation?:ReactNode;taskMetadata?:ReactNode;taskControls?:ReactNode;resultsFooter?:ReactNode;taskPage?:boolean;waitingForWindow?:boolean}){
  readOnly=readOnly||snapshot.session.workspaceRole==='legacy';
  const inspector=useSessionInspector()!;
  const selection=resolvedInspectorSelection(snapshot,inspector.selection);
+ const visible=!!selection&&!waitingForWindow;
  const retained=useRef<InspectorSelection|null>(selection);
  if(selection)retained.current=selection;
- const [present,setPresent]=useState(!!selection),panel=useRef<HTMLElement>(null);
+ const [present,setPresent]=useState(visible),panel=useRef<HTMLElement>(null);
  useEffect(()=>{
-  if(selection){setPresent(true);return;}
-  const timer=setTimeout(()=>setPresent(false),window.matchMedia('(prefers-reduced-motion: reduce)').matches?0:180);
+  if(visible){setPresent(true);return;}
+  const timer=setTimeout(()=>setPresent(false),window.matchMedia('(prefers-reduced-motion: reduce)').matches?0:inspectorExitMs);
   return()=>clearTimeout(timer);
- },[!!selection]);
+ },[visible]);
  const target=selection??retained.current;
  const followTurn=selection?.followLatest?snapshot.messages?.filter(message=>message.role==='user').at(-1)?.id:undefined;
- useLayoutEffect(()=>{const scroll=panel.current?.querySelector('.session-inspector-scroll');if(scroll)scroll.scrollTop=0;},[selection?.sessionId,selection?.turnId,selection?.taskId,selection?.canonicalGoalId,followTurn]);
+ const selectedSessionId=selection?.sessionId;
+ useLayoutEffect(()=>{
+  if(!selectedSessionId)return;
+  const scroll=panel.current?.querySelector('.session-inspector-scroll');
+  if(scroll)scroll.scrollTop=0;
+ },[selectedSessionId,selection?.turnId,selection?.taskId,selection?.canonicalGoalId,followTurn]);
  const task=target?inspectedTask(snapshot,target):undefined;
  const plan=task?.plans?.at(-1);
  const canonical=target?inspectedCanonicalTask(snapshot,target):undefined;
@@ -55,22 +61,28 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
  const hasPlan=!!plan||!!goal?.items?.length;
  const selected=task?inspectedAttempt(task,target?.attemptId):undefined;
  useLayoutEffect(()=>{
-  if(selection&&!selection.automatic&&panel.current&&!panel.current.contains(document.activeElement))panel.current.focus({preventScroll:true});
- },[inspector.selection]);
+  if(visible&&!selection?.automatic&&panel.current&&!panel.current.contains(document.activeElement))panel.current.focus({preventScroll:true});
+ },[inspector.selection,visible]);
  if((!present&&!selection)||!target||target.sessionId!==snapshot.session.id)return null;
  const currentEntry=selected&&task?(task.messages?.find(entry=>entry.attemptId===selected.attempt.id&&entry.kind==='progress')??task.messages?.find(entry=>entry.attemptId===selected.attempt.id)??{id:`inspector-${selected.attempt.id}`,sessionId:task.sessionId,taskId:task.id,roleId:selected.step.role,roleRunId:selected.attempt.roleRunId,attemptId:selected.attempt.id,kind:'progress',body:'',source:'runtime',sequence:0,revision:0,createdAt:selected.attempt.startedAt} satisfies SRETranscriptEntry):undefined;
  const attemptStatus=selected&&task?(selected.attempt.planRunId===task.runs?.at(-1)?.id?sreStepStatus(task,selected.step,snapshot.ai?.agentRuns):selected.attempt.status):'';
  const activeTab=hasPlan||goal?target.tab:'execution';
+ const pilotOverview=target.view==='pilot-activity';
  const choose=(tab:'plan'|'execution',attemptId=target.attemptId,pin=false)=>inspector.open({...target,tab,attemptId,followLatest:pin?false:target.followLatest,evidenceId:undefined,automatic:false});
  const tabs=<div className="session-inspector-tabs" role="tablist" aria-label="任务视图" onKeyDown={event=>{if((hasPlan||goal)&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();choose(event.key==='Home'?'plan':event.key==='End'?'execution':activeTab==='plan'?'execution':'plan');requestAnimationFrame(()=>panel.current?.querySelector<HTMLButtonElement>('[role=tab][aria-selected=true]')?.focus());}}}>
   <button type="button" role="tab" id="inspector-plan-tab" aria-selected={activeTab==='plan'} aria-controls="inspector-plan-panel" tabIndex={activeTab==='plan'?0:-1} disabled={!hasPlan&&!goal} title={!hasPlan&&!goal?'暂无最新计划':undefined} onClick={()=>choose('plan')}>{goal?'结果与证据':'计划'}</button>
   <button type="button" role="tab" id="inspector-execution-tab" aria-selected={activeTab==='execution'} aria-controls="inspector-execution-panel" tabIndex={activeTab==='execution'?0:-1} onClick={()=>choose('execution')}>{goal?'执行过程':'执行'}</button>
  </div>;
- return <aside ref={panel} id={sessionInspectorId} tabIndex={-1} className={`session-inspector${selection?' is-open':' is-closing'}`} inert={!selection} aria-hidden={!selection} aria-label="任务检查" onKeyDown={event=>{if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();event.stopPropagation();inspector.close();}}}>
-  <div className="session-inspector-card">
-   <header className="session-inspector-heading"><Glyph name="document" size={17}/>{goal?<strong className="worker-inspector-title">任务详情</strong>:tabs}<button type="button" className="icon-button" aria-label="关闭任务检查" onClick={inspector.close}><Glyph name="close" size={16}/></button></header>
+ return <aside ref={panel} id={sessionInspectorId} tabIndex={-1} className={`session-inspector${selection?' is-open':' is-closing'}${waitingForWindow?' is-waiting':''}`} inert={!visible} aria-hidden={!visible} aria-label="任务检查" onKeyDown={event=>{if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();event.stopPropagation();inspector.close();}}}>
+  <div className={`session-inspector-card${pilotOverview?' pilot-execution-card':''}`}>
+   <header className={`session-inspector-heading${pilotOverview?' pilot-execution-heading':''}`}>
+    {pilotOverview?<><strong className="worker-inspector-title">执行过程</strong><div className="pilot-execution-summary-host" ref={inspector.setSummaryHost}/></>:
+      <><Glyph name="document" size={17}/>{goal?<strong className="worker-inspector-title">任务详情</strong>:tabs}</>}
+    <button type="button" className="icon-button" aria-label="关闭任务检查" onClick={inspector.close}><Glyph name="close" size={16}/></button>
+   </header>
   <ObjectReferencesProvider resources={snapshot.resources} tasks={snapshot.ai?.agentRuns}>
-   <div className="session-inspector-scroll">
+   <div className="session-inspector-scroll" tabIndex={pilotOverview?0:undefined} role={pilotOverview?'region':undefined} aria-label={pilotOverview?'执行记录':undefined}>
+    {pilotOverview?<><div ref={inspector.setHost} className="inspector-turn-host pilot-execution-host"/><p className="inspector-empty pilot-execution-empty">本轮尚无执行记录。</p></>:<>
     {taskNavigation}
     {goal&&canonical&&<><SuperTaskInspector task={canonical} goal={goal} worker={worker} summaryOnly hideStatus={taskPage}/>{taskMetadata}{taskControls}{tabs}</>}
     {(!goal||!canonical)&&taskControls}
@@ -100,6 +112,7 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
      {!hasInspectorTask(snapshot,target)&&!target.turnId&&(!target.followLatest||!(snapshot.messages?.length??0)&&!snapshot.ai?.cards.length)&&<p className="inspector-empty">本轮尚无执行记录。</p>}
      {!canonical&&<div ref={inspector.setHost} className="inspector-turn-host"/>}
     </div>
+    </>}
    </div>
   </ObjectReferencesProvider>
   </div>

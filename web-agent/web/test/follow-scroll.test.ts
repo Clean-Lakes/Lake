@@ -142,19 +142,20 @@ test("unchanged historical cards reuse Markdown, while streamed content and tool
 
 test('conversation observes actual growth, not same-height metadata or content shrink',()=>{
  const previousResize=globalThis.ResizeObserver,previousMutation=globalThis.MutationObserver;
- let resize=()=>{},replace=()=>{},disconnected=0,requests=0;
+ let resize=()=>{},replace=()=>{},disconnected=0;
+ const requests:boolean[]=[];
  globalThis.ResizeObserver=class {constructor(callback:()=>void){resize=callback}observe(){}unobserve(){}disconnect(){disconnected++}} as unknown as typeof ResizeObserver;
  globalThis.MutationObserver=class {constructor(callback:()=>void){replace=callback}observe(){}disconnect(){disconnected++}} as unknown as typeof MutationObserver;
  try {
   const container={scrollHeight:900,clientHeight:400,clientWidth:700,firstElementChild:{}} as unknown as HTMLElement;
-  const stop=observeConversationGrowth(container,()=>requests++);
-  for(let i=0;i<100;i++)resize();assert.equal(requests,0);
-  Object.assign(container,{scrollHeight:940});resize();assert.equal(requests,1);
-  Object.assign(container,{scrollHeight:900});resize();assert.equal(requests,1);
-  Object.assign(container,{firstElementChild:{}});replace();assert.equal(requests,1);
-  Object.assign(container,{scrollHeight:920});resize();assert.equal(requests,2,'growth uses the post-collapse baseline');
-  Object.assign(container,{clientWidth:600});resize();assert.equal(requests,3);
-  Object.assign(container,{clientHeight:350});resize();assert.equal(requests,4);
+  const stop=observeConversationGrowth(container,viewportChanged=>requests.push(viewportChanged));
+  for(let i=0;i<100;i++)resize();assert.deepEqual(requests,[]);
+  Object.assign(container,{scrollHeight:940});resize();assert.deepEqual(requests,[false]);
+  Object.assign(container,{scrollHeight:900});resize();assert.deepEqual(requests,[false]);
+  Object.assign(container,{firstElementChild:{}});replace();assert.deepEqual(requests,[false]);
+  Object.assign(container,{scrollHeight:920});resize();assert.deepEqual(requests,[false,false],'growth uses the post-collapse baseline');
+  Object.assign(container,{clientWidth:600});resize();assert.deepEqual(requests,[false,false,true]);
+  Object.assign(container,{clientHeight:350});resize();assert.deepEqual(requests,[false,false,true,true]);
   stop();assert.equal(disconnected,2);
  } finally {globalThis.ResizeObserver=previousResize;globalThis.MutationObserver=previousMutation}
 });

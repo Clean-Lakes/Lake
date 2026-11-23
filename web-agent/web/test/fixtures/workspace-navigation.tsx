@@ -26,8 +26,10 @@ function Fixture(){
    <aside className="sidebar workspace-navigation sidebar-open" style={{position:'relative',transform:'none',flex:'0 0 280px',width:280}}>
     <div className="sidebar-brand-row"><span className="brand"><strong>Lake</strong></span></div>
     <SidebarWorkspaceNavigation projectId="navigation-fixture" resourceCount={100} selectionId={selection} selectedPanel={selection.startsWith('resource:')?'resources':'specialists'} attention
-     pilot={<SidebarPilotEntry selected={selection==='pilot'} onPilot={()=>setSelection('pilot')}/>}
-     specialists={<section className="pilot-workspace">{names.map(name=><button key={name} className="nav-row pilot-worker-row" type="button" onClick={()=>setSelection(name)}><Glyph name="chat" size={18}/><span className="nav-row-text"><strong>{name}</strong><span className="pilot-worker-task">持续沟通</span></span></button>)}</section>}>
+     specialists={<section className="pilot-workspace">
+      <SidebarPilotEntry selected={selection==='pilot'} onPilot={()=>setSelection('pilot')}/>
+      {names.map(name=><button key={name} className="nav-row pilot-worker-row" type="button" onClick={()=>setSelection(name)}><Glyph name="chat" size={18}/><span className="nav-row-text"><strong>{name}</strong><span className="pilot-worker-task">持续沟通</span></span></button>)}
+     </section>}>
      <ResourceTree navigationPanel project={project} resources={resources} nodes={[]} disabled={false} refresh={async()=>{}} onAddResource={()=>setChosen('新增资源')} onImport={()=>setChosen('导入资源')} onDelete={()=>{}} renderResource={resource=><button className="nav-row resource-row" type="button" onClick={()=>setSelection(`resource:${resource.id}`)}><Glyph name="server" size={16}/><span className="nav-row-text"><strong>{resource.name}</strong></span></button>}/>
     </SidebarWorkspaceNavigation>
     <footer className="sidebar-footer">工作区</footer>
