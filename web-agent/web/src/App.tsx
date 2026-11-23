@@ -1744,6 +1744,7 @@ function AppContent() {
     (!isLegacyHistory && !activeSnapshot.specialists?.length));
   const detachedConversation=sessionHeader&&!compactNavigation;
   const sharedIsland=detachedConversation&&wideWorkbench;
+  const dockedConversation=detachedConversation&&!terminalVisible&&!inspectorOpen;
   const headerSweep=sessionHeader&&<HeaderSweep key={`sweep-${selectedSession.id}`} active={pilotHeaderActivity?.animated??(avatarActivity?.state==='running')}/>;
   const pilotTone=sessionHeader&&selectedSuperPilot&&!headerPilot&&!headerPilotMode?
     sessionBadgeState(superHeaderPresentation?.status??selectedSession.status,superHeaderPresentation?.label).tone:undefined;
@@ -1830,7 +1831,7 @@ function AppContent() {
       document.getElementById('workspace-projects-title')?.focus();
     }} onSettings={openSettings} onUpdates={() => window.dispatchEvent(new Event('lake-open-updates'))} onTrash={() => setTrashOpen(true)}/>;
 
-  return <SpecialistAvatarProvider channels={pilotWorkspace.workspace?.channels}><div className={`app-shell has-workbench-navigation${terminalVisible ? " terminal-is-open" : ""}${detachedConversation?" has-workbench-conversation":""}${sharedIsland?" has-workbench-island":""}${sidebarCollapsedOnDesktop?" has-collapsed-sidebar":""}`}>
+  return <SpecialistAvatarProvider channels={pilotWorkspace.workspace?.channels}><div className={`app-shell has-workbench-navigation${terminalVisible ? " terminal-is-open" : ""}${detachedConversation?" has-workbench-conversation":""}${dockedConversation?" has-docked-conversation":""}${sharedIsland?" has-workbench-island":""}${sidebarCollapsedOnDesktop?" has-collapsed-sidebar":""}`}>
     <WorkbenchNavigation expanded={!sidebarCollapsedOnDesktop} back={historyAvailable.back} forward={historyAvailable.forward}
       onToggle={() => setSidebarCollapsed(collapsed => !collapsed)} onStep={stepHistory}/>
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
@@ -1937,7 +1938,7 @@ function AppContent() {
 
     </aside>
 
-    {detachedConversation&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={sharedIsland?terminalHeading:null} inspectorOpen={inspectorOpen} terminalOpen={sharedIsland&&terminalOpen} pilotTone={pilotTone}/>}
+    {detachedConversation&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} docked={dockedConversation} terminal={sharedIsland?terminalHeading:null} inspectorOpen={inspectorOpen} terminalOpen={sharedIsland&&terminalOpen} pilotTone={pilotTone}/>}
     <main className={`workspace${window.lakeInspectorWindow?"":" web-inspector-layout"}${inspectorOpen?" has-session-inspector":""}${isWorkspacePage?" is-workspace-page":!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":sessionSelected?" has-specialist-task-list":""}`} onDragOver={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="none";return;}if(selectedSession&&!isLegacyHistory&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.stopPropagation();return;}if(!selectedSession||isLegacyHistory||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
       {isWorkspacePage?<WorkspacePage project={sidebarProject} projects={projectList} resources={catalog.resources}
         connected={workspaceConnected} bulkSelection={bulkSelection} bulkSelectedCount={bulkSelected.length}

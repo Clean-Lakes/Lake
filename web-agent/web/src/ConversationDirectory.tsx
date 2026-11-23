@@ -49,20 +49,36 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
  }
  useLayoutEffect(()=>{
   const container=document.querySelector<HTMLElement>('.conversation');if(!container)return;
-  const header=document.querySelector<HTMLElement>('.island-conversation')??document.querySelector<HTMLElement>('.workspace > .workspace-header');
-  let frame=0;
+  let frame=0,header:HTMLElement|null=null;
   function update(){
+   const nextHeader=header?.isConnected?header:document.querySelector<HTMLElement>('.island-conversation, .workspace > .workspace-header');
+   if(nextHeader!==header){
+    if(header)observer.unobserve(header);
+    headerObserver.disconnect();header=nextHeader;
+    if(header){observer.observe(header);headerObserver.observe(header,{attributes:true,attributeFilter:['class','style','data-ready','data-present']});}
+   }
    const bounds=container!.getBoundingClientRect(),heading=header?.getBoundingClientRect();
    let left=Math.max(bounds.left+4,bounds.right-76),top=Math.max(bounds.top+12,(heading?.top??bounds.top)+9);
+   if(heading&&header?.classList.contains('is-docked')){
+    const style=getComputedStyle(container!);
+    const reserve=parseFloat(style.getPropertyValue('--conversation-window-controls'))+parseFloat(style.getPropertyValue('--conversation-header-actions-offset'));
+    left=Math.max(bounds.left+4,bounds.right-reserve);
+    top=heading.top+Math.max(0,(heading.height-(trigger.current?.offsetHeight??28))/2);
+   }
    const compact=!!heading&&left<heading.right+8&&left+64>heading.left;
    if(compact){left=bounds.left+2;top=Math.max(bounds.top+12,heading!.bottom+10);}
    if(open&&!showTasks)setSelected(directoryItemAtScrollPosition(container!,items,sessionId));
-   if(root.current){root.current.style.left=`${left}px`;root.current.style.top=`${top}px`;root.current.toggleAttribute('data-compact',compact);}
+   if(root.current){
+    const nextLeft=`${left}px`,nextTop=`${top}px`;
+    const moved=root.current.style.left!==nextLeft||root.current.style.top!==nextTop;
+    root.current.style.left=nextLeft;root.current.style.top=nextTop;root.current.toggleAttribute('data-compact',compact);
+    if(moved)window.dispatchEvent(new Event('lake-chrome-resize'));
+   }
   }
   function schedule(){cancelAnimationFrame(frame);frame=requestAnimationFrame(update);}
-  update();const observer=new ResizeObserver(schedule);observer.observe(container);
+  const observer=new ResizeObserver(schedule),headerObserver=new MutationObserver(schedule);
+  observer.observe(container);update();
   const content=open&&!showTasks&&container.querySelector('.timeline-list');if(content)observer.observe(content);
-  const headerObserver=new MutationObserver(schedule);if(header){observer.observe(header);headerObserver.observe(header,{attributes:true,attributeFilter:['style','data-ready','data-present']});}
   if(open&&!showTasks)container.addEventListener('scroll',schedule,{passive:true});
   window.addEventListener('resize',schedule);
   return()=>{cancelAnimationFrame(frame);observer.disconnect();headerObserver.disconnect();container.removeEventListener('scroll',schedule);window.removeEventListener('resize',schedule);};
