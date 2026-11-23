@@ -81,6 +81,7 @@
   }
   function finishSidebarSlide() {
     if (!sidebarSlide) return;
+    if (sidebarSlide.frame) cancelAnimationFrame(sidebarSlide.frame);
     for (const animation of sidebarSlide.animations) animation.cancel();
     sidebarSlide.shell.removeAttribute('data-sidebar-sliding');
     sidebarSlide = undefined;
@@ -118,13 +119,13 @@
     const buttons = (origin?.buttons ?? []).map(([button, before]) => ({ button, before, after: button.getBoundingClientRect() }));
     const padding = island ? getComputedStyle(island).paddingInlineStart : undefined;
     const divider = island?.querySelector('.island-navigation-divider');
-    // One clock drives the content and the controls, including the return
-    // from an interrupted slide. The transcript keeps its line breaks.
-    const start = document.timeline.currentTime;
+    // Hold the old geometry through the commit. Starting in its input task can
+    // spend the whole transition before a busy WebView paints the first frame.
     const animations = [];
     const animate = (node, from, to) => {
       const animation = node.animate([from, to], timing);
-      animation.startTime = start;
+      animation.pause();
+      animation.currentTime = 0;
       animations.push(animation);
     };
     const translate = (node, left, right, top = 0) => {
@@ -152,7 +153,11 @@
       const x = Math.min(before.left, after.left), y = Math.min(before.top, after.top);
       return [x, y, Math.max(before.right, after.right) - x, Math.max(before.bottom, after.bottom) - y];
     });
-    const slide = sidebarSlide = { shell, width, expandedWidth, animations, buttonPaths };
+    const slide = sidebarSlide = { shell, width, expandedWidth, animations, buttonPaths, frame: 0 };
+    slide.frame = requestAnimationFrame(start => {
+      slide.frame = 0;
+      for (const animation of animations) animation.startTime = start;
+    });
     animations[0].onfinish = () => {
       if (sidebarSlide !== slide) return;
       finishSidebarSlide();
