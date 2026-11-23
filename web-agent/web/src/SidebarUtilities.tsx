@@ -7,6 +7,14 @@ import {readableError} from './api';
 import {workspaceMenuParent,workspaceMenuPosition,type WorkspaceMenuView} from './workspaceMenu';
 import './sidebarUtilities.css';
 
+function railMenuPosition(button:HTMLButtonElement|null){
+ const rail=button?.closest('.sidebar-navigation-rail');
+ const sidebar=rail?.closest('.sidebar');
+ if(!button||!rail||!sidebar)return null;
+ return workspaceMenuPosition({top:button.getBoundingClientRect().top,railRight:rail.getBoundingClientRect().right,
+  sidebarRight:sidebar.getBoundingClientRect().right},{width:innerWidth,height:innerHeight});
+}
+
 /** One anchored surface, with local pages for switching and managing projects. */
 export function SidebarUtilities({projects,projectId,projectSelection,onSelectProject,onCreateProject,onDeleteProject,onToggleBulk,bulkMode,onSettings,onTrash,booting,connected,modelConfigured}:{
  projects:Project[];projectId?:string;projectSelection?:ReactNode;onSelectProject:(id:string)=>void;
@@ -19,23 +27,28 @@ export function SidebarUtilities({projects,projectId,projectSelection,onSelectPr
  const [unreadUpdate,setUnreadUpdate]=useState(false),[draft,setDraft]=useState(''),[error,setError]=useState('');
  const [busy,setBusy]=useState<'create'|'delete'|null>(null),operation=useRef<'create'|'delete'|null>(null);
  const [managedProject,setManagedProject]=useState<Project|null>(null);
- const [position,setPosition]=useState({left:8,top:8,width:240,maxHeight:432});
+ const [position,setPosition]=useState<ReturnType<typeof workspaceMenuPosition>|null>(null);
  const trigger=useRef<HTMLButtonElement>(null),panel=useRef<HTMLDivElement>(null);
  const panelId=useId(),nameId=useId(),errorId=useId();
  const currentProject=projects.find(project=>project.id===projectId);
  function close(restoreFocus=false){if(operation.current)return;setOpen(false);if(restoreFocus)trigger.current?.focus({preventScroll:true});}
+ function toggle(){
+  if(open){close();return;}
+  const anchor=railMenuPosition(trigger.current);
+  if(!anchor)return;
+  setPosition(anchor);setView('home');setError('');setPresent(true);setOpen(true);
+ }
  function act(action:()=>void){if(operation.current)return;close(true);action();}
  function page(next:WorkspaceMenuView){if(operation.current)return;setError('');setView(next);}
  useEffect(()=>{if(!operation.current){setOpen(false);setError('');}},[projectId]);
  useLayoutEffect(()=>{
   if(!present)return;
   const button=trigger.current;
-  const rail=button?.closest<HTMLElement>('.sidebar-navigation-rail');
-  const sidebar=rail?.closest<HTMLElement>('.sidebar');
-  if(!button||!rail||!sidebar)return;
+  const sidebar=button?.closest('.sidebar');
+  if(!button||!sidebar)return;
   const place=()=>{
-   setPosition(workspaceMenuPosition({top:button.getBoundingClientRect().top,railRight:rail.getBoundingClientRect().right,
-    sidebarRight:sidebar.getBoundingClientRect().right},{width:innerWidth,height:innerHeight}));
+   const anchor=railMenuPosition(button);
+   if(anchor)setPosition(anchor);
   };
   const observer=new ResizeObserver(place);observer.observe(button);observer.observe(sidebar);
   place();window.addEventListener('resize',place);
@@ -89,11 +102,11 @@ export function SidebarUtilities({projects,projectId,projectSelection,onSelectPr
  const back=(title:string)=><header className="workspace-menu-heading"><button type="button" className="icon-button workspace-menu-back" aria-label="返回" disabled={!!busy} onClick={()=>page(workspaceMenuParent(view))}><Glyph name="next" size={16}/></button><strong>{title}</strong></header>;
  const errorMessage=error&&<p id={errorId} className="workspace-menu-error" role="alert">{error}</p>;
  return <>
-  <button ref={trigger} type="button" className="sidebar-rail-button workspace-utilities-trigger" aria-label={unreadUpdate?'工作区，有新版本':'工作区'} title="工作区" aria-haspopup="dialog" aria-expanded={open} aria-controls={present?panelId:undefined} onKeyDown={event=>{if(open&&event.key==='Escape'){event.preventDefault();close(true);}}} onClick={()=>{if(open)close();else{setView('home');setError('');setPresent(true);setOpen(true);}}}>
+  <button ref={trigger} type="button" className="sidebar-rail-button workspace-utilities-trigger" aria-label={unreadUpdate?'工作区，有新版本':'工作区'} title="工作区" aria-haspopup="dialog" aria-expanded={open} aria-controls={present?panelId:undefined} onKeyDown={event=>{if(open&&event.key==='Escape'){event.preventDefault();close(true);}}} onClick={toggle}>
    <Glyph name="workspace" size={18}/>{unreadUpdate&&<span className="workspace-utilities-update-dot" aria-hidden="true"/>}
   </button>
   <DesktopUpdate hideTrigger onUnreadChange={setUnreadUpdate}/>
-  {present&&createPortal(<div ref={panel} id={panelId} role="dialog" aria-label="工作区操作" aria-busy={!!busy} aria-hidden={!open} inert={!open} data-state={open?'open':'closing'} className="workspace-utilities-popover" style={position} onKeyDown={event=>{
+  {present&&position&&createPortal(<div ref={panel} id={panelId} role="dialog" aria-label="工作区操作" aria-busy={!!busy} aria-hidden={!open} inert={!open} data-state={open?'open':'closing'} className="workspace-utilities-popover" style={position} onKeyDown={event=>{
    if(event.key==='Escape'){event.preventDefault();event.stopPropagation();if(view==='home')close(true);else page(workspaceMenuParent(view));return;}
    if(!['ArrowDown','ArrowUp','Home','End'].includes(event.key)||(event.target as HTMLElement).closest('input,textarea,[contenteditable="true"]'))return;
    const scope=(event.target as HTMLElement).closest('.workspace-project-options')??event.currentTarget;
