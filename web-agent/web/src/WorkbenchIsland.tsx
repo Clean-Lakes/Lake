@@ -31,7 +31,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
   const textMetrics=document.createElement('canvas').getContext('2d');
   const flights:Record<'terminal',IslandFlight>={terminal:{}};
   const observed=new Set<Element>();
-  const write=(node:HTMLElement,box:IslandBox,useGridPosition=false)=>{node.style.left=useGridPosition?'':`${box.left}px`;node.style.top=`${box.top}px`;node.style.width=`${box.width}px`;};
+  const write=(node:HTMLElement,box:IslandBox,useCssAnchor=false)=>{node.style.left=useCssAnchor?'':`${box.left}px`;node.style.top=`${box.top}px`;node.style.width=`${box.width}px`;};
   const present=(node:HTMLElement,value:boolean)=>{node.dataset.present=String(value);node.dataset.ready='true';};
   const move=(name:'terminal',node:HTMLElement,goal:IslandBox|undefined,source:IslandBox,base:DOMRect)=>{
    const flight=flights[name],expanded=open.current[name],changed=flight.open!==expanded;
@@ -78,21 +78,23 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const bounds=view.getBoundingClientRect(),base=shell.getBoundingClientRect(),workspaceBounds=workspace.getBoundingClientRect();
    const shellStyle=getComputedStyle(shell);
    const composer=view.querySelector('.composer-input')?.getBoundingClientRect();
+   const reading=composer??view.querySelector('.timeline-list')?.getBoundingClientRect();
    const frameInset=parseFloat(getComputedStyle(view).getPropertyValue('--conversation-frame-inset'))||0;
    const top=Math.max(shell.closest('html.lake-windows-chrome')?52:12,12+(parseFloat(shellStyle.paddingTop)||0));
    const workspaceStyle=getComputedStyle(workspace);
    const conversationTop=dockedPane?workspaceBounds.top-base.top+parseFloat(workspaceStyle.getPropertyValue('--conversation-island-top')):frameInset?workspaceBounds.top-base.top+parseFloat(workspaceStyle.borderTopWidth)+parseFloat(workspaceStyle.paddingTop)+frameInset:top;
-   const paneLeft=(dockedPane?workspaceBounds.left+parseFloat(workspaceStyle.getPropertyValue('--conversation-header-inset')):frameInset?bounds.left+frameInset*2:composer?.left??bounds.left+48)-base.left;
+   const paneLeft=dockedPane?workspaceBounds.left+parseFloat(workspaceStyle.getPropertyValue('--conversation-header-inset')):bounds.left+(frameInset?frameInset*2:48);
    const navigation=shell.querySelector<HTMLElement>('.workbench-navigation');
    const toolbar=navigation?.getBoundingClientRect();
    const navigationStart=parseFloat(shellStyle.getPropertyValue('--workbench-navigation-start'))||0;
    const navigationWidth=collapsed&&navigation?
     parseFloat(getComputedStyle(navigation).minInlineSize)+2*parseFloat(shellStyle.getPropertyValue('--workbench-navigation-island-padding')):0;
-   const readingLeft=(composer??view.querySelector('.timeline-list')?.getBoundingClientRect())?.left;
-   const left=collapsed?Math.max(readingLeft===undefined?paneLeft:readingLeft-base.left,navigationStart):
-    toolbar&&toolbar.bottom>base.top+conversationTop?Math.max(paneLeft,toolbar.right-base.left+12):paneLeft;
+   const readingLeft=(reading?.left??paneLeft)-base.left;
+   const left=collapsed?Math.max(readingLeft,navigationStart):
+    toolbar&&toolbar.bottom>base.top+conversationTop?Math.max(readingLeft,toolbar.right-base.left+12):readingLeft;
    const actionsSpace=dockedPane?parseFloat(workspaceStyle.getPropertyValue('--conversation-header-actions-offset'))+12:0;
-   const right=dockedPane?bounds.right-base.left-actionsSpace:paneLeft+(frameInset?bounds.width-frameInset*4:composer?.width??bounds.width-96);
+   const paneRight=dockedPane?bounds.right-actionsSpace:frameInset?bounds.right-frameInset*2:reading?.right??bounds.right-48;
+   const right=paneRight-base.left;
    const available=Math.max(1,right-left);
    const identityAvailable=Math.max(1,available-navigationWidth);
    const title=identity.querySelector<HTMLElement>('.crumb-title'),state=identity.querySelector<HTMLElement>('.header-morph-slot.is-visible .header-morph-content');

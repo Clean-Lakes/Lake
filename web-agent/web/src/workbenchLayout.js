@@ -114,11 +114,12 @@
     const reading = workspace.querySelector('.composer-input') ?? workspace.querySelector('.timeline-list');
     const inset = parseFloat(css.getPropertyValue('--conversation-header-inset')) || 16;
     const navStart = parseFloat(css.getPropertyValue('--workbench-navigation-start')) || 0;
-    const railAnchor = railWidth + inset;
-    const collapsedAnchor = Math.max(navStart, reading ? reading.getBoundingClientRect().left - shell.getBoundingClientRect().left : railAnchor);
-    const islandLayout = collapsed ? collapsedAnchor : railAnchor;
-    const islandTarget = collapsed ? collapsedAnchor : width + inset;
-    if (collapsed) shell.style.setProperty('--workbench-island-navigation-left', `${collapsedAnchor}px`);
+    // The reading column is laid out at the rail width for either direction.
+    // Give the island the same final horizontal offset as the composer.
+    const readingShift = (width - railWidth) / 2;
+    const readingTarget = reading ? reading.getBoundingClientRect().left - shell.getBoundingClientRect().left + readingShift : width + inset;
+    const islandTarget = collapsed ? Math.max(navStart, readingTarget) : readingTarget;
+    shell.style.setProperty('--workbench-island-navigation-left', `${islandTarget}px`);
     island?.style.setProperty('--island-panel-available-width', `${Math.max(1, shell.clientWidth - islandTarget - 16)}px`);
 
     const buttons = (origin?.buttons ?? []).map(([button, before]) => ({ button, before, after: button.getBoundingClientRect() }));
@@ -141,12 +142,12 @@
     };
     translate(surface, from - railWidth, width - railWidth);
     translate(shell.querySelector('.sidebar-navigation-content'), from - expandedWidth, width - expandedWidth);
-    translate(island, fromIsland - islandLayout, islandTarget - islandLayout);
+    translate(island, fromIsland - islandTarget, 0);
     if (origin?.headerInset !== undefined && headerInset !== undefined) {
       translate(header, origin.headerInset - headerInset, 0);
     }
     for (const node of workspace.querySelectorAll('.timeline-list, .conversation-header-backdrop, .composer, .composer-session-controls')) {
-      translate(node, (from - railWidth) / 2, (width - railWidth) / 2);
+      translate(node, (from - railWidth) / 2, readingShift);
     }
     for (const { button, before, after } of buttons) {
       translate(button, before.left - after.left, 0, before.top - after.top);
@@ -188,11 +189,9 @@
     if (previousSidebar?.shell !== shell || previousSidebar.collapsed !== collapsed) sidebarOrigin = undefined;
     const shellLeft = toggled ? shell.getBoundingClientRect().left : 0;
     const from = toggled ? surface.getBoundingClientRect().left - shellLeft : width;
+    // Capture the painted position before cancelling an interrupted slide.
     const island = toggled ? shell.querySelector('.island-conversation') : null;
-    // A stable anchor is written by WorkbenchIsland. On an interruption, use
-    // the painted position of the island to reverse without a jump.
-    const fromIsland = !island ? from + 16 : sidebarSlide ? island.getBoundingClientRect().left - shellLeft
-      : parseFloat(shell.style.getPropertyValue('--workbench-island-navigation-left')) || from + 16;
+    const fromIsland = island ? island.getBoundingClientRect().left - shellLeft : from;
     const startSlide = Math.abs(from - width) >= .5;
     if (sidebarSlide && (!canSlide || toggled || sidebarSlide.width !== width || sidebarSlide.expandedWidth !== target.expandedSidebarWidth)) finishSidebarSlide();
     previousSidebar = { shell, docked, collapsed };

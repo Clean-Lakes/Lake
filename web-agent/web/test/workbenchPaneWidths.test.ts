@@ -5,15 +5,17 @@ import {runInNewContext} from 'node:vm';
 
 // Exercise the shipped browser/native script through its resize and splitter events.
 const source=readFileSync(new URL('../src/workbenchLayout.js',import.meta.url),'utf8');
-function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sidebarDuration='420ms'){
+function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sidebarDuration='420ms',railReadingLeft?:number){
  const properties=new Map<string,string>(),callbacks=new Map<number,(time:number)=>void>(),events=new Map<string,Function>();
  let nextFrame=0;
- const animations:Array<{duration:number;startTime:number|null;currentTime:number|null;paused:boolean;cancelled:boolean}>=[];
+ const animations:Array<{name:string;frames:Array<{transform?:string}>;duration:number;startTime:number|null;currentTime:number|null;paused:boolean;cancelled:boolean}>=[];
  const rect=(left:number)=>({left,right:left+28,top:0,bottom:28});
- const animatedNode=(left:()=>number)=>({
+ const animatedNode=(left:()=>number,name='')=>({
+  style:{setProperty(){}},
+  querySelector:()=>null,
   getBoundingClientRect:()=>rect(left()),
-  animate(_frames:unknown,timing:{duration:number}){
-   const animation={duration:timing.duration,startTime:null,currentTime:null,paused:false,cancelled:false,
+  animate(frames:Array<{transform?:string}>,timing:{duration:number}){
+   const animation={name,frames,duration:timing.duration,startTime:null,currentTime:null,paused:false,cancelled:false,
     pause(){this.paused=true;},cancel(){this.cancelled=true;}};
    animations.push(animation);
    return animation;
@@ -22,13 +24,19 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sid
  const sidebarWidth=()=>parseFloat(properties.get('--sidebar-width')||'280');
  const surface=animatedNode(sidebarWidth);
  const toggle=animatedNode(()=>sidebarWidth()>44?86:150);
+ const composer=railReadingLeft===undefined?null:animatedNode(()=>railReadingLeft,'composer');
+ const island=composer&&animatedNode(()=>{
+  const settled=(railReadingLeft??0)+(sidebarWidth()-44)/2;
+  return parseFloat(properties.get('--workbench-island-navigation-left')??String(settled));
+ },'island');
  const handles=new Map<string,any>();
- const makeNode=()=>({className:'',style:{setProperty:(key:string,value:string)=>properties.set(key,value)},classList:{add(){},remove(){}},attributes:new Map<string,string>(),setAttribute(key:string,value:string){this.attributes.set(key,value);},getAttribute(key:string){return this.attributes.get(key);},addEventListener(type:string,callback:Function){(this as any)[type]=callback;},querySelector(){return null;},appendChild(node:any){handles.set(node.className.split('-').at(-1),node);}});
+ const makeNode=()=>({className:'',style:{setProperty:(key:string,value:string)=>properties.set(key,value),getPropertyValue:(key:string)=>properties.get(key)??''},classList:{add(){},remove(){}},attributes:new Map<string,string>(),setAttribute(key:string,value:string){this.attributes.set(key,value);},getAttribute(key:string){return this.attributes.get(key);},addEventListener(type:string,callback:Function){(this as any)[type]=callback;},querySelector(){return null;},appendChild(node:any){handles.set(node.className.split('-').at(-1),node);}});
  const inspector=makeNode(),terminal=makeNode(),shell={...makeNode(),clientWidth:1512,inspectorOpen:!docked,terminalOpen:!docked,sidebarCollapsed:false,
  getBoundingClientRect:()=>rect(0), animate:surface.animate, removeAttribute(key:string){this.attributes.delete(key);},
  querySelectorAll:(selector:string)=>docked&&selector==='.workbench-navigation button'?[toggle]:[],
  classList:{contains:(name:string)=>name==='terminal-is-open'&&shell.terminalOpen||name==='has-collapsed-sidebar'&&shell.sidebarCollapsed||name==='has-docked-conversation'&&docked},querySelector(selector:string):any{
-  if(selector==='.workspace')return {clientWidth:this.clientWidth-sidebarWidth(),querySelector:()=>null,querySelectorAll:()=>[]};
+  if(selector==='.workspace')return {clientWidth:this.clientWidth-sidebarWidth(),querySelector:(name:string)=>name==='.composer-input'?composer:null,querySelectorAll:()=>composer?[composer]:[]};
+  if(selector==='.island-conversation')return island;
   if(selector==='.workbench-conversation-surface')return docked?surface:null;
   if(selector==='.terminal-side-panel')return this.terminalOpen?terminal:null;
   if(selector==='.session-layout > .session-inspector.is-open')return this.inspectorOpen?inspector:null;
@@ -100,6 +108,19 @@ test('the docked reading width follows the window and is independent of sidebar 
  assert.equal(page.properties.get('--expanded-conversation-width'),'696px');
  page.collapseSidebar(false);
  assert.equal(page.properties.get('--expanded-conversation-width'),'696px');
+});
+
+test('the docked island and composer share their left edge throughout both slide directions',()=>{
+ const page=fixture({sidebar:304,terminal:400,inspector:382},true,'420ms',298);
+ const transforms=(name:string)=>Array.from(page.animations.findLast(animation=>animation.name===name)!.frames,frame=>frame.transform);
+ page.collapseSidebar(true);
+ assert.equal(page.properties.get('--workbench-island-navigation-left'),'298px');
+ assert.deepEqual(transforms('island'),transforms('composer'));
+ page.flush();
+ page.collapseSidebar(false);
+ assert.equal(page.properties.get('--workbench-island-navigation-left'),'428px');
+ assert.deepEqual(transforms('island'),['translate3d(-130px,0px,0)','translate3d(0px,0,0)']);
+ assert.deepEqual(transforms('composer'),['translate3d(0px,0px,0)','translate3d(130px,0,0)']);
 });
 
 test('the sidebar and toggle start together on the first frame even after a long input task',()=>{

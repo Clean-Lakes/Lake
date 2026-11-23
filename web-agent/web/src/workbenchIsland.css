@@ -1,7 +1,6 @@
 /* Each pane owns one floating surface; the shell only carries their shared overlay. */
 .lake-workbench-islands { position:absolute; inset:0 0 auto; height:0; z-index:25; pointer-events:none; }
 .app-shell.has-docked-conversation > .lake-workbench-islands { grid-column:1 / 2; }
-.app-shell.has-docked-conversation .island-conversation { left:calc(100% + var(--conversation-header-inset)); }
 .lake-workbench-island { --island-header-inset:14px; --island-header-gap:10px; --island-title-min:60px; position:absolute; top:12px; height:46px; min-width:0; display:flex; align-items:center; border:1px solid var(--border); border-radius:var(--radius-window); corner-shape:var(--corner-window); box-shadow:0 3px 12px rgb(0 0 0 / 5%); background:transparent; isolation:isolate; visibility:hidden; pointer-events:auto; container-type:inline-size; transition:none!important; }
 .app-shell.has-workbench-conversation .island-conversation {
  --island-navigation-inset:0px;
@@ -15,6 +14,7 @@
  --island-navigation-inset:var(--workbench-navigation-island-width);
 }
 .app-shell.has-docked-conversation .island-conversation {
+ left:var(--workbench-island-navigation-left,calc(100% + var(--conversation-header-inset)));
  transition:none!important;
 }
 /* The glass changes width as the navigation enters. Its title and status move
@@ -24,9 +24,6 @@
  inset-block-start:0;
  inset-inline-start:var(--island-navigation-inset);
  inline-size:100cqi;
-}
-.app-shell.has-docked-conversation.has-collapsed-sidebar .island-conversation {
- left:var(--workbench-island-navigation-left,calc(100% + var(--conversation-header-inset)));
 }
 .island-navigation-divider {
  position:absolute;
