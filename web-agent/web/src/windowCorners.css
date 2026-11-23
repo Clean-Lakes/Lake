@@ -94,6 +94,10 @@
  background-clip:text;
  border-image:linear-gradient(transparent,transparent) 1;
  overflow:visible;
+ &:where(.workspace.has-floating-header > .workspace-header,.lake-workbench-island) {
+  /* Extend the masked stroke over the reserved border so it meets the shadow. */
+  --window-corner-inset:-1px;
+ }
  &::before,&::after {
   content:"";
   position:absolute;
@@ -118,8 +122,6 @@
 }
 :root.lake-corner-fallback :is(
  .sidebar.workspace-navigation .navigation-search,
- .workspace.has-floating-header > .workspace-header,
- .lake-workbench-island,
  .island-module-glass,
  .composer-input,
  .markdown-code-block,
