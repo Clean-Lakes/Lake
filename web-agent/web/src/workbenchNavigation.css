@@ -8,6 +8,8 @@
     --workbench-navigation-button-size:28px;
     --workbench-navigation-gap:3px;
     --workbench-navigation-min-width:calc(3 * var(--workbench-navigation-button-size) + 2 * var(--workbench-navigation-gap));
+    --workbench-navigation-island-padding:8px;
+    --workbench-navigation-island-width:calc(var(--workbench-navigation-min-width) + 2 * var(--workbench-navigation-island-padding));
     --workbench-sidebar-duration:300ms;
     --workbench-sidebar-ease:cubic-bezier(.45,0,.3,1);
     --workbench-chrome-background:var(--workbench-content-background,var(--paper));
@@ -82,6 +84,26 @@
     user-select:none;
     pointer-events:none;
   }
+  .app-shell.has-workbench-conversation > .workbench-navigation {
+    z-index:26;
+    inset-inline-end:auto;
+    inline-size:max(var(--workbench-navigation-min-width),calc(var(--sidebar-width,280px) - var(--workbench-navigation-start) - var(--workbench-navigation-end)));
+    transition:inset-inline-start var(--workbench-sidebar-duration) var(--workbench-sidebar-ease),
+      inset-block-start var(--workbench-sidebar-duration) var(--workbench-sidebar-ease),
+      inline-size var(--workbench-sidebar-duration) var(--workbench-sidebar-ease),
+      height var(--workbench-sidebar-duration) var(--workbench-sidebar-ease);
+  }
+  .app-shell.has-docked-conversation > .workbench-navigation {
+    --workbench-island-navigation-left:max(var(--workbench-navigation-start),calc(var(--sidebar-rail-width) + var(--conversation-header-inset)));
+    --workbench-island-navigation-top:var(--conversation-island-top);
+  }
+  .app-shell.has-workbench-conversation.has-collapsed-sidebar > .workbench-navigation {
+    inset-inline-start:calc(var(--workbench-island-navigation-left,var(--workbench-navigation-start)) + var(--workbench-navigation-island-padding));
+    inset-block-start:var(--workbench-island-navigation-top,12px);
+    inline-size:var(--workbench-navigation-min-width);
+    height:46px;
+  }
+  .workbench-resizing .app-shell.has-workbench-conversation > .workbench-navigation { transition:none; }
   .workbench-navigation-history {
     display:flex;
     gap:var(--workbench-navigation-gap);
@@ -117,4 +139,5 @@
   .app-shell.has-workbench-navigation::before,
   .app-shell.has-workbench-navigation .sidebar-navigation-content,
   .app-shell.has-workbench-navigation .sidebar-navigation-rail::after { transition-property:none; }
+  .app-shell.has-workbench-conversation > .workbench-navigation { transition:none; }
 }

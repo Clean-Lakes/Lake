@@ -230,6 +230,6 @@
   window.addEventListener('lake-workbench-layout', sync);
   document.addEventListener('scroll', () => { if (!sidebarSlide) schedule(); }, true);
   window.addEventListener('lake-chrome-resize', schedule);
-  document.addEventListener('transitionend', event => { if (event.target.matches('.app-shell, .terminal-side-panel')) schedule(); });
+  document.addEventListener('transitionend', event => { if (event.target.matches('.app-shell, .terminal-side-panel, .workbench-navigation')) schedule(); });
   schedule();
 })();

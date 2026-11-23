@@ -225,7 +225,7 @@ html.lake-windows-chrome .session-inspector { padding-top:52px; }
  position:absolute;
  z-index:1;
  inset:-1px auto auto -1px;
- inline-size:var(--island-panel-compact-width);
+ inline-size:calc(100% + 2px);
  block-size:var(--island-panel-header);
  border-radius:var(--radius-window);
  corner-shape:var(--corner-window);

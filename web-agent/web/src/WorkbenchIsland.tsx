@@ -68,24 +68,32 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const view=workspace?.querySelector<HTMLElement>('.session-layout > .session-view');
    if(!workspace||!view)return;
    const dockedPane=shell.classList.contains('has-docked-conversation');
+   const collapsed=shell.classList.contains('has-collapsed-sidebar');
    // The two-pane island is positioned by the moving grid line. Read its
    // content budget at the endpoints, outside the animated resize frames.
    if(dockedPane&&shell.hasAttribute('data-sidebar-sliding')&&identity.dataset.ready==='true'){
-    sidebarCollapsed=shell.classList.contains('has-collapsed-sidebar');
+    sidebarCollapsed=collapsed;
     return;
    }
    const bounds=view.getBoundingClientRect(),base=shell.getBoundingClientRect(),workspaceBounds=workspace.getBoundingClientRect();
+   const shellStyle=getComputedStyle(shell);
    const composer=view.querySelector('.composer-input')?.getBoundingClientRect();
    const frameInset=parseFloat(getComputedStyle(view).getPropertyValue('--conversation-frame-inset'))||0;
-   const top=Math.max(shell.closest('html.lake-windows-chrome')?52:12,12+(parseFloat(getComputedStyle(shell).paddingTop)||0));
+   const top=Math.max(shell.closest('html.lake-windows-chrome')?52:12,12+(parseFloat(shellStyle.paddingTop)||0));
    const workspaceStyle=getComputedStyle(workspace);
    const conversationTop=dockedPane?workspaceBounds.top-base.top+parseFloat(workspaceStyle.getPropertyValue('--conversation-island-top')):frameInset?workspaceBounds.top-base.top+parseFloat(workspaceStyle.borderTopWidth)+parseFloat(workspaceStyle.paddingTop)+frameInset:top;
    const paneLeft=(dockedPane?workspaceBounds.left+parseFloat(workspaceStyle.getPropertyValue('--conversation-header-inset')):frameInset?bounds.left+frameInset*2:composer?.left??bounds.left+48)-base.left;
-   const toolbar=shell.querySelector('.workbench-navigation')?.getBoundingClientRect();
-   const left=toolbar&&toolbar.bottom>base.top+conversationTop?Math.max(paneLeft,toolbar.right-base.left+12):paneLeft;
+   const navigation=shell.querySelector<HTMLElement>('.workbench-navigation');
+   const toolbar=navigation?.getBoundingClientRect();
+   const navigationStart=parseFloat(shellStyle.getPropertyValue('--workbench-navigation-start'))||0;
+   const navigationWidth=collapsed&&navigation?
+    parseFloat(getComputedStyle(navigation).minInlineSize)+2*parseFloat(shellStyle.getPropertyValue('--workbench-navigation-island-padding')):0;
+   const left=collapsed?Math.max(paneLeft,navigationStart):
+    toolbar&&toolbar.bottom>base.top+conversationTop?Math.max(paneLeft,toolbar.right-base.left+12):paneLeft;
    const actionsSpace=dockedPane?parseFloat(workspaceStyle.getPropertyValue('--conversation-header-actions-offset'))+12:0;
    const right=dockedPane?bounds.right-base.left-actionsSpace:paneLeft+(frameInset?bounds.width-frameInset*4:composer?.width??bounds.width-96);
    const available=Math.max(1,right-left);
+   const identityAvailable=Math.max(1,available-navigationWidth);
    const title=identity.querySelector<HTMLElement>('.crumb-title'),state=identity.querySelector<HTMLElement>('.header-morph-slot.is-visible .header-morph-content');
    const textWidth=(node:HTMLElement|null)=>{
     if(!node)return 0;
@@ -145,37 +153,41 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const rosterOpen=roster?.dataset.pilotRosterOpen==='true';
    const rosterPreferred=Number(roster?.dataset.preferredWidth??0);
    const rosterGap=roster?(parseFloat(getComputedStyle(roster).getPropertyValue('--pilot-roster-gap'))||0):0;
-   const baseWidth=titleWidth+(pilotWidth||normalStateWidth)+taskControlWidth+2*inset+gap*(taskTrigger?2:1)+parseFloat(islandStyle.borderLeftWidth)+parseFloat(islandStyle.borderRightWidth);
+   const borders=parseFloat(islandStyle.borderLeftWidth)+parseFloat(islandStyle.borderRightWidth);
+   const baseWidth=titleWidth+(pilotWidth||normalStateWidth)+taskControlWidth+2*inset+gap*(taskTrigger?2:1)+borders;
    // Choose the avatar count from the pane budget, independent of the resulting island width.
    // Retiring avatars keep their fitted arrangement while the slot closes.
-   const compactRoster=!!roster&&rosterPreferred>0&&available<Math.ceil(baseWidth+rosterPreferred+rosterGap);
+   const compactRoster=!!roster&&rosterPreferred>0&&identityAvailable<Math.ceil(baseWidth+rosterPreferred+rosterGap);
    const rosterWidth=rosterOpen?(compactRoster?Number(roster.dataset.compactWidth):rosterPreferred)+rosterGap:0;
    const rosterFittedWidth=baseWidth+rosterWidth;
-   const compactStatus=rosterOpen&&compactRoster&&badgeLabelWidth>0&&!pilotWidth&&available<Math.ceil(rosterFittedWidth);
+   const compactStatus=rosterOpen&&compactRoster&&badgeLabelWidth>0&&!pilotWidth&&identityAvailable<Math.ceil(rosterFittedWidth);
    identity.toggleAttribute('data-compact-pilot-roster',compactRoster);
    identity.toggleAttribute('data-compact-pilot-status',compactStatus);
    const conversationWidth=rosterFittedWidth-(compactStatus?badgeLabelWidth:0);
    const layout=workbenchIslandLayout({
     conversation:{left,width:available,inset:0},
     terminal:terminalPane,
-    conversationWidth,
+    conversationWidth:conversationWidth+navigationWidth,
     inspectorWidth:144,
     terminalWidth:Math.min(320,Math.max(260,terminalNameWidth+(terminalNumber?.offsetWidth??0)+(terminalCount?.offsetWidth??0)+112)),
    });
    const source={...layout.conversation,top:conversationTop};
+   // CSS adds the navigation as padding around an unchanged identity width.
+   const identityWidth=Math.max(0,source.width-navigationWidth-borders);
    shell.style.setProperty('--pane-rail-bottom',`${Math.max(12,base.bottom-(composer?.top??base.bottom)+12)}px`);
+   shell.style.setProperty('--workbench-island-navigation-left',`${source.left}px`);
+   shell.style.setProperty('--workbench-island-navigation-top',`${source.top}px`);
    const skipMotion=reduced.matches||document.hidden||document.documentElement.classList.contains('workbench-resizing');
-   const collapsed=shell.classList.contains('has-collapsed-sidebar');
    const toggled=sidebarCollapsed!==collapsed;
    const slide=!dockedPane&&!skipMotion&&(toggled||(sidebarAnimation&&source.left!==previousLeft));
    const fromLeft=slide?identity.getBoundingClientRect().left-base.left:source.left;
    if(dockedPane||slide||skipMotion){sidebarAnimation?.cancel();sidebarAnimation=undefined;}
    sidebarCollapsed=collapsed;previousLeft=source.left;
-   const resizeRoster=!!roster&&roster===previousRoster&&rosterWidth!==previousRosterWidth&&source.width!==previousIslandWidth&&!skipMotion&&!slide&&!sidebarAnimation;
-   const fromWidth=resizeRoster?identity.getBoundingClientRect().width:source.width;
-   if(source.width!==previousIslandWidth||skipMotion||slide){rosterAnimation?.cancel();rosterAnimation=undefined;}
-   write(identity,source,dockedPane);
-   identity.style.setProperty('--island-panel-compact-width',`${source.width}px`);
+   const resizeRoster=!!roster&&roster===previousRoster&&rosterWidth!==previousRosterWidth&&identityWidth!==previousIslandWidth&&!skipMotion&&!slide&&!sidebarAnimation;
+   const fromWidth=resizeRoster?parseFloat(islandStyle.width):identityWidth;
+   if(identityWidth!==previousIslandWidth||skipMotion||slide){rosterAnimation?.cancel();rosterAnimation=undefined;}
+   write(identity,{...source,width:identityWidth},dockedPane);
+   identity.style.setProperty('--island-panel-compact-width',`calc(${identityWidth+borders}px + var(--island-navigation-inset))`);
    identity.style.setProperty('--island-panel-available-width',`${Math.max(source.width,bounds.right-base.left-source.left-16)}px`);
    identity.style.setProperty('--island-panel-available-height',`${Math.max(46,base.height-source.top-16)}px`);
    identity.dataset.ready='true';identity.dataset.present='true';identity.title=title?.textContent??'';
@@ -189,10 +201,10 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
     sidebarAnimation=animation;
     animation.onfinish=()=>{if(sidebarAnimation!==animation)return;sidebarAnimation=undefined;animation.cancel();window.dispatchEvent(new Event('lake-chrome-resize'));};
    }
-   if(resizeRoster&&Math.abs(source.width-fromWidth)>.5)rosterAnimation=identity.animate([
-    {width:`${fromWidth}px`},{width:`${source.width}px`},
+   if(resizeRoster&&Math.abs(identityWidth-fromWidth)>.5)rosterAnimation=identity.animate([
+    {width:`${fromWidth}px`},{width:`${identityWidth}px`},
    ],{duration:parseFloat(islandStyle.getPropertyValue('--pilot-roster-duration')),easing:islandStyle.getPropertyValue('--pilot-roster-ease').trim()});
-   previousRoster=roster;previousRosterWidth=rosterWidth;previousIslandWidth=source.width;
+   previousRoster=roster;previousRosterWidth=rosterWidth;previousIslandWidth=identityWidth;
    if(terminalIsland.current)move('terminal',terminalIsland.current,layout.terminal?{...layout.terminal,top}:undefined,source,base);
    const candidates=new Set<Element>([shell,...shell.querySelectorAll('.workspace,.session-layout > .session-view,.session-layout > .session-inspector,.terminal-side-panel,.composer-input,.composer-dock,.header-morph-content,.crumb-title,.terminal-island-title')]);
    for(const node of observed)if(!candidates.has(node)){observer.unobserve(node);observed.delete(node);}
@@ -212,12 +224,13 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
   content.observe(shell,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['class','data-pilot-roster-open','data-preferred-width']});
   window.addEventListener('resize',schedule);window.addEventListener('lake-workbench-layout',measure);
   document.addEventListener('visibilitychange',schedule);reduced.addEventListener('change',schedule);measure();
-  return()=>{scheduleLayout.current=()=>{};content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);window.removeEventListener('lake-workbench-layout',measure);document.removeEventListener('visibilitychange',schedule);reduced.removeEventListener('change',schedule);rosterAnimation?.cancel();sidebarAnimation?.cancel();for(const flight of Object.values(flights))flight.animation?.cancel();shell.style.removeProperty('--pane-rail-bottom');};
+  return()=>{scheduleLayout.current=()=>{};content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);window.removeEventListener('lake-workbench-layout',measure);document.removeEventListener('visibilitychange',schedule);reduced.removeEventListener('change',schedule);rosterAnimation?.cancel();sidebarAnimation?.cancel();for(const flight of Object.values(flights))flight.animation?.cancel();shell.style.removeProperty('--pane-rail-bottom');shell.style.removeProperty('--workbench-island-navigation-left');shell.style.removeProperty('--workbench-island-navigation-top');};
  },[]);
  useLayoutEffect(()=>scheduleLayout.current(),[inspectorOpen,terminalOpen]);
  return <div ref={root} className="lake-workbench-islands" role="group" aria-label="Lake Island 工作台">
   <div ref={conversationIsland} className="lake-workbench-island island-conversation" data-pilot-island-tone={pilotTone}>
-   <span className="workspace-header-glass" aria-hidden="true"/>{activity}{conversation}
+   <span className="workspace-header-glass" aria-hidden="true"/>
+   <span className="island-navigation-divider" aria-hidden="true"/>{activity}{conversation}
    {islandInspector&&<div className="island-inspector" data-open={inspectorOpen}>
     <div className="island-inspector-viewport">{islandInspector}</div>
    </div>}

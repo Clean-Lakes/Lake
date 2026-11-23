@@ -1,11 +1,41 @@
 /* Each pane owns one floating surface; the shell only carries their shared overlay. */
 .lake-workbench-islands { position:absolute; inset:0 0 auto; height:0; z-index:25; pointer-events:none; }
 .app-shell.has-docked-conversation > .lake-workbench-islands { grid-column:1 / 2; }
-.app-shell.has-docked-conversation .island-conversation {
- left:max(calc(100% + var(--conversation-header-inset)), calc(var(--workbench-navigation-start) + var(--workbench-navigation-min-width) + 12px));
-}
-html.lake-windows-chrome .app-shell.has-docked-conversation .island-conversation { left:calc(100% + var(--conversation-header-inset)); }
+.app-shell.has-docked-conversation .island-conversation { left:calc(100% + var(--conversation-header-inset)); }
 .lake-workbench-island { --island-header-inset:14px; --island-header-gap:10px; --island-title-min:60px; position:absolute; top:12px; height:46px; min-width:0; display:flex; align-items:center; border:1px solid var(--border); border-radius:var(--radius-window); corner-shape:var(--corner-window); box-shadow:0 3px 12px rgb(0 0 0 / 5%); background:transparent; isolation:isolate; visibility:hidden; pointer-events:auto; container-type:inline-size; transition:none!important; }
+.app-shell.has-workbench-conversation .island-conversation {
+ --island-navigation-inset:0px;
+ box-sizing:content-box;
+ height:44px;
+ padding-inline-start:var(--island-navigation-inset);
+ transition:padding-inline-start var(--workbench-sidebar-duration) var(--workbench-sidebar-ease),
+  transform var(--workbench-sidebar-duration) var(--workbench-sidebar-ease)!important;
+}
+.app-shell.has-workbench-conversation.has-collapsed-sidebar .island-conversation {
+ --island-navigation-inset:var(--workbench-navigation-island-width);
+}
+.app-shell.has-docked-conversation.has-collapsed-sidebar .island-conversation {
+ /* Clear the native window controls without stopping the horizontal slide early. */
+ transform:translateX(max(0px,calc(var(--workbench-navigation-start) - var(--sidebar-rail-width) - var(--conversation-header-inset))));
+}
+.island-navigation-divider {
+ position:absolute;
+ inset-inline-start:calc(var(--island-navigation-inset) - 4px);
+ inset-block-start:14px;
+ width:1px;
+ height:16px;
+ background:var(--border);
+ opacity:0;
+ z-index:2;
+ pointer-events:none;
+ transition:inset-inline-start var(--workbench-sidebar-duration) var(--workbench-sidebar-ease),
+  opacity var(--workbench-sidebar-duration) var(--workbench-sidebar-ease);
+}
+.app-shell.has-collapsed-sidebar .island-navigation-divider { opacity:1; }
+@media(prefers-reduced-motion:reduce) {
+ .app-shell.has-workbench-conversation .island-conversation { transition:none!important; }
+ .island-navigation-divider { transition:none; }
+}
 .app-shell.has-workbench-conversation:not(.has-workbench-island) .island-conversation { --island-title-min:0px; box-shadow:var(--shadow-popover); }
 .lake-workbench-island[data-ready=true][data-present=true] { visibility:visible; }
 .lake-workbench-island[data-open=false] { pointer-events:none; }
@@ -14,7 +44,7 @@ html.lake-windows-chrome .app-shell.has-docked-conversation .island-conversation
 /* Auxiliary pane entrances animate their own surfaces. */
 .app-shell.has-workbench-island { transition:none; }
 .lake-workbench-island > .workspace-header-glass { z-index:-1; }
-.lake-workbench-island > :not(.workspace-header-glass,.workspace-header-sweep,.island-inspector) { position:relative; z-index:2; min-width:0; }
+.lake-workbench-island > :not(.workspace-header-glass,.workspace-header-sweep,.island-inspector,.island-navigation-divider) { position:relative; z-index:2; min-width:0; }
 .lake-workbench-island [hidden] { display:none!important; }
 .lake-workbench-island .workspace-header { justify-content:flex-start; position:relative; display:flex; align-items:center; gap:var(--island-header-gap); min-width:0; min-height:44px; height:44px; width:100%; padding:5px var(--island-header-inset); border:0; border-radius:0; background:transparent; box-shadow:none; }
 .lake-workbench-island .workspace-header > .workspace-header-glass { display:none; }
