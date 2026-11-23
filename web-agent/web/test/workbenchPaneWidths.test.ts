@@ -9,7 +9,7 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382}){
  const properties=new Map<string,string>(),callbacks:Function[]=[],events=new Map<string,Function>();
  const handles=new Map<string,any>();
  const makeNode=()=>({className:'',style:{setProperty:(key:string,value:string)=>properties.set(key,value)},classList:{add(){},remove(){}},attributes:new Map<string,string>(),setAttribute(key:string,value:string){this.attributes.set(key,value);},getAttribute(key:string){return this.attributes.get(key);},addEventListener(type:string,callback:Function){(this as any)[type]=callback;},querySelector(){return null;},appendChild(node:any){handles.set(node.className.split('-').at(-1),node);}});
- const inspector=makeNode(),terminal=makeNode(),shell={...makeNode(),clientWidth:1512,inspectorOpen:true,terminalOpen:true,classList:{contains:(name:string)=>name==='terminal-is-open'&&shell.terminalOpen},querySelector(selector:string):any{
+ const inspector=makeNode(),terminal=makeNode(),shell={...makeNode(),clientWidth:1512,inspectorOpen:true,terminalOpen:true,sidebarCollapsed:false,classList:{contains:(name:string)=>name==='terminal-is-open'&&shell.terminalOpen||name==='has-collapsed-sidebar'&&shell.sidebarCollapsed},querySelector(selector:string):any{
   if(selector==='.workspace')return {clientWidth:this.clientWidth-parseFloat(properties.get('--sidebar-width')||'280')};
   if(selector==='.terminal-side-panel')return this.terminalOpen?terminal:null;
   if(selector==='.session-inspector.is-open')return this.inspectorOpen?inspector:null;
@@ -17,10 +17,10 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382}){
   return null;
  }};
  const window={lakeWorkbenchWidths:saved,addEventListener:(type:string,callback:Function)=>events.set(type,callback)};
- const context={window,innerWidth:1512,innerHeight:900,localStorage:{getItem(){return null;},setItem(){}},document:{body:{},head:{appendChild(){}},documentElement:{classList:{add(){},remove(){}}},createElement:makeNode,querySelector:()=>shell,addEventListener(){}},ResizeObserver:class{observe(){}disconnect(){}},MutationObserver:class{observe(){}},requestAnimationFrame:(callback:Function)=>{callbacks.push(callback);return callbacks.length;}};
+ const context={window,innerWidth:1512,innerHeight:900,localStorage:{getItem(){return null;},setItem(){}},document:{body:{},head:{appendChild(){}},documentElement:{classList:{add(){},remove(){}}},createElement:makeNode,querySelector:()=>shell,addEventListener(){}},getComputedStyle:()=>({getPropertyValue:()=> '44px'}),ResizeObserver:class{observe(){}disconnect(){}},MutationObserver:class{observe(){}},requestAnimationFrame:(callback:Function)=>{callbacks.push(callback);return callbacks.length;}};
  runInNewContext(source,context);
  const flush=()=>{while(callbacks.length)callbacks.shift()!();};flush();
- return {properties,resize(width:number){shell.clientWidth=width;context.innerWidth=width;events.get('resize')!();flush();},reset(pane:string){handles.get(pane).dblclick();flush();},toggle(inspectorOpen:boolean,terminalOpen:boolean){shell.inspectorOpen=inspectorOpen;shell.terminalOpen=terminalOpen;events.get('resize')!();flush();},commit(inspectorOpen:boolean,terminalOpen:boolean){shell.inspectorOpen=inspectorOpen;shell.terminalOpen=terminalOpen;events.get('lake-workbench-layout')!();},widths(){return ['--sidebar-width','--terminal-panel-width','--inspector-preferred-width'].map(key=>parseFloat(properties.get(key)!));}};
+ return {properties,resize(width:number){shell.clientWidth=width;context.innerWidth=width;events.get('resize')!();flush();},reset(pane:string){handles.get(pane).dblclick();flush();},toggle(inspectorOpen:boolean,terminalOpen:boolean){shell.inspectorOpen=inspectorOpen;shell.terminalOpen=terminalOpen;events.get('resize')!();flush();},commit(inspectorOpen:boolean,terminalOpen:boolean){shell.inspectorOpen=inspectorOpen;shell.terminalOpen=terminalOpen;events.get('lake-workbench-layout')!();},collapseSidebar(collapsed:boolean){shell.sidebarCollapsed=collapsed;events.get('lake-workbench-layout')!();},widths(){return ['--sidebar-width','--terminal-panel-width','--inspector-preferred-width'].map(key=>parseFloat(properties.get(key)!));}};
 }
 
 test('window zoom reserves conversation space once across both auxiliary panes',()=>{
@@ -52,4 +52,14 @@ test('pane toggles apply the full shared budget synchronously before the first p
  assert.equal(page.widths()[0],280);assert.equal(page.widths()[2],382);
  page.commit(false,true);
  assert.deepEqual(page.widths(),[280,400,280]);
+});
+
+test('collapsing to the icon rail returns width to the workbench and preserves the preferred sidebar width',()=>{
+ const page=fixture({sidebar:304,terminal:400,inspector:382});
+ page.resize(1232);
+ const expanded=page.widths();
+ page.collapseSidebar(true);
+ assert.deepEqual(page.widths(),[44,400,372]);
+ page.collapseSidebar(false);
+ assert.deepEqual(page.widths(),expanded);
 });

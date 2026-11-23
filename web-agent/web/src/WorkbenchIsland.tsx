@@ -59,6 +59,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    animation.onfinish=()=>{if(flight.animation!==animation)return;flight.animation=undefined;present(node,expanded);delete node.dataset.moving;animation.cancel();window.dispatchEvent(new Event('lake-chrome-resize'));};
   };
   const measure=()=>{
+   if(frame)cancelAnimationFrame(frame);
    frame=0;
    const view=shell.querySelector<HTMLElement>('.session-layout > .session-view');
    if(!view)return;
@@ -142,7 +143,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
     inspectorWidth:144,
     terminalWidth:Math.min(320,Math.max(260,terminalNameWidth+(terminalNumber?.offsetWidth??0)+(terminalCount?.offsetWidth??0)+112)),
    });
-   const top=shell.closest('html.lake-windows-chrome')?52:12;
+   const top=Math.max(shell.closest('html.lake-windows-chrome')?52:12,12+(parseFloat(getComputedStyle(shell).paddingTop)||0));
    const source={...layout.conversation,top:frameInset?bounds.top-base.top+frameInset:top};
    shell.style.setProperty('--pane-rail-bottom',`${Math.max(12,base.bottom-(composer?.top??base.bottom)+12)}px`);
    const skipMotion=reduced.matches||document.hidden||document.documentElement.classList.contains('workbench-resizing');
@@ -171,8 +172,9 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    }))schedule();
   });
   content.observe(shell,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['class','data-pilot-roster-open','data-preferred-width']});
-  window.addEventListener('resize',schedule);document.addEventListener('visibilitychange',schedule);reduced.addEventListener('change',schedule);measure();
-  return()=>{scheduleLayout.current=()=>{};content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);document.removeEventListener('visibilitychange',schedule);reduced.removeEventListener('change',schedule);rosterAnimation?.cancel();for(const flight of Object.values(flights))flight.animation?.cancel();shell.style.removeProperty('--pane-rail-bottom');};
+  window.addEventListener('resize',schedule);window.addEventListener('lake-workbench-layout',measure);
+  document.addEventListener('visibilitychange',schedule);reduced.addEventListener('change',schedule);measure();
+  return()=>{scheduleLayout.current=()=>{};content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);window.removeEventListener('lake-workbench-layout',measure);document.removeEventListener('visibilitychange',schedule);reduced.removeEventListener('change',schedule);rosterAnimation?.cancel();for(const flight of Object.values(flights))flight.animation?.cancel();shell.style.removeProperty('--pane-rail-bottom');};
  },[]);
  useLayoutEffect(()=>scheduleLayout.current(),[inspectorOpen,terminalOpen]);
  return <div ref={root} className="lake-workbench-islands" role="group" aria-label="Lake Island 工作台">

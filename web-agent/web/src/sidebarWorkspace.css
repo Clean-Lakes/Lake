@@ -1,7 +1,7 @@
 /* Lightweight workspace: conversations and resources share one quiet sidebar. */
 .sidebar.workspace-navigation {
  --sidebar-row-radius:var(--radius-window); --sidebar-edge-inset:8px; --sidebar-content-inset:16px;
- --sidebar-icon-column:22px; --sidebar-icon-gap:9px; --sidebar-rail-width:44px; --sidebar-rail-button-size:32px;
+ --sidebar-icon-column:22px; --sidebar-icon-gap:9px; --sidebar-rail-button-size:32px;
  --sidebar-brand-height:56px; --sidebar-brand-margin:6px; border-right:0;
 }
 .sidebar.workspace-navigation .sidebar-brand-row {

@@ -24,15 +24,15 @@
     .workbench-resizing, .workbench-resizing * { cursor:col-resize !important; user-select:none !important; }
     .workbench-resizing .app-shell, .workbench-resizing .terminal-side-panel { transition:none !important; }
     .ai-context-panel { position:fixed; z-index:60; bottom:auto; right:auto; overflow-y:auto; }
-    @media(min-width:768px) {
+    @media(min-width:701px) {
       .app-shell { position:relative; grid-template-columns:var(--sidebar-width, 280px) minmax(0,1fr) 0px; }
       .app-shell.terminal-is-open { grid-template-columns:var(--sidebar-width, 280px) minmax(0,1fr) var(--terminal-panel-width); }
       .terminal-side-panel { position:relative; }
     }
-    @media(min-width:768px) and (max-width:1100px) {
+    @media(min-width:701px) and (max-width:1100px) {
       .app-shell, .app-shell.terminal-is-open { grid-template-columns:var(--sidebar-width, 280px) minmax(0,1fr) 0px; }
     }
-    @media(max-width:767px) { .workbench-splitter { display:none; } }
+    @media(max-width:700px) { .workbench-splitter { display:none; } }
   `;
   document.head.appendChild(style);
   let shell, active, frame = 0, lastChrome = '';
@@ -44,15 +44,18 @@
     const desktop = innerWidth > 1100;
     const inspectorOpen = desktop && !!shell.querySelector('.session-inspector.is-open');
     const terminalOpen = desktop && shell.classList.contains('terminal-is-open');
+    const sidebarCollapsed = shell.classList.contains('has-collapsed-sidebar');
     // All open panes share one budget. Reserving the conversation independently
     // for each side pane can otherwise spend that same space twice after zooming.
     const conversationMin = desktop ? 416 : 320;
     const auxiliaryMin = inspectorOpen && terminalOpen ? 240 : 280;
     const sidebarMax = Math.max(200, Math.min(420, width - conversationMin - (terminalOpen ? auxiliaryMin : 0) - (inspectorOpen ? auxiliaryMin : 0)));
-    const sidebar = clamp(preferred.sidebar, 200, sidebarMax);
+    const sidebar = sidebarCollapsed
+      ? parseFloat(getComputedStyle(shell).getPropertyValue('--sidebar-rail-width')) || 44
+      : clamp(preferred.sidebar, 200, sidebarMax);
     const terminalMax = Math.max(auxiliaryMin, Math.min(900, width - sidebar - conversationMin - (inspectorOpen ? auxiliaryMin : 0)));
     const terminal = terminalOpen ? clamp(preferred.terminal, auxiliaryMin, terminalMax) : 0;
-    if (pane === 'sidebar') return [200, sidebarMax];
+    if (pane === 'sidebar') return sidebarCollapsed ? [sidebar, sidebar] : [200, sidebarMax];
     if (pane === 'terminal') return desktop ? [auxiliaryMin, terminalMax] : [280, Math.max(280, Math.min(900, width - 40))];
     if (desktop) return [auxiliaryMin, Math.max(auxiliaryMin, Math.min(900, width - sidebar - terminal - conversationMin))];
     const workspace = shell.querySelector('.workspace');
@@ -94,6 +97,7 @@
     handle.addEventListener('pointermove', event => {
       if (!active || active.pointer !== event.pointerId) return;
       const [min, max] = limits(pane);
+      if (min === max) return;
       preferred[pane] = clamp(active.width + (event.clientX - active.x) * (pane === 'sidebar' ? 1 : -1), min, max);
       apply();
       schedule();
@@ -126,7 +130,7 @@
     const workspace = shell.querySelector('.workspace');
     if (workspace) { const r = workspace.getBoundingClientRect(); regions.push([r.x, 0, r.width, height]); }
     if (sidebar) { const r = sidebar.getBoundingClientRect(); regions.push([r.x, 0, r.width, height]); }
-    const excluded = [...shell.querySelectorAll('.workbench-splitter'), ...headers.flatMap(header => [...header.querySelectorAll('button, a, input, select, textarea, [role="button"]')])].map(rect);
+    const excluded = [...shell.querySelectorAll('.workbench-splitter, .workbench-navigation button'), ...headers.flatMap(header => [...header.querySelectorAll('button, a, input, select, textarea, [role="button"]')])].map(rect);
     for (const element of document.querySelectorAll('.modal-scrim, dialog[open], [role="dialog"], [role="menu"], [role="listbox"]')) excluded.push(rect(element));
     const body = JSON.stringify({ regions, excluded, theme: document.documentElement.dataset.theme || 'light', appearance: window.lakeAppearance || 'light' });
     if (body !== lastChrome) { lastChrome = body; bridge.postMessage(JSON.parse(body)); }

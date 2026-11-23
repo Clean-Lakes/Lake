@@ -1,0 +1,59 @@
+.workbench-navigation { display:none; }
+
+@media (min-width:701px) {
+  .app-shell.has-workbench-navigation { --workbench-navigation-height:36px; --workbench-navigation-start:8px; }
+  :root.lake-native .app-shell.has-workbench-navigation {
+    --workbench-navigation-height:var(--lake-titlebar-height, 52px);
+    --workbench-navigation-start:86px;
+  }
+  :root.lake-windows-chrome .app-shell.has-workbench-navigation { --workbench-navigation-height:48px; }
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation {
+    --sidebar-chrome-inset:var(--workbench-navigation-height);
+    padding-block-start:var(--workbench-navigation-height);
+  }
+  .workbench-navigation {
+    position:absolute;
+    z-index:24;
+    inset-block-start:0;
+    inset-inline-start:var(--workbench-navigation-start);
+    height:var(--workbench-navigation-height);
+    display:flex;
+    align-items:center;
+    gap:3px;
+    user-select:none;
+  }
+  .workbench-navigation button {
+    display:grid;
+    place-items:center;
+    width:28px;
+    height:28px;
+    padding:0;
+    border:0;
+    border-radius:var(--radius-settings-icon);
+    corner-shape:var(--corner-window);
+    color:var(--pilot-header-muted);
+    background:transparent;
+  }
+  .workbench-navigation button:hover:not(:disabled) { color:var(--foreground); background:var(--surface-hover); }
+  .workbench-navigation button:disabled { opacity:.42; }
+  .workbench-navigation button:focus-visible { outline-offset:-2px; }
+  .app-shell.has-collapsed-sidebar {
+    padding-block-start:var(--workbench-navigation-height);
+    transition:none;
+  }
+  .app-shell.has-collapsed-sidebar > .sidebar.workspace-navigation {
+    --sidebar-chrome-inset:0px;
+    padding-block-start:0;
+  }
+  .app-shell.has-collapsed-sidebar > .sidebar > :not(.sidebar-workspace-navigation),
+  .app-shell.has-collapsed-sidebar .sidebar-workspace-navigation > :not(.sidebar-navigation-rail),
+  .app-shell.has-collapsed-sidebar > .workbench-splitter-sidebar { display:none; }
+  :root.lake-windows-chrome .app-shell.has-collapsed-sidebar .workspace.is-workspace-page .workspace-page-header { padding-block-start:0; }
+}
+@media (min-width:701px) and (pointer:coarse) {
+  .app-shell.has-workbench-navigation { --workbench-navigation-height:48px; }
+  .workbench-navigation button { width:44px; height:44px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .app-shell.has-workbench-navigation { transition:none; }
+}

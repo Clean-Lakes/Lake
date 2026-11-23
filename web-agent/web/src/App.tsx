@@ -99,6 +99,8 @@ import type {
 import { api, ApiRequestError, readableError, type Bootstrap } from "./api";
 import {SessionPlansPage} from "./PlanList";
 import {readWorkspaceRoute,workspaceURL,type WorkspaceRoute} from "./workspaceRoute";
+import {useWorkspaceHistory} from "./workspaceHistory";
+import {WorkbenchNavigation} from "./WorkbenchNavigation";
 import { AIControls, AITranscript } from "./AIPanel";
 import { Glyph, ResourceIcon, type GlyphName } from "./Icons";
 import {HeaderSweep} from "./HeaderSweep";
@@ -114,7 +116,7 @@ import { reusableResourceTerminal, onlineTerminalOptions, panelTerminalSessions,
 import { ResourceTree } from "./ResourceTree";
 import { WorkspaceSearch } from "./WorkspaceSearch";
 import { ResourceTerminalMenu } from "./ResourceTerminalMenu";
-import { defaultWorkspaceSession, initialWorkspaceSelection, isUserWorkspaceSession } from "./sidebarState";
+import { defaultWorkspaceSession, initialSidebarProject, initialWorkspaceSelection, isUserWorkspaceSession } from "./sidebarState";
 import { WorkerExecutionResults } from "./WorkerExecutionTree";
 import {savedWorkspaceProject,saveWorkspaceProject} from './workspaceProjectPreference';
 import {SessionNavigation} from "./SessionNavigation";
@@ -231,6 +233,7 @@ function AppContent() {
   });
   useEffect(() => { try { localStorage.setItem("lake.closed-session-groups", JSON.stringify(closedSessionGroups)); } catch {} }, [closedSessionGroups]);
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [dialog, setDialog] = useState<{ kind: "project" } | { kind: "session"; projectId: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WorkSession | null>(null);
   const [editSession, setEditSession] = useState<WorkSession | null>(null);
@@ -314,6 +317,7 @@ function AppContent() {
     return () => window.removeEventListener("keydown", shortcut);
   }, []);
   const [compactNavigation, setCompactNavigation] = useState(() => matchMedia("(max-width: 700px)").matches);
+  const sidebarCollapsedOnDesktop = sidebarCollapsed && !compactNavigation;
   useEffect(() => {
     const media = matchMedia("(max-width: 700px)");
     const update = () => setCompactNavigation(media.matches);
@@ -472,25 +476,46 @@ function AppContent() {
   useEffect(() => { const token = new URLSearchParams(window.location.hash.slice(1)).get("token") || undefined;
     if (token) window.history.replaceState(null, "", window.location.pathname + window.location.search);
     void loadApp(token); }, [loadApp]);
-  useEffect(() => {
-    const onPopState = () => setRoute(initialRoute());
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
-  const navigate = useCallback((next: WorkspaceRoute) => {
-    const url = workspaceURL(window.location.href,next);
-    window.history.pushState(null, "", url);
-    routeRef.current=next;
+  const {available: historyAvailable, push: pushHistory, step: stepHistory} = useWorkspaceHistory(projectId => {
+    let next = initialRoute();
+    if (catalog) {
+      const saved = projectId ?? sidebarProjectId;
+      if ((next.sessionId && !catalog.sessions.some(session => session.id === next.sessionId)) ||
+          (next.resourceId && !catalog.resources.some(resource => resource.id === next.resourceId))) {
+        const selection = initialWorkspaceSelection(catalog, next, saved);
+        next = selection.route;
+        setSidebarProjectId(selection.projectId);
+        window.history.replaceState(window.history.state, "", workspaceURL(window.location.href, next));
+      } else {
+        setSidebarProjectId(initialSidebarProject(catalog, next, saved) ?? null);
+      }
+    }
+    routeRef.current = next;
     setRoute(next);
     setMobileMenu(false);
-  }, []);
+  });
+  const navigationContext = useRef({catalog, sidebarProjectId});
+  navigationContext.current = {catalog, sidebarProjectId};
+  const navigate = useCallback((next: WorkspaceRoute, projectId?: string | null) => {
+    const current = routeRef.current;
+    const {catalog, sidebarProjectId} = navigationContext.current;
+    const fromProject = catalog ? initialSidebarProject(catalog, current, sidebarProjectId) ?? null : sidebarProjectId;
+    const toProject = projectId === undefined
+      ? catalog ? initialSidebarProject(catalog, next, fromProject) ?? null : fromProject
+      : projectId;
+    const href = window.location.href;
+    pushHistory({url: workspaceURL(href, current), projectId: fromProject}, {url: workspaceURL(href, next), projectId: toProject});
+    routeRef.current = next;
+    setRoute(next);
+    setMobileMenu(false);
+  }, [pushHistory]);
   const openWorkspacePage=()=>{
+    setSidebarCollapsed(false);
     if(isWorkspacePage){setMobileMenu(false);return;}
     const box=conversationRef.current;
     if(box&&route.sessionId)conversationResume.current.set(route.sessionId,{top:box.scrollTop,following:conversationScroll.current.following});
     setResourceTerminalMenu(null);setResourceConfigContext(null);
     setAgentOptionsOpen(false);setPermissionsOpen(false);setModelMenuOpen(false);setAttachmentDragOver(false);
-    window.history.replaceState(window.history.state,"",workspaceURL(window.location.href,route));
     navigate({...route,view:'workspace'});
   };
   const isPlansPage=route.view==='plans'&&!route.resourceId&&!!route.sessionId&&!!catalog?.sessions.some(session=>session.id===route.sessionId&&isUserWorkspaceSession(session));
@@ -885,7 +910,7 @@ function AppContent() {
   const {attachView:attachInspectorView,waitingForWindow:inspectorWaitingForWindow} = useInspectorWindow(inspectorOpen);
   // The DOM now has its final pane classes. Apply the shared width budget
   // before paint, rather than flashing one frame with the previous budget.
-  useLayoutEffect(()=>{window.dispatchEvent(new Event('lake-workbench-layout'));},[terminalVisible,inspectorOpen]);
+  useLayoutEffect(()=>{window.dispatchEvent(new Event('lake-workbench-layout'));},[terminalVisible,inspectorOpen,sidebarCollapsedOnDesktop]);
   const headerPilot = !selectedResource && !isPlansPage ? pilotIslandModel(activeSnapshot) : null;
   const headerPilotMode: 'auto'|'manual'|undefined = !selectedResource&&!isPlansPage&&activeSnapshot?.sre?.pilot?.enabled&&(!activeSnapshot.ai?.profile||activeSnapshot.ai.profile==='core')?(activeSnapshot.sre.pilot.autoAdvance?'auto':'manual'):undefined;
   const inspectorAvailable=(activeSnapshot?.session.workspaceRole==='role'?roleWorkers.length>0:!!(activeSnapshot?.ai??inspectedSnapshot?.ai))&&!selectedResource&&!isPlansPage;
@@ -1151,7 +1176,7 @@ function AppContent() {
       if (projectRemoved || sessionRemoved || resourceRemoved) {
         const selection = initialWorkspaceSelection(fresh, current, sidebarProjectId);
         setSidebarProjectId(selection.projectId);
-        navigate(selection.route);
+        navigate(selection.route, selection.projectId);
       }
       return;
     }
@@ -1250,7 +1275,7 @@ function AppContent() {
         const project = await api.createProject(name);
         await refreshCatalog();
         setSidebarProjectId(project.id);
-        if(routeRef.current.view==='workspace'){setBulkMode(false);setBulkSelected([]);navigate({sessionId:null,resourceId:null,view:'workspace'});}
+        if(routeRef.current.view==='workspace'){setBulkMode(false);setBulkSelected([]);navigate({sessionId:null,resourceId:null,view:'workspace'},project.id);}
         notify(`已创建项目「${project.name}」`);
       } else {
         const session = await api.createSession(dialog.projectId);
@@ -1804,7 +1829,9 @@ function AppContent() {
       document.getElementById('workspace-projects-title')?.focus();
     }} onSettings={openSettings} onUpdates={() => window.dispatchEvent(new Event('lake-open-updates'))} onTrash={() => setTrashOpen(true)}/>;
 
-  return <SpecialistAvatarProvider channels={pilotWorkspace.workspace?.channels}><div className={`app-shell ${terminalVisible ? "terminal-is-open" : ""}${sharedIsland?" has-workbench-island":""}`}>
+  return <SpecialistAvatarProvider channels={pilotWorkspace.workspace?.channels}><div className={`app-shell has-workbench-navigation${terminalVisible ? " terminal-is-open" : ""}${sharedIsland?" has-workbench-island":""}${sidebarCollapsedOnDesktop?" has-collapsed-sidebar":""}`}>
+    <WorkbenchNavigation expanded={!sidebarCollapsedOnDesktop} back={historyAvailable.back} forward={historyAvailable.forward}
+      onToggle={() => setSidebarCollapsed(collapsed => !collapsed)} onStep={stepHistory}/>
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
     {mobileMenu && <button className="mobile-scrim" aria-label="关闭项目导航" onClick={() => setMobileMenu(false)}/>}
     {navigationSearchOpen && <WorkspaceSearch projects={projectList} sessions={catalog.sessions} resources={catalog.resources} canCreate={!!sidebarProject && connected && !pendingOperation} onClose={() => setNavigationSearchOpen(false)} onNewSession={() => {if(sidebarProject)openSessionDialog(sidebarProject.id);}} onChoose={entry => {
@@ -1816,7 +1843,7 @@ function AppContent() {
         navigate({sessionId:context,resourceId:entry.id});
       }
     }}/>}
-    <aside className={`sidebar workspace-navigation ${mobileMenu ? "sidebar-open" : ""} ${bulkMode && !isWorkspacePage ? "is-bulk-selecting" : ""}`} aria-label="项目导航" inert={compactNavigation && !mobileMenu} aria-hidden={compactNavigation && !mobileMenu}>
+    <aside id="lake-project-navigation" className={`sidebar workspace-navigation ${mobileMenu ? "sidebar-open" : ""} ${bulkMode && !isWorkspacePage ? "is-bulk-selecting" : ""}`} aria-label="项目导航" inert={compactNavigation && !mobileMenu} aria-hidden={compactNavigation && !mobileMenu}>
       <div className="sidebar-brand-row">
         <span className="brand" aria-label="Lake"><strong>Lake</strong></span>
         <div className="sidebar-brand-actions">
@@ -1830,6 +1857,7 @@ function AppContent() {
        empty={<WelcomeSidebar disabled={!connected} onCreate={openProjectDialog}/>}
        selectionId={route.resourceId?`resource:${route.resourceId}`:`session:${route.sessionId??''}`} selectedPanel={route.resourceId?'resources':'specialists'}
        onSelectPanel={panel=>{
+        setSidebarCollapsed(false);
         if(!isWorkspacePage&&(panel==='resources'||!route.resourceId))return;
         const resourceId=panel==='resources'?route.resourceId:null;
         navigate({sessionId:sessionId??defaultWorkspaceSession(catalog.sessions,sidebarProject?.id??null)?.id??null,resourceId});
@@ -1914,7 +1942,7 @@ function AppContent() {
         onSelectProject={project => {
           if (project.id === sidebarProject?.id) return;
           setSidebarProjectId(project.id);
-          navigate({sessionId:defaultWorkspaceSession(catalog.sessions,project.id)?.id??null,resourceId:null,view:'workspace'});
+          navigate({sessionId:defaultWorkspaceSession(catalog.sessions,project.id)?.id??null,resourceId:null,view:'workspace'},project.id);
         }}
         onDeleteProject={project=>setNavigationDelete({kind:"project",id:project.id,projectId:project.id,name:project.name})}
         onToggleBulk={() => {setBulkMode(!bulkMode);setBulkSelected([]);}}
