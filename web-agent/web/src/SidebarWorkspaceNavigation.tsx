@@ -35,12 +35,12 @@ export function SidebarWorkspaceNavigation({projectId,specialists,children,resou
   <nav className="sidebar-navigation-rail" aria-label="侧栏视图">
    {projectId&&<><button type="button" className="sidebar-rail-button" aria-label="专员" aria-pressed={specialistsOpen}
     aria-controls={`${id}-specialists-panel`} title="专员"
-    onClick={()=>selectPanel('specialists')}><Glyph name="users" size={18}/></button>
+    onClick={()=>selectPanel('specialists')}><Glyph name="lakeSpecialists" size={20}/></button>
    <button type="button" className="sidebar-rail-button" aria-label="资源" aria-pressed={resourcesOpen}
-    aria-controls={`${id}-resources-panel`} title="资源" onClick={()=>selectPanel('resources')}><Glyph name="layers" size={18}/></button></>}
+    aria-controls={`${id}-resources-panel`} title="资源" onClick={()=>selectPanel('resources')}><Glyph name="lakeResources" size={20}/></button></>}
    {workspace&&<button type="button" className="sidebar-rail-button workspace-rail-button" aria-label={workspace.unreadUpdate?'工作区，有新版本':'工作区'}
     aria-pressed={workspace.active} aria-controls={workspace.active?'workspace-page':undefined} title="工作区" onClick={()=>{expand();workspace.onOpen();}}>
-    <Glyph name="workspace" size={18}/>{workspace.unreadUpdate&&<span className="workspace-update-dot" aria-hidden="true"/>}
+    <Glyph name="lakeWorkspace" size={20}/>{workspace.unreadUpdate&&<span className="workspace-update-dot" aria-hidden="true"/>}
    </button>}
   </nav>
   <div className="sidebar-navigation-viewport">

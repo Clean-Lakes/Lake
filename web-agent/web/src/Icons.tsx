@@ -3,6 +3,9 @@ import { ListChecks, LayoutGrid, LoaderCircle, Pause, Eye, EyeOff, ArrowUpRight,
 const icons = {listTasks:ListChecks,workspace:LayoutGrid,loader:LoaderCircle,pause:Pause,eye:Eye,eyeOff:EyeOff,pin:Pin,grip:GripVertical,more:Ellipsis,search:Search,layers:Layers,folder:Folder,shield:ShieldCheck,shieldOutline:Shield,plus:Plus,paperclip:Paperclip,chevron:ChevronDown,terminal:Terminal,chat:MessageCircle,chatAdd:MessageCirclePlus,server:Server,arrow:ArrowRight,outbound:ArrowUpRight,up:ArrowUp,down:ArrowDown,close:X,menu:Menu,refresh:RefreshCw,check:Check,alert:TriangleAlert,circleAlert:CircleAlert,spark:Sparkles,clock:Clock,lock:Lock,link:Link,send:Send,return:CornerDownLeft,stop:Square,copy:Copy,expand:Maximize2,settings:Settings,trash:Trash2,database:Database,docker:Container,local:Monitor,redis:Database,kubernetes:Layers,apisix:Network,prometheus:ChartNoAxesCombined,victoriametrics:Database,network:Network,code:Code,chart:ChartNoAxesCombined,bug:Bug,book:BookOpen,document:FileText,box:Box,filter:SlidersHorizontal,panel:PanelLeft,edit:Pencil,previous:ChevronLeft,next:ChevronRight,plug:Plug,image:Image,brain:Brain,users:UsersRound} satisfies Record<string,LucideIcon>;
 const lakeWaterline='M4 19c2-1.6 4 1.6 6 0s4 1.6 6 0 3 1 4 .3';
 const lakeIcons={
+ lakeSpecialists:'M13 8a3.5 3.5 0 1 1-7 0c0-1.6 1.8-3.7 3.5-5.5C11.2 4.3 13 6.4 13 8Z M3.5 16c.5-2.4 2.7-3.7 6-3.7s5.5 1.3 6 3.7 M15.5 4.5c1.6 1.4 2.6 2.8 2.6 4a3 3 0 0 1-2.4 3 M17 13c1.9.4 3.1 1.4 3.5 3 '+lakeWaterline,
+ lakeResources:'M3 7.5 12 3.5l9 4-9 4-9-4Z M3.5 12l8.5 4 8.5-4 '+lakeWaterline,
+ lakeWorkspace:'M3.5 15.5V6A2.5 2.5 0 0 1 6 3.5h12A2.5 2.5 0 0 1 20.5 6v9.5 M9 3.5v12 M9 9h11.5 '+lakeWaterline,
  lakePermission:'M12 3 6 5v5c0 3 2.4 5.3 6 7 3.6-1.7 6-4 6-7V5l-6-2Z '+lakeWaterline,
  lakePilot:'M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-4.6-3.4-2.2 4.6-4.6 2.2 2.2-4.6 4.6-2.2Z',
  lakeActivity:'M12 3v6M12 15v6M3 12h6M15 12h6M5.6 5.6l4.2 4.2M14.2 14.2l4.2 4.2M5.6 18.4l4.2-4.2M14.2 9.8l4.2-4.2',
