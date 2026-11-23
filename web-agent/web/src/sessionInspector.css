@@ -204,7 +204,8 @@ html.lake-windows-chrome .session-inspector { padding-top:52px; }
 .pilot-island[data-motion=paused] .pilot-ring-value { transition:none; }
 @media(prefers-reduced-motion:reduce) { .header-inspector-toggle > svg { transition:none; } }
 
-/* While AppKit changes the outer frame, the conversation keeps its pre-open width. */
+/* Reveal the card only once the native viewport and pane budget have settled. */
+.session-inspector.is-waiting { visibility:hidden; animation:none; }
 .workspace.inspector-window-sizing {
  --session-content-start:max(var(--session-gutter),calc((var(--inspector-main-width) - 960px)/2));
  --session-content-width:min(960px,calc(var(--inspector-main-width) - var(--session-gutter) - var(--session-gutter)));

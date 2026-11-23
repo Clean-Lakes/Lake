@@ -354,14 +354,12 @@ import LakeDesktopCore
             target = expansion.closing(current: current, minimumWidth: window.minSize.width)
             inspectorExpansion = nil
         }
-        let result: [String: Any] = ["addedWidth": Double(added)]
-        guard target != current else { reply(result, nil); return }
-        modelPanel?.close(notify: true)
-        NSAnimationContext.runAnimationGroup({ context in
-            context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.24
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            window.animator().setFrame(target, display: true)
-        }, completionHandler: { reply(result, nil) })
+        if target != current {
+            modelPanel?.close(notify: true)
+            window.setFrame(target, display: true)
+        }
+        reply(["addedWidth": Double(added),
+               "viewportWidth": Double(window.contentRect(forFrameRect: target).width)], nil)
     }
     func applicationWillTerminate(_ notification: Notification) {
         if let expansion = inspectorExpansion {

@@ -6,14 +6,15 @@ export type PilotProcessTarget={sessionId:string;turnId:string;canonicalGoalId?:
 export type ReplyProcessSources={pilot:PilotProcessTarget;specialist:SpecialistReplyAuthor};
 export type InspectSpecialist=(author:SpecialistReplyAuthor,pilot?:PilotProcessTarget)=>void;
 export type InspectorSelection={sessionId:string;canonicalGoalId?:string;taskId?:string;task?:SRETask;attemptId?:string;evidenceId?:string;turnId?:string;replySources?:ReplyProcessSources;followLatest?:boolean;view?:'pilot-activity';automatic?:boolean;tab:'plan'|'execution'};
-type InspectorState={selection:InspectorSelection|null;lastSelection:InspectorSelection|null;host:HTMLDivElement|null;open:(target:InspectorSelection)=>void;close:()=>void;reset:()=>void;setHost:(node:HTMLDivElement|null)=>void};
+type InspectorState={selection:InspectorSelection|null;lastSelection:InspectorSelection|null;host:HTMLDivElement|null;open:(target:InspectorSelection)=>void;close:()=>void;focusOpener:(ifLost?:boolean)=>void;reset:()=>void;setHost:(node:HTMLDivElement|null)=>void};
 const InspectorContext=createContext<InspectorState|null>(null);
 export const useSessionInspector=()=>useContext(InspectorContext);
 export const sessionInspectorId='session-task-inspector';
+export const inspectorExitMs=180;
 
 // Opening a side pane changes line wrapping. Keep the visible message anchored
 // rather than scrolling the conversation to the inspected plan or operation.
-function retainConversation(){
+export function retainConversation(){
  const box=document.querySelector<HTMLElement>('.conversation');
  if(!box)return()=>{};
  // A reader already at the latest reply keeps the tail through reflow. Only
@@ -36,17 +37,21 @@ export function SessionInspectorProvider({children}:{children:ReactNode}){
   if(frame.current)cancelAnimationFrame(frame.current);
   frame.current=requestAnimationFrame(restore);
  },[]);
+ const focusOpener=useCallback((ifLost=false)=>{
+  if(ifLost&&(!opener.current||document.activeElement!==document.body))return;
+  const usable=(node:HTMLElement|null):node is HTMLElement=>!!node&&node.isConnected&&node!==document.body&&!node.closest('[inert],[aria-hidden="true"]')&&node.getBoundingClientRect().width>0;
+  const target=usable(opener.current)?opener.current:[...document.querySelectorAll<HTMLElement>('.workspace-header .header-inspector-toggle,.workspace-header .pilot-island-trigger')].find(usable);
+  target?.focus({preventScroll:true});
+ },[]);
  const close=useCallback(()=>{
   const restore=retainConversation();setSelection(null);
   if(frame.current)cancelAnimationFrame(frame.current);
   frame.current=requestAnimationFrame(()=>{
    restore();
-   const usable=(node:HTMLElement|null):node is HTMLElement=>!!node&&node.isConnected&&node!==document.body&&!node.closest('[inert],[aria-hidden="true"]')&&node.getBoundingClientRect().width>0;
-   const target=usable(opener.current)?opener.current:[...document.querySelectorAll<HTMLElement>('.workspace-header .header-inspector-toggle,.workspace-header .pilot-island-trigger')].find(usable);
-   target?.focus({preventScroll:true});
+   focusOpener();
   });
- },[]);
+ },[focusOpener]);
  const reset=useCallback(()=>{if(frame.current)cancelAnimationFrame(frame.current);setSelection(null);setLastSelection(null);opener.current=null;},[]);
- const value=useMemo(()=>({selection,lastSelection,host,setHost,open,close,reset}),[selection,lastSelection,host,open,close,reset]);
+ const value=useMemo(()=>({selection,lastSelection,host,setHost,open,close,focusOpener,reset}),[selection,lastSelection,host,open,close,focusOpener,reset]);
  return <InspectorContext.Provider value={value}>{children}</InspectorContext.Provider>;
 }

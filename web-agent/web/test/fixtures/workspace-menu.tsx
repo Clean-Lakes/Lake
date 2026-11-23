@@ -26,10 +26,12 @@ function Preview(){
   <aside className="sidebar workspace-navigation sidebar-open" style={{position:'relative',width:'100%',minWidth:0}} aria-label="项目导航">
    <div className="sidebar-brand-row"><strong>Lake Dev</strong></div>
    <div className="sidebar-workspace-navigation"/>
-   <SidebarUtilities projects={projects} projectId={selected} bulkMode={bulk} onToggleBulk={()=>{setBulk(value=>!value);calls.push({operation:'bulk',value:selected})}} onSelectProject={id=>{setSelected(id);calls.push({operation:'select',value:id})}}
+   <nav className="sidebar-navigation-rail" aria-label="侧栏视图">
+    <SidebarUtilities projects={projects} projectId={selected} bulkMode={bulk} onToggleBulk={()=>{setBulk(value=>!value);calls.push({operation:'bulk',value:selected})}} onSelectProject={id=>{setSelected(id);calls.push({operation:'select',value:id})}}
     onCreateProject={async name=>{await mutation('create',name);const project={id:`created-${calls.length}`,name,createdAt:'2026-10-28T00:00:00Z'};setProjects(items=>[...items,project]);setSelected(project.id)}}
     onDeleteProject={async project=>{await mutation('delete',project.id);setProjects(items=>items.filter(item=>item.id!==project.id));setSelected(projects.find(item=>item.id!==project.id)?.id??'')}}
     onSettings={()=>calls.push({operation:'settings',value:''})} onTrash={()=>calls.push({operation:'trash',value:''})} booting={false} connected modelConfigured/>
+   </nav>
   </aside>
   <main style={{padding:24,minWidth:0}}><button type="button" className="button secondary" id="outside-target">内容区</button></main>
  </div>;

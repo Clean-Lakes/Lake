@@ -10,7 +10,6 @@
  .sidebar.workspace-navigation .resource-folder-row,
  .sidebar.workspace-navigation .resource-nav-row,
  .sidebar.workspace-navigation .sidebar-settings,
- .workspace-utilities-trigger,
  .workspace.has-floating-header > .workspace-header,
  .lake-workbench-island,
  .island-module-glass,
@@ -73,7 +72,6 @@
  .sidebar.workspace-navigation .resource-folder-row,
  .sidebar.workspace-navigation .resource-nav-row,
  .sidebar.workspace-navigation .sidebar-settings,
- .workspace-utilities-trigger,
  .workspace.has-floating-header > .workspace-header,
  .lake-workbench-island,
  .island-module-glass,
@@ -120,7 +118,6 @@
 }
 :root.lake-corner-fallback :is(
  .sidebar.workspace-navigation .navigation-search,
- .workspace-utilities-trigger,
  .workspace.has-floating-header > .workspace-header,
  .lake-workbench-island,
  .island-module-glass,
@@ -139,7 +136,6 @@
  .sidebar.workspace-navigation .resource-folder-row,
  .sidebar.workspace-navigation .resource-nav-row,
  .sidebar.workspace-navigation .sidebar-settings,
- .workspace-utilities-trigger,
  .composer-input,
  .ai-role-user:not(.has-message-images),
  .ai-role-user.has-message-images > .user-message-text,

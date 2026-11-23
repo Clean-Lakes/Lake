@@ -4,10 +4,11 @@ export function workspaceMenuParent(view:WorkspaceMenuView):WorkspaceMenuView{
  return view==='delete'?'manage':view==='create'||view==='manage'?'projects':'home';
 }
 
-/** The footer is the only anchor, including while pages and sidebar width change. */
-export function workspaceMenuPosition(anchor:{left:number;top:number;width:number},viewport:{width:number;height:number}){
- const width=Math.max(1,Math.min(anchor.width,viewport.width-16));
- const left=Math.max(8,Math.min(anchor.left,viewport.width-width-8));
- const bottom=Math.max(8,Math.min(viewport.height-8,viewport.height-anchor.top+8));
- return {left,bottom,width,maxHeight:Math.max(1,Math.min(432,viewport.height-bottom-8))};
+/** Use the same rail anchor for every menu page. Keep space for content in short windows. */
+export function workspaceMenuPosition(anchor:{top:number;railRight:number;sidebarRight:number},viewport:{width:number;height:number}){
+ const left=Math.max(8,Math.min(anchor.railRight+8,viewport.width-9));
+ const width=Math.max(1,Math.min(Math.max(220,anchor.sidebarRight-left-8),viewport.width-left-8));
+ const minimumHeight=Math.min(220,viewport.height-16);
+ const top=Math.max(8,Math.min(anchor.top,viewport.height-minimumHeight-8));
+ return {left,top,width,maxHeight:Math.max(1,Math.min(432,viewport.height-top-8))};
 }

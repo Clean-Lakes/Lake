@@ -61,7 +61,7 @@
  color:var(--text-secondary); background:transparent;
 }
 .sidebar-rail-button:hover { background:var(--surface-hover); }
-.sidebar-rail-button[aria-pressed="true"] { color:var(--info); background:var(--surface-selected); }
+.sidebar-rail-button:is([aria-pressed="true"],[aria-expanded="true"]) { color:var(--info); background:var(--surface-selected); }
 .sidebar-rail-button:focus-visible { outline-offset:-2px; }
 .sidebar-pinned-pilot { flex:none; margin:4px var(--sidebar-edge-inset) 8px; }
 .sidebar.workspace-navigation .sidebar-pinned-pilot .sidebar-pilot-entry { width:100%; min-height:48px; padding:4px var(--sidebar-row-inset); gap:var(--sidebar-icon-gap); border-radius:var(--radius-sidebar-pilot); corner-shape:var(--corner-window); }
@@ -203,9 +203,6 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar.workspace-navigation .project-contents:has(> [id^="project-sessions-"][hidden]) .resources-heading { margin-top:8px; padding-top:0; }
 
 /* A quiet footer keeps its own space below the scrollable resource list. */
-.sidebar.workspace-navigation .sidebar-utilities { margin-inline:var(--sidebar-edge-inset); }
-.sidebar.workspace-navigation .workspace-utilities-trigger { padding-inline:9px; padding-left:calc(var(--sidebar-content-inset) - var(--sidebar-edge-inset) - 1px); }
-.sidebar.workspace-navigation .workspace-utilities-icon { flex:0 0 var(--sidebar-icon-column); width:var(--sidebar-icon-column); }
 
 /* Edge controls keep a complete focus outline inside the clipped sidebar. */
 .sidebar.workspace-navigation :is(.session-drag-handle,.resource-drag-handle):focus-visible { outline-offset:-2px; }

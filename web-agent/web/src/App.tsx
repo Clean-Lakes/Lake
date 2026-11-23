@@ -35,7 +35,6 @@ import {WelcomePage,WelcomeSidebar} from "./WelcomePage";
 import {useSessionComposerDraft} from "./sessionComposerDrafts";
 import {PilotTaskReferenceChip,pilotTaskParticipants} from './PilotTaskDirectory';
 import {MessageText} from './MessageText';
-import {SidebarScrollArea} from './SidebarScrollArea';
 import {SidebarWorkspaceNavigation} from './SidebarWorkspaceNavigation';
 import {SidebarPilotEntry} from './SidebarPilotEntry';
 import {ConversationLatest} from './ConversationLatest';
@@ -864,7 +863,7 @@ function AppContent() {
     return()=>{controller.abort();window.clearInterval(timer);};
   },[sessionId,roleInspection?.session.id,roleInspection?.superagent?.task.taskId,inspector.selection?.sessionId]);
   const inspectorOpen=!!inspectedSnapshot&&inspector.selection?.sessionId===inspectedSnapshot.session.id&&!selectedResource&&!isPlansPage;
-  const attachInspectorView = useInspectorWindow(inspectorOpen);
+  const {attachView:attachInspectorView,waitingForWindow:inspectorWaitingForWindow} = useInspectorWindow(inspectorOpen);
   // The DOM now has its final pane classes. Apply the shared width budget
   // before paint, rather than flashing one frame with the previous budget.
   useLayoutEffect(()=>{window.dispatchEvent(new Event('lake-workbench-layout'));},[terminalOpen,inspectorOpen]);
@@ -1780,6 +1779,16 @@ function AppContent() {
     </div>
   </section>;
 
+  const workspaceUtilities=<SidebarUtilities projects={projectList} projectId={sidebarProject?.id}
+    projectSelection={sidebarProject&&<BulkCheckbox target={{kind:"project",id:sidebarProject.id,projectId:sidebarProject.id,name:sidebarProject.name}} selection={bulkSelection}/>}
+    onSelectProject={id=>{
+      setSidebarProjectId(id);setNavigationSearchOpen(false);setBulkMode(false);setBulkSelected([]);
+      const session=catalog.sessions.filter(item=>item.projectId===id).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];
+      navigate({sessionId:session?.id??null,resourceId:null});
+    }} onCreateProject={createWorkspaceProject} onDeleteProject={deleteWorkspaceProject} bulkMode={bulkMode}
+    onToggleBulk={()=>{setBulkMode(value=>!value);setBulkSelected([]);}}
+    onSettings={()=>void openSettings()} onTrash={()=>setTrashOpen(true)} booting={booting} connected={connected} modelConfigured={modelConfigured}/>;
+
   return <SpecialistAvatarProvider channels={pilotWorkspace.workspace?.channels}><div className={`app-shell ${terminalOpen ? "terminal-is-open" : ""}${sharedIsland?" has-workbench-island":""}`}>
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
     {mobileMenu && <button className="mobile-scrim" aria-label="关闭项目导航" onClick={() => setMobileMenu(false)}/>}
@@ -1801,12 +1810,13 @@ function AppContent() {
         </div>
       </div>
       {bulkMode && <div className="bulk-navigation-toolbar"><button type="button" onClick={()=>{setBulkMode(false);setBulkSelected([]);}}>完成</button><span>已选 {bulkSelected.length} 项</span><button type="button" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkSelected([])}>清空</button><button type="button" className="danger-text" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}>删除所选</button></div>}
-      {sidebarProject?<SidebarWorkspaceNavigation key={sidebarProject.id} projectId={sidebarProject.id}
+      <SidebarWorkspaceNavigation projectId={sidebarProject?.id} utilities={workspaceUtilities}
+       empty={<WelcomeSidebar disabled={!connected} onCreate={openProjectDialog}/>}
        selectionId={route.resourceId?`resource:${route.resourceId}`:`session:${route.sessionId??''}`} selectedPanel={route.resourceId?'resources':'specialists'}
        onLeaveResources={route.resourceId?()=>navigate({sessionId:route.sessionId,resourceId:null}):undefined}
-       resourceCount={catalog.resources.filter(resource=>resource.projectId===sidebarProject.id).length}
+       resourceCount={catalog.resources.filter(resource=>resource.projectId===sidebarProject?.id).length}
        attention={pilotWorkspace.workspace?.channels?.some(channel=>channel.needsConfirmation===true||hasUnreadMessages(channel.messageRead))}
-       pilot={<SidebarPilotEntry buttonRef={sidebarPilotButton} selected={sessionSelected&&route.sessionId===pilotWorkspace.workspace?.project.routerSessionId}
+       pilot={sidebarProject&&<SidebarPilotEntry buttonRef={sidebarPilotButton} selected={sessionSelected&&route.sessionId===pilotWorkspace.workspace?.project.routerSessionId}
         activity={avatarActivity&&avatarActivity.sessionId===pilotWorkspace.workspace?.project.routerSessionId?avatarActivity.state:conversationActivity(undefined,catalog.sessions.find(row=>row.id===pilotWorkspace.workspace?.project.routerSessionId)?.status)}
         messageRead={pilotWorkspace.workspace?.active?pilotWorkspace.workspace.pilotMessageRead:undefined} disabled={!bootstrap?.authenticated}
         onPilot={()=>{const domain=pilotWorkspace.workspace;if(domain?.active)navigate({sessionId:domain.project.routerSessionId,resourceId:null});else void openProjectPilot(sidebarProject.id);}}/>}
@@ -1874,16 +1884,7 @@ function AppContent() {
             </div>
           </div>;
         }) : <WelcomeSidebar disabled={!connected} onCreate={openProjectDialog}/>}
-      </SidebarWorkspaceNavigation>:<SidebarScrollArea><WelcomeSidebar disabled={!connected} onCreate={openProjectDialog}/></SidebarScrollArea>}
-      <SidebarUtilities projects={projectList} projectId={sidebarProject?.id}
-        projectSelection={sidebarProject&&<BulkCheckbox target={{kind:"project",id:sidebarProject.id,projectId:sidebarProject.id,name:sidebarProject.name}} selection={bulkSelection}/>}
-        onSelectProject={id=>{
-          setSidebarProjectId(id);setNavigationSearchOpen(false);setBulkMode(false);setBulkSelected([]);
-          const session=catalog.sessions.filter(item=>item.projectId===id).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];
-          navigate({sessionId:session?.id??null,resourceId:null});
-        }} onCreateProject={createWorkspaceProject} onDeleteProject={deleteWorkspaceProject} bulkMode={bulkMode}
-        onToggleBulk={()=>{setBulkMode(value=>!value);setBulkSelected([]);}}
-        onSettings={()=>void openSettings()} onTrash={()=>setTrashOpen(true)} booting={booting} connected={connected} modelConfigured={modelConfigured}/>
+      </SidebarWorkspaceNavigation>
 
     </aside>
 
@@ -1979,7 +1980,7 @@ function AppContent() {
             disabled={!!sendFeedback || !sessionConnected || !!pendingOperation || reasoningSaving.has(sessionId) || modeSaving.has(sessionId) || stoppingTurn || currentAssignment?.checking || ((modelConfigured || !!currentAssignment) && (!hasMessageDraft || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)))}
           ><Glyph name={composerSendGlyph} size={composerSendGlyph==="up"?17:16}/></button>}
         </div></div></div></div></form></div>}
-      </div>{activeSnapshot&&<SessionInspector key={inspectedSnapshot!.session.id} snapshot={inspectedSnapshot!} taskPage={isSpecialistTasks||isSpecialistExecution} worker={inspectedWorker} taskMetadata={isSpecialistTasks||isSpecialistExecution?<SpecialistTaskMetadata snapshot={inspectedSnapshot!} worker={inspectedWorker}/>:undefined} taskControls={isSpecialistTasks?<SpecialistTaskControls snapshot={inspectedSnapshot!} connected={sessionConnected}/>:undefined} resultsFooter={isSpecialistTasks&&roleResultRead?<ConversationReadMarker session={sessionId} state={roleTasks?.page.channel.messageRead} enabled={sessionConnected}/>:undefined} taskNavigation={activeSnapshot.session.workspaceRole==='role'&&roleWorkers.length>0?<SpecialistTaskSelect workers={roleWorkers} sessionId={inspectedSnapshot!.session.id} onTask={id=>void inspectRoleTask(id)}/>:processNavigation} readOnly={isLegacyHistory} connected={sessionConnected&&!modeSaving.has(inspectedSnapshot!.session.id)} onUpdated={()=>{if(roleInspection)void refreshRoleInspection();else void refreshCurrent();}}/>}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
+      </div>{activeSnapshot&&<SessionInspector key={inspectedSnapshot!.session.id} snapshot={inspectedSnapshot!} waitingForWindow={inspectorWaitingForWindow} taskPage={isSpecialistTasks||isSpecialistExecution} worker={inspectedWorker} taskMetadata={isSpecialistTasks||isSpecialistExecution?<SpecialistTaskMetadata snapshot={inspectedSnapshot!} worker={inspectedWorker}/>:undefined} taskControls={isSpecialistTasks?<SpecialistTaskControls snapshot={inspectedSnapshot!} connected={sessionConnected}/>:undefined} resultsFooter={isSpecialistTasks&&roleResultRead?<ConversationReadMarker session={sessionId} state={roleTasks?.page.channel.messageRead} enabled={sessionConnected}/>:undefined} taskNavigation={activeSnapshot.session.workspaceRole==='role'&&roleWorkers.length>0?<SpecialistTaskSelect workers={roleWorkers} sessionId={inspectedSnapshot!.session.id} onTask={id=>void inspectRoleTask(id)}/>:processNavigation} readOnly={isLegacyHistory} connected={sessionConnected&&!modeSaving.has(inspectedSnapshot!.session.id)} onUpdated={()=>{if(roleInspection)void refreshRoleInspection();else void refreshCurrent();}}/>}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
     </main>
     {terminalTabContext && <NavigationMenu title="终端" x={terminalTabContext.x} y={terminalTabContext.y} onClose={() => setTerminalTabContext(null)} actions={[
       {label: "打开终端", run: () => selectTerminalTab(terminalTabContext.terminal)},
