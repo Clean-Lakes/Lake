@@ -33,9 +33,11 @@ export function SidebarWorkspaceNavigation({projectId,specialists,children,resou
  const resourcesOpen=!workspace?.active&&panel==='resources';
  return <div className="sidebar-workspace-navigation">
   <nav className="sidebar-navigation-rail" aria-label="侧栏视图">
-   {projectId&&<><button type="button" className="sidebar-rail-button" aria-label="专员" aria-pressed={specialistsOpen}
+   {projectId&&<><button type="button" className="sidebar-rail-button" aria-label={attention?'专员，有待确认事项或未读消息':'专员'} aria-pressed={specialistsOpen}
     aria-controls={`${id}-specialists-panel`} title="专员"
-    onClick={()=>selectPanel('specialists')}><Glyph name="lakeSpecialists" size={22} filled={specialistsOpen}/></button>
+    onClick={()=>selectPanel('specialists')}>
+    <Glyph name="lakeSpecialists" size={22} filled={specialistsOpen}/>{attention&&<span className="sidebar-specialist-attention" aria-hidden="true"/>}
+   </button>
    <button type="button" className="sidebar-rail-button" aria-label="资源" aria-pressed={resourcesOpen}
     aria-controls={`${id}-resources-panel`} title="资源" onClick={()=>selectPanel('resources')}><Glyph name="lakeResources" size={22} filled={resourcesOpen}/></button></>}
    {workspace&&<button type="button" className="sidebar-rail-button workspace-rail-button" aria-label={workspace.unreadUpdate?'工作区，有新版本':'工作区'}
@@ -46,13 +48,7 @@ export function SidebarWorkspaceNavigation({projectId,specialists,children,resou
   <div className="sidebar-navigation-viewport">
    <div id={contentId} className="sidebar-navigation-content" inert={collapsed} aria-hidden={collapsed||undefined}>
     {header}
-    {projectId?<><section key={`specialists:${projectId}`} className="sidebar-navigation-panel sidebar-specialists-panel" id={`${id}-specialists-panel`} aria-labelledby={`${id}-specialists-title`} hidden={!specialistsOpen}>
-     <div className="sidebar-content-header">
-      <div className="sidebar-content-title">
-       <h2 id={`${id}-specialists-title`}>专员</h2>
-       {attention&&<span className="sidebar-specialist-attention" role="img" aria-label="专员有待确认事项或未读消息"/>}
-      </div>
-     </div>
+    {projectId?<><section key={`specialists:${projectId}`} className="sidebar-navigation-panel" id={`${id}-specialists-panel`} aria-label="专员" hidden={!specialistsOpen}>
      <SidebarScrollArea>{specialists}</SidebarScrollArea>
     </section>
     <section key={`resources:${projectId}`} className="sidebar-navigation-panel sidebar-resources-panel" id={`${id}-resources-panel`} aria-labelledby={`${id}-resources-title`} hidden={!resourcesOpen}>
