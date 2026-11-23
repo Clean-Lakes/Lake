@@ -13,9 +13,10 @@ function initialPanel(projectId:string|undefined,selected:NavigationPanel):Navig
 }
 
 /** Both lists stay mounted so switching preserves their scroll and folder state. */
-export function SidebarWorkspaceNavigation({projectId,specialists,children,resourceCount,selectionId,selectedPanel,attention=false,onSelectPanel,workspace,empty}:{
+export function SidebarWorkspaceNavigation({projectId,specialists,children,resourceCount,selectionId,selectedPanel,attention=false,onSelectPanel,workspace,empty,header,contentId,collapsed=false}:{
  projectId?:string;specialists:ReactNode;children:ReactNode;resourceCount:number;
  selectionId:string;selectedPanel:NavigationPanel;attention?:boolean;onSelectPanel?:(panel:NavigationPanel)=>void;workspace?:WorkspaceNavigation;empty?:ReactNode;
+ header?:ReactNode;contentId?:string;collapsed?:boolean;
 }) {
  const id=useId();
  const [resourceActions,setResourceActions]=useState<HTMLElement|null>(null);
@@ -40,24 +41,27 @@ export function SidebarWorkspaceNavigation({projectId,specialists,children,resou
     <Glyph name="workspace" size={18}/>{workspace.unreadUpdate&&<span className="workspace-update-dot" aria-hidden="true"/>}
    </button>}
   </nav>
-  {projectId?<><section key={`specialists:${projectId}`} className="sidebar-navigation-panel" id={`${id}-specialists-panel`} aria-labelledby={`${id}-specialists-title`} hidden={!specialistsOpen}>
-   <div className="sidebar-content-header">
-    <div className="sidebar-content-title">
-     <h2 id={`${id}-specialists-title`}>专员</h2>
-     {attention&&<span className="sidebar-specialist-attention" role="img" aria-label="专员有待确认事项或未读消息"/>}
+  <div id={contentId} className="sidebar-navigation-content" inert={collapsed} aria-hidden={collapsed||undefined}>
+   {header}
+   {projectId?<><section key={`specialists:${projectId}`} className="sidebar-navigation-panel" id={`${id}-specialists-panel`} aria-labelledby={`${id}-specialists-title`} hidden={!specialistsOpen}>
+    <div className="sidebar-content-header">
+     <div className="sidebar-content-title">
+      <h2 id={`${id}-specialists-title`}>专员</h2>
+      {attention&&<span className="sidebar-specialist-attention" role="img" aria-label="专员有待确认事项或未读消息"/>}
+     </div>
     </div>
-   </div>
-   <SidebarScrollArea>{specialists}</SidebarScrollArea>
-  </section>
-  <section key={`resources:${projectId}`} className="sidebar-navigation-panel sidebar-resources-panel" id={`${id}-resources-panel`} aria-labelledby={`${id}-resources-title`} hidden={!resourcesOpen}>
-   <div className="sidebar-content-header">
-    <div className="sidebar-content-title"><h2 id={`${id}-resources-title`}>资源</h2><small>{resourceCount}</small></div>
-    <div ref={setResourceActions} className="sidebar-resource-actions"/>
-   </div>
-   <SidebarResourceActions.Provider value={resourceActions}>
-    <SidebarScrollArea>{children}</SidebarScrollArea>
-   </SidebarResourceActions.Provider>
-  </section></>:!workspace?.active&&<SidebarScrollArea>{empty}</SidebarScrollArea>}
-  {workspace?.active&&workspace.navigation}
+    <SidebarScrollArea>{specialists}</SidebarScrollArea>
+   </section>
+   <section key={`resources:${projectId}`} className="sidebar-navigation-panel sidebar-resources-panel" id={`${id}-resources-panel`} aria-labelledby={`${id}-resources-title`} hidden={!resourcesOpen}>
+    <div className="sidebar-content-header">
+     <div className="sidebar-content-title"><h2 id={`${id}-resources-title`}>资源</h2><small>{resourceCount}</small></div>
+     <div ref={setResourceActions} className="sidebar-resource-actions"/>
+    </div>
+    <SidebarResourceActions.Provider value={resourceActions}>
+     <SidebarScrollArea>{children}</SidebarScrollArea>
+    </SidebarResourceActions.Provider>
+   </section></>:!workspace?.active&&<SidebarScrollArea>{empty}</SidebarScrollArea>}
+   {workspace?.active&&workspace.navigation}
+  </div>
  </div>;
 }

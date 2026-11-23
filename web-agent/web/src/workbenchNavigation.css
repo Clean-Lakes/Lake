@@ -1,16 +1,41 @@
 .workbench-navigation { display:none; }
 
+@property --workbench-sidebar-expansion {
+  syntax:"<number>";
+  inherits:true;
+  initial-value:1;
+}
+
 @media (min-width:701px) {
-  .app-shell.has-workbench-navigation { --workbench-navigation-height:36px; --workbench-navigation-start:8px; }
+  :root .app-shell.has-workbench-navigation {
+    --workbench-navigation-height:36px;
+    --workbench-navigation-start:8px;
+    --workbench-sidebar-expansion:1;
+    --sidebar-contraction:calc(1 - var(--workbench-sidebar-expansion));
+    --sidebar-layout-width:calc(var(--sidebar-expanded-width,280px) * var(--workbench-sidebar-expansion) + var(--sidebar-collapsed-width,var(--sidebar-rail-width)) * var(--sidebar-contraction));
+    --sidebar-content-top:calc(var(--workbench-navigation-height) * var(--workbench-sidebar-expansion));
+    --workbench-chrome-background:color-mix(in srgb,var(--workbench-sidebar-background,var(--sidebar)) calc(var(--workbench-sidebar-expansion) * 100%),var(--workbench-content-background,var(--paper)));
+    padding-block-start:calc(var(--workbench-navigation-height) * var(--sidebar-contraction));
+    background:var(--workbench-chrome-background);
+    transition:--workbench-sidebar-expansion 280ms cubic-bezier(.22,1,.36,1);
+  }
+  :root .app-shell.has-workbench-navigation.has-collapsed-sidebar { --workbench-sidebar-expansion:0; }
   :root.lake-native .app-shell.has-workbench-navigation {
     --workbench-navigation-height:var(--lake-titlebar-height, 52px);
     --workbench-navigation-start:86px;
   }
   :root.lake-windows-chrome .app-shell.has-workbench-navigation { --workbench-navigation-height:48px; }
   .app-shell.has-workbench-navigation > .sidebar.workspace-navigation {
-    --sidebar-chrome-inset:var(--workbench-navigation-height);
-    padding-block-start:var(--workbench-navigation-height);
+    --sidebar-chrome-inset:var(--sidebar-content-top);
+    padding-block-start:var(--sidebar-content-top);
+    background:transparent;
+    overflow:clip;
   }
+  .app-shell.has-workbench-navigation .sidebar-navigation-content {
+    inline-size:calc(var(--sidebar-expanded-width,280px) - var(--sidebar-rail-width));
+    opacity:var(--workbench-sidebar-expansion);
+  }
+  .app-shell.has-workbench-navigation .sidebar-navigation-rail::after { opacity:var(--workbench-sidebar-expansion); }
   .workbench-navigation {
     position:absolute;
     z-index:24;
@@ -37,23 +62,25 @@
   .workbench-navigation button:hover:not(:disabled) { color:var(--foreground); background:var(--surface-hover); }
   .workbench-navigation button:disabled { opacity:.42; }
   .workbench-navigation button:focus-visible { outline-offset:-2px; }
-  .app-shell.has-collapsed-sidebar {
-    padding-block-start:var(--workbench-navigation-height);
-    transition:none;
-  }
-  .app-shell.has-collapsed-sidebar > .sidebar.workspace-navigation {
-    --sidebar-chrome-inset:0px;
-    padding-block-start:0;
-  }
-  .app-shell.has-collapsed-sidebar > .sidebar > :not(.sidebar-workspace-navigation),
-  .app-shell.has-collapsed-sidebar .sidebar-workspace-navigation > :not(.sidebar-navigation-rail),
   .app-shell.has-collapsed-sidebar > .workbench-splitter-sidebar { display:none; }
-  :root.lake-windows-chrome .app-shell.has-collapsed-sidebar .workspace.is-workspace-page .workspace-page-header { padding-block-start:0; }
+  :root.lake-windows-chrome .app-shell.has-workbench-navigation .workspace.is-workspace-page .workspace-header.workspace-page-header { padding-block-start:var(--sidebar-content-top); }
+}
+@media (min-width:1101px) {
+  .app-shell.has-workbench-navigation {
+    --terminal-layout-width:calc(var(--terminal-expanded-width,400px) * var(--workbench-sidebar-expansion) + var(--terminal-collapsed-width,400px) * var(--sidebar-contraction));
+  }
+  .app-shell.has-workbench-navigation > .workspace {
+    --inspector-preferred-width:calc(var(--inspector-expanded-width,382px) * var(--workbench-sidebar-expansion) + var(--inspector-collapsed-width,382px) * var(--sidebar-contraction));
+  }
+  .app-shell.has-workbench-navigation > .terminal-side-slot { --terminal-panel-width:var(--terminal-layout-width); }
 }
 @media (min-width:701px) and (pointer:coarse) {
-  .app-shell.has-workbench-navigation { --workbench-navigation-height:48px; }
+  :root .app-shell.has-workbench-navigation { --workbench-navigation-height:48px; }
   .workbench-navigation button { width:44px; height:44px; }
 }
-@media (prefers-reduced-motion:reduce) {
-  .app-shell.has-workbench-navigation { transition:none; }
+@media (min-width:701px) and (prefers-reduced-motion:reduce) {
+  /* Cancel the global short transitions too, so the rail and grid snap on the same frame. */
+  :root .app-shell.has-workbench-navigation,
+  .app-shell.has-workbench-navigation :is(.sidebar.workspace-navigation,.sidebar-navigation-content,.sidebar-navigation-rail),
+  .app-shell.has-workbench-navigation .sidebar-navigation-rail::after { transition-property:none; }
 }

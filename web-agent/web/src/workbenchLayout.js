@@ -16,7 +16,7 @@
   style.textContent = `
     .workbench-splitter { position:absolute; top:0; bottom:0; width:8px; z-index:35; cursor:col-resize; touch-action:none; outline:none; }
     .workbench-splitter:hover::after, .workbench-splitter:focus-visible::after { content:''; position:absolute; top:0; bottom:0; left:3px; width:2px; background:var(--focus); }
-    .workbench-splitter-sidebar { left:calc(var(--sidebar-width) - 4px); }
+    .workbench-splitter-sidebar { left:calc(var(--sidebar-layout-width,var(--sidebar-width)) - 4px); }
     .workbench-splitter-sidebar:hover:not(:focus-visible)::after { width:1px; background:var(--border-strong); }
     .workbench-splitter-terminal, .workbench-splitter-inspector { left:0; }
     .workbench-splitter-terminal::after, .workbench-splitter-inspector::after { left:0; }
@@ -25,12 +25,12 @@
     .workbench-resizing .app-shell, .workbench-resizing .terminal-side-panel { transition:none !important; }
     .ai-context-panel { position:fixed; z-index:60; bottom:auto; right:auto; overflow-y:auto; }
     @media(min-width:701px) {
-      .app-shell { position:relative; grid-template-columns:var(--sidebar-width, 280px) minmax(0,1fr) 0px; }
-      .app-shell.terminal-is-open { grid-template-columns:var(--sidebar-width, 280px) minmax(0,1fr) var(--terminal-panel-width); }
+      .app-shell { position:relative; grid-template-columns:var(--sidebar-layout-width,var(--sidebar-width,280px)) minmax(0,1fr) 0px; }
+      .app-shell.terminal-is-open { grid-template-columns:var(--sidebar-layout-width,var(--sidebar-width,280px)) minmax(0,1fr) var(--terminal-layout-width,var(--terminal-panel-width)); }
       .terminal-side-panel { position:relative; }
     }
     @media(min-width:701px) and (max-width:1100px) {
-      .app-shell, .app-shell.terminal-is-open { grid-template-columns:var(--sidebar-width, 280px) minmax(0,1fr) 0px; }
+      .app-shell, .app-shell.terminal-is-open { grid-template-columns:var(--sidebar-layout-width,var(--sidebar-width,280px)) minmax(0,1fr) 0px; }
     }
     @media(max-width:700px) { .workbench-splitter { display:none; } }
   `;
@@ -39,12 +39,11 @@
   let observedContextPanel;
   const contextResize = new ResizeObserver(() => schedule());
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
-  function limits(pane) {
+  function paneLimits(sidebarCollapsed) {
     const width = shell?.clientWidth || innerWidth;
     const desktop = innerWidth > 1100;
     const inspectorOpen = desktop && !!shell.querySelector('.session-inspector.is-open');
     const terminalOpen = desktop && shell.classList.contains('terminal-is-open');
-    const sidebarCollapsed = shell.classList.contains('has-collapsed-sidebar');
     // All open panes share one budget. Reserving the conversation independently
     // for each side pane can otherwise spend that same space twice after zooming.
     const conversationMin = desktop ? 416 : 320;
@@ -55,12 +54,16 @@
       : clamp(preferred.sidebar, 200, sidebarMax);
     const terminalMax = Math.max(auxiliaryMin, Math.min(900, width - sidebar - conversationMin - (inspectorOpen ? auxiliaryMin : 0)));
     const terminal = terminalOpen ? clamp(preferred.terminal, auxiliaryMin, terminalMax) : 0;
-    if (pane === 'sidebar') return sidebarCollapsed ? [sidebar, sidebar] : [200, sidebarMax];
-    if (pane === 'terminal') return desktop ? [auxiliaryMin, terminalMax] : [280, Math.max(280, Math.min(900, width - 40))];
-    if (desktop) return [auxiliaryMin, Math.max(auxiliaryMin, Math.min(900, width - sidebar - terminal - conversationMin))];
-    const workspace = shell.querySelector('.workspace');
-    return [280, Math.max(280, Math.min(900, (workspace?.clientWidth || 0) - (innerWidth <= 700 ? 0 : 320)))];
+    const workspaceWidth = desktop ? 0 : shell.querySelector('.workspace')?.clientWidth || 0;
+    return {
+      sidebar: sidebarCollapsed ? [sidebar, sidebar] : [200, sidebarMax],
+      terminal: desktop ? [auxiliaryMin, terminalMax] : [280, Math.max(280, Math.min(900, width - 40))],
+      inspector: desktop
+        ? [auxiliaryMin, Math.max(auxiliaryMin, Math.min(900, width - sidebar - terminal - conversationMin))]
+        : [280, Math.max(280, Math.min(900, workspaceWidth - (innerWidth <= 700 ? 0 : 320)))],
+    };
   }
+  function limits(pane) { return paneLimits(shell.classList.contains('has-collapsed-sidebar'))[pane]; }
   function save() {
     try { localStorage.setItem(key, JSON.stringify(preferred)); } catch {}
     // The native backend can use a different loopback port next launch, so persist outside its origin too.
@@ -68,10 +71,17 @@
   }
   function apply() {
     if (!shell) return;
+    // Both endpoints share the same conversation budget. Interpolating them
+    // together keeps the other panes from taking space before the sidebar moves.
+    const expanded = paneLimits(false);
+    const collapsed = paneLimits(true);
+    const target = shell.classList.contains('has-collapsed-sidebar') ? collapsed : expanded;
     for (const pane of ['sidebar', 'terminal', 'inspector']) {
-      const [min, max] = limits(pane);
+      const [min, max] = target[pane];
       const width = clamp(preferred[pane], min, max);
       shell.style.setProperty(pane === 'sidebar' ? '--sidebar-width' : pane === 'terminal' ? '--terminal-panel-width' : '--inspector-preferred-width', `${width}px`);
+      shell.style.setProperty(`--${pane}-expanded-width`, `${clamp(preferred[pane], ...expanded[pane])}px`);
+      shell.style.setProperty(`--${pane}-collapsed-width`, `${clamp(preferred[pane], ...collapsed[pane])}px`);
       const handle = shell.querySelector(`.workbench-splitter-${pane}`);
       if (handle) for (const [name, value] of [['valuemin', min], ['valuemax', max], ['valuenow', width]]) handle.setAttribute(`aria-${name}`, String(value));
     }
