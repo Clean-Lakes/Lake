@@ -194,7 +194,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    identity.dataset.ready='true';identity.dataset.present='true';identity.title=title?.textContent??'';
    if(slide&&Math.abs(fromLeft-source.left)>.5){
     const now=performance.now();
-    if(toggled)sidebarDeadline=now+parseFloat(islandStyle.getPropertyValue('--workbench-sidebar-duration'));
+    if(toggled)sidebarDeadline=now+parseFloat(islandStyle.transitionDuration)*1000;
     // Retarget from the painted position when the user reverses mid-flight.
     const animation=identity.animate([
      {transform:`translate3d(${fromLeft-source.left}px,0,0)`},{transform:'translate3d(0,0,0)'},
@@ -204,7 +204,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    }
    if(resizeRoster&&Math.abs(identityWidth-fromWidth)>.5)rosterAnimation=identity.animate([
     {width:`${fromWidth}px`},{width:`${identityWidth}px`},
-   ],{duration:parseFloat(islandStyle.getPropertyValue('--pilot-roster-duration')),easing:islandStyle.getPropertyValue('--pilot-roster-ease').trim()});
+   ],{duration:parseFloat(getComputedStyle(roster).transitionDuration)*1000,easing:islandStyle.getPropertyValue('--pilot-roster-ease').trim()});
    previousRoster=roster;previousRosterWidth=rosterWidth;previousIslandWidth=identityWidth;
    if(terminalIsland.current)move('terminal',terminalIsland.current,layout.terminal?{...layout.terminal,top}:undefined,source,base);
    const candidates=new Set<Element>([shell,...shell.querySelectorAll('.workspace,.session-layout > .session-view,.session-layout > .session-inspector,.terminal-side-panel,.composer-input,.composer-dock,.header-morph-content,.crumb-title,.terminal-island-title')]);

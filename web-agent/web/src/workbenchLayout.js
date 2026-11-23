@@ -99,9 +99,12 @@
   }
   function slideSidebar({ surface, from, fromIsland, width, expandedWidth, railWidth, collapsed, origin }) {
     const css = getComputedStyle(shell);
+    // The rail's fade uses the same timing as the slide. CSSOM serializes
+    // transitionDuration in seconds even when the source stylesheet uses ms.
+    const railFade = getComputedStyle(shell, '::before');
     const timing = {
-      duration: parseFloat(css.getPropertyValue('--workbench-sidebar-duration')),
-      easing: css.getPropertyValue('--workbench-sidebar-ease').trim(),
+      duration: parseFloat(railFade.transitionDuration) * 1000,
+      easing: railFade.transitionTimingFunction,
       fill: 'both',
     };
     const island = shell.querySelector('.island-conversation');

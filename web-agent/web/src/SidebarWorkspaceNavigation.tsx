@@ -1,7 +1,8 @@
-import {useEffect,useId,useState,type ReactNode} from 'react';
+import {useContext,useEffect,useId,useState,type ReactNode} from 'react';
 import {SidebarScrollArea} from './SidebarScrollArea';
 import {SidebarResourceActions} from './SidebarResourceActions';
 import {Glyph} from './Icons';
+import {WorkbenchSidebar} from './WorkbenchNavigation';
 
 type NavigationPanel = 'specialists'|'resources';
 type WorkspaceNavigation = {active:boolean;onOpen:()=>void;unreadUpdate:boolean;navigation:ReactNode};
@@ -13,19 +14,20 @@ function initialPanel(projectId:string|undefined,selected:NavigationPanel):Navig
 }
 
 /** Both lists stay mounted so switching preserves their scroll and folder state. */
-export function SidebarWorkspaceNavigation({projectId,specialists,children,resourceCount,selectionId,selectedPanel,attention=false,onSelectPanel,workspace,empty,header,contentId,collapsed=false}:{
+export function SidebarWorkspaceNavigation({projectId,specialists,children,resourceCount,selectionId,selectedPanel,attention=false,onSelectPanel,workspace,empty,header,contentId}:{
  projectId?:string;specialists:ReactNode;children:ReactNode;resourceCount:number;
  selectionId:string;selectedPanel:NavigationPanel;attention?:boolean;onSelectPanel?:(panel:NavigationPanel)=>void;workspace?:WorkspaceNavigation;empty?:ReactNode;
- header?:ReactNode;contentId?:string;collapsed?:boolean;
+ header?:ReactNode;contentId?:string;
 }) {
  const id=useId();
+ const {collapsed,expand}=useContext(WorkbenchSidebar);
  const [resourceActions,setResourceActions]=useState<HTMLElement|null>(null);
  const [selection,setSelection]=useState(()=>({projectId,selectionId,panel:initialPanel(projectId,selectedPanel)}));
  const {panel}=selection;
  if(projectId!==selection.projectId||selectionId!==selection.selectionId){
   setSelection({projectId,selectionId,panel:projectId!==selection.projectId?initialPanel(projectId,selectedPanel):selectedPanel});
  }
- const selectPanel=(panel:NavigationPanel)=>{setSelection({...selection,panel});onSelectPanel?.(panel);};
+ const selectPanel=(panel:NavigationPanel)=>{expand();setSelection({...selection,panel});onSelectPanel?.(panel);};
  useEffect(()=>{if(projectId)try{localStorage.setItem(`lake.sidebar-panel.${projectId}`,panel);}catch{}},[projectId,panel]);
  const specialistsOpen=!workspace?.active&&panel==='specialists';
  const resourcesOpen=!workspace?.active&&panel==='resources';
@@ -37,7 +39,7 @@ export function SidebarWorkspaceNavigation({projectId,specialists,children,resou
    <button type="button" className="sidebar-rail-button" aria-label="资源" aria-pressed={resourcesOpen}
     aria-controls={`${id}-resources-panel`} title="资源" onClick={()=>selectPanel('resources')}><Glyph name="layers" size={18}/></button></>}
    {workspace&&<button type="button" className="sidebar-rail-button workspace-rail-button" aria-label={workspace.unreadUpdate?'工作区，有新版本':'工作区'}
-    aria-pressed={workspace.active} aria-controls={workspace.active?'workspace-page':undefined} title="工作区" onClick={workspace.onOpen}>
+    aria-pressed={workspace.active} aria-controls={workspace.active?'workspace-page':undefined} title="工作区" onClick={()=>{expand();workspace.onOpen();}}>
     <Glyph name="workspace" size={18}/>{workspace.unreadUpdate&&<span className="workspace-update-dot" aria-hidden="true"/>}
    </button>}
   </nav>

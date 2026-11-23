@@ -5,15 +5,15 @@ import {runInNewContext} from 'node:vm';
 
 // Exercise the shipped browser/native script through its resize and splitter events.
 const source=readFileSync(new URL('../src/workbenchLayout.js',import.meta.url),'utf8');
-function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false){
+function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sidebarDuration='420ms'){
  const properties=new Map<string,string>(),callbacks=new Map<number,(time:number)=>void>(),events=new Map<string,Function>();
  let nextFrame=0;
- const animations:Array<{startTime:number|null;currentTime:number|null;paused:boolean;cancelled:boolean}>=[];
+ const animations:Array<{duration:number;startTime:number|null;currentTime:number|null;paused:boolean;cancelled:boolean}>=[];
  const rect=(left:number)=>({left,right:left+28,top:0,bottom:28});
  const animatedNode=(left:()=>number)=>({
   getBoundingClientRect:()=>rect(left()),
-  animate(){
-   const animation={startTime:null,currentTime:null,paused:false,cancelled:false,
+  animate(_frames:unknown,timing:{duration:number}){
+   const animation={duration:timing.duration,startTime:null,currentTime:null,paused:false,cancelled:false,
     pause(){this.paused=true;},cancel(){this.cancelled=true;}};
    animations.push(animation);
    return animation;
@@ -36,7 +36,12 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false){
   return null;
  }};
  const window={lakeWorkbenchWidths:saved,addEventListener:(type:string,callback:Function)=>events.set(type,callback)};
- const context={window,innerWidth:1512,innerHeight:900,localStorage:{getItem(){return null;},setItem(){}},document:{body:{},head:{appendChild(){}},documentElement:{classList:{add(){},remove(){}}},timeline:{currentTime:10},createElement:makeNode,querySelector:()=>shell,addEventListener(){}},getComputedStyle:()=>({getPropertyValue:()=> '44px'}),ResizeObserver:class{observe(){}disconnect(){}},MutationObserver:class{observe(){}},requestAnimationFrame:(callback:(time:number)=>void)=>{callbacks.set(++nextFrame,callback);return nextFrame;},cancelAnimationFrame:(frame:number)=>callbacks.delete(frame)};
+ const getComputedStyle=(_node:unknown,pseudo?:string)=>({
+  getPropertyValue:(name:string)=>name==='--workbench-sidebar-duration'?sidebarDuration:'44px',
+  transitionDuration:pseudo==='::before'?'0.42s':'0s',
+  transitionTimingFunction:'ease',
+ });
+ const context={window,innerWidth:1512,innerHeight:900,localStorage:{getItem(){return null;},setItem(){}},document:{body:{},head:{appendChild(){}},documentElement:{classList:{add(){},remove(){}}},timeline:{currentTime:10},createElement:makeNode,querySelector:()=>shell,addEventListener(){}},getComputedStyle,ResizeObserver:class{observe(){}disconnect(){}},MutationObserver:class{observe(){}},requestAnimationFrame:(callback:(time:number)=>void)=>{callbacks.set(++nextFrame,callback);return nextFrame;},cancelAnimationFrame:(frame:number)=>callbacks.delete(frame)};
  runInNewContext(source,context);
  const flush=(time=0)=>{for(const [id,callback] of callbacks){callbacks.delete(id);callback(time);}};flush();
  return {properties,animations,flush,resize(width:number){shell.clientWidth=width;context.innerWidth=width;events.get('resize')!();flush();},reset(pane:string){handles.get(pane).dblclick();flush();},toggle(inspectorOpen:boolean,terminalOpen:boolean){shell.inspectorOpen=inspectorOpen;shell.terminalOpen=terminalOpen;events.get('resize')!();flush();},commit(inspectorOpen:boolean,terminalOpen:boolean){shell.inspectorOpen=inspectorOpen;shell.terminalOpen=terminalOpen;events.get('lake-workbench-layout')!();},collapseSidebar(collapsed:boolean){events.get('lake-workbench-sidebar-toggle')!();shell.sidebarCollapsed=collapsed;events.get('lake-workbench-layout')!();},widths(){return ['--sidebar-width','--terminal-panel-width','--inspector-preferred-width'].map(key=>parseFloat(properties.get(key)!));}};
@@ -117,4 +122,16 @@ test('reversing before the first frame does not start the cancelled slide',()=>{
  page.collapseSidebar(false);
  page.flush(550);
  assert.ok(cancelled.every(animation=>animation.cancelled&&animation.startTime===null));
+});
+
+test('both sidebar directions keep the CSS duration when the desktop stylesheet is minified',()=>{
+ for(const token of ['420ms','.42s']){
+  const page=fixture(undefined,true,token);
+  for(const collapsed of [true,false]){
+   const first=page.animations.length;
+   page.collapseSidebar(collapsed);
+   page.flush();
+   assert.deepEqual(page.animations.slice(first).map(animation=>animation.duration),[420,420],token);
+  }
+ }
 });
