@@ -1,5 +1,6 @@
-import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
+import {useEffect,useLayoutEffect,useRef,useState,type CSSProperties,type ReactNode} from 'react';
 import './workbenchIsland.css';
+import {islandInspectorMotionMs} from './SessionInspectorContext';
 import {workbenchIslandLayout,type IslandPosition} from './workbenchIslandLayout';
 
 export function useWideWorkbench(){
@@ -231,7 +232,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
   <div ref={conversationIsland} className="lake-workbench-island island-conversation" data-pilot-island-tone={pilotTone}>
    <span className="workspace-header-glass" aria-hidden="true"/>
    <span className="island-navigation-divider" aria-hidden="true"/>{activity}{conversation}
-   {islandInspector&&<div className="island-inspector" data-open={inspectorOpen}>
+   {islandInspector&&<div className="island-inspector" data-open={inspectorOpen} style={{'--island-panel-duration':`${islandInspectorMotionMs}ms`} as CSSProperties}>
     <div className="island-inspector-viewport">{islandInspector}</div>
    </div>}
   </div>

@@ -221,7 +221,7 @@ html.lake-windows-chrome .session-inspector { padding-top:52px; }
  --island-panel-header:46px;
  --island-panel-width:max(var(--island-panel-compact-width),min(472px,var(--island-panel-available-width)));
  --island-panel-height:min(460px,var(--island-panel-available-height));
- --island-panel-duration:180ms;
+ --island-panel-ease:cubic-bezier(.3,.15,.25,1);
  position:absolute;
  z-index:1;
  inset:-1px auto auto -1px;
@@ -233,12 +233,11 @@ html.lake-windows-chrome .session-inspector { padding-top:52px; }
  contain:layout;
  visibility:hidden;
  pointer-events:none;
- transition:inline-size var(--island-panel-duration) var(--workbench-sidebar-ease),
-   block-size var(--island-panel-duration) var(--workbench-sidebar-ease),
+ transition:inline-size var(--island-panel-duration) var(--island-panel-ease),
+   block-size var(--island-panel-duration) var(--island-panel-ease),
    visibility 0s linear var(--island-panel-visibility-delay,var(--island-panel-duration));
 }
 .island-inspector[data-open=true] {
- --island-panel-duration:var(--workbench-sidebar-duration);
  --island-panel-visibility-delay:0s;
  inline-size:var(--island-panel-width);
  block-size:var(--island-panel-height);
@@ -290,11 +289,10 @@ html.lake-windows-chrome .session-inspector { padding-top:52px; }
  padding:var(--island-panel-header) 0 0;
  opacity:0;
  animation:none;
- transition:opacity 100ms ease;
+ transition:opacity var(--island-panel-duration) var(--island-panel-ease);
 }
 .island-inspector[data-open=true] .session-inspector {
  opacity:1;
- transition:opacity 180ms ease 45ms;
 }
 .island-inspector .session-inspector-card {
  flex:1 1 auto;
