@@ -3,13 +3,15 @@ import assert from 'node:assert/strict';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {Catalog,Project} from '../../shared/contracts';
-import {WorkspacePage,WorkspaceProjectList} from '../src/WorkspacePage';
+import {WorkspacePage, WorkspaceSidebar} from '../src/WorkspacePage';
 import {initialWorkspaceSelection} from '../src/sidebarState';
 import {readWorkspaceRoute,workspaceURL} from '../src/workspaceRoute';
 
 const project:Project={id:'p',name:'测试项目',createdAt:'2026-11-23T01:00:00Z'};
 const noop=()=>{};
-const actions={onOpenNavigation:noop,onCreateProject:noop,onDeleteProject:noop,onToggleBulk:noop,onSettings:noop,onUpdates:noop,onTrash:noop};
+const props={connected:true, projects:[project], resources:[{projectId:project.id}], bulkSelectedCount:0,
+ onOpenNavigation:noop, onOpenProject:noop, onSelectProject:noop, onCreateProject:noop, onDeleteProject:noop,
+ onToggleBulk:noop, onClearSelection:noop, onDeleteSelected:noop};
 
 test('workspace is a direct route with or without conversation and resource context',()=>{
  for(const route of [
@@ -33,19 +35,29 @@ test('startup restores the workspace page for empty projects and preserves an ow
 });
 
 test('workspace actions render in the page, including a creation path for an empty workspace',()=>{
- const props={connected:true,bulkMode:false,modelConfigured:true,unreadUpdate:false,...actions};
  const html=renderToStaticMarkup(createElement(WorkspacePage,{...props,project}));
- for(const label of ['工作区','当前项目',project.name,'新建项目','批量管理','删除项目','设置','检查更新','已删除'])assert.ok(html.includes(label),label);
+ for(const label of ['工作区','当前项目',project.name,'新建项目','批量管理','删除项目','进入项目','搜索项目'])assert.ok(html.includes(label),label);
  assert.match(html,/id="workspace-page"/);
- assert.doesNotMatch(html,/role="dialog"|composer-dock|message-input/);
- const empty=renderToStaticMarkup(createElement(WorkspacePage,props));
- assert.match(empty,/暂无项目[\s\S]*新建项目/);
- assert.doesNotMatch(empty,/删除项目|批量管理/);
+ assert.doesNotMatch(html,/role="dialog"|composer-dock|message-input|检查更新|已删除/);
+ const empty=renderToStaticMarkup(createElement(WorkspacePage,{...props,projects:[]}));
+ assert.match(empty,/新建项目[\s\S]*暂无项目/);
+ assert.doesNotMatch(empty,/删除项目|批量管理|搜索项目/);
+ const sidebar=renderToStaticMarkup(createElement(WorkspaceSidebar,{
+  connected:true, modelConfigured:false, unreadUpdate:true, onProjects:noop, onSettings:noop, onUpdates:noop, onTrash:noop,
+ }));
+ for(const label of ['项目','设置','待配置','检查更新','新版本','已删除'])assert.ok(sidebar.includes(label),label);
+ assert.doesNotMatch(sidebar,/项目列表|测试项目/);
 });
 
 test('the workspace project list exposes exactly one current project',()=>{
- const html=renderToStaticMarkup(createElement(WorkspaceProjectList,{projects:[project,{...project,id:'other',name:'其他项目'}],projectId:project.id,onSelect:noop}));
+ const html=renderToStaticMarkup(createElement(WorkspacePage,{
+  ...props, project, projects:[project,{...project,id:'other',name:'其他项目'}],
+  bulkSelection:{has:target=>target.id===project.id, toggle:noop, disabled:false}, bulkSelectedCount:1,
+ }));
  assert.equal((html.match(/aria-current="true"/g)??[]).length,1);
  assert.match(html,/aria-current="true" title="测试项目"/);
- assert.match(html,/其他项目/);
+ assert.match(html,/aria-label="选择项目 测试项目" checked=""/);
+ assert.match(html,/aria-label="选择项目 其他项目"/);
+ assert.match(html,/已选 1 项/);
+ assert.match(html,/class="workspace-project-resource-count">1/);
 });

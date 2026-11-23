@@ -4,7 +4,7 @@ import {SidebarResourceActions} from './SidebarResourceActions';
 import {Glyph} from './Icons';
 
 type NavigationPanel = 'specialists'|'resources';
-type WorkspaceNavigation = {active:boolean;onOpen:()=>void;unreadUpdate:boolean;projects:ReactNode};
+type WorkspaceNavigation = {active:boolean;onOpen:()=>void;unreadUpdate:boolean;navigation:ReactNode};
 
 function initialPanel(projectId:string|undefined,selected:NavigationPanel):NavigationPanel {
  if(selected==='resources')return 'resources';
@@ -59,9 +59,6 @@ export function SidebarWorkspaceNavigation({projectId,pilot,specialists,children
     <SidebarScrollArea>{children}</SidebarScrollArea>
    </SidebarResourceActions.Provider>
   </section></>:!workspace?.active&&<SidebarScrollArea>{empty}</SidebarScrollArea>}
-  {workspace?.active&&<section className="sidebar-navigation-panel" aria-labelledby={`${id}-projects-title`}>
-   <div className="sidebar-content-header"><div className="sidebar-content-title"><h2 id={`${id}-projects-title`}>项目</h2></div></div>
-   <SidebarScrollArea>{workspace.projects}</SidebarScrollArea>
-  </section>}
+  {workspace?.active&&workspace.navigation}
  </div>;
 }

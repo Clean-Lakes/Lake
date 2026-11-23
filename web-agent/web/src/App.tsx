@@ -70,7 +70,7 @@ import {TerminalConfigEdit} from "./TerminalConfigEdit";
 import { Workflows } from "./Workflows";
 import { ProjectMemory } from "./ProjectMemory";
 import {DesktopUpdate} from "./DesktopUpdate";
-import {WorkspacePage,WorkspaceProjectList} from "./WorkspacePage";
+import {WorkspacePage,WorkspaceSidebar} from "./WorkspacePage";
 import { ActivityIndicator } from "./ActivityIndicator";
 import { PendingMessages } from "./PendingMessages";
 import { ModelSettings } from "./ModelSettings";
@@ -284,6 +284,10 @@ function AppContent() {
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkSelected, setBulkSelected] = useState<BulkTarget[]>([]);
   const [bulkConfirmation, setBulkConfirmation] = useState<BulkTarget[] | null>(null);
+  useLayoutEffect(() => {
+    setBulkMode(false);
+    setBulkSelected(current => current.length ? [] : current);
+  }, [isWorkspacePage]);
   useEffect(() => {
     if (!catalog) return;
     const available = new Set(bulkCatalogTargets(catalog).map(bulkKey));
@@ -1140,6 +1144,18 @@ function AppContent() {
     if (!result.failed.length) setBulkMode(false);
     const fresh = await refreshCatalog();
     setResourceTerminalMenu(null);
+    const current = routeRef.current;
+    if (current.view === 'workspace') {
+      const projectRemoved = sidebarProjectId && !fresh.projects.some(project => project.id === sidebarProjectId);
+      const sessionRemoved = current.sessionId && !fresh.sessions.some(session => session.id === current.sessionId);
+      const resourceRemoved = current.resourceId && !fresh.resources.some(resource => resource.id === current.resourceId);
+      if (projectRemoved || sessionRemoved || resourceRemoved) {
+        const selection = initialWorkspaceSelection(fresh, current, sidebarProjectId);
+        setSidebarProjectId(selection.projectId);
+        navigate(selection.route);
+      }
+      return;
+    }
     if (route.sessionId && !fresh.sessions.some(item => item.id === route.sessionId)) {
       const next = fresh.sessions.filter(item => item.projectId === selectedProjectId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
       navigate({sessionId: next?.id ?? null, resourceId: null});
@@ -1782,11 +1798,12 @@ function AppContent() {
     </div>
   </section>;
 
-  const workspaceProjects=<WorkspaceProjectList projects={projectList} projectId={sidebarProject?.id} onSelect={project=>{
-    if(project.id===sidebarProject?.id)return;
-    setSidebarProjectId(project.id);setBulkMode(false);setBulkSelected([]);
-    navigate({sessionId:defaultWorkspaceSession(catalog.sessions,project.id)?.id??null,resourceId:null,view:'workspace'});
-  }}/>;
+  const workspaceConnected = connected && !pendingOperation;
+  const workspaceNavigation = isWorkspacePage && <WorkspaceSidebar modelConfigured={modelConfigured} unreadUpdate={workspaceUpdateUnread}
+    connected={workspaceConnected} onProjects={() => {
+      setMobileMenu(false);
+      document.getElementById('workspace-projects-title')?.focus();
+    }} onSettings={openSettings} onUpdates={() => window.dispatchEvent(new Event('lake-open-updates'))} onTrash={() => setTrashOpen(true)}/>;
 
   return <SpecialistAvatarProvider channels={pilotWorkspace.workspace?.channels}><div className={`app-shell ${terminalVisible ? "terminal-is-open" : ""}${sharedIsland?" has-workbench-island":""}`}>
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
@@ -1800,7 +1817,7 @@ function AppContent() {
         navigate({sessionId:context,resourceId:entry.id});
       }
     }}/>}
-    <aside className={`sidebar workspace-navigation ${mobileMenu ? "sidebar-open" : ""} ${bulkMode ? "is-bulk-selecting" : ""}`} aria-label="项目导航" inert={compactNavigation && !mobileMenu} aria-hidden={compactNavigation && !mobileMenu}>
+    <aside className={`sidebar workspace-navigation ${mobileMenu ? "sidebar-open" : ""} ${bulkMode && !isWorkspacePage ? "is-bulk-selecting" : ""}`} aria-label="项目导航" inert={compactNavigation && !mobileMenu} aria-hidden={compactNavigation && !mobileMenu}>
       <div className="sidebar-brand-row">
         <span className="brand" aria-label="Lake"><strong>Lake</strong></span>
         <div className="sidebar-brand-actions">
@@ -1808,9 +1825,9 @@ function AppContent() {
           <button className="icon-button mobile-only" title="关闭导航" aria-label="关闭导航" onClick={() => setMobileMenu(false)}><Glyph name="close"/></button>
         </div>
       </div>
-      {bulkMode && <div className="bulk-navigation-toolbar"><button type="button" onClick={()=>{setBulkMode(false);setBulkSelected([]);}}>完成</button><span>已选 {bulkSelected.length} 项</span><button type="button" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkSelected([])}>清空</button><button type="button" className="danger-text" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}>删除所选</button></div>}
+      {bulkMode && !isWorkspacePage && <div className="bulk-navigation-toolbar"><button type="button" onClick={()=>{setBulkMode(false);setBulkSelected([]);}}>完成</button><span>已选 {bulkSelected.length} 项</span><button type="button" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkSelected([])}>清空</button><button type="button" className="danger-text" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}>删除所选</button></div>}
       <SidebarWorkspaceNavigation projectId={sidebarProject?.id}
-       workspace={{active:isWorkspacePage,onOpen:openWorkspacePage,unreadUpdate:workspaceUpdateUnread,projects:workspaceProjects}}
+       workspace={{active:isWorkspacePage,onOpen:openWorkspacePage,unreadUpdate:workspaceUpdateUnread,navigation:workspaceNavigation}}
        empty={<WelcomeSidebar disabled={!connected} onCreate={openProjectDialog}/>}
        selectionId={route.resourceId?`resource:${route.resourceId}`:`session:${route.sessionId??''}`} selectedPanel={route.resourceId?'resources':'specialists'}
        onSelectPanel={panel=>{
@@ -1895,15 +1912,19 @@ function AppContent() {
 
     {sharedIsland&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={terminalHeading} inspectorOpen={inspectorOpen} terminalOpen={terminalOpen} pilotTone={pilotTone}/>}
     <main className={`workspace${window.lakeInspectorWindow?"":" web-inspector-layout"}${inspectorOpen?" has-session-inspector":""}${isWorkspacePage?" is-workspace-page":!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":sessionSelected?" has-specialist-task-list":""}`} onDragOver={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="none";return;}if(selectedSession&&!isLegacyHistory&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.stopPropagation();return;}if(!selectedSession||isLegacyHistory||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
-      {isWorkspacePage?<WorkspacePage project={sidebarProject}
-        projectSelection={sidebarProject&&<BulkCheckbox target={{kind:"project",id:sidebarProject.id,projectId:sidebarProject.id,name:sidebarProject.name}} selection={bulkSelection}/>}
-        connected={connected&&!pendingOperation} bulkMode={bulkMode} modelConfigured={modelConfigured} unreadUpdate={workspaceUpdateUnread}
+      {isWorkspacePage?<WorkspacePage project={sidebarProject} projects={projectList} resources={catalog.resources}
+        connected={workspaceConnected} bulkSelection={bulkSelection} bulkSelectedCount={bulkSelected.length}
         onOpenNavigation={()=>setMobileMenu(true)} onCreateProject={openProjectDialog}
+        onOpenProject={() => navigate({sessionId:sessionId??defaultWorkspaceSession(catalog.sessions,sidebarProject?.id??null)?.id??null,resourceId:route.resourceId})}
+        onSelectProject={project => {
+          if (project.id === sidebarProject?.id) return;
+          setSidebarProjectId(project.id);
+          navigate({sessionId:defaultWorkspaceSession(catalog.sessions,project.id)?.id??null,resourceId:null,view:'workspace'});
+        }}
         onDeleteProject={project=>setNavigationDelete({kind:"project",id:project.id,projectId:project.id,name:project.name})}
-        onToggleBulk={()=>{
-          setBulkMode(!bulkMode);setBulkSelected([]);
-          if(!bulkMode)navigate({sessionId,resourceId:route.resourceId});
-        }} onSettings={openSettings} onUpdates={()=>window.dispatchEvent(new Event("lake-open-updates"))} onTrash={()=>setTrashOpen(true)}/>:<>
+        onToggleBulk={() => {setBulkMode(!bulkMode);setBulkSelected([]);}}
+        onClearSelection={() => setBulkSelected([])}
+        onDeleteSelected={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}/>:<>
       {!sharedIsland&&(isSpecialistTasks?<header className="specialist-mobile-heading"><button type="button" className="icon-button" aria-label="打开项目导航" onClick={()=>setMobileMenu(true)}><Glyph name="menu" size={21}/></button><span>专员任务</span></header>:workspaceHeading)}
 
       {!persistentMode && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>服务端不支持持续终端。请核对服务端版本。</span></div>}
