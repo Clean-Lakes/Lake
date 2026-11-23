@@ -41,7 +41,7 @@
   `;
   document.head.appendChild(style);
   let shell, active, frame = 0, lastChrome = '';
-  let previousSidebar, sidebarSlide;
+  let previousSidebar, sidebarSlide, sidebarOrigin;
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
   let observedContextPanel;
   const contextResize = new ResizeObserver(() => schedule());
@@ -85,7 +85,18 @@
     sidebarSlide.shell.removeAttribute('data-sidebar-sliding');
     sidebarSlide = undefined;
   }
-  function slideSidebar({ surface, from, fromIsland, width, expandedWidth, railWidth, collapsed }) {
+  function captureSidebarOrigin() {
+    if (!shell?.classList.contains('has-docked-conversation')) return;
+    const island = shell.querySelector('.island-conversation');
+    const divider = island?.querySelector('.island-navigation-divider');
+    sidebarOrigin = {
+      shell,
+      buttons: [...shell.querySelectorAll('.workbench-navigation button')].map(button => [button, button.getBoundingClientRect()]),
+      padding: island ? getComputedStyle(island).paddingInlineStart : undefined,
+      dividerOpacity: divider ? getComputedStyle(divider).opacity : undefined,
+    };
+  }
+  function slideSidebar({ surface, from, fromIsland, width, expandedWidth, railWidth, collapsed, origin }) {
     const css = getComputedStyle(shell);
     const timing = {
       duration: parseFloat(css.getPropertyValue('--workbench-sidebar-duration')),
@@ -104,18 +115,21 @@
     if (collapsed) shell.style.setProperty('--workbench-island-navigation-left', `${collapsedAnchor}px`);
     island?.style.setProperty('--island-panel-available-width', `${Math.max(1, shell.clientWidth - islandTarget - 16)}px`);
 
-    // Hold the reading area at its larger width and move the painted layers.
-    // The transcript and sidebar list keep their line breaks during the slide.
+    const buttons = (origin?.buttons ?? []).map(([button, before]) => ({ button, before, after: button.getBoundingClientRect() }));
+    const padding = island ? getComputedStyle(island).paddingInlineStart : undefined;
+    const divider = island?.querySelector('.island-navigation-divider');
+    // One clock drives the content and the controls, including the return
+    // from an interrupted slide. The transcript keeps its line breaks.
     const start = document.timeline.currentTime;
     const animations = [];
-    const translate = (node, left, right) => {
-      if (!node || Math.abs(left - right) < .1) return;
-      const animation = node.animate([
-        { transform: `translate3d(${left}px,0,0)` },
-        { transform: `translate3d(${right}px,0,0)` },
-      ], timing);
+    const animate = (node, from, to) => {
+      const animation = node.animate([from, to], timing);
       animation.startTime = start;
       animations.push(animation);
+    };
+    const translate = (node, left, right, top = 0) => {
+      if (!node || (Math.abs(left - right) < .1 && Math.abs(top) < .1)) return;
+      animate(node, { transform: `translate3d(${left}px,${top}px,0)` }, { transform: `translate3d(${right}px,0,0)` });
     };
     translate(surface, from - railWidth, width - railWidth);
     translate(shell.querySelector('.sidebar-navigation-content'), from - expandedWidth, width - expandedWidth);
@@ -123,7 +137,22 @@
     for (const node of workspace.querySelectorAll('.timeline-list, .conversation-header-backdrop, .composer, .composer-session-controls')) {
       translate(node, (from - railWidth) / 2, (width - railWidth) / 2);
     }
-    const slide = sidebarSlide = { shell, width, expandedWidth, animations };
+    for (const { button, before, after } of buttons) {
+      translate(button, before.left - after.left, 0, before.top - after.top);
+    }
+    if (island && origin?.padding && padding && origin.padding !== padding) {
+      animate(island, { paddingInlineStart: origin.padding }, { paddingInlineStart: padding });
+      if (divider) {
+        const offset = parseFloat(origin.padding) - parseFloat(padding);
+        animate(divider, { transform: `translate3d(${offset}px,0,0)`, opacity: origin.dividerOpacity },
+          { transform: 'translate3d(0,0,0)', opacity: getComputedStyle(divider).opacity });
+      }
+    }
+    const buttonPaths = buttons.map(({ before, after }) => {
+      const x = Math.min(before.left, after.left), y = Math.min(before.top, after.top);
+      return [x, y, Math.max(before.right, after.right) - x, Math.max(before.bottom, after.bottom) - y];
+    });
+    const slide = sidebarSlide = { shell, width, expandedWidth, animations, buttonPaths };
     animations[0].onfinish = () => {
       if (sidebarSlide !== slide) return;
       finishSidebarSlide();
@@ -140,6 +169,8 @@
     const canSlide = surface && previousSidebar?.shell === shell && previousSidebar.docked &&
       !active && !document.hidden && !reducedMotion?.matches && typeof shell.animate === 'function';
     const toggled = canSlide && previousSidebar.collapsed !== collapsed;
+    const origin = toggled && sidebarOrigin?.shell === shell ? sidebarOrigin : undefined;
+    if (previousSidebar?.shell !== shell || previousSidebar.collapsed !== collapsed) sidebarOrigin = undefined;
     const shellLeft = toggled ? shell.getBoundingClientRect().left : 0;
     const from = toggled ? surface.getBoundingClientRect().left - shellLeft : width;
     const island = toggled ? shell.querySelector('.island-conversation') : null;
@@ -160,7 +191,7 @@
       const handle = shell.querySelector(`.workbench-splitter-${pane}`);
       if (handle) for (const [name, value] of [['valuemin', min], ['valuemax', max], ['valuenow', width]]) handle.setAttribute(`aria-${name}`, String(value));
     }
-    if (startSlide) slideSidebar({ surface, from, fromIsland, width, expandedWidth: target.expandedSidebarWidth, railWidth: target.railWidth, collapsed });
+    if (startSlide) slideSidebar({ surface, from, fromIsland, width, expandedWidth: target.expandedSidebarWidth, railWidth: target.railWidth, collapsed, origin });
   }
   function addHandle(parent, pane) {
     if (parent.querySelector(`:scope > .workbench-splitter-${pane}`)) return;
@@ -217,6 +248,7 @@
     if (workspace) { const r = workspace.getBoundingClientRect(); regions.push([r.x, 0, r.width, height]); }
     if (sidebar) { const r = sidebar.getBoundingClientRect(); regions.push([r.x, 0, r.width, height]); }
     const excluded = [...shell.querySelectorAll('.workbench-splitter, .workbench-navigation button'), ...headers.flatMap(header => [...header.querySelectorAll('button, a, input, select, textarea, [role="button"]')])].map(rect);
+    if (sidebarSlide?.shell === shell) excluded.push(...sidebarSlide.buttonPaths);
     for (const element of document.querySelectorAll('.conversation-directory-trigger, .modal-scrim, dialog[open], [role="dialog"], [role="menu"], [role="listbox"]')) excluded.push(rect(element));
     const body = JSON.stringify({ regions, excluded, theme: document.documentElement.dataset.theme || 'light', appearance: window.lakeAppearance || 'light' });
     if (body !== lastChrome) { lastChrome = body; bridge.postMessage(JSON.parse(body)); }
@@ -264,6 +296,7 @@
   document.addEventListener('visibilitychange', schedule);
   reducedMotion?.addEventListener('change', schedule);
   // React pane toggles must settle widths in the same commit, before paint.
+  window.addEventListener('lake-workbench-sidebar-toggle', captureSidebarOrigin);
   window.addEventListener('lake-workbench-layout', sync);
   document.addEventListener('scroll', () => { if (!sidebarSlide) schedule(); }, true);
   window.addEventListener('lake-chrome-resize', schedule);

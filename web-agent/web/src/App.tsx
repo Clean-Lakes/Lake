@@ -233,7 +233,11 @@ function AppContent() {
   });
   useEffect(() => { try { localStorage.setItem("lake.closed-session-groups", JSON.stringify(closedSessionGroups)); } catch {} }, [closedSessionGroups]);
   const [mobileMenu, setMobileMenu] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsedState] = useState(false);
+  const setSidebarCollapsed = (update: boolean | ((collapsed: boolean) => boolean)) => {
+    window.dispatchEvent(new Event('lake-workbench-sidebar-toggle'));
+    setSidebarCollapsedState(update);
+  };
   const [dialog, setDialog] = useState<{ kind: "project" } | { kind: "session"; projectId: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WorkSession | null>(null);
   const [editSession, setEditSession] = useState<WorkSession | null>(null);

@@ -97,6 +97,7 @@
   }
   .app-shell.has-docked-conversation > .workbench-navigation {
     --workbench-island-navigation-top:var(--conversation-island-top);
+    transition:none;
   }
   .app-shell.has-workbench-conversation.has-collapsed-sidebar > .workbench-navigation {
     inset-inline-start:calc(var(--workbench-island-navigation-left,var(--workbench-navigation-start)) + var(--workbench-navigation-island-padding));
