@@ -3,33 +3,6 @@ import type {Project, Resource} from '../../shared/contracts';
 import {BulkCheckbox, type BulkSelection} from './BulkNavigationDelete';
 import {Glyph} from './Icons';
 
-export function WorkspaceSidebar({modelConfigured, unreadUpdate, connected, onProjects, onSettings, onUpdates, onTrash}: {
-  modelConfigured: boolean;
-  unreadUpdate: boolean;
-  connected: boolean;
-  onProjects: () => void;
-  onSettings: () => void;
-  onUpdates: () => void;
-  onTrash: () => void;
-}) {
-  return <nav className="workspace-sidebar-links" aria-label="工作区导航">
-    <button type="button" aria-current="page" aria-controls="workspace-page" onClick={onProjects}>
-      <Glyph name="folder" size={17}/><span>项目</span>
-    </button>
-    <div className="workspace-sidebar-utilities">
-      <button type="button" onClick={onSettings}>
-        <Glyph name="settings" size={17}/><span>设置</span>{!modelConfigured && <small>待配置</small>}
-      </button>
-      <button type="button" onClick={onUpdates}>
-        <Glyph name="refresh" size={17}/><span>检查更新</span>{unreadUpdate && <small>新版本</small>}
-      </button>
-      <button type="button" disabled={!connected} onClick={onTrash}>
-        <Glyph name="trash" size={17}/><span>已删除</span>
-      </button>
-    </div>
-  </nav>;
-}
-
 const projectDate = new Intl.DateTimeFormat('zh-CN', {year: 'numeric', month: 'long', day: 'numeric'});
 
 function CurrentProject({project, resourceCount, connected, onOpen, onDelete}: {

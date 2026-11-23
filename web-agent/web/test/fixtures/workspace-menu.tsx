@@ -3,8 +3,10 @@ import {useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import type {Project} from '../../../shared/contracts';
 import {SidebarWorkspaceNavigation} from '../../src/SidebarWorkspaceNavigation';
-import {WorkspacePage,WorkspaceSidebar} from '../../src/WorkspacePage';
+import {WorkspacePage} from '../../src/WorkspacePage';
+import {WorkbenchShell} from '../../src/WorkbenchNavigation';
 import {Glyph} from '../../src/Icons';
+import '../../src/workbenchLayout.js';
 import '../../src/styles.css';
 import '../../src/workspacePage.css';
 import '../../src/windowCorners.css';
@@ -22,14 +24,16 @@ function Preview(){
  const [navigationOpen,setNavigationOpen]=useState(false);
  const [action,setAction]=useState(''),[bulk,setBulk]=useState(false);
  const [selection,setSelection]=useState<string[]>([]);
+ const compact=matchMedia('(max-width:700px)').matches;
  const mark=(id:string)=>setSelection(current=>current.includes(id)?current.filter(item=>item!==id):[...current,id]);
- return <div className="app-shell">
-  <aside className={`sidebar workspace-navigation${navigationOpen?' sidebar-open':''}`} aria-label="项目导航">
-   <div className="sidebar-brand-row"><span className="brand"><strong>Lake</strong></span>
-    <button type="button" className="mobile-only icon-button" aria-label="关闭导航" onClick={()=>setNavigationOpen(false)}><Glyph name="close"/></button></div>
+ return <WorkbenchShell className="app-shell has-workbench-navigation" compact={compact} railOnly inspectorOpen={false} back={false} forward={false} onStep={()=>{}}>
+  {navigationOpen&&<button className="mobile-scrim" aria-label="关闭项目导航" onClick={()=>setNavigationOpen(false)}/>}
+  <aside className={`sidebar workspace-navigation${navigationOpen?' sidebar-open':''}`} aria-label="项目导航" inert={compact&&!navigationOpen}>
    <SidebarWorkspaceNavigation projectId={current?.id} specialists={null} resourceCount={0} selectionId={current?.id??''} selectedPanel="specialists"
-    workspace={{active:true,unreadUpdate:false,onOpen:()=>setNavigationOpen(false),navigation:<WorkspaceSidebar connected modelConfigured unreadUpdate={false}
-     onProjects={()=>setNavigationOpen(false)} onSettings={()=>setAction('设置')} onUpdates={()=>setAction('检查更新')} onTrash={()=>setAction('已删除')}/>}}>
+    header={<div className="workspace-sidebar-mobile-actions mobile-only"><button type="button" className="mobile-only icon-button" aria-label="关闭导航"
+     onClick={()=>setNavigationOpen(false)}><Glyph name="close"/></button></div>}
+    workspace={{active:true,modelConfigured:true,unreadUpdate:false,onProjects:()=>setNavigationOpen(false),
+     onSettings:()=>setAction('设置'),onUpdates:()=>setAction('检查更新')}}>
     {null}
    </SidebarWorkspaceNavigation>
   </aside>
@@ -41,6 +45,6 @@ function Preview(){
     onToggleBulk={()=>{setBulk(value=>!value);setSelection([]);}} onClearSelection={()=>setSelection([])} onDeleteSelected={()=>setAction('删除所选')}/>
    <output className="visually-hidden">{action}</output>
   </main>
- </div>;
+ </WorkbenchShell>;
 }
 createRoot(document.getElementById('root')!).render(<Preview/>);

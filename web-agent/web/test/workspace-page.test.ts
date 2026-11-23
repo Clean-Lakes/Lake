@@ -1,11 +1,16 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {registerHooks} from 'node:module';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {Catalog,Project} from '../../shared/contracts';
-import {WorkspacePage, WorkspaceSidebar} from '../src/WorkspacePage';
+import {WorkspacePage} from '../src/WorkspacePage';
 import {initialWorkspaceSelection} from '../src/sidebarState';
 import {readWorkspaceRoute,workspaceURL} from '../src/workspaceRoute';
+
+const css=registerHooks({load(url,context,nextLoad){return url.endsWith('.css')?{format:'module',source:'export {};',shortCircuit:true}:nextLoad(url,context)}});
+const {SidebarWorkspaceNavigation}=await import('../src/SidebarWorkspaceNavigation');
+css.deregister();
 
 const project:Project={id:'p',name:'测试项目',createdAt:'2026-11-23T01:00:00Z'};
 const noop=()=>{};
@@ -42,11 +47,15 @@ test('workspace actions render in the page, including a creation path for an emp
  const empty=renderToStaticMarkup(createElement(WorkspacePage,{...props,projects:[]}));
  assert.match(empty,/新建项目[\s\S]*暂无项目/);
  assert.doesNotMatch(empty,/删除项目|批量管理|搜索项目/);
- const sidebar=renderToStaticMarkup(createElement(WorkspaceSidebar,{
-  connected:true, modelConfigured:false, unreadUpdate:true, onProjects:noop, onSettings:noop, onUpdates:noop, onTrash:noop,
+});
+
+test('the workspace rail exposes a closed menu and signals unread updates',()=>{
+ const sidebar=renderToStaticMarkup(createElement(SidebarWorkspaceNavigation,{
+  projectId:project.id, specialists:null, children:null, resourceCount:0, selectionId:project.id, selectedPanel:'specialists',
+  workspace:{active:true, modelConfigured:false, unreadUpdate:true, onProjects:noop, onSettings:noop, onUpdates:noop},
  }));
- for(const label of ['项目','设置','待配置','检查更新','新版本','已删除'])assert.ok(sidebar.includes(label),label);
- assert.doesNotMatch(sidebar,/项目列表|测试项目/);
+ assert.match(sidebar,/aria-label="工作区，有新版本" aria-current="page" aria-haspopup="menu" aria-expanded="false"/);
+ assert.doesNotMatch(sidebar,/role="menu(?:item)?"|设置|检查更新|已删除/);
 });
 
 test('the workspace project list exposes exactly one current project',()=>{

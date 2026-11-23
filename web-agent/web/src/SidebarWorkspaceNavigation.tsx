@@ -1,11 +1,15 @@
-import {useContext,useEffect,useId,useState,type ReactNode} from 'react';
+import {useContext,useEffect,useId,useRef,useState,type ReactNode} from 'react';
 import {SidebarScrollArea} from './SidebarScrollArea';
 import {SidebarResourceActions} from './SidebarResourceActions';
 import {Glyph} from './Icons';
+import {NavigationMenu} from './NavigationDelete';
 import {WorkbenchSidebar} from './WorkbenchNavigation';
 
 type NavigationPanel = 'specialists'|'resources';
-type WorkspaceNavigation = {active:boolean;onOpen:()=>void;unreadUpdate:boolean;navigation:ReactNode};
+type WorkspaceNavigation = {
+ active:boolean;modelConfigured:boolean;unreadUpdate:boolean;
+ onProjects:()=>void;onSettings:()=>void;onUpdates:()=>void;
+};
 
 function initialPanel(projectId:string|undefined,selected:NavigationPanel):NavigationPanel {
  if(selected==='resources')return 'resources';
@@ -21,6 +25,8 @@ export function SidebarWorkspaceNavigation({projectId,specialists,children,resou
 }) {
  const id=useId();
  const {collapsed,expand}=useContext(WorkbenchSidebar);
+ const workspaceButton=useRef<HTMLButtonElement>(null);
+ const [workspaceMenuOpen,setWorkspaceMenuOpen]=useState(false);
  const [resourceActions,setResourceActions]=useState<HTMLElement|null>(null);
  const [selection,setSelection]=useState(()=>({projectId,selectionId,panel:initialPanel(projectId,selectedPanel)}));
  const {panel}=selection;
@@ -29,6 +35,7 @@ export function SidebarWorkspaceNavigation({projectId,specialists,children,resou
  }
  const selectPanel=(panel:NavigationPanel)=>{expand();setSelection({...selection,panel});onSelectPanel?.(panel);};
  useEffect(()=>{if(projectId)try{localStorage.setItem(`lake.sidebar-panel.${projectId}`,panel);}catch{}},[projectId,panel]);
+ useEffect(()=>{setWorkspaceMenuOpen(false);},[selectionId,workspace?.active]);
  const specialistsOpen=!workspace?.active&&panel==='specialists';
  const resourcesOpen=!workspace?.active&&panel==='resources';
  return <div className="sidebar-workspace-navigation">
@@ -40,11 +47,19 @@ export function SidebarWorkspaceNavigation({projectId,specialists,children,resou
    </button>
    <button type="button" className="sidebar-rail-button" aria-label="资源" aria-pressed={resourcesOpen}
     aria-controls={`${id}-resources-panel`} title="资源" onClick={()=>selectPanel('resources')}><Glyph name="lakeResources" size={22} filled={resourcesOpen}/></button></>}
-   {workspace&&<button type="button" className="sidebar-rail-button workspace-rail-button" aria-label={workspace.unreadUpdate?'工作区，有新版本':'工作区'}
-    aria-pressed={workspace.active} aria-controls={workspace.active?'workspace-page':undefined} title="工作区" onClick={()=>{expand();workspace.onOpen();}}>
-    <Glyph name="lakeWorkspace" size={22} filled={workspace.active}/>{workspace.unreadUpdate&&<span className="workspace-update-dot" aria-hidden="true"/>}
+   {workspace&&<button ref={workspaceButton} type="button" className="sidebar-rail-button workspace-rail-button" aria-label={workspace.unreadUpdate?'工作区，有新版本':'工作区'}
+    aria-current={workspace.active?'page':undefined} aria-haspopup="menu" aria-expanded={workspaceMenuOpen}
+    aria-controls={workspaceMenuOpen?`${id}-workspace-menu`:undefined} title="工作区" onClick={()=>setWorkspaceMenuOpen(open=>!open)}
+    onKeyDown={event=>{if(event.key==='ArrowDown'){event.preventDefault();setWorkspaceMenuOpen(true);}}}>
+    <Glyph name="lakeWorkspace" size={22} filled={workspace.active||workspaceMenuOpen}/>{workspace.unreadUpdate&&<span className="workspace-update-dot" aria-hidden="true"/>}
    </button>}
   </nav>
+  {workspace&&workspaceMenuOpen&&<NavigationMenu id={`${id}-workspace-menu`} title="工作区" className="workspace-actions-menu"
+   anchor={workspaceButton} placement="above" onClose={()=>setWorkspaceMenuOpen(false)} actions={[
+    {label:'项目',icon:'folder',run:workspace.onProjects},
+    {label:'设置',icon:'settings',description:workspace.modelConfigured?undefined:'待配置',run:workspace.onSettings},
+    {label:'检查更新',icon:'refresh',description:workspace.unreadUpdate?'新版本':undefined,run:workspace.onUpdates},
+   ]}/>}
   <div className="sidebar-navigation-viewport">
    <div id={contentId} className="sidebar-navigation-content" inert={collapsed} aria-hidden={collapsed||undefined}>
     {header}
@@ -60,7 +75,6 @@ export function SidebarWorkspaceNavigation({projectId,specialists,children,resou
       <SidebarScrollArea>{children}</SidebarScrollArea>
      </SidebarResourceActions.Provider>
     </section></>:!workspace?.active&&<SidebarScrollArea>{empty}</SidebarScrollArea>}
-    {workspace?.active&&workspace.navigation}
    </div>
   </div>
  </div>;

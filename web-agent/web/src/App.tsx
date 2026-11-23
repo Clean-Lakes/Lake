@@ -63,13 +63,13 @@ import {hasComposerModelChoices} from "./composerModelState";
 import {useSpecialistModel} from "./useSpecialistModel";
 import {BulkCheckbox, BulkNavigationDelete, type BulkSelection} from "./BulkNavigationDelete";
 import {addBulkTargets, bulkCatalogTargets, bulkKey, orderBulkDeletion, type BulkTarget, type BulkDeleteResult} from "./bulkNavigation";
-import {NavigationDelete,NavigationTrash,NavigationMenu,type NavigationDeleteTarget} from "./NavigationDelete";
+import {NavigationDelete,NavigationMenu,type NavigationDeleteTarget} from "./NavigationDelete";
 import {SessionEdit} from "./SessionEdit";
 import {TerminalConfigEdit} from "./TerminalConfigEdit";
 import { Workflows } from "./Workflows";
 import { ProjectMemory } from "./ProjectMemory";
 import {DesktopUpdate} from "./DesktopUpdate";
-import {WorkspacePage,WorkspaceSidebar} from "./WorkspacePage";
+import {WorkspacePage} from "./WorkspacePage";
 import { ActivityIndicator } from "./ActivityIndicator";
 import { PendingMessages } from "./PendingMessages";
 import { ModelSettings } from "./ModelSettings";
@@ -294,7 +294,6 @@ function AppContent() {
     const available = new Set(bulkCatalogTargets(catalog).map(bulkKey));
     setBulkSelected(current => current.every(target => available.has(bulkKey(target))) ? current : current.filter(target => available.has(bulkKey(target))));
   }, [catalog]);
-  const [trashOpen,setTrashOpen]=useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialTab,setSettingsInitialTab] = useState("models");
   const [navigationSearchOpen, setNavigationSearchOpen] = useState(false);
@@ -508,7 +507,11 @@ function AppContent() {
     setMobileMenu(false);
   }, [pushHistory]);
   const openWorkspacePage=()=>{
-    if(isWorkspacePage){setMobileMenu(false);return;}
+    if(isWorkspacePage){
+      setMobileMenu(false);
+      document.getElementById('workspace-projects-title')?.focus({preventScroll:true});
+      return;
+    }
     const box=conversationRef.current;
     if(box&&route.sessionId)conversationResume.current.set(route.sessionId,{top:box.scrollTop,following:conversationScroll.current.following});
     setResourceTerminalMenu(null);setResourceConfigContext(null);
@@ -1835,11 +1838,6 @@ function AppContent() {
     <Glyph name="search" size={18}/>
   </button>;
   const closeNavigation = <button type="button" className="icon-button mobile-only" title="关闭导航" aria-label="关闭导航" onClick={() => setMobileMenu(false)}><Glyph name="close"/></button>;
-  const workspaceNavigation = isWorkspacePage && <WorkspaceSidebar modelConfigured={modelConfigured} unreadUpdate={workspaceUpdateUnread}
-    connected={workspaceConnected} onProjects={() => {
-      setMobileMenu(false);
-      document.getElementById('workspace-projects-title')?.focus();
-    }} onSettings={openSettings} onUpdates={() => window.dispatchEvent(new Event('lake-open-updates'))} onTrash={() => setTrashOpen(true)}/>;
   const inspectorView=inspectedSnapshot&&activeSnapshot&&<SessionInspector key={inspectedSnapshot.session.id}
     snapshot={inspectedSnapshot} waitingForWindow={inspectorWaitingForWindow} taskPage={isSpecialistTasks||isSpecialistExecution}
     worker={inspectedWorker}
@@ -1852,7 +1850,7 @@ function AppContent() {
 
   return <SpecialistAvatarProvider channels={pilotWorkspace.workspace?.channels}><WorkbenchShell
     className={`app-shell has-workbench-navigation${terminalVisible ? " terminal-is-open" : ""}${detachedConversation?" has-workbench-conversation":""}${dockedConversation?" has-docked-conversation":""}${sharedIsland?" has-workbench-island":""}`}
-    compact={compactNavigation} inspectorOpen={dockedInspectorOpen} back={historyAvailable.back} forward={historyAvailable.forward} onStep={stepHistory}>
+    compact={compactNavigation} railOnly={isWorkspacePage} inspectorOpen={dockedInspectorOpen} back={historyAvailable.back} forward={historyAvailable.forward} onStep={stepHistory}>
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
     {mobileMenu && <button className="mobile-scrim" aria-label="关闭项目导航" onClick={() => setMobileMenu(false)}/>}
     {navigationSearchOpen && <WorkspaceSearch projects={projectList} sessions={catalog.sessions} resources={catalog.resources} canCreate={!!sidebarProject && connected && !pendingOperation} onClose={() => setNavigationSearchOpen(false)} onNewSession={() => {if(sidebarProject)openSessionDialog(sidebarProject.id);}} onChoose={entry => {
@@ -1874,7 +1872,9 @@ function AppContent() {
         </div>
         {bulkMode && <div className="bulk-navigation-toolbar"><button type="button" onClick={()=>{setBulkMode(false);setBulkSelected([]);}}>完成</button><span>已选 {bulkSelected.length} 项</span><button type="button" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkSelected([])}>清空</button><button type="button" className="danger-text" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}>删除所选</button></div>}
        </>}
-       workspace={{active:isWorkspacePage,onOpen:openWorkspacePage,unreadUpdate:workspaceUpdateUnread,navigation:workspaceNavigation}}
+       workspace={{active:isWorkspacePage,modelConfigured,unreadUpdate:workspaceUpdateUnread,onProjects:openWorkspacePage,
+        onSettings:()=>{setMobileMenu(false);openSettings();},
+        onUpdates:()=>{setMobileMenu(false);window.dispatchEvent(new Event('lake-open-updates'));}}}
        empty={<WelcomeSidebar disabled={!connected} onCreate={openProjectDialog}/>}
        selectionId={route.resourceId?`resource:${route.resourceId}`:`session:${route.sessionId??''}`} selectedPanel={route.resourceId?'resources':'specialists'}
        onSelectPanel={panel=>{
@@ -2085,7 +2085,6 @@ function AppContent() {
       setSidebarProjectId(null);setBulkMode(false);setBulkSelected([]);
       navigate({sessionId:null,resourceId:null,view:"workspace"});
     }else if(navigationDelete.kind==="project" && selectedSession?.projectId===navigationDelete.id)navigate({sessionId:null,resourceId:null});else if(navigationDelete.kind==="resource"&&route.resourceId===navigationDelete.id)navigate({sessionId:route.sessionId,resourceId:null});await refreshCatalog();if(navigationDelete.kind!=="project")await refreshCurrent();}}/>}
-    {trashOpen && <NavigationTrash onClose={()=>setTrashOpen(false)} onRestored={async()=>{await refreshCatalog();await refreshCurrent();}}/>}
     {settingsOpen && <ModelSettings completionEnabled={completionEnabled} onCompletionEnabledChange={setCompletionEnabled} onGatewayTask={inspectGatewayTask} watchdogEnabled={bootstrap?.backendRuntime==='typescript'} capabilityDetectionEnabled={bootstrap?.backendRuntime==='go'}
       memoryEngine={bootstrap?.memoryEngine} initialTab={settingsInitialTab} onClose={() => setSettingsOpen(false)} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut} onSessionConfig={activeSnapshot?.ai && !selectedResource && !isWorkspacePage ? () => {setSettingsOpen(false);setAgentOptionsOpen(true);} : undefined} onProjectMemory={selectedProjectId ? () => {const project=projectList.find(p=>p.id===selectedProjectId);if(project){setSettingsOpen(false);setMemoryProject(project);}} : undefined} projectId={selectedProjectId??sidebarProject?.id} projectName={projectList.find(project=>project.id===(selectedProjectId??sidebarProject?.id))?.name} ignoreProjectMemory={ignoreProjectMemory} onIgnoreProjectMemoryChange={setIgnoreProjectMemory}/>}
     {jumpProject && <JumpServerSettings key={jumpProject.id} project={jumpProject} refresh={refreshCatalog} onClose={()=>setJumpProject(null)}/>}

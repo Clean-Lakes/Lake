@@ -1110,12 +1110,6 @@ a { color: inherit; }
 
 .sidebar-trash { display: flex; align-items: center; gap: 9px; width: calc(100% - 20px); margin: 4px 10px 0; padding: 8px 11px; border: 0; border-radius: var(--radius-panel); background: none; color: var(--text-secondary); font-size: var(--font-size-ui); }
 .sidebar-trash:hover:not(:disabled) { background: var(--surface-hover); }
-.navigation-trash-dialog.modal { width: min(640px,calc(100vw - 36px)); }
-.navigation-trash-list { list-style: none; margin: 0; padding: 0; }
-.navigation-trash-list>li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border); }
-.navigation-trash-list>li>div { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 5px; }
-.navigation-trash-list strong { font-size: var(--font-size-ui); font-weight:var(--font-weight-medium); overflow-wrap: anywhere; }
-.navigation-trash-list small { font-size: var(--font-size-ui); color: var(--text-secondary); }
 .navigation-delete-dialog h2 { overflow-wrap: anywhere; }
 .resource-import-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
 .resource-import-selection small { color: var(--foreground); font-size: var(--font-size-ui); }

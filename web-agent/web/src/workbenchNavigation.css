@@ -57,6 +57,8 @@
   .app-shell.has-collapsed-sidebar::before,
   .app-shell.has-collapsed-sidebar .sidebar-navigation-content,
   .app-shell.has-collapsed-sidebar .sidebar-navigation-rail::after { opacity:0; }
+  .app-shell.has-rail-only-sidebar::before,
+  .app-shell.has-rail-only-sidebar .sidebar-navigation-rail::after { opacity:1; }
   /* Keep the navigation at its settled width as it slides behind the rail. */
   .app-shell.has-docked-conversation .sidebar-navigation-viewport {
     inline-size:calc(100% - var(--sidebar-rail-width));
@@ -95,6 +97,7 @@
       inline-size var(--workbench-sidebar-duration) var(--workbench-sidebar-ease),
       height var(--workbench-sidebar-duration) var(--workbench-sidebar-ease);
   }
+  .app-shell.has-rail-only-sidebar > .workbench-navigation { inset-inline-end:auto; min-inline-size:0; }
   .app-shell.has-docked-conversation > .workbench-navigation {
     --workbench-island-navigation-top:var(--conversation-island-top);
     transition:none;
@@ -128,11 +131,10 @@
   .workbench-navigation button:hover:not(:disabled) { color:var(--foreground); background:var(--surface-hover); }
   .workbench-navigation button:disabled { opacity:.42; }
   .workbench-navigation button:focus-visible { outline-offset:-2px; }
-  .app-shell.has-collapsed-sidebar:not(.has-workbench-conversation) { padding-block-start:var(--workbench-navigation-height); }
-  .app-shell.has-collapsed-sidebar:not(.has-workbench-conversation) > .sidebar.workspace-navigation { margin-block-start:calc(-1 * var(--workbench-navigation-height)); }
+  .app-shell.has-collapsed-sidebar:not(.has-workbench-conversation,.has-rail-only-sidebar) { padding-block-start:var(--workbench-navigation-height); }
+  .app-shell.has-collapsed-sidebar:not(.has-workbench-conversation,.has-rail-only-sidebar) > .sidebar.workspace-navigation { margin-block-start:calc(-1 * var(--workbench-navigation-height)); }
   .app-shell.has-collapsed-sidebar > .workbench-splitter-sidebar { display:none; }
   .app-shell[data-sidebar-sliding] > .workbench-splitter-sidebar { visibility:hidden; }
-  :root.lake-windows-chrome .app-shell.has-collapsed-sidebar .workspace.is-workspace-page .workspace-header.workspace-page-header { padding-block-start:0; }
 }
 @media (min-width:701px) and (pointer:coarse) {
   :root .app-shell.has-workbench-navigation { --workbench-navigation-height:48px; --workbench-navigation-button-size:44px; }
