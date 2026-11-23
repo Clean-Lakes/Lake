@@ -10,8 +10,8 @@
     --workbench-navigation-min-width:calc(3 * var(--workbench-navigation-button-size) + 2 * var(--workbench-navigation-gap));
     --workbench-navigation-island-padding:8px;
     --workbench-navigation-island-width:calc(var(--workbench-navigation-min-width) + 2 * var(--workbench-navigation-island-padding));
-    --workbench-sidebar-duration:300ms;
-    --workbench-sidebar-ease:cubic-bezier(.45,0,.3,1);
+    --workbench-sidebar-duration:420ms;
+    --workbench-sidebar-ease:cubic-bezier(.3,.15,.25,1);
     --workbench-chrome-background:var(--workbench-content-background,var(--paper));
     background:var(--workbench-chrome-background);
     transition:none;
