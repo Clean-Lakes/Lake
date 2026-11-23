@@ -8,7 +8,7 @@ import type {SuperWorkspace} from '../../shared/contracts';
 test('Pilot and real specialist instances replace session creation',()=>{
  const workspace:SuperWorkspace={active:true,project:{projectId:'project',routerSessionId:'pilot',version:1},workers:[{id:'orders-worker',roleId:'orders',roleName:'订单专员',sessionId:'orders-context',assignmentState:'parked',task:{taskId:'orders',sessionId:'orders-context',projectId:'project',title:'排查订单超时',state:'blocked',acceptanceState:'insufficient',revision:7,originRootTurnId:'actual-root',deadlineAt:'2026-11-03T00:00:00Z'}}]};
  const html=renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:'pilot',onPilot(){},onWorker(){}}));
- assert.match(html,/对话与任务统筹/);
+ assert.match(html,/>打开对话<\/span>/);
  assert.match(html,/订单专员/);assert.match(html,/排查订单超时/);assert.match(html,/已暂停/);
  assert.doesNotMatch(html,/新会话|新对话|已验收|项目执行范围|设置执行范围/);
  assert.match(html,/aria-current="page"/);
@@ -51,7 +51,7 @@ test('a specialist created before any task is navigable with its persistent duti
 
 test('the built-in Pilot remains available during initial workspace activation and preserves actual errors',()=>{
  const html=renderToStaticMarkup(createElement(PilotWorkspace,{workspace:null,error:'仍在核对旧记录',selectedId:null,pilotDisabled:true,onPilot(){},onWorker(){}}));
- assert.match(html,/Pilot · 话事人 · 内置专员/);assert.match(html,/<small>1<\/small>/);assert.match(html,/仍在核对旧记录/);
+ assert.match(html,/Pilot · 打开对话 · 内置专员/);assert.match(html,/<small>1<\/small>/);assert.match(html,/仍在核对旧记录/);
  assert.match(html,/<button[^>]+class="nav-row sidebar-pilot-entry"[^>]+disabled/);
  assert.doesNotMatch(html,/aria-current|删除专员|aria-haspopup/);
 });
