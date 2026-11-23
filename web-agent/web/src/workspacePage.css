@@ -4,8 +4,10 @@
 }
 
 .workspace-sidebar-mobile-actions {
+  position:absolute;
+  inset-block-start:calc(var(--lake-titlebar-height, 0px) + 4px);
+  inset-inline:0;
   justify-items:center;
-  padding-block-start:calc(var(--lake-titlebar-height, 0px) + 4px);
 }
 
 .workspace-page {
