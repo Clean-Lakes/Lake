@@ -24,6 +24,9 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
   let frame=0;
   let previousRoster:HTMLElement|null=null, previousRosterWidth=0, previousIslandWidth=0;
   let rosterAnimation:Animation|undefined;
+  let sidebarAnimation:Animation|undefined;
+  let sidebarDeadline=0,previousLeft=0;
+  let sidebarCollapsed=shell.classList.contains('has-collapsed-sidebar');
   const reduced=matchMedia('(prefers-reduced-motion:reduce)');
   const textMetrics=document.createElement('canvas').getContext('2d');
   const flights:Record<'terminal',IslandFlight>={terminal:{}};
@@ -61,13 +64,19 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
   const measure=()=>{
    if(frame)cancelAnimationFrame(frame);
    frame=0;
-   const view=shell.querySelector<HTMLElement>('.session-layout > .session-view');
-   if(!view)return;
+   const workspace=shell.querySelector<HTMLElement>('.workspace');
+   const view=workspace?.querySelector<HTMLElement>('.session-layout > .session-view');
+   if(!workspace||!view)return;
    const bounds=view.getBoundingClientRect(),base=shell.getBoundingClientRect();
    const composer=view.querySelector('.composer-input')?.getBoundingClientRect();
    const frameInset=parseFloat(getComputedStyle(view).getPropertyValue('--conversation-frame-inset'))||0;
-   const left=(frameInset?bounds.left+frameInset*2:composer?.left??bounds.left+48)-base.left;
-   const available=Math.max(1,frameInset?bounds.width-frameInset*4:composer?.width??bounds.width-96);
+   const top=Math.max(shell.closest('html.lake-windows-chrome')?52:12,12+(parseFloat(getComputedStyle(shell).paddingTop)||0));
+   const workspaceStyle=getComputedStyle(workspace);
+   const conversationTop=frameInset?workspace.getBoundingClientRect().top-base.top+parseFloat(workspaceStyle.borderTopWidth)+parseFloat(workspaceStyle.paddingTop)+frameInset:top;
+   const paneLeft=(frameInset?bounds.left+frameInset*2:composer?.left??bounds.left+48)-base.left;
+   const toolbar=shell.querySelector('.workbench-navigation')?.getBoundingClientRect();
+   const left=toolbar&&toolbar.bottom>base.top+conversationTop?Math.max(paneLeft,toolbar.right-base.left+12):paneLeft;
+   const available=Math.max(1,(frameInset?bounds.width-frameInset*4:composer?.width??bounds.width-96)-(left-paneLeft));
    const title=identity.querySelector<HTMLElement>('.crumb-title'),state=identity.querySelector<HTMLElement>('.header-morph-slot.is-visible .header-morph-content');
    const textWidth=(node:HTMLElement|null)=>{
     if(!node)return 0;
@@ -114,11 +123,12 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    };
    // The panel becomes visible after the shared width budget has been applied.
    const terminalPane=open.current.terminal?rail(shell.querySelector<HTMLElement>('.terminal-side-panel.is-open')):undefined;
-   const titleWidth=Math.max(60,Math.min(213,(title?textWidth(title):160)+titleIconWidth));
    const taskTrigger=identity.querySelector<HTMLElement>('.specialist-task-trigger');
    // Use the same stable spacing tokens as CSS. No second status reserve or
    // extra task-button gap: each visible segment contributes exactly once.
    const islandStyle=getComputedStyle(identity);
+   const minTitleWidth=parseFloat(islandStyle.getPropertyValue('--island-title-min'));
+   const titleWidth=Math.max(minTitleWidth,Math.min(213,(title?textWidth(title):160)+titleIconWidth));
    const inset=parseFloat(islandStyle.getPropertyValue('--island-header-inset'));
    const gap=parseFloat(islandStyle.getPropertyValue('--island-header-gap'));
    const taskControlWidth=taskTrigger?.offsetWidth??0;
@@ -143,14 +153,29 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
     inspectorWidth:144,
     terminalWidth:Math.min(320,Math.max(260,terminalNameWidth+(terminalNumber?.offsetWidth??0)+(terminalCount?.offsetWidth??0)+112)),
    });
-   const top=Math.max(shell.closest('html.lake-windows-chrome')?52:12,12+(parseFloat(getComputedStyle(shell).paddingTop)||0));
-   const source={...layout.conversation,top:frameInset?bounds.top-base.top+frameInset:top};
+   const source={...layout.conversation,top:conversationTop};
    shell.style.setProperty('--pane-rail-bottom',`${Math.max(12,base.bottom-(composer?.top??base.bottom)+12)}px`);
    const skipMotion=reduced.matches||document.hidden||document.documentElement.classList.contains('workbench-resizing');
-   const resizeRoster=!!roster&&roster===previousRoster&&rosterWidth!==previousRosterWidth&&source.width!==previousIslandWidth&&!skipMotion;
+   const collapsed=shell.classList.contains('has-collapsed-sidebar');
+   const toggled=sidebarCollapsed!==collapsed;
+   const slide=!skipMotion&&(toggled||(sidebarAnimation&&source.left!==previousLeft));
+   const fromLeft=slide?identity.getBoundingClientRect().left-base.left:source.left;
+   if(slide||skipMotion){sidebarAnimation?.cancel();sidebarAnimation=undefined;}
+   sidebarCollapsed=collapsed;previousLeft=source.left;
+   const resizeRoster=!!roster&&roster===previousRoster&&rosterWidth!==previousRosterWidth&&source.width!==previousIslandWidth&&!skipMotion&&!slide&&!sidebarAnimation;
    const fromWidth=resizeRoster?identity.getBoundingClientRect().width:source.width;
-   if(source.width!==previousIslandWidth||skipMotion){rosterAnimation?.cancel();rosterAnimation=undefined;}
+   if(source.width!==previousIslandWidth||skipMotion||slide){rosterAnimation?.cancel();rosterAnimation=undefined;}
    write(identity,source);identity.dataset.ready='true';identity.dataset.present='true';identity.title=title?.textContent??'';
+   if(slide&&Math.abs(fromLeft-source.left)>.5){
+    const now=performance.now();
+    if(toggled)sidebarDeadline=now+parseFloat(islandStyle.getPropertyValue('--workbench-sidebar-duration'));
+    // Retarget from the painted position when the user reverses mid-flight.
+    const animation=identity.animate([
+     {transform:`translate3d(${fromLeft-source.left}px,0,0)`},{transform:'translate3d(0,0,0)'},
+    ],{duration:Math.max(1,sidebarDeadline-now),easing:islandStyle.getPropertyValue('--workbench-sidebar-ease').trim(),fill:'both'});
+    sidebarAnimation=animation;
+    animation.onfinish=()=>{if(sidebarAnimation!==animation)return;sidebarAnimation=undefined;animation.cancel();window.dispatchEvent(new Event('lake-chrome-resize'));};
+   }
    if(resizeRoster&&Math.abs(source.width-fromWidth)>.5)rosterAnimation=identity.animate([
     {width:`${fromWidth}px`},{width:`${source.width}px`},
    ],{duration:parseFloat(islandStyle.getPropertyValue('--pilot-roster-duration')),easing:islandStyle.getPropertyValue('--pilot-roster-ease').trim()});
@@ -174,11 +199,11 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
   content.observe(shell,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['class','data-pilot-roster-open','data-preferred-width']});
   window.addEventListener('resize',schedule);window.addEventListener('lake-workbench-layout',measure);
   document.addEventListener('visibilitychange',schedule);reduced.addEventListener('change',schedule);measure();
-  return()=>{scheduleLayout.current=()=>{};content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);window.removeEventListener('lake-workbench-layout',measure);document.removeEventListener('visibilitychange',schedule);reduced.removeEventListener('change',schedule);rosterAnimation?.cancel();for(const flight of Object.values(flights))flight.animation?.cancel();shell.style.removeProperty('--pane-rail-bottom');};
+  return()=>{scheduleLayout.current=()=>{};content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);window.removeEventListener('lake-workbench-layout',measure);document.removeEventListener('visibilitychange',schedule);reduced.removeEventListener('change',schedule);rosterAnimation?.cancel();sidebarAnimation?.cancel();for(const flight of Object.values(flights))flight.animation?.cancel();shell.style.removeProperty('--pane-rail-bottom');};
  },[]);
  useLayoutEffect(()=>scheduleLayout.current(),[inspectorOpen,terminalOpen]);
  return <div ref={root} className="lake-workbench-islands" role="group" aria-label="Lake Island 工作台">
   <div ref={conversationIsland} className="lake-workbench-island island-conversation" data-pilot-island-tone={pilotTone}><span className="workspace-header-glass" aria-hidden="true"/>{activity}{conversation}</div>
-  <div ref={terminalIsland} className="lake-workbench-island island-terminal" data-open={terminalOpen} inert={!terminalOpen} aria-hidden={!terminalOpen}><span className="workspace-header-glass" aria-hidden="true"/>{terminal}</div>
+  {terminal&&<div ref={terminalIsland} className="lake-workbench-island island-terminal" data-open={terminalOpen} inert={!terminalOpen} aria-hidden={!terminalOpen}><span className="workspace-header-glass" aria-hidden="true"/>{terminal}</div>}
  </div>;
 }

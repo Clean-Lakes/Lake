@@ -1,6 +1,7 @@
 /* Each pane owns one floating surface; the shell only carries their shared overlay. */
 .lake-workbench-islands { position:absolute; inset:0 0 auto; height:0; z-index:25; pointer-events:none; }
-.lake-workbench-island { --island-header-inset:14px; --island-header-gap:10px; position:absolute; top:12px; height:46px; min-width:0; display:flex; align-items:center; border:1px solid var(--border); border-radius:var(--radius-window); corner-shape:var(--corner-window); box-shadow:0 3px 12px rgb(0 0 0 / 5%); background:transparent; isolation:isolate; visibility:hidden; pointer-events:auto; container-type:inline-size; transition:none!important; }
+.lake-workbench-island { --island-header-inset:14px; --island-header-gap:10px; --island-title-min:60px; position:absolute; top:12px; height:46px; min-width:0; display:flex; align-items:center; border:1px solid var(--border); border-radius:var(--radius-window); corner-shape:var(--corner-window); box-shadow:0 3px 12px rgb(0 0 0 / 5%); background:transparent; isolation:isolate; visibility:hidden; pointer-events:auto; container-type:inline-size; transition:none!important; }
+.app-shell.has-workbench-conversation:not(.has-workbench-island) .island-conversation { --island-title-min:0px; box-shadow:var(--shadow-popover); }
 .lake-workbench-island[data-ready=true][data-present=true] { visibility:visible; }
 .lake-workbench-island[data-open=false] { pointer-events:none; }
 .lake-workbench-island[data-moving=true] { z-index:3; will-change:transform,opacity; }
@@ -13,7 +14,7 @@
 .lake-workbench-island .workspace-header { justify-content:flex-start; position:relative; display:flex; align-items:center; gap:var(--island-header-gap); min-width:0; min-height:44px; height:44px; width:100%; padding:5px var(--island-header-inset); border:0; border-radius:0; background:transparent; box-shadow:none; }
 .lake-workbench-island .workspace-header > .workspace-header-glass { display:none; }
 .lake-workbench-island .workspace-header > :not(.workspace-header-sweep) { position:relative; z-index:2; }
-.lake-workbench-island .breadcrumbs { flex:0 1 auto; min-width:60px; max-width:213px; gap:8px; }
+.lake-workbench-island .breadcrumbs { flex:0 1 auto; min-width:var(--island-title-min); max-width:213px; gap:8px; }
 .lake-workbench-island .breadcrumbs strong { min-width:0; }
 .lake-workbench-island .pilot-island-trigger { border:0; padding-left:8px; gap:8px; }
 .lake-workbench-island .header-state-area { flex:0 1 auto; }
@@ -37,7 +38,7 @@
 .island-terminal .terminal-panel-header > strong > svg { flex:none; }
 .terminal-island-switcher .terminal-island-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .island-terminal .terminal-tab-dot { width:5px; height:5px; flex:none; }
-.app-shell.has-workbench-island .workspace.has-floating-header > .system-banner { margin-top:80px; }
+.app-shell.has-workbench-conversation .workspace.has-floating-header > .system-banner { margin-top:80px; }
 html.lake-windows-chrome .lake-workbench-island { top:52px; }
 html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { padding-top:120px; }
 

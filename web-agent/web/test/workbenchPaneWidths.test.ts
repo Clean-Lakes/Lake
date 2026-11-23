@@ -58,11 +58,9 @@ test('collapsing to the icon rail returns width to the workbench and preserves t
  const page=fixture({sidebar:304,terminal:400,inspector:382});
  page.resize(1232);
  const expanded=page.widths();
- const endpoint=(state:'expanded'|'collapsed')=>['sidebar','terminal','inspector'].map(pane=>parseFloat(page.properties.get(`--${pane}-${state}-width`)!));
  page.collapseSidebar(true);
  assert.deepEqual(page.widths(),[44,400,372]);
- assert.deepEqual(endpoint('collapsed'),page.widths());
- assert.deepEqual(endpoint('expanded'),expanded);
+ assert.equal(page.properties.get('--sidebar-expanded-width'),`${expanded[0]}px`);
  page.collapseSidebar(false);
  assert.deepEqual(page.widths(),expanded);
 });

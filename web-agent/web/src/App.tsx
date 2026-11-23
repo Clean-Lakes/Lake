@@ -1742,13 +1742,14 @@ function AppContent() {
   // already mounted message tree when the engine starts publishing cards.
   const useConversationTranscript = !!activeSnapshot && (!!activeSnapshot.ai ||
     (!isLegacyHistory && !activeSnapshot.specialists?.length));
-  const sharedIsland=sessionHeader&&wideWorkbench;
+  const detachedConversation=sessionHeader&&!compactNavigation;
+  const sharedIsland=detachedConversation&&wideWorkbench;
   const headerSweep=sessionHeader&&<HeaderSweep key={`sweep-${selectedSession.id}`} active={pilotHeaderActivity?.animated??(avatarActivity?.state==='running')}/>;
   const pilotTone=sessionHeader&&selectedSuperPilot&&!headerPilot&&!headerPilotMode?
     sessionBadgeState(superHeaderPresentation?.status??selectedSession.status,superHeaderPresentation?.label).tone:undefined;
   const workspaceHeading=<header className={`workspace-header${specialistMenu?' has-specialist-tasks':''}${headerPilot||headerPilotMode ? ' has-pilot-island' : ''}${headerPilotMode&&!headerPilot?' has-pilot-mode':''}`} data-pilot-island-tone={pilotTone}>
-        {sessionHeader && <span className="workspace-header-glass" aria-hidden="true"/>}
-        {!sharedIsland&&headerSweep}
+        {sessionHeader&&!detachedConversation&&<span className="workspace-header-glass" aria-hidden="true"/>}
+        {!detachedConversation&&headerSweep}
         <button className="icon-button mobile-only" aria-label="打开项目导航" onClick={() => setMobileMenu(true)}><Glyph name="menu" size={21}/></button>
         {selectedResource?.kind === "grafana" ? <div className="breadcrumbs">
           <Glyph name="panel" size={17}/>
@@ -1829,7 +1830,7 @@ function AppContent() {
       document.getElementById('workspace-projects-title')?.focus();
     }} onSettings={openSettings} onUpdates={() => window.dispatchEvent(new Event('lake-open-updates'))} onTrash={() => setTrashOpen(true)}/>;
 
-  return <SpecialistAvatarProvider channels={pilotWorkspace.workspace?.channels}><div className={`app-shell has-workbench-navigation${terminalVisible ? " terminal-is-open" : ""}${sharedIsland?" has-workbench-island":""}${sidebarCollapsedOnDesktop?" has-collapsed-sidebar":""}`}>
+  return <SpecialistAvatarProvider channels={pilotWorkspace.workspace?.channels}><div className={`app-shell has-workbench-navigation${terminalVisible ? " terminal-is-open" : ""}${detachedConversation?" has-workbench-conversation":""}${sharedIsland?" has-workbench-island":""}${sidebarCollapsedOnDesktop?" has-collapsed-sidebar":""}`}>
     <WorkbenchNavigation expanded={!sidebarCollapsedOnDesktop} back={historyAvailable.back} forward={historyAvailable.forward}
       onToggle={() => setSidebarCollapsed(collapsed => !collapsed)} onStep={stepHistory}/>
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
@@ -1936,7 +1937,7 @@ function AppContent() {
 
     </aside>
 
-    {sharedIsland&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={terminalHeading} inspectorOpen={inspectorOpen} terminalOpen={terminalOpen} pilotTone={pilotTone}/>}
+    {detachedConversation&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={sharedIsland?terminalHeading:null} inspectorOpen={inspectorOpen} terminalOpen={sharedIsland&&terminalOpen} pilotTone={pilotTone}/>}
     <main className={`workspace${window.lakeInspectorWindow?"":" web-inspector-layout"}${inspectorOpen?" has-session-inspector":""}${isWorkspacePage?" is-workspace-page":!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":sessionSelected?" has-specialist-task-list":""}`} onDragOver={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="none";return;}if(selectedSession&&!isLegacyHistory&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.stopPropagation();return;}if(!selectedSession||isLegacyHistory||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
       {isWorkspacePage?<WorkspacePage project={sidebarProject} projects={projectList} resources={catalog.resources}
         connected={workspaceConnected} bulkSelection={bulkSelection} bulkSelectedCount={bulkSelected.length}
@@ -1951,7 +1952,7 @@ function AppContent() {
         onToggleBulk={() => {setBulkMode(!bulkMode);setBulkSelected([]);}}
         onClearSelection={() => setBulkSelected([])}
         onDeleteSelected={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}/>:<>
-      {!sharedIsland&&(isSpecialistTasks?<header className="specialist-mobile-heading"><button type="button" className="icon-button" aria-label="打开项目导航" onClick={()=>setMobileMenu(true)}><Glyph name="menu" size={21}/></button><span>专员任务</span></header>:workspaceHeading)}
+      {!detachedConversation&&(isSpecialistTasks?<header className="specialist-mobile-heading"><button type="button" className="icon-button" aria-label="打开项目导航" onClick={()=>setMobileMenu(true)}><Glyph name="menu" size={21}/></button><span>专员任务</span></header>:workspaceHeading)}
 
       {!persistentMode && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>服务端不支持持续终端。请核对服务端版本。</span></div>}
       {connection.warning && warningSessionId === sessionId && <div className="system-banner offline-banner" role="alert"><Glyph name="alert" size={18}/><span>{visibleSessionError || "实时连接已断开。当前内容可能不是最新状态，操作已暂停。"}</span><button onClick={() => sessionId ? setSessionReload(value => value + 1) : void loadApp()}><Glyph name="refresh" size={15}/>重试</button></div>}
