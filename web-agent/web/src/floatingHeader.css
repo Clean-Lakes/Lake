@@ -197,22 +197,42 @@ html.lake-windows-chrome .conversation-header-backdrop { top:48px; }
 .app-shell.has-docked-conversation {
  --conversation-header-inset:16px;
  --conversation-header-actions-offset:76px;
- --conversation-window-controls:0px;
- --conversation-header-clearance:calc(var(--workbench-navigation-height) + 14px);
+ --conversation-island-top:12px;
+ --conversation-island-bottom:calc(var(--conversation-island-top) + 46px);
+ --conversation-header-clearance:calc(var(--conversation-island-bottom) + 18px);
 }
-:root.lake-windows-chrome .app-shell.has-docked-conversation { --conversation-window-controls:138px; }
+:root.lake-windows-chrome .app-shell.has-docked-conversation { --conversation-island-top:52px; }
 :root .app-shell.has-docked-conversation > .workspace.has-floating-header {
  --background:var(--workbench-chrome-background);
  --paper:var(--background);
+ --conversation-frame-radius:max(8px,calc(var(--radius-window) - 8px));
  --workbench-bottom-inset:16px;
  border-inline-start:1px solid var(--conversation-frame-border,var(--border));
+ border-start-start-radius:var(--conversation-frame-radius);
+ corner-shape:var(--corner-window);
 }
 :root .app-shell.has-docked-conversation.has-collapsed-sidebar > .workspace.has-floating-header { border-inline-start-color:transparent; }
+/* The top-left curve and the divider share the native fallback contour. */
+:root.lake-corner-fallback .app-shell.has-docked-conversation > .workspace.has-floating-header {
+ border-inline-start-color:transparent;
+ border-start-start-radius:0;
+ -webkit-mask-box-image:url('/window-corner-fill.svg') 22 fill / var(--conversation-frame-radius) 0 0 var(--conversation-frame-radius) / 0 stretch;
+}
+:root.lake-corner-fallback .app-shell.has-docked-conversation:not(.has-collapsed-sidebar) > .workspace.has-floating-header::after {
+ content:"";
+ position:absolute;
+ inset:0 0 0 -1px;
+ z-index:30;
+ pointer-events:none;
+ background:var(--conversation-frame-border,var(--border));
+ clip-path:inset(0 calc(100% - var(--conversation-frame-radius)) 0 0);
+ -webkit-mask-box-image:url('/window-corner-stroke.svg') 22 fill / var(--conversation-frame-radius) 0 0 var(--conversation-frame-radius) / 0 stretch;
+}
 .app-shell.has-docked-conversation .conversation { scroll-padding-top:var(--conversation-header-clearance); }
 .app-shell.has-docked-conversation .timeline-list { padding-top:var(--conversation-header-clearance); }
-.app-shell.has-docked-conversation > .workspace.has-floating-header > .system-banner { margin-top:var(--workbench-navigation-height); }
+.app-shell.has-docked-conversation > .workspace.has-floating-header > .system-banner { margin-top:var(--conversation-header-clearance); }
 html .app-shell.has-docked-conversation .conversation-header-backdrop {
- --conversation-header-cover:var(--workbench-navigation-height);
+ --conversation-header-cover:var(--conversation-island-bottom);
  top:0;
  height:var(--conversation-header-clearance);
  -webkit-backdrop-filter:none;

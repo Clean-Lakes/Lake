@@ -13,7 +13,7 @@ type IslandFlight={open?:boolean;target?:IslandBox;animation?:Animation;deadline
 const sameBox=(a:IslandBox|undefined,b:IslandBox)=>!!a&&Math.abs(a.left-b.left)<.5&&Math.abs(a.top-b.top)<.5&&Math.abs(a.width-b.width)<.5;
 
 /** The terminal island separates from the conversation; the inspector owns its card header. */
-export function WorkbenchIsland({conversation,terminal,activity,docked,inspectorOpen,terminalOpen,pilotTone}:{conversation:ReactNode;terminal:ReactNode;activity:ReactNode;docked:boolean;inspectorOpen:boolean;terminalOpen:boolean;pilotTone?:string}){
+export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,terminalOpen,pilotTone}:{conversation:ReactNode;terminal:ReactNode;activity:ReactNode;inspectorOpen:boolean;terminalOpen:boolean;pilotTone?:string}){
  const root=useRef<HTMLDivElement>(null),conversationIsland=useRef<HTMLDivElement>(null),terminalIsland=useRef<HTMLDivElement>(null);
  const open=useRef({terminal:terminalOpen});
  open.current={terminal:terminalOpen};
@@ -68,17 +68,17 @@ export function WorkbenchIsland({conversation,terminal,activity,docked,inspector
    const view=workspace?.querySelector<HTMLElement>('.session-layout > .session-view');
    if(!workspace||!view)return;
    const bounds=view.getBoundingClientRect(),base=shell.getBoundingClientRect(),workspaceBounds=workspace.getBoundingClientRect();
-   const dockedTitle=identity.classList.contains('is-docked');
+   const dockedPane=shell.classList.contains('has-docked-conversation');
    const composer=view.querySelector('.composer-input')?.getBoundingClientRect();
    const frameInset=parseFloat(getComputedStyle(view).getPropertyValue('--conversation-frame-inset'))||0;
    const top=Math.max(shell.closest('html.lake-windows-chrome')?52:12,12+(parseFloat(getComputedStyle(shell).paddingTop)||0));
    const workspaceStyle=getComputedStyle(workspace);
-   const conversationTop=dockedTitle?workspaceBounds.top-base.top:frameInset?workspaceBounds.top-base.top+parseFloat(workspaceStyle.borderTopWidth)+parseFloat(workspaceStyle.paddingTop)+frameInset:top;
-   const paneLeft=(dockedTitle?workspaceBounds.left+parseFloat(workspaceStyle.getPropertyValue('--conversation-header-inset')):frameInset?bounds.left+frameInset*2:composer?.left??bounds.left+48)-base.left;
+   const conversationTop=dockedPane?workspaceBounds.top-base.top+parseFloat(workspaceStyle.getPropertyValue('--conversation-island-top')):frameInset?workspaceBounds.top-base.top+parseFloat(workspaceStyle.borderTopWidth)+parseFloat(workspaceStyle.paddingTop)+frameInset:top;
+   const paneLeft=(dockedPane?workspaceBounds.left+parseFloat(workspaceStyle.getPropertyValue('--conversation-header-inset')):frameInset?bounds.left+frameInset*2:composer?.left??bounds.left+48)-base.left;
    const toolbar=shell.querySelector('.workbench-navigation')?.getBoundingClientRect();
    const left=toolbar&&toolbar.bottom>base.top+conversationTop?Math.max(paneLeft,toolbar.right-base.left+12):paneLeft;
-   const actionsSpace=dockedTitle?parseFloat(workspaceStyle.getPropertyValue('--conversation-header-actions-offset'))+parseFloat(workspaceStyle.getPropertyValue('--conversation-window-controls'))+12:0;
-   const right=dockedTitle?bounds.right-base.left-actionsSpace:paneLeft+(frameInset?bounds.width-frameInset*4:composer?.width??bounds.width-96);
+   const actionsSpace=dockedPane?parseFloat(workspaceStyle.getPropertyValue('--conversation-header-actions-offset'))+12:0;
+   const right=dockedPane?bounds.right-base.left-actionsSpace:paneLeft+(frameInset?bounds.width-frameInset*4:composer?.width??bounds.width-96);
    const available=Math.max(1,right-left);
    const title=identity.querySelector<HTMLElement>('.crumb-title'),state=identity.querySelector<HTMLElement>('.header-morph-slot.is-visible .header-morph-content');
    const textWidth=(node:HTMLElement|null)=>{
@@ -204,9 +204,9 @@ export function WorkbenchIsland({conversation,terminal,activity,docked,inspector
   document.addEventListener('visibilitychange',schedule);reduced.addEventListener('change',schedule);measure();
   return()=>{scheduleLayout.current=()=>{};content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);window.removeEventListener('lake-workbench-layout',measure);document.removeEventListener('visibilitychange',schedule);reduced.removeEventListener('change',schedule);rosterAnimation?.cancel();sidebarAnimation?.cancel();for(const flight of Object.values(flights))flight.animation?.cancel();shell.style.removeProperty('--pane-rail-bottom');};
  },[]);
- useLayoutEffect(()=>scheduleLayout.current(),[docked,inspectorOpen,terminalOpen]);
+ useLayoutEffect(()=>scheduleLayout.current(),[inspectorOpen,terminalOpen]);
  return <div ref={root} className="lake-workbench-islands" role="group" aria-label="Lake Island 工作台">
-  <div ref={conversationIsland} className={`lake-workbench-island island-conversation${docked?' is-docked':''}`} data-pilot-island-tone={pilotTone}>{!docked&&<span className="workspace-header-glass" aria-hidden="true"/>}{activity}{conversation}</div>
+  <div ref={conversationIsland} className="lake-workbench-island island-conversation" data-pilot-island-tone={pilotTone}><span className="workspace-header-glass" aria-hidden="true"/>{activity}{conversation}</div>
   {terminal&&<div ref={terminalIsland} className="lake-workbench-island island-terminal" data-open={terminalOpen} inert={!terminalOpen} aria-hidden={!terminalOpen}><span className="workspace-header-glass" aria-hidden="true"/>{terminal}</div>}
  </div>;
 }

@@ -59,10 +59,10 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
    }
    const bounds=container!.getBoundingClientRect(),heading=header?.getBoundingClientRect();
    let left=Math.max(bounds.left+4,bounds.right-76),top=Math.max(bounds.top+12,(heading?.top??bounds.top)+9);
-   if(heading&&header?.classList.contains('is-docked')){
+   if(heading&&container!.closest('.has-docked-conversation')){
     const style=getComputedStyle(container!);
-    const reserve=parseFloat(style.getPropertyValue('--conversation-window-controls'))+parseFloat(style.getPropertyValue('--conversation-header-actions-offset'));
-    left=Math.max(bounds.left+4,bounds.right-reserve);
+    const actionsOffset=parseFloat(style.getPropertyValue('--conversation-header-actions-offset'));
+    left=Math.max(bounds.left+4,bounds.right-actionsOffset);
     top=heading.top+Math.max(0,(heading.height-(trigger.current?.offsetHeight??28))/2);
    }
    const compact=!!heading&&left<heading.right+8&&left+64>heading.left;
