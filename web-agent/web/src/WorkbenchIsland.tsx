@@ -13,7 +13,7 @@ type IslandFlight={open?:boolean;target?:IslandBox;animation?:Animation;deadline
 const sameBox=(a:IslandBox|undefined,b:IslandBox)=>!!a&&Math.abs(a.left-b.left)<.5&&Math.abs(a.top-b.top)<.5&&Math.abs(a.width-b.width)<.5;
 
 /** The terminal island separates from the conversation; the inspector owns its card header. */
-export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,terminalOpen,pilotTone}:{conversation:ReactNode;terminal:ReactNode;activity:ReactNode;inspectorOpen:boolean;terminalOpen:boolean;pilotTone?:string}){
+export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,terminalOpen,pilotTone,islandInspector}:{conversation:ReactNode;terminal:ReactNode;activity:ReactNode;inspectorOpen:boolean;terminalOpen:boolean;pilotTone?:string;islandInspector?:ReactNode}){
  const root=useRef<HTMLDivElement>(null),conversationIsland=useRef<HTMLDivElement>(null),terminalIsland=useRef<HTMLDivElement>(null);
  const open=useRef({terminal:terminalOpen});
  open.current={terminal:terminalOpen};
@@ -175,6 +175,9 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const fromWidth=resizeRoster?identity.getBoundingClientRect().width:source.width;
    if(source.width!==previousIslandWidth||skipMotion||slide){rosterAnimation?.cancel();rosterAnimation=undefined;}
    write(identity,source,dockedPane);
+   identity.style.setProperty('--island-panel-compact-width',`${source.width}px`);
+   identity.style.setProperty('--island-panel-available-width',`${Math.max(source.width,bounds.right-base.left-source.left-16)}px`);
+   identity.style.setProperty('--island-panel-available-height',`${Math.max(46,base.height-source.top-16)}px`);
    identity.dataset.ready='true';identity.dataset.present='true';identity.title=title?.textContent??'';
    if(slide&&Math.abs(fromLeft-source.left)>.5){
     const now=performance.now();
@@ -191,7 +194,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    ],{duration:parseFloat(islandStyle.getPropertyValue('--pilot-roster-duration')),easing:islandStyle.getPropertyValue('--pilot-roster-ease').trim()});
    previousRoster=roster;previousRosterWidth=rosterWidth;previousIslandWidth=source.width;
    if(terminalIsland.current)move('terminal',terminalIsland.current,layout.terminal?{...layout.terminal,top}:undefined,source,base);
-   const candidates=new Set<Element>([shell,...shell.querySelectorAll('.workspace,.session-layout > .session-view,.session-inspector,.terminal-side-panel,.composer-input,.composer-dock,.header-morph-content,.crumb-title,.terminal-island-title')]);
+   const candidates=new Set<Element>([shell,...shell.querySelectorAll('.workspace,.session-layout > .session-view,.session-layout > .session-inspector,.terminal-side-panel,.composer-input,.composer-dock,.header-morph-content,.crumb-title,.terminal-island-title')]);
    for(const node of observed)if(!candidates.has(node)){observer.unobserve(node);observed.delete(node);}
    for(const node of candidates)if(!observed.has(node)){observed.add(node);observer.observe(node);}
   };
@@ -203,7 +206,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    // containing panes/composer already report actual geometry changes above.
    if(records.some(record=>{
     const target=record.target instanceof Element?record.target:record.target.parentElement;
-    return !target?.closest('.terminal-session,.conversation,.session-inspector-scroll');
+    return !target?.closest('.terminal-session,.conversation,.session-inspector-scroll,.island-inspector');
    }))schedule();
   });
   content.observe(shell,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['class','data-pilot-roster-open','data-preferred-width']});
@@ -213,7 +216,12 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
  },[]);
  useLayoutEffect(()=>scheduleLayout.current(),[inspectorOpen,terminalOpen]);
  return <div ref={root} className="lake-workbench-islands" role="group" aria-label="Lake Island 工作台">
-  <div ref={conversationIsland} className="lake-workbench-island island-conversation" data-pilot-island-tone={pilotTone}><span className="workspace-header-glass" aria-hidden="true"/>{activity}{conversation}</div>
+  <div ref={conversationIsland} className="lake-workbench-island island-conversation" data-pilot-island-tone={pilotTone}>
+   <span className="workspace-header-glass" aria-hidden="true"/>{activity}{conversation}
+   {islandInspector&&<div className="island-inspector" data-open={inspectorOpen}>
+    <div className="island-inspector-viewport">{islandInspector}</div>
+   </div>}
+  </div>
   {terminal&&<div ref={terminalIsland} className="lake-workbench-island island-terminal" data-open={terminalOpen} inert={!terminalOpen} aria-hidden={!terminalOpen}><span className="workspace-header-glass" aria-hidden="true"/>{terminal}</div>}
  </div>;
 }

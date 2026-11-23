@@ -44,7 +44,7 @@
   function paneLimits(sidebarCollapsed) {
     const width = shell?.clientWidth || innerWidth;
     const desktop = innerWidth > 1100;
-    const inspectorOpen = desktop && !!shell.querySelector('.session-inspector.is-open');
+    const inspectorOpen = desktop && !!shell.querySelector('.session-layout > .session-inspector.is-open');
     const terminalOpen = desktop && shell.classList.contains('terminal-is-open');
     // All open panes share one budget. Reserving the conversation independently
     // for each side pane can otherwise spend that same space twice after zooming.
@@ -216,7 +216,7 @@
     addHandle(shell, 'sidebar');
     const terminal = shell.querySelector('.terminal-side-panel');
     if (terminal) addHandle(terminal, 'terminal');
-    const inspector = shell.querySelector('.session-inspector.is-open');
+    const inspector = shell.querySelector('.session-layout > .session-inspector.is-open');
     if (inspector) addHandle(inspector, 'inspector');
     apply(); syncChrome(); placeContextPanel();
   }

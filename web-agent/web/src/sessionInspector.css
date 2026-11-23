@@ -215,6 +215,105 @@ html.lake-windows-chrome .session-inspector { padding-top:52px; }
 .workspace.inspector-window-sizing.inspector-window-docked .session-inspector.is-closing { position:relative; right:auto; top:auto; bottom:auto; }
 .workspace.inspector-window-sizing:not(.inspector-window-docked) .session-inspector { position:absolute; inset:0 0 0 auto; width:min(var(--inspector-preferred-width, 382px),100%); z-index:26; }
 
+/* The frame grows from the title island while the card is laid out at its
+   final size. Only this small viewport resizes during the transition. */
+.island-inspector {
+ --island-panel-header:46px;
+ --island-panel-width:max(var(--island-panel-compact-width),min(472px,var(--island-panel-available-width)));
+ --island-panel-height:min(460px,var(--island-panel-available-height));
+ --island-panel-duration:180ms;
+ position:absolute;
+ z-index:1;
+ inset:-1px auto auto -1px;
+ inline-size:var(--island-panel-compact-width);
+ block-size:var(--island-panel-header);
+ border-radius:var(--radius-window);
+ corner-shape:var(--corner-window);
+ box-shadow:var(--shadow-popover);
+ contain:layout;
+ visibility:hidden;
+ pointer-events:none;
+ transition:inline-size var(--island-panel-duration) var(--workbench-sidebar-ease),
+   block-size var(--island-panel-duration) var(--workbench-sidebar-ease),
+   visibility 0s linear var(--island-panel-visibility-delay,var(--island-panel-duration));
+}
+.island-inspector[data-open=true] {
+ --island-panel-duration:var(--workbench-sidebar-duration);
+ --island-panel-visibility-delay:0s;
+ inline-size:var(--island-panel-width);
+ block-size:var(--island-panel-height);
+ visibility:visible;
+ pointer-events:auto;
+}
+.island-inspector-viewport {
+ position:absolute;
+ inset:0;
+ overflow:hidden;
+ border-radius:inherit;
+ corner-shape:inherit;
+ background:var(--surface);
+}
+.island-inspector-viewport::before {
+ content:"";
+ position:absolute;
+ inset:0 0 auto;
+ block-size:var(--island-panel-header);
+ background:radial-gradient(ellipse 230px 60px at 132px 100%,
+   color-mix(in srgb,var(--pilot-island-tint,var(--surface)) 10%,var(--surface)),transparent),
+   var(--title-glass-sheen),var(--surface);
+ border-bottom:1px solid var(--border);
+}
+.island-inspector-viewport::after {
+ content:"";
+ position:absolute;
+ inset:0;
+ border:1px solid var(--border);
+ border-radius:inherit;
+ corner-shape:inherit;
+ z-index:6;
+ pointer-events:none;
+}
+:root.lake-corner-fallback .island-inspector-viewport {
+ border-radius:0;
+ -webkit-mask-box-image:url('/window-corner-fill.svg') 22 fill / var(--radius-window) / 0 stretch;
+}
+:root.lake-corner-fallback .island-inspector-viewport::after {
+ border:0;
+ background:var(--border);
+ -webkit-mask-box-image:url('/window-corner-stroke.svg') 22 fill / var(--radius-window) / 0 stretch;
+}
+.island-inspector .island-inspector-viewport > .session-inspector {
+ position:absolute;
+ inset:0 auto auto 0;
+ width:var(--island-panel-width);
+ height:var(--island-panel-height);
+ padding:var(--island-panel-header) 0 0;
+ opacity:0;
+ animation:none;
+ transition:opacity 100ms ease;
+}
+.island-inspector[data-open=true] .session-inspector {
+ opacity:1;
+ transition:opacity 180ms ease 45ms;
+}
+.island-inspector .session-inspector-card {
+ flex:1 1 auto;
+ border:0;
+ border-radius:0;
+ background:transparent;
+ box-shadow:none;
+ -webkit-backdrop-filter:none;
+ backdrop-filter:none;
+}
+.island-inspector .pilot-execution-card { --pilot-task-heading:var(--surface); }
+.island-conversation:has(.island-inspector) .header-inspector-toggle > svg { transition:transform 180ms ease; }
+.island-conversation:has(.island-inspector) .header-inspector-toggle[aria-expanded=true] > svg { transform:rotate(90deg); }
+@media(prefers-reduced-motion:reduce) {
+ .island-inspector,
+ .island-inspector:is([data-open]) .session-inspector,
+ .island-conversation:has(.island-inspector) .header-inspector-toggle > svg { transition:none; }
+}
+
 .inspector-execution-outcome { margin:0 0 22px; padding:0 0 18px; border-top:0; border-bottom:1px solid var(--border); }
 
 .operation-review {margin-block:16px;display:grid;gap:8px;font-size:var(--text-sm,13px);}

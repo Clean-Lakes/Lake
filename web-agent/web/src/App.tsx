@@ -20,7 +20,7 @@ import {superPilotActivity} from './superPilotActivity';
 import {useTerminalPopover} from './useTerminalPopover';
 import {WorkbenchIsland,useWideWorkbench} from './WorkbenchIsland';
 import {useInspectorWindow} from './inspectorWindow';
-import {SessionInspectorProvider,useSessionInspector,type PilotProcessTarget,type ReplyProcessSources} from './SessionInspectorContext';
+import {inspectorExitMs,SessionInspectorProvider,useSessionInspector,type PilotProcessTarget,type ReplyProcessSources} from './SessionInspectorContext';
 import {ReplyProcessSelect,SessionInspector} from './SessionInspector';
 import {inspectorWorker,latestInspectorSelection} from './sessionInspectorModel';
 import {InspectionRequestGuard,matchesSpecialistInspection,selectedRoleInspection,snapshotInspectionTarget,specialistInspectionWorker,workerInspectionTarget} from './specialistInspection';
@@ -849,7 +849,12 @@ function AppContent() {
     const pending=pendingRoleInspection.current;
     if(pending&&inspector.selection!==pending.selection){roleInspectionRequest.current.cancel();pendingRoleInspection.current=undefined;}
     if(roleInspection&&(!inspector.selection||inspector.selection.sessionId!==roleInspection.session.id||inspector.selection.canonicalGoalId!==roleInspection.superagent?.task.taskId)){
-      roleInspectionRequest.current.cancel();setRoleInspection(null);
+      roleInspectionRequest.current.cancel();
+      if(!inspector.selection&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
+        const timer=setTimeout(()=>setRoleInspection(null),inspectorExitMs);
+        return()=>clearTimeout(timer);
+      }
+      setRoleInspection(null);
     }
   },[inspector.selection,roleInspection?.session.id,roleInspection?.superagent?.task.taskId]);
   const inspectGatewayTask=async(target:GatewayTaskTarget)=>{
@@ -907,10 +912,6 @@ function AppContent() {
     return()=>{controller.abort();window.clearInterval(timer);};
   },[sessionId,roleInspection?.session.id,roleInspection?.superagent?.task.taskId,inspector.selection?.sessionId]);
   const inspectorOpen=!!inspectedSnapshot&&inspector.selection?.sessionId===inspectedSnapshot.session.id&&!selectedResource&&!isPlansPage&&!isWorkspacePage;
-  const {attachView:attachInspectorView,waitingForWindow:inspectorWaitingForWindow} = useInspectorWindow(inspectorOpen);
-  // The DOM now has its final pane classes. Apply the shared width budget
-  // before paint, rather than flashing one frame with the previous budget.
-  useLayoutEffect(()=>{window.dispatchEvent(new Event('lake-workbench-layout'));},[terminalVisible,inspectorOpen,sidebarCollapsedOnDesktop]);
   const headerPilot = !selectedResource && !isPlansPage ? pilotIslandModel(activeSnapshot) : null;
   const headerPilotMode: 'auto'|'manual'|undefined = !selectedResource&&!isPlansPage&&activeSnapshot?.sre?.pilot?.enabled&&(!activeSnapshot.ai?.profile||activeSnapshot.ai.profile==='core')?(activeSnapshot.sre.pilot.autoAdvance?'auto':'manual'):undefined;
   const inspectorAvailable=(activeSnapshot?.session.workspaceRole==='role'?roleWorkers.length>0:!!(activeSnapshot?.ai??inspectedSnapshot?.ai))&&!selectedResource&&!isPlansPage;
@@ -1049,6 +1050,11 @@ function AppContent() {
     bootstrap?.backendRuntime==='typescript'&&!selectedResource?sessionId??undefined:undefined);
   const selectedSuperPilot=selectedSession?.workspaceRole==='router'||!!(pilotWorkspace.workspace?.active&&
     pilotWorkspace.workspace.project.projectId===selectedSession?.projectId&&pilotWorkspace.workspace.project.routerSessionId===selectedSession?.id);
+  const islandInspection=selectedSuperPilot&&!compactNavigation&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&!isWorkspacePage;
+  const dockedInspectorOpen=inspectorOpen&&!islandInspection;
+  const {attachView:attachInspectorView,waitingForWindow:inspectorWaitingForWindow}=useInspectorWindow(dockedInspectorOpen);
+  // Apply the docked panes' shared width budget before the first paint.
+  useLayoutEffect(()=>{window.dispatchEvent(new Event('lake-workbench-layout'));},[terminalVisible,dockedInspectorOpen,sidebarCollapsedOnDesktop]);
   const pilotTaskContinuation=selectedSuperPilot&&bootstrap?.backendRuntime==='typescript'&&canCompose;
   const pilotTaskReference=pilotTaskContinuation&&sessionId?pilotTaskReferences.get(sessionId):undefined;
   const pilotTaskMembers=useMemo(()=>selectedSession&&pilotTaskReference?
@@ -1747,7 +1753,7 @@ function AppContent() {
     (!isLegacyHistory && !activeSnapshot.specialists?.length));
   const detachedConversation=sessionHeader&&!compactNavigation;
   const sharedIsland=detachedConversation&&wideWorkbench;
-  const dockedConversation=detachedConversation&&!terminalVisible&&!inspectorOpen;
+  const dockedConversation=detachedConversation&&!terminalVisible&&!dockedInspectorOpen;
   const headerSweep=sessionHeader&&<HeaderSweep key={`sweep-${selectedSession.id}`} active={pilotHeaderActivity?.animated??(avatarActivity?.state==='running')}/>;
   const pilotTone=sessionHeader&&selectedSuperPilot&&!headerPilot&&!headerPilotMode?
     sessionBadgeState(superHeaderPresentation?.status??selectedSession.status,superHeaderPresentation?.label).tone:undefined;
@@ -1833,6 +1839,15 @@ function AppContent() {
       setMobileMenu(false);
       document.getElementById('workspace-projects-title')?.focus();
     }} onSettings={openSettings} onUpdates={() => window.dispatchEvent(new Event('lake-open-updates'))} onTrash={() => setTrashOpen(true)}/>;
+  const inspectorView=inspectedSnapshot&&activeSnapshot&&<SessionInspector key={inspectedSnapshot.session.id}
+    snapshot={inspectedSnapshot} waitingForWindow={inspectorWaitingForWindow} taskPage={isSpecialistTasks||isSpecialistExecution}
+    worker={inspectedWorker}
+    taskMetadata={isSpecialistTasks||isSpecialistExecution?<SpecialistTaskMetadata snapshot={inspectedSnapshot} worker={inspectedWorker}/>:undefined}
+    taskControls={isSpecialistTasks?<SpecialistTaskControls snapshot={inspectedSnapshot} connected={sessionConnected}/>:undefined}
+    resultsFooter={sessionId&&isSpecialistTasks&&roleResultRead?<ConversationReadMarker session={sessionId} state={roleTasks?.page.channel.messageRead} enabled={sessionConnected}/>:undefined}
+    taskNavigation={activeSnapshot.session.workspaceRole==='role'&&roleWorkers.length>0?<SpecialistTaskSelect workers={roleWorkers} sessionId={inspectedSnapshot.session.id} onTask={id=>void inspectRoleTask(id)}/>:processNavigation}
+    readOnly={isLegacyHistory} connected={sessionConnected&&!modeSaving.has(inspectedSnapshot.session.id)}
+    onUpdated={()=>{if(roleInspection)void refreshRoleInspection();else void refreshCurrent();}}/>;
 
   return <SpecialistAvatarProvider channels={pilotWorkspace.workspace?.channels}><div className={`app-shell has-workbench-navigation${terminalVisible ? " terminal-is-open" : ""}${detachedConversation?" has-workbench-conversation":""}${dockedConversation?" has-docked-conversation":""}${sharedIsland?" has-workbench-island":""}${sidebarCollapsedOnDesktop?" has-collapsed-sidebar":""}`}>
     <WorkbenchNavigation expanded={!sidebarCollapsedOnDesktop} back={historyAvailable.back} forward={historyAvailable.forward}
@@ -1941,8 +1956,9 @@ function AppContent() {
 
     </aside>
 
-    {detachedConversation&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={sharedIsland?terminalHeading:null} inspectorOpen={inspectorOpen} terminalOpen={sharedIsland&&terminalOpen} pilotTone={pilotTone}/>}
-    <main className={`workspace${window.lakeInspectorWindow?"":" web-inspector-layout"}${inspectorOpen?" has-session-inspector":""}${isWorkspacePage?" is-workspace-page":!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":sessionSelected?" has-specialist-task-list":""}`} onDragOver={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="none";return;}if(selectedSession&&!isLegacyHistory&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.stopPropagation();return;}if(!selectedSession||isLegacyHistory||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
+    {detachedConversation&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={sharedIsland?terminalHeading:null}
+      inspectorOpen={inspectorOpen} terminalOpen={sharedIsland&&terminalOpen} pilotTone={pilotTone} islandInspector={islandInspection?inspectorView:undefined}/>}
+    <main className={`workspace${window.lakeInspectorWindow?"":" web-inspector-layout"}${dockedInspectorOpen?" has-session-inspector":""}${isWorkspacePage?" is-workspace-page":!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":sessionSelected?" has-specialist-task-list":""}`} onDragOver={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="none";return;}if(selectedSession&&!isLegacyHistory&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.stopPropagation();return;}if(!selectedSession||isLegacyHistory||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
       {isWorkspacePage?<WorkspacePage project={sidebarProject} projects={projectList} resources={catalog.resources}
         connected={workspaceConnected} bulkSelection={bulkSelection} bulkSelectedCount={bulkSelected.length}
         onOpenNavigation={()=>setMobileMenu(true)} onCreateProject={openProjectDialog}
@@ -2046,7 +2062,7 @@ function AppContent() {
             disabled={!!sendFeedback || !sessionConnected || !!pendingOperation || reasoningSaving.has(sessionId) || modeSaving.has(sessionId) || stoppingTurn || currentAssignment?.checking || ((modelConfigured || !!currentAssignment) && (!hasMessageDraft || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)))}
           ><Glyph name={composerSendGlyph} size={composerSendGlyph==="up"?17:16}/></button>}
         </div></div></div></div></form></div>}
-      </div>{activeSnapshot&&<SessionInspector key={inspectedSnapshot!.session.id} snapshot={inspectedSnapshot!} waitingForWindow={inspectorWaitingForWindow} taskPage={isSpecialistTasks||isSpecialistExecution} worker={inspectedWorker} taskMetadata={isSpecialistTasks||isSpecialistExecution?<SpecialistTaskMetadata snapshot={inspectedSnapshot!} worker={inspectedWorker}/>:undefined} taskControls={isSpecialistTasks?<SpecialistTaskControls snapshot={inspectedSnapshot!} connected={sessionConnected}/>:undefined} resultsFooter={isSpecialistTasks&&roleResultRead?<ConversationReadMarker session={sessionId} state={roleTasks?.page.channel.messageRead} enabled={sessionConnected}/>:undefined} taskNavigation={activeSnapshot.session.workspaceRole==='role'&&roleWorkers.length>0?<SpecialistTaskSelect workers={roleWorkers} sessionId={inspectedSnapshot!.session.id} onTask={id=>void inspectRoleTask(id)}/>:processNavigation} readOnly={isLegacyHistory} connected={sessionConnected&&!modeSaving.has(inspectedSnapshot!.session.id)} onUpdated={()=>{if(roleInspection)void refreshRoleInspection();else void refreshCurrent();}}/>}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
+      </div>{!islandInspection&&inspectorView}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
       </>}
     </main>
     <DesktopUpdate hideTrigger onUnreadChange={setWorkspaceUpdateUnread}/>

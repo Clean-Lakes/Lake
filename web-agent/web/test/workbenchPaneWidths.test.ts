@@ -12,7 +12,7 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382}){
  const inspector=makeNode(),terminal=makeNode(),shell={...makeNode(),clientWidth:1512,inspectorOpen:true,terminalOpen:true,sidebarCollapsed:false,classList:{contains:(name:string)=>name==='terminal-is-open'&&shell.terminalOpen||name==='has-collapsed-sidebar'&&shell.sidebarCollapsed},querySelector(selector:string):any{
   if(selector==='.workspace')return {clientWidth:this.clientWidth-parseFloat(properties.get('--sidebar-width')||'280')};
   if(selector==='.terminal-side-panel')return this.terminalOpen?terminal:null;
-  if(selector==='.session-inspector.is-open')return this.inspectorOpen?inspector:null;
+  if(selector==='.session-layout > .session-inspector.is-open')return this.inspectorOpen?inspector:null;
   if(selector.startsWith('.workbench-splitter-'))return handles.get(selector.split('-').at(-1));
   return null;
  }};
