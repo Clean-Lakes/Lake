@@ -61,8 +61,10 @@
  color:var(--text-secondary); background:transparent;
 }
 .sidebar-rail-button:hover { background:var(--surface-hover); }
-.sidebar-rail-button:is([aria-pressed="true"],[aria-expanded="true"]) { color:var(--info); background:var(--surface-selected); }
+.sidebar-rail-button[aria-pressed="true"] { color:var(--info); background:var(--surface-selected); }
 .sidebar-rail-button:focus-visible { outline-offset:-2px; }
+.workspace-rail-button { position:relative; }
+.workspace-update-dot { position:absolute; inset-block-start:5px; inset-inline-end:5px; width:6px; height:6px; border-radius:50%; background:var(--danger); }
 .sidebar-pinned-pilot { flex:none; margin:4px var(--sidebar-edge-inset) 8px; }
 .sidebar.workspace-navigation .sidebar-pinned-pilot .sidebar-pilot-entry { width:100%; min-height:48px; padding:4px var(--sidebar-row-inset); gap:var(--sidebar-icon-gap); border-radius:var(--radius-sidebar-pilot); corner-shape:var(--corner-window); }
 .sidebar-pinned-pilot .super-role-avatar { flex:0 0 var(--sidebar-icon-column); width:var(--sidebar-icon-column); }

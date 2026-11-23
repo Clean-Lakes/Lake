@@ -4,6 +4,7 @@ import {SidebarResourceActions} from './SidebarResourceActions';
 import {Glyph} from './Icons';
 
 type NavigationPanel = 'specialists'|'resources';
+type WorkspaceNavigation = {active:boolean;onOpen:()=>void;unreadUpdate:boolean;projects:ReactNode};
 
 function initialPanel(projectId:string|undefined,selected:NavigationPanel):NavigationPanel {
  if(selected==='resources')return 'resources';
@@ -12,9 +13,9 @@ function initialPanel(projectId:string|undefined,selected:NavigationPanel):Navig
 }
 
 /** Both lists stay mounted so switching preserves their scroll and folder state. */
-export function SidebarWorkspaceNavigation({projectId,pilot,specialists,children,resourceCount,selectionId,selectedPanel,attention=false,onLeaveResources,utilities,empty}:{
+export function SidebarWorkspaceNavigation({projectId,pilot,specialists,children,resourceCount,selectionId,selectedPanel,attention=false,onSelectPanel,workspace,empty}:{
  projectId?:string;pilot:ReactNode;specialists:ReactNode;children:ReactNode;resourceCount:number;
- selectionId:string;selectedPanel:NavigationPanel;attention?:boolean;onLeaveResources?:()=>void;utilities?:ReactNode;empty?:ReactNode;
+ selectionId:string;selectedPanel:NavigationPanel;attention?:boolean;onSelectPanel?:(panel:NavigationPanel)=>void;workspace?:WorkspaceNavigation;empty?:ReactNode;
 }) {
  const id=useId();
  const [resourceActions,setResourceActions]=useState<HTMLElement|null>(null);
@@ -23,20 +24,24 @@ export function SidebarWorkspaceNavigation({projectId,pilot,specialists,children
  if(projectId!==selection.projectId||selectionId!==selection.selectionId){
   setSelection({projectId,selectionId,panel:projectId!==selection.projectId?initialPanel(projectId,selectedPanel):selectedPanel});
  }
- const setPanel=(panel:NavigationPanel)=>setSelection({...selection,panel});
+ const selectPanel=(panel:NavigationPanel)=>{setSelection({...selection,panel});onSelectPanel?.(panel);};
  useEffect(()=>{if(projectId)try{localStorage.setItem(`lake.sidebar-panel.${projectId}`,panel);}catch{}},[projectId,panel]);
- const resourcesOpen=panel==='resources';
+ const specialistsOpen=!workspace?.active&&panel==='specialists';
+ const resourcesOpen=!workspace?.active&&panel==='resources';
  return <div className="sidebar-workspace-navigation">
   <nav className="sidebar-navigation-rail" aria-label="侧栏视图">
-   {projectId&&<><button type="button" className="sidebar-rail-button" aria-label="专员" aria-pressed={!resourcesOpen}
+   {projectId&&<><button type="button" className="sidebar-rail-button" aria-label="专员" aria-pressed={specialistsOpen}
     aria-controls={`${id}-specialists-panel`} title="专员"
-    onClick={()=>{setPanel('specialists');if(resourcesOpen)onLeaveResources?.();}}><Glyph name="users" size={18}/></button>
+    onClick={()=>selectPanel('specialists')}><Glyph name="users" size={18}/></button>
    <button type="button" className="sidebar-rail-button" aria-label="资源" aria-pressed={resourcesOpen}
-    aria-controls={`${id}-resources-panel`} title="资源" onClick={()=>setPanel('resources')}><Glyph name="layers" size={18}/></button></>}
-   {utilities}
+    aria-controls={`${id}-resources-panel`} title="资源" onClick={()=>selectPanel('resources')}><Glyph name="layers" size={18}/></button></>}
+   {workspace&&<button type="button" className="sidebar-rail-button workspace-rail-button" aria-label={workspace.unreadUpdate?'工作区，有新版本':'工作区'}
+    aria-pressed={workspace.active} aria-controls={workspace.active?'workspace-page':undefined} title="工作区" onClick={workspace.onOpen}>
+    <Glyph name="workspace" size={18}/>{workspace.unreadUpdate&&<span className="workspace-update-dot" aria-hidden="true"/>}
+   </button>}
   </nav>
-  {projectId?<><section key={`specialists:${projectId}`} className="sidebar-navigation-panel" id={`${id}-specialists-panel`} aria-labelledby={`${id}-specialists-title`} hidden={resourcesOpen}>
-   {!resourcesOpen&&<div className="sidebar-pinned-pilot">{pilot}</div>}
+  {projectId?<><section key={`specialists:${projectId}`} className="sidebar-navigation-panel" id={`${id}-specialists-panel`} aria-labelledby={`${id}-specialists-title`} hidden={!specialistsOpen}>
+   {specialistsOpen&&<div className="sidebar-pinned-pilot">{pilot}</div>}
    <div className="sidebar-content-header">
     <div className="sidebar-content-title">
      <h2 id={`${id}-specialists-title`}>专员</h2>
@@ -53,6 +58,10 @@ export function SidebarWorkspaceNavigation({projectId,pilot,specialists,children
    <SidebarResourceActions.Provider value={resourceActions}>
     <SidebarScrollArea>{children}</SidebarScrollArea>
    </SidebarResourceActions.Provider>
-  </section></>:<SidebarScrollArea>{empty}</SidebarScrollArea>}
+  </section></>:!workspace?.active&&<SidebarScrollArea>{empty}</SidebarScrollArea>}
+  {workspace?.active&&<section className="sidebar-navigation-panel" aria-labelledby={`${id}-projects-title`}>
+   <div className="sidebar-content-header"><div className="sidebar-content-title"><h2 id={`${id}-projects-title`}>项目</h2></div></div>
+   <SidebarScrollArea>{workspace.projects}</SidebarScrollArea>
+  </section>}
  </div>;
 }

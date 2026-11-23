@@ -4,7 +4,7 @@
  .approval-card, .attachment-approval, .ai-options, .sre-plan, .agent-task-body, .agent-task-detail,
  .resource-folder-editor, .resource-move-panel, .resource-add-menu,
  .resource-terminal-menu, .navigation-context-menu, .terminal-action-menu,
- .terminal-list-menu, .workspace-utilities-popover, .mention-menu,
+ .terminal-list-menu, .mention-menu,
  .composer-mention-menu, .app-select-popup, .conversation-turn-preview) {
  --radius-control: var(--radius-settings-control);
  --radius-panel: var(--radius-settings-panel);
@@ -29,7 +29,7 @@
  .resource-add-menu > button, .resource-terminal-item button,
  .resource-folder-editor button, .resource-move-panel button,
  .navigation-context-menu > button, .terminal-action-menu button,
- .terminal-list-menu button, .workspace-utility-action, .mention-item,
+ .terminal-list-menu button, .mention-item,
  .schedule-list > button, .desktop-update-links > a, .lake-question button, .lake-question-option,
  .lake-question-other, .agent-task-row > details > summary) {
  corner-shape: var(--corner-window);
