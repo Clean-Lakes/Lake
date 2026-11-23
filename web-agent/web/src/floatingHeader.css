@@ -195,6 +195,7 @@ html.lake-windows-chrome .conversation-header-backdrop { top:48px; }
 
 /* A conversation by itself runs to the window edge beside the navigation. */
 .app-shell.has-docked-conversation {
+ --conversation-frame-radius:max(8px,calc(var(--radius-window) - 8px));
  --conversation-header-inset:16px;
  --conversation-header-actions-offset:76px;
  --conversation-island-top:12px;
@@ -205,28 +206,39 @@ html.lake-windows-chrome .conversation-header-backdrop { top:48px; }
 :root .app-shell.has-docked-conversation > .workspace.has-floating-header {
  --background:var(--workbench-chrome-background);
  --paper:var(--background);
- --conversation-frame-radius:max(8px,calc(var(--radius-window) - 8px));
  --workbench-bottom-inset:16px;
  /* Keep line breaks stable across the toggle. The reading column is centered
     in the available space and scales when the window or sidebar is resized. */
  --docked-reading-viewport:calc(var(--expanded-conversation-width,100cqw) - 1px);
  --session-content-width:min(960px,calc(var(--docked-reading-viewport) - var(--session-gutter) - var(--session-gutter)));
  --session-content-start:max(var(--session-gutter),calc((100cqw - var(--session-content-width)) / 2));
+ background:transparent;
+ border-inline-start:1px solid transparent;
+ border-start-start-radius:var(--conversation-frame-radius);
+ border-end-start-radius:var(--conversation-frame-radius);
+ corner-shape:var(--corner-window);
+}
+.workbench-conversation-surface {
+ position:absolute;
+ grid-column:2 / 3;
+ inset:0;
+ background:var(--workbench-chrome-background);
+ pointer-events:none;
  border-inline-start:1px solid var(--conversation-frame-border,var(--border));
  border-start-start-radius:var(--conversation-frame-radius);
  border-end-start-radius:var(--conversation-frame-radius);
  corner-shape:var(--corner-window);
 }
-:root .app-shell.has-docked-conversation.has-collapsed-sidebar > .workspace.has-floating-header { border-inline-start-color:transparent; }
+:root .app-shell.has-collapsed-sidebar > .workbench-conversation-surface { border-inline-start-color:transparent; }
 /* Both ends of the divider share the native fallback contour. */
-:root.lake-corner-fallback .app-shell.has-docked-conversation > .workspace.has-floating-header {
+:root.lake-corner-fallback .workbench-conversation-surface {
  --conversation-frame-mask-width:var(--conversation-frame-radius) 0 var(--conversation-frame-radius) var(--conversation-frame-radius);
  border-inline-start-color:transparent;
  border-start-start-radius:0;
  border-end-start-radius:0;
  -webkit-mask-box-image:url('/window-corner-fill.svg') 22 fill / var(--conversation-frame-mask-width) / 0 stretch;
 }
-:root.lake-corner-fallback .app-shell.has-docked-conversation > .workspace.has-floating-header::after {
+:root.lake-corner-fallback .workbench-conversation-surface::after {
  content:"";
  position:absolute;
  inset:0 0 0 -1px;
@@ -237,16 +249,20 @@ html.lake-windows-chrome .conversation-header-backdrop { top:48px; }
  -webkit-mask-box-image:url('/window-corner-stroke.svg') 22 fill / var(--conversation-frame-mask-width) / 0 stretch;
  transition:opacity var(--workbench-sidebar-duration) var(--workbench-sidebar-ease);
 }
-:root.lake-corner-fallback .app-shell.has-docked-conversation.has-collapsed-sidebar > .workspace.has-floating-header::after { opacity:0; }
+:root.lake-corner-fallback .app-shell.has-collapsed-sidebar > .workbench-conversation-surface::after { opacity:0; }
 @media (prefers-reduced-motion:reduce) {
- :root.lake-corner-fallback .app-shell.has-docked-conversation > .workspace.has-floating-header::after { transition:none; }
+ :root.lake-corner-fallback .workbench-conversation-surface::after { transition:none; }
 }
 .app-shell.has-docked-conversation .conversation { scroll-padding-top:var(--conversation-header-clearance); }
 .app-shell.has-docked-conversation .timeline-list { padding-top:var(--conversation-header-clearance); }
+.app-shell.has-docked-conversation .composer-dock { background:transparent; }
 .app-shell.has-docked-conversation > .workspace.has-floating-header > .system-banner { margin-top:var(--conversation-header-clearance); }
 html .app-shell.has-docked-conversation .conversation-header-backdrop {
  --conversation-header-cover:var(--conversation-island-bottom);
  top:0;
+ left:var(--session-content-start);
+ right:auto;
+ width:var(--session-content-width);
  height:var(--conversation-header-clearance);
  -webkit-backdrop-filter:none;
  backdrop-filter:none;

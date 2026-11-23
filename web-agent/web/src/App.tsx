@@ -20,7 +20,7 @@ import {superPilotActivity} from './superPilotActivity';
 import {useTerminalPopover} from './useTerminalPopover';
 import {WorkbenchIsland,useWideWorkbench} from './WorkbenchIsland';
 import {useInspectorWindow} from './inspectorWindow';
-import {inspectorExitMs,islandInspectorMotionMs,SessionInspectorProvider,useSessionInspector,type PilotProcessTarget,type ReplyProcessSources} from './SessionInspectorContext';
+import {inspectorExitMs,SessionInspectorProvider,useSessionInspector,type PilotProcessTarget,type ReplyProcessSources} from './SessionInspectorContext';
 import {ReplyProcessSelect,SessionInspector} from './SessionInspector';
 import {inspectorWorker,latestInspectorSelection} from './sessionInspectorModel';
 import {InspectionRequestGuard,matchesSpecialistInspection,selectedRoleInspection,snapshotInspectionTarget,specialistInspectionWorker,workerInspectionTarget} from './specialistInspection';
@@ -825,14 +825,6 @@ function AppContent() {
   const currentSessionPresentation = selectedSession ? workGoalPresentation(activeSnapshot)??sreSessionPresentation(selectedSession,activeSnapshot?.sre?.tasks,activeSnapshot?.ai?.turnStartedAt) : {};
   const currentSessionStatus = currentSessionPresentation.status ?? selectedSession?.status;
   const selectedResource = catalog?.resources.find(item => item.id === route.resourceId);
-  const selectedProjectId = selectedResource?.projectId ?? selectedSession?.projectId;
-  const pilotProjectId=sidebarProjectId??selectedProjectId??catalog?.projects[0]?.id;
-  const pilotWorkspace=usePilotWorkspace(pilotProjectId,!!bootstrap?.authenticated&&!!catalog,
-    bootstrap?.backendRuntime==='typescript'&&!selectedResource?sessionId??undefined:undefined);
-  const selectedSuperPilot=selectedSession?.workspaceRole==='router'||!!(pilotWorkspace.workspace?.active&&
-    pilotWorkspace.workspace.project.projectId===selectedSession?.projectId&&pilotWorkspace.workspace.project.routerSessionId===selectedSession?.id);
-  const islandInspection=selectedSuperPilot&&!compactNavigation&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&!isWorkspacePage;
-  const inspectorCloseMs=islandInspection?islandInspectorMotionMs:inspectorExitMs;
   useEffect(()=>{inspector.reset();},[sessionId,route.resourceId,isPlansPage,isWorkspacePage]);
   const [pilotReports,setPilotReports]=useState<{sessionId:string;ids:ReadonlySet<string>}|null>(null);
   const onPilotReportsPresented=useCallback((id:string,ids:readonly string[])=>{
@@ -859,12 +851,12 @@ function AppContent() {
     if(roleInspection&&(!inspector.selection||inspector.selection.sessionId!==roleInspection.session.id||inspector.selection.canonicalGoalId!==roleInspection.superagent?.task.taskId)){
       roleInspectionRequest.current.cancel();
       if(!inspector.selection&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
-        const timer=setTimeout(()=>setRoleInspection(null),inspectorCloseMs);
+        const timer=setTimeout(()=>setRoleInspection(null),inspectorExitMs);
         return()=>clearTimeout(timer);
       }
       setRoleInspection(null);
     }
-  },[inspector.selection,roleInspection?.session.id,roleInspection?.superagent?.task.taskId,inspectorCloseMs]);
+  },[inspector.selection,roleInspection?.session.id,roleInspection?.superagent?.task.taskId]);
   const inspectGatewayTask=async(target:GatewayTaskTarget)=>{
     const next=await api.snapshot(target.sessionId,undefined,target.taskId);
     if(!gatewayTaskMatches(next,target))throw new Error('任务的项目或执行身份已变化，请刷新消息后重试');
@@ -939,6 +931,7 @@ function AppContent() {
     if(roleInspection?.session.id===sessionId){roleInspectionRequest.current.cancel();setRoleInspection(null);}
     inspector.open(latest);
   };
+  const selectedProjectId = selectedResource?.projectId ?? selectedSession?.projectId;
   useEffect(() => {
     if (selectedProjectId) setSidebarProjectId(selectedProjectId);
   }, [selectedProjectId]);
@@ -1052,6 +1045,12 @@ function AppContent() {
     sync();window.addEventListener("focus",sync);document.addEventListener("visibilitychange",sync);
     return ()=>{window.removeEventListener("focus",sync);document.removeEventListener("visibilitychange",sync);};
   },[mountedJumpProjects]);
+  const pilotProjectId=sidebarProjectId??selectedProjectId??catalog?.projects[0]?.id;
+  const pilotWorkspace=usePilotWorkspace(pilotProjectId,!!bootstrap?.authenticated&&!!catalog,
+    bootstrap?.backendRuntime==='typescript'&&!selectedResource?sessionId??undefined:undefined);
+  const selectedSuperPilot=selectedSession?.workspaceRole==='router'||!!(pilotWorkspace.workspace?.active&&
+    pilotWorkspace.workspace.project.projectId===selectedSession?.projectId&&pilotWorkspace.workspace.project.routerSessionId===selectedSession?.id);
+  const islandInspection=selectedSuperPilot&&!compactNavigation&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&!isWorkspacePage;
   const dockedInspectorOpen=inspectorOpen&&!islandInspection;
   const {attachView:attachInspectorView,waitingForWindow:inspectorWaitingForWindow}=useInspectorWindow(dockedInspectorOpen);
   // Apply the docked panes' shared width budget before the first paint.
@@ -1841,7 +1840,7 @@ function AppContent() {
       document.getElementById('workspace-projects-title')?.focus();
     }} onSettings={openSettings} onUpdates={() => window.dispatchEvent(new Event('lake-open-updates'))} onTrash={() => setTrashOpen(true)}/>;
   const inspectorView=inspectedSnapshot&&activeSnapshot&&<SessionInspector key={inspectedSnapshot.session.id}
-    snapshot={inspectedSnapshot} waitingForWindow={inspectorWaitingForWindow} exitMs={inspectorCloseMs} taskPage={isSpecialistTasks||isSpecialistExecution}
+    snapshot={inspectedSnapshot} waitingForWindow={inspectorWaitingForWindow} taskPage={isSpecialistTasks||isSpecialistExecution}
     worker={inspectedWorker}
     taskMetadata={isSpecialistTasks||isSpecialistExecution?<SpecialistTaskMetadata snapshot={inspectedSnapshot} worker={inspectedWorker}/>:undefined}
     taskControls={isSpecialistTasks?<SpecialistTaskControls snapshot={inspectedSnapshot} connected={sessionConnected}/>:undefined}
@@ -1959,6 +1958,7 @@ function AppContent() {
 
     {detachedConversation&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={sharedIsland?terminalHeading:null}
       inspectorOpen={inspectorOpen} terminalOpen={sharedIsland&&terminalOpen} pilotTone={pilotTone} islandInspector={islandInspection?inspectorView:undefined}/>}
+    {dockedConversation&&<div className="workbench-conversation-surface" aria-hidden="true"/>}
     <main className={`workspace${window.lakeInspectorWindow?"":" web-inspector-layout"}${dockedInspectorOpen?" has-session-inspector":""}${isWorkspacePage?" is-workspace-page":!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":sessionSelected?" has-specialist-task-list":""}`} onDragOver={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="none";return;}if(selectedSession&&!isLegacyHistory&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.stopPropagation();return;}if(!selectedSession||isLegacyHistory||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
       {isWorkspacePage?<WorkspacePage project={sidebarProject} projects={projectList} resources={catalog.resources}
         connected={workspaceConnected} bulkSelection={bulkSelection} bulkSelectedCount={bulkSelected.length}

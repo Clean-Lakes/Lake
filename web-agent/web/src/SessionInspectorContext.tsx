@@ -11,7 +11,6 @@ const InspectorContext=createContext<InspectorState|null>(null);
 export const useSessionInspector=()=>useContext(InspectorContext);
 export const sessionInspectorId='session-task-inspector';
 export const inspectorExitMs=180;
-export const islandInspectorMotionMs=500;
 
 // Opening a side pane changes line wrapping. Keep the visible message anchored
 // rather than scrolling the conversation to the inspected plan or operation.

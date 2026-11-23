@@ -32,6 +32,11 @@
     @media(min-width:701px) and (max-width:1100px) {
       .app-shell, .app-shell.terminal-is-open { grid-template-columns:var(--sidebar-width,280px) minmax(0,1fr) 0px; }
     }
+    @media(min-width:701px) {
+      .app-shell.has-docked-conversation[data-sidebar-sliding] {
+        grid-template-columns:var(--sidebar-rail-width,44px) minmax(0,1fr) 0px;
+      }
+    }
     @media(max-width:700px) { .workbench-splitter { display:none; } }
   `;
   document.head.appendChild(style);
@@ -52,14 +57,14 @@
     const auxiliaryMin = inspectorOpen && terminalOpen ? 240 : 280;
     const sidebarMax = Math.max(200, Math.min(420, width - conversationMin - (terminalOpen ? auxiliaryMin : 0) - (inspectorOpen ? auxiliaryMin : 0)));
     const expandedSidebarWidth = clamp(preferred.sidebar, 200, sidebarMax);
-    const sidebar = sidebarCollapsed
-      ? parseFloat(getComputedStyle(shell).getPropertyValue('--sidebar-rail-width')) || 44
-      : expandedSidebarWidth;
+    const railWidth = parseFloat(getComputedStyle(shell).getPropertyValue('--sidebar-rail-width')) || 44;
+    const sidebar = sidebarCollapsed ? railWidth : expandedSidebarWidth;
     const terminalMax = Math.max(auxiliaryMin, Math.min(900, width - sidebar - conversationMin - (inspectorOpen ? auxiliaryMin : 0)));
     const terminal = terminalOpen ? clamp(preferred.terminal, auxiliaryMin, terminalMax) : 0;
     const workspaceWidth = desktop ? 0 : shell.querySelector('.workspace')?.clientWidth || 0;
     return {
       expandedSidebarWidth,
+      railWidth,
       expandedConversationWidth: width - expandedSidebarWidth,
       sidebar: sidebarCollapsed ? [sidebar, sidebar] : [200, sidebarMax],
       terminal: desktop ? [auxiliaryMin, terminalMax] : [280, Math.max(280, Math.min(900, width - 40))],
@@ -76,26 +81,51 @@
   }
   function finishSidebarSlide() {
     if (!sidebarSlide) return;
-    sidebarSlide.animation.cancel();
+    for (const animation of sidebarSlide.animations) animation.cancel();
     sidebarSlide.shell.removeAttribute('data-sidebar-sliding');
     sidebarSlide = undefined;
   }
-  function slideSidebar(from, width) {
+  function slideSidebar({ surface, from, fromIsland, width, expandedWidth, railWidth, collapsed }) {
     const css = getComputedStyle(shell);
-    // The side list stays at its full width. Its clip, the conversation edge,
-    // and the header groups all move with the same grid line.
-    const animation = shell.animate([
-      { gridTemplateColumns: `${from}px minmax(0,1fr) 0px` },
-      { gridTemplateColumns: `${width}px minmax(0,1fr) 0px` },
-    ], {
+    const timing = {
       duration: parseFloat(css.getPropertyValue('--workbench-sidebar-duration')),
       easing: css.getPropertyValue('--workbench-sidebar-ease').trim(),
-    });
-    animation.startTime = document.timeline.currentTime;
-    shell.setAttribute('data-sidebar-sliding', '');
-    sidebarSlide = { shell, width, animation };
-    animation.onfinish = () => {
-      if (sidebarSlide?.animation !== animation) return;
+      fill: 'both',
+    };
+    const island = shell.querySelector('.island-conversation');
+    const workspace = shell.querySelector('.workspace');
+    const reading = workspace.querySelector('.composer-input') ?? workspace.querySelector('.timeline-list');
+    const inset = parseFloat(css.getPropertyValue('--conversation-header-inset')) || 16;
+    const navStart = parseFloat(css.getPropertyValue('--workbench-navigation-start')) || 0;
+    const railAnchor = railWidth + inset;
+    const collapsedAnchor = Math.max(navStart, reading ? reading.getBoundingClientRect().left - shell.getBoundingClientRect().left : railAnchor);
+    const islandLayout = collapsed ? collapsedAnchor : railAnchor;
+    const islandTarget = collapsed ? collapsedAnchor : width + inset;
+    if (collapsed) shell.style.setProperty('--workbench-island-navigation-left', `${collapsedAnchor}px`);
+    island?.style.setProperty('--island-panel-available-width', `${Math.max(1, shell.clientWidth - islandTarget - 16)}px`);
+
+    // Hold the reading area at its larger width and move the painted layers.
+    // The transcript and sidebar list keep their line breaks during the slide.
+    const start = document.timeline.currentTime;
+    const animations = [];
+    const translate = (node, left, right) => {
+      if (!node || Math.abs(left - right) < .1) return;
+      const animation = node.animate([
+        { transform: `translate3d(${left}px,0,0)` },
+        { transform: `translate3d(${right}px,0,0)` },
+      ], timing);
+      animation.startTime = start;
+      animations.push(animation);
+    };
+    translate(surface, from - railWidth, width - railWidth);
+    translate(shell.querySelector('.sidebar-navigation-content'), from - expandedWidth, width - expandedWidth);
+    translate(island, fromIsland - islandLayout, islandTarget - islandLayout);
+    for (const node of workspace.querySelectorAll('.timeline-list, .conversation-header-backdrop, .composer, .composer-session-controls')) {
+      translate(node, (from - railWidth) / 2, (width - railWidth) / 2);
+    }
+    const slide = sidebarSlide = { shell, width, expandedWidth, animations };
+    animations[0].onfinish = () => {
+      if (sidebarSlide !== slide) return;
       finishSidebarSlide();
       window.dispatchEvent(new Event('lake-workbench-layout'));
     };
@@ -106,15 +136,21 @@
     const docked = shell.classList.contains('has-docked-conversation') && innerWidth > 700;
     const target = paneLimits(collapsed);
     const width = clamp(preferred.sidebar, ...target.sidebar);
-    const canSlide = docked && previousSidebar?.shell === shell && previousSidebar.docked &&
+    const surface = docked && shell.querySelector('.workbench-conversation-surface');
+    const canSlide = surface && previousSidebar?.shell === shell && previousSidebar.docked &&
       !active && !document.hidden && !reducedMotion?.matches && typeof shell.animate === 'function';
     const toggled = canSlide && previousSidebar.collapsed !== collapsed;
-    const from = toggled ? shell.querySelector('.sidebar').getBoundingClientRect().width : width;
-    if (sidebarSlide && (!canSlide || toggled || sidebarSlide.width !== width)) finishSidebarSlide();
+    const shellLeft = toggled ? shell.getBoundingClientRect().left : 0;
+    const from = toggled ? surface.getBoundingClientRect().left - shellLeft : width;
+    const island = toggled ? shell.querySelector('.island-conversation') : null;
+    // A stable anchor is written by WorkbenchIsland. On an interruption, use
+    // the painted position of the island to reverse without a jump.
+    const fromIsland = !island ? from + 16 : sidebarSlide ? island.getBoundingClientRect().left - shellLeft
+      : parseFloat(shell.style.getPropertyValue('--workbench-island-navigation-left')) || from + 16;
+    const startSlide = Math.abs(from - width) >= .5;
+    if (sidebarSlide && (!canSlide || toggled || sidebarSlide.width !== width || sidebarSlide.expandedWidth !== target.expandedSidebarWidth)) finishSidebarSlide();
     previousSidebar = { shell, docked, collapsed };
-    // Start at the painted width before applying the target so the transcript
-    // never lays out at the endpoint and then returns to the first frame.
-    if (Math.abs(from - width) >= .5) slideSidebar(from, width);
+    if (startSlide) shell.setAttribute('data-sidebar-sliding', '');
     shell.style.setProperty('--sidebar-expanded-width', `${target.expandedSidebarWidth}px`);
     shell.style.setProperty('--expanded-conversation-width', `${target.expandedConversationWidth}px`);
     for (const pane of ['sidebar', 'terminal', 'inspector']) {
@@ -124,6 +160,7 @@
       const handle = shell.querySelector(`.workbench-splitter-${pane}`);
       if (handle) for (const [name, value] of [['valuemin', min], ['valuemax', max], ['valuenow', width]]) handle.setAttribute(`aria-${name}`, String(value));
     }
+    if (startSlide) slideSidebar({ surface, from, fromIsland, width, expandedWidth: target.expandedSidebarWidth, railWidth: target.railWidth, collapsed });
   }
   function addHandle(parent, pane) {
     if (parent.querySelector(`:scope > .workbench-splitter-${pane}`)) return;

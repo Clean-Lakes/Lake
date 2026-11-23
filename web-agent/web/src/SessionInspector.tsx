@@ -33,7 +33,7 @@ export function ReplyProcessSelect({sessionId,onSpecialist,onPilot}:{sessionId?:
  </label>;
 }
 
-export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=false,taskNavigation,taskMetadata,taskControls,resultsFooter,taskPage=false,waitingForWindow=false,exitMs=inspectorExitMs}:{snapshot:SessionSnapshot;connected:boolean;onUpdated:()=>void;worker?:SuperWorker;readOnly?:boolean;taskNavigation?:ReactNode;taskMetadata?:ReactNode;taskControls?:ReactNode;resultsFooter?:ReactNode;taskPage?:boolean;waitingForWindow?:boolean;exitMs?:number}){
+export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=false,taskNavigation,taskMetadata,taskControls,resultsFooter,taskPage=false,waitingForWindow=false}:{snapshot:SessionSnapshot;connected:boolean;onUpdated:()=>void;worker?:SuperWorker;readOnly?:boolean;taskNavigation?:ReactNode;taskMetadata?:ReactNode;taskControls?:ReactNode;resultsFooter?:ReactNode;taskPage?:boolean;waitingForWindow?:boolean}){
  readOnly=readOnly||snapshot.session.workspaceRole==='legacy';
  const inspector=useSessionInspector()!;
  const selection=resolvedInspectorSelection(snapshot,inspector.selection);
@@ -43,17 +43,12 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
  const [present,setPresent]=useState(visible),panel=useRef<HTMLElement>(null);
  useEffect(()=>{
   if(visible){setPresent(true);return;}
-  const timer=setTimeout(()=>setPresent(false),window.matchMedia('(prefers-reduced-motion: reduce)').matches?0:exitMs);
+  const timer=setTimeout(()=>setPresent(false),window.matchMedia('(prefers-reduced-motion: reduce)').matches?0:inspectorExitMs);
   return()=>clearTimeout(timer);
- },[visible,exitMs]);
+ },[visible]);
  const target=selection??retained.current;
  const followTurn=selection?.followLatest?snapshot.messages?.filter(message=>message.role==='user').at(-1)?.id:undefined;
- const selectedSessionId=selection?.sessionId;
- useLayoutEffect(()=>{
-  if(!selectedSessionId)return;
-  const scroll=panel.current?.querySelector('.session-inspector-scroll');
-  if(scroll)scroll.scrollTop=0;
- },[selectedSessionId,selection?.turnId,selection?.taskId,selection?.canonicalGoalId,followTurn]);
+ useLayoutEffect(()=>{const scroll=panel.current?.querySelector('.session-inspector-scroll');if(scroll)scroll.scrollTop=0;},[selection?.sessionId,selection?.turnId,selection?.taskId,selection?.canonicalGoalId,followTurn]);
  const task=target?inspectedTask(snapshot,target):undefined;
  const plan=task?.plans?.at(-1);
  const canonical=target?inspectedCanonicalTask(snapshot,target):undefined;

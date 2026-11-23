@@ -14,9 +14,11 @@
 .app-shell.has-workbench-conversation.has-collapsed-sidebar .island-conversation {
  --island-navigation-inset:var(--workbench-navigation-island-width);
 }
+.app-shell.has-docked-conversation .island-conversation {
+ transition:padding-inline-start var(--workbench-sidebar-duration) var(--workbench-sidebar-ease)!important;
+}
 .app-shell.has-docked-conversation.has-collapsed-sidebar .island-conversation {
- /* Clear the native window controls without stopping the horizontal slide early. */
- transform:translateX(max(0px,calc(var(--workbench-navigation-start) - var(--sidebar-rail-width) - var(--conversation-header-inset))));
+ left:var(--workbench-island-navigation-left,calc(100% + var(--conversation-header-inset)));
 }
 .island-navigation-divider {
  position:absolute;
@@ -33,7 +35,7 @@
 }
 .app-shell.has-collapsed-sidebar .island-navigation-divider { opacity:1; }
 @media(prefers-reduced-motion:reduce) {
- .app-shell.has-workbench-conversation .island-conversation { transition:none!important; }
+ .app-shell:is(.has-workbench-conversation,.has-docked-conversation) .island-conversation { transition:none!important; }
  .island-navigation-divider { transition:none; }
 }
 .app-shell.has-workbench-conversation:not(.has-workbench-island) .island-conversation { --island-title-min:0px; box-shadow:var(--shadow-popover); }

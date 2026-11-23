@@ -10,8 +10,8 @@
     --workbench-navigation-min-width:calc(3 * var(--workbench-navigation-button-size) + 2 * var(--workbench-navigation-gap));
     --workbench-navigation-island-padding:8px;
     --workbench-navigation-island-width:calc(var(--workbench-navigation-min-width) + 2 * var(--workbench-navigation-island-padding));
-    --workbench-sidebar-duration:300ms;
-    --workbench-sidebar-ease:cubic-bezier(.45,0,.3,1);
+    --workbench-sidebar-duration:420ms;
+    --workbench-sidebar-ease:cubic-bezier(.3,.15,.25,1);
     --workbench-chrome-background:var(--workbench-content-background,var(--paper));
     background:var(--workbench-chrome-background);
     transition:none;
@@ -57,10 +57,12 @@
   .app-shell.has-collapsed-sidebar::before,
   .app-shell.has-collapsed-sidebar .sidebar-navigation-content,
   .app-shell.has-collapsed-sidebar .sidebar-navigation-rail::after { opacity:0; }
-  /* The moving seam clips the navigation behind the rail. The inner list
-     keeps its layout and scroll width throughout. */
+  /* Keep the navigation at its settled width as it slides behind the rail. */
   .app-shell.has-docked-conversation .sidebar-navigation-viewport {
     inline-size:calc(100% - var(--sidebar-rail-width));
+  }
+  .app-shell.has-docked-conversation[data-sidebar-sliding] .sidebar-navigation-viewport {
+    inline-size:calc(var(--sidebar-expanded-width,280px) - var(--sidebar-rail-width));
   }
   .app-shell.has-docked-conversation .sidebar-navigation-content {
     inline-size:calc(var(--sidebar-expanded-width,280px) - var(--sidebar-rail-width));
@@ -94,7 +96,6 @@
       height var(--workbench-sidebar-duration) var(--workbench-sidebar-ease);
   }
   .app-shell.has-docked-conversation > .workbench-navigation {
-    --workbench-island-navigation-left:max(var(--workbench-navigation-start),calc(var(--sidebar-rail-width) + var(--conversation-header-inset)));
     --workbench-island-navigation-top:var(--conversation-island-top);
   }
   .app-shell.has-workbench-conversation.has-collapsed-sidebar > .workbench-navigation {

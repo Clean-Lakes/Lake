@@ -1,6 +1,5 @@
-import {useEffect,useLayoutEffect,useRef,useState,type CSSProperties,type ReactNode} from 'react';
+import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 import './workbenchIsland.css';
-import {islandInspectorMotionMs} from './SessionInspectorContext';
 import {workbenchIslandLayout,type IslandPosition} from './workbenchIslandLayout';
 
 export function useWideWorkbench(){
@@ -70,8 +69,8 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    if(!workspace||!view)return;
    const dockedPane=shell.classList.contains('has-docked-conversation');
    const collapsed=shell.classList.contains('has-collapsed-sidebar');
-   // The two-pane island is positioned by the moving grid line. Read its
-   // content budget at the endpoints, outside the animated resize frames.
+   // Sidebar motion translates the painted island using its settled layout.
+   // Keep text measurements and width updates outside the motion.
    if(dockedPane&&shell.hasAttribute('data-sidebar-sliding')&&identity.dataset.ready==='true'){
     sidebarCollapsed=collapsed;
     return;
@@ -89,7 +88,8 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const navigationStart=parseFloat(shellStyle.getPropertyValue('--workbench-navigation-start'))||0;
    const navigationWidth=collapsed&&navigation?
     parseFloat(getComputedStyle(navigation).minInlineSize)+2*parseFloat(shellStyle.getPropertyValue('--workbench-navigation-island-padding')):0;
-   const left=collapsed?Math.max(paneLeft,navigationStart):
+   const readingLeft=(composer??view.querySelector('.timeline-list')?.getBoundingClientRect())?.left;
+   const left=collapsed?Math.max(readingLeft===undefined?paneLeft:readingLeft-base.left,navigationStart):
     toolbar&&toolbar.bottom>base.top+conversationTop?Math.max(paneLeft,toolbar.right-base.left+12):paneLeft;
    const actionsSpace=dockedPane?parseFloat(workspaceStyle.getPropertyValue('--conversation-header-actions-offset'))+12:0;
    const right=dockedPane?bounds.right-base.left-actionsSpace:paneLeft+(frameInset?bounds.width-frameInset*4:composer?.width??bounds.width-96);
@@ -232,7 +232,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
   <div ref={conversationIsland} className="lake-workbench-island island-conversation" data-pilot-island-tone={pilotTone}>
    <span className="workspace-header-glass" aria-hidden="true"/>
    <span className="island-navigation-divider" aria-hidden="true"/>{activity}{conversation}
-   {islandInspector&&<div className="island-inspector" data-open={inspectorOpen} style={{'--island-panel-duration':`${islandInspectorMotionMs}ms`} as CSSProperties}>
+   {islandInspector&&<div className="island-inspector" data-open={inspectorOpen}>
     <div className="island-inspector-viewport">{islandInspector}</div>
    </div>}
   </div>
