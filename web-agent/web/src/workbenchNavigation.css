@@ -8,8 +8,8 @@
     --workbench-navigation-button-size:28px;
     --workbench-navigation-gap:3px;
     --workbench-navigation-min-width:calc(3 * var(--workbench-navigation-button-size) + 2 * var(--workbench-navigation-gap));
-    --workbench-sidebar-duration:240ms;
-    --workbench-sidebar-ease:cubic-bezier(.25,.72,.34,1);
+    --workbench-sidebar-duration:300ms;
+    --workbench-sidebar-ease:cubic-bezier(.45,0,.3,1);
     --workbench-chrome-background:var(--workbench-content-background,var(--paper));
     background:var(--workbench-chrome-background);
     transition:none;

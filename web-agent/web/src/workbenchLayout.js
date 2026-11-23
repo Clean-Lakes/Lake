@@ -60,6 +60,7 @@
     const workspaceWidth = desktop ? 0 : shell.querySelector('.workspace')?.clientWidth || 0;
     return {
       expandedSidebarWidth,
+      expandedConversationWidth: width - expandedSidebarWidth,
       sidebar: sidebarCollapsed ? [sidebar, sidebar] : [200, sidebarMax],
       terminal: desktop ? [auxiliaryMin, terminalMax] : [280, Math.max(280, Math.min(900, width - 40))],
       inspector: desktop
@@ -115,6 +116,7 @@
     // never lays out at the endpoint and then returns to the first frame.
     if (Math.abs(from - width) >= .5) slideSidebar(from, width);
     shell.style.setProperty('--sidebar-expanded-width', `${target.expandedSidebarWidth}px`);
+    shell.style.setProperty('--expanded-conversation-width', `${target.expandedConversationWidth}px`);
     for (const pane of ['sidebar', 'terminal', 'inspector']) {
       const [min, max] = target[pane];
       const width = clamp(preferred[pane], min, max);

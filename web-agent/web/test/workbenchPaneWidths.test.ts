@@ -64,3 +64,16 @@ test('collapsing to the icon rail returns width to the workbench and preserves t
  page.collapseSidebar(false);
  assert.deepEqual(page.widths(),expanded);
 });
+
+test('the docked reading width follows the window and is independent of sidebar collapse',()=>{
+ const page=fixture({sidebar:304,terminal:400,inspector:382});
+ page.toggle(false,false);
+ page.resize(903);
+ assert.equal(page.properties.get('--expanded-conversation-width'),'599px');
+ page.collapseSidebar(true);
+ assert.equal(page.properties.get('--expanded-conversation-width'),'599px');
+ page.resize(1000);
+ assert.equal(page.properties.get('--expanded-conversation-width'),'696px');
+ page.collapseSidebar(false);
+ assert.equal(page.properties.get('--expanded-conversation-width'),'696px');
+});

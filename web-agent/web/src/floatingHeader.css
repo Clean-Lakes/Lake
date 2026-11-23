@@ -62,7 +62,7 @@
     corner-shape: var(--corner-window);
   }
   :root:not(.lake-windows-chrome) .app-shell > .workspace.has-floating-header {
-    --session-gutter: clamp(16px, 3.4cqw, 32px);
+    --session-gutter: clamp(16px, calc(var(--docked-reading-viewport,100cqw) * .034), 32px);
     --workbench-bottom-inset: 12px;
   }
   :root[data-theme="dark"]:not(.lake-windows-chrome) .workspace.has-floating-header {
@@ -207,6 +207,11 @@ html.lake-windows-chrome .conversation-header-backdrop { top:48px; }
  --paper:var(--background);
  --conversation-frame-radius:max(8px,calc(var(--radius-window) - 8px));
  --workbench-bottom-inset:16px;
+ /* Keep line breaks stable across the toggle. The reading column is centered
+    in the available space and scales when the window or sidebar is resized. */
+ --docked-reading-viewport:calc(var(--expanded-conversation-width,100cqw) - 1px);
+ --session-content-width:min(960px,calc(var(--docked-reading-viewport) - var(--session-gutter) - var(--session-gutter)));
+ --session-content-start:max(var(--session-gutter),calc((100cqw - var(--session-content-width)) / 2));
  border-inline-start:1px solid var(--conversation-frame-border,var(--border));
  border-start-start-radius:var(--conversation-frame-radius);
  border-end-start-radius:var(--conversation-frame-radius);
