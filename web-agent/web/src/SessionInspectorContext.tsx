@@ -5,7 +5,7 @@ import type {SpecialistReplyAuthor,SRETask} from '../../shared/contracts';
 export type PilotProcessTarget={sessionId:string;turnId:string;canonicalGoalId?:string};
 export type ReplyProcessSources={pilot:PilotProcessTarget;specialist:SpecialistReplyAuthor};
 export type InspectSpecialist=(author:SpecialistReplyAuthor,pilot?:PilotProcessTarget)=>void;
-export type InspectorSelection={sessionId:string;canonicalGoalId?:string;taskId?:string;task?:SRETask;attemptId?:string;evidenceId?:string;turnId?:string;replySources?:ReplyProcessSources;followLatest?:boolean;automatic?:boolean;tab:'plan'|'execution'};
+export type InspectorSelection={sessionId:string;canonicalGoalId?:string;taskId?:string;task?:SRETask;attemptId?:string;evidenceId?:string;turnId?:string;replySources?:ReplyProcessSources;followLatest?:boolean;view?:'pilot-activity';automatic?:boolean;tab:'plan'|'execution'};
 type InspectorState={selection:InspectorSelection|null;lastSelection:InspectorSelection|null;host:HTMLDivElement|null;open:(target:InspectorSelection)=>void;close:()=>void;reset:()=>void;setHost:(node:HTMLDivElement|null)=>void};
 const InspectorContext=createContext<InspectorState|null>(null);
 export const useSessionInspector=()=>useContext(InspectorContext);

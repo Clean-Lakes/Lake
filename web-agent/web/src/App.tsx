@@ -870,16 +870,22 @@ function AppContent() {
   useLayoutEffect(()=>{window.dispatchEvent(new Event('lake-workbench-layout'));},[terminalOpen,inspectorOpen]);
   const headerPilot = !selectedResource && !isPlansPage ? pilotIslandModel(activeSnapshot) : null;
   const headerPilotMode: 'auto'|'manual'|undefined = !selectedResource&&!isPlansPage&&activeSnapshot?.sre?.pilot?.enabled&&(!activeSnapshot.ai?.profile||activeSnapshot.ai.profile==='core')?(activeSnapshot.sre.pilot.autoAdvance?'auto':'manual'):undefined;
-  const inspectorAvailable=(activeSnapshot?.session.workspaceRole==='role'?roleWorkers.length>0:!!inspectedSnapshot?.ai)&&!selectedResource&&!isPlansPage;
+  const inspectorAvailable=(activeSnapshot?.session.workspaceRole==='role'?roleWorkers.length>0:!!(activeSnapshot?.ai??inspectedSnapshot?.ai))&&!selectedResource&&!isPlansPage;
   const reopenInspector=()=>{
     if(activeSnapshot?.session.workspaceRole==='role'){
       const worker=preferredChannelTask(roleWorkers);if(worker)void inspectRoleTask(worker.sessionId);
       return;
     }
     if(!inspectedSnapshot||!inspectorAvailable)return;
-    if(roleInspection?.session.id===sessionId){roleInspectionRequest.current.cancel();setRoleInspection(null);}
     const tab=inspector.lastSelection?.sessionId===inspectedSnapshot.session.id?inspector.lastSelection.tab:headerPilot?'plan':'execution';
-    inspector.open(latestInspectorSelection(activeSnapshot??inspectedSnapshot,tab));
+    const latest=latestInspectorSelection(activeSnapshot??inspectedSnapshot,tab);
+    if(selectedSuperPilot&&activeSnapshot&&conversationMode==='conversation'&&!latest.taskId){
+      roleInspectionRequest.current.cancel();pendingRoleInspection.current=undefined;setRoleInspection(null);
+      inspector.open({sessionId:activeSnapshot.session.id,tab:'execution',followLatest:true,view:'pilot-activity'});
+      return;
+    }
+    if(roleInspection?.session.id===sessionId){roleInspectionRequest.current.cancel();setRoleInspection(null);}
+    inspector.open(latest);
   };
   const selectedProjectId = selectedResource?.projectId ?? selectedSession?.projectId;
   useEffect(() => {
@@ -1797,6 +1803,7 @@ function AppContent() {
       {bulkMode && <div className="bulk-navigation-toolbar"><button type="button" onClick={()=>{setBulkMode(false);setBulkSelected([]);}}>完成</button><span>已选 {bulkSelected.length} 项</span><button type="button" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkSelected([])}>清空</button><button type="button" className="danger-text" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}>删除所选</button></div>}
       {sidebarProject?<SidebarWorkspaceNavigation key={sidebarProject.id} projectId={sidebarProject.id}
        selectionId={route.resourceId?`resource:${route.resourceId}`:`session:${route.sessionId??''}`} selectedPanel={route.resourceId?'resources':'specialists'}
+       onLeaveResources={route.resourceId?()=>navigate({sessionId:route.sessionId,resourceId:null}):undefined}
        resourceCount={catalog.resources.filter(resource=>resource.projectId===sidebarProject.id).length}
        attention={pilotWorkspace.workspace?.channels?.some(channel=>channel.needsConfirmation===true||hasUnreadMessages(channel.messageRead))}
        pilot={<SidebarPilotEntry buttonRef={sidebarPilotButton} selected={sessionSelected&&route.sessionId===pilotWorkspace.workspace?.project.routerSessionId}

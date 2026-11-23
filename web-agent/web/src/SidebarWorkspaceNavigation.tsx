@@ -1,15 +1,16 @@
 import {useEffect,useId,useRef,useState,type ReactNode} from 'react';
 import {SidebarScrollArea} from './SidebarScrollArea';
 import {SidebarResourceActions} from './SidebarResourceActions';
+import {Glyph} from './Icons';
 
 type NavigationPanel = 'specialists'|'resources';
 
 /** Both lists stay mounted so switching preserves their scroll and folder state. */
-export function SidebarWorkspaceNavigation({projectId,pilot,specialists,children,resourceCount,selectionId,selectedPanel,attention=false}:{
+export function SidebarWorkspaceNavigation({projectId,pilot,specialists,children,resourceCount,selectionId,selectedPanel,attention=false,onLeaveResources}:{
  projectId:string;pilot:ReactNode;specialists:ReactNode;children:ReactNode;resourceCount:number;
- selectionId:string;selectedPanel:NavigationPanel;attention?:boolean;
+ selectionId:string;selectedPanel:NavigationPanel;attention?:boolean;onLeaveResources?:()=>void;
 }) {
- const id=useId(),tabs=useRef(new Map<NavigationPanel,HTMLButtonElement>());
+ const id=useId();
  const [resourceActions,setResourceActions]=useState<HTMLElement|null>(null);
  const [panel,setPanel]=useState<NavigationPanel>(()=>{
   if(selectedPanel==='resources')return 'resources';
@@ -21,29 +22,26 @@ export function SidebarWorkspaceNavigation({projectId,pilot,specialists,children
   previousSelection.current=selectionId;setPanel(selectedPanel);
  },[selectionId,selectedPanel]);
  useEffect(()=>{try{localStorage.setItem(`lake.sidebar-panel.${projectId}`,panel);}catch{}},[projectId,panel]);
+ const resourcesOpen=panel==='resources';
  return <div className="sidebar-workspace-navigation">
-  <div className="sidebar-pinned-pilot">{pilot}</div>
+  <nav className="sidebar-resource-rail" aria-label="资源导航">
+   <button type="button" className="sidebar-resource-rail-toggle" aria-label="资源" aria-pressed={resourcesOpen}
+    aria-controls={`${id}-resources-panel`} title={resourcesOpen?'返回会话侧栏':'打开资源'}
+    onClick={()=>{setPanel(resourcesOpen?'specialists':'resources');if(resourcesOpen)onLeaveResources?.();}}><Glyph name="layers" size={18}/></button>
+  </nav>
+  {!resourcesOpen&&<div className="sidebar-pinned-pilot">{pilot}</div>}
   <div className="sidebar-content-header">
-   <div className="sidebar-content-tabs" role="tablist" aria-label="项目导航内容">
-   {(['specialists','resources'] as const).map(value=><button type="button" key={value} ref={node=>{if(node)tabs.current.set(value,node);else tabs.current.delete(value);}}
-    role="tab" id={`${id}-${value}-tab`} aria-controls={`${id}-${value}-panel`} aria-selected={panel===value} tabIndex={panel===value?0:-1}
-    className="sidebar-content-tab" onClick={()=>setPanel(value)} onKeyDown={event=>{
-     if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
-     event.preventDefault();const next=event.key==='Home'?'specialists':event.key==='End'?'resources':value==='specialists'?'resources':'specialists';
-     setPanel(next);tabs.current.get(next)?.focus();
-    }}>
-    <span>{value==='specialists'?'专员':'资源'}</span>
-    {value==='resources'&&<small>{resourceCount}</small>}
-    {value==='specialists'&&attention&&<span className="sidebar-specialist-attention" role="img" aria-label="专员有待确认事项或未读消息"/>}
-   </button>)}
+   <div className="sidebar-content-title">
+    <h2 id={`${id}-panel-title`}>{resourcesOpen?'资源':'专员'}</h2>
+    {resourcesOpen?<small>{resourceCount}</small>:attention&&<span className="sidebar-specialist-attention" role="img" aria-label="专员有待确认事项或未读消息"/>}
    </div>
-   <div ref={setResourceActions} className={`sidebar-resource-actions${panel==='resources'?' is-active':''}`} aria-hidden={panel!=='resources'} inert={panel!=='resources'}/>
+   <div ref={setResourceActions} className="sidebar-resource-actions" hidden={!resourcesOpen}/>
   </div>
   <SidebarResourceActions.Provider value={resourceActions}>
-  <section className="sidebar-navigation-panel" role="tabpanel" id={`${id}-specialists-panel`} aria-labelledby={`${id}-specialists-tab`} hidden={panel!=='specialists'}>
+  <section className="sidebar-navigation-panel" aria-labelledby={`${id}-panel-title`} hidden={resourcesOpen}>
    <SidebarScrollArea>{specialists}</SidebarScrollArea>
   </section>
-  <section className="sidebar-navigation-panel sidebar-resources-panel" role="tabpanel" id={`${id}-resources-panel`} aria-labelledby={`${id}-resources-tab`} hidden={panel!=='resources'}>
+  <section className="sidebar-navigation-panel sidebar-resources-panel" id={`${id}-resources-panel`} aria-labelledby={`${id}-panel-title`} hidden={!resourcesOpen}>
    <SidebarScrollArea>{children}</SidebarScrollArea>
   </section>
   </SidebarResourceActions.Provider>
