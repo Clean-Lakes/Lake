@@ -32,19 +32,20 @@
  --window-corner-stroke-image:url('/window-corner-stroke-compact.svg');
  --window-corner-stroke-slice:18;
 }
-:root .sidebar.workspace-navigation :is(.navigation-search,.session-nav-row,.resource-row,.resource-folder-toggle,.resource-tree-row,.resource-folder-row,.resource-nav-row,.pilot-workspace .nav-row) {
+:root .sidebar.workspace-navigation :is(.navigation-search,.session-nav-row,.resource-row,.resource-folder-toggle,.resource-tree-row,.resource-folder-row,.resource-nav-row) {
  --window-corner-radius:18px;
  --window-corner-stroke-image:url('/window-corner-stroke-compact.svg');
  --window-corner-stroke-slice:18;
 }
 @media(pointer:coarse) {
- :root .sidebar.workspace-navigation :is(.navigation-search,.session-nav-row,.resource-row,.resource-folder-toggle,.resource-tree-row,.resource-folder-row,.resource-nav-row,.pilot-workspace .nav-row) {
-  &:not(.pilot-worker-row,.sidebar-pilot-entry) { min-height:44px; }
+ :root .sidebar.workspace-navigation :is(.navigation-search,.session-nav-row,.resource-row,.resource-folder-toggle,.resource-tree-row,.resource-folder-row,.resource-nav-row) {
+  min-height:44px;
   --window-corner-radius:var(--radius-window);
   --window-corner-stroke-image:url('/window-corner-stroke.svg');
   --window-corner-stroke-slice:22;
  }
 }
+:root .sidebar.workspace-navigation .pilot-workspace .nav-row { --window-corner-radius:var(--radius-settings-control); }
 
 /* Compact badges and composer actions retain their size and scale the same curve. */
 :root :is(.session-state-badge,.composer-reference-token,.message-reference-token,:where(.composer-input) .composer-attach-button,:where(.composer-input) .send-button,:where(.composer-foot) > .composer-permission-button:where(:not(.sre-mode-toggle))) {

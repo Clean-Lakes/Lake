@@ -46,7 +46,7 @@ export function SidebarWorkspaceNavigation({projectId,specialists,children,resou
   <div className="sidebar-navigation-viewport">
    <div id={contentId} className="sidebar-navigation-content" inert={collapsed} aria-hidden={collapsed||undefined}>
     {header}
-    {projectId?<><section key={`specialists:${projectId}`} className="sidebar-navigation-panel" id={`${id}-specialists-panel`} aria-labelledby={`${id}-specialists-title`} hidden={!specialistsOpen}>
+    {projectId?<><section key={`specialists:${projectId}`} className="sidebar-navigation-panel sidebar-specialists-panel" id={`${id}-specialists-panel`} aria-labelledby={`${id}-specialists-title`} hidden={!specialistsOpen}>
      <div className="sidebar-content-header">
       <div className="sidebar-content-title">
        <h2 id={`${id}-specialists-title`}>专员</h2>

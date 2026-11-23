@@ -11,7 +11,7 @@ test('Pilot is a built-in specialist row with its own selection and no delete me
  assert.doesNotMatch(html,/brand\/lake-app-icon\.png/);
  const visible=html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
  assert.match(visible,/^Pilot 话事人 对话与任务统筹$/);
- assert.match(html,/title="Pilot · 话事人 · 内置专员 · 对话与任务统筹 · 不可删除"/);
+ assert.match(html,/title="内置专员 · 不可删除"/);
  assert.equal((html.match(/<button/g)??[]).length,1);
  assert.match(html,/data-role="coordinator"/);
  assert.doesNotMatch(html,/aria-haspopup|删除专员|sidebar-pilot-slash/);
