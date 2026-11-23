@@ -50,10 +50,14 @@
 .lake-native .sidebar.workspace-navigation { --sidebar-chrome-inset:var(--lake-titlebar-height,0px); }
 .sidebar-workspace-navigation { display:flex; flex:1 1 auto; min-height:0; flex-direction:column; }
 .sidebar-navigation-rail {
+ --sidebar-rail-top:calc(var(--sidebar-brand-margin) + (var(--sidebar-brand-height) - var(--sidebar-rail-button-size)) / 2);
  position:absolute; inset-block:var(--sidebar-chrome-inset,0px) 0; inset-inline-start:0;
  width:var(--sidebar-rail-width); display:flex; flex-direction:column; align-items:center; gap:10px;
- padding-block-start:calc(var(--sidebar-brand-margin) + (var(--sidebar-brand-height) - var(--sidebar-rail-button-size)) / 2);
- border-inline-end:1px solid var(--border);
+ padding-block-start:var(--sidebar-rail-top); padding-inline-end:1px;
+}
+.sidebar-navigation-rail::after {
+ content:""; position:absolute; inset-block:var(--sidebar-rail-top) 32px; inset-inline-end:0;
+ inline-size:1px; background:var(--border); pointer-events:none;
 }
 .sidebar-rail-button {
  display:grid; place-items:center; flex:none; width:var(--sidebar-rail-button-size); height:var(--sidebar-rail-button-size); padding:0;
