@@ -209,14 +209,17 @@ html.lake-windows-chrome .conversation-header-backdrop { top:48px; }
  --workbench-bottom-inset:16px;
  border-inline-start:1px solid var(--conversation-frame-border,var(--border));
  border-start-start-radius:var(--conversation-frame-radius);
+ border-end-start-radius:var(--conversation-frame-radius);
  corner-shape:var(--corner-window);
 }
 :root .app-shell.has-docked-conversation.has-collapsed-sidebar > .workspace.has-floating-header { border-inline-start-color:transparent; }
-/* The top-left curve and the divider share the native fallback contour. */
+/* Both ends of the divider share the native fallback contour. */
 :root.lake-corner-fallback .app-shell.has-docked-conversation > .workspace.has-floating-header {
+ --conversation-frame-mask-width:var(--conversation-frame-radius) 0 var(--conversation-frame-radius) var(--conversation-frame-radius);
  border-inline-start-color:transparent;
  border-start-start-radius:0;
- -webkit-mask-box-image:url('/window-corner-fill.svg') 22 fill / var(--conversation-frame-radius) 0 0 var(--conversation-frame-radius) / 0 stretch;
+ border-end-start-radius:0;
+ -webkit-mask-box-image:url('/window-corner-fill.svg') 22 fill / var(--conversation-frame-mask-width) / 0 stretch;
 }
 :root.lake-corner-fallback .app-shell.has-docked-conversation > .workspace.has-floating-header::after {
  content:"";
@@ -226,7 +229,7 @@ html.lake-windows-chrome .conversation-header-backdrop { top:48px; }
  pointer-events:none;
  background:var(--conversation-frame-border,var(--border));
  clip-path:inset(0 calc(100% - var(--conversation-frame-radius)) 0 0);
- -webkit-mask-box-image:url('/window-corner-stroke.svg') 22 fill / var(--conversation-frame-radius) 0 0 var(--conversation-frame-radius) / 0 stretch;
+ -webkit-mask-box-image:url('/window-corner-stroke.svg') 22 fill / var(--conversation-frame-mask-width) / 0 stretch;
  transition:opacity var(--workbench-sidebar-duration) var(--workbench-sidebar-ease);
 }
 :root.lake-corner-fallback .app-shell.has-docked-conversation.has-collapsed-sidebar > .workspace.has-floating-header::after { opacity:0; }
