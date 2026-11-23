@@ -43,11 +43,13 @@ export function latestPilotTaskAssignments(workspace:SuperWorkspace|null|undefin
  return assignments.filter(assignment=>assignment.worker.task.taskId===latest?.worker.task.taskId);
 }
 
-export type PilotExecutionStep={id:string;at:string;label:string;icon:GlyphName;description?:string;running?:boolean;status?:string};
+type StepStatus={label:string;tone:'neutral'|'danger'|'attention'|'success'};
+export type PilotExecutionStep={id:string;at:string;label:string;icon:GlyphName;description?:string;running?:boolean;status?:StepStatus};
 
-const statuses:Record<string,string>={
- pending:'待确认',failed:'失败',unknown:'结果待核查',not_executed:'未执行',
- cancelled:'已停止',interrupted:'已停止',
+const statuses:Partial<Record<string,StepStatus>>={
+ pending:{label:'待确认',tone:'attention'}, failed:{label:'失败',tone:'danger'},
+ unknown:{label:'结果待核查',tone:'attention'}, not_executed:{label:'未执行',tone:'neutral'},
+ cancelled:{label:'已停止',tone:'neutral'}, interrupted:{label:'已停止',tone:'neutral'},
 };
 
 /** Project recorded dispatches, tool calls and summary events. The recorded
@@ -67,7 +69,7 @@ export function pilotExecutionSteps(turn:readonly TranscriptEntry[],source:Messa
   if(receipt&&source&&dispatches.some(message=>matchesPilotForwarding(message,source,receipt)))continue;
   steps.push({id:card.id,at:card.at,label:route?'派发专员任务':read?'查阅任务记录':toolDescription(card),
    icon:route?'lakeWorkflow':progressGlyph(card),running:card.status==='running'||card.status==='background_running',
-   status:recoveredRoutes.has(card.id)?'已恢复':statuses[card.status]});
+   status:recoveredRoutes.has(card.id)?{label:'已恢复',tone:'success'}:statuses[card.status]});
  }
  for(const {id,round,final} of summaries){
   if(!final&&round?.state!=='summarizing')continue;

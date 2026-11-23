@@ -69,3 +69,13 @@ test('Pilot operations keep distinct Workers on a joint receipt and show newer w
  ]);
  assert.equal(steps[1]?.description,release.dispatch!.instruction);
 });
+
+test('the operation timeline keeps the recorded time and distinguishes failures from uncertain results',()=>{
+ const failed:AICard={id:'dispatch',type:'operation',title:'route_work',status:'failed',at:at(3)};
+ const unknown:AICard={id:'lookup',type:'operation',title:'read_super_object',status:'unknown',at:at(7)};
+ const steps=pilotExecutionSteps([unknown,failed].map(card=>({id:card.id,card,at:card.at})),input,[],[]);
+ assert.deepEqual(steps.map(({id,at,status})=>[id,at,status]),[
+  [failed.id,failed.at,{label:'失败',tone:'danger'}],
+  [unknown.id,unknown.at,{label:'结果待核查',tone:'attention'}],
+ ]);
+});

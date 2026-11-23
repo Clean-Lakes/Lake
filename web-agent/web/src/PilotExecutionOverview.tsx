@@ -12,6 +12,8 @@ import {latestPilotTaskAssignments,pilotExecutionSteps} from './pilotExecutionOv
 import type {PilotSummarySlot} from './routeDispatchPresentation';
 import type {TranscriptEntry} from './timeline';
 
+const stepClock=new Intl.DateTimeFormat('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
+
 export function PilotExecutionOverview({workspace,session,source,messages,turn,summaries,active,onInspect}:{
  workspace?:SuperWorkspace|null;session:Pick<WorkSession,'id'|'projectId'>;turn:readonly TranscriptEntry[];
  source?:Message;messages:readonly Message[];summaries:readonly PilotSummarySlot[];active:boolean;onInspect?:InspectSpecialist;
@@ -58,17 +60,25 @@ export function PilotExecutionOverview({workspace,session,source,messages,turn,s
   </section>
   <section className="pilot-execution-steps" aria-label="Pilot 操作过程">
    <div className="pilot-execution-section-heading"><h3>Pilot 操作过程</h3></div>
-   {steps.length?<ol>{steps.map(step=><li key={step.id}>
-    <span className="pilot-execution-step-icon"><Glyph name={step.icon} size={15}/></span>
-    <div className="pilot-execution-step-content">
-     <span className="pilot-execution-step-name" data-active={step.id===current||undefined}>
-      {step.id===animated.current&&<HeaderSweep active={step.id===current}/>}
-      <span>{step.label}</span>
+   {steps.length?<ol role="list">{steps.map(step=>{
+    const isCurrent=step.id===current;
+    const status=isCurrent?{label:'进行中',tone:'active'}:step.status;
+    const at=Date.parse(step.at);
+    const action=<>
+     <span className="pilot-execution-step-name" data-active={isCurrent||undefined}>
+      {step.id===animated.current&&<HeaderSweep active={isCurrent}/>}<span>{step.label}</span>
      </span>
-     {step.description&&<p>{step.description}</p>}
-    </div>
-    {step.status&&<small>{step.status}</small>}
-   </li>)}</ol>:<p className="inspector-empty">本轮尚无 Pilot 操作记录。</p>}
+     {status&&<small data-tone={status.tone}>{status.label}</small>}
+    </>;
+    return <li key={step.id} aria-current={isCurrent?'step':undefined}>
+     {Number.isFinite(at)&&<time dateTime={step.at} title={new Date(at).toLocaleString('zh-CN')}>{stepClock.format(at)}</time>}
+     <span className="pilot-execution-step-icon" aria-hidden="true" data-tone={status?.tone}><Glyph name={step.icon} size={14}/></span>
+     {step.description?<details className="pilot-execution-step-content">
+      <DisclosureSummary className="pilot-execution-step-line">{action}</DisclosureSummary>
+      <p>{step.description}</p>
+     </details>:<div className="pilot-execution-step-content pilot-execution-step-line">{action}</div>}
+    </li>;
+   })}</ol>:<p className="inspector-empty">本轮尚无 Pilot 操作记录。</p>}
   </section>
  </div>;
 }

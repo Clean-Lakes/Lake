@@ -17,6 +17,14 @@
 .app-shell.has-docked-conversation .island-conversation {
  transition:none!important;
 }
+/* The glass changes width as the navigation enters. Its title and status move
+   together on the compositor, independently of when WebKit repaints the glass. */
+.app-shell.has-docked-conversation[data-sidebar-sliding] .island-conversation > .workspace-header {
+ position:absolute;
+ inset-block-start:0;
+ inset-inline-start:var(--island-navigation-inset);
+ inline-size:100cqi;
+}
 .app-shell.has-docked-conversation.has-collapsed-sidebar .island-conversation {
  left:var(--workbench-island-navigation-left,calc(100% + var(--conversation-header-inset)));
 }

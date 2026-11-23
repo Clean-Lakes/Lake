@@ -89,10 +89,12 @@
   function captureSidebarOrigin() {
     if (!shell?.classList.contains('has-docked-conversation')) return;
     const island = shell.querySelector('.island-conversation');
+    const header = island?.querySelector('.workspace-header');
     const divider = island?.querySelector('.island-navigation-divider');
     sidebarOrigin = {
       shell,
       buttons: [...shell.querySelectorAll('.workbench-navigation button')].map(button => [button, button.getBoundingClientRect()]),
+      headerInset: header ? header.getBoundingClientRect().left - island.getBoundingClientRect().left : undefined,
       padding: island ? getComputedStyle(island).paddingInlineStart : undefined,
       dividerOpacity: divider ? getComputedStyle(divider).opacity : undefined,
     };
@@ -121,6 +123,8 @@
 
     const buttons = (origin?.buttons ?? []).map(([button, before]) => ({ button, before, after: button.getBoundingClientRect() }));
     const padding = island ? getComputedStyle(island).paddingInlineStart : undefined;
+    const header = island?.querySelector('.workspace-header');
+    const headerInset = header ? header.getBoundingClientRect().left - island.getBoundingClientRect().left : undefined;
     const divider = island?.querySelector('.island-navigation-divider');
     // Hold the old geometry through the commit. Starting in its input task can
     // spend the whole transition before a busy WebView paints the first frame.
@@ -138,6 +142,9 @@
     translate(surface, from - railWidth, width - railWidth);
     translate(shell.querySelector('.sidebar-navigation-content'), from - expandedWidth, width - expandedWidth);
     translate(island, fromIsland - islandLayout, islandTarget - islandLayout);
+    if (origin?.headerInset !== undefined && headerInset !== undefined) {
+      translate(header, origin.headerInset - headerInset, 0);
+    }
     for (const node of workspace.querySelectorAll('.timeline-list, .conversation-header-backdrop, .composer, .composer-session-controls')) {
       translate(node, (from - railWidth) / 2, (width - railWidth) / 2);
     }
