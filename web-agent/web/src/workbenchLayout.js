@@ -36,6 +36,8 @@
   `;
   document.head.appendChild(style);
   let shell, active, frame = 0, lastChrome = '';
+  let previousSidebar, sidebarSlide;
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
   let observedContextPanel;
   const contextResize = new ResizeObserver(() => schedule());
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -71,10 +73,47 @@
     // The native backend can use a different loopback port next launch, so persist outside its origin too.
     window.webkit?.messageHandlers?.lakeChrome?.postMessage({ widths: preferred });
   }
+  function finishSidebarSlide() {
+    if (!sidebarSlide) return;
+    sidebarSlide.animation.cancel();
+    sidebarSlide.shell.removeAttribute('data-sidebar-sliding');
+    sidebarSlide = undefined;
+  }
+  function slideSidebar(from, width) {
+    const css = getComputedStyle(shell);
+    // The side list stays at its full width. Its clip, the conversation edge,
+    // and the header groups all move with the same grid line.
+    const animation = shell.animate([
+      { gridTemplateColumns: `${from}px minmax(0,1fr) 0px` },
+      { gridTemplateColumns: `${width}px minmax(0,1fr) 0px` },
+    ], {
+      duration: parseFloat(css.getPropertyValue('--workbench-sidebar-duration')),
+      easing: css.getPropertyValue('--workbench-sidebar-ease').trim(),
+    });
+    animation.startTime = document.timeline.currentTime;
+    shell.setAttribute('data-sidebar-sliding', '');
+    sidebarSlide = { shell, width, animation };
+    animation.onfinish = () => {
+      if (sidebarSlide?.animation !== animation) return;
+      finishSidebarSlide();
+      window.dispatchEvent(new Event('lake-workbench-layout'));
+    };
+  }
   function apply() {
     if (!shell) return;
-    const target = paneLimits(shell.classList.contains('has-collapsed-sidebar'));
-    // The sliding navigation stays at its expanded width as the grid snaps once.
+    const collapsed = shell.classList.contains('has-collapsed-sidebar');
+    const docked = shell.classList.contains('has-docked-conversation') && innerWidth > 700;
+    const target = paneLimits(collapsed);
+    const width = clamp(preferred.sidebar, ...target.sidebar);
+    const canSlide = docked && previousSidebar?.shell === shell && previousSidebar.docked &&
+      !active && !document.hidden && !reducedMotion?.matches && typeof shell.animate === 'function';
+    const toggled = canSlide && previousSidebar.collapsed !== collapsed;
+    const from = toggled ? shell.querySelector('.sidebar').getBoundingClientRect().width : width;
+    if (sidebarSlide && (!canSlide || toggled || sidebarSlide.width !== width)) finishSidebarSlide();
+    previousSidebar = { shell, docked, collapsed };
+    // Start at the painted width before applying the target so the transcript
+    // never lays out at the endpoint and then returns to the first frame.
+    if (Math.abs(from - width) >= .5) slideSidebar(from, width);
     shell.style.setProperty('--sidebar-expanded-width', `${target.expandedSidebarWidth}px`);
     for (const pane of ['sidebar', 'terminal', 'inspector']) {
       const [min, max] = target[pane];
@@ -183,9 +222,11 @@
   new MutationObserver(schedule).observe(document.body, { childList:true, subtree:true, attributes:true, attributeFilter:['class'] });
   new MutationObserver(schedule).observe(document.documentElement, { attributes:true, attributeFilter:['data-theme'] });
   window.addEventListener('resize', schedule);
+  document.addEventListener('visibilitychange', schedule);
+  reducedMotion?.addEventListener('change', schedule);
   // React pane toggles must settle widths in the same commit, before paint.
   window.addEventListener('lake-workbench-layout', sync);
-  document.addEventListener('scroll', schedule, true);
+  document.addEventListener('scroll', () => { if (!sidebarSlide) schedule(); }, true);
   window.addEventListener('lake-chrome-resize', schedule);
   document.addEventListener('transitionend', event => { if (event.target.matches('.app-shell, .terminal-side-panel')) schedule(); });
   schedule();

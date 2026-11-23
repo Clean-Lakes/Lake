@@ -31,7 +31,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
   const textMetrics=document.createElement('canvas').getContext('2d');
   const flights:Record<'terminal',IslandFlight>={terminal:{}};
   const observed=new Set<Element>();
-  const write=(node:HTMLElement,box:IslandBox)=>{node.style.left=`${box.left}px`;node.style.top=`${box.top}px`;node.style.width=`${box.width}px`;};
+  const write=(node:HTMLElement,box:IslandBox,useGridPosition=false)=>{node.style.left=useGridPosition?'':`${box.left}px`;node.style.top=`${box.top}px`;node.style.width=`${box.width}px`;};
   const present=(node:HTMLElement,value:boolean)=>{node.dataset.present=String(value);node.dataset.ready='true';};
   const move=(name:'terminal',node:HTMLElement,goal:IslandBox|undefined,source:IslandBox,base:DOMRect)=>{
    const flight=flights[name],expanded=open.current[name],changed=flight.open!==expanded;
@@ -67,8 +67,14 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const workspace=shell.querySelector<HTMLElement>('.workspace');
    const view=workspace?.querySelector<HTMLElement>('.session-layout > .session-view');
    if(!workspace||!view)return;
-   const bounds=view.getBoundingClientRect(),base=shell.getBoundingClientRect(),workspaceBounds=workspace.getBoundingClientRect();
    const dockedPane=shell.classList.contains('has-docked-conversation');
+   // The two-pane island is positioned by the moving grid line. Read its
+   // content budget at the endpoints, outside the animated resize frames.
+   if(dockedPane&&shell.hasAttribute('data-sidebar-sliding')&&identity.dataset.ready==='true'){
+    sidebarCollapsed=shell.classList.contains('has-collapsed-sidebar');
+    return;
+   }
+   const bounds=view.getBoundingClientRect(),base=shell.getBoundingClientRect(),workspaceBounds=workspace.getBoundingClientRect();
    const composer=view.querySelector('.composer-input')?.getBoundingClientRect();
    const frameInset=parseFloat(getComputedStyle(view).getPropertyValue('--conversation-frame-inset'))||0;
    const top=Math.max(shell.closest('html.lake-windows-chrome')?52:12,12+(parseFloat(getComputedStyle(shell).paddingTop)||0));
@@ -161,14 +167,15 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const skipMotion=reduced.matches||document.hidden||document.documentElement.classList.contains('workbench-resizing');
    const collapsed=shell.classList.contains('has-collapsed-sidebar');
    const toggled=sidebarCollapsed!==collapsed;
-   const slide=!skipMotion&&(toggled||(sidebarAnimation&&source.left!==previousLeft));
+   const slide=!dockedPane&&!skipMotion&&(toggled||(sidebarAnimation&&source.left!==previousLeft));
    const fromLeft=slide?identity.getBoundingClientRect().left-base.left:source.left;
-   if(slide||skipMotion){sidebarAnimation?.cancel();sidebarAnimation=undefined;}
+   if(dockedPane||slide||skipMotion){sidebarAnimation?.cancel();sidebarAnimation=undefined;}
    sidebarCollapsed=collapsed;previousLeft=source.left;
    const resizeRoster=!!roster&&roster===previousRoster&&rosterWidth!==previousRosterWidth&&source.width!==previousIslandWidth&&!skipMotion&&!slide&&!sidebarAnimation;
    const fromWidth=resizeRoster?identity.getBoundingClientRect().width:source.width;
    if(source.width!==previousIslandWidth||skipMotion||slide){rosterAnimation?.cancel();rosterAnimation=undefined;}
-   write(identity,source);identity.dataset.ready='true';identity.dataset.present='true';identity.title=title?.textContent??'';
+   write(identity,source,dockedPane);
+   identity.dataset.ready='true';identity.dataset.present='true';identity.title=title?.textContent??'';
    if(slide&&Math.abs(fromLeft-source.left)>.5){
     const now=performance.now();
     if(toggled)sidebarDeadline=now+parseFloat(islandStyle.getPropertyValue('--workbench-sidebar-duration'));

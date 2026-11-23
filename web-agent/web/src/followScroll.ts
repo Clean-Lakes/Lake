@@ -71,13 +71,14 @@ export class FollowScroll {
 
 // Follow rendered line growth, never the SSE cursor or an activity timer. A
 // shrinking transcript only updates the baseline; it must not pull the reader up.
-export function observeConversationGrowth(container: HTMLElement, request: () => void) {
+export function observeConversationGrowth(container: HTMLElement, request: (viewportChanged: boolean) => void) {
   let height = container.scrollHeight, width = container.clientWidth, viewport = container.clientHeight;
   const measure = () => {
     const nextHeight = container.scrollHeight, nextWidth = container.clientWidth, nextViewport = container.clientHeight;
-    const changed = nextHeight > height || nextWidth !== width || nextViewport !== viewport;
+    const viewportChanged = nextWidth !== width || nextViewport !== viewport;
+    const changed = nextHeight > height || viewportChanged;
     height = nextHeight; width = nextWidth; viewport = nextViewport;
-    if (changed) request();
+    if (changed) request(viewportChanged);
   };
   const resize = new ResizeObserver(measure);
   resize.observe(container);

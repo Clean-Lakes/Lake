@@ -1005,7 +1005,10 @@ function AppContent() {
     const resume=conversationResume.current.get(key);
     if(resume){conversationResume.current.delete(key);conversationScroll.current={key,following:resume.following};container.scrollTop=resume.top;if(resume.following)follower.jump();}
     else follower.jump();
-    const stopObserving = observeConversationGrowth(container, () => historyVisible.current===key?follower.request():follower.jump());
+    const stopObserving = observeConversationGrowth(container, viewportChanged => {
+      if (viewportChanged || historyVisible.current!==key) follower.jump();
+      else follower.request();
+    });
     return () => {
       motion.removeEventListener("change", updateMotion);
       stopObserving(); follower.stop(); conversationFollower.current = null;

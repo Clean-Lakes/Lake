@@ -4,8 +4,12 @@
   :root .app-shell.has-workbench-navigation {
     --workbench-navigation-height:36px;
     --workbench-navigation-start:8px;
+    --workbench-navigation-end:16px;
+    --workbench-navigation-button-size:28px;
+    --workbench-navigation-gap:3px;
+    --workbench-navigation-min-width:calc(3 * var(--workbench-navigation-button-size) + 2 * var(--workbench-navigation-gap));
     --workbench-sidebar-duration:240ms;
-    --workbench-sidebar-ease:cubic-bezier(.22,1,.36,1);
+    --workbench-sidebar-ease:cubic-bezier(.25,.72,.34,1);
     --workbench-chrome-background:var(--workbench-content-background,var(--paper));
     background:var(--workbench-chrome-background);
     transition:none;
@@ -51,28 +55,51 @@
   .app-shell.has-collapsed-sidebar::before,
   .app-shell.has-collapsed-sidebar .sidebar-navigation-content,
   .app-shell.has-collapsed-sidebar .sidebar-navigation-rail::after { opacity:0; }
+  /* The moving seam clips the navigation behind the rail. The inner list
+     keeps its layout and scroll width throughout. */
+  .app-shell.has-docked-conversation .sidebar-navigation-viewport {
+    inline-size:calc(100% - var(--sidebar-rail-width));
+  }
+  .app-shell.has-docked-conversation .sidebar-navigation-content {
+    inline-size:calc(var(--sidebar-expanded-width,280px) - var(--sidebar-rail-width));
+    align-self:flex-end;
+    transform:none;
+    opacity:1;
+    transition:none;
+  }
   .workbench-navigation {
     position:absolute;
     z-index:24;
+    grid-column:1 / 2;
     inset-block-start:0;
     inset-inline-start:var(--workbench-navigation-start);
+    inset-inline-end:var(--workbench-navigation-end);
+    min-inline-size:var(--workbench-navigation-min-width);
     height:var(--workbench-navigation-height);
     display:flex;
     align-items:center;
-    gap:3px;
+    gap:var(--workbench-navigation-gap);
     user-select:none;
+    pointer-events:none;
+  }
+  .workbench-navigation-history {
+    display:flex;
+    gap:var(--workbench-navigation-gap);
+    margin-inline-start:auto;
   }
   .workbench-navigation button {
     display:grid;
     place-items:center;
-    width:28px;
-    height:28px;
+    flex:none;
+    width:var(--workbench-navigation-button-size);
+    height:var(--workbench-navigation-button-size);
     padding:0;
     border:0;
     border-radius:var(--radius-settings-icon);
     corner-shape:var(--corner-window);
     color:var(--pilot-header-muted);
     background:transparent;
+    pointer-events:auto;
   }
   .workbench-navigation button:hover:not(:disabled) { color:var(--foreground); background:var(--surface-hover); }
   .workbench-navigation button:disabled { opacity:.42; }
@@ -80,11 +107,11 @@
   .app-shell.has-collapsed-sidebar:not(.has-workbench-conversation) { padding-block-start:var(--workbench-navigation-height); }
   .app-shell.has-collapsed-sidebar:not(.has-workbench-conversation) > .sidebar.workspace-navigation { margin-block-start:calc(-1 * var(--workbench-navigation-height)); }
   .app-shell.has-collapsed-sidebar > .workbench-splitter-sidebar { display:none; }
+  .app-shell[data-sidebar-sliding] > .workbench-splitter-sidebar { visibility:hidden; }
   :root.lake-windows-chrome .app-shell.has-collapsed-sidebar .workspace.is-workspace-page .workspace-header.workspace-page-header { padding-block-start:0; }
 }
 @media (min-width:701px) and (pointer:coarse) {
-  :root .app-shell.has-workbench-navigation { --workbench-navigation-height:48px; }
-  .workbench-navigation button { width:44px; height:44px; }
+  :root .app-shell.has-workbench-navigation { --workbench-navigation-height:48px; --workbench-navigation-button-size:44px; }
 }
 @media (min-width:701px) and (prefers-reduced-motion:reduce) {
   .app-shell.has-workbench-navigation::before,
