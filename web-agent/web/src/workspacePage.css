@@ -75,13 +75,14 @@ html.lake-windows-chrome .workspace.is-workspace-page .workspace-header.workspac
   corner-shape:var(--corner-window);
 }
 .workspace-page-layout {
-  display:grid;
-  align-content:start;
+  display:flex;
+  flex-direction:column;
   flex:1 1 auto;
   min-height:0;
   overflow:auto;
   overscroll-behavior:contain;
 }
+.workspace-page-layout > :is(.workspace-project-directory,.workspace-current-project) { flex-shrink:0; }
 :is(.workspace-page-layout,.workspace-project-sheet,.workspace-current-project) {
   scrollbar-width:thin;
   scrollbar-color:var(--border-strong) transparent;
@@ -284,6 +285,7 @@ html.lake-windows-chrome .workspace.is-workspace-page .workspace-header.workspac
   .app-shell.has-rail-only-sidebar { --workspace-chrome-height:var(--workbench-navigation-height); }
   @container workspace-page (min-width:610px) {
     .workspace-page-layout {
+      display:grid;
       grid-template-rows:minmax(0, 1fr);
       align-content:stretch;
       overflow:hidden;
