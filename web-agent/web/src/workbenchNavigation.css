@@ -111,9 +111,9 @@
   .workbench-navigation-brand {
     display:none;
     flex:none;
-    color:var(--foreground);
+    color:var(--pilot-header-muted);
   }
-  @container workbench-navigation (min-width:176px) {
+  @container workbench-navigation (min-width:160px) {
     .workbench-navigation-brand { display:block; }
   }
   .app-shell:is(.has-collapsed-sidebar,[data-sidebar-sliding]) .workbench-navigation-brand { display:none; }
@@ -145,7 +145,7 @@
 }
 @media (min-width:701px) and (pointer:coarse) {
   :root .app-shell.has-workbench-navigation { --workbench-navigation-height:48px; --workbench-navigation-button-size:44px; }
-  @container workbench-navigation (width < 224px) {
+  @container workbench-navigation (width < 208px) {
     .workbench-navigation-brand { display:none; }
   }
 }
