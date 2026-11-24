@@ -1,6 +1,6 @@
 /* Shared geometry for floating forms and actionable panels. Keep the compact
    transcript scale outside these surfaces; model menus own their inset scale. */
-:where(.modal, dialog, .schedule-dialog, .workflow-dialog, .desktop-update-dialog, .lake-question, .ai-pending,
+:where(.modal, dialog, .schedule-dialog, .workflow-dialog, .lake-question, .ai-pending,
  .approval-card, .attachment-approval, .ai-options, .sre-plan, .agent-task-body, .agent-task-detail,
  .resource-folder-editor, .resource-move-panel, .resource-add-menu,
  .resource-terminal-menu, .navigation-context-menu, .terminal-action-menu,
@@ -12,7 +12,7 @@
  corner-shape: var(--corner-window);
 }
 
-:where(.modal, dialog, .schedule-dialog, .workflow-dialog, .desktop-update-dialog, .lake-question, .ai-pending,
+:where(.modal, dialog, .schedule-dialog, .workflow-dialog, .lake-question, .ai-pending,
  .approval-card, .attachment-approval, .ai-options, .sre-plan, .agent-task-body, .agent-task-detail,
  .resource-folder-editor, .resource-move-panel)
  :where(.button, .icon-button, .app-select-trigger, .app-select-option,
@@ -36,3 +36,67 @@
 }
 
 .modal .modal-icon { border-radius: var(--radius-settings-icon); corner-shape: var(--corner-window); }
+
+.workbench-dialog {
+ --workbench-dialog-inset: 24px;
+ border: 1px solid var(--border);
+ border-radius: var(--radius-settings-dialog);
+ corner-shape: var(--corner-window);
+ background: var(--surface);
+ color: var(--foreground);
+ box-shadow: var(--shadow-dialog);
+}
+.workbench-dialog.modal {
+ display: flex;
+ flex-direction: column;
+ max-height: calc(100dvh - 36px);
+ padding: 0;
+ overflow: hidden;
+}
+.workbench-dialog-header {
+ display: flex;
+ flex: none;
+ justify-content: space-between;
+ align-items: flex-start;
+ gap: 12px;
+ padding: 18px var(--workbench-dialog-inset) 14px;
+}
+.workbench-dialog .workbench-dialog-header h2 {
+ margin: 0;
+ font-size: calc(var(--font-size-ui) + 7px);
+ line-height: 1.3;
+ letter-spacing: -.025em;
+ overflow-wrap: anywhere;
+}
+.workbench-dialog-header p {
+ margin: 6px 0 0;
+ color: var(--pilot-header-muted);
+ font-size: var(--font-size-process);
+ line-height: 1.5;
+}
+.workbench-dialog-header .icon-button { flex: none; }
+.workbench-dialog-form { display: flex; flex-direction: column; min-height: 0; }
+.workbench-dialog-body {
+ flex: 1 1 auto;
+ min-height: 0;
+ padding: 16px var(--workbench-dialog-inset) 20px;
+ overflow-y: auto;
+ overscroll-behavior: contain;
+ scrollbar-width: thin;
+}
+.workbench-dialog-body > :first-child { margin-block-start: 0; }
+.workbench-dialog-body > :last-child { margin-block-end: 0; }
+.workbench-dialog-footer {
+ display: flex;
+ flex: none;
+ align-items: center;
+ justify-content: flex-end;
+ flex-wrap: wrap;
+ gap: 8px;
+ padding: 12px var(--workbench-dialog-inset);
+ border-top: 1px solid var(--border);
+ background: var(--surface-subtle);
+}
+@media (max-width: 700px) {
+ .workbench-dialog { --workbench-dialog-inset: 16px; }
+}

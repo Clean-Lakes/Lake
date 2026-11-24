@@ -56,10 +56,15 @@ export function ExternalAgentSettings({projectId,projectName,onBusyChange}:{proj
   };
   return <section id="agents-settings-panel" role="tabpanel" aria-labelledby="agents-settings-tab" className="model-conversation external-agent-settings">
     {!projectId?<p className="settings-note">请先选择项目，再配置外部 Agent。</p>:<>
-      <div className="external-agent-heading"><strong>{projectName||'当前项目'}</strong><span>Codex 连接</span><button className="button secondary" disabled={!!busy} onClick={()=>void run('refresh',refresh,'配置已刷新')}>刷新</button></div>
-      <p className="settings-note">专员的任务和协作回复统一使用此项目的 Codex 连接。修改连接配置会停止当前 Codex 调用。</p>
+      <div className="external-agent-heading">
+        <div className="workspace-setting-copy">
+          <h2 className="workspace-section-title">{projectName||'当前项目'}</h2>
+          <p className="settings-note">本项目的专员任务和协作回复共用 Codex 连接。修改连接配置会停止当前 Codex 调用。</p>
+        </div>
+        <button type="button" className="button secondary" disabled={!!busy} onClick={()=>void run('refresh',refresh,'配置已刷新')}>刷新</button>
+      </div>
       {loading&&<p role="status">正在读取配置…</p>}
-      {agents.map(agent=><article className="external-agent-panel" key={agent.id}>
+      {agents.map(agent=><article className="external-agent-panel workspace-setting-card" key={agent.id}>
         <header><span className="external-agent-mark"><ProviderIcon brand="openai" size={23}/></span><div><h3>Codex</h3><small>{agent.assignmentReady?'已就绪':agent.transportReady?(agent.enabled&&agent.assignmentBlocker||'Codex 连接已验证'):agent.installed?'Codex 引擎可用':'启用后自动准备'}</small></div>
           <button className={`provider-switch ${agent.enabled?'on':''}`} type="button" role="switch" aria-label="启用 Codex" aria-checked={agent.enabled} disabled={!!busy} onClick={()=>void run(agent.id,()=>agent.enabled?api.saveExternalAgent(projectId,agent.id,{enabled:false,expectedRevision:agent.revision}):save({...agent,enabled:true}),'Codex 配置已更新')}><span/></button>
         </header>

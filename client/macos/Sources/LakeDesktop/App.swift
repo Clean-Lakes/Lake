@@ -37,9 +37,37 @@ import LakeDesktopCore
     }
 }
 
+@MainActor private final class WorkbenchContentView: NSView {
+    private let webView: WKWebView
+    var inspectorViewportWidth: CGFloat? {
+        didSet { resizeWebView() }
+    }
+
+    init(webView: WKWebView) {
+        self.webView = webView
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        addSubview(webView)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func resizeSubviews(withOldSize oldSize: NSSize) {
+        resizeWebView()
+    }
+
+    private func resizeWebView() {
+        let size = NSSize(width: inspectorViewportWidth ?? bounds.width, height: bounds.height)
+        if webView.frame.size != size { webView.setFrameSize(size) }
+    }
+}
+
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler, WKScriptMessageHandlerWithReply {
     private var window: NSWindow!
     private var webView: WKWebView!
+    private var workbenchContent: WorkbenchContentView!
     private let backend = Backend()
     private let updater = Updater()
     private let profile = DesktopProfile(bundleIdentifier: Bundle.main.bundleIdentifier)
@@ -49,6 +77,17 @@ import LakeDesktopCore
     private var stopKernelRequested = false
     private var ready = false
     private var inspectorExpansion: InspectorWindowExpansion?
+    private struct InspectorTransition {
+        let id: Int
+        let open: Bool
+        let closed: NSRect
+        let expanded: NSRect
+        var target: NSRect { open ? expanded : closed }
+    }
+    private var inspectorTransition: InspectorTransition?
+    private var inspectorRequestID = 0
+    private var inspectorAnimation: Timer?
+    private var inspectorAnimationReply: ((Any?, String?) -> Void)?
     private var dragRegions: [NSRect] = []
     private var dragExcluded: [NSRect] = []
 
@@ -117,7 +156,14 @@ import LakeDesktopCore
         }
         config.userContentController.add(self, name: "lakeChrome")
         config.userContentController.addScriptMessageHandler(self, contentWorld: .page, name: "lakeInspectorWindow")
-        config.userContentController.addUserScript(WKUserScript(source: "window.lakeInspectorWindow = {setOpen: open => window.webkit.messageHandlers.lakeInspectorWindow.postMessage({open})};", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        let inspectorBridge = """
+        window.lakeInspectorWindow = {
+          setOpen: open => window.webkit.messageHandlers.lakeInspectorWindow.postMessage({open}),
+          prepare: (open, width, docked) => window.webkit.messageHandlers.lakeInspectorWindow.postMessage({action:'prepare', open, width, docked}),
+          animate: (id, animate) => window.webkit.messageHandlers.lakeInspectorWindow.postMessage({action:'animate', id, animate})
+        };
+        """
+        config.userContentController.addUserScript(WKUserScript(source: inspectorBridge, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         config.userContentController.addScriptMessageHandler(self, contentWorld: .page, name: "lakeWindowAttention")
         config.userContentController.addUserScript(WKUserScript(source: "window.lakeWindowAttention = {isReading: () => window.webkit.messageHandlers.lakeWindowAttention.postMessage({})};", injectionTime: .atDocumentStart, forMainFrameOnly: true))
         config.userContentController.addScriptMessageHandler(self, contentWorld: .page, name: "lakeUpdates")
@@ -144,7 +190,8 @@ import LakeDesktopCore
         window.toolbarStyle = .unified
         window.backgroundColor = NSColor(calibratedWhite: 252/255, alpha: 1)
         window.minSize = NSSize(width: 850, height: 600)
-        window.contentView = webView
+        workbenchContent = WorkbenchContentView(webView: webView)
+        window.contentView = workbenchContent
         (window as? WorkbenchWindow)?.shouldStartDrag = { [weak self] event in
             guard let self, self.sameOrigin(self.webView.url) else { return false }
             let local = self.webView.convert(event.locationInWindow, from: nil)
@@ -249,9 +296,31 @@ import LakeDesktopCore
         }
         if message.name == "lakeInspectorWindow" {
             guard message.webView === webView, message.frameInfo.isMainFrame,
-                  sameOrigin(message.frameInfo.request.url), let body = message.body as? [String: Any],
-                  let open = body["open"] as? Bool else { replyHandler(nil, "窗口请求不可用"); return }
-            setInspectorOpen(open, reply: replyHandler)
+                  sameOrigin(message.frameInfo.request.url), let body = message.body as? [String: Any] else {
+                replyHandler(nil, "窗口请求不可用"); return
+            }
+            if body["action"] as? String == "animate" {
+                guard let transition = inspectorTransition, body["id"] as? Int == transition.id,
+                      inspectorAnimation == nil else { replyHandler(nil, "窗口请求已失效"); return }
+                animateInspector(transition, animated: body["animate"] as? Bool == true, reply: replyHandler)
+                return
+            }
+            guard let open = body["open"] as? Bool else { replyHandler(nil, "窗口请求不可用"); return }
+            let width = body["width"] as? Double ?? 382
+            let preparesViewport = body["action"] as? String == "prepare"
+            let transition = prepareInspector(open, width: width.isFinite ? min(900, max(280, width)) : 382,
+                preparesViewport: preparesViewport, docked: body["docked"] as? Bool == true)
+            if preparesViewport {
+                var result: [String: Any] = ["id": transition.id]
+                if transition.expanded.width > transition.closed.width {
+                    let viewport = inspectorViewport(transition.expanded)
+                    workbenchContent.inspectorViewportWidth = viewport
+                    result["pinnedViewportWidth"] = viewport
+                }
+                replyHandler(result, nil)
+            } else {
+                animateInspector(transition, animated: false, reply: replyHandler)
+            }
             return
         }
         #if compiler(>=6.2)
@@ -291,8 +360,20 @@ import LakeDesktopCore
         renderUpdate(updater.state)
         Task { await updater.checkIfDue() }
     }
-    func windowDidResize(_ notification: Notification) { modelPanel?.close(notify: true); syncChromeHeight() }
-    func windowDidMove(_ notification: Notification) { modelPanel?.close(notify: true) }
+    func windowDidResize(_ notification: Notification) {
+        guard inspectorAnimation == nil else { return }
+        modelPanel?.close(notify: true)
+        syncChromeHeight()
+    }
+    func windowDidMove(_ notification: Notification) {
+        if inspectorAnimation == nil { modelPanel?.close(notify: true) }
+    }
+    func windowWillStartLiveResize(_ notification: Notification) {
+        if let transition = inspectorTransition, let reply = inspectorAnimationReply {
+            cancelInspectorAnimation()
+            finishInspector(transition, reply: reply)
+        }
+    }
     func windowWillMiniaturize(_ notification: Notification) { modelPanel?.close(notify: true) }
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.name == "lakeChrome", message.frameInfo.isMainFrame,
@@ -336,36 +417,97 @@ import LakeDesktopCore
         dragRegions = rectangles("regions")
         dragExcluded = rectangles("excluded")
     }
-    private func setInspectorOpen(_ open: Bool, reply: @escaping (Any?, String?) -> Void) {
+    private func inspectorViewport(_ frame: NSRect) -> Double {
+        Double(window.contentRect(forFrameRect: frame).width)
+    }
+    private func cancelInspectorAnimation() {
+        inspectorAnimation?.invalidate()
+        inspectorAnimation = nil
+        inspectorAnimationReply = nil
+    }
+    private func prepareInspector(_ open: Bool, width: CGFloat, preparesViewport: Bool, docked: Bool) -> InspectorTransition {
+        let interrupted = inspectorTransition
+        let cancelledReply = inspectorAnimationReply
+        cancelInspectorAnimation()
+        cancelledReply?(nil, "窗口操作已更新")
         let current = window.frame
-        var target = current
-        var added: CGFloat = 0
-        if open {
-            if let expansion = inspectorExpansion { added = expansion.addedWidth }
-            else {
-                let expansion = InspectorWindowExpansion(frame: current,
-                    visible: window.screen?.visibleFrame ?? current,
-                    fullscreen: window.styleMask.contains(.fullScreen))
-                inspectorExpansion = expansion
-                target = expansion.expanded
-                added = expansion.addedWidth
-            }
+        let closed: NSRect
+        let expanded: NSRect
+        if let interrupted {
+            closed = interrupted.closed
+            expanded = interrupted.expanded
         } else if let expansion = inspectorExpansion {
-            target = expansion.closing(current: current, minimumWidth: window.minSize.width)
-            inspectorExpansion = nil
+            closed = expansion.closing(current: current, minimumWidth: window.minSize.width)
+            expanded = current
+        } else if open {
+            let visible = window.screen?.visibleFrame ?? current
+            // Leave the viewport fixed when the screen cannot fit the entire pane alongside the chat.
+            let fits = !preparesViewport || (docked && current.width + width <= visible.width)
+            let expansion = InspectorWindowExpansion(frame: current, visible: visible,
+                                                      width: fits ? width : 0, fullscreen: window.styleMask.contains(.fullScreen))
+            inspectorExpansion = expansion
+            closed = current
+            expanded = expansion.expanded
+        } else {
+            closed = current
+            expanded = current
         }
-        if target != current {
+        inspectorRequestID += 1
+        let transition = InspectorTransition(id: inspectorRequestID, open: open, closed: closed, expanded: expanded)
+        inspectorTransition = transition
+        return transition
+    }
+    private func animateInspector(_ transition: InspectorTransition, animated: Bool, reply: @escaping (Any?, String?) -> Void) {
+        let from = window.frame
+        let target = transition.target
+        guard animated, from != target, window.isVisible, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            finishInspector(transition, reply: reply)
+            return
+        }
+        modelPanel?.close(notify: true)
+        let duration = 0.18
+        let started = ProcessInfo.processInfo.systemUptime
+        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] timer in
+            MainActor.assumeIsolated {
+                guard let self, self.inspectorAnimation === timer else { timer.invalidate(); return }
+                let elapsed = (ProcessInfo.processInfo.systemUptime - started) / duration
+                if elapsed >= 1 {
+                    self.cancelInspectorAnimation()
+                    self.finishInspector(transition, reply: reply)
+                } else {
+                    self.window.setFrame(InspectorWindowExpansion.frame(from: from, to: target, progress: elapsed), display: false)
+                }
+            }
+        }
+        inspectorAnimation = timer
+        inspectorAnimationReply = reply
+        RunLoop.main.add(timer, forMode: .common)
+    }
+    private func finishInspector(_ transition: InspectorTransition, reply: (Any?, String?) -> Void) {
+        if window.frame != transition.target {
             modelPanel?.close(notify: true)
-            window.setFrame(target, display: true)
+            window.setFrame(transition.target, display: true)
         }
-        reply(["addedWidth": Double(added),
-               "viewportWidth": Double(window.contentRect(forFrameRect: target).width)], nil)
+        workbenchContent.inspectorViewportWidth = nil
+        inspectorTransition = nil
+        inspectorExpansion = transition.open ? InspectorWindowExpansion(original: transition.closed, expanded: window.frame) : nil
+        let added = inspectorExpansion?.addedWidth ?? 0
+        reply(["addedWidth": Double(added), "viewportWidth": inspectorViewport(window.frame)], nil)
+    }
+    private func restoreInspectorWindow(display: Bool) {
+        let reply = inspectorAnimationReply
+        cancelInspectorAnimation()
+        reply?(nil, "窗口已切换")
+        let closed = inspectorTransition?.closed ?? inspectorExpansion?.closing(current: window.frame, minimumWidth: window.minSize.width)
+        inspectorTransition = nil
+        inspectorExpansion = nil
+        if let closed { window.setFrame(closed, display: display) }
+        workbenchContent?.inspectorViewportWidth = nil
     }
     func applicationWillTerminate(_ notification: Notification) {
-        if let expansion = inspectorExpansion {
-            window.setFrame(expansion.closing(current: window.frame, minimumWidth: window.minSize.width), display: false)
-            window.saveFrame(usingName: "LakeWorkbench")
-        }
+        guard inspectorTransition != nil || inspectorExpansion != nil else { return }
+        restoreInspectorWindow(display: false)
+        window.saveFrame(usingName: "LakeWorkbench")
     }
     private func syncChromeHeight() {
         guard sameOrigin(webView?.url) else { return }
@@ -456,10 +598,7 @@ import LakeDesktopCore
         panel.beginSheetModal(for: window) { result in completionHandler(result == .OK ? panel.urls : nil) }
     }
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-        if let expansion = inspectorExpansion {
-            window.setFrame(expansion.closing(current: window.frame, minimumWidth: window.minSize.width), display: true)
-            inspectorExpansion = nil
-        }
+        restoreInspectorWindow(display: true)
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         guard sameOrigin(webView.url) else { return }

@@ -1,7 +1,6 @@
 /* Major surfaces share one visible corner contour, not just a CSS radius value.
    Both dimensions must fit two complete corners to prevent browser scaling. */
 :root :is(
- .sidebar.workspace-navigation .project-switcher,
  .sidebar.workspace-navigation .navigation-search,
  .sidebar.workspace-navigation .session-nav-row,
  .sidebar.workspace-navigation .resource-row,
@@ -32,19 +31,20 @@
  --window-corner-stroke-image:url('/window-corner-stroke-compact.svg');
  --window-corner-stroke-slice:18;
 }
-:root .sidebar.workspace-navigation :is(.navigation-search,.session-nav-row,.resource-row,.resource-folder-toggle,.resource-tree-row,.resource-folder-row,.resource-nav-row,.pilot-workspace .nav-row) {
+:root .sidebar.workspace-navigation :is(.navigation-search,.session-nav-row,.resource-row,.resource-folder-toggle,.resource-tree-row,.resource-folder-row,.resource-nav-row) {
  --window-corner-radius:18px;
  --window-corner-stroke-image:url('/window-corner-stroke-compact.svg');
  --window-corner-stroke-slice:18;
 }
 @media(pointer:coarse) {
- :root .sidebar.workspace-navigation :is(.navigation-search,.session-nav-row,.resource-row,.resource-folder-toggle,.resource-tree-row,.resource-folder-row,.resource-nav-row,.pilot-workspace .nav-row) {
-  &:not(.pilot-worker-row,.sidebar-pilot-entry) { min-height:44px; }
+ :root .sidebar.workspace-navigation :is(.navigation-search,.session-nav-row,.resource-row,.resource-folder-toggle,.resource-tree-row,.resource-folder-row,.resource-nav-row) {
+  min-height:44px;
   --window-corner-radius:var(--radius-window);
   --window-corner-stroke-image:url('/window-corner-stroke.svg');
   --window-corner-stroke-slice:22;
  }
 }
+:root .sidebar.workspace-navigation .pilot-workspace .nav-row { --window-corner-radius:var(--radius-settings-control); }
 
 /* Compact badges and composer actions retain their size and scale the same curve. */
 :root :is(.session-state-badge,.composer-reference-token,.message-reference-token,:where(.composer-input) .composer-attach-button,:where(.composer-input) .send-button,:where(.composer-foot) > .composer-permission-button:where(:not(.sre-mode-toggle))) {
@@ -63,7 +63,6 @@
    are native CSS changes; no observer or per-frame JavaScript is needed. */
 :root.lake-corner-fallback :is(
  .sidebar.workspace-navigation .pilot-workspace .nav-row,
- .sidebar.workspace-navigation .project-switcher,
  .sidebar.workspace-navigation .navigation-search,
  .sidebar.workspace-navigation .session-nav-row,
  .sidebar.workspace-navigation .resource-row,
@@ -94,8 +93,8 @@
  background-clip:text;
  border-image:linear-gradient(transparent,transparent) 1;
  overflow:visible;
- &:where(.workspace.has-floating-header > .workspace-header,.lake-workbench-island) {
-  /* Extend the masked stroke over the reserved border so it meets the shadow. */
+ &:where(.workspace.has-floating-header > .workspace-header,.lake-workbench-island,.composer-input) {
+  /* Paint the masked stroke over the reserved border so it follows the box edge. */
   --window-corner-inset:-1px;
  }
  &::before,&::after {
@@ -123,13 +122,11 @@
 :root.lake-corner-fallback :is(
  .sidebar.workspace-navigation .navigation-search,
  .island-module-glass,
- .composer-input,
  .markdown-code-block,
  .composer-mentions.mention-menu
 ) { --window-corner-inset:-1px; }
 :root.lake-corner-fallback :is(
  .sidebar.workspace-navigation .pilot-workspace .nav-row,
- .sidebar.workspace-navigation .project-switcher,
  .sidebar.workspace-navigation .navigation-search,
  .sidebar.workspace-navigation .session-nav-row,
  .sidebar.workspace-navigation .resource-row,

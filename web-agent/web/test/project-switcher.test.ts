@@ -4,10 +4,14 @@ import {createElement} from "react";
 import {renderToStaticMarkup} from "react-dom/server";
 import type {Project} from "../../shared/contracts";
 import {ProjectSwitcher} from "../src/ProjectSwitcher";
-test("project selection starts as an accessible app menu with the actual selected project",()=>{
- const projects=[{id:"a",name:"生产项目"},{id:"b",name:"测试项目"}] as Project[];
- const html=renderToStaticMarkup(createElement(ProjectSwitcher,{projects,value:"b",onChange(){}}));
- assert.ok(html.includes('aria-label="选择项目：测试项目"'));
- assert.ok(html.includes('aria-haspopup="menu"')&&html.includes('aria-expanded="false"'));
- assert.ok(!html.includes('<select')&&!html.includes('生产项目'));
+test("the sidebar and collapsed rail identify the active project in their picker",()=>{
+ const projects=[{id:"a",name:"生产项目"},{id:"b",name:"测试项目"}] satisfies Pick<Project,"id"|"name">[];
+ for(const iconOnly of [false,true]){
+  const html=renderToStaticMarkup(createElement(ProjectSwitcher,{projects,value:"b",iconOnly,onChange(){}}));
+  assert.match(html,/<button [^>]*role="combobox"[^>]*aria-label="切换项目：测试项目"[^>]*aria-haspopup="listbox"[^>]*aria-expanded="false"/);
+  assert.match(html,/class="app-select-value">测试项目<\/span>/);
+  assert.match(html,/<select [^>]*hidden="" aria-hidden="true"/);
+  assert.doesNotMatch(html,/role="listbox"/);
+  assert.equal(html.includes("is-icon-only"),iconOnly);
+ }
 });

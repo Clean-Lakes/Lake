@@ -7,19 +7,19 @@ import {replyElapsed} from './replyDurationState';
 import {turnStatus} from './turnStatus';
 import {quietCoordination} from './coordinationActivity';
 import {recoveredRouteFailures} from './routeDispatchPresentation';
-import {DisclosureSummary} from './DisclosureSummary';
+import {DeferredDisclosure} from './DisclosureSummary';
 export const ExecutionDetailsOpen=createContext(false);
+export const FlatExecutionRecords=createContext(false);
 export const RoutingRecoveryContext=createContext<ReadonlySet<string>>(new Set());
 export function canonicalExecutionSelected(selection:InspectorSelection|null|undefined,sessionId:string,canonicalGoalId:string){
  return selection?.sessionId===sessionId&&selection.canonicalGoalId===canonicalGoalId&&selection.tab==='execution';
 }
-export function TurnExecutionDetails({details,onInspect,presentingReply=false,hideLive=false,hideStatus=false,hideIdentity:_hideIdentity=false,sessionId,latest=false,latestTaskId,canonicalGoalId,detailsInHeader=false,children,specialistReplies,collaboration,footerReportId,pilotOverview,progress:_progress,...timing}:{hideStatus?:boolean;hideIdentity?:boolean;latest?:boolean;latestTaskId?:string;canonicalGoalId?:string;detailsInHeader?:boolean;progress?:{text:string;active:boolean};hideLive?:boolean;sessionId?:string;children?:ReactNode;specialistReplies?:ReactNode;collaboration?:(footer:ReactNode)=>ReactNode;footerReportId?:string;pilotOverview?:ReactNode;details:ReactNode[];onInspect?:()=>void;presentingReply?:boolean}&ReplyDurationProps){
+export function TurnExecutionDetails({details,processNotices,onInspect,presentingReply=false,hideLive=false,hideStatus=false,hideIdentity:_hideIdentity=false,sessionId,latest=false,latestTaskId,canonicalGoalId,detailsInHeader=false,children,specialistReplies,collaboration,footerReportId,pilotOverview,progress:_progress,...timing}:{hideStatus?:boolean;hideIdentity?:boolean;latest?:boolean;latestTaskId?:string;canonicalGoalId?:string;detailsInHeader?:boolean;progress?:{text:string;active:boolean};hideLive?:boolean;sessionId?:string;children?:ReactNode;specialistReplies?:ReactNode;collaboration?:(footer:ReactNode)=>ReactNode;footerReportId?:string;pilotOverview?:ReactNode;details:ReactNode[];processNotices?:readonly {status:string;label:string}[];onInspect?:()=>void;presentingReply?:boolean}&ReplyDurationProps){
  const id=useId();
  const inspector=useSessionInspector();
  const selection=inspector?.selection;
- // The island keeps its contents for the exit animation. Disclosure state
- // still closes immediately, and the exiting panel is inert.
- const displayed=selection??(inspector?.host?.closest('.island-inspector')?inspector.lastSelection:null);
+ // Keep the recorded turn mounted while the inert pane slides out.
+ const displayed=selection??(inspector?.host?inspector.lastSelection:null);
  const showOverview=displayed?.view==='pilot-activity';
  const showRecords=!!displayed&&displayed.sessionId===sessionId&&
   (showOverview?latest&&!!pilotOverview:displayed.followLatest?latest&&!latestTaskId:displayed.tab==='execution'&&displayed.turnId===id);
@@ -42,7 +42,7 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
  // The status island can replace the live disclosure only when its target
  // opens these same records. Other turns keep their own disclosure.
  const inlineDisclosure=livePilot&&detailsInHeader&&latest&&inspector&&sessionId?undefined:summaryDisclosure;
- const liveNotice=livePilot?undefined:timing.detailNotice;
+ const liveNotice=livePilot?undefined:processNotices?.map(notice=>notice.label).join(' · ')??timing.detailNotice;
  const settledStatus=state==='回复结束'?undefined:state;
  const foldFailure=!!summaryDisclosure&&settledStatus==='未完成';
  const pilot=timing.assistantIdentity?.pilot&&inspector&&sessionId&&summaryDisclosure?{sessionId,turnId:id,canonicalGoalId}:undefined;
@@ -53,13 +53,19 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
   :!combinedReportId&&<ReplyFooter preview={preview} status={preview?liveNotice:footerStatus} duration={summaryDisclosure||!timing.assistantIdentity?.pilot?footerDuration:undefined} action={inlineDisclosure&&{
    text:timing.processLabel,controls:inlineDisclosure.controls,expanded:inlineDisclosure.open,side:inlineDisclosure.side,onClick:inlineDisclosure.onToggle
   }}/>;
- const notice=[foldFailure?settledStatus:undefined,timing.detailNotice].filter(Boolean).join(' · ');
+ const failureNotice=showOverview?processNotices?.find(notice=>notice.status==='failed'):undefined;
+ const detailNotice=processNotices?.filter(item=>item!==failureNotice).map(item=>item.label).join(' · ')??timing.detailNotice;
+ const notice=[foldFailure?settledStatus:undefined,detailNotice].filter(Boolean).join(' · ');
  const records=<>{notice&&<p className="execution-detail-note">{notice}</p>}{details.length?details:<p className="inspector-empty">本轮尚无执行记录。</p>}</>;
  const overviewBody=showOverview&&showRecords&&inspector?.host&&createPortal(<>
   {pilotOverview}
-  {(details.length>0||notice)&&<details className="pilot-execution-records"><DisclosureSummary>完整执行记录</DisclosureSummary>
-   <ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{records}</div></ExecutionDetailsOpen.Provider>
-  </details>}
+  {(details.length>0||notice||failureNotice)&&<DeferredDisclosure className="pilot-execution-records" summary={<>
+   <span>完整执行记录</span>{failureNotice&&<span className="pilot-record-failure-count">{failureNotice.label}</span>}
+  </>}>
+   <ExecutionDetailsOpen.Provider value={true}><FlatExecutionRecords.Provider value={true}>
+    <div className="pilot-execution-record-body">{records}</div>
+   </FlatExecutionRecords.Provider></ExecutionDetailsOpen.Provider>
+  </DeferredDisclosure>}
  </>,inspector.host);
  const body=showOverview?overviewBody:canonicalGoalId?null:inspector&&sessionId?showRecords&&inspector.host&&createPortal(<ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{records}</div></ExecutionDetailsOpen.Provider>,inspector.host)
   :details.length>0&&<div id={id} className={`turn-execution-details${open?' is-open':''}`} aria-hidden={!open} inert={!open} role="region" aria-label="执行详细过程"><div className="turn-execution-content"><div className="turn-execution-body"><ExecutionDetailsOpen.Provider value={open}>{records}</ExecutionDetailsOpen.Provider></div></div></div>;

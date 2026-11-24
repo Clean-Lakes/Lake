@@ -1,5 +1,5 @@
 import {hasUnreadMessages} from './ConversationReadMarker';
-import {useCallback,useEffect,useRef,useState,type RefObject} from 'react';
+import {useCallback,useEffect,useRef,useState,type PointerEvent,type RefObject} from 'react';
 import type {SessionEvent,SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {greetRoleAvatar,SuperRoleAvatar} from './SuperRoleAvatar';
@@ -172,6 +172,12 @@ type PilotWorkspaceProps = {
  disabled?:boolean; onDeleted?:(channel:SpecialistChannelInfo)=>void;
 };
 
+function showClippedText(event: PointerEvent<HTMLElement>) {
+ const text = event.currentTarget;
+ if (text.scrollWidth > text.clientWidth) text.title = text.textContent ?? '';
+ else text.removeAttribute('title');
+}
+
 export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,showHeading=true}: PilotWorkspaceProps) {
  const [context,setContext]=useState<{channel:SpecialistChannelInfo;x:number;y:number}|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null);
  const anchor=useRef<HTMLButtonElement|null>(null);
@@ -210,18 +216,28 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
    const status = [needsConfirmation && '需确认', activityLabel, showUnread && '有新消息未读'].filter(Boolean).join(' · ') ||
     (task && task.state !== 'running' ? channelTaskPresentation(task).label : task ? '暂无正在执行的任务' : '暂无任务');
    const detail=aggregate.detail??(channel?.duties||'持续沟通');
-   const label = `${name}${backend?` · Agent 类型：${agentTypeName(backend)}`:''} · ${detail}${detail.endsWith(status)?'':` · ${status}`}`;
+   const detailStatus = detail.endsWith(status) ? undefined : status;
+   const label = `${name}${backend?` · Agent 类型：${agentTypeName(backend)}`:''} · ${detail}${detailStatus?` · ${detailStatus}`:''}`;
    return <button type="button" key={channel?.id ?? worker!.id} className={`nav-row pilot-worker-row${selected ? ' active' : ''}`}
-     aria-current={selected ? 'page' : undefined} aria-label={label} title={label}
+     aria-current={selected ? 'page' : undefined} aria-label={label}
      aria-haspopup={channel?'menu':undefined}
      onContextMenu={event=>{event.preventDefault();event.stopPropagation();if(channel&&!disabled){anchor.current=event.currentTarget;setContext({channel,x:event.clientX,y:event.clientY});}}}
      onKeyDown={event=>{if(channel&&!disabled&&(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10')){event.preventDefault();const bounds=event.currentTarget.getBoundingClientRect();anchor.current=event.currentTarget;setContext({channel,x:bounds.left+20,y:bounds.bottom});}}}
      onClick={event=>{greetRoleAvatar(event.currentTarget);if(channel&&onChannel)onChannel(channel);else if(worker)onWorker(worker);}}>
-    <SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId} motion={preparing?'working':replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/><span className="nav-row-text"><span className="pilot-worker-name"><strong>{name}</strong><AgentBackendLogo backend={backend}/></span><span className="pilot-worker-task">{detail}</span></span>
-    <span className="pilot-worker-status">
-     {aggregate.runningCount>1&&<span className="pilot-worker-count" aria-label={`${aggregate.runningCount} 项任务执行中`}>{aggregate.runningCount}</span>}
-     {needsConfirmation && <span className="pilot-worker-confirmation">需确认</span>}
-     {activityLabel ? <span className="pilot-worker-running" role="img" aria-label={activityLabel}><Glyph name="loader" size={14} className="activity-indicator"/></span> : showUnread && <span className="pilot-worker-unread" role="img" aria-label="有新消息未读"/>}
+    <SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId} motion={preparing?'working':replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/>
+    <span className="nav-row-text">
+     <span className="pilot-worker-name">
+      <strong onPointerEnter={showClippedText}>{name}</strong>
+      <AgentBackendLogo backend={backend} size={12}/>
+     </span>
+     <span className="pilot-worker-summary" title={detailStatus}>
+      <span className="pilot-worker-task" onPointerEnter={showClippedText}>{detail}</span>
+      <span className="pilot-worker-status">
+       {aggregate.runningCount>1&&<span className="pilot-worker-count" aria-label={`${aggregate.runningCount} 项任务执行中`}>{aggregate.runningCount}</span>}
+       {needsConfirmation && <span className="pilot-worker-confirmation">需确认</span>}
+       {activityLabel ? <span className="pilot-worker-running" role="img" aria-label={activityLabel}><Glyph name="loader" size={12} className="activity-indicator"/></span> : showUnread && <span className="pilot-worker-unread" role="img" aria-label="有新消息未读"/>}
+      </span>
+     </span>
     </span>
    </button>;
   }) : null}

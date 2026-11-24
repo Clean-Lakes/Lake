@@ -57,7 +57,7 @@ export function WorkspaceSearch({projects, sessions, resources, canCreate, onCho
     <span className="workspace-search-label">{entry.label}</span><span className="workspace-search-project">{entry.projectName}</span>
     {selected === index && <kbd>↵</kbd>}
   </button>;
-  return <dialog ref={dialog} id="workspace-search-dialog" className="workspace-search-dialog" aria-label="搜索会话和资源" onCancel={event => {event.preventDefault(); dismiss();}} onClick={event => {
+  return <dialog ref={dialog} id="workspace-search-dialog" className="workbench-dialog workspace-search-dialog" aria-label="搜索会话和资源" onCancel={event => {event.preventDefault(); dismiss();}} onClick={event => {
     if (event.target !== event.currentTarget) return;
     const rect = event.currentTarget.getBoundingClientRect();
     if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dismiss();

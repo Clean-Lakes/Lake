@@ -37,4 +37,4 @@ window.fetch=async(input,init)=>{
 };
 document.body.style.display='grid';document.body.style.placeItems='center';
 const root=document.getElementById('root')!;root.style.display='grid';root.style.placeItems='center';
-createRoot(document.getElementById('root')!).render(<section className="model-settings-dialog modal" role="dialog" aria-label="设置"><div className="model-settings-tabs" role="tablist" aria-label="设置分类"><button id="mcp-settings-tab" role="tab" aria-selected="true">MCP</button></div><div className="model-settings-body"><MCPSettings onBusyChange={()=>{}}/></div></section>);
+createRoot(document.getElementById('root')!).render(<section className="model-settings-page modal" role="dialog" aria-label="设置"><div className="model-settings-tabs" role="tablist" aria-label="设置分类"><button id="mcp-settings-tab" role="tab" aria-selected="true">MCP</button></div><div className="model-settings-body"><MCPSettings onBusyChange={()=>{}}/></div></section>);

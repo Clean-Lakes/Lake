@@ -2,7 +2,7 @@ import {useRef} from 'react';
 import {createPortal} from 'react-dom';
 import type {Message,SuperWorkspace,WorkSession} from '../../shared/contracts';
 import {AssistantMarkdown} from './AssistantMarkdown';
-import {DisclosureSummary} from './DisclosureSummary';
+import {DeferredDisclosure,DisclosureSummary} from './DisclosureSummary';
 import {HeaderSweep} from './HeaderSweep';
 import {Glyph} from './Icons';
 import {SuperRoleAvatar} from './SuperRoleAvatar';
@@ -41,11 +41,10 @@ export function PilotExecutionOverview({workspace,session,source,messages,turn,s
     {assignments.map(({worker,instruction,report})=>{
      const channel=workspace?.channels?.find(channel=>channel.roleId===worker.roleId);
      const state=report?{label:worker.task.reportedOutcome==='partial'?'部分回传':'已回传',tone:'success'}:superTaskPresentation(worker.task);
-     return <details key={worker.id}>
-      <DisclosureSummary className="pilot-execution-worker-summary">
+     return <DeferredDisclosure key={worker.id} summaryClassName="pilot-execution-worker-summary" summary={<>
        <SuperRoleAvatar roleId={worker.roleId} name={worker.roleName} avatarId={channel?.avatarId} size={22} motion="still"/>
        <strong>{worker.roleName}</strong><span className="pilot-execution-state" data-tone={state.tone}>{report&&<Glyph name="check" size={12}/>} {state.label}</span>
-      </DisclosureSummary>
+      </>}>
       <div className="pilot-execution-worker-detail">
        {instruction&&<p><small>负责</small> {instruction}</p>}
        {report?.text.trim()&&<><small>回传</small><AssistantMarkdown allowImages={false}>{report.text}</AssistantMarkdown></>}
@@ -54,7 +53,7 @@ export function PilotExecutionOverview({workspace,session,source,messages,turn,s
         sessionId:worker.sessionId,taskId:worker.task.taskId,channelSessionId:channel?.sessionId,execution:worker.execution?.backend,
        })}>查看 Worker 执行记录<Glyph name="next" size={12}/></button>}
       </div>
-     </details>;
+     </DeferredDisclosure>;
     })}
    </div>:<p className="inspector-empty">本轮尚无关联 Worker。</p>}
   </section>

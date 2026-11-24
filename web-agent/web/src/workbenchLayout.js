@@ -34,7 +34,7 @@
     }
     @media(min-width:701px) {
       .app-shell.has-docked-conversation[data-sidebar-sliding] {
-        grid-template-columns:var(--sidebar-rail-width,44px) minmax(0,1fr) 0px;
+        grid-template-columns:var(--sidebar-rail-width,52px) minmax(0,1fr) 0px;
       }
     }
     @media(max-width:700px) { .workbench-splitter { display:none; } }
@@ -48,27 +48,28 @@
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
   function paneLimits(sidebarCollapsed) {
     const width = shell?.clientWidth || innerWidth;
-    const desktop = innerWidth > 1100;
-    const inspectorOpen = desktop && !!shell.querySelector('.session-layout > .session-inspector.is-open');
-    const terminalOpen = desktop && shell.classList.contains('terminal-is-open');
+    const inspectorDocked = innerWidth >= 960;
+    const terminalDocked = innerWidth > 1100;
+    const inspectorPresent = inspectorDocked && !!shell.querySelector('.session-layout > .session-inspector');
+    const terminalOpen = terminalDocked && shell.classList.contains('terminal-is-open');
     // All open panes share one budget. Reserving the conversation independently
     // for each side pane can otherwise spend that same space twice after zooming.
-    const conversationMin = desktop ? 416 : 320;
-    const auxiliaryMin = inspectorOpen && terminalOpen ? 240 : 280;
-    const sidebarMax = Math.max(200, Math.min(420, width - conversationMin - (terminalOpen ? auxiliaryMin : 0) - (inspectorOpen ? auxiliaryMin : 0)));
+    const conversationMin = inspectorDocked ? 416 : 320;
+    const auxiliaryMin = inspectorPresent && terminalOpen ? 240 : 280;
+    const sidebarMax = Math.max(200, Math.min(420, width - conversationMin - (terminalOpen ? auxiliaryMin : 0) - (inspectorPresent ? auxiliaryMin : 0)));
     const expandedSidebarWidth = clamp(preferred.sidebar, 200, sidebarMax);
-    const railWidth = parseFloat(getComputedStyle(shell).getPropertyValue('--sidebar-rail-width')) || 44;
+    const railWidth = parseFloat(getComputedStyle(shell).getPropertyValue('--sidebar-rail-width')) || 52;
     const sidebar = sidebarCollapsed ? railWidth : expandedSidebarWidth;
-    const terminalMax = Math.max(auxiliaryMin, Math.min(900, width - sidebar - conversationMin - (inspectorOpen ? auxiliaryMin : 0)));
+    const terminalMax = Math.max(auxiliaryMin, Math.min(900, width - sidebar - conversationMin - (inspectorPresent ? auxiliaryMin : 0)));
     const terminal = terminalOpen ? clamp(preferred.terminal, auxiliaryMin, terminalMax) : 0;
-    const workspaceWidth = desktop ? 0 : shell.querySelector('.workspace')?.clientWidth || 0;
+    const workspaceWidth = inspectorDocked ? 0 : shell.querySelector('.workspace')?.clientWidth || 0;
     return {
       expandedSidebarWidth,
       railWidth,
       expandedConversationWidth: width - expandedSidebarWidth,
       sidebar: sidebarCollapsed ? [sidebar, sidebar] : [200, sidebarMax],
-      terminal: desktop ? [auxiliaryMin, terminalMax] : [280, Math.max(280, Math.min(900, width - 40))],
-      inspector: desktop
+      terminal: terminalDocked ? [auxiliaryMin, terminalMax] : [280, Math.max(280, Math.min(900, width - 40))],
+      inspector: inspectorDocked
         ? [auxiliaryMin, Math.max(auxiliaryMin, Math.min(900, width - sidebar - terminal - conversationMin))]
         : [280, Math.max(280, Math.min(900, workspaceWidth - (innerWidth <= 700 ? 0 : 320)))],
     };
@@ -114,12 +115,12 @@
     const reading = workspace.querySelector('.composer-input') ?? workspace.querySelector('.timeline-list');
     const inset = parseFloat(css.getPropertyValue('--conversation-header-inset')) || 16;
     const navStart = parseFloat(css.getPropertyValue('--workbench-navigation-start')) || 0;
-    const railAnchor = railWidth + inset;
-    const collapsedAnchor = Math.max(navStart, reading ? reading.getBoundingClientRect().left - shell.getBoundingClientRect().left : railAnchor);
-    const islandLayout = collapsed ? collapsedAnchor : railAnchor;
-    const islandTarget = collapsed ? collapsedAnchor : width + inset;
-    if (collapsed) shell.style.setProperty('--workbench-island-navigation-left', `${collapsedAnchor}px`);
-    island?.style.setProperty('--island-panel-available-width', `${Math.max(1, shell.clientWidth - islandTarget - 16)}px`);
+    // The reading column is laid out at the rail width for either direction.
+    // Give the island the same final horizontal offset as the composer.
+    const readingShift = (width - railWidth) / 2;
+    const readingTarget = reading ? reading.getBoundingClientRect().left - shell.getBoundingClientRect().left + readingShift : width + inset;
+    const islandTarget = collapsed ? Math.max(navStart, readingTarget) : readingTarget;
+    shell.style.setProperty('--workbench-island-navigation-left', `${islandTarget}px`);
 
     const buttons = (origin?.buttons ?? []).map(([button, before]) => ({ button, before, after: button.getBoundingClientRect() }));
     const padding = island ? getComputedStyle(island).paddingInlineStart : undefined;
@@ -141,12 +142,12 @@
     };
     translate(surface, from - railWidth, width - railWidth);
     translate(shell.querySelector('.sidebar-navigation-content'), from - expandedWidth, width - expandedWidth);
-    translate(island, fromIsland - islandLayout, islandTarget - islandLayout);
+    translate(island, fromIsland - islandTarget, 0);
     if (origin?.headerInset !== undefined && headerInset !== undefined) {
       translate(header, origin.headerInset - headerInset, 0);
     }
     for (const node of workspace.querySelectorAll('.timeline-list, .conversation-header-backdrop, .composer, .composer-session-controls')) {
-      translate(node, (from - railWidth) / 2, (width - railWidth) / 2);
+      translate(node, (from - railWidth) / 2, readingShift);
     }
     for (const { button, before, after } of buttons) {
       translate(button, before.left - after.left, 0, before.top - after.top);
@@ -188,17 +189,16 @@
     if (previousSidebar?.shell !== shell || previousSidebar.collapsed !== collapsed) sidebarOrigin = undefined;
     const shellLeft = toggled ? shell.getBoundingClientRect().left : 0;
     const from = toggled ? surface.getBoundingClientRect().left - shellLeft : width;
+    // Capture the painted position before cancelling an interrupted slide.
     const island = toggled ? shell.querySelector('.island-conversation') : null;
-    // A stable anchor is written by WorkbenchIsland. On an interruption, use
-    // the painted position of the island to reverse without a jump.
-    const fromIsland = !island ? from + 16 : sidebarSlide ? island.getBoundingClientRect().left - shellLeft
-      : parseFloat(shell.style.getPropertyValue('--workbench-island-navigation-left')) || from + 16;
+    const fromIsland = island ? island.getBoundingClientRect().left - shellLeft : from;
     const startSlide = Math.abs(from - width) >= .5;
     if (sidebarSlide && (!canSlide || toggled || sidebarSlide.width !== width || sidebarSlide.expandedWidth !== target.expandedSidebarWidth)) finishSidebarSlide();
     previousSidebar = { shell, docked, collapsed };
     if (startSlide) shell.setAttribute('data-sidebar-sliding', '');
     shell.style.setProperty('--sidebar-expanded-width', `${target.expandedSidebarWidth}px`);
     shell.style.setProperty('--expanded-conversation-width', `${target.expandedConversationWidth}px`);
+    shell.style.setProperty('--inspector-requested-width', `${preferred.inspector}px`);
     for (const pane of ['sidebar', 'terminal', 'inspector']) {
       const [min, max] = target[pane];
       const width = clamp(preferred[pane], min, max);

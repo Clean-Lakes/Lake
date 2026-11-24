@@ -29,14 +29,26 @@ export function WatchdogSettings({projectId,projectName,onBusyChange}:{projectId
  };
  return <section id="watchdog-settings-panel" role="tabpanel" aria-labelledby="watchdog-settings-tab" className="model-conversation watchdog-settings">
   {!projectId?<p className="settings-note">请先选择一个项目，再配置任务巡检。</p>:<>
-   <div className="watchdog-settings-project"><span>当前项目</span><strong>{projectName||'当前项目'}</strong></div>
-   <p className="settings-note">统一应用于本项目的专员任务。每次执行的巡检发现仍在任务详情中查看。</p>
-   <div className="watchdog-settings-card">
-    <label className="field-label">巡检模式<AppSelect aria-label="项目巡检模式" value={saving??mode??''} disabled={!mode||saving!==undefined} aria-busy={!mode&&!error||saving!==undefined} aria-describedby="watchdog-mode-description" onChange={event=>void change(event.target.value as WatchdogMode)}>
-     {!mode&&<option value="" disabled>{error?'读取失败':'读取中…'}</option>}
-     {(Object.keys(watchdogModes) as WatchdogMode[]).map(value=><option key={value} value={value}>{watchdogModes[value].label}</option>)}
-    </AppSelect></label>
-    {mode&&<p id="watchdog-mode-description" className="settings-note">{watchdogModes[saving??mode].description}</p>}
+   <h2 className="workspace-section-title">项目巡检</h2>
+   <div className="workspace-setting-card">
+    <div className="workspace-setting-row">
+     <div className="workspace-setting-copy">
+      <strong>当前项目</strong><p className="settings-note">统一应用于本项目的专员任务。巡检发现可在对应任务详情中查看。</p>
+     </div>
+     <span>{projectName||'当前项目'}</span>
+    </div>
+    <div className="workspace-setting-row">
+     <div className="workspace-setting-copy">
+      <strong>巡检模式</strong>
+      {mode&&<p id="watchdog-mode-description" className="settings-note">{watchdogModes[saving??mode].description}</p>}
+     </div>
+     <AppSelect label="项目巡检模式" value={saving??mode??''} disabled={!mode||saving!==undefined}
+      aria-busy={!mode&&!error||saving!==undefined} aria-describedby={mode?'watchdog-mode-description':undefined}
+      onChange={event=>void change(event.target.value as WatchdogMode)}>
+      {!mode&&<option value="" disabled>{error?'读取失败':'读取中…'}</option>}
+      {(Object.keys(watchdogModes) as WatchdogMode[]).map(value=><option key={value} value={value}>{watchdogModes[value].label}</option>)}
+     </AppSelect>
+    </div>
    </div>
    {error&&<div className="watchdog-settings-error"><p className="form-error" role="alert">{error}</p><button type="button" className="button secondary" disabled={saving!==undefined} onClick={()=>setReload(value=>value+1)}>重新读取</button></div>}
    <p className="settings-note" role="status">{saving?'正在保存…':mode&&!error?'更改后自动保存。':''}</p>
