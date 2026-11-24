@@ -14,7 +14,7 @@ import {SREPlanCard} from './SREPlanCard';
 import {SRERoleMessage} from './SRERoleMessage';
 import {sreRoles,sreStatus,sreStepStatus} from './sreTranscript';
 import {inspectorGoal,hasInspectorTask,inspectedTask,inspectedCanonicalTask,inspectedAttempt,inspectorAttempts,resolvedInspectorSelection} from './sessionInspectorModel';
-import {inspectorExitMs,sessionInspectorId,useSessionInspector,type InspectSpecialist,type InspectorSelection} from './SessionInspectorContext';
+import {inspectorExitMs,retainConversation,sessionInspectorId,useSessionInspector,type InspectSpecialist,type InspectorSelection} from './SessionInspectorContext';
 import {AppSelect} from './AppSelect';
 import {SpecialistTaskSteps} from './SpecialistTaskList';
 
@@ -41,11 +41,21 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
  const retained=useRef<InspectorSelection|null>(selection);
  if(selection)retained.current=selection;
  const [present,setPresent]=useState(visible),panel=useRef<HTMLElement>(null);
+ const restoreAfterExit=useRef<(()=>void)|null>(null);
  useEffect(()=>{
   if(visible){setPresent(true);return;}
-  const timer=setTimeout(()=>setPresent(false),window.matchMedia('(prefers-reduced-motion: reduce)').matches?0:inspectorExitMs);
+  if(!present)return;
+  const timer=setTimeout(()=>{
+   restoreAfterExit.current=retainConversation();
+   setPresent(false);
+  },window.matchMedia('(prefers-reduced-motion: reduce)').matches?0:inspectorExitMs);
   return()=>clearTimeout(timer);
- },[visible]);
+ },[visible,present]);
+ useLayoutEffect(()=>{
+  if(present)return;
+  restoreAfterExit.current?.();
+  restoreAfterExit.current=null;
+ },[present]);
  const target=selection??retained.current;
  const followTurn=selection?.followLatest?snapshot.messages?.filter(message=>message.role==='user').at(-1)?.id:undefined;
  const selectedSessionId=selection?.sessionId;

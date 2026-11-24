@@ -9,15 +9,16 @@ export function useInspectorWindow(open:boolean){
  const [ready,setReady]=useState(false);
  const focusOpener=useSessionInspector()?.focusOpener;
  const view=useRef<HTMLDivElement|null>(null);
- const settled=useRef<{width:number;docked:boolean}|null>(null);
+ const settled=useRef<{width:number;readingWidth?:number;docked:boolean}|null>(null);
  const measure=useCallback(()=>{
   const element=view.current;
   const workspace=element?.closest('.workspace');
   if(!element||!workspace||workspace.classList.contains('inspector-window-sizing'))return;
   const inspector=workspace.querySelector('.session-inspector.is-open');
-  const docked=inspector?getComputedStyle(inspector).position==='relative':!window.matchMedia('(max-width:1100px)').matches;
+  const docked=inspector?getComputedStyle(inspector).position==='relative':window.matchMedia('(min-width:960px)').matches;
   const width=element.getBoundingClientRect().width;
-  if(width>0)settled.current={width,docked};
+  const reading=element.querySelector('.composer-input')??element.querySelector('.timeline-list');
+  if(width>0)settled.current={width,readingWidth:reading?.getBoundingClientRect().width,docked};
  },[]);
  const attachView=useCallback((element:HTMLDivElement|null)=>{
   if(!element||!window.lakeInspectorWindow)return;
@@ -35,6 +36,7 @@ export function useInspectorWindow(open:boolean){
   const layout=settled.current;
   if(layout){
    workspace.style.setProperty('--inspector-main-width',`${layout.width}px`);
+   if(layout.readingWidth)workspace.style.setProperty('--inspector-reading-width',`${layout.readingWidth}px`);
    workspace.classList.add('inspector-window-sizing');
    workspace.classList.toggle('inspector-window-docked',layout.docked);
   }
@@ -44,6 +46,7 @@ export function useInspectorWindow(open:boolean){
    const restore=retainConversation();
    workspace.classList.remove('inspector-window-sizing','inspector-window-docked');
    workspace.style.removeProperty('--inspector-main-width');
+   workspace.style.removeProperty('--inspector-reading-width');
    window.dispatchEvent(new Event('lake-workbench-layout'));
    restore();
    measure();

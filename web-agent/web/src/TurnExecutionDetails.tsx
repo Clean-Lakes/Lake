@@ -17,9 +17,8 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
  const id=useId();
  const inspector=useSessionInspector();
  const selection=inspector?.selection;
- // The island keeps its contents for the exit animation. Disclosure state
- // still closes immediately, and the exiting panel is inert.
- const displayed=selection??(inspector?.host?.closest('.island-inspector')?inspector.lastSelection:null);
+ // Keep the recorded turn mounted while the inert pane slides out.
+ const displayed=selection??(inspector?.host?inspector.lastSelection:null);
  const showOverview=displayed?.view==='pilot-activity';
  const showRecords=!!displayed&&displayed.sessionId===sessionId&&
   (showOverview?latest&&!!pilotOverview:displayed.followLatest?latest&&!latestTaskId:displayed.tab==='execution'&&displayed.turnId===id);

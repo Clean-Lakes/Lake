@@ -40,7 +40,7 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sid
   if(selector==='.island-conversation')return island;
   if(selector==='.workbench-conversation-surface')return docked?surface:null;
   if(selector==='.terminal-side-panel')return this.terminalOpen?terminal:null;
-  if(selector==='.session-layout > .session-inspector.is-open')return this.inspectorOpen?inspector:null;
+  if(selector==='.session-layout > .session-inspector'||selector==='.session-layout > .session-inspector.is-open')return this.inspectorOpen?inspector:null;
   if(selector.startsWith('.workbench-splitter-'))return handles.get(selector.split('-').at(-1));
   return null;
  }};
@@ -85,6 +85,19 @@ test('pane toggles apply the full shared budget synchronously before the first p
  assert.equal(page.widths()[0],280);assert.equal(page.widths()[2],382);
  page.commit(false,true);
  assert.deepEqual(page.widths(),[280,400,280]);
+});
+
+test('the inspector fits beside the conversation at desktop widths below the terminal threshold',()=>{
+ const page=fixture({sidebar:348,terminal:400,inspector:382});
+ for(const width of [960,1063,1100]){
+  page.commit(false,false);
+  page.resize(width);
+  assert.equal(page.widths()[0],348);
+  page.commit(true,false);
+  const [sidebar,,inspector]=page.widths();
+  assert.ok(inspector!>=280);
+  assert.ok(width-sidebar!-inspector!>=416);
+ }
 });
 
 test('collapsing to the icon rail returns width to the workbench and preserves the preferred sidebar width',()=>{

@@ -13,7 +13,7 @@ type IslandFlight={open?:boolean;target?:IslandBox;animation?:Animation;deadline
 const sameBox=(a:IslandBox|undefined,b:IslandBox)=>!!a&&Math.abs(a.left-b.left)<.5&&Math.abs(a.top-b.top)<.5&&Math.abs(a.width-b.width)<.5;
 
 /** The terminal island separates from the conversation; the inspector owns its card header. */
-export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,terminalOpen,pilotTone,islandInspector}:{conversation:ReactNode;terminal:ReactNode;activity:ReactNode;inspectorOpen:boolean;terminalOpen:boolean;pilotTone?:string;islandInspector?:ReactNode}){
+export function WorkbenchIsland({conversation,terminal,activity,terminalOpen,pilotTone}:{conversation:ReactNode;terminal:ReactNode;activity:ReactNode;terminalOpen:boolean;pilotTone?:string}){
  const root=useRef<HTMLDivElement>(null),conversationIsland=useRef<HTMLDivElement>(null),terminalIsland=useRef<HTMLDivElement>(null);
  const open=useRef({terminal:terminalOpen});
  open.current={terminal:terminalOpen};
@@ -190,9 +190,6 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const fromWidth=resizeRoster?parseFloat(islandStyle.width):identityWidth;
    if(identityWidth!==previousIslandWidth||skipMotion||slide){rosterAnimation?.cancel();rosterAnimation=undefined;}
    write(identity,{...source,width:identityWidth},dockedPane);
-   identity.style.setProperty('--island-panel-compact-width',`calc(${identityWidth+borders}px + var(--island-navigation-inset))`);
-   identity.style.setProperty('--island-panel-available-width',`${Math.max(source.width,bounds.right-base.left-source.left-16)}px`);
-   identity.style.setProperty('--island-panel-available-height',`${Math.max(46,base.height-source.top-16)}px`);
    identity.dataset.ready='true';identity.dataset.present='true';identity.title=title?.textContent??'';
    if(slide&&Math.abs(fromLeft-source.left)>.5){
     const now=performance.now();
@@ -221,7 +218,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    // containing panes/composer already report actual geometry changes above.
    if(records.some(record=>{
     const target=record.target instanceof Element?record.target:record.target.parentElement;
-    return !target?.closest('.terminal-session,.conversation,.session-inspector-scroll,.island-inspector');
+    return !target?.closest('.terminal-session,.conversation,.session-inspector-scroll');
    }))schedule();
   });
   content.observe(shell,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['class','data-pilot-roster-open','data-preferred-width']});
@@ -229,14 +226,11 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
   document.addEventListener('visibilitychange',schedule);reduced.addEventListener('change',schedule);measure();
   return()=>{scheduleLayout.current=()=>{};content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);window.removeEventListener('lake-workbench-layout',measure);document.removeEventListener('visibilitychange',schedule);reduced.removeEventListener('change',schedule);rosterAnimation?.cancel();sidebarAnimation?.cancel();for(const flight of Object.values(flights))flight.animation?.cancel();shell.style.removeProperty('--pane-rail-bottom');shell.style.removeProperty('--workbench-island-navigation-left');shell.style.removeProperty('--workbench-island-navigation-top');};
  },[]);
- useLayoutEffect(()=>scheduleLayout.current(),[inspectorOpen,terminalOpen]);
+ useLayoutEffect(()=>scheduleLayout.current(),[terminalOpen]);
  return <div ref={root} className="lake-workbench-islands" role="group" aria-label="Lake Island 工作台">
   <div ref={conversationIsland} className="lake-workbench-island island-conversation" data-pilot-island-tone={pilotTone}>
    <span className="workspace-header-glass" aria-hidden="true"/>
    <span className="island-navigation-divider" aria-hidden="true"/>{activity}{conversation}
-   {islandInspector&&<div className="island-inspector" data-open={inspectorOpen}>
-    <div className="island-inspector-viewport">{islandInspector}</div>
-   </div>}
   </div>
   {terminal&&<div ref={terminalIsland} className="lake-workbench-island island-terminal" data-open={terminalOpen} inert={!terminalOpen} aria-hidden={!terminalOpen}><span className="workspace-header-glass" aria-hidden="true"/>{terminal}</div>}
  </div>;

@@ -1078,9 +1078,7 @@ function AppContent() {
     bootstrap?.backendRuntime==='typescript'&&!selectedResource?sessionId??undefined:undefined);
   const selectedSuperPilot=selectedSession?.workspaceRole==='router'||!!(pilotWorkspace.workspace?.active&&
     pilotWorkspace.workspace.project.projectId===selectedSession?.projectId&&pilotWorkspace.workspace.project.routerSessionId===selectedSession?.id);
-  const islandInspection=selectedSuperPilot&&!compactNavigation&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&!isWorkspacePage;
-  const dockedInspectorOpen=inspectorOpen&&!islandInspection;
-  const {attachView:attachInspectorView,waitingForWindow:inspectorWaitingForWindow}=useInspectorWindow(dockedInspectorOpen);
+  const {attachView:attachInspectorView,waitingForWindow:inspectorWaitingForWindow}=useInspectorWindow(inspectorOpen);
   const pilotTaskContinuation=selectedSuperPilot&&bootstrap?.backendRuntime==='typescript'&&canCompose;
   const pilotTaskReference=pilotTaskContinuation&&sessionId?pilotTaskReferences.get(sessionId):undefined;
   const pilotTaskMembers=useMemo(()=>selectedSession&&pilotTaskReference?
@@ -1778,7 +1776,7 @@ function AppContent() {
     (!isLegacyHistory && !activeSnapshot.specialists?.length));
   const detachedConversation=sessionHeader&&!compactNavigation;
   const sharedIsland=detachedConversation&&wideWorkbench;
-  const dockedConversation=detachedConversation&&!terminalVisible&&!dockedInspectorOpen;
+  const dockedConversation=detachedConversation&&!terminalVisible;
   const headerSweep=sessionHeader&&<HeaderSweep key={`sweep-${selectedSession.id}`} active={pilotHeaderActivity?.animated??(avatarActivity?.state==='running')}/>;
   const pilotTone=sessionHeader&&selectedSuperPilot&&!headerPilot&&!headerPilotMode?
     sessionBadgeState(superHeaderPresentation?.status??selectedSession.status,superHeaderPresentation?.label).tone:undefined;
@@ -1877,7 +1875,7 @@ function AppContent() {
 
   return <SpecialistAvatarProvider channels={pilotWorkspace.workspace?.channels}><WorkbenchShell
     className={`app-shell has-workbench-navigation${terminalVisible ? " terminal-is-open" : ""}${detachedConversation?" has-workbench-conversation":""}${dockedConversation?" has-docked-conversation":""}${sharedIsland?" has-workbench-island":""}`}
-    compact={compactNavigation} railOnly={isWorkspacePage} inspectorOpen={dockedInspectorOpen} back={historyAvailable.back} forward={historyAvailable.forward} onStep={stepHistory}>
+    compact={compactNavigation} railOnly={isWorkspacePage} inspectorOpen={inspectorOpen} back={historyAvailable.back} forward={historyAvailable.forward} onStep={stepHistory}>
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
     {mobileMenu && <button className="mobile-scrim" aria-label="关闭项目导航" onClick={() => setMobileMenu(false)}/>}
     {navigationSearchOpen && <WorkspaceSearch projects={projectList} sessions={catalog.sessions} resources={catalog.resources} canCreate={!!sidebarProject && connected && !pendingOperation} onClose={() => setNavigationSearchOpen(false)} onNewSession={() => afterSettings(()=>{
@@ -1985,9 +1983,9 @@ function AppContent() {
     </aside>
 
     {detachedConversation&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={sharedIsland?terminalHeading:null}
-      inspectorOpen={inspectorOpen} terminalOpen={sharedIsland&&terminalOpen} pilotTone={pilotTone} islandInspector={islandInspection?inspectorView:undefined}/>}
+      terminalOpen={sharedIsland&&terminalOpen} pilotTone={pilotTone}/>}
     {dockedConversation&&<div className="workbench-conversation-surface" aria-hidden="true"/>}
-    <main className={`workspace${window.lakeInspectorWindow?"":" web-inspector-layout"}${dockedInspectorOpen?" has-session-inspector":""}${isWorkspacePage?" is-workspace-page":!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":sessionSelected?" has-specialist-task-list":""}`} onDragOver={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="none";return;}if(selectedSession&&!isLegacyHistory&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.stopPropagation();return;}if(!selectedSession||isLegacyHistory||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
+    <main className={`workspace${inspectorOpen?" has-session-inspector":""}${isWorkspacePage?" is-workspace-page":!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":sessionSelected?" has-specialist-task-list":""}`} onDragOver={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="none";return;}if(selectedSession&&!isLegacyHistory&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.stopPropagation();return;}if(!selectedSession||isLegacyHistory||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
       <DesktopUpdate visible={route.view==='updates'} onUnreadChange={setWorkspaceUpdateUnread}
         onOpenNavigation={()=>setMobileMenu(true)} onBack={backFromWorkbenchPage}/>
       {isSettingsPage?<ModelSettings navigationGuard={settingsNavigation}
@@ -2101,7 +2099,7 @@ function AppContent() {
             disabled={!!sendFeedback || !sessionConnected || !!pendingOperation || reasoningSaving.has(sessionId) || modeSaving.has(sessionId) || stoppingTurn || currentAssignment?.checking || ((modelConfigured || !!currentAssignment) && (!hasMessageDraft || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)))}
           ><Glyph name={composerSendGlyph} size={composerSendGlyph==="up"?17:16}/></button>}
         </div></div></div></div></form></div>}
-      </div>{!islandInspection&&inspectorView}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
+      </div>{inspectorView}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
       </>}
     </main>
     {terminalTabContext && <NavigationMenu title="终端" x={terminalTabContext.x} y={terminalTabContext.y} onClose={() => setTerminalTabContext(null)} actions={[

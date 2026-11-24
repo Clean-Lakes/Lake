@@ -48,27 +48,28 @@
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
   function paneLimits(sidebarCollapsed) {
     const width = shell?.clientWidth || innerWidth;
-    const desktop = innerWidth > 1100;
-    const inspectorOpen = desktop && !!shell.querySelector('.session-layout > .session-inspector.is-open');
-    const terminalOpen = desktop && shell.classList.contains('terminal-is-open');
+    const inspectorDocked = innerWidth >= 960;
+    const terminalDocked = innerWidth > 1100;
+    const inspectorPresent = inspectorDocked && !!shell.querySelector('.session-layout > .session-inspector');
+    const terminalOpen = terminalDocked && shell.classList.contains('terminal-is-open');
     // All open panes share one budget. Reserving the conversation independently
     // for each side pane can otherwise spend that same space twice after zooming.
-    const conversationMin = desktop ? 416 : 320;
-    const auxiliaryMin = inspectorOpen && terminalOpen ? 240 : 280;
-    const sidebarMax = Math.max(200, Math.min(420, width - conversationMin - (terminalOpen ? auxiliaryMin : 0) - (inspectorOpen ? auxiliaryMin : 0)));
+    const conversationMin = inspectorDocked ? 416 : 320;
+    const auxiliaryMin = inspectorPresent && terminalOpen ? 240 : 280;
+    const sidebarMax = Math.max(200, Math.min(420, width - conversationMin - (terminalOpen ? auxiliaryMin : 0) - (inspectorPresent ? auxiliaryMin : 0)));
     const expandedSidebarWidth = clamp(preferred.sidebar, 200, sidebarMax);
     const railWidth = parseFloat(getComputedStyle(shell).getPropertyValue('--sidebar-rail-width')) || 52;
     const sidebar = sidebarCollapsed ? railWidth : expandedSidebarWidth;
-    const terminalMax = Math.max(auxiliaryMin, Math.min(900, width - sidebar - conversationMin - (inspectorOpen ? auxiliaryMin : 0)));
+    const terminalMax = Math.max(auxiliaryMin, Math.min(900, width - sidebar - conversationMin - (inspectorPresent ? auxiliaryMin : 0)));
     const terminal = terminalOpen ? clamp(preferred.terminal, auxiliaryMin, terminalMax) : 0;
-    const workspaceWidth = desktop ? 0 : shell.querySelector('.workspace')?.clientWidth || 0;
+    const workspaceWidth = inspectorDocked ? 0 : shell.querySelector('.workspace')?.clientWidth || 0;
     return {
       expandedSidebarWidth,
       railWidth,
       expandedConversationWidth: width - expandedSidebarWidth,
       sidebar: sidebarCollapsed ? [sidebar, sidebar] : [200, sidebarMax],
-      terminal: desktop ? [auxiliaryMin, terminalMax] : [280, Math.max(280, Math.min(900, width - 40))],
-      inspector: desktop
+      terminal: terminalDocked ? [auxiliaryMin, terminalMax] : [280, Math.max(280, Math.min(900, width - 40))],
+      inspector: inspectorDocked
         ? [auxiliaryMin, Math.max(auxiliaryMin, Math.min(900, width - sidebar - terminal - conversationMin))]
         : [280, Math.max(280, Math.min(900, workspaceWidth - (innerWidth <= 700 ? 0 : 320)))],
     };
@@ -120,7 +121,6 @@
     const readingTarget = reading ? reading.getBoundingClientRect().left - shell.getBoundingClientRect().left + readingShift : width + inset;
     const islandTarget = collapsed ? Math.max(navStart, readingTarget) : readingTarget;
     shell.style.setProperty('--workbench-island-navigation-left', `${islandTarget}px`);
-    island?.style.setProperty('--island-panel-available-width', `${Math.max(1, shell.clientWidth - islandTarget - 16)}px`);
 
     const buttons = (origin?.buttons ?? []).map(([button, before]) => ({ button, before, after: button.getBoundingClientRect() }));
     const padding = island ? getComputedStyle(island).paddingInlineStart : undefined;

@@ -211,9 +211,9 @@ html.lake-windows-chrome .conversation-header-backdrop { top:48px; }
  --workbench-bottom-inset:16px;
  /* Keep line breaks stable across the toggle. The reading column is centered
     in the available space and scales when the window or sidebar is resized. */
- --docked-reading-viewport:calc(var(--expanded-conversation-width,100cqw) - 1px);
- --session-content-width:min(960px,calc(var(--docked-reading-viewport) - var(--session-gutter) - var(--session-gutter)));
- --session-content-start:max(var(--session-gutter),calc((100cqw - var(--session-content-width)) / 2));
+ --docked-reading-viewport:calc(var(--expanded-conversation-width,100cqw) - var(--inspector-width,0px) - 1px);
+ --session-content-width:var(--inspector-reading-width,min(960px,calc(var(--docked-reading-viewport) - var(--session-gutter) - var(--session-gutter))));
+ --session-content-start:max(var(--session-gutter),calc((var(--inspector-main-width,calc(100cqw - var(--inspector-width,0px))) - var(--session-content-width)) / 2));
  background:transparent;
  border-inline-start:1px solid transparent;
  border-start-start-radius:var(--conversation-frame-radius);
