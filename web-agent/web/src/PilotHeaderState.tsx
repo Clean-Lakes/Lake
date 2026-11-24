@@ -23,7 +23,7 @@ export function PilotHeaderState({model,mode,status,normal,onInspect,details}:{d
  const retained=useRef<PilotIslandModel|null>(model);if(model)retained.current=model;
  const pilotVisible=!!model||!!mode;
  const inspectorToggle=details?.available&&<button type="button" className="header-inspector-toggle" aria-label={details.open?'收起执行详情':'展开执行详情'} title={details.open?'收起执行详情':'展开执行详情'} aria-controls={sessionInspectorId} aria-expanded={details.open} onClick={details.toggle}>
-  <span className="inspector-chevron" aria-hidden="true"><Glyph name="next" size={13}/></span>
+  <Glyph name="next" size={13} className="inspector-chevron"/>
  </button>;
  return <div className="header-state-area">
   <HeaderMorphSlot visible={!pilotVisible} className="header-normal-state">{normal}{inspectorToggle}</HeaderMorphSlot>

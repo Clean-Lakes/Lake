@@ -87,7 +87,7 @@ export function PilotStatusIsland({model, onInspect,visible=true,status}: {model
       {primary&&<span className={`pilot-action-avatar role-state-${primary.status}`} aria-hidden="true"><AgentIcon role={primary.role} size={22}/></span>}
       <span className="pilot-island-action" aria-hidden="true"><span className="pilot-island-action-line">{primary&&<strong>{primary.name}</strong>}<span className="pilot-island-action-label" title={action}>{model.tone!=='active'&&<i className="pilot-action-state-dot"/>}{action}</span></span><small title={secondary}>{secondary}</small></span>
       <span className="pilot-island-progress" data-session-status={model.status==='paused'?'idle':status} aria-hidden="true">{ended?<span className="pilot-island-ended" title={model.status==='completed'?'任务已结束':'任务已取消'}><Glyph name={model.status==='completed'?'check':'close'} size={16}/></span>:<svg className="pilot-island-ring" viewBox="0 0 28 28" fill="none"><circle className="pilot-ring-track" cx="14" cy="14" r="10"/><circle className="pilot-ring-value" opacity={model.completed>0?1:0} cx="14" cy="14" r="10" pathLength="100" strokeDasharray={`${progress} 100`} transform="rotate(-90 14 14)"/></svg>}
-        {inspector?<span className="inspector-chevron"><Glyph name="next" size={12}/></span>:<Glyph name="next" size={12}/>}
+        <Glyph name="next" size={12} className={inspector?'inspector-chevron':undefined}/>
       </span>
     </button>
     <span className="visually-hidden" role="status" aria-live="polite">{model.detail}</span>
