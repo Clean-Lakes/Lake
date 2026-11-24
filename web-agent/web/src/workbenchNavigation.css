@@ -82,6 +82,7 @@
     height:var(--workbench-navigation-height);
     display:flex;
     align-items:center;
+    justify-content:space-between;
     gap:var(--workbench-navigation-gap);
     container:workbench-navigation / inline-size;
     user-select:none;
@@ -107,18 +108,12 @@
     height:46px;
   }
   .workbench-resizing .app-shell.has-workbench-conversation > .workbench-navigation { transition:none; }
-  .workbench-navigation-trailing {
-    display:flex;
-    flex:none;
-    align-items:center;
-    gap:18px;
-    margin-inline-start:auto;
-  }
   .workbench-navigation-brand {
     display:none;
-    color:var(--foreground);
-    font-size:var(--font-size-ui);
-    font-weight:var(--font-weight-semibold);
+    flex:none;
+    color:var(--pilot-header-muted);
+    font-size:var(--font-size-toolbar);
+    font-weight:var(--font-weight-medium);
     line-height:1;
     white-space:nowrap;
   }
