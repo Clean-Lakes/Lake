@@ -18,11 +18,14 @@ const props={connected:true, projects:[project], resources:[{projectId:project.i
  onOpenNavigation:noop, onOpenProject:noop, onSelectProject:noop, onCreateProject:noop, onDeleteProject:noop,
  onToggleBulk:noop, onClearSelection:noop, onDeleteSelected:noop};
 
-test('workspace is a direct route with or without conversation and resource context',()=>{
- for(const route of [
-  {sessionId:null,resourceId:null,view:'workspace' as const},
-  {sessionId:'s',resourceId:'r',view:'workspace' as const},
+const workspaceViews=['workspace','settings','updates'] as const;
+
+test('each workspace page is a direct route with or without conversation and resource context',()=>{
+ for(const view of workspaceViews) for(const context of [
+  {sessionId:null,resourceId:null},
+  {sessionId:'s',resourceId:'r'},
  ]){
+  const route={...context,view};
   const url=workspaceURL('http://localhost/?keep=1&view=plans',route);
   assert.deepEqual(readWorkspaceRoute(url.search),route);
   assert.equal(url.searchParams.get('keep'),'1');
@@ -31,12 +34,14 @@ test('workspace is a direct route with or without conversation and resource cont
 });
 
 test('startup restores the workspace page for empty projects and preserves an owned resource',()=>{
- const route={sessionId:null,resourceId:null,view:'workspace' as const};
- assert.deepEqual(initialWorkspaceSelection({projects:[],sessions:[],resources:[]},route),{projectId:null,route});
  const catalog={projects:[project],sessions:[{id:'s',projectId:project.id,workspaceRole:'router'}],resources:[{id:'r',projectId:project.id}]} as Catalog;
- assert.deepEqual(initialWorkspaceSelection(catalog,{...route,resourceId:'r'}),{
-  projectId:project.id,route:{sessionId:'s',resourceId:'r',view:'workspace'},
- });
+ for(const view of workspaceViews){
+  const route={sessionId:null,resourceId:null,view};
+  assert.deepEqual(initialWorkspaceSelection({projects:[],sessions:[],resources:[]},route),{projectId:null,route});
+  assert.deepEqual(initialWorkspaceSelection(catalog,{...route,resourceId:'r'}),{
+   projectId:project.id,route:{sessionId:'s',resourceId:'r',view},
+  });
+ }
 });
 
 test('workspace actions render in the page, including a creation path for an empty workspace',()=>{
@@ -52,7 +57,7 @@ test('workspace actions render in the page, including a creation path for an emp
 test('the workspace rail exposes a closed menu and signals unread updates',()=>{
  const sidebar=renderToStaticMarkup(createElement(SidebarWorkspaceNavigation,{
   projectId:project.id, specialists:null, children:null, resourceCount:0, selectionId:project.id, selectedPanel:'specialists',
-  workspace:{active:true, modelConfigured:false, unreadUpdate:true, onProjects:noop, onSettings:noop, onUpdates:noop},
+  workspace:{view:"workspace", modelConfigured:false, unreadUpdate:true, onProjects:noop, onSettings:noop, onUpdates:noop},
  }));
  assert.match(sidebar,/aria-label="工作区，有新版本" aria-current="page" aria-haspopup="menu" aria-expanded="false"/);
  assert.doesNotMatch(sidebar,/role="menu(?:item)?"|设置|检查更新|已删除/);

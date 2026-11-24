@@ -62,8 +62,8 @@
  .extension-detail {overflow:visible;flex:1 0 auto;}
  .extension-empty {min-height:240px;}
 }
-.model-settings-dialog .extension-fields > .field-label {min-width:0;margin:0;line-height:1.5;}
-.model-settings-dialog .extension-fields > .settings-note {margin:0;}
+.model-settings-page .extension-fields > .field-label {min-width:0;margin:0;line-height:1.5;}
+.model-settings-page .extension-fields > .settings-note {margin:0;}
 .extension-tools {max-height:220px;overflow:auto;}
 .extension-actions {position:sticky;bottom:-20px;z-index:1;padding:16px 0;background:var(--surface);}
 
@@ -79,7 +79,7 @@
 .mcp-scope {display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-bottom:20px;color:var(--text-muted);font-size:var(--font-size-ui);}
 .mcp-scope-value {display:inline-flex;align-items:center;gap:7px;color:var(--foreground);border:1px solid var(--border);border-radius:var(--radius-control);padding:6px 12px;}
 .mcp-form-fields {display:grid;grid-template-columns:minmax(0,1fr);gap:16px;border:0;padding:0;margin:0;min-width:0;}
-.model-settings-dialog .mcp-form-fields > .field-label {margin:0;min-width:0;font-size:var(--font-size-ui);}
+.model-settings-page .mcp-form-fields > .field-label {margin:0;min-width:0;font-size:var(--font-size-ui);}
 .mcp-narrow-field {width:100%;max-width:300px;}
 .mcp-form-fields input:not([type=checkbox]) {padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-control);background:var(--surface);color:var(--foreground);font-size:var(--font-size-ui);min-height:36px;}
 .mcp-form-fields .settings-note {margin:0;}

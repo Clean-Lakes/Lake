@@ -15,7 +15,7 @@
 .external-execution-report{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text-secondary);font-size:13px;line-height:1.7}
 @media(max-width:600px){.external-agent-fields{grid-template-columns:minmax(0,1fr)}.external-agent-panel{padding:14px}}
 
-.model-settings-dialog .external-agent-fields .field-label{margin:0}
+.model-settings-page .external-agent-fields .field-label{margin:0}
 
 .agent-execution{border:1px solid var(--border);border-radius:var(--radius-settings-panel,14px);corner-shape:var(--corner-window);background:var(--surface);padding:12px;margin:12px 0;min-width:0;overflow:hidden}
 .agent-execution-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}

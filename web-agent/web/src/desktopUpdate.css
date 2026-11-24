@@ -1,12 +1,21 @@
-.desktop-update-scrim { z-index: 120; }
-.desktop-update-dialog.modal { width: min(480px, 100%); }
-.desktop-update-dialog:focus { outline: none; }
+.desktop-update-layout { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.desktop-update-content,.desktop-update-details { min-width: 0; padding: 20px var(--workspace-gutter); }
+.desktop-update-details { border-top: 1px solid var(--border); background: var(--surface-subtle); }
+@container workspace-page (min-width:610px) {
+  .desktop-update-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(216px, 30cqw, 300px);
+    grid-template-rows: minmax(0, 1fr);
+    overflow: hidden;
+  }
+  .desktop-update-content,.desktop-update-details { overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+  .desktop-update-details { border-top: 0; border-inline-start: 1px solid var(--border); }
+}
 
-.desktop-update-content { border-top: 1px solid var(--border); }
 .desktop-update-status-card {
   padding: 12px 14px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-settings-panel);
   corner-shape: var(--corner-window);
   background: var(--surface-subtle);
 }
@@ -49,7 +58,7 @@
 
 .desktop-update-links {
   border: 1px solid var(--border);
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-settings-panel);
   corner-shape: var(--corner-window);
   overflow: hidden;
 }
@@ -60,6 +69,7 @@
   padding: 9px 11px;
   color: var(--foreground);
   text-decoration: none;
+  corner-shape: var(--corner-window);
 }
 .desktop-update-links > a + a { border-top: 1px solid var(--border); }
 .desktop-update-links > a:hover { background: var(--surface-hover); }
@@ -69,9 +79,7 @@
 .desktop-update-links small { display: block; margin-top: 3px; color: var(--pilot-header-muted); font-size: var(--font-size-toolbar); overflow-wrap: anywhere; }
 .desktop-update-note { margin: 12px 0 0; color: var(--pilot-header-muted); font-size: var(--font-size-process); line-height: 1.5; }
 
-.desktop-update-trigger { position: relative; }
-.desktop-update-trigger i { position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--success); }
 @media (prefers-reduced-motion: no-preference) {
-  :is(.desktop-update-symbol, .desktop-update-trigger) .spinning { animation: desktop-update-spin 1.2s linear infinite; }
+  .desktop-update-symbol .spinning { animation: desktop-update-spin 1.2s linear infinite; }
 }
 @keyframes desktop-update-spin { to { transform: rotate(360deg); } }

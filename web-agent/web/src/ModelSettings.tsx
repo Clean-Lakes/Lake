@@ -8,7 +8,7 @@ import {Glyph} from "./Icons";
 import {AppSelect} from "./AppSelect";
 import {useAutoRefresh} from "./useAutoRefresh";
 import {reuseUnchanged} from "./snapshotUpdates";
-import {useEffect, useLayoutEffect, useRef, useState} from "react";
+import {useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode, type Ref} from "react";
 import {setThemePreference, themePreference, type ThemePreference} from "./appearance";
 import type {AvailableModels, ModelProvider, ProviderCatalog, ProviderModel} from "../../shared/contracts";
 import {api, readableError, type ModelSyncState} from "./api";
@@ -17,6 +17,7 @@ import {parseSendShortcut, type SendShortcut} from "./composerKeyboard";
 import {ProviderQuickSetup,ProviderModelPicker} from "./ProviderSetup";
 import {type ProviderPreset} from "./providerPresets";
 import {navigateSettingsTabs,trapSettingsTab} from './settingsFocus';
+import {WorkspacePageHeader} from './WorkspacePage';
 import "./modelSettings.css";
 import "./externalAgents.css";
 import "./gatewaySettings.css";
@@ -39,8 +40,11 @@ const settingsTabs:readonly {key:string;label:string;title?:string;description:s
 function Switch({checked,label,onChange,disabled=false}: {checked:boolean;label:string;onChange:(value:boolean)=>void;disabled?:boolean}) {
   return <button type="button" role="switch" aria-checked={checked} aria-label={label} className={`provider-switch ${checked ? "on" : ""}`} disabled={disabled} onClick={() => onChange(!checked)}><span/></button>;
 }
-export function ModelSettings({initialTab="models",onClose:closeSettings,onChanged,sendShortcut,onShortcutChange,completionEnabled,onCompletionEnabledChange,onSessionConfig:openSessionConfig,onProjectMemory:openProjectMemory,projectId,projectName,ignoreProjectMemory,onIgnoreProjectMemoryChange,memoryEngine,watchdogEnabled=false,capabilityDetectionEnabled=false,onGatewayTask:openGatewayTask}: {
-  initialTab?:string;onClose:()=>void;onChanged:()=>Promise<void>;sendShortcut:SendShortcut;onShortcutChange:(value:SendShortcut)=>void;onSessionConfig?:()=>void;onProjectMemory?:()=>void;projectId?:string;projectName?:string;
+export type SettingsNavigationHandle = {confirmLeave: () => boolean | Promise<boolean>};
+
+export function ModelSettings({initialTab="models",navigationGuard,navigationSearch,onOpenNavigation,onBack,onChanged,sendShortcut,onShortcutChange,completionEnabled,onCompletionEnabledChange,onSessionConfig:openSessionConfig,onProjectMemory:openProjectMemory,projectId,projectName,ignoreProjectMemory,onIgnoreProjectMemoryChange,memoryEngine,watchdogEnabled=false,capabilityDetectionEnabled=false,onGatewayTask:openGatewayTask}: {
+  initialTab?:string;navigationGuard?:Ref<SettingsNavigationHandle>;navigationSearch?:ReactNode;onOpenNavigation:()=>void;onBack?:()=>void;
+  onChanged:()=>Promise<void>;sendShortcut:SendShortcut;onShortcutChange:(value:SendShortcut)=>void;onSessionConfig?:()=>void;onProjectMemory?:()=>void;projectId?:string;projectName?:string;
   completionEnabled?:boolean;onCompletionEnabledChange?:(value:boolean)=>void;
   ignoreProjectMemory:boolean;onIgnoreProjectMemoryChange:(value:boolean)=>void;memoryEngine?:'layered';watchdogEnabled?:boolean;capabilityDetectionEnabled?:boolean;onGatewayTask?:(target:GatewayTaskTarget)=>Promise<void>;
 }) {
@@ -59,7 +63,7 @@ export function ModelSettings({initialTab="models",onClose:closeSettings,onChang
   const [discovery,setDiscovery] = useState<{id:string;available:AvailableModels}|null>(null);
   const [deleteConfirm,setDeleteConfirm] = useState(false);
   const [detection,setDetection] = useState<{id:string;status:string;total:number;complete:number}|null>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
+  const pageRef = useRef<HTMLElement>(null);
   const tabsRef = useRef<HTMLDivElement>(null);
   const providerListRef = useRef<HTMLDivElement>(null);
   const discardDialog = useRef<HTMLDialogElement>(null);
@@ -74,24 +78,23 @@ export function ModelSettings({initialTab="models",onClose:closeSettings,onChang
   const sourceToggle = useRef<HTMLButtonElement>(null), focusSource = useRef(false);
   const addressInput = useRef<HTMLInputElement>(null), keyInput = useRef<HTMLInputElement>(null), modelsButton = useRef<HTMLButtonElement>(null);
   const [sourcesExpanded,setSourcesExpanded] = useState(false);
-  const onClose=()=>void leave(closeSettings);
   const onSessionConfig=openSessionConfig && (()=>void leave(openSessionConfig));
   const onProjectMemory=openProjectMemory && (()=>void leave(openProjectMemory));
   const onGatewayTask=openGatewayTask && ((target:GatewayTaskTarget)=>leave(()=>openGatewayTask(target)));
-  const closeRef=useRef(onClose);closeRef.current=onClose;
-  const busyRef=useRef(busy);busyRef.current=busy||extensionBusy?"busy":"";
   const draft = drafts[selected];
   const isBusy = !!busy||extensionBusy;
+  function confirmDiscard() {
+    const prompt=discardDialog.current;
+    if (!prompt || decision.current) return false;
+    const active=document.activeElement as HTMLElement|null;
+    returnFocus.current=!pageRef.current?.contains(active)&&lastField.current?.isConnected ? lastField.current : active;
+    const answer=new Promise<boolean>(resolve=>{decision.current=resolve;});
+    prompt.showModal();
+    return answer;
+  }
+  useImperativeHandle(navigationGuard,()=>({confirmLeave:()=>isBusy ? false : !hasEdits || confirmDiscard()}));
   async function leave(action:()=>void|Promise<void>, confirm=hasEdits) {
-    if (confirm) {
-      const prompt=discardDialog.current;
-      if (!prompt || decision.current) return;
-      const active=document.activeElement as HTMLElement|null;
-      returnFocus.current=active===dialogRef.current?.querySelector('.model-settings-header button') && lastField.current?.isConnected ? lastField.current : active;
-      const answer=new Promise<boolean>(resolve=>{decision.current=resolve;});
-      prompt.showModal();
-      if (!await answer) return;
-    }
+    if (confirm && !await confirmDiscard()) return;
     await action();
   }
   function answerDiscard(discard:boolean) {
@@ -171,17 +174,16 @@ export function ModelSettings({initialTab="models",onClose:closeSettings,onChang
     return () => {active=false;window.clearInterval(timer);};
   }, [capabilityDetectionEnabled,detection?.id,detection?.status]);
   useEffect(() => {
-    const previous = document.activeElement as HTMLElement|null;
-    dialogRef.current?.focus();
-    const key = (event:KeyboardEvent) => {
-      if (event.defaultPrevented) return;
-      if (discardDialog.current?.open) {trapSettingsTab(event,discardDialog.current);return;}
-      if (event.key === "Escape" && !busyRef.current) {event.preventDefault();event.stopPropagation();closeRef.current();}
-      trapSettingsTab(event,dialogRef.current);
-    };
+    const key = (event:KeyboardEvent) => {if(discardDialog.current?.open)trapSettingsTab(event,discardDialog.current);};
     document.addEventListener("keydown",key);
-    return () => {document.removeEventListener("keydown",key);decision.current?.(false);decision.current=null;previous?.focus();};
+    return () => {document.removeEventListener("keydown",key);decision.current?.(false);decision.current=null;};
   }, []);
+  useEffect(()=>{
+    if(!hasEdits&&!isBusy)return;
+    const beforeUnload=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue='';};
+    window.addEventListener('beforeunload',beforeUnload);
+    return ()=>window.removeEventListener('beforeunload',beforeUnload);
+  },[hasEdits,isBusy]);
   function update(patch:Partial<ProviderDraft>) {
     if (["baseURL","protocol","apiKey","clearKey"].some(key => key in patch)) setDiscovery(null);
     const original=presetDefaults.current.get(selected) ?? catalog.providers.find(provider=>provider.id===selected);
@@ -297,14 +299,10 @@ export function ModelSettings({initialTab="models",onClose:closeSettings,onChang
   }
   const rows=Object.values(drafts);
   const category=settingsTabs.find(item=>item.key===tab);
-  return <div className="modal-scrim"><div ref={dialogRef} tabIndex={-1} className="modal workbench-dialog model-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="model-settings-title">
-    <header className="workbench-dialog-header model-settings-header">
-      <div>
-        <h2 id="model-settings-title">{category?.title ?? category?.label ?? "设置"}{tab==="memory"&&<span className="memory-experimental-badge" aria-label="实验功能">实验</span>}</h2>
-        <p>{tab==="memory"&&memoryEngine==='layered'?"管理用户、项目和专员的长期知识，以及如何使用。":category?.description}</p>
-      </div>
-      <button type="button" className="icon-button" aria-label="关闭设置" disabled={isBusy} onClick={onClose}><Glyph name="close" size={16}/></button>
-    </header>
+  return <section ref={pageRef} id="workspace-settings-page" className="workspace-page model-settings-page" aria-labelledby="model-settings-title">
+    <WorkspacePageHeader id="model-settings-title" title={<>{category?.title ?? category?.label ?? "设置"}{tab==="memory"&&<span className="memory-experimental-badge" aria-label="实验功能">实验</span>}</>}
+      description={tab==="memory"&&memoryEngine==='layered'?"管理用户、项目和专员的长期知识，以及如何使用。":category?.description}
+      actions={navigationSearch} onOpenNavigation={onOpenNavigation} onBack={onBack}/>
     <div ref={tabsRef} className="model-settings-tabs" role="tablist" aria-label="设置分类" onKeyDown={event=>navigateSettingsTabs(event,event.currentTarget)}>
       {settingsTabs.filter(item=>watchdogEnabled||!item.requiresWatchdog).map(({key,label,panel=key})=><button
         key={key} type="button" role="tab" id={panel+"-settings-tab"} aria-controls={panel+"-settings-panel"}
@@ -358,7 +356,7 @@ export function ModelSettings({initialTab="models",onClose:closeSettings,onChang
       <h3 id="provider-discard-title">放弃未保存的更改？</h3><p id="provider-discard-hint">选择「继续编辑」可保留刚才的输入。</p>
       <div className="provider-editor-actions"><button type="button" className="button secondary" onClick={()=>answerDiscard(false)}>继续编辑</button><button type="button" className="button danger" onClick={()=>answerDiscard(true)}>放弃更改</button></div>
     </dialog>
-  </div></div>;
+  </section>;
 }
 
 function ProviderModelEditor({model,editing,onChange,onCancel,onCommit}: {

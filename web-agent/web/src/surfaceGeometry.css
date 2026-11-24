@@ -1,6 +1,6 @@
 /* Shared geometry for floating forms and actionable panels. Keep the compact
    transcript scale outside these surfaces; model menus own their inset scale. */
-:where(.modal, dialog, .schedule-dialog, .workflow-dialog, .desktop-update-dialog, .lake-question, .ai-pending,
+:where(.modal, dialog, .schedule-dialog, .workflow-dialog, .lake-question, .ai-pending,
  .approval-card, .attachment-approval, .ai-options, .sre-plan, .agent-task-body, .agent-task-detail,
  .resource-folder-editor, .resource-move-panel, .resource-add-menu,
  .resource-terminal-menu, .navigation-context-menu, .terminal-action-menu,
@@ -12,7 +12,7 @@
  corner-shape: var(--corner-window);
 }
 
-:where(.modal, dialog, .schedule-dialog, .workflow-dialog, .desktop-update-dialog, .lake-question, .ai-pending,
+:where(.modal, dialog, .schedule-dialog, .workflow-dialog, .lake-question, .ai-pending,
  .approval-card, .attachment-approval, .ai-options, .sre-plan, .agent-task-body, .agent-task-detail,
  .resource-folder-editor, .resource-move-panel)
  :where(.button, .icon-button, .app-select-trigger, .app-select-option,

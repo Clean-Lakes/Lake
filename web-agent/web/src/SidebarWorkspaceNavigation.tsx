@@ -4,10 +4,11 @@ import {SidebarResourceActions} from './SidebarResourceActions';
 import {Glyph} from './Icons';
 import {NavigationMenu} from './NavigationDelete';
 import {WorkbenchSidebar} from './WorkbenchNavigation';
+import type {WorkspacePageView} from './workspaceRoute';
 
 type NavigationPanel = 'specialists'|'resources';
 type WorkspaceNavigation = {
- active:boolean;modelConfigured:boolean;unreadUpdate:boolean;
+ view?:WorkspacePageView;modelConfigured:boolean;unreadUpdate:boolean;
  onProjects:()=>void;onSettings:()=>void;onUpdates:()=>void;
 };
 
@@ -20,7 +21,7 @@ function initialPanel(projectId:string|undefined,selected:NavigationPanel):Navig
 /** Both lists stay mounted so switching preserves their scroll and folder state. */
 export function SidebarWorkspaceNavigation({projectId,specialists,children,resourceCount,selectionId,selectedPanel,attention=false,onSelectPanel,workspace,empty,header,contentId}:{
  projectId?:string;specialists:ReactNode;children:ReactNode;resourceCount:number;
- selectionId:string;selectedPanel:NavigationPanel;attention?:boolean;onSelectPanel?:(panel:NavigationPanel)=>void;workspace?:WorkspaceNavigation;empty?:ReactNode;
+ selectionId:string;selectedPanel:NavigationPanel;attention?:boolean;onSelectPanel?:(panel:NavigationPanel,select:()=>void)=>void;workspace?:WorkspaceNavigation;empty?:ReactNode;
  header?:ReactNode;contentId?:string;
 }) {
  const id=useId();
@@ -33,11 +34,15 @@ export function SidebarWorkspaceNavigation({projectId,specialists,children,resou
  if(projectId!==selection.projectId||selectionId!==selection.selectionId){
   setSelection({projectId,selectionId,panel:projectId!==selection.projectId?initialPanel(projectId,selectedPanel):selectedPanel});
  }
- const selectPanel=(panel:NavigationPanel)=>{expand();setSelection({...selection,panel});onSelectPanel?.(panel);};
+ const selectPanel=(panel:NavigationPanel)=>{
+  const select=()=>{expand();setSelection({...selection,panel});};
+  if(onSelectPanel)onSelectPanel(panel,select);else select();
+ };
  useEffect(()=>{if(projectId)try{localStorage.setItem(`lake.sidebar-panel.${projectId}`,panel);}catch{}},[projectId,panel]);
- useEffect(()=>{setWorkspaceMenuOpen(false);},[selectionId,workspace?.active]);
- const specialistsOpen=!workspace?.active&&panel==='specialists';
- const resourcesOpen=!workspace?.active&&panel==='resources';
+ const workspaceView=workspace?.view;
+ useEffect(()=>{setWorkspaceMenuOpen(false);},[selectionId,workspaceView]);
+ const specialistsOpen=!workspaceView&&panel==='specialists';
+ const resourcesOpen=!workspaceView&&panel==='resources';
  return <div className="sidebar-workspace-navigation">
   <nav className="sidebar-navigation-rail" aria-label="侧栏视图">
    {projectId&&<><button type="button" className="sidebar-rail-button" aria-label={attention?'专员，有待确认事项或未读消息':'专员'} aria-pressed={specialistsOpen}
@@ -48,17 +53,17 @@ export function SidebarWorkspaceNavigation({projectId,specialists,children,resou
    <button type="button" className="sidebar-rail-button" aria-label="资源" aria-pressed={resourcesOpen}
     aria-controls={`${id}-resources-panel`} title="资源" onClick={()=>selectPanel('resources')}><Glyph name="lakeResources" size={22} filled={resourcesOpen}/></button></>}
    {workspace&&<button ref={workspaceButton} type="button" className="sidebar-rail-button workspace-rail-button" aria-label={workspace.unreadUpdate?'工作区，有新版本':'工作区'}
-    aria-current={workspace.active?'page':undefined} aria-haspopup="menu" aria-expanded={workspaceMenuOpen}
+    aria-current={workspaceView?'page':undefined} aria-haspopup="menu" aria-expanded={workspaceMenuOpen}
     aria-controls={workspaceMenuOpen?`${id}-workspace-menu`:undefined} title="工作区" onClick={()=>setWorkspaceMenuOpen(open=>!open)}
     onKeyDown={event=>{if(event.key==='ArrowDown'){event.preventDefault();setWorkspaceMenuOpen(true);}}}>
-    <Glyph name="lakeWorkspace" size={22} filled={workspace.active||workspaceMenuOpen}/>{workspace.unreadUpdate&&<span className="workspace-update-dot" aria-hidden="true"/>}
+    <Glyph name="lakeWorkspace" size={22} filled={!!workspaceView||workspaceMenuOpen}/>{workspace.unreadUpdate&&<span className="workspace-update-dot" aria-hidden="true"/>}
    </button>}
   </nav>
   {workspace&&workspaceMenuOpen&&<NavigationMenu id={`${id}-workspace-menu`} title="工作区" className="workspace-actions-menu"
    anchor={workspaceButton} placement="above" onClose={()=>setWorkspaceMenuOpen(false)} actions={[
-    {label:'项目',icon:'folder',current:workspace.active,run:workspace.onProjects},
-    {label:'设置',icon:'settings',description:workspace.modelConfigured?undefined:'待配置',run:workspace.onSettings},
-    {label:'检查更新',icon:'refresh',description:workspace.unreadUpdate?'新版本':undefined,run:workspace.onUpdates},
+    {label:'项目',icon:'folder',current:workspaceView==='workspace',run:workspace.onProjects},
+    {label:'设置',icon:'settings',current:workspaceView==='settings',description:workspace.modelConfigured?undefined:'待配置',run:workspace.onSettings},
+    {label:'检查更新',icon:'refresh',current:workspaceView==='updates',description:workspace.unreadUpdate?'新版本':undefined,run:workspace.onUpdates},
    ]}/>}
   <div className="sidebar-navigation-viewport">
    <div id={contentId} className="sidebar-navigation-content" inert={collapsed} aria-hidden={collapsed||undefined}>
@@ -74,7 +79,7 @@ export function SidebarWorkspaceNavigation({projectId,specialists,children,resou
      <SidebarResourceActions.Provider value={resourceActions}>
       <SidebarScrollArea>{children}</SidebarScrollArea>
      </SidebarResourceActions.Provider>
-    </section></>:!workspace?.active&&<SidebarScrollArea>{empty}</SidebarScrollArea>}
+    </section></>:!workspaceView&&<SidebarScrollArea>{empty}</SidebarScrollArea>}
    </div>
   </div>
  </div>;

@@ -1,5 +1,5 @@
 import type {Catalog, WorkSession} from "../../shared/contracts";
-import type {WorkspaceRoute} from "./workspaceRoute";
+import {isWorkspacePageView, type WorkspaceRoute} from "./workspaceRoute";
 
 type WorkspaceCatalog = Pick<Catalog, "projects" | "resources" | "sessions">;
 
@@ -29,7 +29,7 @@ export function initialWorkspaceSelection(catalog: WorkspaceCatalog, route: Work
   const sessionId = session?.id ?? null;
   return {projectId, route: {
     sessionId, resourceId: resource?.id ?? null,
-    ...(route.view==='workspace'?{view:'workspace' as const}:
+    ...(isWorkspacePageView(route.view)?{view:route.view}:
       route.view==='plans'&&sessionId===route.sessionId&&session&&isUserWorkspaceSession(session)&&!resource?{view:'plans' as const}:{}),
   }};
 }

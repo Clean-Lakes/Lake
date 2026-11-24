@@ -36,14 +36,21 @@ html.lake-windows-chrome .workspace.is-workspace-page .workspace-header.workspac
   width:100%;
   padding:16px var(--workspace-gutter);
 }
-.workspace-page-title-row h1 {
-  flex:1;
+.workspace-page-heading { flex:1; min-width:0; }
+.workspace-page-heading h1 {
   margin:0;
   font-size:clamp(21px, 3.15cqw, 26px);
   letter-spacing:-.025em;
   line-height:1.2;
+  overflow-wrap:anywhere;
 }
-.workspace-page-title-row h1:focus { outline:none; }
+.workspace-page-heading h1:focus { outline:none; }
+.workspace-page-heading p {
+  margin:6px 0 0;
+  color:var(--pilot-header-muted);
+  font-size:var(--font-size-process);
+  line-height:1.5;
+}
 .workspace-page-header-actions { display:flex; flex:none; align-items:center; gap:8px; }
 .workspace-search-trigger {
   width:36px;
@@ -53,7 +60,7 @@ html.lake-windows-chrome .workspace.is-workspace-page .workspace-header.workspac
   corner-shape:var(--corner-window);
   color:var(--pilot-header-muted);
 }
-.workspace-page .button {
+.workspace-page :where(.workspace-page-header-actions,.workspace-current-project) .button {
   min-height:36px;
   border-radius:var(--radius-settings-control);
   corner-shape:var(--corner-window);
@@ -317,7 +324,7 @@ html.lake-windows-chrome .workspace.is-workspace-page .workspace-header.workspac
   .workspace-page-title-row > .mobile-only { margin-inline-start:-6px; }
 }
 @media (pointer:coarse) {
-  .workspace-page .button,
+  .workspace-page :where(.workspace-page-header-actions,.workspace-current-project) .button,
   .workspace-page .workspace-text-button, .workspace-project-search > .icon-button,
   .workspace-search-trigger, .workspace-sidebar-mobile-actions > button { min-height:44px; }
   .workspace-project-search > .icon-button, .workspace-search-trigger,

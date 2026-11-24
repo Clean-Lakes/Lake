@@ -32,7 +32,7 @@ function Preview(){
    <SidebarWorkspaceNavigation projectId={current?.id} specialists={null} resourceCount={0} selectionId={current?.id??''} selectedPanel="specialists"
     header={<div className="workspace-sidebar-mobile-actions mobile-only"><button type="button" className="mobile-only icon-button" aria-label="关闭导航"
      onClick={()=>setNavigationOpen(false)}><Glyph name="close"/></button></div>}
-    workspace={{active:true,modelConfigured:true,unreadUpdate:false,onProjects:()=>setNavigationOpen(false),
+    workspace={{view:"workspace",modelConfigured:true,unreadUpdate:false,onProjects:()=>setNavigationOpen(false),
      onSettings:()=>setAction('设置'),onUpdates:()=>setAction('检查更新')}}>
     {null}
    </SidebarWorkspaceNavigation>

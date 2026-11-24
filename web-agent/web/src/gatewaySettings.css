@@ -1,6 +1,6 @@
 /* The shared settings shell owns dialog and header geometry for every tab. */
 .gateway-settings {display:grid;grid-template-columns:var(--settings-rail-width) minmax(0,1fr);flex:1;min-height:0;overflow:hidden;font-size:var(--font-size-ui)}
-.gateway-rail,.gateway-detail {min-width:0;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.gateway-rail,.gateway-detail {min-width:0;min-height:0;overflow:auto;overscroll-behavior:contain}
 .gateway-rail {padding:var(--settings-rail-padding);border-right:1px solid var(--border);background:var(--surface-muted)}
 .gateway-rail-heading,.gateway-section-heading,.gateway-history-actions,.gateway-detail-header,.gateway-detail-title,.gateway-detail-actions,.gateway-connection-footer,.gateway-manage-actions,.gateway-form-actions {display:flex;align-items:center;gap:10px}
 .gateway-rail-heading {justify-content:space-between;margin-bottom:12px;flex-wrap:wrap}

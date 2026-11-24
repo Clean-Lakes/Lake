@@ -8,6 +8,7 @@ import '../../src/styles.css';
 import '../../src/appSelect.css';
 import '../../src/providerIcon.css';
 import '../../src/extensionSettings.css';
+import '../../src/workspacePage.css';
 const params=new URLSearchParams(location.search);
 const dark=params.has('dark');
 document.documentElement.dataset.theme=dark?'dark':'light';
@@ -65,4 +66,4 @@ window.fetch=async(input,init)=>{
  }
  return new Response(JSON.stringify({error:'Fixture blocks unknown requests'}),{status:404,headers:{'Content-Type':'application/json'}});
 };
-createRoot(document.getElementById('root')!).render(<ModelSettings initialTab={params.get('tab')??'models'} watchdogEnabled projectId={projectId} projectName={projectName} onClose={()=>{}} onChanged={async()=>{}} sendShortcut="enter" onShortcutChange={()=>{}} ignoreProjectMemory={false} onIgnoreProjectMemoryChange={()=>{}}/>);
+createRoot(document.getElementById('root')!).render(<main className="workspace is-workspace-page" style={{height:'100dvh'}}><ModelSettings initialTab={params.get('tab')??'models'} watchdogEnabled projectId={projectId} projectName={projectName} onOpenNavigation={()=>{}} onChanged={async()=>{}} sendShortcut="enter" onShortcutChange={()=>{}} ignoreProjectMemory={false} onIgnoreProjectMemoryChange={()=>{}}/></main>);

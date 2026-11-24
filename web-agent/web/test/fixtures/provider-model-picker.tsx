@@ -9,7 +9,7 @@ const current=names.slice(0,2).map(name=>({id:name,name,enabled:true,supportsIma
 document.documentElement.dataset.theme=new URLSearchParams(location.search).has('dark')?'dark':'light';
 function Fixture(){
  const [added,setAdded]=useState<string[]>([]);
- return <div className="model-settings-dialog modal" style={{width:'min(720px,calc(100vw - 32px))',height:'auto',margin:'24px auto',padding:16}}>
+ return <div className="model-settings-page modal" style={{width:'min(720px,calc(100vw - 32px))',height:'auto',margin:'24px auto',padding:16}}>
   <ProviderModelPicker available={{models:names}} current={current} onAdd={setAdded} onCancel={()=>{}}/>
   <output id="picker-add-proof" hidden>{JSON.stringify(added)}</output>
  </div>;

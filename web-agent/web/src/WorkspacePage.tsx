@@ -5,6 +5,33 @@ import {Glyph} from './Icons';
 
 const projectDate = new Intl.DateTimeFormat('zh-CN', {year: 'numeric', month: 'long', day: 'numeric'});
 
+export function WorkspacePageHeader({id, title, description, actions, onOpenNavigation, onBack}: {
+  id: string;
+  title: ReactNode;
+  description?: string;
+  actions?: ReactNode;
+  onOpenNavigation: () => void;
+  onBack?: () => void;
+}) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  useLayoutEffect(() => heading.current?.focus({preventScroll: true}), [id]);
+  return <header className="workspace-header workspace-page-header">
+    <div className="workspace-page-title-row">
+      <button type="button" className="icon-button mobile-only" aria-label="打开项目导航" onClick={onOpenNavigation}>
+        <Glyph name="menu" size={21}/>
+      </button>
+      <div className="workspace-page-heading">
+        <h1 id={id} ref={heading} tabIndex={-1}>{title}</h1>
+        {description && <p>{description}</p>}
+      </div>
+      <div className="workspace-page-header-actions">
+        {onBack && <button type="button" className="icon-button mobile-only" aria-label="返回上一页" onClick={onBack}><Glyph name="previous" size={17}/></button>}
+        {actions}
+      </div>
+    </div>
+  </header>;
+}
+
 function CurrentProject({project, resourceCount, connected, onOpen, onDelete}: {
   project: Project;
   resourceCount: number;
@@ -52,7 +79,6 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
   onClearSelection: () => void;
   onDeleteSelected: () => void;
 }) {
-  const heading = useRef<HTMLHeadingElement>(null);
   const search = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const needle = query.trim().normalize('NFKC').toLowerCase();
@@ -64,23 +90,13 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
     for (const {projectId} of resources) counts.set(projectId, (counts.get(projectId) ?? 0) + 1);
     return counts;
   }, [resources]);
-  useLayoutEffect(() => heading.current?.focus({preventScroll: true}), []);
-
   return <div id="workspace-page" className="workspace-page" aria-labelledby="workspace-page-title">
-    <header className="workspace-header workspace-page-header">
-      <div className="workspace-page-title-row">
-        <button type="button" className="icon-button mobile-only" aria-label="打开项目导航" onClick={onOpenNavigation}>
-          <Glyph name="menu" size={21}/>
-        </button>
-        <h1 id="workspace-page-title" ref={heading} tabIndex={-1}>工作区</h1>
-        <div className="workspace-page-header-actions">
-          {navigationSearch}
-          <button type="button" className="button primary" disabled={!connected} onClick={onCreateProject}>
-            <Glyph name="plus" size={16}/>新建项目
-          </button>
-        </div>
-      </div>
-    </header>
+    <WorkspacePageHeader id="workspace-page-title" title="工作区" onOpenNavigation={onOpenNavigation} actions={<>
+      {navigationSearch}
+      <button type="button" className="button primary" disabled={!connected} onClick={onCreateProject}>
+        <Glyph name="plus" size={16}/>新建项目
+      </button>
+    </>}/>
     <div className="workspace-page-layout">
       {project && <CurrentProject project={project} resourceCount={resourceCounts.get(project.id) ?? 0}
         connected={connected && !bulkSelection} onOpen={onOpenProject} onDelete={() => onDeleteProject(project)}/>}
