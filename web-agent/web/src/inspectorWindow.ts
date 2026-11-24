@@ -56,7 +56,7 @@ export function useInspectorWindow(open:boolean){
    if(!active)return;
    const restore=retainConversation();
    if(!open&&nativeReveal.current){
-    // The pane is outside the restored frame. Remove it before releasing its transform.
+    // The pane is outside the restored frame. Remove it before releasing the frozen layout.
     flushSync(()=>setNativePresence(false));
     nativeReveal.current=false;
    }
@@ -112,7 +112,6 @@ export function useInspectorWindow(open:boolean){
     workspace.classList.add('inspector-window-pinned');
     nativeReveal.current=true;
     setNativePresence(true);
-    if(open)setReady(true);
     waitForViewport(plan.pinnedViewportWidth,()=>{
      window.dispatchEvent(new Event('lake-workbench-layout'));
      if(document.hidden){void run(false);return;}

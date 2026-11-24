@@ -7,7 +7,7 @@ import {replyElapsed} from './replyDurationState';
 import {turnStatus} from './turnStatus';
 import {quietCoordination} from './coordinationActivity';
 import {recoveredRouteFailures} from './routeDispatchPresentation';
-import {DisclosureSummary} from './DisclosureSummary';
+import {DeferredDisclosure} from './DisclosureSummary';
 export const ExecutionDetailsOpen=createContext(false);
 export const RoutingRecoveryContext=createContext<ReadonlySet<string>>(new Set());
 export function canonicalExecutionSelected(selection:InspectorSelection|null|undefined,sessionId:string,canonicalGoalId:string){
@@ -56,9 +56,9 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
  const records=<>{notice&&<p className="execution-detail-note">{notice}</p>}{details.length?details:<p className="inspector-empty">本轮尚无执行记录。</p>}</>;
  const overviewBody=showOverview&&showRecords&&inspector?.host&&createPortal(<>
   {pilotOverview}
-  {(details.length>0||notice)&&<details className="pilot-execution-records"><DisclosureSummary>完整执行记录</DisclosureSummary>
+  {(details.length>0||notice)&&<DeferredDisclosure className="pilot-execution-records" summary="完整执行记录">
    <ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{records}</div></ExecutionDetailsOpen.Provider>
-  </details>}
+  </DeferredDisclosure>}
  </>,inspector.host);
  const body=showOverview?overviewBody:canonicalGoalId?null:inspector&&sessionId?showRecords&&inspector.host&&createPortal(<ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{records}</div></ExecutionDetailsOpen.Provider>,inspector.host)
   :details.length>0&&<div id={id} className={`turn-execution-details${open?' is-open':''}`} aria-hidden={!open} inert={!open} role="region" aria-label="执行详细过程"><div className="turn-execution-content"><div className="turn-execution-body"><ExecutionDetailsOpen.Provider value={open}>{records}</ExecutionDetailsOpen.Provider></div></div></div>;

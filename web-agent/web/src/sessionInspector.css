@@ -297,5 +297,6 @@ html.lake-windows-chrome .session-inspector { padding-top:52px; }
  inset:0 auto 0 var(--inspector-main-width);
  width:var(--inspector-preferred-width,382px);
  z-index:26;
+ visibility:visible;
  animation:none;
 }
