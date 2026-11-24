@@ -344,7 +344,7 @@ html.lake-windows-chrome .session-inspector { padding-top:52px; }
 .header-inspector-toggle { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; margin-left:4px; padding:0; border:0; border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); color:var(--text-muted); background:transparent; cursor:pointer; }
 .header-inspector-toggle:hover { color:var(--foreground); background:var(--surface-hover); }
 .header-inspector-toggle:focus-visible { outline:2px solid var(--focus-outline); outline-offset:2px; }
-.workspace-header .inspector-chevron { transform:rotate(0deg); transform-origin:center; transition:transform var(--inspector-duration) var(--inspector-ease); }
+.workspace-header .inspector-chevron { display:inline-flex; flex:none; overflow:hidden; transform:rotate(0deg); transform-origin:center; transition:transform var(--inspector-duration) var(--inspector-ease); }
 .app-shell:is([data-inspector-window-open=true],:not([data-inspector-window-open]):has(.session-inspector.is-open:not(.is-waiting))) .workspace-header .inspector-chevron { transform:rotate(180deg); }
 .pilot-island[data-motion=paused] .pilot-ring-value { transition:none; }
 @media(prefers-reduced-motion:reduce) { .workspace-header .inspector-chevron { transition:none; } }
