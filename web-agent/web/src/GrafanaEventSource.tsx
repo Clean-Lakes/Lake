@@ -250,9 +250,13 @@ function ManualWebhookFields({source, token, disabled, onUpdate, onDismissToken,
 
 export function GrafanaEventSource({source, token, disabled, onUpdate, onDismissToken, onReceipt}: Props) {
   return <>
-    <section className="gateway-grafana-setup workspace-setting-card" aria-labelledby="gateway-webhook-title">
-      <h2 id="gateway-webhook-title" className="workspace-section-title">Webhook 配置</h2>
-      <ManualWebhookFields source={source} token={token} disabled={disabled} onUpdate={onUpdate} onDismissToken={onDismissToken}/>
+    <section className="gateway-section gateway-grafana-setup" aria-labelledby="gateway-webhook-title">
+      <div className="gateway-section-heading">
+        <h2 id="gateway-webhook-title" className="workspace-section-title">Webhook 配置</h2>
+      </div>
+      <div className="gateway-setting-group workspace-setting-card">
+        <ManualWebhookFields source={source} token={token} disabled={disabled} onUpdate={onUpdate} onDismissToken={onDismissToken}/>
+      </div>
     </section>
     <EventDeliveries sourceId={source.id} onReceipt={onReceipt}/>
   </>;

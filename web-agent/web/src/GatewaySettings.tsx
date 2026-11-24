@@ -232,99 +232,137 @@ export function GatewaySettings({actionsHost,onBusyChange,projectId,onTask}:{act
     </div>}
     <p className="gateway-feedback settings-note" role="status">{busy?'正在处理…':feedback}</p>
 
-    {creating?<form className="gateway-create workspace-setting-card" onSubmit={event=>{event.preventDefault();void create();}}>
-      <h2 className="workspace-section-title">新建连接</h2>
-      <label className="field-label">连接名称
-        <input ref={nameInput} value={name} onChange={event=>setName(event.target.value)} maxLength={120} autoComplete="off"
-          placeholder="例如：我的 Codex" disabled={!!busy}/>
-      </label>
-      <div className="gateway-create-fields">
-        <label className="field-label">所属项目
+    {creating?<section className="gateway-section" aria-labelledby="gateway-create-title">
+      <div className="gateway-section-heading">
+        <h2 id="gateway-create-title" className="workspace-section-title">新建连接</h2>
+      </div>
+      <form className="gateway-create gateway-setting-group workspace-setting-card" onSubmit={event=>{event.preventDefault();void create();}}>
+        <div className="workspace-setting-row">
+          <div className="workspace-setting-copy"><label htmlFor="gateway-new-name">连接名称</label></div>
+          <input id="gateway-new-name" className="gateway-name-input" ref={nameInput} value={name} onChange={event=>setName(event.target.value)}
+            maxLength={120} autoComplete="off" placeholder="我的 Codex" disabled={!!busy}/>
+        </div>
+        <div className="workspace-setting-row">
+          <div className="workspace-setting-copy">
+            <strong>所属项目</strong>
+            {!catalog?.projects.length&&<p className="settings-note">请先在工作区创建项目。</p>}
+          </div>
           <AppSelect label="所属项目" value={project} disabled={!!busy} onChange={event=>{setProject(event.target.value);setRoute('pilot');}}>
             {catalog?.projects.map(entry=><option key={entry.id} value={entry.id}>{entry.name}</option>)}
           </AppSelect>
-        </label>
-        <div className="field-label">处理方式{selectRouting(route,setRoute)}</div>
-      </div>
-      {!catalog?.projects.length&&<p className="settings-note">请先在工作区创建项目。</p>}
-      <div className="gateway-form-actions">
-        <button className="button secondary" type="button" disabled={!!busy} onClick={closeCreate}>取消</button>
-        <button className="button primary" type="submit" disabled={!!busy||!name.trim()||!project}>{busy==='create'?'创建中…':'创建连接'}</button>
-      </div>
-    </form>:current&&catalog?<section className="gateway-overview workspace-setting-card" aria-label="当前连接">
-      <header className="gateway-overview-header">
-        <span className="gateway-connection-icon"><Glyph name={source?'grafana':'plug'} size={20}/></span>
-        <div className="gateway-connection-identity">
-          {entries.length>1?<AppSelect className="gateway-connection-picker" label="切换连接" title={current.name}
-            value={selected} renderValue={current.name} disabled={!!busy} onChange={event=>selectConnection(event.target.value)}>
-            {entries.map(entry=><option key={entry.id} value={entry.id}>
-              {entry.name} · {'kind' in entry?'Grafana':'MCP'} · {catalog.projects.find(item=>item.id===entry.projectId)?.name??'原项目不可用'}
-            </option>)}
-          </AppSelect>:<h2 className="workspace-section-title">{current.name}</h2>}
-          <div className="gateway-connection-meta">
-            <span className="gateway-protocol">{source?'Grafana':'MCP'}</span>
-            <span className="gateway-project-name"><Glyph name="folder" size={14}/><span className="visually-hidden">所属项目 </span>{projectName}</span>
+        </div>
+        <div className="workspace-setting-row">
+          <div className="workspace-setting-copy"><strong>处理方式</strong></div>
+          {selectRouting(route,setRoute)}
+        </div>
+        <div className="workspace-setting-row gateway-form-actions">
+          <button className="button secondary" type="button" disabled={!!busy} onClick={closeCreate}>取消</button>
+          <button className="button primary" type="submit" disabled={!!busy||!name.trim()||!project}>{busy==='create'?'创建中…':'创建连接'}</button>
+        </div>
+      </form>
+    </section>:current&&catalog?<>
+      <section className="gateway-section" aria-labelledby="gateway-connection-title">
+        <div className="gateway-section-heading">
+          <h2 id="gateway-connection-title" className="workspace-section-title">连接设置</h2>
+        </div>
+        <div className="gateway-setting-group workspace-setting-card">
+          <div className="workspace-setting-row">
+            <div className="workspace-setting-copy">
+              <strong>当前连接</strong>
+              <p className="settings-note">
+                {source?'Grafana':'MCP'} · <span className="visually-hidden">所属项目 </span>{projectName}
+              </p>
+            </div>
+            {entries.length>1?<AppSelect label="切换连接" title={current.name}
+              value={selected} renderValue={current.name} disabled={!!busy} onChange={event=>selectConnection(event.target.value)}>
+              {entries.map(entry=><option key={entry.id} value={entry.id}>
+                {entry.name} · {'kind' in entry?'Grafana':'MCP'} · {catalog.projects.find(item=>item.id===entry.projectId)?.name??'原项目不可用'}
+              </option>)}
+            </AppSelect>:<span className="gateway-current-name">
+              <Glyph name={source?'grafana':'plug'} size={16}/>{current.name}
+            </span>}
           </div>
+          <div className="workspace-setting-row">
+            <div className="workspace-setting-copy">
+              <strong>启用接入</strong>
+              <p className="settings-note">{source?'接收来自 Grafana 的告警。':'接收来自此外部客户端的消息。'}</p>
+            </div>
+            <div className="gateway-connection-status">
+              <span>{current.enabled?'已启用':'已停用'}</span>
+              <button type="button" role="switch" aria-checked={current.enabled}
+                aria-label={source?`启用来源 ${current.name}`:`启用连接 ${current.name}`}
+                className={`provider-switch ${current.enabled?'on':''}`} disabled={!!busy}
+                onClick={()=>{if(source)void updateSource({expectedRevision:source.revision,enabled:!source.enabled});else if(connection)void update({enabled:!connection.enabled});}}><span/></button>
+            </div>
+          </div>
+          {connection&&!source&&<div className="workspace-setting-row gateway-routing">
+            <div className="workspace-setting-copy">
+              <strong>处理方式</strong>
+              <p className="settings-note">{connection.routing.mode==='pilot'?'Pilot 根据消息内容回复、追问或分派任务。':
+                available.some(role=>role.roleId===currentRouting)?'将新消息交给所选专员。':'原专员不可用，请选择新的处理方式。'}</p>
+            </div>
+            {selectRouting(currentRouting,value=>void update({routing:routing(value)}))}
+          </div>}
         </div>
-        <div className="gateway-connection-status">
-          <button type="button" role="switch" aria-checked={current.enabled}
-            aria-label={source?`启用来源 ${current.name}`:`启用连接 ${current.name}`}
-            className={`provider-switch ${current.enabled?'on':''}`} disabled={!!busy}
-            onClick={()=>{if(source)void updateSource({expectedRevision:source.revision,enabled:!source.enabled});else if(connection)void update({enabled:!connection.enabled});}}><span/></button>
-          <span>{current.enabled?'已启用':'已停用'}</span>
-        </div>
-      </header>
-      {connection&&!source&&<>
-        <div className="gateway-quick-actions">
-          <button className="button secondary" type="button" disabled={!!busy}
-            onClick={()=>void copy(gatewayClientConfig(catalog.command,connection),connection.id)}><Glyph name="copy" size={15}/>复制接入配置</button>
-          <button className="button secondary" type="button" disabled={!!busy||!connection.enabled} onClick={()=>{
-            void run('test',()=>api.testGatewayConnection(connection.id),'').then(result=>{
-              if(result&&mounted.current&&selectedRef.current===connection.id)setFeedback(result.message);
-            });
-          }}><Glyph name={busy==='test'?'loader':'plug'} size={15}/>测试接入</button>
-          <button ref={manageButton} className="button secondary gateway-manage-button" type="button" disabled={!!busy}
+      </section>
+      {connection&&!source&&<section className="gateway-section" aria-labelledby="gateway-config-title">
+        <div className="gateway-section-heading">
+          <h2 id="gateway-config-title" className="workspace-section-title">接入配置</h2>
+          <button ref={manageButton} className="provider-text-button" type="button" disabled={!!busy}
             aria-expanded={!!management} aria-controls={management?'gateway-management':undefined}
             onClick={()=>setManagement(management?null:'actions')}><Glyph name="more" size={17}/>管理连接</button>
         </div>
-        {management&&<section id="gateway-management" className="gateway-management" aria-label="连接管理">
-          <div className="gateway-manage-actions">
-            <button className="provider-text-button" type="button" disabled={!!busy} aria-expanded={management==='config'}
-              onClick={()=>setManagement(management==='config'?'actions':'config')}><Glyph name="code" size={15}/>查看接入配置</button>
-            <button className="provider-text-button" type="button" disabled={!!busy} aria-expanded={management==='rename'}
-              onClick={()=>{setNewName(connection.name);setManagement('rename');}}><Glyph name="edit" size={14}/>重命名</button>
-            <button className="provider-text-button danger-text" type="button" disabled={!!busy} aria-expanded={management==='delete'}
-              onClick={()=>setManagement('delete')}><Glyph name="trash" size={14}/>删除连接</button>
-          </div>
-          {management==='config'&&<pre className="gateway-config" tabIndex={0} aria-label="接入配置 JSON">{gatewayClientConfig(catalog.command,connection)}</pre>}
-          {management==='rename'&&<form className="gateway-management-form" onSubmit={event=>{
-            event.preventDefault();void update({name:newName.trim()})?.then(result=>{if(result)setManagement('actions');});
-          }}>
-            <label className="field-label">连接名称<input ref={nameInput} value={newName} onChange={event=>setNewName(event.target.value)} maxLength={120} disabled={!!busy}/></label>
-            <div className="gateway-form-actions">
-              <button className="button secondary" type="button" disabled={!!busy} onClick={closeManagement}>取消</button>
-              <button className="button primary" type="submit" disabled={!!busy||!newName.trim()||newName.trim()===connection.name}>保存名称</button>
+        <div className="gateway-setting-group workspace-setting-card">
+          <div className="workspace-setting-row">
+            <div className="workspace-setting-copy">
+              <strong>客户端配置</strong>
+              <p className="settings-note">将配置加入外部客户端的 MCP 设置。</p>
             </div>
-          </form>}
-          {management==='delete'&&<div className="gateway-management-form" role="group" aria-label="确认删除连接">
-            <p>删除「{connection.name}」后将立即拒绝新接入，原消息及任务记录保留。</p>
-            <div className="gateway-form-actions">
-              <button type="button" autoFocus className="button secondary" disabled={!!busy} onClick={closeManagement}>取消</button>
-              <button type="button" className="button secondary danger-text" disabled={!!busy}
-                onClick={()=>void run('delete',()=>api.deleteGatewayConnection(connection.id),'连接已删除，原任务记录保留')}>确认删除</button>
-            </div>
-          </div>}
-        </section>}
-        <div className="gateway-routing workspace-setting-row">
-          <div className="workspace-setting-copy">
-            <strong>处理方式</strong>
-            <p className="settings-note">{connection.routing.mode==='pilot'?'Pilot 根据消息内容回复、追问或分派任务。':
-              available.some(role=>role.roleId===currentRouting)?'将新消息交给所选专员。':'原专员不可用，请选择新的处理方式。'}</p>
+            <button className="button secondary" type="button" disabled={!!busy}
+              onClick={()=>void copy(gatewayClientConfig(catalog.command,connection),connection.id)}><Glyph name="copy" size={15}/>复制接入配置</button>
           </div>
-          {selectRouting(currentRouting,value=>void update({routing:routing(value)}))}
+          <div className="workspace-setting-row">
+            <div className="workspace-setting-copy">
+              <strong>连通性检查</strong>
+              <p className="settings-note">检查当前连接是否可用。</p>
+            </div>
+            <button className="button secondary" type="button" disabled={!!busy||!connection.enabled} onClick={()=>{
+              void run('test',()=>api.testGatewayConnection(connection.id),'').then(result=>{
+                if(result&&mounted.current&&selectedRef.current===connection.id)setFeedback(result.message);
+              });
+            }}><Glyph name={busy==='test'?'loader':'plug'} size={15}/>测试接入</button>
+          </div>
+          {management&&<section id="gateway-management" className="gateway-management" aria-label="连接管理">
+            <div className="gateway-manage-actions">
+              <button className="provider-text-button" type="button" disabled={!!busy} aria-expanded={management==='config'}
+                onClick={()=>setManagement(management==='config'?'actions':'config')}><Glyph name="code" size={15}/>查看接入配置</button>
+              <button className="provider-text-button" type="button" disabled={!!busy} aria-expanded={management==='rename'}
+                onClick={()=>{setNewName(connection.name);setManagement('rename');}}><Glyph name="edit" size={14}/>重命名</button>
+              <button className="provider-text-button danger-text" type="button" disabled={!!busy} aria-expanded={management==='delete'}
+                onClick={()=>setManagement('delete')}><Glyph name="trash" size={14}/>删除连接</button>
+            </div>
+            {management==='config'&&<pre className="gateway-config" tabIndex={0} aria-label="接入配置 JSON">{gatewayClientConfig(catalog.command,connection)}</pre>}
+            {management==='rename'&&<form className="gateway-management-form" onSubmit={event=>{
+              event.preventDefault();void update({name:newName.trim()})?.then(result=>{if(result)setManagement('actions');});
+            }}>
+              <label className="field-label">连接名称<input ref={nameInput} value={newName} onChange={event=>setNewName(event.target.value)} maxLength={120} disabled={!!busy}/></label>
+              <div className="gateway-form-actions">
+                <button className="button secondary" type="button" disabled={!!busy} onClick={closeManagement}>取消</button>
+                <button className="button primary" type="submit" disabled={!!busy||!newName.trim()||newName.trim()===connection.name}>保存名称</button>
+              </div>
+            </form>}
+            {management==='delete'&&<div className="gateway-management-form" role="group" aria-label="确认删除连接">
+              <p>删除「{connection.name}」后将立即拒绝新接入，原消息及任务记录保留。</p>
+              <div className="gateway-form-actions">
+                <button type="button" autoFocus className="button secondary" disabled={!!busy} onClick={closeManagement}>取消</button>
+                <button type="button" className="button secondary danger-text" disabled={!!busy}
+                  onClick={()=>void run('delete',()=>api.deleteGatewayConnection(connection.id),'连接已删除，原任务记录保留')}>确认删除</button>
+              </div>
+            </div>}
+          </section>}
         </div>
-      </>}
-    </section>:!error&&<section className="gateway-empty-state workspace-setting-card" aria-labelledby="gateway-list-title">
+      </section>}
+    </>:!error&&<section className="gateway-empty-state workspace-setting-card" aria-labelledby="gateway-list-title">
       <Glyph name="plug" size={19}/>
       <div><h2 id="gateway-list-title" className="workspace-section-title">我的连接</h2>
         {loading?<p className="settings-note" role="status">正在读取接入渠道…</p>:
