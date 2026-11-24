@@ -148,10 +148,9 @@ function EventDeliveries({sourceId, onReceipt, timeline = false, waitingForSourc
     };
   }, [load, sourceId]);
 
-  const Heading = timeline ? 'h2' : 'h4';
   return <section className={timeline ? 'grafana-timeline' : 'gateway-messages'} aria-labelledby={headingId}>
     <div className="gateway-section-heading">
-      <Heading id={headingId}>接收记录</Heading>
+      <h2 id={headingId} className={timeline?undefined:'workspace-section-title'}>接收记录</h2>
       <button className="provider-text-button" type="button" disabled={!sourceId || loading} onClick={() => void load()}>
         <Glyph name="refresh" size={14}/>刷新
       </button>
@@ -160,10 +159,9 @@ function EventDeliveries({sourceId, onReceipt, timeline = false, waitingForSourc
     {(loading || waitingForSource) && <p className="settings-note" role="status">正在读取投递记录…</p>}
     {!loading && !waitingForSource && !error && !page.deliveries.length && (timeline
       ? <p className="settings-note">暂无接收记录。</p>
-      : <div className="gateway-empty">
+      : <div className="gateway-empty gateway-empty-state workspace-setting-card">
       <Glyph name="alert" size={22}/>
-      <h4>还没有收到告警</h4>
-      <p>在 Grafana 的接入点点击 Test 后，投递会显示在这里。</p>
+      <div><h3>还没有收到告警</h3><p>在 Grafana 的接入点点击 Test 后，投递会显示在这里。</p></div>
     </div>)}
     {sourceId && timeline && [...deliveryGroups(page.deliveries)].map(([day, group]) => <div className="grafana-timeline-group" key={day}>
       <h3>{group.label}</h3>
@@ -179,7 +177,6 @@ function EventDeliveries({sourceId, onReceipt, timeline = false, waitingForSourc
 
 type Props = {
   source: LakeEventSource;
-  projectName?: string;
   token?: string;
   disabled: boolean;
   onUpdate: (value: LakeEventSourceUpdate) => void;
@@ -251,25 +248,12 @@ function ManualWebhookFields({source, token, disabled, onUpdate, onDismissToken,
     </div>;
 }
 
-export function GrafanaEventSource({source, projectName, token, disabled, onUpdate, onDismissToken, onReceipt}: Props) {
+export function GrafanaEventSource({source, token, disabled, onUpdate, onDismissToken, onReceipt}: Props) {
   return <>
-    <header className="gateway-detail-header">
-      <div className="gateway-detail-title">
-        {projectName ? <>
-          <span className="gateway-connection-icon"><Glyph name="grafana" size={18}/></span>
-          <h3>{source.name}</h3>
-          <span className="gateway-protocol">Grafana</span>
-        </> : <h2>Grafana Webhook</h2>}
-      </div>
-      <div className="gateway-detail-actions">
-        <button type="button" role="switch" aria-checked={source.enabled} aria-label={`启用来源 ${source.name}`}
-          className={`provider-switch ${source.enabled ? 'on' : ''}`} disabled={disabled}
-          onClick={() => onUpdate({expectedRevision: source.revision, enabled: !source.enabled})}><span/></button>
-        <span>{source.enabled ? '已启用' : '已停用'}</span>
-      </div>
-    </header>
-    {projectName && <p className="settings-note gateway-detail-note">{projectName} · 接收 Grafana 告警</p>}
-    <ManualWebhookFields source={source} token={token} disabled={disabled} onUpdate={onUpdate} onDismissToken={onDismissToken}/>
+    <section className="gateway-grafana-setup workspace-setting-card" aria-labelledby="gateway-webhook-title">
+      <h2 id="gateway-webhook-title" className="workspace-section-title">Webhook 配置</h2>
+      <ManualWebhookFields source={source} token={token} disabled={disabled} onUpdate={onUpdate} onDismissToken={onDismissToken}/>
+    </section>
     <EventDeliveries sourceId={source.id} onReceipt={onReceipt}/>
   </>;
 }
