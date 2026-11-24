@@ -7,6 +7,7 @@ import type {
 import { api, readableError } from "./api";
 import { AppSelect } from "./AppSelect";
 import { Glyph } from "./Icons";
+import { WorkspaceSettingSection } from "./WorkspacePage";
 
 type Props = {
   projectId?: string;
@@ -142,32 +143,56 @@ export function NativeMemorySettings({
       aria-labelledby="memory-settings-tab"
       className="memory-settings"
     >
-      <label className="field-label">
-        记忆范围
-        <AppSelect
-          label="记忆范围"
-          value={scopeKey}
-          disabled={busy || !scopes.length}
-          onChange={(event) => setScopeKey(event.target.value)}
-        >
-          {scopes.map((scope) => (
-            <option key={scope.key} value={scope.key}>
-              {scope.kind === "user"
-                ? "所有项目的偏好"
-                : scope.kind === "project"
-                  ? `当前项目 · ${projectName || scope.name}`
-                  : `专员 · ${scope.name}`}
-            </option>
-          ))}
-        </AppSelect>
-      </label>
-      <p className="memory-scope-note">
-        {scope?.kind === "user"
-          ? "这里保存你明确允许跨项目使用的偏好，供 Pilot 使用。项目对话不会自动共享到这里。"
-          : scope?.kind === "role"
-            ? "这位专员的知识可跨任务保留。临时子智能体的有效发现由父任务汇合后积累，其他专员不会自动读取。"
-            : "项目共享知识由 Pilot 和本项目专员按需读取。专员各自的经验保存在其专员范围。"}
-      </p>
+      <WorkspaceSettingSection id="memory-scope-title" title="记忆设置">
+        <div className="workspace-setting-card">
+          <div className="workspace-setting-row">
+            <div className="workspace-setting-copy">
+              <strong>记忆范围</strong>
+              <p className="settings-note">
+                {scope?.kind === "user"
+                  ? "这里保存你明确允许跨项目使用的偏好，供 Pilot 使用。项目对话不会自动共享到这里。"
+                  : scope?.kind === "role"
+                    ? "这位专员的知识可跨任务保留。临时子智能体的有效发现由父任务汇合后积累，其他专员不会自动读取。"
+                    : "项目共享知识由 Pilot 和本项目专员按需读取。专员各自的经验保存在其专员范围。"}
+              </p>
+            </div>
+            <AppSelect label="记忆范围" value={scopeKey} disabled={busy || !scopes.length} onChange={(event) => setScopeKey(event.target.value)}>
+              {scopes.map((scope) => (
+                <option key={scope.key} value={scope.key}>
+                  {scope.kind === "user" ? "所有项目的偏好" : scope.kind === "project" ? `当前项目 · ${projectName || scope.name}` : `专员 · ${scope.name}`}
+                </option>
+              ))}
+            </AppSelect>
+          </div>
+          {view && scope?.kind !== "user" && (
+            <label className="memory-control workspace-setting-row">
+              <span className="workspace-setting-copy">
+                <strong>自动积累知识</strong>
+                <span className="settings-note">从开启后的新对话、有验收证据的任务及已确认的只读失败中提取可复用知识。</span>
+              </span>
+              <input className="provider-switch" aria-label="自动积累知识" type="checkbox" role="switch"
+                disabled={disabled} checked={view.settings.extractionEnabled}
+                onChange={(event) => void run(() => settings(view.settings.useEnabled, event.target.checked))}/>
+            </label>
+          )}
+          {view && (
+            <label className="memory-control workspace-setting-row">
+              <span className="workspace-setting-copy">
+                <strong>回答时使用记忆</strong>
+                <span className="settings-note">按当前项目和专员范围读取相关内容。</span>
+              </span>
+              <input className="provider-switch" aria-label="回答时使用记忆" type="checkbox" role="switch"
+                disabled={disabled} checked={view.settings.useEnabled}
+                onChange={(event) => void run(() => settings(event.target.checked, view.settings.extractionEnabled))}/>
+            </label>
+          )}
+          {view && <p className="memory-control-hint settings-note">
+            {scope?.kind === "user"
+              ? "这里只保存你明确提交的偏好。"
+              : "当前项目及其专员共用这组开关，各自的知识内容仍独立。开启积累后可能产生额外模型请求和 Token 用量。"}
+          </p>}
+        </div>
+      </WorkspaceSettingSection>
       {error && (
         <p className="form-error" role="alert">
           {error}
@@ -182,58 +207,7 @@ export function NativeMemorySettings({
         <>
           {view.search?.engine==='claude-mem-sqlite'&&<p className="settings-note" role="status">已接入 Claude-Mem 本地检索。</p>}
           {(view.search?.error||!!view.search?.pendingDeletions)&&<p className="settings-note" role="status">{view.search?.error??'记忆已停止使用，本地检索副本尚待清理；服务恢复后会继续清理。'}</p>}
-          <section className="memory-controls" aria-label="记忆开关">
-            {scope?.kind !== "user" && (
-              <label className="memory-control">
-                <span>
-                  <strong>自动积累知识</strong>
-                  <span>
-                    从开启后的新对话、有验收证据的任务及已确认的只读失败中提取可复用知识。
-                  </span>
-                </span>
-                <input
-                  aria-label="自动积累知识"
-                  type="checkbox"
-                  disabled={disabled}
-                  checked={view.settings.extractionEnabled}
-                  onChange={(event) =>
-                    void run(() =>
-                      settings(view.settings.useEnabled, event.target.checked),
-                    )
-                  }
-                />
-              </label>
-            )}
-            <label className="memory-control">
-              <span>
-                <strong>回答时使用记忆</strong>
-                <span>按当前项目和专员范围读取相关内容。</span>
-              </span>
-              <input
-                aria-label="回答时使用记忆"
-                type="checkbox"
-                disabled={disabled}
-                checked={view.settings.useEnabled}
-                onChange={(event) =>
-                  void run(() =>
-                    settings(
-                      event.target.checked,
-                      view.settings.extractionEnabled,
-                    ),
-                  )
-                }
-              />
-            </label>
-            <p className="memory-control-hint">
-              {scope?.kind === "user"
-                ? "这里只保存你明确提交的偏好。"
-                : "当前项目及其专员共用这组开关，各自的知识内容仍独立。开启积累后可能产生额外模型请求和 Token 用量。"}
-            </p>
-          </section>
-          <section aria-label="已保存的知识">
-            <header className="memory-section-header">
-              <h4>已保存的知识</h4>
-              <div className="memory-toolbar">
+          <WorkspaceSettingSection id="memory-knowledge-title" title="已保存的知识" actions={<>
                 <button
                   type="button"
                   className="memory-text-button"
@@ -256,8 +230,8 @@ export function NativeMemorySettings({
                 >
                   <Glyph name="refresh" size={15} />
                 </button>
-              </div>
-            </header>
+          </>}>
+            <div className="workspace-setting-card">
             {!view.items.length && !loading && (
               <p className="memory-empty">
                 还没有保存知识。
@@ -329,10 +303,11 @@ export function NativeMemorySettings({
                 </div>
               </article>
             ))}
-          </section>
+            </div>
+          </WorkspaceSettingSection>
           {editing && (
             <form
-              className="memory-editor"
+              className="memory-editor workspace-setting-card"
               aria-label={editing.id ? "更正记忆" : "保存记忆"}
               onKeyDown={(event) => {
                 if (event.key === "Escape" && !busy) {

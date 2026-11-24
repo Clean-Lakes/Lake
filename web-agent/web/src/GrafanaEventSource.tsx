@@ -3,6 +3,7 @@ import type {GrafanaDelivery, GrafanaDeliveryDetail, GrafanaDeliveryPage, LakeEv
 import {api, readableError} from './api';
 import {DisclosureSummary} from './DisclosureSummary';
 import {Glyph} from './Icons';
+import {WorkspaceSettingSection} from './WorkspacePage';
 
 function readableTime(value: string) {
   return new Date(value).toLocaleString('zh-CN', {
@@ -148,8 +149,8 @@ function EventDeliveries({sourceId, onReceipt, timeline = false, waitingForSourc
     };
   }, [load, sourceId]);
 
-  return <section className={timeline ? 'grafana-timeline' : 'gateway-messages'} aria-labelledby={headingId}>
-    <div className="gateway-section-heading">
+  return <section className={timeline ? 'grafana-timeline' : 'gateway-messages workspace-setting-section'} aria-labelledby={headingId}>
+    <div className={timeline ? 'gateway-section-heading' : 'workspace-setting-heading'}>
       <h2 id={headingId} className={timeline?undefined:'workspace-section-title'}>接收记录</h2>
       <button className="provider-text-button" type="button" disabled={!sourceId || loading} onClick={() => void load()}>
         <Glyph name="refresh" size={14}/>刷新
@@ -250,14 +251,11 @@ function ManualWebhookFields({source, token, disabled, onUpdate, onDismissToken,
 
 export function GrafanaEventSource({source, token, disabled, onUpdate, onDismissToken, onReceipt}: Props) {
   return <>
-    <section className="gateway-section gateway-grafana-setup" aria-labelledby="gateway-webhook-title">
-      <div className="gateway-section-heading">
-        <h2 id="gateway-webhook-title" className="workspace-section-title">Webhook 配置</h2>
-      </div>
-      <div className="gateway-setting-group workspace-setting-card">
+    <WorkspaceSettingSection id="gateway-webhook-title" title="Webhook 配置">
+      <div className="gateway-grafana-setup workspace-setting-card">
         <ManualWebhookFields source={source} token={token} disabled={disabled} onUpdate={onUpdate} onDismissToken={onDismissToken}/>
       </div>
-    </section>
+    </WorkspaceSettingSection>
     <EventDeliveries sourceId={source.id} onReceipt={onReceipt}/>
   </>;
 }

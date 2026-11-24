@@ -1,8 +1,5 @@
 /* The console supplies the page header and reading width. */
 .gateway-settings {
-  --gateway-group-fill:var(--surface);
-  --gateway-group-line:color-mix(in srgb,var(--border) 82%,var(--surface));
-  --gateway-group-shadow:0 1px 3px rgb(0 0 0 / 5%);
   flex:1;
   min-height:0;
   overflow:auto;
@@ -10,45 +7,12 @@
   padding:var(--settings-pane-padding);
   font-size:var(--font-size-ui);
 }
-[data-theme="dark"] .gateway-settings {
-  --gateway-group-fill:color-mix(in srgb,var(--surface-muted) 76%,var(--surface));
-  --gateway-group-shadow:0 1px 3px rgb(0 0 0 / 16%);
-}
-.gateway-section + .gateway-section,.gateway-settings > .gateway-messages {
-  margin-block-start:var(--workspace-section-gap);
-}
 .gateway-section-heading {
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:12px;
   margin-block-end:12px;
-}
-.gateway-settings .gateway-section-heading {
-  padding-inline:var(--workspace-card-inset);
-  margin-block-end:10px;
-}
-.gateway-section-heading .workspace-section-title {margin:0}
-.gateway-settings :is(.gateway-setting-group,.gateway-empty-state) {
-  border-color:var(--gateway-group-line);
-  background:var(--gateway-group-fill);
-  box-shadow:var(--gateway-group-shadow);
-}
-.gateway-setting-group > .workspace-setting-row {
-  gap:9px 18px;
-  padding-block:12px;
-}
-.gateway-setting-group > .workspace-setting-row + .workspace-setting-row {
-  border-block-start-color:var(--gateway-group-line);
-}
-.gateway-setting-group .workspace-setting-copy :is(strong,label) {
-  font-weight:var(--font-weight-medium);
-}
-.gateway-setting-group > .workspace-setting-row > :is(.app-select,.gateway-name-input) {
-  flex:0 0 clamp(160px,38%,232px);
-  width:auto;
-  min-width:0;
-  margin:0;
 }
 .gateway-current-name,.gateway-connection-status {
   display:flex;
@@ -67,7 +31,7 @@
   font-size:var(--font-size-toolbar);
 }
 .gateway-connection-status > button {flex:none}
-.gateway-setting-group > .workspace-setting-row:not(.gateway-form-actions) > .button {margin-inline-start:auto}
+.gateway-settings .workspace-setting-row:not(.gateway-form-actions) > .button {margin-inline-start:auto}
 .gateway-name-input {
   height:36px;
   padding:0 11px;
@@ -99,14 +63,14 @@
 .gateway-settings .field-label {min-width:0;margin:0;font-size:var(--font-size-ui)}
 .gateway-management {
   padding:12px var(--workspace-card-inset);
-  border-block-start:1px solid var(--gateway-group-line);
+  border-block-start:1px solid var(--workspace-card-line);
 }
 .gateway-manage-actions {gap:6px 18px}
 .gateway-management-form {display:grid;gap:12px;margin-top:12px}
 .gateway-management-form p {margin:0;overflow-wrap:anywhere}
 .gateway-history-actions {display:flex;justify-content:flex-end;flex-wrap:wrap;gap:7px 14px}
 .gateway-settings .provider-text-button {display:inline-flex;align-items:center;gap:5px;line-height:1.5}
-.gateway-settings .gateway-section-heading .provider-text-button[aria-expanded="true"] {color:var(--foreground)}
+.gateway-settings .workspace-setting-heading .provider-text-button[aria-expanded="true"] {color:var(--foreground)}
 .gateway-receipt {
   margin:4px 0 0;
   color:var(--text-secondary);
@@ -179,7 +143,6 @@
   .gateway-linked-tasks li>.provider-text-button {justify-self:end}
 }
 @container workspace-page (max-width:490px) {
-  .gateway-setting-group > .workspace-setting-row > :is(.app-select,.gateway-name-input) {flex-basis:100%}
   .gateway-section-heading {gap:7px;flex-wrap:wrap}
   .gateway-linked-tasks {margin-left:7px;padding-left:12px}
   .gateway-linked-tasks li {grid-template-columns:16px minmax(0,1fr);grid-template-areas:'icon title' '. owner' '. progress' '. description' '. action'}

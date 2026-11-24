@@ -6,6 +6,7 @@ import {AppSelect} from './AppSelect';
 import {DisclosureSummary} from './DisclosureSummary';
 import {GrafanaEventSource} from './GrafanaEventSource';
 import {Glyph} from './Icons';
+import {WorkspaceSettingSection} from './WorkspacePage';
 
 export type GatewayTaskTarget = {projectId:string;sessionId:string;taskId:string;roleId:string};
 export function gatewayTaskTarget(message:GatewayMessage,task:GatewayInstructionTask):GatewayTaskTarget|undefined {
@@ -90,8 +91,8 @@ function GatewayMessages({connection,onTask,disabled,onReceipt}:{connection:Gate
   },[connection.id]);
   useEffect(()=>{alive.current=true;void load();const timer=window.setInterval(()=>{if(!document.hidden)void load();},3000);return()=>{alive.current=false;controller.current?.abort();window.clearInterval(timer);};},[load]);
   const toggleHistory=()=>{setExpanded(value=>!value);if(expanded){pages.current=1;controller.current?.abort();void load();}};
-  return <section className="gateway-messages" aria-labelledby="gateway-messages-title">
-    <div className="gateway-section-heading">
+  return <section className="gateway-messages workspace-setting-section" aria-labelledby="gateway-messages-title">
+    <div className="workspace-setting-heading">
       <div>
         <h2 id="gateway-messages-title" className="workspace-section-title">消息与任务</h2>
         {connection.lastReceivedAt&&<p className="gateway-receipt">最近收件 <time dateTime={connection.lastReceivedAt}>{time(connection.lastReceivedAt)}</time></p>}
@@ -232,14 +233,11 @@ export function GatewaySettings({actionsHost,onBusyChange,projectId,onTask}:{act
     </div>}
     <p className="gateway-feedback settings-note" role="status">{busy?'正在处理…':feedback}</p>
 
-    {creating?<section className="gateway-section" aria-labelledby="gateway-create-title">
-      <div className="gateway-section-heading">
-        <h2 id="gateway-create-title" className="workspace-section-title">新建连接</h2>
-      </div>
-      <form className="gateway-create gateway-setting-group workspace-setting-card" onSubmit={event=>{event.preventDefault();void create();}}>
+    {creating?<WorkspaceSettingSection id="gateway-create-title" title="新建连接">
+      <form className="gateway-create workspace-setting-card" onSubmit={event=>{event.preventDefault();void create();}}>
         <div className="workspace-setting-row">
           <div className="workspace-setting-copy"><label htmlFor="gateway-new-name">连接名称</label></div>
-          <input id="gateway-new-name" className="gateway-name-input" ref={nameInput} value={name} onChange={event=>setName(event.target.value)}
+          <input id="gateway-new-name" className="gateway-name-input workspace-setting-field" ref={nameInput} value={name} onChange={event=>setName(event.target.value)}
             maxLength={120} autoComplete="off" placeholder="我的 Codex" disabled={!!busy}/>
         </div>
         <div className="workspace-setting-row">
@@ -260,12 +258,9 @@ export function GatewaySettings({actionsHost,onBusyChange,projectId,onTask}:{act
           <button className="button primary" type="submit" disabled={!!busy||!name.trim()||!project}>{busy==='create'?'创建中…':'创建连接'}</button>
         </div>
       </form>
-    </section>:current&&catalog?<>
-      <section className="gateway-section" aria-labelledby="gateway-connection-title">
-        <div className="gateway-section-heading">
-          <h2 id="gateway-connection-title" className="workspace-section-title">连接设置</h2>
-        </div>
-        <div className="gateway-setting-group workspace-setting-card">
+    </WorkspaceSettingSection>:current&&catalog?<>
+      <WorkspaceSettingSection id="gateway-connection-title" title="连接设置">
+        <div className="workspace-setting-card">
           <div className="workspace-setting-row">
             <div className="workspace-setting-copy">
               <strong>当前连接</strong>
@@ -304,15 +299,13 @@ export function GatewaySettings({actionsHost,onBusyChange,projectId,onTask}:{act
             {selectRouting(currentRouting,value=>void update({routing:routing(value)}))}
           </div>}
         </div>
-      </section>
-      {connection&&!source&&<section className="gateway-section" aria-labelledby="gateway-config-title">
-        <div className="gateway-section-heading">
-          <h2 id="gateway-config-title" className="workspace-section-title">接入配置</h2>
+      </WorkspaceSettingSection>
+      {connection&&!source&&<WorkspaceSettingSection id="gateway-config-title" title="接入配置" actions={
           <button ref={manageButton} className="provider-text-button" type="button" disabled={!!busy}
             aria-expanded={!!management} aria-controls={management?'gateway-management':undefined}
             onClick={()=>setManagement(management?null:'actions')}><Glyph name="more" size={17}/>管理连接</button>
-        </div>
-        <div className="gateway-setting-group workspace-setting-card">
+      }>
+        <div className="workspace-setting-card">
           <div className="workspace-setting-row">
             <div className="workspace-setting-copy">
               <strong>客户端配置</strong>
@@ -361,7 +354,7 @@ export function GatewaySettings({actionsHost,onBusyChange,projectId,onTask}:{act
             </div>}
           </section>}
         </div>
-      </section>}
+      </WorkspaceSettingSection>}
     </>:!error&&<section className="gateway-empty-state workspace-setting-card" aria-labelledby="gateway-list-title">
       <Glyph name="plug" size={19}/>
       <div><h2 id="gateway-list-title" className="workspace-section-title">我的连接</h2>

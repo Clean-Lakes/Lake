@@ -3,18 +3,28 @@ import {Glyph} from "./Icons";
 import {useEffect,useRef,useState} from "react";
 import type {AvailableModels,ProviderModel} from "../../shared/contracts";
 import {customProviderPreset,providerPresets,type ProviderPreset} from "./providerPresets";
+import {WorkspaceSettingSection} from "./WorkspacePage";
 
 export function ProviderQuickSetup({onSelect}: {onSelect:(preset:ProviderPreset)=>void}) {
   const [query,setQuery]=useState("");
   const presets=providerPresets.filter(preset => `${preset.name} ${preset.subtitle} ${preset.id}`.toLowerCase().includes(query.trim().toLowerCase()));
-  return <div className="provider-quick-setup">
-    <div className="provider-setup-heading"><h3>添加模型供应商</h3><p>选择厂商后填写 API Key，再获取并勾选需要的模型。</p></div>
-    <input aria-label="搜索模型厂商" placeholder="搜索厂商，例如 DeepSeek、Kimi…" value={query} onChange={event => setQuery(event.target.value)}/>
-    <div className="provider-preset-grid" aria-label="快速接入厂商">{presets.map(preset => <button type="button" className="provider-preset-card" key={preset.id} onClick={() => onSelect(preset)}><span className="provider-preset-mark" aria-hidden="true"><ProviderIcon brand={preset.id}/></span><span><strong>{preset.name}</strong><small>{preset.subtitle}</small></span></button>)}</div>
-    {!presets.length && <p className="settings-note">没有匹配的厂商，可以使用自定义 API。</p>}
-    <button type="button" className="provider-custom-card" onClick={() => onSelect(customProviderPreset)}><span className="provider-preset-mark" aria-hidden="true"><ProviderIcon brand="custom"/></span><span><strong>自定义 API</strong><small>支持兼容接口、代理服务和私有部署</small></span><span aria-hidden="true"><Glyph name="arrow" size={16}/></span></button>
-    <p className="provider-setup-note">使用对应厂商和区域的密钥；接入地址和 API 格式都可以继续修改。</p>
-  </div>;
+  return <WorkspaceSettingSection id="provider-setup-title" title="添加模型供应商">
+    <input className="provider-setup-search" aria-label="搜索模型厂商" placeholder="搜索厂商，例如 DeepSeek、Kimi…" value={query} onChange={event => setQuery(event.target.value)}/>
+    <div className="provider-setup-list workspace-setting-card">
+      {presets.map(preset => <button type="button" className="provider-setup-row" key={preset.id} onClick={() => onSelect(preset)}>
+        <span className="provider-preset-mark" aria-hidden="true"><ProviderIcon brand={preset.id}/></span>
+        <span className="provider-item-copy"><strong>{preset.name}</strong><small>{preset.subtitle}</small></span>
+        <Glyph name="next" size={14}/>
+      </button>)}
+      {!presets.length && <p className="workspace-setting-row settings-note">没有匹配的厂商，可以使用自定义 API。</p>}
+      <button type="button" className="provider-setup-row" onClick={() => onSelect(customProviderPreset)}>
+        <span className="provider-preset-mark" aria-hidden="true"><ProviderIcon brand="custom"/></span>
+        <span className="provider-item-copy"><strong>自定义 API</strong><small>支持兼容接口、代理服务和私有部署</small></span>
+        <Glyph name="next" size={14}/>
+      </button>
+    </div>
+    <p className="settings-note">选择供应商后，填写对应厂商和区域的 API Key，再获取需要的模型。</p>
+  </WorkspaceSettingSection>;
 }
 
 export function ProviderModelPicker({available,current,onAdd,onCancel}: {available:AvailableModels;current:ProviderModel[];onAdd:(names:string[])=>void;onCancel:()=>void}) {
@@ -36,7 +46,7 @@ export function ProviderModelPicker({available,current,onAdd,onCancel}: {availab
   const remaining=Math.max(0,256-current.length);
   function toggle(name:string) {setSelected(previous => {const next=new Set(previous);if (next.has(name)) next.delete(name);else next.add(name);return next;});}
   function selectVisible() {setSelected(previous => new Set([...previous,...selectable]));}
-  return <div ref={pickerRef} className="provider-discovery" role="group" aria-labelledby="provider-discovery-title">
+  return <div ref={pickerRef} className="provider-discovery workspace-setting-card" role="group" aria-labelledby="provider-discovery-title">
     <div className="provider-discovery-heading"><div><h4 id="provider-discovery-title">从 API 添加模型</h4><p>获取到 {names.length} 个模型，勾选需要添加的模型。</p></div><button type="button" className="provider-text-button" onClick={onCancel}>关闭</button></div>
     <input aria-label="搜索 API 模型" placeholder="搜索模型 ID…" value={query} onChange={event => setQuery(event.target.value)}/>
     <div className="provider-discovery-toolbar">

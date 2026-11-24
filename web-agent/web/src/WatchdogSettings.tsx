@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import type {WatchdogMode} from '../../shared/contracts';
 import {AppSelect} from './AppSelect';
+import {WorkspaceSettingSection} from './WorkspacePage';
 import {api,readableError} from './api';
 
 export const watchdogModes:Record<WatchdogMode,{label:string;description:string}>={
@@ -28,8 +29,7 @@ export function WatchdogSettings({projectId,projectName,onBusyChange}:{projectId
   finally{flight.current=false;if(mounted.current)setSaving(undefined);}
  };
  return <section id="watchdog-settings-panel" role="tabpanel" aria-labelledby="watchdog-settings-tab" className="model-conversation watchdog-settings">
-  {!projectId?<p className="settings-note">请先选择一个项目，再配置任务巡检。</p>:<>
-   <h2 className="workspace-section-title">项目巡检</h2>
+  {!projectId?<p className="settings-note">请先选择一个项目，再配置任务巡检。</p>:<WorkspaceSettingSection id="watchdog-project-title" title="项目巡检">
    <div className="workspace-setting-card">
     <div className="workspace-setting-row">
      <div className="workspace-setting-copy">
@@ -52,6 +52,6 @@ export function WatchdogSettings({projectId,projectName,onBusyChange}:{projectId
    </div>
    {error&&<div className="watchdog-settings-error"><p className="form-error" role="alert">{error}</p><button type="button" className="button secondary" disabled={saving!==undefined} onClick={()=>setReload(value=>value+1)}>重新读取</button></div>}
    <p className="settings-note" role="status">{saving?'正在保存…':mode&&!error?'更改后自动保存。':''}</p>
-  </>}
+  </WorkspaceSettingSection>}
  </section>;
 }
