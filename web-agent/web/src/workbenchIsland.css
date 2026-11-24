@@ -44,7 +44,8 @@
  .app-shell:is(.has-workbench-conversation,.has-docked-conversation) .island-conversation { transition:none!important; }
  .island-navigation-divider { transition:none; }
 }
-.app-shell.has-workbench-conversation:not(.has-workbench-island) .island-conversation { --island-title-min:0px; box-shadow:var(--shadow-popover); }
+/* Inspector expansion can cross the wide-workbench breakpoint while the conversation stays docked. */
+.app-shell.has-workbench-conversation:not(.has-docked-conversation,.has-workbench-island) .island-conversation { --island-title-min:0px; box-shadow:var(--shadow-popover); }
 .lake-workbench-island[data-ready=true][data-present=true] { visibility:visible; }
 .lake-workbench-island[data-open=false] { pointer-events:none; }
 .lake-workbench-island[data-moving=true] { z-index:3; will-change:transform,opacity; }
