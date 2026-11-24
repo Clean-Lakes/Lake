@@ -192,7 +192,7 @@ private final class TransparentPanelWebView: WKWebView {
         self.origin = origin
         let initialFrame = NSRect(x: 0, y: 0, width: 276, height: 220)
         panel = ModelPanelWindow(contentRect: initialFrame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        let configuration = WKWebViewConfiguration()
+        let configuration = makeWorkbenchWebConfiguration()
         configuration.websiteDataStore = webView.configuration.websiteDataStore
         configuration.userContentController.addUserScript(Self.bridge(role: "panel"))
         content = TransparentPanelWebView(frame: initialFrame, configuration: configuration)

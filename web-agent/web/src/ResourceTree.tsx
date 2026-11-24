@@ -7,6 +7,7 @@ import {NavigationMenu,type NavigationDeleteTarget} from "./NavigationDelete";
 import { useContext, useEffect, useRef, useState, type DragEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import type { Project, Resource, ResourceTreeNode } from "../../shared/contracts";
 import { api, readableError } from "./api";
+import { DragAutoScroll } from "./dragAutoScroll";
 import { canMoveInto, compareTreeNodes, dropPlacement, projectResourceTree, treeDropZone } from "./resource-tree-model";
 
 type FolderEditor = {id?:string;parentId:string|null;name:string};
@@ -92,17 +93,21 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   useEffect(()=>{
     if(!dragging)return;
     let frame=0;
+    const autoScroll=new DragAutoScroll(performance.now());
     const cancel=()=>{suppressClick.current=true;pointerDrag.current=null;pointerDrop.current=null;dragSource.current=null;setDragging(null);setDrop(null);};
     const key=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();cancel();}};
-    const tick=()=>{
-      const drag=pointerDrag.current,scroll=drag?.scroll;
+    const tick=(time:number)=>{
+      const drag=pointerDrag.current,scroll=drag?.scroll??null;
+      let speed=0;
       if(drag?.active&&scroll){
         const rect=scroll.getBoundingClientRect();
         if(drag.currentX>=rect.left&&drag.currentX<=rect.right){
-          const edge=48;const speed=drag.currentY<rect.top+edge?-Math.min(12,(rect.top+edge-drag.currentY)/4):drag.currentY>rect.bottom-edge?Math.min(12,(drag.currentY-rect.bottom+edge)/4):0;
-          if(speed){scroll.scrollTop+=speed;pointerUpdate.current(drag.currentX,drag.currentY);}
+          const edge=48;
+          if(drag.currentY<rect.top+edge) speed=-Math.min(720,(rect.top+edge-drag.currentY)*15);
+          else if(drag.currentY>rect.bottom-edge) speed=Math.min(720,(drag.currentY-rect.bottom+edge)*15);
         }
       }
+      if(autoScroll.step(scroll,speed,time)&&drag)pointerUpdate.current(drag.currentX,drag.currentY);
       frame=requestAnimationFrame(tick);
     };
     frame=requestAnimationFrame(tick);document.addEventListener('keydown',key);
