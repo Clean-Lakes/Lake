@@ -32,7 +32,7 @@ function CurrentProject({project, resourceCount, canDelete, onDelete}: {
   onDelete: () => void;
 }) {
   const createdAt = new Date(project.createdAt);
-  return <section id="workspace-current-project" className="workspace-current-project" aria-labelledby="workspace-current-project-title">
+  return <section id="workspace-current-project" className="workspace-current-project workspace-setting-card" aria-labelledby="workspace-current-project-title">
     <div className="workspace-current-project-label">当前项目</div>
     <h2 id="workspace-current-project-title" aria-live="polite">{project.name}</h2>
     <dl className="workspace-project-facts">
@@ -100,10 +100,6 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
       </button>
     }/>
     {!!projects.length && <div className="workspace-project-toolbar">
-        <h2>切换项目</h2>
-        <span className="workspace-directory-count" role="status">
-          {needle ? `${visibleProjects.length} / ${projects.length}` : projects.length} 项
-        </span>
         <div className="workspace-project-search">
           <Glyph name="search" size={16}/>
           <input ref={search} type="search" aria-label="搜索项目" placeholder="搜索项目" value={query}
@@ -112,6 +108,9 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
           {query && <button type="button" className="icon-button" aria-label="清除项目搜索"
             onClick={() => {setQuery(''); search.current?.focus();}}><Glyph name="close" size={14}/></button>}
         </div>
+        <span className="workspace-directory-count" role="status">
+          {needle ? `${visibleProjects.length} / ${projects.length}` : projects.length} 个项目
+        </span>
         <button type="button" className="workspace-text-button workspace-bulk-toggle" aria-pressed={!!bulkSelection}
           aria-label={bulkSelection ? '完成' : '批量管理'} title={bulkSelection ? '完成' : '批量管理'}
           disabled={!connected && !bulkSelection} onClick={onToggleBulk}>
@@ -127,7 +126,7 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
           <button type="button" className="workspace-text-button danger-text" disabled={!bulkSelectedCount || !connected}
             onClick={onDeleteSelected}>删除所选…</button>
         </div>}
-        <div className={`workspace-project-sheet${bulkSelection ? ' is-bulk-selecting' : ''}`}>
+        <div className="workspace-project-sheet workspace-setting-card">
           {visibleProjects.length ? <>
             <ul ref={list} className="workspace-projects-list" aria-label="项目列表">{visibleProjects.map(item => {
               const current = item.id === project?.id || undefined;

@@ -1186,13 +1186,6 @@ a { color: inherit; }
 .resource-indicator.available, .resource-terminal-state i{ background: var(--success); }
 .provider-state.enabled{ background: var(--success); }
 .resource-tree-folder-icon{ color: var(--text-secondary); }
-.theme-options{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 22px; }
-.theme-choice{ display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); color: var(--foreground); text-align: left; }
-.theme-choice[aria-checked="true"]{ border-color: var(--info); background: var(--info-soft); }
-.theme-choice[aria-checked="false"]:hover{ background: var(--surface-hover); }
-.theme-preview{ display: grid; grid-template-columns: 25% 1fr; width: 100%; height: 90px; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: hidden; background: var(--background); }
-.theme-preview i{ display: block; background: var(--sidebar); border-right: 1px solid var(--border); }
-.theme-preview span{ margin: 16px 12px; border: 1px solid var(--border); border-radius: 3px; background: var(--surface-subtle); }
 input[type="checkbox"]{ accent-color: var(--primary); }
 .project-memory-toolbar > input, .project-memory-editor input, .project-memory-editor select, .project-memory-editor textarea{ padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--foreground); font: inherit; }
 .response-identity{ display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--primary); font-size: var(--font-size-ui); }
@@ -1220,7 +1213,6 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .resource-folder-row:hover .resource-folder-toggle, .resource-folder-row:focus-within .resource-folder-toggle{ padding-right: 28px; }
 .resource-folder-empty{ color: var(--text-muted); }
 @media (hover: none) { .resource-terminal-button, .resource-folder-actions { opacity: 1; } .resource-nav-row .nav-row { padding-right: 64px; } .resource-folder-toggle { padding-right: 28px; } }
-@media (max-width: 600px) { .theme-options { grid-template-columns: 1fr; } .theme-choice { flex-direction: row; align-items: center; } .theme-preview { width: 110px; height: 65px; } }
 .ai-pending > .ai-diff-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .ai-pending pre { min-width: 0; }
 @media (max-width: 600px) {

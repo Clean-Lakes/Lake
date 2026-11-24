@@ -2,6 +2,7 @@
 import {useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {ModelSettings} from '../../src/ModelSettings';
+import {DesktopUpdate} from '../../src/DesktopUpdate';
 import {WorkspaceConsole} from '../../src/WorkspaceConsole';
 import {WorkspacePageHeader} from '../../src/WorkspacePage';
 import {consoleCategories, type ConsolePage} from '../../src/workspaceConsoleTabs';
@@ -23,6 +24,12 @@ const catalog={providers,activeProviderId:'deepseek',activeModelId:'deepseek-fla
 const projectId=params.has('other-project')?'other-settings-fixture':'settings-layout-fixture';
 const projectName=params.has('other-project')?'第二个测试项目':'隔离设置验收';
 const connection:GatewayConnection={id:'fixture-client',name:'研发使用',projectId,enabled:true,routing:{mode:'pilot'},createdAt:'2026-11-16T00:00:00Z',updatedAt:'2026-11-16T00:00:00Z'};
+const memoryScope={key:'project-fixture',kind:'project',name:projectName,projectId};
+const skill={name:'检查发布记录',description:'整理最近的发布记录',path:'/fixture/skills/check-release',source:'本机',enabled:true,managed:true};
+window.lakeDesktopUpdates={platform:'macOS arm64',development:true,command:async()=>({
+ status:'current',currentVersion:'0.3.34',version:'0.3.34',message:'Lake 已是最新版本。',
+ releaseNotes:'### 控制台\n\n项目与设置共用同一个窗口。\n\n- 分组显示连接设置\n- 保留窄窗操作入口',
+})};
 const agentPath=`/api/projects/${projectId}/external-agents`;
 const preferenceKey=`fixture-codex-overrides:${projectId}`;
 const localModel='gpt-6.2-sol';
@@ -61,7 +68,10 @@ window.fetch=async(input,init)=>{
  if(path===`/api/projects/${projectId}/superagent`)return json({active:true,project:{projectId,routerSessionId:'fixture-pilot',version:1},workers:[],channels:[]});
  if(path===`/api/projects/${projectId}/watchdog`)return json({mode:'off'});
  if(path==='/api/settings/mcp')return json({servers:[]});
- if(path==='/api/settings/skills')return json({skills:[],roots:[],defaultRoot:'/fixture/skills'});
+ if(path==='/api/settings/skills')return json({skills:[skill],roots:[],defaultRoot:'/fixture/skills'});
+ if(path===`/api/settings/skills/${encodeURIComponent(skill.name)}`)return json({skill,content:'# 检查发布记录\n\n列出本次版本的已发布内容。'});
+ if(path==='/api/memory')return json({engine:'typescript',scopes:[memoryScope]});
+ if(path==='/api/memory/scopes/project-fixture')return json({scope:memoryScope,settings:{useEnabled:false,extractionEnabled:false,revision:1},items:[],jobs:[]});
  if(path.includes('/natural-memory/')){
   if(path.endsWith('/settings'))return json({scope:{kind:'project',projectId},revision:1,autoEnabled:false,automaticReady:true,recallSettings:{revision:1,useEnabled:false},projectMemorySettings:null});
   if(path.endsWith('/status'))return json({captured:0,processed:0,deferred:0,withdrawn:0});
@@ -83,9 +93,11 @@ function SettingsFixture() {
    <button type="button" onClick={()=>setOpen(true)}>打开控制台</button>
   </main>
   <WorkspaceConsole dialogRef={consoleRef} open={open} page={page} typescriptBackend busy={busy} onPage={setPage} onClose={close}>
-   {page==='workspace'||page==='updates' ? <section className="workspace-page"><WorkspacePageHeader id="fixture-title" title={page==='workspace'?'项目':'检查更新'} onClose={close}/></section> :
+   {page==='updates' ? <DesktopUpdate visible onClose={close}/> : page==='workspace' ?
+    <section className="workspace-page"><WorkspacePageHeader id="fixture-title" title="项目" onClose={close}/></section> :
     <ModelSettings tab={page} onTabChange={setPage} projectId={projectId} projectName={projectName} onClose={close}
      onBusyChange={setBusy} onChanged={async()=>{}} sendShortcut="enter" onShortcutChange={()=>{}}
+     memoryEngine="layered" completionEnabled onCompletionEnabledChange={()=>{}}
      ignoreProjectMemory={false} onIgnoreProjectMemoryChange={()=>{}}/>}
   </WorkspaceConsole>
  </>;

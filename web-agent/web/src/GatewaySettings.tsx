@@ -89,8 +89,8 @@ function GatewayMessages({connection,onTask,disabled,onReceipt,footer}:{connecti
   },[connection.id]);
   useEffect(()=>{alive.current=true;void load();const timer=window.setInterval(()=>{if(!document.hidden)void load();},3000);return()=>{alive.current=false;controller.current?.abort();window.clearInterval(timer);};},[load]);
   const toggleHistory=()=>{setExpanded(value=>!value);if(expanded){pages.current=1;controller.current?.abort();void load();}};
-  return <section className="gateway-messages" aria-labelledby="gateway-messages-title"><div className="gateway-section-heading"><h4 id="gateway-messages-title">消息与任务</h4><div className="gateway-history-actions">{(messages.length>1||nextCursor||expanded)&&<button className="provider-text-button" type="button" aria-expanded={expanded} aria-controls="gateway-message-history" onClick={toggleHistory}>{expanded?'收起历史消息':'查看全部消息'}<Glyph name={expanded?'up':'next'} size={13}/></button>}<button className="provider-text-button" type="button" disabled={loading} onClick={()=>void load()}><Glyph name="refresh" size={13}/>刷新</button></div></div>
-    <div className="gateway-messages-body">
+  return <section className="gateway-messages" aria-labelledby="gateway-messages-title"><div className="gateway-section-heading"><h2 id="gateway-messages-title" className="workspace-section-title">消息与任务</h2><div className="gateway-history-actions">{(messages.length>1||nextCursor||expanded)&&<button className="provider-text-button" type="button" aria-expanded={expanded} aria-controls="gateway-message-history" onClick={toggleHistory}>{expanded?'收起历史消息':'查看全部消息'}<Glyph name={expanded?'up':'next'} size={13}/></button>}<button className="provider-text-button" type="button" disabled={loading} onClick={()=>void load()}><Glyph name="refresh" size={13}/>刷新</button></div></div>
+    <div className="gateway-messages-body workspace-setting-card">
     {loading&&<p className="settings-note" role="status">正在读取消息与任务…</p>}
     {error&&<div className="gateway-message-error" role="alert"><p className="form-error">{error}</p><button type="button" className="provider-text-button" onClick={()=>void load()}>重试</button></div>}
     {!loading&&!error&&!messages.length&&<div className="gateway-empty"><h4>还没收到消息</h4><p>收到消息后，这里会展示 Pilot 的回复及关联任务。</p></div>}
@@ -164,9 +164,9 @@ export function GatewaySettings({actionsHost,onBusyChange,projectId,onTask}:{act
     {actionsHost&&createPortal(<button ref={addButton} type="button" className="button primary" aria-label="添加连接" title="添加连接"
       disabled={loading||!!busy} onClick={openCreate}><Glyph name="plus" size={15}/><span>添加连接</span></button>,actionsHost)}
     <section className="gateway-rail" aria-labelledby="gateway-list-title">
-      <div className="gateway-rail-heading"><h3 id="gateway-list-title">我的连接 <small>{entries.length}</small></h3></div>
+      <div className="gateway-rail-heading"><h2 id="gateway-list-title" className="workspace-section-title">我的连接 <small>{entries.length}</small></h2></div>
       {loading&&<p className="settings-note" role="status">正在读取接入渠道…</p>}
-      {!!entries.length&&<div className="gateway-connection-list">
+      {!!entries.length&&<div className="gateway-connection-list workspace-setting-card">
       <ul className="gateway-connections">
         {entries.map(entry=>{
           const grafana='kind' in entry;
@@ -195,8 +195,8 @@ export function GatewaySettings({actionsHost,onBusyChange,projectId,onTask}:{act
           </li>;
         })}
       </ul>
-      {!creating&&connection&&catalog&&<div className="gateway-config-row">
-        <div><strong>接入配置</strong><p className="settings-note">将接入配置添加到外部客户端。</p></div>
+      {!creating&&connection&&catalog&&<div className="gateway-config-row workspace-setting-row">
+        <div className="workspace-setting-copy"><strong>接入配置</strong><p className="settings-note">将接入配置添加到外部客户端。</p></div>
         <button className="button secondary" type="button" disabled={!!busy} onClick={()=>void copy(gatewayClientConfig(catalog.command,connection))}>
           <Glyph name="copy" size={14}/>复制接入配置
         </button>
@@ -206,7 +206,7 @@ export function GatewaySettings({actionsHost,onBusyChange,projectId,onTask}:{act
       {!!catalog?.legacyTokens.length&&<details className="gateway-legacy"><summary>兼容接入 · {catalog.legacyTokens.length}</summary><p>原单专员配置继续使用原权限范围。</p>{catalog.legacyTokens.map(token=><div key={token.id}><strong>{token.name}</strong><small>{token.roles?.length?`限定 ${token.roles.length} 位专员`:'原全部专员范围'}</small><button className="provider-text-button" type="button" onClick={()=>void copy(gatewayCommandSnippet(catalog.command,token.id,token.roles?.length===1?token.roles[0]:undefined))}>复制旧命令<Glyph name="copy" size={13}/></button><button type="button" className="provider-text-button danger-text" disabled={!!busy} onClick={()=>setLegacyDeleteId(token.id)}>删除旧凭据</button>{legacyDeleteId===token.id&&<div className="gateway-legacy-confirm" role="group" aria-label={`确认删除旧凭据 ${token.name}`}><p>删除后原连接立即失效，任务记录保留。</p><button type="button" className="provider-text-button" disabled={!!busy} onClick={()=>setLegacyDeleteId('')}>取消</button><button type="button" className="provider-text-button danger-text" disabled={!!busy} onClick={()=>void run('delete-legacy',()=>api.deleteGatewayToken(token.id),'旧凭据已删除').then(result=>{if(result)setLegacyDeleteId('');})}>确认删除旧凭据</button></div>}</div>)}</details>}
     </section>
     <div className="gateway-detail">
-      {creating?<form className="gateway-create" onSubmit={event=>{event.preventDefault();void create();}}>
+      {creating?<form className="gateway-create workspace-setting-card" onSubmit={event=>{event.preventDefault();void create();}}>
         <h3>添加连接</h3>
         <label className="field-label">连接名称
           <input ref={nameInput} value={name} onChange={event=>setName(event.target.value)} maxLength={120} autoComplete="off"
@@ -223,7 +223,7 @@ export function GatewaySettings({actionsHost,onBusyChange,projectId,onTask}:{act
           <button className="button secondary" type="button" disabled={!!busy} onClick={()=>setCreating(false)}>取消</button>
           <button className="button primary" type="submit" disabled={!!busy||!name.trim()||!project}>{busy==='create'?'创建中…':'创建连接'}</button>
         </div>
-      </form>:source&&catalog?<div className="gateway-connection-settings"><GrafanaEventSource key={source.id} source={source}
+      </form>:source&&catalog?<div className="gateway-connection-settings workspace-setting-card"><GrafanaEventSource key={source.id} source={source}
         projectName={catalog.projects.find(item=>item.id===source.projectId)?.name??'原项目不可用'}
         token={credential?.sourceId===source.id?credential.token:undefined}
         disabled={!!busy} onUpdate={value=>void updateSource(value)} onDismissToken={()=>setCredential(undefined)}
@@ -232,8 +232,8 @@ export function GatewaySettings({actionsHost,onBusyChange,projectId,onTask}:{act
           return {...current,eventSources:current.eventSources?.map(entry=>entry.id===source.id?{...entry,lastReceivedAt:at}:entry)};
         })}/></div>:connection&&catalog?<>
         <section className="gateway-routing" aria-labelledby="gateway-routing-title">
-          <h3 id="gateway-routing-title">连接设置</h3>
-          <div className="gateway-fields gateway-connection-settings"><label className="field-label">所属项目<AppSelect value={connection.projectId} disabled title="连接的项目固定；如需更换项目，请添加连接">{catalog.projects.some(item=>item.id===connection.projectId)?catalog.projects.map(entry=><option key={entry.id} value={entry.id}>{entry.name}</option>):<option value={connection.projectId}>原项目不可用</option>}</AppSelect><small>更换项目请添加连接。</small></label>{selectRouting(connection.routing.mode==='pilot'?'pilot':connection.routing.roleId,value=>void update({routing:routing(value)}))}</div>
+          <h2 id="gateway-routing-title" className="workspace-section-title">连接设置</h2>
+          <div className="gateway-fields workspace-setting-card"><label className="field-label">所属项目<AppSelect value={connection.projectId} disabled title="连接的项目固定；如需更换项目，请添加连接">{catalog.projects.some(item=>item.id===connection.projectId)?catalog.projects.map(entry=><option key={entry.id} value={entry.id}>{entry.name}</option>):<option value={connection.projectId}>原项目不可用</option>}</AppSelect><small>更换项目请添加连接。</small></label>{selectRouting(connection.routing.mode==='pilot'?'pilot':connection.routing.roleId,value=>void update({routing:routing(value)}))}</div>
         </section>
         <GatewayMessages key={connection.id} connection={connection} onTask={target=>void inspect(target)} disabled={!!busy}
           onReceipt={(id,at)=>setCatalog(current=>current?{...current,connections:current.connections.map(entry=>entry.id===id&&(!entry.lastReceivedAt||entry.lastReceivedAt<at)?{...entry,lastReceivedAt:at}:entry)}:current)}

@@ -1,35 +1,25 @@
 /* The shared settings shell owns dialog and header geometry for every tab. */
 .gateway-settings {flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:var(--settings-pane-padding);font-size:var(--font-size-ui)}
 .gateway-rail,.gateway-detail {min-width:0}
-.gateway-detail {margin-block-start:20px}
-.gateway-connection-settings,.gateway-create,.gateway-connection-list,.gateway-messages-body {
-  border:1px solid var(--border);
-  border-radius:var(--radius-settings-panel);
-  corner-shape:var(--corner-window);
-  background:var(--surface);
-}
-.gateway-connection-settings,.gateway-create {padding:clamp(10px,2.45cqw,18px)}
-.gateway-messages-body {padding:clamp(10px,2.45cqw,18px)}
+.gateway-detail {margin-block-start:var(--workspace-section-gap)}
+.gateway-connection-settings,.gateway-create,.gateway-messages-body {padding:var(--workspace-card-inset)}
 .gateway-connection-list,.gateway-fields {overflow:hidden}
 .gateway-rail-heading,.gateway-section-heading,.gateway-history-actions,.gateway-detail-header,.gateway-detail-title,.gateway-detail-actions,.gateway-connection-footer,.gateway-manage-actions,.gateway-form-actions {display:flex;align-items:center;gap:10px}
 .gateway-rail-heading {justify-content:space-between;margin-bottom:12px;flex-wrap:wrap}
-.gateway-rail-heading h3 {margin:0;font-size:16px;font-weight:var(--font-weight-semibold)}
-.gateway-detail h3 {margin:0;font-size:18px}
-.gateway-section-heading h4,.gateway-detail .gateway-routing h3 {margin:0;font-size:16px}
-.gateway-detail .gateway-routing h3 {margin-block-end:12px}
-.gateway-rail-heading h3 small,.gateway-protocol {font-size:var(--font-size-toolbar);font-weight:400;background:var(--surface-muted);padding:3px 7px;border-radius:var(--radius-settings-badge);color:var(--text-secondary)}
-.gateway-rail-heading h3 small {margin-left:5px}
+.gateway-rail-heading .workspace-section-title,.gateway-section-heading .workspace-section-title {margin:0}
+.gateway-detail h3 {margin:0;font-size:var(--workspace-section-size)}
+.gateway-rail-heading h2 small,.gateway-protocol {font-size:var(--font-size-toolbar);font-weight:400;background:var(--surface-muted);padding:3px 7px;border-radius:var(--radius-settings-badge);color:var(--text-secondary)}
+.gateway-rail-heading h2 small {margin-left:5px}
 .gateway-settings .button {display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
 .gateway-connections {list-style:none;margin:0;padding:0}
 .gateway-connections li {display:flex;align-items:center;flex-wrap:wrap}
 .gateway-connections li+li {border-top:1px solid var(--border)}
-.gateway-connection {flex:1 1 130px;min-width:0;display:grid;grid-template-columns:30px minmax(0,1fr);align-items:center;gap:10px;padding:12px 14px;border:0;background:transparent;color:var(--foreground);text-align:left;cursor:pointer}
+.gateway-connection {flex:1 1 130px;min-width:0;display:grid;grid-template-columns:30px minmax(0,1fr);align-items:center;gap:10px;padding:var(--workspace-row-padding);border:0;background:transparent;color:var(--foreground);text-align:left;cursor:pointer}
 .gateway-connection:focus-visible {outline-offset:-3px}
 .gateway-connections li:hover {background:var(--surface-hover)}
 .gateway-connections:has(li + li) > li.selected {background:var(--info-soft)}
-.gateway-connection-toggle,.gateway-enabled {display:flex;align-items:center;gap:7px;padding:6px 14px;font-size:var(--font-size-ui)}
-.gateway-config-row {display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px 14px;padding:12px 14px;border-block-start:1px solid var(--border)}
-.gateway-config-row .settings-note {margin:4px 0 0;line-height:1.5}
+.gateway-connection-toggle,.gateway-enabled {display:flex;align-items:center;gap:7px;padding:6px var(--workspace-card-inset);font-size:var(--font-size-ui)}
+.gateway-config-row {border-block-start:1px solid var(--border)}
 .gateway-connection-icon {display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--radius-settings-icon);corner-shape:var(--corner-window);background:var(--surface-muted);flex-shrink:0}
 .gateway-connection-copy {display:flex;flex-direction:column;gap:5px;min-width:0}
 .gateway-connection-copy strong {font-size:var(--font-size-ui);font-weight:var(--font-weight-medium);overflow-wrap:anywhere}
@@ -42,16 +32,15 @@
 .gateway-detail-title h3 {overflow-wrap:anywhere}
 .gateway-detail-actions {font-size:var(--font-size-ui);flex-wrap:wrap}
 .gateway-detail-actions .button {font-size:var(--font-size-ui);padding:8px 10px}
-.gateway-settings .settings-note {font-size:var(--font-size-ui)}
+.gateway-settings .settings-note {font-size:var(--font-size-process)}
 .gateway-detail-note {margin:8px 0 14px!important}
-.gateway-fields {padding:0}
 .gateway-settings .field-label {min-width:0;margin:0;font-size:var(--font-size-ui)}
 .gateway-settings .gateway-fields>.field-label {
   display:grid;
-  grid-template-columns:minmax(0,1fr) minmax(0,.72fr);
+  grid-template-columns:minmax(0,1fr) minmax(0,.85fr);
   align-items:center;
-  gap:4px 12px;
-  padding:12px 14px;
+  gap:4px 20px;
+  padding:var(--workspace-row-padding);
   color:var(--foreground);
 }
 .gateway-fields>.field-label+.field-label {border-block-start:1px solid var(--border)}
@@ -60,7 +49,7 @@
 .gateway-settings .gateway-fields>.field-label .app-select {grid-column:2;grid-row:1 / span 2;margin:0}
 .gateway-settings .gateway-fields>.field-label small {grid-column:1;margin:0}
 .gateway-settings .app-select-trigger {width:100%}
-.gateway-messages {margin-top:24px}
+.gateway-messages {margin-top:var(--workspace-section-gap)}
 .gateway-messages-body > .gateway-connection-footer {margin-top:12px}
 .gateway-messages-body:has(.gateway-empty) {display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px}
 .gateway-messages-body:has(.gateway-empty) > .gateway-connection-footer {margin:0 0 0 auto;border:0;padding:0}
@@ -98,7 +87,7 @@
 .gateway-connection-footer>small {font-size:var(--font-size-ui);color:var(--text-secondary)}
 .gateway-empty {color:var(--text-secondary);line-height:1.6}
 .gateway-empty h4 {color:var(--foreground);font-size:var(--font-size-ui);margin:0 0 3px}
-.gateway-empty p {margin:0;font-size:13px}
+.gateway-empty p {margin:0;font-size:var(--font-size-process)}
 .gateway-create {display:flex;flex-direction:column;gap:12px}
 .gateway-create .settings-note {margin:0}
 .gateway-form-actions {justify-content:flex-end}
@@ -123,8 +112,6 @@
   .gateway-settings .gateway-fields > .field-label {grid-template-columns:minmax(0,1fr)}
   .gateway-settings .gateway-fields > .field-label .app-select {grid-column:1;grid-row:auto;margin:3px 0}
   .gateway-detail-actions,.gateway-section-heading {gap:7px;flex-wrap:wrap}
-  .gateway-connection {padding:10px}
-  .gateway-config-row {padding:10px}
   .gateway-linked-tasks {margin-left:7px;padding-left:12px}
   .gateway-linked-tasks li {grid-template-columns:16px minmax(0,1fr);grid-template-areas:'icon title' '. owner' '. progress' '. description' '. action'}
   .gateway-linked-tasks li:before {left:-12px;width:8px}

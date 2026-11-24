@@ -54,27 +54,30 @@ export function DesktopUpdate({visible,onUnreadChange,onClose}:{
           onClick={()=>void command(available&&!readonly?"install":"check")}><Glyph name={available&&!readonly?'down':'refresh'} size={15}/><span>{actionLabel}</span></button>
       }/>
       <div className="desktop-update-layout">
-        <div className="desktop-update-content">
-          <p className="desktop-update-version">当前版本 v{state.currentVersion||"—"} · {bridge?.development?"本地测试版":platform}</p>
-          <div className="desktop-update-status-card">
+        <div className="desktop-update-status-card workspace-setting-card">
             <div className={`desktop-update-status status-${state.status}`} aria-live="polite">
               <span className="desktop-update-symbol" aria-hidden="true"><Glyph className={busy?"spinning":undefined} name={busy?'refresh':available?'down':state.status==='error'?'alert':state.status==='current'?'check':'refresh'} size={20}/></span>
-              <div>{available&&<strong>Lake {state.version}</strong>}<p>{state.message}</p></div>
+              <div>
+                <strong>Lake {state.currentVersion || "—"}</strong>
+                <p className="desktop-update-version">{bridge?.development?"本地测试版":platform}{available&&state.version? ` · 可更新至 ${state.version}`:""}</p>
+              </div>
             </div>
+            <p className={`desktop-update-message status-${state.status}`} role="status">{state.message}</p>
             {state.status==="downloading"&&<div className="desktop-update-progress"><progress max={100} value={state.progress??0} aria-label="安装包下载进度"/><span>{state.progress??0}%</span></div>}
-          </div>
-          <section className="desktop-update-release-notes" aria-label="更新公告">
-            <h3>更新内容{state.version ? ` · ${state.version}` : ""}</h3>
-            <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml components={{a:props=><a {...props} target="_blank" rel="noopener noreferrer"/>}}>{state.releaseNotes?.trim() || (busy?"正在读取更新内容…":state.status==="error"||state.status==="idle"?"暂未取得更新内容。":"该版本未提供更新内容。")}</ReactMarkdown>
-          </section>
         </div>
-        <aside className="desktop-update-details">
-          <nav className="desktop-update-links" aria-label="更新链接">
+        <section className="desktop-update-release-notes" aria-labelledby="desktop-update-notes-title">
+          <h2 id="desktop-update-notes-title" className="workspace-section-title">更新内容{state.version ? ` · ${state.version}` : ""}</h2>
+          <div className="desktop-update-notes-copy workspace-setting-card">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml components={{a:props=><a {...props} target="_blank" rel="noopener noreferrer"/>}}>{state.releaseNotes?.trim() || (busy?"正在读取更新内容…":state.status==="error"||state.status==="idle"?"暂未取得更新内容。":"该版本未提供更新内容。")}</ReactMarkdown>
+          </div>
+        </section>
+        <div className="desktop-update-details">
+          <nav className="desktop-update-links workspace-setting-card" aria-label="更新链接">
             <a href={releasesURL} target="_blank" rel="noopener noreferrer"><Glyph name="layers" size={15}/><span>查看发布页</span><Glyph name="arrow" size={14}/></a>
             <a href={repositoryURL} target="_blank" rel="noopener noreferrer"><Glyph name="code" size={15}/><span>源代码<small>github.com/Clean-Lakes/Lake</small></span><Glyph name="arrow" size={14}/></a>
           </nav>
           <p className="desktop-update-note">{bridge?.development?"本地测试版通过本地构建更新。":!bridge?"可在发布页查看适合当前系统的安装包。":"安装将关闭终端连接并重新打开 Lake，保留数据和配置。"}</p>
-        </aside>
+        </div>
       </div>
     </section>;
 }
