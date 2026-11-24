@@ -4,7 +4,6 @@
   overflow:auto;
   overscroll-behavior:contain;
   scrollbar-width:thin;
-  scrollbar-color:var(--border-strong) transparent;
   padding:var(--workspace-page-padding);
 }
 .desktop-update-layout > * + * { margin-block-start:var(--workspace-section-gap); }
