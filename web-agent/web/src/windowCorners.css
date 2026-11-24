@@ -13,6 +13,7 @@
  .lake-workbench-island,
  .island-module-glass,
  .composer-input,
+ .composer-backplate,
  .ai-role-user:not(.has-message-images),
  .ai-role-user.has-message-images > .user-message-text,
  .markdown-code-block,
@@ -26,7 +27,7 @@
 }
 
 /* Scale the window curve for compact navigation and the input frame. */
-:root .composer-input {
+:root :is(.composer-input,.composer-backplate) {
  --window-corner-radius:var(--radius-composer);
  --window-corner-stroke-image:url('/window-corner-stroke-compact.svg');
  --window-corner-stroke-slice:18;
@@ -47,7 +48,7 @@
 :root .sidebar.workspace-navigation .pilot-workspace .nav-row { --window-corner-radius:var(--radius-settings-control); }
 
 /* Compact badges and composer actions retain their size and scale the same curve. */
-:root :is(.session-state-badge,.composer-reference-token,.message-reference-token,:where(.composer-input) .composer-attach-button,:where(.composer-input) .send-button,:where(.composer-foot) .composer-permission-button:where(:not(.sre-mode-toggle))) {
+:root :is(.session-state-badge,.composer-reference-token,.message-reference-token,:where(.composer-input) .composer-attach-button,:where(.composer-input) .send-button,:where(.composer-foot) > .composer-permission-button:where(:not(.sre-mode-toggle))) {
  --window-corner-radius:8px;
  --window-corner-stroke-image:url('/window-corner-stroke-small.svg');
  --window-corner-stroke-slice:8;
@@ -74,7 +75,8 @@
  .workspace.has-floating-header > .workspace-header,
  .lake-workbench-island,
  .island-module-glass,
- .composer-input,
+ .composer-input:not(.composer-resizing-surface),
+ .composer-backplate,
  .ai-role-user:not(.has-message-images),
  .ai-role-user.has-message-images > .user-message-text,
  .markdown-code-block,
@@ -84,7 +86,7 @@
  .composer-reference-token,
  .message-reference-token,
  .composer-input .composer-attach-button,
- .composer-foot .composer-permission-button:not(.sre-mode-toggle),
+ .composer-foot > .composer-permission-button:not(.sre-mode-toggle),
  .composer-input .send-button
 ) {
  --window-corner-inset:0px;
@@ -93,7 +95,7 @@
  background-clip:text;
  border-image:linear-gradient(transparent,transparent) 1;
  overflow:visible;
- &:where(.workspace.has-floating-header > .workspace-header,.lake-workbench-island,.composer-input) {
+ &:where(.workspace.has-floating-header > .workspace-header,.lake-workbench-island,.composer-input,.composer-backplate) {
   /* Paint the masked stroke over the reserved border so it follows the box edge. */
   --window-corner-inset:-1px;
  }
@@ -144,14 +146,14 @@
  .composer-reference-token,
  .message-reference-token,
  .composer-input .composer-attach-button,
- .composer-foot .composer-permission-button:not(.sre-mode-toggle),
+ .composer-foot > .composer-permission-button:not(.sre-mode-toggle),
  .composer-input .send-button
 ) { position:relative; }
 
 :root.lake-corner-fallback .composer-input :is(
  .composer-attach-button,
  .send-button,
- .composer-foot .composer-permission-button:not(.sre-mode-toggle)
+ .composer-foot > .composer-permission-button:not(.sre-mode-toggle)
 ) {
  background:transparent;
  -webkit-background-clip:border-box;

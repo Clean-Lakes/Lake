@@ -90,7 +90,7 @@
     left: calc(var(--conversation-frame-inset) * 2);
   }
   :root[data-theme="dark"]:not(.lake-windows-chrome) .workspace.has-floating-header .composer-input:not(.attachment-drop-active) {
-    background-color: #2b2b2b;
+    --composer-fill: #2b2b2b;
   }
   :root:not(.lake-windows-chrome) .app-shell:has(> .workspace:is(.has-floating-header, .has-specialist-task-list)) > .workbench-splitter-sidebar:not(:hover,:focus-visible,.is-dragging)::after {
     opacity: 0;

@@ -5,6 +5,7 @@ export function ComposerSurface({sessionId,dragging,pinnedOpen,children}:{
   sessionId:string;dragging:boolean;pinnedOpen:boolean;children:ReactNode;
 }) {
   const surface=useRef<HTMLDivElement>(null);
+  const face=useRef<HTMLDivElement>(null);
   const contents=useRef<HTMLDivElement>(null);
   const [editingSession,setEditingSession]=useState<string>();
   const editing=editingSession===sessionId;
@@ -23,7 +24,7 @@ export function ComposerSurface({sessionId,dragging,pinnedOpen,children}:{
         setEditingSession(undefined);
       }
     };
-    // Pointer handling also covers Safari clicks on non-focusable elements.
+    // Safari can blur the editor without focusing the button that was clicked.
     document.addEventListener("pointerdown",leave,true);
     document.addEventListener("focusin",leave);
     return()=>{
@@ -33,52 +34,53 @@ export function ComposerSurface({sessionId,dragging,pinnedOpen,children}:{
   },[editing,editingSession]);
 
   useLayoutEffect(()=>{
-    const box=surface.current,content=contents.current;
+    const box=surface.current,backplate=face.current,content=contents.current;
     const editor=content?.querySelector<HTMLElement>(".composer-body");
-    if(!box||!content||!editor)return;
-    const position=()=>{
-      const frame=content.getBoundingClientRect(),field=editor.getBoundingClientRect();
-      const [x=0,y=0]=getComputedStyle(editor).translate?.split(" ").map(value=>parseFloat(value)||0)??[];
-      return {left:field.left-frame.left-x,top:field.top-frame.bottom-y,x,y};
+    const tools=content?.querySelector<HTMLElement>(".composer-foot");
+    if(!box||!backplate||!content||!editor||!tools)return;
+    const geometry=()=>{
+      const frame=box.getBoundingClientRect();
+      const shift=parseFloat(getComputedStyle(editor).translate?.split(" ")[1]??"0")||0;
+      return {width:box.offsetWidth,height:frame.height,editorTop:editor.getBoundingClientRect().top-frame.bottom-shift,
+        shift,compact:box.hasAttribute("data-composer-compact")};
     };
-    let height=box.getBoundingClientRect().height,width=content.offsetWidth;
-    let wasCompact=box.hasAttribute("data-composer-compact"),lastPosition=position();
-    let animation:Animation|undefined,editorAnimation:Animation|undefined;
-    const resize=new ResizeObserver(([entry])=>{
-      if(!entry)return;
-      const style=getComputedStyle(box);
-      const chrome=[style.paddingTop,style.paddingBottom,style.borderTopWidth,style.borderBottomWidth]
-        .reduce((total,value)=>total+parseFloat(value),0);
-      const nextHeight=entry.contentRect.height+chrome;
-      const nextWidth=content.offsetWidth,nextCompact=box.hasAttribute("data-composer-compact");
-      const nextPosition=position(),previousPosition=lastPosition;
-      const previousHeight=height;
-      const widthChanged=nextWidth!==width,layoutChanged=nextCompact!==wasCompact;
-      height=nextHeight;
-      width=nextWidth;
-      wasCompact=nextCompact;
-      lastPosition=nextPosition;
-      if(widthChanged||!canAnimateControls()||!box.animate){
-        animation?.cancel();
-        editorAnimation?.cancel();
+    let last=geometry();
+    let plateMotion:Animation|undefined,editorMotion:Animation|undefined,toolMotion:Animation|undefined;
+    const clearMotion=()=>{plateMotion?.cancel();editorMotion?.cancel();toolMotion?.cancel();};
+    const resize=new ResizeObserver(()=>{
+      const next=geometry(),previous=last;
+      last=next;
+      const layoutChanged=previous.compact!==next.compact;
+      if(next.width!==previous.width||!canAnimateControls()||!backplate.animate){
+        clearMotion();
         return;
       }
-      if(!layoutChanged&&Math.abs(nextHeight-previousHeight)<1)return;
-      const currentHeight=animation?.playState==="running"?box.getBoundingClientRect().height:previousHeight;
-      animation?.cancel();
-      const start=layoutChanged?currentHeight:Math.min(nextHeight+32,Math.max(nextHeight-32,currentHeight));
-      const timing={duration:layoutChanged?190:155,easing:controlMotionEase};
-      animation=box.animate([{height:`${start}px`},{height:`${nextHeight}px`}],timing);
+      if(!layoutChanged&&Math.abs(next.height-previous.height)<1)return;
+      const scale=parseFloat(getComputedStyle(backplate).scale?.split(" ")[1]??"1")||1;
+      plateMotion?.cancel();
+      editorMotion?.cancel();
+      const visualHeight=previous.height*scale;
+      const from=layoutChanged?visualHeight:Math.max(next.height-32,Math.min(next.height+32,visualHeight));
+      const timing={duration:layoutChanged?200:145,easing:controlMotionEase};
+      // The conversation has its final layout already. Only the painted frame and editor move.
+      plateMotion=backplate.animate([{scale:`1 ${from/next.height}`},{scale:"1 1"}],timing);
       if(layoutChanged){
-        // The actions stay on their bottom rail while the same editable field moves.
-        editorAnimation?.cancel();
-        const x=previousPosition.left+nextPosition.x-nextPosition.left;
-        const y=previousPosition.top+nextPosition.y-nextPosition.top;
-        editorAnimation=editor.animate([{translate:`${x}px ${y}px`},{translate:"0px 0px"}],timing);
+        const offset=previous.editorTop+next.shift-next.editorTop;
+        editorMotion=editor.animate([{translate:`0px ${offset}px`},{translate:"0px 0px"}],timing);
+        toolMotion?.cancel();
+        if(!next.compact&&!tools.contains(document.activeElement)){
+          toolMotion=tools.animate([
+            {opacity:0,pointerEvents:"none",offset:0},
+            {opacity:0,pointerEvents:"none",offset:0.72},
+            {opacity:1,pointerEvents:"auto",offset:1},
+          ],{duration:timing.duration,easing:"linear"});
+        }
       }
     });
+    const revealTools=()=>{toolMotion?.cancel();};
     resize.observe(content);
-    return()=>{resize.disconnect();animation?.cancel();editorAnimation?.cancel();};
+    tools.addEventListener("focusin",revealTools);
+    return()=>{resize.disconnect();tools.removeEventListener("focusin",revealTools);clearMotion();};
   },[sessionId]);
 
   return <div ref={surface} className={`composer-input composer-resizing-surface${dragging?" attachment-drop-active":""}`}
@@ -94,6 +96,7 @@ export function ComposerSurface({sessionId,dragging,pinnedOpen,children}:{
         setEditingSession(sessionId);
       }
     }}>
-    <div ref={contents} className="composer-resizing-content">{children}</div>
+    <div className="composer-backplate" ref={face} aria-hidden="true"/>
+    <div className="composer-resizing-content" ref={contents}>{children}</div>
   </div>;
 }
