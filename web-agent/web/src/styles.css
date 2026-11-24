@@ -403,7 +403,12 @@ a { color: inherit; }
 /* Approval and question surfaces share the composer's responsive content rail. */
 .composer-session-controls { width:min(960px,100%); min-width:0; margin-inline:auto; }
 .composer-session-controls > :is(.attachment-approval,.ai-pending,.agent-question) { width:100%; max-width:none; }
-.composer { position: relative; container-type: inline-size; container-name: lake-composer; width: min(960px, 100%); margin-inline: auto; padding: 0; background: transparent; border: 0; box-shadow: none; }
+.composer {
+  position: relative; container-type: inline-size; container-name: lake-composer; width: min(960px, 100%);
+  margin-inline: auto; padding: 0; background: transparent; border: 0; box-shadow: none;
+  /* Reserve the empty expanded height so focusing the editor keeps the last message in place. */
+  display: flex; flex-direction: column; justify-content: flex-end; min-block-size: 86px;
+}
 .composer-input {
   --composer-placeholder: color-mix(in srgb, var(--text-muted) 88%, transparent);
   padding: 8px 13px;
@@ -1269,6 +1274,7 @@ input[type="checkbox"]{ accent-color: var(--primary); }
  .composer-foot .pilot-mode-toggle { min-width:28px; justify-content:center; }
 }
 @media (pointer: coarse) {
+ .composer { min-block-size:100px; }
  .composer-foot,.composer-foot-actions { flex-wrap:wrap; }
  .composer-input :is(.composer-attach-button,.composer-foot > .composer-permission-button,.send-button,.composer-model-setup,.composer-model-select.app-select > .app-select-trigger) {
   min-width:44px; min-height:44px;
