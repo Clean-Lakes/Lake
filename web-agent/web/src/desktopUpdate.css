@@ -1,14 +1,14 @@
-.desktop-update-layout { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.desktop-update-layout { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
 .desktop-update-content,.desktop-update-details { min-width: 0; padding: 20px var(--workspace-gutter); }
 .desktop-update-details { border-top: 1px solid var(--border); background: var(--surface-subtle); }
 @container workspace-page (min-width:610px) {
   .desktop-update-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) clamp(216px, 30cqw, 300px);
+    grid-template-columns: minmax(0, 1fr) var(--workspace-details-width);
     grid-template-rows: minmax(0, 1fr);
     overflow: hidden;
   }
-  .desktop-update-content,.desktop-update-details { overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+  .desktop-update-content,.desktop-update-details { overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
   .desktop-update-details { border-top: 0; border-inline-start: 1px solid var(--border); }
 }
 

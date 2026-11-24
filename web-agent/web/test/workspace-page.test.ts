@@ -15,7 +15,7 @@ css.deregister();
 const project:Project={id:'p',name:'测试项目',createdAt:'2026-11-23T01:00:00Z'};
 const noop=()=>{};
 const props={connected:true, projects:[project], resources:[{projectId:project.id}], bulkSelectedCount:0,
- onOpenNavigation:noop, onOpenProject:noop, onSelectProject:noop, onCreateProject:noop, onDeleteProject:noop,
+ onOpenNavigation:noop, onOpenProject:noop, onCreateProject:noop, onDeleteProject:noop,
  onToggleBulk:noop, onClearSelection:noop, onDeleteSelected:noop};
 
 const workspaceViews=['workspace','settings','updates'] as const;
@@ -46,9 +46,12 @@ test('startup restores the workspace page for empty projects and preserves an ow
 
 test('workspace actions render in the page, including a creation path for an empty workspace',()=>{
  const html=renderToStaticMarkup(createElement(WorkspacePage,{...props,project}));
- for(const label of ['工作区','当前项目',project.name,'新建项目','批量管理','删除项目','进入项目','搜索项目'])assert.ok(html.includes(label),label);
+ for(const label of ['当前项目',project.name,'新建项目','批量管理','删除项目','打开当前项目','搜索项目'])assert.ok(html.includes(label),label);
  assert.match(html,/id="workspace-page"/);
- assert.doesNotMatch(html,/role="dialog"|composer-dock|message-input|检查更新|已删除/);
+ assert.match(html,/<h1 id="workspace-page-title"[^>]*>切换项目<\/h1>/);
+ assert.match(html,/<header[\s\S]*搜索项目[\s\S]*批量管理[\s\S]*新建项目[\s\S]*<\/header>/);
+ assert.equal((html.match(/type="search"/g)??[]).length,1);
+ assert.doesNotMatch(html,/role="dialog"|composer-dock|message-input|检查更新|已删除|搜索会话和资源|进入项目/);
  const empty=renderToStaticMarkup(createElement(WorkspacePage,{...props,projects:[]}));
  assert.match(empty,/新建项目[\s\S]*暂无项目/);
  assert.doesNotMatch(empty,/删除项目|批量管理|搜索项目/);
@@ -63,15 +66,21 @@ test('the workspace rail exposes a closed menu and signals unread updates',()=>{
  assert.doesNotMatch(sidebar,/role="menu(?:item)?"|设置|检查更新|已删除/);
 });
 
-test('the workspace project list exposes exactly one current project',()=>{
+test('each project can open directly and the bulk mode uses checkboxes instead',()=>{
+ const page={...props, project, projects:[project,{...project,id:'other',name:'其他项目'}]};
+ const navigation=renderToStaticMarkup(createElement(WorkspacePage,page));
+ assert.equal((navigation.match(/<button type="button" class="workspace-project-row"/g)??[]).length,2);
+ assert.match(navigation,/打开当前项目 /);
+ assert.match(navigation,/切换到 /);
  const html=renderToStaticMarkup(createElement(WorkspacePage,{
-  ...props, project, projects:[project,{...project,id:'other',name:'其他项目'}],
+  ...page,
   bulkSelection:{has:target=>target.id===project.id, toggle:noop, disabled:false}, bulkSelectedCount:1,
  }));
  assert.equal((html.match(/aria-current="true"/g)??[]).length,1);
  assert.match(html,/aria-current="true" title="测试项目"/);
  assert.match(html,/aria-label="选择项目 测试项目" checked=""/);
  assert.match(html,/aria-label="选择项目 其他项目"/);
+ assert.doesNotMatch(html,/<button type="button" class="workspace-project-row"/);
  assert.match(html,/已选 1 项/);
  assert.match(html,/class="workspace-project-resource-count">1/);
 });

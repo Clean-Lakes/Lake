@@ -1,4 +1,4 @@
-import {useEffect, useRef, useState, type ReactNode} from "react";
+import {useEffect, useRef, useState} from "react";
 import "./desktopUpdate.css";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -10,8 +10,8 @@ import {checkReleaseAnnouncement,repositoryURL,releasesURL,type UpdateState,type
 declare global {interface Window {lakeWindowsDesktop?:UpdateBridge;lakeDesktopUpdates?:UpdateBridge}}
 const processing = new Set(["checking","downloading","verifying","installing"]);
 
-export function DesktopUpdate({visible,onUnreadChange,navigationSearch,onOpenNavigation,onBack}:{
-  visible:boolean;onUnreadChange?:(unread:boolean)=>void;navigationSearch?:ReactNode;onOpenNavigation:()=>void;onBack:()=>void;
+export function DesktopUpdate({visible,onUnreadChange,onOpenNavigation,onBack}:{
+  visible:boolean;onUnreadChange?:(unread:boolean)=>void;onOpenNavigation:()=>void;onBack:()=>void;
 }) {
   const [bridge] = useState(() => window.lakeDesktopUpdates??window.lakeWindowsDesktop);
   const [state,setState] = useState<UpdateState>({status:"idle",currentVersion:packageInfo.version,message:"检查 Lake 更新"});
@@ -49,10 +49,9 @@ export function DesktopUpdate({visible,onUnreadChange,navigationSearch,onOpenNav
   if(!visible)return null;
   return <section id="workspace-updates-page" className="workspace-page desktop-update-page" aria-labelledby="desktop-update-title">
       <WorkspacePageHeader id="desktop-update-title" title="Lake 更新" description={`当前版本 v${state.currentVersion||"—"} · ${bridge?.development?"本地测试版":platform}`}
-        onOpenNavigation={onOpenNavigation} onBack={onBack} actions={<>
-          {navigationSearch}
+        onOpenNavigation={onOpenNavigation} onBack={onBack} actions={
           <button type="button" className="button primary" disabled={busy} onClick={()=>void command(available&&!readonly?"install":"check")}>{busy?state.status==="downloading"?"下载中…":"正在处理…":available&&!readonly?"下载并安装":"重新检查"}</button>
-        </>}/>
+        }/>
       <div className="desktop-update-layout">
         <div className="desktop-update-content">
           <div className="desktop-update-status-card">

@@ -8,7 +8,7 @@ import {Glyph} from "./Icons";
 import {AppSelect} from "./AppSelect";
 import {useAutoRefresh} from "./useAutoRefresh";
 import {reuseUnchanged} from "./snapshotUpdates";
-import {useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode, type Ref} from "react";
+import {useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type Ref} from "react";
 import {setThemePreference, themePreference, type ThemePreference} from "./appearance";
 import type {AvailableModels, ModelProvider, ProviderCatalog, ProviderModel} from "../../shared/contracts";
 import {api, readableError, type ModelSyncState} from "./api";
@@ -42,8 +42,8 @@ function Switch({checked,label,onChange,disabled=false}: {checked:boolean;label:
 }
 export type SettingsNavigationHandle = {confirmLeave: () => boolean | Promise<boolean>};
 
-export function ModelSettings({initialTab="models",navigationGuard,navigationSearch,onOpenNavigation,onBack,onChanged,sendShortcut,onShortcutChange,completionEnabled,onCompletionEnabledChange,onSessionConfig:openSessionConfig,onProjectMemory:openProjectMemory,projectId,projectName,ignoreProjectMemory,onIgnoreProjectMemoryChange,memoryEngine,watchdogEnabled=false,capabilityDetectionEnabled=false,onGatewayTask:openGatewayTask}: {
-  initialTab?:string;navigationGuard?:Ref<SettingsNavigationHandle>;navigationSearch?:ReactNode;onOpenNavigation:()=>void;onBack?:()=>void;
+export function ModelSettings({initialTab="models",navigationGuard,onOpenNavigation,onBack,onChanged,sendShortcut,onShortcutChange,completionEnabled,onCompletionEnabledChange,onSessionConfig:openSessionConfig,onProjectMemory:openProjectMemory,projectId,projectName,ignoreProjectMemory,onIgnoreProjectMemoryChange,memoryEngine,watchdogEnabled=false,capabilityDetectionEnabled=false,onGatewayTask:openGatewayTask}: {
+  initialTab?:string;navigationGuard?:Ref<SettingsNavigationHandle>;onOpenNavigation:()=>void;onBack?:()=>void;
   onChanged:()=>Promise<void>;sendShortcut:SendShortcut;onShortcutChange:(value:SendShortcut)=>void;onSessionConfig?:()=>void;onProjectMemory?:()=>void;projectId?:string;projectName?:string;
   completionEnabled?:boolean;onCompletionEnabledChange?:(value:boolean)=>void;
   ignoreProjectMemory:boolean;onIgnoreProjectMemoryChange:(value:boolean)=>void;memoryEngine?:'layered';watchdogEnabled?:boolean;capabilityDetectionEnabled?:boolean;onGatewayTask?:(target:GatewayTaskTarget)=>Promise<void>;
@@ -302,7 +302,7 @@ export function ModelSettings({initialTab="models",navigationGuard,navigationSea
   return <section ref={pageRef} id="workspace-settings-page" className="workspace-page model-settings-page" aria-labelledby="model-settings-title">
     <WorkspacePageHeader id="model-settings-title" title={<>{category?.title ?? category?.label ?? "设置"}{tab==="memory"&&<span className="memory-experimental-badge" aria-label="实验功能">实验</span>}</>}
       description={tab==="memory"&&memoryEngine==='layered'?"管理用户、项目和专员的长期知识，以及如何使用。":category?.description}
-      actions={navigationSearch} onOpenNavigation={onOpenNavigation} onBack={onBack}/>
+      onOpenNavigation={onOpenNavigation} onBack={onBack}/>
     <div ref={tabsRef} className="model-settings-tabs" role="tablist" aria-label="设置分类" onKeyDown={event=>navigateSettingsTabs(event,event.currentTarget)}>
       {settingsTabs.filter(item=>watchdogEnabled||!item.requiresWatchdog).map(({key,label,panel=key})=><button
         key={key} type="button" role="tab" id={panel+"-settings-tab"} aria-controls={panel+"-settings-panel"}

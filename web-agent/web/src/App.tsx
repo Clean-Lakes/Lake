@@ -522,7 +522,7 @@ function AppContent() {
     const current=routeRef.current;
     if(current.view===view){
       setMobileMenu(false);
-      const title=view==='workspace'?'workspace-projects-title':view==='settings'?'model-settings-title':'desktop-update-title';
+      const title=view==='workspace'?'workspace-page-title':view==='settings'?'model-settings-title':'desktop-update-title';
       document.getElementById(title)?.focus({preventScroll:true});
       return;
     }
@@ -1859,7 +1859,7 @@ function AppContent() {
   </section>;
 
   const workspaceConnected = connected && !pendingOperation;
-  const navigationSearchTrigger = <button type="button" className={`icon-button ${isWorkspacePage ? 'workspace-search-trigger' : 'sidebar-search-trigger'}`}
+  const navigationSearchTrigger = <button type="button" className="icon-button sidebar-search-trigger"
     aria-label="搜索会话和资源" aria-haspopup="dialog" aria-expanded={navigationSearchOpen} aria-controls={navigationSearchOpen ? "workspace-search-dialog" : undefined}
     aria-keyshortcuts="Meta+K Control+K" title={`搜索（${/Mac/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'}）`} onClick={() => setNavigationSearchOpen(true)}>
     <Glyph name="search" size={18}/>
@@ -1989,8 +1989,8 @@ function AppContent() {
     {dockedConversation&&<div className="workbench-conversation-surface" aria-hidden="true"/>}
     <main className={`workspace${window.lakeInspectorWindow?"":" web-inspector-layout"}${dockedInspectorOpen?" has-session-inspector":""}${isWorkspacePage?" is-workspace-page":!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":sessionSelected?" has-specialist-task-list":""}`} onDragOver={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="none";return;}if(selectedSession&&!isLegacyHistory&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.stopPropagation();return;}if(!selectedSession||isLegacyHistory||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
       <DesktopUpdate visible={route.view==='updates'} onUnreadChange={setWorkspaceUpdateUnread}
-        navigationSearch={navigationSearchTrigger} onOpenNavigation={()=>setMobileMenu(true)} onBack={backFromWorkbenchPage}/>
-      {isSettingsPage?<ModelSettings navigationGuard={settingsNavigation} navigationSearch={navigationSearchTrigger}
+        onOpenNavigation={()=>setMobileMenu(true)} onBack={backFromWorkbenchPage}/>
+      {isSettingsPage?<ModelSettings navigationGuard={settingsNavigation}
         onOpenNavigation={()=>setMobileMenu(true)} onBack={backFromWorkbenchPage}
         completionEnabled={completionEnabled} onCompletionEnabledChange={setCompletionEnabled} onGatewayTask={inspectGatewayTask} watchdogEnabled={bootstrap?.backendRuntime==='typescript'} capabilityDetectionEnabled={bootstrap?.backendRuntime==='go'}
         memoryEngine={bootstrap?.memoryEngine} initialTab={settingsInitialTab} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut}
@@ -1999,12 +1999,13 @@ function AppContent() {
         projectId={selectedProjectId??sidebarProject?.id} projectName={projectList.find(project=>project.id===(selectedProjectId??sidebarProject?.id))?.name}
         ignoreProjectMemory={ignoreProjectMemory} onIgnoreProjectMemoryChange={setIgnoreProjectMemory}/>:route.view==='workspace'?<WorkspacePage project={sidebarProject} projects={projectList} resources={catalog.resources}
         connected={workspaceConnected} bulkSelection={bulkSelection} bulkSelectedCount={bulkSelected.length}
-        navigationSearch={navigationSearchTrigger} onOpenNavigation={()=>setMobileMenu(true)} onCreateProject={openProjectDialog}
-        onOpenProject={() => navigate({sessionId:sessionId??defaultWorkspaceSession(catalog.sessions,sidebarProject?.id??null)?.id??null,resourceId:route.resourceId})}
-        onSelectProject={project => {
-          if (project.id === sidebarProject?.id) return;
+        onOpenNavigation={()=>setMobileMenu(true)} onCreateProject={openProjectDialog}
+        onOpenProject={project => {
+          const current = project.id === sidebarProject?.id;
+          const defaultSession = defaultWorkspaceSession(catalog.sessions, project.id)?.id ?? null;
           setSidebarProjectId(project.id);
-          navigate({sessionId:defaultWorkspaceSession(catalog.sessions,project.id)?.id??null,resourceId:null,view:'workspace'},project.id);
+          navigate({sessionId: current ? sessionId ?? defaultSession : defaultSession,
+            resourceId: current ? route.resourceId : null}, project.id);
         }}
         onDeleteProject={project=>setNavigationDelete({kind:"project",id:project.id,projectId:project.id,name:project.name})}
         onToggleBulk={() => {setBulkMode(!bulkMode);setBulkSelected([]);}}
