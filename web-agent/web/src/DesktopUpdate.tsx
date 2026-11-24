@@ -10,8 +10,8 @@ import {checkReleaseAnnouncement,repositoryURL,releasesURL,type UpdateState,type
 declare global {interface Window {lakeWindowsDesktop?:UpdateBridge;lakeDesktopUpdates?:UpdateBridge}}
 const processing = new Set(["checking","downloading","verifying","installing"]);
 
-export function DesktopUpdate({visible,onUnreadChange,onClose}:{
-  visible:boolean;onUnreadChange?:(unread:boolean)=>void;onClose:()=>void;
+export function DesktopUpdate({visible,onUnreadChange}:{
+  visible:boolean;onUnreadChange?:(unread:boolean)=>void;
 }) {
   const [bridge] = useState(() => window.lakeDesktopUpdates??window.lakeWindowsDesktop);
   const [state,setState] = useState<UpdateState>({status:"idle",currentVersion:packageInfo.version,message:"检查 Lake 更新"});
@@ -49,7 +49,7 @@ export function DesktopUpdate({visible,onUnreadChange,onClose}:{
   if(!visible)return null;
   const actionLabel=busy?state.status==="downloading"?"下载中…":"正在处理…":available&&!readonly?"下载并安装":"重新检查";
   return <section id="workspace-updates-page" className="workspace-page desktop-update-page" role="tabpanel" aria-labelledby="updates-console-tab">
-      <WorkspacePageHeader id="desktop-update-title" title="检查更新" onClose={onClose} actions={
+      <WorkspacePageHeader id="desktop-update-title" title="检查更新" actions={
         <button type="button" className="button primary" aria-label={actionLabel} title={actionLabel} disabled={busy}
           onClick={()=>void command(available&&!readonly?"install":"check")}><Glyph name={available&&!readonly?'down':'refresh'} size={15}/><span>{actionLabel}</span></button>
       }/>

@@ -1,7 +1,6 @@
 /* Major surfaces share one visible corner contour, not just a CSS radius value.
    Both dimensions must fit two complete corners to prevent browser scaling. */
 :root :is(
- .sidebar.workspace-navigation .project-switcher,
  .sidebar.workspace-navigation .navigation-search,
  .sidebar.workspace-navigation .session-nav-row,
  .sidebar.workspace-navigation .resource-row,
@@ -64,7 +63,6 @@
    are native CSS changes; no observer or per-frame JavaScript is needed. */
 :root.lake-corner-fallback :is(
  .sidebar.workspace-navigation .pilot-workspace .nav-row,
- .sidebar.workspace-navigation .project-switcher,
  .sidebar.workspace-navigation .navigation-search,
  .sidebar.workspace-navigation .session-nav-row,
  .sidebar.workspace-navigation .resource-row,
@@ -129,7 +127,6 @@
 ) { --window-corner-inset:-1px; }
 :root.lake-corner-fallback :is(
  .sidebar.workspace-navigation .pilot-workspace .nav-row,
- .sidebar.workspace-navigation .project-switcher,
  .sidebar.workspace-navigation .navigation-search,
  .sidebar.workspace-navigation .session-nav-row,
  .sidebar.workspace-navigation .resource-row,

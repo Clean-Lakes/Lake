@@ -32,8 +32,8 @@ function Switch({checked,label,onChange,disabled=false}: {checked:boolean;label:
 }
 export type SettingsNavigationHandle = {confirmLeave: () => boolean | Promise<boolean>};
 
-export function ModelSettings({tab,onTabChange,navigationGuard,onClose,onBusyChange,onChanged,sendShortcut,onShortcutChange,completionEnabled,onCompletionEnabledChange,onSessionConfig:openSessionConfig,onProjectMemory:openProjectMemory,projectId,projectName,ignoreProjectMemory,onIgnoreProjectMemoryChange,memoryEngine,capabilityDetectionEnabled=false,onGatewayTask:openGatewayTask}: {
-  tab:SettingsPage;onTabChange:(tab:SettingsPage)=>void;navigationGuard?:Ref<SettingsNavigationHandle>;onClose:()=>void;onBusyChange:(busy:boolean)=>void;
+export function ModelSettings({tab,onTabChange,navigationGuard,onBusyChange,onChanged,sendShortcut,onShortcutChange,completionEnabled,onCompletionEnabledChange,onSessionConfig:openSessionConfig,onProjectMemory:openProjectMemory,projectId,projectName,ignoreProjectMemory,onIgnoreProjectMemoryChange,memoryEngine,capabilityDetectionEnabled=false,onGatewayTask:openGatewayTask}: {
+  tab:SettingsPage;onTabChange:(tab:SettingsPage)=>void;navigationGuard?:Ref<SettingsNavigationHandle>;onBusyChange:(busy:boolean)=>void;
   onChanged:()=>Promise<void>;sendShortcut:SendShortcut;onShortcutChange:(value:SendShortcut)=>void;onSessionConfig?:()=>void;onProjectMemory?:()=>void;projectId?:string;projectName?:string;
   completionEnabled?:boolean;onCompletionEnabledChange?:(value:boolean)=>void;
   ignoreProjectMemory:boolean;onIgnoreProjectMemoryChange:(value:boolean)=>void;memoryEngine?:'layered';capabilityDetectionEnabled?:boolean;onGatewayTask?:(target:GatewayTaskTarget)=>Promise<void>;
@@ -283,7 +283,7 @@ export function ModelSettings({tab,onTabChange,navigationGuard,onClose,onBusyCha
   }
   const rows=Object.values(drafts);
   return <section ref={pageRef} id="workspace-settings-page" className="workspace-page model-settings-page" aria-labelledby="model-settings-title">
-    <WorkspacePageHeader id="model-settings-title" title={consoleCategoryLabel(tab) ?? '设置'} onClose={onClose}
+    <WorkspacePageHeader id="model-settings-title" title={consoleCategoryLabel(tab) ?? '设置'}
       actions={tab==='channels' ? <div ref={setActionsHost} className="workspace-console-page-action"/> :
         tab==='memory' ? <span className="memory-experimental-badge" aria-label="实验功能">实验</span> : undefined}/>
     {tab==="channels"?<GatewaySettings actionsHost={actionsHost} onBusyChange={setExtensionBusy} projectId={projectId} onTask={onGatewayTask}/>:tab==="agents"?<ExternalAgentSettings key={projectId??"none"} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="watchdog"?<WatchdogSettings key={projectId??'none'} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="memory"?<MemorySettings memoryEngine={memoryEngine} onProjectMemory={onProjectMemory} key={projectId||'global'} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="mcp"?<MCPSettings onBusyChange={setExtensionBusy}/>:tab==="skills"?<SkillSettings onBusyChange={setExtensionBusy}/>:tab==="appearance" ? <AppearanceSettings/> : tab==="conversation" ? <section id="conversation-settings-panel" role="tabpanel" aria-labelledby="conversation-settings-tab" className="model-conversation conversation-settings">

@@ -1868,6 +1868,19 @@ function AppContent() {
   </section>;
 
   const workspaceConnected = connected && !pendingOperation;
+  const switchProject = (projectId: string) => {
+    if (projectId === sidebarProject?.id) {
+      if (routeRef.current.view === 'workspace') closeWorkbenchConsole();
+      return;
+    }
+    afterSettings(() => {
+      const sessionId = defaultWorkspaceSession(catalog.sessions, projectId)?.id ?? null;
+      setSidebarProjectId(projectId);
+      setBulkMode(false);
+      setBulkSelected([]);
+      commitNavigation({sessionId, resourceId: null}, projectId, isWorkspacePageView(routeRef.current.view));
+    });
+  };
   const navigationSearchTrigger = <button type="button" className="icon-button sidebar-search-trigger"
     aria-label="搜索会话和资源" aria-haspopup="dialog" aria-expanded={navigationSearchOpen} aria-controls={navigationSearchOpen ? "workspace-search-dialog" : undefined}
     aria-keyshortcuts="Meta+K Control+K" title={`搜索（${/Mac/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'}）`} onClick={() => setNavigationSearchOpen(true)}>
@@ -1937,11 +1950,9 @@ function AppContent() {
     <aside className={`sidebar workspace-navigation ${mobileMenu ? "sidebar-open" : ""} ${bulkMode && !isWorkspacePage ? "is-bulk-selecting" : ""}`} aria-label="项目导航" inert={compactNavigation && !mobileMenu} aria-hidden={compactNavigation && !mobileMenu}>
       <SidebarWorkspaceNavigation projectId={sidebarProject?.id}
        contentId="lake-project-navigation"
+       projectPicker={sidebarProject ? {projects:projectList,value:sidebarProject.id,onChange:switchProject} : undefined}
+       headerActions={<>{navigationSearchTrigger}{closeNavigation}</>}
        header={<>
-        <div className="sidebar-brand-row">
-         <span className="brand" aria-label="Lake"><strong>Lake</strong></span>
-         <div className="sidebar-brand-actions">{navigationSearchTrigger}{closeNavigation}</div>
-        </div>
         {bulkMode && <div className="bulk-navigation-toolbar"><button type="button" onClick={()=>{setBulkMode(false);setBulkSelected([]);}}>完成</button><span>已选 {bulkSelected.length} 项</span><button type="button" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkSelected([])}>清空</button><button type="button" className="danger-text" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}>删除所选</button></div>}
        </>}
        workspace={{open:isWorkspacePage,unreadUpdate:workspaceUpdateUnread,onOpen:()=>openWorkbenchPage('workspace')}}
@@ -2122,10 +2133,8 @@ function AppContent() {
       page={route.view==='updates'?'updates':isSettingsPage?activeSettingsTab:'workspace'} busy={isSettingsPage&&settingsBusy}
       onPage={selectConsolePage} onClose={closeWorkbenchConsole} overlay={isWorkspacePage&&workspaceOverlayOpen?workspaceOverlays:undefined}
       notice={isWorkspacePage?noticeView:undefined}>
-      <DesktopUpdate visible={route.view==='updates'} onUnreadChange={setWorkspaceUpdateUnread}
-        onClose={closeWorkbenchConsole}/>
+      <DesktopUpdate visible={route.view==='updates'} onUnreadChange={setWorkspaceUpdateUnread}/>
       {isSettingsPage?<ModelSettings navigationGuard={settingsNavigation} tab={activeSettingsTab} onTabChange={setSettingsTab} onBusyChange={setSettingsBusy}
-        onClose={closeWorkbenchConsole}
         completionEnabled={completionEnabled} onCompletionEnabledChange={setCompletionEnabled} onGatewayTask={inspectGatewayTask} capabilityDetectionEnabled={bootstrap?.backendRuntime==='go'}
         memoryEngine={bootstrap?.memoryEngine} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut}
         onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {commitNavigation({sessionId,resourceId:null});setAgentOptionsOpen(true);} : undefined}
@@ -2133,14 +2142,8 @@ function AppContent() {
         projectId={selectedProjectId??sidebarProject?.id} projectName={projectList.find(project=>project.id===(selectedProjectId??sidebarProject?.id))?.name}
         ignoreProjectMemory={ignoreProjectMemory} onIgnoreProjectMemoryChange={setIgnoreProjectMemory}/>:route.view==='workspace'?<WorkspacePage project={sidebarProject} projects={projectList} resources={catalog.resources}
         connected={workspaceConnected} bulkSelection={bulkSelection} bulkSelectedCount={bulkSelected.length}
-        onClose={closeWorkbenchConsole} onCreateProject={openProjectDialog}
-        onOpenProject={project => {
-          const current = project.id === sidebarProject?.id;
-          const defaultSession = defaultWorkspaceSession(catalog.sessions, project.id)?.id ?? null;
-          if (current) {closeWorkbenchConsole();return;}
-          setSidebarProjectId(project.id);
-          commitNavigation({sessionId: defaultSession, resourceId: null}, project.id, true);
-        }}
+        onCreateProject={openProjectDialog}
+        onOpenProject={project => switchProject(project.id)}
         onDeleteProject={project=>setNavigationDelete({kind:"project",id:project.id,projectId:project.id,name:project.name})}
         onToggleBulk={() => {setBulkMode(!bulkMode);setBulkSelected([]);}}
         onClearSelection={() => setBulkSelected([])}

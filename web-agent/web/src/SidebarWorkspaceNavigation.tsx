@@ -2,6 +2,7 @@ import {useContext,useEffect,useId,useState,type ReactNode} from 'react';
 import {SidebarScrollArea} from './SidebarScrollArea';
 import {SidebarResourceActions} from './SidebarResourceActions';
 import {Glyph} from './Icons';
+import {ProjectSwitcher, type ProjectSwitcherProps} from './ProjectSwitcher';
 import {WorkbenchSidebar} from './WorkbenchNavigation';
 
 type NavigationPanel = 'specialists'|'resources';
@@ -16,10 +17,10 @@ function initialPanel(projectId:string|undefined,selected:NavigationPanel):Navig
 }
 
 /** Both lists stay mounted so switching preserves their scroll and folder state. */
-export function SidebarWorkspaceNavigation({projectId,specialists,children,resourceCount,selectionId,selectedPanel,attention=false,onSelectPanel,workspace,empty,header,contentId}:{
+export function SidebarWorkspaceNavigation({projectId,specialists,children,resourceCount,selectionId,selectedPanel,attention=false,onSelectPanel,workspace,empty,header,headerActions,projectPicker,contentId}:{
  projectId?:string;specialists:ReactNode;children:ReactNode;resourceCount:number;
  selectionId:string;selectedPanel:NavigationPanel;attention?:boolean;onSelectPanel?:(panel:NavigationPanel,select:()=>void)=>void;workspace?:WorkspaceNavigation;empty?:ReactNode;
- header?:ReactNode;contentId?:string;
+ header?:ReactNode;headerActions?:ReactNode;projectPicker?:ProjectSwitcherProps;contentId?:string;
 }) {
  const id=useId();
  const {collapsed,expand}=useContext(WorkbenchSidebar);
@@ -45,6 +46,7 @@ export function SidebarWorkspaceNavigation({projectId,specialists,children,resou
    </button>
    <button type="button" className="sidebar-rail-button" aria-label="资源" aria-pressed={resourcesOpen}
     aria-controls={`${id}-resources-panel`} title="资源" onClick={()=>selectPanel('resources')}><Glyph name="lakeResources" size={22} filled={resourcesOpen}/></button></>}
+   {collapsed && projectPicker && <ProjectSwitcher {...projectPicker} iconOnly/>}
    {workspace&&<button type="button" className="sidebar-rail-button workspace-rail-button" aria-label={workspace.unreadUpdate?'控制台，有新版本':'控制台'}
     aria-haspopup="dialog" aria-expanded={workspace.open} aria-controls="workspace-console" title="控制台" onClick={workspace.onOpen}>
     <Glyph name="lakeWorkspace" size={22} filled={workspace.open}/>{workspace.unreadUpdate&&<span className="workspace-update-dot" aria-hidden="true"/>}
@@ -52,6 +54,11 @@ export function SidebarWorkspaceNavigation({projectId,specialists,children,resou
   </nav>
   <div className="sidebar-navigation-viewport">
    <div id={contentId} className="sidebar-navigation-content" inert={collapsed} aria-hidden={collapsed||undefined}>
+    {(projectPicker || headerActions) && <div className="sidebar-brand-row">
+     {projectPicker ? <ProjectSwitcher {...projectPicker} disabled={collapsed || projectPicker.disabled}/> :
+     <span className="brand" aria-label="Lake"><strong>Lake</strong></span>}
+     {headerActions && <div className="sidebar-brand-actions">{headerActions}</div>}
+    </div>}
     {header}
     {projectId?<><section key={`specialists:${projectId}`} className="sidebar-navigation-panel" id={`${id}-specialists-panel`} aria-label="专员" hidden={!specialistsOpen}>
      <SidebarScrollArea>{specialists}</SidebarScrollArea>

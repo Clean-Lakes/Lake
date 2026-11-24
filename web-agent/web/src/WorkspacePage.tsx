@@ -5,23 +5,17 @@ import {Glyph} from './Icons';
 
 const projectDate = new Intl.DateTimeFormat('zh-CN', {year: 'numeric', month: 'long', day: 'numeric'});
 
-export function WorkspacePageHeader({id, title, actions, onClose}: {
+export function WorkspacePageHeader({id, title, actions}: {
   id: string;
   title: string;
   actions?: ReactNode;
-  onClose: () => void;
 }) {
   return <header className="workspace-page-header">
     <div className="workspace-console-breadcrumb">
       <span aria-hidden="true">控制台</span><span aria-hidden="true">/</span>
       <h1 id={id} title={title}>{title}</h1>
     </div>
-    <div className="workspace-page-header-actions">
-      {actions}
-      <button type="button" className="icon-button workspace-console-close" title="关闭控制台" aria-label="关闭控制台" onClick={onClose}>
-        <Glyph name="close" size={17}/>
-      </button>
-    </div>
+    {actions && <div className="workspace-page-header-actions">{actions}</div>}
   </header>;
 }
 
@@ -50,7 +44,7 @@ function CurrentProject({project, resourceCount, canDelete, onDelete}: {
 }
 
 export function WorkspacePage({projects, project, resources, connected, bulkSelection, bulkSelectedCount,
-  onClose, onOpenProject, onCreateProject, onDeleteProject, onToggleBulk,
+  onOpenProject, onCreateProject, onDeleteProject, onToggleBulk,
   onClearSelection, onDeleteSelected}: {
   projects: readonly Project[];
   project?: Project;
@@ -58,7 +52,6 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
   connected: boolean;
   bulkSelection?: BulkSelection;
   bulkSelectedCount: number;
-  onClose: () => void;
   onOpenProject: (project: Project) => void;
   onCreateProject: () => void;
   onDeleteProject: (project: Project) => void;
@@ -94,7 +87,7 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
     }
   };
   return <section id="workspace-page" className="workspace-page workspace-project-page" role="tabpanel" aria-labelledby="workspace-console-tab">
-    <WorkspacePageHeader id="workspace-page-title" title="项目" onClose={onClose} actions={
+    <WorkspacePageHeader id="workspace-page-title" title="项目" actions={
       <button type="button" className="button primary" aria-label="新建项目" title="新建项目" disabled={!connected} onClick={onCreateProject}>
         <Glyph name="plus" size={15}/><span>新建项目</span>
       </button>

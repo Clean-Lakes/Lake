@@ -1270,9 +1270,6 @@ input[type="checkbox"]{ accent-color: var(--primary); }
  }
 }
 
-/* Compact project navigation: a single project, conversations and resources together. */
-.sidebar-project-picker { display: flex; align-items: center; gap: 8px; min-height: 36px; margin: 0 14px 12px; padding: 3px 4px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-subtle); flex-shrink: 0; }
-.sidebar-project-picker .icon-button { width: 24px; height: 26px; font-size: 17px; flex-shrink: 0; }
 .navigation-search-key { flex-shrink: 0; font-size: var(--font-size-ui); white-space: nowrap; }
 .sidebar .nav-row-wrap:hover .session-nav-row, .sidebar .nav-row-wrap:focus-within .session-nav-row { padding-right: 62px; }
 .sidebar .nav-row-wrap:is(:hover,:focus-within) :is(.session-edit,.session-more) { background: var(--sidebar); }
@@ -1294,15 +1291,6 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .agent-process-details > summary::-webkit-details-marker { display: none; }
 .agent-task-list-compact .agent-task-body { margin-top: 8px; }
 
-.project-switcher { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; min-height: 30px; padding: 4px 6px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--foreground); text-align: left; font-size: var(--font-size-ui); }
-.project-switcher > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.project-switcher > svg { flex-shrink: 0; color: var(--text-secondary); }
-.project-switcher:hover, .project-switcher[aria-expanded="true"] { background: var(--surface-hover); }
-.project-switcher:focus-visible { outline: 1px solid var(--text-muted); outline-offset: -1px; }
-.project-selector-menu { max-height: calc(100dvh - 24px); overflow-y: auto; }
-.project-selector-menu > button { font-size: var(--font-size-ui); color: var(--foreground); }
-.project-selector-menu > button[aria-checked="true"] { background: var(--surface-muted); }
-.project-selector-menu > button > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu-selection-mark { display: grid; place-items: center; width: 14px; flex-shrink: 0; }
 
 .composer-input.attachment-drop-active { border-color: var(--focus); background: var(--surface-hover); outline: 2px dashed var(--focus-outline); outline-offset: 3px; }

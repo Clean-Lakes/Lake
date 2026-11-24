@@ -126,7 +126,11 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
           {!first && <p className="workspace-console-empty" role="status">没有匹配的分类</p>}
         </div>
       </nav>
-      <div className="workspace-console-content">{children}</div>
+      <div className="workspace-console-content">
+        <button type="button" className="icon-button workspace-console-close" title="关闭控制台"
+          aria-label="关闭控制台" onClick={onClose}><Glyph name="close" size={18}/></button>
+        {children}
+      </div>
     </div>
     {hasOverlay && <div ref={overlayRoot} className="workspace-console-overlays">{overlay}</div>}
     {notice}

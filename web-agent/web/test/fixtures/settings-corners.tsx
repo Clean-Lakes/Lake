@@ -93,9 +93,9 @@ function SettingsFixture() {
    <button type="button" onClick={()=>setOpen(true)}>打开控制台</button>
   </main>
   <WorkspaceConsole dialogRef={consoleRef} open={open} page={page} typescriptBackend busy={busy} onPage={setPage} onClose={close}>
-   {page==='updates' ? <DesktopUpdate visible onClose={close}/> : page==='workspace' ?
-    <section className="workspace-page"><WorkspacePageHeader id="fixture-title" title="项目" onClose={close}/></section> :
-    <ModelSettings tab={page} onTabChange={setPage} projectId={projectId} projectName={projectName} onClose={close}
+   {page==='updates' ? <DesktopUpdate visible/> : page==='workspace' ?
+    <section className="workspace-page"><WorkspacePageHeader id="fixture-title" title="项目"/></section> :
+    <ModelSettings tab={page} onTabChange={setPage} projectId={projectId} projectName={projectName}
      onBusyChange={setBusy} onChanged={async()=>{}} sendShortcut="enter" onShortcutChange={()=>{}}
      memoryEngine="layered" completionEnabled onCompletionEnabledChange={()=>{}}
      ignoreProjectMemory={false} onIgnoreProjectMemoryChange={()=>{}}/>}
