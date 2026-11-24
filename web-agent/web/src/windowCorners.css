@@ -47,7 +47,7 @@
 :root .sidebar.workspace-navigation .pilot-workspace .nav-row { --window-corner-radius:var(--radius-settings-control); }
 
 /* Compact badges and composer actions retain their size and scale the same curve. */
-:root :is(.session-state-badge,.composer-reference-token,.message-reference-token,:where(.composer-input) .composer-attach-button,:where(.composer-input) .send-button,:where(.composer-foot) > .composer-permission-button:where(:not(.sre-mode-toggle))) {
+:root :is(.session-state-badge,.composer-reference-token,.message-reference-token,:where(.composer-input) .composer-attach-button,:where(.composer-input) .send-button,:where(.composer-foot) .composer-permission-button:where(:not(.sre-mode-toggle))) {
  --window-corner-radius:8px;
  --window-corner-stroke-image:url('/window-corner-stroke-small.svg');
  --window-corner-stroke-slice:8;
@@ -84,7 +84,7 @@
  .composer-reference-token,
  .message-reference-token,
  .composer-input .composer-attach-button,
- .composer-foot > .composer-permission-button:not(.sre-mode-toggle),
+ .composer-foot .composer-permission-button:not(.sre-mode-toggle),
  .composer-input .send-button
 ) {
  --window-corner-inset:0px;
@@ -144,14 +144,14 @@
  .composer-reference-token,
  .message-reference-token,
  .composer-input .composer-attach-button,
- .composer-foot > .composer-permission-button:not(.sre-mode-toggle),
+ .composer-foot .composer-permission-button:not(.sre-mode-toggle),
  .composer-input .send-button
 ) { position:relative; }
 
 :root.lake-corner-fallback .composer-input :is(
  .composer-attach-button,
  .send-button,
- .composer-foot > .composer-permission-button:not(.sre-mode-toggle)
+ .composer-foot .composer-permission-button:not(.sre-mode-toggle)
 ) {
  background:transparent;
  -webkit-background-clip:border-box;
