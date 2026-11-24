@@ -1,12 +1,21 @@
 import {useCallback,useLayoutEffect,useRef,useState} from 'react';
+import {flushSync} from 'react-dom';
 import {inspectorExitMs,retainConversation,useSessionInspector} from './SessionInspectorContext';
 
-declare global {interface Window {lakeInspectorWindow?:{setOpen:(open:boolean)=>Promise<{addedWidth:number;viewportWidth?:number}>};}}
+type InspectorWindowSize={addedWidth:number;viewportWidth?:number};
+type InspectorWindowPlan={id:number;closedWidth:number;openWidth:number};
+declare global {interface Window {lakeInspectorWindow?:{
+ setOpen:(open:boolean)=>Promise<InspectorWindowSize>;
+ prepare?:(open:boolean,width:number)=>Promise<InspectorWindowPlan>;
+ animate?:(id:number,animate:boolean)=>Promise<InspectorWindowSize>;
+};}}
 
-/** Keep the conversation in place until WKWebView receives the final window bounds. */
+/** Keep the reading layout fixed while the native viewport reveals the right pane. */
 export function useInspectorWindow(open:boolean){
  const requested=useRef(false);
  const [ready,setReady]=useState(false);
+ const [nativePresence,setNativePresence]=useState<boolean>();
+ const nativeReveal=useRef(false);
  const focusOpener=useSessionInspector()?.focusOpener;
  const view=useRef<HTMLDivElement|null>(null);
  const settled=useRef<{width:number;readingWidth?:number;docked:boolean}|null>(null);
@@ -33,25 +42,39 @@ export function useInspectorWindow(open:boolean){
   const bridge=window.lakeInspectorWindow;
   const workspace=document.querySelector<HTMLElement>('.workspace');
   if(!bridge||!workspace||!open&&!requested.current)return;
+  const shell=workspace.closest<HTMLElement>('.app-shell');
   const layout=settled.current;
-  if(layout){
+  if(layout&&(open||!bridge.prepare||nativeReveal.current)){
    workspace.style.setProperty('--inspector-main-width',`${layout.width}px`);
    if(layout.readingWidth)workspace.style.setProperty('--inspector-reading-width',`${layout.readingWidth}px`);
    workspace.classList.add('inspector-window-sizing');
    workspace.classList.toggle('inspector-window-docked',layout.docked);
   }
   let active=true,frame=0,timer=0;
+  const canAnimate=!document.hidden&&!matchMedia('(prefers-reduced-motion: reduce)').matches;
   const settle=()=>{
    if(!active)return;
    const restore=retainConversation();
-   workspace.classList.remove('inspector-window-sizing','inspector-window-docked');
+   if(!open&&nativeReveal.current){
+    // The pane is outside the restored frame. Remove it before releasing its transform.
+    flushSync(()=>setNativePresence(false));
+    nativeReveal.current=false;
+   }
+   shell?.removeAttribute('data-inspector-layout-width');
+   workspace.classList.remove('inspector-window-sizing','inspector-window-docked','inspector-window-motion');
    workspace.style.removeProperty('--inspector-main-width');
    workspace.style.removeProperty('--inspector-reading-width');
+   workspace.style.removeProperty('--inspector-motion-open-width');
+   workspace.style.removeProperty('--inspector-motion-scale');
    window.dispatchEvent(new Event('lake-workbench-layout'));
    restore();
    measure();
-   if(open)setReady(true);
-   else frame=requestAnimationFrame(()=>focusOpener?.(true));
+   if(open)flushSync(()=>setReady(true));
+   else {
+    requested.current=false;
+    setReady(false);
+    frame=requestAnimationFrame(()=>focusOpener?.(true));
+   }
   };
   const waitForViewport=(width?:number)=>{
    if(!active)return;
@@ -65,16 +88,45 @@ export function useInspectorWindow(open:boolean){
    };
    frame=requestAnimationFrame(paint);
   };
-  const request=()=>{
-   if(!open)setReady(false);
-   requested.current=open;
-   void bridge.setOpen(open).then(result=>waitForViewport(result.viewportWidth),()=>waitForViewport());
+  const legacy=()=>bridge.setOpen(open).then(result=>waitForViewport(result.viewportWidth),()=>waitForViewport());
+  const request=(run:()=>Promise<unknown>)=>{
+   if(!open&&!nativeReveal.current&&canAnimate&&workspace.querySelector('.session-inspector.is-closing')){
+    timer=window.setTimeout(()=>{void run();},inspectorExitMs);
+   }else void run();
   };
-  if(!open&&!document.hidden&&!matchMedia('(prefers-reduced-motion: reduce)').matches&&workspace.querySelector('.session-inspector.is-closing')){
-   timer=window.setTimeout(request,inspectorExitMs);
-  }else request();
+  if(open)requested.current=true;
+  if(!bridge.prepare||!bridge.animate||!shell)request(legacy);
+  else {
+   const animate=bridge.animate;
+   const requestedWidth=parseFloat(getComputedStyle(shell).getPropertyValue('--inspector-requested-width'))||382;
+   void bridge.prepare(open,requestedWidth).then(plan=>{
+    if(!active)return;
+    const growth=plan.openWidth-plan.closedWidth;
+    const run=(motion:boolean)=>animate(plan.id,motion).then(result=>waitForViewport(result.viewportWidth),()=>{
+     if(active)return legacy();
+    });
+    if(!canAnimate||growth<1||!workspace.querySelector('.session-inspector')){
+     if(open&&!nativeReveal.current)setNativePresence(undefined);
+     request(()=>run(false));
+     return;
+    }
+    // Compute pane sizes once using the expanded viewport. Each painted frame
+    // then translates the same sized card from the actual viewport width.
+    shell.setAttribute('data-inspector-layout-width',String(plan.openWidth));
+    window.dispatchEvent(new Event('lake-workbench-layout'));
+    const paneWidth=parseFloat(getComputedStyle(shell).getPropertyValue('--inspector-preferred-width'))||requestedWidth;
+    workspace.style.setProperty('--inspector-motion-open-width',`${plan.openWidth}px`);
+    workspace.style.setProperty('--inspector-motion-scale',String(paneWidth/growth));
+    workspace.classList.add('inspector-window-motion');
+    nativeReveal.current=true;
+    setNativePresence(true);
+    if(open)setReady(true);
+    // Let WebKit commit the card at its starting position before growing the window.
+    frame=requestAnimationFrame(()=>{frame=requestAnimationFrame(()=>{if(active)void run(true);});});
+   },()=>{if(active)request(legacy);});
+  }
   return()=>{active=false;cancelAnimationFrame(frame);window.clearTimeout(timer);};
  },[open,measure,focusOpener]);
  useLayoutEffect(()=>()=>{if(requested.current)void window.lakeInspectorWindow?.setOpen(false).catch(()=>{});},[]);
- return {attachView,waitingForWindow:open&&!!window.lakeInspectorWindow&&!ready};
+ return {attachView,waitingForWindow:open&&!!window.lakeInspectorWindow&&!ready,nativePresence};
 }

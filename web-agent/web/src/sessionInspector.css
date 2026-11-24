@@ -2,8 +2,8 @@
 .session-layout { position:relative; display:flex; flex:1 1 auto; min-height:0; min-width:0; overflow:hidden; }
 .session-layout > .session-view { min-width:0; overflow:hidden; }
 .workspace.has-session-inspector > .workspace-header { max-width:calc(100% - var(--inspector-width, 0px) - var(--session-content-start) - 16px); }
-.session-inspector { flex:0 0 var(--inspector-preferred-width, 382px); width:var(--inspector-preferred-width, 382px); min-width:0; height:100%; position:relative; z-index:5; display:flex; flex-direction:column; padding:12px 12px 16px; background:transparent; color:var(--foreground); outline:none; animation:inspector-arrive var(--workbench-sidebar-duration, 420ms) var(--workbench-sidebar-ease, ease-out) both; }
-.session-inspector-card { position:relative; display:flex; flex-direction:column; flex:0 1 auto; min-height:0; max-height:100%; width:100%; border:1px solid var(--border); border-radius:var(--radius-window); corner-shape:var(--corner-window); background:var(--title-glass-background); -webkit-backdrop-filter:var(--title-glass-filter); backdrop-filter:var(--title-glass-filter); box-shadow:0 3px 14px rgb(0 0 0 / 5%); overflow:hidden; }
+.session-inspector { flex:0 0 var(--inspector-preferred-width, 382px); width:var(--inspector-preferred-width, 382px); min-width:0; height:100%; position:relative; z-index:5; display:flex; flex-direction:column; padding:12px 12px 16px; background:var(--workbench-chrome-background,var(--background)); color:var(--foreground); outline:none; animation:inspector-arrive var(--workbench-sidebar-duration, 420ms) var(--workbench-sidebar-ease, ease-out) both; }
+.session-inspector-card { position:relative; display:flex; flex-direction:column; flex:0 1 auto; min-height:0; max-height:100%; width:100%; border:1px solid var(--border); border-radius:var(--radius-window); corner-shape:var(--corner-window); background:var(--title-glass-background); box-shadow:0 3px 14px rgb(0 0 0 / 5%); overflow:hidden; }
 .session-inspector.is-closing { position:absolute; right:0; top:0; bottom:0; pointer-events:none; animation:inspector-depart 180ms ease both; }
 .session-inspector-heading { display:flex; flex:none; align-items:center; gap:12px; padding:6px 12px 0 16px; border-bottom:1px solid var(--border); }
 .session-inspector-heading > svg { flex:none; color:var(--text-muted); }
@@ -262,7 +262,7 @@
 }
 @media (width < 960px) {
  .session-inspector { position:absolute; top:0; bottom:0; right:0; width:min(var(--inspector-preferred-width, 382px),100%); z-index:26; }
- .session-inspector-card { background:var(--surface); -webkit-backdrop-filter:none; backdrop-filter:none; }
+ .session-inspector-card { background:var(--surface); }
 }
 html.lake-windows-chrome .session-inspector { padding-top:52px; }
 @media (prefers-reduced-motion:reduce) { .session-inspector,.session-inspector.is-closing { animation:none; } }
@@ -275,7 +275,8 @@ html.lake-windows-chrome .session-inspector { padding-top:52px; }
 .pilot-island[data-motion=paused] .pilot-ring-value { transition:none; }
 @media(prefers-reduced-motion:reduce) { .header-inspector-toggle > svg { transition:none; } }
 
-/* Reveal the card only once the native viewport and pane budget have settled. */
+/* The native bridge keeps the pane mounted until the last resized frame. */
+.session-inspector[data-window-reveal] { animation:none; }
 .session-inspector.is-waiting { visibility:hidden; animation:none; }
 .workspace.inspector-window-sizing {
  --session-content-start:max(var(--session-gutter),calc((var(--inspector-main-width) - 960px)/2));
@@ -283,5 +284,16 @@ html.lake-windows-chrome .session-inspector { padding-top:52px; }
 }
 .workspace.inspector-window-sizing .session-layout > .session-view { flex:0 0 var(--inspector-main-width); width:var(--inspector-main-width); }
 .workspace.inspector-window-sizing > .workspace-header { max-width:calc(var(--inspector-main-width) - var(--session-content-start) - 16px); }
-.workspace.inspector-window-sizing.inspector-window-docked .session-inspector.is-closing { position:relative; right:auto; top:auto; bottom:auto; }
-.workspace.inspector-window-sizing:not(.inspector-window-docked) .session-inspector { position:absolute; inset:0 0 0 auto; width:min(var(--inspector-preferred-width, 382px),100%); z-index:26; }
+.workspace.inspector-window-sizing.inspector-window-docked:not(.inspector-window-motion) .session-inspector.is-closing { position:relative; right:auto; top:auto; bottom:auto; }
+.workspace.inspector-window-sizing:not(.inspector-window-docked,.inspector-window-motion) .session-inspector { position:absolute; inset:0 0 0 auto; width:min(var(--inspector-preferred-width, 382px),100%); z-index:26; }
+
+/* The viewport is the clock in Lake Dev. The pane and its opaque canvas share
+   this translation, while the conversation keeps its measured reading width. */
+.workspace.inspector-window-motion .session-layout > .session-inspector {
+ position:absolute;
+ inset:0 0 0 auto;
+ width:var(--inspector-preferred-width,382px);
+ z-index:26;
+ animation:none;
+ transform:translate3d(clamp(0px,calc((var(--inspector-motion-open-width) - 100vw) * var(--inspector-motion-scale)),100%),0,0);
+}

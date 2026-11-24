@@ -33,7 +33,7 @@ export function ReplyProcessSelect({sessionId,onSpecialist,onPilot}:{sessionId?:
  </label>;
 }
 
-export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=false,taskNavigation,taskMetadata,taskControls,resultsFooter,taskPage=false,waitingForWindow=false}:{snapshot:SessionSnapshot;connected:boolean;onUpdated:()=>void;worker?:SuperWorker;readOnly?:boolean;taskNavigation?:ReactNode;taskMetadata?:ReactNode;taskControls?:ReactNode;resultsFooter?:ReactNode;taskPage?:boolean;waitingForWindow?:boolean}){
+export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=false,taskNavigation,taskMetadata,taskControls,resultsFooter,taskPage=false,waitingForWindow=false,nativePresence}:{snapshot:SessionSnapshot;connected:boolean;onUpdated:()=>void;worker?:SuperWorker;readOnly?:boolean;taskNavigation?:ReactNode;taskMetadata?:ReactNode;taskControls?:ReactNode;resultsFooter?:ReactNode;taskPage?:boolean;waitingForWindow?:boolean;nativePresence?:boolean}){
  readOnly=readOnly||snapshot.session.workspaceRole==='legacy';
  const inspector=useSessionInspector()!;
  const selection=resolvedInspectorSelection(snapshot,inspector.selection);
@@ -43,6 +43,7 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
  const [present,setPresent]=useState(visible),panel=useRef<HTMLElement>(null);
  const restoreAfterExit=useRef<(()=>void)|null>(null);
  useEffect(()=>{
+  if(nativePresence!==undefined)return;
   if(visible){setPresent(true);return;}
   if(!present)return;
   const timer=setTimeout(()=>{
@@ -50,7 +51,7 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
    setPresent(false);
   },window.matchMedia('(prefers-reduced-motion: reduce)').matches?0:inspectorExitMs);
   return()=>clearTimeout(timer);
- },[visible,present]);
+ },[visible,present,nativePresence]);
  useLayoutEffect(()=>{
   if(present)return;
   restoreAfterExit.current?.();
@@ -73,7 +74,7 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
  useLayoutEffect(()=>{
   if(visible&&!selection?.automatic&&panel.current&&!panel.current.contains(document.activeElement))panel.current.focus({preventScroll:true});
  },[inspector.selection,visible]);
- if((!present&&!selection)||!target||target.sessionId!==snapshot.session.id)return null;
+ if((!(nativePresence??present)&&!selection)||!target||target.sessionId!==snapshot.session.id)return null;
  const currentEntry=selected&&task?(task.messages?.find(entry=>entry.attemptId===selected.attempt.id&&entry.kind==='progress')??task.messages?.find(entry=>entry.attemptId===selected.attempt.id)??{id:`inspector-${selected.attempt.id}`,sessionId:task.sessionId,taskId:task.id,roleId:selected.step.role,roleRunId:selected.attempt.roleRunId,attemptId:selected.attempt.id,kind:'progress',body:'',source:'runtime',sequence:0,revision:0,createdAt:selected.attempt.startedAt} satisfies SRETranscriptEntry):undefined;
  const attemptStatus=selected&&task?(selected.attempt.planRunId===task.runs?.at(-1)?.id?sreStepStatus(task,selected.step,snapshot.ai?.agentRuns):selected.attempt.status):'';
  const activeTab=hasPlan||goal?target.tab:'execution';
@@ -83,7 +84,7 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
   <button type="button" role="tab" id="inspector-plan-tab" aria-selected={activeTab==='plan'} aria-controls="inspector-plan-panel" tabIndex={activeTab==='plan'?0:-1} disabled={!hasPlan&&!goal} title={!hasPlan&&!goal?'暂无最新计划':undefined} onClick={()=>choose('plan')}>{goal?'结果与证据':'计划'}</button>
   <button type="button" role="tab" id="inspector-execution-tab" aria-selected={activeTab==='execution'} aria-controls="inspector-execution-panel" tabIndex={activeTab==='execution'?0:-1} onClick={()=>choose('execution')}>{goal?'执行过程':'执行'}</button>
  </div>;
- return <aside ref={panel} id={sessionInspectorId} tabIndex={-1} className={`session-inspector${selection?' is-open':' is-closing'}${waitingForWindow?' is-waiting':''}`} inert={!visible} aria-hidden={!visible} aria-label="任务检查" onKeyDown={event=>{if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();event.stopPropagation();inspector.close();}}}>
+ return <aside ref={panel} id={sessionInspectorId} tabIndex={-1} className={`session-inspector${selection?' is-open':' is-closing'}${waitingForWindow?' is-waiting':''}`} data-window-reveal={nativePresence||undefined} inert={!visible} aria-hidden={!visible} aria-label="任务检查" onKeyDown={event=>{if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();event.stopPropagation();inspector.close();}}}>
   <div className={`session-inspector-card${pilotOverview?' pilot-execution-card':''}`}>
    <header className={`session-inspector-heading${pilotOverview?' pilot-execution-heading':''}`}>
     {pilotOverview?<><strong className="worker-inspector-title">执行过程</strong><div className="pilot-execution-summary-host" ref={inspector.setSummaryHost}/></>:

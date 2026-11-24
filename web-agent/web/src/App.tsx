@@ -1078,7 +1078,7 @@ function AppContent() {
     bootstrap?.backendRuntime==='typescript'&&!selectedResource?sessionId??undefined:undefined);
   const selectedSuperPilot=selectedSession?.workspaceRole==='router'||!!(pilotWorkspace.workspace?.active&&
     pilotWorkspace.workspace.project.projectId===selectedSession?.projectId&&pilotWorkspace.workspace.project.routerSessionId===selectedSession?.id);
-  const {attachView:attachInspectorView,waitingForWindow:inspectorWaitingForWindow}=useInspectorWindow(inspectorOpen);
+  const {attachView:attachInspectorView,waitingForWindow:inspectorWaitingForWindow,nativePresence:inspectorNativePresence}=useInspectorWindow(inspectorOpen);
   const pilotTaskContinuation=selectedSuperPilot&&bootstrap?.backendRuntime==='typescript'&&canCompose;
   const pilotTaskReference=pilotTaskContinuation&&sessionId?pilotTaskReferences.get(sessionId):undefined;
   const pilotTaskMembers=useMemo(()=>selectedSession&&pilotTaskReference?
@@ -1864,7 +1864,7 @@ function AppContent() {
   </button>;
   const closeNavigation = <button type="button" className="icon-button mobile-only" title="关闭导航" aria-label="关闭导航" onClick={() => setMobileMenu(false)}><Glyph name="close"/></button>;
   const inspectorView=inspectedSnapshot&&activeSnapshot&&<SessionInspector key={inspectedSnapshot.session.id}
-    snapshot={inspectedSnapshot} waitingForWindow={inspectorWaitingForWindow} taskPage={isSpecialistTasks||isSpecialistExecution}
+    snapshot={inspectedSnapshot} waitingForWindow={inspectorWaitingForWindow} nativePresence={inspectorNativePresence} taskPage={isSpecialistTasks||isSpecialistExecution}
     worker={inspectedWorker}
     taskMetadata={isSpecialistTasks||isSpecialistExecution?<SpecialistTaskMetadata snapshot={inspectedSnapshot} worker={inspectedWorker}/>:undefined}
     taskControls={isSpecialistTasks?<SpecialistTaskControls snapshot={inspectedSnapshot} connected={sessionConnected}/>:undefined}

@@ -47,8 +47,9 @@
   const contextResize = new ResizeObserver(() => schedule());
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
   function paneLimits(sidebarCollapsed) {
-    const width = shell?.clientWidth || innerWidth;
-    const inspectorDocked = innerWidth >= 960;
+    const plannedWidth = Number(shell?.getAttribute('data-inspector-layout-width'));
+    const width = plannedWidth || shell?.clientWidth || innerWidth;
+    const inspectorDocked = (plannedWidth || innerWidth) >= 960;
     const terminalDocked = innerWidth > 1100;
     const inspectorPresent = inspectorDocked && !!shell.querySelector('.session-layout > .session-inspector');
     const terminalOpen = terminalDocked && shell.classList.contains('terminal-is-open');
@@ -198,6 +199,7 @@
     if (startSlide) shell.setAttribute('data-sidebar-sliding', '');
     shell.style.setProperty('--sidebar-expanded-width', `${target.expandedSidebarWidth}px`);
     shell.style.setProperty('--expanded-conversation-width', `${target.expandedConversationWidth}px`);
+    shell.style.setProperty('--inspector-requested-width', `${preferred.inspector}px`);
     for (const pane of ['sidebar', 'terminal', 'inspector']) {
       const [min, max] = target[pane];
       const width = clamp(preferred[pane], min, max);

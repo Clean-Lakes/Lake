@@ -20,4 +20,11 @@ public struct InspectorWindowExpansion {
         return CGRect(x: unchanged ? original.minX : current.minX, y: current.minY,
                       width: width, height: current.height)
     }
+
+    public static func frame(from: CGRect, to: CGRect, progress: Double) -> CGRect {
+        let time = CGFloat(max(0, min(1, progress)))
+        let eased = time * time * (3 - 2 * time)
+        return CGRect(x: from.minX + (to.minX - from.minX) * eased, y: from.minY,
+                      width: from.width + (to.width - from.width) * eased, height: from.height)
+    }
 }
