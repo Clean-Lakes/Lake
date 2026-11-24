@@ -1,7 +1,7 @@
 import type {ProgressResource} from './conversation-progress-model';
 import {MiniBox} from './MiniBox';
 import {isTerminalCommand,type MiniBoxScope} from './miniBoxModel';
-import {ExecutionDetailsOpen,RoutingRecoveryContext} from './TurnExecutionDetails';
+import {ExecutionDetailsOpen,FlatExecutionRecords,RoutingRecoveryContext} from './TurnExecutionDetails';
 import {ExecutionIcon} from './ExecutionIcon';
 import {executionCardTitle} from '../../shared/external-agents';
 import {DisclosureSummary} from './DisclosureSummary';
@@ -11,24 +11,47 @@ import remarkGfm from "remark-gfm";
 import type { AICard } from "../../shared/contracts";
 import { sameCard } from "./cardEquality";
 import { processDescription, toolDescription, toolLabels } from "./activity";
-export const ToolStep = memo(function ToolStep({ card, onInspect, active=false, hideTarget=false }: { card: AICard; onInspect?: () => void; active?:boolean; hideTarget?:boolean }) {
+const recordClock=new Intl.DateTimeFormat('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
+
+export const ToolStep = memo(function ToolStep({ card, onInspect, active=false, hideTarget=false, sourceLabel }: { card: AICard; onInspect?: () => void; active?:boolean; hideTarget?:boolean; sourceLabel?:string }) {
+  const records=useContext(FlatExecutionRecords);
   const recovered=useContext(RoutingRecoveryContext).has(card.id);
   const [open,setOpen]=useState(false);
   const data = card.data && typeof card.data === "object" ? card.data as Record<string, unknown> : {};
   const args = data.arguments && typeof data.arguments === "object" ? data.arguments as Record<string, unknown> : {};
   const state = recovered ? "首次失败 · 重试后已恢复" : card.status === "pending" ? "等待确认" : card.status === "background_running" ? "后台执行中" : card.status === "running" ? "执行中" : card.status === "failed" ? "失败" : card.status === "not_executed" ? "未执行" : ["interrupted", "cancelled"].includes(card.status) ? "已停止" : ["completed", "succeeded", "success"].includes(card.status) ? "已完成" : "结果待核查";
   const command = typeof args.command === "string" ? args.command : "";
-  return <li className={`thinking-step thinking-tool step-${recovered?'recovered':card.status}`}>
-    <span className="thinking-step-marker"><ExecutionIcon card={card} active={active&&["running","completed","succeeded","success"].includes(card.status)} size={20}/></span>
-    <details onToggle={event => { setOpen(event.currentTarget.open); if (event.currentTarget.open) onInspect?.(); }}>
-      <summary><span className="thinking-tool-label">{toolLabels[card.title || ""] || executionCardTitle(card) || "执行操作"}</span>{!hideTarget && typeof data.target === "string" && <span className="thinking-tool-target">{data.target}</span>}<small>{state}</small><svg className="thinking-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></summary>
+  const title=toolLabels[card.title||""]||executionCardTitle(card)||"执行操作";
+  const target=sourceLabel??(!hideTarget&&typeof data.target==="string"?data.target:undefined);
+  const time=records?Date.parse(card.at):NaN;
+  const hasTime=Number.isFinite(time);
+  const marker=<span className="thinking-step-marker"><ExecutionIcon card={card} active={active&&["running","completed","succeeded","success"].includes(card.status)} size={records?16:20}/></span>;
+  const recordLabel=records&&<>
+    {marker}
+    <span className="pilot-record-label">
+      <span className="thinking-tool-label">{title}</span>
+      {(hasTime||target)&&<span className="pilot-record-meta">
+        {hasTime&&<time dateTime={card.at}>{recordClock.format(time)}</time>}
+        {target&&<span className="thinking-tool-target" title={target}>{target}</span>}
+      </span>}
+    </span>
+    <small>{state}</small>
+  </>;
+  const hasDetails=!!card.content||card.data!=null;
+  return <li className={`thinking-step thinking-tool step-${recovered?'recovered':card.status}${records?' pilot-record-step':''}`}>
+    {!records&&marker}
+    {records&&!hasDetails?<div className="pilot-record-operation">{recordLabel}</div>:<details onToggle={event => { setOpen(event.currentTarget.open); if (event.currentTarget.open) onInspect?.(); }}>
+      {records?<DisclosureSummary className="pilot-record-operation">{recordLabel}</DisclosureSummary>:<summary>
+        <span className="thinking-tool-label">{title}</span>{target&&<span className="thinking-tool-target">{target}</span>}
+        <small>{state}</small><svg className="thinking-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+      </summary>}
       {open && <div className="thinking-tool-detail">
         {command ? <><strong>命令</strong><pre>{command}</pre></> : card.data != null && <><strong>调用参数</strong><pre>{JSON.stringify(data.arguments ?? card.data, null, 2)}</pre></>}
         {card.content && <><strong>结果</strong><pre>{card.content}</pre></>}
       </div>}
-    </details>
+    </details>}
   </li>;
-}, (a, b) => sameCard(a.card, b.card) && a.active === b.active && a.hideTarget === b.hideTarget && a.onInspect === b.onInspect);
+}, (a, b) => sameCard(a.card, b.card) && a.active === b.active && a.hideTarget === b.hideTarget && a.sourceLabel === b.sourceLabel && a.onInspect === b.onInspect);
 
 export const ReasonStep = memo(function ReasonStep({card}: {card: AICard}) {
   return card.content ? <li className="thinking-step thinking-reason"><span className="thinking-step-marker"><i/></span><div className="thinking-prose"><Markdown remarkPlugins={[remarkGfm]} skipHtml components={{a: props => <a {...props} target="_blank" rel="noopener noreferrer"/>}}>{card.content}</Markdown></div></li> : null;
@@ -37,8 +60,10 @@ export const ReasonStep = memo(function ReasonStep({card}: {card: AICard}) {
 export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, onInspect, resourceRow=false, continuing=false, resource, stage,stagePreview,miniScope }: { cards: AICard[]; live: boolean; onInspect?: () => void; resourceRow?:boolean; continuing?:boolean; resource?:ProgressResource; stage?:ReactNode;stagePreview?:string;miniScope?:MiniBoxScope }) {
   // Host command previews open in the dispatch render, before history arrives.
   const disclosureOpen=useContext(ExecutionDetailsOpen);
+  const records=useContext(FlatExecutionRecords);
   const terminalKind=resource?.kind==='ssh'||resource?.kind==='local'?resource.kind:undefined;
   const miniCards=terminalKind&&resource?.id&&miniScope?cards.filter(isTerminalCommand):[];
+  const flatOperations=records&&!miniCards.length&&!stage&&!stagePreview;
   const [open, setOpen] = useState(!resourceRow&&disclosureOpen);
   const inspected=useRef(false),autoOpened=useRef(false);
   if(!autoOpened.current&&!inspected.current&&miniScope?.live&&miniCards.length) {
@@ -66,13 +91,25 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
     : executing);
   const label = [description,state].filter(Boolean).join(' · ');
   const panelId = `thinking-${cards[0]!.id}`;
-  return <section className={`thinking-timeline ${resourceRow ? "is-resource-row" : ""} ${live ? "is-live" : ""} ${executing ? "is-executing" : ""} ${progressing ? "is-continuing" : ""} ${stagePreview ? "has-stage-preview" : ""}`} aria-label="思考与操作过程">
-    <button type="button" className="thinking-toggle" aria-expanded={open} aria-controls={panelId} title={stagePreview ? `${label} · ${stagePreview}` : undefined} onClick={() => { inspected.current=true;onInspect?.(); setOpen(!open); }}>
+  const displayDetails=flatOperations||open;
+  return <section className={`thinking-timeline ${resourceRow ? "is-resource-row" : ""} ${live ? "is-live" : ""} ${executing ? "is-executing" : ""} ${progressing ? "is-continuing" : ""} ${stagePreview ? "has-stage-preview" : ""}`} aria-label={flatOperations?undefined:"思考与操作过程"}>
+    {!flatOperations&&<button type="button" className="thinking-toggle" aria-expanded={open} aria-controls={panelId} title={stagePreview ? `${label} · ${stagePreview}` : undefined} onClick={() => { inspected.current=true;onInspect?.(); setOpen(!open); }}>
       <span className="thinking-process-icon"><ExecutionIcon card={currentTool} active={iconActive} resourceKind={resource?.kind}/></span><span className="thinking-label">{label}</span>{resourceRow&&tools.length>1&&<small className="thinking-operation-count">{tools.length} 项</small>}{stagePreview&&<span className="thinking-label thinking-stage-preview">{stagePreview}</span>}<svg className={`thinking-chevron ${open ? "is-open" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
-    </button>
-    {(open||hasOpened.current&&miniCards.length>0) && <div className="thinking-detail-panel" id={panelId} hidden={!open} inert={!open}>
+    </button>}
+    {(displayDetails||hasOpened.current&&miniCards.length>0) && <div className={flatOperations?"pilot-record-list":"thinking-detail-panel"} id={panelId} hidden={!displayDetails} inert={!displayDetails}>
       {stage}
-      {tools.length > 0 && <ol className="thinking-steps">{tools.map(card => miniCards.includes(card)?card.id===miniCards[0]!.id?<li className="thinking-step thinking-tool" key={card.id}><MiniBox marker scope={miniScope!} resource={resource!.id!} kind={terminalKind!} cards={miniCards} onInspect={onInspect}/><details className="mini-box-audit" onToggle={event=>setCommandsOpen(event.currentTarget.open)}><DisclosureSummary>原始执行记录 · {miniCards.length}</DisclosureSummary>{commandsOpen&&<ol className="thinking-steps">{miniCards.map(item=><ToolStep card={item} key={item.id} hideTarget onInspect={onInspect}/>)}</ol>}</details></li>:null:<ToolStep card={card} key={card.id} active={iconActive&&currentTool?.id===card.id} hideTarget={!!resource} onInspect={onInspect}/>)}</ol>}
+      {tools.length>0&&<ol className="thinking-steps" role={flatOperations?"list":undefined}>{tools.map(card=>{
+        if(!miniCards.includes(card))return <ToolStep key={card.id} card={card} active={iconActive&&currentTool?.id===card.id}
+          hideTarget={!!resource&&!flatOperations} sourceLabel={flatOperations?resource?.name:undefined} onInspect={onInspect}/>;
+        if(card.id!==miniCards[0]?.id)return null;
+        return <li className="thinking-step thinking-tool" key={card.id}>
+          <MiniBox marker scope={miniScope!} resource={resource!.id!} kind={terminalKind!} cards={miniCards} onInspect={onInspect}/>
+          <details className="mini-box-audit" onToggle={event=>setCommandsOpen(event.currentTarget.open)}>
+            <DisclosureSummary>原始执行记录 · {miniCards.length}</DisclosureSummary>
+            {commandsOpen&&<ol className="thinking-steps">{miniCards.map(item=><ToolStep card={item} key={item.id} hideTarget onInspect={onInspect}/>)}</ol>}
+          </details>
+        </li>;
+      })}</ol>}
       {thoughts.length > 0 && <details className="thinking-raw-records" onToggle={event => setRawOpen(event.currentTarget.open)}><DisclosureSummary>原始思考记录</DisclosureSummary>{rawOpen && <ol className="thinking-steps">{thoughts.map(card => <ReasonStep card={card} key={card.id}/>)}</ol>}</details>}
     </div>}
   </section>;

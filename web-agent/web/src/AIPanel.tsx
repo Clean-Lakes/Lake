@@ -268,7 +268,16 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotTaskDire
       const compactionDiagnostics=turn.flatMap(entry=>entry.card?.type==='error'&&isContextCompactionFailure(entry.card.content||'')?[<details className="compaction-diagnostic" key={`diagnostic-${entry.id}`}><DisclosureSummary>整理请求诊断</DisclosureSummary><pre>{entry.card.content}</pre></details>]:[]);
       if(fallbackDiagnostic)compactionDiagnostics.push(<details className="compaction-diagnostic" key={`diagnostic-${fallbackDiagnostic.id}`}><DisclosureSummary>整理请求诊断</DisclosureSummary><pre>{fallbackDiagnostic.card?.content??fallbackDiagnostic.message?.text}</pre></details>);
       const recoveredRouting=recoveredRouteFailures(turn.flatMap(entry=>entry.card?[entry.card]:[]));
-      const notices=[...(recoveredRouting.size?[["recovered","项派单重试后已恢复"]]:[]),['failed','项失败'],['pending','项待确认'],['unknown','项结果待核查'],['background_running','项后台执行中'],['not_executed','项未执行'],['interrupted','项已停止'],['cancelled','项已停止']].flatMap(([status,label])=>{const count=status==='recovered'?recoveredRouting.size:processGroups.flatMap(group=>group.entries).filter(entry=>entry.card?.status===status&&!(status==='failed'&&recoveredRouting.has(entry.id))).length;return count?[`${count} ${label}`]:[];}).join(' · ');
+      const processEntries=processGroups.flatMap(group=>group.entries);
+      const notices=[
+        ['recovered','项派单重试后已恢复'],['failed','项失败'],['pending','项待确认'],
+        ['unknown','项结果待核查'],['background_running','项后台执行中'],['not_executed','项未执行'],
+        ['interrupted','项已停止'],['cancelled','项已停止'],
+      ].flatMap(([status,label])=>{
+        const count=status==='recovered'?recoveredRouting.size:
+          processEntries.filter(entry=>entry.card?.status===status&&!(status==='failed'&&recoveredRouting.has(entry.id))).length;
+        return count?[{status,label:`${count} ${label}`}]:[];
+      });
       const hasSpecialistProcess = mode === 'conversation' && assistantIdentity?.pilot && !!onInspectSpecialist &&
         (turnDispatchRows.length > 0 || turn.some(({message}) => hasTaskProcess(message?.author)));
       const timingProps={connected,current:turn===currentTurn,timing,view:turn===currentTurn?snapshot.ai:undefined,cards:turn.flatMap(entry=>entry.card?[entry.card]:[]),latestUserAt:turn.find(entry=>entry.message?.role==='user')?.at??'',
@@ -325,7 +334,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotTaskDire
         if(!acknowledgement)continue;
         executionDetails.push(<InterimReply key={acknowledgement.id} entryId={acknowledgement.id} text={acknowledgement.content??''}/>);
       }
-      const hasPilotProcess=executionDetails.length>0||!!notices;
+      const hasPilotProcess=executionDetails.length>0||notices.length>0;
       const hideConversationStatus=turnConversations.length>0&&!turnDispatchRows.length&&!canonicalGoalId&&!pilotTurnLive&&!hasPilotProcess;
       const visibleGroups=groups.filter(group=>!detailGroups.includes(group)&&!(proseInChannel&&group.entries.every(channelBody)));
       const dialogueGroups=new Set<ConversationGroup>();
@@ -405,7 +414,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotTaskDire
         latestTaskId={latestInspectorTarget.taskId} canonicalGoalId={canonicalGoalId} detailsInHeader={detailsInHeader}
         assistantIdentity={assistantIdentity} hideIdentity={hideReplyIdentity} showThinkingAvatar={!hasPilotReplyAvatar}
         presentingReply={presentingReply} hideStatus={hideConversationStatus} hideLive={turn.some(entry=>entry.sre?.task.pilot)}
-        detailNotice={pilotLive?undefined:notices} details={pilotLive?[]:executionDetails} onInspect={onInspect}
+        processNotices={pilotLive?undefined:notices} details={pilotLive?[]:executionDetails} onInspect={onInspect}
         pilotOverview={assistantIdentity?.pilot&&latestExecutionTurn?<PilotExecutionOverview workspace={pilotWorkspace} session={snapshot.session} source={replyUser} messages={snapshot.messages} turn={turn} summaries={summarySlots} active={pilotAnimated} onInspect={onInspectSpecialist}/>:undefined}
         footerReportId={footerReport?.id} specialistReplies={specialistReplies} collaboration={collaboration}
       >{replyContent}</TurnExecutionDetails>:replyContent}
