@@ -415,7 +415,6 @@ a { color: inherit; }
 }
 .composer-input,.composer-backplate {
   border: 1px solid var(--composer-stroke, var(--conversation-composer-border, var(--border)));
-  border-radius: var(--radius-composer);
   background: var(--composer-fill, var(--surface));
 }
 .composer-body { display: flex; align-items: flex-end; gap: 10px; }

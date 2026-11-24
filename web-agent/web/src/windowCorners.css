@@ -26,12 +26,7 @@
  corner-shape:var(--corner-window);
 }
 
-/* Scale the window curve for compact navigation and the input frame. */
-:root :is(.composer-input,.composer-backplate) {
- --window-corner-radius:var(--radius-composer);
- --window-corner-stroke-image:url('/window-corner-stroke-compact.svg');
- --window-corner-stroke-slice:18;
-}
+/* Scale the window curve for compact navigation. */
 :root .sidebar.workspace-navigation :is(.navigation-search,.session-nav-row,.resource-row,.resource-folder-toggle,.resource-tree-row,.resource-folder-row,.resource-nav-row) {
  --window-corner-radius:18px;
  --window-corner-stroke-image:url('/window-corner-stroke-compact.svg');
