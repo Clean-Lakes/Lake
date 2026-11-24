@@ -62,6 +62,8 @@
  flex:1; min-width:0; min-height:32px; padding:0; border:0; outline:0;
  background:transparent; color:var(--foreground); font:inherit;
 }
+.sidebar-project-popup .app-select-option { column-gap:6px; }
+.sidebar-project-popup .app-select-option-content { column-gap:7px; }
 .sidebar-project-popup .app-select-option-content > svg { flex:none; color:var(--text-secondary); }
 .sidebar-project-popup .app-select-check { color:var(--info); }
 .sidebar.workspace-navigation .navigation-search { position: relative; margin: 0 13px 34px; padding: 7px 10px; min-height: 36px; background: var(--surface-hover); border-radius: var(--sidebar-row-radius); }
