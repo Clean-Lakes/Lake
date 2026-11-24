@@ -1,5 +1,6 @@
 import {createContext, useLayoutEffect, useState, type ReactNode} from 'react';
 import {Glyph} from './Icons';
+import {LakeLogo} from './LakeLogo';
 import './workbenchNavigation.css';
 
 export const WorkbenchSidebar = createContext({collapsed: false, expand() {}});
@@ -29,13 +30,18 @@ export function WorkbenchShell({className, compact, inspectorOpen, back, forward
     <div className="workbench-navigation" role="group" aria-label="工作台导航">
       <button type="button" aria-label={label} title={label} aria-expanded={!collapsed}
         aria-controls="lake-project-navigation" onClick={() => changeSidebar(!folded)}><Glyph name="panel" size={16}/></button>
-      <div className="workbench-navigation-history">
-        <button type="button" aria-label="后退" title="后退" disabled={!back} onClick={() => onStep(-1)}>
-          <Glyph name="previous" size={17}/>
-        </button>
-        <button type="button" aria-label="前进" title="前进" disabled={!forward} onClick={() => onStep(1)}>
-          <Glyph name="next" size={17}/>
-        </button>
+      <div className="workbench-navigation-trailing">
+        <span className="workbench-navigation-brand" role="img" aria-label="Lake">
+          <LakeLogo size={22} decorative/><span>Lake</span>
+        </span>
+        <div className="workbench-navigation-history">
+          <button type="button" aria-label="后退" title="后退" disabled={!back} onClick={() => onStep(-1)}>
+            <Glyph name="previous" size={17}/>
+          </button>
+          <button type="button" aria-label="前进" title="前进" disabled={!forward} onClick={() => onStep(1)}>
+            <Glyph name="next" size={17}/>
+          </button>
+        </div>
       </div>
     </div>
     <WorkbenchSidebar.Provider value={{collapsed, expand: () => changeSidebar(false)}}>{children}</WorkbenchSidebar.Provider>
