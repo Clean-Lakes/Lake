@@ -32,7 +32,7 @@
 .extension-empty {display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:350px;text-align:center;color:var(--text-muted);}
 .extension-empty h3 {font-size:17px;color:var(--foreground);margin:20px 0 0;}
 .extension-empty p {font-size:var(--font-size-ui);line-height:1.7;max-width:340px;margin:12px 0 22px;}
-.extension-empty > div {display:flex;gap:10px;}
+.extension-empty > div {display:flex;justify-content:center;flex-wrap:wrap;gap:10px;}
 .extension-skill-content {min-height:260px;}
 .extension-path {font-size:var(--font-size-ui);color:var(--text-muted);overflow-wrap:anywhere;line-height:1.6;}
 .extension-roots-button {display:flex;justify-content:center;align-items:center;gap:8px;margin-top:16px;}
@@ -45,13 +45,13 @@
 .extension-root-list > div {display:flex;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);color:var(--text-secondary);}
 .extension-root-list code {flex:1;min-width:0;font-size:11px;overflow-wrap:anywhere;}
 .extension-settings .provider-success {font-size:var(--font-size-ui);line-height:1.6;}
-@media(max-width:700px) {
+@container workspace-page (max-width:700px) {
  .extension-fields {grid-template-columns:minmax(0,1fr);}
  .extension-wide {grid-column:auto;}
  .extension-heading {flex-wrap:wrap;}
  .extension-root-form {flex-direction:column;align-items:stretch;}
 }
-@media(max-width:600px) {
+@container workspace-page (max-width:600px) {
  .extension-settings {flex-direction:column;overflow:auto;}
  .extension-rail {width:auto;max-height:240px;border-right:0;border-bottom:1px solid var(--border);}
  .extension-list {display:flex;gap:6px;overflow:auto;min-height:48px;flex:none;}
