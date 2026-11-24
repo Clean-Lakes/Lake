@@ -1,5 +1,6 @@
 /* The inspector shares the conversation workspace, without a second chat scroll. */
-.session-layout { --inspector-duration:180ms; --inspector-ease:cubic-bezier(.33,0,.67,1); position:relative; display:flex; flex:1 1 auto; min-height:0; min-width:0; overflow:hidden; }
+:root { --inspector-duration:180ms; --inspector-ease:cubic-bezier(.33,0,.67,1); }
+.session-layout { position:relative; display:flex; flex:1 1 auto; min-height:0; min-width:0; overflow:hidden; }
 .session-layout > .session-view { min-width:0; overflow:hidden; }
 .workspace.has-session-inspector > .workspace-header { max-width:calc(100% - var(--inspector-width, 0px) - var(--session-content-start) - 16px); }
 .session-inspector { flex:0 0 var(--inspector-preferred-width, 382px); width:var(--inspector-preferred-width, 382px); min-width:0; height:100%; position:relative; z-index:5; display:flex; flex-direction:column; padding:12px 12px 16px; background:var(--workbench-chrome-background,var(--background)); color:var(--foreground); outline:none; animation:inspector-arrive var(--inspector-duration) var(--inspector-ease) both; }
@@ -343,8 +344,10 @@ html.lake-windows-chrome .session-inspector { padding-top:52px; }
 .header-inspector-toggle { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; margin-left:4px; padding:0; border:0; border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); color:var(--text-muted); background:transparent; cursor:pointer; }
 .header-inspector-toggle:hover { color:var(--foreground); background:var(--surface-hover); }
 .header-inspector-toggle:focus-visible { outline:2px solid var(--focus-outline); outline-offset:2px; }
+.workspace-header .inspector-chevron { transform:rotate(0deg); transform-origin:center; transition:transform var(--inspector-duration) var(--inspector-ease); }
+.app-shell:is([data-inspector-window-open=true],:not([data-inspector-window-open]):has(.session-inspector.is-open:not(.is-waiting))) .workspace-header .inspector-chevron { transform:rotate(180deg); }
 .pilot-island[data-motion=paused] .pilot-ring-value { transition:none; }
-@media(prefers-reduced-motion:reduce) { .header-inspector-toggle > svg { transition:none; } }
+@media(prefers-reduced-motion:reduce) { .workspace-header .inspector-chevron { transition:none; } }
 
 /* The native bridge keeps the pane mounted until the last resized frame. */
 .session-layout > .session-inspector:is([data-window-reveal],.is-waiting) { animation:none; }

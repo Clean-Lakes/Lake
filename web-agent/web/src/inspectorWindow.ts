@@ -68,6 +68,7 @@ export function useInspectorWindow(open:boolean){
    measure();
    if(open)flushSync(()=>setReady(true));
    else {
+    shell?.removeAttribute('data-inspector-window-open');
     requested.current=false;
     setReady(false);
     frame=requestAnimationFrame(()=>focusOpener?.(true));
@@ -85,7 +86,10 @@ export function useInspectorWindow(open:boolean){
    };
    frame=requestAnimationFrame(paint);
   };
-  const legacy=()=>bridge.setOpen(open).then(result=>waitForViewport(result.viewportWidth),settle);
+  const legacy=()=>{
+   shell?.removeAttribute('data-inspector-window-open');
+   return bridge.setOpen(open).then(result=>waitForViewport(result.viewportWidth),settle);
+  };
   const request=(run:()=>Promise<unknown>)=>{
    if(!open&&!nativeReveal.current&&canAnimate&&workspace.querySelector('.session-inspector.is-closing')){
     timer=window.setTimeout(()=>{void run();},inspectorExitMs);
@@ -112,10 +116,15 @@ export function useInspectorWindow(open:boolean){
     workspace.classList.add('inspector-window-pinned');
     nativeReveal.current=true;
     setNativePresence(true);
+    const startWindowMotion=(motion:boolean)=>{
+     if(!active)return;
+     shell.dataset.inspectorWindowOpen=String(open);
+     void run(motion);
+    };
     waitForViewport(plan.pinnedViewportWidth,()=>{
      window.dispatchEvent(new Event('lake-workbench-layout'));
-     if(document.hidden){void run(false);return;}
-     frame=requestAnimationFrame(()=>{if(active)void run(canAnimate);});
+     if(document.hidden){startWindowMotion(false);return;}
+     frame=requestAnimationFrame(()=>startWindowMotion(canAnimate));
     });
    },()=>{if(active)request(legacy);});
   }
