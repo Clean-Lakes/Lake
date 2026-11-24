@@ -1,10 +1,10 @@
 /* The inspector shares the conversation workspace, without a second chat scroll. */
-.session-layout { position:relative; display:flex; flex:1 1 auto; min-height:0; min-width:0; overflow:hidden; }
+.session-layout { --inspector-duration:180ms; --inspector-ease:cubic-bezier(.33,0,.67,1); position:relative; display:flex; flex:1 1 auto; min-height:0; min-width:0; overflow:hidden; }
 .session-layout > .session-view { min-width:0; overflow:hidden; }
 .workspace.has-session-inspector > .workspace-header { max-width:calc(100% - var(--inspector-width, 0px) - var(--session-content-start) - 16px); }
-.session-inspector { flex:0 0 var(--inspector-preferred-width, 382px); width:var(--inspector-preferred-width, 382px); min-width:0; height:100%; position:relative; z-index:5; display:flex; flex-direction:column; padding:12px 12px 16px; background:var(--workbench-chrome-background,var(--background)); color:var(--foreground); outline:none; animation:inspector-arrive var(--workbench-sidebar-duration, 420ms) var(--workbench-sidebar-ease, ease-out) both; }
+.session-inspector { flex:0 0 var(--inspector-preferred-width, 382px); width:var(--inspector-preferred-width, 382px); min-width:0; height:100%; position:relative; z-index:5; display:flex; flex-direction:column; padding:12px 12px 16px; background:var(--workbench-chrome-background,var(--background)); color:var(--foreground); outline:none; animation:inspector-arrive var(--inspector-duration) var(--inspector-ease) both; }
 .session-inspector-card { position:relative; display:flex; flex-direction:column; flex:0 1 auto; min-height:0; max-height:100%; width:100%; border:1px solid var(--border); border-radius:var(--radius-window); corner-shape:var(--corner-window); background:var(--title-glass-background); box-shadow:0 3px 14px rgb(0 0 0 / 5%); overflow:hidden; }
-.session-inspector.is-closing { position:absolute; right:0; top:0; bottom:0; pointer-events:none; animation:inspector-depart 180ms ease both; }
+.session-inspector.is-closing { position:absolute; right:0; top:0; bottom:0; pointer-events:none; animation:inspector-depart var(--inspector-duration) var(--inspector-ease) both; }
 .session-inspector-heading { display:flex; flex:none; align-items:center; gap:12px; padding:6px 12px 0 16px; border-bottom:1px solid var(--border); }
 .session-inspector-heading > svg { flex:none; color:var(--text-muted); }
 .session-inspector-heading > button { flex:none; width:32px; height:44px; margin-left:auto; }
@@ -249,23 +249,26 @@
 .watchdog-record ul { padding-inline-start:18px; margin:5px 0; }
 .task-watchdog details { font-size:12px; color:var(--text-muted); }
 .task-watchdog details > summary { width:fit-content; max-width:100%; gap:5px; }
-@keyframes inspector-arrive { from { opacity:0; transform:translateX(100%); } to { opacity:1; transform:translateX(0); } }
-@keyframes inspector-depart { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(100%); } }
+@keyframes inspector-arrive { from { transform:translateX(100%); } }
+@keyframes inspector-depart { to { transform:translateX(100%); } }
+@keyframes inspector-dock-arrive { from { margin-inline-end:calc(-1 * var(--inspector-preferred-width,382px)); } }
+@keyframes inspector-dock-depart { to { margin-inline-end:calc(-1 * var(--inspector-preferred-width,382px)); } }
 @media (min-width:960px) {
  .workspace:has(> .session-layout > .session-inspector) {
   --inspector-width:var(--inspector-preferred-width, 382px);
   --session-content-start:max(var(--session-gutter),calc((100cqw - var(--inspector-width) - 960px)/2));
   --session-content-width:min(960px,calc(100cqw - var(--inspector-width) - var(--session-gutter) - var(--session-gutter)));
  }
- /* Keep the reading width until the inert card has left its slot. */
- .session-layout > .session-inspector.is-closing { position:relative; inset:auto; }
+ /* Reveal a fixed-width card as the space beside the conversation grows. */
+ .session-layout > .session-inspector { animation-name:inspector-dock-arrive; }
+ .session-layout > .session-inspector.is-closing { position:relative; inset:auto; animation-name:inspector-dock-depart; }
 }
 @media (width < 960px) {
- .session-inspector { position:absolute; top:0; bottom:0; right:0; width:min(var(--inspector-preferred-width, 382px),100%); z-index:26; }
+ .session-inspector { position:absolute; top:0; bottom:0; right:0; width:min(var(--inspector-preferred-width, 382px),100%); z-index:26; background:transparent; }
  .session-inspector-card { background:var(--surface); }
 }
 html.lake-windows-chrome .session-inspector { padding-top:52px; }
-@media (prefers-reduced-motion:reduce) { .session-inspector,.session-inspector.is-closing { animation:none; } }
+@media (prefers-reduced-motion:reduce) { .session-layout > .session-inspector,.session-layout > .session-inspector.is-closing { animation:none; } }
 
 .inspector-plan-context { margin:0 0 18px; color:var(--text-muted); font-size:var(--font-size-ui); }
 .inspector-plan-context > p { font-size:var(--font-size-ui); line-height:1.7; margin:12px 0 0; overflow-wrap:anywhere; }
@@ -276,24 +279,23 @@ html.lake-windows-chrome .session-inspector { padding-top:52px; }
 @media(prefers-reduced-motion:reduce) { .header-inspector-toggle > svg { transition:none; } }
 
 /* The native bridge keeps the pane mounted until the last resized frame. */
-.session-inspector[data-window-reveal] { animation:none; }
-.session-inspector.is-waiting { visibility:hidden; animation:none; }
+.session-layout > .session-inspector:is([data-window-reveal],.is-waiting) { animation:none; }
+.session-inspector.is-waiting { visibility:hidden; }
 .workspace.inspector-window-sizing {
  --session-content-start:max(var(--session-gutter),calc((var(--inspector-main-width) - 960px)/2));
  --session-content-width:var(--inspector-reading-width,min(960px,calc(var(--inspector-main-width) - var(--session-gutter) - var(--session-gutter))));
 }
 .workspace.inspector-window-sizing .session-layout > .session-view { flex:0 0 var(--inspector-main-width); width:var(--inspector-main-width); }
 .workspace.inspector-window-sizing > .workspace-header { max-width:calc(var(--inspector-main-width) - var(--session-content-start) - 16px); }
-.workspace.inspector-window-sizing.inspector-window-docked:not(.inspector-window-motion) .session-inspector.is-closing { position:relative; right:auto; top:auto; bottom:auto; }
-.workspace.inspector-window-sizing:not(.inspector-window-docked,.inspector-window-motion) .session-inspector { position:absolute; inset:0 0 0 auto; width:min(var(--inspector-preferred-width, 382px),100%); z-index:26; }
+.workspace.inspector-window-sizing.inspector-window-docked:not(.inspector-window-pinned) .session-inspector.is-closing { position:relative; right:auto; top:auto; bottom:auto; }
+.workspace.inspector-window-sizing:not(.inspector-window-docked,.inspector-window-pinned) .session-inspector { position:absolute; inset:0 0 0 auto; width:min(var(--inspector-preferred-width, 382px),100%); z-index:26; }
 
-/* The viewport is the clock in Lake Dev. The pane and its opaque canvas share
-   this translation, while the conversation keeps its measured reading width. */
-.workspace.inspector-window-motion .session-layout > .session-inspector {
+/* WebKit paints the complete right pane beside the chat. AppKit clips this
+   unchanged viewport as the window moves, exposing both surfaces together. */
+.workspace.inspector-window-pinned .session-layout > .session-inspector {
  position:absolute;
- inset:0 0 0 auto;
+ inset:0 auto 0 var(--inspector-main-width);
  width:var(--inspector-preferred-width,382px);
  z-index:26;
  animation:none;
- transform:translate3d(clamp(0px,calc((var(--inspector-motion-open-width) - 100vw) * var(--inspector-motion-scale)),100%),0,0);
 }

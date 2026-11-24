@@ -3,10 +3,10 @@ import {flushSync} from 'react-dom';
 import {inspectorExitMs,retainConversation,useSessionInspector} from './SessionInspectorContext';
 
 type InspectorWindowSize={addedWidth:number;viewportWidth?:number};
-type InspectorWindowPlan={id:number;closedWidth:number;openWidth:number};
+type InspectorWindowPlan={id:number;pinnedViewportWidth?:number};
 declare global {interface Window {lakeInspectorWindow?:{
  setOpen:(open:boolean)=>Promise<InspectorWindowSize>;
- prepare?:(open:boolean,width:number)=>Promise<InspectorWindowPlan>;
+ prepare?:(open:boolean,width:number,docked:boolean)=>Promise<InspectorWindowPlan>;
  animate?:(id:number,animate:boolean)=>Promise<InspectorWindowSize>;
 };}}
 
@@ -60,12 +60,9 @@ export function useInspectorWindow(open:boolean){
     flushSync(()=>setNativePresence(false));
     nativeReveal.current=false;
    }
-   shell?.removeAttribute('data-inspector-layout-width');
-   workspace.classList.remove('inspector-window-sizing','inspector-window-docked','inspector-window-motion');
+   workspace.classList.remove('inspector-window-sizing','inspector-window-docked','inspector-window-pinned');
    workspace.style.removeProperty('--inspector-main-width');
    workspace.style.removeProperty('--inspector-reading-width');
-   workspace.style.removeProperty('--inspector-motion-open-width');
-   workspace.style.removeProperty('--inspector-motion-scale');
    window.dispatchEvent(new Event('lake-workbench-layout'));
    restore();
    measure();
@@ -76,19 +73,19 @@ export function useInspectorWindow(open:boolean){
     frame=requestAnimationFrame(()=>focusOpener?.(true));
    }
   };
-  const waitForViewport=(width?:number)=>{
+  const waitForViewport=(width:number|undefined,next=settle)=>{
    if(!active)return;
-   if(document.hidden){settle();return;}
+   if(document.hidden){next();return;}
    // The native reply can arrive before WebKit has applied the new viewport.
    // Keep a short fallback for an independent window resize racing the request.
    const deadline=performance.now()+100;
    const paint=(now:number)=>{
     if(width&&Math.abs(innerWidth-width)>1&&now<deadline){frame=requestAnimationFrame(paint);return;}
-    settle();
+    next();
    };
    frame=requestAnimationFrame(paint);
   };
-  const legacy=()=>bridge.setOpen(open).then(result=>waitForViewport(result.viewportWidth),()=>waitForViewport());
+  const legacy=()=>bridge.setOpen(open).then(result=>waitForViewport(result.viewportWidth),settle);
   const request=(run:()=>Promise<unknown>)=>{
    if(!open&&!nativeReveal.current&&canAnimate&&workspace.querySelector('.session-inspector.is-closing')){
     timer=window.setTimeout(()=>{void run();},inspectorExitMs);
@@ -99,30 +96,28 @@ export function useInspectorWindow(open:boolean){
   else {
    const animate=bridge.animate;
    const requestedWidth=parseFloat(getComputedStyle(shell).getPropertyValue('--inspector-requested-width'))||382;
-   void bridge.prepare(open,requestedWidth).then(plan=>{
+   const docked=!!layout?.docked&&!shell.classList.contains('terminal-is-open');
+   void bridge.prepare(open,requestedWidth,docked).then(plan=>{
     if(!active)return;
-    const growth=plan.openWidth-plan.closedWidth;
     const run=(motion:boolean)=>animate(plan.id,motion).then(result=>waitForViewport(result.viewportWidth),()=>{
      if(active)return legacy();
     });
-    if(!canAnimate||growth<1||!workspace.querySelector('.session-inspector')){
+    if(!plan.pinnedViewportWidth||!layout||!workspace.querySelector('.session-inspector')){
      if(open&&!nativeReveal.current)setNativePresence(undefined);
      request(()=>run(false));
      return;
     }
-    // Compute pane sizes once using the expanded viewport. Each painted frame
-    // then translates the same sized card from the actual viewport width.
-    shell.setAttribute('data-inspector-layout-width',String(plan.openWidth));
-    window.dispatchEvent(new Event('lake-workbench-layout'));
-    const paneWidth=parseFloat(getComputedStyle(shell).getPropertyValue('--inspector-preferred-width'))||requestedWidth;
-    workspace.style.setProperty('--inspector-motion-open-width',`${plan.openWidth}px`);
-    workspace.style.setProperty('--inspector-motion-scale',String(paneWidth/growth));
-    workspace.classList.add('inspector-window-motion');
+    // The host clips a fully laid-out viewport. Paint the card beside the
+    // frozen chat before letting the window uncover either surface.
+    workspace.classList.add('inspector-window-pinned');
     nativeReveal.current=true;
     setNativePresence(true);
     if(open)setReady(true);
-    // Let WebKit commit the card at its starting position before growing the window.
-    frame=requestAnimationFrame(()=>{frame=requestAnimationFrame(()=>{if(active)void run(true);});});
+    waitForViewport(plan.pinnedViewportWidth,()=>{
+     window.dispatchEvent(new Event('lake-workbench-layout'));
+     if(document.hidden){void run(false);return;}
+     frame=requestAnimationFrame(()=>{if(active)void run(canAnimate);});
+    });
    },()=>{if(active)request(legacy);});
   }
   return()=>{active=false;cancelAnimationFrame(frame);window.clearTimeout(timer);};

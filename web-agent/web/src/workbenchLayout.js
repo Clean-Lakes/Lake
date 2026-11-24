@@ -47,9 +47,8 @@
   const contextResize = new ResizeObserver(() => schedule());
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
   function paneLimits(sidebarCollapsed) {
-    const plannedWidth = Number(shell?.getAttribute('data-inspector-layout-width'));
-    const width = plannedWidth || shell?.clientWidth || innerWidth;
-    const inspectorDocked = (plannedWidth || innerWidth) >= 960;
+    const width = shell?.clientWidth || innerWidth;
+    const inspectorDocked = innerWidth >= 960;
     const terminalDocked = innerWidth > 1100;
     const inspectorPresent = inspectorDocked && !!shell.querySelector('.session-layout > .session-inspector');
     const terminalOpen = terminalDocked && shell.classList.contains('terminal-is-open');

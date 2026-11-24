@@ -37,9 +37,37 @@ import LakeDesktopCore
     }
 }
 
+@MainActor private final class WorkbenchContentView: NSView {
+    private let webView: WKWebView
+    var inspectorViewportWidth: CGFloat? {
+        didSet { resizeWebView() }
+    }
+
+    init(webView: WKWebView) {
+        self.webView = webView
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        addSubview(webView)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func resizeSubviews(withOldSize oldSize: NSSize) {
+        resizeWebView()
+    }
+
+    private func resizeWebView() {
+        let size = NSSize(width: inspectorViewportWidth ?? bounds.width, height: bounds.height)
+        if webView.frame.size != size { webView.setFrameSize(size) }
+    }
+}
+
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler, WKScriptMessageHandlerWithReply {
     private var window: NSWindow!
     private var webView: WKWebView!
+    private var workbenchContent: WorkbenchContentView!
     private let backend = Backend()
     private let updater = Updater()
     private let profile = DesktopProfile(bundleIdentifier: Bundle.main.bundleIdentifier)
@@ -131,7 +159,7 @@ import LakeDesktopCore
         let inspectorBridge = """
         window.lakeInspectorWindow = {
           setOpen: open => window.webkit.messageHandlers.lakeInspectorWindow.postMessage({open}),
-          prepare: (open, width) => window.webkit.messageHandlers.lakeInspectorWindow.postMessage({action:'prepare', open, width}),
+          prepare: (open, width, docked) => window.webkit.messageHandlers.lakeInspectorWindow.postMessage({action:'prepare', open, width, docked}),
           animate: (id, animate) => window.webkit.messageHandlers.lakeInspectorWindow.postMessage({action:'animate', id, animate})
         };
         """
@@ -162,7 +190,8 @@ import LakeDesktopCore
         window.toolbarStyle = .unified
         window.backgroundColor = NSColor(calibratedWhite: 252/255, alpha: 1)
         window.minSize = NSSize(width: 850, height: 600)
-        window.contentView = webView
+        workbenchContent = WorkbenchContentView(webView: webView)
+        window.contentView = workbenchContent
         (window as? WorkbenchWindow)?.shouldStartDrag = { [weak self] event in
             guard let self, self.sameOrigin(self.webView.url) else { return false }
             let local = self.webView.convert(event.locationInWindow, from: nil)
@@ -278,10 +307,17 @@ import LakeDesktopCore
             }
             guard let open = body["open"] as? Bool else { replyHandler(nil, "窗口请求不可用"); return }
             let width = body["width"] as? Double ?? 382
-            let transition = prepareInspector(open, width: width.isFinite ? min(900, max(280, width)) : 382)
-            if body["action"] as? String == "prepare" {
-                replyHandler(["id": transition.id, "closedWidth": inspectorViewport(transition.closed),
-                              "openWidth": inspectorViewport(transition.expanded)], nil)
+            let preparesViewport = body["action"] as? String == "prepare"
+            let transition = prepareInspector(open, width: width.isFinite ? min(900, max(280, width)) : 382,
+                preparesViewport: preparesViewport, docked: body["docked"] as? Bool == true)
+            if preparesViewport {
+                var result: [String: Any] = ["id": transition.id]
+                if transition.expanded.width > transition.closed.width {
+                    let viewport = inspectorViewport(transition.expanded)
+                    workbenchContent.inspectorViewportWidth = viewport
+                    result["pinnedViewportWidth"] = viewport
+                }
+                replyHandler(result, nil)
             } else {
                 animateInspector(transition, animated: false, reply: replyHandler)
             }
@@ -389,7 +425,7 @@ import LakeDesktopCore
         inspectorAnimation = nil
         inspectorAnimationReply = nil
     }
-    private func prepareInspector(_ open: Bool, width: CGFloat) -> InspectorTransition {
+    private func prepareInspector(_ open: Bool, width: CGFloat, preparesViewport: Bool, docked: Bool) -> InspectorTransition {
         let interrupted = inspectorTransition
         let cancelledReply = inspectorAnimationReply
         cancelInspectorAnimation()
@@ -404,8 +440,11 @@ import LakeDesktopCore
             closed = expansion.closing(current: current, minimumWidth: window.minSize.width)
             expanded = current
         } else if open {
-            let expansion = InspectorWindowExpansion(frame: current, visible: window.screen?.visibleFrame ?? current,
-                                                      width: width, fullscreen: window.styleMask.contains(.fullScreen))
+            let visible = window.screen?.visibleFrame ?? current
+            // Leave the viewport fixed when the screen cannot fit the entire pane alongside the chat.
+            let fits = !preparesViewport || (docked && current.width + width <= visible.width)
+            let expansion = InspectorWindowExpansion(frame: current, visible: visible,
+                                                      width: fits ? width : 0, fullscreen: window.styleMask.contains(.fullScreen))
             inspectorExpansion = expansion
             closed = current
             expanded = expansion.expanded
@@ -426,7 +465,7 @@ import LakeDesktopCore
             return
         }
         modelPanel?.close(notify: true)
-        let duration = transition.open ? 0.42 : 0.18
+        let duration = 0.18
         let started = ProcessInfo.processInfo.systemUptime
         let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] timer in
             MainActor.assumeIsolated {
@@ -436,7 +475,7 @@ import LakeDesktopCore
                     self.cancelInspectorAnimation()
                     self.finishInspector(transition, reply: reply)
                 } else {
-                    self.window.setFrame(InspectorWindowExpansion.frame(from: from, to: target, progress: elapsed), display: true)
+                    self.window.setFrame(InspectorWindowExpansion.frame(from: from, to: target, progress: elapsed), display: false)
                 }
             }
         }
@@ -445,13 +484,14 @@ import LakeDesktopCore
         RunLoop.main.add(timer, forMode: .common)
     }
     private func finishInspector(_ transition: InspectorTransition, reply: (Any?, String?) -> Void) {
-        let added = transition.open ? transition.expanded.width - transition.closed.width : 0
         if window.frame != transition.target {
             modelPanel?.close(notify: true)
             window.setFrame(transition.target, display: true)
         }
+        workbenchContent.inspectorViewportWidth = nil
         inspectorTransition = nil
-        if !transition.open { inspectorExpansion = nil }
+        inspectorExpansion = transition.open ? InspectorWindowExpansion(original: transition.closed, expanded: window.frame) : nil
+        let added = inspectorExpansion?.addedWidth ?? 0
         reply(["addedWidth": Double(added), "viewportWidth": inspectorViewport(window.frame)], nil)
     }
     private func restoreInspectorWindow(display: Bool) {
@@ -462,6 +502,7 @@ import LakeDesktopCore
         inspectorTransition = nil
         inspectorExpansion = nil
         if let closed { window.setFrame(closed, display: display) }
+        workbenchContent?.inspectorViewportWidth = nil
     }
     func applicationWillTerminate(_ notification: Notification) {
         guard inspectorTransition != nil || inspectorExpansion != nil else { return }
