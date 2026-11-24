@@ -1,6 +1,5 @@
 import {createContext, useLayoutEffect, useState, type ReactNode} from 'react';
 import {Glyph} from './Icons';
-import {LakeWordmark} from './LakeLogo';
 import './workbenchNavigation.css';
 
 export const WorkbenchSidebar = createContext({collapsed: false, expand() {}});
@@ -30,7 +29,7 @@ export function WorkbenchShell({className, compact, inspectorOpen, back, forward
     <div className="workbench-navigation" role="group" aria-label="工作台导航">
       <button type="button" aria-label={label} title={label} aria-expanded={!collapsed}
         aria-controls="lake-project-navigation" onClick={() => changeSidebar(!folded)}><Glyph name="panel" size={16}/></button>
-      <LakeWordmark className="workbench-navigation-brand"/>
+      <span className="workbench-navigation-brand">Lake</span>
       <div className="workbench-navigation-history">
         <button type="button" aria-label="后退" title="后退" disabled={!back} onClick={() => onStep(-1)}>
           <Glyph name="previous" size={17}/>
