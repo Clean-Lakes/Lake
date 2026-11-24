@@ -1,7 +1,5 @@
 import {ExternalAgentSettings} from './ExternalAgentSettings';
 import {GatewaySettings,type GatewayTaskTarget} from './GatewaySettings';
-import {WatchdogSettings} from "./WatchdogSettings";
-import {MemorySettings} from "./MemorySettings";
 import {MCPSettings,SkillSettings} from "./ExtensionSettings";
 import {ProviderIcon} from "./ProviderIcon";
 import {Glyph} from "./Icons";
@@ -32,11 +30,11 @@ function Switch({checked,label,onChange,disabled=false}: {checked:boolean;label:
 }
 export type SettingsNavigationHandle = {confirmLeave: () => boolean | Promise<boolean>};
 
-export function ModelSettings({tab,onTabChange,navigationGuard,onBusyChange,onChanged,sendShortcut,onShortcutChange,completionEnabled,onCompletionEnabledChange,onSessionConfig:openSessionConfig,onProjectMemory:openProjectMemory,projectId,projectName,ignoreProjectMemory,onIgnoreProjectMemoryChange,memoryEngine,capabilityDetectionEnabled=false,onGatewayTask:openGatewayTask}: {
-  tab:SettingsPage;onTabChange:(tab:SettingsPage)=>void;navigationGuard?:Ref<SettingsNavigationHandle>;onBusyChange:(busy:boolean)=>void;
-  onChanged:()=>Promise<void>;sendShortcut:SendShortcut;onShortcutChange:(value:SendShortcut)=>void;onSessionConfig?:()=>void;onProjectMemory?:()=>void;projectId?:string;projectName?:string;
+export function ModelSettings({tab,navigationGuard,onBusyChange,onChanged,sendShortcut,onShortcutChange,completionEnabled,onCompletionEnabledChange,onSessionConfig:openSessionConfig,projectId,projectName,capabilityDetectionEnabled=false,onGatewayTask:openGatewayTask}: {
+  tab:SettingsPage;navigationGuard?:Ref<SettingsNavigationHandle>;onBusyChange:(busy:boolean)=>void;
+  onChanged:()=>Promise<void>;sendShortcut:SendShortcut;onShortcutChange:(value:SendShortcut)=>void;onSessionConfig?:()=>void;projectId?:string;projectName?:string;
   completionEnabled?:boolean;onCompletionEnabledChange?:(value:boolean)=>void;
-  ignoreProjectMemory:boolean;onIgnoreProjectMemoryChange:(value:boolean)=>void;memoryEngine?:'layered';capabilityDetectionEnabled?:boolean;onGatewayTask?:(target:GatewayTaskTarget)=>Promise<void>;
+  capabilityDetectionEnabled?:boolean;onGatewayTask?:(target:GatewayTaskTarget)=>Promise<void>;
 }) {
   const [extensionBusy,setExtensionBusy]=useState(false);
   const [actionsHost,setActionsHost]=useState<HTMLDivElement|null>(null);
@@ -68,7 +66,6 @@ export function ModelSettings({tab,onTabChange,navigationGuard,onBusyChange,onCh
   const addressInput = useRef<HTMLInputElement>(null), keyInput = useRef<HTMLInputElement>(null), modelsButton = useRef<HTMLButtonElement>(null);
   const [sourcesExpanded,setSourcesExpanded] = useState(false);
   const onSessionConfig=openSessionConfig && (()=>void leave(openSessionConfig));
-  const onProjectMemory=openProjectMemory && (()=>void leave(openProjectMemory));
   const onGatewayTask=openGatewayTask && ((target:GatewayTaskTarget)=>leave(()=>openGatewayTask(target)));
   const draft = drafts[selected];
   const isBusy = !!busy||extensionBusy;
@@ -284,9 +281,8 @@ export function ModelSettings({tab,onTabChange,navigationGuard,onBusyChange,onCh
   const rows=Object.values(drafts);
   return <section ref={pageRef} id="workspace-settings-page" className="workspace-page model-settings-page" aria-labelledby="model-settings-title">
     <WorkspacePageHeader id="model-settings-title" title={consoleCategoryLabel(tab) ?? '设置'}
-      actions={tab==='channels' ? <div ref={setActionsHost} className="workspace-console-page-action"/> :
-        tab==='memory' ? <span className="memory-experimental-badge" aria-label="实验功能">实验</span> : undefined}/>
-    {tab==="channels"?<GatewaySettings actionsHost={actionsHost} onBusyChange={setExtensionBusy} projectId={projectId} onTask={onGatewayTask}/>:tab==="agents"?<ExternalAgentSettings key={projectId??"none"} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="watchdog"?<WatchdogSettings key={projectId??'none'} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="memory"?<MemorySettings memoryEngine={memoryEngine} onProjectMemory={onProjectMemory} key={projectId||'global'} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="mcp"?<MCPSettings onBusyChange={setExtensionBusy}/>:tab==="skills"?<SkillSettings onBusyChange={setExtensionBusy}/>:tab==="appearance" ? <AppearanceSettings/> : tab==="conversation" ? <section id="conversation-settings-panel" role="tabpanel" aria-labelledby="conversation-settings-tab" className="model-conversation conversation-settings">
+      actions={tab==='channels' ? <div ref={setActionsHost} className="workspace-console-page-action"/> : undefined}/>
+    {tab==="channels"?<GatewaySettings actionsHost={actionsHost} onBusyChange={setExtensionBusy} projectId={projectId} onTask={onGatewayTask}/>:tab==="agents"?<ExternalAgentSettings key={projectId??"none"} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="mcp"?<MCPSettings onBusyChange={setExtensionBusy}/>:tab==="skills"?<SkillSettings onBusyChange={setExtensionBusy}/>:tab==="appearance" ? <AppearanceSettings/> : tab==="conversation" ? <section id="conversation-settings-panel" role="tabpanel" aria-labelledby="conversation-settings-tab" className="model-conversation conversation-settings">
       <WorkspaceSettingSection id="conversation-message-settings" title="消息">
         <div className="workspace-setting-card">
           <div className="workspace-setting-row">
@@ -310,28 +306,10 @@ export function ModelSettings({tab,onTabChange,navigationGuard,onBusyChange,onCh
           </div>}
         </div>
       </WorkspaceSettingSection>
-      {(onProjectMemory || onSessionConfig) && <WorkspaceSettingSection id="conversation-memory-settings" title="会话与记忆">
-        <div className="workspace-setting-card">
-          {onProjectMemory && <div className="workspace-setting-row">
-            <div className="workspace-setting-copy">
-              <strong>项目记忆</strong>
-              {projectName && <p className="settings-note">{projectName}</p>}
-            </div>
-            <button type="button" className="button secondary" onClick={memoryEngine==='layered'?()=>onTabChange('memory'):onProjectMemory}>配置项目记忆</button>
-          </div>}
-          {onSessionConfig && <>
-            <div className="workspace-setting-row">
-              <div className="workspace-setting-copy">
-                <strong>本轮忽略记忆</strong>
-                <p className="settings-note">下一条消息跳过记忆读取和采集，发送后自动取消。</p>
-              </div>
-              <Switch label="本轮忽略记忆" checked={ignoreProjectMemory} onChange={onIgnoreProjectMemoryChange}/>
-            </div>
-            <div className="workspace-setting-row">
-              <div className="workspace-setting-copy"><strong>当前会话</strong></div>
-              <button type="button" className="button secondary" onClick={onSessionConfig}>当前会话配置</button>
-            </div>
-          </>}
+      {onSessionConfig && <WorkspaceSettingSection id="conversation-session-settings" title="会话">
+        <div className="workspace-setting-card workspace-setting-row">
+          <div className="workspace-setting-copy"><strong>当前会话</strong></div>
+          <button type="button" className="button secondary" onClick={onSessionConfig}>当前会话配置</button>
         </div>
       </WorkspaceSettingSection>}
     </section> : <div id="model-settings-panel" role="tabpanel" aria-labelledby="model-settings-tab" className="model-settings-body">

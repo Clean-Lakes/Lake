@@ -215,7 +215,3 @@ input.provider-switch::before { content:""; }
 .provider-discovery-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
 .provider-discovery-actions > span { font-size: var(--font-size-ui); color: var(--text-muted); }
 .provider-add,.provider-text-button,.provider-row-icon { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
-
-.watchdog-settings .workspace-setting-row > span { overflow-wrap:anywhere; }
-.watchdog-settings-error { display:flex; align-items:center; flex-wrap:wrap; gap:8px 16px; }
-.watchdog-settings-error .form-error { flex:1; min-width:0; }

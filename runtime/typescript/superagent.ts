@@ -156,7 +156,7 @@ export class LakeSuperagent implements AgentHost {
   private taskStops = new Map<string, Promise<void>>();
   private heartbeat: ReturnType<typeof setInterval>;
   private watchdogTimer: ReturnType<typeof setInterval>;
-  constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH,readonly mysql?:LakeMySQL,readonly execution?:LakeExecution, private readonly watchdogClock = Date.now,readonly configuration?:PilotConfiguration, readonly services?:LakeServiceResources) {
+  constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH,readonly mysql?:LakeMySQL,readonly execution?:LakeExecution, private readonly watchdogClock = Date.now,readonly configuration?:PilotConfiguration, readonly services?:LakeServiceResources, allowWatchdogModeOverrides = true) {
     this.discoveryRecovery = new ProgramDiscoveryRecovery(store, agents.sessions);
     this.operatorReviews = new OperatorEffectReviewService(store, agents.sessions, operation => {
       if (!ssh || !operation.resourceId || !operation.hostConfigurationHash)
@@ -245,7 +245,7 @@ export class LakeSuperagent implements AgentHost {
         return agents.steer(sample.sessionId,text,inputId);
       },
       changed: sample => this.notify(sample.sessionId,"specialist"),
-    },watchdogClock);
+    },watchdogClock,allowWatchdogModeOverrides);
     // A process boundary revokes every previous execution owner. Unknown effects
     // remain unknown; neither a pending UI approval nor a queued SDK call is replayed.
     store.transaction(() => {
