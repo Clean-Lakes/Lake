@@ -1,0 +1,43 @@
+.save-action.button { position:relative; }
+.save-action-size { visibility:hidden; }
+.save-action-feedback {
+  position:absolute; inset:0; display:flex; justify-content:center; align-items:center;
+  white-space:nowrap; gap:4px;
+}
+@keyframes lake-control-appear {
+  from { opacity:.4; transform:translateY(3px); }
+  to { opacity:1; transform:none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .save-action-feedback,.bulk-navigation-toolbar,.workspace-bulk-actions {
+    animation:lake-control-appear 155ms cubic-bezier(.2,.8,.2,1) both;
+  }
+  .composer-input .send-button {
+    transition:background-color 145ms ease-out,color 145ms ease-out;
+  }
+  .composer-input .send-button > svg { transition:transform 145ms cubic-bezier(.2,.8,.2,1); }
+  .composer-input .send-button:not(.stop-button,[data-send-ready]) > svg { transform:scale(.9); }
+  .composer-input .send-button.stop-button { animation:lake-control-appear 155ms cubic-bezier(.2,.8,.2,1) both; }
+}
+
+.composer-resizing-surface { display:grid; align-content:end; }
+.composer-resizing-content { min-width:0; }
+
+.message-image-preview[data-image-moving] { overflow:visible; }
+.message-image-preview > img { transform-origin:top left; }
+@keyframes lake-image-backdrop-in { from { opacity:0; } to { opacity:1; } }
+@keyframes lake-image-backdrop-out { from { opacity:1; } to { opacity:0; } }
+@media (prefers-reduced-motion:no-preference) {
+  .message-image-preview[open]::backdrop { animation:lake-image-backdrop-in 175ms ease-out both; }
+  .message-image-preview[data-image-closing]::backdrop {
+    animation:lake-image-backdrop-out 160ms ease-out both;
+  }
+}
+
+.app-select-popup[data-menu-motion][inert] { pointer-events:none; }
+@media (prefers-reduced-motion:no-preference) {
+  .app-select-popup[data-menu-motion] .app-select-option,
+  .lake-native-model-panel .composer-model-popup .app-select-option {
+    transition:background-color 100ms ease-out;
+  }
+}

@@ -5,6 +5,9 @@
 @import "./settledReply.css";
 @import './operationOutcomes.css';
 @import "./theme.css";
+@import "./controlFeedback.css";
+@import "./tabSelectionIndicator.css";
+@import "./resourceFolderRename.css";
 @import "./surfaceGeometry.css";
 @import "./statusText.css";
 @import "./contextUsage.css";

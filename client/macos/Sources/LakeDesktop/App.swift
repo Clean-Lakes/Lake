@@ -329,7 +329,7 @@ import LakeDesktopCore
             guard #available(macOS 26.0, *), message.webView === webView, message.frameInfo.isMainFrame,
                   sameOrigin(message.frameInfo.request.url), let body = message.body as? [String: Any], let action = body["action"] as? String,
                   let origin else { replyHandler(nil, "原生模型面板不可用"); return }
-            if action == "close" { modelPanel?.close(notify: false); replyHandler(true, nil); return }
+            if action == "close" { modelPanel?.close(notify: false, restoreFocus: false, animated: true); replyHandler(true, nil); return }
             guard action == "show", let state = body["state"] as? [String: Any] else { replyHandler(nil, "未知的面板请求"); return }
             if modelPanel == nil { modelPanel = NativeModelPanel(parent: window, webView: webView, origin: origin) }
             guard modelPanel?.show(state) == true else { replyHandler(nil, "模型面板位置不可用"); return }
@@ -375,7 +375,10 @@ import LakeDesktopCore
     func windowDidChangeScreen(_ notification: Notification) { updateInspectorAnimationScreen() }
     func applicationDidChangeScreenParameters(_ notification: Notification) { updateInspectorAnimationScreen() }
     func windowDidChangeOcclusionState(_ notification: Notification) {
-        if !window.occlusionState.contains(.visible) { finishPendingInspectorAnimation() }
+        if !window.occlusionState.contains(.visible) {
+            finishPendingInspectorAnimation()
+            modelPanel?.close(notify: true)
+        }
     }
     func windowWillStartLiveResize(_ notification: Notification) { finishPendingInspectorAnimation() }
     func windowWillMiniaturize(_ notification: Notification) {
