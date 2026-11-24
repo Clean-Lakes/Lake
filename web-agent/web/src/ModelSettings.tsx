@@ -24,16 +24,16 @@ import "./gatewaySettings.css";
 const formats = [["openai","OpenAI · Chat Completions"],["openai-response","OpenAI · Responses"],["claude","Anthropic · Messages"],["gemini","Gemini · Generate Content"],["azure-gpt","Azure OpenAI"],["ollama","Ollama"]];
 const magpieSelection = "__magpie__";
 const newProviderSelection = "__new_provider__";
-const settingsTabs:readonly {key:string;label:string;panel?:string;icon?:"plug"|"book";requiresWatchdog?:boolean}[] = [
-  {key:"channels",label:"接入渠道",requiresWatchdog:true},
-  {key:"agents",label:"Agent 执行器"},
-  {key:"models",label:"Pilot 模型",panel:"model"},
-  {key:"mcp",label:"MCP 工具",icon:"plug"},
-  {key:"skills",label:"Skills",icon:"book"},
-  {key:"memory",label:"记忆"},
-  {key:"conversation",label:"对话"},
-  {key:"watchdog",label:"巡检",requiresWatchdog:true},
-  {key:"appearance",label:"外观"},
+const settingsTabs:readonly {key:string;label:string;title?:string;description:string;panel?:string;requiresWatchdog?:boolean}[] = [
+  {key:"channels",label:"接入渠道",description:"让外部客户端向 Lake 发送消息，由 Pilot 统一处理。",requiresWatchdog:true},
+  {key:"agents",label:"Agent 执行器",description:"配置 Lake 调用的执行 Agent，统一收集任务过程与结果。"},
+  {key:"models",label:"Pilot 模型",title:"模型设置",description:"配置供应商与模型，在聊天中随时切换。",panel:"model"},
+  {key:"mcp",label:"MCP 工具",description:"连接外部工具，在对话中按需调用。"},
+  {key:"skills",label:"Skills",title:"Skills 设置",description:"管理可复用的操作流程与本机技能目录。"},
+  {key:"memory",label:"记忆",description:"管理 Lake 记住的偏好，以及回答时如何使用。"},
+  {key:"conversation",label:"对话",title:"对话设置",description:"配置发送快捷键、文字补齐和会话偏好。"},
+  {key:"watchdog",label:"巡检",title:"巡检设置",description:"统一管理当前项目的任务巡检。",requiresWatchdog:true},
+  {key:"appearance",label:"外观",title:"外观设置",description:"选择工作台主题，立即生效并自动保存。"},
 ];
 
 function Switch({checked,label,onChange,disabled=false}: {checked:boolean;label:string;onChange:(value:boolean)=>void;disabled?:boolean}) {
@@ -60,6 +60,7 @@ export function ModelSettings({initialTab="models",onClose:closeSettings,onChang
   const [deleteConfirm,setDeleteConfirm] = useState(false);
   const [detection,setDetection] = useState<{id:string;status:string;total:number;complete:number}|null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const tabsRef = useRef<HTMLDivElement>(null);
   const providerListRef = useRef<HTMLDivElement>(null);
   const discardDialog = useRef<HTMLDialogElement>(null);
   const decision = useRef<((discard:boolean)=>void)|null>(null);
@@ -104,6 +105,15 @@ export function ModelSettings({initialTab="models",onClose:closeSettings,onChang
     else if (focusSource.current && sourceToggle.current?.getClientRects().length) sourceToggle.current.focus();
     presetFocus.current=null;focusSource.current=false;
   },[selected,sourcesExpanded]);
+  useLayoutEffect(()=>{
+    const tabs=tabsRef.current;
+    if(!tabs)return;
+    const revealSelected=()=>tabs.querySelector('[aria-selected="true"]')?.scrollIntoView({block:"nearest",inline:"nearest"});
+    revealSelected();
+    const resize=new ResizeObserver(revealSelected);
+    resize.observe(tabs);
+    return ()=>resize.disconnect();
+  },[tab]);
   useLayoutEffect(()=>{
     const list=providerListRef.current;
     if(tab!=="models"||!list)return;
@@ -286,17 +296,23 @@ export function ModelSettings({initialTab="models",onClose:closeSettings,onChang
     update({models});setEditor(null);setError("");
   }
   const rows=Object.values(drafts);
-  return <div className="modal-scrim"><div ref={dialogRef} tabIndex={-1} className="modal model-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="model-settings-title">
-    <header className="model-settings-header"><div><h2 id="model-settings-title">{tab==="channels"?"接入渠道":tab==="agents"?"Agent 执行器":tab==="models"?"模型设置":tab==="mcp"?"MCP 工具":tab==="memory"?"记忆":tab==="skills"?"Skills 设置":tab==="appearance"?"外观设置":tab==="watchdog"?"巡检设置":"对话设置"}{tab==="memory"&&<span className="memory-experimental-badge" aria-label="实验功能">实验</span>}</h2><p>{tab==="channels"?"让外部客户端向 Lake 发送消息，由 Pilot 统一处理。":tab==="agents"?"配置 Lake 调用的执行 Agent，统一收集任务过程与结果。":tab==="mcp"?"连接外部工具，在对话中按需调用。":tab==="memory"?(memoryEngine==='layered'?"管理用户、项目和专员的长期知识，以及如何使用。":"管理 Lake 记住的偏好，以及回答时如何使用。"):tab==="skills"?"管理可复用的操作流程与本机技能目录。":tab==="appearance" ? "选择工作台主题，立即生效并自动保存。" : tab==="watchdog" ? "统一管理当前项目的任务巡检。" : tab==="conversation" ? "配置消息输入与会话偏好。" : "配置供应商与模型，在聊天中随时切换。"}</p></div><button className="icon-button" aria-label="关闭设置" disabled={isBusy} onClick={onClose}><Glyph name="close" size={18}/></button></header>
-    <div className="model-settings-tabs" role="tablist" aria-label="设置分类" onKeyDown={event=>navigateSettingsTabs(event,event.currentTarget)}>
-      {settingsTabs.filter(item=>watchdogEnabled||!item.requiresWatchdog).map(({key,label,panel=key,icon})=><button
+  const category=settingsTabs.find(item=>item.key===tab);
+  return <div className="modal-scrim"><div ref={dialogRef} tabIndex={-1} className="modal workbench-dialog model-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="model-settings-title">
+    <header className="workbench-dialog-header model-settings-header">
+      <div>
+        <h2 id="model-settings-title">{category?.title ?? category?.label ?? "设置"}{tab==="memory"&&<span className="memory-experimental-badge" aria-label="实验功能">实验</span>}</h2>
+        <p>{tab==="memory"&&memoryEngine==='layered'?"管理用户、项目和专员的长期知识，以及如何使用。":category?.description}</p>
+      </div>
+      <button type="button" className="icon-button" aria-label="关闭设置" disabled={isBusy} onClick={onClose}><Glyph name="close" size={16}/></button>
+    </header>
+    <div ref={tabsRef} className="model-settings-tabs" role="tablist" aria-label="设置分类" onKeyDown={event=>navigateSettingsTabs(event,event.currentTarget)}>
+      {settingsTabs.filter(item=>watchdogEnabled||!item.requiresWatchdog).map(({key,label,panel=key})=><button
         key={key} type="button" role="tab" id={panel+"-settings-tab"} aria-controls={panel+"-settings-panel"}
         aria-selected={tab===key} tabIndex={tab===key?0:-1} disabled={isBusy} onClick={()=>setTab(key)}>
-        {icon&&<Glyph name={icon} size={15}/>}
-        {label}{key==="memory"&&<span className="memory-experimental-badge" aria-label="实验功能">实验</span>}
+        {label}
       </button>)}
     </div>
-    {tab==="channels"?<GatewaySettings onBusyChange={setExtensionBusy} projectId={projectId} onTask={onGatewayTask}/>:tab==="agents"?<div className="model-conversation agent-settings-stack"><ExternalAgentSettings key={projectId??"none"} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/></div>:tab==="watchdog"&&watchdogEnabled?<WatchdogSettings key={projectId??'none'} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="memory"?<MemorySettings memoryEngine={memoryEngine} onProjectMemory={onProjectMemory} key={projectId||'global'} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="mcp"?<MCPSettings onBusyChange={setExtensionBusy}/>:tab==="skills"?<SkillSettings onBusyChange={setExtensionBusy}/>:tab==="appearance" ? <AppearanceSettings/> : tab==="conversation" ? <section id="conversation-settings-panel" role="tabpanel" aria-labelledby="conversation-settings-tab" className="model-conversation"><label className="field-label">发送快捷键<AppSelect icon={<Glyph name="return" size={15}/>} value={sendShortcut} onChange={event => onShortcutChange(parseSendShortcut(event.target.value))}><option value="enter">Enter 发送，Shift + Enter 换行</option><option value="command-enter">Command / Ctrl + Enter 发送，Enter 换行</option></AppSelect></label><p className="settings-note">立即生效并自动保存。输入法确认候选词时不会发送消息。</p>
+    {tab==="channels"?<GatewaySettings onBusyChange={setExtensionBusy} projectId={projectId} onTask={onGatewayTask}/>:tab==="agents"?<ExternalAgentSettings key={projectId??"none"} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="watchdog"&&watchdogEnabled?<WatchdogSettings key={projectId??'none'} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="memory"?<MemorySettings memoryEngine={memoryEngine} onProjectMemory={onProjectMemory} key={projectId||'global'} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="mcp"?<MCPSettings onBusyChange={setExtensionBusy}/>:tab==="skills"?<SkillSettings onBusyChange={setExtensionBusy}/>:tab==="appearance" ? <AppearanceSettings/> : tab==="conversation" ? <section id="conversation-settings-panel" role="tabpanel" aria-labelledby="conversation-settings-tab" className="model-conversation"><div className="model-conversation-memory"><label className="field-label">发送快捷键<AppSelect icon={<Glyph name="return" size={15}/>} value={sendShortcut} onChange={event => onShortcutChange(parseSendShortcut(event.target.value))}><option value="enter">Enter 发送，Shift + Enter 换行</option><option value="command-enter">Command / Ctrl + Enter 发送，Enter 换行</option></AppSelect></label><p className="settings-note">立即生效并自动保存。输入法确认候选词时不会发送消息。</p></div>
       {onCompletionEnabledChange&&<div className="model-conversation-memory">
         <h3>文字补齐</h3>
         <label><input type="checkbox" checked={!!completionEnabled} onChange={event=>onCompletionEnabledChange(event.target.checked)}/>自动建议文字</label>
@@ -337,7 +353,7 @@ export function ModelSettings({initialTab="models",onClose:closeSettings,onChang
         </fieldset>
       </> : <div className="provider-empty"><span><Glyph name="plug" size={32}/></span><h3>添加你的模型供应商</h3><p>同一供应商可配置多个模型，聊天时直接切换。</p><button className="button primary" disabled={loading || isBusy} onClick={() => choose(newProviderSelection)}><Glyph name="plus" size={14}/>添加供应商</button></div>}</section>
     </div>}
-    {tab!=="channels"&&tab!=="agents"&&tab!=="strategy"&&tab!=="memory"&&tab!=="mcp"&&tab!=="skills"&&tab!=="watchdog"&&<footer className="model-settings-footer"><div className="provider-feedback" aria-live="polite">{error ? <p className="form-error" role="alert">{error}</p> : result ? <p className={result.ok ? "provider-success" : "form-error"}>{result.message}</p> : <p>{tab==="models" ? selected===magpieSelection ? magpieModel ? "Magpie 与手动供应商的模型可随时切换。" : "接入后会自动同步 Magpie 模型。" : discovery ? "勾选模型并添加到列表后，保存供应商使配置生效。" : selected===newProviderSelection ? "厂商预设会自动填写接入地址和 API 格式。" : editor ? "完成模型编辑后，保存供应商使配置生效。" : magpieModel ? "保存后点击「使用」即可切换模型，无需停用 Magpie 接入。" : "每个供应商独立保存密钥。保存后立即生效。" : tab==="appearance" ? "外观偏好自动保存。" : "对话偏好自动保存。"}</p>}</div>{tab==="models" && draft && <div className="provider-footer-actions"><button className="button secondary" disabled={isBusy || !draft.baseURL.trim() || !draft.models.length || !!editor || !!discovery} onClick={() => void run("test",test)}>{busy==="test" ? "测试中…" : "测试连接"}</button><button className="button primary" disabled={isBusy || !draft.baseURL.trim() || !draft.name.trim() || !!editor || !!discovery || (!draft.dirty && !draft.isNew)} onClick={() => void run("save",save)}>{busy==="save" ? "保存中…" : "保存供应商"}</button></div>}</footer>}
+    {tab==="models"&&<footer className="workbench-dialog-footer model-settings-footer"><div className="provider-feedback" aria-live="polite">{error ? <p className="form-error" role="alert">{error}</p> : result ? <p className={result.ok ? "provider-success" : "form-error"}>{result.message}</p> : <p>{selected===magpieSelection ? magpieModel ? "Magpie 与手动供应商的模型可随时切换。" : "接入后会自动同步 Magpie 模型。" : discovery ? "勾选模型并添加到列表后，保存供应商使配置生效。" : selected===newProviderSelection ? "厂商预设会自动填写接入地址和 API 格式。" : editor ? "完成模型编辑后，保存供应商使配置生效。" : magpieModel ? "保存后点击「使用」即可切换模型，无需停用 Magpie 接入。" : "每个供应商独立保存密钥。保存后立即生效。"}</p>}</div>{draft && <div className="provider-footer-actions"><button className="button secondary" disabled={isBusy || !draft.baseURL.trim() || !draft.models.length || !!editor || !!discovery} onClick={() => void run("test",test)}>{busy==="test" ? "测试中…" : "测试连接"}</button><button className="button primary" disabled={isBusy || !draft.baseURL.trim() || !draft.name.trim() || !!editor || !!discovery || (!draft.dirty && !draft.isNew)} onClick={() => void run("save",save)}>{busy==="save" ? "保存中…" : "保存供应商"}</button></div>}</footer>}
     <dialog ref={discardDialog} className="presentation-dialog provider-discard-dialog" role="alertdialog" aria-modal="true" aria-labelledby="provider-discard-title" aria-describedby="provider-discard-hint" onCancel={event=>{event.preventDefault();answerDiscard(false);}}>
       <h3 id="provider-discard-title">放弃未保存的更改？</h3><p id="provider-discard-hint">选择「继续编辑」可保留刚才的输入。</p>
       <div className="provider-editor-actions"><button type="button" className="button secondary" onClick={()=>answerDiscard(false)}>继续编辑</button><button type="button" className="button danger" onClick={()=>answerDiscard(true)}>放弃更改</button></div>
@@ -374,7 +390,7 @@ function MagpieModelList({available,busy,onSelect}: {available:AvailableModels|n
 function AppearanceSettings() {
   const [preference, setPreference] = useState<ThemePreference>(themePreference);
   return <section id="appearance-settings-panel" role="tabpanel" aria-labelledby="appearance-settings-tab" className="model-conversation">
-    <h3>工作台主题</h3><p className="settings-note">导航、对话、终端和弹窗使用同一套主题。</p>
+    <h3>工作台主题</h3>
     <div className="theme-options" role="radiogroup" aria-label="工作台主题">{([['light','浅色'],['dark','深色'],['system','跟随系统']] as const).map(([value,label]) => <button key={value} type="button" role="radio" aria-checked={preference===value} className="theme-choice" tabIndex={preference===value ? 0 : -1} onKeyDown={event => { if (!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key)) return; event.preventDefault(); const values:ThemePreference[]=["light","dark","system"]; const next=values[(values.indexOf(value)+(event.key==="ArrowLeft"||event.key==="ArrowUp"?2:1))%3]!; setPreference(next); setThemePreference(next); const buttons=event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("button"); buttons?.[values.indexOf(next)]?.focus(); }} onClick={() => { setPreference(value); setThemePreference(value); }}><span className="theme-preview" data-preview={value} aria-hidden="true"><i/><span/></span><strong>{label}</strong></button>)}</div>
   </section>;
 }

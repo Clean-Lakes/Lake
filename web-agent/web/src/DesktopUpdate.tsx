@@ -60,13 +60,33 @@ export function DesktopUpdate({hideTrigger=false,onUnreadChange}:{hideTrigger?:b
   return <>
     {!hideTrigger&&<button type="button" ref={trigger} className={`icon-button desktop-update-trigger ${unread?"has-unread-update":""}`} onClick={() => {setOpen(true);if(!busy&&!available)void command("check");}} title="检查更新" aria-label={available ? `发现新版本 Lake ${state.version || ""}` : "检查更新"}><Glyph name="refresh" size={17} className={busy?"spinning":""}/>{unread&&<i aria-hidden="true"/>}</button>}
     {open&&createPortal(<div className="modal-scrim desktop-update-scrim" onClick={event=>{if(event.target===event.currentTarget)setOpen(false);}}>
-      <section ref={dialog} className="desktop-update-dialog" role="dialog" aria-modal="true" aria-labelledby="desktop-update-title" tabIndex={-1}>
-        <div className="desktop-update-heading"><div><h2 id="desktop-update-title">Lake 更新</h2><p>当前版本 v{state.currentVersion||"—"} · {bridge?.development?"本地测试版":platform}</p></div><button type="button" className="icon-button" aria-label="关闭更新窗口" onClick={()=>setOpen(false)}><Glyph name="close" size={16}/></button></div>
-        <div className={`desktop-update-status status-${state.status}`} aria-live="polite"><span className={`desktop-update-symbol ${busy?"spinning":""}`} aria-hidden="true"><Glyph name={busy?'refresh':available?'down':state.status==='error'?'alert':state.status==='current'?'check':'refresh'} size={20}/></span><div>{available&&<strong>Lake {state.version}</strong>}<p>{state.message}</p></div></div>
-        {state.status==="downloading"&&<div className="desktop-update-progress"><progress max={100} value={state.progress??0} aria-label="安装包下载进度"/><span>{state.progress??0}%</span></div>}
-        {<section className="desktop-update-release-notes" aria-label="更新公告"><h3>更新内容{state.version ? ` · ${state.version}` : ""}</h3><div><ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml components={{a:props=><a {...props} target="_blank" rel="noopener noreferrer"/>}}>{state.releaseNotes?.trim() || (busy?"正在读取更新内容…":state.status==="error"||state.status==="idle"?"暂未取得更新内容。":"该版本未提供更新内容。")}</ReactMarkdown></div></section>}
-        <div className="desktop-update-links"><a href={repositoryURL} target="_blank" rel="noopener noreferrer"><Glyph name="code" size={15}/><span>Git 地址<small>github.com/Clean-Lakes/Lake</small></span><Glyph name="arrow" size={14}/></a><a href={releasesURL} target="_blank" rel="noopener noreferrer">查看发布页<Glyph name="arrow" size={13}/></a></div><p className="desktop-update-note">{bridge?.development?"本地测试版通过本地构建更新，正式版与测试版保持独立。":!bridge?"可在发布页查看适合当前系统的安装包。":"安装将关闭终端连接并重新打开 Lake，保留数据和配置。"}</p>
-        <div className="desktop-update-actions"><button type="button" className="button secondary" onClick={()=>setOpen(false)}>{busy?"隐藏窗口":"稍后"}</button><button type="button" className="button primary" disabled={busy} onClick={()=>void command(available&&!readonly?"install":"check")}>{busy?state.status==="downloading"?"下载中…":"正在处理…":available&&!readonly?"下载并安装":"重新检查"}</button></div>
+      <section ref={dialog} className="modal workbench-dialog desktop-update-dialog" role="dialog" aria-modal="true" aria-labelledby="desktop-update-title" tabIndex={-1}>
+        <header className="workbench-dialog-header">
+          <div><h2 id="desktop-update-title">Lake 更新</h2><p>当前版本 v{state.currentVersion||"—"} · {bridge?.development?"本地测试版":platform}</p></div>
+          <button type="button" className="icon-button" aria-label="关闭更新窗口" onClick={()=>setOpen(false)}><Glyph name="close" size={16}/></button>
+        </header>
+        <div className="workbench-dialog-body desktop-update-content">
+          <div className="desktop-update-status-card">
+            <div className={`desktop-update-status status-${state.status}`} aria-live="polite">
+              <span className="desktop-update-symbol" aria-hidden="true"><Glyph className={busy?"spinning":undefined} name={busy?'refresh':available?'down':state.status==='error'?'alert':state.status==='current'?'check':'refresh'} size={20}/></span>
+              <div>{available&&<strong>Lake {state.version}</strong>}<p>{state.message}</p></div>
+            </div>
+            {state.status==="downloading"&&<div className="desktop-update-progress"><progress max={100} value={state.progress??0} aria-label="安装包下载进度"/><span>{state.progress??0}%</span></div>}
+          </div>
+          <section className="desktop-update-release-notes" aria-label="更新公告">
+            <h3>更新内容{state.version ? ` · ${state.version}` : ""}</h3>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml components={{a:props=><a {...props} target="_blank" rel="noopener noreferrer"/>}}>{state.releaseNotes?.trim() || (busy?"正在读取更新内容…":state.status==="error"||state.status==="idle"?"暂未取得更新内容。":"该版本未提供更新内容。")}</ReactMarkdown>
+          </section>
+          <nav className="desktop-update-links" aria-label="更新链接">
+            <a href={releasesURL} target="_blank" rel="noopener noreferrer"><Glyph name="layers" size={15}/><span>查看发布页</span><Glyph name="arrow" size={14}/></a>
+            <a href={repositoryURL} target="_blank" rel="noopener noreferrer"><Glyph name="code" size={15}/><span>源代码<small>github.com/Clean-Lakes/Lake</small></span><Glyph name="arrow" size={14}/></a>
+          </nav>
+          <p className="desktop-update-note">{bridge?.development?"本地测试版通过本地构建更新。":!bridge?"可在发布页查看适合当前系统的安装包。":"安装将关闭终端连接并重新打开 Lake，保留数据和配置。"}</p>
+        </div>
+        <footer className="workbench-dialog-footer">
+          <button type="button" className="button secondary" onClick={()=>setOpen(false)}>{busy?"隐藏窗口":"稍后"}</button>
+          <button type="button" className="button primary" disabled={busy} onClick={()=>void command(available&&!readonly?"install":"check")}>{busy?state.status==="downloading"?"下载中…":"正在处理…":available&&!readonly?"下载并安装":"重新检查"}</button>
+        </footer>
       </section>
     </div>,document.body)}
   </>;

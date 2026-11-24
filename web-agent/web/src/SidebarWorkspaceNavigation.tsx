@@ -56,7 +56,7 @@ export function SidebarWorkspaceNavigation({projectId,specialists,children,resou
   </nav>
   {workspace&&workspaceMenuOpen&&<NavigationMenu id={`${id}-workspace-menu`} title="工作区" className="workspace-actions-menu"
    anchor={workspaceButton} placement="above" onClose={()=>setWorkspaceMenuOpen(false)} actions={[
-    {label:'项目',icon:'folder',run:workspace.onProjects},
+    {label:'项目',icon:'folder',current:workspace.active,run:workspace.onProjects},
     {label:'设置',icon:'settings',description:workspace.modelConfigured?undefined:'待配置',run:workspace.onSettings},
     {label:'检查更新',icon:'refresh',description:workspace.unreadUpdate?'新版本':undefined,run:workspace.onUpdates},
    ]}/>}

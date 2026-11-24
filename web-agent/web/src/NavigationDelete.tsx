@@ -9,7 +9,7 @@ type NavigationMenuPosition =
  | {x:number;y:number;anchor?:RefObject<HTMLButtonElement|null>;placement?:undefined}
  | {x?:never;y?:never;anchor:RefObject<HTMLButtonElement|null>;placement:'above'};
 
-export function NavigationMenu({id,title,x=0,y=0,actions,onClose,className="",width,anchor,placement}: {id?:string;title:string;actions:{label:string;description?:string;icon?:GlyphName;separatorBefore?:boolean;danger?:boolean;disabled?:boolean;checked?:boolean;selectionType?:'radio'|'checkbox';run:()=>void}[];onClose:()=>void;className?:string;width?:number} & NavigationMenuPosition) {
+export function NavigationMenu({id,title,x=0,y=0,actions,onClose,className="",width,anchor,placement}: {id?:string;title:string;actions:{label:string;description?:string;icon?:GlyphName;separatorBefore?:boolean;danger?:boolean;disabled?:boolean;current?:boolean;checked?:boolean;selectionType?:'radio'|'checkbox';run:()=>void}[];onClose:()=>void;className?:string;width?:number} & NavigationMenuPosition) {
  const menu=useRef<HTMLDivElement>(null);
  const closeRef=useRef(onClose);closeRef.current=onClose;
  const [position,setPosition]=useState({left:x,top:y});
@@ -45,7 +45,7 @@ export function NavigationMenu({id,title,x=0,y=0,actions,onClose,className="",wi
  },[]);
  return createPortal(<div ref={menu} id={id} role="menu" aria-label={`${title} 管理菜单`} className={`navigation-context-menu ${className}`} style={{width,...position}} onContextMenu={event=>event.preventDefault()} onPointerMove={event=>{const button=(event.target as Element).closest<HTMLButtonElement>('button');if(button&&!button.disabled&&document.activeElement!==button)button.focus({preventScroll:true});}} onKeyDown={event=>{if(!["ArrowDown","ArrowUp","Home","End"].includes(event.key))return;event.preventDefault();const buttons=[...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];const index=buttons.indexOf(document.activeElement as HTMLButtonElement);buttons[event.key==="Home"?0:event.key==="End"?buttons.length-1:(index+(event.key==="ArrowUp"?-1:1)+buttons.length)%buttons.length]?.focus();}}><small title={title}>{title}</small>{actions.map((action,index)=><Fragment key={action.label}>
   {action.separatorBefore&&index>0&&<div role="separator" className="navigation-menu-separator"/>}
-  <button type="button" role={action.checked===undefined?"menuitem":action.selectionType==='checkbox'?"menuitemcheckbox":"menuitemradio"} aria-checked={action.checked} disabled={action.disabled} className={action.danger?"danger-text":""} onClick={()=>{anchor?.current?.focus();onClose();action.run();}}>
+  <button type="button" role={action.checked===undefined?"menuitem":action.selectionType==='checkbox'?"menuitemcheckbox":"menuitemradio"} aria-current={action.current?'page':undefined} aria-checked={action.checked} disabled={action.disabled} className={action.danger?"danger-text":""} onClick={()=>{anchor?.current?.focus();onClose();action.run();}}>
    {action.icon?<Glyph name={action.icon} size={15}/>:action.danger?<TrashIcon/>:null}
    {!action.icon&&action.checked!==undefined&&<span className="menu-selection-mark">{action.checked&&<Glyph name="check" size={14}/>}</span>}
    <span className="menu-action-label">{action.label}{action.description&&<small className="menu-action-description">{action.description}</small>}</span>
@@ -64,5 +64,18 @@ export function NavigationDelete({target,onClose,onDeleted}: {target:NavigationD
    await onDeleted();onClose();
   }catch(error){setError(readableError(error));}finally{setBusy(false);}
  }
- return <div className="modal-scrim"><section className="modal navigation-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="navigation-delete-title"><div className="modal-header"><span className="modal-icon danger-icon"><TrashIcon/></span><button className="icon-button" aria-label="关闭删除确认" disabled={busy} onClick={onClose}><Glyph name="close" size={14}/></button></div><h2 id="navigation-delete-title">删除{label}「{target.name}」？</h2><p className="modal-description">{target.kind==="folder"?"文件夹将从导航中移除，其中的资源和子文件夹会移到上一级。":target.kind==="project"?"项目及其资源、会话将从导航中移除。系统保留配置和历史记录。":"资源将从导航中移除。系统保留连接配置和会话记录。"}</p>{error&&<p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button className="button secondary" disabled={busy} onClick={onClose}>取消</button><button className="button danger" disabled={busy} onClick={()=>void remove()}>{busy?"正在删除…":`删除${label}`}</button></div></section></div>;
+ return <div className="modal-scrim"><section className="modal workbench-dialog navigation-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="navigation-delete-title">
+  <header className="workbench-dialog-header">
+   <h2 id="navigation-delete-title">删除{label}「{target.name}」？</h2>
+   <button type="button" className="icon-button" aria-label="关闭删除确认" disabled={busy} onClick={onClose}><Glyph name="close" size={16}/></button>
+  </header>
+  <div className="workbench-dialog-body">
+   <p className="modal-description">{target.kind==="folder"?"文件夹将从导航中移除，其中的资源和子文件夹会移到上一级。":target.kind==="project"?"项目及其资源、会话将从导航中移除。系统保留配置和历史记录。":"资源将从导航中移除。系统保留连接配置和会话记录。"}</p>
+   {error&&<p className="form-error" role="alert">{error}</p>}
+  </div>
+  <footer className="workbench-dialog-footer">
+   <button type="button" className="button secondary" disabled={busy} onClick={onClose}>取消</button>
+   <button type="button" className="button danger" disabled={busy} onClick={()=>void remove()}>{busy?"正在删除…":`删除${label}`}</button>
+  </footer>
+ </section></div>;
 }

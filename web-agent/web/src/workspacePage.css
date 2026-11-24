@@ -1,6 +1,6 @@
 .workspace.is-workspace-page {
   overflow:hidden;
-  background:var(--workbench-chrome-background, var(--paper));
+  background:var(--surface);
 }
 
 .workspace-sidebar-mobile-actions {
@@ -18,12 +18,11 @@
   min-height:0;
   container:workspace-page / inline-size;
   --workspace-gutter:clamp(16px, 3.15cqw, 32px);
-  --workspace-page-surface:var(--workbench-chrome-background, var(--paper));
 }
 .workspace .workspace-page-header {
   padding:0;
   border-bottom:1px solid var(--border);
-  background:var(--workspace-page-surface);
+  background:var(--surface);
 }
 :root.lake-native .workspace.is-workspace-page .workspace-page-header { padding-right:0; }
 html.lake-windows-chrome .workspace.is-workspace-page .workspace-header.workspace-page-header {
@@ -72,7 +71,7 @@ html.lake-windows-chrome .workspace.is-workspace-page .workspace-header.workspac
   min-width:0;
   padding:20px var(--workspace-gutter);
   border-block-end:1px solid var(--border);
-  background:color-mix(in srgb, var(--foreground) 2.5%, var(--workspace-page-surface));
+  background:var(--surface-subtle);
 }
 .workspace-current-project-label {
   color:var(--pilot-header-muted);
@@ -218,20 +217,15 @@ html.lake-windows-chrome .workspace.is-workspace-page .workspace-header.workspac
   padding:9px calc(var(--project-row-padding) + var(--project-indicator-width) + var(--project-row-gap)) 9px
     calc(var(--project-row-padding) + var(--project-selection-width) + var(--project-icon-width) + var(--project-row-gap));
   border-bottom:1px solid var(--border);
-  background:color-mix(in srgb, var(--foreground) 3%, var(--workspace-page-surface));
+  background:var(--surface-muted);
   color:var(--pilot-header-muted);
   font-size:var(--font-size-toolbar);
 }
 .workspace-project-sheet-heading > :last-child { text-align:end; }
 .workspace-projects-list { margin:0; padding:0; list-style:none; }
 .workspace-project-list-item { display:flex; border-block-end:1px solid var(--border); }
-.workspace-project-list-item:has([aria-current="true"]) {
-  background:color-mix(in srgb, var(--info) 9%, var(--workspace-page-surface));
-}
-.workspace-project-list-item:hover { background:var(--surface-hover); }
-.workspace-project-list-item:has([aria-current="true"]):hover {
-  background:color-mix(in srgb, var(--info) 12%, var(--workspace-page-surface));
-}
+.workspace-project-list-item:has([aria-current="true"]) { background:var(--info-soft); }
+.workspace-project-list-item:not(:has([aria-current="true"])):hover { background:var(--surface-hover); }
 .workspace-project-select {
   display:grid;
   place-items:center;
