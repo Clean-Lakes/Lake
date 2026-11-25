@@ -1,4 +1,4 @@
-import {Fragment,useRef,type CSSProperties,type ReactNode} from 'react';
+import {Fragment,useRef,type CSSProperties,type ReactNode,type Ref} from 'react';
 import {usePageVisible} from './usePageVisible';
 import {useSynchronizedLight} from './synchronizedLight';
 import {AgentIcon} from './AgentIcon';
@@ -115,7 +115,7 @@ export function LiveTextMotionLabel({children,active=false,glow=false,leading=fa
 }
 
 /** Ordinary Markdown does not subscribe to visibility or acquire motion markup. */
-export function LiveTextMotionBoundary({active,className,children}:{active:boolean;className:string;children:ReactNode}){
+export function LiveTextMotionBoundary({active,className,children,ref}:{active:boolean;className:string;children:ReactNode;ref?:Ref<HTMLDivElement>}){
  const visible=usePageVisible();
- return <div className={className} data-live-motion={active&&visible?'active':'still'}>{children}</div>;
+ return <div ref={ref} className={className} data-live-motion={active&&visible?'active':'still'}>{children}</div>;
 }

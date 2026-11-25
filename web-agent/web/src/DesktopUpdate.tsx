@@ -3,7 +3,7 @@ import "./desktopUpdate.css";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {Glyph} from "./Icons";
-import {WorkspacePageHeader} from "./WorkspacePage";
+import {WorkspacePageHeader, WorkspaceSettingSection} from "./WorkspacePage";
 import packageInfo from "../../package.json";
 import {checkReleaseAnnouncement,repositoryURL,releasesURL,type UpdateState,type UpdateBridge} from "./desktopUpdateModel";
 
@@ -54,30 +54,40 @@ export function DesktopUpdate({visible,onUnreadChange}:{
           onClick={()=>void command(available&&!readonly?"install":"check")}><Glyph name={available&&!readonly?'down':'refresh'} size={15}/><span>{actionLabel}</span></button>
       }/>
       <div className="desktop-update-layout">
-        <div className="desktop-update-status-card workspace-setting-card">
-            <div className={`desktop-update-status status-${state.status}`} aria-live="polite">
-              <span className="desktop-update-symbol" aria-hidden="true"><Glyph className={busy?"spinning":undefined} name={busy?'refresh':available?'down':state.status==='error'?'alert':state.status==='current'?'check':'refresh'} size={20}/></span>
-              <div>
-                <strong>Lake {state.currentVersion || "—"}</strong>
-                <p className="desktop-update-version">{bridge?.development?"本地测试版":platform}{available&&state.version? ` · 可更新至 ${state.version}`:""}</p>
+        <WorkspaceSettingSection id="desktop-update-status-title" title="版本状态">
+          <div className="workspace-setting-card">
+            <div className="workspace-setting-row">
+              <div className="workspace-setting-copy"><strong>当前版本</strong>
+                <p className="settings-note">{bridge?.development?"本地测试版":platform}</p>
               </div>
+              <span className="desktop-update-version" aria-live="polite">
+                <strong>Lake {state.currentVersion || "—"}</strong>
+              </span>
             </div>
-            <p className={`desktop-update-message status-${state.status}`} role="status">{state.message}</p>
-            {state.status==="downloading"&&<div className="desktop-update-progress"><progress max={100} value={state.progress??0} aria-label="安装包下载进度"/><span>{state.progress??0}%</span></div>}
-        </div>
-        <section className="desktop-update-release-notes" aria-labelledby="desktop-update-notes-title">
-          <h2 id="desktop-update-notes-title" className="workspace-section-title">更新内容{state.version ? ` · ${state.version}` : ""}</h2>
+            <div className="workspace-setting-row">
+              <div className="workspace-setting-copy"><strong>更新状态</strong>
+                <p className={`settings-note desktop-update-message status-${state.status}`} role="status">{state.message}</p>
+              </div>
+              <span className={`desktop-update-status status-${state.status}`}>
+                <Glyph className={busy?"spinning":undefined} name={busy?'refresh':available?'down':state.status==='error'?'alert':state.status==='current'?'check':'refresh'} size={16}/>
+                {available&&state.version&&<span>可更新至 {state.version}</span>}
+              </span>
+            </div>
+            {state.status==="downloading"&&<div className="workspace-setting-row desktop-update-progress"><progress max={100} value={state.progress??0} aria-label="安装包下载进度"/><span>{state.progress??0}%</span></div>}
+          </div>
+        </WorkspaceSettingSection>
+        <WorkspaceSettingSection id="desktop-update-notes-title" title={`更新内容${state.version ? ` · ${state.version}` : ""}`}>
           <div className="desktop-update-notes-copy workspace-setting-card">
             <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml components={{a:props=><a {...props} target="_blank" rel="noopener noreferrer"/>}}>{state.releaseNotes?.trim() || (busy?"正在读取更新内容…":state.status==="error"||state.status==="idle"?"暂未取得更新内容。":"该版本未提供更新内容。")}</ReactMarkdown>
           </div>
-        </section>
-        <div className="desktop-update-details">
+        </WorkspaceSettingSection>
+        <WorkspaceSettingSection id="desktop-update-links-title" title="发布信息">
           <nav className="desktop-update-links workspace-setting-card" aria-label="更新链接">
             <a href={releasesURL} target="_blank" rel="noopener noreferrer"><Glyph name="layers" size={15}/><span>查看发布页</span><Glyph name="arrow" size={14}/></a>
             <a href={repositoryURL} target="_blank" rel="noopener noreferrer"><Glyph name="code" size={15}/><span>源代码<small>github.com/Clean-Lakes/Lake</small></span><Glyph name="arrow" size={14}/></a>
           </nav>
           <p className="desktop-update-note">{bridge?.development?"本地测试版通过本地构建更新。":!bridge?"可在发布页查看适合当前系统的安装包。":"安装将关闭终端连接并重新打开 Lake，保留数据和配置。"}</p>
-        </div>
+        </WorkspaceSettingSection>
       </div>
     </section>;
 }

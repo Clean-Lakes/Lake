@@ -10,6 +10,7 @@ import type {
   Catalog,
   Message,
   ModelProvider,
+  NavigationTrashItem,
   Project,
   Resource,
   SessionEvent,
@@ -179,6 +180,10 @@ export class LakeStore {
   project(projectId: string) {
     return this.require<Project>("projects", projectId);
   }
+  activeProjects(trash: readonly NavigationTrashItem[] = this.list<NavigationTrashItem>('navigationTrash')) {
+    const archived = new Set(trash.filter(item => item.kind === 'project').map(item => item.id));
+    return this.list<Project>("projects").filter(project => !archived.has(project.id));
+  }
   session(sessionId: string) {
     // Older versions wrote decorated sessions back along with their raw fields.
     const { tags: _legacyTags, ...session } = this.require<StoredSession & { tags?: unknown }>("sessions", sessionId);
@@ -211,7 +216,7 @@ export class LakeStore {
     return project;
   }
   catalog(): Catalog {
-    const trash = this.list<{kind: string; id: string}>('navigationTrash');
+    const trash = this.list<NavigationTrashItem>('navigationTrash');
     const hidden = (kind: string, key: string) => trash.some(item => item.kind === kind && item.id === key);
     const resources = this.list<Resource>("resources").filter(resource => !hidden('resource', resource.id) && !hidden('project', resource.projectId)).map(resource=>({...resource,configurationRevision:this.get<number>('resourceRevisions',resource.id)??1}));
     const tree = this.list<ResourceTreeNode>("tree").filter(node => !hidden('project', node.projectId) && !hidden(node.kind, node.resourceId ?? node.id));
@@ -227,7 +232,7 @@ export class LakeStore {
           position: tree.length,
         });
     return {
-      projects: this.list<Project>("projects").filter(project => !hidden('project', project.id)),
+      projects: this.activeProjects(trash),
       resources,
       resourceTree: tree,
       sessions: this.list<StoredSession>("sessions").filter((session) => session.workspaceRole!=='conversation' && !hidden('project', session.projectId) && !this.list<string>("terminalScopes").includes(session.id)).map(({ id }) => {

@@ -157,7 +157,7 @@ export class LakeSuperagent implements AgentHost {
   private taskStops = new Map<string, Promise<void>>();
   private heartbeat: ReturnType<typeof setInterval>;
   private watchdogTimer: ReturnType<typeof setInterval>;
-  constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH,readonly mysql?:LakeMySQL,readonly execution?:LakeExecution, private readonly watchdogClock = Date.now,readonly configuration?:PilotConfiguration, readonly services?:LakeServiceResources) {
+  constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH,readonly mysql?:LakeMySQL,readonly execution?:LakeExecution, private readonly watchdogClock = Date.now,readonly configuration?:PilotConfiguration, readonly services?:LakeServiceResources, allowWatchdogModeOverrides = true) {
     this.discoveryRecovery = new ProgramDiscoveryRecovery(store, agents.sessions);
     this.operatorReviews = new OperatorEffectReviewService(store, agents.sessions, operation => {
       if (!ssh || !operation.resourceId || !operation.hostConfigurationHash)
@@ -246,7 +246,7 @@ export class LakeSuperagent implements AgentHost {
         return agents.steer(sample.sessionId,text,inputId);
       },
       changed: sample => this.notify(sample.sessionId,"specialist"),
-    },watchdogClock);
+    },watchdogClock,allowWatchdogModeOverrides);
     // A process boundary revokes every previous execution owner. Unknown effects
     // remain unknown; neither a pending UI approval nor a queued SDK call is replayed.
     store.transaction(() => {
@@ -3262,7 +3262,9 @@ export class LakeSuperagent implements AgentHost {
   // no tool call from outside can grant or bypass an approval.
 
   gatewaySpecialists(projectId?: string): { specialists: GatewaySpecialistRef[] } {
-    const roles = this.store.list<Role>("superRoles").filter(role => !role.deletedAt && (!projectId || role.projectId === projectId));
+    const active = new Set(this.store.activeProjects().map(project => project.id));
+    const roles = this.store.list<Role>("superRoles").filter(role =>
+      !role.deletedAt && active.has(role.projectId) && (!projectId || role.projectId === projectId));
     return { specialists: roles.map(role => {
       const channel = this.ensureChannel(role);
       return { roleId: role.id, roleKey: role.roleKey, name: role.name, duties: role.duties, projectId: role.projectId,

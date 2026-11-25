@@ -14,7 +14,7 @@ test('Pilot and real specialist instances replace session creation',()=>{
  assert.match(html,/aria-current="page"/);
  assert.doesNotMatch(html,/brand\/lake-app-icon\.png/);
  assert.equal((html.match(/class="nav-row sidebar-pilot-entry/g)??[]).length,1);
- assert.ok(html.indexOf('>专员<')<html.indexOf('>Pilot<')&&html.indexOf('>Pilot<')<html.indexOf('>订单专员<'));
+ assert.ok(html.indexOf('>专员<')<html.indexOf('>Lake<')&&html.indexOf('>Lake<')<html.indexOf('>订单专员<'));
  assert.match(html,/<small>2<\/small>/);
  assert.doesNotMatch(html,/pilot-workspace-entry/);
 });
@@ -51,7 +51,7 @@ test('a specialist created before any task is navigable with its persistent duti
 
 test('the built-in Pilot remains available during initial workspace activation and preserves actual errors',()=>{
  const html=renderToStaticMarkup(createElement(PilotWorkspace,{workspace:null,error:'仍在核对旧记录',selectedId:null,pilotDisabled:true,onPilot(){},onWorker(){}}));
- assert.match(html,/Pilot · 打开对话 · 内置专员/);assert.match(html,/<small>1<\/small>/);assert.match(html,/仍在核对旧记录/);
+ assert.match(html,/Lake · 打开对话 · 内置专员/);assert.match(html,/<small>1<\/small>/);assert.match(html,/仍在核对旧记录/);
  assert.match(html,/<button[^>]+class="nav-row sidebar-pilot-entry"[^>]+disabled/);
  assert.doesNotMatch(html,/aria-current|删除专员|aria-haspopup/);
 });
