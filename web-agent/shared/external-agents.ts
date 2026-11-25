@@ -1,4 +1,4 @@
-import type {AICard} from './contracts';
+import type {AICard,ExternalReplyStage,ExternalToolProgress} from './contracts';
 export type ExternalAgentId = 'codex';
 export type ExternalRuntimeKind = 'codex-app-server';
 /** Read compatibility only; retired bindings never authorize a new run. */
@@ -16,6 +16,35 @@ export function executionCardTitle(card:AICard){
  if(agent==='codex'||agent==='runtime-acp')return externalExecutionName(agent,
   data.external_run_id===card.id&&data.external_runtime_kind==='codex-app-server'?'codex-app-server':undefined);
  return card.title==='Codex · ACP'?'Codex':card.title;
+}
+
+export function directExternalOperationData(card:AICard|undefined,rootTurnId:string){
+ const data=card?.data as Record<string,unknown>|undefined;
+ return card?.type==='operation'&&data?.source==='external_agent'&&data.external_run_id===card.id&&
+  data.root_turn_id===rootTurnId&&!data.agentRunId&&!data.childSessionId?data:undefined;
+}
+
+export function isExternalToolProgress(value:unknown):value is ExternalToolProgress{
+ if(!value||typeof value!=='object')return false;
+ const {total,running,failed}=value as ExternalToolProgress;
+ return Number.isSafeInteger(total)&&total>0&&Number.isSafeInteger(running)&&running>=0&&
+  Number.isSafeInteger(failed)&&failed>=0&&failed+running<=total;
+}
+
+export function isExternalReplyStage(value:unknown):value is ExternalReplyStage{
+ if(!value||typeof value!=='object')return false;
+ const stage=value as ExternalReplyStage;
+ return typeof stage.id==='string'&&!!stage.id&&(stage.kind==='prose'&&typeof stage.content==='string'||
+  stage.kind==='tools'&&isExternalToolProgress(stage.progress));
+}
+
+export function externalReplyStages(value:unknown):ExternalReplyStage[]{
+ return Array.isArray(value)?value.filter(isExternalReplyStage):[];
+}
+
+export function updateExternalReplyStages(stages:ExternalReplyStage[],stage:ExternalReplyStage){
+ const index=stages.findIndex(item=>item.id===stage.id&&item.kind===stage.kind);
+ return index<0?[...stages,stage]:stages.map((item,i)=>i===index?stage:item);
 }
 export type AgentModelRef = {modelId:string;providerId?:string};
 export type AgentBackendRef = {kind:'native';model?:AgentModelRef} | {kind:'acp';agent:StoredExternalAgentId;revision?:number;model?:AgentModelRef};

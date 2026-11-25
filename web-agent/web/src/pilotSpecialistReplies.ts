@@ -1,4 +1,5 @@
-import type {Message,SessionSnapshot,SpecialistChannelEntry,SpecialistReplyAuthor,SuperWorker,SuperWorkspace} from '../../shared/contracts';
+import type {AICard,ExternalToolProgress,Message,SessionSnapshot,SpecialistChannelEntry,SpecialistReplyAuthor,SuperWorker,SuperWorkspace} from '../../shared/contracts';
+import {directExternalOperationData,externalReplyStages} from '../../shared/external-agents';
 import {liveSpecialistReplies} from '../../shared/specialist-replies';
 
 type PilotSpecialistActivity=Omit<NonNullable<SuperWorker['activity']>,'phase'>&{phase:NonNullable<SuperWorker['activity']>['phase']|'updating'};
@@ -107,7 +108,14 @@ export function awaitingPilotReport(row:PilotSpecialistRow,snapshot?:SessionSnap
   (!snapshot.ai?.rootTurnId||snapshot.ai.rootTurnId===row.observedRootTurnId);
 }
 
-export type PilotReplyPresentation={binding:string;entry?:SpecialistChannelEntry};
+export type PilotReplyStage={kind:'prose';id:string;card:AICard}|{kind:'tools';id:string;progress:ExternalToolProgress};
+type PilotReplyEntry=SpecialistChannelEntry&{stages:PilotReplyStage[]};
+export type PilotReplyPresentation={binding:string;entry?:PilotReplyEntry};
+
+export function pilotToolStageLabel({total,running,failed}:ExternalToolProgress,active:boolean){
+ const ended=total-running;
+ return ['工具调用',running>0&&`${running} 项${active?'执行中':'未结束'}`,ended>0&&`${ended} 项已结束`,failed>0&&`${failed} 项失败`].filter(Boolean).join(' · ');
+}
 
 /** Keep the last committed public segment until the host's exact report takes
  * over. A late completion snapshot is audit data, not another public update. */
@@ -117,7 +125,7 @@ export function pilotSpecialistPresentation(row:PilotSpecialistRow,snapshot:Sess
  return pilotSpecialistReply(row,snapshot);
 }
 
-/** Public current-invocation prose only; thinking, tools and old replies stay private. */
+/** Project the current invocation's public stages, with count-only tool groups. */
 export function pilotSpecialistReply(row:PilotSpecialistRow,snapshot?:SessionSnapshot){
  if(!snapshot||!specialistSnapshotMatches(row,snapshot)||row.activity.phase==='queued')return undefined;
  const view=snapshot.ai;
@@ -130,14 +138,35 @@ export function pilotSpecialistReply(row:PilotSpecialistRow,snapshot?:SessionSna
  const backend=row.worker.execution?.backend,execution=snapshot.superagent?.execution;
  const runs=backend?.kind==='acp'&&execution?.backend.kind==='acp'&&execution.backend.agent===backend.agent?
   new Set(execution.runs.filter(run=>run.scope==='worker'&&run.agent===backend.agent).map(run=>run.id)):new Set<string>();
- const cards=view.cards.map(card=>{
+ const stages:PilotReplyStage[]=[];
+ const cards=view.cards.flatMap(card=>{
   const data=card.data as Record<string,unknown>|undefined;
-  const direct=card.type==='operation'&&runs.has(card.id)&&data?.source==='external_agent'&&data.external_run_id===card.id&&
-   data.taskId===(row.worker.task.executionGoalId??row.worker.task.taskId)&&data.root_turn_id===view.rootTurnId&&!data.agentRunId&&!data.childSessionId;
-  const reply=direct?data?.external_reply as {id?:unknown;content?:unknown}|undefined:undefined;
+  const operation=runs.has(card.id)&&directExternalOperationData(card,view.rootTurnId!);
+  if(!operation||operation.taskId!==(row.worker.task.executionGoalId??row.worker.task.taskId)){
+   if((card.type==='message'||card.type==='text')&&data?.root_turn_id===view.rootTurnId&&card.at>=view.turnStartedAt!&&card.content?.trim()){
+    stages.push({kind:'prose',id:card.id,card});
+   }
+   return [card];
+  }
+  const at=card.at<view.turnStartedAt!?view.turnStartedAt!:card.at;
+  const timeline=externalReplyStages(operation.external_reply_stages);
+  if(timeline.length)return timeline.flatMap(stage=>{
+   const id=JSON.stringify([card.id,stage.kind,stage.id]);
+   if(stage.kind==='tools'){
+    stages.push({...stage,id});
+    return [];
+   }
+   if(!stage.content.trim())return [];
+   const message={...card,id:stage.id,type:'message',at,content:stage.content};
+   stages.push({kind:'prose',id,card:message});
+   return [message];
+  });
+  const reply=operation.external_reply as {id?:unknown;content?:unknown}|undefined;
   const publicSegment=reply&&typeof reply.id==='string'&&reply.id&&typeof reply.content==='string'?reply:undefined;
-  return direct?{...card,type:'message',...(publicSegment?{id:publicSegment.id as string,content:publicSegment.content as string}:{}),at:card.at<view.turnStartedAt!?view.turnStartedAt!:card.at}:card;
+  return [{...card,type:'message',...(publicSegment?{id:publicSegment.id as string,content:publicSegment.content as string}:{}),at}];
  });
  const projectedSnapshot={...snapshot,ai:{...view,cards}};
- return liveSpecialistReplies([projectedSnapshot],[row.worker]).find(entry=>entry.reply?.turnId===view.rootTurnId);
+ const entry=liveSpecialistReplies([projectedSnapshot],[row.worker]).find(entry=>entry.reply?.turnId===view.rootTurnId);
+ const latestProse=stages.filter(stage=>stage.kind==='prose').at(-1);
+ return entry?{...entry,stages:latestProse?.card.id===entry.card?.id?stages:[]}:undefined;
 }

@@ -54,6 +54,15 @@ test('only actual same-binding text replacements retire and reveal; initial, equ
  assert.equal(changesPilotReplyContent(first,content('其他任务',{binding:'other'})),false);
 });
 
+test('stage changes animate locally without replacing the exact invocation body',()=>{
+ const first=content('第一阶段',{kind:'stages',id:'run-root',live:true});
+ const next={...first,text:'同一阶段继续更新'};
+ assert.equal(changesPilotReplyContent(thinking,first),false);
+ assert.equal(changesPilotReplyContent(first,next),false);
+ assert.equal(changesPilotReplyContent(first,{...next,id:'next-root'}),true);
+ assert.equal(changesPilotReplyContent(first,content('正式报告',{id:'report'})),true);
+});
+
 test('old text retires right to left before the one body commits and reveals new text left to right',()=>{
  const {transition,committed,clips,finish}=transitionHarness(),next=content('真实公开回复');
  transition.update(thinking,true);transition.update(next,true);

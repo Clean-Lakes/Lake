@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {externalReplyTextUpdate} from './external-reply-events';
+import {externalReplyTextUpdate,recordExternalReplyStage} from './external-reply-events';
 import type {AICard} from '../../web-agent/shared/contracts';
+import type {ExternalEvent,ExternalRun} from './acp/types';
+import {externalReplyStages} from '../../web-agent/shared/external-agents';
 
 test('only public root ACP Worker text gets a prefix; child and tool records remain separate',()=>{
  const card:AICard={id:'run',type:'operation',status:'running',at:'2026-11-12T00:00:00Z',content:'当前公开回复',data:{source:'external_agent',external_run_id:'run'}};
@@ -26,4 +28,37 @@ test('public ACP message prefixes accompany the unchanged cumulative audit prefi
   const update=externalReplyTextUpdate({purpose:'worker'},{kind:'text'},{...card,data:{external_reply:invalid}},'root').textUpdate!;
   assert.equal(update.externalReply,undefined);
  }
+});
+
+test('each real public message and tool group has a stable phase, including late tool completions',()=>{
+ const at='2026-11-12T00:00:00Z',run={id:'run',taskId:'task',rootTurnId:'root',purpose:'worker'} as ExternalRun;
+ const card:AICard={id:run.id,type:'operation',status:'running',at,content:'retained audit',
+  data:{source:'external_agent',external_run_id:run.id,taskId:run.taskId,root_turn_id:run.rootTurnId}};
+ const emit=(event:Omit<ExternalEvent,'at'|'sequence'>)=>recordExternalReplyStage(run,{...event,at,sequence:1},card);
+ const prose=(id:string,content:string)=>{
+  card.data={...card.data as object,external_reply:{id,content}};
+  return emit({kind:'text',publicTextId:id,publicText:'PRIVATE_RAW_PREFIX'});
+ };
+ const tool=(callId:string,status:string)=>emit({kind:status==='running'?'tool':'tool_update',callId,status,title:'PRIVATE_TOOL_TITLE'});
+ prose('a','先核对。');
+ const first=tool('call-1','running')!.stage;
+ assert.equal(tool('call-2','running')!.stage.id,first.id);
+ assert.equal(tool('call-1','running'),undefined);
+ prose('b','开始汇总');
+ const second=tool('call-3','running')!.stage;
+ assert.notEqual(second.id,first.id);
+ assert.equal(tool('call-1','completed')!.stage.id,first.id);
+ assert.equal(tool('call-2','failed')!.stage.id,first.id);
+ assert.equal(tool('call-2','completed'),undefined);
+ prose('b','开始汇总。');
+ prose('c','继续验证。');
+ const after=externalReplyStages((card.data as Record<string,unknown>).external_reply_stages);
+ assert.deepEqual(after,[{kind:'prose',id:'a',content:'先核对。'},
+  {kind:'tools',id:first.id,progress:{total:2,running:0,failed:1}},
+  {kind:'prose',id:'b',content:'开始汇总。'},
+  {kind:'tools',id:second.id,progress:{total:1,running:1,failed:0}},
+  {kind:'prose',id:'c',content:'继续验证。'}]);
+ assert.doesNotMatch(JSON.stringify(after),/PRIVATE_|call-[123]/);
+ assert.equal(card.content,'retained audit');
+ assert.equal(recordExternalReplyStage({...run,childSessionId:'child'},{kind:'tool',callId:'child',status:'running',at,sequence:2},card),undefined);
 });

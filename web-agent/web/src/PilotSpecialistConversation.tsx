@@ -1,9 +1,9 @@
-import {useCallback,useEffect,useLayoutEffect,useRef,useState} from 'react';
+import {memo,useCallback,useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 import type {SessionEvent,SessionSnapshot,SpecialistReplyAuthor} from '../../shared/contracts';
 import {api} from './api';
-import {applyLiveText} from './liveTextUpdates';
+import {applyExternalReplyStageUpdate,applyLiveText} from './liveTextUpdates';
 import {acceptSnapshot} from './snapshotUpdates';
-import {awaitingPilotReport,pilotSpecialistBinding,pilotSpecialistPresentation,specialistSnapshotMatches,type PilotReplyPresentation,type PilotSpecialistRow} from './pilotSpecialistReplies';
+import {awaitingPilotReport,pilotSpecialistBinding,pilotSpecialistPresentation,pilotToolStageLabel,specialistSnapshotMatches,type PilotReplyPresentation,type PilotReplyStage,type PilotSpecialistRow} from './pilotSpecialistReplies';
 import {ReplyIdentity} from './ReplyIdentity';
 import {AssistantMarkdown} from './AssistantMarkdown';
 import {ReplyProcessStatus} from './ReplyProcessStatus';
@@ -17,7 +17,8 @@ import {allowsAnimalThinking,turnStatus} from './turnStatus';
 import {useSpecialistAppearance} from './SuperRoleAvatar';
 import {lakeAvatarThinking} from './lakeAvatarThinking';
 import {LiveTextMotionLabel} from './liveTextMotion';
-import {PilotReplyContent,type PilotReplyContentState} from './PilotReplyContent';
+import {PilotReplyContent,PILOT_REPLY_TRANSITION_MS,type PilotReplyContentState} from './PilotReplyContent';
+import {Glyph} from './Icons';
 import {specialistInterimText} from './SpecialistReplyCursor';
 import type {LakeAvatarName} from './lakeAvatarCatalog';
 import type {SubscribePilotWorkerEvents} from './PilotWorkspace';
@@ -42,7 +43,7 @@ function useSpecialistReply(row:PilotSpecialistRow,connected:boolean,visible:boo
   const controller=new AbortController();let disposed=false,busy=false,queued=false,healthy=false,streamOpen=false;
   let latest=state?.binding===binding?state.snapshot:undefined,frame:number|undefined,timer:ReturnType<typeof setTimeout>|undefined,stream:EventSource|undefined;
   let snapshotFailureSince:number|undefined;
-  let events:SessionEvent[]=[];
+  let frameHasText=false;
   const refresh=async()=>{
    if(busy){queued=true;return;}busy=true;
    try{
@@ -51,9 +52,12 @@ function useSpecialistReply(row:PilotSpecialistRow,connected:boolean,visible:boo
     snapshotFailureSince=undefined;
     healthy=streamOpen;
     // A response for a superseded binding cannot replace this row's prose.
-    if(next&&(!latest||next.cursor>=latest.cursor))latest=acceptSnapshot(latest??null,next);
+    if(next&&(!latest||next.cursor>=latest.cursor)){
+     if(next.ai?.rootTurnId!==latest?.ai?.rootTurnId)frameHasText=false;
+     latest=acceptSnapshot(latest??null,next);
+    }
     const snapshot=latest;
-    setState(current=>current?.binding===binding&&current.snapshot===snapshot&&!current.failed?current:{binding,snapshot,failed:false});
+    if(frame===undefined)setState(current=>current?.binding===binding&&current.snapshot===snapshot&&!current.failed?current:{binding,snapshot,failed:false});
    }catch{
     if(disposed)return;
     healthy=false;
@@ -66,15 +70,17 @@ function useSpecialistReply(row:PilotSpecialistRow,connected:boolean,visible:boo
   const schedule=()=>{if(!timer)timer=setTimeout(()=>{timer=undefined;void refresh();},100);};
   const receive=(event:SessionEvent)=>{
    try{
-    if(event.sessionId!==row.worker.sessionId||typeof event.seq!=='number'||latest&&event.seq<=latest.cursor)return;
-    if(event.textUpdate&&applyLiveText(latest??null,event)){
-     events.push(event);
+    if(event.sessionId!==row.worker.sessionId||!Number.isSafeInteger(event.seq)||latest&&event.seq<=latest.cursor)return;
+    const next=event.externalReplyStageUpdate?applyExternalReplyStageUpdate(latest??null,event):event.textUpdate?applyLiveText(latest??null,event):null;
+    if(next){
+     latest=next;frameHasText||=!!event.textUpdate;
      if(frame===undefined)frame=requestAnimationFrame(()=>{
       frame=undefined;if(disposed)return;
-      for(const item of events)latest=applyLiveText(latest??null,item)??latest;
-      events=[];snapshotFailureSince=undefined;
+      const snapshot=latest,hasText=frameHasText;
+      frameHasText=false;snapshotFailureSince=undefined;
       healthy=streamOpen;
-      setState({binding,snapshot:latest,failed:false,livePacket:true});
+      setState(current=>({binding,snapshot,failed:false,livePacket:hasText||
+       current?.binding===binding&&current.snapshot?.ai?.rootTurnId===snapshot?.ai?.rootTurnId&&current.livePacket}));
      });
     }else schedule();
    }catch{schedule();}
@@ -106,8 +112,39 @@ function PilotSpecialistReply({row,onSpecialist,onInspectSpecialist,connected,on
  return <PilotSpecialistReplyView row={row} snapshot={state?.snapshot} livePacket={state?.livePacket} available={connected&&!state?.failed} visible={visible} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} onObservedTurn={onObservedTurn} onReportPresented={onReportPresented} taskLabel={taskLabel}/>;
 }
 
-function PilotReplyProse({text,active,animateInitial,cursorAvatar}:{text:string;active:boolean;animateInitial?:boolean;cursorAvatar?:LakeAvatarName}){
+const PilotReplyProse=memo(function PilotReplyProse({text,active,animateInitial,cursorAvatar}:{text:string;active:boolean;animateInitial?:boolean;cursorAvatar?:LakeAvatarName}){
  return <div className="ai-card ai-message"><AssistantMarkdown reveal={active} animateInitial={animateInitial} cursorAvatar={cursorAvatar}>{text}</AssistantMarkdown></div>;
+});
+
+function PilotReplyStageSurface({stage,arrive,active,children}:{stage:PilotReplyStage;arrive:boolean;active:boolean;children:ReactNode}){
+ const element=useRef<HTMLDivElement>(null),entering=useRef(arrive);
+ useLayoutEffect(()=>{
+  if(!entering.current)return;
+  entering.current=false;
+  if(!active||document.hidden||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const animation=element.current?.animate?.([{clipPath:'inset(0 100% 0 0)',opacity:.45},{clipPath:'inset(0 0 0 0)',opacity:1}],
+   {duration:PILOT_REPLY_TRANSITION_MS,easing:'cubic-bezier(.22,1,.36,1)'});
+  return()=>animation?.cancel();
+ },[active]);
+ return <div ref={element} className="pilot-specialist-stage" data-reply-stage={stage.kind} data-reply-stage-id={stage.id}>{children}</div>;
+}
+
+type PlanOptions=Parameters<typeof conversationPlanEntry>[1];
+function PilotReplyStages({stages,text,active,arrive,cursorAvatar,plan}:{stages:PilotReplyStage[];text:string;active:boolean;arrive:boolean;cursorAvatar?:LakeAvatarName;plan:PlanOptions}){
+ const currentProse=stages.filter(stage=>stage.kind==='prose').at(-1);
+ return <div className="pilot-specialist-stages">{stages.map(stage=>{
+  let content;
+  if(stage.kind==='tools'){
+   content=<div className="pilot-specialist-tool-stage"><Glyph name="plug" size={13}/><ReplyProcessStatus active={active&&stage.progress.running>0}>{pilotToolStageLabel(stage.progress,active)}</ReplyProcessStatus></div>;
+  }else{
+   const current=stage===currentProse;
+   const projected=conversationPlanEntry({id:stage.card.id,at:stage.card.at,card:stage.card},{...plan,live:plan.live&&current});
+   content=projected.card?.type==='plan_reference'
+    ?<PlanReference state={(projected.card.data as {state:'saved'|'writing'|'incomplete'}).state}/>
+    :<PilotReplyProse text={current?text:stage.card.content??''} active={active&&current} animateInitial={arrive&&current} cursorAvatar={current?cursorAvatar:undefined}/>;
+  }
+  return <PilotReplyStageSurface key={stage.id} stage={stage} arrive={arrive} active={active}>{content}</PilotReplyStageSurface>;
+ })}</div>;
 }
 
 /** Public reply presentation is separate from the exact-worker live subscription. */
@@ -115,6 +152,7 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
  const appearance=useSpecialistAppearance(row.author);
  const previous=useRef<PilotReplyPresentation>(undefined),binding=pilotSpecialistBinding(row);
  const entry=pilotSpecialistPresentation(row,snapshot,previous.current);
+ const observedPhase=previous.current?.binding===binding&&previous.current.entry?.reply?.turnId===entry?.reply?.turnId&&!!entry?.reply?.turnId;
  useLayoutEffect(()=>{previous.current={binding,entry};});
  const awaitingReport=awaitingPilotReport(row,snapshot);
  const statusSnapshot=snapshot&&specialistSnapshotMatches(row,snapshot)&&(!row.continuity||!!row.observedRootTurnId&&snapshot.ai?.rootTurnId===row.observedRootTurnId)?snapshot:undefined;
@@ -132,8 +170,9 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
  const [presented,setPresented]=useState('');
  const reportPresented=useCallback((id:string)=>{setPresented(id);onReportPresented?.(id);},[onReportPresented]);
  const moving=working||!!report&&available&&presented!==report.id&&workedBinding.current===binding;
- const reportEntry=report?conversationPlanEntry({id:report.id,at:report.createdAt,message:report},{planMode:snapshot?.conversationMode==='plan',live:false,currentPlanId:snapshot?.ai?.proposedPlan?.id}):undefined;
- const projected=reportEntry??(entry?.card?conversationPlanEntry({id:entry.card.id,at:entry.createdAt,card:entry.card},{planMode:snapshot?.conversationMode==='plan',live:moving,currentPlanId:snapshot?.ai?.proposedPlan?.id}):undefined);
+ const plan={planMode:snapshot?.conversationMode==='plan',live:moving,currentPlanId:snapshot?.ai?.proposedPlan?.id};
+ const reportEntry=report?conversationPlanEntry({id:report.id,at:report.createdAt,message:report},{...plan,live:false}):undefined;
+ const projected=reportEntry??(entry?.card?conversationPlanEntry({id:entry.card.id,at:entry.createdAt,card:entry.card},plan):undefined);
  const text=projected?.card?.type==='plan_reference'?'':report?planMarkdown(report.text):
   specialistInterimText(entry?.card?.content??'');
  useLayoutEffect(()=>{
@@ -150,23 +189,26 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
  const label=available?(updating?(row.continuity==='terminal'?row.activity.label:interruptionLabel??row.activity.label):snapshotLabel??row.activity.label):'进度暂未更新，正在重连';
  const waitingLabel=status?.phase==='waiting'?status.state
   :['waiting_approval','waiting_input','waiting_external'].includes(row.activity.phase)?row.activity.label:undefined;
- const inlineWait=text&&available&&!report&&!awaitingReport&&!updating?waitingLabel:undefined;
  const planState=projected?.card?.type==='plan_reference'?(projected.card.data as {state:'saved'|'writing'|'incomplete'}).state:undefined;
+ const stages=report?undefined:entry?.stages;
+ const hasStages=!!stages?.length;
+ const inlineWait=(text||hasStages)&&available&&!report&&!awaitingReport&&!updating?waitingLabel:undefined;
+ const live=working&&visible&&!awaitingReport;
  const contentState:PilotReplyContentState={
-  binding:pilotSpecialistBinding(row),
-  kind:planState?'plan':text||report?'prose':'status',id:report?.id??entry?.card?.id??'',
+  binding,
+  kind:hasStages?'stages':planState?'plan':text||report?'prose':'status',id:hasStages?entry?.reply?.turnId??'':report?.id??entry?.card?.id??'',
   text:planState??(report?text:text||(thinking?lakeAvatarThinking[appearance.icon].label:label)),
-  live:working&&visible&&!awaitingReport,
+  live,
  };
  return <section className="ai-chat-message ai-role-assistant pilot-specialist-reply" data-worker-id={row.worker.id} data-task-id={row.worker.task.taskId} data-phase={report?'settled':row.activity.phase} data-report-id={report?.id} aria-label={`${row.author.name}的回复`}>
   <ReplyIdentity identity={{name:'Pilot',pilot:true}} author={report?.author??row.author} authorMotion={moving?'working':'still'} nameMotion={moving&&visible} onSpecialist={onSpecialist}/>
   {taskLabel&&<small className="pilot-specialist-task-label">{taskLabel}</small>}
   <PilotReplyContent state={contentState} onPresented={report?reportPresented:undefined} active={(moving||!!report&&!['failed','cancelled'].includes(row.worker.task.state))&&available&&visible}>
-   {planState?<PlanReference state={planState}/>:text?<PilotReplyProse text={text} active={working&&visible&&!awaitingReport} animateInitial={livePacket} cursorAvatar={working?appearance.icon:undefined}/>:report||awaitingReport?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
+   {hasStages?<PilotReplyStages key={entry?.reply?.turnId} stages={stages!} text={text} active={live} arrive={live&&(observedPhase||!!livePacket)} cursorAvatar={working?appearance.icon:undefined} plan={plan}/>:planState?<PlanReference state={planState}/>:text?<PilotReplyProse text={text} active={live} animateInitial={livePacket} cursorAvatar={working?appearance.icon:undefined}/>:report||awaitingReport?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
    {report&&<MessageAttachments message={report} sessionId={report.sessionId}/>}
   </PilotReplyContent>
   <SpecialistProcessLink author={report?.author??row.author} reportId={report?.id} onInspect={onInspectSpecialist} active={moving&&visible} liveStatus={inlineWait}/>
-  {!report&&text&&(!available||updating&&!awaitingReport)&&<small className="pilot-specialist-connection" role="status">{label}</small>}
+  {!report&&(text||hasStages)&&(!available||updating&&!awaitingReport)&&<small className="pilot-specialist-connection" role="status">{label}</small>}
  </section>;
 }
 

@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {applyLiveText} from '../src/liveTextUpdates';
+import {applyExternalReplyStageUpdate,applyLiveText} from '../src/liveTextUpdates';
 import {acceptSnapshot} from '../src/snapshotUpdates';
-import type {SessionEvent,SessionSnapshot} from '../../shared/contracts';
+import type {ExternalReplyStage,SessionEvent,SessionSnapshot} from '../../shared/contracts';
 const snapshot=()=>({session:{id:'s'},cursor:10,messages:[{id:'history'}],sre:{tasks:[]},resources:[],ai:{status:'running',rootTurnId:'turn',cards:[{id:'history',content:'历史',status:'completed'}],totalCards:1,agentRuns:[{id:'role',status:'running'}]}} as unknown as SessionSnapshot);
 const event=(textUpdate:SessionEvent['textUpdate'],seq=11)=>({sessionId:'s',seq,type:'message',createdAt:'now',textUpdate} as SessionEvent);
 const card=(content:string)=>({target:'card' as const,id:'reply',cardType:'message',content,at:'2026-10-18T10:00:00Z',rootTurnId:'turn'});
@@ -68,4 +68,31 @@ test('ACP segment prefixes replace public prose without replacing audit content 
  assert.equal((appended.ai!.cards.at(-1)!.data as any).external_reply.content,'结论完整');
  assert.equal(applyLiveText(before,event({...prefix,rootTurnId:'other'})),null);
  assert.equal(applyLiveText(before,event({...card('x'),externalReply:prefix.externalReply})),null,'unrelated message SSE cannot acquire ACP ownership');
+});
+
+test('one stream frame can capture multiple ACP phases and in-place updates without losing older prose',()=>{
+ const initial=snapshot();initial.superagent={task:{taskId:'task'}} as SessionSnapshot['superagent'];
+ initial.ai!.cards.push({id:'acp',type:'operation',status:'running',at:'now',data:{source:'external_agent',external_run_id:'acp',root_turn_id:'turn',taskId:'task'}});
+ const phase=(seq:number,stage:ExternalReplyStage):SessionEvent=>({
+  ...event(stage.kind==='prose'?{target:'card',id:'acp',cardType:'operation',content:'cumulative audit',rootTurnId:'turn',externalReply:{id:stage.id,content:stage.content}}:undefined,seq),
+  externalReplyStageUpdate:{id:'acp',taskId:'task',rootTurnId:'turn',stage:stage.kind==='prose'?{kind:stage.kind,id:stage.id}:stage},
+ });
+ const messages=[phase(11,{kind:'prose',id:'first',content:'开始检查。'}),
+  phase(12,{kind:'tools',id:'tools:1',progress:{total:2,running:2,failed:0}}),
+  phase(13,{kind:'prose',id:'next',content:'准备总结'}),
+  phase(14,{kind:'tools',id:'tools:1',progress:{total:2,running:0,failed:1}}),
+  phase(15,{kind:'prose',id:'next',content:'准备总结。'})];
+ const next=messages.reduce((state,item)=>applyExternalReplyStageUpdate(state,item)!,initial);
+ const current=next.ai!.cards.at(-1)!,data=current.data as Record<string,unknown>;
+ assert.deepEqual(data.external_reply_stages,[{kind:'prose',id:'first',content:'开始检查。'},messages[3]!.externalReplyStageUpdate!.stage,
+  {kind:'prose',id:'next',content:'准备总结。'}]);
+ assert.equal(next.messages,initial.messages);
+ assert.equal(next.ai!.cards[0],initial.ai!.cards[0]);
+ assert.equal(current.content,'cumulative audit');
+ assert.equal(applyExternalReplyStageUpdate(next,messages[1]!),next);
+ assert.equal(applyExternalReplyStageUpdate(next,{...messages[4]!,seq:16,textUpdate:undefined}),null);
+ for(const update of [{taskId:'other'},{rootTurnId:'other'},{id:'other'}]){
+  const wrong={...messages[3]!,seq:16,externalReplyStageUpdate:{...messages[3]!.externalReplyStageUpdate!,...update}};
+  assert.equal(applyExternalReplyStageUpdate(next,wrong),null);
+ }
 });

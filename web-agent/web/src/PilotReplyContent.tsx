@@ -1,17 +1,18 @@
 import {useEffect,useLayoutEffect,useMemo,useRef,useState,type ReactNode} from 'react';
 
-export type PilotReplyContentState={binding:string;kind:'prose'|'plan'|'status';id:string;text:string;live?:boolean};
+export type PilotReplyContentState={binding:string;kind:'prose'|'stages'|'plan'|'status';id:string;text:string;live?:boolean};
 export const PILOT_REPLY_TRANSITION_MS=160;
 export const PILOT_REPLY_EXIT_MS=80;
 const visibleClip='inset(0% 0% 0% 0%)',hiddenClip='inset(0% 100% 0% 0%)';
 
 function startsLiveProse(previous:PilotReplyContentState|undefined,next:PilotReplyContentState){
- return previous?.kind==='status'&&next.kind==='prose'&&next.live===true;
+ return previous?.kind==='status'&&(next.kind==='prose'||next.kind==='stages')&&next.live===true;
 }
 
 /** Only a replacement needs a transition; received prefixes already stream smoothly. */
 export function changesPilotReplyContent(previous:PilotReplyContentState|undefined,next:PilotReplyContentState){
  if(!previous||previous.binding!==next.binding||startsLiveProse(previous,next))return false;
+ if(previous.kind==='stages'&&next.kind==='stages')return previous.id!==next.id;
  if(previous.kind===next.kind&&previous.text===next.text)return false;
  return !(previous.kind==='prose'&&next.kind==='prose'&&previous.id===next.id&&next.text.startsWith(previous.text));
 }

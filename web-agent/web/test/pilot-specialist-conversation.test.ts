@@ -127,6 +127,20 @@ test('Codex public root-worker text is projected from its exact ACP run, without
  const selected=pilotSpecialistReply(row,{...snapshot,ai:{...snapshot.ai!,cards:[segmented]}})?.card;
  assert.equal(selected?.id,'message-final');assert.equal(selected?.content,'仅结论');
  assert.equal(segmented.content,card.content,'the original cumulative audit is unchanged');
+ const multiPhase={...card,content:'PRIVATE_CUMULATIVE',data:{...card.data,external_events:[{title:'PRIVATE_TOOL_TITLE'}],external_reply_stages:[
+  {kind:'prose',id:'phase-1',content:'先核对版本。'},
+  {kind:'tools',id:'tools:1',progress:{total:1,running:0,failed:0}},
+  {kind:'prose',id:'phase-2',content:'<proposed_plan>\nPRIVATE_PLAN_BODY\n</proposed_plan>'},
+  {kind:'tools',id:'tools:3',progress:{total:2,running:1,failed:0}},
+  {kind:'prose',id:'phase-3',content:'继续检查结果。'},
+ ]}};
+ const withStages={...snapshot,ai:{...snapshot.ai!,cards:[multiPhase]}};
+ const html=renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row,snapshot:withStages}));
+ assert.deepEqual([...html.matchAll(/data-reply-stage="([a-z]+)"/g)].map(match=>match[1]),['prose','tools','prose','tools','prose']);
+ assert.match(html,/先核对版本。[^]*工具调用 · 1 项已结束[^]*工具调用 · 1 项执行中[^]*继续检查结/);
+ assert.equal((html.match(/class="specialist-reply-cursor"/g)??[]).length,1);
+ assert.doesNotMatch(html,/PRIVATE_/);
+ assert.equal(pilotSpecialistReply(row,withStages)?.card?.id,'phase-3');
  for(const wrong of [{...card,data:{...card.data,source:'tool'}},{...card,data:{...card.data,taskId:'another-task'}},{...card,data:{...card.data,childSessionId:'child'}},{...card,data:{...card.data,root_turn_id:'old'}}]){
   assert.equal(pilotSpecialistReply(row,{...snapshot,ai:{...snapshot.ai!,cards:[wrong]}})?.card,undefined);
  }

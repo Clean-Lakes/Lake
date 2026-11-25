@@ -2,8 +2,8 @@
 // All messages and source snapshots are synthetic; no backend request escapes.
 import {useLayoutEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import type {AICard,Message,SessionSnapshot,SpecialistChannelInfo,SuperWorker,SuperWorkspace} from '../../../shared/contracts';
-import type {AgentExecutionSummary} from '../../../shared/external-agents';
+import type {AICard,ExternalReplyStage,Message,SessionEvent,SessionSnapshot,SpecialistChannelInfo,SuperWorker,SuperWorkspace} from '../../../shared/contracts';
+import {updateExternalReplyStages,type AgentExecutionSummary} from '../../../shared/external-agents';
 import {AITranscript} from '../../src/AIPanel';
 import {ObjectReferencesProvider} from '../../src/AssistantMarkdown';
 import {SpecialistAvatarProvider} from '../../src/SuperRoleAvatar';
@@ -20,6 +20,7 @@ const at='2026-11-16T08:00:00.000Z',started='2026-11-16T08:00:01.000Z';
 const labels=['思考','工具状态','首段进度','流式追加','工具执行','新段进度','最终段待报告','源快照先结束','完成待报告','结束后播报','结束快照空窗','正式报告','ACP晚到累计','ACP完成message','等待审批','活动快照空窗','断线','删除专员'] as const;
 type Stage=typeof labels[number];
 let stage:Stage='思考',cursor=1,servedCursor=0,acp=true,long=false,secondComplete=false;
+let replyStages:ExternalReplyStage[]=[];
 const streams=new Set<FixtureEvents>();
 class FixtureEvents extends EventTarget {
  readyState=1;onopen:(()=>void)|null=null;onerror:(()=>void)|null=null;onmessage:((event:MessageEvent)=>void)|null=null;
@@ -59,10 +60,12 @@ function worker(isSecond=false):SuperWorker{
 function sourceCards(isSecond=false):AICard[]{
  if(isSecond)return [{id:'parallel-progress',type:'message',status:secondComplete?'completed':'running',at:started,content:'并行核对资料目录；第一位专员结束后，我仍继续当前任务。',data:{root_turn_id:parallel.rootTurnId}}];
  if(stage==='结束快照空窗')return [];
- const segment=publicSegment();
+ const latest=replyStages.filter(item=>item.kind==='prose').at(-1);
+ const segment=latest?{id:latest.id,content:latest.content}:publicSegment();
  const cumulative=segment.id==='acp_message_first'?segment.content:[first+firstAppend,long?longProgress:shortProgress,...(segment.id==='acp_message_final'?[conclusion]:[])].join('\n\n');
  const cards:AICard[]=acp?[{id:'acp-run-current',type:'operation',status:stage==='ACP完成message'?'completed':'running',at:started,content:cumulative+(stage==='ACP晚到累计'?'\n\n晚到的累计审计更新，不应替换已送达报告。':''),
-  data:{source:'external_agent',external_run_id:'acp-run-current',taskId:primary.taskId,root_turn_id:primary.rootTurnId,external_reply:segment}}]:segment.content?[{id:segment.id,type:'message',status:'running',at:started,content:segment.content,data:{root_turn_id:primary.rootTurnId}}]:[];
+  data:{source:'external_agent',external_run_id:'acp-run-current',taskId:primary.taskId,root_turn_id:primary.rootTurnId,external_reply:segment,
+   ...(replyStages.length>0&&{external_reply_stages:replyStages})}}]:segment.content?[{id:segment.id,type:'message',status:'running',at:started,content:segment.content,data:{root_turn_id:primary.rootTurnId}}]:[];
  if(['工具执行','工具状态'].includes(stage))cards.push({id:'sample-operation',type:'operation',status:'running',at:started,title:'读取样例',content:'PRIVATE_TOOL_DETAIL',data:{root_turn_id:primary.rootTurnId}});
  if(stage==='ACP完成message')cards.push({id:'acp-completed-message',type:'message',status:'completed',at:'2026-11-16T08:00:12.000Z',content:cumulative,data:{root_turn_id:primary.rootTurnId}});
  return cards;
@@ -83,6 +86,14 @@ function announce(incremental=false,isSecond=false){
  const card=sourceCards()[0],segment=publicSegment();
  const textUpdate=incremental&&card?{target:'card',id:card.id,content:card.content,cardType:card.type,at:card.at,rootTurnId:primary.rootTurnId,...(acp?{externalReply:segment}:{})}:undefined;
  for(const stream of streams)stream.dispatchEvent(new MessageEvent('session',{data:JSON.stringify({sessionId:isSecond?parallel.sessionId:primary.sessionId,seq:cursor,textUpdate})}));
+}
+function publishPhase(update:ExternalReplyStage){
+ replyStages=updateExternalReplyStages(replyStages,update);
+ const card=sourceCards()[0]!;
+ const textUpdate:SessionEvent['textUpdate']=update.kind==='prose'?{target:'card',id:card.id,content:card.content??'',cardType:'operation',rootTurnId:primary.rootTurnId,externalReply:{id:update.id,content:update.content}}:undefined;
+ const event={sessionId:primary.sessionId,seq:++cursor,textUpdate,externalReplyStageUpdate:{id:card.id,taskId:primary.taskId,rootTurnId:primary.rootTurnId,
+  stage:update.kind==='prose'?{kind:update.kind,id:update.id}:update}};
+ for(const stream of streams)stream.dispatchEvent(new MessageEvent('session',{data:JSON.stringify(event)}));
 }
 const user:Message={id:'user-fixture',sessionId:'pilot-fixture',role:'user',text:'检查隔离样例的进度更新。',createdAt:at};
 const history:Message[]=Array.from({length:4},(_,index)=>[
@@ -112,7 +123,7 @@ function Fixture(){
   const container=box.current!,scroll=new FollowScroll(container,()=>following.current,undefined,window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   follower.current=scroll;scroll.jump();
   const stop=observeConversationGrowth(container,()=>scroll.request());
-  Object.assign(window,{specialistProgressQA:{capture,measure}});
+  Object.assign(window,{specialistProgressQA:{capture,measure,publishPhase}});
   return()=>{stop();scroll.stop();delete (window as unknown as {specialistProgressQA?:unknown}).specialistProgressQA;};
  },[]);
  const move=(next:Stage)=>{stage=next;cursor++;setCurrent(next);setRevision(value=>value+1);announce(next==='流式追加');};

@@ -2,6 +2,10 @@
 .pilot-specialist-conversation:empty { display:none; }
 .pilot-specialist-reply-content { min-width:0; }
 .pilot-specialist-reply-body { display:flow-root; min-width:0; }
+.pilot-specialist-stages { display:grid; gap:10px; min-width:0; }
+.pilot-specialist-stage { min-width:0; }
+.pilot-specialist-tool-stage { display:flex; align-items:flex-start; gap:7px; color:var(--text-muted); }
+.pilot-specialist-tool-stage > svg { flex:none; margin-block-start:4px; }
 .pilot-specialist-connection { display:block; margin-top:8px; color:var(--text-muted); font-size:12px; }
 .pilot-report-fold { position:relative; min-width:0; }
 .pilot-report-body { display:grid; grid-template-rows:1fr; min-width:0; transition:grid-template-rows 200ms ease, margin-top 200ms ease, visibility 0s; }
@@ -20,6 +24,7 @@
 .ai-chat-message .pilot-specialist-task-label { margin:-3px 0 4px; color:var(--text-muted); font-size:var(--font-size-toolbar); }
 @media (prefers-reduced-motion:reduce) {
  .pilot-specialist-reply-content { clip-path:none!important; }
+ .pilot-specialist-stage { clip-path:none!important; opacity:1!important; }
  .pilot-report-body { transition:none; }
  .pilot-report-chevron { transition:none; }
 }

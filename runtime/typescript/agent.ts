@@ -1,6 +1,6 @@
 import {pilotConfigurationToolNames} from './configuration-tool-names';
 import {externalExecutionName} from '../../web-agent/shared/external-agents';
-import {externalReplyTextUpdate} from './external-reply-events';
+import {externalReplyTextUpdate,recordExternalReplyStage} from './external-reply-events';
 import {prepareSessionArchive} from "./session-archive";
 import {finalReportBoundary} from "./final-report";
 import type {MessageInput} from "./message-input";
@@ -134,7 +134,11 @@ export class LakeAgents {
     if(event.kind==='status'){card.status=event.status==='completed'?'completed':['failed','cancelled','unknown','interrupted'].includes(event.status??'')?event.status!:'running';if(run.summary||run.error)card.content=run.summary||run.error||'';}
     card.title=externalExecutionName(run.agent,run.runtimeKind);
     card.data={...(card.data??{}),external_agent:run.agent,external_runtime_kind:run.runtimeKind,external_state:run.state,external_usage:run.usage,external_events:run.events.filter(item=>item.kind==='tool'||item.kind==='tool_update').slice(-16)};
-    this.update(sessionId,view,externalReplyTextUpdate(run,event,{...card,content:this.redact(card.content??'')},rootTurnId));
+    const externalReplyStageUpdate=recordExternalReplyStage(run,event,card);
+    this.update(sessionId,view,{
+      ...externalReplyTextUpdate(run,event,{...card,content:this.redact(card.content??'')},rootTurnId),
+      ...(externalReplyStageUpdate&&{externalReplyStageUpdate}),
+    });
   }
   private externalActor(sessionId:string,profile:HostProfile,runtime:AgentRuntime,context:Pick<HostToolContext,'toolCallId'|'abortSignal'|'lakeSubagent'>,purpose:ExternalActor['purpose']='segment'):ExternalActor{
     if(profile.conversation){

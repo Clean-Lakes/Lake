@@ -291,6 +291,11 @@ export type ResourceTreeNode = { id: string; projectId: string; parentId: string
 
 export type SSHHostKeyTrust = { id: string; resourceId: string; host: string; port: number; algorithm: string; fingerprint: string; previousFingerprints: string[]; changed: boolean; scope: "lake" };
 
+export type ExternalToolProgress = {total:number;running:number;failed:number};
+export type ExternalReplyStage =
+  | {kind:'prose';id:string;content:string}
+  | {kind:'tools';id:string;progress:ExternalToolProgress};
+
 export type SessionEvent = {
 	conversationMode?: ConversationMode;
   conversationProgress?: true;
@@ -300,6 +305,7 @@ export type SessionEvent = {
   type: "session" | "message" | "specialist" | "evidence" | "action" | "terminal";
   createdAt: string;
   textUpdate?: {target:"card"|"agent";id:string;content:string;cardType?:string;at?:string;rootTurnId?:string;textId?:string;externalReply?:{id:string;content:string}};
+  externalReplyStageUpdate?: {id:string;taskId:string;rootTurnId:string;stage:{kind:'prose';id:string}|Extract<ExternalReplyStage,{kind:'tools'}>};
 };
 
 export type TerminalHistory = {
