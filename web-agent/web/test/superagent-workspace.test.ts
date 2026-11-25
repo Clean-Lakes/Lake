@@ -12,6 +12,7 @@ test('the project group list and the specialist rail have distinct entries',()=>
  const props={workspace,error:'',selectedId:'group',showHeading:false,onPilot(){},onWorker(){},onChannel(){}};
  const rail=renderToStaticMarkup(createElement(PilotWorkspace,{...props,presentation:'rail'}));
  assert.match(rail,/sidebar-rail-button sidebar-specialist-button/);
+ assert.match(rail,/aria-haspopup="dialog" aria-expanded="false"/);
  assert.match(rail,/title="运维专员.*有新消息未读"/);
  assert.doesNotMatch(rail,/sidebar-pilot-entry|<strong>运维专员<\/strong>/);
  const entry=renderToStaticMarkup(createElement(PilotWorkspace,{...props,presentation:'entry'}));
