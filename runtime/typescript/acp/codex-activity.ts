@@ -19,7 +19,7 @@ export function publicCommand(value:unknown,redact:(text:string)=>string=text=>t
   const clean=redact(value).replace(/\r\n?/g,'\n').replace(/\x1b\[[0-?]*[ -/]*[@-~]/g,'')
     .replace(/[\x00-\x08\x0b-\x1f\x7f\u202a-\u202e\u2066-\u2069]/g,'').trim();
   let result=clean.replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/gi,masked)
-    .replace(/(["'])Authorization:\s*[^'"\\\r\n]*\1/gi,(_,quote:string)=>quote+'Authorization: '+masked+quote)
+    .replace(/(["'])Authorization:\s*[^'"\\\r\n]*\1(?=\s|$|[|;&])/gi,(_,quote:string)=>quote+'Authorization: '+masked+quote)
     .replace(/\b(?:sk-|gh[pousr]_)[a-z\d_-]{10,}/gi,masked)
     .replace(/(\b[a-z][a-z\d+.-]{0,30}:\/\/)[^\s/@]+:[^\s/@]+@/g,'$1'+masked+'@');
   if(privateCommand(result)){
@@ -44,7 +44,7 @@ export function publicCommand(value:unknown,redact:(text:string)=>string=text=>t
       }
       // A complete Python assignment inside a literal heredoc ends on this
       // line. Mask its expression and keep the following independent statements.
-      const python=pythonEnd&&/^(\s*[A-Za-z_]\w*\s*=\s*)(.+)$/.exec(line);
+      const python=pythonEnd&&/^(\s*[A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*\s*=\s*)(.+)$/.exec(line);
       if(python&&!/['"]{3}|\\\s*$/.test(python[2])){
         const syntax=python[2].replace(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g,'').split('#')[0]!;
         const closing:Record<string,string>={'(':')','[':']','{':'}'};

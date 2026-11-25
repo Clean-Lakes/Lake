@@ -55,7 +55,9 @@ test('command text keeps newlines, masks literals before clipping, and withholds
  assert.equal(publicCommand("export API_TOKEN='fixture example'\npwd"),'export API_TOKEN=[已脱敏]\npwd');
  assert.equal(publicCommand("tool --token 'fixture value' --list"),"tool --token [已脱敏] --list");
  const scriptWithReference="python3 - <<'PY'\nprint(1)\npassword = get_value('fixture')\nprint(2)\nPY";
- assert.equal(publicCommand(scriptWithReference),scriptWithReference.replace("get_value('fixture')",'[已脱敏]'));
+ for(const example of [scriptWithReference,scriptWithReference.replace('password =','user, password =')])
+   assert.equal(publicCommand(example),example.replace("get_value('fixture')",'[已脱敏]'));
+ assert.doesNotMatch(publicCommand('curl -H "Authorization: Bearer "fixture https://example.test'),/fixture/);
  for(const cmd of ['curl -H "Authorization: Bearer fixture example" https://example.test',
    'echo -----BEGIN OPENSSH PRIVATE KEY-----\nfixture\n-----END OPENSSH PRIVATE KEY-----',
    'PASSWORD="fixture\ncontinued value"\necho ok','curl https://u:fixture@example.test/']){
