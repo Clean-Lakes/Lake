@@ -143,7 +143,7 @@
 
   .specialist-reply-cursor[data-waiting] {
     transform-origin: 50% 75%;
-    animation: lake-cursor-wait-sway 3.6s ease-in-out infinite;
+    animation: lake-cursor-wait-sway 760ms ease-in-out;
   }
   .specialist-reply-cursor[data-waiting] > *,
   .specialist-reply-cursor[data-waiting] *::after { animation: none; }
@@ -153,29 +153,9 @@
   .specialist-reply-cursor[data-paused] *::after { animation-play-state: paused; }
 }
 
-@supports ((background-clip: text) or (-webkit-background-clip: text)) {
-  @media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
-    .specialist-reply-wait-text[data-waiting] {
-      color: transparent;
-      -webkit-text-fill-color: transparent;
-      background-color: var(--foreground);
-      background-image: linear-gradient(105deg, transparent 32%, color-mix(in srgb, var(--foreground) 38%, var(--info)) 50%, transparent 68%);
-      background-size: 220% 100%;
-      background-repeat: no-repeat;
-      background-clip: text;
-      -webkit-background-clip: text;
-      animation: status-text-sweep 3.6s linear infinite;
-    }
-    .specialist-reply-wait-text:has(.specialist-reply-cursor[data-paused]) { animation-play-state: paused; }
-    .specialist-reply-wait-text[data-waiting]::selection,
-    .specialist-reply-wait-text[data-waiting] .specialist-reply-cursor-tail::selection { -webkit-text-fill-color: var(--foreground); }
-  }
-}
-
 @keyframes lake-cursor-wait-sway {
-  0%, 34%, 100% { transform: none; }
-  13% { transform: translateY(-.9px) rotate(-5deg); }
-  23% { transform: translateY(-.25px) rotate(2deg); }
+  0%, 100% { transform: none; }
+  42% { transform: translateY(-.6px) rotate(-4deg); }
 }
 
 @keyframes lake-cursor-ear-lift {
@@ -214,8 +194,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :is(.specialist-reply-wait-text,.specialist-reply-cursor),
-  :is(.specialist-reply-wait-text,.specialist-reply-cursor) * { transition-property: none; }
+  .specialist-reply-cursor,
+  .specialist-reply-cursor * { transition-property: none; }
 }
 
 @media (forced-colors: active) {

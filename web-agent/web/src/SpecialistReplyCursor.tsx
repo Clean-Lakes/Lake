@@ -1,7 +1,7 @@
 import {createContext,memo,useContext,useLayoutEffect,useRef,type CSSProperties} from 'react';
 import {avatarPaintStyle,lakeAvatarArtwork,type AvatarPartName} from './lakeAvatarArtwork';
 import {lakeAvatarDefinition,type LakeAvatarFamily,type LakeAvatarName} from './lakeAvatarCatalog';
-import {lastGrapheme,trailingGraphemeStart} from './textReveal';
+import {lastGrapheme} from './textReveal';
 import {usePageVisible} from './usePageVisible';
 
 const familyParts: Record<LakeAvatarFamily, AvatarPartName> = {
@@ -56,8 +56,7 @@ export function specialistInterimText(text: string) {
   return text.replace(/(?:。|(?<![.\d])\.)(?=\s*$)/u, '');
 }
 
-// Undefined leaves ordinary specialist cursors outside the waiting presentation.
-export const SpecialistReplyWaiting = createContext<boolean|undefined>(undefined);
+export const SpecialistReplyWaiting = createContext(false);
 
 export const SpecialistReplyCursor = memo(function SpecialistReplyCursor({avatar}: {avatar: LakeAvatarName}) {
   const visible = usePageVisible();
@@ -84,13 +83,8 @@ export const SpecialistReplyCursor = memo(function SpecialistReplyCursor({avatar
 });
 
 export function SpecialistReplyCursorTail({avatar,children}: {avatar: LakeAvatarName;children: string}) {
-  const waiting = useContext(SpecialistReplyWaiting);
   const text = children.trimEnd();
   const last = lastGrapheme(text);
   if (!last) return children;
-  const start = waiting===undefined ? last.index : trailingGraphemeStart(text,8);
-  const tail = <span className="specialist-reply-cursor-tail">{last.segment}<SpecialistReplyCursor avatar={avatar}/></span>;
-  return <>{text.slice(0,start)}{waiting===undefined?tail:
-    <span className="specialist-reply-wait-text" data-waiting={waiting||undefined}>{text.slice(start,last.index)}{tail}</span>
-  }{children.slice(text.length)}</>;
+  return <>{text.slice(0,last.index)}<span className="specialist-reply-cursor-tail">{last.segment}<SpecialistReplyCursor avatar={avatar}/></span>{children.slice(text.length)}</>;
 }

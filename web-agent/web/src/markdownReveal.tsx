@@ -1,4 +1,4 @@
-import {createContext,useContext,useEffect,useLayoutEffect,useMemo,useRef,useState,type ReactNode} from 'react';
+import {createContext,useContext,useEffect,useLayoutEffect,useMemo,useRef,useState,type ReactNode,type RefObject} from 'react';
 import type {ExtraProps} from 'react-markdown';
 import {isLakeAvatarName,type LakeAvatarName} from './lakeAvatarCatalog';
 import {SpecialistReplyCursor,SpecialistReplyCursorTail,SpecialistReplyWaiting} from './SpecialistReplyCursor';
@@ -79,7 +79,53 @@ export function remarkSpecialistReplyCursor(avatar: LakeAvatarName) {
   };
 }
 
-export function MarkdownReveal({source,active,animateInitial,finishPending,waitForUpdate,render}: MarkdownRevealOptions & {source: string; render: (paintedThrough?:number)=>ReactNode}) {
+const sweepProperties = ['--reply-wait-angle','--reply-wait-band','--reply-wait-width','--reply-wait-x','--reply-wait-y','--reply-wait-duration'] as const;
+
+function useWaitingSweep(surface: RefObject<HTMLDivElement|null>, waiting: boolean) {
+  useLayoutEffect(() => {
+    const element = surface.current;
+    if (!waiting || !element) return;
+
+    const measure = () => {
+      const {clientWidth:width,clientHeight:height} = element;
+      if (!width || !height) {
+        element.removeAttribute('data-reply-waiting');
+        return;
+      }
+
+      const lineHeight = parseFloat(getComputedStyle(element).lineHeight) || 26;
+      const singleLine = height <= lineHeight * 1.45;
+      let sweepWidth = width;
+      if (singleLine) {
+        const range = document.createRange();
+        range.selectNodeContents(element.firstElementChild ?? element);
+        sweepWidth = Math.min(width,range.getBoundingClientRect().width) || width;
+      }
+      // Tilt the band by less than one line across the width, so it moves
+      // left to right within each line before reaching the next one.
+      const skew = lineHeight * .8;
+      const angle = singleLine ? 90 : 180 - Math.atan2(skew,width) * 180 / Math.PI;
+      const band = singleLine ? Math.min(72,Math.max(18,sweepWidth * .12)) : lineHeight * .38;
+      const x = singleLine ? sweepWidth / 2 + band + 1 : 0;
+      const y = singleLine ? 0 : height / 2 + skew / 2 + band + 1;
+      const duration = Math.min(10,Math.max(3.6,height / lineHeight * .48));
+      const values = [`${angle}deg`,`${band}px`,`${sweepWidth}px`,`${x}px`,`${y}px`,`${duration}s`];
+      sweepProperties.forEach((property,index) => element.style.setProperty(property,values[index]!));
+      element.setAttribute('data-reply-waiting','');
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      element.removeAttribute('data-reply-waiting');
+      sweepProperties.forEach(property => element.style.removeProperty(property));
+    };
+  },[surface,waiting]);
+}
+
+export function MarkdownReveal({source,active,animateInitial,finishPending,waitForUpdate,waitingSurface,render}: MarkdownRevealOptions & {source: string; waitingSurface: RefObject<HTMLDivElement|null>; render: (paintedThrough?:number)=>ReactNode}) {
   const visible = useSmoothText(source,active,{animateInitial,finishPending});
   const caughtUp = !!waitForUpdate && visible === source;
   const waitTarget = useMemo(() => caughtUp ? {source} : undefined,[caughtUp,source]);
@@ -90,6 +136,8 @@ export function MarkdownReveal({source,active,animateInitial,finishPending,waitF
     const timer = window.setTimeout(() => setWaited(waitTarget),550);
     return () => window.clearTimeout(timer);
   }, [waitTarget]);
+  const waiting = !!waitTarget && waited === waitTarget;
+  useWaitingSweep(waitingSurface,waiting);
   // Completion with the same source leaves the parsed text nodes mounted,
   // even if references change and the Markdown needs to be parsed again.
   const packet=useRef({source,paintedThrough:visible.length});
@@ -97,7 +145,7 @@ export function MarkdownReveal({source,active,animateInitial,finishPending,waitF
   useLayoutEffect(()=>{packet.current={source,paintedThrough};},[source,paintedThrough]);
   const prose=useMemo(()=>render(paintedThrough<source.length?paintedThrough:undefined),[source,render,paintedThrough]);
   return <VisibleOffset.Provider value={visible.length}>
-    <SpecialistReplyWaiting.Provider value={waitForUpdate?!!waitTarget&&waited===waitTarget:undefined}>{prose}</SpecialistReplyWaiting.Provider>
+    <SpecialistReplyWaiting.Provider value={waiting}>{prose}</SpecialistReplyWaiting.Provider>
   </VisibleOffset.Provider>;
 }
 

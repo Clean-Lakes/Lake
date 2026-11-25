@@ -5,6 +5,35 @@
 .ai-markdown.assistant-prose :is(strong,b) { font-weight:inherit; }
 div.ai-markdown.assistant-prose:has(> .reply-info-facts) { padding: 0; border: 0; border-radius: 0; background: none; }
 div.ai-markdown.assistant-prose:has(> .reply-info-facts) > :is(h1,h2,h3,h4) { font-weight:var(--font-weight-semibold); }
+
+@supports ((background-clip: text) or (-webkit-background-clip: text)) and (-webkit-text-fill-color: transparent) {
+  @media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+    div.ai-markdown.assistant-prose[data-reply-waiting] {
+      -webkit-text-fill-color: transparent;
+      background-color: currentColor;
+      background-image: linear-gradient(var(--reply-wait-angle), transparent calc(50% - var(--reply-wait-band)), color-mix(in srgb, var(--foreground) 38%, var(--info)) 50%, transparent calc(50% + var(--reply-wait-band)));
+      background-size: var(--reply-wait-width) 100%;
+      background-repeat: no-repeat;
+      -webkit-background-clip: text;
+      background-clip: text;
+      animation: lake-reply-wait-sweep var(--reply-wait-duration) linear infinite;
+    }
+    .assistant-prose[data-reply-waiting] :is(a,button,code,pre,table,.object-reference),
+    .assistant-prose[data-reply-waiting]::selection,
+    .assistant-prose[data-reply-waiting] *::selection { -webkit-text-fill-color: currentColor; }
+  }
+}
+
+@keyframes lake-reply-wait-sweep {
+  from { background-position: calc(-1 * var(--reply-wait-x)) calc(-1 * var(--reply-wait-y)); }
+  88%, to { background-position: var(--reply-wait-x) var(--reply-wait-y); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-prose[data-reply-waiting],
+  .assistant-prose[data-reply-waiting] * { transition-property: none; }
+}
+
 .ai-markdown.assistant-prose .reply-number { font-weight: inherit; }
 .ai-markdown.assistant-prose ul,.ai-markdown.assistant-prose ol { margin: 16px 0 20px; padding-inline-start: 1.5em; }
 .ai-markdown.assistant-prose li { margin: 9px 0; padding-inline-start: 4px; }
