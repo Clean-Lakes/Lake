@@ -179,7 +179,7 @@ type PilotWorkspaceProps = {
  workspace: SuperWorkspace | null; error: string; selectedId: string | null; selectedRoleId?: string;
  activity?:ConversationAvatarActivity; pilotButton?:RefObject<HTMLButtonElement|null>;
  pilotActivity?:ConversationActivity;pilotDisabled?:boolean;
- onPilot: () => void; onWorker: (worker: SuperWorker) => void; onChannel?: (channel: SpecialistChannelInfo, task?: SuperWorker) => void;
+ onPilot: () => void; onWorker: (worker: SuperWorker) => void; onChannel?: (channel: SpecialistChannelInfo) => void;
  disabled?:boolean; onDeleted?:(channel:SpecialistChannelInfo)=>void;
  creation?:{projectId:string;onCreated:(channel:SpecialistChannelInfo)=>void};
 };
@@ -299,7 +299,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
      onClick={event=>{
       closeNameHint();
       greetRoleAvatar(event.currentTarget);
-      if(channel&&onChannel)onChannel(channel,rail?worker:undefined);else if(worker)onWorker(worker);
+      if(channel&&onChannel)onChannel(channel);else if(worker)onWorker(worker);
      }}>
     {avatar}
     {rail?<span className="sidebar-specialist-status" aria-hidden="true">

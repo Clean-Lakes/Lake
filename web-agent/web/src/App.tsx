@@ -1151,17 +1151,13 @@ function AppContent() {
     taskDetailFocus.current=identity.sessionId;
     navigate({sessionId:identity.sessionId,resourceId:null},identity.projectId);
   };
-  const openSpecialistPage=(channel:SpecialistChannelInfo,worker?:SuperWorker)=>{
+  const openSpecialistTaskList=(channel:SpecialistChannelInfo)=>{
     if(channel.projectId!==pilotWorkspace.workspace?.project.projectId)return;
-    const task=worker?.roleId===channel.roleId&&worker.sessionId!==pilotWorkspace.workspace.project.routerSessionId
-      ?workerInspectionTarget(worker,channel.projectId):undefined;
-    const target=task?.sessionId??channel.sessionId;
     roleInspectionRequest.current.cancel();
     pendingRoleInspection.current=undefined;
     setRoleInspection(null);
     inspector.reset();
-    if(task&&sessionId!==target)taskDetailFocus.current=target;
-    if(sessionId!==target||route.resourceId||route.view)navigate({sessionId:target,resourceId:null},channel.projectId);
+    if(sessionId!==channel.sessionId||route.resourceId||route.view)navigate({sessionId:channel.sessionId,resourceId:null},channel.projectId);
     else setMobileMenu(false);
     void pilotWorkspace.readChannel(channel);
   };
@@ -2040,7 +2036,7 @@ function AppContent() {
       if(domain?.active)navigate({sessionId:domain.project.routerSessionId,resourceId:null});
       else if(sidebarProject)void openProjectPilot(sidebarProject.id);
     },
-    onWorker:(worker:SuperWorker)=>navigate({sessionId:worker.sessionId,resourceId:null}),onChannel:openSpecialistPage,
+    onWorker:(worker:SuperWorker)=>navigate({sessionId:worker.sessionId,resourceId:null}),onChannel:openSpecialistTaskList,
   };
   return <SpecialistAvatarProvider channels={pilotWorkspace.workspace?.channels}><WorkbenchShell
     className={`app-shell has-workbench-navigation${terminalVisible ? " terminal-is-open" : ""}${detachedConversation?" has-workbench-conversation":""}${dockedConversation?" has-docked-conversation":""}${sharedIsland?" has-workbench-island":""}`}
@@ -2169,7 +2165,7 @@ function AppContent() {
             initialQuery={taskListVisits.current.get(sessionId)?.query} onTask={openSpecialistTask}
             onTasks={updateRoleTasks} onActivity={updateRoleReplyActivity} onReady={updateRoleContentReady}/></div>: isSpecialistExecution ?
             <SpecialistTaskDetail key={JSON.stringify([sessionId,activeSnapshot.superagent?.task.taskId])} snapshot={activeSnapshot} worker={selectedSuperWorker}
-             connected={sessionConnected&&!modeSaving.has(sessionId)} onBack={taskOwner?()=>openSpecialistPage(taskOwner):undefined}
+             connected={sessionConnected&&!modeSaving.has(sessionId)} onBack={taskOwner?()=>openSpecialistTaskList(taskOwner):undefined}
              onContinue={isLegacyHistory?undefined:()=>void openProjectPilot(selectedSession.projectId,activeSnapshot.superagent?.task)} onUpdated={()=>void refreshCurrent()}
              resultsFooter={detailChannelRead&&detailResultRead?<ConversationReadMarker session={detailChannelRead.channel.sessionId} state={detailChannelRead.channel.messageRead} enabled={sessionConnected}/>:undefined}/> : (hasConversationItems||pilotTaskContinuation) ? <div className="timeline-list">
             {!hasConversationItems&&emptyConversation}
