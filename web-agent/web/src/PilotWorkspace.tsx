@@ -1,5 +1,5 @@
 import {hasUnreadMessages} from './ConversationReadMarker';
-import {Fragment,useCallback,useEffect,useId,useRef,useState,type PointerEvent,type RefObject} from 'react';
+import {useCallback,useEffect,useRef,useState,type PointerEvent,type RefObject} from 'react';
 import type {SessionEvent,SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {greetRoleAvatar,SuperRoleAvatar} from './SuperRoleAvatar';
@@ -7,7 +7,6 @@ import {conversationAvatarMotion,superAvatarMotion,channelTaskPresentation,speci
 import {Glyph} from './Icons';
 import {NavigationMenu} from './NavigationDelete';
 import {SpecialistDelete} from './SpecialistDelete';
-import {SpecialistRailPopover} from './SpecialistRailPopover';
 import {SidebarPilotEntry} from './SidebarPilotEntry';
 import {AgentBackendLogo,agentTypeName} from './AgentBackendLogo';
 import {reuseUnchanged} from './snapshotUpdates';
@@ -170,13 +169,9 @@ type PilotWorkspaceProps = {
  workspace: SuperWorkspace | null; error: string; selectedId: string | null; selectedRoleId?: string;
  activity?:ConversationAvatarActivity; pilotButton?:RefObject<HTMLButtonElement|null>;
  pilotActivity?:ConversationActivity;pilotDisabled?:boolean;
- onPilot: () => void; onWorker: (worker: SuperWorker) => void; onChannel?: (channel: SpecialistChannelInfo) => void;
+ onPilot: () => void; onWorker: (worker: SuperWorker) => void; onChannel?: (channel: SpecialistChannelInfo, task?: SuperWorker) => void;
  disabled?:boolean; onDeleted?:(channel:SpecialistChannelInfo)=>void;
 };
-type SpecialistPopup =
- | {kind:'rail';channelId:string;showActions:boolean}
- | {kind:'menu';channel:SpecialistChannelInfo;x:number;y:number};
-
 function showClippedText(event: PointerEvent<HTMLElement>) {
  const text = event.currentTarget;
  if (text.scrollWidth > text.clientWidth) text.title = text.textContent ?? '';
@@ -184,10 +179,9 @@ function showClippedText(event: PointerEvent<HTMLElement>) {
 }
 
 export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,showHeading=true,presentation='list'}: PilotWorkspaceProps) {
- const [popup,setPopup]=useState<SpecialistPopup|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null);
- const popupId=useId();
+ const [menu,setMenu]=useState<{channel:SpecialistChannelInfo;x:number;y:number}|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null);
  const anchor=useRef<HTMLButtonElement|null>(null);
- useEffect(()=>{setPopup(null);setDeleting(null);},[workspace?.project.projectId]);
+ useEffect(()=>{setMenu(null);setDeleting(null);},[workspace?.project.projectId]);
  const roots = workspace?.active?workspace.workers.filter(worker => !worker.parentWorkerId):[];
  const channels = workspace?.active?workspace.channels:undefined;
  const viewedRole = selectedId ? selectedRoleId ?? channels?.find(channel => channel.sessionId === selectedId)?.roleId ??
@@ -228,17 +222,16 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
    const detail=aggregate.detail??(channel?.duties||'持续沟通');
    const detailStatus = detail.endsWith(status) ? undefined : status;
    const label = `${name}${backend?` · Agent 类型：${agentTypeName(backend)}`:''} · ${detail}${detailStatus?` · ${detailStatus}`:''}`;
-   const preview=rail&&channel&&popup?.kind==='rail'&&popup.channelId===channel.id?popup:null;
    const openManagement=(button:HTMLButtonElement,x:number,y:number)=>{
     if(!channel||disabled)return;
     anchor.current=button;
-    setPopup(rail?{kind:'rail',channelId:channel.id,showActions:true}:{kind:'menu',channel,x,y});
+    setMenu({channel,x,y});
    };
-   return <Fragment key={channel?.id ?? worker!.id}>
-   <button type="button" className={rail?'sidebar-rail-button sidebar-specialist-button':`nav-row pilot-worker-row${selected ? ' active' : ''}`}
+   const avatar=<SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId}
+     motion={preparing?'working':replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/>;
+   return <button type="button" key={channel?.id ?? worker!.id} className={rail?'sidebar-rail-button sidebar-specialist-button':`nav-row pilot-worker-row${selected ? ' active' : ''}`}
      aria-current={selected ? 'page' : undefined} aria-label={label} title={rail?label:undefined}
-     aria-haspopup={channel?(rail?'dialog':'menu'):undefined}
-     aria-expanded={rail&&channel?!!preview:undefined} aria-controls={preview?popupId:undefined}
+     aria-keyshortcuts={channel&&!disabled?'Shift+F10':undefined}
      onContextMenu={event=>{event.preventDefault();event.stopPropagation();openManagement(event.currentTarget,event.clientX,event.clientY);}}
      onKeyDown={event=>{
       if(channel&&!disabled&&(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10')){
@@ -249,15 +242,17 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
      }}
      onClick={event=>{
       greetRoleAvatar(event.currentTarget);
-      if(rail&&channel){
-       anchor.current=event.currentTarget;
-       setPopup(preview?null:{kind:'rail',channelId:channel.id,showActions:false});
-      }else if(channel&&onChannel)onChannel(channel);else if(worker)onWorker(worker);
+      if(channel&&onChannel)onChannel(channel,rail?worker:undefined);else if(worker)onWorker(worker);
      }}>
-    <SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId} motion={preparing?'working':replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/>
-    {rail?<span className="sidebar-specialist-status" aria-hidden="true">
-     {needsConfirmation?<Glyph name="circleAlert" size={10}/>:activityLabel?<Glyph name="loader" size={10} className="activity-indicator"/>:showUnread?<span className="pilot-worker-unread"/>:null}
-    </span>:<span className="nav-row-text">
+    {rail?<>
+     <span className="sidebar-specialist-avatar">
+      {avatar}
+      <span className="sidebar-specialist-status" aria-hidden="true">
+       {needsConfirmation?<Glyph name="circleAlert" size={10}/>:activityLabel?<Glyph name="loader" size={10} className="activity-indicator"/>:showUnread?<span className="pilot-worker-unread"/>:null}
+      </span>
+     </span>
+     <span className="sidebar-specialist-name">{name}</span>
+    </>:<>{avatar}<span className="nav-row-text">
      <span className="pilot-worker-name">
       <strong onPointerEnter={showClippedText}>{name}</strong>
       <AgentBackendLogo backend={backend} size={12}/>
@@ -270,20 +265,11 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
        {activityLabel ? <span className="pilot-worker-running" role="img" aria-label={activityLabel}><Glyph name="loader" size={12} className="activity-indicator"/></span> : showUnread && <span className="pilot-worker-unread" role="img" aria-label="有新消息未读"/>}
       </span>
      </span>
-    </span>}
-   </button>
-   {preview&&channel&&<SpecialistRailPopover id={popupId} channel={channel} anchor={anchor}
-    status={needsConfirmation?'待确认':activityLabel||(showUnread?'有新消息':status)}
-    tone={needsConfirmation?'attention':activityLabel?'active':showUnread?'unread':undefined}
-    showActions={preview.showActions} canDelete={!disabled&&channel.roleRevision!==undefined}
-    onClose={()=>setPopup(current=>current?.kind==='rail'&&current.channelId===channel.id?null:current)}
-    onMore={()=>setPopup({...preview,showActions:!preview.showActions})}
-    onTasks={onChannel&&(()=>{setPopup(null);anchor.current?.focus({preventScroll:true});onChannel(channel);})}
-    onDelete={()=>{setPopup(null);setDeleting(channel);}}/>}
-   </Fragment>;
+    </span></>}
+   </button>;
   })}
-  {popup?.kind==='menu'&&<NavigationMenu title={popup.channel.roleName} x={popup.x} y={popup.y} anchor={anchor} onClose={()=>setPopup(null)} actions={[
-   {label:'删除专员',icon:'trash',danger:true,disabled:disabled||popup.channel.roleRevision===undefined,run:()=>setDeleting(popup.channel)},
+  {menu&&<NavigationMenu title={menu.channel.roleName} x={menu.x} y={menu.y} anchor={anchor} onClose={()=>setMenu(null)} actions={[
+   {label:'删除专员',icon:'trash',danger:true,disabled:disabled||menu.channel.roleRevision===undefined,run:()=>setDeleting(menu.channel)},
   ]}/>}
   {deleting&&<SpecialistDelete channel={deleting} returnFocus={anchor} onClose={()=>setDeleting(null)} onDeleted={()=>{
    onDeleted?.(deleting);

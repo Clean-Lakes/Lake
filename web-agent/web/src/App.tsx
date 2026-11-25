@@ -1117,12 +1117,16 @@ function AppContent() {
     return()=>clearTimeout(timer);
   },[selectedSuperPilot,sessionId,pilotWorkspaceConnected]);
   const pilotActivityConnected=pilotWorkspaceConnected||!!sessionId&&pilotLiveSession===sessionId;
-  const openSpecialistOverview=(channel:SpecialistChannelInfo)=>{
+  const openSpecialistPage=(channel:SpecialistChannelInfo,worker?:SuperWorker)=>{
+    if(channel.projectId!==pilotWorkspace.workspace?.project.projectId)return;
+    const task=worker?.roleId===channel.roleId&&worker.sessionId!==pilotWorkspace.workspace.project.routerSessionId
+      ?workerInspectionTarget(worker,channel.projectId):undefined;
+    const target=task?.sessionId??channel.sessionId;
     roleInspectionRequest.current.cancel();
     pendingRoleInspection.current=undefined;
     setRoleInspection(null);
     inspector.reset();
-    if(sessionId!==channel.sessionId||route.resourceId||isPlansPage)navigate({sessionId:channel.sessionId,resourceId:null});
+    if(sessionId!==target||route.resourceId||route.view)navigate({sessionId:target,resourceId:null},channel.projectId);
     else setMobileMenu(false);
     void pilotWorkspace.readChannel(channel);
   };
@@ -1812,6 +1816,7 @@ function AppContent() {
   const superHeaderPresentation=pilotHeaderActivity??(selectedSuperChannel&&roleReplyActivity?.sessionId===sessionId&&roleReplyActivity.state!=='idle'?{status:roleReplyActivity.state==='running'?'investigating' as const:'waiting_approval' as const,label:roleReplyActivity.state==='running'?(roleRunningCount>1?`${roleRunningCount} 项执行中`:'处理中'):'需要处理'}:superTaskHeaderPresentation(activeSnapshot?.superagent?.task??selectedSuperWorker?.task,activeSnapshot)??currentSessionPresentation);
   const selectedRoleName=selectedSuperChannel?.roleName??selectedSuperWorker?.roleName??pilotWorkspace.workspace?.channels?.find(channel=>channel.roleId===activeSnapshot?.superagent?.roleId)?.roleName;
   const selectedRoleId=selectedSuperChannel?.roleId??selectedSuperWorker?.roleId??activeSnapshot?.superagent?.roleId;
+  const taskOwner=isSpecialistExecution?pilotWorkspace.workspace?.channels?.find(channel=>channel.projectId===selectedSession?.projectId&&channel.roleId===selectedRoleId):undefined;
   const selectedAgentBackend=selectedSuperChannel?.execution??selectedSuperWorker?.execution?.backend??activeSnapshot?.superagent?.execution?.backend;
   const avatarActivity=activeSnapshot?{sessionId:activeSnapshot.session.id,state:selectedSuperChannel&&roleReplyActivity?.sessionId===activeSnapshot.session.id?roleReplyActivity.state:conversationActivity(activeSnapshot.ai,selectedSession?.status)}:undefined;
   const superHeaderIdentity=sessionHeader&&(selectedRoleName||selectedSuperPilot);
@@ -1985,6 +1990,7 @@ function AppContent() {
   </>;
 
   const groupsEnabled=bootstrap?.backendRuntime==='typescript';
+  const showSpecialistRail=groupsEnabled&&!!sidebarProject;
   const pilotNavigation={
     showHeading:false,activity:avatarActivity,pilotButton:sidebarPilotButton,
     pilotActivity:conversationActivity(undefined,catalog.sessions.find(row=>row.id===pilotWorkspace.workspace?.project.routerSessionId)?.status),
@@ -1999,10 +2005,10 @@ function AppContent() {
       if(domain?.active)navigate({sessionId:domain.project.routerSessionId,resourceId:null});
       else if(sidebarProject)void openProjectPilot(sidebarProject.id);
     },
-    onWorker:(worker:SuperWorker)=>navigate({sessionId:worker.sessionId,resourceId:null}),onChannel:openSpecialistOverview,
+    onWorker:(worker:SuperWorker)=>navigate({sessionId:worker.sessionId,resourceId:null}),onChannel:openSpecialistPage,
   };
   return <SpecialistAvatarProvider channels={pilotWorkspace.workspace?.channels}><WorkbenchShell
-    className={`app-shell has-workbench-navigation${terminalVisible ? " terminal-is-open" : ""}${detachedConversation?" has-workbench-conversation":""}${dockedConversation?" has-docked-conversation":""}${sharedIsland?" has-workbench-island":""}`}
+    className={`app-shell has-workbench-navigation${showSpecialistRail?' has-specialist-rail':''}${terminalVisible ? " terminal-is-open" : ""}${detachedConversation?" has-workbench-conversation":""}${dockedConversation?" has-docked-conversation":""}${sharedIsland?" has-workbench-island":""}`}
     compact={compactNavigation} inspectorOpen={inspectorOpen} back={historyAvailable.back} forward={historyAvailable.forward} onStep={stepHistory}>
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
     {mobileMenu && <button className="mobile-scrim" aria-label="关闭项目导航" onClick={() => setMobileMenu(false)}/>}
@@ -2037,7 +2043,7 @@ function AppContent() {
        })}
        resourceCount={catalog.resources.filter(resource=>resource.projectId===sidebarProject?.id).length}
        attention={pilotWorkspace.workspace?.channels?.some(channel=>channel.needsConfirmation===true||hasUnreadMessages(channel.messageRead))}
-       specialistRail={groupsEnabled&&sidebarProject?<PilotWorkspace {...pilotNavigation} presentation="rail"/>:undefined}
+       specialistRail={showSpecialistRail?<PilotWorkspace {...pilotNavigation} presentation="rail"/>:undefined}
        specialists={<>
         {sidebarProject&&<PilotWorkspace {...pilotNavigation} presentation={groupsEnabled?'entry':'list'}/>}
         {groupsEnabled&&sidebarProject&&<ChatGroupNavigation key={sidebarProject.id} projectId={sidebarProject.id}
@@ -2124,6 +2130,7 @@ function AppContent() {
         <span className="conversation-header-backdrop" aria-hidden="true"/>
         <div className="conversation-stage" aria-busy={historyPending}>{historyPending&&<SessionLoading/>}<section id="session-view-panel" tabIndex={-1} ref={attachConversation} className={`conversation${historyPending?" is-entering":""}`} inert={historyPending} aria-label={isSpecialistTasks?"专员任务":"会话记录"}>
           {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true"/> : isChatGroup ? <div className="timeline-list"><ChatGroupMessages snapshot={activeSnapshot}/></div> : selectedSession.workspaceRole==='role'?<div className="timeline-list"><SpecialistChannel key={sessionId} snapshot={activeSnapshot} connected={sessionConnected} selectedSessionId={inspectorOpen?inspectedSnapshot?.session.id:undefined} inspectedSnapshot={roleInspection??undefined} onTask={id=>void inspectRoleTask(id)} onTasks={updateRoleTasks} onActivity={updateRoleReplyActivity} onReady={updateRoleContentReady}/></div>: isSpecialistExecution ? <section className="timeline-list" aria-label="任务详情">
+            {taskOwner&&<button type="button" className="specialist-task-back" onClick={()=>openSpecialistPage(taskOwner)}><Glyph name="previous" size={14}/>全部任务</button>}
             <h2>{activeSnapshot.superagent?.task.title??selectedSession.title}</h2>
             <WorkerExecutionResults snapshot={activeSnapshot}/>
             <SpecialistTaskControls snapshot={activeSnapshot} connected={sessionConnected}/>
