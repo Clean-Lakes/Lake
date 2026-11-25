@@ -62,6 +62,16 @@ test('console category search matches labels and keywords without exposing TypeS
  assert.deepEqual(consoleCategories(true,'默认模型').flatMap(group=>group.items.map(item=>item.key)),['models']);
 });
 
+test('memory and watchdog settings are absent from the console and category search',()=>{
+ for(const typescriptBackend of [true,false]){
+  const html=renderToStaticMarkup(createElement(WorkspaceConsole,{
+   dialogRef:{current:null}, open:false, page:'conversation', typescriptBackend, busy:false, onPage:noop, onClose:noop,
+  }));
+  assert.doesNotMatch(html,/记忆|巡检|memory-settings-tab|watchdog-settings-tab/);
+  for(const query of ['记忆','巡检','memory','watchdog']) assert.deepEqual(consoleCategories(typescriptBackend,query),[]);
+ }
+});
+
 test('workspace actions render in the page, including a creation path for an empty workspace',()=>{
  const html=renderToStaticMarkup(createElement(WorkspacePage,{...props,project}));
  for(const label of ['当前项目',project.name,'新建项目','批量管理','删除项目','打开当前项目','搜索项目'])assert.ok(html.includes(label),label);
