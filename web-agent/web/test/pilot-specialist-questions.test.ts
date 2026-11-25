@@ -18,7 +18,7 @@ test('Pilot displays every original specialist question with its own name, avata
   assert.ok(html.includes(`data-role="${item.author.avatarId}"`));
  }
  assert.equal((html.match(/class="response-avatar"/g)??[]).length,2);
- assert.doesNotMatch(html,/<strong>Pilot<\/strong>|执行详情|打开任务/);
+ assert.doesNotMatch(html,/<strong>Lake<\/strong>|执行详情|打开任务/);
  assert.doesNotMatch(html,/<fieldset[^>]*disabled/);
 });
 test('disconnected Pilot keeps questions visible but disables their original forms',()=>{

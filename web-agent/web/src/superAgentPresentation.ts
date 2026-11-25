@@ -2,6 +2,8 @@ import type {AIView,SessionSnapshot,SuperTask,SuperWorker,TaskParticipant} from 
 import type {AgentIconName} from './AgentIcon';
 import {isLakeAvatarName,lakeAvatarGroups} from './lakeAvatarCatalog';
 
+export const pilotIdentity = {name:'Lake', pilot:true} as const;
+
 const specialistPalettes=['river','moss','reed','clay'] as const;
 export function superWorkerAppearance(worker:Pick<SuperWorker,'roleName'>&{roleId?:string;avatarId?:string}) {
  // RoleID owns the default; an explicit local avatar changes only its shape.

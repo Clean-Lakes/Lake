@@ -7,7 +7,7 @@ import {AITranscript} from '../src/AIPanel';
 import type {Message,SpecialistReplyAuthor,SessionSnapshot} from '../../shared/contracts';
 import {orderedTranscript} from '../src/timeline';
 import {isAssistantProse} from '../src/completedTurnProse';
-import {superWorkerIcon} from '../src/superAgentPresentation';
+import {pilotIdentity,superWorkerIcon} from '../src/superAgentPresentation';
 
 const author=(name:string,id:string):SpecialistReplyAuthor=>({kind:'specialist',name,roleId:'role-'+id,workerId:'worker-'+id,sessionId:'session-'+id,taskId:'task-'+id});
 test('a legacy session-only author link names the record it can open',()=>{
@@ -28,15 +28,15 @@ test('specialist own-session replies omit repeated identity headers and chat ava
 });
 test('each delivered report displays its own specialist even inside the Pilot conversation',()=>{
  for(const name of ['Go 审查专员','前端执行专员']){
-  const html=renderToStaticMarkup(createElement(ReplyIdentity,{identity:{name:'Pilot',pilot:true},author:author(name,name),onSpecialist(){}}));
+  const html=renderToStaticMarkup(createElement(ReplyIdentity,{identity:pilotIdentity,author:author(name,name),onSpecialist(){}}));
   assert.ok(html.includes(`<strong>${name}</strong>`));assert.ok(html.includes(`aria-label="查看${name}的任务记录"`));
   assert.match(html,/class="response-avatar"/);
   assert.ok(html.includes(`data-role="${superWorkerIcon({roleId:author(name,name).roleId,roleName:name})}"`));
   assert.doesNotMatch(html,/data-role="coordinator"/);
   assert.ok(!html.includes('<strong>Pilot</strong>')&&!html.includes('<strong>Lake</strong>'));
  }
- const own=renderToStaticMarkup(createElement(ReplyIdentity,{identity:{name:'Pilot',pilot:true}}));
- assert.match(own,/<strong>Pilot<\/strong>/);assert.match(own,/data-role="coordinator"/);
+ const own=renderToStaticMarkup(createElement(ReplyIdentity,{identity:pilotIdentity}));
+ assert.match(own,/<strong>Lake<\/strong>/);assert.match(own,/data-role="coordinator"/);
 });
 test('unattributed ordinary replies retain their own identity',()=>{
  assert.match(renderToStaticMarkup(createElement(ReplyIdentity,{})),/<strong>Lake<\/strong>/);
@@ -44,7 +44,7 @@ test('unattributed ordinary replies retain their own identity',()=>{
 });
 test('name motion opts in only the live specialist name while its logo, avatar and navigation stay outside',()=>{
  const specialist={...author('数据库👩🏽‍💻核对专员','db'),execution:{kind:'acp' as const,agent:'codex' as const}};
- const render=(nameMotion:boolean)=>renderToStaticMarkup(createElement(ReplyIdentity,{identity:{name:'Pilot',pilot:true},author:specialist,nameMotion,onSpecialist(){}}));
+ const render=(nameMotion:boolean)=>renderToStaticMarkup(createElement(ReplyIdentity,{identity:pilotIdentity,author:specialist,nameMotion,onSpecialist(){}}));
  const active=render(true),still=render(false),name=active.match(/<strong>([\s\S]*?)<\/strong>/)?.[1]??'';
  assert.match(name,/class="live-text-motion-label reply-author-name-motion"/);
  assert.match(name,/data-live-motion="active"/);assert.match(name,/data-live-glow="active"/);
@@ -58,7 +58,7 @@ test('name motion opts in only the live specialist name while its logo, avatar a
 test('historical reports and ordinary identities never acquire name effects from avatar activity',()=>{
  for(const props of [
   {author:author('已归档专员','archived'),authorMotion:'working' as const},
-  {identity:{name:'Pilot',pilot:true},nameMotion:true},
+  {identity:pilotIdentity,nameMotion:true},
   {identity:{name:'Lake'},motion:'working' as const,nameMotion:true},
   {author:author('连续回复','continued'),nameMotion:true,continued:true},
  ]){
@@ -68,7 +68,7 @@ test('historical reports and ordinary identities never acquire name effects from
 });
 test('long specialist names animate the visible leading graphemes before ellipsis and keep their full readable name',()=>{
  const fullName='数据库👩🏽‍💻é核对专员'.repeat(5)+'尾部';
- const html=renderToStaticMarkup(createElement(ReplyIdentity,{identity:{name:'Pilot',pilot:true},author:author(fullName,'long'),nameMotion:true,onSpecialist(){}}));
+ const html=renderToStaticMarkup(createElement(ReplyIdentity,{identity:pilotIdentity,author:author(fullName,'long'),nameMotion:true,onSpecialist(){}}));
  const name=html.match(/<strong>([\s\S]*?)<\/strong>/)?.[1]??'';
  const graphemes=[...new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(fullName)];
  const animatedOffsets=[...name.matchAll(/class="live-text-motion-character" data-text-offset="(\d+)"/g)].map(match=>Number(match[1]));
