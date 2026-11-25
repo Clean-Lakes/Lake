@@ -8,19 +8,19 @@ const reducedMotion = '(prefers-reduced-motion: reduce)';
 // The Bento Card spring at 600 ms with 0.2 bounce, sampled every 30 ms.
 const selectionSpring = 'linear(0,.0794,.2486,.4375,.6093,.7484,.8518,.9231,.9688,.9954,1.0091,1.0144,1.015,1.0131,1.0104,1.0076,1.0051,1.0032,1.0018,1.0009,1)';
 
-function cancelSelectionMotion(background: HTMLElement, mark: HTMLElement) {
-  for (const layer of [background, mark]) layer.getAnimations?.().forEach(animation => animation.cancel());
+function cancelSelectionMotion(background: HTMLElement) {
+  background.getAnimations?.().forEach(animation => animation.cancel());
 }
 
 function selectionTransform(top: number, scale = 1) {
   return 'translate3d(0,' + top + 'px,0) scaleY(' + scale + ')';
 }
 
-function alignSelection(list: HTMLElement, background: HTMLElement, mark: HTMLElement, reveal = false) {
+function alignSelection(list: HTMLElement, background: HTMLElement, reveal = false) {
   const row = list.querySelector<HTMLButtonElement>('[aria-selected="true"]:not([hidden])');
   if (!row) {
     list.removeAttribute('data-selection-visible');
-    cancelSelectionMotion(background, mark);
+    cancelSelectionMotion(background);
     return;
   }
   const bounds = row.getBoundingClientRect();
@@ -43,10 +43,9 @@ function alignSelection(list: HTMLElement, background: HTMLElement, mark: HTMLEl
   background.dataset.tab = row.id;
   if (atTarget) return;
 
-  cancelSelectionMotion(background, mark);
+  cancelSelectionMotion(background);
   background.style.setProperty('--console-selection-top', top + 'px');
   background.style.height = height + 'px';
-  mark.style.setProperty('--console-selection-center', top + height / 2 + 'px');
   list.setAttribute('data-selection-visible', '');
   if (!from || !height) return;
 
@@ -55,14 +54,9 @@ function alignSelection(list: HTMLElement, background: HTMLElement, mark: HTMLEl
     duration: 600, fill: 'backwards',
     easing: CSS.supports('animation-timing-function', selectionSpring) ? selectionSpring : 'cubic-bezier(.2,.85,.3,1)',
   };
-  // Scale only the moving background. The blue mark keeps its physical height.
   background.animate([
     {transform: selectionTransform(fromTop, from.height / height)},
     {transform: selectionTransform(top)},
-  ], timing);
-  mark.animate([
-    {transform: selectionTransform(fromTop + from.height / 2)},
-    {transform: selectionTransform(top + height / 2)},
   ], timing);
 }
 
@@ -82,7 +76,6 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
   const search = useRef<HTMLInputElement>(null);
   const tabs = useRef<HTMLDivElement>(null);
   const selectionBackground = useRef<HTMLSpanElement>(null);
-  const selectionMark = useRef<HTMLSpanElement>(null);
   const overlayRoot = useRef<HTMLDivElement>(null);
   const lastFrameFocus = useRef<HTMLElement | null>(null);
   const hadOverlay = useRef(false);
@@ -106,32 +99,30 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
   useLayoutEffect(() => {
     const list = tabs.current;
     const background = selectionBackground.current;
-    const mark = selectionMark.current;
-    if (!list || !background || !mark) return;
+    if (!list || !background) return;
     if (!open) {
       list.removeAttribute('data-selection-visible');
-      cancelSelectionMotion(background, mark);
+      cancelSelectionMotion(background);
       return;
     }
-    alignSelection(list, background, mark, !query);
+    alignSelection(list, background, !query);
   }, [open, page, query, typescriptBackend]);
   useLayoutEffect(() => {
     const list = tabs.current;
     const background = selectionBackground.current;
-    const mark = selectionMark.current;
-    if (!open || !list || !background || !mark) return;
-    const resize = new ResizeObserver(() => alignSelection(list, background, mark));
+    if (!open || !list || !background) return;
+    const resize = new ResizeObserver(() => alignSelection(list, background));
     resize.observe(list);
     list.querySelectorAll('.workspace-console-group').forEach(group => resize.observe(group));
     const motion = window.matchMedia(reducedMotion);
-    const settle = () => { if (motion.matches || document.hidden) cancelSelectionMotion(background, mark); };
+    const settle = () => { if (motion.matches || document.hidden) cancelSelectionMotion(background); };
     motion.addEventListener('change', settle);
     document.addEventListener('visibilitychange', settle);
     return () => {
       resize.disconnect();
       motion.removeEventListener('change', settle);
       document.removeEventListener('visibilitychange', settle);
-      cancelSelectionMotion(background, mark);
+      cancelSelectionMotion(background);
     };
   }, [open]);
   useLayoutEffect(() => {
@@ -205,7 +196,6 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
         <div ref={tabs} className="workspace-console-categories" role="tablist" aria-label="分类" aria-orientation="vertical"
           onKeyDown={event => navigateSettingsTabs(event, event.currentTarget)}>
           <span ref={selectionBackground} className="workspace-console-selection" aria-hidden="true"/>
-          <span ref={selectionMark} className="workspace-console-selection-mark" aria-hidden="true"/>
           {groups.map(group => <div key={group.label} className="workspace-console-group" role="group" aria-label={group.label}
             hidden={!group.items.some(item => matching.has(item.key))}>
             {group.showLabel && <span className="workspace-console-group-label" aria-hidden="true">{group.label}</span>}

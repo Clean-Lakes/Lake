@@ -96,14 +96,12 @@
   padding:0 var(--console-tab-inset) 12px;
 }
 [data-theme="dark"] .workspace-console-categories { --console-tab-selection:var(--surface-selected); }
-.workspace-console-selection,.workspace-console-selection-mark {
+.workspace-console-selection {
   position:absolute;
   z-index:-1;
   pointer-events:none;
   visibility:hidden;
   transition-property:none;
-}
-.workspace-console-selection {
   inset-block-start:0;
   inset-inline:var(--console-tab-inset);
   border-radius:var(--radius-settings-control);
@@ -112,18 +110,9 @@
   transform-origin:center top;
   transform:translate3d(0,var(--console-selection-top,0px),0);
 }
-.workspace-console-categories[data-selection-visible] :is(.workspace-console-selection,.workspace-console-selection-mark) {
+.workspace-console-categories[data-selection-visible] .workspace-console-selection {
   visibility:visible;
   will-change:transform;
-}
-.workspace-console-selection-mark {
-  inset-block-start:-8px;
-  inset-inline-start:calc(var(--console-tab-inset) + 1px);
-  width:2px;
-  height:16px;
-  transform:translate3d(0,var(--console-selection-center,0px),0);
-  border-radius:2px;
-  background:var(--info);
 }
 .workspace-console-group { display:grid; gap:4px; }
 .workspace-console-group:not([hidden]) ~ .workspace-console-group { margin-block-start:15px; }
