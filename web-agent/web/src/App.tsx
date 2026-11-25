@@ -3,8 +3,9 @@ import {RoleMentionAvatar} from './RoleMentionAvatar';
 import {SessionLoading} from './SessionLoading';
 import {prepareSessionEntrance} from './sessionEntrance';
 import './sessionEntrance.css';
-import {preferredChannelTask,SpecialistChannel,SpecialistTaskSelect} from './SpecialistChannel';
+import {preferredChannelTask,SpecialistChannel} from './SpecialistChannel';
 import {SpecialistTaskMenu} from './SpecialistTaskMenu';
+import {SpecialistTaskDetail} from './SpecialistTaskDetail';
 import {SpecialistTaskMetadata} from './SpecialistTaskList';
 import {SpecialistTaskControls} from './SpecialistTaskControls';
 import {PilotSpecialistQuestions} from './PilotSpecialistQuestions';
@@ -124,7 +125,6 @@ import { ResourceTree } from "./ResourceTree";
 import { WorkspaceSearch } from "./WorkspaceSearch";
 import { ResourceTerminalMenu } from "./ResourceTerminalMenu";
 import { defaultWorkspaceSession, initialSidebarProject, initialWorkspaceSelection, isUserWorkspaceSession } from "./sidebarState";
-import { WorkerExecutionResults } from "./WorkerExecutionTree";
 import {savedWorkspaceProject,saveWorkspaceProject} from './workspaceProjectPreference';
 import {SessionNavigation} from "./SessionNavigation";
 import {sortSessionNavigation} from "./sessionNavigationModel";
@@ -873,7 +873,7 @@ function AppContent() {
   const activeSnapshot = snapshot?.session.id === sessionId ? snapshot : sessionId && catalog?.sessions.some(session => session.id === sessionId) ? snapshotCache.current.get(sessionId) ?? null : null;
   const selectedSession = activeSnapshot?.session ?? catalog?.sessions.find(item => item.id === sessionId);
   const isSpecialistTasks=selectedSession?.workspaceRole==='role';
-  const isSpecialistExecution=selectedSession?.workspaceRole==='worker';
+  const isSpecialistExecution=selectedSession?.workspaceRole==='worker'||selectedSession?.workspaceRole==='legacy'&&!!activeSnapshot?.superagent?.task;
   const isChatGroup=selectedSession?.workspaceRole==='group';
   const activeGroupRound=activeSnapshot?.chatGroupRounds?.some(chatGroupRoundOpen)??false;
   const canCompose=!!selectedSession&&isUserWorkspaceSession(selectedSession)&&selectedSession.workspaceRole!=='legacy';
@@ -893,6 +893,8 @@ function AppContent() {
   const updateRoleReplyActivity=useCallback((id:string,state:'running'|'waiting'|'idle')=>setRoleReplyActivity(previous=>previous?.sessionId===id&&previous.state===state?previous:{sessionId:id,state}),[]);
   const [roleInspection,setRoleInspection]=useState<SessionSnapshot|null>(null);
   const [roleTasks,setRoleTasks]=useState<{sessionId:string;workers:SuperWorker[];page:SpecialistChannelPage}|null>(null);
+  const taskListVisits=useRef(new Map<string,{query:string;scrollTop:number;taskId:string;sessionId:string}>());
+  const taskDetailFocus=useRef<string|undefined>(undefined);
   const updateRoleTasks=useCallback((id:string,workers:SuperWorker[],page:SpecialistChannelPage)=>setRoleTasks({sessionId:id,workers,page}),[]);
   const roleWorkers=roleTasks?.sessionId===sessionId?roleTasks.workers:[];
   const roleInspectionRequest=useRef(new InspectionRequestGuard());
@@ -969,10 +971,10 @@ function AppContent() {
   const inspectorOpen=!!inspectedSnapshot&&inspector.selection?.sessionId===inspectedSnapshot.session.id&&!selectedResource&&!isPlansPage;
   const headerPilot = !selectedResource && !isPlansPage ? pilotIslandModel(activeSnapshot) : null;
   const headerPilotMode: 'auto'|'manual'|undefined = !selectedResource&&!isPlansPage&&activeSnapshot?.sre?.pilot?.enabled&&(!activeSnapshot.ai?.profile||activeSnapshot.ai.profile==='core')?(activeSnapshot.sre.pilot.autoAdvance?'auto':'manual'):undefined;
-  const inspectorAvailable=(activeSnapshot?.session.workspaceRole==='role'?roleWorkers.length>0:!!(activeSnapshot?.ai??inspectedSnapshot?.ai))&&!selectedResource&&!isPlansPage&&!isChatGroup;
+  const inspectorAvailable=!isSpecialistExecution&&(activeSnapshot?.session.workspaceRole==='role'?roleWorkers.length>0:!!(activeSnapshot?.ai??inspectedSnapshot?.ai))&&!selectedResource&&!isPlansPage&&!isChatGroup;
   const reopenInspector=()=>{
     if(activeSnapshot?.session.workspaceRole==='role'){
-      const worker=preferredChannelTask(roleWorkers);if(worker)void inspectRoleTask(worker.sessionId);
+      const worker=preferredChannelTask(roleWorkers);if(worker)openSpecialistTask(worker);
       return;
     }
     if(!inspectedSnapshot||!inspectorAvailable)return;
@@ -1047,7 +1049,7 @@ function AppContent() {
 
   useLayoutEffect(() => {
     const container = conversationBox;
-    if (!container || !activeSnapshot || route.resourceId || isPlansPage || isSpecialistTasks) {
+    if (!container || !activeSnapshot || route.resourceId || isPlansPage || isSpecialistTasks || isSpecialistExecution) {
       conversationScroll.current = { key: "", following: true };
       return;
     }
@@ -1063,12 +1065,29 @@ function AppContent() {
     if(resume&&!resume.following)container.scrollTop=resume.top;
     else scroll.follower.jump();
     return () => { scroll.dispose(); conversationFollower.current=null; };
-  }, [conversationBox,activeSnapshot?.session.id,route.resourceId,isPlansPage,isSpecialistTasks]);
+  }, [conversationBox,activeSnapshot?.session.id,route.resourceId,isPlansPage,isSpecialistTasks,isSpecialistExecution]);
 
   useLayoutEffect(()=>{
     if(!conversationBox||!sessionId||!historyDataReady||route.resourceId||isPlansPage||historyVisible.current===sessionId)return;
     return prepareSessionEntrance(()=>conversationFollower.current?.follower.jump(),()=>setHistoryVisibleId(sessionId));
   },[conversationBox,sessionId,historyDataReady,route.resourceId,isPlansPage]);
+
+  useLayoutEffect(()=>{
+    if(!conversationBox||!sessionId||historyPending||route.resourceId||isPlansPage)return;
+    if(isSpecialistExecution){
+      conversationBox.scrollTop=0;
+      if(taskDetailFocus.current===sessionId){
+        taskDetailFocus.current=undefined;
+        conversationBox.querySelector<HTMLElement>('.specialist-task-detail')?.focus({preventScroll:true});
+      }
+    }else if(isSpecialistTasks){
+      const visit=taskListVisits.current.get(sessionId);
+      if(!visit)return;
+      const row=conversationBox.querySelector<HTMLButtonElement>(`[data-task-id="${CSS.escape(visit.taskId)}"][data-session-id="${CSS.escape(visit.sessionId)}"] > .specialist-task-open`);
+      conversationBox.scrollTop=visit.scrollTop;
+      row?.focus({preventScroll:true});
+    }
+  },[conversationBox,sessionId,historyPending,route.resourceId,isPlansPage,isSpecialistTasks,isSpecialistExecution]);
 
   // Completion can add final text; continue the existing smooth follow without
   // jumping or opting a reader of earlier messages back into following.
@@ -1117,6 +1136,22 @@ function AppContent() {
     return()=>clearTimeout(timer);
   },[selectedSuperPilot,sessionId,pilotWorkspaceConnected]);
   const pilotActivityConnected=pilotWorkspaceConnected||!!sessionId&&pilotLiveSession===sessionId;
+  const openSpecialistTask=(worker:SuperWorker,query?:string)=>{
+    const identity=workerInspectionTarget(worker,activeSnapshot?.session.projectId??'');
+    const target=catalog?.sessions.find(session=>session.id===identity?.sessionId);
+    if(!identity||identity.sessionId===pilotWorkspace.workspace?.project.routerSessionId||
+      target&&(target.projectId!==identity.projectId||target.workspaceRole!=='worker'&&!(target.workspaceRole==='legacy'&&worker.assignmentState==='archived'))){
+      handleFailure(new Error('任务不属于当前项目或执行身份已变化'));
+      return;
+    }
+    if(isSpecialistTasks&&sessionId&&query!==undefined){
+      taskListVisits.current.set(sessionId,{query,scrollTop:conversationBox?.scrollTop??0,taskId:identity.taskId,sessionId:identity.sessionId});
+    }
+    inspector.reset();
+    if(sessionId===identity.sessionId)return;
+    taskDetailFocus.current=identity.sessionId;
+    navigate({sessionId:identity.sessionId,resourceId:null},identity.projectId);
+  };
   const openSpecialistPage=(channel:SpecialistChannelInfo,worker?:SuperWorker)=>{
     if(channel.projectId!==pilotWorkspace.workspace?.project.projectId)return;
     const task=worker?.roleId===channel.roleId&&worker.sessionId!==pilotWorkspace.workspace.project.routerSessionId
@@ -1126,6 +1161,7 @@ function AppContent() {
     pendingRoleInspection.current=undefined;
     setRoleInspection(null);
     inspector.reset();
+    if(task&&sessionId!==target)taskDetailFocus.current=target;
     if(sessionId!==target||route.resourceId||route.view)navigate({sessionId:target,resourceId:null},channel.projectId);
     else setMobileMenu(false);
     void pilotWorkspace.readChannel(channel);
@@ -1173,7 +1209,8 @@ function AppContent() {
     openedPilotProjects.current.add(domain.projectId);
     void refreshCatalog().then(data=>{
       const current=data.sessions.find(session=>session.id===activeSession.current);
-      const continuous=current?.projectId===domain.projectId&&['router','role','worker','group'].includes(current.workspaceRole??'');
+      const continuous=current?.projectId===domain.projectId&&(['router','role','worker','group'].includes(current.workspaceRole??'')||
+        current.workspaceRole==='legacy'&&pilotWorkspace.workspace?.workers.some(worker=>worker.sessionId===current.id));
       if(isWorkspacePageView(routeRef.current.view)){openedPilotProjects.current.delete(domain.projectId);return;}
       if(!routeRef.current.resourceId&&!continuous)navigate({sessionId:domain.routerSessionId,resourceId:null});
     }).catch(handleFailure);
@@ -1806,7 +1843,8 @@ function AppContent() {
   const sessionSelected=!!selectedSession&&!selectedResource&&!isPlansPage;
   const sessionHeader=sessionSelected&&!isSpecialistTasks;
   const specialistTaskPage=sessionSelected&&isSpecialistTasks;
-  const selectedSuperWorker=pilotWorkspace.workspace?.active&&selectedSession?.workspaceRole==='worker'?pilotWorkspace.workspace.workers.find(worker=>worker.sessionId===selectedSession?.id):undefined;
+  const selectedSuperWorker=pilotWorkspace.workspace?.active&&isSpecialistExecution?inspectorWorker(pilotWorkspace.workspace.workers,activeSnapshot)??
+    pilotWorkspace.workspace.workers.find(worker=>worker.sessionId===selectedSession?.id):undefined;
   const presentedReports=conversationMode==='conversation'&&pilotReports?.sessionId===sessionId?pilotReports?.ids:
     new Set(conversationMode==='conversation'?[]:activeSnapshot?.messages.map(message=>message.id));
   const pilotHeaderActivity=selectedSuperPilot?superPilotActivity(pilotWorkspace.workspace,selectedSession,pilotActivityConnected,presentedReports):null;
@@ -1828,7 +1866,11 @@ function AppContent() {
   const latestRoleReply=roleTasks?.sessionId===sessionId?roleTasks.page.entries.filter(entry=>entry.message?.role==='assistant'&&!entry.message.dispatch).at(-1):undefined;
   const roleResultRead=!!latestRoleReply&&latestRoleReply.sourceSessionId===inspectedSnapshot?.session.id&&latestRoleReply?.taskId===inspectedSnapshot?.superagent?.task.taskId&&!!inspectedSnapshot?.superagent?.task.summary&&latestRoleReply.message?.text.trim()===inspectedSnapshot.superagent.task.summary.trim();
   const specialistMenu=sessionHeader&&!!activeSnapshot&&(selectedSession.workspaceRole==='role'||selectedSession.workspaceRole==='worker');
-  const menuTask=roleInspection?.superagent??activeSnapshot?.superagent;
+  const menuTask=activeSnapshot?.superagent;
+  const detailChannelRead=taskOwner&&roleTasks?.page.channel.id===taskOwner.id?roleTasks.page:undefined;
+  const detailLatestReply=detailChannelRead?.entries.filter(entry=>entry.message?.role==='assistant'&&!entry.message.dispatch).at(-1);
+  const detailResultRead=!!detailLatestReply&&detailLatestReply.sourceSessionId===sessionId&&detailLatestReply.taskId===activeSnapshot?.superagent?.task.taskId&&
+    !!activeSnapshot?.superagent?.task.summary&&detailLatestReply.message?.text.trim()===activeSnapshot.superagent.task.summary.trim();
   const sidebarSessionsExpanded=!closedSessionGroups.includes(sidebarProject?.id??"");
   const navigationProjects = projectList.filter(project => project.id === sidebarProject?.id);
   const itemList = activeSnapshot ? timelineItems(activeSnapshot) : [];
@@ -1876,7 +1918,7 @@ function AppContent() {
           inspector.open(entry?{sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,task,attemptId:entry.attemptId,tab:'execution'}:latestInspectorSelection(activeSnapshot,'plan'));
         }}/>}
         {specialistMenu&&<SpecialistTaskMenu key={selectedSession.id} sessionId={selectedSession.id} currentTaskId={menuTask?.task.taskId} source={menuTask?.goal?.userText} onTask={worker=>{
-          void inspectRoleTask(worker.sessionId,worker);
+          openSpecialistTask(worker);
         }}/>}
       </header>;
   const terminalListMenu=terminalListOpen && <div className="terminal-list-menu" ref={terminalListPopup.menu} id="terminal-switcher" role="group" aria-label="已打开的终端">
@@ -1953,7 +1995,7 @@ function AppContent() {
     taskMetadata={isSpecialistTasks||isSpecialistExecution?<SpecialistTaskMetadata snapshot={inspectedSnapshot} worker={inspectedWorker}/>:undefined}
     taskControls={isSpecialistTasks?<SpecialistTaskControls snapshot={inspectedSnapshot} connected={sessionConnected}/>:undefined}
     resultsFooter={sessionId&&isSpecialistTasks&&roleResultRead?<ConversationReadMarker session={sessionId} state={roleTasks?.page.channel.messageRead} enabled={sessionConnected}/>:undefined}
-    taskNavigation={activeSnapshot.session.workspaceRole==='role'&&roleWorkers.length>0?<SpecialistTaskSelect workers={roleWorkers} sessionId={inspectedSnapshot.session.id} onTask={id=>void inspectRoleTask(id)}/>:processNavigation}
+    taskNavigation={processNavigation}
     readOnly={isLegacyHistory} connected={sessionConnected&&!modeSaving.has(inspectedSnapshot.session.id)}
     onUpdated={()=>{if(roleInspection)void refreshRoleInspection();else void refreshCurrent();}}/>;
 
@@ -2128,14 +2170,13 @@ function AppContent() {
         </> : sessionId && selectedSession ? isPlansPage ? <SessionPlansPage key={sessionId} session={selectedSession} snapshot={activeSnapshot} error={visibleSessionError} disabled={!sessionConnected||turnActive||!!pendingOperation||modeSaving.has(sessionId)} onBack={returnToConversation} onRetry={()=>setSessionReload(value=>value+1)} onRevise={()=>{returnToConversation();requestAnimationFrame(()=>messageInputRef.current?.focus());}} onExecuted={async()=>{await refreshCurrent();returnToConversation();}}/> : <div className={`session-layout${isSpecialistTasks?" is-specialist-tasks":""}`}><div className="session-view" ref={attachInspectorView}>
         <span className="conversation-header-backdrop" aria-hidden="true"/>
         <div className="conversation-stage" aria-busy={historyPending}>{historyPending&&<SessionLoading/>}<section id="session-view-panel" tabIndex={-1} ref={attachConversation} className={`conversation${historyPending?" is-entering":""}`} inert={historyPending} aria-label={isSpecialistTasks?"专员任务":"会话记录"}>
-          {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true"/> : isChatGroup ? <div className="timeline-list"><ChatGroupMessages snapshot={activeSnapshot}/></div> : selectedSession.workspaceRole==='role'?<div className="timeline-list"><SpecialistChannel key={sessionId} snapshot={activeSnapshot} connected={sessionConnected} selectedSessionId={inspectorOpen?inspectedSnapshot?.session.id:undefined} inspectedSnapshot={roleInspection??undefined} onTask={id=>void inspectRoleTask(id)} onTasks={updateRoleTasks} onActivity={updateRoleReplyActivity} onReady={updateRoleContentReady}/></div>: isSpecialistExecution ? <section className="timeline-list" aria-label="任务详情">
-            {taskOwner&&<button type="button" className="specialist-task-back" onClick={()=>openSpecialistPage(taskOwner)}><Glyph name="previous" size={14}/>全部任务</button>}
-            <h2>{activeSnapshot.superagent?.task.title??selectedSession.title}</h2>
-            <WorkerExecutionResults snapshot={activeSnapshot}/>
-            <SpecialistTaskControls snapshot={activeSnapshot} connected={sessionConnected}/>
-            <button type="button" className="button secondary" onClick={reopenInspector} disabled={!inspectorAvailable}>执行过程</button>
-            <button type="button" className="button secondary" onClick={()=>void openProjectPilot(selectedSession.projectId,activeSnapshot.superagent?.task)}>前往 Pilot 继续沟通<Glyph name="arrow" size={14}/></button>
-          </section> : (hasConversationItems||pilotTaskContinuation) ? <div className="timeline-list">
+          {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true"/> : isChatGroup ? <div className="timeline-list"><ChatGroupMessages snapshot={activeSnapshot}/></div> : selectedSession.workspaceRole==='role'?<div className="timeline-list"><SpecialistChannel key={sessionId} snapshot={activeSnapshot} connected={sessionConnected}
+            initialQuery={taskListVisits.current.get(sessionId)?.query} onTask={openSpecialistTask}
+            onTasks={updateRoleTasks} onActivity={updateRoleReplyActivity} onReady={updateRoleContentReady}/></div>: isSpecialistExecution ?
+            <SpecialistTaskDetail key={JSON.stringify([sessionId,activeSnapshot.superagent?.task.taskId])} snapshot={activeSnapshot} worker={selectedSuperWorker}
+             connected={sessionConnected&&!modeSaving.has(sessionId)} onBack={taskOwner?()=>openSpecialistPage(taskOwner):undefined}
+             onContinue={isLegacyHistory?undefined:()=>void openProjectPilot(selectedSession.projectId,activeSnapshot.superagent?.task)} onUpdated={()=>void refreshCurrent()}
+             resultsFooter={detailChannelRead&&detailResultRead?<ConversationReadMarker session={detailChannelRead.channel.sessionId} state={detailChannelRead.channel.messageRead} enabled={sessionConnected}/>:undefined}/> : (hasConversationItems||pilotTaskContinuation) ? <div className="timeline-list">
             {!hasConversationItems&&emptyConversation}
             {useConversationTranscript ? <AITranscript key={sessionId} pilotWorkspace={selectedSuperPilot?pilotWorkspace.workspace:undefined} pilotConnected={pilotActivityConnected} pilotTaskDirectory={pilotTaskContinuation?{currentTaskId:pilotTaskReference?.taskId,error:pilotWorkspace.error,onContinue:selectPilotTask}:undefined} subscribeWorkerEvents={pilotWorkspace.subscribeWorkerEvents} presentedPilotReports={presentedReports} onPilotReportsPresented={selectedSuperPilot?onPilotReportsPresented:undefined} connected={!isLegacyHistory&&sessionConnected} superTask={selectedSuperWorker?.task} onInspectSpecialist={inspectSpecialist} onSpecialist={author=>{const worker=pilotWorkspace.workspace?.workers.find(row=>row.id===author.workerId);const channel=pilotWorkspace.workspace?.channels?.find(row=>row.roleId===worker?.roleId);void api.superWorkspace(selectedSession.projectId).then(()=>refreshCatalog()).then(()=>navigate({sessionId:author.channelSessionId??channel?.sessionId??author.sessionId,resourceId:null})).catch(handleFailure);}} assistantIdentity={selectedSuperWorker?{name:selectedSuperWorker.roleName,roleId:selectedSuperWorker.roleId}:selectedSuperPilot?pilotIdentity:undefined} refresh={refreshCurrent} snapshot={activeSnapshot} mode={conversationMode} onOpenPlans={openPlans} onInspect={inspectConversation} onStopTurn={() => void stopCurrentTurn()} stopping={stoppingTurn} disabled={isLegacyHistory||!sessionConnected || modeSaving.has(sessionId)} renderAction={action => <TimelineNode entry={{ kind: "action", at: action.createdAt, id: action.id, item: action }} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={isLegacyHistory||!sessionConnected || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })}/>} /> : itemList.map(entry => <TimelineNode key={`${entry.kind}:${entry.id}`} entry={entry} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || messageBlocked || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })} />)}
             {selectedSession.status === "investigating" && !activeSnapshot.ai && <div className="timeline-item item-thinking" role="status" aria-live="polite"><span className="timeline-point"><Glyph name="spark" size={15}/></span><div className="timeline-content"><div className="thinking-line"><span className="thinking-dots" aria-hidden="true"><i/><i/><i/></span><span>正在处理…</span></div></div></div>}

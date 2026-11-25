@@ -79,23 +79,6 @@
 @media(prefers-reduced-motion:reduce) {
  .specialist-name-bubble { animation:none; }
 }
-.specialist-task-back {
- display:inline-flex;
- align-items:center;
- gap:5px;
- min-height:32px;
- padding-inline:6px;
- border:0;
- border-radius:var(--radius-settings-control);
- corner-shape:var(--corner-window);
- background:transparent;
- color:var(--text-secondary);
- font-size:var(--font-size-ui);
-}
-.specialist-task-back:hover { background:var(--surface-hover); color:var(--foreground); }
-@media(pointer:coarse) {
- .specialist-task-back { min-height:44px; }
-}
 .sidebar.workspace-navigation .pilot-workspace .nav-heading { margin-inline:var(--sidebar-row-inset); padding:14px 0 6px; }
 .pilot-workspace .nav-heading small,.pilot-workspace-empty,.pilot-workspace-error { color:var(--text-muted); font-size:var(--font-size-ui); }
 .pilot-workspace .nav-row-text { gap:2px; }
