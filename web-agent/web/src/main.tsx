@@ -8,7 +8,6 @@ import "./appSelect.css";
 import "./providerIcon.css";
 import "./composerModelSelect.css";
 import "./composerCompletion.css";
-import "./specialistTaskMenu.css";
 import "./assistantProse.css";
 import "./objectReferences.css";
 import { initializeAppearance } from "./appearance";

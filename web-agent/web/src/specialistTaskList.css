@@ -63,8 +63,8 @@
 .specialist-task-page[data-hidden] .activity-indicator,.specialist-inspector-steps[data-hidden] .activity-indicator { animation-play-state:paused; }
 .session-layout.is-specialist-tasks .conversation { padding-inline:32px; padding-top:24px; }
 .specialist-mobile-heading { display:none; }
-.session-layout.is-specialist-tasks .conversation-header-backdrop { display:none; }
-.session-layout.is-specialist-tasks .timeline-list { max-width:none; width:100%; padding:0; margin:0; }
+.session-layout.is-specialist-tasks .timeline-list { width:100%; padding:0; margin:0; }
+.session-layout.is-specialist-tasks .specialist-task-detail { max-width:960px; margin-inline:auto; padding-bottom:32px; }
 .session-layout.is-specialist-tasks .session-inspector-card { flex:1; }
 .specialist-task-detail { min-width:0; outline:none; }
 .specialist-task-detail-header h1 {

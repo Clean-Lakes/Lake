@@ -4,7 +4,6 @@ import {SessionLoading} from './SessionLoading';
 import {prepareSessionEntrance} from './sessionEntrance';
 import './sessionEntrance.css';
 import {preferredChannelTask,SpecialistChannel} from './SpecialistChannel';
-import {SpecialistTaskMenu} from './SpecialistTaskMenu';
 import {SpecialistTaskDetail} from './SpecialistTaskDetail';
 import {SpecialistTaskMetadata} from './SpecialistTaskList';
 import {SpecialistTaskControls} from './SpecialistTaskControls';
@@ -1841,8 +1840,8 @@ function AppContent() {
   const projectList = [...catalog.projects].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const sidebarProject = projectList.find(project => project.id === (sidebarProjectId ?? selectedProjectId)) ?? projectList[0];
   const sessionSelected=!!selectedSession&&!selectedResource&&!isPlansPage;
-  const sessionHeader=sessionSelected&&!isSpecialistTasks;
-  const specialistTaskPage=sessionSelected&&isSpecialistTasks;
+  const specialistTaskPage=sessionSelected&&(isSpecialistTasks||isSpecialistExecution);
+  const sessionHeader=sessionSelected&&!specialistTaskPage&&(!isLegacyHistory||!!activeSnapshot);
   const selectedSuperWorker=pilotWorkspace.workspace?.active&&isSpecialistExecution?inspectorWorker(pilotWorkspace.workspace.workers,activeSnapshot)??
     pilotWorkspace.workspace.workers.find(worker=>worker.sessionId===selectedSession?.id):undefined;
   const presentedReports=conversationMode==='conversation'&&pilotReports?.sessionId===sessionId?pilotReports?.ids:
@@ -1865,8 +1864,6 @@ function AppContent() {
   const inspectedWorker=isSpecialistTasks?roleWorkers.find(worker=>worker.sessionId===inspectedSnapshot?.session.id):inspectorWorker(pilotWorkspace.workspace?.workers??[],inspectedSnapshot);
   const latestRoleReply=roleTasks?.sessionId===sessionId?roleTasks.page.entries.filter(entry=>entry.message?.role==='assistant'&&!entry.message.dispatch).at(-1):undefined;
   const roleResultRead=!!latestRoleReply&&latestRoleReply.sourceSessionId===inspectedSnapshot?.session.id&&latestRoleReply?.taskId===inspectedSnapshot?.superagent?.task.taskId&&!!inspectedSnapshot?.superagent?.task.summary&&latestRoleReply.message?.text.trim()===inspectedSnapshot.superagent.task.summary.trim();
-  const specialistMenu=sessionHeader&&!!activeSnapshot&&(selectedSession.workspaceRole==='role'||selectedSession.workspaceRole==='worker');
-  const menuTask=activeSnapshot?.superagent;
   const detailChannelRead=taskOwner&&roleTasks?.page.channel.id===taskOwner.id?roleTasks.page:undefined;
   const detailLatestReply=detailChannelRead?.entries.filter(entry=>entry.message?.role==='assistant'&&!entry.message.dispatch).at(-1);
   const detailResultRead=!!detailLatestReply&&detailLatestReply.sourceSessionId===sessionId&&detailLatestReply.taskId===activeSnapshot?.superagent?.task.taskId&&
@@ -1892,7 +1889,7 @@ function AppContent() {
   const headerSweep=sessionHeader&&<HeaderSweep key={`sweep-${selectedSession.id}`} active={pilotHeaderActivity?.animated??(avatarActivity?.state==='running')}/>;
   const pilotTone=sessionHeader&&selectedSuperPilot&&!headerPilot&&!headerPilotMode?
     sessionBadgeState(superHeaderPresentation?.status??selectedSession.status,superHeaderPresentation?.label).tone:undefined;
-  const workspaceHeading=<header className={`workspace-header${specialistMenu?' has-specialist-tasks':''}${headerPilot||headerPilotMode ? ' has-pilot-island' : ''}${headerPilotMode&&!headerPilot?' has-pilot-mode':''}`} data-pilot-island-tone={pilotTone}>
+  const workspaceHeading=<header className={`workspace-header${headerPilot||headerPilotMode ? ' has-pilot-island' : ''}${headerPilotMode&&!headerPilot?' has-pilot-mode':''}`} data-pilot-island-tone={pilotTone}>
         {sessionHeader&&!detachedConversation&&<span className="workspace-header-glass" aria-hidden="true"/>}
         {!detachedConversation&&headerSweep}
         <button className="icon-button mobile-only" aria-label="打开项目导航" onClick={() => setMobileMenu(true)}><Glyph name="menu" size={21}/></button>
@@ -1911,14 +1908,11 @@ function AppContent() {
             </strong>
             {pilotParticipants&&<PilotActiveSpecialists key={sessionId} participants={pilotParticipants} visible={showPilotParticipants}/>}
           </div>}
-        {selectedSession && !selectedResource && !isPlansPage && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} mode={headerPilotMode} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}} normal={isChatGroup?selectedChatGroup&&<span className="chat-group-size" title={selectedChatGroup.members.map(member=>member.roleName).join('、')}>{selectedChatGroup.members.length} 位专员</span>:<SessionStateBadge session={selectedSession} {...superHeaderPresentation} iconOnly={selectedSuperPilot}/>} onInspect={targetId => {
+        {sessionHeader && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} mode={headerPilotMode} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}} normal={isChatGroup?selectedChatGroup&&<span className="chat-group-size" title={selectedChatGroup.members.map(member=>member.roleName).join('、')}>{selectedChatGroup.members.length} 位专员</span>:<SessionStateBadge session={selectedSession} {...superHeaderPresentation} iconOnly={selectedSuperPilot}/>} onInspect={targetId => {
           if(!activeSnapshot||!headerPilot)return;
           const task=activeSnapshot.sre?.tasks.find(t=>t.id===headerPilot.taskId);
           const entry=task?.messages?.find(m=>`sre-message-${m.id}`===targetId);
           inspector.open(entry?{sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,task,attemptId:entry.attemptId,tab:'execution'}:latestInspectorSelection(activeSnapshot,'plan'));
-        }}/>}
-        {specialistMenu&&<SpecialistTaskMenu key={selectedSession.id} sessionId={selectedSession.id} currentTaskId={menuTask?.task.taskId} source={menuTask?.goal?.userText} onTask={worker=>{
-          openSpecialistTask(worker);
         }}/>}
       </header>;
   const terminalListMenu=terminalListOpen && <div className="terminal-list-menu" ref={terminalListPopup.menu} id="terminal-switcher" role="group" aria-label="已打开的终端">
@@ -2158,8 +2152,8 @@ function AppContent() {
     {detachedConversation&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={sharedIsland?terminalHeading:null}
       terminalOpen={sharedIsland&&terminalOpen} pilotTone={pilotTone}/>}
     {(dockedConversation||specialistTaskPage)&&<div className={`workbench-conversation-surface${specialistTaskPage?" is-specialist-task-surface":""}`} aria-hidden="true"/>}
-    <main className={`workspace${inspectorOpen?" has-session-inspector":""}${!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":specialistTaskPage?" has-specialist-task-list":""}`} onDragOver={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="none";return;}if(selectedSession&&!isLegacyHistory&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.stopPropagation();return;}if(!selectedSession||isLegacyHistory||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
-      {!detachedConversation&&(isSpecialistTasks?<header className="specialist-mobile-heading"><button type="button" className="icon-button" aria-label="打开项目导航" onClick={()=>setMobileMenu(true)}><Glyph name="menu" size={21}/></button><span>专员任务</span></header>:workspaceHeading)}
+    <main className={`workspace${inspectorOpen?" has-session-inspector":""}${!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":specialistTaskPage?" has-specialist-task-page":""}`} onDragOver={event=>{if(isWorkspacePage)return;if(specialistTaskPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="none";return;}if(selectedSession&&!isLegacyHistory&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(isWorkspacePage)return;if(specialistTaskPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.stopPropagation();return;}if(!selectedSession||isLegacyHistory||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
+      {!detachedConversation&&(specialistTaskPage?<header className="specialist-mobile-heading"><button type="button" className="icon-button" aria-label="打开项目导航" onClick={()=>setMobileMenu(true)}><Glyph name="menu" size={21}/></button><span>专员任务</span></header>:workspaceHeading)}
 
       {!persistentMode && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>服务端不支持持续终端。请核对服务端版本。</span></div>}
       {connection.warning && warningSessionId === sessionId && <div className="system-banner offline-banner" role="alert"><Glyph name="alert" size={18}/><span>{visibleSessionError || "实时连接已断开。当前内容可能不是最新状态，操作已暂停。"}</span><button onClick={() => sessionId ? setSessionReload(value => value + 1) : void loadApp()}><Glyph name="refresh" size={15}/>重试</button></div>}
@@ -2168,9 +2162,9 @@ function AppContent() {
       {activeSnapshot?.ai?.memoryStatus === "backlog_full" && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>项目记忆待处理队列已满，本轮未自动学习。请在项目记忆中查看任务状态。</span>{selectedProjectId && <button onClick={() => {const project = projectList.find(item => item.id === selectedProjectId); if (project) setMemoryProject(project);}}>查看项目记忆</button>}</div>}
 
       {selectedResource ? <><ResourceDetail serviceEditing={bootstrap?.backendRuntime==='typescript'} resource={selectedResource} pilotSessionId={pilotWorkspace.workspace?.active&&pilotWorkspace.workspace.project.projectId===selectedResource.projectId?pilotWorkspace.workspace.project.routerSessionId:undefined} project={projectList.find(project => project.id === selectedResource.projectId)} sessions={catalog.sessions.filter(session => session.projectId === selectedResource.projectId)} selectedSession={selectedSession} terminalList={resourceTerminals} disabled={!connected || !!pendingOperation} onBack={() => navigate({ sessionId, resourceId: null })} onNewSession={() => openSessionDialog(selectedResource.projectId)} onSession={id => navigate({ sessionId: id, resourceId: null })} onEdit={() => selectedResource.jumpServer ? setJumpAccount(selectedResource) : setEditTerminalResource(selectedResource)} />
-        </> : sessionId && selectedSession ? isPlansPage ? <SessionPlansPage key={sessionId} session={selectedSession} snapshot={activeSnapshot} error={visibleSessionError} disabled={!sessionConnected||turnActive||!!pendingOperation||modeSaving.has(sessionId)} onBack={returnToConversation} onRetry={()=>setSessionReload(value=>value+1)} onRevise={()=>{returnToConversation();requestAnimationFrame(()=>messageInputRef.current?.focus());}} onExecuted={async()=>{await refreshCurrent();returnToConversation();}}/> : <div className={`session-layout${isSpecialistTasks?" is-specialist-tasks":""}`}><div className="session-view" ref={attachInspectorView}>
-        <span className="conversation-header-backdrop" aria-hidden="true"/>
-        <div className="conversation-stage" aria-busy={historyPending}>{historyPending&&<SessionLoading/>}<section id="session-view-panel" tabIndex={-1} ref={attachConversation} className={`conversation${historyPending?" is-entering":""}`} inert={historyPending} aria-label={isSpecialistTasks?"专员任务":"会话记录"}>
+        </> : sessionId && selectedSession ? isPlansPage ? <SessionPlansPage key={sessionId} session={selectedSession} snapshot={activeSnapshot} error={visibleSessionError} disabled={!sessionConnected||turnActive||!!pendingOperation||modeSaving.has(sessionId)} onBack={returnToConversation} onRetry={()=>setSessionReload(value=>value+1)} onRevise={()=>{returnToConversation();requestAnimationFrame(()=>messageInputRef.current?.focus());}} onExecuted={async()=>{await refreshCurrent();returnToConversation();}}/> : <div className={`session-layout${specialistTaskPage?" is-specialist-tasks":""}`}><div className="session-view" ref={attachInspectorView}>
+        {sessionHeader&&<span className="conversation-header-backdrop" aria-hidden="true"/>}
+        <div className="conversation-stage" aria-busy={historyPending}>{historyPending&&<SessionLoading/>}<section id="session-view-panel" tabIndex={-1} ref={attachConversation} className={`conversation${historyPending?" is-entering":""}`} inert={historyPending} aria-label={specialistTaskPage?"专员任务":"会话记录"}>
           {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true"/> : isChatGroup ? <div className="timeline-list"><ChatGroupMessages snapshot={activeSnapshot}/></div> : selectedSession.workspaceRole==='role'?<div className="timeline-list"><SpecialistChannel key={sessionId} snapshot={activeSnapshot} connected={sessionConnected}
             initialQuery={taskListVisits.current.get(sessionId)?.query} onTask={openSpecialistTask}
             onTasks={updateRoleTasks} onActivity={updateRoleReplyActivity} onReady={updateRoleContentReady}/></div>: isSpecialistExecution ?
