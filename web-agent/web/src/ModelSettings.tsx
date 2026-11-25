@@ -3,6 +3,7 @@ import {GatewaySettings,type GatewayTaskTarget} from './GatewaySettings';
 import {MCPSettings,SkillSettings} from "./ExtensionSettings";
 import {ProviderIcon} from "./ProviderIcon";
 import {Glyph} from "./Icons";
+import {SaveAction} from "./SaveAction";
 import {AppSelect} from "./AppSelect";
 import {useAutoRefresh} from "./useAutoRefresh";
 import {reuseUnchanged} from "./snapshotUpdates";
@@ -46,7 +47,7 @@ export function ModelSettings({tab,navigationGuard,onBusyChange,onChanged,sendSh
   const [loading,setLoading] = useState(true);
   const [busy,setBusy] = useState("");
   const [error,setError] = useState("");
-  const [result,setResult] = useState<{ok:boolean;message:string}|null>(null);
+  const [result,setResult] = useState<{ok:boolean;message:string;action?:"save"}|null>(null);
   const [editor,setEditor] = useState<ProviderModel|null>(null);
   const [discovery,setDiscovery] = useState<{id:string;available:AvailableModels}|null>(null);
   const [deleteConfirm,setDeleteConfirm] = useState(false);
@@ -217,7 +218,7 @@ export function ModelSettings({tab,navigationGuard,onBusyChange,onChanged,sendSh
   }
   async function save() {
     await saveCurrent();
-    setResult({ok:true,message:capabilityDetectionEnabled ? "供应商已保存。图片与思考级别能力将在后台识别。" : "供应商已保存。"});
+    setResult({ok:true,action:"save",message:capabilityDetectionEnabled ? "供应商已保存。图片与思考级别能力将在后台识别。" : "供应商已保存。"});
   }
   async function detectCapabilities() {
     if (!draft || draft.isNew || draft.dirty) throw new Error("请先保存供应商配置");
@@ -432,7 +433,7 @@ export function ModelSettings({tab,navigationGuard,onBusyChange,onChanged,sendSh
         </div>
       </WorkspaceSettingSection>}</div>
     </div>}
-    {tab==="models"&&<footer className="workbench-dialog-footer model-settings-footer"><div className="provider-feedback" aria-live="polite">{error ? <p className="form-error" role="alert">{error}</p> : result ? <p className={result.ok ? "provider-success" : "form-error"}>{result.message}</p> : <p>{selected===magpieSelection ? magpieModel ? "Magpie 与手动供应商的模型可随时切换。" : "接入后会自动同步 Magpie 模型。" : discovery ? "勾选模型并添加到列表后，保存供应商使配置生效。" : selected===newProviderSelection ? "厂商预设会自动填写接入地址和 API 格式。" : editor ? "完成模型编辑后，保存供应商使配置生效。" : magpieModel ? "保存后点击「使用」即可切换模型，无需停用 Magpie 接入。" : "每个供应商独立保存密钥。保存后立即生效。"}</p>}</div>{draft && <div className="provider-footer-actions"><button className="button secondary" disabled={isBusy || !draft.baseURL.trim() || !draft.models.length || !!editor || !!discovery} onClick={() => void run("test",test)}>{busy==="test" ? "测试中…" : "测试连接"}</button><button className="button primary" disabled={isBusy || !draft.baseURL.trim() || !draft.name.trim() || !!editor || !!discovery || (!draft.dirty && !draft.isNew)} onClick={() => void run("save",save)}>{busy==="save" ? "保存中…" : "保存供应商"}</button></div>}</footer>}
+    {tab==="models"&&<footer className="workbench-dialog-footer model-settings-footer"><div className="provider-feedback" aria-live="polite">{error ? <p className="form-error" role="alert">{error}</p> : result ? <p className={result.ok ? "provider-success" : "form-error"}>{result.message}</p> : <p>{selected===magpieSelection ? magpieModel ? "Magpie 与手动供应商的模型可随时切换。" : "接入后会自动同步 Magpie 模型。" : discovery ? "勾选模型并添加到列表后，保存供应商使配置生效。" : selected===newProviderSelection ? "厂商预设会自动填写接入地址和 API 格式。" : editor ? "完成模型编辑后，保存供应商使配置生效。" : magpieModel ? "保存后点击「使用」即可切换模型，无需停用 Magpie 接入。" : "每个供应商独立保存密钥。保存后立即生效。"}</p>}</div>{draft && <div className="provider-footer-actions"><button className="button secondary" disabled={isBusy || !draft.baseURL.trim() || !draft.models.length || !!editor || !!discovery} onClick={() => void run("test",test)}>{busy==="test" ? "测试中…" : "测试连接"}</button><SaveAction label="保存供应商" saving={busy==="save"} saved={result?.action==="save"} disabled={isBusy || !draft.baseURL.trim() || !draft.name.trim() || !!editor || !!discovery || (!draft.dirty && !draft.isNew)} onClick={() => void run("save",save)}/></div>}</footer>}
     <dialog ref={discardDialog} className="presentation-dialog provider-discard-dialog" role="alertdialog" aria-modal="true" aria-labelledby="provider-discard-title" aria-describedby="provider-discard-hint" onCancel={event=>{event.preventDefault();answerDiscard(false);}}>
       <h3 id="provider-discard-title">放弃未保存的更改？</h3><p id="provider-discard-hint">选择「继续编辑」可保留刚才的输入。</p>
       <div className="provider-editor-actions"><button type="button" className="button secondary" onClick={()=>answerDiscard(false)}>继续编辑</button><button type="button" className="button danger" onClick={()=>answerDiscard(true)}>放弃更改</button></div>

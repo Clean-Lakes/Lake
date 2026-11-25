@@ -1,9 +1,10 @@
 import {Children,Fragment,isValidElement,useEffect,useId,useLayoutEffect,useRef,useState,type KeyboardEvent,type ReactNode,type SelectHTMLAttributes} from "react";
 import {createPortal} from "react-dom";
+import {useMenuMotion} from "./useMenuMotion";
 import {Glyph} from "./Icons";
 import {activeSelectIndex,matchSelectOption,nextEnabledOption,selectPopupPosition,selectSidePopupPosition,type SelectOption} from "./selectState";
 
-type Props=Omit<SelectHTMLAttributes<HTMLSelectElement>,"multiple"|"size"|"value"|"defaultValue"> & {value?:string|number;defaultValue?:string|number;label?:string;icon?:ReactNode;open?:boolean;onOpenChange?:(open:boolean)=>void;renderValue?:ReactNode;renderOption?:(option:SelectOption)=>ReactNode;popupHeader?:ReactNode|((state:{listId:string;activeId?:string})=>ReactNode);popupFooter?:ReactNode;emptyMessage?:string;popupClassName?:string;popupMinWidth?:number;popupAlign?:"start"|"end";popupMaxHeight?:number;nativePopup?:boolean;selectionLocked?:boolean;popupPlacement?:"vertical"|"side"};
+type Props=Omit<SelectHTMLAttributes<HTMLSelectElement>,"multiple"|"size"|"value"|"defaultValue"> & {value?:string|number;defaultValue?:string|number;label?:string;icon?:ReactNode;open?:boolean;onOpenChange?:(open:boolean)=>void;renderValue?:ReactNode;renderOption?:(option:SelectOption)=>ReactNode;popupHeader?:ReactNode|((state:{listId:string;activeId?:string})=>ReactNode);popupFooter?:ReactNode;emptyMessage?:string;popupClassName?:string;popupMinWidth?:number;popupAlign?:"start"|"end";popupMaxHeight?:number;nativePopup?:boolean;selectionLocked?:boolean;popupPlacement?:"vertical"|"side";popupMotion?:boolean};
 function nodeText(node:ReactNode):string {
   return Children.toArray(node).map(child=>isValidElement<{children?:ReactNode}>(child)?nodeText(child.props.children):String(child)).join("");
 }
@@ -18,7 +19,7 @@ function collectOptions(children:ReactNode,inheritedDisabled=false,group=""):Sel
 }
 
 /** Shared single-value field. The hidden select preserves real change events and form values. */
-export function AppSelect({children,value,defaultValue,onChange,disabled=false,id,className="",label,icon,open:controlledOpen,onOpenChange,renderValue,renderOption,popupHeader,popupFooter,emptyMessage="没有可选项",popupClassName="",popupMinWidth=200,popupAlign="start",popupMaxHeight=288,nativePopup=false,selectionLocked=false,popupPlacement="vertical",...nativeProps}:Props) {
+export function AppSelect({children,value,defaultValue,onChange,disabled=false,id,className="",label,icon,open:controlledOpen,onOpenChange,renderValue,renderOption,popupHeader,popupFooter,emptyMessage="没有可选项",popupClassName="",popupMinWidth=200,popupAlign="start",popupMaxHeight=288,nativePopup=false,selectionLocked=false,popupPlacement="vertical",popupMotion=false,...nativeProps}:Props) {
   const generatedId=useId();
   const controlId=id || `lake-select-${generatedId}`;
   const listId=`${controlId}-list`;
@@ -38,6 +39,7 @@ export function AppSelect({children,value,defaultValue,onChange,disabled=false,i
   const [sideDirection,setSideDirection]=useState<"left"|"right"|"up"|"down">();
   const root=useRef<HTMLSpanElement>(null),trigger=useRef<HTMLButtonElement>(null),native=useRef<HTMLSelectElement>(null),popup=useRef<HTMLDivElement>(null);
   const list=useRef<HTMLDivElement>(null);
+  const retainPopup=useMenuMotion(popup,popupVisible,popupMotion&&!nativePopup);
   const search=useRef({text:"",time:0});
   const accessibleLabel=nativeProps["aria-label"] || label || inferredLabel || undefined;
   useLayoutEffect(()=>{
@@ -95,8 +97,9 @@ export function AppSelect({children,value,defaultValue,onChange,disabled=false,i
     if (!popupVisible||!viewport||!row) return;
     const reveal=()=>{
       const bounds=viewport.getBoundingClientRect(),item=row.getBoundingClientRect();
-      if (item.top<bounds.top) viewport.scrollTop+=item.top-bounds.top;
-      else if (item.bottom>bounds.bottom) viewport.scrollTop+=item.bottom-bounds.bottom;
+      const scale=viewport.offsetHeight&&bounds.height>0?bounds.height/viewport.offsetHeight:1;
+      if (item.top<bounds.top) viewport.scrollTop+=(item.top-bounds.top)/scale;
+      else if (item.bottom>bounds.bottom) viewport.scrollTop+=(item.bottom-bounds.bottom)/scale;
     };
     reveal();
     // Loading a footer can shrink the list without resizing the popup or changing its active row.
@@ -150,7 +153,9 @@ export function AppSelect({children,value,defaultValue,onChange,disabled=false,i
   return <span className={`app-select ${className}`} data-popup-direction={sideDirection} ref={root}>
     <button ref={trigger} id={controlId} type="button" className="app-select-trigger" role="combobox" title={nativeProps.title} aria-label={accessibleLabel} aria-labelledby={nativeProps["aria-labelledby"]} aria-describedby={nativeProps["aria-describedby"]} aria-invalid={nativeProps["aria-invalid"]} aria-busy={nativeProps["aria-busy"]} aria-required={nativeProps.required} aria-readonly={selectionLocked||undefined} aria-haspopup={nativeProps["aria-haspopup"]??(nativePopup?"dialog":"listbox")} aria-expanded={open} aria-controls={open&&!nativePopup?listId:undefined} aria-activedescendant={open&&!nativePopup&&active>=0?`${listId}-${active}`:undefined} disabled={disabled} autoFocus={nativeProps.autoFocus} onClick={()=>open?close():show()} onKeyDown={onKeyDown}>{icon&&<span className="app-select-icon">{icon}</span>}<span className="app-select-value">{renderValue??(options[selected]?.label || "请选择")}</span><Glyph name="chevron" size={14} className={`app-select-chevron ${open?"is-open":""}`}/></button>
     <select {...nativeProps} ref={native} id={`${controlId}-native`} hidden aria-hidden="true" tabIndex={-1} style={{display:"none"}} disabled={disabled} value={selectedValue} onChange={event=>{if (value===undefined) setLocalValue(event.target.value);onChange?.(event);}}>{children}</select>
-    {open&&!nativePopup&&position&&createPortal(<div ref={popup} className={`app-select-popup ${popupClassName}`} data-select-id={controlId} data-parent-select={root.current?.closest<HTMLElement>(".app-select-popup")?.dataset.selectId} style={position} onKeyDown={onKeyDown} onBlur={event=>{if(event.relatedTarget&&!popup.current?.contains(event.relatedTarget as Node)&&!root.current?.contains(event.relatedTarget as Node)&&(event.relatedTarget as Element).closest?.<HTMLElement>(".app-select-popup")?.dataset.parentSelect!==controlId) close();}}>
+    {(popupVisible||retainPopup)&&position&&createPortal(<div ref={popup} className={`app-select-popup ${popupClassName}`} data-select-id={controlId} data-parent-select={root.current?.closest<HTMLElement>(".app-select-popup")?.dataset.selectId} style={{...position,transformOrigin:popupMotion?`${popupAlign==="end"?"right":"left"} ${"bottom" in position?"bottom":"top"}`:undefined}}
+      inert={!popupVisible} aria-hidden={!popupVisible||undefined} data-menu-motion={popupMotion||undefined}
+      onKeyDown={onKeyDown} onBlur={event=>{if(popupVisible&&event.relatedTarget&&!popup.current?.contains(event.relatedTarget as Node)&&!root.current?.contains(event.relatedTarget as Node)&&(event.relatedTarget as Element).closest?.<HTMLElement>(".app-select-popup")?.dataset.parentSelect!==controlId) close();}}>
       {popupHeader&&<div className="app-select-header">{typeof popupHeader==="function"?popupHeader({listId,activeId:active>=0?`${listId}-${active}`:undefined}):popupHeader}</div>}
       <div ref={list} id={listId} role="listbox" tabIndex={-1} aria-readonly={selectionLocked||undefined} aria-label={accessibleLabel} className="app-select-list">
         {!options.length&&<div className="app-select-empty" role="status">{emptyMessage}</div>}

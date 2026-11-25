@@ -1,0 +1,19 @@
+.resource-folder-rename { flex:1; min-width:0; padding:2px 3px; }
+.resource-folder-rename form { display:flex; align-items:center; gap:4px; min-width:0; margin:0; }
+.resource-folder-rename form > svg { flex:none; margin-inline-end:2px; }
+.resource-folder-rename input {
+  flex:1; min-width:0; width:100%; min-height:28px; padding:3px 7px;
+  border:1px solid var(--border); border-radius:var(--radius-settings-control);
+  corner-shape:var(--corner-window); color:var(--foreground); background:var(--surface);
+  font:inherit;
+}
+.resource-folder-rename input:focus { outline:1px solid var(--focus-outline); outline-offset:-1px; }
+.resource-folder-rename .icon-button { flex:none; width:26px; height:28px; }
+.resource-folder-rename .form-error { margin:4px 0 0; overflow-wrap:anywhere; }
+@media (pointer:coarse) {
+  .resource-folder-rename input,.resource-folder-rename .icon-button { min-height:44px; }
+  .resource-folder-rename .icon-button { width:44px; }
+}
+@media (prefers-reduced-motion:no-preference) {
+  .resource-folder-rename { animation:lake-control-appear 135ms ease-out both; }
+}

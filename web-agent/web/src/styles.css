@@ -6,6 +6,9 @@
 @import './operationOutcomes.css';
 @import "./theme.css";
 @import "./scrollbarVisibility.css";
+@import "./controlFeedback.css";
+@import "./tabSelectionIndicator.css";
+@import "./resourceFolderRename.css";
 @import "./surfaceGeometry.css";
 @import "./statusText.css";
 @import "./contextUsage.css";
@@ -390,13 +393,22 @@ a { color: inherit; }
 /* Approval and question surfaces share the composer's responsive content rail. */
 .composer-session-controls { width:min(960px,100%); min-width:0; margin-inline:auto; }
 .composer-session-controls > :is(.attachment-approval,.ai-pending,.agent-question) { width:100%; max-width:none; }
-.composer { position: relative; container-type: inline-size; container-name: lake-composer; width: min(960px, 100%); margin-inline: auto; padding: 0; background: transparent; border: 0; box-shadow: none; }
+.composer {
+  position: relative; container-type: inline-size; container-name: lake-composer; width: min(960px, 100%);
+  margin-inline: auto; padding: 0; background: transparent; border: 0; box-shadow: none;
+  /* Reserve the empty expanded height so focusing the editor keeps the last message in place. */
+  display: flex; flex-direction: column; justify-content: flex-end; min-block-size: var(--composer-reserved-height, 92px);
+}
 .composer-input {
   --composer-placeholder: color-mix(in srgb, var(--text-muted) 88%, transparent);
-  padding: 8px 13px;
-  border: 1px solid var(--conversation-composer-border, var(--border));
-  border-radius: var(--radius-composer);
-  background: var(--surface);
+  --composer-block-inset: 10px;
+  --composer-inline-inset: 13px;
+  --composer-toolbar-gap: 10px;
+  padding: var(--composer-block-inset) var(--composer-inline-inset);
+}
+.composer-input,.composer-backplate {
+  border: 1px solid var(--composer-stroke, var(--conversation-composer-border, var(--border)));
+  background: var(--composer-fill, var(--surface));
 }
 .composer-body { display: flex; align-items: flex-end; gap: 10px; }
 .composer textarea { display: block; flex: 1; min-width: 0; width: 100%; resize: none; height: 30px; min-height: 30px; max-height: 160px; overflow-y: hidden; border: none; background: transparent; color: var(--foreground); padding: 3px 0; outline: none; font-size: var(--font-size-ui); line-height: 1.55; }
@@ -405,20 +417,20 @@ a { color: inherit; }
 .send-button { flex: 0 0 auto; display: grid; place-items: center; border: 0; width: 32px; height: 32px; border-radius: var(--radius-control); background: var(--primary); color: var(--on-primary); }
 .send-button:hover:not(:disabled) { background: var(--primary-hover); }
 .send-button:disabled { background: var(--surface-selected); color: var(--text-disabled); }
-.composer-foot { display: flex; align-items: center; flex-wrap: nowrap; color: var(--text-muted); font-size: var(--font-size-toolbar); margin-top: 8px; padding: 0; gap: 6px; min-width: 0; }
+.composer-foot { display: flex; align-items: center; flex-wrap: nowrap; color: var(--text-muted); font-size: var(--font-size-toolbar); margin-top: var(--composer-toolbar-gap); padding: 0; gap: 6px; min-width: 0; }
 .composer-foot-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-inline-start: auto; min-width: 0; }
 .composer-input .send-button {
-  --composer-action-background: transparent;
+  --composer-action-background: var(--surface-hover);
   width: 30px; height: 30px;
   background: var(--composer-action-background); color: var(--text-secondary);
-  border-radius: var(--radius-composer-action);
+  border-radius: 50%;
 }
 .composer-input .send-button:hover:enabled { background: var(--composer-action-background); }
-.composer-input .send-button:not(.stop-button, [data-send-ready]):hover:enabled { --composer-action-background: var(--surface-hover); color: var(--foreground); }
+.composer-input .send-button:not(.stop-button, [data-send-ready]):hover:enabled { --composer-action-background: var(--surface-selected); color: var(--foreground); }
 .composer-input .send-button[data-send-ready]:enabled { --composer-action-background: var(--foreground); color: var(--surface); }
 .composer-input .send-button:disabled { color: var(--text-disabled); }
 .composer-input .send-button:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
-.composer-input .send-button > .lucide-arrow-up { stroke-width: 2.05; }
+.composer-input .send-button > .lucide-arrow-up { stroke-width: 2.25; }
 .composer-input .send-button.stop-button {
   --composer-action-background: var(--surface-hover);
   display: inline-flex;
@@ -428,6 +440,7 @@ a { color: inherit; }
   width: auto;
   min-width: 30px;
   padding: 0 8px;
+  border-radius: var(--radius-composer-action);
   background: var(--composer-action-background);
   color: var(--foreground);
   font: inherit;
@@ -648,7 +661,7 @@ a { color: inherit; }
   .command-input-row { flex-direction: column; }
   .command-button { align-self: flex-end; }
   .composer-dock { padding: 9px var(--session-gutter, 13px) var(--workbench-bottom-inset); }
-  .composer-input { padding: 8px 12px; }
+  .composer-input { --composer-inline-inset:12px; }
   .composer-foot { gap: 6px; }
   .resource-detail { width: calc(100% - 26px); padding-top: 19px; }
   .resource-hero { margin-top: 23px; }
@@ -1155,7 +1168,7 @@ a { color: inherit; }
 .workspace-actions{ display: flex; gap: 3px; flex-shrink: 0; }
 .workspace-refresh.is-refreshing svg { animation: spin 0.8s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .workspace-refresh.is-refreshing svg { animation: none; } }
-.composer-input:has(.composer-rich-input:focus, textarea:focus) { border-color: color-mix(in srgb, var(--focus) 56%, var(--border)); }
+.composer-input:has(.composer-rich-input:focus, textarea:focus) { --composer-stroke: color-mix(in srgb, var(--focus) 56%, var(--border)); }
 .ai-markdown h1, .ai-markdown h2, .ai-markdown h3{ color: var(--foreground); font-weight:var(--font-weight-semibold); line-height: 1.4; margin: 20px 0 10px; }
 .ai-markdown h1{ font-size: 25px; }
 .ai-markdown h2{ font-size: 21px; }
@@ -1223,11 +1236,11 @@ input[type="checkbox"]{ accent-color: var(--primary); }
  }
 }
 @container lake-composer (max-width: 420px) {
- .composer-input { padding-inline:8px; }
+ .composer-input { --composer-inline-inset:8px; }
  .composer-input .send-button.stop-button { font-size:11px; padding-inline:4px; }
  .composer-foot .composer-model-select.app-select > .app-select-trigger { padding-inline:4px; }
  .composer-foot .composer-model-name { max-width:74px; }
- .composer-foot .composer-model-effort { display:none; }
+ .composer-foot .composer-model-effort-label { display:none; }
 }
 @container lake-composer (max-width: 370px) {
  .composer-foot[data-running] .composer-foot-actions { flex-wrap:wrap; }
@@ -1244,6 +1257,7 @@ input[type="checkbox"]{ accent-color: var(--primary); }
  .composer-foot .pilot-mode-toggle { min-width:28px; justify-content:center; }
 }
 @media (pointer: coarse) {
+ .composer { min-block-size:var(--composer-reserved-height,106px); }
  .composer-foot,.composer-foot-actions { flex-wrap:wrap; }
  .composer-input :is(.composer-attach-button,.composer-foot > .composer-permission-button,.send-button,.composer-model-setup,.composer-model-select.app-select > .app-select-trigger) {
   min-width:44px; min-height:44px;
@@ -1273,7 +1287,7 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 
 .menu-selection-mark { display: grid; place-items: center; width: 14px; flex-shrink: 0; }
 
-.composer-input.attachment-drop-active { border-color: var(--focus); background: var(--surface-hover); outline: 2px dashed var(--focus-outline); outline-offset: 3px; }
+.composer-input.attachment-drop-active { --composer-stroke: var(--focus); --composer-fill: var(--surface-hover); outline: 2px dashed var(--focus-outline); outline-offset: 3px; }
 .attachment-upload-status { margin: 0 0 9px; color: var(--text-muted); font-size: var(--font-size-ui); }
 .message-attachments a { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; overflow-wrap: anywhere; }
 .text-file-drafts small { color: var(--text-muted); white-space: nowrap; }

@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from "react";
 import type {SkillCatalog,SkillConfig} from "../../shared/contracts";
 import {api,readableError} from "./api";
+import {SaveAction} from "./SaveAction";
 import {Glyph} from "./Icons";
 import {WorkspaceSettingSection} from "./WorkspacePage";
 import "./extensionSettings.css";
@@ -12,10 +13,11 @@ export function SkillSettings({onBusyChange}:{onBusyChange:(busy:boolean)=>void}
  const detail=useRef<HTMLDivElement>(null);
  const [catalog,setCatalog]=useState<SkillCatalog>({skills:[],roots:[],defaultRoot:""}),[selected,setSelected]=useState<SkillConfig|null>(null),[content,setContent]=useState(""),[name,setName]=useState(""),[enabled,setEnabled]=useState(true),[creating,setCreating]=useState(false),[rootsOpen,setRootsOpen]=useState(false),[root,setRoot]=useState("");
  const [busy,setBusy]=useState(""),[loading,setLoading]=useState(true),[dirty,setDirty]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
+ const [saved,setSaved]=useState(false);
  async function load(){const data=await api.skills();setCatalog(data);return data;}
  useEffect(()=>{void load().catch(e=>setError(readableError(e))).finally(()=>setLoading(false));},[]);
- async function run(kind:string,task:()=>Promise<void>){setBusy(kind);onBusyChange(true);setError("");setNotice("");try{await task();}catch(e){setError(readableError(e));detail.current?.scrollIntoView({block:"start"});}finally{setBusy("");onBusyChange(false);}}
- function create(){detail.current?.scrollIntoView({block:"start"});setCreating(true);setRootsOpen(false);setSelected(null);setName("");setContent(skillTemplate);setEnabled(true);setDirty(true);setError("");setNotice("");}
+ async function run(kind:string,task:()=>Promise<void>){setBusy(kind);setSaved(false);onBusyChange(true);setError("");setNotice("");try{await task();}catch(e){setError(readableError(e));detail.current?.scrollIntoView({block:"start"});}finally{setBusy("");onBusyChange(false);}}
+ function create(){setSaved(false);detail.current?.scrollIntoView({block:"start"});setCreating(true);setRootsOpen(false);setSelected(null);setName("");setContent(skillTemplate);setEnabled(true);setDirty(true);setError("");setNotice("");}
  async function choose(skill:SkillConfig){const data=await api.skill(skill.name);detail.current?.scrollIntoView({block:"start"});setSelected(data.skill);setContent(data.content);setName(data.skill.name);setEnabled(data.skill.enabled);setCreating(false);setRootsOpen(false);setDirty(false);}
  return <section id="skills-settings-panel" role="tabpanel" aria-labelledby="skills-settings-tab" className="extension-settings skill-settings">
  <WorkspaceSettingSection id="skills-library-title" title="已安装的 Skills" actions={<>
@@ -85,11 +87,12 @@ export function SkillSettings({onBusyChange}:{onBusyChange:(busy:boolean)=>void}
      </label>
     </div>
     <div className="workspace-setting-row extension-editor-actions">
-     <button type="button" className="button primary" disabled={!!busy||!dirty||!name.trim()} onClick={()=>void run("save",async()=>{
+     <SaveAction label="保存 Skill" saving={busy==="save"} saved={saved&&!dirty} disabled={!!busy||!dirty||!name.trim()} onClick={()=>void run("save",async()=>{
       await api.saveSkill(name.trim(),{enabled,create:creating,...(creating||selected?.managed?{content:creating?content.replace(/^name:.*$/m,`name: ${name.trim()}`):content}:{})});
       const data=await load();const skill=data.skills.find(v=>v.name===name.trim());if(skill)await choose(skill);
+      setSaved(true);
       setNotice(enabled?"Skill 已保存，聊天中即可按需使用。":"Skill 已停用，不再加载。");
-     })}>{busy==="save"?"保存中…":"保存 Skill"}</button>
+     })}/>
     </div>
    </div>
   </WorkspaceSettingSection>:null}

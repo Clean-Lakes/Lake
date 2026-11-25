@@ -55,11 +55,16 @@ const lakeIcons={
  lakeQuestion:'M5 14V4h14v10h-7l-3 2v-2H5M10 7c0-2 4-2 4 0 0 1.5-2 1-2 3M12 12h.01 '+lakeWaterline,
  lakeProcess:'M6 6c2-2 4 2 6 0s4 2 6 0M6 11c2-2 4 2 6 0s4 2 6 0 '+lakeWaterline,
 } as const;
-export type GlyphName = keyof typeof icons | keyof typeof lakeIcons | keyof typeof lakeNavigationIcons | "grafana";
+export type GlyphName = keyof typeof icons | keyof typeof lakeIcons | keyof typeof lakeNavigationIcons | "grafana" | "reasoningLevel";
 export const sessionIcons = [{id:"chat",label:"对话"},{id:"document",label:"文档"},{id:"terminal",label:"终端"},{id:"server",label:"服务器"},{id:"database",label:"数据库"},{id:"network",label:"网络"},{id:"code",label:"代码"},{id:"chart",label:"图表"},{id:"bug",label:"问题"},{id:"shield",label:"安全"},{id:"book",label:"手册"},{id:"box",label:"服务"}] as const;
 export function Glyph({name,size=18,className="",filled=false}:{name:string;size?:number;className?:string;filled?:boolean}) {
  if(name==="grafana")return <svg width={size} height={size} viewBox="0 0 24 24" className={className} data-glyph={name} aria-hidden="true">
   <image href="/resource-icons/grafana.svg" width={24} height={24}/>
+ </svg>;
+ if(name==="reasoningLevel")return <svg width={size} height={size} viewBox="0 0 14 14" fill="currentColor" className={className} data-glyph={name} aria-hidden="true">
+  <rect x="1.5" y="8" width="2.5" height="4.5" rx="1"/>
+  <rect x="5.75" y="5" width="2.5" height="7.5" rx="1"/>
+  <rect x="10" y="2" width="2.5" height="10.5" rx="1"/>
  </svg>;
  const navigationIcon=lakeNavigationIcons[name as keyof typeof lakeNavigationIcons];
  const solid=filled?navigationIcon?.solid:undefined;

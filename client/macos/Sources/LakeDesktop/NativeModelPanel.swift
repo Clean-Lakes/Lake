@@ -1,14 +1,15 @@
 import AppKit
+import QuartzCore
 import WebKit
 import LakeDesktopCore
 
 @MainActor protocol ModelPanelHosting: AnyObject {
     func show(_ state: [String: Any]) -> Bool
-    func close(notify: Bool, restoreFocus: Bool)
+    func close(notify: Bool, restoreFocus: Bool, animated: Bool)
 }
 
 @MainActor extension ModelPanelHosting {
-    func close(notify: Bool) { close(notify: notify, restoreFocus: false) }
+    func close(notify: Bool) { close(notify: notify, restoreFocus: false, animated: false) }
 }
 
 // Older SDKs keep the web fallback; Liquid Glass requires the macOS 26 SDK.
@@ -186,6 +187,9 @@ private final class TransparentPanelWebView: WKWebView {
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var deactivateObserver: NSObjectProtocol?
+    private let revealMask = CAShapeLayer()
+    private var revealClock: WindowDisplayClock?
+    private var revealProgress: CGFloat = 1
 
     init(parent: NSWindow, webView: WKWebView, origin: URL) {
         self.parent = parent
@@ -193,7 +197,7 @@ private final class TransparentPanelWebView: WKWebView {
         self.origin = origin
         let initialFrame = NSRect(x: 0, y: 0, width: 276, height: 220)
         panel = ModelPanelWindow(contentRect: initialFrame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        let configuration = WKWebViewConfiguration()
+        let configuration = makeWorkbenchWebConfiguration()
         configuration.websiteDataStore = webView.configuration.websiteDataStore
         configuration.userContentController.addUserScript(Self.bridge(role: "panel"))
         content = TransparentPanelWebView(frame: initialFrame, configuration: configuration)
@@ -265,16 +269,22 @@ private final class TransparentPanelWebView: WKWebView {
         let frame = ModelPanelGeometry.frame(anchor: onScreen, visible: screen.visibleFrame, height: height)
         if panel.frame != frame {
             panel.setFrame(frame, display: true)
+            updateReveal(revealProgress)
             panel.invalidateShadow()
         }
     }
 
     private func present() {
         guard wantsOpen, let parent, parent.isVisible, !parent.isMiniaturized else { return }
-        if !panel.isVisible {
-            parent.addChildWindow(panel, ordered: .above)
+        if localMonitor == nil {
+            if !panel.isVisible {
+                updateReveal(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : 0)
+                parent.addChildWindow(panel, ordered: .above)
+            }
+            panel.ignoresMouseEvents = false
             panel.makeKeyAndOrderFront(nil)
             panel.makeFirstResponder(content)
+            animateReveal(to: 1)
             localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
                 guard let self else { return event }
                 if let providerList = self.providerList {
@@ -285,11 +295,11 @@ private final class TransparentPanelWebView: WKWebView {
                 }
                 if event.type == .leftMouseDown && event.window === self.parent && self.anchorOnScreen.contains(NSEvent.mouseLocation) {
                     // Consume the trigger click: otherwise the web click can reopen the panel after this close.
-                    self.close(notify: true, restoreFocus: true)
+                    self.close(notify: true, restoreFocus: true, animated: true)
                     return nil
                 }
-                if event.type == .keyDown && event.keyCode == 53 { self.close(notify: true, restoreFocus: true); return nil }
-                if event.type != .keyDown && event.window !== self.panel { self.close(notify: true) }
+                if event.type == .keyDown && event.keyCode == 53 { self.close(notify: true, restoreFocus: true, animated: true); return nil }
+                if event.type != .keyDown && event.window !== self.panel { self.close(notify: true, restoreFocus: false, animated: true) }
                 return event
             }
             globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in self?.close(notify: true) }
@@ -299,15 +309,82 @@ private final class TransparentPanelWebView: WKWebView {
         }
     }
 
-    func close(notify: Bool, restoreFocus: Bool = false) {
+    // Mask the native material and content together. The WKWebView keeps its
+    // final frame, so a reveal does not reflow the list or move its scroll position.
+    private func updateReveal(_ progress: CGFloat) {
+        revealProgress = progress
+        guard let surface = panel.contentView?.layer else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        if progress >= 1 {
+            surface.mask = nil
+            return
+        }
+        let bounds = surface.bounds
+        var rect = ModelPanelGeometry.revealBounds(panel: panel.frame, anchor: anchorOnScreen, progress: progress)
+        if surface.isGeometryFlipped { rect.origin.y = bounds.height - rect.maxY }
+        revealMask.frame = bounds
+        revealMask.path = CGPath(roundedRect: rect, cornerWidth: min(18, rect.width / 2),
+                                 cornerHeight: min(18, rect.height / 2), transform: nil)
+        surface.mask = revealMask
+    }
+
+    private func animateReveal(to target: CGFloat, completion: (() -> Void)? = nil) {
+        revealClock?.invalidate()
+        revealClock = nil
+        let from = revealProgress
+        guard from != target, panel.isVisible, let parent, parent.occlusionState.contains(.visible),
+              !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            updateReveal(target)
+            completion?()
+            return
+        }
+        let started = CACurrentMediaTime()
+        let duration = target == 1 ? 0.19 : 0.13
+        let clock = WindowDisplayClock(window: parent) { [weak self] timestamp in
+            guard let self else { return }
+            let elapsed = min(1, max(0, (timestamp - started) / duration))
+            let remaining = 1 - elapsed
+            let eased = target == 1 ? 1 - remaining * remaining * remaining : elapsed * elapsed
+            self.updateReveal(from + (target - from) * eased)
+            if elapsed >= 1 {
+                self.revealClock?.invalidate()
+                self.revealClock = nil
+                self.panel.invalidateShadow()
+                completion?()
+            }
+        }
+        revealClock = clock
+        if !clock.start() {
+            revealClock = nil
+            updateReveal(target)
+            completion?()
+        }
+    }
+
+    private func orderOutPanel() {
+        revealClock?.invalidate()
+        revealClock = nil
+        parent?.removeChildWindow(panel)
+        panel.orderOut(nil)
+        updateReveal(1)
+    }
+
+    func close(notify: Bool, restoreFocus: Bool, animated: Bool) {
         providerList?.close(restoringFocus: false)
         let wasOpen = wantsOpen
         wantsOpen = false
-        parent?.removeChildWindow(panel)
-        panel.orderOut(nil)
         if let localMonitor { NSEvent.removeMonitor(localMonitor); self.localMonitor = nil }
         if let globalMonitor { NSEvent.removeMonitor(globalMonitor); self.globalMonitor = nil }
         if let deactivateObserver { NotificationCenter.default.removeObserver(deactivateObserver); self.deactivateObserver = nil }
+        if animated && wasOpen && panel.isVisible {
+            panel.ignoresMouseEvents = true
+            if NSApp.isActive && panel.isKeyWindow { parent?.makeKey() }
+            animateReveal(to: 0) { [weak self] in self?.orderOutPanel() }
+        } else if !animated {
+            orderOutPanel()
+        }
         // Retain the content so a pending reasoning save can finish and release the main UI's busy state.
         if notify && wasOpen, let id = state?["id"] as? String { relay(["id": id, "kind": "close", "restoreFocus": restoreFocus]) }
     }
@@ -358,7 +435,7 @@ private final class TransparentPanelWebView: WKWebView {
             else if kind == "settings", wantsOpen { relay(["id": state!["id"]!, "kind": kind]) }
             else if kind == "select", wantsOpen, let value = event["value"] as? String, value.count <= 4096 { relay(["id": state!["id"]!, "kind": kind, "value": value]) }
             else { replyHandler(nil, "不可用的面板事件"); return }
-        case "close": close(notify: true, restoreFocus: true)
+        case "close": close(notify: true, restoreFocus: true, animated: true)
         default: replyHandler(nil, "未知的面板操作"); return
         }
         replyHandler(true, nil)
