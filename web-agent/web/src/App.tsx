@@ -2125,7 +2125,7 @@ function AppContent() {
             aria-busy={stoppingTurn}
             disabled={stoppingTurn || !sessionConnected}
             onClick={event => void stopCurrentTurn(event.currentTarget)}
-          ><Glyph name="stop" size={11}/><span>{stopPresentation.label}</span></button>}
+          ><Glyph name="stop" size={11}/></button>}
           {composerShowsSend && <button
             className="send-button"
             type="submit"

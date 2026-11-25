@@ -433,22 +433,11 @@ a { color: inherit; }
 .composer-input .send-button > .lucide-arrow-up { stroke-width: 2.25; }
 .composer-input .send-button.stop-button {
   --composer-action-background: var(--surface-hover);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: auto;
-  min-width: 30px;
-  padding: 0 8px;
+  padding: 0;
   border-radius: var(--radius-composer-action);
-  background: var(--composer-action-background);
   color: var(--foreground);
-  font: inherit;
-  font-weight: var(--font-weight-normal);
-  line-height: 1;
-  white-space: nowrap;
 }
-.composer-input .send-button.stop-button > svg { flex: none; fill: currentColor; stroke: none; }
+.composer-input .send-button.stop-button > svg { fill: currentColor; stroke: none; }
 .composer-input .send-button.stop-button:hover:not(:disabled) { --composer-action-background: var(--surface-selected); }
 .composer-input .send-button.stop-button:disabled { color: var(--text-disabled); }
 .resource-detail { flex: 0 0 auto; margin: 0 auto; padding: 27px 0 70px; width: min(960px, calc(100% - 64px)); }
@@ -1229,7 +1218,6 @@ input[type="checkbox"]{ accent-color: var(--primary); }
  .composer-foot .ai-context-trigger { padding-inline:3px; }
 }
 @container lake-composer (max-width: 480px) {
- .composer-input .send-button.stop-button { gap:4px; padding-inline:7px; }
  .composer-foot .composer-send-actions { gap:4px; }
  .composer-send-actions:has(.stop-button) .composer-send-feedback {
   position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%);
@@ -1237,7 +1225,6 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 }
 @container lake-composer (max-width: 420px) {
  .composer-input { --composer-inline-inset:8px; }
- .composer-input .send-button.stop-button { font-size:11px; padding-inline:4px; }
  .composer-foot .composer-model-select.app-select > .app-select-trigger { padding-inline:4px; }
  .composer-foot .composer-model-name { max-width:74px; }
  .composer-foot .composer-model-effort-label { display:none; }
