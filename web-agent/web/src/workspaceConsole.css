@@ -98,7 +98,6 @@
   overflow:auto;
   overscroll-behavior:contain;
   scrollbar-width:thin;
-  scrollbar-color:var(--border-strong) transparent;
   padding:0 8px 12px;
 }
 .workspace-console-group { display:grid; gap:4px; }

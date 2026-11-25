@@ -8,7 +8,6 @@
 .model-settings-page :where(.model-conversation,.memory-settings,.provider-list,.model-settings-body,.gateway-settings,
  .extension-settings,.extension-list,.extension-detail,.mcp-content) {
  scrollbar-width: thin;
- scrollbar-color: var(--border-strong) transparent;
 }
 /* Every rounded setting surface uses the same curve, scaled to its role. */
 .model-settings-page :is(input:not([type="checkbox"]),textarea,.button,.icon-button,.provider-add,.provider-item,.provider-avatar,.provider-discovery-list,.provider-preset-mark,.provider-context,.provider-output-control,.app-select-trigger,.app-select-popup,.app-select-option) { corner-shape: var(--corner-window); }

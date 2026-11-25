@@ -171,14 +171,9 @@
 .workspace-page-layout > .workspace-setting-section { flex-shrink:0; }
 .workspace-page-layout {
   scrollbar-width:thin;
-  scrollbar-color:var(--border-strong) transparent;
 }
 @supports not (scrollbar-color: gray transparent) {
   .workspace-page-layout::-webkit-scrollbar { width:5px; }
-  .workspace-page-layout::-webkit-scrollbar-thumb {
-    border-radius:3px;
-    background:var(--border-strong);
-  }
 }
 .workspace-project-facts {
   display:flex;
