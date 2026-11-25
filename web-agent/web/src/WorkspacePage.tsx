@@ -11,10 +11,7 @@ export function WorkspacePageHeader({id, title, actions}: {
   actions?: ReactNode;
 }) {
   return <header className="workspace-page-header">
-    <div className="workspace-console-breadcrumb">
-      <span aria-hidden="true">控制台</span><span aria-hidden="true">/</span>
-      <h1 id={id} title={title}>{title}</h1>
-    </div>
+    <h1 id={id} className="workspace-page-title" title={title}>{title}</h1>
     {actions && <div className="workspace-page-header-actions">{actions}</div>}
   </header>;
 }
