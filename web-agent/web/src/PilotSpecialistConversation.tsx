@@ -107,7 +107,7 @@ function PilotSpecialistReply({row,onSpecialist,onInspectSpecialist,connected,on
 }
 
 function PilotReplyProse({text,active,animateInitial,cursorAvatar}:{text:string;active:boolean;animateInitial?:boolean;cursorAvatar?:LakeAvatarName}){
- return <div className="ai-card ai-message"><AssistantMarkdown reveal={active} animateInitial={animateInitial} cursorAvatar={cursorAvatar}>{text}</AssistantMarkdown></div>;
+ return <div className="ai-card ai-message"><AssistantMarkdown reveal={active} animateInitial={animateInitial} cursorAvatar={cursorAvatar} waitForUpdate={!!cursorAvatar}>{text}</AssistantMarkdown></div>;
 }
 
 /** Public reply presentation is separate from the exact-worker live subscription. */
@@ -150,6 +150,9 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
  const label=available?(updating?(row.continuity==='terminal'?row.activity.label:interruptionLabel??row.activity.label):snapshotLabel??row.activity.label):'进度暂未更新，正在重连';
  const waitingLabel=status?.phase==='waiting'?status.state
   :['waiting_approval','waiting_input','waiting_external'].includes(row.activity.phase)?row.activity.label:undefined;
+ const expectingUpdate=awaitingReport?row.continuity==='terminal'||!waitingLabel
+  :working&&row.worker.task.state==='running'&&row.worker.assignmentState!=='stopped'&&!waitingLabel;
+ const cursorAvatar=!report&&available&&visible&&expectingUpdate?appearance.icon:undefined;
  const inlineWait=text&&available&&!report&&!awaitingReport&&!updating?waitingLabel:undefined;
  const planState=projected?.card?.type==='plan_reference'?(projected.card.data as {state:'saved'|'writing'|'incomplete'}).state:undefined;
  const contentState:PilotReplyContentState={
@@ -162,7 +165,7 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
   <ReplyIdentity identity={{name:'Pilot',pilot:true}} author={report?.author??row.author} authorMotion={moving?'working':'still'} nameMotion={moving&&visible} onSpecialist={onSpecialist}/>
   {taskLabel&&<small className="pilot-specialist-task-label">{taskLabel}</small>}
   <PilotReplyContent state={contentState} onPresented={report?reportPresented:undefined} active={(moving||!!report&&!['failed','cancelled'].includes(row.worker.task.state))&&available&&visible}>
-   {planState?<PlanReference state={planState}/>:text?<PilotReplyProse text={text} active={working&&visible&&!awaitingReport} animateInitial={livePacket} cursorAvatar={working?appearance.icon:undefined}/>:report||awaitingReport?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
+   {planState?<PlanReference state={planState}/>:text?<PilotReplyProse text={text} active={working&&visible&&!awaitingReport} animateInitial={livePacket} cursorAvatar={cursorAvatar}/>:report||awaitingReport?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
    {report&&<MessageAttachments message={report} sessionId={report.sessionId}/>}
   </PilotReplyContent>
   <SpecialistProcessLink author={report?.author??row.author} reportId={report?.id} onInspect={onInspectSpecialist} active={moving&&visible} liveStatus={inlineWait}/>

@@ -43,8 +43,13 @@ test('successful completion before a report keeps prose without an extra ending 
   assert.equal(retained.continuity,'terminal');assert.equal(retained.activity.label,label);
   const rendered=html(retained,running),plain=rendered.replace(/<[^>]*>/g,'');
   assert.match(plain,/这是真实公开进度/);
-  if(state==='completed')assert.doesNotMatch(plain,/执行结束|回复结束|接收结果/);
-  else assert.ok(plain.includes(label));
+  if(state==='completed'){
+   assert.doesNotMatch(plain,/执行结束|回复结束|接收结果/);
+   assert.match(rendered,/class="specialist-reply-cursor"/);
+  }else{
+   assert.ok(plain.includes(label));
+   assert.doesNotMatch(rendered,/class="specialist-reply-cursor"/);
+  }
   assert.doesNotMatch(rendered,/data-live-(?:motion|glow)="active"|status-text--active|data-motion="working"/);
  }
 });

@@ -1,4 +1,4 @@
-import {memo,useLayoutEffect,useRef,type CSSProperties} from 'react';
+import {createContext,memo,useContext,useLayoutEffect,useRef,type CSSProperties} from 'react';
 import {avatarPaintStyle,lakeAvatarArtwork,type AvatarPartName} from './lakeAvatarArtwork';
 import {lakeAvatarDefinition,type LakeAvatarFamily,type LakeAvatarName} from './lakeAvatarCatalog';
 import {lastGrapheme} from './textReveal';
@@ -56,10 +56,14 @@ export function specialistInterimText(text: string) {
   return text.replace(/(?:。|(?<![.\d])\.)(?=\s*$)/u, '');
 }
 
+export const SpecialistReplyWaiting = createContext(false);
+
 export const SpecialistReplyCursor = memo(function SpecialistReplyCursor({avatar}: {avatar: LakeAvatarName}) {
   const visible = usePageVisible();
+  const waiting = useContext(SpecialistReplyWaiting);
   let mark;
-  switch (avatar) {
+  if (waiting) mark = <span className="specialist-cursor-waiting"><i/><i/><i/></span>;
+  else switch (avatar) {
     case 'rabbit':
       mark = <span className="specialist-cursor-rabbit">
         <span className="specialist-cursor-ear"/><span className="specialist-cursor-ear"/>

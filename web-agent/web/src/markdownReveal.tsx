@@ -1,10 +1,10 @@
-import {createContext,useContext,useLayoutEffect,useMemo,useRef,type ReactNode} from 'react';
+import {createContext,useContext,useEffect,useLayoutEffect,useMemo,useRef,useState,type ReactNode} from 'react';
 import type {ExtraProps} from 'react-markdown';
 import {isLakeAvatarName,type LakeAvatarName} from './lakeAvatarCatalog';
-import {SpecialistReplyCursor,SpecialistReplyCursorTail} from './SpecialistReplyCursor';
+import {SpecialistReplyCursor,SpecialistReplyCursorTail,SpecialistReplyWaiting} from './SpecialistReplyCursor';
 import {useSmoothText} from './useSmoothText';
 
-export type MarkdownRevealOptions = {active: boolean; animateInitial?: boolean; finishPending?: boolean};
+export type MarkdownRevealOptions = {active: boolean; animateInitial?: boolean; finishPending?: boolean; waitForUpdate?: boolean};
 
 type ProseNode = {
   type: string;
@@ -79,15 +79,26 @@ export function remarkSpecialistReplyCursor(avatar: LakeAvatarName) {
   };
 }
 
-export function MarkdownReveal({source,active,animateInitial,finishPending,render}: MarkdownRevealOptions & {source: string; render: (paintedThrough?:number)=>ReactNode}) {
+export function MarkdownReveal({source,active,animateInitial,finishPending,waitForUpdate,render}: MarkdownRevealOptions & {source: string; render: (paintedThrough?:number)=>ReactNode}) {
   const visible = useSmoothText(source,active,{animateInitial,finishPending});
+  const caughtUp = !!waitForUpdate && visible === source;
+  const waitTarget = useMemo(() => caughtUp ? {source} : undefined,[caughtUp,source]);
+  const [waited,setWaited] = useState<typeof waitTarget>();
+  useEffect(() => {
+    if (!waitTarget) return;
+    // Let short gaps pass without swapping the cursor while text is still being painted.
+    const timer = window.setTimeout(() => setWaited(waitTarget),550);
+    return () => window.clearTimeout(timer);
+  }, [waitTarget]);
   // Completion with the same source leaves the parsed text nodes mounted,
   // even if references change and the Markdown needs to be parsed again.
   const packet=useRef({source,paintedThrough:visible.length});
   const paintedThrough=packet.current.source===source?packet.current.paintedThrough:visible.length;
   useLayoutEffect(()=>{packet.current={source,paintedThrough};},[source,paintedThrough]);
   const prose=useMemo(()=>render(paintedThrough<source.length?paintedThrough:undefined),[source,render,paintedThrough]);
-  return <VisibleOffset.Provider value={visible.length}>{prose}</VisibleOffset.Provider>;
+  return <VisibleOffset.Provider value={visible.length}>
+    <SpecialistReplyWaiting.Provider value={!!waitTarget&&waited===waitTarget}>{prose}</SpecialistReplyWaiting.Provider>
+  </VisibleOffset.Provider>;
 }
 
 function cursorAvatar(node: ExtraProps['node']) {
