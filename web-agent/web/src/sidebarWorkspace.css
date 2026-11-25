@@ -136,7 +136,8 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar-scroll-area > .project-scroll { min-width:0; width:100%; scrollbar-width:none; }
 .sidebar-scroll-area > .project-scroll::-webkit-scrollbar { display:none; }
 .sidebar-scroll-thumb { position:absolute; top:0; right:0; width:10px; padding:0; border:0; border-radius:5px; background:transparent; touch-action:none; cursor:default; z-index:2; opacity:0; pointer-events:none; transition:opacity 160ms ease; }
-.sidebar-scroll-thumb:is(.is-visible,:hover,:focus-visible) { opacity:1; pointer-events:auto; }
+.project-scroll[data-scrollbar-activity="scrolling"] + .sidebar-scroll-thumb,
+.sidebar-scroll-thumb:is(:active,:focus-visible) { opacity:1; pointer-events:auto; }
 .sidebar-scroll-thumb::before { content:""; position:absolute; top:0; bottom:0; left:4px; width:3px; border-radius:3px; background:var(--border-strong); }
 .sidebar-scroll-thumb:hover::before, .sidebar-scroll-thumb:active::before { background:var(--text-muted); }
 .sidebar-scroll-thumb:focus-visible { outline:1px solid var(--focus-outline); outline-offset:1px; }

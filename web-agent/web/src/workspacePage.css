@@ -127,14 +127,9 @@
 .workspace-page-layout > :is(.workspace-project-directory,.workspace-current-project) { flex-shrink:0; }
 :is(.workspace-page-layout,.workspace-project-sheet,.workspace-current-project) {
   scrollbar-width:thin;
-  scrollbar-color:var(--border-strong) transparent;
 }
 @supports not (scrollbar-color: gray transparent) {
   :is(.workspace-page-layout,.workspace-project-sheet,.workspace-current-project)::-webkit-scrollbar { width:5px; }
-  :is(.workspace-page-layout,.workspace-project-sheet,.workspace-current-project)::-webkit-scrollbar-thumb {
-    border-radius:3px;
-    background:var(--border-strong);
-  }
 }
 .workspace-current-project {
   min-width:0;
