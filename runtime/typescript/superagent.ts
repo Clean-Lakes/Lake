@@ -3245,7 +3245,9 @@ export class LakeSuperagent implements AgentHost {
   // no tool call from outside can grant or bypass an approval.
 
   gatewaySpecialists(projectId?: string): { specialists: GatewaySpecialistRef[] } {
-    const roles = this.store.list<Role>("superRoles").filter(role => !role.deletedAt && (!projectId || role.projectId === projectId));
+    const active = new Set(this.store.activeProjects().map(project => project.id));
+    const roles = this.store.list<Role>("superRoles").filter(role =>
+      !role.deletedAt && active.has(role.projectId) && (!projectId || role.projectId === projectId));
     return { specialists: roles.map(role => {
       const channel = this.ensureChannel(role);
       return { roleId: role.id, roleKey: role.roleKey, name: role.name, duties: role.duties, projectId: role.projectId,

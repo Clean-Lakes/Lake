@@ -953,7 +953,7 @@ export async function startLakeServer(options: ServerOptions) {
       } else if (path[1] === "settings" && path[2] === "gateway") {
         if (path[3] === 'connections') {
           if (path.length === 4 && method === 'GET') {
-            const projects = store.catalog().projects.map(({id, name}) => ({id, name}));
+            const projects = store.activeProjects().map(({id, name}) => ({id, name}));
             result = {
               connections: gateway!.connections().map(connection => ({...connection, lastReceivedAt: superagent!.lastGatewayMessageAt(connection.id)})),
               command: gatewayCommand(), projects,

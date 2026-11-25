@@ -183,7 +183,8 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
       <nav className="workspace-console-nav" aria-label="控制台分类">
         <label className="workspace-console-search">
           <Glyph name="search" size={17}/>
-          <input ref={search} type="search" aria-label="搜索控制台" placeholder="搜索" autoComplete="off" value={query}
+          <input ref={search} type="search" aria-label="搜索控制台" aria-keyshortcuts="/" title="搜索控制台（/）"
+            placeholder="搜索" autoComplete="off" value={query}
             onChange={event => setQuery(event.target.value)}
             onKeyDown={event => {
               if (event.nativeEvent.isComposing || event.keyCode === 229) return;
@@ -200,7 +201,6 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
                 choose(first);
               }
             }}/>
-          <kbd aria-hidden="true">/</kbd>
         </label>
         <div ref={tabs} className="workspace-console-categories" role="tablist" aria-label="分类" aria-orientation="vertical"
           onKeyDown={event => navigateSettingsTabs(event, event.currentTarget)}>
