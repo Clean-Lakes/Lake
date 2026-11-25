@@ -55,7 +55,8 @@ export function codexStartupArgs(home:string,mcpIds:string[]=[],hooks:Record<str
   // Codex's -c parser splits dotted paths literally, so quote IDs inside an
   // inline TOML table (IDs may themselves contain dots or quotes).
   config.mcp_servers=Object.fromEntries(mcpIds.map(name=>[name,{enabled:false}]));
-  config.hooks=Object.fromEntries(Object.keys(hooks).map(name=>[name,[]]));
+  // hooks.state is Codex's per-hook trust map. Only event lists take an empty array.
+  config.hooks=Object.fromEntries(Object.keys(hooks).filter(name=>name!=='state').map(name=>[name,[]]));
   return Object.entries(config).flatMap(([key,value])=>['-c',key+'='+tomlValue(value)]);
 }
 export function tomlConfig(config:Record<string,unknown>){

@@ -9,6 +9,7 @@ import { privateFile, privatePath } from './private';
 import { codexCatalogRevision, codexModelCatalog, codexStartupArgs, isCodexModelId, isCodexReasoningEffort, tomlValue } from './codex-profile';
 import {CodexLocalSource,codexHomePresent} from './codex-local';
 import {discoverCodexRuntime,validateCodexNode} from './runtime-paths';
+import {codexConnectionVersion} from './types';
 
 function projectOverride(input:unknown,current:string|undefined,isValid:(value:unknown)=>value is string,invalid:string){
   if(input===undefined)return current;
@@ -84,9 +85,8 @@ export class ExternalAgentRegistry {
   }
   probe(projectId:string,agent:ExternalAgentId) {
     const probe = this.store.get<CodexConnectionProbe>('acpProbes',this.key(projectId,agent));
-    // Old failures could describe the CLI's unrelated default model. Recheck
-    // them once using the connection-only probe.
-    return probe?.ready === false && probe.connectionVersion !== 1 ? undefined : probe;
+    // Retry older failures once with the corrected startup configuration.
+    return probe?.ready === false && probe.connectionVersion !== codexConnectionVersion ? undefined : probe;
   }
   async save(projectId: string, agent: unknown, input: Record<string, unknown>) {
     const id=externalAgentId(agent), key=this.key(projectId,id), previous=this.mutations.get(key)??Promise.resolve();

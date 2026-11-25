@@ -1,6 +1,6 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {mkdtemp,mkdir,writeFile,readFile,cp,access,rm}=require('node:fs/promises');
+const {mkdtemp,mkdir,writeFile,appendFile,readFile,cp,access,rm}=require('node:fs/promises');
 const {tmpdir}=require('node:os');
 const {join}=require('node:path');
 const {createServer}=require('node:http');
@@ -41,6 +41,7 @@ async function localCodexProvider(registry,url,model,listedModel){
  const source=registry.local.home;await mkdir(source,{recursive:true});
  const trap=join(source,'MCP_TRAP_EXECUTED'),notify=join(source,'NOTIFY_TRAP_EXECUTED'),hook=join(source,'HOOK_TRAP_EXECUTED'),command=[process.execPath,'-e',"require('fs').writeFileSync("+JSON.stringify(trap)+",'unexpected')"];
  await writeFile(join(source,'config.toml'),'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "max"\nmodel_provider = "fixture"\nnotify = '+JSON.stringify([process.execPath,'-e',"require('fs').writeFileSync("+JSON.stringify(notify)+",'unexpected')"])+ '\n[model_providers.fixture]\nname = "Isolated Responses fixture"\nbase_url = "'+url+'"\nwire_api = "responses"\nrequires_openai_auth = false\n[mcp_servers.inherited_trap]\ncommand = '+JSON.stringify(process.execPath)+'\nargs = '+JSON.stringify(command.slice(1))+'\nenabled = true\n[hooks]\nSessionStart = [{hooks = [{type = "command", command = "touch '+hook+'"}]}]\n',{mode:0o600});
+ await appendFile(join(source,'config.toml'),'\n[hooks.state.fixture]\nenabled = true\n');
  if(model!==undefined){const path=join(source,'config.toml');await writeFile(path,(await readFile(path,'utf8')).replace('model = "gpt-6.1-sol"','model = '+JSON.stringify(model)),{mode:0o600});}
  if(listedModel){
   const catalog=join(source,'fixture-models.json'),config=join(source,'config.toml');
@@ -226,11 +227,12 @@ for(const pending of [false,true])test(pending?'real Codex submits partial findi
  const unchanged=await localCodexProvider(registry,url,'gpt-6.2-astra');
  await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.env.LAKE_CODEX_TEST_NODE??process.execPath});
  const probeKey=project.id+':codex';
- app.store.put('acpProbes',probeKey,{revision:1,authentication:'codex-local',ready:false,message:'本机 Codex 模型尚未通过当前工具兼容验证：gpt-6.2-astra'});
+ app.store.put('acpProbes',probeKey,{revision:1,authentication:'codex-local',ready:false,
+  ...(pending?{connectionVersion:1,message:'智能体进程已退出'}:{message:'本机 Codex 模型尚未通过当前工具兼容验证：gpt-6.2-astra'})});
  const {agents:[status]}=await api(path+'/external-agents');
  assert.equal(status.assignmentReady,true);assert.equal(status.model,'gpt-6.2-astra');
  const probe=app.store.get('acpProbes',probeKey);
- assert.equal(probe.connectionVersion,1);assert.equal(probe.ready,true);
+ assert.equal(probe.connectionVersion,2);assert.equal(probe.ready,true);
  assert.equal(status.defaultTaskModel,'gpt-6.2-astra');
  assert.equal(requests.length,0,'connection testing must never start model inference');
  const body={text:'请读取 CODEX_ASSIGNED_EVIDENCE.txt 并报告实际内容。',assignment:{requestId:'codex-assignment-0001',roleRevision:2,execution:{kind:'acp',agent:'codex',revision:1}}};

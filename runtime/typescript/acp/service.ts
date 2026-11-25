@@ -14,7 +14,7 @@ import {privatePath} from './private';
 import {codexConfig,tomlValue} from './codex-profile';
 import {ExternalPublicText} from './public-text';
 import type { CodexConnectionProbe,CodexModelOption,ExternalActor,ExternalAgentProfile,ExternalEvent,ExternalResult,ExternalRun } from './types';
-import {maxExternalConversationRuns} from './types';
+import {codexConnectionVersion,maxExternalConversationRuns} from './types';
 
 function ownLauncher(flag:string,args:string[]=[]){return {executable:process.execPath,args:isSea()?[flag,...args]:[__filename,flag,...args]};}
 type LiveRun={process?:AgentConnection;controller:AbortController;scopeHash:string;conversation:boolean;guard?:()=>void};
@@ -55,13 +55,13 @@ export class LakeExternalAgents {
       const capabilities=await transport.initialize(signal);
       if(this.registry.get(projectId,profile.id).revision!==profile.revision)throw new Error('本机 Codex 配置或账号已变化，请重新连接');
       const message=launch.observed.authenticated?'已连接本机 Codex，复用已有登录与配置':'本机 Codex 尚未登录，请先在 Codex 中完成登录后重新连接';
-      this.store.put<CodexConnectionProbe>('acpProbes',projectId+':'+profile.id,{connectionVersion:1,revision:profile.revision,authentication:'codex-local',ready:true,
+      this.store.put<CodexConnectionProbe>('acpProbes',projectId+':'+profile.id,{connectionVersion:codexConnectionVersion,revision:profile.revision,authentication:'codex-local',ready:true,
         ...launch.observed,localModel:launch.localModel,models:launch.models,capabilities,message});
       return {ok:true,capabilities};
     }catch(error){
       const message=this.redact(error instanceof Error?error.message:'Codex 连接失败');
       if(this.registry.get(projectId,profile.id).revision===profile.revision)
-        this.store.put<CodexConnectionProbe>('acpProbes',projectId+':'+profile.id,{connectionVersion:1,revision:profile.revision,authentication:'codex-local',ready:false,message});
+        this.store.put<CodexConnectionProbe>('acpProbes',projectId+':'+profile.id,{connectionVersion:codexConnectionVersion,revision:profile.revision,authentication:'codex-local',ready:false,message});
       throw new HttpError(409,message);
     }
     finally{await transport?.close();}
