@@ -78,8 +78,6 @@ test('header opens latest execution without restoring the last historical turn o
  const history={sessionId:snapshot.session.id,turnId:'old-turn',taskId:'old-task',attemptId:'old-attempt',tab:'execution' as const};
  assert.equal(resolvedInspectorSelection(snapshot,history),history,'manual history stays pinned');
  assert.deepEqual(resolvedInspectorSelection(snapshot,{...history,followLatest:true}),current,'follow latest drops saved history IDs');
- const overview={...current,view:'pilot-activity' as const};
- assert.equal(resolvedInspectorSelection(snapshot,overview),overview,'Pilot overview continues to own the current-turn host');
  assert.equal(resolvedInspectorSelection(snapshot,{...history,sessionId:'other-session'}),null);
 });
 test('a new ordinary user turn cannot display an earlier Pilot task while its snapshot is catching up',()=>{

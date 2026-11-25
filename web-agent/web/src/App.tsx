@@ -959,25 +959,6 @@ function AppContent() {
     return()=>{controller.abort();window.clearInterval(timer);};
   },[sessionId,roleInspection?.session.id,roleInspection?.superagent?.task.taskId,inspector.selection?.sessionId]);
   const inspectorOpen=!!inspectedSnapshot&&inspector.selection?.sessionId===inspectedSnapshot.session.id&&!selectedResource&&!isPlansPage;
-  const headerPilot = !selectedResource && !isPlansPage ? pilotIslandModel(activeSnapshot) : null;
-  const headerPilotMode: 'auto'|'manual'|undefined = !selectedResource&&!isPlansPage&&activeSnapshot?.sre?.pilot?.enabled&&(!activeSnapshot.ai?.profile||activeSnapshot.ai.profile==='core')?(activeSnapshot.sre.pilot.autoAdvance?'auto':'manual'):undefined;
-  const inspectorAvailable=(activeSnapshot?.session.workspaceRole==='role'?roleWorkers.length>0:!!(activeSnapshot?.ai??inspectedSnapshot?.ai))&&!selectedResource&&!isPlansPage;
-  const reopenInspector=()=>{
-    if(activeSnapshot?.session.workspaceRole==='role'){
-      const worker=preferredChannelTask(roleWorkers);if(worker)void inspectRoleTask(worker.sessionId);
-      return;
-    }
-    if(!inspectedSnapshot||!inspectorAvailable)return;
-    const tab=inspector.lastSelection?.sessionId===inspectedSnapshot.session.id?inspector.lastSelection.tab:headerPilot?'plan':'execution';
-    const latest=latestInspectorSelection(activeSnapshot??inspectedSnapshot,tab);
-    if(selectedSuperPilot&&activeSnapshot&&conversationMode==='conversation'&&!latest.taskId){
-      roleInspectionRequest.current.cancel();pendingRoleInspection.current=undefined;setRoleInspection(null);
-      inspector.open({sessionId:activeSnapshot.session.id,tab:'execution',followLatest:true,view:'pilot-activity'});
-      return;
-    }
-    if(roleInspection?.session.id===sessionId){roleInspectionRequest.current.cancel();setRoleInspection(null);}
-    inspector.open(latest);
-  };
   const selectedProjectId = selectedResource?.projectId ?? selectedSession?.projectId;
   useEffect(() => {
     if (selectedProjectId) setSidebarProjectId(selectedProjectId);
@@ -1091,6 +1072,21 @@ function AppContent() {
     bootstrap?.backendRuntime==='typescript'&&!selectedResource?sessionId??undefined:undefined);
   const selectedSuperPilot=selectedSession?.workspaceRole==='router'||!!(pilotWorkspace.workspace?.active&&
     pilotWorkspace.workspace.project.projectId===selectedSession?.projectId&&pilotWorkspace.workspace.project.routerSessionId===selectedSession?.id);
+  const headerHasInspector = !selectedResource && !isPlansPage && !(selectedSuperPilot && conversationMode === "conversation");
+  const headerPilot = headerHasInspector ? pilotIslandModel(activeSnapshot) : null;
+  const headerPilotMode: 'auto'|'manual'|undefined = headerHasInspector&&activeSnapshot?.sre?.pilot?.enabled&&(!activeSnapshot.ai?.profile||activeSnapshot.ai.profile==='core')?(activeSnapshot.sre.pilot.autoAdvance?'auto':'manual'):undefined;
+  const inspectorAvailable=(activeSnapshot?.session.workspaceRole==='role'?roleWorkers.length>0:!!(activeSnapshot?.ai??inspectedSnapshot?.ai))&&headerHasInspector;
+  const reopenInspector=()=>{
+    if(activeSnapshot?.session.workspaceRole==='role'){
+      const worker=preferredChannelTask(roleWorkers);if(worker)void inspectRoleTask(worker.sessionId);
+      return;
+    }
+    if(!inspectedSnapshot||!inspectorAvailable)return;
+    const tab=inspector.lastSelection?.sessionId===inspectedSnapshot.session.id?inspector.lastSelection.tab:headerPilot?'plan':'execution';
+    const latest=latestInspectorSelection(activeSnapshot??inspectedSnapshot,tab);
+    if(roleInspection?.session.id===sessionId){roleInspectionRequest.current.cancel();setRoleInspection(null);}
+    inspector.open(latest);
+  };
   const {attachView:attachInspectorView,waitingForWindow:inspectorWaitingForWindow,nativePresence:inspectorNativePresence}=useInspectorWindow(inspectorOpen);
   const pilotTaskContinuation=selectedSuperPilot&&bootstrap?.backendRuntime==='typescript'&&canCompose;
   const pilotTaskReference=pilotTaskContinuation&&sessionId?pilotTaskReferences.get(sessionId):undefined;
