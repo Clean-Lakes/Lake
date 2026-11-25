@@ -1,5 +1,5 @@
 .task-reply-timeline { min-width:0; }
-.task-reply-timeline[data-steps] { --task-clock:8ch; --task-dot:10px; --task-gap:8px; margin-top:4px; }
+.task-reply-timeline[data-steps] { --task-clock:3.75rem; --task-dot:10px; --task-gap:8px; margin-top:4px; }
 .task-reply-timeline ol { list-style:none; padding:0; margin:0; }
 .task-reply-event,.task-reply-tail[data-report] { display:grid; grid-template-columns:var(--task-clock) var(--task-dot) minmax(0,1fr); column-gap:var(--task-gap); align-items:baseline; }
 .task-reply-event { font-size:var(--font-size-process); color:var(--text-secondary,var(--foreground)); }
@@ -16,4 +16,4 @@
 .task-reply-earlier>summary { margin-bottom:8px; color:var(--text-muted); cursor:pointer; font-size:var(--font-size-process); }
 .task-reply-timeline[data-steps] .task-reply-tail:not([data-report]) { margin-top:4px; }
 .task-reply-timeline:not(:has(.task-reply-tail[data-report]))>ol>.task-reply-event:last-child>i::after { display:none; }
-@media(max-width:600px){ .task-reply-timeline[data-steps]{ --task-clock:6.6ch; --task-gap:5px; } }
+@media(max-width:600px){ .task-reply-timeline[data-steps]{ --task-clock:3.25rem; --task-gap:5px; } }
