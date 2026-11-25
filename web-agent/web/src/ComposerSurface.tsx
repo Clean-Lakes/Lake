@@ -1,8 +1,9 @@
 import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from "react";
 import {canAnimateControls,controlMotionEase} from "./controlMotion";
+import {Glyph} from "./Icons";
 
-export function ComposerSurface({sessionId,dragging,pinnedOpen,children}:{
-  sessionId:string;dragging:boolean;pinnedOpen:boolean;children:ReactNode;
+export function ComposerSurface({sessionId,dragging,pinnedOpen,editorDisabled,children}:{
+  sessionId:string;dragging:boolean;pinnedOpen:boolean;editorDisabled:boolean;children:ReactNode;
 }) {
   const surface=useRef<HTMLDivElement>(null);
   const face=useRef<HTMLDivElement>(null);
@@ -83,6 +84,13 @@ export function ComposerSurface({sessionId,dragging,pinnedOpen,children}:{
     return()=>{resize.disconnect();tools.removeEventListener("focusin",revealTools);clearMotion();};
   },[sessionId]);
 
+  const focusEditor=()=>{
+    const editor=contents.current?.querySelector<HTMLElement>('.composer-rich-input[contenteditable="true"]');
+    if(!editor)return;
+    editor.focus({preventScroll:true});
+    setEditingSession(sessionId);
+  };
+
   return <div ref={surface} className={`composer-input composer-resizing-surface${dragging?" attachment-drop-active":""}`}
     data-composer-compact={compact||undefined} onFocusCapture={event=>{
       if(event.target.matches(".composer-rich-input"))setEditingSession(sessionId);
@@ -90,13 +98,15 @@ export function ComposerSurface({sessionId,dragging,pinnedOpen,children}:{
       const target=event.target;
       if(!compact||!(target instanceof Element)
         ||(target!==event.currentTarget&&target!==contents.current&&!target.closest(".composer-body")))return;
-      const editor=contents.current?.querySelector<HTMLElement>('.composer-rich-input[contenteditable="true"]');
-      if(editor){
-        editor.focus({preventScroll:true});
-        setEditingSession(sessionId);
-      }
+      focusEditor();
     }}>
     <div className="composer-backplate" ref={face} aria-hidden="true"/>
-    <div className="composer-resizing-content" ref={contents}>{children}</div>
+    <div className="composer-resizing-content" ref={contents}>
+      {children}
+      {compact&&<button type="button" className="composer-expand-button" aria-label="展开输入框"
+        title="展开输入框" disabled={editorDisabled} onClick={focusEditor}>
+        <span>展开</span><Glyph name="chevron" size={14}/>
+      </button>}
+    </div>
   </div>;
 }

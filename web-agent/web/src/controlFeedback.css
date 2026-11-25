@@ -26,9 +26,32 @@
 .composer-backplate { position:absolute; inset:-1px; z-index:-1; pointer-events:none; transform-origin:bottom center; }
 .composer-resizing-content { min-width:0; }
 .composer-resizing-surface[data-composer-compact] { cursor:text; }
+.composer-resizing-surface[data-composer-compact] .composer-resizing-content {
+  display:flex; align-items:center; gap:8px;
+}
+.composer-resizing-surface[data-composer-compact] .composer-body { flex:1; min-width:0; }
 .composer-resizing-surface[data-composer-compact] .composer-foot { display:none; }
 .composer-resizing-surface[data-composer-compact] .composer-rich-input[data-empty="true"]::before {
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.composer-expand-button {
+  --composer-action-background:var(--surface-hover);
+  display:inline-flex; align-items:center; justify-content:center; flex:none; gap:4px;
+  min-width:30px; height:30px; padding:0 8px; border:0;
+  background:var(--composer-action-background); color:color-mix(in srgb,var(--foreground) 68%,var(--surface));
+  font:inherit; font-size:var(--font-size-toolbar); line-height:1; white-space:nowrap;
+}
+.composer-expand-button > svg { flex:none; transform:rotate(180deg); }
+.composer-expand-button:hover:enabled { --composer-action-background:var(--surface-selected); color:var(--foreground); }
+.composer-expand-button:focus-visible { outline:2px solid var(--focus-outline); outline-offset:2px; }
+.composer-expand-button:disabled { color:var(--text-disabled); cursor:default; }
+@container lake-composer (max-width:320px) {
+  .composer-expand-button > span { display:none; }
+}
+@media (pointer:coarse) {
+  /* Enlarge the hit area inside the existing single-line frame. */
+  .composer-expand-button { min-width:44px; min-height:44px; margin-block:-7px; }
+  .composer-expand-button:focus-visible { outline-offset:-2px; }
 }
 
 .message-image-preview[data-image-moving] { overflow:visible; }
