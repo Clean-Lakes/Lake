@@ -47,6 +47,7 @@ test("startup prefers Pilot but preserves explicit task and legacy links", () =>
     {id:'role',projectId:'p',workspaceRole:'role',updatedAt:'2026-01-03'},
     {id:'worker',projectId:'p',workspaceRole:'worker',updatedAt:'2026-01-04'},
     {id:'internal',projectId:'p',workspaceRole:'conversation',updatedAt:'2026-01-05'},
+    {id:'group',projectId:'p',workspaceRole:'group',updatedAt:'2026-01-07'},
     {id:'foreign',projectId:'q',workspaceRole:'worker',updatedAt:'2026-01-06'},
   ]} as unknown as Catalog;
   const select=(sessionId:string|null,resourceId:string|null=null,view?:'plans')=>initialWorkspaceSelection(catalog,{sessionId,resourceId,view});
@@ -54,7 +55,7 @@ test("startup prefers Pilot but preserves explicit task and legacy links", () =>
   assert.equal(select('missing').route.sessionId,'pilot');
   assert.equal(select('internal').route.sessionId,'pilot');
   assert.equal(select('legacy').route.sessionId,'legacy');
-  for(const id of ['role','worker']) assert.deepEqual(select(id,null,'plans').route,{sessionId:id,resourceId:null});
+  for(const id of ['role','worker','group']) assert.deepEqual(select(id,null,'plans').route,{sessionId:id,resourceId:null});
   assert.deepEqual(select('foreign','host'),{projectId:'p',route:{sessionId:'pilot',resourceId:'host'}});
 });
 

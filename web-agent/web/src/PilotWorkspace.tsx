@@ -165,6 +165,7 @@ function useCompletionReads(workspace: SuperWorkspace | null, viewedRole: string
 
 type PilotWorkspaceProps = {
  showHeading?:boolean;
+ presentation?:'list'|'entry'|'rail';
  workspace: SuperWorkspace | null; error: string; selectedId: string | null; selectedRoleId?: string;
  activity?:ConversationAvatarActivity; pilotButton?:RefObject<HTMLButtonElement|null>;
  pilotActivity?:ConversationActivity;pilotDisabled?:boolean;
@@ -178,7 +179,7 @@ function showClippedText(event: PointerEvent<HTMLElement>) {
  else text.removeAttribute('title');
 }
 
-export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,showHeading=true}: PilotWorkspaceProps) {
+export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,showHeading=true,presentation='list'}: PilotWorkspaceProps) {
  const [context,setContext]=useState<{channel:SpecialistChannelInfo;x:number;y:number}|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null);
  const anchor=useRef<HTMLButtonElement|null>(null);
  useEffect(()=>{setContext(null);setDeleting(null);},[workspace?.project.projectId]);
@@ -186,17 +187,21 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
  const channels = workspace?.active?workspace.channels:undefined;
  const viewedRole = selectedId ? selectedRoleId ?? channels?.find(channel => channel.sessionId === selectedId)?.roleId ??
   roots.find(worker => worker.sessionId === selectedId)?.roleId : undefined;
- const readMarks = useCompletionReads(workspace, viewedRole);
+ const readMarks = useCompletionReads(presentation==='entry'?null:workspace, viewedRole);
+ const rail=presentation==='rail';
  const routerId=workspace?.active?workspace.project.routerSessionId:undefined;
  const entries = channels ? channels.map(channel => ({channel, workers: roots.filter(worker => worker.roleId === channel.roleId)})) :
   roots.map(worker => ({channel: undefined, workers: [worker]}));
- return <section className="pilot-workspace" aria-label={showHeading?'专员':undefined}>
-  {showHeading&&<div className="nav-heading"><span>专员</span><small>{entries.length+1}</small></div>}
-  <SidebarPilotEntry buttonRef={pilotButton} selected={!!routerId&&selectedId===routerId}
-   activity={routerId&&activity?.sessionId===routerId?activity.state:pilotActivity} messageRead={workspace?.active?workspace.pilotMessageRead:undefined}
-   disabled={pilotDisabled} onPilot={onPilot}/>
-  {error&&<p className="pilot-workspace-error" role="status">{error}</p>}
-  {entries.length ? entries.map(({channel, workers}) => {
+ if(rail&&!entries.length)return null;
+ return <section className={rail?'sidebar-specialist-roster':'pilot-workspace'} aria-label={rail||showHeading?'专员':undefined}>
+  {!rail&&<>
+   {showHeading&&<div className="nav-heading"><span>专员</span><small>{entries.length+1}</small></div>}
+   <SidebarPilotEntry buttonRef={pilotButton} selected={!!routerId&&selectedId===routerId}
+    activity={routerId&&activity?.sessionId===routerId?activity.state:pilotActivity} messageRead={workspace?.active?workspace.pilotMessageRead:undefined}
+    disabled={pilotDisabled} onPilot={onPilot}/>
+   {error&&<p className="pilot-workspace-error" role="status">{error}</p>}
+  </>}
+  {presentation!=='entry'&&entries.map(({channel, workers}) => {
    const aggregate=specialistTaskActivity(workers),worker = aggregate.worker, task = worker?.task;
    const name = channel?.roleName ?? worker!.roleName;
    const backend = channel ? channel.execution : worker?.execution?.backend;
@@ -218,14 +223,24 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
    const detail=aggregate.detail??(channel?.duties||'持续沟通');
    const detailStatus = detail.endsWith(status) ? undefined : status;
    const label = `${name}${backend?` · Agent 类型：${agentTypeName(backend)}`:''} · ${detail}${detailStatus?` · ${detailStatus}`:''}`;
-   return <button type="button" key={channel?.id ?? worker!.id} className={`nav-row pilot-worker-row${selected ? ' active' : ''}`}
-     aria-current={selected ? 'page' : undefined} aria-label={label}
+   return <button type="button" key={channel?.id ?? worker!.id} className={rail?'sidebar-rail-button sidebar-specialist-button':`nav-row pilot-worker-row${selected ? ' active' : ''}`}
+     aria-current={selected ? 'page' : undefined} aria-label={label} title={rail?label:undefined}
      aria-haspopup={channel?'menu':undefined}
+     aria-expanded={rail&&channel?context?.channel.id===channel.id:undefined}
      onContextMenu={event=>{event.preventDefault();event.stopPropagation();if(channel&&!disabled){anchor.current=event.currentTarget;setContext({channel,x:event.clientX,y:event.clientY});}}}
      onKeyDown={event=>{if(channel&&!disabled&&(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10')){event.preventDefault();const bounds=event.currentTarget.getBoundingClientRect();anchor.current=event.currentTarget;setContext({channel,x:bounds.left+20,y:bounds.bottom});}}}
-     onClick={event=>{greetRoleAvatar(event.currentTarget);if(channel&&onChannel)onChannel(channel);else if(worker)onWorker(worker);}}>
+     onClick={event=>{
+      greetRoleAvatar(event.currentTarget);
+      if(rail&&channel){
+       const button=event.currentTarget,bounds=button.getBoundingClientRect();
+       anchor.current=button;
+       setContext(current=>current?.channel.id===channel.id?null:{channel,x:bounds.right+6,y:bounds.top});
+      }else if(channel&&onChannel)onChannel(channel);else if(worker)onWorker(worker);
+     }}>
     <SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId} motion={preparing?'working':replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/>
-    <span className="nav-row-text">
+    {rail?<span className="sidebar-specialist-status" aria-hidden="true">
+     {needsConfirmation?<Glyph name="circleAlert" size={10}/>:activityLabel?<Glyph name="loader" size={10} className="activity-indicator"/>:showUnread?<span className="pilot-worker-unread"/>:null}
+    </span>:<span className="nav-row-text">
      <span className="pilot-worker-name">
       <strong onPointerEnter={showClippedText}>{name}</strong>
       <AgentBackendLogo backend={backend} size={12}/>
@@ -238,10 +253,13 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
        {activityLabel ? <span className="pilot-worker-running" role="img" aria-label={activityLabel}><Glyph name="loader" size={12} className="activity-indicator"/></span> : showUnread && <span className="pilot-worker-unread" role="img" aria-label="有新消息未读"/>}
       </span>
      </span>
-    </span>
+    </span>}
    </button>;
-  }) : null}
-  {context&&<NavigationMenu title={context.channel.roleName} x={context.x} y={context.y} anchor={anchor} onClose={()=>setContext(null)} actions={[{label:'删除专员',icon:'trash',danger:true,disabled:disabled||context.channel.roleRevision===undefined,run:()=>setDeleting(context.channel)}]}/>}
+  })}
+  {context&&<NavigationMenu title={context.channel.roleName} x={context.x} y={context.y} anchor={anchor} onClose={()=>setContext(null)} actions={[
+   ...(rail&&onChannel?[{label:'查看专员任务',icon:'document' as const,run:()=>onChannel(context.channel)}]:[]),
+   {label:'删除专员',icon:'trash',danger:true,disabled:disabled||context.channel.roleRevision===undefined,run:()=>setDeleting(context.channel)},
+  ]}/>}
   {deleting&&<SpecialistDelete channel={deleting} returnFocus={anchor} onClose={()=>setDeleting(null)} onDeleted={()=>{
    onDeleted?.(deleting);
    if(deleting.roleId===viewedRole){

@@ -11,6 +11,8 @@ import type {
   AvailableModels,
   AvailableModelEntry,
   Catalog,
+  ChatGroup,
+  Message,
   WorkflowCatalog,
   WorkflowInput,
   WorkflowTemplate,
@@ -123,6 +125,10 @@ export const api = {
   saveMemory: (key: string, projectId: string, data: {title: string; body: string; expectedRevision: number}, entryId?: string) => request<LayeredMemoryView>(`/api/memory/scopes/${encodeURIComponent(key)}/entries${entryId ? "/"+encodeURIComponent(entryId) : ""}?projectId=${encodeURIComponent(projectId)}`, {method: entryId ? "PUT" : "POST", body: JSON.stringify(data)}),
   forgetMemory: (key: string, projectId: string, entryId: string, expectedRevision: number) => request<LayeredMemoryView>(`/api/memory/scopes/${encodeURIComponent(key)}/entries/${encodeURIComponent(entryId)}?projectId=${encodeURIComponent(projectId)}`, {method: "DELETE", body: JSON.stringify({expectedRevision})}),
 	superWorkspace:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperWorkspace>(`/api/projects/${encodeURIComponent(project)}/superagent`,{signal}),
+  createChatGroup:(project:string,input:{title:string;roleIds:string[];requestId:string})=>
+    post<ChatGroup>(`/api/projects/${encodeURIComponent(project)}/superagent/groups`,input),
+  sendChatGroupMessage:(project:string,session:string,input:{text:string;requestId:string})=>
+    post<Message>(`/api/projects/${encodeURIComponent(project)}/superagent/groups/${encodeURIComponent(session)}/messages`,input),
   operationReview: (sessionId: string, operationId: string, signal?: AbortSignal) =>
     request<OperationReview>(`/api/sessions/${encodeURIComponent(sessionId)}/operation-reconciliation/${encodeURIComponent(operationId)}`, {signal}),
   confirmOperationReview: (sessionId: string, operationId: string, confirmation: OperationReviewConfirmation) =>

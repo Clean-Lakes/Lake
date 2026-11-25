@@ -3,7 +3,27 @@ import assert from 'node:assert/strict';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {PilotWorkspace} from '../src/PilotWorkspace';
+import {ChatGroupNavigation} from '../src/ChatGroup';
 import type {SuperWorkspace} from '../../shared/contracts';
+
+test('the project group list and the specialist rail have distinct entries',()=>{
+ const channel={id:'channel-ops',projectId:'p',roleId:'ops',roleName:'运维专员',sessionId:'ops-channel',revision:1,createdAt:'',messageRead:{cursor:'2',seenCursor:'1'}};
+ const workspace:SuperWorkspace={active:true,project:{projectId:'p',routerSessionId:'pilot',version:1},workers:[],channels:[channel]};
+ const props={workspace,error:'',selectedId:'group',showHeading:false,onPilot(){},onWorker(){},onChannel(){}};
+ const rail=renderToStaticMarkup(createElement(PilotWorkspace,{...props,presentation:'rail'}));
+ assert.match(rail,/sidebar-rail-button sidebar-specialist-button/);
+ assert.match(rail,/title="运维专员.*有新消息未读"/);
+ assert.doesNotMatch(rail,/sidebar-pilot-entry|<strong>运维专员<\/strong>/);
+ const entry=renderToStaticMarkup(createElement(PilotWorkspace,{...props,presentation:'entry'}));
+ assert.match(entry,/sidebar-pilot-entry/);
+ assert.doesNotMatch(entry,/运维专员/);
+ const groups=renderToStaticMarkup(createElement(ChatGroupNavigation,{projectId:'p',channels:[channel],selectedId:'group',disabled:false,
+  groups:[{sessionId:'group',projectId:'p',title:'运维协作群',updatedAt:'',members:[channel],latest:{text:'已更新巡检记录',author:'运维专员'}}],
+  onOpen(){},async onCreated(){}}));
+ assert.match(groups,/aria-label="新建群组"/);
+ assert.match(groups,/class="nav-row chat-group-nav-row" aria-current="page"/);
+ assert.match(groups,/运维专员：已更新巡检记录/);
+});
 
 test('Pilot and real specialist instances replace session creation',()=>{
  const workspace:SuperWorkspace={active:true,project:{projectId:'project',routerSessionId:'pilot',version:1},workers:[{id:'orders-worker',roleId:'orders',roleName:'订单专员',sessionId:'orders-context',assignmentState:'parked',task:{taskId:'orders',sessionId:'orders-context',projectId:'project',title:'排查订单超时',state:'blocked',acceptanceState:'insufficient',revision:7,originRootTurnId:'actual-root',deadlineAt:'2026-11-03T00:00:00Z'}}]};

@@ -599,7 +599,19 @@ export async function startLakeServer(options: ServerOptions) {
         else throw new HttpError(405,"不支持此巡检请求");
       } else if (path[1] === "projects" && path[3] === "superagent") {
         store.project(path[2]);
-        if(path.length===5&&path[4]==="stop"&&method==="POST"){
+        if(path[4]==='groups'&&method==='POST'&&(path.length===5||path.length===7&&path[6]==='messages')){
+          await agents.prepareRedaction();
+          if(draining)throw new HttpError(503,'服务正在退出');
+          if(path.length===5){
+            result=superagent.conversations.createGroup(path[2],data);
+            status=201;
+            for(const stream of catalogStreams)stream.write("event: catalog\ndata: {}\n\n");
+          }else{
+            result=superagent.conversations.sendGroupMessage(path[2],path[5],data);
+            status=202;
+          }
+        }
+        else if(path.length===5&&path[4]==="stop"&&method==="POST"){
           if (superagent.workspace(path[2]).project.routerSessionId !== data.routerSessionId) throw new HttpError(409, 'Pilot 工作区身份已变化');
           messageQueue!.pauseProject(path[2]);result=await superagent.stopWorkspace(path[2],String(data.routerSessionId??""));
         }
@@ -690,6 +702,7 @@ export async function startLakeServer(options: ServerOptions) {
         const sessionId = path[2];
         const session = store.session(sessionId);
         if(session.workspaceRole==='conversation'&&!['GET','HEAD'].includes(method))throw new HttpError(409,'对话回应会话由宿主管理，请在 Pilot 或专员频道继续');
+        if(session.workspaceRole==='group'&&!['GET','HEAD'].includes(method))throw new HttpError(409,'请使用群组界面管理群消息');
         if (session.workspaceRole === "legacy" && !["GET", "HEAD"].includes(method) && !(path[3] === "presentation" || path.length === 3 && method === "PATCH"))
           throw new HttpError(409, "旧 Go 会话为只读档案；请在 Pilot 中提出新的明确要求，历史任务与操作不会重放");
         if (method === "GET" && (path[3] === "snapshot" || path[3] === "ai")) {

@@ -1,0 +1,163 @@
+.sidebar-specialist-roster {
+  flex:0 1 auto;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:5px;
+  width:100%;
+  min-block-size:0;
+  overflow:auto;
+  scrollbar-width:none;
+  overscroll-behavior:contain;
+}
+.sidebar-specialist-roster::before {
+  content:"";
+  flex:none;
+  width:24px;
+  height:1px;
+  margin-block:4px 5px;
+  background:var(--border);
+}
+.sidebar-specialist-status {
+  position:absolute;
+  inset-block-start:2px;
+  inset-inline-end:2px;
+  display:grid;
+  place-items:center;
+  color:var(--info);
+  pointer-events:none;
+}
+.chat-group-navigation {
+  padding-block:0 12px;
+  min-width:0;
+}
+.chat-group-navigation-heading {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  min-height:36px;
+  padding-inline:var(--sidebar-row-inset) 4px;
+  color:var(--text-secondary);
+}
+.chat-group-navigation-heading h2 {
+  margin:0;
+  font-size:var(--font-size-toolbar);
+  font-weight:var(--font-weight-medium);
+}
+.chat-group-navigation-heading .icon-button {
+  width:30px;
+  height:30px;
+  border-radius:var(--radius-settings-control);
+  corner-shape:var(--corner-window);
+}
+.sidebar.workspace-navigation .chat-group-nav-row {
+  min-height:50px;
+  margin-block-end:2px;
+  padding:6px var(--sidebar-row-inset);
+  border-radius:var(--radius-settings-control);
+  corner-shape:var(--corner-window);
+  gap:var(--sidebar-icon-gap);
+}
+.chat-group-nav-row[aria-current=page] {
+  background:color-mix(in srgb,var(--info) 11%,transparent);
+  color:var(--foreground);
+}
+.chat-group-nav-row:focus-visible {
+  outline-offset:-2px;
+}
+.sidebar.workspace-navigation .chat-group-nav-row .nav-row-text > small {
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:var(--font-size-toolbar);
+}
+.chat-group-avatars {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:none;
+  min-inline-size:var(--sidebar-icon-column,22px);
+  line-height:1;
+}
+.chat-group-avatars .super-role-avatar + .super-role-avatar {
+  margin-inline-start:-4px;
+}
+.chat-group-nav-row .chat-group-avatars {
+  inline-size:var(--sidebar-icon-column);
+}
+.chat-group-nav-row .chat-group-avatars .super-role-avatar + .super-role-avatar {
+  margin-inline-start:-6px;
+}
+.chat-group-size {
+  flex:none;
+  font-size:var(--font-size-toolbar);
+  color:var(--text-muted);
+  white-space:nowrap;
+}
+.modal.chat-group-create-dialog {
+  width:min(416px,calc(100vw - 32px));
+  margin:auto;
+}
+.chat-group-create-dialog:not([open]) { display:none; }
+.chat-group-create-dialog::backdrop { background:var(--overlay); }
+.chat-group-member-picker {
+  min-inline-size:0;
+  padding:0;
+  margin:18px 0 0;
+  border:0;
+}
+.chat-group-member-picker legend,
+.chat-group-member-picker p {
+  margin-block:0 6px;
+  color:var(--text-secondary);
+  font-size:var(--font-size-toolbar);
+}
+.chat-group-member-list {
+  display:grid;
+  border:1px solid var(--border);
+  border-radius:var(--radius-settings-panel);
+  corner-shape:var(--corner-window);
+  overflow:hidden;
+}
+.chat-group-member-list label {
+  display:flex;
+  align-items:center;
+  gap:9px;
+  min-height:40px;
+  padding:6px 10px;
+  overflow-wrap:anywhere;
+  cursor:pointer;
+}
+.chat-group-member-list label + label { border-top:1px solid var(--border); }
+.chat-group-member-list label:is(:hover,:focus-within) { background:var(--surface-hover); }
+.chat-group-member-list input {
+  flex:none;
+  width:15px;
+  height:15px;
+  accent-color:var(--primary);
+}
+.chat-group-round-status {
+  display:grid;
+  gap:4px;
+  list-style:none;
+  margin:0;
+  padding-inline-start:var(--reply-avatar-column,40px);
+  color:var(--text-secondary);
+  font-size:var(--font-size-toolbar);
+}
+.chat-group-round-status li { display:flex; align-items:baseline; gap:6px; overflow-wrap:anywhere; }
+.chat-group-round-status svg { align-self:center; flex:none; color:var(--text-muted); }
+.composer.chat-group-composer { min-block-size:0; }
+.chat-group-composer-input {
+  border-radius:var(--radius-window);
+  corner-shape:var(--corner-window);
+}
+.chat-group-composer .composer-body > textarea { overflow-y:auto; }
+.chat-group-composer .form-error { margin:0 0 7px; }
+@media(pointer:coarse) {
+  .chat-group-navigation-heading .icon-button,
+  .chat-group-member-list label { min-height:44px; }
+  .chat-group-navigation-heading .icon-button { width:44px; }
+}

@@ -219,7 +219,11 @@ export class LakeSuperagent implements AgentHost {
         throw new HttpError(409, "Resource ownership, availability or connection revision changed");
     }, operation => this.effectResolution(operation)); agents.host = this;
     this.conversations=new SpecialistConversations(store,agents,{
-      check:()=>{if(this.closed)throw new HttpError(409,'Lake 正在退出');this.security?.check();},
+      check:projectId=>{
+        if(this.closed)throw new HttpError(409,'Lake 正在退出');
+        if(projectId&&this.stoppingProjects.has(projectId))throw new HttpError(409,'当前项目正在停止活动任务，请稍后发送');
+        this.security?.check();
+      },
       channel:role=>this.ensureChannel(this.role(role.projectId,role.id)).sessionId,
       freeze:role=>({...role,execution:this.roleExecution(this.role(role.projectId,role.id),true)}),
       validate:role=>{
@@ -687,6 +691,7 @@ export class LakeSuperagent implements AgentHost {
     const project = this.store.get<SuperProject>("superProjects", projectId);
     const workers=this.workers(projectId,project?.routerSessionId);
     return { pilotMessageRead: project ? conversationReadState(this.store, project.routerSessionId) : undefined, active: !!project, project: project ?? { projectId, routerSessionId: "", version: 0 }, workers, conversations:this.conversations.list(projectId),
+      chatGroups:this.conversations.groups(projectId),
       questions: this.specialistQuestions(projectId),
       channels: this.store.list<Channel>("superChannels").filter((channel) => channel.projectId === projectId && !this.role(projectId, channel.roleId, true).deletedAt)
         .map((channel) => this.channelView(channel, workers)), cursor: project ? this.store.cursor(project.routerSessionId) : 0 };
@@ -1339,6 +1344,7 @@ export class LakeSuperagent implements AgentHost {
     await this.agents.prepareRedaction();
     const source = this.store.session(sessionId), project = this.store.get<SuperProject>("superProjects", source.projectId);
     if(source.workspaceRole==='conversation')throw new HttpError(409,'请在 Pilot 或专员频道继续对话');
+    if(source.workspaceRole==='group')throw new HttpError(409,'请使用群组发送消息');
     this.store.project(source.projectId);
     if(this.stoppingProjects.has(source.projectId))throw new HttpError(409,"当前项目正在停止活动任务，请稍后发送");
     if(assignment!==undefined){
@@ -2615,6 +2621,7 @@ export class LakeSuperagent implements AgentHost {
     if(Number.isFinite(duration)&&duration>=0)return duration;
   }
   decorate(snapshot: SessionSnapshot,taskId?:string): SessionSnapshot {
+    if(snapshot.session.workspaceRole==='group')return {...snapshot,ai:undefined,chatGroupRounds:this.conversations.groupRounds(snapshot.session.id)};
     snapshot.hostKeyTrust=this.ssh?.prompt(snapshot.session.id)??null;
     snapshot.messages = [...snapshot.messages, ...this.store.list<Message>("superDispatchMessages").filter((message) => message.sessionId === snapshot.session.id)]
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))

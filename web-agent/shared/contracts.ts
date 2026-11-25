@@ -57,7 +57,7 @@ export type Resource = {
 };
 
 export type WorkSession = {
-	workspaceRole?: 'router'|'worker'|'role'|'legacy'|'conversation';
+	workspaceRole?: 'router'|'worker'|'role'|'legacy'|'conversation'|'group';
   id: string;
   projectId: string;
   title: string;
@@ -265,6 +265,7 @@ export type WatchdogView = {mode: WatchdogMode; findings: WatchdogFinding[]};
 export type SessionSnapshot = {
  commandExecutions?:HostCommandView[];
  messageRead?:ConversationReadState;
+ chatGroupRounds?:SpecialistConversation[];
 	superagent?:{task:SuperTask;goal?:WorkGoal;roleId?:string;execution?:import('./external-agents').AgentExecutionSummary;deliveredReplies?:Message[];watchdog?:WatchdogView};
  naturalMemoryNotices?:{changeId:string;scope:string;entryId:string;revision:number;batchId?:string}[];
   commandStopNotices?: CommandStopNotice[];
@@ -423,13 +424,22 @@ export type SpecialistConversationMember = {
 };
 export type SpecialistConversation = {
   id:string;projectId:string;sessionId:string;sourceMessageId:string;title:string;
-  kind?:'task-summary';
+  kind?:'task-summary'|'group';
   state:'queued'|'running'|'summarizing'|'completed'|'cancelled'|'interrupted'|'failed';
   createdAt:string;deadlineAt:string;members:SpecialistConversationMember[];summaryMessageId?:string;summaryRequested?:boolean;
   summary?: {id:string;taskId?:string;preview?:{seq:number;text:string}};
 };
+export type ChatGroupMember = {roleId:string;roleName:string;avatarId?:LakeAvatarName;unavailable?:boolean};
+export type ChatGroup = {
+  sessionId:string;
+  projectId:string;
+  title:string;
+  members:ChatGroupMember[];
+  updatedAt:string;
+  latest?:{text:string;author?:string};
+};
 export type SpecialistQuestion = {author:SpecialistReplyAuthor;taskTitle:string;request:AIQuestionRequest};
-export type SuperWorkspace = {pilotMessageRead?:ConversationReadState;active:boolean;project:SuperProject;workers:SuperWorker[];questions?:SpecialistQuestion[];channels?:SpecialistChannelInfo[];conversations?:SpecialistConversation[];cursor?:number};
+export type SuperWorkspace = {pilotMessageRead?:ConversationReadState;active:boolean;project:SuperProject;workers:SuperWorker[];questions?:SpecialistQuestion[];channels?:SpecialistChannelInfo[];conversations?:SpecialistConversation[];chatGroups?:ChatGroup[];cursor?:number};
 export type GatewayTokenView = {id:string;name:string;roles?:string[];createdAt:string};
 export type GatewayCommand = {program:string;script?:string;home:string;data?:string};
 export type GatewayRouting = {mode:'pilot'} | {mode:'specialist';roleId:string};
