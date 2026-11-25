@@ -29,17 +29,17 @@ function useSummaryPreview(slot:PilotSummarySlot,active:boolean,subscribe?:Subsc
  return preview?.text;
 }
 
-function SummaryProse({text,working,reveal,animateInitial,finishPending}:{
- text:string;working:boolean;reveal:boolean;animateInitial?:boolean;finishPending?:boolean;
+function SummaryProse({text,working,reveal,animateInitial,finishPending,arrive}:{
+ text:string;working:boolean;reveal:boolean;animateInitial?:boolean;finishPending?:boolean;arrive:boolean;
 }){
  const visible=useSmoothText(text,reveal,{animateInitial,finishPending});
  const moving=working||!!finishPending&&visible!==text;
  const observedMotion=useRef(moving);
  observedMotion.current ||= moving;
- return <AssistantMarkdown liveMotion={observedMotion.current?moving:undefined} pilotCursor={observedMotion.current}>{visible}</AssistantMarkdown>;
+ return <AssistantMarkdown liveMotion={observedMotion.current?moving:undefined} pilotCursor={observedMotion.current} arrive={arrive}>{visible}</AssistantMarkdown>;
 }
 
-export function PilotSummaryReply({slot,connected,subscribe}:{slot:PilotSummarySlot;connected:boolean;subscribe?:SubscribePilotWorkerEvents}){
+export function PilotSummaryReply({slot,connected,subscribe,arrive=false}:{slot:PilotSummarySlot;connected:boolean;subscribe?:SubscribePilotWorkerEvents;arrive?:boolean}){
  const summarizing=!slot.final&&slot.round?.state==='summarizing';
  const observedSummary=useRef(summarizing);
  observedSummary.current ||= summarizing;
@@ -56,6 +56,6 @@ export function PilotSummaryReply({slot,connected,subscribe}:{slot:PilotSummaryS
  return <div ref={body} className="ai-card ai-message" data-pilot-summary={slot.id}>
   <SummaryProse key={summary?slot.id:'acknowledgement'} text={summary?text:acknowledgement}
    working={connected&&active} reveal={connected&&summary&&active}
-   animateInitial={summary&&reveal} finishPending={connected&&summary&&!active}/>
+   animateInitial={summary&&reveal} finishPending={connected&&summary&&!active} arrive={connected&&arrive&&!reveal}/>
  </div>;
 }
