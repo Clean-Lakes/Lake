@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
+import {pilotIdentity} from '../src/superAgentPresentation';
 import {AITranscript} from '../src/AIPanel';
 import {pilotReplyContinuations,replyRoleBreaks} from '../src/replyGrouping';
 import type {TranscriptEntry} from '../src/timeline';
@@ -26,7 +27,7 @@ test('Pilot-to-specialist and specialist-to-Pilot boundaries receive spacing wit
   {id:'report',sessionId:'pilot',role:'assistant',text:'这是实际结果。',createdAt:at(2),author:{...author,roleId:'role'}},
   {id:'pilot-return',sessionId:'pilot',role:'assistant',text:'收到检查结果。',createdAt:at(3)}];
  const snapshot={session:{id:'pilot'},resources:[],actions:[],specialists:[],evidence:[],messages} as SessionSnapshot;
- const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:'Pilot',pilot:true},onSpecialist(){}}));
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:pilotIdentity,onSpecialist(){}}));
  assert.equal((html.match(/is-role-break/g)??[]).length,2);
  assert.equal((html.match(/aria-label="查看知识库专员的任务记录"/g)??[]).length,1);
  for(const text of messages.map(message=>message.text))assert.ok(html.includes(text));
@@ -63,8 +64,8 @@ test('hidden tools, reasoning, empty packets and Pilot dispatch keep one visible
     {id:'thought',at:at(3),type:'thinking',status:'completed',content:'不公开的思考'},
     {id:'empty',at:at(3),type:'message',status:'running',content:''},
     {...prose('last',4).card!,status,content:texts[1]}]}} as SessionSnapshot;
-  const before=JSON.stringify(snapshot),html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:'Pilot',pilot:true}}));
-  assert.equal((html.match(/<strong>Pilot<\/strong>/g)??[]).length,1,status);
+  const before=JSON.stringify(snapshot),html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:pilotIdentity}));
+  assert.equal((html.match(/<strong>Lake<\/strong>/g)??[]).length,1,status);
   assert.match(html,/data-conversation-entry="last" class="ai-response is-reply-continuation"/);
   assert.ok(html.includes('data-conversation-entry="first"')&&html.includes('data-conversation-entry="last"'));
   assert.ok(!html.includes('内部派发记录'));
@@ -83,9 +84,9 @@ test('real errors, confirmation and specialist authors still separate visible Pi
  for(const boundary of boundaries){
   const snapshot={session:{id:'pilot'},resources:[],actions:[],messages:[{id:'user',sessionId:'pilot',role:'user',text:'检查服务器',createdAt:at(0)},...(boundary.message?[boundary.message]:[])],
    ai:{session:'pilot',status:'completed',cardsOffset:0,cards:[prose('first',1).card!,...(boundary.card?[boundary.card]:[]),prose('last',4).card!]}} as SessionSnapshot;
-  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:'Pilot',pilot:true},onSpecialist(){}}));
+  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:pilotIdentity,onSpecialist(){}}));
   const narrationRetired=boundary.card?.type==='operation'&&boundary.card.title!=='ask_user_question';
-  assert.equal((html.match(/<strong>Pilot<\/strong>/g)??[]).length,narrationRetired?1:2,boundary.id);
+  assert.equal((html.match(/<strong>Lake<\/strong>/g)??[]).length,narrationRetired?1:2,boundary.id);
   assert.ok(!html.includes('data-conversation-entry="last" class="ai-response is-reply-continuation"'),boundary.id);
   if(narrationRetired)assert.match(html,/data-conversation-entry="first" class="turn-process-prose reply-process-text"/);
   if(boundary.card?.type==='operation'&&boundary.card.status!=='completed')assert.ok(html.includes('thinking-timeline'),'real operation attention remains available');
@@ -96,11 +97,11 @@ test('streaming and restored Pilot replies group without changing messages or sp
   const text=['我查一下知识库专员的统计结果。','南京-运维组共有 62 个已发布文档。'];
   const snapshot={session:{id:'pilot'},resources:[],actions:[],specialists:[],evidence:[],messages:[{id:'user',sessionId:'pilot',role:'user',text:'运维组多少文档呢',createdAt:at(0)},...(persisted?text.map((value,n)=>({id:'reply-'+n,sessionId:'pilot',role:'assistant',text:value,createdAt:at(n+1)})):[])],ai:{session:'pilot',status,rootTurnId:'turn',cardsOffset:0,cards:persisted?[]:text.map((value,n)=>({id:'reply-'+n,type:'message',status:n===0?'completed':status,at:at(n+1),content:value}))}} as SessionSnapshot;
   const before=JSON.stringify(snapshot);
-  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:'Pilot',pilot:true}}));
+  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:pilotIdentity}));
   // A live waiting indicator has its own CSS-hidden identity label. Count
   // ended headers, and always require the actual continuation's hidden label.
-  if(status==='completed')assert.equal((html.match(/<strong>Pilot<\/strong>/g)||[]).length,1);
-  assert.ok(html.includes('class="reply-continued-author">Pilot</span>'));
+  if(status==='completed')assert.equal((html.match(/<strong>Lake<\/strong>/g)||[]).length,1);
+  assert.ok(html.includes('class="reply-continued-author">Lake</span>'));
   assert.ok(html.includes('is-reply-continuation'));
   for(const value of text)assert.ok(html.includes(value));
   assert.equal(JSON.stringify(snapshot),before);
@@ -108,7 +109,7 @@ test('streaming and restored Pilot replies group without changing messages or sp
   assert.ok(!normal.includes('is-reply-continuation'));
  }
  const reports={session:{id:'pilot'},resources:[],actions:[],specialists:[],evidence:[],messages:[1,2].map(n=>({id:'report-'+n,sessionId:'pilot',role:'assistant',text:'相同的结果',createdAt:at(n),author:{...author,taskId:'task-'+n,workerId:'worker-'+n}}))} as SessionSnapshot;
- const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:reports,assistantIdentity:{name:'Pilot',pilot:true},onSpecialist(){}}));
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:reports,assistantIdentity:pilotIdentity,onSpecialist(){}}));
  assert.equal((html.match(/aria-label="查看知识库专员的任务记录"/g)||[]).length,2);
  assert.ok(!html.includes('is-reply-continuation'));
 });

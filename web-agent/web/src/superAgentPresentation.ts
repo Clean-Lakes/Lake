@@ -2,6 +2,8 @@ import type {AIView,SessionSnapshot,SuperTask,SuperWorker,TaskParticipant} from 
 import type {AgentIconName} from './AgentIcon';
 import {isLakeAvatarName,lakeAvatarGroups} from './lakeAvatarCatalog';
 
+export const pilotIdentity = {name:'Lake', pilot:true} as const;
+
 const specialistPalettes=['river','moss','reed','clay'] as const;
 export function superWorkerAppearance(worker:Pick<SuperWorker,'roleName'>&{roleId?:string;avatarId?:string}) {
  // RoleID owns the default; an explicit local avatar changes only its shape.
@@ -81,7 +83,7 @@ export function specialistTaskActivity(workers:SuperWorker[]) {
 export function stopControlPresentation(role?:string,typescript=false,collaborating=false) {
  if(role==='router'&&typescript)return {label:'停止当前项目全部任务',shortLabel:'停止项目全部任务',title:'停止当前项目全部活动任务，保留历史和草稿'};
  if(role==='role')return {label:'停止该专员全部任务',shortLabel:'停止专员全部任务',title:'停止该专员全部活动任务；单独停止请进入对应任务详情'};
- if(role==='worker'&&collaborating)return {label:'停止本专员的执行',shortLabel:'停止本专员的执行',title:'其他专员会继续执行'};
+ if(role==='worker'&&collaborating)return {label:'停止本专员的执行',shortLabel:'停止本专员的执行',title:'停止本专员的执行，其他专员会继续执行'};
  if(role==='worker')return {label:'停止当前任务',shortLabel:'停止当前任务',title:'仅停止当前任务，不影响同一专员的其他任务'};
  return {label:'停止本轮回复',shortLabel:'停止本轮',title:'停止本轮回复，保留草稿'};
 }

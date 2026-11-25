@@ -1,3 +1,4 @@
+import {updateCodexActivity,type CodexActivityItem} from '../../shared/codex-activity';
 import type {SessionEvent,SessionSnapshot} from '../../shared/contracts';
 
 // Live events address one item. They carry its received prefix, making replay,
@@ -22,6 +23,14 @@ export function applyLiveText(previous:SessionSnapshot|null,event:SessionEvent):
   if(card?.type!=='operation'||data?.source!=='external_agent'||data.external_run_id!==update.id||data.root_turn_id!==ai.rootTurnId||data.agentRunId||data.childSessionId)return null;
  }
  if(update.externalReply&&(update.cardType!=='operation'||typeof update.externalReply.id!=='string'||!update.externalReply.id||typeof update.externalReply.content!=='string'))return null;
+ if(update.codexItem){
+  const data=ai.cards[index]?.data as {taskId?:string;codex_activity?:CodexActivityItem[];external_agent?:string}|undefined;
+  if(update.cardType!=='operation'||!data||data.external_agent!=='codex'||!update.codexTaskId||data.taskId!==update.codexTaskId)return null;
+  const cards=ai.cards.slice();
+  cards[index]={...cards[index]!,content:update.content,data:{...data,codex_activity:updateCodexActivity(data.codex_activity??[],update.codexItem),
+    ...(update.externalReply&&{external_reply:update.externalReply})}};
+  return {...previous,cursor:event.seq,ai:{...ai,cards}};
+ }
  if(index<0&&!update.at)return null;
  if(index>=0&&ai.cards[index]!.status!=='running')return null;
  const cards=index<0?[...ai.cards,{id:update.id,type:update.cardType!,content:update.content,status:'running',at:update.at!,data:{root_turn_id:update.rootTurnId,source_message_id:ai.sourceMessageIds?.[0]}}]:ai.cards.map((card,i)=>i===index?{...card,content:update.content,...(update.externalReply?{data:{...(card.data as Record<string,unknown>),external_reply:update.externalReply}}:{})}:card);

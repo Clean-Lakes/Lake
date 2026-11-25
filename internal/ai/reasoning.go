@@ -67,6 +67,8 @@ func ReasoningSupport(m Model) ReasoningCapability {
 			} else {
 				c.Default = "none"
 			}
+		case modelVersion(name, "gpt-6.2-sol"):
+			c.Levels = []string{"low", "medium", "high", "xhigh", "max"}
 		case p == "openai-response" && (modelVersion(name, "gpt-6-astra") || modelVersion(name, "gpt-6.1-sol")):
 			c.Levels, c.Default = []string{"low", "medium", "high", "xhigh", "max", "ultra"}, "medium"
 		}

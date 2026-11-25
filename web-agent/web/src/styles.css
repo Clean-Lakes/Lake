@@ -1,3 +1,4 @@
+@import './codexActivity.css';
 @import './pilotConversationProgress.css';
 @import './replyProcessStatus.css';
 @import './miniBox.css';
@@ -5,6 +6,10 @@
 @import "./settledReply.css";
 @import './operationOutcomes.css';
 @import "./theme.css";
+@import "./scrollbarVisibility.css";
+@import "./controlFeedback.css";
+@import "./tabSelectionIndicator.css";
+@import "./resourceFolderRename.css";
 @import "./surfaceGeometry.css";
 @import "./statusText.css";
 @import "./contextUsage.css";
@@ -45,12 +50,7 @@ a { color: inherit; }
 .sidebar-add, .nav-add { width: 27px; height: 27px; display: grid; place-items: center; color: var(--text-secondary); border: 0; background: transparent; border-radius: var(--radius-control); }
 .sidebar-add:hover:not(:disabled), .nav-add:hover:not(:disabled) { background: var(--surface-selected); color: var(--foreground); }
 .sidebar-add:disabled, .nav-add:disabled { opacity: .45; }
-.project-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 10px 24px; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
-@supports not (scrollbar-color: gray transparent) {
-  .project-scroll::-webkit-scrollbar { width: 6px; }
-  .project-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 6px; }
-  .project-scroll::-webkit-scrollbar-thumb:hover, .project-scroll::-webkit-scrollbar-thumb:active { background: var(--text-muted); }
-}
+.project-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 10px 24px; scrollbar-width: thin; }
 .project-group { margin-bottom: 7px; }
 .project-toggle { width: 100%; display: flex; align-items: center; gap: 9px; border: 0; background: transparent; text-align: left; color: var(--foreground); font-weight:var(--font-weight-semibold); padding: 8px 7px; border-radius: var(--radius-control); font-size: var(--font-size-ui); }
 .project-toggle:hover, .nav-row:hover { background: var(--surface-hover); }
@@ -247,14 +247,8 @@ a { color: inherit; }
 .muted-small { color: var(--text-secondary); font-size: var(--font-size-ui); line-height: 1.6; }
 .conversation { container-type: inline-size; flex: 1 1 auto; min-height: 110px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable both-edges; border-top: 0; }
 /* Chat, inspector and PTY history share a native thin thumb and transparent track. */
-.conversation, .session-inspector-scroll, .terminal-screen .xterm-viewport { scrollbar-width:thin; scrollbar-color:var(--border-strong) transparent; }
+.conversation, .session-inspector-scroll, .terminal-screen .xterm-viewport { scrollbar-width:thin; }
 .terminal-screen .xterm-viewport { overflow-y:auto; top:12px; bottom:12px; }
-@supports not (scrollbar-color:gray transparent) {
- .conversation::-webkit-scrollbar, .session-inspector-scroll::-webkit-scrollbar, .terminal-screen .xterm-viewport::-webkit-scrollbar { width:6px; }
- .conversation::-webkit-scrollbar-track, .session-inspector-scroll::-webkit-scrollbar-track, .terminal-screen .xterm-viewport::-webkit-scrollbar-track { background:transparent; }
- .conversation::-webkit-scrollbar-thumb, .session-inspector-scroll::-webkit-scrollbar-thumb, .terminal-screen .xterm-viewport::-webkit-scrollbar-thumb { background:var(--border-strong); border-radius:6px; }
- .conversation::-webkit-scrollbar-thumb:hover, .session-inspector-scroll::-webkit-scrollbar-thumb:hover, .terminal-screen .xterm-viewport::-webkit-scrollbar-thumb:hover { background:var(--text-muted); }
-}
 .startup-loading { color: var(--text-secondary); font-size: var(--font-size-ui); }
 .session-loading { width: min(790px, calc(100% - 52px)); margin: 0 auto; padding: 24px 0; color: var(--text-secondary); font-size: var(--font-size-ui); }
 .timeline-list { width: min(960px, calc(100% - var(--session-gutter, 24px) - var(--session-gutter, 24px))); margin-inline: auto; padding: 26px 0 32px; }
@@ -400,13 +394,22 @@ a { color: inherit; }
 /* Approval and question surfaces share the composer's responsive content rail. */
 .composer-session-controls { width:min(960px,100%); min-width:0; margin-inline:auto; }
 .composer-session-controls > :is(.attachment-approval,.ai-pending,.agent-question) { width:100%; max-width:none; }
-.composer { position: relative; container-type: inline-size; container-name: lake-composer; width: min(960px, 100%); margin-inline: auto; padding: 0; background: transparent; border: 0; box-shadow: none; }
+.composer {
+  position: relative; container-type: inline-size; container-name: lake-composer; width: min(960px, 100%);
+  margin-inline: auto; padding: 0; background: transparent; border: 0; box-shadow: none;
+  /* Reserve the empty expanded height so focusing the editor keeps the last message in place. */
+  display: flex; flex-direction: column; justify-content: flex-end; min-block-size: var(--composer-reserved-height, 92px);
+}
 .composer-input {
   --composer-placeholder: color-mix(in srgb, var(--text-muted) 88%, transparent);
-  padding: 8px 13px;
-  border: 1px solid var(--conversation-composer-border, var(--border));
-  border-radius: var(--radius-composer);
-  background: var(--surface);
+  --composer-block-inset: 10px;
+  --composer-inline-inset: 13px;
+  --composer-toolbar-gap: 10px;
+  padding: var(--composer-block-inset) var(--composer-inline-inset);
+}
+.composer-input,.composer-backplate {
+  border: 1px solid var(--composer-stroke, var(--conversation-composer-border, var(--border)));
+  background: var(--composer-fill, var(--surface));
 }
 .composer-body { display: flex; align-items: flex-end; gap: 10px; }
 .composer textarea { display: block; flex: 1; min-width: 0; width: 100%; resize: none; height: 30px; min-height: 30px; max-height: 160px; overflow-y: hidden; border: none; background: transparent; color: var(--foreground); padding: 3px 0; outline: none; font-size: var(--font-size-ui); line-height: 1.55; }
@@ -415,37 +418,27 @@ a { color: inherit; }
 .send-button { flex: 0 0 auto; display: grid; place-items: center; border: 0; width: 32px; height: 32px; border-radius: var(--radius-control); background: var(--primary); color: var(--on-primary); }
 .send-button:hover:not(:disabled) { background: var(--primary-hover); }
 .send-button:disabled { background: var(--surface-selected); color: var(--text-disabled); }
-.composer-foot { display: flex; align-items: center; flex-wrap: nowrap; color: var(--text-muted); font-size: var(--font-size-toolbar); margin-top: 8px; padding: 0; gap: 6px; min-width: 0; }
+.composer-foot { display: flex; align-items: center; flex-wrap: nowrap; color: var(--text-muted); font-size: var(--font-size-toolbar); margin-top: var(--composer-toolbar-gap); padding: 0; gap: 6px; min-width: 0; }
 .composer-foot-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-inline-start: auto; min-width: 0; }
 .composer-input .send-button {
-  --composer-action-background: transparent;
+  --composer-action-background: var(--surface-hover);
   width: 30px; height: 30px;
   background: var(--composer-action-background); color: var(--text-secondary);
-  border-radius: var(--radius-composer-action);
+  border-radius: 50%;
 }
 .composer-input .send-button:hover:enabled { background: var(--composer-action-background); }
-.composer-input .send-button:not(.stop-button, [data-send-ready]):hover:enabled { --composer-action-background: var(--surface-hover); color: var(--foreground); }
+.composer-input .send-button:not(.stop-button, [data-send-ready]):hover:enabled { --composer-action-background: var(--surface-selected); color: var(--foreground); }
 .composer-input .send-button[data-send-ready]:enabled { --composer-action-background: var(--foreground); color: var(--surface); }
 .composer-input .send-button:disabled { color: var(--text-disabled); }
 .composer-input .send-button:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
-.composer-input .send-button > .lucide-arrow-up { stroke-width: 2.05; }
+.composer-input .send-button > .lucide-arrow-up { stroke-width: 2.25; }
 .composer-input .send-button.stop-button {
   --composer-action-background: var(--surface-hover);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: auto;
-  min-width: 30px;
-  padding: 0 8px;
-  background: var(--composer-action-background);
+  padding: 0;
+  border-radius: var(--radius-composer-action);
   color: var(--foreground);
-  font: inherit;
-  font-weight: var(--font-weight-normal);
-  line-height: 1;
-  white-space: nowrap;
 }
-.composer-input .send-button.stop-button > svg { flex: none; fill: currentColor; stroke: none; }
+.composer-input .send-button.stop-button > svg { fill: currentColor; stroke: none; }
 .composer-input .send-button.stop-button:hover:not(:disabled) { --composer-action-background: var(--surface-selected); }
 .composer-input .send-button.stop-button:disabled { color: var(--text-disabled); }
 .resource-detail { flex: 0 0 auto; margin: 0 auto; padding: 27px 0 70px; width: min(960px, calc(100% - 64px)); }
@@ -532,13 +525,11 @@ a { color: inherit; }
   to { transform: rotate(360deg); }
 }
 .modal-scrim { position: fixed; z-index: 50; inset: 0; display: flex; align-items: center; justify-content: center; padding: 18px; background: var(--overlay); backdrop-filter: none; }
-.modal { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; width: min(500px, 100%); max-height: calc(100vh - 36px); overflow-y: auto; border: 1px solid var(--border); box-shadow: var(--shadow-dialog); border-radius: var(--radius-dialog); padding: 24px; background: var(--surface); }
+.modal { scrollbar-width: thin; width: min(500px, 100%); max-height: calc(100vh - 36px); overflow-y: auto; border: 1px solid var(--border); box-shadow: var(--shadow-dialog); border-radius: var(--radius-dialog); padding: 24px; background: var(--surface); }
 @supports selector(::-webkit-scrollbar) {
   .modal { scrollbar-width: auto; scrollbar-color: auto; }
   .modal::-webkit-scrollbar { width: 5px; height: 5px; }
-  .modal::-webkit-scrollbar-track { margin-block: var(--radius-settings-dialog); background: transparent; }
-  .modal::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--border-strong); }
-  .modal::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+  .modal::-webkit-scrollbar-track { margin-block: var(--radius-settings-dialog); }
 }
 .modal-header { display: flex; align-items: flex-start; justify-content: space-between; }
 .modal-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-dialog); background: var(--surface-muted); color: var(--text-secondary); }
@@ -660,7 +651,7 @@ a { color: inherit; }
   .command-input-row { flex-direction: column; }
   .command-button { align-self: flex-end; }
   .composer-dock { padding: 9px var(--session-gutter, 13px) var(--workbench-bottom-inset); }
-  .composer-input { padding: 8px 12px; }
+  .composer-input { --composer-inline-inset:12px; }
   .composer-foot { gap: 6px; }
   .resource-detail { width: calc(100% - 26px); padding-top: 19px; }
   .resource-hero { margin-top: 23px; }
@@ -886,13 +877,10 @@ a { color: inherit; }
 :is(.ai-markdown.assistant-prose,.ai-markdown,.sre-prose) .markdown-code-block > pre { min-width: 0; max-width: 100%; margin: 0; border: 0; border-radius: 0; padding: 3px 6px; background: transparent; overflow: auto; white-space: pre; font: 13px/22px var(--font-mono); }
 :is(.ai-markdown.assistant-prose,.ai-markdown,.sre-prose) .markdown-code-block > pre code { font-size: inherit; }
 /* Keep native horizontal scrolling, with a fine code-only scrollbar. */
-.markdown-code-block > pre { scrollbar-width:thin; scrollbar-color:var(--border-strong) transparent; }
+.markdown-code-block > pre { scrollbar-width:thin; }
 @supports selector(::-webkit-scrollbar) {
   .markdown-code-block > pre { scrollbar-width:auto; scrollbar-color:auto; }
   .markdown-code-block > pre::-webkit-scrollbar { height:3px; width:5px; }
-  .markdown-code-block > pre::-webkit-scrollbar-track, .markdown-code-block > pre::-webkit-scrollbar-corner { background:transparent; }
-  .markdown-code-block > pre::-webkit-scrollbar-thumb { border:0; border-radius:999px; background:var(--border-strong); }
-  .markdown-code-block > pre::-webkit-scrollbar-thumb:hover { background:var(--text-muted); }
 }
 .markdown-code-block .markdown-code-shell { color: var(--terminal-green); }
 .markdown-code-block .markdown-code-command { color: var(--terminal-blue); }
@@ -1064,9 +1052,8 @@ a { color: inherit; }
 .terminal-ai-adoption,.terminal-history-note { padding: 10px 0; }
 .terminal-ai button { padding: 6px 10px; }
 .ssh-key-file-input::file-selector-button { border: 1px solid var(--line); border-radius: var(--radius-control); padding: 7px 10px; margin-right: 10px; background: var(--surface); color: var(--ink); cursor: pointer; font: inherit; }
-.resource-terminal-menu, .resource-terminal-connections { scrollbar-width: thin; scrollbar-color: var(--text-muted) transparent; }
+.resource-terminal-menu, .resource-terminal-connections { scrollbar-width: thin; --lake-scrollbar-color: var(--text-muted); }
 .resource-terminal-menu::-webkit-scrollbar, .resource-terminal-connections::-webkit-scrollbar { width: 5px; }
-.resource-terminal-menu::-webkit-scrollbar-thumb, .resource-terminal-connections::-webkit-scrollbar-thumb { background: var(--surface-muted); border-radius: var(--radius-control); }
 /* One running motion across the sidebar, resource conversations and Agent tasks. */
 .activity-indicator { display: inline-block; flex-shrink: 0; transform-box: view-box; transform-origin: 50% 50%; animation: activity-indicator-spin 1s linear infinite; }
 .session-nav-row { padding-right: 8px; transition: background-color .16s ease,color .16s ease; }
@@ -1171,7 +1158,7 @@ a { color: inherit; }
 .workspace-actions{ display: flex; gap: 3px; flex-shrink: 0; }
 .workspace-refresh.is-refreshing svg { animation: spin 0.8s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .workspace-refresh.is-refreshing svg { animation: none; } }
-.composer-input:has(.composer-rich-input:focus, textarea:focus) { border-color: color-mix(in srgb, var(--focus) 56%, var(--border)); }
+.composer-input:has(.composer-rich-input:focus, textarea:focus) { --composer-stroke: color-mix(in srgb, var(--focus) 56%, var(--border)); }
 .ai-markdown h1, .ai-markdown h2, .ai-markdown h3{ color: var(--foreground); font-weight:var(--font-weight-semibold); line-height: 1.4; margin: 20px 0 10px; }
 .ai-markdown h1{ font-size: 25px; }
 .ai-markdown h2{ font-size: 21px; }
@@ -1198,14 +1185,10 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .evidence-record pre{ white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: 12px; }
 /* The scroll box owns both the scrollbar lane and the paragraph spacing.
    Keep overlay scrollbars inside this box, away from the next paragraph. */
-.markdown-table-scroll{ box-sizing:border-box; width:100%; min-width:0; max-width:100%; overflow-x:auto; overflow-y:hidden; margin:12px 0 16px; padding-bottom:8px; overscroll-behavior-x:contain; scrollbar-width:thin; scrollbar-color:var(--border-strong) transparent; }
+.markdown-table-scroll{ box-sizing:border-box; width:100%; min-width:0; max-width:100%; overflow-x:auto; overflow-y:hidden; margin:12px 0 16px; padding-bottom:8px; overscroll-behavior-x:contain; scrollbar-width:thin; }
 .markdown-table-scroll > table{ margin:0; }
 @supports selector(::-webkit-scrollbar) {
  .markdown-table-scroll{ scrollbar-width:auto; scrollbar-color:auto; }
- .markdown-table-scroll::-webkit-scrollbar{ height:6px; width:6px; }
- .markdown-table-scroll::-webkit-scrollbar-track,.markdown-table-scroll::-webkit-scrollbar-corner{ background:transparent; }
- .markdown-table-scroll::-webkit-scrollbar-thumb{ border:0; border-radius:999px; background:var(--border-strong); }
- .markdown-table-scroll::-webkit-scrollbar-thumb:hover{ background:var(--text-muted); }
 }
 .resource-nav-row:hover .nav-row, .resource-nav-row:focus-within .nav-row{ padding-right: 64px; }
 .resource-terminal-manage[aria-expanded="true"]{ opacity: 1; }
@@ -1236,18 +1219,16 @@ input[type="checkbox"]{ accent-color: var(--primary); }
  .composer-foot .ai-context-trigger { padding-inline:3px; }
 }
 @container lake-composer (max-width: 480px) {
- .composer-input .send-button.stop-button { gap:4px; padding-inline:7px; }
  .composer-foot .composer-send-actions { gap:4px; }
  .composer-send-actions:has(.stop-button) .composer-send-feedback {
   position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%);
  }
 }
 @container lake-composer (max-width: 420px) {
- .composer-input { padding-inline:8px; }
- .composer-input .send-button.stop-button { font-size:11px; padding-inline:4px; }
+ .composer-input { --composer-inline-inset:8px; }
  .composer-foot .composer-model-select.app-select > .app-select-trigger { padding-inline:4px; }
  .composer-foot .composer-model-name { max-width:74px; }
- .composer-foot .composer-model-effort { display:none; }
+ .composer-foot .composer-model-effort-label { display:none; }
 }
 @container lake-composer (max-width: 370px) {
  .composer-foot[data-running] .composer-foot-actions { flex-wrap:wrap; }
@@ -1264,6 +1245,7 @@ input[type="checkbox"]{ accent-color: var(--primary); }
  .composer-foot .pilot-mode-toggle { min-width:28px; justify-content:center; }
 }
 @media (pointer: coarse) {
+ .composer { min-block-size:var(--composer-reserved-height,106px); }
  .composer-foot,.composer-foot-actions { flex-wrap:wrap; }
  .composer-input :is(.composer-attach-button,.composer-foot > .composer-permission-button,.send-button,.composer-model-setup,.composer-model-select.app-select > .app-select-trigger) {
   min-width:44px; min-height:44px;
@@ -1293,7 +1275,7 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 
 .menu-selection-mark { display: grid; place-items: center; width: 14px; flex-shrink: 0; }
 
-.composer-input.attachment-drop-active { border-color: var(--focus); background: var(--surface-hover); outline: 2px dashed var(--focus-outline); outline-offset: 3px; }
+.composer-input.attachment-drop-active { --composer-stroke: var(--focus); --composer-fill: var(--surface-hover); outline: 2px dashed var(--focus-outline); outline-offset: 3px; }
 .attachment-upload-status { margin: 0 0 9px; color: var(--text-muted); font-size: var(--font-size-ui); }
 .message-attachments a { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; overflow-wrap: anywhere; }
 .text-file-drafts small { color: var(--text-muted); white-space: nowrap; }

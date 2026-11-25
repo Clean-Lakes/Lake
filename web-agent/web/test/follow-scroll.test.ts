@@ -4,14 +4,16 @@ import { atConversationTail, conversationCanScroll, pausesConversationFollow, fo
 import { sameCard } from "../src/cardEquality";
 
 function fixture(reduced = false) {
-  let following = true; let next = 0;
+  let following = true; let next = 0; let now = 0;
   const callbacks = new Map<number, FrameRequestCallback>();
   const box = {scrollTop: 0, scrollHeight: 1000, clientHeight: 500};
   const follower = new FollowScroll(box, () => following, {
     request(callback) { callbacks.set(++next, callback); return next; },
     cancel(id) { callbacks.delete(id); },
+    now() { return now; },
   }, reduced);
   return {box, follower, callbacks, pause() {following = false;}, frame(time: number) {
+    now = time;
     const entries = [...callbacks]; callbacks.clear(); entries.forEach(([, callback]) => callback(time));
   }};
 }
@@ -26,6 +28,16 @@ test('gestures without room to scroll never strand following; upward reading sti
  assert.equal(pausesConversationFollow(box,-1),true);
  box.scrollTop=200;
  assert.equal(pausesConversationFollow(box,1),true,'manual reading remains in control until reaching tail');
+});
+
+test("following advances the same distance in the same time at 60 and 120 Hz", () => {
+  function positionAt100ms(hertz: number) {
+    const f = fixture();
+    f.follower.request();
+    for (let index = 1; index <= hertz / 10; index++) f.frame(index * 1000 / hertz);
+    return f.box.scrollTop;
+  }
+  assert.ok(Math.abs(positionAt100ms(60) - positionAt100ms(120)) < 0.01);
 });
 
 test('content crossing from empty space into overflow follows and stops at the new tail',()=>{
@@ -144,15 +156,21 @@ test('conversation observes actual growth, not same-height metadata or content s
  const previousResize=globalThis.ResizeObserver,previousMutation=globalThis.MutationObserver;
  let resize=()=>{},replace=()=>{},disconnected=0;
  const requests:boolean[]=[];
- globalThis.ResizeObserver=class {constructor(callback:()=>void){resize=callback}observe(){}unobserve(){}disconnect(){disconnected++}} as unknown as typeof ResizeObserver;
+ const observed=new Set<Element>();
+ globalThis.ResizeObserver=class {constructor(callback:()=>void){resize=callback}observe(node:Element){observed.add(node)}unobserve(node:Element){observed.delete(node)}disconnect(){disconnected++}} as unknown as typeof ResizeObserver;
  globalThis.MutationObserver=class {constructor(callback:()=>void){replace=callback}observe(){}disconnect(){disconnected++}} as unknown as typeof MutationObserver;
  try {
-  const container={scrollHeight:900,clientHeight:400,clientWidth:700,firstElementChild:{}} as unknown as HTMLElement;
+  const container={scrollHeight:900,clientHeight:400,clientWidth:700,children:[]} as unknown as HTMLElement;
   const stop=observeConversationGrowth(container,viewportChanged=>requests.push(viewportChanged));
   for(let i=0;i<100;i++)resize();assert.deepEqual(requests,[]);
   Object.assign(container,{scrollHeight:940});resize();assert.deepEqual(requests,[false]);
   Object.assign(container,{scrollHeight:900});resize();assert.deepEqual(requests,[false]);
-  Object.assign(container,{firstElementChild:{}});replace();assert.deepEqual(requests,[false]);
+  const first={parentElement:container as HTMLElement|null}, second={parentElement:container};
+  Object.assign(container,{children:[first,second]});replace();assert.deepEqual(requests,[false]);
+  assert.deepEqual([...observed],[container,first,second]);
+  first.parentElement=null;
+  Object.assign(container,{children:[second]});replace();
+  assert.deepEqual([...observed],[container,second]);assert.deepEqual(requests,[false]);
   Object.assign(container,{scrollHeight:920});resize();assert.deepEqual(requests,[false,false],'growth uses the post-collapse baseline');
   Object.assign(container,{clientWidth:600});resize();assert.deepEqual(requests,[false,false,true]);
   Object.assign(container,{clientHeight:350});resize();assert.deepEqual(requests,[false,false,true,true]);

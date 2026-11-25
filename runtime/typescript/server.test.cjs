@@ -16,7 +16,7 @@ test('the packaged TypeScript version matches the native updater contract withou
  assert.equal(output.trim(),`Lake ${version} TypeScript`);
 });
 
-async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = true) {
+async function fixture(t, mode = "text", {legacyDev = false, nativeSpecialists = true, allowAutomationOverrides = false} = {}) {
   const home = await mkdtemp(join(tmpdir(), "lake-ts-test-"));
   const web = join(home, "web");
   await require("node:fs/promises").mkdir(web);
@@ -147,7 +147,7 @@ async function fixture(t, mode = "text", legacyDev = false, nativeSpecialists = 
   const codexHome=join(home,'local-codex');await mkdir(codexHome,{recursive:true});
   await writeFile(join(codexHome,'config.toml'),'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "max"\n');
   await writeFile(join(codexHome,'auth.json'),JSON.stringify({auth_mode:'chatgpt',tokens:{account_id:'fixture-account',access_token:'synthetic-local-codex-token'}}));
-  const options = { home, codexHome, data: join(home, "data"), port: 0, staticRoot: web, development: legacyDev };
+  const options = { home, codexHome, data: join(home, "data"), port: 0, staticRoot: web, development: legacyDev, allowAutomationOverrides };
   if (legacyDev) {
     const fs = require("node:fs/promises");
     await fs.mkdir(options.data, { mode: 0o700 });
@@ -380,7 +380,7 @@ test('Magpie imports an exact legacy selection once and never resurrects it over
 });
 
 test('a fresh Dev import preserves an explicit old Magpie source and its exact native fallback', async t => {
-  const f = await fixture(t, 'legacy-magpie-source', true), config = join(f.home, 'secrets/magpie-agent.json');
+  const f = await fixture(t, 'legacy-magpie-source', {legacyDev:true}), config = join(f.home, 'secrets/magpie-agent.json');
   assert.equal((await f.api('/api/bootstrap')).modelSelection.providerId, 'magpie');
   assert.equal((await f.api('/api/settings/model')).name, 'legacy-magpie');
   await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'Use the original selected source', ignoreProjectMemory: true}, 202); await f.wait(['completed']);
@@ -777,6 +777,26 @@ test('the existing exact DeepSeek reasoning registry reaches the wire and explic
   assert.deepEqual((await f.api(base)).levels, []);
   delete provider.models[0].reasoningCapability; provider.models[0].name = 'deepseek-flash-unrelated'; await f.api(`/api/settings/providers/${provider.id}`, 'PUT', provider);
   assert.deepEqual((await f.api(base)).levels, [], 'similar names cannot inherit another model version capability');
+});
+
+test('the GPT-6.2 Sol gateway alias exposes API effort levels and keeps the provider default', async t => {
+  const f = await fixture(t);
+  const provider = (await f.api('/api/settings/providers')).providers[0];
+  const base = `/api/sessions/${f.session.id}/ai/reasoning`;
+  provider.models[0].name = 'codex/gpt-6.2-sol';
+  await f.api(`/api/settings/providers/${provider.id}`, 'PUT', provider);
+
+  const settings = await f.api(base);
+  assert.deepEqual(settings.levels, ['low', 'medium', 'high', 'xhigh', 'max']);
+  assert.equal(settings.default, undefined);
+  await f.api(base, 'POST', {modelId: settings.modelId, effort: 'none'}, 400);
+  for (const effort of ['', 'max']) {
+    await f.api(base, 'POST', {modelId: settings.modelId, effort});
+    await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: `Check GPT-6.2 Sol effort ${effort || 'default'}`}, 202);
+    await f.wait(['completed']);
+    assert.equal(f.requests.at(-1).model, 'codex/gpt-6.2-sol');
+    assert.equal(f.requests.at(-1).reasoning_effort, effort || undefined);
+  }
 });
 
 test('extracting a preset makes a real bounded model request and saves a persistent result with its source', async t => {
@@ -1393,8 +1413,51 @@ test("two specialist channels share one task, retain their own evidence and rece
   assert.deepEqual(new Set(pilotHistory.filter(m=>m.author?.taskId===a.task.taskId).map(m=>m.author.roleId)),new Set([a.roleId,b.roleId]));
 });
 
+test("application defaults apply to saved and new projects without overwriting Memory or Watchdog records", async t => {
+  const f = await fixture(t);
+  const projectId = f.project.id;
+  const scope = f.app.memory.scope('project', projectId);
+  const user = f.app.memory.scope('user');
+  const savedMemory = {useEnabled:true, extractionEnabled:true, revision:7};
+  const savedUserMemory = {useEnabled:true, extractionEnabled:false, revision:2};
+  const savedWatchdog = {mode:'guide', revision:3};
+  f.app.store.put('memorySettings', scope.key, savedMemory);
+  f.app.store.put('memorySettings', user.key, savedUserMemory);
+  f.app.store.put('superWatchdogPolicy', projectId, savedWatchdog);
+  await f.app.memory.remember(scope, {title:'已保存的项目知识', body:'PREVIOUS_MEMORY_FIXTURE', expectedRevision:0});
+  const finding = f.app.superagent.watchdog.recordIncident({
+    projectId, workerId:'previous-worker', sessionId:f.session.id, executionId:'previous-execution', taskId:'previous-task', generation:1,
+  }, '已有的巡检记录');
+
+  await f.restart();
+  const other = await f.api('/api/projects', 'POST', {name:'无自定义配置的项目'});
+  const watchdog = `/api/projects/${projectId}/watchdog`;
+  const memory = `/api/memory/scopes/${scope.key}`;
+  const projectQuery = `?projectId=${projectId}`;
+  assert.deepEqual(await f.api(watchdog), {mode:'observe'});
+  assert.deepEqual(await f.api(`/api/projects/${other.id}/watchdog`), {mode:'observe'});
+  await f.api(watchdog, 'PUT', {mode:'guide'}, 405);
+  assert.deepEqual(await f.api(watchdog, 'PUT', {mode:'observe'}), {mode:'observe'});
+  const view = await f.api(memory + projectQuery);
+  assert.deepEqual(view.settings, {useEnabled:false, extractionEnabled:false, revision:7});
+  assert.equal(view.items[0].body, 'PREVIOUS_MEMORY_FIXTURE');
+  assert.deepEqual((await f.api(`/api/memory/scopes/${user.key}`)).settings, {useEnabled:false, extractionEnabled:false, revision:2});
+  assert.deepEqual(f.app.memory.settings(f.app.memory.scope('project', other.id)), {useEnabled:false, extractionEnabled:false, revision:0});
+  await f.api(memory + '/settings' + projectQuery, 'PATCH', {useEnabled:true, extractionEnabled:true, expectedRevision:7}, 405);
+  assert.deepEqual(await f.api(memory + '/settings' + projectQuery, 'PATCH', {useEnabled:false, extractionEnabled:false, expectedRevision:7}), view.settings);
+
+  await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text:'以后先给结论。'}, 202);
+  await f.wait(['completed']);
+  assert.ok(f.requests.every(request => !JSON.stringify(request.messages).includes('PREVIOUS_MEMORY_FIXTURE')));
+  assert.equal(f.app.store.list('memoryJobs').length, 0);
+  assert.deepEqual(f.app.store.get('memorySettings', scope.key), savedMemory);
+  assert.deepEqual(f.app.store.get('memorySettings', user.key), savedUserMemory);
+  assert.deepEqual(f.app.store.get('superWatchdogPolicy', projectId), savedWatchdog);
+  assert.deepEqual(f.app.superagent.watchdog.records(projectId), [finding]);
+});
+
 test("timed Watchdog reviews a live SDK Worker and queues one guide; an actual result still settles the task", {timeout:20_000}, async t=>{
-  const f=await fixture(t,"super-watchdog-guide"), project="/api/projects/"+f.project.id;
+  const f=await fixture(t,"super-watchdog-guide",{allowAutomationOverrides:true}), project="/api/projects/"+f.project.id;
   const {routerSessionId}=await f.api(project+"/superagent","POST",{});
   const settings=project+"/watchdog";
   assert.deepEqual(await f.api(settings),{mode:"observe"});
@@ -1446,7 +1509,7 @@ test('a native Worker reaches the task deadline while waiting for the model and 
 });
 
 test("Watchdog identifies a real provider 503 and retries the same SDK assignment after the service recovers", {timeout:30_000}, async t=>{
-  const f=await fixture(t,"super-watchdog-outage"), project="/api/projects/"+f.project.id;
+  const f=await fixture(t,"super-watchdog-outage",{allowAutomationOverrides:true}), project="/api/projects/"+f.project.id;
   const {routerSessionId}=await f.api(project+"/superagent","POST",{});
   await f.api(project+"/watchdog","PUT",{mode:"guide"});
   f.failWorkerRequests();
@@ -1479,7 +1542,7 @@ async function prepareCodexProtocolFixture(app,mode){
 }
 
 async function startSubagentTask(t, mode, memory = false, legacyMaxSteps = 24, permissions = {}) {
-  const f = await fixture(t, mode);
+  const f = await fixture(t, mode, {allowAutomationOverrides:memory});
   if(mode.includes('acp')){await f.enableCodexFixture();await f.api(`/api/projects/${f.project.id}/external-agents/codex`,'PUT',{enabled:true,expectedRevision:0});await f.api(`/api/projects/${f.project.id}/external-agents/codex/probe`,'POST',{});}
   const project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
   await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`, "POST", { maxSteps: legacyMaxSteps, ...permissions });
@@ -1842,7 +1905,7 @@ test("invalid JSON bodies cannot enter persistent navigation mutations", async (
 });
 
 test("explicit TS Dev imports model configuration once without copying credentials or touching the Go database", async (t) => {
-  const f = await fixture(t, "text", true);
+  const f = await fixture(t, "text", {legacyDev:true});
   const catalogFile = join(f.options.data, "providers.json");
   const oldCatalog = await readFile(catalogFile);
   const legacyKey = join(f.home, "secrets/provider-fixture.key");
@@ -1907,7 +1970,7 @@ test('import-only preparation does not start task, queue or memory runtimes',asy
 });
 
 test('Dev provider import preserves declared modality and reasoning metadata without probing or importing arbitrary fields', async t => {
-  const f = await fixture(t, 'legacy-rich-model-flags', true), model = (await f.api('/api/settings/providers')).providers[0].models[0];
+  const f = await fixture(t, 'legacy-rich-model-flags', {legacyDev:true}), model = (await f.api('/api/settings/providers')).providers[0].models[0];
   for (const key of ['supportsVideoInput', 'supportsAudioInput', 'supportsPdfInput', 'supportsNativeWebSearch', 'imageInputDetected']) assert.equal(model[key], true);
   assert.equal(model.imageInputMode, 'on'); assert.deepEqual(model.reasoningCapability, {levels: ['low', 'high'], default: 'high', source: 'saved-settings'});
   assert.equal(model.ignoredPrivateField, undefined); assert.equal(f.calls, 0);
@@ -2747,7 +2810,7 @@ test("a failed proven read obtains a fresh attempt without replaying the failure
 });
 
 for(const entrance of ["followup","predecessor"]) test(`real SDK invalid-memory ${entrance} uses a fresh scoped readonly context, preserving source unknowns`, async t=>{
-  const f=await fixture(t,"super-memory-recheck"+(entrance==="predecessor"?"-predecessor":"")),project=await f.api(`/api/projects/${f.project.id}/superagent`,"POST",{});
+  const f=await fixture(t,"super-memory-recheck"+(entrance==="predecessor"?"-predecessor":""),{allowAutomationOverrides:true}),project=await f.api(`/api/projects/${f.project.id}/superagent`,"POST",{});
   const resource=(await f.api("/api/catalog")).resources.find(r=>r.projectId===f.project.id);
   await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,"POST",{silentReadFiles:true,silentWriteFiles:true});
   const scope=f.app.memory.scope("project",f.project.id);
@@ -3355,7 +3418,7 @@ test('SSH authentication failure is distinct from availability and never exposes
 });
 
 test('native Memory extracts after real user input, publishes scoped files, recalls across sessions and honors forget',async t=>{
- const f=await fixture(t,'memory-native');
+ const f=await fixture(t,'memory-native',{allowAutomationOverrides:true});
  const catalog=await f.api(`/api/memory?projectId=${f.project.id}`),scope=catalog.scopes.find(scope=>scope.kind==='project');
  assert.equal(catalog.engine,'typescript');
  await f.api(`/api/memory/scopes/${scope.key}/settings?projectId=${f.project.id}`,'PATCH',{useEnabled:true,extractionEnabled:true,expectedRevision:0});
@@ -3383,7 +3446,7 @@ test('native Memory extracts after real user input, publishes scoped files, reca
 });
 
 test('native Memory records a legitimate no-change extraction without claiming a published note', async t => {
-  const f = await fixture(t, 'memory-native-nochange');
+  const f = await fixture(t, 'memory-native-nochange', {allowAutomationOverrides:true});
   const catalog = await f.api(`/api/memory?projectId=${f.project.id}`), scope = catalog.scopes.find(scope => scope.kind === 'project');
   await f.api(`/api/memory/scopes/${scope.key}/settings?projectId=${f.project.id}`, 'PATCH', {useEnabled: true, extractionEnabled: true, expectedRevision: 0});
   await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: '这次仅查看临时输出，不包含新的长期偏好。'}, 202);
@@ -3413,7 +3476,7 @@ test('native child evidence flows into stable role Memory and a new Worker reads
 });
 
 test('single-message ignore prevents native Memory reads and source capture; explicit global notes do not auto-share to Workers',async t=>{
- const f=await fixture(t,'memory-native'),scope=f.app.memory.scope('project',f.project.id);
+ const f=await fixture(t,'memory-native',{allowAutomationOverrides:true}),scope=f.app.memory.scope('project',f.project.id);
  f.app.memory.setSettings(scope,{useEnabled:true,extractionEnabled:true,expectedRevision:0});
  await f.app.memory.remember(scope,{title:'Only scoped knowledge',body:'MANUAL_PRIVATE_MEMORY',expectedRevision:0});
  await f.api(`/api/sessions/${f.session.id}/messages`,'POST',{text:'本轮请只检查，不使用或积累记忆。',ignoreProjectMemory:true},202);await f.wait(['completed']);await f.app.memory.wait();
@@ -3424,7 +3487,7 @@ test('single-message ignore prevents native Memory reads and source capture; exp
 });
 
 test('native background extraction failure cannot be reported as a published success or retried at restart',async t=>{
- const f=await fixture(t,'memory-native-error'),scope=f.app.memory.scope('project',f.project.id);
+ const f=await fixture(t,'memory-native-error',{allowAutomationOverrides:true}),scope=f.app.memory.scope('project',f.project.id);
  f.app.memory.setSettings(scope,{useEnabled:true,extractionEnabled:true,expectedRevision:0});
  await f.api(`/api/sessions/${f.session.id}/messages`,'POST',{text:'以后请先给结论再给依据。'},202);await f.wait(['completed']);await f.app.memory.wait();
  const view=f.app.memory.view(scope);assert.equal(view.items.length,0);assert.equal(view.jobs[0].state,'failed');assert.equal(view.jobs[0].nativeExtraction,undefined);
@@ -4301,6 +4364,12 @@ test('Pilot report handoff spans work_finish, Codex settlement and durable chat 
  const reply=(await readPilot()).messages.find(message=>message.id===id);
  assert.equal(reply.author.workerId,finished.id);
  assert.equal(reply.text,finished.task.summary);
+ const calls=reply.codexActivity.filter(item=>item.kind!=='text');
+ assert.deepEqual(calls.map(item=>[item.kind,item.text,item.status]),[['integration','list_project_files','completed']]);
+ assert.equal(reply.codexActivity[0].text,'先读取项目。继续核对。');
+ const channelPage=await f.api(`/api/sessions/${channel.sessionId}/channel`);
+ const channelReport=channelPage.entries.find(entry=>entry.reply?.state==='settled')?.message;
+ assert.deepEqual(channelReport.codexActivity,reply.codexActivity,'both destinations retain the same recorded work');
 });
 
 for(const reported of [true,false])test(`direct ACP Worker empty final message ${reported?'preserves the submitted report':'cannot promote progress into a report'}`,{timeout:30000},async t=>{
@@ -4462,7 +4531,7 @@ test('disabling the project ACP profile revokes a pending bridge write without a
 });
 
 test('a legacy Lake Agent specialist routes new work to Codex and rejects native assignment',{timeout:30000},async t=>{
- const f=await fixture(t,'super-acp-worker',false,false),path=`/api/projects/${f.project.id}`;
+ const f=await fixture(t,'super-acp-worker',{nativeSpecialists:false}),path=`/api/projects/${f.project.id}`;
  const project=await f.api(path+'/superagent','POST',{});
  const role={id:'e'.repeat(64),projectId:f.project.id,roleKey:'project-inspector',name:'项目检查员',duties:'检查实际项目',revision:1,
    execution:{kind:'native',model:{providerId:'legacy-provider',modelId:'legacy-model'}}};
@@ -4495,7 +4564,7 @@ test('removed external backend rejects new configuration and preserves historica
 });
 
 test('local login auto-detection refreshes on account changes and no login blocks a new task',async t=>{
- const f=await fixture(t,'super-acp-worker',false,false),path=`/api/projects/${f.project.id}`;
+ const f=await fixture(t,'super-acp-worker',{nativeSpecialists:false}),path=`/api/projects/${f.project.id}`;
  await f.enableCodexFixture();await f.api(path+'/external-agents/codex','PUT',{expectedRevision:0,enabled:true});
  let status=(await f.api(path+'/external-agents')).agents[0];assert.equal(status.assignmentReady,true);assert.equal(status.authMode,'chatgpt');assert.equal(f.calls,0);
  const project=await f.api(path+'/superagent','POST',{}),role={id:'f'.repeat(64),projectId:f.project.id,roleKey:'local-login',name:'本机登录检查专员',duties:'检查项目',revision:1};

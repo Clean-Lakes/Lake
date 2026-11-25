@@ -1,3 +1,4 @@
+import {codexActivity} from '../../web-agent/shared/codex-activity';
 import {redactModelValue} from "./model-errors";
 import type {PilotConfiguration} from "./pilot-configuration";
 import {pilotConfigurationToolNames} from "./configuration-tool-names";
@@ -156,7 +157,7 @@ export class LakeSuperagent implements AgentHost {
   private taskStops = new Map<string, Promise<void>>();
   private heartbeat: ReturnType<typeof setInterval>;
   private watchdogTimer: ReturnType<typeof setInterval>;
-  constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH,readonly mysql?:LakeMySQL,readonly execution?:LakeExecution, private readonly watchdogClock = Date.now,readonly configuration?:PilotConfiguration, readonly services?:LakeServiceResources) {
+  constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH,readonly mysql?:LakeMySQL,readonly execution?:LakeExecution, private readonly watchdogClock = Date.now,readonly configuration?:PilotConfiguration, readonly services?:LakeServiceResources, allowWatchdogModeOverrides = true) {
     this.discoveryRecovery = new ProgramDiscoveryRecovery(store, agents.sessions);
     this.operatorReviews = new OperatorEffectReviewService(store, agents.sessions, operation => {
       if (!ssh || !operation.resourceId || !operation.hostConfigurationHash)
@@ -245,7 +246,7 @@ export class LakeSuperagent implements AgentHost {
         return agents.steer(sample.sessionId,text,inputId);
       },
       changed: sample => this.notify(sample.sessionId,"specialist"),
-    },watchdogClock);
+    },watchdogClock,allowWatchdogModeOverrides);
     // A process boundary revokes every previous execution owner. Unknown effects
     // remain unknown; neither a pending UI approval nor a queued SDK call is replayed.
     store.transaction(() => {
@@ -2558,8 +2559,19 @@ export class LakeSuperagent implements AgentHost {
   }
   /** Enrich old report display from its frozen Worker, without rewriting history. */
   private reportMessage(original:Message):Message {
-    const message=stoppedReportProjection(this.store,original,id=>this.ledger.unresolved(id)),author=message.author;
+    let message=stoppedReportProjection(this.store,original,id=>this.ledger.unresolved(id));
+    const author=message.author;
     const isReport=message.id.startsWith('report_')&&message.role==='assistant'&&!message.conversation;
+    if(isReport&&message.text.trim()&&message.codexActivity){
+      const codexActivity=message.codexActivity.filter(item=>item.kind!=='text'||!this.agents.external.isClosingMessage(item.id));
+      const restored=codexActivity.map(item=>{
+        const text=item.kind==='command'&&(item.text==='内容已隐藏'||item.text.length===240)
+          ?this.agents.external.historicalCommand(item.id,author):undefined;
+        return text?{...item,text}:item;
+      });
+      if(restored.some((item,i)=>item!==message.codexActivity![i])||restored.length!==message.codexActivity.length)
+        message={...message,codexActivity:restored};
+    }
     const recoverDuration=isReport&&author?.execution?.kind==='acp'&&author.durationMs===undefined&&!!author.rootTurnId;
     if(!author?.taskId || (!recoverDuration&&author.execution&&(message.replyToMessageId||!isReport)))return message;
     const worker=this.store.get<Worker>('superWorkers',author.workerId);
@@ -2656,7 +2668,9 @@ export class LakeSuperagent implements AgentHost {
     const goal = this.ledger.get(worker.taskId), view = this.store.view(sessionId);
     view.workGoals = [this.publicGoal(goal)]; this.store.put("views", sessionId, view);
     const project = this.store.require<SuperProject>("superProjects", worker.projectId);
-    this.notify(project.routerSessionId, "specialist");
+    // A text delta is already delivered on the subscribed Worker stream. The
+    // router transcript changes on a structural event or a delivered report.
+    if(!event?.textUpdate)this.notify(project.routerSessionId, "specialist");
     if(!worker.inline){
       const joint=goal.sharedTaskId && this.ledger.jointTask(goal.sharedTaskId);
       const roles=joint ? joint.memberIds.map(id=>this.ledger.get(id).roleId) : [worker.roleId];
@@ -2988,6 +3002,8 @@ export class LakeSuperagent implements AgentHost {
     if (!this.store.get("superReports", key)) {
       const project = this.store.require<SuperProject>("superProjects", worker.projectId), channel = this.store.require<Channel>("superChannels", worker.roleId);
       const presentation = pending.presentation ?? { body: goal.summary ?? "这次检查还没完成。", channelBody: goal.summary ?? "这次检查还没完成。" };
+      const activity = worker.roleSnapshot.execution?.kind==='acp' && worker.roleSnapshot.execution.agent==='codex'
+        ? codexActivity(this.store.view(worker.sessionId),goal.id,pending.rootTurnId) : [];
       const source = this.reportSourceMessage(worker.projectId, pending.sourceEventId ?? this.reportSourceEventId(worker, pending.inputEventIds));
       this.store.transaction(() => { for (const target of [project.routerSessionId, channel.sessionId]) {
         const body = target === channel.sessionId ? presentation.channelBody : presentation.body;
@@ -2996,6 +3012,7 @@ export class LakeSuperagent implements AgentHost {
           author: { kind: "specialist", name: worker.roleSnapshot.name, roleId: worker.roleId, workerId: worker.id,
             sessionId: worker.sessionId, taskId: goal.sharedTaskId ?? goal.id, channelSessionId: channel.sessionId,rootTurnId:pending.rootTurnId,
             execution:worker.roleSnapshot.execution??{kind:'native'},durationMs:pending.durationMs } };
+        if (activity.some(item=>item.kind!=='text')) message.codexActivity=activity;
         if (source?.sessionId === target) message.replyToMessageId = source.id;
         if (!this.store.get("messages", message.id)) this.store.put("messages", message.id, message);
       }
@@ -3245,7 +3262,9 @@ export class LakeSuperagent implements AgentHost {
   // no tool call from outside can grant or bypass an approval.
 
   gatewaySpecialists(projectId?: string): { specialists: GatewaySpecialistRef[] } {
-    const roles = this.store.list<Role>("superRoles").filter(role => !role.deletedAt && (!projectId || role.projectId === projectId));
+    const active = new Set(this.store.activeProjects().map(project => project.id));
+    const roles = this.store.list<Role>("superRoles").filter(role =>
+      !role.deletedAt && active.has(role.projectId) && (!projectId || role.projectId === projectId));
     return { specialists: roles.map(role => {
       const channel = this.ensureChannel(role);
       return { roleId: role.id, roleKey: role.roleKey, name: role.name, duties: role.duties, projectId: role.projectId,

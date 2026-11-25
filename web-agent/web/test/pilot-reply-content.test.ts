@@ -42,15 +42,15 @@ test('the final report is ready for the island only after its replacement has be
  assert.equal(reduced.presented.at(-1),report);
 });
 
-test('only actual same-binding text replacements retire and reveal; initial, equal and streamed prefixes stay immediate',()=>{
+test('new reply identities can transition while edits within a paragraph or status stay in place',()=>{
  const first=content('已经读取主机信息。');
  assert.equal(changesPilotReplyContent(undefined,thinking),false);
  assert.equal(changesPilotReplyContent(thinking,first),true);
  assert.equal(changesPilotReplyContent(first,content(first.text+'接下来检查数据库。')),false);
  assert.equal(changesPilotReplyContent(first,{...first,id:'another-id'}),false);
  assert.equal(changesPilotReplyContent(first,content('新的进度。',{id:'next'})),true);
- assert.equal(changesPilotReplyContent(first,content('同段真实修正。')),true);
- assert.equal(changesPilotReplyContent(thinking,content('正在读取文件',{kind:'status',id:''})),true);
+ assert.equal(changesPilotReplyContent(first,content('同段真实修正。')),false);
+ assert.equal(changesPilotReplyContent(thinking,content('正在读取文件',{kind:'status',id:''})),false);
  assert.equal(changesPilotReplyContent(first,content('其他任务',{binding:'other'})),false);
 });
 
@@ -71,13 +71,47 @@ test('old text retires right to left before the one body commits and reveals new
 test('the first live prose replaces a retiring status immediately',()=>{
  const h=transitionHarness(),first=content('真实首字',{live:true});
  h.transition.update(thinking,true);
- h.transition.update(content('正在处理',{kind:'status',id:''}),true);
+ h.transition.update(content('正在处理',{kind:'status',id:'another-status'}),true);
  assert.equal(h.clips().length,1);
  assert.equal(changesPilotReplyContent(thinking,first),false);
  h.transition.update(first,true);
  assert.equal(h.committed.at(-1),first);
  assert.equal(h.clips().length,1);
  assert.equal(h.clips()[0]!.animation.cancelled,1);
+});
+
+test('new live prose opens vertically without delaying the first commit or restarting on a prefix',()=>{
+ const h=transitionHarness(),first=content('首段公开回复',{live:true,arrive:true});
+ h.transition.update(thinking,true,22);
+ h.transition.update(first,true,28);
+ assert.equal(h.committed.at(-1),first);
+ assert.equal(h.presented.at(-1),thinking);
+ assert.deepEqual(h.clips()[0]!.frames,[
+  {clipPath:'inset(0% -4px 100% -4px)'},
+  {clipPath:'inset(0% -4px -4px -4px)'},
+ ]);
+ assert.equal(h.clips()[0]!.options.duration,400);
+ assert.equal(h.calls.find(call=>call.frames[0]?.opacity===0)?.options.delay,80);
+ assert.ok(h.calls.every(call=>call.frames[0]?.height===undefined));
+ const prefix={...first,text:first.text+'续写后一行'};
+ h.transition.update(prefix,true,52);
+ assert.equal(h.clips().length,1);
+ h.finish();
+ assert.equal(h.presented.at(-1),prefix);
+ assert.ok(h.calls.every(call=>call.animation.cancelled===1));
+});
+
+test('a newly delivered report can open on its first commit while restored prose is immediate',()=>{
+ const h=transitionHarness(),report=content('完整报告',{id:'report',arrive:true});
+ h.transition.update(report,true);
+ assert.equal(h.committed.at(-1),report);
+ assert.equal(h.presented.length,0);
+ h.finish();
+ assert.equal(h.presented.at(-1),report);
+ const restored=transitionHarness();
+ restored.transition.update({...report,arrive:false},true);
+ assert.equal(restored.calls.length,0);
+ assert.equal(restored.presented.at(-1)?.id,report.id);
 });
 
 test('bursts and streamed suffixes during exit coalesce into the latest paragraph without restarting the exit',()=>{

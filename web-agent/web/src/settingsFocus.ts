@@ -45,6 +45,6 @@ export function navigateSettingsTabs(
   const index=key==='Home'?0:key==='End'?tabs.length-1:(current+direction+tabs.length)%tabs.length;
   const next=tabs[index]!;
   event.preventDefault();
-  next.focus();
+  next.focus({preventScroll:true});
   next.click();
 }

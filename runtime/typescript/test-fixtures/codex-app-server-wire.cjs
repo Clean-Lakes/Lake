@@ -54,6 +54,19 @@ async function handle(message){
    const dynamic=await ask('item/tool/call',params);
    if(command.result?.decision!=='decline'||!dynamic.error){process.exit(2);return;}
   }
+  if(scenario==='inline-activity'){
+   note('item/completed',{item:{id:'a',type:'agentMessage',text:'检查服务'}});
+   const read={id:'read',type:'mcpToolCall',server:'lake',tool:'Read',arguments:{file_path:'inspector.yaml'}};
+   note('item/started',{item:read});note('item/completed',{item:{...read,status:'completed'}});
+   note('item/completed',{item:{id:'b',type:'agentMessage',text:'核对日志'}});
+   const cmd={id:'cmd',type:'commandExecution',command:'journalctl -u inspector -n 20'};
+   note('item/started',{item:cmd});
+   note('item/commandExecution/outputDelta',{itemId:'cmd',delta:'scan '});
+   note('item/commandExecution/outputDelta',{itemId:'cmd',delta:'started\n'.replace('\\n','\n')});
+   await new Promise(resolve=>setTimeout(resolve,300));
+   note('item/completed',{item:{...cmd,status:'completed',exitCode:0,aggregatedOutput:'scan finished'}});
+   note('turn/completed',{turn:{id:turnId,status:'completed',items:[]}});return;
+  }
   // Foreign output and an old terminal must not become the current report.
   note('item/agentMessage/delta',{threadId:'foreign',itemId:'foreign',delta:'WRONG_THREAD'});
   note('item/agentMessage/delta',{turnId:'old-turn',itemId:'foreign',delta:'WRONG_TURN'});

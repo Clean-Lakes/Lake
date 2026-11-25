@@ -1,9 +1,12 @@
 import {useCallback,useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {SessionEvent,SessionSnapshot,SpecialistReplyAuthor} from '../../shared/contracts';
+import {CodexActivity} from './CodexActivity';
+import {codexActivity} from '../../shared/codex-activity';
 import {api} from './api';
 import {applyLiveText} from './liveTextUpdates';
 import {acceptSnapshot} from './snapshotUpdates';
 import {awaitingPilotReport,pilotSpecialistBinding,pilotSpecialistPresentation,specialistSnapshotMatches,type PilotReplyPresentation,type PilotSpecialistRow} from './pilotSpecialistReplies';
+import {pilotIdentity} from './superAgentPresentation';
 import {ReplyIdentity} from './ReplyIdentity';
 import {AssistantMarkdown} from './AssistantMarkdown';
 import {ReplyProcessStatus} from './ReplyProcessStatus';
@@ -101,9 +104,9 @@ function useSpecialistReply(row:PilotSpecialistRow,connected:boolean,visible:boo
 type ObservedTurn=(row:PilotSpecialistRow,root:string)=>void;
 type ReportPresented=(id:string)=>void;
 
-function PilotSpecialistReply({row,onSpecialist,onInspectSpecialist,connected,onObservedTurn,onReportPresented,taskLabel,subscribeWorkerEvents}:{row:PilotSpecialistRow;onSpecialist?: (author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:InspectSpecialist;connected:boolean;onObservedTurn?:ObservedTurn;onReportPresented?:ReportPresented;taskLabel?:string;subscribeWorkerEvents?:SubscribePilotWorkerEvents}){
+function PilotSpecialistReply({row,onSpecialist,onInspectSpecialist,connected,onObservedTurn,onReportPresented,arriveReport,taskLabel,subscribeWorkerEvents}:{row:PilotSpecialistRow;onSpecialist?: (author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:InspectSpecialist;connected:boolean;onObservedTurn?:ObservedTurn;onReportPresented?:ReportPresented;arriveReport?:boolean;taskLabel?:string;subscribeWorkerEvents?:SubscribePilotWorkerEvents}){
  const visible=usePageVisible(),state=useSpecialistReply(row,connected,visible,subscribeWorkerEvents);
- return <PilotSpecialistReplyView row={row} snapshot={state?.snapshot} livePacket={state?.livePacket} available={connected&&!state?.failed} visible={visible} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} onObservedTurn={onObservedTurn} onReportPresented={onReportPresented} taskLabel={taskLabel}/>;
+ return <PilotSpecialistReplyView row={row} snapshot={state?.snapshot} livePacket={state?.livePacket} available={connected&&!state?.failed} visible={visible} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} onObservedTurn={onObservedTurn} onReportPresented={onReportPresented} arriveReport={arriveReport} taskLabel={taskLabel}/>;
 }
 
 function PilotReplyProse({text,active,animateInitial,cursorAvatar}:{text:string;active:boolean;animateInitial?:boolean;cursorAvatar?:LakeAvatarName}){
@@ -111,13 +114,14 @@ function PilotReplyProse({text,active,animateInitial,cursorAvatar}:{text:string;
 }
 
 /** Public reply presentation is separate from the exact-worker live subscription. */
-export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true,visible=true,onSpecialist,onInspectSpecialist,onObservedTurn,onReportPresented,taskLabel}:{row:PilotSpecialistRow;snapshot?:SessionSnapshot;livePacket?:boolean;available?:boolean;visible?:boolean;onSpecialist?:(author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:InspectSpecialist;onObservedTurn?:ObservedTurn;onReportPresented?:ReportPresented;taskLabel?:string}){
+export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true,visible=true,onSpecialist,onInspectSpecialist,onObservedTurn,onReportPresented,arriveReport,taskLabel}:{row:PilotSpecialistRow;snapshot?:SessionSnapshot;livePacket?:boolean;available?:boolean;visible?:boolean;onSpecialist?:(author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:InspectSpecialist;onObservedTurn?:ObservedTurn;onReportPresented?:ReportPresented;arriveReport?:boolean;taskLabel?:string}){
  const appearance=useSpecialistAppearance(row.author);
- const previous=useRef<PilotReplyPresentation>(undefined),binding=pilotSpecialistBinding(row);
+ const previous=useRef<PilotReplyPresentation&{observed:boolean}>(undefined),binding=pilotSpecialistBinding(row);
  const entry=pilotSpecialistPresentation(row,snapshot,previous.current);
- useLayoutEffect(()=>{previous.current={binding,entry};});
  const awaitingReport=awaitingPilotReport(row,snapshot);
  const statusSnapshot=snapshot&&specialistSnapshotMatches(row,snapshot)&&(!row.continuity||!!row.observedRootTurnId&&snapshot.ai?.rootTurnId===row.observedRootTurnId)?snapshot:undefined;
+ const observed=previous.current?.binding===binding&&previous.current.observed;
+ useLayoutEffect(()=>{previous.current={binding,entry,observed:observed||!!statusSnapshot};});
  const status=statusSnapshot?.ai?turnStatus(undefined,statusSnapshot.ai,statusSnapshot.ai.cards,statusSnapshot.ai.turnStartedAt??row.sourceCreatedAt,Date.now()):undefined;
  const candidate=row.finalReport;
  const report=candidate&&(!entry?.reply?.turnId||entry.reply.turnId===candidate.author?.rootTurnId||
@@ -141,6 +145,9 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
  },[entry?.reply?.turnId,onObservedTurn,row]);
  const observedRoot=entry?.reply?.turnId??row.observedRootTurnId;
  if(!report&&observedRoot&&row.reportedTurns.includes(observedRoot))return null;
+ const transcript=report?.codexActivity??codexActivity(statusSnapshot?.ai,row.worker.task.executionGoalId??row.worker.task.taskId,
+  report?.author?.rootTurnId??entry?.reply?.turnId??row.observedRootTurnId??statusSnapshot?.ai?.rootTurnId);
+ const hasActivity=transcript.some(item=>item.kind!=='text');
  const thinking=moving&&row.activity.phase==='thinking'&&allowsAnimalThinking(snapshot?.ai)&&(!status||status.phase==='thinking')&&!text&&projected?.card?.type!=='plan_reference';
  const snapshotLabel=status&&(status.phase==='waiting'||status.phase==='settled'||row.activity.phase==='thinking'&&status.phase!=='thinking')?status.state:undefined;
  const updating=row.activity.phase==='updating';
@@ -153,24 +160,26 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
  const inlineWait=text&&available&&!report&&!awaitingReport&&!updating?waitingLabel:undefined;
  const planState=projected?.card?.type==='plan_reference'?(projected.card.data as {state:'saved'|'writing'|'incomplete'}).state:undefined;
  const contentState:PilotReplyContentState={
-  binding:pilotSpecialistBinding(row),
+  binding,
   kind:planState?'plan':text||report?'prose':'status',id:report?.id??entry?.card?.id??'',
   text:planState??(report?text:text||(thinking?lakeAvatarThinking[appearance.icon].label:label)),
   live:working&&visible&&!awaitingReport,
+  arrive:!!text&&(report?arriveReport:working&&(!!livePacket||observed)),
  };
  return <section className="ai-chat-message ai-role-assistant pilot-specialist-reply" data-worker-id={row.worker.id} data-task-id={row.worker.task.taskId} data-phase={report?'settled':row.activity.phase} data-report-id={report?.id} aria-label={`${row.author.name}的回复`}>
-  <ReplyIdentity identity={{name:'Pilot',pilot:true}} author={report?.author??row.author} authorMotion={moving?'working':'still'} nameMotion={moving&&visible} onSpecialist={onSpecialist}/>
+  <ReplyIdentity identity={pilotIdentity} author={report?.author??row.author} showBackendName={hasActivity} authorMotion={moving?'working':'still'} nameMotion={moving&&visible} onSpecialist={onSpecialist}/>
   {taskLabel&&<small className="pilot-specialist-task-label">{taskLabel}</small>}
+  {hasActivity&&!planState&&<CodexActivity items={transcript} live={working&&visible} reportText={report?.text} cursorAvatar={awaitingReport?undefined:appearance.icon}/>}
   <PilotReplyContent state={contentState} onPresented={report?reportPresented:undefined} active={(moving||!!report&&!['failed','cancelled'].includes(row.worker.task.state))&&available&&visible}>
-   {planState?<PlanReference state={planState}/>:text?<PilotReplyProse text={text} active={working&&visible&&!awaitingReport} animateInitial={livePacket} cursorAvatar={working?appearance.icon:undefined}/>:report||awaitingReport?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
+   {planState?<PlanReference state={planState}/>:hasActivity&&!report?null:text?<PilotReplyProse text={text} active={working&&visible&&!awaitingReport} animateInitial={livePacket} cursorAvatar={working?appearance.icon:undefined}/>:report||awaitingReport?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
    {report&&<MessageAttachments message={report} sessionId={report.sessionId}/>}
   </PilotReplyContent>
-  <SpecialistProcessLink author={report?.author??row.author} reportId={report?.id} onInspect={onInspectSpecialist} active={moving&&visible} liveStatus={inlineWait}/>
+  <SpecialistProcessLink author={report?.author??row.author} reportId={report?.id} onInspect={onInspectSpecialist} active={moving&&visible} liveStatus={hasActivity?waitingLabel:inlineWait}/>
   {!report&&text&&(!available||updating&&!awaitingReport)&&<small className="pilot-specialist-connection" role="status">{label}</small>}
  </section>;
 }
 
-export function PilotSpecialistConversation({rows,onSpecialist,onInspectSpecialist,connected=true,onObservedTurn,onReportPresented,taskLabels,subscribeWorkerEvents}:{rows:PilotSpecialistRow[];onSpecialist?: (author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:InspectSpecialist;connected?:boolean;onObservedTurn?:ObservedTurn;onReportPresented?:ReportPresented;taskLabels?:ReadonlyMap<string,string>;subscribeWorkerEvents?:SubscribePilotWorkerEvents}){
+export function PilotSpecialistConversation({rows,onSpecialist,onInspectSpecialist,connected=true,onObservedTurn,onReportPresented,reportArrives,taskLabels,subscribeWorkerEvents}:{rows:PilotSpecialistRow[];onSpecialist?: (author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:InspectSpecialist;connected?:boolean;onObservedTurn?:ObservedTurn;onReportPresented?:ReportPresented;reportArrives?:(id:string)=>boolean;taskLabels?:ReadonlyMap<string,string>;subscribeWorkerEvents?:SubscribePilotWorkerEvents}){
  if(!rows.length)return null;
- return <div className="pilot-specialist-conversation">{rows.map(row=><PilotSpecialistReply key={row.worker.id} row={row} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} connected={connected} onObservedTurn={onObservedTurn} onReportPresented={onReportPresented} taskLabel={taskLabels?.get(row.worker.id)} subscribeWorkerEvents={subscribeWorkerEvents}/>)}</div>;
+ return <div className="pilot-specialist-conversation">{rows.map(row=><PilotSpecialistReply key={row.worker.id} row={row} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} connected={connected} onObservedTurn={onObservedTurn} onReportPresented={onReportPresented} arriveReport={!!row.finalReport&&reportArrives?.(row.finalReport.id)} taskLabel={taskLabels?.get(row.worker.id)} subscribeWorkerEvents={subscribeWorkerEvents}/>)}</div>;
 }
