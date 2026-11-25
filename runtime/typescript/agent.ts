@@ -169,7 +169,7 @@ export class LakeAgents {
       generation:worker.generation,rootTurnId:purpose==='worker'?this.store.view(sessionId).rootTurnId:undefined,
       get deadlineAt(){return profile.taskDeadline?.()??goal.deadlineAt;},scopeHash:digest([worker.id,worker.generation,worker.policyHash,child?.sessionId]),workspace:'',
       ...(profile.execution?.kind==='acp'&&profile.execution.model?{model:profile.execution.model.modelId}:{}),
-      signal:AbortSignal.any([controller.signal,context.abortSignal]),guard,tools,purpose,systemPrompt:purpose==='worker'?profile.systemPrompt+'\n'+lakeCommunicationPrompt:undefined,
+      signal:AbortSignal.any([controller.signal,context.abortSignal]),guard,tools,purpose,mcpDisplayName:profile.mcpDisplayName,systemPrompt:purpose==='worker'?profile.systemPrompt+'\n'+lakeCommunicationPrompt:undefined,
       executeTool:async(name,input,callId,signal)=>{
         guard();const run=this.store.require<ExternalRun>('acpRuns',callId.split(':',1)[0]);
         if(run.workerId!==worker.id||run.generation!==worker.generation||run.childSessionId!==child?.sessionId)throw new HttpError(409,'外部工具执行来源不匹配');

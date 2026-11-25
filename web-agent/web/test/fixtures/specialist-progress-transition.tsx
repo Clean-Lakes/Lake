@@ -21,6 +21,7 @@ const labels=['思考','工具状态','首段进度','流式追加','工具执�
 type Stage=typeof labels[number];
 let stage:Stage='思考',cursor=1,servedCursor=0,acp=true,long=false,secondComplete=false;
 let replyStages:ExternalReplyStage[]=[];
+const emptyInitialRun=new URLSearchParams(window.location.search).has('emptyRun');
 const streams=new Set<FixtureEvents>();
 class FixtureEvents extends EventTarget {
  readyState=1;onopen:(()=>void)|null=null;onerror:(()=>void)|null=null;onmessage:((event:MessageEvent)=>void)|null=null;
@@ -59,7 +60,7 @@ function worker(isSecond=false):SuperWorker{
 }
 function sourceCards(isSecond=false):AICard[]{
  if(isSecond)return [{id:'parallel-progress',type:'message',status:secondComplete?'completed':'running',at:started,content:'并行核对资料目录；第一位专员结束后，我仍继续当前任务。',data:{root_turn_id:parallel.rootTurnId}}];
- if(stage==='结束快照空窗')return [];
+ if(stage==='结束快照空窗'||emptyInitialRun&&stage==='思考'&&!replyStages.length)return [];
  const latest=replyStages.filter(item=>item.kind==='prose').at(-1);
  const segment=latest?{id:latest.id,content:latest.content}:publicSegment();
  const cumulative=segment.id==='acp_message_first'?segment.content:[first+firstAppend,long?longProgress:shortProgress,...(segment.id==='acp_message_final'?[conclusion]:[])].join('\n\n');

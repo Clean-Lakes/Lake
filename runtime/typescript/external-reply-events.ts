@@ -1,5 +1,5 @@
 import type {AICard,ExternalReplyStage,SessionEvent} from '../../web-agent/shared/contracts';
-import {directExternalOperationData,externalReplyStages,updateExternalReplyStages} from '../../web-agent/shared/external-agents';
+import {directExternalOperationData,externalReplyStages,isExternalToolAction,updateExternalReplyStages} from '../../web-agent/shared/external-agents';
 import type {ExternalEvent,ExternalRun} from './acp/types';
 
 type WorkerRun=Pick<ExternalRun,'purpose'|'childSessionId'|'agentRunId'>;
@@ -17,7 +17,7 @@ export function externalReplyTextUpdate(run:WorkerRun,event:Pick<ExternalEvent,'
 
 const toolCalls=new WeakMap<ExternalRun,Map<string,{stageId:string;running:boolean}>>();
 
-/** Keep one redacted prefix per public message and counts per consecutive tool group. */
+/** Keep each public message and each distinct tool action in execution order. */
 export function recordExternalReplyStage(run:ExternalRun,event:ExternalEvent,card:AICard):SessionEvent['externalReplyStageUpdate']{
  if(!rootWorker(run)||!run.taskId||!run.rootTurnId)return;
  const data=directExternalOperationData(card,run.rootTurnId);
@@ -32,16 +32,23 @@ export function recordExternalReplyStage(run:ExternalRun,event:ExternalEvent,car
   let calls=toolCalls.get(run);
   if(!calls)toolCalls.set(run,calls=new Map());
   const call=calls.get(event.callId);
-  if(event.kind==='tool'&&event.status==='running'&&!call){
+  const starting=event.kind==='tool'&&event.status==='running';
+  const ending=event.kind==='tool_update'&&(event.status==='completed'||event.status==='failed');
+  const failed=event.status==='failed'?1:0;
+  const action=isExternalToolAction(event.action)?event.action:undefined;
+  if(!call&&(starting||ending)){
    const tail=stages.at(-1);
-   const group=tail?.kind==='tools'?tail:{kind:'tools' as const,id:`tools:${stages.length}`,progress:{total:0,running:0,failed:0}};
-   stage={...group,progress:{...group.progress,total:group.progress.total+1,running:group.progress.running+1}};
-   calls.set(event.callId,{stageId:group.id,running:true});
-  }else if(call?.running&&event.kind==='tool_update'&&(event.status==='completed'||event.status==='failed')){
+   const sameAction=tail?.kind==='tools'&&tail.action?.tool===action?.tool&&tail.action?.integration===action?.integration&&
+    !(action?.tool==='call_mcp_tool'&&!action.integration);
+   const group=sameAction?tail:{kind:'tools' as const,id:`tools:${stages.length}`,progress:{total:0,running:0,failed:0},...(action&&{action})};
+   stage={...group,progress:{total:group.progress.total+1,running:group.progress.running+Number(starting),failed:group.progress.failed+failed}};
+   calls.set(event.callId,{stageId:group.id,running:starting});
+  }else if(call?.running&&ending){
    const group=stages.find(item=>item.kind==='tools'&&item.id===call.stageId);
    if(group?.kind!=='tools')return;
    call.running=false;
-   stage={...group,progress:{...group.progress,running:group.progress.running-1,failed:group.progress.failed+(event.status==='failed'?1:0)}};
+   const named=group.progress.total===1&&!group.action?.integration&&action?.integration?{action}:{};
+   stage={...group,...named,progress:{...group.progress,running:group.progress.running-1,failed:group.progress.failed+failed}};
   }
  }
  if(!stage)return;

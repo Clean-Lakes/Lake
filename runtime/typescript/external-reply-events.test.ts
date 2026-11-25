@@ -62,3 +62,25 @@ test('each real public message and tool group has a stable phase, including late
  assert.equal(card.content,'retained audit');
  assert.equal(recordExternalReplyStage({...run,childSessionId:'child'},{kind:'tool',callId:'child',status:'running',at,sequence:2},card),undefined);
 });
+
+test('consecutive different Codex actions open distinct rows and a fast completion still creates a named row',()=>{
+ const at='2026-11-12T00:00:00Z',run={id:'run',taskId:'task',rootTurnId:'root',purpose:'worker'} as ExternalRun;
+ const card:AICard={id:run.id,type:'operation',status:'running',at,
+  data:{source:'external_agent',external_run_id:run.id,taskId:run.taskId,root_turn_id:run.rootTurnId}};
+ const emit=(kind:'tool'|'tool_update',callId:string,tool:string,status:string,integration?:string)=>recordExternalReplyStage(run,{
+  kind,callId,at,sequence:1,status,title:'RAW_PRIVATE_DATA',action:{tool,integration},
+ },card)?.stage;
+ const lookup=emit('tool','a','list_assets','running')!;
+ assert.equal(emit('tool_update','a','list_assets','completed')?.id,lookup.id);
+ const firstCommand=emit('tool','b','Bash','running')!;
+ assert.notEqual(firstCommand.id,lookup.id);
+ assert.equal(emit('tool','c','Bash','running')?.id,firstCommand.id);
+ const search=emit('tool_update','d','search_web','completed','样例知识库')!;
+ assert.notEqual(search.id,firstCommand.id);
+ assert.equal(emit('tool_update','d','search_web','completed','样例知识库'),undefined);
+ assert.equal(emit('tool_update','c','Bash','failed')?.id,firstCommand.id);
+ const stages=externalReplyStages((card.data as Record<string,unknown>).external_reply_stages);
+ assert.deepEqual(stages.map(stage=>stage.kind==='tools'?stage.action?.tool:undefined),['list_assets','Bash','search_web']);
+ assert.deepEqual(stages.at(-1),{kind:'tools',id:search.id,action:{tool:'search_web',integration:'样例知识库'},progress:{total:1,running:0,failed:0}});
+ assert.doesNotMatch(JSON.stringify(stages),/RAW_PRIVATE_DATA/);
+});

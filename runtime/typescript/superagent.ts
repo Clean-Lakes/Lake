@@ -1697,6 +1697,7 @@ export class LakeSuperagent implements AgentHost {
       taskDeadline: worker.inline?undefined:()=>this.ledger.get(worker.taskId).deadlineAt,
       validateExecution:()=>this.validateWorker(worker.id,worker.generation),
       execution:worker.roleSnapshot.execution??{kind:'native'},
+      mcpDisplayName:serverId=>this.extensions?.projectServers(worker.projectId,this.store.session(router.routerSessionId).options).servers.find(server=>server.id===serverId)?.name,
       requestFinalReport: () => this.requestFinalReport(worker),
       wrapHTTP:base=>this.httpPort(worker,base),
       wrapFilesystem:base=>this.filePort(worker,base),

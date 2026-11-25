@@ -48,7 +48,7 @@ export type ExternalEvent = {
   sequence: number; kind: 'text' | 'tool' | 'tool_update' | 'status'; text?: string;
   /** Read-only current ACP message projection; text remains the full run audit. */
   publicText?: string; publicTextId?: string;
-  callId?: string; title?: string; status?: string; at: string;
+  callId?: string; title?: string; status?: string; action?: import('../../../web-agent/shared/contracts').ExternalToolAction; at: string;
 };
 /** Constructed by Lake's current task or conversation host. Never deserialized from tool arguments. */
 export type ExternalActor = {
@@ -59,6 +59,7 @@ export type ExternalActor = {
   systemPrompt?: string;
   model?:string;
   guard: () => void; tools: ToolEntry[];
+  mcpDisplayName?: (serverId:string)=>string|undefined;
   executeTool: (name: string, input: unknown, callId: string, signal: AbortSignal) => Promise<unknown>;
   event: (run: ExternalRun, event: ExternalEvent) => void;
   inputConsumed?: (inputId:string) => void;

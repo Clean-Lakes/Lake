@@ -1,6 +1,7 @@
-import type {AICard,ExternalToolProgress,Message,SessionSnapshot,SpecialistChannelEntry,SpecialistReplyAuthor,SuperWorker,SuperWorkspace} from '../../shared/contracts';
+import type {AICard,ExternalReplyStage,ExternalToolAction,ExternalToolProgress,Message,SessionSnapshot,SpecialistChannelEntry,SpecialistReplyAuthor,SuperWorker,SuperWorkspace} from '../../shared/contracts';
 import {directExternalOperationData,externalReplyStages} from '../../shared/external-agents';
 import {liveSpecialistReplies} from '../../shared/specialist-replies';
+import {toolLabels} from './activity';
 
 type PilotSpecialistActivity=Omit<NonNullable<SuperWorker['activity']>,'phase'>&{phase:NonNullable<SuperWorker['activity']>['phase']|'updating'};
 export type PilotSpecialistRow={projectId:string;routerSessionId?:string;worker:SuperWorker;activity:PilotSpecialistActivity;sourceMessageId:string;sourceCreatedAt:string;author:SpecialistReplyAuthor;reportedTurns:string[];continuity?:'updating'|'terminal';observedRootTurnId?:string;finalReport?:Message};
@@ -108,13 +109,23 @@ export function awaitingPilotReport(row:PilotSpecialistRow,snapshot?:SessionSnap
   (!snapshot.ai?.rootTurnId||snapshot.ai.rootTurnId===row.observedRootTurnId);
 }
 
-export type PilotReplyStage={kind:'prose';id:string;card:AICard}|{kind:'tools';id:string;progress:ExternalToolProgress};
+export type PilotReplyStage={kind:'prose';id:string;card:AICard}|Extract<ExternalReplyStage,{kind:'tools'}>;
 type PilotReplyEntry=SpecialistChannelEntry&{stages:PilotReplyStage[]};
 export type PilotReplyPresentation={binding:string;entry?:PilotReplyEntry};
 
-export function pilotToolStageLabel({total,running,failed}:ExternalToolProgress,active:boolean){
+const codexToolLabels:Record<string,string>={
+ Bash:'执行命令',Read:'读取文件',Write:'写入文件',Edit:'编辑文件',Glob:'查找文件',Grep:'搜索文件',
+ FindFiles:'查找文件',SearchText:'搜索文件',WebSearch:'搜索网页',WebFetch:'读取网页',Agent:'专员协作',
+ work_begin:'开始任务',work_update:'更新任务进度',work_wait:'等待任务输入',work_finish:'提交专员报告',
+};
+
+export function pilotToolStageLabel({total,running,failed}:ExternalToolProgress,active:boolean,action?:ExternalToolAction){
+ const tool=action?.tool;
+ const name=tool&&Object.hasOwn(codexToolLabels,tool)?codexToolLabels[tool]:tool&&Object.hasOwn(toolLabels,tool)?toolLabels[tool]:tool;
+ const title=action?.integration?`${name}（${action.integration}）`:name;
+ if(title&&total===1)return `${title} · ${running?active?'执行中':'未结束':failed?'失败':'已完成'}`;
  const ended=total-running;
- return ['工具调用',running>0&&`${running} 项${active?'执行中':'未结束'}`,ended>0&&`${ended} 项已结束`,failed>0&&`${failed} 项失败`].filter(Boolean).join(' · ');
+ return [title??'工具调用',running>0&&`${running} 项${active?'执行中':'未结束'}`,ended>0&&`${ended} 项已结束`,failed>0&&`${failed} 项失败`].filter(Boolean).join(' · ');
 }
 
 /** Keep the last committed public segment until the host's exact report takes

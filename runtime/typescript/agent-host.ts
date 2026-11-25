@@ -31,6 +31,7 @@ export type HostProfile = {
   /** Request one SDK-native, presentation-only continuation when business work lacks its public report. */
   requestFinalReport?: () => boolean;
   configureTool?: (entry: ToolEntry) => ToolEntry;
+  mcpDisplayName?: (serverId:string)=>string|undefined;
   permissionRules?: PermissionRuleset;
   projectRequest?: <T>(request: T) => T;
   invoke?: (entry: ToolEntry, input: unknown, context: HostToolContext) => Promise<unknown>;

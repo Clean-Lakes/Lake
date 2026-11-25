@@ -292,9 +292,10 @@ export type ResourceTreeNode = { id: string; projectId: string; parentId: string
 export type SSHHostKeyTrust = { id: string; resourceId: string; host: string; port: number; algorithm: string; fingerprint: string; previousFingerprints: string[]; changed: boolean; scope: "lake" };
 
 export type ExternalToolProgress = {total:number;running:number;failed:number};
+export type ExternalToolAction = {tool:string;integration?:string};
 export type ExternalReplyStage =
   | {kind:'prose';id:string;content:string}
-  | {kind:'tools';id:string;progress:ExternalToolProgress};
+  | {kind:'tools';id:string;progress:ExternalToolProgress;action?:ExternalToolAction};
 
 export type SessionEvent = {
 	conversationMode?: ConversationMode;

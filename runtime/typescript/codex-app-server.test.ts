@@ -53,6 +53,21 @@ test('Codex resumes one provider thread, excludes historical messages and subtra
  assert.deepEqual(activity.find(event=>event.kind==='usage'),{kind:'usage',usage:{inputTokens:10,outputTokens:5}});
 });
 
+test('Codex wire tool stages identify specific actions and scoped integrations without reflecting invocation inputs',async t=>{
+ const activity:AgentActivity[]=[];
+ const adapter=new CodexAppServer(launch('named-phases'),event=>activity.push(event),{
+  server:'lake',tools:new Set(['Read','call_mcp_tool']),guard(){},displayName:id=>id==='catalog'?'样例知识库':undefined,
+ });
+ t.after(()=>adapter.close());
+ await adapter.initialize(signal());await adapter.openSession({cwd:process.cwd()},signal());
+ assert.equal((await adapter.exec('hello',signal())).stopReason,'end_turn');
+ const tools=activity.filter((event):event is Extract<AgentActivity,{kind:'tool'|'tool_update'}>=>event.kind==='tool'||event.kind==='tool_update');
+ assert.deepEqual(tools.filter(item=>item.kind==='tool').map(item=>item.action),[{tool:'Read'},{tool:'search_web',integration:'样例知识库'},{tool:'terminal_execute_command'}]);
+ assert.deepEqual(tools.find(item=>item.callId==='web')?.action,{tool:'web_search'});
+ assert.equal(tools.find(item=>item.callId==='command'&&item.kind==='tool_update')?.status,'failed');
+ assert.doesNotMatch(JSON.stringify(tools.map(item=>item.action)),/RAW_|server_id|catalog/);
+});
+
 test('Codex refuses native approval and dynamic tool requests without forwarding business calls',async t=>{
  const adapter=new CodexAppServer(launch('approval'),()=>{});t.after(()=>adapter.close());
  await adapter.initialize(signal());await adapter.openSession({cwd:process.cwd()},signal());

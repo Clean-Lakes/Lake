@@ -1,4 +1,4 @@
-import type {AICard,ExternalReplyStage,ExternalToolProgress} from './contracts';
+import type {AICard,ExternalReplyStage,ExternalToolAction,ExternalToolProgress} from './contracts';
 export type ExternalAgentId = 'codex';
 export type ExternalRuntimeKind = 'codex-app-server';
 /** Read compatibility only; retired bindings never authorize a new run. */
@@ -31,11 +31,22 @@ export function isExternalToolProgress(value:unknown):value is ExternalToolProgr
   Number.isSafeInteger(failed)&&failed>=0&&failed+running<=total;
 }
 
+export function isExternalToolName(value:unknown):value is string{
+ return typeof value==='string'&&/^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,127}$/.test(value);
+}
+
+export function isExternalToolAction(value:unknown):value is ExternalToolAction{
+ if(!value||typeof value!=='object')return false;
+ const {tool,integration}=value as ExternalToolAction;
+ return isExternalToolName(tool)&&(integration===undefined||typeof integration==='string'&&!!integration.trim()&&
+  integration.length<=120&&!/[\p{C}\u2028\u2029]/u.test(integration));
+}
+
 export function isExternalReplyStage(value:unknown):value is ExternalReplyStage{
  if(!value||typeof value!=='object')return false;
  const stage=value as ExternalReplyStage;
  return typeof stage.id==='string'&&!!stage.id&&(stage.kind==='prose'&&typeof stage.content==='string'||
-  stage.kind==='tools'&&isExternalToolProgress(stage.progress));
+  stage.kind==='tools'&&isExternalToolProgress(stage.progress)&&(stage.action===undefined||isExternalToolAction(stage.action)));
 }
 
 export function externalReplyStages(value:unknown):ExternalReplyStage[]{

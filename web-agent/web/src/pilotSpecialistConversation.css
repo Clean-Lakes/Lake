@@ -24,7 +24,7 @@
 .ai-chat-message .pilot-specialist-task-label { margin:-3px 0 4px; color:var(--text-muted); font-size:var(--font-size-toolbar); }
 @media (prefers-reduced-motion:reduce) {
  .pilot-specialist-reply-content { clip-path:none!important; }
- .pilot-specialist-stage { clip-path:none!important; opacity:1!important; }
+ .pilot-specialist-stage,.pilot-specialist-tool-stage { clip-path:none!important; opacity:1!important; }
  .pilot-report-body { transition:none; }
  .pilot-report-chevron { transition:none; }
 }

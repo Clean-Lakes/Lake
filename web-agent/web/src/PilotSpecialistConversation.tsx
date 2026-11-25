@@ -43,7 +43,7 @@ function useSpecialistReply(row:PilotSpecialistRow,connected:boolean,visible:boo
   const controller=new AbortController();let disposed=false,busy=false,queued=false,healthy=false,streamOpen=false;
   let latest=state?.binding===binding?state.snapshot:undefined,frame:number|undefined,timer:ReturnType<typeof setTimeout>|undefined,stream:EventSource|undefined;
   let snapshotFailureSince:number|undefined;
-  let frameHasText=false;
+  let frameHasActivity=false;
   const refresh=async()=>{
    if(busy){queued=true;return;}busy=true;
    try{
@@ -53,7 +53,7 @@ function useSpecialistReply(row:PilotSpecialistRow,connected:boolean,visible:boo
     healthy=streamOpen;
     // A response for a superseded binding cannot replace this row's prose.
     if(next&&(!latest||next.cursor>=latest.cursor)){
-     if(next.ai?.rootTurnId!==latest?.ai?.rootTurnId)frameHasText=false;
+     if(next.ai?.rootTurnId!==latest?.ai?.rootTurnId)frameHasActivity=false;
      latest=acceptSnapshot(latest??null,next);
     }
     const snapshot=latest;
@@ -73,13 +73,13 @@ function useSpecialistReply(row:PilotSpecialistRow,connected:boolean,visible:boo
     if(event.sessionId!==row.worker.sessionId||!Number.isSafeInteger(event.seq)||latest&&event.seq<=latest.cursor)return;
     const next=event.externalReplyStageUpdate?applyExternalReplyStageUpdate(latest??null,event):event.textUpdate?applyLiveText(latest??null,event):null;
     if(next){
-     latest=next;frameHasText||=!!event.textUpdate;
+     latest=next;frameHasActivity||=!!(event.textUpdate||event.externalReplyStageUpdate);
      if(frame===undefined)frame=requestAnimationFrame(()=>{
       frame=undefined;if(disposed)return;
-      const snapshot=latest,hasText=frameHasText;
-      frameHasText=false;snapshotFailureSince=undefined;
+      const snapshot=latest,hasActivity=frameHasActivity;
+      frameHasActivity=false;snapshotFailureSince=undefined;
       healthy=streamOpen;
-      setState(current=>({binding,snapshot,failed:false,livePacket:hasText||
+      setState(current=>({binding,snapshot,failed:false,livePacket:hasActivity||
        current?.binding===binding&&current.snapshot?.ai?.rootTurnId===snapshot?.ai?.rootTurnId&&current.livePacket}));
      });
     }else schedule();
@@ -123,10 +123,23 @@ function PilotReplyStageSurface({stage,arrive,active,children}:{stage:PilotReply
   entering.current=false;
   if(!active||document.hidden||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
   const animation=element.current?.animate?.([{clipPath:'inset(0 100% 0 0)',opacity:.45},{clipPath:'inset(0 0 0 0)',opacity:1}],
-   {duration:PILOT_REPLY_TRANSITION_MS,easing:'cubic-bezier(.22,1,.36,1)'});
+   {duration:stage.kind==='tools'?320:PILOT_REPLY_TRANSITION_MS,easing:'cubic-bezier(.22,1,.36,1)'});
   return()=>animation?.cancel();
- },[active]);
+ },[active,stage.kind]);
  return <div ref={element} className="pilot-specialist-stage" data-reply-stage={stage.kind} data-reply-stage-id={stage.id}>{children}</div>;
+}
+
+function PilotToolStage({stage,active}:{stage:Extract<PilotReplyStage,{kind:'tools'}>;active:boolean}){
+ const label=pilotToolStageLabel(stage.progress,active,stage.action);
+ const row=useRef<HTMLDivElement>(null),previous=useRef({label,active});
+ useLayoutEffect(()=>{
+  const last=previous.current;
+  previous.current={label,active};
+  if(!active||!last.active||last.label===label||document.hidden||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const animation=row.current?.animate?.([{opacity:.6},{opacity:1}],{duration:240,easing:'ease-out'});
+  return()=>animation?.cancel();
+ },[label,active]);
+ return <div ref={row} className="pilot-specialist-tool-stage"><Glyph name="plug" size={13}/><ReplyProcessStatus active={active&&stage.progress.running>0}>{label}</ReplyProcessStatus></div>;
 }
 
 type PlanOptions=Parameters<typeof conversationPlanEntry>[1];
@@ -135,7 +148,7 @@ function PilotReplyStages({stages,text,active,arrive,cursorAvatar,plan}:{stages:
  return <div className="pilot-specialist-stages">{stages.map(stage=>{
   let content;
   if(stage.kind==='tools'){
-   content=<div className="pilot-specialist-tool-stage"><Glyph name="plug" size={13}/><ReplyProcessStatus active={active&&stage.progress.running>0}>{pilotToolStageLabel(stage.progress,active)}</ReplyProcessStatus></div>;
+   content=<PilotToolStage stage={stage} active={active}/>;
   }else{
    const current=stage===currentProse;
    const projected=conversationPlanEntry({id:stage.card.id,at:stage.card.at,card:stage.card},{...plan,live:plan.live&&current});
@@ -150,12 +163,12 @@ function PilotReplyStages({stages,text,active,arrive,cursorAvatar,plan}:{stages:
 /** Public reply presentation is separate from the exact-worker live subscription. */
 export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true,visible=true,onSpecialist,onInspectSpecialist,onObservedTurn,onReportPresented,taskLabel}:{row:PilotSpecialistRow;snapshot?:SessionSnapshot;livePacket?:boolean;available?:boolean;visible?:boolean;onSpecialist?:(author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:InspectSpecialist;onObservedTurn?:ObservedTurn;onReportPresented?:ReportPresented;taskLabel?:string}){
  const appearance=useSpecialistAppearance(row.author);
- const previous=useRef<PilotReplyPresentation>(undefined),binding=pilotSpecialistBinding(row);
+ const previous=useRef<PilotReplyPresentation&{observed:boolean}>(undefined),binding=pilotSpecialistBinding(row);
  const entry=pilotSpecialistPresentation(row,snapshot,previous.current);
- const observedPhase=previous.current?.binding===binding&&previous.current.entry?.reply?.turnId===entry?.reply?.turnId&&!!entry?.reply?.turnId;
- useLayoutEffect(()=>{previous.current={binding,entry};});
  const awaitingReport=awaitingPilotReport(row,snapshot);
  const statusSnapshot=snapshot&&specialistSnapshotMatches(row,snapshot)&&(!row.continuity||!!row.observedRootTurnId&&snapshot.ai?.rootTurnId===row.observedRootTurnId)?snapshot:undefined;
+ const observed=previous.current?.binding===binding&&previous.current.observed;
+ useLayoutEffect(()=>{previous.current={binding,entry,observed:observed||!!statusSnapshot};});
  const status=statusSnapshot?.ai?turnStatus(undefined,statusSnapshot.ai,statusSnapshot.ai.cards,statusSnapshot.ai.turnStartedAt??row.sourceCreatedAt,Date.now()):undefined;
  const candidate=row.finalReport;
  const report=candidate&&(!entry?.reply?.turnId||entry.reply.turnId===candidate.author?.rootTurnId||
@@ -204,7 +217,7 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
   <ReplyIdentity identity={{name:'Pilot',pilot:true}} author={report?.author??row.author} authorMotion={moving?'working':'still'} nameMotion={moving&&visible} onSpecialist={onSpecialist}/>
   {taskLabel&&<small className="pilot-specialist-task-label">{taskLabel}</small>}
   <PilotReplyContent state={contentState} onPresented={report?reportPresented:undefined} active={(moving||!!report&&!['failed','cancelled'].includes(row.worker.task.state))&&available&&visible}>
-   {hasStages?<PilotReplyStages key={entry?.reply?.turnId} stages={stages!} text={text} active={live} arrive={live&&(observedPhase||!!livePacket)} cursorAvatar={working?appearance.icon:undefined} plan={plan}/>:planState?<PlanReference state={planState}/>:text?<PilotReplyProse text={text} active={live} animateInitial={livePacket} cursorAvatar={working?appearance.icon:undefined}/>:report||awaitingReport?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
+   {hasStages?<PilotReplyStages key={entry?.reply?.turnId} stages={stages!} text={text} active={live} arrive={live&&(observed||!!livePacket)} cursorAvatar={working?appearance.icon:undefined} plan={plan}/>:planState?<PlanReference state={planState}/>:text?<PilotReplyProse text={text} active={live} animateInitial={livePacket} cursorAvatar={working?appearance.icon:undefined}/>:report||awaitingReport?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
    {report&&<MessageAttachments message={report} sessionId={report.sessionId}/>}
   </PilotReplyContent>
   <SpecialistProcessLink author={report?.author??row.author} reportId={report?.id} onInspect={onInspectSpecialist} active={moving&&visible} liveStatus={inlineWait}/>

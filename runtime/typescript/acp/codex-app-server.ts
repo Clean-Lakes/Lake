@@ -1,4 +1,6 @@
 import type {AgentActivity,AgentConnection,AgentLaunch,AgentTurnResult} from './client';
+import type {ExternalToolAction} from '../../../web-agent/shared/contracts';
+import {isExternalToolName} from '../../../web-agent/shared/external-agents';
 import {JsonRpcProcess} from './process';
 
 type Tokens={inputTokens:number;outputTokens:number};
@@ -8,7 +10,24 @@ type Turn={id?:string;done:boolean;resolve:(result:AgentTurnResult)=>void;reject
   inputs:Map<string,{text:string;consumed:boolean}>;};
 const tokens=(value:any):Tokens|undefined=>value&&Number.isSafeInteger(value.inputTokens)&&value.inputTokens>=0&&Number.isSafeInteger(value.outputTokens)&&value.outputTokens>=0?
   {inputTokens:value.inputTokens,outputTokens:value.outputTokens}:undefined;
-type McpGate={server:string;tools:ReadonlySet<string>;guard:()=>void};
+type McpGate={server:string;tools:ReadonlySet<string>;guard:()=>void;displayName?:(serverId:string)=>string|undefined};
+
+const codexActions:Record<string,string>={commandExecution:'terminal_execute_command',fileChange:'edit_file',webSearch:'web_search',collabAgentToolCall:'Agent'};
+
+function publicToolAction(item:any,mcp?:McpGate):ExternalToolAction|undefined{
+ if(item.type==='mcpToolCall'&&isExternalToolName(item.tool)){
+  if(mcp&&mcp.server===item.server&&mcp.tools.has(item.tool)&&['call_mcp_tool','list_mcp_tools'].includes(item.tool)&&isExternalToolName(item.arguments?.server_id)){
+   // Resolve only the project catalog label. Invocation inputs and capability decisions stay in the broker.
+   let integration:string|undefined;
+   try{integration=mcp.displayName?.(item.arguments.server_id);}catch{/* Discovery may be unavailable. */}
+   if(integration)return {tool:item.tool==='call_mcp_tool'&&isExternalToolName(item.arguments.tool)?item.arguments.tool:item.tool,integration};
+  }
+  return {tool:item.tool,...(item.server!=='lake'&&isExternalToolName(item.server)&&{integration:item.server})};
+ }
+ if(item.type==='dynamicToolCall'&&isExternalToolName(item.tool))return {tool:item.tool};
+ const tool=Object.hasOwn(codexActions,item.type)?codexActions[item.type]:undefined;
+ return tool?{tool}:undefined;
+}
 
 /** Official Codex App Server. JSON-RPC version headers are omitted. */
 export class CodexAppServer implements AgentConnection {
@@ -152,10 +171,11 @@ export class CodexAppServer implements AgentConnection {
         if(method==='item/completed'){const call=turn.mcpCalls.get(item.id);if(call)call.pending=false;}
       }
       if(item.type==='agentMessage'&&method==='item/completed'&&typeof item.text==='string')this.messageText(turn,item.id,item.text);
-      else if(['mcpToolCall','commandExecution','fileChange','dynamicToolCall','collabAgentToolCall'].includes(item.type))
+      else if(['mcpToolCall','commandExecution','fileChange','dynamicToolCall','collabAgentToolCall','webSearch'].includes(item.type))
         this.activity({kind:method==='item/started'?'tool':'tool_update',callId:item.id,
           title:item.type==='mcpToolCall'?item.server==='lake'?item.tool:item.server+' / '+item.tool:item.tool??item.command??item.type,
-          status:method==='item/started'?'running':item.status==='failed'||item.success===false?'failed':'completed'});
+          action:publicToolAction(item,this.mcp),
+          status:method==='item/started'?'running':['failed','declined','cancelled','interrupted'].includes(item.status)||item.success===false?'failed':'completed'});
     }else if(method==='thread/tokenUsage/updated') {
       const total=tokens(params.tokenUsage?.total);if(!total)return;
       this.totalTokens=total;

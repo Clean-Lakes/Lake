@@ -66,6 +66,13 @@ async function handle(message){
   note('item/agentMessage/delta',{itemId:'message',delta:'好'});
   const tool={id:'tool',type:'mcpToolCall',server:'lake',tool:'Read',status:'inProgress'};
   note('item/started',{item:tool});note('item/completed',{item:{...tool,status:'completed'}});
+  if(scenario==='named-phases'){
+   const action={id:'lookup',type:'mcpToolCall',server:'lake',tool:'call_mcp_tool',arguments:{server_id:'catalog',tool:'search_web',private:'RAW_TOOL_INPUT'}};
+   note('item/started',{item:action});note('item/completed',{item:{...action,status:'completed'}});
+   const command={id:'command',type:'commandExecution',command:'RAW_COMMAND_CONTENT',status:'inProgress'};
+   note('item/started',{item:command});note('item/completed',{item:{...command,status:'declined'}});
+   note('item/completed',{item:{id:'web',type:'webSearch',query:'RAW_SEARCH_CONTENT',status:'completed'}});
+  }
   const base=message.params.input[0].text==='resumed'?{inputTokens:100,outputTokens:50}:{inputTokens:0,outputTokens:0};
   note('thread/tokenUsage/updated',{tokenUsage:{total:{inputTokens:base.inputTokens+10,outputTokens:base.outputTokens+5}}});
   const item={id:'message',type:'agentMessage',text:'你好'};

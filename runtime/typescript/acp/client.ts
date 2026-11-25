@@ -1,3 +1,5 @@
+import type {ExternalToolAction} from '../../../web-agent/shared/contracts';
+
 /** Provider-neutral boundary. Protocol frames never enter the task runtime. */
 export type AgentLaunch = {
   executable: string; args: string[]; cwd: string; env: NodeJS.ProcessEnv;
@@ -7,7 +9,7 @@ export type AgentLaunch = {
 export type AgentActivity =
   | {kind:'input';inputId:string}
   | {kind:'text';text:string;messageId:string;messageText:string}
-  | {kind:'tool'|'tool_update';callId:string;title:string;status:string}
+  | {kind:'tool'|'tool_update';callId:string;title:string;status:string;action?:ExternalToolAction}
   | {kind:'usage';usage:{inputTokens:number;outputTokens:number}};
 export type AgentTurnResult = {stopReason:'end_turn'|'cancelled'|'failed';error?:string};
 export interface AgentConnection {

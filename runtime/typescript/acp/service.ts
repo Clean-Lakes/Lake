@@ -8,7 +8,7 @@ import type {AgentConnection,AgentLaunch} from './client';
 import {CodexAppServer} from './codex-app-server';
 import { ExternalAgentRegistry } from './registry';
 import { externalAgentId,externalControlTools,externalProducts } from './catalog';
-import {externalAgentName} from '../../../web-agent/shared/external-agents';
+import {externalAgentName,isExternalToolAction} from '../../../web-agent/shared/external-agents';
 import { openToolBridge } from './bridge';
 import {privatePath} from './private';
 import {codexConfig,tomlValue} from './codex-profile';
@@ -122,9 +122,10 @@ export class LakeExternalAgents {
     let bridge:Awaited<ReturnType<typeof openToolBridge>>|undefined,submittedReport='',eventBytes=0;
     const text=new ExternalPublicText(run.id,this.redact);
     const persist=()=>{run.updatedAt=now();this.store.put('acpRuns',run.id,run);};
-    const event=(value:Omit<ExternalEvent,'sequence'|'at'>)=>{
+    const event=({action,...value}:Omit<ExternalEvent,'sequence'|'at'>)=>{
       const clean=Object.fromEntries(Object.entries(value).map(([key,item])=>[key,['text','publicText','title','callId'].includes(key)&&typeof item==='string'?this.redact(item,key==='text'||key==='publicText').slice(0,key==='text'||key==='publicText'?32768:512):item]));
-      const entry:ExternalEvent={...value,...clean,sequence:run.events.length+1,at:now()};eventBytes+=Buffer.byteLength(JSON.stringify(entry));
+      const label=action&&{tool:this.redact(action.tool),integration:action.integration&&this.redact(action.integration)};
+      const entry:ExternalEvent={...value,...clean,...(isExternalToolAction(label)&&{action:label}),sequence:run.events.length+1,at:now()};eventBytes+=Buffer.byteLength(JSON.stringify(entry));
       if(eventBytes<=16*1024*1024&&run.events.length<2048)run.events.push(entry);
       else if(!controller.signal.aborted)controller.abort(new Error('外部 Agent 过程输出达到本次上限'));
       persist();actor.event(run,entry);
@@ -151,7 +152,7 @@ export class LakeExternalAgents {
         else if(update.kind==='usage'){run.usage=update.usage;persist();}
         else if(update.kind==='text')event({kind:'text',...text.snapshot(update.text,update.messageId,update.messageText)});
         else event(update);
-      },bridge?{server:'lake',tools:new Set(tools.map(tool=>tool.metadata.name)),guard:activePrompt}:undefined);
+      },bridge?{server:'lake',tools:new Set(tools.map(tool=>tool.metadata.name)),guard:activePrompt,displayName:actor.mcpDisplayName}:undefined);
       live.process=transport;
       const cancel=()=>{void transport.cancel().finally(()=>transport.close());};controller.signal.addEventListener('abort',cancel,{once:true});
       await transport.initialize(controller.signal);
