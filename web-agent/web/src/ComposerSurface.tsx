@@ -1,9 +1,11 @@
 import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from "react";
 import {canAnimateControls,controlMotionEase} from "./controlMotion";
-import {Glyph} from "./Icons";
+import {ProviderIcon} from "./ProviderIcon";
 
-export function ComposerSurface({sessionId,dragging,pinnedOpen,editorDisabled,children}:{
-  sessionId:string;dragging:boolean;pinnedOpen:boolean;editorDisabled:boolean;children:ReactNode;
+const composerSpringEase="cubic-bezier(.28,.75,.35,1.12)";
+
+export function ComposerSurface({sessionId,dragging,pinnedOpen,modelBrand,children}:{
+  sessionId:string;dragging:boolean;pinnedOpen:boolean;modelBrand?:string;children:ReactNode;
 }) {
   const surface=useRef<HTMLDivElement>(null);
   const face=useRef<HTMLDivElement>(null);
@@ -36,35 +38,46 @@ export function ComposerSurface({sessionId,dragging,pinnedOpen,editorDisabled,ch
 
   useLayoutEffect(()=>{
     const box=surface.current,backplate=face.current,content=contents.current;
+    const rail=box?.parentElement;
     const editor=content?.querySelector<HTMLElement>(".composer-body");
     const tools=content?.querySelector<HTMLElement>(".composer-foot");
-    if(!box||!backplate||!content||!editor||!tools)return;
+    if(!box||!rail||!backplate||!content||!editor||!tools)return;
     const geometry=()=>{
       const frame=box.getBoundingClientRect();
       const shift=parseFloat(getComputedStyle(editor).translate?.split(" ")[1]??"0")||0;
-      return {width:box.offsetWidth,height:frame.height,editorTop:editor.getBoundingClientRect().top-frame.bottom-shift,
+      return {width:frame.width,height:frame.height,railWidth:rail.offsetWidth,
+        editorTop:editor.getBoundingClientRect().top-frame.bottom-shift,
         shift,compact:box.hasAttribute("data-composer-compact")};
     };
     let last=geometry();
     let plateMotion:Animation|undefined,editorMotion:Animation|undefined,toolMotion:Animation|undefined;
-    const clearMotion=()=>{plateMotion?.cancel();editorMotion?.cancel();toolMotion?.cancel();};
+    const clearMotion=()=>{
+      plateMotion?.cancel();editorMotion?.cancel();toolMotion?.cancel();
+      box.removeAttribute("data-composer-collapsing");
+    };
     const resize=new ResizeObserver(()=>{
       const next=geometry(),previous=last;
       last=next;
       const layoutChanged=previous.compact!==next.compact;
-      if(next.width!==previous.width||!canAnimateControls()||!backplate.animate){
+      if(next.railWidth!==previous.railWidth||!next.width||!next.height||!canAnimateControls()||!backplate.animate){
         clearMotion();
         return;
       }
       if(!layoutChanged&&Math.abs(next.height-previous.height)<1)return;
-      const scale=parseFloat(getComputedStyle(backplate).scale?.split(" ")[1]??"1")||1;
+      const [scaleX,scaleY=scaleX]=getComputedStyle(backplate).scale?.split(" ")??[];
       plateMotion?.cancel();
       editorMotion?.cancel();
-      const visualHeight=previous.height*scale;
-      const from=layoutChanged?visualHeight:Math.max(next.height-32,Math.min(next.height+32,visualHeight));
-      const timing={duration:layoutChanged?200:145,easing:controlMotionEase};
+      const visualHeight=previous.height*(Number(scaleY)||1);
+      const fromHeight=layoutChanged?visualHeight:Math.max(next.height-32,Math.min(next.height+32,visualHeight));
+      const fromWidth=previous.width*(Number(scaleX)||1);
+      const timing=layoutChanged?{duration:260,easing:composerSpringEase}:{duration:145,easing:controlMotionEase};
       // The conversation has its final layout already. Only the painted frame and editor move.
-      plateMotion=backplate.animate([{scale:`1 ${from/next.height}`},{scale:"1 1"}],timing);
+      const frameMotion=backplate.animate([{scale:`${fromWidth/next.width} ${fromHeight/next.height}`},{scale:"1 1"}],timing);
+      plateMotion=frameMotion;
+      if(layoutChanged)box.toggleAttribute("data-composer-collapsing",next.compact);
+      if(box.hasAttribute("data-composer-collapsing"))frameMotion.onfinish=()=>{
+        if(plateMotion===frameMotion)box.removeAttribute("data-composer-collapsing");
+      };
       if(layoutChanged){
         const offset=previous.editorTop+next.shift-next.editorTop;
         editorMotion=editor.animate([{translate:`0px ${offset}px`},{translate:"0px 0px"}],timing);
@@ -103,10 +116,9 @@ export function ComposerSurface({sessionId,dragging,pinnedOpen,editorDisabled,ch
     <div className="composer-backplate" ref={face} aria-hidden="true"/>
     <div className="composer-resizing-content" ref={contents}>
       {children}
-      {compact&&<button type="button" className="composer-expand-button" aria-label="展开输入框"
-        title="展开输入框" disabled={editorDisabled} onClick={focusEditor}>
-        <span>展开</span><Glyph name="chevron" size={14}/>
-      </button>}
+      {compact&&modelBrand&&<span className="composer-model-preview" aria-hidden="true">
+        <span><ProviderIcon brand={modelBrand} size={16}/></span>
+      </span>}
     </div>
   </div>;
 }
