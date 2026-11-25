@@ -1,5 +1,6 @@
 import {useLayoutEffect, useRef, useState, type ReactNode, type RefObject} from 'react';
 import {Glyph} from './Icons';
+import {SettingsOverview} from './SettingsOverview';
 import {navigateSettingsTabs, settingsTabStops, trapSettingsTab} from './settingsFocus';
 import {consoleCategories, consolePanelId, consoleTabId, type ConsolePage} from './workspaceConsoleTabs';
 import './workspaceConsole.css';
@@ -52,12 +53,14 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
     hadOverlay.current = hasOverlay;
   }, [open, hasOverlay]);
 
-  function choose(next: ConsolePage) {
+  function choose(next: ConsolePage, focusTab = false) {
     if (busy) return;
     onPage(next);
     if (query) {
       setQuery('');
       search.current?.focus();
+    } else if (focusTab) {
+      document.getElementById(consoleTabId(next))?.focus({preventScroll: true});
     }
   }
 
@@ -129,6 +132,8 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
       <div className="workspace-console-content">
         <button type="button" className="icon-button workspace-console-close" title="关闭控制台"
           aria-label="关闭控制台" onClick={onClose}><Glyph name="close" size={18}/></button>
+        {open && page === 'overview' &&
+          <SettingsOverview typescriptBackend={typescriptBackend} onPage={next => choose(next, true)}/>}
         {children}
       </div>
     </div>
