@@ -20,7 +20,7 @@ export class CodexAppServer implements AgentConnection {
   private turn?:Turn;
   private totalTokens?:Tokens;
   private broken=false;
-  constructor(private readonly launch:AgentLaunch,private readonly activity:(event:AgentActivity)=>void,private readonly mcp?:McpGate) {
+  constructor(private readonly launch:AgentLaunch,private readonly activity:(event:AgentActivity)=>void,private readonly mcp?:McpGate,private readonly redact?:(text:string)=>string) {
     this.rpc=new JsonRpcProcess(launch,{
       notification:(method,params)=>this.notification(method,params),
       request:async(method,params)=>{
@@ -147,7 +147,7 @@ export class CodexAppServer implements AgentConnection {
       this.messageText(turn,params.itemId,(turn.messages.get(params.itemId)??'')+params.delta);
     else if(method==='item/commandExecution/outputDelta'||method==='item/mcpToolCall/progress'){
       const call=this.previews.get(params.itemId);
-      if(!call||call.detail.detail==='内容已隐藏')return;
+      if(!call||call.detail.suppressOutput||call.detail.detail==='内容已隐藏')return;
       const line=method==='item/commandExecution/outputDelta'&&typeof params.delta==='string'?call.buffer.append(params.delta):
         typeof params.message==='string'?outputLine(params.message):undefined;
       if(!line||line===call.last)return;
@@ -176,21 +176,21 @@ export class CodexAppServer implements AgentConnection {
       else if(['mcpToolCall','commandExecution','fileChange','dynamicToolCall','collabAgentToolCall','webSearch'].includes(item.type)){
         const started=method==='item/started';
         const previous=this.previews.get(item.id);
-        const detail=codexToolDetail(item);
+        const missingInput=!item.arguments&&!item.command&&!item.changes;
+        const detail=codexToolDetail(!started&&missingInput&&previous?.detail.displayKind==='command'
+          ?{...item,command:previous.detail.detail}:item,this.redact);
         if(started&&detail&&!previous)this.previews.set(item.id,{detail,buffer:new CodexOutputBuffer()});
         if(!started&&previous){
           clearTimeout(previous.timer);
           this.previews.delete(item.id);
           if(detail){
-            if(previous.detail.detail==='内容已隐藏'){detail.detail=previous.detail.detail;delete detail.preview;}
-            else {
-              if(!item.arguments&&!item.command&&!item.changes)detail.detail=previous.detail.detail;
-              detail.preview??=previous.last;
-            }
+            if(missingInput)Object.assign(detail,previous.detail);
+            if(previous.detail.suppressOutput||detail.suppressOutput||previous.detail.detail==='内容已隐藏')delete detail.preview;
+            else detail.preview??=previous.last;
           }
         }
         this.activity({kind:method==='item/started'?'tool':'tool_update',callId:item.id,
-          title:item.type==='mcpToolCall'?item.server==='lake'?item.tool:item.server+' / '+item.tool:item.tool??(detail?.detail==='内容已隐藏'?'执行命令':item.command)??item.type,
+          title:item.type==='mcpToolCall'?item.server==='lake'?item.tool:item.server+' / '+item.tool:item.tool??(item.type==='commandExecution'?detail?.detail:undefined)??item.type,
           status:started?'running':item.status==='failed'||item.success===false||item.error||item.result?.isError||typeof item.exitCode==='number'&&item.exitCode!==0?'failed':
             ['declined','cancelled','interrupted'].includes(item.status)?'cancelled':'completed',...detail});
       }

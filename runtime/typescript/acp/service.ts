@@ -5,6 +5,7 @@ import { LakeStore,HttpError,id,now } from '../store';
 import { digest } from '../tasks';
 import {TaskDeadlineReached,watchTaskDeadline} from '../task-deadline';
 import type {AgentConnection,AgentLaunch} from './client';
+import {commandLimit} from './codex-activity';
 import {CodexAppServer} from './codex-app-server';
 import { ExternalAgentRegistry } from './registry';
 import { externalAgentId,externalControlTools,externalProducts } from './catalog';
@@ -15,7 +16,8 @@ import {codexConfig,tomlValue} from './codex-profile';
 import {ExternalPublicText} from './public-text';
 import type { CodexConnectionProbe,CodexModelOption,ExternalActor,ExternalAgentProfile,ExternalEvent,ExternalResult,ExternalRun } from './types';
 import {maxExternalConversationRuns} from './types';
-import {codexClosingMessageIds} from '../codex-conversation';
+import type {SpecialistReplyAuthor} from '../../../web-agent/shared/contracts';
+import {codexClosingMessageIds,legacyCommandBodies} from '../codex-conversation';
 
 function ownLauncher(flag:string,args:string[]=[]){return {executable:process.execPath,args:isSea()?[flag,...args]:[__filename,flag,...args]};}
 type LiveRun={process?:AgentConnection;controller:AbortController;scopeHash:string;conversation:boolean;guard?:()=>void};
@@ -24,14 +26,37 @@ export class LakeExternalAgents {
   private probes=new Map<string,{controller:AbortController;work:Promise<unknown>}>();
   private live=new Map<string,LiveRun>();
   private closingMessages=new Set<string>();
+  private legacyCommands=new Map<string,{text:string;worker:string;session:string;task:string;root:string}>();
   constructor(readonly store:LakeStore,readonly redact:(text:string,live?:boolean)=>string,readonly registerSecret:(value:string)=>void,codexHome?:string){
     this.registry=new ExternalAgentRegistry(store,{codexHome,registerSecret});
     for(const run of store.list<ExternalRun>('acpRuns'))if(run.schemaVersion===1){
       this.indexClosingMessages(run);
+      this.indexLegacyCommands(run);
       if(['starting','running'].includes(run.state)){
         run.state=run.dispatchPhase==='not_sent'?'interrupted':'unknown';run.updatedAt=now();store.put('acpRuns',run.id,run);
       }
     }
+  }
+  private indexLegacyCommands(run:ExternalRun){
+    if(run.agent!=='codex'||run.purpose!=='worker'||run.childSessionId||run.agentRunId||!run.rootTurnId||!run.taskId||
+        !run.events.some(e=>e.displayKind==='command'&&e.detail==='内容已隐藏'))return;
+    const receipts=this.store.db.prepare(`SELECT json_extract(o.value,'$.at') AS at,json_extract(o.value,'$.completedAt') AS completedAt,
+      json_extract(c.value,'$.command') AS command FROM records o JOIN records c
+      ON c.kind='commandExecutions' AND c.id=json_extract(o.value,'$.commandExecutionId')
+      WHERE o.kind='superOperations' AND json_extract(o.value,'$.tool')='Bash'
+      AND json_extract(o.value,'$.externalRunId')=? AND json_extract(o.value,'$.externalSessionId')=?
+      AND json_extract(o.value,'$.projectId')=? AND json_extract(o.value,'$.goalId')=? AND json_extract(o.value,'$.sessionId')=?
+      AND json_extract(o.value,'$.generation')=? AND json_extract(o.value,'$.completedAt') IS NOT NULL
+      AND json_extract(c.value,'$.taskId')=? AND json_extract(c.value,'$.sessionId')=? AND json_extract(c.value,'$.workerId')=?
+      AND json_extract(c.value,'$.generation')=?`).all(run.id,run.externalSessionId??null,run.projectId,run.taskId,run.sessionId,run.generation,
+        run.taskId,run.sessionId,run.workerId,run.generation) as {at:string;completedAt:string;command:string}[];
+    for(const [id,text] of legacyCommandBodies(run,receipts,this.redact))
+      this.legacyCommands.set(id,{text,worker:run.workerId,session:run.sessionId,task:run.taskId,root:run.rootTurnId});
+  }
+  historicalCommand(id:string,author:SpecialistReplyAuthor|undefined){
+    const record=this.legacyCommands.get(id);
+    if(record&&author&&record.worker===author.workerId&&record.session===author.sessionId&&record.task===author.taskId&&record.root===author.rootTurnId)
+      return this.redact(record.text);
   }
   private indexClosingMessages(run:ExternalRun){
     for(const id of codexClosingMessageIds(run))this.closingMessages.add(id);
@@ -132,7 +157,12 @@ export class LakeExternalAgents {
     const text=new ExternalPublicText(run.id,this.redact);
     const persist=()=>{run.updatedAt=now();this.store.put('acpRuns',run.id,run);};
     const event=(value:Omit<ExternalEvent,'sequence'|'at'>)=>{
-      const clean=Object.fromEntries(Object.entries(value).map(([key,item])=>[key,['text','publicText','title','callId','detail','preview'].includes(key)&&typeof item==='string'?this.redact(item,key==='text'||key==='publicText').slice(0,key==='text'||key==='publicText'?32768:512):item]));
+      const clean=Object.fromEntries(Object.entries(value).map(([key,item])=>{
+        if(typeof item!=='string'||!['text','publicText','title','callId','detail','preview'].includes(key))return [key,item];
+        const prose=key==='text'||key==='publicText';
+        const limit=prose?32768:key==='detail'&&value.displayKind==='command'?commandLimit:512;
+        return [key,this.redact(item,prose).slice(0,limit)];
+      }));
       const entry:ExternalEvent={...value,...clean,sequence:run.events.length+1,at:now()};eventBytes+=Buffer.byteLength(JSON.stringify(entry));
       if(eventBytes<=16*1024*1024&&run.events.length<2048)run.events.push(entry);
       else if(!controller.signal.aborted)controller.abort(new Error('外部 Agent 过程输出达到本次上限'));
@@ -160,12 +190,12 @@ export class LakeExternalAgents {
         else if(update.kind==='usage'){run.usage=update.usage;persist();}
         else if((update.kind==='tool_update'||update.kind==='tool')&&update.transient){
           if(actor.purpose==='worker'&&update.preview)actor.event(run,{kind:'tool_update',status:update.status,callId:this.redact(update.callId),
-            displayKind:update.displayKind,detail:this.redact(update.detail??'').slice(0,240),preview:this.redact(update.preview,true).slice(0,200),sequence:run.events.length,at:now()});
+            displayKind:update.displayKind,detail:this.redact(update.detail??'').slice(0,update.displayKind==='command'?commandLimit:512),preview:this.redact(update.preview,true).slice(0,200),sequence:run.events.length,at:now()});
         }
         else if(update.kind==='text')event({kind:'text',...text.snapshot(update.text,update.messageId,update.messageText)});
         else if(actor.purpose==='worker'&&!actor.childSessionId&&!actor.agentRunId)event(update);
         else event({kind:update.kind,callId:update.callId,title:update.title,status:update.status});
-      },bridge?{server:'lake',tools:new Set(tools.map(tool=>tool.metadata.name)),guard:activePrompt}:undefined);
+      },bridge?{server:'lake',tools:new Set(tools.map(tool=>tool.metadata.name)),guard:activePrompt}:undefined,this.redact);
       live.process=transport;
       const cancel=()=>{void transport.cancel().finally(()=>transport.close());};controller.signal.addEventListener('abort',cancel,{once:true});
       await transport.initialize(controller.signal);

@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {join} from 'node:path';
 import {CodexAppServer} from './acp/codex-app-server';
-import {codexToolDetail,CodexOutputBuffer} from './acp/codex-activity';
-import {captureCodexActivity,codexClosingMessageIds} from './codex-conversation';
+import {codexToolDetail,CodexOutputBuffer,publicCommand} from './acp/codex-activity';
+import {captureCodexActivity,codexClosingMessageIds,legacyCommandBodies} from './codex-conversation';
 import {codexActivity} from '../../web-agent/shared/codex-activity';
 import type {AICard} from '../../web-agent/shared/contracts';
 import type {ExternalRun,ExternalEvent} from './acp/types';
@@ -43,9 +43,36 @@ test('only root workers contribute, file contents and sensitive commands stay ou
    assert.equal(captureCodexActivity(other,event,card),undefined);
  assert.equal(codexToolDetail({type:'mcpToolCall',tool:'Read',arguments:{path:'file'},result:{content:[{text:'private file contents'}]}})?.preview,undefined);
  const hidden=codexToolDetail({type:'commandExecution',command:'cat .env',aggregatedOutput:'secret value'});
- assert.equal(hidden?.detail,'内容已隐藏');assert.equal(hidden?.preview,undefined);
+ assert.equal(hidden?.detail,'cat .env');assert.equal(hidden?.preview,undefined);
  const lines=new CodexOutputBuffer();
  assert.equal(lines.append('-----BEGIN RSA PRIV'),undefined);
  assert.equal(lines.append('ATE KEY-----\nkey bytes\n'),'敏感输出已隐藏');
  assert.equal(lines.append('-----END RSA PRIVATE KEY-----\nsafe\n'),'safe');
+});
+test('command text keeps newlines, masks literals before clipping, and withholds risky output',()=>{
+ const script='pwd\n'+('ls -al\n'.repeat(90))+'date';
+ assert.equal(publicCommand(script),script);
+ assert.equal(publicCommand("export API_TOKEN='fixture example'\npwd"),'export API_TOKEN=[已脱敏]\npwd');
+ assert.equal(publicCommand("tool --token 'fixture value' --list"),"tool --token [已脱敏] --list");
+ const scriptWithReference="python3 - <<'PY'\nprint(1)\npassword = get_value('fixture')\nprint(2)\nPY";
+ assert.equal(publicCommand(scriptWithReference),scriptWithReference.replace("get_value('fixture')",'[已脱敏]'));
+ for(const cmd of ['curl -H "Authorization: Bearer fixture example" https://example.test',
+   'echo -----BEGIN OPENSSH PRIVATE KEY-----\nfixture\n-----END OPENSSH PRIVATE KEY-----',
+   'PASSWORD="fixture\ncontinued value"\necho ok','curl https://u:fixture@example.test/']){
+   const call=codexToolDetail({type:'commandExecution',command:cmd,aggregatedOutput:'fixture'});
+   assert.doesNotMatch(call!.detail,/fixture|continued value/);assert.equal(call!.preview,undefined);
+ }
+ assert.doesNotMatch(publicCommand('x'.repeat(32765)+'fixture',s=>s.replaceAll('fixture','[已脱敏]')),/fix/);
+});
+test('historical Bash receipts require unique, fully contained calls, including when calls overlap',()=>{
+ const events=(callId:string,start:string,end:string):ExternalEvent[]=>[
+   {kind:'tool',callId,displayKind:'command',title:'Bash',detail:'内容已隐藏',status:'running',at:start,sequence:1},
+   {kind:'tool_update',callId,displayKind:'command',title:'Bash',detail:'内容已隐藏',status:'completed',at:end,sequence:2}];
+ const history={...run,events:events('a','10','30')};
+ const receipt={at:'11',completedAt:'29',command:'ls .env'};
+ const recover=(record:ExternalRun,rows:typeof receipt[])=>[...legacyCommandBodies(record,rows,s=>s).values()];
+ assert.deepEqual(recover(history,[receipt]),['ls .env']);
+ assert.deepEqual(recover(history,[receipt,receipt]),[]);
+ assert.deepEqual(recover({...history,events:[...history.events,...events('b','20','35')]},[receipt]),[]);
+ assert.deepEqual(recover(history,[{...receipt,completedAt:'31'}]),[]);
 });

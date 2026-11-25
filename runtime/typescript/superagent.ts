@@ -2564,7 +2564,13 @@ export class LakeSuperagent implements AgentHost {
     const isReport=message.id.startsWith('report_')&&message.role==='assistant'&&!message.conversation;
     if(isReport&&message.text.trim()&&message.codexActivity){
       const codexActivity=message.codexActivity.filter(item=>item.kind!=='text'||!this.agents.external.isClosingMessage(item.id));
-      if(codexActivity.length!==message.codexActivity.length)message={...message,codexActivity};
+      const restored=codexActivity.map(item=>{
+        const text=item.kind==='command'&&(item.text==='内容已隐藏'||item.text.length===240)
+          ?this.agents.external.historicalCommand(item.id,author):undefined;
+        return text?{...item,text}:item;
+      });
+      if(restored.some((item,i)=>item!==message.codexActivity![i])||restored.length!==message.codexActivity.length)
+        message={...message,codexActivity:restored};
     }
     const recoverDuration=isReport&&author?.execution?.kind==='acp'&&author.durationMs===undefined&&!!author.rootTurnId;
     if(!author?.taskId || (!recoverDuration&&author.execution&&(message.replyToMessageId||!isReport)))return message;

@@ -1,67 +1,45 @@
 import {useEffect,useState} from 'react';
-import type {CodexActivityItem,CodexAction} from '../../shared/codex-activity';
+import type {CodexActivityItem} from '../../shared/codex-activity';
 import {AssistantMarkdown} from './AssistantMarkdown';
 import {Glyph} from './Icons';
 import type {LakeAvatarName} from './lakeAvatarCatalog';
 
 type Call=Exclude<CodexActivityItem,{kind:'text'}>;
-const verbs:Record<Exclude<CodexAction,'task'>,[string,string,string]>={
-  command:['运行','条','命令'],read:['读取','个','文件'],edit:['编辑','个','文件'],integration:['调用','个','工具'],
-};
-function groupLabel(calls:Call[],live:boolean){
-  const counts=new Map<string,number>();
-  for(const call of calls){
-    if(call.kind==='task')continue;
-    const [verb,unit,object]=verbs[call.kind];
-    const prefix=call.status==='running'?(live?'正在':'待确认 · '):call.status==='completed'?'已':call.status==='failed'?'失败 · ':call.status==='stopped'?'已停止 · ':'待确认 · ';
-    const key=prefix+verb+'|'+unit+object;
-    counts.set(key,(counts.get(key)??0)+1);
-  }
-  return [...counts].map(([key,count])=>{const [action,unit]=key.split('|');return action+' '+count+' '+unit;}).join('，');
-}
+const icons={command:'terminal',read:'document',edit:'edit',integration:'plug',task:'listTasks'} as const;
+const labels={command:'命令',read:'读取文件',edit:'编辑文件',integration:'工具',task:'任务'} as const;
+
 function Elapsed({start}:{start:string}){
   const [now,setNow]=useState(()=>Date.now());
   useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[]);
   return <small>{Math.max(0,Math.floor((now-Date.parse(start))/1000))} 秒</small>;
 }
-function ToolGroup({calls,live}:{calls:Call[];live:boolean}){
-  const current=calls.find(call=>call.status==='running'), active=!!current&&live;
-  const [open,setOpen]=useState(active);
-  const icon=active?'loader':calls.some(c=>c.status==='failed')?'alert':calls.every(c=>c.status==='completed')?'check':'clock';
-  return <div className="codex-tool-group">
-    <button type="button" aria-expanded={open} className="codex-group-toggle" onClick={()=>setOpen(value=>!value)}>
-      <Glyph name={active?'loader':'plug'} size={15} className={active?'codex-busy':''}/><span>{groupLabel(calls,live)}</span>
-      {!active&&<Glyph name={icon} size={13}/>}<Glyph name={open?'chevron':'next'} size={12}/>
-      {active&&<Elapsed start={current.at}/>}
-    </button>
-    {open?<ul>{calls.map(call=><li key={call.id}>
-      <div><Glyph name={call.kind==='command'?'terminal':call.kind==='integration'?'plug':'document'} size={13}/><code>{call.text}</code>
-      {call.status==='failed'&&<small>失败</small>}{call.status==='stopped'&&<small>已停止</small>}</div>
-      {call.output&&<pre>{call.output}</pre>}
-    </li>)}</ul>:<div className="codex-group-preview">{[...new Set(calls.slice(-3).map(c=>c.text))].join('  ·  ')}</div>}
+
+function ActivityRow({call,live}:{call:Call;live:boolean}){
+  const running=call.status==='running'&&live;
+  const status=running?'进行中':call.status==='completed'?'已完成':call.status==='failed'?'失败':call.status==='stopped'?'已停止':'待确认';
+  const label=call.kind==='task'&&call.status==='completed'?(call.createdTask?'添加了任务':'更新了任务'):labels[call.kind];
+  const body=call.text==='内容已隐藏'?'旧记录未保存可展示的正文':call.text;
+  const multiline=body.includes('\n');
+  return <div className="codex-event" data-kind={call.kind}>
+    <div className="codex-event-heading">
+      <Glyph name={icons[call.kind]} size={14}/><span>{label}</span>
+      {!multiline&&<code className="codex-event-inline">{body}</code>}
+      <span className="codex-event-status" data-status={running?'running':call.status} aria-label={status} title={status}>
+        <Glyph name={running?'loader':call.status==='completed'?'check':call.status==='failed'?'alert':call.status==='stopped'?'stop':'clock'} size={12} className={running?'codex-busy':undefined}/>
+        {running?<Elapsed start={call.at}/>:call.status!=='completed'&&status}
+      </span>
+    </div>
+    {multiline&&<pre className="codex-event-script" tabIndex={0} aria-label={label+'正文'}>{body}</pre>}
+    {call.output&&<pre className="codex-event-output">{call.output}</pre>}
   </div>;
 }
+
 export function CodexActivity({items,live=false,reportText,cursorAvatar}:{items:CodexActivityItem[];live?:boolean;reportText?:string;cursorAvatar?:LakeAvatarName}){
-  const groups:(CodexActivityItem|Call[])[]=[];
-  let latestProse:CodexActivityItem|undefined;
-  for(const item of items){
-    if(item.kind==='text'){
-      if(!item.text.trim()||item.text.trim()===reportText?.trim())continue;
-      groups.push(item);
-      latestProse=item;
-    }else if(item.kind==='task')groups.push(item);
-    else {
-      const last=groups.at(-1);
-      if(Array.isArray(last))last.push(item);else groups.push([item]);
-    }
-  }
-  if(!groups.length)return null;
-  return <div className="codex-activity" aria-label="Codex 执行记录">{groups.map(group=>{
-    if(Array.isArray(group)){
-      const active=live&&group.some(call=>call.status==='running');
-      return <ToolGroup key={JSON.stringify([group[0]!.id,active])} calls={group} live={live}/>;
-    }
-    if(group.kind==='text')return <AssistantMarkdown key={group.id} cursorAvatar={live&&group===latestProse?cursorAvatar:undefined}>{group.text}</AssistantMarkdown>;
-    return <div className="codex-task-event" key={group.id}><Glyph name="listTasks" size={15}/><span>{group.status==='failed'?'任务更新失败':group.status==='running'?'正在更新任务':group.status==='completed'?(group.createdTask?'添加了任务':'更新了任务'):'任务状态待确认'}</span><span className="codex-task-chip">{group.text}</span></div>;
-  })}</div>;
+  const visible=items.filter(item=>item.kind!=='text'||(item.text.trim()&&item.text.trim()!==reportText?.trim()));
+  const latestProse=visible.filter(item=>item.kind==='text').pop();
+  if(!visible.length)return null;
+  return <div className="codex-activity" aria-label="Codex 执行记录">{visible.map(item=>
+    item.kind==='text'?<AssistantMarkdown key={item.id} cursorAvatar={live&&item===latestProse?cursorAvatar:undefined}>{item.text}</AssistantMarkdown>:
+      <ActivityRow key={item.id} call={item} live={live}/>
+  )}</div>;
 }
