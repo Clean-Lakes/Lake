@@ -25,11 +25,10 @@ function Elapsed({start}:{start:string}){
 }
 function ToolGroup({calls,live}:{calls:Call[];live:boolean}){
   const current=calls.find(call=>call.status==='running'), active=!!current&&live;
-  const [choice,setChoice]=useState<{active:boolean;open:boolean}>();
-  const open=choice?.active===active?choice.open:active;
+  const [open,setOpen]=useState(active);
   const icon=active?'loader':calls.some(c=>c.status==='failed')?'alert':calls.every(c=>c.status==='completed')?'check':'clock';
   return <div className="codex-tool-group">
-    <button type="button" aria-expanded={open} className="codex-group-toggle" onClick={()=>setChoice({active,open:!open})}>
+    <button type="button" aria-expanded={open} className="codex-group-toggle" onClick={()=>setOpen(value=>!value)}>
       <Glyph name={active?'loader':'plug'} size={15} className={active?'codex-busy':''}/><span>{groupLabel(calls,live)}</span>
       {!active&&<Glyph name={icon} size={13}/>}<Glyph name={open?'chevron':'next'} size={12}/>
       {active&&<Elapsed start={current.at}/>}
@@ -54,7 +53,10 @@ export function CodexActivity({items,live=false,reportText}:{items:CodexActivity
   }
   if(!groups.length)return null;
   return <div className="codex-activity" aria-label="Codex 执行记录">{groups.map(group=>{
-    if(Array.isArray(group))return <ToolGroup key={group[0]!.id} calls={group} live={live}/>;
+    if(Array.isArray(group)){
+      const active=live&&group.some(call=>call.status==='running');
+      return <ToolGroup key={JSON.stringify([group[0]!.id,active])} calls={group} live={live}/>;
+    }
     if(group.kind==='text')return <AssistantMarkdown key={group.id}>{group.text}</AssistantMarkdown>;
     return <div className="codex-task-event" key={group.id}><Glyph name="listTasks" size={15}/><span>{group.status==='failed'?'任务更新失败':group.status==='running'?'正在更新任务':group.status==='completed'?(group.createdTask?'添加了任务':'更新了任务'):'任务状态待确认'}</span><span className="codex-task-chip">{group.text}</span></div>;
   })}</div>;

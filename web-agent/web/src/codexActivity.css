@@ -15,6 +15,7 @@
 .codex-group-preview { padding:4px 10px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .codex-task-event { font-size:var(--font-size-toolbar,12px); color:var(--text-muted); flex-wrap:wrap; }
 .codex-task-chip { padding:2px 7px; border-radius:6px; background:color-mix(in srgb,currentColor 7%,transparent); color:var(--foreground); overflow-wrap:anywhere; }
+.codex-task-chip::before { content:''; display:inline-block; width:7px; height:7px; margin-inline-end:5px; border:1.5px solid var(--warning,#b78122); border-radius:50%; }
 .codex-busy { color:var(--primary); animation:codex-activity-spin 1.2s linear infinite; }
 @keyframes codex-activity-spin { to { transform:rotate(1turn); } }
 @media(prefers-reduced-motion:reduce){ .codex-busy { animation:none; } }

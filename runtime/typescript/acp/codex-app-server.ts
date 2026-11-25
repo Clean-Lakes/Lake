@@ -190,7 +190,7 @@ export class CodexAppServer implements AgentConnection {
           }
         }
         this.activity({kind:method==='item/started'?'tool':'tool_update',callId:item.id,
-          title:item.type==='mcpToolCall'?item.server==='lake'?item.tool:item.server+' / '+item.tool:item.tool??item.command??item.type,
+          title:item.type==='mcpToolCall'?item.server==='lake'?item.tool:item.server+' / '+item.tool:item.tool??(detail?.detail==='内容已隐藏'?'执行命令':item.command)??item.type,
           status:started?'running':item.status==='failed'||item.success===false||item.error||item.result?.isError||typeof item.exitCode==='number'&&item.exitCode!==0?'failed':
             ['declined','cancelled','interrupted'].includes(item.status)?'cancelled':'completed',...detail});
       }
