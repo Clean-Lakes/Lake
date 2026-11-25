@@ -19,6 +19,8 @@ func TestReasoningRequestAdapters(t *testing.T) {
 		{"gpt-5.2", "openai", "xhigh", `"reasoning_effort":"xhigh"`},
 		{"gpt-5.2", "openai-response", "low", `"reasoning":{"effort":"low"}`},
 		{"gpt-6.1-sol", "openai-response", "ultra", `"reasoning":{"effort":"ultra"}`},
+		{"codex/gpt-6.2-sol", "openai", "max", `"reasoning_effort":"max"`},
+		{"gpt-6.2-sol", "openai-response", "xhigh", `"reasoning":{"effort":"xhigh"}`},
 		{"claude-opus-4-6", "claude", "max", `"output_config":{"effort":"max"}`},
 		{"gemini-3-pro-preview", "gemini", "low", `"thinkingLevel":"low"`},
 	} {
@@ -44,13 +46,13 @@ func TestReasoningRequestAdapters(t *testing.T) {
 			}
 		})
 	}
-	for _, m := range []Model{{Name: "deepseek-flash", ReasoningEffort: "medium"}, {Name: "gpt-5.2", ReasoningEffort: "max"}, {Name: "gpt-4.1", ReasoningEffort: "high"}, {Name: "gemini-3-pro-preview", Protocol: "gemini", ReasoningEffort: "medium"}} {
+	for _, m := range []Model{{Name: "deepseek-flash", ReasoningEffort: "medium"}, {Name: "gpt-5.2", ReasoningEffort: "max"}, {Name: "gpt-4.1", ReasoningEffort: "high"}, {Name: "gpt-6.2-sol", ReasoningEffort: "none"}, {Name: "gemini-3-pro-preview", Protocol: "gemini", ReasoningEffort: "medium"}} {
 		m.URL = "http://localhost/test"
 		if _, _, err := modelPayload(m, nil, nil); err == nil {
 			t.Fatal("unsupported effort accepted", m.Name, m.ReasoningEffort)
 		}
 	}
-	for _, name := range []string{"deepseek-flash", "gpt-5.2", "unknown"} {
+	for _, name := range []string{"deepseek-flash", "gpt-5.2", "gpt-6.2-sol", "unknown"} {
 		_, body, err := modelPayload(Model{URL: "http://localhost/test", Name: name}, nil, nil)
 		if err != nil || body["reasoning_effort"] != nil || body["thinking"] != nil || body["reasoning"] != nil {
 			t.Fatal("default changed provider behavior", body, err)

@@ -25,6 +25,7 @@ function legacyCapability(provider: ModelProvider, model: ProviderModel) {
     if (['gpt-5', 'gpt-5-mini', 'gpt-5-nano'].some(is)) return result(['minimal', 'low', 'medium', 'high']);
     if (is('gpt-5.1')) return result(['none', 'low', 'medium', 'high'], 'none');
     if (['gpt-5.2', 'gpt-5.4', 'gpt-5.5'].some(is)) return result(['none', 'low', 'medium', 'high', 'xhigh'], is('gpt-5.5') ? 'medium' : 'none');
+    if (is('gpt-6.2-sol')) return result(['low', 'medium', 'high', 'xhigh', 'max']);
     if (api === 'openai-responses' && ['gpt-6-astra', 'gpt-6.1-sol'].some(is)) return result(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'], 'medium');
   }
   return undefined;

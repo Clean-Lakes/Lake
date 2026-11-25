@@ -430,17 +430,17 @@ a { color: inherit; }
 .composer-foot { display: flex; align-items: center; flex-wrap: nowrap; color: var(--text-muted); font-size: var(--font-size-toolbar); margin-top: var(--composer-toolbar-gap); padding: 0; gap: 6px; min-width: 0; }
 .composer-foot-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-inline-start: auto; min-width: 0; }
 .composer-input .send-button {
-  --composer-action-background: transparent;
+  --composer-action-background: var(--surface-hover);
   width: 30px; height: 30px;
   background: var(--composer-action-background); color: var(--text-secondary);
-  border-radius: var(--radius-composer-action);
+  border-radius: 50%;
 }
 .composer-input .send-button:hover:enabled { background: var(--composer-action-background); }
-.composer-input .send-button:not(.stop-button, [data-send-ready]):hover:enabled { --composer-action-background: var(--surface-hover); color: var(--foreground); }
+.composer-input .send-button:not(.stop-button, [data-send-ready]):hover:enabled { --composer-action-background: var(--surface-selected); color: var(--foreground); }
 .composer-input .send-button[data-send-ready]:enabled { --composer-action-background: var(--foreground); color: var(--surface); }
 .composer-input .send-button:disabled { color: var(--text-disabled); }
 .composer-input .send-button:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
-.composer-input .send-button > .lucide-arrow-up { stroke-width: 2.05; }
+.composer-input .send-button > .lucide-arrow-up { stroke-width: 2.25; }
 .composer-input .send-button.stop-button {
   --composer-action-background: var(--surface-hover);
   display: inline-flex;
@@ -450,6 +450,7 @@ a { color: inherit; }
   width: auto;
   min-width: 30px;
   padding: 0 8px;
+  border-radius: var(--radius-composer-action);
   background: var(--composer-action-background);
   color: var(--foreground);
   font: inherit;
@@ -1259,7 +1260,7 @@ input[type="checkbox"]{ accent-color: var(--primary); }
  .composer-input .send-button.stop-button { font-size:11px; padding-inline:4px; }
  .composer-foot .composer-model-select.app-select > .app-select-trigger { padding-inline:4px; }
  .composer-foot .composer-model-name { max-width:74px; }
- .composer-foot .composer-model-effort { display:none; }
+ .composer-foot .composer-model-effort-label { display:none; }
 }
 @container lake-composer (max-width: 370px) {
  .composer-foot[data-running] .composer-foot-actions { flex-wrap:wrap; }

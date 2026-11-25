@@ -779,6 +779,26 @@ test('the existing exact DeepSeek reasoning registry reaches the wire and explic
   assert.deepEqual((await f.api(base)).levels, [], 'similar names cannot inherit another model version capability');
 });
 
+test('the GPT-6.2 Sol gateway alias exposes API effort levels and keeps the provider default', async t => {
+  const f = await fixture(t);
+  const provider = (await f.api('/api/settings/providers')).providers[0];
+  const base = `/api/sessions/${f.session.id}/ai/reasoning`;
+  provider.models[0].name = 'codex/gpt-6.2-sol';
+  await f.api(`/api/settings/providers/${provider.id}`, 'PUT', provider);
+
+  const settings = await f.api(base);
+  assert.deepEqual(settings.levels, ['low', 'medium', 'high', 'xhigh', 'max']);
+  assert.equal(settings.default, undefined);
+  await f.api(base, 'POST', {modelId: settings.modelId, effort: 'none'}, 400);
+  for (const effort of ['', 'max']) {
+    await f.api(base, 'POST', {modelId: settings.modelId, effort});
+    await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: `Check GPT-6.2 Sol effort ${effort || 'default'}`}, 202);
+    await f.wait(['completed']);
+    assert.equal(f.requests.at(-1).model, 'codex/gpt-6.2-sol');
+    assert.equal(f.requests.at(-1).reasoning_effort, effort || undefined);
+  }
+});
+
 test('extracting a preset makes a real bounded model request and saves a persistent result with its source', async t => {
   const f = await fixture(t);
   await f.api(`/api/sessions/${f.session.id}/ai/extractPreset`, 'POST', {}, 400);

@@ -57,13 +57,23 @@ export function ComposerModelSelect({externalAgent,onExternalAgentSettings,avail
   const visible=sourceRows.filter(row=>`${row.label} ${row.name}`.toLocaleLowerCase().includes(query));
   const note=available.message&&(available.source==="magpie"||!available.models.length)?available.message:"";
   const label=codexOnly?'Codex':configured?(current?composerModelLabel(current.displayName,current.name):modelName?.split("/").pop()||"已配置"):"选择模型";
-  const levelLabel=!codexOnly&&level&&level.session===session&&level.providerId===providerId?currentReasoningLabel(level.settings,modelId):undefined;
+  const levelSettings=!codexOnly&&level&&level.session===session&&level.providerId===providerId?level.settings:undefined;
+  const levelLabel=currentReasoningLabel(levelSettings,modelId);
+  const effort=levelSettings?.effort||levelSettings?.default||'default';
   const hasCurrentModel=configured || codexOnly;
-  const accessibleLabel=hasCurrentModel ? `选择模型：${label}${levelLabel?` · 思考强度：${levelLabel}`:""}${codexOnly?' · 独立 Agent':current?.providerName?` · ${current.providerName}`:""}` : label;
-  const triggerLabel=<span className="composer-model-current"><span className="composer-model-name">{label}</span>{levelLabel&&<span className="composer-model-effort" title={`思考强度：${levelLabel}`}>{levelLabel}</span>}</span>;
+  const effortDescription=levelLabel?`思考强度：${levelLabel}`:'';
+  const accessibleLabel=hasCurrentModel ? `选择模型：${label}${effortDescription?` · ${effortDescription}`:""}${codexOnly?' · 独立 Agent':current?.providerName?` · ${current.providerName}`:""}` : label;
+  const modelTitle=modelName&&label!==modelName?`${label}\n${modelName}`:label;
+  const triggerTitle=codexOnly?externalAgent?.message||'Codex 独立执行':effortDescription?`${modelTitle}\n${effortDescription}`:modelTitle;
+  const triggerLabel=<span className="composer-model-current">
+    <span className="composer-model-name">{label}</span>
+    {levelLabel&&<span className="composer-model-effort" data-effort={effort}>
+      <Glyph name="reasoningLevel" size={14}/><span className="composer-model-effort-label">{levelLabel}</span>
+    </span>}
+  </span>;
   const codexFooter=externalAgent&&<div className="composer-codex-footer">{externalAgent.configurationOnly&&<strong>专员 Codex</strong>}<p role="status">{externalAgent.ready?'已连接本机 Codex，复用已有登录与配置':externalAgent.message||'请先配置 Codex'}</p><button type="button" disabled={disabled} onClick={()=>{onOpenChange(false);onExternalAgentSettings?.();}}><Glyph name="settings" size={14}/>配置 Codex</button>{!externalAgent.configurationOnly&&<small>发送后创建独立任务，进度与结果回到当前专员。</small>}</div>;
   return <span ref={anchor} className="composer-model-anchor"><AppSelect key={presentation} nativePopup={native} popupMotion={!onProviderMenu} selectionLocked={disabled} className={`composer-model-select ${hasCurrentModel?"":"model-missing"}`} popupClassName="composer-model-popup" popupMinWidth={260} popupAlign="end" popupMaxHeight={420}
-    label={accessibleLabel} title={codexOnly?externalAgent?.message||'Codex 独立执行':modelName&&label!==modelName?`${label}\n${modelName}`:label} value={codexOnly?codexModelValue:current?JSON.stringify([current.providerId,current.modelId]):modelName||""} renderValue={triggerLabel}
+    label={accessibleLabel} title={triggerTitle} value={codexOnly?codexModelValue:current?JSON.stringify([current.providerId,current.modelId]):modelName||""} renderValue={triggerLabel}
     icon={<ProviderIcon brand={codexOnly?'openai':modelBrand(modelName||"",current?.displayName,current?.providerName)} size={16}/>}
     open={open} aria-busy={disabled} onOpenChange={next=>{if(next&&disabled) return;if(next) {setSearch("");setSource(selectedSource);}onOpenChange(next);}}
     onChange={event=>{const row=rows.find(row=>row.value===event.target.value);if(row&&!row.external&&!disabled)onSelect(row.model);}}
