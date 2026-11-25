@@ -85,7 +85,8 @@ test('malformed local configuration gives an actionable blocker without preventi
 });
 
 test('startup overrides disable inherited services with literal IDs and preserve native model choice',()=>{
- const args=codexStartupArgs('/private/lake', ['a.b','a"b'],{SessionStart:[{}]}),config=Object.fromEntries(Array.from({length:args.length/2},(_,i)=>{const override=args[i*2+1],index=override.indexOf('=');return [override.slice(0,index),parse('value = '+override.slice(index+1)).value];}));
+ const hooks={SessionStart:[{}],state:{fixture:{enabled:true}}};
+ const args=codexStartupArgs('/private/lake', ['a.b','a"b'],hooks),config=Object.fromEntries(Array.from({length:args.length/2},(_,i)=>{const override=args[i*2+1],index=override.indexOf('=');return [override.slice(0,index),parse('value = '+override.slice(index+1)).value];}));
  assert.deepEqual(config.mcp_servers,{'a.b':{enabled:false},'a"b':{enabled:false}});assert.deepEqual(config.hooks,{SessionStart:[]});assert.deepEqual(config.notify,[]);
  assert.equal(config.model,undefined);assert.equal(config.model_provider,undefined);assert.equal(config.model_reasoning_effort,undefined);
  assert.equal(config.sqlite_home,'/private/lake/state');

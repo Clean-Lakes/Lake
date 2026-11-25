@@ -15,8 +15,9 @@ export type CodexModelOption = {
   reasoningEfforts: string[];
   defaultReasoningEffort?: string;
 };
+export const codexConnectionVersion = 2;
 export type CodexConnectionProbe = {
-  connectionVersion?: 1;
+  connectionVersion?: 1 | typeof codexConnectionVersion;
   revision: number;
   authentication?: string;
   ready: boolean;
