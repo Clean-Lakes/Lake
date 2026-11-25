@@ -13,7 +13,6 @@
 .pilot-workspace .nav-row:focus-visible { outline:2px solid var(--focus-outline); outline-offset:-2px; }
 .pilot-workspace .sidebar-pilot-entry .pilot-entry-chevron { color:var(--pilot-header-muted); }
 .pilot-workspace .sidebar-pilot-entry:not(:disabled):is(:hover,:focus-visible) .pilot-entry-chevron { color:var(--foreground); }
-.app-shell.has-specialist-rail { --sidebar-rail-width:88px; }
 .sidebar-specialist-roster {
  flex:0 1 auto;
  display:flex;
@@ -34,35 +33,51 @@
  margin-block:4px 5px;
  background:var(--border);
 }
-.sidebar-specialist-roster .sidebar-specialist-button {
- display:flex;
- flex-direction:column;
- justify-content:center;
- align-items:center;
- gap:4px;
- width:calc(100% - 12px);
- height:auto;
- min-height:52px;
- padding:6px 2px;
-}
-.sidebar-specialist-avatar { position:relative; display:flex; }
 .sidebar-specialist-status {
  position:absolute;
- inset-block-start:-2px;
- inset-inline-end:-5px;
+ inset-block-start:2px;
+ inset-inline-end:2px;
  display:grid;
  place-items:center;
  color:var(--info);
  pointer-events:none;
 }
-.sidebar-specialist-name {
- max-width:100%;
+.specialist-name-bubble {
+ position:fixed;
+ z-index:70;
+ max-width:min(240px,calc(100vw - 72px));
+ padding:5px 9px;
+ border:1px solid var(--border);
+ border-radius:var(--radius-settings-control);
+ corner-shape:var(--corner-window);
+ background:var(--surface);
+ box-shadow:var(--shadow-popover);
  color:var(--foreground);
  font-size:var(--font-size-toolbar);
+ font-weight:var(--font-weight-medium);
  line-height:16px;
- text-align:center;
- text-wrap:balance;
  overflow-wrap:anywhere;
+ pointer-events:none;
+ animation:specialist-name-bubble-in 150ms cubic-bezier(.2,.75,.3,1) 60ms both;
+}
+.specialist-name-bubble::before {
+ content:"";
+ position:absolute;
+ top:var(--specialist-bubble-tail,50%);
+ left:-4px;
+ width:6px;
+ height:6px;
+ border-left:1px solid var(--border);
+ border-bottom:1px solid var(--border);
+ background:var(--surface);
+ transform:translateY(-50%) rotate(45deg);
+}
+@keyframes specialist-name-bubble-in {
+ from { opacity:0; transform:translateX(-4px); }
+ to { opacity:1; transform:translateX(0); }
+}
+@media(prefers-reduced-motion:reduce) {
+ .specialist-name-bubble { animation:none; }
 }
 .specialist-task-back {
  display:inline-flex;

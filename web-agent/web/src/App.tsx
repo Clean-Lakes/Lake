@@ -1990,7 +1990,6 @@ function AppContent() {
   </>;
 
   const groupsEnabled=bootstrap?.backendRuntime==='typescript';
-  const showSpecialistRail=groupsEnabled&&!!sidebarProject;
   const pilotNavigation={
     showHeading:false,activity:avatarActivity,pilotButton:sidebarPilotButton,
     pilotActivity:conversationActivity(undefined,catalog.sessions.find(row=>row.id===pilotWorkspace.workspace?.project.routerSessionId)?.status),
@@ -2008,7 +2007,7 @@ function AppContent() {
     onWorker:(worker:SuperWorker)=>navigate({sessionId:worker.sessionId,resourceId:null}),onChannel:openSpecialistPage,
   };
   return <SpecialistAvatarProvider channels={pilotWorkspace.workspace?.channels}><WorkbenchShell
-    className={`app-shell has-workbench-navigation${showSpecialistRail?' has-specialist-rail':''}${terminalVisible ? " terminal-is-open" : ""}${detachedConversation?" has-workbench-conversation":""}${dockedConversation?" has-docked-conversation":""}${sharedIsland?" has-workbench-island":""}`}
+    className={`app-shell has-workbench-navigation${terminalVisible ? " terminal-is-open" : ""}${detachedConversation?" has-workbench-conversation":""}${dockedConversation?" has-docked-conversation":""}${sharedIsland?" has-workbench-island":""}`}
     compact={compactNavigation} inspectorOpen={inspectorOpen} back={historyAvailable.back} forward={historyAvailable.forward} onStep={stepHistory}>
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
     {mobileMenu && <button className="mobile-scrim" aria-label="关闭项目导航" onClick={() => setMobileMenu(false)}/>}
@@ -2043,7 +2042,7 @@ function AppContent() {
        })}
        resourceCount={catalog.resources.filter(resource=>resource.projectId===sidebarProject?.id).length}
        attention={pilotWorkspace.workspace?.channels?.some(channel=>channel.needsConfirmation===true||hasUnreadMessages(channel.messageRead))}
-       specialistRail={showSpecialistRail?<PilotWorkspace {...pilotNavigation} presentation="rail"/>:undefined}
+       specialistRail={groupsEnabled&&sidebarProject?<PilotWorkspace {...pilotNavigation} presentation="rail"/>:undefined}
        specialists={<>
         {sidebarProject&&<PilotWorkspace {...pilotNavigation} presentation={groupsEnabled?'entry':'list'}/>}
         {groupsEnabled&&sidebarProject&&<ChatGroupNavigation key={sidebarProject.id} projectId={sidebarProject.id}

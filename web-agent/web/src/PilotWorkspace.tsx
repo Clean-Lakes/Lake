@@ -1,5 +1,6 @@
 import {hasUnreadMessages} from './ConversationReadMarker';
-import {useCallback,useEffect,useRef,useState,type PointerEvent,type RefObject} from 'react';
+import {useCallback,useEffect,useLayoutEffect,useRef,useState,type PointerEvent,type RefObject} from 'react';
+import {createPortal} from 'react-dom';
 import type {SessionEvent,SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {greetRoleAvatar,SuperRoleAvatar} from './SuperRoleAvatar';
@@ -178,10 +179,44 @@ function showClippedText(event: PointerEvent<HTMLElement>) {
  else text.removeAttribute('title');
 }
 
+function SpecialistNameBubble({name,target,onClose}:{name:string;target:HTMLButtonElement;onClose:()=>void}) {
+ const bubble=useRef<HTMLSpanElement>(null);
+ useLayoutEffect(()=>{
+  const node=bubble.current;
+  if(!node)return;
+  const roster=target.closest('.sidebar-specialist-roster');
+  const place=()=>{
+   const bounds=target.getBoundingClientRect(),visible=roster?.getBoundingClientRect();
+   if(!target.isConnected||target.closest('[inert]')||bounds.right<=0||!visible||bounds.bottom<=visible.top||bounds.top>=visible.bottom){
+    onClose();
+    return;
+   }
+   const center=bounds.top+bounds.height/2,height=node.offsetHeight;
+   const top=Math.max(8,Math.min(center-height/2,window.innerHeight-height-8));
+   node.style.left=`${bounds.right+12}px`;
+   node.style.top=`${top}px`;
+   node.style.setProperty('--specialist-bubble-tail',`${Math.min(height-8,Math.max(8,center-top))}px`);
+  };
+  const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')onClose();};
+  place();
+  window.addEventListener('resize',place);
+  window.addEventListener('scroll',place,true);
+  window.addEventListener('keydown',escape);
+  return()=>{
+   window.removeEventListener('resize',place);
+   window.removeEventListener('scroll',place,true);
+   window.removeEventListener('keydown',escape);
+  };
+ },[target,name,onClose]);
+ return createPortal(<span ref={bubble} className="specialist-name-bubble" aria-hidden="true">{name}</span>,document.body);
+}
+
 export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,showHeading=true,presentation='list'}: PilotWorkspaceProps) {
  const [menu,setMenu]=useState<{channel:SpecialistChannelInfo;x:number;y:number}|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null);
+ const [nameHint,setNameHint]=useState<{id:string;target:HTMLButtonElement}|null>(null);
  const anchor=useRef<HTMLButtonElement|null>(null);
- useEffect(()=>{setMenu(null);setDeleting(null);},[workspace?.project.projectId]);
+ const closeNameHint=useCallback(()=>setNameHint(null),[]);
+ useEffect(()=>{setMenu(null);setDeleting(null);closeNameHint();},[workspace?.project.projectId,closeNameHint]);
  const roots = workspace?.active?workspace.workers.filter(worker => !worker.parentWorkerId):[];
  const channels = workspace?.active?workspace.channels:undefined;
  const viewedRole = selectedId ? selectedRoleId ?? channels?.find(channel => channel.sessionId === selectedId)?.roleId ??
@@ -191,6 +226,8 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
  const routerId=workspace?.active?workspace.project.routerSessionId:undefined;
  const entries = channels ? channels.map(channel => ({channel, workers: roots.filter(worker => worker.roleId === channel.roleId)})) :
   roots.map(worker => ({channel: undefined, workers: [worker]}));
+ const hintedEntry=nameHint&&entries.find(({channel,workers})=>(channel?.id??workers[0].id)===nameHint.id);
+ const hintedName=hintedEntry&&(hintedEntry.channel?.roleName??hintedEntry.workers[0].roleName);
  if(rail&&!entries.length)return null;
  return <section className={rail?'sidebar-specialist-roster':'pilot-workspace'} aria-label={rail||showHeading?'专员':undefined}>
   {!rail&&<>
@@ -222,16 +259,23 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
    const detail=aggregate.detail??(channel?.duties||'持续沟通');
    const detailStatus = detail.endsWith(status) ? undefined : status;
    const label = `${name}${backend?` · Agent 类型：${agentTypeName(backend)}`:''} · ${detail}${detailStatus?` · ${detailStatus}`:''}`;
+   const id=channel?.id??worker!.id;
+   const dismissRowHint=()=>setNameHint(current=>current?.id===id?null:current);
    const openManagement=(button:HTMLButtonElement,x:number,y:number)=>{
     if(!channel||disabled)return;
+    closeNameHint();
     anchor.current=button;
     setMenu({channel,x,y});
    };
    const avatar=<SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId}
      motion={preparing?'working':replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/>;
-   return <button type="button" key={channel?.id ?? worker!.id} className={rail?'sidebar-rail-button sidebar-specialist-button':`nav-row pilot-worker-row${selected ? ' active' : ''}`}
-     aria-current={selected ? 'page' : undefined} aria-label={label} title={rail?label:undefined}
+   return <button type="button" key={id} className={rail?'sidebar-rail-button sidebar-specialist-button':`nav-row pilot-worker-row${selected ? ' active' : ''}`}
+     aria-current={selected ? 'page' : undefined} aria-label={label}
      aria-keyshortcuts={channel&&!disabled?'Shift+F10':undefined}
+     onPointerEnter={rail?event=>{if(event.pointerType==='mouse'&&!menu&&!deleting)setNameHint({id,target:event.currentTarget});}:undefined}
+     onPointerLeave={rail?dismissRowHint:undefined}
+     onFocus={rail?event=>{if(event.currentTarget.matches(':focus-visible')&&!menu&&!deleting)setNameHint({id,target:event.currentTarget});}:undefined}
+     onBlur={rail?dismissRowHint:undefined}
      onContextMenu={event=>{event.preventDefault();event.stopPropagation();openManagement(event.currentTarget,event.clientX,event.clientY);}}
      onKeyDown={event=>{
       if(channel&&!disabled&&(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10')){
@@ -241,18 +285,14 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
       }
      }}
      onClick={event=>{
+      closeNameHint();
       greetRoleAvatar(event.currentTarget);
       if(channel&&onChannel)onChannel(channel,rail?worker:undefined);else if(worker)onWorker(worker);
      }}>
-    {rail?<>
-     <span className="sidebar-specialist-avatar">
-      {avatar}
-      <span className="sidebar-specialist-status" aria-hidden="true">
-       {needsConfirmation?<Glyph name="circleAlert" size={10}/>:activityLabel?<Glyph name="loader" size={10} className="activity-indicator"/>:showUnread?<span className="pilot-worker-unread"/>:null}
-      </span>
-     </span>
-     <span className="sidebar-specialist-name">{name}</span>
-    </>:<>{avatar}<span className="nav-row-text">
+    {avatar}
+    {rail?<span className="sidebar-specialist-status" aria-hidden="true">
+     {needsConfirmation?<Glyph name="circleAlert" size={10}/>:activityLabel?<Glyph name="loader" size={10} className="activity-indicator"/>:showUnread?<span className="pilot-worker-unread"/>:null}
+    </span>:<span className="nav-row-text">
      <span className="pilot-worker-name">
       <strong onPointerEnter={showClippedText}>{name}</strong>
       <AgentBackendLogo backend={backend} size={12}/>
@@ -265,9 +305,10 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
        {activityLabel ? <span className="pilot-worker-running" role="img" aria-label={activityLabel}><Glyph name="loader" size={12} className="activity-indicator"/></span> : showUnread && <span className="pilot-worker-unread" role="img" aria-label="有新消息未读"/>}
       </span>
      </span>
-    </span></>}
+    </span>}
    </button>;
   })}
+  {rail&&nameHint&&hintedName&&<SpecialistNameBubble key={nameHint.id} name={hintedName} target={nameHint.target} onClose={closeNameHint}/>}
   {menu&&<NavigationMenu title={menu.channel.roleName} x={menu.x} y={menu.y} anchor={anchor} onClose={()=>setMenu(null)} actions={[
    {label:'删除专员',icon:'trash',danger:true,disabled:disabled||menu.channel.roleRevision===undefined,run:()=>setDeleting(menu.channel)},
   ]}/>}
