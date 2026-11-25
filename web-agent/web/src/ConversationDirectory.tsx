@@ -1,5 +1,6 @@
 import {useEffect,useId,useLayoutEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
+import {TabSelectionIndicator} from "./TabSelectionIndicator";
 import {Glyph} from './Icons';
 import type {Message} from '../../shared/contracts';
 import {PilotTaskDirectory,type PilotTaskDirectoryData} from './PilotTaskDirectory';
@@ -115,12 +116,15 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
  if(!taskDirectory&&items.length<2&&!onLoadOlder)return null;
  const tabs=taskDirectory&&<div role="tablist" aria-label="目录视图" className="conversation-directory-tabs"
   onKeyDown={event=>{
-   if(event.key!=='ArrowLeft'&&event.key!=='ArrowRight')return;
+   if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
    event.preventDefault();
-   setView(showTasks?'messages':'tasks');
+   const next=event.key==='Home'?'tasks':event.key==='End'?'messages':showTasks?'messages':'tasks';
+   setView(next);
+   document.getElementById(`${id}-${next}-tab`)?.focus({preventScroll:true});
   }}>
   <button type="button" role="tab" id={`${id}-tasks-tab`} aria-controls={`${id}-tasks`} aria-selected={showTasks} tabIndex={showTasks?0:-1} onClick={()=>setView('tasks')}>任务</button>
   <button type="button" role="tab" id={`${id}-messages-tab`} aria-controls={`${id}-messages`} aria-selected={!showTasks} tabIndex={showTasks?-1:0} onClick={()=>setView('messages')}>消息</button>
+  <TabSelectionIndicator selection={showTasks}/>
  </div>;
  const content=open&&<section ref={panel} className="conversation-directory-popover" style={position} id={id} role="dialog" aria-label="会话目录">
   <header className="conversation-directory-heading">{tabs||<span>当前对话</span>}<button type="button" aria-label="关闭会话目录" onClick={()=>close(true)}><Glyph name="close" size={15}/></button></header>

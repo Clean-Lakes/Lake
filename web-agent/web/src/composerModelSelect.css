@@ -89,7 +89,19 @@
 
 .composer-model-current { display:flex; align-items:center; gap:7px; min-width:0; }
 .composer-model-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.composer-model-effort { flex-shrink:0; color:var(--text-muted); font-size: var(--font-size-toolbar); font-weight:var(--font-weight-ui); }
+.composer-model-effort { display:inline-flex; align-items:center; flex:none; gap:3px; color:var(--text-muted); font-size:var(--font-size-toolbar); font-weight:var(--font-weight-ui); }
+.composer-model-effort > svg { flex:none; }
+.composer-model-effort rect {
+  transform-box:fill-box;
+  transform-origin:center bottom;
+  transition:transform 260ms cubic-bezier(.215,.61,.355,1), opacity 260ms cubic-bezier(.215,.61,.355,1);
+}
+.composer-model-effort:is([data-effort="minimal"],[data-effort="low"]) rect:first-child { transform:scaleY(.7222); }
+.composer-model-effort:is([data-effort="minimal"],[data-effort="low"]) rect:nth-child(2) { transform:scaleY(.6333); }
+.composer-model-effort:is([data-effort="minimal"],[data-effort="low"],[data-effort="medium"]) rect:last-child { transform:scaleY(0); opacity:0; }
+.composer-model-effort[data-effort="default"] rect { opacity:.55; }
+.composer-model-effort[data-effort="none"] rect { transform:scaleY(.25); opacity:.55; }
+@media (prefers-reduced-motion:reduce) { .composer-model-effort rect { transition:none; } }
 
 .composer-codex-footer{padding:8px 12px;display:grid;gap:8px;color:var(--text-secondary);font-size:12px;line-height:1.5}
 .composer-codex-footer p{margin:0}

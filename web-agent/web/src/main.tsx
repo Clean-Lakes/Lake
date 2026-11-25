@@ -13,10 +13,12 @@ import "./assistantProse.css";
 import "./objectReferences.css";
 import { initializeAppearance } from "./appearance";
 import { initializeFocusModality } from "./focusModality";
+import { initializeScrollbarVisibility } from "./scrollbarVisibility";
 import { WindowsChrome } from "./WindowsChrome";
 
 initializeAppearance();
 initializeFocusModality();
+initializeScrollbarVisibility();
 if (window.lakeWindowsChrome) document.documentElement.classList.add("lake-windows-chrome");
 
 const root = document.getElementById("root");

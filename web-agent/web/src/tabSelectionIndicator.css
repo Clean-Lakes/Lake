@@ -1,0 +1,25 @@
+:is(.session-inspector-tabs,.conversation-directory-tabs) { position:relative; }
+.tab-selection-indicator { display:none; position:absolute; left:0; pointer-events:none; }
+.tab-selection-indicator[data-ready] {
+  display:block;
+  width:var(--tab-selection-width);
+  transform:translateX(var(--tab-selection-left));
+  transition:transform 170ms cubic-bezier(.2,.8,.2,1), width 170ms cubic-bezier(.2,.8,.2,1);
+}
+.session-inspector-tabs > .tab-selection-indicator {
+  bottom:-1px; height:2px; border-radius:1px; background:var(--info);
+}
+.session-inspector-tabs:has(> .tab-selection-indicator[data-ready]) button[aria-selected="true"]::after {
+  content:none;
+}
+.conversation-directory-tabs > .tab-selection-indicator {
+  top:var(--tab-selection-top); height:var(--tab-selection-height);
+  border-radius:7px; corner-shape:var(--corner-window); background:var(--surface-selected);
+}
+.conversation-directory-tabs:has(> .tab-selection-indicator[data-ready]) > button[aria-selected="true"] {
+  background:transparent;
+}
+.conversation-directory-tabs > button { position:relative; }
+@media (prefers-reduced-motion: reduce) {
+  .tab-selection-indicator[data-ready] { transition:none; }
+}

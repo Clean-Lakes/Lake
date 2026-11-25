@@ -1,5 +1,6 @@
 import {useContext, useLayoutEffect, useRef, useState} from 'react';
 import {PilotReportFolds, readingPilotReport} from './PilotReportFold';
+import {animateReplyEntrance} from './replyEntrance';
 
 type Summary = {id: string; roundId: string; connected: boolean};
 type Shown = {id?: string; fromHeight?: number};
@@ -73,12 +74,14 @@ export function usePilotSummaryHandoff({id, roundId, connected}: Partial<Summary
     arrived.current = shown.id;
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
     if (!connected || media.matches || document.hidden || readingPilotReport(element)) return;
-    const arrival = element.animate([
-      {opacity: .48, transform: 'translateY(3px)', minHeight: `${shown.fromHeight}px`},
-      {opacity: 1, transform: 'none', minHeight: '0px'},
+    const opening = animateReplyEntrance(element);
+    const layout = element.animate([
+      {minHeight: `${shown.fromHeight}px`},
+      {minHeight: '0px'},
     ], {duration: 230, easing: 'cubic-bezier(.32,.15,.22,1)'});
     const stop = () => {
-      arrival.cancel();
+      opening.forEach(animation => animation.cancel());
+      layout.cancel();
       media.removeEventListener('change', stop);
       document.removeEventListener('visibilitychange', stop);
       element.removeEventListener('focusin', stop);
@@ -86,7 +89,7 @@ export function usePilotSummaryHandoff({id, roundId, connected}: Partial<Summary
     media.addEventListener('change', stop);
     document.addEventListener('visibilitychange', stop);
     element.addEventListener('focusin', stop);
-    void arrival.finished.then(stop, stop);
+    void opening[0].finished.then(stop, stop);
     return stop;
   }, [connected, visible, shown]);
 
