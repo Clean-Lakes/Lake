@@ -4,6 +4,68 @@ import {navigateSettingsTabs, settingsTabStops, trapSettingsTab} from './setting
 import {consoleCategories, consolePanelId, consoleTabId, type ConsolePage} from './workspaceConsoleTabs';
 import './workspaceConsole.css';
 
+const reducedMotion = '(prefers-reduced-motion: reduce)';
+// The Bento Card spring at 600 ms with 0.2 bounce, sampled every 30 ms.
+const selectionSpring = 'linear(0,.0794,.2486,.4375,.6093,.7484,.8518,.9231,.9688,.9954,1.0091,1.0144,1.015,1.0131,1.0104,1.0076,1.0051,1.0032,1.0018,1.0009,1)';
+
+function cancelSelectionMotion(background: HTMLElement, mark: HTMLElement) {
+  for (const layer of [background, mark]) layer.getAnimations?.().forEach(animation => animation.cancel());
+}
+
+function selectionTransform(top: number, scale = 1) {
+  return 'translate3d(0,' + top + 'px,0) scaleY(' + scale + ')';
+}
+
+function alignSelection(list: HTMLElement, background: HTMLElement, mark: HTMLElement, reveal = false) {
+  const row = list.querySelector<HTMLButtonElement>('[aria-selected="true"]:not([hidden])');
+  if (!row) {
+    list.removeAttribute('data-selection-visible');
+    cancelSelectionMotion(background, mark);
+    return;
+  }
+  const bounds = row.getBoundingClientRect();
+  const scroll = list.scrollTop;
+  const origin = list.getBoundingClientRect().top + list.clientTop - scroll;
+  const top = Math.round((bounds.top - origin) * 1000) / 1000;
+  const height = Math.round(bounds.height * 1000) / 1000;
+  const visible = list.hasAttribute('data-selection-visible');
+  const atTarget = visible && background.style.getPropertyValue('--console-selection-top') === top + 'px' &&
+    background.style.height === height + 'px';
+  // Read the painted position before cancelling an interrupted slide or scrolling.
+  const moving = reveal && !atTarget && visible && background.dataset.tab !== row.id &&
+    typeof background.animate === 'function' && !document.hidden && !window.matchMedia(reducedMotion).matches;
+  const from = moving ? background.getBoundingClientRect() : null;
+
+  if (reveal) {
+    if (top < scroll) list.scrollTop = top;
+    else if (top + height > scroll + list.clientHeight) list.scrollTop = top + height - list.clientHeight;
+  }
+  background.dataset.tab = row.id;
+  if (atTarget) return;
+
+  cancelSelectionMotion(background, mark);
+  background.style.setProperty('--console-selection-top', top + 'px');
+  background.style.height = height + 'px';
+  mark.style.setProperty('--console-selection-center', top + height / 2 + 'px');
+  list.setAttribute('data-selection-visible', '');
+  if (!from || !height) return;
+
+  const fromTop = from.top - origin;
+  const timing: KeyframeAnimationOptions = {
+    duration: 600, fill: 'backwards',
+    easing: CSS.supports('animation-timing-function', selectionSpring) ? selectionSpring : 'cubic-bezier(.2,.85,.3,1)',
+  };
+  // Scale only the moving background. The blue mark keeps its physical height.
+  background.animate([
+    {transform: selectionTransform(fromTop, from.height / height)},
+    {transform: selectionTransform(top)},
+  ], timing);
+  mark.animate([
+    {transform: selectionTransform(fromTop + from.height / 2)},
+    {transform: selectionTransform(top + height / 2)},
+  ], timing);
+}
+
 export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy, overlay, notice, onClose, onPage, children}: {
   dialogRef: RefObject<HTMLDialogElement | null>;
   open: boolean;
@@ -19,7 +81,8 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
   const [query, setQuery] = useState('');
   const search = useRef<HTMLInputElement>(null);
   const tabs = useRef<HTMLDivElement>(null);
-  const selection = useRef<HTMLSpanElement>(null);
+  const selectionBackground = useRef<HTMLSpanElement>(null);
+  const selectionMark = useRef<HTMLSpanElement>(null);
   const overlayRoot = useRef<HTMLDivElement>(null);
   const lastFrameFocus = useRef<HTMLElement | null>(null);
   const hadOverlay = useRef(false);
@@ -42,35 +105,35 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
   }, [dialogRef, open]);
   useLayoutEffect(() => {
     const list = tabs.current;
-    const indicator = selection.current;
-    if (!list || !indicator) return;
-    const active = list.querySelector<HTMLButtonElement>('[aria-selected="true"]:not([hidden])');
-    if (!open || !active) {
+    const background = selectionBackground.current;
+    const mark = selectionMark.current;
+    if (!list || !background || !mark) return;
+    if (!open) {
       list.removeAttribute('data-selection-visible');
-      indicator.removeAttribute('data-sliding');
+      cancelSelectionMotion(background, mark);
       return;
     }
-
-    if (!query) active.scrollIntoView({block: 'nearest'});
-    const align = (slide: boolean) => {
-      const row = active.getBoundingClientRect();
-      const top = row.top - list.getBoundingClientRect().top + list.scrollTop - list.clientTop;
-      const transform = 'translateY(' + Math.round(top * 1000) / 1000 + 'px)';
-      const height = row.height + 'px';
-      const visible = list.hasAttribute('data-selection-visible');
-      if (visible && indicator.style.transform === transform && indicator.style.height === height) return;
-      indicator.toggleAttribute('data-sliding', visible && slide);
-      indicator.style.transform = transform;
-      indicator.style.height = height;
-      list.setAttribute('data-selection-visible', '');
-    };
-    align(!query);
-
-    const resize = new ResizeObserver(() => align(false));
+    alignSelection(list, background, mark, !query);
+  }, [open, page, query, typescriptBackend]);
+  useLayoutEffect(() => {
+    const list = tabs.current;
+    const background = selectionBackground.current;
+    const mark = selectionMark.current;
+    if (!open || !list || !background || !mark) return;
+    const resize = new ResizeObserver(() => alignSelection(list, background, mark));
     resize.observe(list);
     list.querySelectorAll('.workspace-console-group').forEach(group => resize.observe(group));
-    return () => resize.disconnect();
-  }, [open, page, query, typescriptBackend]);
+    const motion = window.matchMedia(reducedMotion);
+    const settle = () => { if (motion.matches || document.hidden) cancelSelectionMotion(background, mark); };
+    motion.addEventListener('change', settle);
+    document.addEventListener('visibilitychange', settle);
+    return () => {
+      resize.disconnect();
+      motion.removeEventListener('change', settle);
+      document.removeEventListener('visibilitychange', settle);
+      cancelSelectionMotion(background, mark);
+    };
+  }, [open]);
   useLayoutEffect(() => {
     const layer = overlayRoot.current;
     if (open && layer && !layer.contains(document.activeElement)) settingsTabStops(layer)[0]?.focus();
@@ -83,7 +146,7 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
 
   function choose(next: ConsolePage) {
     if (busy) return;
-    onPage(next);
+    if (next !== page) onPage(next);
     if (query) {
       setQuery('');
       search.current?.focus();
@@ -141,7 +204,8 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
         </label>
         <div ref={tabs} className="workspace-console-categories" role="tablist" aria-label="分类" aria-orientation="vertical"
           onKeyDown={event => navigateSettingsTabs(event, event.currentTarget)}>
-          <span ref={selection} className="workspace-console-selection" aria-hidden="true"/>
+          <span ref={selectionBackground} className="workspace-console-selection" aria-hidden="true"/>
+          <span ref={selectionMark} className="workspace-console-selection-mark" aria-hidden="true"/>
           {groups.map(group => <div key={group.label} className="workspace-console-group" role="group" aria-label={group.label}
             hidden={!group.items.some(item => matching.has(item.key))}>
             {group.showLabel && <span className="workspace-console-group-label" aria-hidden="true">{group.label}</span>}
