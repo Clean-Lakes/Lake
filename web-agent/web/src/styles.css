@@ -407,11 +407,14 @@ a { color: inherit; }
   position: relative; container-type: inline-size; container-name: lake-composer; width: min(960px, 100%);
   margin-inline: auto; padding: 0; background: transparent; border: 0; box-shadow: none;
   /* Reserve the empty expanded height so focusing the editor keeps the last message in place. */
-  display: flex; flex-direction: column; justify-content: flex-end; min-block-size: 86px;
+  display: flex; flex-direction: column; justify-content: flex-end; min-block-size: var(--composer-reserved-height, 92px);
 }
 .composer-input {
   --composer-placeholder: color-mix(in srgb, var(--text-muted) 88%, transparent);
-  padding: 8px 13px;
+  --composer-block-inset: 10px;
+  --composer-inline-inset: 13px;
+  --composer-toolbar-gap: 10px;
+  padding: var(--composer-block-inset) var(--composer-inline-inset);
 }
 .composer-input,.composer-backplate {
   border: 1px solid var(--composer-stroke, var(--conversation-composer-border, var(--border)));
@@ -424,7 +427,7 @@ a { color: inherit; }
 .send-button { flex: 0 0 auto; display: grid; place-items: center; border: 0; width: 32px; height: 32px; border-radius: var(--radius-control); background: var(--primary); color: var(--on-primary); }
 .send-button:hover:not(:disabled) { background: var(--primary-hover); }
 .send-button:disabled { background: var(--surface-selected); color: var(--text-disabled); }
-.composer-foot { display: flex; align-items: center; flex-wrap: nowrap; color: var(--text-muted); font-size: var(--font-size-toolbar); margin-top: 8px; padding: 0; gap: 6px; min-width: 0; }
+.composer-foot { display: flex; align-items: center; flex-wrap: nowrap; color: var(--text-muted); font-size: var(--font-size-toolbar); margin-top: var(--composer-toolbar-gap); padding: 0; gap: 6px; min-width: 0; }
 .composer-foot-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-inline-start: auto; min-width: 0; }
 .composer-input .send-button {
   --composer-action-background: transparent;
@@ -669,7 +672,7 @@ a { color: inherit; }
   .command-input-row { flex-direction: column; }
   .command-button { align-self: flex-end; }
   .composer-dock { padding: 9px var(--session-gutter, 13px) var(--workbench-bottom-inset); }
-  .composer-input { padding: 8px 12px; }
+  .composer-input { --composer-inline-inset:12px; }
   .composer-foot { gap: 6px; }
   .resource-detail { width: calc(100% - 26px); padding-top: 19px; }
   .resource-hero { margin-top: 23px; }
@@ -1252,7 +1255,7 @@ input[type="checkbox"]{ accent-color: var(--primary); }
  }
 }
 @container lake-composer (max-width: 420px) {
- .composer-input { padding-inline:8px; }
+ .composer-input { --composer-inline-inset:8px; }
  .composer-input .send-button.stop-button { font-size:11px; padding-inline:4px; }
  .composer-foot .composer-model-select.app-select > .app-select-trigger { padding-inline:4px; }
  .composer-foot .composer-model-name { max-width:74px; }
@@ -1273,7 +1276,7 @@ input[type="checkbox"]{ accent-color: var(--primary); }
  .composer-foot .pilot-mode-toggle { min-width:28px; justify-content:center; }
 }
 @media (pointer: coarse) {
- .composer { min-block-size:100px; }
+ .composer { min-block-size:var(--composer-reserved-height,106px); }
  .composer-foot,.composer-foot-actions { flex-wrap:wrap; }
  .composer-input :is(.composer-attach-button,.composer-foot > .composer-permission-button,.send-button,.composer-model-setup,.composer-model-select.app-select > .app-select-trigger) {
   min-width:44px; min-height:44px;
