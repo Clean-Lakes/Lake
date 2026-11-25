@@ -27,10 +27,12 @@ test('running and finished work both show their actual text and output without i
  const html=renderToStaticMarkup(createElement(CodexActivity,{items,live:true}));
  for(const part of ['inspector.yaml','journalctl -u inspector -n 20','进行中','scan started','核对巡检日志'])assert.ok(html.includes(part),part);
  assert.ok(html.indexOf('检查服务')<html.indexOf('inspector.yaml')&&html.indexOf('inspector.yaml')<html.indexOf('核对日志'));
+ assert.match(html,/<div class="codex-task-event">.*?<span class="codex-task-chip">核对巡检日志<\/span>/);
+ assert.equal(html.match(/class="codex-tool-group"/g)?.length,2);
  const finished=updateCodexActivity(items,{...items[4]!,kind:'command',at,status:'completed',output:'done'});
  assert.equal(finished.length,5);
  const saved=renderToStaticMarkup(createElement(CodexActivity,{items:finished,reportText:'核对日志'}));
- assert.ok(!saved.includes('aria-expanded')&&!saved.includes('>核对日志<')&&saved.includes('journalctl -u inspector -n 20')&&saved.includes('done'));
+ assert.ok(saved.includes('aria-expanded="true"')&&!saved.includes('>核对日志<')&&saved.includes('journalctl -u inspector -n 20')&&saved.includes('done'));
 });
 test('all consecutive commands remain individually readable, including repeated commands and multiline scripts',()=>{
  const items:CodexActivityItem[]=['pwd','pwd','date\necho ok','whoami','ls'].map((text,i)=>({id:String(i),kind:'command',status:'completed',at,text}));
@@ -38,5 +40,7 @@ test('all consecutive commands remain individually readable, including repeated 
  assert.equal(html.match(/data-kind="command"/g)?.length,5);
  assert.equal(html.match(/>pwd</g)?.length,2);
  assert.match(html,/date\necho ok/);
- assert.doesNotMatch(html,/aria-expanded|<button|内容已隐藏/);
+ assert.match(html,/已运行 5 条命令/);
+ assert.equal(html.match(/class="codex-tool-group"/g)?.length,1);
+ assert.doesNotMatch(html,/内容已隐藏/);
 });
