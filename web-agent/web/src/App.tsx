@@ -130,7 +130,7 @@ import {composerCompletionStorageKey} from './composerCompletion';
 import { HostKeyTrust } from "./HostKeyTrust";
 import { conversationActive, sessionConnection, type StreamState } from "./connection";
 import {continuousPilotInput,queuesComposerMessage} from './messageQueue';
-import { conversationCanScroll, pausesConversationFollow, followsConversationScroll, FollowScroll, observeConversationGrowth } from "./followScroll";
+import { conversationCanScroll, bindConversationFollow } from "./followScroll";
 import { type CommandPolicy, dangerConfirmation } from "../../shared/command-policy";
 import "./styles.css";
 import "./workspacePage.css";
@@ -412,15 +412,21 @@ function AppContent() {
   const streamCursor = useRef(0);
   const activeSession = useRef<string | null>(route.sessionId);
   const conversationRef = useRef<HTMLElement>(null);
+  const [conversationBox,setConversationBox]=useState<HTMLElement|null>(null);
+  const attachConversation=useCallback((node:HTMLElement|null)=>{
+    conversationRef.current=node;
+    setConversationBox(node);
+  },[]);
   const conversationScroll = useRef({ key: "", following: true });
-  const conversationFollower = useRef<FollowScroll | null>(null);
+  const conversationFollower = useRef<ReturnType<typeof bindConversationFollow> | null>(null);
   const pauseFollowing = useCallback(() => {
     conversationScroll.current.following = false;
-    conversationFollower.current?.stop();
+    conversationFollower.current?.setFollowing(false);
   }, []);
   const jumpToLatest = useCallback(() => {
     conversationScroll.current.following = true;
-    conversationFollower.current?.jump();
+    conversationFollower.current?.setFollowing(true);
+    conversationFollower.current?.follower.jump();
   }, []);
   const conversationResume=useRef(new Map<string,{top:number;following:boolean}>());
   const inspectConversation = useCallback(() => {
@@ -1032,39 +1038,33 @@ function AppContent() {
   }, [terminalVisible, commandBusy, terminalId, currentTerminal?.holder, currentTerminal?.status, terminalHistory?.terminal.id]);
 
   useLayoutEffect(() => {
-    const container = conversationRef.current;
+    const container = conversationBox;
     if (!container || !activeSnapshot || route.resourceId || isPlansPage || isSpecialistTasks) {
       conversationScroll.current = { key: "", following: true };
       return;
     }
     const key = activeSnapshot.session.id;
     if (conversationScroll.current.key !== key) conversationScroll.current = { key, following: true };
-    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const follower = new FollowScroll(container, () => conversationScroll.current.following, undefined, motion.matches);
-    const updateMotion = (event: MediaQueryListEvent) => follower.setReducedMotion(event.matches);
-    motion.addEventListener("change", updateMotion);
-    conversationFollower.current = follower;
     const resume=conversationResume.current.get(key);
-    if(resume){conversationResume.current.delete(key);conversationScroll.current={key,following:resume.following};container.scrollTop=resume.top;if(resume.following)follower.jump();}
-    else follower.jump();
-    const stopObserving = observeConversationGrowth(container, viewportChanged => {
-      if (viewportChanged || historyVisible.current!==key) follower.jump();
-      else follower.request();
-    });
-    return () => {
-      motion.removeEventListener("change", updateMotion);
-      stopObserving(); follower.stop(); conversationFollower.current = null;
-    };
-  }, [activeSnapshot?.session.id, route.resourceId,isPlansPage,isSpecialistTasks]);
+    if(resume){
+      conversationResume.current.delete(key);
+      conversationScroll.current={key,following:resume.following};
+    }
+    const scroll=bindConversationFollow(container,conversationScroll.current,()=>historyVisible.current!==key);
+    conversationFollower.current=scroll;
+    if(resume&&!resume.following)container.scrollTop=resume.top;
+    else scroll.follower.jump();
+    return () => { scroll.dispose(); conversationFollower.current=null; };
+  }, [conversationBox,activeSnapshot?.session.id,route.resourceId,isPlansPage,isSpecialistTasks]);
 
   useLayoutEffect(()=>{
-    if(!sessionId||!historyDataReady||route.resourceId||isPlansPage||historyVisible.current===sessionId)return;
-    return prepareSessionEntrance(()=>conversationFollower.current?.jump(),()=>setHistoryVisibleId(sessionId));
-  },[sessionId,historyDataReady,route.resourceId,isPlansPage]);
+    if(!conversationBox||!sessionId||!historyDataReady||route.resourceId||isPlansPage||historyVisible.current===sessionId)return;
+    return prepareSessionEntrance(()=>conversationFollower.current?.follower.jump(),()=>setHistoryVisibleId(sessionId));
+  },[conversationBox,sessionId,historyDataReady,route.resourceId,isPlansPage]);
 
   // Completion can add final text; continue the existing smooth follow without
   // jumping or opting a reader of earlier messages back into following.
-  useLayoutEffect(() => { conversationFollower.current?.request(); },
+  useLayoutEffect(() => { conversationFollower.current?.follower.request(); },
     [activeSnapshot?.replyTimings?.at(-1)?.finishedAt,activeSnapshot?.ai?.turnFinishedAt]);
 
   const refreshCatalog = useCallback(async (signal?: AbortSignal) => {
@@ -1495,6 +1495,7 @@ function AppContent() {
     setMention(null);
     setPendingOperation("message");
     conversationScroll.current.following = true;
+    conversationFollower.current?.setFollowing(true);
     try {
       const accepted=await api.sendMessage(targetSession, text, payload.resourceIds, imageDraft, payload.references, undefined, fileDraft, currentAssignment?false:queueMode, ignoreProjectMemory, payload.mentions,currentAssignment?.assignment,pilotTaskReference?.taskId);
       clearSubmitted(targetSession, composerDraft);
@@ -2059,17 +2060,7 @@ function AppContent() {
       {selectedResource ? <><ResourceDetail serviceEditing={bootstrap?.backendRuntime==='typescript'} resource={selectedResource} pilotSessionId={pilotWorkspace.workspace?.active&&pilotWorkspace.workspace.project.projectId===selectedResource.projectId?pilotWorkspace.workspace.project.routerSessionId:undefined} project={projectList.find(project => project.id === selectedResource.projectId)} sessions={catalog.sessions.filter(session => session.projectId === selectedResource.projectId)} selectedSession={selectedSession} terminalList={resourceTerminals} disabled={!connected || !!pendingOperation} onBack={() => navigate({ sessionId, resourceId: null })} onNewSession={() => openSessionDialog(selectedResource.projectId)} onSession={id => navigate({ sessionId: id, resourceId: null })} onEdit={() => selectedResource.jumpServer ? setJumpAccount(selectedResource) : setEditTerminalResource(selectedResource)} />
         </> : sessionId && selectedSession ? isPlansPage ? <SessionPlansPage key={sessionId} session={selectedSession} snapshot={activeSnapshot} error={visibleSessionError} disabled={!sessionConnected||turnActive||!!pendingOperation||modeSaving.has(sessionId)} onBack={returnToConversation} onRetry={()=>setSessionReload(value=>value+1)} onRevise={()=>{returnToConversation();requestAnimationFrame(()=>messageInputRef.current?.focus());}} onExecuted={async()=>{await refreshCurrent();returnToConversation();}}/> : <div className={`session-layout${isSpecialistTasks?" is-specialist-tasks":""}`}><div className="session-view" ref={attachInspectorView}>
         <span className="conversation-header-backdrop" aria-hidden="true"/>
-        <div className="conversation-stage" aria-busy={historyPending}>{historyPending&&<SessionLoading/>}<section id="session-view-panel" tabIndex={-1} ref={conversationRef} onWheel={event => { if (pausesConversationFollow(event.currentTarget,event.deltaY,conversationScroll.current.following)) pauseFollowing(); }} onPointerDown={event => {
-          // Only grabbing the native scrollbar pauses on pointer-down. Clicking
-          // text or toggling a short progress row is not a scroll gesture.
-          const box=event.currentTarget, rect=box.getBoundingClientRect();
-          if (event.target===box && (event.clientX < rect.left+box.clientLeft || event.clientX >= rect.left+box.clientLeft+box.clientWidth)) inspectConversation();
-        }} onTouchMove={inspectConversation} onPointerMove={event => { if(event.buttons===1&&window.getSelection()?.type==='Range')inspectConversation(); }} onKeyDown={event => {
-          const target=event.target as HTMLElement;
-          if(target.closest('input,textarea,[contenteditable="true"]'))return;
-          const direction=["ArrowUp","PageUp","Home"].includes(event.key)?-1:["ArrowDown","PageDown","End"].includes(event.key)?1:0;
-          if(direction&&pausesConversationFollow(event.currentTarget,direction,conversationScroll.current.following))pauseFollowing();
-        }} onScroll={event => { if (conversationFollower.current?.animating) return; conversationScroll.current.following = followsConversationScroll(event.currentTarget,conversationScroll.current.following); if(conversationScroll.current.following)conversationFollower.current?.request(); }} className={`conversation${historyPending?" is-entering":""}`} inert={historyPending} aria-label={isSpecialistTasks?"专员任务":"会话记录"}>
+        <div className="conversation-stage" aria-busy={historyPending}>{historyPending&&<SessionLoading/>}<section id="session-view-panel" tabIndex={-1} ref={attachConversation} className={`conversation${historyPending?" is-entering":""}`} inert={historyPending} aria-label={isSpecialistTasks?"专员任务":"会话记录"}>
           {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true"/> : selectedSession.workspaceRole==='role'?<div className="timeline-list"><SpecialistChannel key={sessionId} snapshot={activeSnapshot} connected={sessionConnected} selectedSessionId={inspectorOpen?inspectedSnapshot?.session.id:undefined} inspectedSnapshot={roleInspection??undefined} onTask={id=>void inspectRoleTask(id)} onTasks={updateRoleTasks} onActivity={updateRoleReplyActivity} onReady={updateRoleContentReady}/></div>: isSpecialistExecution ? <section className="timeline-list" aria-label="任务详情">
             <h2>{activeSnapshot.superagent?.task.title??selectedSession.title}</h2>
             <WorkerExecutionResults snapshot={activeSnapshot}/>

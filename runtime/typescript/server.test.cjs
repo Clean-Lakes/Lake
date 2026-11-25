@@ -4364,6 +4364,12 @@ test('Pilot report handoff spans work_finish, Codex settlement and durable chat 
  const reply=(await readPilot()).messages.find(message=>message.id===id);
  assert.equal(reply.author.workerId,finished.id);
  assert.equal(reply.text,finished.task.summary);
+ const calls=reply.codexActivity.filter(item=>item.kind!=='text');
+ assert.deepEqual(calls.map(item=>[item.kind,item.text,item.status]),[['integration','list_project_files','completed']]);
+ assert.equal(reply.codexActivity[0].text,'先读取项目。继续核对。');
+ const channelPage=await f.api(`/api/sessions/${channel.sessionId}/channel`);
+ const channelReport=channelPage.entries.find(entry=>entry.reply?.state==='settled')?.message;
+ assert.deepEqual(channelReport.codexActivity,reply.codexActivity,'both destinations retain the same recorded work');
 });
 
 for(const reported of [true,false])test(`direct ACP Worker empty final message ${reported?'preserves the submitted report':'cannot promote progress into a report'}`,{timeout:30000},async t=>{

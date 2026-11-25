@@ -8,3 +8,5 @@
 .conversation-loading-preview > span:nth-child(3) { width:88%; animation-delay:240ms; }
 @keyframes conversation-placeholder { from { opacity:.35; } to { opacity:1; } }
 @media (prefers-reduced-motion:reduce) { .conversation-stage > .conversation { transition:none; } .conversation-loading-preview > span { animation:none; } }
+
+[data-follow-scroll="tail"] { overflow-anchor:none; }

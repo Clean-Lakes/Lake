@@ -69,6 +69,19 @@ async function fixture(t: { after(fn: () => Promise<void>): void }, clock = Date
     aborted,steering: () => steering };
 }
 
+test('worker text deltas stay on their stream while structural changes still notify the router',async t=>{
+  const f=await fixture(t),{taskId}=await f.start(),worker=f.worker(taskId);
+  const before=f.store.cursor(f.router);
+  for(const content of ['第一行','第一行已更新','第一行已更新\n第二行']){
+    const event=f.store.event(worker.sessionId,'session',{textUpdate:{target:'card',cardType:'message',id:'reply',rootTurnId:'turn',content}});
+    f.host.changed(worker.sessionId,event);
+  }
+  assert.equal(f.store.cursor(f.router),before);
+  assert.equal(f.store.events(worker.sessionId,0).at(-1)?.textUpdate?.content,'第一行已更新\n第二行');
+  f.host.changed(worker.sessionId);
+  assert.equal(f.store.events(f.router,before).at(-1)?.type,'specialist');
+});
+
 test('a successfully routed supplement resumes the exact pending prerequisite without inventing answers',async t=>{
   const f=await fixture(t),initial=await f.start(),worker=f.worker(initial.taskId),generation=worker.generation;
   const ask=f.host.profile(worker.sessionId)!.tools.find(tool=>tool.metadata.name==='ask_user_question')!;

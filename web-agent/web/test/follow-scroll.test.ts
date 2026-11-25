@@ -156,15 +156,21 @@ test('conversation observes actual growth, not same-height metadata or content s
  const previousResize=globalThis.ResizeObserver,previousMutation=globalThis.MutationObserver;
  let resize=()=>{},replace=()=>{},disconnected=0;
  const requests:boolean[]=[];
- globalThis.ResizeObserver=class {constructor(callback:()=>void){resize=callback}observe(){}unobserve(){}disconnect(){disconnected++}} as unknown as typeof ResizeObserver;
+ const observed=new Set<Element>();
+ globalThis.ResizeObserver=class {constructor(callback:()=>void){resize=callback}observe(node:Element){observed.add(node)}unobserve(node:Element){observed.delete(node)}disconnect(){disconnected++}} as unknown as typeof ResizeObserver;
  globalThis.MutationObserver=class {constructor(callback:()=>void){replace=callback}observe(){}disconnect(){disconnected++}} as unknown as typeof MutationObserver;
  try {
-  const container={scrollHeight:900,clientHeight:400,clientWidth:700,firstElementChild:{}} as unknown as HTMLElement;
+  const container={scrollHeight:900,clientHeight:400,clientWidth:700,children:[]} as unknown as HTMLElement;
   const stop=observeConversationGrowth(container,viewportChanged=>requests.push(viewportChanged));
   for(let i=0;i<100;i++)resize();assert.deepEqual(requests,[]);
   Object.assign(container,{scrollHeight:940});resize();assert.deepEqual(requests,[false]);
   Object.assign(container,{scrollHeight:900});resize();assert.deepEqual(requests,[false]);
-  Object.assign(container,{firstElementChild:{}});replace();assert.deepEqual(requests,[false]);
+  const first={parentElement:container as HTMLElement|null}, second={parentElement:container};
+  Object.assign(container,{children:[first,second]});replace();assert.deepEqual(requests,[false]);
+  assert.deepEqual([...observed],[container,first,second]);
+  first.parentElement=null;
+  Object.assign(container,{children:[second]});replace();
+  assert.deepEqual([...observed],[container,second]);assert.deepEqual(requests,[false]);
   Object.assign(container,{scrollHeight:920});resize();assert.deepEqual(requests,[false,false],'growth uses the post-collapse baseline');
   Object.assign(container,{clientWidth:600});resize();assert.deepEqual(requests,[false,false,true]);
   Object.assign(container,{clientHeight:350});resize();assert.deepEqual(requests,[false,false,true,true]);
