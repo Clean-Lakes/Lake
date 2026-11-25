@@ -1762,6 +1762,7 @@ function AppContent() {
   const selectedAgentBackend=selectedSuperChannel?.execution??selectedSuperWorker?.execution?.backend??activeSnapshot?.superagent?.execution?.backend;
   const avatarActivity=activeSnapshot?{sessionId:activeSnapshot.session.id,state:selectedSuperChannel&&roleReplyActivity?.sessionId===activeSnapshot.session.id?roleReplyActivity.state:conversationActivity(activeSnapshot.ai,selectedSession?.status)}:undefined;
   const superHeaderIdentity=sessionHeader&&(selectedRoleName||selectedSuperPilot);
+  const headerTitle=sessionHeader&&selectedSuperPilot?'Lake':selectedResource?.name??selectedSession?.title??'概览';
   const processNavigation=<ReplyProcessSelect sessionId={activeSnapshot?.session.id} onSpecialist={inspectSpecialist} onPilot={()=>{
     roleInspectionRequest.current.cancel();pendingRoleInspection.current=undefined;setRoleInspection(null);
   }}/>;
@@ -1804,7 +1805,7 @@ function AppContent() {
             {!sessionHeader&&<><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span></>}
             <strong>
               {superHeaderIdentity?<SuperRoleAvatar name={selectedRoleName} roleId={selectedRoleId} pilot={!!selectedSuperPilot} size={20} motion={pilotHeaderActivity?.motion??conversationAvatarMotion(avatarActivity?.state??'idle',activeSnapshot?.superagent?.task?.state??selectedSuperWorker?.task.state)}/>:<Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession ? selectedSession.icon??'chat' : 'document'} size={15}/>}
-              <span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{superHeaderIdentity?(selectedRoleName??'Pilot'):selectedResource?.name ?? selectedSession?.title ?? "概览"}</span>
+              <span className="crumb-title" title={headerTitle}>{superHeaderIdentity&&!selectedSuperPilot?selectedRoleName:headerTitle}</span>
               {superHeaderIdentity&&!selectedSuperPilot&&<AgentBackendLogo backend={selectedAgentBackend}/>}
             </strong>
             {pilotParticipants&&<PilotActiveSpecialists key={sessionId} participants={pilotParticipants} visible={showPilotParticipants}/>}
