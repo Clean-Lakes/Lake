@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 import WebKit
 import LakeUpdateCore
 import LakeDesktopCore
@@ -86,7 +87,7 @@ import LakeDesktopCore
     }
     private var inspectorTransition: InspectorTransition?
     private var inspectorRequestID = 0
-    private var inspectorAnimation: Timer?
+    private var inspectorAnimation: WindowDisplayClock?
     private var inspectorAnimationReply: ((Any?, String?) -> Void)?
     private var dragRegions: [NSRect] = []
     private var dragExcluded: [NSRect] = []
@@ -102,7 +103,7 @@ import LakeDesktopCore
         refreshApplicationIcon()
         if profile.isDevelopment { NSApp.dockTile.badgeLabel = "DEV" }
         installMenu()
-        let config = WKWebViewConfiguration()
+        let config = makeWorkbenchWebConfiguration()
         if let projectID = UserDefaults.standard.string(forKey: "LakeWorkspaceProjectId"),
            let data = try? JSONEncoder().encode(projectID), let json = String(data: data, encoding: .utf8) {
             config.userContentController.addUserScript(WKUserScript(source: "window.lakeWorkspaceProjectId = \(json);", injectionTime: .atDocumentStart, forMainFrameOnly: true))
@@ -328,7 +329,7 @@ import LakeDesktopCore
             guard #available(macOS 26.0, *), message.webView === webView, message.frameInfo.isMainFrame,
                   sameOrigin(message.frameInfo.request.url), let body = message.body as? [String: Any], let action = body["action"] as? String,
                   let origin else { replyHandler(nil, "原生模型面板不可用"); return }
-            if action == "close" { modelPanel?.close(notify: false); replyHandler(true, nil); return }
+            if action == "close" { modelPanel?.close(notify: false, restoreFocus: false, animated: true); replyHandler(true, nil); return }
             guard action == "show", let state = body["state"] as? [String: Any] else { replyHandler(nil, "未知的面板请求"); return }
             if modelPanel == nil { modelPanel = NativeModelPanel(parent: window, webView: webView, origin: origin) }
             guard modelPanel?.show(state) == true else { replyHandler(nil, "模型面板位置不可用"); return }
@@ -353,7 +354,10 @@ import LakeDesktopCore
             replyHandler(value, nil)
         }
     }
-    @objc private func updateAccessibilityChanged() { renderUpdate(updater.state) }
+    @objc private func updateAccessibilityChanged() {
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion { finishPendingInspectorAnimation() }
+        renderUpdate(updater.state)
+    }
     func applicationDidBecomeActive(_ notification: Notification) {
         if window != nil && !window.isVisible { showWorkbench() }
         guard ready else { return }
@@ -368,13 +372,29 @@ import LakeDesktopCore
     func windowDidMove(_ notification: Notification) {
         if inspectorAnimation == nil { modelPanel?.close(notify: true) }
     }
-    func windowWillStartLiveResize(_ notification: Notification) {
-        if let transition = inspectorTransition, let reply = inspectorAnimationReply {
-            cancelInspectorAnimation()
-            finishInspector(transition, reply: reply)
+    func windowDidChangeScreen(_ notification: Notification) { updateInspectorAnimationScreen() }
+    func applicationDidChangeScreenParameters(_ notification: Notification) { updateInspectorAnimationScreen() }
+    func windowDidChangeOcclusionState(_ notification: Notification) {
+        if !window.occlusionState.contains(.visible) {
+            finishPendingInspectorAnimation()
+            modelPanel?.close(notify: true)
         }
     }
-    func windowWillMiniaturize(_ notification: Notification) { modelPanel?.close(notify: true) }
+    func windowWillStartLiveResize(_ notification: Notification) { finishPendingInspectorAnimation() }
+    func windowWillMiniaturize(_ notification: Notification) {
+        finishPendingInspectorAnimation()
+        modelPanel?.close(notify: true)
+    }
+    private func updateInspectorAnimationScreen() {
+        if let clock = inspectorAnimation, !clock.followWindowScreen() {
+            finishPendingInspectorAnimation()
+        }
+    }
+    private func finishPendingInspectorAnimation() {
+        guard let transition = inspectorTransition, let reply = inspectorAnimationReply else { return }
+        cancelInspectorAnimation()
+        finishInspector(transition, reply: reply)
+    }
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.name == "lakeChrome", message.frameInfo.isMainFrame,
               sameOrigin(message.frameInfo.request.url), let body = message.body as? [String: Any] else { return }
@@ -460,28 +480,26 @@ import LakeDesktopCore
     private func animateInspector(_ transition: InspectorTransition, animated: Bool, reply: @escaping (Any?, String?) -> Void) {
         let from = window.frame
         let target = transition.target
-        guard animated, from != target, window.isVisible, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+        guard animated, from != target, window.isVisible, window.occlusionState.contains(.visible),
+              !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
             finishInspector(transition, reply: reply)
             return
         }
         modelPanel?.close(notify: true)
         let duration = 0.18
-        let started = ProcessInfo.processInfo.systemUptime
-        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] timer in
-            MainActor.assumeIsolated {
-                guard let self, self.inspectorAnimation === timer else { timer.invalidate(); return }
-                let elapsed = (ProcessInfo.processInfo.systemUptime - started) / duration
-                if elapsed >= 1 {
-                    self.cancelInspectorAnimation()
-                    self.finishInspector(transition, reply: reply)
-                } else {
-                    self.window.setFrame(InspectorWindowExpansion.frame(from: from, to: target, progress: elapsed), display: false)
-                }
+        let started = CACurrentMediaTime()
+        let clock = WindowDisplayClock(window: window) { [weak self] timestamp in
+            guard let self, self.inspectorTransition?.id == transition.id else { return }
+            let elapsed = (timestamp - started) / duration
+            if elapsed >= 1 {
+                self.finishPendingInspectorAnimation()
+            } else {
+                self.window.setFrame(InspectorWindowExpansion.frame(from: from, to: target, progress: elapsed), display: false)
             }
         }
-        inspectorAnimation = timer
+        inspectorAnimation = clock
         inspectorAnimationReply = reply
-        RunLoop.main.add(timer, forMode: .common)
+        if !clock.start() { finishPendingInspectorAnimation() }
     }
     private func finishInspector(_ transition: InspectorTransition, reply: (Any?, String?) -> Void) {
         if window.frame != transition.target {
@@ -515,6 +533,7 @@ import LakeDesktopCore
         webView.evaluateJavaScript("document.documentElement.style.setProperty('--lake-titlebar-height', '\(height)px'); window.dispatchEvent(new Event('lake-chrome-resize'));", completionHandler: nil)
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
+        finishPendingInspectorAnimation()
         modelPanel?.close(notify: true)
         return BackgroundWindow.shouldClose(sender, terminating: terminating)
     }

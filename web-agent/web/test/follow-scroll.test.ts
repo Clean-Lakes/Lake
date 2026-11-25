@@ -4,14 +4,16 @@ import { atConversationTail, conversationCanScroll, pausesConversationFollow, fo
 import { sameCard } from "../src/cardEquality";
 
 function fixture(reduced = false) {
-  let following = true; let next = 0;
+  let following = true; let next = 0; let now = 0;
   const callbacks = new Map<number, FrameRequestCallback>();
   const box = {scrollTop: 0, scrollHeight: 1000, clientHeight: 500};
   const follower = new FollowScroll(box, () => following, {
     request(callback) { callbacks.set(++next, callback); return next; },
     cancel(id) { callbacks.delete(id); },
+    now() { return now; },
   }, reduced);
   return {box, follower, callbacks, pause() {following = false;}, frame(time: number) {
+    now = time;
     const entries = [...callbacks]; callbacks.clear(); entries.forEach(([, callback]) => callback(time));
   }};
 }
@@ -26,6 +28,16 @@ test('gestures without room to scroll never strand following; upward reading sti
  assert.equal(pausesConversationFollow(box,-1),true);
  box.scrollTop=200;
  assert.equal(pausesConversationFollow(box,1),true,'manual reading remains in control until reaching tail');
+});
+
+test("following advances the same distance in the same time at 60 and 120 Hz", () => {
+  function positionAt100ms(hertz: number) {
+    const f = fixture();
+    f.follower.request();
+    for (let index = 1; index <= hertz / 10; index++) f.frame(index * 1000 / hertz);
+    return f.box.scrollTop;
+  }
+  assert.ok(Math.abs(positionAt100ms(60) - positionAt100ms(120)) < 0.01);
 });
 
 test('content crossing from empty space into overflow follows and stops at the new tail',()=>{

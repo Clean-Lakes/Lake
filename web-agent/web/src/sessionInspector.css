@@ -55,7 +55,7 @@
 .pilot-execution-card .session-inspector-scroll {
  margin-inline:var(--pilot-execution-scroll-inset);
  padding:12px calc(var(--pilot-execution-inset) - var(--pilot-execution-scroll-inset)) 14px;
- scrollbar-color:var(--pilot-execution-thumb) transparent;
+ --lake-scrollbar-color:var(--pilot-execution-thumb);
 }
 .pilot-execution-card .session-inspector-scroll:focus-visible { outline:2px solid var(--focus-outline); outline-offset:-2px; }
 @supports selector(::-webkit-scrollbar) {
@@ -64,9 +64,7 @@
   padding-inline-end:calc(var(--pilot-execution-inset) - var(--pilot-execution-scroll-inset) - var(--pilot-execution-thumb-width));
  }
  .pilot-execution-card .session-inspector-scroll::-webkit-scrollbar { width:var(--pilot-execution-thumb-width); }
- .pilot-execution-card .session-inspector-scroll::-webkit-scrollbar-track { background:transparent; margin-block:8px; }
- .pilot-execution-card .session-inspector-scroll::-webkit-scrollbar-thumb { background:var(--pilot-execution-thumb); border-radius:6px; }
- .pilot-execution-card .session-inspector-scroll::-webkit-scrollbar-thumb:hover { background:var(--text-muted); }
+ .pilot-execution-card .session-inspector-scroll::-webkit-scrollbar-track { margin-block:8px; }
 }
 .pilot-execution-host:not(:empty) + .pilot-execution-empty { display:none; }
 .pilot-execution-empty { margin:0; }

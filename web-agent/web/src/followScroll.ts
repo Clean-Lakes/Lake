@@ -1,5 +1,5 @@
 type ScrollBox = Pick<HTMLElement, "scrollTop" | "scrollHeight" | "clientHeight">;
-type Frames = { request: (callback: FrameRequestCallback) => number; cancel: (id: number) => void };
+type Frames = { request: (callback: FrameRequestCallback) => number; cancel: (id: number) => void; now: () => number };
 
 export function conversationCanScroll(box: ScrollBox) {
   return box.scrollHeight - box.clientHeight >= 2;
@@ -30,7 +30,8 @@ export class FollowScroll {
   private previousTime: number | null = null;
   get animating() { return this.frame !== null; }
   constructor(private box: ScrollBox, private following: () => boolean,
-    private frames: Frames = {request: callback => window.requestAnimationFrame(callback), cancel: id => window.cancelAnimationFrame(id)}, private reducedMotion = false) {}
+    private frames: Frames = {request: callback => window.requestAnimationFrame(callback), cancel: id => window.cancelAnimationFrame(id),
+      now: () => performance.now()}, private reducedMotion = false) {}
   setReducedMotion(reduced: boolean) {
     this.reducedMotion = reduced;
     if (reduced) this.jump();
@@ -40,6 +41,7 @@ export class FollowScroll {
     // Cursor/activity updates are not necessarily new content. Avoid starting
     // an animation and writing scrollTop again when already at the tail.
     if (atConversationTail(this.box)) return;
+    this.previousTime = this.frames.now();
     this.frame = this.frames.request(this.tick);
   }
   jump() {
@@ -54,7 +56,7 @@ export class FollowScroll {
     if (!this.following()) { this.stop(); return; }
     const destination = Math.max(0, this.box.scrollHeight - this.box.clientHeight);
     const current = this.box.scrollTop;
-    const delta = Math.min(32, Math.max(1, this.previousTime === null ? 16.67 : time - this.previousTime));
+    const delta = Math.min(32, Math.max(1, time - (this.previousTime ?? time)));
     this.previousTime = time;
     const gap = destination - current;
     // Browsers quantize scrollTop to device pixels. Finish before a subpixel

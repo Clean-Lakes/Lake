@@ -17,8 +17,8 @@ export function ProjectSwitcher({projects, value, onChange, iconOnly = false, di
   const needle = query.trim().normalize('NFKC').toLowerCase();
   const visible = projects.filter(project => project.name.normalize('NFKC').toLowerCase().includes(needle));
   const label = selected ? `切换项目：${selected.name}` : '切换项目';
-  return <AppSelect className={`sidebar-project-select${iconOnly ? ' is-icon-only' : ''}`}
-    popupClassName="sidebar-project-popup" popupMinWidth={250} popupMaxHeight={320}
+  return <AppSelect popupMotion className={`sidebar-project-select${iconOnly ? ' is-icon-only' : ''}`}
+    popupClassName="sidebar-project-popup" popupMinWidth={iconOnly ? 250 : 0} popupMaxHeight={320}
     value={value} label={label} title={label} disabled={disabled || !projects.length}
     icon={<Glyph name="folder" size={iconOnly ? 20 : 16}/>}
     renderValue={selected?.name ?? '选择项目'}

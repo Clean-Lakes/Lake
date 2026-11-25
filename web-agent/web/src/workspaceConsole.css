@@ -92,7 +92,6 @@
   overflow:auto;
   overscroll-behavior:contain;
   scrollbar-width:thin;
-  scrollbar-color:var(--border-strong) transparent;
   padding:0 var(--console-tab-inset) 12px;
 }
 [data-theme="dark"] .workspace-console-categories { --console-tab-selection:var(--surface-selected); }

@@ -62,7 +62,10 @@ export { LakeMemory } from "./memory";
 export {sessionArchiveName, legacySessionArchiveName} from "./session-archive";
 
 declare const __LAKE_VERSION__:string;
-export type ServerOptions = { codexHome?:string; home: string; data: string; port: number; staticRoot: string; development?: boolean; production?:boolean; importLegacy?: boolean; importOnly?:boolean; resourceImport?:HexHubImportOptions; grafanaReceiverBase?:string };
+export type ServerOptions = { codexHome?:string; home: string; data: string; port: number; staticRoot: string; development?: boolean; production?:boolean; importLegacy?: boolean; importOnly?:boolean; resourceImport?:HexHubImportOptions; grafanaReceiverBase?:string;
+  /** Exercise stored automation settings in isolated compatibility fixtures. */
+  allowAutomationOverrides?: boolean;
+};
 const encode = (value: unknown) => JSON.stringify(value);
 const equal = (left: string, right: string) => {
   const a = Buffer.from(left),
@@ -1073,8 +1076,9 @@ export async function startLakeServer(options: ServerOptions) {
     resourceManagement=new LakeResourceManagement(store,security,ssh,services,resourceNavigation);
     resourceImport=new LakeResourceImport(store,resourceManagement,value=>agents!.registerSecret(value),options.resourceImport);
     const configuration=new PilotConfiguration(store,security,extensions,resourceManagement,value=>agents!.redact(ssh!.scrub(extensions!.scrub(value))));
-    superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql,execution,Date.now,configuration,services);
-    memory = new LakeMemory(store, () => security!.check(), value => agents!.redact(ssh!.scrub(extensions!.scrub(value))));
+    const allowAutomationOverrides = options.allowAutomationOverrides === true;
+    superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql,execution,Date.now,configuration,services,allowAutomationOverrides);
+    memory = new LakeMemory(store, () => security!.check(), value => agents!.redact(ssh!.scrub(extensions!.scrub(value))), allowAutomationOverrides);
     try { await memory.initialize(); } catch { memory.disable("记忆文件需要核实，当前暂停记忆功能；原记录保留，普通新任务仍可运行"); }
     agents.memory = memory;
     messageQueue = new LakeMessageQueue(store, () => security!.check(), session => superagent!.messageQueueBusy(session),
