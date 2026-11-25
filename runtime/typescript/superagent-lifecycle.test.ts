@@ -323,6 +323,21 @@ test('a shared supplement reaches each selected existing task once without creat
  assert.deepEqual(f.aborted,[]);
 });
 
+test('delivered timeline survives reload, and legacy steps require the matching outbox receipt',async t=>{
+ const f=await fixture(t),work=await f.start(),worker=f.worker(work.taskId);
+ const view=f.store.view(worker.sessionId),at=new Date(Date.now()-2000).toISOString();
+ view.rootTurnId='timeline-turn';view.turnStartedAt=at;
+ view.cards.push({id:'first',type:'operation',title:'inspect_host',status:'completed',at,data:{taskId:worker.taskId,root_turn_id:view.rootTurnId}});
+ f.store.put('views',worker.sessionId,view);
+ await f.finish(work.taskId);f.settleWorker(work.taskId);
+ const report=f.store.messages(f.router).find(message=>message.author?.taskId===work.taskId)!;
+ assert.equal(report.taskTimeline?.steps[0]?.label,'检查主机状态');
+ const {taskTimeline, ...legacy}=report;
+ assert.deepEqual(f.internal.reportMessage(legacy).taskTimeline,taskTimeline);
+ assert.equal(f.internal.reportMessage({...legacy,id:'report_unrelated'}).taskTimeline,undefined);
+ assert.equal(f.internal.reportMessage({...legacy,author:{...legacy.author,rootTurnId:'other'}}).taskTimeline,undefined);
+});
+
 test('specialist report Agent identity stays frozen and legacy projection never rewrites history or crosses bindings',async t=>{
  const f=await fixture(t),work=await f.start(),worker=f.worker(work.taskId);
  await f.finish(work.taskId);f.settleWorker(work.taskId);

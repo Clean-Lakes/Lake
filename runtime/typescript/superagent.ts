@@ -145,6 +145,7 @@ export class LakeSuperagent implements AgentHost {
   readonly operatorReviews: OperatorEffectReviewService;
   readonly owner = id();
   private batches = new Map<string, RouterBatch>();
+  private readonly historicalTimelines=new Map<string,Message['taskTimeline']>();
   private routing = new Set<string>();
   private stoppingProjects = new Set<string>();
   private active = new Set<string>();
@@ -2561,13 +2562,30 @@ export class LakeSuperagent implements AgentHost {
   private reportMessage(original:Message):Message {
     const message=stoppedReportProjection(this.store,original,id=>this.ledger.unresolved(id)),author=message.author;
     const isReport=message.id.startsWith('report_')&&message.role==='assistant'&&!message.conversation;
+    const recoverTimeline=isReport && !!author?.rootTurnId && !message.taskTimeline;
     const recoverDuration=isReport&&author?.execution?.kind==='acp'&&author.durationMs===undefined&&!!author.rootTurnId;
-    if(!author?.taskId || (!recoverDuration&&author.execution&&(message.replyToMessageId||!isReport)))return message;
+    if(!author?.taskId || (!recoverTimeline&&!recoverDuration&&author.execution&&(message.replyToMessageId||!isReport)))return message;
     const worker=this.store.get<Worker>('superWorkers',author.workerId);
     const target=this.store.get<StoredSession>('sessions',message.sessionId);
     if(!worker||!target||worker.projectId!==target.projectId||worker.sessionId!==author.sessionId||worker.roleId!==author.roleId||
       (worker.taskId!==author.taskId&&!this.ledger.jointTask(author.taskId)?.memberIds.includes(worker.taskId)))return message;
     let result = message;
+    if (recoverTimeline) {
+      // Reports are immutable. Cache only after checking the worker and destination
+      // so a frequently refreshed conversation doesn't reread every worker view.
+      const key=JSON.stringify([message.id,worker.id,worker.taskId,author.rootTurnId,message.createdAt]);
+      if (!this.historicalTimelines.has(key)) {
+        const goal=this.store.get<Goal>('superGoals',worker.taskId);
+        const delivered=goal && workerReportKeys(this.store,goal).some(receipt=>specialistReportMessageId(receipt,message.sessionId)===message.id);
+        const view=delivered ? this.store.view(worker.sessionId) : undefined;
+        const timeline=specialistTimeline(view,worker.taskId,author.rootTurnId);
+        const steps=timeline?.steps.filter(step=>Date.parse(step.at)<=Date.parse(message.createdAt));
+        if (this.historicalTimelines.size>=256) this.historicalTimelines.delete(this.historicalTimelines.keys().next().value!);
+        this.historicalTimelines.set(key,timeline && steps?.length ? {...timeline,steps} : undefined);
+      }
+      const timeline=this.historicalTimelines.get(key);
+      if (timeline) result={...result,taskTimeline:timeline};
+    }
     if (!message.replyToMessageId && isReport) {
       const source = this.reportSourceMessage(worker.projectId, this.reportSourceEventId(worker));
       if (source?.sessionId === message.sessionId) {
@@ -2575,7 +2593,7 @@ export class LakeSuperagent implements AgentHost {
         if (goal?.workerId === worker.id && goal.sessionId === worker.sessionId && goal.roleId === worker.roleId &&
             goal.projectId === worker.projectId && (goal.sharedTaskId ?? goal.id) === author.taskId &&
             workerReportKeys(this.store, goal).some(key => message.id === 'report_' + digest([key, message.sessionId]))) {
-          result = {...message, replyToMessageId:source.id};
+          result = {...result, replyToMessageId:source.id};
         }
       }
     }
