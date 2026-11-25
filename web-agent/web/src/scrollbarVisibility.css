@@ -1,0 +1,26 @@
+@property --lake-scrollbar-thumb {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+
+/* Keep the native scrollbar lane stable as the thumb fades. */
+:where(*) {
+  --lake-scrollbar-thumb: transparent;
+  scrollbar-color: var(--lake-scrollbar-thumb) transparent;
+}
+:where([data-scrollbar-activity="scrolling"]) {
+  --lake-scrollbar-thumb: var(--lake-scrollbar-color, var(--border-strong));
+}
+@media (prefers-reduced-motion: no-preference) {
+  :where([data-scrollbar-activity="idle"]) { transition: --lake-scrollbar-thumb 160ms ease-out; }
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background-color: var(--lake-scrollbar-thumb);
+  border-radius: 999px;
+}
+[data-scrollbar-activity="scrolling"]::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active { background-color: var(--text-muted); }

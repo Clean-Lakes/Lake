@@ -127,6 +127,7 @@ import LakeDesktopCore
         // NSScrollView's default bezel otherwise adds a second rim inside the panel.
         scroll.borderType = .noBorder; scroll.focusRingType = .none
         scroll.contentView.drawsBackground = false
+        scroll.scrollerStyle = .overlay
         scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.documentView = stack
         surface.addSubview(scroll)
         window.handleKey = { [weak self] event in

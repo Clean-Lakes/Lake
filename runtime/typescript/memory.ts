@@ -135,6 +135,7 @@ export class LakeMemory {
     readonly store: LakeStore,
     readonly guard: () => void,
     readonly scrub: (value: string) => string = (value) => value,
+    private readonly allowSettingsOverrides = true,
   ) {
     this.root = join(store.data, "memory");
     const persisted = store.get<string>("settings", "layeredMemoryStoreId");
@@ -439,13 +440,12 @@ export class LakeMemory {
       scope.kind === "role"
         ? this.scope("project", scope.projectId).key
         : scope.key;
-    return (
-      this.store.get<LayeredMemorySettings>("memorySettings", key) ?? {
-        useEnabled: false,
-        extractionEnabled: false,
-        revision: 0,
-      }
-    );
+    const stored = this.store.get<LayeredMemorySettings>("memorySettings", key);
+    return this.allowSettingsOverrides && stored ? stored : {
+      useEnabled: false,
+      extractionEnabled: false,
+      revision: stored?.revision ?? 0,
+    };
   }
   setSettings(scope: Scope, input: any) {
     this.requireAvailable();
@@ -458,6 +458,10 @@ export class LakeMemory {
       typeof input.extractionEnabled !== "boolean"
     )
       throw new HttpError(400, "记忆开关必须是布尔值");
+    if (!this.allowSettingsOverrides) {
+      if (input.useEnabled || input.extractionEnabled) throw new HttpError(405, "记忆统一使用默认设置");
+      return current;
+    }
     if (scope.kind === "user" && input.extractionEnabled)
       throw new HttpError(400, "全局偏好由用户明确保存，项目对话不自动共享");
     const next = {
