@@ -14,6 +14,13 @@ export function lastGrapheme(text:string) {
  return segmenter.segment(text).containing(text.length-1);
 }
 
+export function trailingGraphemeStart(text:string,limit:number) {
+ const segments=segmenter.segment(text);
+ let start=text.length;
+ for(let count=0;count<limit&&start>0;count++) start=segments.containing(start-1)!.index;
+ return start;
+}
+
 // Presentation only: canonical content and completion state never wait for frames.
 // Initial/restored text is immediate; only append updates of a live reply animate.
 export class TextReveal {

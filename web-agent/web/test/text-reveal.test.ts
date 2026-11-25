@@ -5,6 +5,7 @@ import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {AssistantMarkdown} from '../src/AssistantMarkdown';
 import {remarkRevealText} from '../src/markdownReveal';
+import {SpecialistReplyWaiting} from '../src/SpecialistReplyCursor';
 
 test('a specialist cursor keeps the final grapheme and leaves inline links intact',()=>{
  const render=(children:string)=>renderToStaticMarkup(createElement(AssistantMarkdown,{children,cursorAvatar:'rabbit'}));
@@ -12,6 +13,18 @@ test('a specialist cursor keeps the final grapheme and leaves inline links intac
  assert.match(formatted,/class="specialist-reply-cursor-tail">👩🏽‍💻<span class="specialist-reply-cursor"/);
  const link=render('正在核对 [记录](https://example.com)');
  assert.match(link,/<a[^>]*>记录<\/a><span class="specialist-reply-cursor"/);
+});
+
+test('waiting keeps the animal and a single copy of a grapheme-safe text tail',()=>{
+ const text='甲乙丙👩🏽‍💻一二三四五六七';
+ const render=(value:boolean)=>renderToStaticMarkup(createElement(SpecialistReplyWaiting.Provider,{value},
+  createElement(AssistantMarkdown,{children:text,cursorAvatar:'rabbit'})));
+ const waiting=render(true),resumed=render(false);
+ assert.match(waiting,/甲乙丙<span class="specialist-reply-wait-text" data-waiting="true">👩🏽‍💻一二三四五六/);
+ assert.match(waiting,/class="specialist-reply-cursor" data-cursor-avatar="rabbit" data-waiting="true"/);
+ assert.match(waiting,/class="specialist-cursor-rabbit"/);
+ assert.equal(waiting.replace(/<[^>]*>/g,''),text);
+ assert.equal(waiting.replaceAll(' data-waiting="true"',''),resumed);
 });
 function fixture(initial=''){
  let now=0,id=0;const pending=new Map<number,FrameRequestCallback>(),values:string[]=[];

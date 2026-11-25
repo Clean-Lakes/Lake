@@ -1,7 +1,7 @@
 import {createContext,memo,useContext,useLayoutEffect,useRef,type CSSProperties} from 'react';
 import {avatarPaintStyle,lakeAvatarArtwork,type AvatarPartName} from './lakeAvatarArtwork';
 import {lakeAvatarDefinition,type LakeAvatarFamily,type LakeAvatarName} from './lakeAvatarCatalog';
-import {lastGrapheme} from './textReveal';
+import {lastGrapheme,trailingGraphemeStart} from './textReveal';
 import {usePageVisible} from './usePageVisible';
 
 const familyParts: Record<LakeAvatarFamily, AvatarPartName> = {
@@ -56,14 +56,14 @@ export function specialistInterimText(text: string) {
   return text.replace(/(?:。|(?<![.\d])\.)(?=\s*$)/u, '');
 }
 
-export const SpecialistReplyWaiting = createContext(false);
+// Undefined leaves ordinary specialist cursors outside the waiting presentation.
+export const SpecialistReplyWaiting = createContext<boolean|undefined>(undefined);
 
 export const SpecialistReplyCursor = memo(function SpecialistReplyCursor({avatar}: {avatar: LakeAvatarName}) {
   const visible = usePageVisible();
   const waiting = useContext(SpecialistReplyWaiting);
   let mark;
-  if (waiting) mark = <span className="specialist-cursor-waiting"><i/><i/><i/></span>;
-  else switch (avatar) {
+  switch (avatar) {
     case 'rabbit':
       mark = <span className="specialist-cursor-rabbit">
         <span className="specialist-cursor-ear"/><span className="specialist-cursor-ear"/>
@@ -80,12 +80,17 @@ export const SpecialistReplyCursor = memo(function SpecialistReplyCursor({avatar
     default:
       mark = <AvatarCursorPart key={avatar} avatar={avatar}/>;
   }
-  return <span className="specialist-reply-cursor" data-cursor-avatar={avatar} data-paused={!visible || undefined} aria-hidden="true">{mark}</span>;
+  return <span className="specialist-reply-cursor" data-cursor-avatar={avatar} data-waiting={waiting || undefined} data-paused={!visible || undefined} aria-hidden="true">{mark}</span>;
 });
 
 export function SpecialistReplyCursorTail({avatar,children}: {avatar: LakeAvatarName;children: string}) {
-  const end = children.trimEnd().length;
-  const last = lastGrapheme(children.slice(0, end));
+  const waiting = useContext(SpecialistReplyWaiting);
+  const text = children.trimEnd();
+  const last = lastGrapheme(text);
   if (!last) return children;
-  return <>{children.slice(0, last.index)}<span className="specialist-reply-cursor-tail">{last.segment}<SpecialistReplyCursor avatar={avatar}/></span>{children.slice(end)}</>;
+  const start = waiting===undefined ? last.index : trailingGraphemeStart(text,8);
+  const tail = <span className="specialist-reply-cursor-tail">{last.segment}<SpecialistReplyCursor avatar={avatar}/></span>;
+  return <>{text.slice(0,start)}{waiting===undefined?tail:
+    <span className="specialist-reply-wait-text" data-waiting={waiting||undefined}>{text.slice(start,last.index)}{tail}</span>
+  }{children.slice(text.length)}</>;
 }

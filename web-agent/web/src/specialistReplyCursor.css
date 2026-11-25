@@ -14,24 +14,6 @@
   user-select: none;
 }
 
-.specialist-cursor-waiting {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  color: var(--text-secondary);
-}
-
-.specialist-cursor-waiting > i {
-  flex: 0 0 3px;
-  block-size: 3px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: .55;
-}
-
 .specialist-reply-cursor[data-cursor-avatar="rabbit"] {
   --cursor-tone: light-dark(#9a6e5e, #d1ad9b);
   --cursor-shade: light-dark(#7e584e, #9a7767);
@@ -139,9 +121,6 @@
 .specialist-cursor-artwork[data-family="lotus"] { --cursor-tilt: 8deg; --cursor-squash: .98; --cursor-lift: -.35px; }
 
 @media (prefers-reduced-motion: no-preference) {
-  .specialist-cursor-waiting > i { animation: lake-cursor-wait 1.4s ease-in-out infinite; }
-  .specialist-cursor-waiting > i:nth-child(2) { animation-delay: .14s; }
-  .specialist-cursor-waiting > i:nth-child(3) { animation-delay: .28s; }
   .specialist-cursor-rabbit { animation: lake-cursor-ear-lift var(--reply-cursor-period) ease-in-out var(--cursor-delay) infinite; }
   .specialist-cursor-feather { animation: lake-cursor-feather-tilt var(--reply-cursor-period) ease-in-out var(--cursor-delay) infinite; }
   .specialist-cursor-eyes { animation: lake-cursor-eye-blink var(--reply-cursor-period) ease-in-out var(--cursor-delay) infinite; }
@@ -162,13 +141,41 @@
     animation: lake-cursor-feather-glint var(--reply-cursor-period) ease-out var(--cursor-delay) infinite;
   }
 
+  .specialist-reply-cursor[data-waiting] {
+    transform-origin: 50% 75%;
+    animation: lake-cursor-wait-sway 3.6s ease-in-out infinite;
+  }
+  .specialist-reply-cursor[data-waiting] > *,
+  .specialist-reply-cursor[data-waiting] *::after { animation: none; }
+
+  .specialist-reply-cursor[data-paused],
   .specialist-reply-cursor[data-paused] *,
   .specialist-reply-cursor[data-paused] *::after { animation-play-state: paused; }
 }
 
-@keyframes lake-cursor-wait {
-  0%, 68%, 100% { opacity: .55; transform: translateY(0); }
-  30% { opacity: 1; transform: translateY(-1.5px); }
+@supports ((background-clip: text) or (-webkit-background-clip: text)) {
+  @media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+    .specialist-reply-wait-text[data-waiting] {
+      color: transparent;
+      -webkit-text-fill-color: transparent;
+      background-color: var(--foreground);
+      background-image: linear-gradient(105deg, transparent 32%, color-mix(in srgb, var(--foreground) 38%, var(--info)) 50%, transparent 68%);
+      background-size: 220% 100%;
+      background-repeat: no-repeat;
+      background-clip: text;
+      -webkit-background-clip: text;
+      animation: status-text-sweep 3.6s linear infinite;
+    }
+    .specialist-reply-wait-text:has(.specialist-reply-cursor[data-paused]) { animation-play-state: paused; }
+    .specialist-reply-wait-text[data-waiting]::selection,
+    .specialist-reply-wait-text[data-waiting] .specialist-reply-cursor-tail::selection { -webkit-text-fill-color: var(--foreground); }
+  }
+}
+
+@keyframes lake-cursor-wait-sway {
+  0%, 34%, 100% { transform: none; }
+  13% { transform: translateY(-.9px) rotate(-5deg); }
+  23% { transform: translateY(-.25px) rotate(2deg); }
 }
 
 @keyframes lake-cursor-ear-lift {
@@ -206,15 +213,20 @@
   69% { opacity: .8; transform: none; filter: drop-shadow(0 0 0 transparent); }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  :is(.specialist-reply-wait-text,.specialist-reply-cursor),
+  :is(.specialist-reply-wait-text,.specialist-reply-cursor) * { transition-property: none; }
+}
+
 @media (forced-colors: active) {
   .specialist-reply-cursor { forced-color-adjust: none; }
+  .specialist-reply-cursor[data-waiting],
   .specialist-reply-cursor *,
   .specialist-reply-cursor *::after { animation: none; }
   :is(.specialist-cursor-ear, .specialist-cursor-plume)::after { content: none; }
   .specialist-cursor-ear, .specialist-cursor-plume, .specialist-cursor-shaft,
   .specialist-cursor-eyes::before, .specialist-cursor-eyes::after { background: CanvasText; }
   .specialist-cursor-ear::before { background: Canvas; }
-  .specialist-cursor-waiting { color: CanvasText; }
   .specialist-cursor-artwork [fill]:not([fill="none"]) { fill: CanvasText; }
   .specialist-cursor-artwork [stroke] { stroke: CanvasText; }
 }

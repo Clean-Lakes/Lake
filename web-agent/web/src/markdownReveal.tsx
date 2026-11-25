@@ -86,7 +86,7 @@ export function MarkdownReveal({source,active,animateInitial,finishPending,waitF
   const [waited,setWaited] = useState<typeof waitTarget>();
   useEffect(() => {
     if (!waitTarget) return;
-    // Let short gaps pass without swapping the cursor while text is still being painted.
+    // Let brief gaps pass before starting the waiting motion.
     const timer = window.setTimeout(() => setWaited(waitTarget),550);
     return () => window.clearTimeout(timer);
   }, [waitTarget]);
@@ -97,7 +97,7 @@ export function MarkdownReveal({source,active,animateInitial,finishPending,waitF
   useLayoutEffect(()=>{packet.current={source,paintedThrough};},[source,paintedThrough]);
   const prose=useMemo(()=>render(paintedThrough<source.length?paintedThrough:undefined),[source,render,paintedThrough]);
   return <VisibleOffset.Provider value={visible.length}>
-    <SpecialistReplyWaiting.Provider value={!!waitTarget&&waited===waitTarget}>{prose}</SpecialistReplyWaiting.Provider>
+    <SpecialistReplyWaiting.Provider value={waitForUpdate?!!waitTarget&&waited===waitTarget:undefined}>{prose}</SpecialistReplyWaiting.Provider>
   </VisibleOffset.Provider>;
 }
 
