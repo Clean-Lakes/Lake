@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {readableError} from './api';
 import {Glyph} from './Icons';
+import {WorkspaceSettingSection} from './WorkspacePage';
 import {naturalMemoryApi,naturalMemoryPath,naturalPreferenceApi,naturalConsolidationApi,type NaturalConflict,type ConsolidationStatus,type FormedPreference,type FormedChange,type NaturalMemorySettings} from './naturalMemoryApi';
 
 export function NaturalPreferenceChangeView({value}:{value:FormedChange}){
@@ -17,11 +18,19 @@ export function NaturalPreferenceChangeView({value}:{value:FormedChange}){
 }
 
 export function MemoryPreferenceControls({settings,busy,onCapture,onUse}:{settings:NaturalMemorySettings|null;busy:boolean;onCapture:(enabled:boolean)=>void;onUse:(enabled:boolean)=>void}){
- return <section className="memory-controls" aria-label="记忆开关">
-  <label className="memory-control"><span><strong>自动积累偏好</strong><span>从今后的对话中保存明确的长期偏好。</span></span><input aria-label="自动积累偏好" type="checkbox" checked={settings?.autoEnabled??false} disabled={busy||!settings?.automaticReady} onChange={e=>onCapture(e.target.checked)}/></label>
-  <label className="memory-control"><span><strong>回答时使用偏好</strong><span>让回答参考这里保存的偏好。</span></span><input aria-label="回答时使用偏好" type="checkbox" checked={settings?.recallSettings?.useEnabled??false} disabled={busy||!settings} onChange={e=>onUse(e.target.checked)}/></label>
-  <p className="memory-control-hint">关闭开关会保留已保存的偏好。{settings&&!settings.automaticReady&&'当前运行模式暂不支持自动积累。'}</p>
- </section>;
+ return <WorkspaceSettingSection id="memory-preference-controls-title" title="记忆开关">
+  <div className="workspace-setting-card">
+   <label className="memory-control workspace-setting-row">
+    <span className="workspace-setting-copy"><strong>自动积累偏好</strong><span className="settings-note">从今后的对话中保存明确的长期偏好。</span></span>
+    <input className="provider-switch" aria-label="自动积累偏好" type="checkbox" role="switch" checked={settings?.autoEnabled??false} disabled={busy||!settings?.automaticReady} onChange={e=>onCapture(e.target.checked)}/>
+   </label>
+   <label className="memory-control workspace-setting-row">
+    <span className="workspace-setting-copy"><strong>回答时使用偏好</strong><span className="settings-note">让回答参考这里保存的偏好。</span></span>
+    <input className="provider-switch" aria-label="回答时使用偏好" type="checkbox" role="switch" checked={settings?.recallSettings?.useEnabled??false} disabled={busy||!settings} onChange={e=>onUse(e.target.checked)}/>
+   </label>
+   <p className="memory-control-hint settings-note">关闭开关会保留已保存的偏好。{settings&&!settings.automaticReady&&'当前运行模式暂不支持自动积累。'}</p>
+  </div>
+ </WorkspaceSettingSection>;
 }
 
 export function MemoryPreferenceItem({value,busy,onForget}:{value:FormedPreference;busy:boolean;onForget:(value:FormedPreference)=>void}){
@@ -60,13 +69,18 @@ export function NaturalMemoryPreferences({projectId,busy,run}:{projectId:string;
   <MemoryPreferenceControls settings={settings} busy={busy||loading} onCapture={enabled=>void run(async()=>{await naturalPreferenceApi.settings(base,settings!.revision,enabled);await refresh();setNotice(enabled?'已开启自动积累，只处理今后的对话。':'已停止自动积累，保存内容保留。')})} onUse={enabled=>void run(async()=>{await naturalPreferenceApi.recallSettings(base,settings!.recallSettings?.revision??0,enabled);await refresh();setNotice(enabled?'回答时将参考这里的偏好。':'已停止使用这里的偏好，保存内容保留。')})}/>
   {error&&<p className="form-error" role="alert">{error}</p>}{notice&&<p className="settings-note" role="status">{notice}</p>}
   {pending.length>0&&<section className="memory-attention" aria-label="需要确认的偏好"><h4>有些偏好需要你确认</h4><p className="settings-note">发现了不同说法，相关偏好已暂停使用。要更改偏好，也可以直接在对话中说明。</p>{pending.map(c=><div className="memory-conflict" key={c.id}>{items.find(p=>p.id===c.entryId)?.body&&<><strong>原偏好</strong><p>{items.find(p=>p.id===c.entryId)!.body}</p></>}<strong>新的说法</strong><p>{c.body}</p><button type="button" className="button secondary" disabled={busy} onClick={()=>void run(async()=>{await naturalConsolidationApi.reject(base,c.id,c.currentRevision);await refresh();setNotice('已保留原偏好。')})}>保留原偏好</button></div>)}</section>}
-  <section className="memory-saved" aria-label="已保存的偏好"><header className="memory-section-header"><h4>已保存的偏好</h4><button type="button" className="icon-button" aria-label="刷新记忆" title="刷新记忆" disabled={busy||loading} onClick={()=>void run(refresh)}><Glyph name="refresh" size={15}/></button></header>
-   {!settings?(loading?<p className="settings-note" role="status">正在读取记忆…</p>:null):saved.length===0&&<p className="memory-empty">{cursor?'当前页没有可用偏好，可继续加载。':settings.automaticReady?'还没有保存偏好。开启自动积累后，正常交流即可。':'还没有保存偏好。'}</p>}
+  <WorkspaceSettingSection id="memory-saved-preferences-title" title="已保存的偏好" actions={
+   <button type="button" className="provider-text-button" disabled={busy||loading} onClick={()=>void run(refresh)}><Glyph name="refresh" size={14}/>刷新记忆</button>
+  }>
+  <div className="workspace-setting-card">
+   {!settings?(loading?<p className="memory-empty" role="status">正在读取记忆…</p>:null):saved.length===0&&<p className="memory-empty">{cursor?'当前页没有可用偏好，可继续加载。':settings.automaticReady?'还没有保存偏好。开启自动积累后，正常交流即可。':'还没有保存偏好。'}</p>}
    {saved.map(value=><MemoryPreferenceItem key={value.id} value={value} busy={busy||loading} onForget={item=>void run(async()=>{await naturalPreferenceApi.forget(base,item.id,item.revision);setDetail(null);await refresh();setNotice('已遗忘这条偏好及其历史正文。')})}/>)}
-   {cursor&&<button type="button" className="button secondary" disabled={busy||loading} onClick={()=>void run(async()=>{const page=await naturalPreferenceApi.list(base,cursor);setItems(v=>[...v,...page.items]);setCursor(page.nextCursor)})}>加载更多偏好</button>}
-  </section>
+   {cursor&&<div className="workspace-setting-row"><button type="button" className="button secondary" disabled={busy||loading} onClick={()=>void run(async()=>{const page=await naturalPreferenceApi.list(base,cursor);setItems(v=>[...v,...page.items]);setCursor(page.nextCursor)})}>加载更多偏好</button></div>}
+  </div>
+  </WorkspaceSettingSection>
 
-  <div className="memory-support">
+  <WorkspaceSettingSection id="memory-preference-history-title" title="记忆记录">
+  <div className="memory-support workspace-setting-card">
    <details className="memory-support-details"><summary>修改记录</summary>
     {!changes.length&&!removed.length&&<p className="settings-note">还没有修改记录。</p>}
     {changes.map(c=><div className="memory-change-row" key={c.id}><span>{({save:'保存偏好',replace:'更正偏好',undo:'撤销修改',forget:'遗忘偏好',merge:'合并重复偏好'} as Record<string,string>)[c.kind]||'修改偏好'} · {new Date(c.createdAt).toLocaleString()}</span><div className="memory-toolbar"><button type="button" className="memory-text-button" disabled={busy} onClick={()=>void run(async()=>setDetail(await naturalPreferenceApi.change(base,c.id)))}>查看变化</button>{['save','replace','merge'].includes(c.kind)&&!c.undoneBy&&<button type="button" className="memory-text-button" disabled={busy||!items.some(p=>p.id===c.entryId&&p.revision===c.afterRevision&&p.state==='active')} onClick={()=>void run(async()=>{await naturalPreferenceApi.undo(base,c.id,c.afterRevision);setDetail(null);await refresh();setNotice('已撤销这次修改。')})}>撤销这次修改</button>}</div>{detail?.id===c.id&&<><NaturalPreferenceChangeView value={detail}/><button type="button" className="memory-text-button" onClick={()=>setDetail(null)}>收起变化</button></>}</div>)}
@@ -77,5 +91,6 @@ export function NaturalMemoryPreferences({projectId,busy,run}:{projectId:string;
    {activity&&<MemoryConsolidationDetails value={activity}/>}
    <details className="memory-support-details"><summary>记忆如何工作</summary><ul><li>只积累开启后的新对话，不补扫历史。</li><li>自动积累与回答使用独立控制，各自默认关闭。</li><li>当前明确要求优先；项目偏好优先于所有项目的偏好。所有项目的偏好需要在对应范围单独开启。</li><li>偏好只影响回答方式，不改变工具权限。目前用于普通对话和 Pilot 协调回复，专员与工作流不继承。</li></ul></details>
   </div>
+  </WorkspaceSettingSection>
  </section>;
 }

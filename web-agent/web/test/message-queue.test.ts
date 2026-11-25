@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {reorderQueuedMessages} from "../src/messageQueue";
+import {DragAutoScroll} from "../src/dragAutoScroll";
 
 test("queue moves preserve every message and unaffected relative order",()=>{
  const ids=["a","b","c","d"];
@@ -35,6 +36,18 @@ test('dragging scrolls only near the list edges and caps speed outside the viewp
  assert.equal(queueDragScroll(-1000,0,160),-9);
  assert.equal(queueDragScroll(1000,0,160),9);
  assert.equal(queueDragScroll(0,0,0),0);
+});
+
+test("edge scrolling keeps its speed on high-refresh screens with rounded scroll positions", () => {
+ for (const hertz of [60, 120, 144, 240]) {
+  const scroller = new DragAutoScroll(0);
+  let top = 0;
+  const box = {get scrollTop() { return top; }, set scrollTop(value: number) { top = Math.round(value); }};
+  for (let frame = 1; frame <= hertz; frame++) scroller.step(box, 60, frame * 1000 / hertz);
+  assert.equal(top, 60);
+  scroller.step(box, 60, 2000);
+  assert.equal(top, 63, "an idle gap cannot produce a visible jump");
+ }
 });
 
 import {pendingUserSupplements,visibleQueuedMessages,completeQueueOrder} from "../src/messageQueue";

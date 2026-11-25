@@ -10,7 +10,7 @@ const {enableNativeSpecialistFixture} = require('./test-fixtures/native-speciali
 async function fixture(t){
  const home=await mkdtemp(join(tmpdir(),'lake-channel-http-')),web=join(home,'web');
  await mkdir(web);await writeFile(join(web,'index.html'),'<html>channel transport fixture</html>');
- const app=await startLakeServer({home,data:join(home,'custom data'),port:0,staticRoot:web});
+ const app=await startLakeServer({home,data:join(home,'custom data'),port:0,staticRoot:web,codexHome:join(home,'codex')});
  enableNativeSpecialistFixture(app.superagent);
  // These transport/admission tests hold scheduling; the gateway runtime suite
  // separately exercises real Pilot and Worker turns with a model fixture.
@@ -58,6 +58,33 @@ test('connection APIs validate project scope, keep credentials private and repor
  f.app.store.put('superRoles',f.role.id,{...f.role,deletedAt:new Date().toISOString()});
  await f.api(`/api/settings/gateway/connections/${orphan.id}`,'PATCH',{enabled:false,name:'已失效连接'});
  await f.api(`/api/settings/gateway/connections/${orphan.id}`,'PATCH',{enabled:true},400);
+});
+
+test('archived projects do not block the channel settings catalog or expose archived specialists',async t=>{
+ const f=await fixture(t);
+ // Existing channels still project their Codex settings under the owning project.
+ f.app.store.put('superRoles',f.otherRole.id,{...f.otherRole,execution:undefined});
+ const active=await f.connect('保留的连接');
+ const archived=await f.api('/api/settings/gateway/connections','POST',{name:'归档项目的连接',projectId:f.other.id},201);
+ const legacy=await f.api('/api/settings/gateway/tokens','POST',{name:'旧客户端'},201);
+ const before=await f.api('/api/settings/gateway/connections');
+ const archivedSpecialist=before.specialists.find(role=>role.roleId===f.otherRole.id);
+ assert.ok(archivedSpecialist?.sessionId);
+
+ await f.api('/api/navigation-delete','POST',{kind:'project',id:f.other.id});
+ const catalog=await f.api('/api/settings/gateway/connections');
+ assert.deepEqual(catalog.projects.map(project=>project.id),[f.project.id]);
+ assert.deepEqual(catalog.specialists.map(role=>role.roleId),[f.role.id]);
+ assert.deepEqual(catalog.connections.map(connection=>connection.id),[active.id,archived.id]);
+ assert.deepEqual((await f.api('/api/gateway/specialists','GET',undefined,200,legacy.token)).specialists.map(role=>role.roleId),[f.role.id]);
+ assert.deepEqual((await f.api('/api/gateway/specialists?projectId='+f.other.id,'GET',undefined,200,legacy.token)).specialists,[]);
+ await f.api('/api/settings/gateway/connections/'+archived.id+'/test','POST',{},404);
+ assert.equal((await f.api('/api/gateway/connection','GET',undefined,200,active.token)).ready,true);
+
+ await f.api('/api/navigation-trash','POST',{kind:'project',id:f.other.id});
+ const restored=await f.api('/api/settings/gateway/connections');
+ assert.equal(restored.specialists.find(role=>role.roleId===f.otherRole.id)?.sessionId,archivedSpecialist.sessionId);
+ assert.equal((await f.api('/api/settings/gateway/connections/'+archived.id+'/test','POST',{})).ready,true);
 });
 
 test('transport confines messages and receipts to their connection and keeps legacy endpoints separate',async t=>{

@@ -1,5 +1,6 @@
 import {createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import Markdown, {type Components,type ExtraProps} from 'react-markdown';
+import {useReplyEntrance} from './replyEntrance';
 import remarkGfm from 'remark-gfm';
 import type {AICard, AgentRun, Resource} from '../../shared/contracts';
 import {remarkAssistantProse} from './assistantProse';
@@ -106,8 +107,10 @@ const components: Components = {
 
 const textImageComponents:Components={...components,img:({alt})=>alt?<span>{alt}</span>:null};
 
-export const AssistantMarkdown = memo(function AssistantMarkdown({children, className = '', allowImages = true,liveMotion,reveal,animateInitial,finishPending,cursorAvatar,pilotCursor=false}: {children: string; className?: string; allowImages?: boolean;liveMotion?:boolean;reveal?:boolean;animateInitial?:boolean;finishPending?:boolean;cursorAvatar?:LakeAvatarName;pilotCursor?:boolean}) {
+export const AssistantMarkdown = memo(function AssistantMarkdown({children, className = '', allowImages = true,liveMotion,reveal,animateInitial,finishPending,cursorAvatar,pilotCursor=false,arrive=false}: {children: string; className?: string; allowImages?: boolean;liveMotion?:boolean;reveal?:boolean;animateInitial?:boolean;finishPending?:boolean;cursorAvatar?:LakeAvatarName;pilotCursor?:boolean;arrive?:boolean}) {
   const {catalog} = useContext(References);
+  const body = useRef<HTMLDivElement>(null);
+  useReplyEntrance(body,arrive);
   const decorateObjects = useMemo(() => remarkObjectReferences(catalog), [catalog]);
   const proseClass=`ai-markdown assistant-prose${className ? ` ${className}` : ''}`;
   const decorateMotion=liveMotion!==undefined;
@@ -120,5 +123,5 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({children, clas
   ]} components={allowImages?components:textImageComponents} skipHtml>{children}</Markdown>,
   [children,decorateObjects,decorateMotion,allowImages,cursorAvatar,pilotCursor]);
   const prose=reveal===undefined?render():<MarkdownReveal source={children} active={reveal} animateInitial={animateInitial} finishPending={finishPending} render={render}/>;
-  return liveMotion===undefined?<div className={proseClass}>{prose}</div>:<LiveTextMotionBoundary active={liveMotion} className={proseClass}>{prose}</LiveTextMotionBoundary>;
+  return liveMotion===undefined?<div ref={body} className={proseClass}>{prose}</div>:<LiveTextMotionBoundary ref={body} active={liveMotion} className={proseClass}>{prose}</LiveTextMotionBoundary>;
 });

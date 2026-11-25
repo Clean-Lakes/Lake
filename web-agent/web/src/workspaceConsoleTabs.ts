@@ -1,6 +1,6 @@
 import type {GlyphName} from './Icons';
 
-export type SettingsPage = 'channels' | 'appearance' | 'conversation' | 'memory' | 'watchdog' | 'agents' | 'models' | 'mcp' | 'skills';
+export type SettingsPage = 'channels' | 'appearance' | 'conversation' | 'agents' | 'models' | 'mcp' | 'skills';
 export type ConsolePage = SettingsPage | 'workspace' | 'updates';
 type Category = {
   key: ConsolePage;
@@ -16,8 +16,6 @@ const categories: readonly {label: string; showLabel?: boolean; items: readonly 
     {key: 'appearance', label: '外观', icon: 'palette', keywords: '主题 深色 浅色 配色 颜色'},
     {key: 'conversation', label: '对话', icon: 'chat', keywords: '消息 会话 发送 快捷键'},
     {key: 'workspace', label: '项目', icon: 'folder', keywords: '切换 工作区'},
-    {key: 'memory', label: '记忆', icon: 'book', keywords: '偏好 知识'},
-    {key: 'watchdog', label: '巡检', icon: 'lakeSchedule', keywords: '任务 定时', typescriptOnly: true},
   ]},
   {label: 'Pilot', showLabel: true, items: [
     {key: 'agents', label: 'Agent 执行器', icon: 'terminal', keywords: 'Codex 执行器'},
@@ -46,7 +44,6 @@ export function consoleCategoryLabel(page: ConsolePage) {
 export function availableSettingsPage(page: SettingsPage, typescriptBackend: boolean): SettingsPage {
   if (typescriptBackend) return page;
   if (page === 'channels') return 'models';
-  if (page === 'watchdog') return 'conversation';
   return page;
 }
 

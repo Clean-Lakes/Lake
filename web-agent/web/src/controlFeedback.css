@@ -1,0 +1,87 @@
+.save-action.button { position:relative; }
+.save-action-size { visibility:hidden; }
+.save-action-feedback {
+  position:absolute; inset:0; display:flex; justify-content:center; align-items:center;
+  white-space:nowrap; gap:4px;
+}
+@keyframes lake-control-appear {
+  from { opacity:.4; transform:translateY(3px); }
+  to { opacity:1; transform:none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .save-action-feedback,.bulk-navigation-toolbar,.workspace-bulk-actions {
+    animation:lake-control-appear 155ms cubic-bezier(.2,.8,.2,1) both;
+  }
+  .composer-input .send-button {
+    transition:background-color 145ms ease-out,color 145ms ease-out;
+  }
+  .composer-input .send-button > svg { transition:transform 145ms cubic-bezier(.2,.8,.2,1); }
+  .composer-input .send-button:not(.stop-button,[data-send-ready]) > svg { transform:scale(.9); }
+  .composer-input .send-button.stop-button { animation:lake-control-appear 155ms cubic-bezier(.2,.8,.2,1) both; }
+}
+
+.composer-input.composer-resizing-surface {
+  --composer-prompt-ease:cubic-bezier(.25,.46,.45,.94);
+  position:relative; isolation:isolate; border-color:transparent; background:transparent;
+}
+.composer-backplate {
+  position:absolute; inset-inline:-1px; bottom:-1px; height:calc(100% + 2px);
+  contain:layout; z-index:-1; pointer-events:none;
+}
+.composer-resizing-content { min-width:0; }
+.composer-resizing-surface[data-composer-compact] { cursor:text; }
+.composer-resizing-surface[data-composer-compact] .composer-resizing-content {
+  display:flex; align-items:center; gap:8px;
+}
+.composer-resizing-surface[data-composer-compact] .composer-body { flex:1; min-width:0; }
+.composer-resizing-surface .composer-foot {
+  opacity:1;
+  transition:opacity 200ms var(--composer-prompt-ease) 80ms;
+}
+.composer-resizing-surface:not([data-composer-compact]) .composer-foot:focus-within { transition:none; }
+.composer-resizing-surface[data-composer-compact] .composer-foot {
+  position:absolute; inset-inline:var(--composer-inline-inset); bottom:var(--composer-block-inset); margin-top:0;
+  opacity:0; visibility:hidden; pointer-events:none;
+  transition:opacity 160ms var(--composer-prompt-ease),visibility 0s linear 160ms;
+}
+.composer-resizing-surface .composer-foot .send-button:not(.stop-button) {
+  opacity:1; scale:1;
+  transition:opacity 150ms var(--composer-prompt-ease),scale 150ms var(--composer-prompt-ease),
+    background-color 145ms ease-out,color 145ms ease-out;
+}
+.composer-resizing-surface[data-composer-compact] .composer-foot .send-button:not(.stop-button) { opacity:0; scale:.85; }
+@media (prefers-reduced-motion:reduce) {
+  .composer-resizing-surface[data-composer-compact] .composer-foot .send-button:not(.stop-button) { scale:1; }
+}
+.composer-resizing-surface[data-composer-compact] .composer-rich-input[data-empty="true"]::before {
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.composer-model-preview { display:none; pointer-events:none; }
+@media (hover:hover) and (pointer:fine) {
+  .composer-model-preview {
+    display:grid; align-items:center; justify-items:end;
+    flex:0 0 calc(26px + var(--composer-inline-inset)); height:30px; overflow:hidden;
+    padding-inline-end:var(--composer-inline-inset);
+    margin-inline-end:calc(0px - var(--composer-inline-inset));
+  }
+  .composer-model-preview > span { display:grid; place-items:center; }
+}
+
+.message-image-preview[data-image-moving] { overflow:visible; }
+.message-image-preview > img { transform-origin:top left; }
+@keyframes lake-image-backdrop-in { from { opacity:0; } to { opacity:1; } }
+@keyframes lake-image-backdrop-out { from { opacity:1; } to { opacity:0; } }
+@media (prefers-reduced-motion:no-preference) {
+  .message-image-preview[open]::backdrop { animation:lake-image-backdrop-in 175ms ease-out both; }
+  .message-image-preview[data-image-closing]::backdrop {
+    animation:lake-image-backdrop-out 160ms ease-out both;
+  }
+}
+
+.app-select-popup[data-menu-motion][inert] { pointer-events:none; }
+@media (prefers-reduced-motion:no-preference) {
+  .app-select-popup[data-menu-motion] .app-select-option,
+  .lake-native-model-panel .composer-model-popup .app-select-option {
+    transition:background-color 100ms ease-out;
+  }
+}

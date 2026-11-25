@@ -44,6 +44,7 @@ type Ports = {
   changed?(sample: ExecutionIdentity): void;
 };
 type Policy = { mode: WatchdogMode; revision: number };
+const defaultPolicy: Policy = { mode: "observe", revision: 0 };
 type Observation = {
   epoch: string;
   generation: number;
@@ -93,6 +94,7 @@ export class TaskWatchdog {
     readonly store: LakeStore,
     private readonly ports: Ports,
     private readonly clock = Date.now,
+    private readonly allowModeOverrides = true,
   ) {
     store.db.exec(`CREATE INDEX IF NOT EXISTS watchdog_records_project_at ON records
       (json_extract(value,'$.projectId'),json_extract(value,'$.at')) WHERE kind='superWatchdogRecords'`);
@@ -111,13 +113,14 @@ export class TaskWatchdog {
   }
 
   private policy(projectId: string): Policy {
-    return this.store.get<Policy>(policyKind, projectId) ?? { mode: "observe", revision: 0 };
+    return (this.allowModeOverrides ? this.store.get<Policy>(policyKind, projectId) : undefined) ?? defaultPolicy;
   }
   mode(projectId: string) {
     return this.policy(projectId).mode;
   }
   setMode(projectId: string, mode: WatchdogMode) {
     if (!["off", "observe", "guide"].includes(mode)) throw new HttpError(400, "无效的巡检模式");
+    if (!this.allowModeOverrides && mode !== defaultPolicy.mode) throw new HttpError(405, "巡检统一使用仅观察模式");
     const previous = this.policy(projectId);
     if (previous.mode !== mode) {
       this.store.put(policyKind, projectId, { mode, revision: previous.revision + 1 });
@@ -188,7 +191,7 @@ export class TaskWatchdog {
     return Number(row?.n ?? 0) < 4;
   }
   private epoch(sample: WatchdogSample, policy: Policy) {
-    return digest([identity(sample), sample.policyHash, sample.controlKey, policy.revision]);
+    return digest([identity(sample), sample.policyHash, sample.controlKey, policy.mode, policy.revision]);
   }
   private observe(sample: WatchdogSample, policy: Policy, time: number) {
     // Keep the per-execution review clock even if the generation or mode changes.

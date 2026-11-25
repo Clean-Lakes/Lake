@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {WatchdogSettings} from '../src/WatchdogSettings';
 import {TaskWatchdog} from '../src/TaskWatchdog';
 import {api} from '../src/api';
 import type {WatchdogFinding} from '../../shared/contracts';
@@ -30,7 +29,7 @@ test('watchdog shows the latest intervention and its evidence; queueing guidance
   assert.doesNotMatch(html,/combobox|项目巡检模式/);
 });
 
-test('watchdog mode is an explicit project setting, separate from task controls', async t => {
+test('the compatibility API sends mode updates only for the requested project', async t => {
   const requests: Array<{path:string; method?:string; body:unknown}> = [];
   t.mock.method(globalThis,'fetch',async (url:string,init?:RequestInit)=>{
     requests.push({path:url,method:init?.method,body:JSON.parse(String(init?.body))});
@@ -41,15 +40,7 @@ test('watchdog mode is an explicit project setting, separate from task controls'
 });
 
 
-test('watchdog configuration is centralized in settings, reads existing project state and never assumes a mode while loading',()=>{
- const props={projectId:'project-b',projectName:'乙项目'};
- const html=renderToStaticMarkup(createElement(WatchdogSettings,props));
- assert.match(html,/id="watchdog-settings-panel"/);assert.match(html,/乙项目/);
- assert.match(html,/统一应用于本项目的专员任务/);assert.match(html,/读取中/);assert.match(html,/role="combobox"[^>]*disabled/);
- assert.match(renderToStaticMarkup(createElement(WatchdogSettings,{})),/请先选择一个项目/);
-});
-
-test('watchdog settings read the exact project without mutating its mode',async t=>{
+test('the compatibility API reads the exact project without mutating its mode',async t=>{
  const requests:Array<{path:string;method?:string}> = [];
  t.mock.method(globalThis,'fetch',async(url:string,init?:RequestInit)=>{requests.push({path:url,method:init?.method});return Response.json({mode:'off'});});
  assert.deepEqual(await api.watchdogMode('项目/乙'),{mode:'off'});

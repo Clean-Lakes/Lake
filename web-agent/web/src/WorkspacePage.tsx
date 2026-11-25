@@ -11,12 +11,24 @@ export function WorkspacePageHeader({id, title, actions}: {
   actions?: ReactNode;
 }) {
   return <header className="workspace-page-header">
-    <div className="workspace-console-breadcrumb">
-      <span aria-hidden="true">控制台</span><span aria-hidden="true">/</span>
-      <h1 id={id} title={title}>{title}</h1>
-    </div>
+    <h1 id={id} className="workspace-page-title" title={title}>{title}</h1>
     {actions && <div className="workspace-page-header-actions">{actions}</div>}
   </header>;
+}
+
+export function WorkspaceSettingSection({id, title, actions, children}: {
+  id: string;
+  title: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return <section className="workspace-setting-section" aria-labelledby={id}>
+    <div className="workspace-setting-heading">
+      <h2 id={id} className="workspace-section-title">{title}</h2>
+      {actions && <div className="workspace-setting-actions">{actions}</div>}
+    </div>
+    {children}
+  </section>;
 }
 
 function CurrentProject({project, resourceCount, canDelete, onDelete}: {
@@ -26,21 +38,24 @@ function CurrentProject({project, resourceCount, canDelete, onDelete}: {
   onDelete: () => void;
 }) {
   const createdAt = new Date(project.createdAt);
-  return <section id="workspace-current-project" className="workspace-current-project workspace-setting-card" aria-labelledby="workspace-current-project-title">
-    <div className="workspace-current-project-label">当前项目</div>
-    <h2 id="workspace-current-project-title" aria-live="polite">{project.name}</h2>
-    <dl className="workspace-project-facts">
-      <div><dt>资源</dt><dd>{resourceCount} 项</dd></div>
-      {!Number.isNaN(createdAt.getTime()) && <div>
-        <dt>创建于</dt><dd><time dateTime={project.createdAt}>{projectDate.format(createdAt)}</time></dd>
-      </div>}
-    </dl>
-    <div className="workspace-current-project-actions">
-      <button type="button" className="workspace-text-button danger-text" disabled={!canDelete} onClick={onDelete}>
-        <Glyph name="trash" size={15}/>删除项目…
-      </button>
+  return <WorkspaceSettingSection id="workspace-current-project-title" title="当前项目">
+    <div id="workspace-current-project" className="workspace-setting-card">
+      <div className="workspace-setting-row">
+        <div className="workspace-setting-copy">
+          <strong aria-live="polite">{project.name}</strong>
+          <dl className="workspace-project-facts">
+            <div><dt>资源</dt><dd>{resourceCount} 项</dd></div>
+            {!Number.isNaN(createdAt.getTime()) && <div>
+              <dt>创建于</dt><dd><time dateTime={project.createdAt}>{projectDate.format(createdAt)}</time></dd>
+            </div>}
+          </dl>
+        </div>
+        <button type="button" className="workspace-text-button danger-text" disabled={!canDelete} onClick={onDelete}>
+          <Glyph name="trash" size={15}/>删除项目…
+        </button>
+      </div>
     </div>
-  </section>;
+  </WorkspaceSettingSection>;
 }
 
 export function WorkspacePage({projects, project, resources, connected, bulkSelection, bulkSelectedCount,
@@ -92,26 +107,27 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
         <Glyph name="plus" size={15}/><span>新建项目</span>
       </button>
     }/>
-    {!!projects.length && <div className="workspace-project-toolbar">
-        <div className="workspace-project-search">
-          <Glyph name="search" size={16}/>
-          <input ref={search} type="search" aria-label="搜索项目" placeholder="搜索项目" value={query}
-            aria-keyshortcuts={bulkSelection ? 'ArrowDown' : 'ArrowDown Enter'}
-            onChange={event => setQuery(event.target.value)} onKeyDown={handleSearchKey}/>
-          {query && <button type="button" className="icon-button" aria-label="清除项目搜索"
-            onClick={() => {setQuery(''); search.current?.focus();}}><Glyph name="close" size={14}/></button>}
-        </div>
+    <div className="workspace-page-layout">
+      <WorkspaceSettingSection id="workspace-project-directory-title" title="项目列表" actions={!!projects.length &&
         <span className="workspace-directory-count" role="status">
           {needle ? `${visibleProjects.length} / ${projects.length}` : projects.length} 个项目
         </span>
-        <button type="button" className="workspace-text-button workspace-bulk-toggle" aria-pressed={!!bulkSelection}
-          aria-label={bulkSelection ? '完成' : '批量管理'} title={bulkSelection ? '完成' : '批量管理'}
-          disabled={!connected && !bulkSelection} onClick={onToggleBulk}>
-          <Glyph name={bulkSelection ? 'check' : 'listTasks'} size={16}/><span>{bulkSelection ? '完成' : '批量管理'}</span>
-        </button>
-      </div>}
-    <div className="workspace-page-layout">
-      <div className="workspace-project-directory">
+      }>
+        {!!projects.length && <div className="workspace-project-toolbar">
+          <div className="workspace-project-search">
+            <Glyph name="search" size={16}/>
+            <input ref={search} type="search" aria-label="搜索项目" placeholder="搜索项目" value={query}
+              aria-keyshortcuts={bulkSelection ? 'ArrowDown' : 'ArrowDown Enter'}
+              onChange={event => setQuery(event.target.value)} onKeyDown={handleSearchKey}/>
+            {query && <button type="button" className="icon-button" aria-label="清除项目搜索"
+              onClick={() => {setQuery(''); search.current?.focus();}}><Glyph name="close" size={14}/></button>}
+          </div>
+          <button type="button" className="workspace-text-button workspace-bulk-toggle" aria-pressed={!!bulkSelection}
+            aria-label={bulkSelection ? '完成' : '批量管理'} title={bulkSelection ? '完成' : '批量管理'}
+            disabled={!connected && !bulkSelection} onClick={onToggleBulk}>
+            <Glyph name={bulkSelection ? 'check' : 'listTasks'} size={16}/><span>{bulkSelection ? '完成' : '批量管理'}</span>
+          </button>
+        </div>}
         {bulkSelection && <div className="workspace-bulk-actions" aria-label="项目批量管理">
           <span role="status">已选 {bulkSelectedCount} 项</span>
           <button type="button" className="workspace-text-button" disabled={!bulkSelectedCount || !connected}
@@ -151,7 +167,7 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
             <p>{needle ? '没有匹配的项目' : '暂无项目'}</p>
           </div>}
         </div>
-      </div>
+      </WorkspaceSettingSection>
       {project && <CurrentProject project={project} resourceCount={resourceCounts.get(project.id) ?? 0}
         canDelete={connected && !bulkSelection} onDelete={() => onDeleteProject(project)}/>}
     </div>

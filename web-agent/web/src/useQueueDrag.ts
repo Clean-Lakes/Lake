@@ -1,8 +1,9 @@
 import {useEffect,useLayoutEffect,useRef,useState,type PointerEvent} from "react";
+import {DragAutoScroll} from "./dragAutoScroll";
 import {queueDropAt,queueDragScroll,type QueueDrop} from "./queueDrag";
 
 type Options={ids:string[];revision:number;disabled:boolean;onMove:(id:string,position:number)=>void;onStale:()=>void};
-type Drag={id:string;pointer:number;startX:number;startY:number;x:number;y:number;active:boolean;revision:number;ids:string[];handle:HTMLButtonElement};
+type Drag={id:string;pointer:number;startX:number;startY:number;x:number;y:number;active:boolean;revision:number;ids:string[];handle:HTMLButtonElement;autoScroll?:DragAutoScroll};
 
 export function useQueueDrag(options:Options) {
  const list=useRef<HTMLOListElement>(null);
@@ -34,15 +35,21 @@ export function useQueueDrag(options:Options) {
   });
   return queueDropAt(rows,value.id,value.y);
  }
- function tick() {
+ function tick(time:number) {
   const value=drag.current;
   if(!value?.active)return;
   if(stale(value)){stop();current.current.onStale();return;}
   const element=list.current;
+  const autoScroll=value.autoScroll??=new DragAutoScroll(time);
+  let speed=0;
   if(element){
    const bounds=element.getBoundingClientRect();
-   if(value.x>=bounds.left-32 && value.x<=bounds.right+32 && value.y>=bounds.top-40 && value.y<=bounds.bottom+40)element.scrollTop+=queueDragScroll(value.y,bounds.top,bounds.bottom);
+   if(value.x>=bounds.left-32 && value.x<=bounds.right+32 && value.y>=bounds.top-40 && value.y<=bounds.bottom+40){
+    // Convert the existing edge step to px/s to preserve the drag speed.
+    speed=60*queueDragScroll(value.y,bounds.top,bounds.bottom);
+   }
   }
+  autoScroll.step(element,speed,time);
   const next=target(value);
   setDrop(previous=>previous?.id===next?.id&&previous?.edge===next?.edge&&previous?.position===next?.position?previous:next);
   frame.current=requestAnimationFrame(tick);
@@ -58,7 +65,7 @@ export function useQueueDrag(options:Options) {
   const value=drag.current;
   if(!value || value.pointer!==event.pointerId)return;
   value.x=event.clientX;value.y=event.clientY;
-  if(!value.active && Math.hypot(value.x-value.startX,value.y-value.startY)>=4){value.active=true;setDragging(value.id);tick();}
+  if(!value.active && Math.hypot(value.x-value.startX,value.y-value.startY)>=4){value.active=true;setDragging(value.id);tick(performance.now());}
  }
  function finish(event:PointerEvent<HTMLButtonElement>) {
   const value=drag.current;
