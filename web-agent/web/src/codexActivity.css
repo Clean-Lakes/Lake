@@ -14,6 +14,7 @@
 .codex-call-body { min-width:0; }
 .codex-call-body code,.codex-call-body pre { margin:0; font:450 1em/1.5 var(--font-mono); white-space:pre-wrap; overflow-wrap:anywhere; }
 .codex-call-body code,.codex-call-script { color:var(--foreground); }
+.codex-tool-group [data-kind="command"] .codex-call-body > code { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; }
 .codex-call-script { max-height:9em; overflow-y:auto; }
 .codex-call-body .codex-call-output { margin-top:2px; }
 .codex-tool-group li > small { font:inherit; }

@@ -45,7 +45,7 @@ function ToolGroup({calls,live}:{calls:Call[];live:boolean}){
       return <li key={call.id} data-kind={call.kind}>
         <Glyph name={icons[call.kind]} size={13}/>
         <div className="codex-call-body">
-          {body.includes('\n')?<pre className="codex-call-script" tabIndex={0} aria-label="执行记录正文">{body}</pre>:<code>{body}</code>}
+          {call.kind!=='command'&&body.includes('\n')?<pre className="codex-call-script" tabIndex={0} aria-label="执行记录正文">{body}</pre>:<code>{body}</code>}
           {call.output&&<pre className="codex-call-output">{call.output}</pre>}
         </div>
         <small aria-label={status} className={status==='已完成'?'visually-hidden':undefined}>{status}</small>
