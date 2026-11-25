@@ -2559,8 +2559,13 @@ export class LakeSuperagent implements AgentHost {
   }
   /** Enrich old report display from its frozen Worker, without rewriting history. */
   private reportMessage(original:Message):Message {
-    const message=stoppedReportProjection(this.store,original,id=>this.ledger.unresolved(id)),author=message.author;
+    let message=stoppedReportProjection(this.store,original,id=>this.ledger.unresolved(id));
+    const author=message.author;
     const isReport=message.id.startsWith('report_')&&message.role==='assistant'&&!message.conversation;
+    if(isReport&&message.text.trim()&&message.codexActivity){
+      const codexActivity=message.codexActivity.filter(item=>item.kind!=='text'||!this.agents.external.isClosingMessage(item.id));
+      if(codexActivity.length!==message.codexActivity.length)message={...message,codexActivity};
+    }
     const recoverDuration=isReport&&author?.execution?.kind==='acp'&&author.durationMs===undefined&&!!author.rootTurnId;
     if(!author?.taskId || (!recoverDuration&&author.execution&&(message.replyToMessageId||!isReport)))return message;
     const worker=this.store.get<Worker>('superWorkers',author.workerId);

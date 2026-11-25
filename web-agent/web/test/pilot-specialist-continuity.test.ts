@@ -5,6 +5,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import type {Message,SessionSnapshot,SuperWorker,SuperWorkspace} from '../../shared/contracts';
 import {awaitingPilotReport,continuousPilotDispatchRows,pilotDispatchRows,pilotSpecialistBinding,pilotSpecialistPresentation,pilotSpecialistReply,type PilotSpecialistRow} from '../src/pilotSpecialistReplies';
 import {PilotSpecialistReplyView} from '../src/PilotSpecialistConversation';
+import {SpecialistLiveReply} from '../src/SpecialistChannel';
 import {redundantJointReports} from '../src/pilotReportGroups';
 
 const at='2026-11-16T00:00:00Z';
@@ -18,6 +19,23 @@ const report=(row:PilotSpecialistRow,root='sdk-root'):Message=>({id:`report-${ro
 const snapshot=(row:PilotSpecialistRow,root='sdk-root'):SessionSnapshot=>({session:{id:row.worker.sessionId,projectId:row.projectId},superagent:{roleId:row.worker.roleId,task:row.worker.task},cursor:1,
  ai:{session:row.worker.sessionId,status:'running',replyStatus:'running',rootTurnId:root,turnStartedAt:at,cards:[{id:'public',type:'message',status:'running',at,content:'这是真实公开进度。',data:{root_turn_id:root}}],cardsOffset:0,totalCards:1}} as SessionSnapshot);
 const html=(row:PilotSpecialistRow,state?:SessionSnapshot)=>renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row,snapshot:state}));
+
+test('both specialist surfaces keep one animal on the latest Codex prose through a tool call',()=>{
+ const row=advance([],workspace())[0]!,state=snapshot(row),turnId=state.ai!.rootTurnId;
+ state.ai!.cards.push({id:'run',type:'operation',at,status:'running',data:{
+  source:'external_agent',external_agent:'codex',external_run_id:'run',taskId:row.worker.task.executionGoalId,root_turn_id:turnId,
+  codex_activity:[{kind:'text',id:'a',text:'第一阶段'},{kind:'text',id:'b',text:'接着核对记录'},
+   {kind:'command',id:'c',text:'date',status:'running',at}]}});
+ for(const connected of [true,false]){
+  const pilot=renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row,snapshot:state,available:connected}));
+  const channel=renderToStaticMarkup(createElement(SpecialistLiveReply,{worker:row.worker,snapshot:state,turnId,connected}));
+  for(const html of [pilot,channel]){
+   assert.match(html,/正在运行 1 条命令|待确认 · 运行 1 条命令/);
+   assert.equal((html.match(/class="specialist-reply-cursor"/g)??[]).length,connected?1:0);
+   if(connected)assert.match(html,/class="specialist-reply-cursor-tail">录<span/);
+  }
+ }
+});
 
 test('an observed dispatch survives an activity gap in its original slot without inventing work',()=>{
  const state=workspace([worker(),worker('database')]),initial=advance([],state);

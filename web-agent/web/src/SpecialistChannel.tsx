@@ -47,7 +47,7 @@ export function SpecialistLiveReply({text,worker,snapshot,turnId,connected=true}
  const task=snapshot?.superagent?.task;
  const bound=worker&&task&&snapshot.session.id===worker.sessionId&&task.taskId===worker.task.taskId&&snapshot.superagent?.roleId===worker.roleId&&turnId===snapshot.ai?.rootTurnId;
  const items=bound?codexActivity(snapshot.ai,task.executionGoalId??task.taskId,turnId):[];
- if(items.some(item=>item.kind!=='text'))return <><CodexActivity items={items} live={moving&&visible}/>{(!connected||waiting)&&<small>{label}</small>}</>;
+ if(items.some(item=>item.kind!=='text'))return <><CodexActivity items={items} live={moving&&visible} cursorAvatar={icon}/>{(!connected||waiting)&&<small>{label}</small>}</>;
  return <div className={`specialist-live-reply${moving?' is-running':''}`} role="status" aria-live="polite" aria-atomic="true" data-phase={!connected?'disconnected':waiting?'waiting':moving?'running':'idle'}>
   <SpecialistReplyTransition revision="progress" text={label} enabled={moving&&visible}>
    <StatusText active={moving&&visible}>{moving&&interim&&(roleId||worker?.roleName)?<SpecialistReplyCursorTail avatar={icon}>{shown}</SpecialistReplyCursorTail>:shown}</StatusText>

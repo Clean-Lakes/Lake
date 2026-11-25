@@ -15,6 +15,7 @@ import {codexConfig,tomlValue} from './codex-profile';
 import {ExternalPublicText} from './public-text';
 import type { CodexConnectionProbe,CodexModelOption,ExternalActor,ExternalAgentProfile,ExternalEvent,ExternalResult,ExternalRun } from './types';
 import {maxExternalConversationRuns} from './types';
+import {codexClosingMessageIds} from '../codex-conversation';
 
 function ownLauncher(flag:string,args:string[]=[]){return {executable:process.execPath,args:isSea()?[flag,...args]:[__filename,flag,...args]};}
 type LiveRun={process?:AgentConnection;controller:AbortController;scopeHash:string;conversation:boolean;guard?:()=>void};
@@ -22,12 +23,20 @@ export class LakeExternalAgents {
   readonly registry:ExternalAgentRegistry;
   private probes=new Map<string,{controller:AbortController;work:Promise<unknown>}>();
   private live=new Map<string,LiveRun>();
+  private closingMessages=new Set<string>();
   constructor(readonly store:LakeStore,readonly redact:(text:string,live?:boolean)=>string,readonly registerSecret:(value:string)=>void,codexHome?:string){
     this.registry=new ExternalAgentRegistry(store,{codexHome,registerSecret});
-    for(const run of store.list<ExternalRun>('acpRuns'))if(run.schemaVersion===1&&['starting','running'].includes(run.state)){
-      run.state=run.dispatchPhase==='not_sent'?'interrupted':'unknown';run.updatedAt=now();store.put('acpRuns',run.id,run);
+    for(const run of store.list<ExternalRun>('acpRuns'))if(run.schemaVersion===1){
+      this.indexClosingMessages(run);
+      if(['starting','running'].includes(run.state)){
+        run.state=run.dispatchPhase==='not_sent'?'interrupted':'unknown';run.updatedAt=now();store.put('acpRuns',run.id,run);
+      }
     }
   }
+  private indexClosingMessages(run:ExternalRun){
+    for(const id of codexClosingMessageIds(run))this.closingMessages.add(id);
+  }
+  isClosingMessage(id:string){return this.closingMessages.has(id);}
   private async launch(profile:ExternalAgentProfile,directory:string,signal:AbortSignal,mcp?:{command:string;args:string[]},model?:string,purpose:'run'|'probe'='run'):
     Promise<AgentLaunch & {localModel:string;models:CodexModelOption[]}>{
     if(process.platform!=='darwin')throw new HttpError(409,'当前平台的 Codex 工具隔离尚未验证');
@@ -177,7 +186,7 @@ export class LakeExternalAgents {
       run.summary=this.redact(text.auditText).slice(0,32768);
       run.state=run.dispatchPhase==='not_sent'?(controller.signal.aborted||run.stopReason==='deadline_reached'?'cancelled':'failed'):'unknown';persist();event({kind:'status',status:run.state});
       if(run.state==='failed'&&!run.summary)throw new HttpError(409,run.error);return this.result(run);
-    }finally{stopDeadline();clearInterval(fence);controller.abort(new Error('外部执行已结束'));actor.signal.removeEventListener('abort',stop);await bridge?.close();await live.process?.close();this.live.delete(run.id);}
+    }finally{this.indexClosingMessages(run);stopDeadline();clearInterval(fence);controller.abort(new Error('外部执行已结束'));actor.signal.removeEventListener('abort',stop);await bridge?.close();await live.process?.close();this.live.delete(run.id);}
   }
   active(sessionId:string){return [...this.live.keys()].some(id=>this.store.get<ExternalRun>('acpRuns',id)?.sessionId===sessionId);}
   async steer(sessionId:string,input:string,inputId:string,agentRunId?:string){

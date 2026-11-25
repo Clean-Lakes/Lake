@@ -2,6 +2,21 @@ import {updateCodexActivity,type CodexActivityItem} from '../../web-agent/shared
 import type {AICard,SessionEvent} from '../../web-agent/shared/contracts';
 import type {ExternalRun,ExternalEvent} from './acp/types';
 
+/** A fresh Codex message after the host accepted work_finish is closing prose.
+ * Keep its audit events, and let the delivered report own the final paragraph. */
+export function codexClosingMessageIds(run:ExternalRun):string[]{
+  if(run.agent!=='codex'||run.purpose!=='worker'||run.childSessionId||run.agentRunId||!run.rootTurnId)return [];
+  const finish=run.events.findIndex(e=>e.kind==='tool_update'&&e.title==='work_finish'&&e.status==='completed');
+  if(finish<0)return [];
+  const progress=new Set<string>(),closing=new Set<string>();
+  for(const [index,event] of run.events.entries()){
+    if(event.kind!=='text'||!event.publicTextId)continue;
+    if(index<finish)progress.add(event.publicTextId);
+    else if(!progress.has(event.publicTextId))closing.add(event.publicTextId);
+  }
+  return [...closing];
+}
+
 export function captureCodexActivity(run:ExternalRun,event:ExternalEvent,card:AICard):SessionEvent['textUpdate']|undefined {
   if(run.agent!=='codex'||run.purpose!=='worker'||!run.rootTurnId||!run.taskId||run.childSessionId||run.agentRunId)return;
   const data=card.data as Record<string,unknown>;

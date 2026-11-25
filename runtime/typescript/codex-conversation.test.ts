@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {join} from 'node:path';
 import {CodexAppServer} from './acp/codex-app-server';
 import {codexToolDetail,CodexOutputBuffer} from './acp/codex-activity';
-import {captureCodexActivity} from './codex-conversation';
+import {captureCodexActivity,codexClosingMessageIds} from './codex-conversation';
 import {codexActivity} from '../../web-agent/shared/codex-activity';
 import type {AICard} from '../../web-agent/shared/contracts';
 import type {ExternalRun,ExternalEvent} from './acp/types';
@@ -12,6 +12,14 @@ const at='2026-11-25T01:00:00Z';
 const run={id:'run',purpose:'worker',agent:'codex',taskId:'task',rootTurnId:'root'} as ExternalRun;
 const operation=():AICard=>({id:'run',type:'operation',at,status:'running',content:'',data:{
  source:'external_agent',external_run_id:'run',external_agent:'codex',root_turn_id:'root',taskId:'task'}});
+test('only messages first spoken after a successful work_finish belong to the report handoff',()=>{
+ const text=(publicTextId:string):ExternalEvent=>({kind:'text',publicTextId,sequence:1,at});
+ const finish:ExternalEvent={kind:'tool_update',title:'work_finish',status:'completed',sequence:2,at};
+ const events=[text('stage'),finish,text('stage'),text('closing'),text('closing')];
+ assert.deepEqual(codexClosingMessageIds({...run,events}),['closing']);
+ assert.deepEqual(codexClosingMessageIds({...run,events:[{...finish,status:'failed'},text('retry')]}),[]);
+ assert.deepEqual(codexClosingMessageIds({...run,events,childSessionId:'child'}),[]);
+});
 test('Codex wire appends commentary in place around concrete calls and streams complete output lines',async t=>{
  const card=operation(), seen:string[]=[];
  const adapter=new CodexAppServer({executable:process.execPath,args:[join(__dirname,'test-fixtures/codex-app-server-wire.cjs')],cwd:process.cwd(),env:{LAKE_WIRE_SCENARIO:'inline-activity'}},update=>{

@@ -32,3 +32,9 @@ test('completed work collapses and an active command expands within the speciali
  const saved=renderToStaticMarkup(createElement(CodexActivity,{items:finished,reportText:'核对日志'}));
  assert.ok(!saved.includes('aria-expanded="true"')&&!saved.includes('核对日志')&&saved.includes('已运行 1 条命令'));
 });
+test('collapsed previews show a repeated redaction once and retain the real command count',()=>{
+ const items:CodexActivityItem[]=['a','b','c'].map(id=>({id,kind:'command',status:'completed',at,text:'内容已隐藏'}));
+ const html=renderToStaticMarkup(createElement(CodexActivity,{items}));
+ assert.match(html,/已运行 3 条命令/);
+ assert.equal(html.match(/内容已隐藏/g)?.length,1);
+});

@@ -2,6 +2,7 @@ import {useEffect,useState} from 'react';
 import type {CodexActivityItem,CodexAction} from '../../shared/codex-activity';
 import {AssistantMarkdown} from './AssistantMarkdown';
 import {Glyph} from './Icons';
+import type {LakeAvatarName} from './lakeAvatarCatalog';
 
 type Call=Exclude<CodexActivityItem,{kind:'text'}>;
 const verbs:Record<Exclude<CodexAction,'task'>,[string,string,string]>={
@@ -37,14 +38,17 @@ function ToolGroup({calls,live}:{calls:Call[];live:boolean}){
       <div><Glyph name={call.kind==='command'?'terminal':call.kind==='integration'?'plug':'document'} size={13}/><code>{call.text}</code>
       {call.status==='failed'&&<small>失败</small>}{call.status==='stopped'&&<small>已停止</small>}</div>
       {call.output&&<pre>{call.output}</pre>}
-    </li>)}</ul>:<div className="codex-group-preview">{calls.slice(-3).map(c=>c.text).join('  ·  ')}</div>}
+    </li>)}</ul>:<div className="codex-group-preview">{[...new Set(calls.slice(-3).map(c=>c.text))].join('  ·  ')}</div>}
   </div>;
 }
-export function CodexActivity({items,live=false,reportText}:{items:CodexActivityItem[];live?:boolean;reportText?:string}){
+export function CodexActivity({items,live=false,reportText,cursorAvatar}:{items:CodexActivityItem[];live?:boolean;reportText?:string;cursorAvatar?:LakeAvatarName}){
   const groups:(CodexActivityItem|Call[])[]=[];
+  let latestProse:CodexActivityItem|undefined;
   for(const item of items){
     if(item.kind==='text'){
-      if(item.text.trim()&&item.text.trim()!==reportText?.trim())groups.push(item);
+      if(!item.text.trim()||item.text.trim()===reportText?.trim())continue;
+      groups.push(item);
+      latestProse=item;
     }else if(item.kind==='task')groups.push(item);
     else {
       const last=groups.at(-1);
@@ -57,7 +61,7 @@ export function CodexActivity({items,live=false,reportText}:{items:CodexActivity
       const active=live&&group.some(call=>call.status==='running');
       return <ToolGroup key={JSON.stringify([group[0]!.id,active])} calls={group} live={live}/>;
     }
-    if(group.kind==='text')return <AssistantMarkdown key={group.id}>{group.text}</AssistantMarkdown>;
+    if(group.kind==='text')return <AssistantMarkdown key={group.id} cursorAvatar={live&&group===latestProse?cursorAvatar:undefined}>{group.text}</AssistantMarkdown>;
     return <div className="codex-task-event" key={group.id}><Glyph name="listTasks" size={15}/><span>{group.status==='failed'?'任务更新失败':group.status==='running'?'正在更新任务':group.status==='completed'?(group.createdTask?'添加了任务':'更新了任务'):'任务状态待确认'}</span><span className="codex-task-chip">{group.text}</span></div>;
   })}</div>;
 }
