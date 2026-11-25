@@ -80,6 +80,7 @@ export type SpecialistReplyAuthor = {kind:'specialist';name:string;roleId?:strin
 /** An instruction that entered Lake from an external developer agent client. */
 export type ExternalMessageOrigin = {kind:'mcp';connectionId?:string;connectionName?:string;threadId?:string;threadTitle?:string;clientMessageId?:string};
 export type Message = {
+  taskTimeline?: import('./specialist-timeline').SpecialistTimeline;
   taskReference?: PilotTaskReference;
   /** Host-owned reply association; a later user message never owns this reply. */
   replyToMessageId?:string;

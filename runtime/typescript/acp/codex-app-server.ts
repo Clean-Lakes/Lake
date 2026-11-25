@@ -153,7 +153,7 @@ export class CodexAppServer implements AgentConnection {
       }
       if(item.type==='agentMessage'&&method==='item/completed'&&typeof item.text==='string')this.messageText(turn,item.id,item.text);
       else if(['mcpToolCall','commandExecution','fileChange','dynamicToolCall','collabAgentToolCall'].includes(item.type))
-        this.activity({kind:method==='item/started'?'tool':'tool_update',callId:item.id,
+        this.activity({kind:method==='item/started'?'tool':'tool_update',callId:item.id,toolKind:item.type,
           title:item.type==='mcpToolCall'?item.server==='lake'?item.tool:item.server+' / '+item.tool:item.tool??item.command??item.type,
           status:method==='item/started'?'running':item.status==='failed'||item.success===false?'failed':'completed'});
     }else if(method==='thread/tokenUsage/updated') {

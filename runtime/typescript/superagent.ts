@@ -1,3 +1,4 @@
+import {specialistTimeline} from '../../web-agent/shared/specialist-timeline';
 import {redactModelValue} from "./model-errors";
 import type {PilotConfiguration} from "./pilot-configuration";
 import {pilotConfigurationToolNames} from "./configuration-tool-names";
@@ -2989,6 +2990,7 @@ export class LakeSuperagent implements AgentHost {
       const project = this.store.require<SuperProject>("superProjects", worker.projectId), channel = this.store.require<Channel>("superChannels", worker.roleId);
       const presentation = pending.presentation ?? { body: goal.summary ?? "这次检查还没完成。", channelBody: goal.summary ?? "这次检查还没完成。" };
       const source = this.reportSourceMessage(worker.projectId, pending.sourceEventId ?? this.reportSourceEventId(worker, pending.inputEventIds));
+      const taskTimeline = pending.rootTurnId ? specialistTimeline(this.store.view(worker.sessionId),goal.id,pending.rootTurnId) : undefined;
       this.store.transaction(() => { for (const target of [project.routerSessionId, channel.sessionId]) {
         const body = target === channel.sessionId ? presentation.channelBody : presentation.body;
         if (body === null) continue;
@@ -2996,6 +2998,7 @@ export class LakeSuperagent implements AgentHost {
           author: { kind: "specialist", name: worker.roleSnapshot.name, roleId: worker.roleId, workerId: worker.id,
             sessionId: worker.sessionId, taskId: goal.sharedTaskId ?? goal.id, channelSessionId: channel.sessionId,rootTurnId:pending.rootTurnId,
             execution:worker.roleSnapshot.execution??{kind:'native'},durationMs:pending.durationMs } };
+        if (taskTimeline) message.taskTimeline = taskTimeline;
         if (source?.sessionId === target) message.replyToMessageId = source.id;
         if (!this.store.get("messages", message.id)) this.store.put("messages", message.id, message);
       }

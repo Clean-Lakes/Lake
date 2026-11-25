@@ -1,3 +1,5 @@
+import {TaskReplyTimeline} from './TaskReplyTimeline';
+import {specialistTimeline} from '../../shared/specialist-timeline';
 import {useCallback,useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {SessionEvent,SessionSnapshot,SpecialistReplyAuthor} from '../../shared/contracts';
 import {api} from './api';
@@ -158,13 +160,18 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
   text:planState??(report?text:text||(thinking?lakeAvatarThinking[appearance.icon].label:label)),
   live:working&&visible&&!awaitingReport,
  };
+ const view=statusSnapshot?.ai;
+ const withinDispatch=row.activity.phase!=='queued' && view?.turnStartedAt && Date.parse(view.turnStartedAt)>=Date.parse(row.sourceCreatedAt);
+ const timeline=report ? report.taskTimeline : withinDispatch ? specialistTimeline(view,row.worker.task.executionGoalId??row.worker.task.taskId,view?.rootTurnId) : undefined;
  return <section className="ai-chat-message ai-role-assistant pilot-specialist-reply" data-worker-id={row.worker.id} data-task-id={row.worker.task.taskId} data-phase={report?'settled':row.activity.phase} data-report-id={report?.id} aria-label={`${row.author.name}的回复`}>
   <ReplyIdentity identity={{name:'Pilot',pilot:true}} author={report?.author??row.author} authorMotion={moving?'working':'still'} nameMotion={moving&&visible} onSpecialist={onSpecialist}/>
   {taskLabel&&<small className="pilot-specialist-task-label">{taskLabel}</small>}
+  <TaskReplyTimeline timeline={timeline} active={working&&visible} reportAt={report?.createdAt}>
   <PilotReplyContent state={contentState} onPresented={report?reportPresented:undefined} active={(moving||!!report&&!['failed','cancelled'].includes(row.worker.task.state))&&available&&visible}>
    {planState?<PlanReference state={planState}/>:text?<PilotReplyProse text={text} active={working&&visible&&!awaitingReport} animateInitial={livePacket} cursorAvatar={working?appearance.icon:undefined}/>:report||awaitingReport?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
    {report&&<MessageAttachments message={report} sessionId={report.sessionId}/>}
   </PilotReplyContent>
+  </TaskReplyTimeline>
   <SpecialistProcessLink author={report?.author??row.author} reportId={report?.id} onInspect={onInspectSpecialist} active={moving&&visible} liveStatus={inlineWait}/>
   {!report&&text&&(!available||updating&&!awaitingReport)&&<small className="pilot-specialist-connection" role="status">{label}</small>}
  </section>;

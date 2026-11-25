@@ -1,3 +1,4 @@
+import {externalTimelineSteps} from '../../web-agent/shared/specialist-timeline';
 import {pilotConfigurationToolNames} from './configuration-tool-names';
 import {externalExecutionName} from '../../web-agent/shared/external-agents';
 import {externalReplyTextUpdate} from './external-reply-events';
@@ -132,6 +133,9 @@ export class LakeAgents {
       if(event.publicTextId&&typeof event.publicText==='string')card.data={...(card.data??{}),external_reply:{id:event.publicTextId,content:this.redact(event.publicText)}};
     }
     if(event.kind==='status'){card.status=event.status==='completed'?'completed':['failed','cancelled','unknown','interrupted'].includes(event.status??'')?event.status!:'running';if(run.summary||run.error)card.content=run.summary||run.error||'';}
+    if (run.purpose==='worker' && !run.agentRunId && !run.childSessionId && (event.kind==='tool' || event.kind==='tool_update')) {
+      card.data = {...card.data as object, external_steps:externalTimelineSteps(run.events)};
+    }
     card.title=externalExecutionName(run.agent,run.runtimeKind);
     card.data={...(card.data??{}),external_agent:run.agent,external_runtime_kind:run.runtimeKind,external_state:run.state,external_usage:run.usage,external_events:run.events.filter(item=>item.kind==='tool'||item.kind==='tool_update').slice(-16)};
     this.update(sessionId,view,externalReplyTextUpdate(run,event,{...card,content:this.redact(card.content??'')},rootTurnId));

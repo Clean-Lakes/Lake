@@ -1,3 +1,5 @@
+import {TaskReplyTimeline} from './TaskReplyTimeline';
+import {specialistTimeline} from '../../shared/specialist-timeline';
 import {AgentExecution} from './AgentExecution';
 import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 import type {SessionSnapshot,SpecialistChannelEntry,SpecialistChannelPage,SuperWorker} from '../../shared/contracts';
@@ -32,7 +34,7 @@ export function SpecialistTaskSelect({workers,sessionId,onTask}:{workers:SuperWo
  return <label className="specialist-task-select"><span>任务记录</span><AppSelect aria-label="查看专员任务" value={sessionId} title={workers.find(worker=>worker.sessionId===sessionId)?.task.title} onChange={event=>onTask(event.target.value)}>{workers.map(worker=><option key={worker.id} value={worker.sessionId}>{worker.task.title}</option>)}</AppSelect></label>;
 }
 
-export function SpecialistLiveReply({text,worker,snapshot,connected=true}:{text?:string;worker?:SuperWorker;snapshot?:SessionSnapshot;connected?:boolean}){
+export function SpecialistLiveReply({text,worker,snapshot,turnId,connected=true}:{turnId?:string;text?:string;worker?:SuperWorker;snapshot?:SessionSnapshot;connected?:boolean}){
  const visible=usePageVisible();
  const roleId=worker?.roleId??snapshot?.superagent?.roleId;
  const {icon}=useSpecialistAppearance({roleId,name:worker?.roleName});
@@ -42,11 +44,15 @@ export function SpecialistLiveReply({text,worker,snapshot,connected=true}:{text?
  const interim=specialistInterimText(text?.trim()??'');
  const label=!connected?'进度暂未更新，正在重连':waiting?activity?.label??'等待确认后继续':interim||activity?.label||'正在思考…';
  const shown=useSmoothText(label,moving);
- return <div className={`specialist-live-reply${moving?' is-running':''}`} role="status" aria-live="polite" aria-atomic="true" data-phase={!connected?'disconnected':waiting?'waiting':moving?'running':'idle'}>
+ const task=snapshot?.superagent?.task;
+ const bound=worker && task && worker.roleId===snapshot?.superagent?.roleId && worker.sessionId===snapshot?.session.id &&
+  task.sessionId===worker.sessionId && task.taskId===worker.task.taskId && turnId===snapshot?.ai?.rootTurnId;
+ const timeline=bound ? specialistTimeline(snapshot.ai,task.executionGoalId??task.taskId,turnId) : undefined;
+ return <TaskReplyTimeline timeline={timeline} active={moving&&visible}><div className={`specialist-live-reply${moving?' is-running':''}`} role="status" aria-live="polite" aria-atomic="true" data-phase={!connected?'disconnected':waiting?'waiting':moving?'running':'idle'}>
   <SpecialistReplyTransition revision="progress" text={label} enabled={moving&&visible}>
    <StatusText active={moving&&visible}>{moving&&interim&&(roleId||worker?.roleName)?<SpecialistReplyCursorTail avatar={icon}>{shown}</SpecialistReplyCursorTail>:shown}</StatusText>
   </SpecialistReplyTransition>
- </div>;
+ </div></TaskReplyTimeline>;
 }
 
 /** Animate actual replacements, not every token, poll or history restoration. */
@@ -104,7 +110,7 @@ export function SpecialistChannelEntries({entries,resources,workers=[],activeSou
    <div className="specialist-reply-content" data-reply-state={entry.reply?.state}>
    {entry.reply&&<SpecialistReplyMeta entry={entry} worker={bySession.get(entry.sourceSessionId)} latest={current.keys.has(entry.id)}/>}
    <SpecialistReplyTransition revision={`${entry.reply?.turnId??entry.id}:${entry.reply?.state??''}`} text={entry.reply?.state==='working'?'':entry.message?.text??entry.card?.content} enabled={connected&&!['failed','cancelled','blocked','paused','waiting_user','waiting_external'].includes(bySession.get(entry.sourceSessionId)?.task.state??'')}>
-    {entry.reply?.state==='working'&&projected.card?.type!=='plan_reference'?<SpecialistLiveReply text={entry.card?.content} worker={bySession.get(entry.sourceSessionId)} snapshot={active} connected={connected}/>:projected.message?<TranscriptMessage message={projected.message} sessionId={entry.sourceSessionId} resources={resources} hideIdentity/>:projected.card?<Card card={projected.card} streaming={activeSources?projected.card.status==='running'&&activeSources.has(entry.sourceSessionId):undefined}/>:null}
+    {entry.reply?.state==='working'&&projected.card?.type!=='plan_reference'?<SpecialistLiveReply turnId={entry.reply?.turnId} text={entry.card?.content} worker={bySession.get(entry.sourceSessionId)} snapshot={active} connected={connected}/>:projected.message?<TranscriptMessage message={projected.message} sessionId={entry.sourceSessionId} resources={resources} hideIdentity/>:projected.card?<Card card={projected.card} streaming={activeSources?projected.card.status==='running'&&activeSources.has(entry.sourceSessionId):undefined}/>:null}
    </SpecialistReplyTransition>
    {history.length>0&&<details className="specialist-reply-history"><summary>之前的 {history.length} 次执行</summary><div>{history.map(previous=>{
     const saved=conversationPlanEntry({id:previous.card?.id??previous.message?.id??previous.id,at:previous.createdAt,card:previous.card,message:previous.message},{planMode:false,live:false});

@@ -7,7 +7,7 @@ export type AgentLaunch = {
 export type AgentActivity =
   | {kind:'input';inputId:string}
   | {kind:'text';text:string;messageId:string;messageText:string}
-  | {kind:'tool'|'tool_update';callId:string;title:string;status:string}
+  | {kind:'tool'|'tool_update';callId:string;title:string;toolKind?:string;status:string}
   | {kind:'usage';usage:{inputTokens:number;outputTokens:number}};
 export type AgentTurnResult = {stopReason:'end_turn'|'cancelled'|'failed';error?:string};
 export interface AgentConnection {
