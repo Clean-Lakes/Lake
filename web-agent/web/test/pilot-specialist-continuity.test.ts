@@ -30,8 +30,9 @@ test('both specialist surfaces keep one animal on the latest Codex prose through
   const pilot=renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row,snapshot:state,available:connected}));
   const channel=renderToStaticMarkup(createElement(SpecialistLiveReply,{worker:row.worker,snapshot:state,turnId,connected}));
   for(const html of [pilot,channel]){
-   assert.match(html,/>date<\/code>/);
-   assert.ok(html.includes(connected?'aria-label="进行中"':'aria-label="待确认"'));
+   assert.doesNotMatch(html,/>date<\/code>/);
+   assert.match(html,/aria-expanded="false"/);
+   assert.ok(html.includes(connected?'正在运行 1 条命令':'待确认 · 运行 1 条命令'));
    assert.equal((html.match(/class="specialist-reply-cursor"/g)??[]).length,connected?1:0);
    if(connected)assert.match(html,/class="specialist-reply-cursor-tail">录<span/);
   }

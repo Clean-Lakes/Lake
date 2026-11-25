@@ -1,4 +1,4 @@
-import {useEffect,useId,useState} from 'react';
+import {useEffect,useId,useLayoutEffect,useRef,useState} from 'react';
 import type {CodexActivityItem,CodexAction} from '../../shared/codex-activity';
 import {AssistantMarkdown} from './AssistantMarkdown';
 import {Glyph} from './Icons';
@@ -26,19 +26,33 @@ function Elapsed({start}:{start:string}){
 }
 function ToolGroup({calls,live}:{calls:Call[];live:boolean}){
   const current=calls.find(call=>call.status==='running'), active=!!current&&live;
-  const [open,setOpen]=useState(true);
+  const [details,setDetails]=useState<'closed'|'live'|'saved'>('closed');
+  const open=details!=='closed';
   const bodyId=useId();
+  const list=useRef<HTMLUListElement>(null);
+  useLayoutEffect(()=>{
+    const body=list.current;
+    if(!body||details!=='live')return;
+    // Keep subsequent streamed rows inside the viewport the reader opened.
+    body.style.blockSize=body.getBoundingClientRect().height+'px';
+    return ()=>{body.style.removeProperty('block-size');};
+  },[details]);
   const icons={command:'terminal',read:'document',edit:'edit',integration:'plug',task:'listTasks'} as const;
-  const kind=calls[0]!.kind;
-  const groupIcon=calls.every(call=>call.kind===kind)?icons[kind]:'listTasks';
-  const statusIcon=calls.some(call=>call.status==='failed')?'alert':calls.every(call=>call.status==='completed')?'check':'clock';
+  const completed=calls.filter(call=>call.status==='completed').length;
+  const finished=completed===calls.length;
+  const label=groupLabel(calls,live);
+  // Leave a visible blue starting mark before the first result arrives.
+  const arc=Math.max(10,100*completed/calls.length);
   return <div className="codex-tool-group">
-    <button type="button" aria-expanded={open} aria-controls={bodyId} className="codex-group-toggle" onClick={()=>setOpen(value=>!value)}>
-      <Glyph name={active?'loader':groupIcon} size={15} className={active?'codex-busy':''}/><span>{groupLabel(calls,live)}</span>
-      {!active&&<Glyph name={statusIcon} size={13}/>}<Glyph name={open?'chevron':'next'} size={12}/>
+    <button type="button" title={label} aria-expanded={open} aria-controls={bodyId} className="codex-group-toggle" onClick={()=>setDetails(open?'closed':live?'live':'saved')}>
+      <svg className="codex-group-ring" data-complete={finished} viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" strokeWidth="2">
+        <circle className="codex-ring-track" cx="8" cy="8" r="6"/>
+        <circle cx="8" cy="8" r="6" stroke="currentColor" pathLength="100" strokeDasharray={`${arc} 100`} transform="rotate(-90 8 8)"/>
+      </svg>
+      <span className="codex-group-label">{label}</span><Glyph name={open?'chevron':'next'} size={12}/>
       {active&&<Elapsed start={current.at}/>}
     </button>
-    <ul id={bodyId} hidden={!open}>{calls.map(call=>{
+    <ul ref={list} id={bodyId} hidden={!open} aria-label="调用明细" tabIndex={details==='live'?0:undefined} className={details==='live'?'codex-live-details':undefined}>{open&&calls.map(call=>{
       const body=call.text==='内容已隐藏'?'旧记录未保存可展示的正文':call.text;
       const status=call.status==='failed'?'失败':call.status==='stopped'?'已停止':
         call.status==='unknown'||(call.status==='running'&&!live)?'待确认':call.status==='running'?'进行中':'已完成';
@@ -67,10 +81,21 @@ export function CodexActivity({items,live=false,reportText,cursorAvatar}:{items:
       if(Array.isArray(last))last.push(item);else groups.push([item]);
     }
   }
+  // The bounded transcript can evict the first call of a still-visible group.
+  // Keep its disclosure mounted while any of that group's calls remain.
+  const previousGroups=useRef(new Map<string,string>());
+  const keys=new Map<string,string>();
+  for(const group of groups){
+    if(!Array.isArray(group))continue;
+    const first=group[0]!.id;
+    const key=group===groups[0]?(previousGroups.current.get(first)??first):first;
+    for(const call of group)keys.set(call.id,key);
+  }
+  useLayoutEffect(()=>{previousGroups.current=keys;});
   if(!groups.length)return null;
   return <div className="codex-activity" aria-label="Codex 执行记录">{groups.map(group=>{
     if(Array.isArray(group)){
-      return <ToolGroup key={group[0]!.id} calls={group} live={live}/>;
+      return <ToolGroup key={keys.get(group[0]!.id)} calls={group} live={live}/>;
     }
     if(group.kind==='text')return <AssistantMarkdown key={group.id} cursorAvatar={live&&group===latestProse?cursorAvatar:undefined}>{group.text}</AssistantMarkdown>;
     return <div className="codex-task-event" key={group.id}><Glyph name="listTasks" size={15}/><span>{group.status==='failed'?'任务更新失败':group.status==='running'?'正在更新任务':group.status==='completed'?(group.createdTask?'添加了任务':'更新了任务'):'任务状态待确认'}</span><span className="codex-task-chip">{group.text}</span></div>;
