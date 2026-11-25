@@ -39,6 +39,7 @@
     "operationReview",
     "confirmOperationReview",
     "ensureSuperWorkspace",
+    "createSpecialist",
     "deleteSpecialist",
     "specialistChannel",
     "specialistTasks",

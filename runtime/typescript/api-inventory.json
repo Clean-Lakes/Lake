@@ -229,6 +229,15 @@
       ]
     },
     {
+      "name": "createSpecialist",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/projects/${encodeURIComponent(project)}/superagent/specialists`"
+        }
+      ]
+    },
+    {
       "name": "createSshResource",
       "routes": [
         {

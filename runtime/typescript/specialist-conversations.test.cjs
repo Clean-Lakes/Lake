@@ -96,6 +96,39 @@ test('HTTP and actual SDK deliver six independent replies without another Pilot 
  await f.api(`/api/sessions/${round.members[0].sessionId}/messages`,'POST',{text:'forged'},409);
 });
 
+test('the specialist form creates one project-local profile and channel without starting work',async t=>{
+ const f=await fixture(t,{count:0});
+ const input={name:'  发布核对专员  ',duties:'核对发布清单\n汇报证据',avatarId:'beaver',requestId:'create-beaver'};
+ const route=f.path+'/specialists';
+ await f.api(route,'POST',{...input,avatarId:'unknown-animal'},400);
+ await f.api(route,'POST',{...input,duties:'  '},400);
+ await f.api(route,'POST',{...input,execution:{kind:'native'}},400);
+ assert.deepEqual((await f.api(f.path)).channels,[]);
+ const [channel,retried]=await Promise.all([f.api(route,'POST',input,201),f.api(route,'POST',input,201)]);
+ assert.deepEqual(retried,channel);
+ assert.equal(channel.roleName,'发布核对专员');
+ assert.equal(channel.duties,input.duties);
+ assert.equal(channel.avatarId,'beaver');
+ assert.equal(channel.projectId,f.project.id);
+ assert.equal(channel.execution.agent,'codex');
+ await f.api(route,'POST',{...input,name:'修改名称'},409);
+ const workspace=await f.api(f.path);
+ assert.deepEqual(workspace.channels,[channel]);
+ assert.deepEqual(workspace.workers,[]);
+ assert.deepEqual(f.app.store.list('superInputs'),[]);
+ assert.deepEqual(f.requests,[]);
+ const session=f.app.store.session(channel.sessionId);
+ assert.equal(session.workspaceRole,'role');
+ assert.equal(session.title,channel.roleName);
+
+ const other=await f.api('/api/projects','POST',{name:'另一项目'});
+ const otherPath=`/api/projects/${other.id}/superagent`;
+ assert.deepEqual((await f.api(otherPath)).channels,[]);
+ const otherChannel=await f.api(otherPath+'/specialists','POST',input,201);
+ assert.notEqual(otherChannel.roleId,channel.roleId);
+ assert.equal(otherChannel.projectId,other.id);
+});
+
 test('project groups save their selected roster and deliver text only to the exact group and turn',async t=>{
  const f=await fixture(t,{count:3,hold:true});
  const roleIds=f.roles.slice(0,2).map(role=>role.id);

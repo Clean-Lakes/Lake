@@ -2084,7 +2084,8 @@ function AppContent() {
        })}
        resourceCount={catalog.resources.filter(resource=>resource.projectId===sidebarProject?.id).length}
        attention={pilotWorkspace.workspace?.channels?.some(channel=>channel.needsConfirmation===true||hasUnreadMessages(channel.messageRead))}
-       specialistRail={groupsEnabled&&sidebarProject?<PilotWorkspace {...pilotNavigation} presentation="rail"/>:undefined}
+       specialistRail={groupsEnabled&&sidebarProject?<PilotWorkspace key={sidebarProject.id} {...pilotNavigation} presentation="rail"
+        creation={{projectId:sidebarProject.id,onCreated:pilotWorkspace.addRole}}/>:undefined}
        specialists={<>
         {sidebarProject&&<PilotWorkspace {...pilotNavigation} presentation={groupsEnabled?'entry':'list'}/>}
         {groupsEnabled&&sidebarProject&&<ChatGroupNavigation key={sidebarProject.id} projectId={sidebarProject.id}

@@ -836,12 +836,12 @@ export class LakeSuperagent implements AgentHost {
     // Imported specialists can have IDs that predate the project/key digest.
     return this.store.list<Role>("superRoles").find(row => row.projectId === projectId && row.roleKey === roleKey);
   }
-  private roleForCreation(projectId: string, roleKey: string, profile: Record<string, any>, existing?: Role, available?: SpecialistExecutionOption[]): Role {
+  private roleForCreation(projectId: string, roleKey: string, profile: Record<string, any>, existing?: Role, available?: SpecialistExecutionOption[], defaultExecution?: AgentBackendRef): Role {
     if (roleKey.trim() !== roleKey) throw new HttpError(400, "Create requires an immutable role_key");
     if (profile.name === undefined || profile.duties === undefined) throw new HttpError(400, "Create requires specialist name and duties");
     const avatarId = profile.avatar_id === "auto" ? undefined : profile.avatar_id;
     if (!existing) return { id: digest([projectId, roleKey]), projectId, roleKey, name: profile.name, duties: profile.duties,
-      revision: 1, ...(avatarId && {avatarId}), execution: this.creationExecution(projectId, profile, available) };
+      revision: 1, ...(avatarId && {avatarId}), execution: defaultExecution ?? this.creationExecution(projectId, profile, available) };
     this.role(projectId, existing.id);
     const requested = profile.execution === undefined ? undefined : this.roleBackend(projectId, profile.execution);
     const sameBackend = !requested || existing.execution?.kind === requested.kind &&
@@ -854,6 +854,28 @@ export class LakeSuperagent implements AgentHost {
       profile.avatar_id !== undefined && existing.avatarId !== avatarId)
       throw new HttpError(409, "role_key exists; update the exact role_id and revision");
     return existing;
+  }
+  createSpecialist(projectId: string, input: Record<string, unknown>): SpecialistChannelInfo {
+    this.security?.check();
+    if (Object.keys(input).some(key => !['name', 'duties', 'avatarId', 'requestId'].includes(key)))
+      throw new HttpError(400, '专员表单包含不支持的字段');
+    const {avatarId} = input;
+    if (typeof avatarId !== 'string' || !isLakeAvatarName(avatarId)) throw new HttpError(400, '请选择有效的专员头像');
+    const profile = {
+      name: this.agents.redact(text(input.name, '专员名称', 128).trim().replace(/\s+/g, ' ')),
+      duties: this.agents.redact(text(input.duties, '角色描述', 4096).trim()),
+      avatar_id: avatarId,
+    };
+    const roleKey = 'manual-' + digest(text(input.requestId, '添加专员请求', 128));
+    const project = this.ensure(projectId);
+    const {channel, created} = this.store.transaction(() => {
+      const existing = this.roleByKey(projectId, roleKey);
+      const role = this.roleForCreation(projectId, roleKey, profile, existing, undefined, {kind:'acp',agent:'codex'});
+      if (!existing) this.store.put('superRoles', role.id, role);
+      return {channel: this.ensureChannel(role), created: !existing};
+    });
+    if (created) this.notify(project.routerSessionId, 'specialist');
+    return this.channelView(channel);
   }
   private savedExecutionLabel(role: Role) {
     const backend = role.execution, model = backend?.model;

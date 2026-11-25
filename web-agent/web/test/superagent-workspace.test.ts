@@ -25,6 +25,16 @@ test('the project group list and the specialist rail have distinct entries',()=>
  assert.match(groups,/运维专员：已更新巡检记录/);
 });
 
+test('the specialist rail provides an add button in a project with no specialists',()=>{
+ const workspace:SuperWorkspace={active:true,project:{projectId:'p',routerSessionId:'pilot',version:1},workers:[],channels:[]};
+ const props={workspace,error:'',selectedId:null,creation:{projectId:'p',onCreated(){}},onPilot(){},onWorker(){}};
+ const rail=renderToStaticMarkup(createElement(PilotWorkspace,{...props,presentation:'rail'}));
+ assert.match(rail,/aria-label="添加专员"[^>]+aria-haspopup="dialog"/);
+ assert.doesNotMatch(rail,/sidebar-specialist-button|<dialog/);
+ const entry=renderToStaticMarkup(createElement(PilotWorkspace,{...props,presentation:'entry'}));
+ assert.doesNotMatch(entry,/添加专员/);
+});
+
 test('Pilot and real specialist instances replace session creation',()=>{
  const workspace:SuperWorkspace={active:true,project:{projectId:'project',routerSessionId:'pilot',version:1},workers:[{id:'orders-worker',roleId:'orders',roleName:'订单专员',sessionId:'orders-context',assignmentState:'parked',task:{taskId:'orders',sessionId:'orders-context',projectId:'project',title:'排查订单超时',state:'blocked',acceptanceState:'insufficient',revision:7,originRootTurnId:'actual-root',deadlineAt:'2026-11-03T00:00:00Z'}}]};
  const html=renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:'pilot',onPilot(){},onWorker(){}}));

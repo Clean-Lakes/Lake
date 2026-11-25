@@ -599,7 +599,14 @@ export async function startLakeServer(options: ServerOptions) {
         else throw new HttpError(405,"不支持此巡检请求");
       } else if (path[1] === "projects" && path[3] === "superagent") {
         store.project(path[2]);
-        if(path[4]==='groups'&&method==='POST'&&(path.length===5||path.length===7&&path[6]==='messages')){
+        if(path.length===5&&path[4]==='specialists'&&method==='POST'){
+          await agents.prepareRedaction();
+          if(draining)throw new HttpError(503,'服务正在退出');
+          result=superagent.createSpecialist(path[2],data);
+          status=201;
+          for(const stream of catalogStreams)stream.write("event: catalog\ndata: {}\n\n");
+        }
+        else if(path[4]==='groups'&&method==='POST'&&(path.length===5||path.length===7&&path[6]==='messages')){
           await agents.prepareRedaction();
           if(draining)throw new HttpError(503,'服务正在退出');
           if(path.length===5){

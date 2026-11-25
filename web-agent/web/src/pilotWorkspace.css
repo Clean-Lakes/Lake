@@ -33,6 +33,29 @@
  margin-block:4px 5px;
  background:var(--border);
 }
+.modal.specialist-create-dialog {
+ width:min(416px,calc(100vw - 32px));
+ margin:auto;
+}
+.specialist-create-dialog:not([open]) { display:none; }
+.specialist-create-dialog::backdrop { background:var(--overlay); }
+.specialist-create-dialog .app-select-trigger { height:40px; }
+.specialist-create-dialog textarea {
+ display:block;
+ width:100%;
+ min-height:88px;
+ margin-top:8px;
+ padding:10px 12px;
+ resize:vertical;
+ border:1px solid var(--border);
+ border-radius:var(--radius-settings-control);
+ corner-shape:var(--corner-window);
+ background:var(--surface);
+ color:var(--foreground);
+ font:inherit;
+ font-weight:var(--font-weight-ui);
+ line-height:1.55;
+}
 .sidebar-specialist-status {
  position:absolute;
  inset-block-start:2px;

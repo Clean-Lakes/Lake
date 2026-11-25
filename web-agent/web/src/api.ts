@@ -1,6 +1,7 @@
 import type {MCPServerConfig,MCPToolCatalog,SkillConfig,SkillCatalog} from "../../shared/contracts";
 import {displayAiError} from "./aiErrors";
 import type { CommandPolicy } from "../../shared/command-policy";
+import type {LakeAvatarName} from '../../shared/specialist-avatars';
 import type { LayeredMemoryScope, LayeredMemorySettings, LayeredMemoryView } from "../../shared/contracts";
 import type {
   SSHConnectionInput,
@@ -12,6 +13,7 @@ import type {
   AvailableModelEntry,
   Catalog,
   ChatGroup,
+  SpecialistChannelInfo,
   Message,
   WorkflowCatalog,
   WorkflowInput,
@@ -125,6 +127,8 @@ export const api = {
   saveMemory: (key: string, projectId: string, data: {title: string; body: string; expectedRevision: number}, entryId?: string) => request<LayeredMemoryView>(`/api/memory/scopes/${encodeURIComponent(key)}/entries${entryId ? "/"+encodeURIComponent(entryId) : ""}?projectId=${encodeURIComponent(projectId)}`, {method: entryId ? "PUT" : "POST", body: JSON.stringify(data)}),
   forgetMemory: (key: string, projectId: string, entryId: string, expectedRevision: number) => request<LayeredMemoryView>(`/api/memory/scopes/${encodeURIComponent(key)}/entries/${encodeURIComponent(entryId)}?projectId=${encodeURIComponent(projectId)}`, {method: "DELETE", body: JSON.stringify({expectedRevision})}),
 	superWorkspace:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperWorkspace>(`/api/projects/${encodeURIComponent(project)}/superagent`,{signal}),
+  createSpecialist:(project:string,input:{name:string;duties:string;avatarId:LakeAvatarName;requestId:string})=>
+    post<SpecialistChannelInfo>(`/api/projects/${encodeURIComponent(project)}/superagent/specialists`,input),
   createChatGroup:(project:string,input:{title:string;roleIds:string[];requestId:string})=>
     post<ChatGroup>(`/api/projects/${encodeURIComponent(project)}/superagent/groups`,input),
   sendChatGroupMessage:(project:string,session:string,input:{text:string;requestId:string})=>

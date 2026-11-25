@@ -7,6 +7,7 @@ import {greetRoleAvatar,SuperRoleAvatar} from './SuperRoleAvatar';
 import {conversationAvatarMotion,superAvatarMotion,channelTaskPresentation,specialistTaskActivity,type ConversationActivity,type ConversationAvatarActivity} from './superAgentPresentation';
 import {Glyph} from './Icons';
 import {NavigationMenu} from './NavigationDelete';
+import {SpecialistCreate} from './SpecialistCreate';
 import {SpecialistDelete} from './SpecialistDelete';
 import {SidebarPilotEntry} from './SidebarPilotEntry';
 import {AgentBackendLogo,agentTypeName} from './AgentBackendLogo';
@@ -24,7 +25,7 @@ export type SubscribePilotWorkerEvents=(sessionId:string,listener:WorkerEventLis
 export function usePilotWorkspace(projectId:string|undefined,connected:boolean,visiblePilotSessionId?:string){
  const [loadedWorkspace,setWorkspace]=useState<SuperWorkspace|null>(null),[error,setError]=useState('');
  const workspace=loadedWorkspace?.project.projectId===projectId?loadedWorkspace:null;
- const generation=useRef(0),refreshRef=useRef<()=>Promise<void>>(async()=>{});
+ const generation=useRef(0),rosterRevision=useRef(0),refreshRef=useRef<()=>Promise<void>>(async()=>{});
  const deletedRoles=useRef(new Set<string>());
  const listeners=useRef(new Map<string,Set<WorkerEventListener>>());
  const streamingWorkers=useRef<ReadonlySet<string>|null>(null);
@@ -43,10 +44,11 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean,v
   const controller=new AbortController();let busy=false,queued=false,nextActivation=0;
   const refresh=async()=>{
    if(busy){queued=true;return;}busy=true;
+   const roster=rosterRevision.current;
    try{
     let next=await api.superWorkspace(projectId,controller.signal);
     if(!next.active&&Date.now()>=nextActivation){nextActivation=Date.now()+15000;await api.ensureSuperWorkspace(projectId,controller.signal);next=await api.superWorkspace(projectId,controller.signal);}
-    if(generation.current===current){
+    if(generation.current===current&&roster===rosterRevision.current){
      setWorkspace(previous=>{
       // A workspace poll started before an acknowledgement can arrive after it.
       const seen=new Map(previous?.project.projectId===next.project.projectId
@@ -61,7 +63,7 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean,v
      });
      if(next.active)setError('');
     }
-   }catch(reason){if(!controller.signal.aborted&&generation.current===current)setError(readableError(reason));}
+   }catch(reason){if(!controller.signal.aborted&&generation.current===current&&roster===rosterRevision.current)setError(readableError(reason));}
    finally{busy=false;if(queued&&!controller.signal.aborted){queued=false;void refresh();}}
   };
   refreshRef.current=refresh;
@@ -106,6 +108,13 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean,v
   return()=>{stream.close();ready(false);window.clearTimeout(timer);};
  },[routerId,connected,workerScope]);
  useEffect(()=>{const refresh=()=>refreshRef.current();window.addEventListener('lake:conversation-read',refresh);return()=>window.removeEventListener('lake:conversation-read',refresh);},[]);
+ const addRole=(channel:SpecialistChannelInfo)=>{
+  // Discard an in-flight poll that started before this creation was saved.
+  rosterRevision.current++;
+  setWorkspace(current=>current?.project.projectId===channel.projectId&&!current.channels?.some(row=>row.roleId===channel.roleId)
+   ? {...current,channels:[...(current.channels??[]),channel]}:current);
+  void refreshRef.current();
+ };
  const removeRole=(roleId:string)=>{deletedRoles.current.add(roleId);setWorkspace(current=>current?{...current,questions:current.questions?.filter(question=>question.author.roleId!==roleId),channels:current.channels?.filter(channel=>channel.roleId!==roleId),workers:current.workers.filter(worker=>worker.roleId!==roleId)}:current);void refreshRef.current();};
  const readChannel=async(channel:SpecialistChannelInfo)=>{
   const state=channel.messageRead;
@@ -120,7 +129,7 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean,v
    // The visible overview can retry if the receipt could not be saved.
   }
  };
- return {workspace,error,removeRole,readChannel,refresh:()=>refreshRef.current(),subscribeWorkerEvents:shared?subscribeWorkerEvents:undefined};
+ return {workspace,error,addRole,removeRole,readChannel,refresh:()=>refreshRef.current(),subscribeWorkerEvents:shared?subscribeWorkerEvents:undefined};
 }
 
 type ReadMark = {requested: string; acknowledged: string; pending: boolean};
@@ -172,6 +181,7 @@ type PilotWorkspaceProps = {
  pilotActivity?:ConversationActivity;pilotDisabled?:boolean;
  onPilot: () => void; onWorker: (worker: SuperWorker) => void; onChannel?: (channel: SpecialistChannelInfo, task?: SuperWorker) => void;
  disabled?:boolean; onDeleted?:(channel:SpecialistChannelInfo)=>void;
+ creation?:{projectId:string;onCreated:(channel:SpecialistChannelInfo)=>void};
 };
 function showClippedText(event: PointerEvent<HTMLElement>) {
  const text = event.currentTarget;
@@ -211,10 +221,12 @@ function SpecialistNameBubble({name,target,onClose}:{name:string;target:HTMLButt
  return createPortal(<span ref={bubble} className="specialist-name-bubble" aria-hidden="true">{name}</span>,document.body);
 }
 
-export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,showHeading=true,presentation='list'}: PilotWorkspaceProps) {
+export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,creation,showHeading=true,presentation='list'}: PilotWorkspaceProps) {
  const [menu,setMenu]=useState<{channel:SpecialistChannelInfo;x:number;y:number}|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null);
+ const [creating,setCreating]=useState(false);
  const [nameHint,setNameHint]=useState<{id:string;target:HTMLButtonElement}|null>(null);
  const anchor=useRef<HTMLButtonElement|null>(null);
+ const addButton=useRef<HTMLButtonElement>(null);
  const closeNameHint=useCallback(()=>setNameHint(null),[]);
  useEffect(()=>{setMenu(null);setDeleting(null);closeNameHint();},[workspace?.project.projectId,closeNameHint]);
  const roots = workspace?.active?workspace.workers.filter(worker => !worker.parentWorkerId):[];
@@ -228,7 +240,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
   roots.map(worker => ({channel: undefined, workers: [worker]}));
  const hintedEntry=nameHint&&entries.find(({channel,workers})=>(channel?.id??workers[0].id)===nameHint.id);
  const hintedName=hintedEntry&&(hintedEntry.channel?.roleName??hintedEntry.workers[0].roleName);
- if(rail&&!entries.length)return null;
+ if(rail&&!entries.length&&!creation)return null;
  return <section className={rail?'sidebar-specialist-roster':'pilot-workspace'} aria-label={rail||showHeading?'专员':undefined}>
   {!rail&&<>
    {showHeading&&<div className="nav-heading"><span>专员</span><small>{entries.length+1}</small></div>}
@@ -308,6 +320,13 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
     </span>}
    </button>;
   })}
+  {rail&&creation&&<>
+   <button type="button" ref={addButton} className="sidebar-rail-button" aria-label="添加专员" title="添加专员"
+    aria-haspopup="dialog" disabled={disabled} onClick={()=>{closeNameHint();setCreating(true);}}>
+    <Glyph name="plus" size={18}/>
+   </button>
+   {creating&&<SpecialistCreate {...creation} disabled={disabled} returnFocus={addButton} onClose={()=>setCreating(false)}/>}
+  </>}
   {rail&&nameHint&&hintedName&&<SpecialistNameBubble key={nameHint.id} name={hintedName} target={nameHint.target} onClose={closeNameHint}/>}
   {menu&&<NavigationMenu title={menu.channel.roleName} x={menu.x} y={menu.y} anchor={anchor} onClose={()=>setMenu(null)} actions={[
    {label:'删除专员',icon:'trash',danger:true,disabled:disabled||menu.channel.roleRevision===undefined,run:()=>setDeleting(menu.channel)},
