@@ -13,7 +13,7 @@ function startsLiveProse(previous:PilotReplyContentState|undefined,next:PilotRep
 export function changesPilotReplyContent(previous:PilotReplyContentState|undefined,next:PilotReplyContentState){
  if(!previous||previous.binding!==next.binding||startsLiveProse(previous,next))return false;
  if(previous.kind===next.kind&&previous.text===next.text)return false;
- return !(previous.kind==='prose'&&next.kind==='prose'&&previous.id===next.id&&next.text.startsWith(previous.text));
+ return previous.kind!==next.kind||previous.id!==next.id;
 }
 
 type ContentSurface=Pick<HTMLElement,'animate'>;
@@ -112,7 +112,7 @@ export function PilotReplyContent({state,active,children,onPresented}:{state:Pil
    element.removeEventListener('focusin',stop);observer?.disconnect();
   };
  },[]);
- useLayoutEffect(()=>sync.current());
+ useLayoutEffect(()=>sync.current(),[active,state.binding,state.kind,state.id,state.text,state.live,shown]);
  useEffect(()=>{
   if(presented&&presented===state.id&&presented===displayed.state.id)onPresented?.(presented);
  },[presented,state.id,displayed.state.id,onPresented]);

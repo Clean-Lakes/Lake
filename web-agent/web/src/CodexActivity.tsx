@@ -2,6 +2,7 @@ import {useEffect,useId,useLayoutEffect,useRef,useState} from 'react';
 import type {CodexActivityItem,CodexAction} from '../../shared/codex-activity';
 import {AssistantMarkdown} from './AssistantMarkdown';
 import {Glyph} from './Icons';
+import {bindConversationFollow} from './followScroll';
 import type {LakeAvatarName} from './lakeAvatarCatalog';
 
 type Call=Exclude<CodexActivityItem,{kind:'text'}>;
@@ -35,7 +36,9 @@ function ToolGroup({calls,live}:{calls:Call[];live:boolean}){
     if(!body||details!=='live')return;
     // Keep subsequent streamed rows inside the viewport the reader opened.
     body.style.blockSize=body.getBoundingClientRect().height+'px';
-    return ()=>{body.style.removeProperty('block-size');};
+    const scroll=bindConversationFollow(body,{following:true});
+    scroll.follower.jump();
+    return ()=>{scroll.dispose();body.style.removeProperty('block-size');};
   },[details]);
   const icons={command:'terminal',read:'document',edit:'edit',integration:'plug',task:'listTasks'} as const;
   const completed=calls.filter(call=>call.status==='completed').length;

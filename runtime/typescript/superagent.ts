@@ -2668,7 +2668,9 @@ export class LakeSuperagent implements AgentHost {
     const goal = this.ledger.get(worker.taskId), view = this.store.view(sessionId);
     view.workGoals = [this.publicGoal(goal)]; this.store.put("views", sessionId, view);
     const project = this.store.require<SuperProject>("superProjects", worker.projectId);
-    this.notify(project.routerSessionId, "specialist");
+    // A text delta is already delivered on the subscribed Worker stream. The
+    // router transcript changes on a structural event or a delivered report.
+    if(!event?.textUpdate)this.notify(project.routerSessionId, "specialist");
     if(!worker.inline){
       const joint=goal.sharedTaskId && this.ledger.jointTask(goal.sharedTaskId);
       const roles=joint ? joint.memberIds.map(id=>this.ledger.get(id).roleId) : [worker.roleId];

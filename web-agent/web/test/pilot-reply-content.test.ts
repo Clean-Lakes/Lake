@@ -42,15 +42,15 @@ test('the final report is ready for the island only after its replacement has be
  assert.equal(reduced.presented.at(-1),report);
 });
 
-test('only actual same-binding text replacements retire and reveal; initial, equal and streamed prefixes stay immediate',()=>{
+test('new reply identities can transition while edits within a paragraph or status stay in place',()=>{
  const first=content('已经读取主机信息。');
  assert.equal(changesPilotReplyContent(undefined,thinking),false);
  assert.equal(changesPilotReplyContent(thinking,first),true);
  assert.equal(changesPilotReplyContent(first,content(first.text+'接下来检查数据库。')),false);
  assert.equal(changesPilotReplyContent(first,{...first,id:'another-id'}),false);
  assert.equal(changesPilotReplyContent(first,content('新的进度。',{id:'next'})),true);
- assert.equal(changesPilotReplyContent(first,content('同段真实修正。')),true);
- assert.equal(changesPilotReplyContent(thinking,content('正在读取文件',{kind:'status',id:''})),true);
+ assert.equal(changesPilotReplyContent(first,content('同段真实修正。')),false);
+ assert.equal(changesPilotReplyContent(thinking,content('正在读取文件',{kind:'status',id:''})),false);
  assert.equal(changesPilotReplyContent(first,content('其他任务',{binding:'other'})),false);
 });
 
@@ -71,7 +71,7 @@ test('old text retires right to left before the one body commits and reveals new
 test('the first live prose replaces a retiring status immediately',()=>{
  const h=transitionHarness(),first=content('真实首字',{live:true});
  h.transition.update(thinking,true);
- h.transition.update(content('正在处理',{kind:'status',id:''}),true);
+ h.transition.update(content('正在处理',{kind:'status',id:'another-status'}),true);
  assert.equal(h.clips().length,1);
  assert.equal(changesPilotReplyContent(thinking,first),false);
  h.transition.update(first,true);

@@ -44,7 +44,7 @@ export class FollowScroll {
   }
   jump() {
     this.stop();
-    if (this.following()) this.box.scrollTop = Math.max(0, this.box.scrollHeight - this.box.clientHeight);
+    if (this.following() && !atConversationTail(this.box)) this.box.scrollTop = Math.max(0, this.box.scrollHeight - this.box.clientHeight);
   }
   stop() {
     if (this.frame !== null) this.frames.cancel(this.frame);
@@ -82,15 +82,69 @@ export function observeConversationGrowth(container: HTMLElement, request: (view
   };
   const resize = new ResizeObserver(measure);
   resize.observe(container);
-  let content = container.firstElementChild;
-  if (content) resize.observe(content);
-  const children = new MutationObserver(() => {
-    if (content === container.firstElementChild) return;
-    if (content) resize.unobserve(content);
-    content = container.firstElementChild;
-    if (content) resize.observe(content);
-    measure();
-  });
+  const observed = new Set<Element>();
+  const syncChildren = () => {
+    for (const child of observed) {
+      if (child.parentElement === container) continue;
+      resize.unobserve(child);
+      observed.delete(child);
+    }
+    for (const child of container.children) {
+      if (!observed.has(child)) { resize.observe(child); observed.add(child); }
+    }
+  };
+  syncChildren();
+  const children = new MutationObserver(() => { syncChildren(); measure(); });
   children.observe(container, {childList: true});
   return () => { children.disconnect(); resize.disconnect(); };
+}
+
+// Conversations and open live logs own independent scroll positions. A gesture
+// inside a nested log must not pause the conversation that contains it.
+export function bindConversationFollow(box:HTMLElement, state:{following:boolean}, entering=()=>false) {
+  const motion=window.matchMedia('(prefers-reduced-motion: reduce)');
+  const follower=new FollowScroll(box,()=>state.following,undefined,motion.matches);
+  const events=new AbortController();
+  const options={signal:events.signal,passive:true};
+  const setFollowing=(value:boolean)=>{
+    state.following=value;
+    box.dataset.followScroll=value?'tail':'reading';
+    if(!value)follower.stop();
+  };
+  setFollowing(state.following);
+  const owns=(event:Event)=>event.target instanceof Element && event.target.closest('[data-follow-scroll]')===box;
+  const gesture=(event:Event,delta:number)=>{
+    if(owns(event)&&pausesConversationFollow(box,delta,state.following))setFollowing(false);
+  };
+  box.addEventListener('wheel',event=>gesture(event,event.deltaY),options);
+  let touchY=0;
+  box.addEventListener('touchstart',event=>{touchY=event.touches[0]?.clientY??0;},options);
+  box.addEventListener('touchmove',event=>{
+    const y=event.touches[0]?.clientY??touchY;
+    gesture(event,touchY-y);touchY=y;
+  },options);
+  box.addEventListener('keydown',event=>{
+    if(event.target instanceof Element&&event.target.closest('input,textarea,[contenteditable="true"]'))return;
+    if(['ArrowUp','PageUp','Home'].includes(event.key))gesture(event,-1);
+    if(['ArrowDown','PageDown','End'].includes(event.key))gesture(event,1);
+  },options);
+  box.addEventListener('pointerdown',event=>{
+    if(event.target!==box||!conversationCanScroll(box))return;
+    const left=box.getBoundingClientRect().left+box.clientLeft;
+    if(event.clientX<left||event.clientX>=left+box.clientWidth)setFollowing(false);
+  },options);
+  box.addEventListener('pointermove',event=>{
+    if(event.buttons===1&&owns(event)&&window.getSelection()?.type==='Range'&&conversationCanScroll(box))setFollowing(false);
+  },options);
+  box.addEventListener('scroll',()=>{
+    if(!state.following&&atConversationTail(box))setFollowing(true);
+  },options);
+  motion.addEventListener('change',event=>follower.setReducedMotion(event.matches),options);
+  const stopObserving=observeConversationGrowth(box,()=>{
+    if(entering())follower.jump();
+    else follower.request();
+  });
+  return {follower,setFollowing,dispose(){
+    stopObserving();events.abort();follower.stop();delete box.dataset.followScroll;
+  }};
 }
