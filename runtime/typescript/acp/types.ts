@@ -49,6 +49,7 @@ export type ExternalEvent = {
   /** Read-only current ACP message projection; text remains the full run audit. */
   publicText?: string; publicTextId?: string;
   callId?: string; title?: string; status?: string; at: string;
+  displayKind?:import('../../../web-agent/shared/codex-activity').CodexAction; detail?:string; preview?:string;
 };
 /** Constructed by Lake's current task or conversation host. Never deserialized from tool arguments. */
 export type ExternalActor = {

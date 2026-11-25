@@ -1,5 +1,7 @@
 import {useCallback,useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {SessionEvent,SessionSnapshot,SpecialistReplyAuthor} from '../../shared/contracts';
+import {CodexActivity} from './CodexActivity';
+import {codexActivity} from '../../shared/codex-activity';
 import {api} from './api';
 import {applyLiveText} from './liveTextUpdates';
 import {acceptSnapshot} from './snapshotUpdates';
@@ -141,6 +143,9 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
  },[entry?.reply?.turnId,onObservedTurn,row]);
  const observedRoot=entry?.reply?.turnId??row.observedRootTurnId;
  if(!report&&observedRoot&&row.reportedTurns.includes(observedRoot))return null;
+ const transcript=report?.codexActivity??codexActivity(statusSnapshot?.ai,row.worker.task.executionGoalId??row.worker.task.taskId,
+  report?.author?.rootTurnId??entry?.reply?.turnId??row.observedRootTurnId??statusSnapshot?.ai?.rootTurnId);
+ const hasActivity=transcript.some(item=>item.kind!=='text');
  const thinking=moving&&row.activity.phase==='thinking'&&allowsAnimalThinking(snapshot?.ai)&&(!status||status.phase==='thinking')&&!text&&projected?.card?.type!=='plan_reference';
  const snapshotLabel=status&&(status.phase==='waiting'||status.phase==='settled'||row.activity.phase==='thinking'&&status.phase!=='thinking')?status.state:undefined;
  const updating=row.activity.phase==='updating';
@@ -159,13 +164,14 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
   live:working&&visible&&!awaitingReport,
  };
  return <section className="ai-chat-message ai-role-assistant pilot-specialist-reply" data-worker-id={row.worker.id} data-task-id={row.worker.task.taskId} data-phase={report?'settled':row.activity.phase} data-report-id={report?.id} aria-label={`${row.author.name}的回复`}>
-  <ReplyIdentity identity={{name:'Pilot',pilot:true}} author={report?.author??row.author} authorMotion={moving?'working':'still'} nameMotion={moving&&visible} onSpecialist={onSpecialist}/>
+  <ReplyIdentity identity={{name:'Pilot',pilot:true}} author={report?.author??row.author} showBackendName={hasActivity} authorMotion={moving?'working':'still'} nameMotion={moving&&visible} onSpecialist={onSpecialist}/>
   {taskLabel&&<small className="pilot-specialist-task-label">{taskLabel}</small>}
+  {hasActivity&&!planState&&<CodexActivity items={transcript} live={working&&visible} reportText={report?.text}/>}
   <PilotReplyContent state={contentState} onPresented={report?reportPresented:undefined} active={(moving||!!report&&!['failed','cancelled'].includes(row.worker.task.state))&&available&&visible}>
-   {planState?<PlanReference state={planState}/>:text?<PilotReplyProse text={text} active={working&&visible&&!awaitingReport} animateInitial={livePacket} cursorAvatar={working?appearance.icon:undefined}/>:report||awaitingReport?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
+   {planState?<PlanReference state={planState}/>:hasActivity&&!report?null:text?<PilotReplyProse text={text} active={working&&visible&&!awaitingReport} animateInitial={livePacket} cursorAvatar={working?appearance.icon:undefined}/>:report||awaitingReport?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
    {report&&<MessageAttachments message={report} sessionId={report.sessionId}/>}
   </PilotReplyContent>
-  <SpecialistProcessLink author={report?.author??row.author} reportId={report?.id} onInspect={onInspectSpecialist} active={moving&&visible} liveStatus={inlineWait}/>
+  <SpecialistProcessLink author={report?.author??row.author} reportId={report?.id} onInspect={onInspectSpecialist} active={moving&&visible} liveStatus={hasActivity?waitingLabel:inlineWait}/>
   {!report&&text&&(!available||updating&&!awaitingReport)&&<small className="pilot-specialist-connection" role="status">{label}</small>}
  </section>;
 }

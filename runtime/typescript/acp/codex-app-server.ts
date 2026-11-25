@@ -1,4 +1,5 @@
 import type {AgentActivity,AgentConnection,AgentLaunch,AgentTurnResult} from './client';
+import {codexToolDetail,CodexOutputBuffer,outputLine,type CodexDetail} from './codex-activity';
 import {JsonRpcProcess} from './process';
 
 type Tokens={inputTokens:number;outputTokens:number};
@@ -12,6 +13,7 @@ type McpGate={server:string;tools:ReadonlySet<string>;guard:()=>void};
 
 /** Official Codex App Server. JSON-RPC version headers are omitted. */
 export class CodexAppServer implements AgentConnection {
+  private readonly previews=new Map<string,{detail:CodexDetail;buffer:CodexOutputBuffer;last?:string;timer?:ReturnType<typeof setTimeout>}>();
   private readonly rpc:JsonRpcProcess;
   private initialized=false;
   private threadId?:string;
@@ -88,7 +90,12 @@ export class CodexAppServer implements AgentConnection {
       turn.confirm();
       return await completed;
     }catch(error){this.broken=true;turn.reject(error instanceof Error?error:new Error('Codex 轮次失败'));throw error;
-    }finally{signal.removeEventListener('abort',abort);if(this.turn===turn)this.turn=undefined;}
+    }finally{
+      for(const call of this.previews.values())clearTimeout(call.timer);
+      this.previews.clear();
+      signal.removeEventListener('abort',abort);
+      if(this.turn===turn)this.turn=undefined;
+    }
   }
   private notification(method:string,params:any) {
     if(!params||params.threadId!==this.threadId)return;
@@ -138,7 +145,21 @@ export class CodexAppServer implements AgentConnection {
     if(turn.done||id!==turn.id)return;
     if(method==='item/agentMessage/delta'&&typeof params.itemId==='string'&&typeof params.delta==='string')
       this.messageText(turn,params.itemId,(turn.messages.get(params.itemId)??'')+params.delta);
-    else if(method==='item/started'||method==='item/completed') {
+    else if(method==='item/commandExecution/outputDelta'||method==='item/mcpToolCall/progress'){
+      const call=this.previews.get(params.itemId);
+      if(!call||call.detail.detail==='内容已隐藏')return;
+      const line=method==='item/commandExecution/outputDelta'&&typeof params.delta==='string'?call.buffer.append(params.delta):
+        typeof params.message==='string'?outputLine(params.message):undefined;
+      if(!line||line===call.last)return;
+      call.last=line;
+      if(!call.timer)call.timer=setTimeout(()=>{
+        call.timer=undefined;
+        if(this.turn===turn&&!turn.done)this.activity({kind:'tool_update',callId:params.itemId,title:call.detail.detail,status:'running',...call.detail,preview:call.last,transient:true});
+      },200);
+    }else if(method==='turn/plan/updated'&&Array.isArray(params.plan)){
+      const step=params.plan.find((s:any)=>s?.status==='inProgress'||s?.status==='in_progress')??params.plan[0];
+      if(typeof step?.step==='string')this.activity({kind:'tool_update',callId:'plan:'+turn.id,title:'更新计划',status:'completed',displayKind:'task',detail:step.step});
+    }else if(method==='item/started'||method==='item/completed') {
       const item=params.item;if(!item||typeof item.id!=='string')return;
       if(item.type==='userMessage'&&typeof item.clientId==='string') {
         const input=turn.inputs.get(item.clientId);
@@ -152,10 +173,27 @@ export class CodexAppServer implements AgentConnection {
         if(method==='item/completed'){const call=turn.mcpCalls.get(item.id);if(call)call.pending=false;}
       }
       if(item.type==='agentMessage'&&method==='item/completed'&&typeof item.text==='string')this.messageText(turn,item.id,item.text);
-      else if(['mcpToolCall','commandExecution','fileChange','dynamicToolCall','collabAgentToolCall'].includes(item.type))
+      else if(['mcpToolCall','commandExecution','fileChange','dynamicToolCall','collabAgentToolCall','webSearch'].includes(item.type)){
+        const started=method==='item/started';
+        const previous=this.previews.get(item.id);
+        const detail=codexToolDetail(item);
+        if(started&&detail&&!previous)this.previews.set(item.id,{detail,buffer:new CodexOutputBuffer()});
+        if(!started&&previous){
+          clearTimeout(previous.timer);
+          this.previews.delete(item.id);
+          if(detail){
+            if(previous.detail.detail==='内容已隐藏'){detail.detail=previous.detail.detail;delete detail.preview;}
+            else {
+              if(!item.arguments&&!item.command&&!item.changes)detail.detail=previous.detail.detail;
+              detail.preview??=previous.last;
+            }
+          }
+        }
         this.activity({kind:method==='item/started'?'tool':'tool_update',callId:item.id,
           title:item.type==='mcpToolCall'?item.server==='lake'?item.tool:item.server+' / '+item.tool:item.tool??item.command??item.type,
-          status:method==='item/started'?'running':item.status==='failed'||item.success===false?'failed':'completed'});
+          status:started?'running':item.status==='failed'||item.success===false||item.error||item.result?.isError||typeof item.exitCode==='number'&&item.exitCode!==0?'failed':
+            ['declined','cancelled','interrupted'].includes(item.status)?'cancelled':'completed',...detail});
+      }
     }else if(method==='thread/tokenUsage/updated') {
       const total=tokens(params.tokenUsage?.total);if(!total)return;
       this.totalTokens=total;

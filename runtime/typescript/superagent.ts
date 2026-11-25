@@ -1,3 +1,4 @@
+import {codexActivity} from '../../web-agent/shared/codex-activity';
 import {redactModelValue} from "./model-errors";
 import type {PilotConfiguration} from "./pilot-configuration";
 import {pilotConfigurationToolNames} from "./configuration-tool-names";
@@ -2988,6 +2989,8 @@ export class LakeSuperagent implements AgentHost {
     if (!this.store.get("superReports", key)) {
       const project = this.store.require<SuperProject>("superProjects", worker.projectId), channel = this.store.require<Channel>("superChannels", worker.roleId);
       const presentation = pending.presentation ?? { body: goal.summary ?? "这次检查还没完成。", channelBody: goal.summary ?? "这次检查还没完成。" };
+      const activity = worker.roleSnapshot.execution?.kind==='acp' && worker.roleSnapshot.execution.agent==='codex'
+        ? codexActivity(this.store.view(worker.sessionId),goal.id,pending.rootTurnId) : [];
       const source = this.reportSourceMessage(worker.projectId, pending.sourceEventId ?? this.reportSourceEventId(worker, pending.inputEventIds));
       this.store.transaction(() => { for (const target of [project.routerSessionId, channel.sessionId]) {
         const body = target === channel.sessionId ? presentation.channelBody : presentation.body;
@@ -2996,6 +2999,7 @@ export class LakeSuperagent implements AgentHost {
           author: { kind: "specialist", name: worker.roleSnapshot.name, roleId: worker.roleId, workerId: worker.id,
             sessionId: worker.sessionId, taskId: goal.sharedTaskId ?? goal.id, channelSessionId: channel.sessionId,rootTurnId:pending.rootTurnId,
             execution:worker.roleSnapshot.execution??{kind:'native'},durationMs:pending.durationMs } };
+        if (activity.some(item=>item.kind!=='text')) message.codexActivity=activity;
         if (source?.sessionId === target) message.replyToMessageId = source.id;
         if (!this.store.get("messages", message.id)) this.store.put("messages", message.id, message);
       }

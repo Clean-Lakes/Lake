@@ -80,6 +80,7 @@ export type SpecialistReplyAuthor = {kind:'specialist';name:string;roleId?:strin
 /** An instruction that entered Lake from an external developer agent client. */
 export type ExternalMessageOrigin = {kind:'mcp';connectionId?:string;connectionName?:string;threadId?:string;threadTitle?:string;clientMessageId?:string};
 export type Message = {
+  codexActivity?:import('./codex-activity').CodexActivityItem[];
   taskReference?: PilotTaskReference;
   /** Host-owned reply association; a later user message never owns this reply. */
   replyToMessageId?:string;
@@ -299,7 +300,7 @@ export type SessionEvent = {
   sessionId: string;
   type: "session" | "message" | "specialist" | "evidence" | "action" | "terminal";
   createdAt: string;
-  textUpdate?: {target:"card"|"agent";id:string;content:string;cardType?:string;at?:string;rootTurnId?:string;textId?:string;externalReply?:{id:string;content:string}};
+  textUpdate?: {target:"card"|"agent";id:string;content:string;cardType?:string;at?:string;rootTurnId?:string;textId?:string;codexItem?:import('./codex-activity').CodexActivityItem;codexTaskId?:string;externalReply?:{id:string;content:string}};
 };
 
 export type TerminalHistory = {

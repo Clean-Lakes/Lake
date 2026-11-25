@@ -123,7 +123,7 @@ export class LakeExternalAgents {
     const text=new ExternalPublicText(run.id,this.redact);
     const persist=()=>{run.updatedAt=now();this.store.put('acpRuns',run.id,run);};
     const event=(value:Omit<ExternalEvent,'sequence'|'at'>)=>{
-      const clean=Object.fromEntries(Object.entries(value).map(([key,item])=>[key,['text','publicText','title','callId'].includes(key)&&typeof item==='string'?this.redact(item,key==='text'||key==='publicText').slice(0,key==='text'||key==='publicText'?32768:512):item]));
+      const clean=Object.fromEntries(Object.entries(value).map(([key,item])=>[key,['text','publicText','title','callId','detail','preview'].includes(key)&&typeof item==='string'?this.redact(item,key==='text'||key==='publicText').slice(0,key==='text'||key==='publicText'?32768:512):item]));
       const entry:ExternalEvent={...value,...clean,sequence:run.events.length+1,at:now()};eventBytes+=Buffer.byteLength(JSON.stringify(entry));
       if(eventBytes<=16*1024*1024&&run.events.length<2048)run.events.push(entry);
       else if(!controller.signal.aborted)controller.abort(new Error('外部 Agent 过程输出达到本次上限'));
@@ -149,8 +149,13 @@ export class LakeExternalAgents {
         if(controller.signal.aborted||!['dispatching','sent'].includes(run.dispatchPhase))return;
         if(update.kind==='input'){guard();actor.inputConsumed?.(update.inputId);}
         else if(update.kind==='usage'){run.usage=update.usage;persist();}
+        else if((update.kind==='tool_update'||update.kind==='tool')&&update.transient){
+          if(actor.purpose==='worker'&&update.preview)actor.event(run,{kind:'tool_update',status:update.status,callId:this.redact(update.callId),
+            displayKind:update.displayKind,detail:this.redact(update.detail??'').slice(0,240),preview:this.redact(update.preview,true).slice(0,200),sequence:run.events.length,at:now()});
+        }
         else if(update.kind==='text')event({kind:'text',...text.snapshot(update.text,update.messageId,update.messageText)});
-        else event(update);
+        else if(actor.purpose==='worker'&&!actor.childSessionId&&!actor.agentRunId)event(update);
+        else event({kind:update.kind,callId:update.callId,title:update.title,status:update.status});
       },bridge?{server:'lake',tools:new Set(tools.map(tool=>tool.metadata.name)),guard:activePrompt}:undefined);
       live.process=transport;
       const cancel=()=>{void transport.cancel().finally(()=>transport.close());};controller.signal.addEventListener('abort',cancel,{once:true});
