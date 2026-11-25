@@ -1,6 +1,6 @@
 import type {GlyphName} from './Icons';
 
-export type SettingsPage = 'overview' | 'channels' | 'appearance' | 'conversation' | 'memory' | 'watchdog' | 'agents' | 'models' | 'mcp' | 'skills';
+export type SettingsPage = 'channels' | 'appearance' | 'conversation' | 'memory' | 'watchdog' | 'agents' | 'models' | 'mcp' | 'skills';
 export type ConsolePage = SettingsPage | 'workspace' | 'updates';
 type Category = {
   key: ConsolePage;
@@ -12,7 +12,6 @@ type Category = {
 
 const categories: readonly {label: string; showLabel?: boolean; items: readonly Category[]}[] = [
   {label: '工作区', items: [
-    {key: 'overview', label: '设置概览', icon: 'workspace', keywords: '常用 设置'},
     {key: 'channels', label: '接入渠道', icon: 'filter', keywords: '连接 客户端 路由 MCP', typescriptOnly: true},
     {key: 'appearance', label: '外观', icon: 'palette', keywords: '主题 深色 浅色 配色 颜色'},
     {key: 'conversation', label: '对话', icon: 'chat', keywords: '消息 会话 发送 快捷键'},

@@ -298,7 +298,7 @@ function AppContent() {
     const available = new Set(bulkCatalogTargets(catalog).map(bulkKey));
     setBulkSelected(current => current.every(target => available.has(bulkKey(target))) ? current : current.filter(target => available.has(bulkKey(target))));
   }, [catalog]);
-  const [settingsTab,setSettingsTab] = useState<SettingsPage>('overview');
+  const [settingsTab,setSettingsTab] = useState<SettingsPage>('models');
   const [settingsBusy,setSettingsBusy] = useState(false);
   const consoleRef = useRef<HTMLDialogElement>(null);
   const typescriptBackend = bootstrap?.backendRuntime === 'typescript';
@@ -529,8 +529,7 @@ function AppContent() {
   const openWorkbenchPage=useCallback((view:WorkspacePageView,tab:SettingsPage='models')=>{
     const current=routeRef.current;
     if(current.view===view){
-      if(view==='settings'&&tab==='overview')afterSettings(()=>setSettingsTab(tab));
-      else if(view==='settings')setSettingsTab(tab);
+      if(view==='settings')setSettingsTab(tab);
       return;
     }
     afterSettings(()=>{
@@ -1956,7 +1955,7 @@ function AppContent() {
        header={<>
         {bulkMode && <div className="bulk-navigation-toolbar"><button type="button" onClick={()=>{setBulkMode(false);setBulkSelected([]);}}>完成</button><span>已选 {bulkSelected.length} 项</span><button type="button" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkSelected([])}>清空</button><button type="button" className="danger-text" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}>删除所选</button></div>}
        </>}
-       workspace={{open:isWorkspacePage,unreadUpdate:workspaceUpdateUnread,onOpen:()=>openSettings('overview')}}
+       workspace={{open:isWorkspacePage,unreadUpdate:workspaceUpdateUnread,onOpen:()=>openWorkbenchPage('workspace')}}
        empty={<WelcomeSidebar disabled={!connected} onCreate={openProjectDialog}/>}
        selectionId={route.resourceId?`resource:${route.resourceId}`:`session:${route.sessionId??''}`} selectedPanel={route.resourceId?'resources':'specialists'}
        onSelectPanel={(panel,select)=>afterSettings(()=>{
@@ -2135,7 +2134,7 @@ function AppContent() {
       onPage={selectConsolePage} onClose={closeWorkbenchConsole} overlay={isWorkspacePage&&workspaceOverlayOpen?workspaceOverlays:undefined}
       notice={isWorkspacePage?noticeView:undefined}>
       <DesktopUpdate visible={route.view==='updates'} onUnreadChange={setWorkspaceUpdateUnread}/>
-      {isSettingsPage&&activeSettingsTab!=='overview'?<ModelSettings navigationGuard={settingsNavigation} tab={activeSettingsTab} onTabChange={setSettingsTab} onBusyChange={setSettingsBusy}
+      {isSettingsPage?<ModelSettings navigationGuard={settingsNavigation} tab={activeSettingsTab} onTabChange={setSettingsTab} onBusyChange={setSettingsBusy}
         completionEnabled={completionEnabled} onCompletionEnabledChange={setCompletionEnabled} onGatewayTask={inspectGatewayTask} capabilityDetectionEnabled={bootstrap?.backendRuntime==='go'}
         memoryEngine={bootstrap?.memoryEngine} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut}
         onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {commitNavigation({sessionId,resourceId:null});setAgentOptionsOpen(true);} : undefined}

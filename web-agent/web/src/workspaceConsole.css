@@ -94,12 +94,40 @@
   font-size:var(--font-size-toolbar);
 }
 .workspace-console-categories {
+  --console-tab-inset:8px;
+  --console-tab-selection:var(--surface);
+  position:relative;
+  isolation:isolate;
   min-height:0;
   overflow:auto;
   overscroll-behavior:contain;
   scrollbar-width:thin;
   scrollbar-color:var(--border-strong) transparent;
-  padding:0 8px 12px;
+  padding:0 var(--console-tab-inset) 12px;
+}
+[data-theme="dark"] .workspace-console-categories { --console-tab-selection:var(--surface-selected); }
+.workspace-console-selection {
+  position:absolute;
+  z-index:-1;
+  inset-block-start:0;
+  inset-inline:var(--console-tab-inset);
+  border-radius:var(--radius-settings-control);
+  corner-shape:var(--corner-window);
+  background:var(--console-tab-selection);
+  pointer-events:none;
+  visibility:hidden;
+}
+.workspace-console-categories[data-selection-visible] .workspace-console-selection { visibility:visible; }
+.workspace-console-selection::before {
+  position:absolute;
+  inset-block-start:50%;
+  inset-inline-start:1px;
+  width:2px;
+  height:16px;
+  transform:translateY(-50%);
+  border-radius:2px;
+  background:var(--info);
+  content:"";
 }
 .workspace-console-group { display:grid; gap:4px; }
 .workspace-console-group:not([hidden]) ~ .workspace-console-group { margin-block-start:15px; }
@@ -127,13 +155,12 @@
 .workspace-console-tab > svg { flex:none; }
 .workspace-console :is(.workspace-console-tab,.workspace-console-group)[hidden] { display:none; }
 .workspace-console-tab > span { overflow-wrap:anywhere; }
-.workspace-console-tab:hover:not(:disabled) { background:var(--surface-hover); color:var(--foreground); }
+.workspace-console-tab:hover:not(:disabled,[aria-selected="true"]) { background:var(--surface-hover); color:var(--foreground); }
 .workspace-console-tab[aria-selected="true"] {
-  background:var(--surface);
   color:var(--foreground);
   font-weight:var(--font-weight-semibold);
 }
-[data-theme="dark"] .workspace-console-tab[aria-selected="true"] { background:var(--surface-selected); }
+.workspace-console-categories:not([data-selection-visible]) .workspace-console-tab[aria-selected="true"] { background:var(--console-tab-selection); }
 .workspace-console-tab:focus-visible { outline:2px solid var(--focus-outline); outline-offset:-2px; }
 .workspace-console-tab:disabled:not([aria-selected="true"]) { opacity:.6; }
 .workspace-console-empty { padding-inline:8px; color:var(--pilot-header-muted); font-size:var(--font-size-toolbar); }
@@ -177,6 +204,20 @@
 @media (prefers-reduced-motion:no-preference) {
   .workspace-console[open]::backdrop { animation:workspace-console-backdrop-in var(--console-motion) both; }
   .workspace-console[open] .workspace-console-frame { animation:workspace-console-frame-in var(--console-motion) both; }
+  .workspace-console-selection[data-sliding] {
+    transition-property:transform,height;
+    transition-duration:600ms;
+    transition-timing-function:cubic-bezier(.2,.85,.3,1);
+  }
+  @supports (transition-timing-function:linear(0,1)) {
+    .workspace-console-selection[data-sliding] {
+      /* Bento Card's 600ms spring with 0.2 bounce, sampled every 30ms. */
+      transition-timing-function:linear(0,.0794,.2486,.4375,.6093,.7484,.8518,.9231,.9688,.9954,1.0091,1.0144,1.015,1.0131,1.0104,1.0076,1.0051,1.0032,1.0018,1.0009,1);
+    }
+  }
+}
+@media (prefers-reduced-motion:reduce) {
+  .workspace-console-selection { transition-property:none; }
 }
 @keyframes workspace-console-backdrop-in { from { opacity:0; } }
 @keyframes workspace-console-frame-in { from { opacity:0; transform:translateY(5px); } }
@@ -184,7 +225,7 @@
 @media (max-width:620px) {
   .workspace-console-frame { grid-template-columns:clamp(112px,27%,170px) minmax(0,1fr); }
   .workspace-console-search { gap:6px; padding-inline:10px; }
-  .workspace-console-categories { padding-inline:5px; }
+  .workspace-console-categories { --console-tab-inset:5px; }
   .workspace-console-tab { gap:6px; padding-inline:6px; min-height:30px; font-size:var(--font-size-process); }
 }
 @media (max-width:390px) {

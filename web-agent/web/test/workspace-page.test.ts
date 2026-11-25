@@ -60,20 +60,6 @@ test('console category search matches labels and keywords without exposing TypeS
  assert.deepEqual(consoleCategories(true,'客户端 mcp').flatMap(group=>group.items.map(item=>item.key)),['channels']);
  assert.deepEqual(consoleCategories(false,'客户端 mcp'),[]);
  assert.deepEqual(consoleCategories(true,'默认模型').flatMap(group=>group.items.map(item=>item.key)),['models']);
- assert.deepEqual(consoleCategories(true,'设置概览').flatMap(group=>group.items.map(item=>item.key)),['overview']);
-});
-
-test('the settings overview exposes real console categories and respects backend availability',()=>{
- for(const typescriptBackend of [true,false]){
-  const html=renderToStaticMarkup(createElement(WorkspaceConsole,{
-   dialogRef:{current:null}, open:true, page:'overview', typescriptBackend, busy:false, onPage:noop, onClose:noop,
-  }));
-  const card=html.slice(html.indexOf('settings-bento-card'));
-  assert.match(html,/id="overview-settings-panel" role="tabpanel" aria-labelledby="overview-settings-tab"/);
-  assert.match(card,/aria-label="常用设置分组" aria-orientation="vertical"/);
-  assert.match(card,/工作区与偏好[\s\S]*Pilot 模型[\s\S]*检查更新/);
-  assert.equal(card.includes('接入渠道'),typescriptBackend);
- }
 });
 
 test('workspace actions render in the page, including a creation path for an empty workspace',()=>{

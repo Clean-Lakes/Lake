@@ -1,6 +1,5 @@
 import {useLayoutEffect, useRef, useState, type ReactNode, type RefObject} from 'react';
 import {Glyph} from './Icons';
-import {SettingsOverview} from './SettingsOverview';
 import {navigateSettingsTabs, settingsTabStops, trapSettingsTab} from './settingsFocus';
 import {consoleCategories, consolePanelId, consoleTabId, type ConsolePage} from './workspaceConsoleTabs';
 import './workspaceConsole.css';
@@ -20,6 +19,7 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
   const [query, setQuery] = useState('');
   const search = useRef<HTMLInputElement>(null);
   const tabs = useRef<HTMLDivElement>(null);
+  const selection = useRef<HTMLSpanElement>(null);
   const overlayRoot = useRef<HTMLDivElement>(null);
   const lastFrameFocus = useRef<HTMLElement | null>(null);
   const hadOverlay = useRef(false);
@@ -41,8 +41,36 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
     }
   }, [dialogRef, open]);
   useLayoutEffect(() => {
-    if (open && !query) tabs.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({block: 'nearest'});
-  }, [open, page, query]);
+    const list = tabs.current;
+    const indicator = selection.current;
+    if (!list || !indicator) return;
+    const active = list.querySelector<HTMLButtonElement>('[aria-selected="true"]:not([hidden])');
+    if (!open || !active) {
+      list.removeAttribute('data-selection-visible');
+      indicator.removeAttribute('data-sliding');
+      return;
+    }
+
+    if (!query) active.scrollIntoView({block: 'nearest'});
+    const align = (slide: boolean) => {
+      const row = active.getBoundingClientRect();
+      const top = row.top - list.getBoundingClientRect().top + list.scrollTop - list.clientTop;
+      const transform = 'translateY(' + Math.round(top * 1000) / 1000 + 'px)';
+      const height = row.height + 'px';
+      const visible = list.hasAttribute('data-selection-visible');
+      if (visible && indicator.style.transform === transform && indicator.style.height === height) return;
+      indicator.toggleAttribute('data-sliding', visible && slide);
+      indicator.style.transform = transform;
+      indicator.style.height = height;
+      list.setAttribute('data-selection-visible', '');
+    };
+    align(!query);
+
+    const resize = new ResizeObserver(() => align(false));
+    resize.observe(list);
+    list.querySelectorAll('.workspace-console-group').forEach(group => resize.observe(group));
+    return () => resize.disconnect();
+  }, [open, page, query, typescriptBackend]);
   useLayoutEffect(() => {
     const layer = overlayRoot.current;
     if (open && layer && !layer.contains(document.activeElement)) settingsTabStops(layer)[0]?.focus();
@@ -53,14 +81,12 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
     hadOverlay.current = hasOverlay;
   }, [open, hasOverlay]);
 
-  function choose(next: ConsolePage, focusTab = false) {
+  function choose(next: ConsolePage) {
     if (busy) return;
     onPage(next);
     if (query) {
       setQuery('');
       search.current?.focus();
-    } else if (focusTab) {
-      document.getElementById(consoleTabId(next))?.focus({preventScroll: true});
     }
   }
 
@@ -115,6 +141,7 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
         </label>
         <div ref={tabs} className="workspace-console-categories" role="tablist" aria-label="分类" aria-orientation="vertical"
           onKeyDown={event => navigateSettingsTabs(event, event.currentTarget)}>
+          <span ref={selection} className="workspace-console-selection" aria-hidden="true"/>
           {groups.map(group => <div key={group.label} className="workspace-console-group" role="group" aria-label={group.label}
             hidden={!group.items.some(item => matching.has(item.key))}>
             {group.showLabel && <span className="workspace-console-group-label" aria-hidden="true">{group.label}</span>}
@@ -132,8 +159,6 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
       <div className="workspace-console-content">
         <button type="button" className="icon-button workspace-console-close" title="关闭控制台"
           aria-label="关闭控制台" onClick={onClose}><Glyph name="close" size={18}/></button>
-        {open && page === 'overview' &&
-          <SettingsOverview typescriptBackend={typescriptBackend} onPage={next => choose(next, true)}/>}
         {children}
       </div>
     </div>
