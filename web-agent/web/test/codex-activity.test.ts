@@ -50,3 +50,19 @@ test('the group ring counts successful calls and stays incomplete after a failur
   assert.doesNotMatch(html,/data-kind="command"/);
  }
 });
+test('the active cursor stays on the latest paragraph when tool timers are paused',()=>{
+ const items:CodexActivityItem[]=[{id:'opening',kind:'text',text:'先整理材料'},{id:'current',kind:'text',text:'继续核对'},
+   {id:'tool',kind:'integration',text:'查阅记录',status:'running',at}];
+ const html=renderToStaticMarkup(createElement(CodexActivity,{items,cursorAvatar:'kingfisher'}));
+ assert.equal(html.match(/class="specialist-reply-cursor"/g)?.length,1);
+ assert.match(html,/继续核<span class="specialist-reply-cursor-tail">对<span class="specialist-reply-cursor" data-cursor-avatar="kingfisher"/);
+ assert.doesNotMatch(renderToStaticMarkup(createElement(CodexActivity,{items})),/class="specialist-reply-cursor"/);
+});
+test('a newly streamed Codex paragraph starts immediately while existing prose reads in full',()=>{
+ const items:CodexActivityItem[]=[{id:'earlier',kind:'text',text:'这一段已完整呈现。'},
+   {id:'current',kind:'text',text:'新段继续核对。'}];
+ const live=renderToStaticMarkup(createElement(CodexActivity,{items,live:true,animateInitial:true}));
+ assert.match(live,/<p>这一段已完整呈现。<\/p>/);
+ assert.match(live,/<p>新<\/p>/);
+ assert.match(renderToStaticMarkup(createElement(CodexActivity,{items,live:true})),/<p>新段继续核对。<\/p>/);
+});

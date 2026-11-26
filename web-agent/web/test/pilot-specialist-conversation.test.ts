@@ -95,7 +95,7 @@ test('Pilot live loading preserves the SDK root instead of the task inspector ro
  assert.match(html.replace(/<[^>]*>/g,''),/本次隔离验收正文已经开始输出/);
  assert.doesNotMatch(html,/animal-thinking-bubble|正在生成回复/);
  assert.equal(renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row:{...row,reportedTurns:['turn-current-sdk']},snapshot:loaded})),'','a delivered report retires only this exact live SDK invocation');
- assert.match(renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row:{...row,reportedTurns:['super-task-origin']},snapshot:loaded})),/data-live-motion="active"/,'task origin is not proof that the current public reply was delivered');
+ assert.match(renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row:{...row,reportedTurns:['super-task-origin']},snapshot:loaded})),/class="specialist-reply-cursor"/,'task origin is not proof that the current public reply was delivered');
  for(const changed of [
   {...snapshot,session:{...snapshot.session,id:'other-session'}},
   {...snapshot,session:{...snapshot.session,projectId:'other-project'}},

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { atConversationTail, conversationCanScroll, pausesConversationFollow, followsConversationScroll, FollowScroll, observeConversationGrowth } from "../src/followScroll";
+import { atConversationTail, bindConversationFollow, conversationCanScroll, pausesConversationFollow, followsConversationScroll, FollowScroll, observeConversationGrowth } from "../src/followScroll";
 import { sameCard } from "../src/cardEquality";
 
 function fixture(reduced = false) {
@@ -140,6 +140,8 @@ test("reading just above the tail does not resume following until the reader rea
   assert.equal(atConversationTail(box), true);
   box.scrollTop = 500;
   assert.equal(atConversationTail(box), true);
+  box.scrollTop = 506;
+  assert.equal(atConversationTail(box), true, 'WebKit rubber-band overscroll is still at the tail');
   assert.equal(atConversationTail({scrollTop: 0, scrollHeight: 300, clientHeight: 500}), true);
 });
 
@@ -192,6 +194,59 @@ test('layout scroll events cannot cancel line-growth following, but reader gestu
  assert.equal(f.callbacks.size,0);assert.equal(followsConversationScroll(f.box,false),false);
  f.box.scrollTop=f.box.scrollHeight-f.box.clientHeight;
  assert.equal(followsConversationScroll(f.box,false),true,'manually reaching the tail resumes following');
+});
+
+test('following survives input at the old tail that did not scroll, while actual upward reading holds its position',()=>{
+ const previous={Element:globalThis.Element,window:globalThis.window,ResizeObserver:globalThis.ResizeObserver,MutationObserver:globalThis.MutationObserver};
+ class ScrollBox extends EventTarget {
+  scrollHeight=1000;
+  clientHeight=500;
+  clientWidth=700;
+  scrollTop=500;
+  dataset:Record<string,string>={};
+  children:Element[]=[];
+  closest(){return this;}
+ }
+ let measure=()=>{},nextFrame=0,now=0;
+ const frames=new Map<number,FrameRequestCallback>();
+ Object.assign(globalThis,{
+  Element:ScrollBox,
+  window:{matchMedia:()=>Object.assign(new EventTarget(),{matches:false}),requestAnimationFrame(callback:FrameRequestCallback){frames.set(++nextFrame,callback);return nextFrame;},cancelAnimationFrame(id:number){frames.delete(id);}},
+  ResizeObserver:class {constructor(callback:()=>void){measure=callback;}observe(){}disconnect(){}},
+  MutationObserver:class {observe(){}disconnect(){}},
+ });
+ const box=new ScrollBox(),state={following:true};
+ const wheel=(deltaY:number,deltaX=0)=>box.dispatchEvent(Object.assign(new Event('wheel'),{deltaX,deltaY}));
+ const grow=()=>{box.scrollHeight+=80;measure();};
+ const drain=()=>{for(let frame=0;frames.size&&frame<80;frame++){
+  const pending=[...frames.values()];frames.clear();now+=16.67;pending.forEach(callback=>callback(performance.now()+now));
+ }};
+ try {
+  const control=bindConversationFollow(box as unknown as HTMLElement,state);
+  wheel(-0.4,100);
+  assert.equal(state.following,true,'a horizontal gesture keeps the vertical follower engaged');
+
+  wheel(-8);
+  grow();
+  box.scrollTop-=26;
+  box.dispatchEvent(new Event('scroll'));
+  drain();
+  assert.equal(state.following,true,'a gesture that left the viewport at the old tail does not strand future content');
+  assert.equal(box.scrollTop,580);
+
+  wheel(-80);
+  box.scrollTop=450;
+  box.dispatchEvent(new Event('scroll'));
+  grow();drain();
+  assert.equal(state.following,false);
+  assert.equal(box.scrollTop,450,'actual upward reading stays at the reader’s position');
+
+  box.scrollTop=box.scrollHeight-box.clientHeight;
+  control.setFollowing(false);
+  wheel(80);
+  assert.equal(state.following,true,'downward input at the tail resumes even without a scroll event');
+  control.dispose();
+ } finally {Object.assign(globalThis,previous);}
 });
 
 test('completion relocation keeps the latest reply visible without pulling a history reader',()=>{
