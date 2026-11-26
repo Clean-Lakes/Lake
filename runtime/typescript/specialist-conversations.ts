@@ -289,6 +289,7 @@ export class SpecialistConversations {
     const {round,member}=execution;
     return {version:'conversation:'+round.id+':'+(member?.id??'pilot'),runtimeMode:'build',tools:[],allowlist:[],subagents:false,
       ...(member?.execution&&{execution:member.execution}),
+      ...(!member&&{modelSessionId:round.sessionId}),
       ...(member&&{conversation:{id:round.id,participantId:member.id,deadlineAt:round.deadlineAt}}),
       memoryActor:member?{kind:'worker',projectId:round.projectId,roleId:member.roleId}:{kind:'pilot',projectId:round.projectId},
       systemPrompt:member

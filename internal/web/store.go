@@ -664,7 +664,7 @@ func (s *Store) DeleteSession(id string) {
 		s.strategyEraseSessionSources(id)
 		s.exec("UPDATE terminalEntries SET actionId=NULL WHERE actionId IN (SELECT id FROM actions WHERE sessionId=?)", id)
 		s.exec("DELETE FROM terminalEntries WHERE terminalId IN (SELECT id FROM terminals WHERE sessionId=?)", id)
-		for _, table := range []string{"aiOptions", "events", "evidence", "specialists", "actions", "terminals", "messages", "sessionResources"} {
+		for _, table := range []string{"aiOptions", "sessionModelChoices", "events", "evidence", "specialists", "actions", "terminals", "messages", "sessionResources"} {
 			s.exec("DELETE FROM "+table+" WHERE sessionId=?", id)
 		}
 		s.exec("DELETE FROM sessions WHERE id=?", id)

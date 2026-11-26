@@ -1430,7 +1430,7 @@ export class LakeSuperagent implements AgentHost {
   }
   async sendGroupMessage(projectId:string,sessionId:string,input:{text?:unknown;requestId?:unknown}) {
     if(!this.conversations.group(projectId,sessionId))throw new HttpError(404,'当前项目找不到该群组');
-    await this.agents.prepareRedaction();
+    await this.agents.prepareRedaction(sessionId);
     const value=this.agents.redact(text(input.text,'消息',16384).trim());
     const requestId=text(input.requestId,'发送请求',128),hash=digest(value);
     return this.conversations.priorGroupMessage(sessionId,requestId,hash)??
@@ -1438,7 +1438,7 @@ export class LakeSuperagent implements AgentHost {
   }
   async send(sessionId: string, value: string, explicitTaskId?: string, ignoreMemory = false, inputDetails?: MessageInput, assignment?:unknown, external?:import('../../web-agent/shared/contracts').ExternalMessageOrigin, receipt?: InputReceipt) {
     text(value, "message", 256000);
-    await this.agents.prepareRedaction();
+    await this.agents.prepareRedaction(sessionId);
     const source = this.store.session(sessionId);
     if(source.workspaceRole==='conversation')throw new HttpError(409,'请在 Pilot 或专员频道继续对话');
     this.store.project(source.projectId);
@@ -1529,6 +1529,14 @@ export class LakeSuperagent implements AgentHost {
     if (worker) return ['active', 'queued'].includes(worker.state) || this.agents.isRunning(worker.sessionId);
     return this.routing.has(session.projectId) || this.agents.isRunning(project.routerSessionId) ||
       this.store.list<InputEvent>('superInputs').some(event => event.projectId === session.projectId && event.disposition === 'pending');
+  }
+  modelChangeBusy(sessionId: string) {
+    const session = this.store.session(sessionId);
+    const project = this.store.get<SuperProject>('superProjects', session.projectId);
+    if (project?.routerSessionId !== sessionId) return this.messageQueueBusy(sessionId);
+    return this.batches.has(sessionId) || this.agents.isRunning(sessionId) ||
+      this.store.list<InputEvent>('superInputs').some(event => event.projectId === session.projectId && event.disposition === 'pending' &&
+        !this.conversations.group(session.projectId, event.sessionId));
   }
   private planGoals(sessionId: string) {
     const session = this.store.session(sessionId); this.store.project(session.projectId);

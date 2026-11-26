@@ -1,4 +1,4 @@
-import type {ConversationModeUpdate,SessionSnapshot} from '../../shared/contracts';
+import type {ConversationModeUpdate,SessionModelState,SessionSnapshot} from '../../shared/contracts';
 
 // Both the save response and the live event carry the same ordered mode delta.
 // Keep every unrelated branch intact and reject replies from an older session
@@ -26,11 +26,18 @@ export function reuseUnchanged<T>(previous:T,next:T):T {
  return same?previous:result as T;
 }
 
+export function applySessionModel(previous: SessionSnapshot | null, session: string, update: SessionModelState): SessionSnapshot | null {
+ if (previous?.session.id !== session || (previous.model?.revision ?? 0) > update.revision) return previous;
+ const model = reuseUnchanged(previous.model, update);
+ return model === previous.model ? previous : {...previous, model};
+}
+
 export function acceptSnapshot(previous:SessionSnapshot|null,next:SessionSnapshot):SessionSnapshot {
  if(previous?.session.id!==next.session.id)return next;
  // A manual refresh can finish before an earlier SSE/poll request. Never
  // roll text, approvals, or task status back when that older response arrives.
  if(next.cursor<previous.cursor)return previous;
+ if (previous.model && previous.model.revision > (next.model?.revision ?? 0)) next = {...next, model: previous.model};
  // The backend sends a rolling page, not a deletion of previously displayed
  // history. Dropping its old prefix on every tool step changes scroll height
  // and remounts historical rows. Keep the visible page in this session snapshot;

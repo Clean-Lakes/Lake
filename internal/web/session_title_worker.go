@@ -33,7 +33,7 @@ func shouldGenerateSessionTitle(input string) bool {
 }
 
 func (b *Server) generateSessionTitle(id, input string) {
-	model := b.Models.Active()
+	model := b.sessionModel(id)
 	if model == nil || b.Engine == nil || b.Context.Err() != nil {
 		return
 	}
