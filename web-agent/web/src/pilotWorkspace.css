@@ -36,6 +36,10 @@
  border-radius:var(--radius-settings-control);
  corner-shape:var(--corner-window);
 }
+.sidebar.workspace-navigation .pilot-workspace .sidebar-pilot-entry {
+ min-height:var(--sidebar-rail-button-size);
+ padding-block:4px;
+}
 .sidebar.workspace-navigation .pilot-workspace .nav-row:hover { background:color-mix(in srgb,var(--foreground) 4%,transparent); }
 .sidebar.workspace-navigation .pilot-workspace .nav-row[aria-current=page] { background:color-mix(in srgb,var(--info) 11%,transparent); }
 .sidebar.workspace-navigation .pilot-workspace .super-role-avatar { flex:0 0 var(--sidebar-icon-column); width:var(--sidebar-icon-column); }
@@ -59,7 +63,7 @@
  flex:none;
  width:24px;
  height:1px;
- margin-block:4px 5px;
+ margin-block:var(--sidebar-specialist-divider-inset) 5px;
  background:var(--border);
 }
 .modal.specialist-create-dialog {
@@ -137,7 +141,6 @@
 .pilot-worker-name,.pilot-worker-summary { display:flex; align-items:center; gap:6px; min-width:0; }
 .pilot-worker-name { line-height:20px; }
 .pilot-worker-summary { min-height:16px; line-height:16px; }
-.sidebar-pilot-entry .pilot-worker-summary { column-gap:3px; }
 .pilot-worker-name > strong { flex:1; min-width:0; }
 .pilot-workspace .nav-row[aria-current=page] .pilot-worker-name > strong { font-weight:var(--font-weight-semibold); }
 .agent-backend-logo { display:inline-flex; align-items:center; justify-content:center; flex:none; vertical-align:middle; line-height:1; }

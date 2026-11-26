@@ -3,6 +3,7 @@
  --sidebar-row-radius:var(--radius-window); --sidebar-edge-inset:8px; --sidebar-content-inset:16px;
  --sidebar-icon-column:22px; --sidebar-icon-gap:9px; --sidebar-rail-button-size:36px;
  --sidebar-brand-height:52px; --sidebar-brand-gap:6px; border-right:0;
+ --sidebar-rail-gap:8px; --sidebar-specialist-divider-inset:4px;
  --sidebar-rail-top:calc((var(--sidebar-brand-height) - var(--sidebar-rail-button-size)) / 2);
 }
 .sidebar.workspace-navigation .sidebar-brand-row {
@@ -78,7 +79,7 @@
 .sidebar-navigation-rail {
  --sidebar-rail-bottom:12px;
  position:absolute; inset-block:var(--sidebar-chrome-inset,0px) 0; inset-inline-start:0;
- width:var(--sidebar-rail-width); display:flex; flex-direction:column; align-items:center; gap:8px;
+ width:var(--sidebar-rail-width); display:flex; flex-direction:column; align-items:center; gap:var(--sidebar-rail-gap);
  padding-block:var(--sidebar-rail-top) var(--sidebar-rail-bottom);
 }
 .sidebar-navigation-rail::after {
@@ -105,6 +106,11 @@
 .sidebar-navigation-panel { display:flex; flex:1 1 auto; flex-direction:column; min-height:0; }
 .sidebar-navigation-panel[hidden] { display:none; }
 .sidebar.workspace-navigation .sidebar-navigation-panel .pilot-workspace { padding-top:0; }
+.sidebar.workspace-navigation:has(.sidebar-specialist-roster) .sidebar-navigation-panel .pilot-workspace {
+ /* Match the bottom of the Lake row to the divider after the two rail buttons. */
+ padding-top:max(0px, calc(var(--sidebar-rail-top) + var(--sidebar-rail-button-size) + 2 * var(--sidebar-rail-gap)
+  + var(--sidebar-specialist-divider-inset) - var(--sidebar-brand-height) - var(--sidebar-brand-gap)));
+}
 .sidebar-resource-actions { flex:0 0 28px; width:28px; }
 .sidebar.workspace-navigation .resource-panel-actions { display:flex; justify-content:flex-end; align-items:center; min-height:28px; margin:0; padding:0; border:0; font-size:var(--font-size-ui); }
 .sidebar.workspace-navigation .sidebar-resource-actions .resource-create-trigger { width:28px; min-height:28px; height:28px; padding:0; border-radius:var(--radius-sidebar-tab); corner-shape:var(--corner-window); }
