@@ -208,6 +208,11 @@ function AppContent() {
   const routeRef=useRef(route);routeRef.current=route;
   const isWorkspacePage=isWorkspacePageView(route.view);
   const isSettingsPage=route.view==='settings';
+  const [settingsVisit,setSettingsVisit]=useState({active:isSettingsPage,id:0});
+  // A new visit starts with fresh settings even if the previous view is still fading out.
+  if(settingsVisit.active!==isSettingsPage){
+    setSettingsVisit({active:isSettingsPage,id:settingsVisit.id+(isSettingsPage?1:0)});
+  }
   const settingsNavigation=useRef<SettingsNavigationHandle>(null);
   const [workspaceUpdateUnread,setWorkspaceUpdateUnread]=useState(false);
   const [snapshot, setSnapshot] = useState<SessionSnapshot | null>(null);
@@ -2220,7 +2225,7 @@ function AppContent() {
       onPage={selectConsolePage} onClose={closeWorkbenchConsole} overlay={isWorkspacePage&&workspaceOverlayOpen?workspaceOverlays:undefined}
       notice={isWorkspacePage?noticeView:undefined}>
       <DesktopUpdate visible={route.view==='updates'} onUnreadChange={setWorkspaceUpdateUnread}/>
-      {isSettingsPage?<ModelSettings navigationGuard={settingsNavigation} tab={activeSettingsTab} onBusyChange={setSettingsBusy}
+      {isSettingsPage?<ModelSettings key={settingsVisit.id} navigationGuard={settingsNavigation} tab={activeSettingsTab} onBusyChange={setSettingsBusy}
         completionEnabled={completionEnabled} onCompletionEnabledChange={setCompletionEnabled} onGatewayTask={inspectGatewayTask} capabilityDetectionEnabled={bootstrap?.backendRuntime==='go'}
         onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut}
         onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {commitNavigation({sessionId,resourceId:null});setAgentOptionsOpen(true);} : undefined}

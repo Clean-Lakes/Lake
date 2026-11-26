@@ -5,6 +5,7 @@ import {consoleCategories, consolePanelId, consoleTabId, type ConsolePage} from 
 import './workspaceConsole.css';
 
 const reducedMotion = '(prefers-reduced-motion: reduce)';
+const consoleMotion: KeyframeAnimationOptions = {duration:180,easing:'cubic-bezier(.2,.7,.2,1)',fill:'both'};
 // The Bento Card spring at 600 ms with 0.2 bounce, sampled every 30 ms.
 const selectionSpring = 'linear(0,.0794,.2486,.4375,.6093,.7484,.8518,.9231,.9688,.9954,1.0091,1.0144,1.015,1.0131,1.0104,1.0076,1.0051,1.0032,1.0018,1.0009,1)';
 
@@ -73,6 +74,15 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
   children: ReactNode;
 }) {
   const [query, setQuery] = useState('');
+  const [present, setPresent] = useState(open);
+  const visible = open || present;
+  const closing = present && !open;
+  const currentView = {page, busy, children};
+  const lastOpenView = useRef(currentView);
+  const displayed = closing ? lastOpenView.current : currentView;
+  const appearance = useRef<Animation[]>([]);
+  const scrim = useRef<HTMLDivElement>(null);
+  const frame = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
   const tabs = useRef<HTMLDivElement>(null);
   const selectionBackground = useRef<HTMLSpanElement>(null);
@@ -82,35 +92,82 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
   const groups = consoleCategories(typescriptBackend, '');
   const matching = new Set(consoleCategories(typescriptBackend, query).flatMap(group => group.items.map(item => item.key)));
   const first = matching.values().next().value;
-  const tabbable = matching.has(page) ? page : first;
-  const hasOverlay = Boolean(overlay);
+  const tabbable = matching.has(displayed.page) ? displayed.page : first;
+  const hasOverlay = open && Boolean(overlay);
 
+  // Navigation can remove the page before the native dialog finishes reversing.
+  useLayoutEffect(() => { if (open) lastOpenView.current = currentView; });
   useLayoutEffect(() => {
     const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (open && !dialog.open) {
-      setQuery('');
-      dialog.showModal();
-      search.current?.focus();
-    } else if (!open && dialog.open) {
+    const panel = frame.current;
+    const shade = scrim.current;
+    if (!dialog || !panel || !shade || (!open && !dialog.open)) return;
+
+    const controller = new AbortController();
+    const motion = window.matchMedia(reducedMotion);
+    const shouldSkip = () => document.hidden || motion.matches;
+    const clearAppearance = () => {
+      for (const animation of appearance.current) animation.cancel();
+      appearance.current = [];
+    };
+    const finish = () => {
+      if (controller.signal.aborted) return;
+      controller.abort();
       dialog.close();
+      clearAppearance();
+      setPresent(false);
+    };
+
+    if (open) {
+      if (!dialog.open) {
+        setQuery('');
+        dialog.showModal();
+        setPresent(true);
+        if (!shouldSkip() && typeof panel.animate === 'function') {
+          // Each layer animates its own opacity. The shade never samples the page beneath it.
+          appearance.current = [
+            shade.animate([{opacity:0},{opacity:1}],consoleMotion),
+            panel.animate([{opacity:0,transform:'translateY(5px)'},{opacity:1,transform:'none'}],consoleMotion),
+          ];
+        }
+      } else if (shouldSkip()) {
+        clearAppearance();
+      } else {
+        for (const animation of appearance.current) animation.reverse();
+      }
+      search.current?.focus({preventScroll:true});
+    } else {
+      const animations = appearance.current;
+      // Before the first painted entrance frame there is nothing to reverse.
+      if (shouldSkip() || !animations.some(animation => Number(animation.currentTime) > 0)) return finish();
+      for (const animation of animations) animation.reverse();
+      void Promise.allSettled(animations.map(animation => animation.finished)).then(finish);
     }
+
+    const skipMotion = () => {
+      if (!shouldSkip()) return;
+      if (open) clearAppearance();
+      else finish();
+    };
+    motion.addEventListener('change', skipMotion, {signal: controller.signal});
+    document.addEventListener('visibilitychange', skipMotion, {signal: controller.signal});
+    return () => controller.abort();
   }, [dialogRef, open]);
   useLayoutEffect(() => {
     const list = tabs.current;
     const background = selectionBackground.current;
     if (!list || !background) return;
-    if (!open) {
+    if (!visible) {
       list.removeAttribute('data-selection-visible');
       cancelSelectionMotion(background);
       return;
     }
     alignSelection(list, background, !query);
-  }, [open, page, query, typescriptBackend]);
+  }, [visible, displayed.page, query, typescriptBackend]);
   useLayoutEffect(() => {
     const list = tabs.current;
     const background = selectionBackground.current;
-    if (!open || !list || !background) return;
+    if (!visible || !list || !background) return;
     const resize = new ResizeObserver(() => alignSelection(list, background));
     resize.observe(list);
     list.querySelectorAll('.workspace-console-group').forEach(group => resize.observe(group));
@@ -124,7 +181,7 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
       document.removeEventListener('visibilitychange', settle);
       cancelSelectionMotion(background);
     };
-  }, [open]);
+  }, [visible]);
   useLayoutEffect(() => {
     const layer = overlayRoot.current;
     if (open && layer && !layer.contains(document.activeElement)) settingsTabStops(layer)[0]?.focus();
@@ -144,17 +201,21 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
     }
   }
 
+  function requestClose() {
+    if (open && !hasOverlay) onClose();
+  }
+
   return <dialog ref={dialogRef} className="workspace-console" id="workspace-console" role="dialog" aria-label="控制台"
     onCancel={event => {
       event.preventDefault();
       // React's cancel event also bubbles from the provider's discard dialog.
-      if (event.target === event.currentTarget && !hasOverlay) onClose();
+      if (event.target === event.currentTarget) requestClose();
     }}
     onClick={event => {
-      if (event.target === event.currentTarget && !hasOverlay) onClose();
+      if (event.target === event.currentTarget) requestClose();
     }}
     onKeyDown={event => {
-      if (event.nativeEvent.isComposing || event.keyCode === 229 || event.defaultPrevented) return;
+      if (!open || event.nativeEvent.isComposing || event.keyCode === 229 || event.defaultPrevented) return;
       const target = event.target as HTMLElement;
       if (hasOverlay) {
         trapSettingsTab(event, overlayRoot.current);
@@ -168,7 +229,8 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
       }
       trapSettingsTab(event, dialogRef.current);
     }}>
-    <div className="workspace-console-frame" inert={hasOverlay} onFocusCapture={event => {
+    <div ref={scrim} className="workspace-console-scrim" aria-hidden="true"/>
+    <div ref={frame} className="workspace-console-frame" inert={hasOverlay || closing} onFocusCapture={event => {
       lastFrameFocus.current = event.target as HTMLElement;
     }}>
       <nav className="workspace-console-nav" aria-label="控制台分类">
@@ -179,9 +241,11 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
             onChange={event => setQuery(event.target.value)}
             onKeyDown={event => {
               if (event.nativeEvent.isComposing || event.keyCode === 229) return;
-              if (event.key === 'Escape' && query) {
+              if (event.key === 'Escape') {
                 event.preventDefault();
-                setQuery('');
+                if (query) setQuery('');
+                else requestClose();
+                return;
               }
               if (event.key === 'ArrowDown' && first && !busy) {
                 event.preventDefault();
@@ -200,9 +264,9 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
             hidden={!group.items.some(item => matching.has(item.key))}>
             {group.showLabel && <span className="workspace-console-group-label" aria-hidden="true">{group.label}</span>}
             {group.items.map(item => <button type="button" key={item.key} id={consoleTabId(item.key)} role="tab"
-              className="workspace-console-tab" aria-selected={page === item.key}
-              aria-controls={page === item.key ? consolePanelId(item.key) : undefined}
-              tabIndex={tabbable === item.key ? 0 : -1} disabled={busy} hidden={!matching.has(item.key)}
+              className="workspace-console-tab" aria-selected={displayed.page === item.key}
+              aria-controls={displayed.page === item.key ? consolePanelId(item.key) : undefined}
+              tabIndex={tabbable === item.key ? 0 : -1} disabled={displayed.busy} hidden={!matching.has(item.key)}
               onClick={() => choose(item.key)} title={item.label}>
               <Glyph name={item.icon} size={16}/><span>{item.label}</span>
             </button>)}
@@ -212,8 +276,8 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
       </nav>
       <div className="workspace-console-content">
         <button type="button" className="icon-button workspace-console-close" title="关闭控制台"
-          aria-label="关闭控制台" onClick={onClose}><Glyph name="close" size={18}/></button>
-        {children}
+          aria-label="关闭控制台" onClick={requestClose}><Glyph name="close" size={18}/></button>
+        {displayed.children}
       </div>
     </div>
     {hasOverlay && <div ref={overlayRoot} className="workspace-console-overlays">{overlay}</div>}
