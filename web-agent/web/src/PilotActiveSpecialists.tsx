@@ -26,7 +26,7 @@ export function PilotActiveSpecialists({participants, visible = true, fixedRoste
     const anchor = trigger.current;
     if (!expanded) {
       if (open || document.activeElement === anchor) {
-        anchor?.closest('.workspace-header')?.querySelector<HTMLButtonElement>('.header-morph-slot.is-visible .header-inspector-toggle')?.focus({preventScroll:true});
+        document.getElementById('session-view-panel')?.focus({preventScroll:true});
       }
       if (open) setOpen(false);
       return;

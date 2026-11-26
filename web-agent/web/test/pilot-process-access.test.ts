@@ -46,7 +46,7 @@ test('a completed consultation cannot silence an actually thinking or waiting Pi
  }
 });
 
-test('the current Pilot status leaves the operation preview to the status island',t=>{
+test('the current Pilot turn keeps a compact live status and preserves task-specific disclosures',t=>{
  t.mock.method(Date,'now',()=>Date.parse(at)+23000);
  const snapshot=pilot('running');
  snapshot.replyTimings=[{messageId:user.id,startedAt:at,finishedAt:'',status:'running'}];
@@ -66,7 +66,7 @@ test('the current Pilot status leaves the operation preview to the status island
  assert.doesNotMatch(standalone,/turn-current-step|turn-execution-notice/);
 
  snapshot.superagent={roleId:'pilot:project',task:{taskId:'router-main',sessionId:'pilot',projectId:'project',title:'Pilot',state:'running',acceptanceState:'not_evaluated',revision:1,originRootTurnId:'router-root',deadlineAt:at}};
- assert.match(render(),/turn-duration-disclosure/,'a header pointing to a different task cannot replace this turn’s entry');
+ assert.match(render(),/turn-duration-disclosure/,'a turn linked to a different task retains its own entry');
 });
 
 test('specialist process remains accessible in the live slot, adopted report and restored history',()=>{
