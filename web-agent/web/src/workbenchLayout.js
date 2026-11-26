@@ -18,7 +18,15 @@
     .workbench-splitter:hover::after, .workbench-splitter:focus-visible::after { content:''; position:absolute; top:0; bottom:0; left:3px; width:2px; background:var(--focus); }
     .workbench-splitter-sidebar { left:calc(var(--sidebar-width) - 4px); }
     .workbench-splitter-sidebar:hover:not(:focus-visible)::after { width:1px; background:var(--border-strong); }
-    .workbench-splitter-sidebar.is-dragging::after { transform:translate3d(var(--sidebar-drag-offset,0px),0,0); will-change:transform; }
+    .conversation[data-sidebar-resizing] { overflow-x:hidden; }
+    .app-shell > .workspace .conversation[data-sidebar-resizing] > .timeline-list { width:var(--sidebar-resize-reading-width); }
+    .workspace.has-floating-header .conversation[data-sidebar-resizing] {
+      --sidebar-resize-chat-room:max(0px,calc(100cqw - var(--inspector-width,0px) - var(--session-content-start) - var(--session-gutter)));
+    }
+    .workspace.has-floating-header .conversation[data-sidebar-resizing] .ai-role-user {
+      translate:min(0px,calc(var(--sidebar-resize-chat-room) - var(--sidebar-resize-reading-width)));
+      max-width:min(85%,calc(var(--sidebar-resize-chat-room) * .85));
+    }
     .workbench-splitter-terminal, .workbench-splitter-inspector { left:0; }
     .workbench-splitter-terminal::after, .workbench-splitter-inspector::after { left:0; }
     .workbench-resizing .session-inspector { animation:none !important; }
@@ -47,7 +55,7 @@
   let observedContextPanel;
   const contextResize = new ResizeObserver(() => schedule());
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
-  function paneLimits(sidebarCollapsed) {
+  function paneLimits(sidebarCollapsed, sidebarPreference = preferred.sidebar) {
     const width = shell?.clientWidth || innerWidth;
     const inspectorDocked = innerWidth >= 960;
     const terminalDocked = innerWidth > 1100;
@@ -58,7 +66,7 @@
     const conversationMin = inspectorDocked ? 416 : 320;
     const auxiliaryMin = inspectorPresent && terminalOpen ? 240 : 280;
     const sidebarMax = Math.max(200, Math.min(420, width - conversationMin - (terminalOpen ? auxiliaryMin : 0) - (inspectorPresent ? auxiliaryMin : 0)));
-    const expandedSidebarWidth = clamp(preferred.sidebar, 200, sidebarMax);
+    const expandedSidebarWidth = clamp(sidebarPreference, 200, sidebarMax);
     const railWidth = parseFloat(getComputedStyle(shell).getPropertyValue('--sidebar-rail-width')) || 52;
     const sidebar = sidebarCollapsed ? railWidth : expandedSidebarWidth;
     const terminalMax = Math.max(auxiliaryMin, Math.min(900, width - sidebar - conversationMin - (inspectorPresent ? auxiliaryMin : 0)));
@@ -180,8 +188,9 @@
     if (!shell) return;
     const collapsed = shell.classList.contains('has-collapsed-sidebar');
     const docked = shell.classList.contains('has-docked-conversation') && innerWidth > 700;
-    const target = paneLimits(collapsed);
-    const width = clamp(preferred.sidebar, ...target.sidebar);
+    const sidebarPreference = active?.pane === 'sidebar' ? sidebarDragWidth(active, active.clientX) : preferred.sidebar;
+    const target = paneLimits(collapsed, sidebarPreference);
+    const width = clamp(sidebarPreference, ...target.sidebar);
     const surface = docked && shell.querySelector('.workbench-conversation-surface');
     const canSlide = surface && previousSidebar?.shell === shell && previousSidebar.docked &&
       !active && !document.hidden && !reducedMotion?.matches && typeof shell.animate === 'function';
@@ -202,30 +211,47 @@
     shell.style.setProperty('--inspector-requested-width', `${preferred.inspector}px`);
     for (const pane of ['sidebar', 'terminal', 'inspector']) {
       const [min, max] = target[pane];
-      const width = clamp(preferred[pane], min, max);
-      shell.style.setProperty(pane === 'sidebar' ? '--sidebar-width' : pane === 'terminal' ? '--terminal-panel-width' : '--inspector-preferred-width', `${width}px`);
+      const paneWidth = pane === 'sidebar' ? width : clamp(preferred[pane], min, max);
+      shell.style.setProperty(pane === 'sidebar' ? '--sidebar-width' : pane === 'terminal' ? '--terminal-panel-width' : '--inspector-preferred-width', `${paneWidth}px`);
       const handle = shell.querySelector(`.workbench-splitter-${pane}`);
-      if (handle) for (const [name, value] of [['valuemin', min], ['valuemax', max], ['valuenow', width]]) handle.setAttribute(`aria-${name}`, String(value));
+      if (handle) for (const [name, value] of [['valuemin', min], ['valuemax', max], ['valuenow', paneWidth]]) handle.setAttribute(`aria-${name}`, String(value));
     }
     if (startSlide) slideSidebar({ surface, from, fromIsland, width, expandedWidth: target.expandedSidebarWidth, railWidth: target.railWidth, collapsed, origin });
   }
-  function sidebarDragWidth(drag, x, min, max) {
-    return clamp(drag.width + x - drag.x, min, max);
+  function sidebarDragWidth(drag, x) {
+    return drag.width + x - drag.x;
   }
-  function previewSidebarDrag(drag) {
-    drag.previewFrame = 0;
-    const { handle } = drag;
-    const min = Number(handle.getAttribute('aria-valuemin'));
-    const max = Number(handle.getAttribute('aria-valuemax'));
-    const settled = Number(handle.getAttribute('aria-valuenow'));
-    const width = sidebarDragWidth(drag, drag.clientX, min, max);
-    handle.style.setProperty('--sidebar-drag-offset', `${width - settled}px`);
+  function holdReadingLayout(box) {
+    const timeline = box?.querySelector(':scope > .timeline-list');
+    const width = timeline?.getBoundingClientRect().width;
+    if (!width) return;
+    // Stable inherited geometry lets WebKit reuse the transcript layout as
+    // the grid and its chrome change size around the scroll view.
+    const properties = [
+      '--sidebar-width', '--sidebar-expanded-width', '--expanded-conversation-width',
+      '--terminal-panel-width', '--inspector-preferred-width', '--inspector-width',
+      '--pane-rail-bottom', '--workbench-island-navigation-left', '--workbench-island-navigation-top',
+      '--docked-reading-viewport', '--session-content-width', '--session-content-start', '--session-gutter',
+    ];
+    const css = getComputedStyle(box);
+    const values = properties.map(name => [name, css.getPropertyValue(name) || 'initial']);
+    values.push(['--sidebar-resize-reading-width', `${width}px`]);
+    const original = values.map(([name]) => [name, box.style.getPropertyValue(name), box.style.getPropertyPriority(name)]);
+    for (const [name, value] of values) box.style.setProperty(name, value);
+    box.setAttribute('data-sidebar-resizing', '');
+    return () => {
+      box.removeAttribute('data-sidebar-resizing');
+      for (const [name, value, priority] of original) {
+        if (value) box.style.setProperty(name, value, priority);
+        else box.style.removeProperty(name);
+      }
+    };
   }
   function clearDrag() {
-    const { pane, handle, pointer, previewFrame } = active;
+    const { handle, pointer, previewFrame, restoreReadingLayout } = active;
     active = null;
     if (previewFrame) cancelAnimationFrame(previewFrame);
-    if (pane === 'sidebar') handle.style.removeProperty('--sidebar-drag-offset');
+    restoreReadingLayout?.();
     handle.classList.remove('is-dragging');
     document.documentElement.classList.remove('workbench-resizing');
     if (handle.hasPointerCapture(pointer)) handle.releasePointerCapture(pointer);
@@ -245,7 +271,8 @@
       handle.setPointerCapture(event.pointerId);
       const width = pane === 'sidebar' ? Number(handle.getAttribute('aria-valuenow'))
         : shell.querySelector(pane === 'terminal' ? '.terminal-side-panel' : '.session-inspector').getBoundingClientRect().width;
-      active = { pane, handle, x: event.clientX, width, pointer: event.pointerId };
+      active = { pane, handle, x: event.clientX, clientX: event.clientX, width, pointer: event.pointerId };
+      if (pane === 'sidebar') active.restoreReadingLayout = holdReadingLayout(shell.querySelector('.conversation'));
       handle.classList.add('is-dragging');
       document.documentElement.classList.add('workbench-resizing');
     });
@@ -253,10 +280,11 @@
       const drag = active;
       if (drag?.handle !== handle || drag.pointer !== event.pointerId) return;
       if (pane === 'sidebar') {
-        // Keep the transcript at its settled width until release. Only the
-        // divider's painted position follows the pointer on each display frame.
         drag.clientX = event.clientX;
-        if (!drag.previewFrame) drag.previewFrame = requestAnimationFrame(() => previewSidebarDrag(drag));
+        if (!drag.previewFrame) drag.previewFrame = requestAnimationFrame(() => {
+          drag.previewFrame = 0;
+          apply();
+        });
         return;
       }
       const [min, max] = limits(pane);
@@ -267,19 +295,25 @@
     });
     const finish = event => {
       if (active?.handle !== handle || active.pointer !== event.pointerId) return;
-      if (pane !== 'sidebar') save();
-      else if (event.type === 'pointerup' && innerWidth > 700) {
+      if (pane !== 'sidebar') {
+        save();
+        clearDrag();
+        return;
+      }
+      let committed = false;
+      if (event.type === 'pointerup' && innerWidth > 700 && handle.isConnected) {
         const [min, max] = limits(pane);
-        const width = sidebarDragWidth(active, event.clientX, min, max);
+        const width = clamp(sidebarDragWidth(active, event.clientX), min, max);
         if (min !== max && width !== clamp(preferred.sidebar, min, max)) {
           window.dispatchEvent(new Event('lake-workbench-sidebar-will-resize'));
           preferred.sidebar = width;
-          apply();
-          save();
-          schedule();
+          committed = true;
         }
       }
       clearDrag();
+      apply();
+      if (committed) save();
+      schedule();
     };
     handle.addEventListener('pointerup', finish);
     handle.addEventListener('pointercancel', finish);
@@ -342,8 +376,8 @@
   function sync() {
     frame = 0;
     const nextShell = document.querySelector('.app-shell');
-    if (active?.pane === 'sidebar' && (nextShell !== shell || !active.handle.isConnected ||
-      innerWidth <= 700 || nextShell.classList.contains('has-collapsed-sidebar'))) clearDrag();
+    if (active && (!active.handle.isConnected || active.pane === 'sidebar' &&
+      (nextShell !== shell || document.hidden || innerWidth <= 700 || nextShell.classList.contains('has-collapsed-sidebar')))) clearDrag();
     shell = nextShell;
     if (!shell) return;
     addHandle(shell, 'sidebar');
