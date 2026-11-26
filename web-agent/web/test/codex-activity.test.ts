@@ -58,3 +58,11 @@ test('the active cursor stays on the latest paragraph when tool timers are pause
  assert.match(html,/继续核<span class="specialist-reply-cursor-tail">对<span class="specialist-reply-cursor" data-cursor-avatar="kingfisher"/);
  assert.doesNotMatch(renderToStaticMarkup(createElement(CodexActivity,{items})),/class="specialist-reply-cursor"/);
 });
+test('a newly streamed Codex paragraph starts immediately while existing prose reads in full',()=>{
+ const items:CodexActivityItem[]=[{id:'earlier',kind:'text',text:'这一段已完整呈现。'},
+   {id:'current',kind:'text',text:'新段继续核对。'}];
+ const live=renderToStaticMarkup(createElement(CodexActivity,{items,live:true,animateInitial:true}));
+ assert.match(live,/<p>这一段已完整呈现。<\/p>/);
+ assert.match(live,/<p>新<\/p>/);
+ assert.match(renderToStaticMarkup(createElement(CodexActivity,{items,live:true})),/<p>新段继续核对。<\/p>/);
+});

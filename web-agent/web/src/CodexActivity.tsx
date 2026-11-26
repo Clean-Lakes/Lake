@@ -70,7 +70,7 @@ function ToolGroup({calls,live}:{calls:Call[];live:boolean}){
     })}</ul>
   </div>;
 }
-export function CodexActivity({items,live=false,reportText,cursorAvatar}:{items:CodexActivityItem[];live?:boolean;reportText?:string;cursorAvatar?:LakeAvatarName}){
+export function CodexActivity({items,live=false,animateInitial,reportText,cursorAvatar}:{items:CodexActivityItem[];live?:boolean;animateInitial?:boolean;reportText?:string;cursorAvatar?:LakeAvatarName}){
   const groups:(CodexActivityItem|Call[])[]=[];
   let latestProse:CodexActivityItem|undefined;
   for(const item of items){
@@ -101,7 +101,10 @@ export function CodexActivity({items,live=false,reportText,cursorAvatar}:{items:
       return <ToolGroup key={keys.get(group[0]!.id)} calls={group} live={live}/>;
     }
     // The caller owns the current cursor. Tool timers can pause separately.
-    if(group.kind==='text')return <AssistantMarkdown key={group.id} cursorAvatar={group===latestProse?cursorAvatar:undefined}>{group.text}</AssistantMarkdown>;
+    if(group.kind==='text'){
+      const current=group===latestProse;
+      return <AssistantMarkdown key={group.id} reveal={live&&current} animateInitial={current&&animateInitial} paceBursts cursorAvatar={current?cursorAvatar:undefined}>{group.text}</AssistantMarkdown>;
+    }
     return <div className="codex-task-event" key={group.id}><Glyph name="listTasks" size={15}/><span>{group.status==='failed'?'任务更新失败':group.status==='running'?'正在更新任务':group.status==='completed'?(group.createdTask?'添加了任务':'更新了任务'):'任务状态待确认'}</span><span className="codex-task-chip">{group.text}</span></div>;
   })}</div>;
 }
