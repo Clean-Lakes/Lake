@@ -14,4 +14,4 @@ export function externalAgentId(value: unknown): ExternalAgentId {
   return value as ExternalAgentId;
 }
 export const externalControlTools = new Set([...pilotConfigurationToolNames,'run_external_agent', 'Agent', 'Task', 'TaskOutput', 'TaskStop', 'SendMessage',
-  'route_work', 'manage_specialist', 'list_specialist_execution_options', 'EnterPlanMode', 'ExitPlanMode', 'AskUserQuestion']);
+  'route_work', 'manage_specialist', 'create_chat_group', 'list_specialist_execution_options', 'EnterPlanMode', 'ExitPlanMode', 'AskUserQuestion']);

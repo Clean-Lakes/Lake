@@ -95,8 +95,8 @@ test('task rows retain exact identities, Lake role avatars and frozen executor b
  assert.equal(rows[0].agent,'Codex');assert.equal(rows[1].agent,'Lake Worker');
  assert.equal(rows[0].progress,undefined,'missing progress cannot become an invented percentage');
  assert.deepEqual(rows[0].paths,['演示环境 / 业务集群 / 应用节点']);
- const html=renderToStaticMarkup(createElement(SpecialistTaskList,{channel:{id:'channel',sessionId:'channel',projectId:'project',roleId:'ops',roleName:'服务器专员',revision:1,createdAt:at},rows,selectedSessionId:'session-b',onTask:()=>{}}));
- assert.match(html,/aria-label="专员任务列表"/);assert.match(html,/aria-current="true"/);assert.match(html,/data-task-id="task-a"/);assert.match(html,/data-task-id="task-b"/);
+ const html=renderToStaticMarkup(createElement(SpecialistTaskList,{channel:{id:'channel',sessionId:'channel',projectId:'project',roleId:'ops',roleName:'服务器专员',revision:1,createdAt:at},rows,onTask:()=>{}}));
+ assert.match(html,/aria-label="专员任务列表"/);assert.match(html,/data-task-id="task-a" data-session-id="session-a"/);assert.match(html,/data-task-id="task-b" data-session-id="session-b"/);
  assert.match(html,/openai.svg/);assert.match(html,/super-role-avatar/);assert.match(html,/未报告/);assert.doesNotMatch(html,/private-host|private-user|private-ref|private-description/);
  assert.equal(JSON.stringify([a,b]),before);
 });

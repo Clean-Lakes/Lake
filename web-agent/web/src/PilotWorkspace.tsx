@@ -1,5 +1,6 @@
 import {hasUnreadMessages} from './ConversationReadMarker';
-import {useCallback,useEffect,useRef,useState,type PointerEvent,type RefObject} from 'react';
+import {useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState,type PointerEvent,type RefObject} from 'react';
+import {createPortal} from 'react-dom';
 import type {SessionEvent,SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {greetRoleAvatar,SuperRoleAvatar} from './SuperRoleAvatar';
@@ -20,10 +21,24 @@ function withSeenCursor(channel:SpecialistChannelInfo,cursor:string):SpecialistC
 type WorkerEventListener={receive:(event:SessionEvent)=>void;connection:(open:boolean)=>void};
 export type SubscribePilotWorkerEvents=(sessionId:string,listener:WorkerEventListener)=>()=>void;
 
+export function pilotConversationView(workspace:SuperWorkspace|null,sessionId?:string):SuperWorkspace|null {
+ if(!workspace?.active||!sessionId)return null;
+ const group=workspace.chatGroups?.find(row=>row.sessionId===sessionId&&row.projectId===workspace.project.projectId);
+ if(!group&&workspace.project.routerSessionId!==sessionId)return null;
+ return {...workspace,
+  project:group?{...workspace.project,routerSessionId:sessionId}:workspace.project,
+  workers:workspace.workers.filter(worker=>worker.pilotSessionId===group?.sessionId),
+  questions:workspace.questions?.filter(question=>question.pilotSessionId===group?.sessionId),
+  channels:group?workspace.channels?.filter(channel=>group.members.some(member=>member.roleId===channel.roleId)):workspace.channels,
+  conversations:workspace.conversations?.filter(round=>round.sessionId===sessionId),
+  ...(group&&{cursor:group.cursor,pilotMessageRead:undefined}),
+ };
+}
+
 export function usePilotWorkspace(projectId:string|undefined,connected:boolean,visiblePilotSessionId?:string){
  const [loadedWorkspace,setWorkspace]=useState<SuperWorkspace|null>(null),[error,setError]=useState('');
  const workspace=loadedWorkspace?.project.projectId===projectId?loadedWorkspace:null;
- const generation=useRef(0),refreshRef=useRef<()=>Promise<void>>(async()=>{});
+ const generation=useRef(0),rosterRevision=useRef(0),refreshRef=useRef<()=>Promise<void>>(async()=>{});
  const deletedRoles=useRef(new Set<string>());
  const listeners=useRef(new Map<string,Set<WorkerEventListener>>());
  const streamingWorkers=useRef<ReadonlySet<string>|null>(null);
@@ -42,10 +57,11 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean,v
   const controller=new AbortController();let busy=false,queued=false,nextActivation=0;
   const refresh=async()=>{
    if(busy){queued=true;return;}busy=true;
+   const roster=rosterRevision.current;
    try{
     let next=await api.superWorkspace(projectId,controller.signal);
     if(!next.active&&Date.now()>=nextActivation){nextActivation=Date.now()+15000;await api.ensureSuperWorkspace(projectId,controller.signal);next=await api.superWorkspace(projectId,controller.signal);}
-    if(generation.current===current){
+    if(generation.current===current&&roster===rosterRevision.current){
      setWorkspace(previous=>{
       // A workspace poll started before an acknowledgement can arrive after it.
       const seen=new Map(previous?.project.projectId===next.project.projectId
@@ -60,18 +76,18 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean,v
      });
      if(next.active)setError('');
     }
-   }catch(reason){if(!controller.signal.aborted&&generation.current===current)setError(readableError(reason));}
+   }catch(reason){if(!controller.signal.aborted&&generation.current===current&&roster===rosterRevision.current)setError(readableError(reason));}
    finally{busy=false;if(queued&&!controller.signal.aborted){queued=false;void refresh();}}
   };
   refreshRef.current=refresh;
   void refresh();const timer=window.setInterval(()=>void refresh(),2500);
   return()=>{controller.abort();refreshRef.current=async()=>{};window.clearInterval(timer);};
  },[projectId,connected]);
- const routerId=workspace?.active?workspace.project.routerSessionId:undefined;
- const shared=!!routerId&&routerId===visiblePilotSessionId;
- const workerScope=JSON.stringify(shared?workspace!.workers.filter(worker=>!worker.parentWorkerId&&
+ const conversation=useMemo(()=>pilotConversationView(workspace,visiblePilotSessionId),[workspace,visiblePilotSessionId]);
+ const routerId=conversation?.project.routerSessionId??(workspace?.active?workspace.project.routerSessionId:undefined);
+ const workerScope=JSON.stringify(conversation?conversation.workers.filter(worker=>!worker.parentWorkerId&&
   (['active','queued'].includes(worker.assignmentState)||worker.pilotReport?.executionSettled===false)).map(worker=>worker.sessionId).sort():[]);
- const cursor=useRef(0);cursor.current=workspace?.cursor??0;
+ const cursor=useRef(0);cursor.current=(conversation??workspace)?.cursor??0;
  useEffect(()=>{
   if(!routerId||!connected||typeof EventSource==='undefined')return;
   const workers=new Set<string>(JSON.parse(workerScope));
@@ -105,6 +121,13 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean,v
   return()=>{stream.close();ready(false);window.clearTimeout(timer);};
  },[routerId,connected,workerScope]);
  useEffect(()=>{const refresh=()=>refreshRef.current();window.addEventListener('lake:conversation-read',refresh);return()=>window.removeEventListener('lake:conversation-read',refresh);},[]);
+ const addRole=(channel:SpecialistChannelInfo)=>{
+  // Discard an in-flight poll that started before this creation was saved.
+  rosterRevision.current++;
+  setWorkspace(current=>current?.project.projectId===channel.projectId&&!current.channels?.some(row=>row.roleId===channel.roleId)
+   ? {...current,channels:[...(current.channels??[]),channel]}:current);
+  void refreshRef.current();
+ };
  const removeRole=(roleId:string)=>{deletedRoles.current.add(roleId);setWorkspace(current=>current?{...current,questions:current.questions?.filter(question=>question.author.roleId!==roleId),channels:current.channels?.filter(channel=>channel.roleId!==roleId),workers:current.workers.filter(worker=>worker.roleId!==roleId)}:current);void refreshRef.current();};
  const readChannel=async(channel:SpecialistChannelInfo)=>{
   const state=channel.messageRead;
@@ -119,7 +142,7 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean,v
    // The visible overview can retry if the receipt could not be saved.
   }
  };
- return {workspace,error,removeRole,readChannel,refresh:()=>refreshRef.current(),subscribeWorkerEvents:shared?subscribeWorkerEvents:undefined};
+ return {workspace,conversation,error,addRole,removeRole,readChannel,refresh:()=>refreshRef.current(),subscribeWorkerEvents:conversation?subscribeWorkerEvents:undefined};
 }
 
 type ReadMark = {requested: string; acknowledged: string; pending: boolean};
@@ -165,38 +188,78 @@ function useCompletionReads(workspace: SuperWorkspace | null, viewedRole: string
 
 type PilotWorkspaceProps = {
  showHeading?:boolean;
+ presentation?:'list'|'entry'|'rail';
  workspace: SuperWorkspace | null; error: string; selectedId: string | null; selectedRoleId?: string;
  activity?:ConversationAvatarActivity; pilotButton?:RefObject<HTMLButtonElement|null>;
  pilotActivity?:ConversationActivity;pilotDisabled?:boolean;
  onPilot: () => void; onWorker: (worker: SuperWorker) => void; onChannel?: (channel: SpecialistChannelInfo) => void;
  disabled?:boolean; onDeleted?:(channel:SpecialistChannelInfo)=>void;
 };
-
 function showClippedText(event: PointerEvent<HTMLElement>) {
  const text = event.currentTarget;
  if (text.scrollWidth > text.clientWidth) text.title = text.textContent ?? '';
  else text.removeAttribute('title');
 }
 
-export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,showHeading=true}: PilotWorkspaceProps) {
- const [context,setContext]=useState<{channel:SpecialistChannelInfo;x:number;y:number}|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null);
+function SpecialistNameBubble({name,target,onClose}:{name:string;target:HTMLButtonElement;onClose:()=>void}) {
+ const bubble=useRef<HTMLSpanElement>(null);
+ useLayoutEffect(()=>{
+  const node=bubble.current;
+  if(!node)return;
+  const roster=target.closest('.sidebar-specialist-roster');
+  const place=()=>{
+   const bounds=target.getBoundingClientRect(),visible=roster?.getBoundingClientRect();
+   if(!target.isConnected||target.closest('[inert]')||bounds.right<=0||!visible||bounds.bottom<=visible.top||bounds.top>=visible.bottom){
+    onClose();
+    return;
+   }
+   const center=bounds.top+bounds.height/2,height=node.offsetHeight;
+   const top=Math.max(8,Math.min(center-height/2,window.innerHeight-height-8));
+   node.style.left=`${bounds.right+12}px`;
+   node.style.top=`${top}px`;
+   node.style.setProperty('--specialist-bubble-tail',`${Math.min(height-8,Math.max(8,center-top))}px`);
+  };
+  const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')onClose();};
+  place();
+  window.addEventListener('resize',place);
+  window.addEventListener('scroll',place,true);
+  window.addEventListener('keydown',escape);
+  return()=>{
+   window.removeEventListener('resize',place);
+   window.removeEventListener('scroll',place,true);
+   window.removeEventListener('keydown',escape);
+  };
+ },[target,name,onClose]);
+ return createPortal(<span ref={bubble} className="specialist-name-bubble" aria-hidden="true">{name}</span>,document.body);
+}
+
+export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,showHeading=true,presentation='list'}: PilotWorkspaceProps) {
+ const [menu,setMenu]=useState<{channel:SpecialistChannelInfo;x:number;y:number}|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null);
+ const [nameHint,setNameHint]=useState<{id:string;target:HTMLButtonElement}|null>(null);
  const anchor=useRef<HTMLButtonElement|null>(null);
- useEffect(()=>{setContext(null);setDeleting(null);},[workspace?.project.projectId]);
+ const closeNameHint=useCallback(()=>setNameHint(null),[]);
+ useEffect(()=>{setMenu(null);setDeleting(null);closeNameHint();},[workspace?.project.projectId,closeNameHint]);
  const roots = workspace?.active?workspace.workers.filter(worker => !worker.parentWorkerId):[];
  const channels = workspace?.active?workspace.channels:undefined;
  const viewedRole = selectedId ? selectedRoleId ?? channels?.find(channel => channel.sessionId === selectedId)?.roleId ??
   roots.find(worker => worker.sessionId === selectedId)?.roleId : undefined;
- const readMarks = useCompletionReads(workspace, viewedRole);
+ const readMarks = useCompletionReads(presentation==='entry'?null:workspace, viewedRole);
+ const rail=presentation==='rail';
  const routerId=workspace?.active?workspace.project.routerSessionId:undefined;
  const entries = channels ? channels.map(channel => ({channel, workers: roots.filter(worker => worker.roleId === channel.roleId)})) :
   roots.map(worker => ({channel: undefined, workers: [worker]}));
- return <section className="pilot-workspace" aria-label={showHeading?'专员':undefined}>
-  {showHeading&&<div className="nav-heading"><span>专员</span><small>{entries.length+1}</small></div>}
-  <SidebarPilotEntry buttonRef={pilotButton} selected={!!routerId&&selectedId===routerId}
-   activity={routerId&&activity?.sessionId===routerId?activity.state:pilotActivity} messageRead={workspace?.active?workspace.pilotMessageRead:undefined}
-   disabled={pilotDisabled} onPilot={onPilot}/>
-  {error&&<p className="pilot-workspace-error" role="status">{error}</p>}
-  {entries.length ? entries.map(({channel, workers}) => {
+ const hintedEntry=nameHint&&entries.find(({channel,workers})=>(channel?.id??workers[0].id)===nameHint.id);
+ const hintedName=hintedEntry&&(hintedEntry.channel?.roleName??hintedEntry.workers[0].roleName);
+ if(rail&&!entries.length)return null;
+ return <section className={rail?'sidebar-specialist-roster':'pilot-workspace'} aria-label={rail||showHeading?'专员':undefined}>
+  {!rail&&<>
+   {showHeading&&<div className="nav-heading"><span>专员</span><small>{entries.length+1}</small></div>}
+   <SidebarPilotEntry buttonRef={pilotButton} selected={!!routerId&&selectedId===routerId}
+    activity={routerId&&activity?.sessionId===routerId?activity.state:pilotActivity} messageRead={workspace?.active?workspace.pilotMessageRead:undefined}
+    disabled={pilotDisabled} onPilot={onPilot}/>
+   {error&&<p className="pilot-workspace-error" role="status">{error}</p>}
+  </>}
+  {presentation!=='entry'&&entries.map(({channel, workers}) => {
    const aggregate=specialistTaskActivity(workers),worker = aggregate.worker, task = worker?.task;
    const name = channel?.roleName ?? worker!.roleName;
    const backend = channel ? channel.execution : worker?.execution?.backend;
@@ -218,14 +281,40 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
    const detail=aggregate.detail??(channel?.duties||'持续沟通');
    const detailStatus = detail.endsWith(status) ? undefined : status;
    const label = `${name}${backend?` · Agent 类型：${agentTypeName(backend)}`:''} · ${detail}${detailStatus?` · ${detailStatus}`:''}`;
-   return <button type="button" key={channel?.id ?? worker!.id} className={`nav-row pilot-worker-row${selected ? ' active' : ''}`}
+   const id=channel?.id??worker!.id;
+   const dismissRowHint=()=>setNameHint(current=>current?.id===id?null:current);
+   const openManagement=(button:HTMLButtonElement,x:number,y:number)=>{
+    if(!channel||disabled)return;
+    closeNameHint();
+    anchor.current=button;
+    setMenu({channel,x,y});
+   };
+   const avatar=<SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId}
+     motion={preparing?'working':replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/>;
+   return <button type="button" key={id} className={rail?'sidebar-rail-button sidebar-specialist-button':`nav-row pilot-worker-row${selected ? ' active' : ''}`}
      aria-current={selected ? 'page' : undefined} aria-label={label}
-     aria-haspopup={channel?'menu':undefined}
-     onContextMenu={event=>{event.preventDefault();event.stopPropagation();if(channel&&!disabled){anchor.current=event.currentTarget;setContext({channel,x:event.clientX,y:event.clientY});}}}
-     onKeyDown={event=>{if(channel&&!disabled&&(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10')){event.preventDefault();const bounds=event.currentTarget.getBoundingClientRect();anchor.current=event.currentTarget;setContext({channel,x:bounds.left+20,y:bounds.bottom});}}}
-     onClick={event=>{greetRoleAvatar(event.currentTarget);if(channel&&onChannel)onChannel(channel);else if(worker)onWorker(worker);}}>
-    <SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId} motion={preparing?'working':replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/>
-    <span className="nav-row-text">
+     aria-keyshortcuts={channel&&!disabled?'Shift+F10':undefined}
+     onPointerEnter={rail?event=>{if(event.pointerType==='mouse'&&!menu&&!deleting)setNameHint({id,target:event.currentTarget});}:undefined}
+     onPointerLeave={rail?dismissRowHint:undefined}
+     onFocus={rail?event=>{if(event.currentTarget.matches(':focus-visible')&&!menu&&!deleting)setNameHint({id,target:event.currentTarget});}:undefined}
+     onBlur={rail?dismissRowHint:undefined}
+     onContextMenu={event=>{event.preventDefault();event.stopPropagation();openManagement(event.currentTarget,event.clientX,event.clientY);}}
+     onKeyDown={event=>{
+      if(channel&&!disabled&&(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10')){
+       event.preventDefault();
+       const bounds=event.currentTarget.getBoundingClientRect();
+       openManagement(event.currentTarget,bounds.left+20,bounds.bottom);
+      }
+     }}
+     onClick={event=>{
+      closeNameHint();
+      greetRoleAvatar(event.currentTarget);
+      if(channel&&onChannel)onChannel(channel);else if(worker)onWorker(worker);
+     }}>
+    {avatar}
+    {rail?<span className="sidebar-specialist-status" aria-hidden="true">
+     {needsConfirmation?<Glyph name="circleAlert" size={10}/>:activityLabel?<Glyph name="loader" size={10} className="activity-indicator"/>:showUnread?<span className="pilot-worker-unread"/>:null}
+    </span>:<span className="nav-row-text">
      <span className="pilot-worker-name">
       <strong onPointerEnter={showClippedText}>{name}</strong>
       <AgentBackendLogo backend={backend} size={12}/>
@@ -238,10 +327,13 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
        {activityLabel ? <span className="pilot-worker-running" role="img" aria-label={activityLabel}><Glyph name="loader" size={12} className="activity-indicator"/></span> : showUnread && <span className="pilot-worker-unread" role="img" aria-label="有新消息未读"/>}
       </span>
      </span>
-    </span>
+    </span>}
    </button>;
-  }) : null}
-  {context&&<NavigationMenu title={context.channel.roleName} x={context.x} y={context.y} anchor={anchor} onClose={()=>setContext(null)} actions={[{label:'删除专员',icon:'trash',danger:true,disabled:disabled||context.channel.roleRevision===undefined,run:()=>setDeleting(context.channel)}]}/>}
+  })}
+  {rail&&nameHint&&hintedName&&<SpecialistNameBubble key={nameHint.id} name={hintedName} target={nameHint.target} onClose={closeNameHint}/>}
+  {menu&&<NavigationMenu title={menu.channel.roleName} x={menu.x} y={menu.y} anchor={anchor} onClose={()=>setMenu(null)} actions={[
+   {label:'删除专员',icon:'trash',danger:true,disabled:disabled||menu.channel.roleRevision===undefined,run:()=>setDeleting(menu.channel)},
+  ]}/>}
   {deleting&&<SpecialistDelete channel={deleting} returnFocus={anchor} onClose={()=>setDeleting(null)} onDeleted={()=>{
    onDeleted?.(deleting);
    if(deleting.roleId===viewedRole){
