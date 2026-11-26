@@ -15,6 +15,7 @@ import {remarkReplyInfo} from './replyInfo';
 import {replyInfoComponents, ReplyInfoSpan} from './ReplyInfoElements';
 import {LiveTextMotionBoundary,LiveTextMotionText,pilotSummaryCursorComponents,remarkLiveTextMotion,remarkPilotSummaryCursor} from './liveTextMotion';
 import {MarkdownReveal,markdownRevealComponents,remarkRevealText,remarkSpecialistReplyCursor} from './markdownReveal';
+import {useReplyWaitingMotion} from './replyWaitingMotion';
 import type {LakeAvatarName} from './lakeAvatarCatalog';
 
 const emptyCatalog = objectCatalog();
@@ -111,6 +112,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({children, clas
   const {catalog} = useContext(References);
   const body = useRef<HTMLDivElement>(null);
   useReplyEntrance(body,arrive);
+  useReplyWaitingMotion(body,children,!!cursorAvatar);
   const decorateObjects = useMemo(() => remarkObjectReferences(catalog), [catalog]);
   const proseClass=`ai-markdown assistant-prose${className ? ` ${className}` : ''}`;
   const decorateMotion=liveMotion!==undefined;

@@ -130,9 +130,10 @@ test('Pilot shows animal-specific thinking text under its original identity, the
  assert.doesNotMatch(html(),/animal-thinking-bubble|pilot-specialist-thinking-label/);assert.match(html(),/正在压缩上下文/);
  snapshot.ai!.cards=[{id:'reply',type:'message',status:'running',content:'这是本次检查结果。',at,data:{root_turn_id:'root'}}];
  assert.match(html().replace(/<[^>]*>/g,''),/这是本次检查结果(?!。)/);assert.doesNotMatch(html(),/animal-thinking-bubble|pilot-specialist-thinking-label|turn-activity-mark|正在生成回复/);
- assert.match(html(),/data-live-motion="active"/);
- assert.equal((html().match(/data-live-glow="active"/g)??[]).length,1,'the public body stays quiet while the existing name keeps its glow');
- assert.equal(html().match(/<div class="response-identity">[\s\S]*?<\/div>/)?.[0],thinking.match(/<div class="response-identity">[\s\S]*?<\/div>/)?.[0],'the identity stays in the same parent and retains the same author while its content slot changes');
+ assert.match(html(),/class="specialist-reply-cursor"/);
+ assert.doesNotMatch(html(),/data-live-(?:motion|glow)="active"/);
+ const identity=(value:string)=>value.match(/<div class="response-identity">[\s\S]*?<\/div>/)?.[0].replace(/data-live-(?:motion|glow)="\w+"/g,'');
+ assert.equal(identity(html()),identity(thinking),'the identity keeps its author while its motion stops');
 });
 
 test('Pilot thinking copy follows the exact original avatar for explicit IDs, project roles and duplicate names',()=>{
@@ -173,7 +174,8 @@ test('Pilot public prose keeps its original specialist entry and execution logo 
   assert.ok(html.includes(`data-agent-type="${backend.kind==='native'?'native':'codex'}"`),'branding follows the real execution binding');
   assert.ok(html.indexOf('<button')<html.indexOf('class="ai-card ai-message"'));
   assert.match(html.replace(/<[^>]*>/g,''),/这是专员真正公开的回复(?!。)/);
-  assert.match(html,/data-live-motion="active"/);
+  assert.match(html,/class="specialist-reply-cursor"/);
+  assert.doesNotMatch(html,/data-live-(?:motion|glow)="active"/);
   assert.equal((html.match(/role="status"/g)??[]).length,0,'public prose does not add a synthetic thinking announcement');
  }
 });
@@ -204,19 +206,19 @@ test('tool, wait, reconnect, settled and actual prose all retain the original se
  const prose=renderReply();assertSeparate(prose);assert.match(prose.replace(/<[^>]*>/g,''),/实际正文接替思考气泡/);
 });
 
-test('Pilot identity moves only during connected visible execution while public text stays intact through waits and termination',()=>{
+test('Pilot public text stays intact through waits and termination',()=>{
  const row=specialistRow();
  const content='已收到的真实公开正文不因暂停、失败或断线丢失。';
  const snapshot={session:{id:'worker',projectId:'project'},superagent:{roleId:row.worker.roleId,task:row.worker.task},cursor:1,ai:view({rootTurnId:'root',replyStatus:'running',cards:[{id:'reply',type:'message',status:'running',content,at,data:{root_turn_id:'root'}}]})} as SessionSnapshot;
  const renderReply=(extra:{available?:boolean;visible?:boolean}={})=>renderToStaticMarkup(createElement(PilotSpecialistReplyView,{row,snapshot,...extra}));
- for(const phase of ['thinking','tool'] as const){row.activity.phase=phase;assert.match(renderReply(),/data-live-motion="active"/);}
  const assertStill=(html:string)=>{const plain=html.replace(/<[^>]*>/g,'');assert.ok(plain.includes(content.slice(0,-1)));assert.ok(!plain.includes(content));assert.match(html,/data-live-motion="still"/);assert.doesNotMatch(html,/animal-thinking-bubble|turn-activity-mark|status-text--active|data-live-(?:motion|glow)="active"/);};
+ for(const phase of ['thinking','tool'] as const){row.activity.phase=phase;const html=renderReply();assertStill(html);assert.match(html,/class="specialist-reply-cursor"/);}
  assertStill(renderReply({available:false}));assert.match(renderReply({available:false}),/进度暂未更新，正在重连/);
  assertStill(renderReply({visible:false}));
  for(const phase of ['waiting_approval','waiting_input','waiting_external'] as const){row.activity.phase=phase;assertStill(renderReply());}
  row.activity.phase='thinking';
  for(const status of ['queued','waiting_approval','waiting_input','waiting_external','paused','cancelled','failed','interrupted']){snapshot.ai!.status=status;assertStill(renderReply());}
- snapshot.ai!.status='completed';snapshot.ai!.replyStatus='completed';assert.match(renderReply(),/data-live-motion="active"/,'an SDK segment finishing leaves the specialist animated while its task is active');
+ snapshot.ai!.status='completed';snapshot.ai!.replyStatus='completed';assertStill(renderReply());
  row.activity.phase='updating';row.continuity='terminal';row.observedRootTurnId='root';
  row.worker.task.state='completed';assertStill(renderReply());
  row.activity.phase='thinking';row.continuity=undefined;row.worker.task.state='running';

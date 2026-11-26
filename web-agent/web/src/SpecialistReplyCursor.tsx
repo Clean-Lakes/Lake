@@ -2,7 +2,6 @@ import {memo,useLayoutEffect,useRef,type CSSProperties} from 'react';
 import {avatarPaintStyle,lakeAvatarArtwork,type AvatarPartName} from './lakeAvatarArtwork';
 import {lakeAvatarDefinition,type LakeAvatarFamily,type LakeAvatarName} from './lakeAvatarCatalog';
 import {lastGrapheme} from './textReveal';
-import {usePageVisible} from './usePageVisible';
 
 const familyParts: Record<LakeAvatarFamily, AvatarPartName> = {
   heron: 'head', otter: 'tail', turtle: 'tail', kingfisher: 'wing',
@@ -57,7 +56,6 @@ export function specialistInterimText(text: string) {
 }
 
 export const SpecialistReplyCursor = memo(function SpecialistReplyCursor({avatar}: {avatar: LakeAvatarName}) {
-  const visible = usePageVisible();
   let mark;
   switch (avatar) {
     case 'rabbit':
@@ -76,7 +74,7 @@ export const SpecialistReplyCursor = memo(function SpecialistReplyCursor({avatar
     default:
       mark = <AvatarCursorPart key={avatar} avatar={avatar}/>;
   }
-  return <span className="specialist-reply-cursor" data-cursor-avatar={avatar} data-paused={!visible || undefined} aria-hidden="true">{mark}</span>;
+  return <span className="specialist-reply-cursor" data-cursor-avatar={avatar} aria-hidden="true">{mark}</span>;
 });
 
 export function SpecialistReplyCursorTail({avatar,children}: {avatar: LakeAvatarName;children: string}) {

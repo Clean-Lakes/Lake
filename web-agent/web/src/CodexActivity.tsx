@@ -50,7 +50,7 @@ function ToolGroup({calls,live}:{calls:Call[];live:boolean}){
     <button type="button" title={label} aria-expanded={open} aria-controls={bodyId} className="codex-group-toggle" onClick={()=>setDetails(open?'closed':live?'live':'saved')}>
       <svg className="codex-group-ring" data-complete={finished} viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" strokeWidth="2">
         <circle className="codex-ring-track" cx="8" cy="8" r="6"/>
-        <circle cx="8" cy="8" r="6" stroke="currentColor" pathLength="100" strokeDasharray={`${arc} 100`} transform="rotate(-90 8 8)"/>
+        <circle className="codex-ring-progress" cx="8" cy="8" r="6" stroke="currentColor" pathLength="100" strokeDasharray={`${arc} 100`} transform="rotate(-90 8 8)"/>
       </svg>
       <span className="codex-group-label">{label}</span><Glyph name={open?'chevron':'next'} size={12}/>
       {active&&<Elapsed start={current.at}/>}

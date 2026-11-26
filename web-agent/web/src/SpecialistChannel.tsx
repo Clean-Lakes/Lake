@@ -16,6 +16,7 @@ import {usePageVisible} from './usePageVisible';
 import {SpecialistTaskList} from './SpecialistTaskList';
 import {specialistTaskRows} from './specialistTaskListModel';
 import {SpecialistReplyCursorTail,specialistInterimText} from './SpecialistReplyCursor';
+import {useReplyWaitingMotion} from './replyWaitingMotion';
 import {useSpecialistAppearance} from './SuperRoleAvatar';
 export {mergeChannelEntries} from './specialistChannelProjection';
 export {SpecialistTaskControls} from './SpecialistTaskControls';
@@ -47,10 +48,15 @@ export function SpecialistLiveReply({text,worker,snapshot,turnId,connected=true}
  const task=snapshot?.superagent?.task;
  const bound=worker&&task&&snapshot.session.id===worker.sessionId&&task.taskId===worker.task.taskId&&snapshot.superagent?.roleId===worker.roleId&&turnId===snapshot.ai?.rootTurnId;
  const items=bound?codexActivity(snapshot.ai,task.executionGoalId??task.taskId,turnId):[];
- if(items.some(item=>item.kind!=='text'))return <><CodexActivity items={items} live={moving&&visible} cursorAvatar={icon}/>{(!connected||waiting)&&<small>{label}</small>}</>;
+ const showsTranscript=items.some(item=>item.kind!=='text'||!!item.text.trim());
+ const hasProse=!!interim&&moving;
+ const showCursor=hasProse&&!!(roleId||worker?.roleName);
+ const prose=useRef<HTMLSpanElement>(null);
+ useReplyWaitingMotion(prose,interim,showCursor&&!showsTranscript);
+ if(showsTranscript)return <><CodexActivity items={items} live={moving&&visible} cursorAvatar={icon}/>{(!connected||waiting)&&<small>{label}</small>}</>;
  return <div className={`specialist-live-reply${moving?' is-running':''}`} role="status" aria-live="polite" aria-atomic="true" data-phase={!connected?'disconnected':waiting?'waiting':moving?'running':'idle'}>
   <SpecialistReplyTransition revision="progress" text={label} enabled={moving&&visible}>
-   <StatusText active={moving&&visible}>{moving&&interim&&(roleId||worker?.roleName)?<SpecialistReplyCursorTail avatar={icon}>{shown}</SpecialistReplyCursorTail>:shown}</StatusText>
+   {hasProse?<span ref={prose} className="status-text specialist-interim-prose">{showCursor?<SpecialistReplyCursorTail avatar={icon}>{shown}</SpecialistReplyCursorTail>:shown}</span>:<StatusText active={moving&&visible}>{shown}</StatusText>}
   </SpecialistReplyTransition>
  </div>;
 }
