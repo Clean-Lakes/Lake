@@ -38,7 +38,7 @@
   white-space:nowrap;
 }
 .codex-config .icon-button { color:var(--pilot-header-muted); }
-.codex-config-body { display:grid; grid-template-columns:122px minmax(0,1fr); }
+.codex-config-body { display:grid; grid-template-columns:minmax(134px,max-content) minmax(0,1fr); }
 .codex-config-executors {
   display:flex;
   flex-direction:column;

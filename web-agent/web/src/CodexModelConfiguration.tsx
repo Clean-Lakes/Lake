@@ -10,7 +10,7 @@ import './codexModelConfiguration.css';
 type Preferences = {model:string;effort:string;enabled:boolean;nodePath:string;npmPath:string};
 const executors = [
   {id:'codex',name:'Codex',brand:'openai'},
-  {id:'claude-code',name:'Claude Code',brand:'anthropic'},
+  {id:'claude-code',name:'Claude Code',brand:'claude'},
   {id:'z-code',name:'Z Code'},
 ] as const;
 type Executor = typeof executors[number];
