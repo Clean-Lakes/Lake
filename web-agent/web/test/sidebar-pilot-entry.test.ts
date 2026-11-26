@@ -10,7 +10,7 @@ test('Pilot is a built-in specialist row with its own selection and no delete me
  assert.match(html,/aria-current="page"/);
  assert.doesNotMatch(html,/brand\/lake-app-icon\.png/);
  const visible=html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
- assert.match(visible,/^Lake 打开对话$/);
+ assert.equal(visible,'Lake');
  assert.match(html,/title="打开 Lake 对话"/);
  assert.match(html,/<svg[^>]+class="lucide lucide-chevron-right pilot-entry-chevron"[^>]+aria-hidden="true"/);
  assert.equal((html.match(/<button/g)??[]).length,1);

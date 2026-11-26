@@ -20,14 +20,14 @@ export function SidebarPilotEntry({selected,activity='idle',messageRead,disabled
   onClick={event=>{greetRoleAvatar(event.currentTarget);onPilot();}}>
   <SuperRoleAvatar {...pilotIdentity} motion={conversationAvatarMotion(activity)}/>
   <span className="nav-row-text">
-   <span className="pilot-worker-name"><strong>{pilotIdentity.name}</strong><Glyph name="next" size={14} className="pilot-entry-chevron"/></span>
-   <span className="pilot-worker-summary">
-    <span className="pilot-worker-task">打开对话</span>
+   <span className="pilot-worker-name">
+    <strong>{pilotIdentity.name}</strong>
     {status && <span className="pilot-worker-status">
      {running && <span className="pilot-worker-running" role="img" aria-label="处理中"><Glyph name="loader" size={12} className="activity-indicator"/></span>}
      {waiting && <span className="pilot-worker-confirmation">需确认</span>}
      {unread && <span className="pilot-worker-unread" role="img" aria-label="有新消息未读"/>}
     </span>}
+    <Glyph name="next" size={14} className="pilot-entry-chevron"/>
    </span>
   </span>
  </button>;
