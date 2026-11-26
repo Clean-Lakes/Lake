@@ -74,7 +74,7 @@ export function orderedTranscript(snapshot: SessionSnapshot, cards: AICard[], be
   const entries: TranscriptEntry[] = [
     ...snapshot.messages.filter(m => (before === 0 || compareTime(m.createdAt, earliest) >= 0 || m.id === earlierUser || sources.has(m.id))).map(message => ({
       at: message.createdAt, id: message.id, message,
-      separateIfUnbound: snapshot.session?.workspaceRole === 'router' && !!message.author?.taskId && !message.conversation && !message.author.conversationId,
+      separateIfUnbound: (snapshot.session?.workspaceRole === 'router' || snapshot.session?.workspaceRole === 'group') && !!message.author?.taskId && !message.conversation && !message.author.conversationId,
     })),
     ...cards.filter(card => card.type !== "compaction" && card.type !== "draft" && (!!card.content || ["operation", "chart", "diff", "image", "strategy_correction"].includes(card.type) || card.type === "thinking" && card.status === "running")).map(card => ({ at: card.at, id: card.id, card })),
     // The Go engine owns new tool cards. Keep earlier native approvals in their original turn.

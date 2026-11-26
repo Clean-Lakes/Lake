@@ -7,7 +7,6 @@ import {api,readableError} from './api';
 import {Card,TranscriptMessage} from './AIPanel';
 import {conversationActivity} from './superAgentPresentation';
 import {isCompactionFallbackEntry} from './timeline';
-import {AppSelect} from './AppSelect';
 import {StatusText} from './StatusText';
 import {channelExecutionTimeline,currentChannelReplies,mergeChannelPage} from './specialistChannelProjection';
 import {conversationPlanEntry} from './planConversation';
@@ -29,10 +28,6 @@ export function channelTasksByRecentRecord(workers:SuperWorker[],entries:Special
  const latest=new Map<string,number>();
  for(const entry of entries)latest.set(entry.sourceSessionId,Math.max(latest.get(entry.sourceSessionId)??0,Date.parse(entry.createdAt)||0,Date.parse(entry.message?.createdAt??'')||0));
  return [...workers].sort((a,b)=>(latest.get(b.sessionId)??0)-(latest.get(a.sessionId)??0));
-}
-
-export function SpecialistTaskSelect({workers,sessionId,onTask}:{workers:SuperWorker[];sessionId:string;onTask:(sessionId:string)=>void}){
- return <label className="specialist-task-select"><span>任务记录</span><AppSelect aria-label="查看专员任务" value={sessionId} title={workers.find(worker=>worker.sessionId===sessionId)?.task.title} onChange={event=>onTask(event.target.value)}>{workers.map(worker=><option key={worker.id} value={worker.sessionId}>{worker.task.title}</option>)}</AppSelect></label>;
 }
 
 export function SpecialistLiveReply({text,worker,snapshot,turnId,connected=true}:{turnId?:string;text?:string;worker?:SuperWorker;snapshot?:SessionSnapshot;connected?:boolean}){
@@ -127,7 +122,7 @@ export function SpecialistChannelEntries({entries,resources,workers=[],activeSou
  })}</>;
 }
 
-export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,onReady,selectedSessionId,inspectedSnapshot}:{snapshot:SessionSnapshot;connected:boolean;onTask:(sessionId:string)=>void;onTasks?:(sessionId:string,workers:SuperWorker[],page:SpecialistChannelPage)=>void;onActivity?:(sessionId:string,state:"running"|"waiting"|"idle")=>void;onReady?:(sessionId:string,ready:boolean)=>void;selectedSessionId?:string;inspectedSnapshot?:SessionSnapshot}){
+export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,onReady,initialQuery}:{snapshot:SessionSnapshot;connected:boolean;onTask:(worker:SuperWorker,query:string)=>void;onTasks?:(sessionId:string,workers:SuperWorker[],page:SpecialistChannelPage)=>void;onActivity?:(sessionId:string,state:"running"|"waiting"|"idle")=>void;onReady?:(sessionId:string,ready:boolean)=>void;initialQuery?:string}){
  const session=snapshot.session.id;
  const [page,setPage]=useState<SpecialistChannelPage|null>(null),[entries,setEntries]=useState<SpecialistChannelEntry[]>([]),[error,setError]=useState('');
  const generation=useRef(0);
@@ -163,9 +158,7 @@ export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,
  const admitting=latestOwn?.role==='user'&&(!page||!entries.length||Date.parse(latestOwn.createdAt)>Date.parse(entries.at(-1)!.createdAt));
  const activity=page?.routing||admitting||!!page?.queued||page?.active.some(active=>conversationActivity(active.ai)==='running')?'running':page?.active.length?'waiting':'idle';
  useEffect(()=>{onActivity?.(session,activity)},[session,activity,onActivity]);
- // Reuse the detail read for a parked task; never fetch one snapshot per row.
- const available=[...(page?.active??[]),...(inspectedSnapshot?[inspectedSnapshot]:[])];
- const rows=specialistTaskRows({workers:page?.workers??[],entries,active:available,projectId:snapshot.session.projectId,resources:snapshot.resources,resourceTree:snapshot.resourceTree});
+ const rows=specialistTaskRows({workers:page?.workers??[],entries,active:page?.active,projectId:snapshot.session.projectId,resources:snapshot.resources,resourceTree:snapshot.resourceTree});
  const channel=page?.channel??{id:session,sessionId:session,projectId:snapshot.session.projectId,roleId:'',roleName:snapshot.session.title,revision:0,createdAt:''};
- return <SpecialistTaskList channel={channel} rows={rows} selectedSessionId={selectedSessionId} onTask={onTask} connected={connected} loading={!page&&!error} routing={!!page?.routing||admitting} queued={page?.queued} error={error} onRetry={()=>refreshCurrent.current()}/>;
+ return <SpecialistTaskList channel={channel} rows={rows} initialQuery={initialQuery} onTask={onTask} connected={connected} loading={!page&&!error} routing={!!page?.routing||admitting} queued={page?.queued} error={error} onRetry={()=>refreshCurrent.current()}/>;
 }

@@ -151,7 +151,7 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
  const hasTranscriptProse=transcript.some(item=>item.kind==='text'&&!!item.text.trim());
  const showsTranscript=hasActivity||!report&&hasTranscriptProse;
  const hasProse=!!text.trim()||hasTranscriptProse;
- const statusMotion=moving&&visible&&!hasProse;
+ const statusMotion=working&&visible&&!awaitingReport&&status?.phase!=='settled';
  const thinking=moving&&row.activity.phase==='thinking'&&allowsAnimalThinking(snapshot?.ai)&&(!status||status.phase==='thinking')&&!hasProse&&projected?.card?.type!=='plan_reference';
  const snapshotLabel=status&&(status.phase==='waiting'||status.phase==='settled'||row.activity.phase==='thinking'&&status.phase!=='thinking')?status.state:undefined;
  const updating=row.activity.phase==='updating';

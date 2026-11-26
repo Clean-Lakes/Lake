@@ -54,13 +54,13 @@ export function channelTaskPresentation(task:SuperTask) {
 export function superTaskHeaderPresentation(task:SuperTask|undefined,snapshot:Pick<SessionSnapshot,'session'|'ai'>|null|undefined) {
  if(!snapshot)return;
  const {session,ai}=snapshot;
- if(['router','role','worker'].includes(session.workspaceRole??'')) {
+ if(['router','group','role','worker'].includes(session.workspaceRole??'')) {
   const activity=conversationActivity(ai,session.status);
   if(activity==='running')return {status:'investigating' as const,label:'处理中'};
   if(activity==='waiting')return {status:'waiting_approval' as const,label:ai?.question?'等待你的选择':'等待确认'};
  }
  if(!task||task.projectId&&task.projectId!==session.projectId)return;
- if(session.workspaceRole==='router') {
+ if(session.workspaceRole==='router'||session.workspaceRole==='group') {
   if(task.sessionId!==session.id||!ai?.rootTurnId||task.originRootTurnId!==ai.rootTurnId)return;
  } else if(session.workspaceRole!=='role'&&task.sessionId!==session.id)return;
  if(task?.state==='blocked'&&task.reason==='token_limit_removed')return {status:'failed' as const,label:'等待后续核对'};
@@ -81,6 +81,7 @@ export function specialistTaskActivity(workers:SuperWorker[]) {
 }
 
 export function stopControlPresentation(role?:string,typescript=false,collaborating=false) {
+ if(role==='group'&&typescript)return {label:'停止当前群组任务',shortLabel:'停止群组任务',title:'停止本群的活动任务并保留记录和草稿'};
  if(role==='router'&&typescript)return {label:'停止当前项目全部任务',shortLabel:'停止项目全部任务',title:'停止当前项目全部活动任务，保留历史和草稿'};
  if(role==='role')return {label:'停止该专员全部任务',shortLabel:'停止专员全部任务',title:'停止该专员全部活动任务；单独停止请进入对应任务详情'};
  if(role==='worker'&&collaborating)return {label:'停止本专员的执行',shortLabel:'停止本专员的执行',title:'停止本专员的执行，其他专员会继续执行'};

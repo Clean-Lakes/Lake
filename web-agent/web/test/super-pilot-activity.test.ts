@@ -5,6 +5,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import type {SuperTask,SuperWorker,SuperWorkerActivity,SuperWorkspace,WorkSession} from '../../shared/contracts';
 import {SessionStateBadge} from '../src/SessionPresentation';
 import {superPilotActivity} from '../src/superPilotActivity';
+import {pilotConversationView} from '../src/PilotWorkspace';
 
 const router={id:'pilot',projectId:'project',status:'completed'} as WorkSession;
 const task:SuperTask={taskId:'task',sessionId:'worker-session',projectId:'project',title:'检查服务器',state:'running',acceptanceState:'not_evaluated',revision:1,originRootTurnId:'turn',deadlineAt:''};
@@ -18,6 +19,23 @@ function workspace(workers:SuperWorker[]):SuperWorkspace {
 function badge(workspaceValue:SuperWorkspace,presentedReports?:ReadonlySet<string>) {
  return renderToStaticMarkup(createElement(SessionStateBadge,{session:router,...superPilotActivity(workspaceValue,router,true,presentedReports)}));
 }
+
+test('Pilot activity displays only the workers from the selected main chat or group',()=>{
+ const main=worker('thinking',{id:'main'});
+ const grouped=worker('tool',{id:'grouped',pilotSessionId:'group'});
+ const model={...workspace([main,grouped]),cursor:25,chatGroups:[{
+  sessionId:'group',projectId:'project',title:'运维群',members:[],updatedAt:'',cursor:4,
+ }]};
+ const group=pilotConversationView(model,'group')!;
+ assert.equal(group.cursor,4);
+ assert.deepEqual(group.workers.map(row=>row.id),['grouped']);
+ assert.equal(superPilotActivity(group,{...router,id:'group'})?.phase,'tool');
+ const pilot=pilotConversationView(model,router.id)!;
+ assert.equal(pilot.cursor,25);
+ assert.deepEqual(pilot.workers.map(row=>row.id),['main']);
+ assert.equal(superPilotActivity(pilot,router)?.phase,'thinking');
+ assert.equal(pilotConversationView(model,'different-group'),null);
+});
 
 test('a completed Router reply still shows real thinking and tool activity from its workers',()=>{
  for(const phase of ['thinking','tool'] as const){

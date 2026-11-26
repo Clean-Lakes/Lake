@@ -26,7 +26,7 @@ test('TypeScript Pilot admits new messages while busy even with paused old draft
  assert.equal(queuesComposerMessage(value,'typescript',false),false);
  assert.equal(value.messageQueue.paused,true);assert.equal(value.messageQueue.items.length,1);
  assert.equal(queuesComposerMessage(value,'go',true),true);
- for(const role of ['role','worker'] as const)assert.equal(queuesComposerMessage({...value,session:{...value.session,workspaceRole:role}},'typescript',true),false);
+ for(const role of ['group','role','worker'] as const)assert.equal(queuesComposerMessage({...value,session:{...value.session,workspaceRole:role}},'typescript',true),false);
  assert.equal(queuesComposerMessage({...value,session:{...value.session,workspaceRole:undefined}},'typescript',true),true);
 });
 

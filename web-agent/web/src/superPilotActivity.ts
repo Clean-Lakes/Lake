@@ -1,4 +1,5 @@
 import type {SuperWorker,SuperWorkerActivity,SuperWorkspace,WorkSession} from '../../shared/contracts';
+import type {LakeAvatarName} from '../../shared/specialist-avatars';
 import type {AvatarMotion} from './superAgentPresentation';
 import type {SpecialistTaskMember} from './specialistTaskListModel';
 
@@ -18,7 +19,7 @@ export type SuperPilotActivity={
  workerCount:number;
  participants:PilotParticipant[];
 };
-export type PilotParticipant=SpecialistTaskMember&{detail:string};
+export type PilotParticipant=SpecialistTaskMember&{detail:string;avatarId?:LakeAvatarName};
 
 function reconnecting(phase:SuperPilotActivity['phase'],workerCount:number,participants:PilotParticipant[]):SuperPilotActivity {
  return {status:'idle',label:'进度暂未更新，正在重连',idleLabel:'重连中',phase,animated:false,motion:'still',workerCount,participants};

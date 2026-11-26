@@ -4,7 +4,9 @@ import {SuperRoleAvatar} from './SuperRoleAvatar';
 import {useTerminalPopover} from './useTerminalPopover';
 import type {PilotParticipant} from './superPilotActivity';
 
-export function PilotActiveSpecialists({participants, visible = true}: {participants: readonly PilotParticipant[]; visible?: boolean}) {
+export function PilotActiveSpecialists({participants, visible = true, fixedRoster = false}: {
+  participants: readonly PilotParticipant[]; visible?: boolean; fixedRoster?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const id = useId();
   const expanded = visible && participants.length > 0;
@@ -24,7 +26,7 @@ export function PilotActiveSpecialists({participants, visible = true}: {particip
     const anchor = trigger.current;
     if (!expanded) {
       if (open || document.activeElement === anchor) {
-        anchor?.closest('.workspace-header')?.querySelector<HTMLButtonElement>('.header-morph-slot.is-visible .header-inspector-toggle')?.focus({preventScroll:true});
+        document.getElementById('session-view-panel')?.focus({preventScroll:true});
       }
       if (open) setOpen(false);
       return;
@@ -55,11 +57,11 @@ export function PilotActiveSpecialists({participants, visible = true}: {particip
       style={{'--pilot-roster-wide-width':`${preferredWidth}px`,'--pilot-roster-compact-width':`${compactWidth}px`} as CSSProperties}
       inert={!expanded} aria-hidden={!expanded}>
       {count > 0 && <button ref={trigger} type="button" className="pilot-active-specialists-trigger" title={names} disabled={!expanded}
-        aria-label={`查看参与协作的 ${count} 位专员：${names}`} aria-haspopup="dialog" aria-expanded={open && expanded}
+        aria-label={fixedRoster?`查看群组成员：${names}`:`查看参与协作的 ${count} 位专员：${names}`} aria-haspopup="dialog" aria-expanded={open && expanded}
         aria-controls={open && expanded ? id : undefined} onClick={() => setOpen(!open)}>
         <span className="pilot-active-specialists-strip" aria-hidden="true">
           {preview.map(person => <span className="pilot-active-specialist-avatar" key={person.key}>
-            <SuperRoleAvatar roleId={person.roleId} name={person.name} motion={expanded && person.moving ? 'working' : 'still'} size={20}/>
+            <SuperRoleAvatar roleId={person.roleId} name={person.name} avatarId={person.avatarId} motion={expanded && person.moving ? 'working' : 'still'} size={20}/>
           </span>)}
           {remaining > 0 && <span className="pilot-active-specialists-count">+{remaining}</span>}
           {compactRemaining > 0 && <span className="pilot-active-specialists-count" data-compact>+{compactRemaining}</span>}
@@ -67,10 +69,10 @@ export function PilotActiveSpecialists({participants, visible = true}: {particip
       </button>}
     </div>
     {open && expanded && createPortal(<div ref={menu} id={id} className="pilot-active-specialists-panel" role="dialog"
-      aria-label="参与协作的专员" tabIndex={-1}>
+      aria-label={fixedRoster?'群组成员':'参与协作的专员'} tabIndex={-1}>
       <ul>{participants.map(person => <li key={person.key}>
-        <SuperRoleAvatar roleId={person.roleId} name={person.name} motion={person.moving ? 'working' : 'still'} size={24}/>
-        <div><strong>{person.name}</strong><small>{person.detail}</small></div>
+        <SuperRoleAvatar roleId={person.roleId} name={person.name} avatarId={person.avatarId} motion={person.moving ? 'working' : 'still'} size={24}/>
+        <div><strong>{person.name}</strong>{person.detail&&<small>{person.detail}</small>}</div>
       </li>)}</ul>
     </div>, document.body)}
   </>;

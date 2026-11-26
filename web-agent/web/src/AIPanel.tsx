@@ -8,8 +8,6 @@ import type {SubscribePilotWorkerEvents} from './PilotWorkspace';
 import {PilotReportGroup} from './PilotReportGroup';
 import {PilotReportFoldScope} from './PilotReportFold';
 import {PilotSummaryReply} from './PilotSummaryReply';
-import {PilotExecutionOverview} from './PilotExecutionOverview';
-import {superPilotActivity} from './superPilotActivity';
 import {pilotReportParticipants,redundantJointReports} from './pilotReportGroups';
 import {hasTaskProcess,SpecialistProcessLink} from './SpecialistProcessLink';
 import type {InspectSpecialist} from './SessionInspectorContext';
@@ -215,8 +213,6 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotTaskDire
   const latestUserAt = replyUser?.createdAt || "";
   const latestInspectorTarget=latestInspectorSelection(snapshot);
   const currentTurn=replyUser?turns.find(turn=>turn.some(entry=>entry.message?.id===replyUser.id))??[]:[];
-  const pilotAnimated=!!assistantIdentity?.pilot&&pilotConnected&&
-    (superPilotActivity(pilotWorkspace,snapshot.session,pilotConnected,presentedPilotReports)?.animated??conversationActivity(snapshot.ai)==='running');
   const currentTiming=timingForTurn(currentTurn,snapshot);
   const liveConversation=['running','waiting_approval'].includes(snapshot.ai?.status||'')&&(!currentTiming||currentTiming.status==='running');
   const conversationTurnEntries=(turn:typeof entries)=>turn.filter(entry=>!isFileChangeCard(entry.card)
@@ -304,7 +300,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotTaskDire
           return <p key={entry.id} className="execution-detail-note" role="status">{entry.message.text}</p>;
         if(group.every(item=>interimProse.has(item.id)))return <InterimReply key={entry.id} entryId={entry.id} text={entry.card?.content??entry.message?.text??''}/>;
         // A Pilot router can own a task and still have separate per-turn dispatch records.
-        if(mode==='conversation'&&progress&&snapshot.superagent?.task&&snapshot.session.workspaceRole!=='router')return null;
+        if(mode==='conversation'&&progress&&snapshot.superagent?.task&&snapshot.session.workspaceRole!=='router'&&snapshot.session.workspaceRole!=='group')return null;
         if(proseInChannel&&mode==='conversation'&&group.every(channelBody))return null;
         if(progress)return <ReplyArrival key={entry.id} entryId={entry.id} arrive={!restoredCardIds.current.has(entry.id)&&turn.some(item=>item.message?.id===latestUser?.id)&&!(miniScope.live&&(resource?.kind==='ssh'||resource?.kind==='local')&&group.some(item=>item.card&&isTerminalCommand(item.card)))}><ThinkingTimeline cards={group.map(item=>item.card!)} live={snapshot.ai?.status==='running'&&(group.some(item=>item.card?.status==='running')||entry.id===progressingId)} continuing={entry.id===progressingId} miniScope={mode==='conversation'?miniScope:undefined} resource={resource} resourceRow onInspect={onInspect}/></ReplyArrival>;
         if(mode==='conversation'&&entry.card?.type==='thinking'&&!entry.card.content)return null;
@@ -329,7 +325,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotTaskDire
       const interimGroups=groups.filter(group=>group.entries.every(entry=>interimProse.has(entry.id)));
       const detailGroups=groups.filter(group=>processGroups.includes(group)||interimGroups.includes(group));
       const canonicalGoalId=canonicalGoalForExecution(snapshot,timingProps.cards,pilotWorkspace?.workers.map(worker=>worker.task));
-      const detailsInHeader=!!timingProps.view&&!latestInspectorTarget.taskId&&latestInspectorTarget.canonicalGoalId===canonicalGoalId;
+      const compactLiveStatus=!!timingProps.view&&!latestInspectorTarget.taskId&&latestInspectorTarget.canonicalGoalId===canonicalGoalId;
       const pilotTurnLive=turn===currentTurn&&turnStatus(timingProps.timing,timingProps.view,timingProps.cards,timingProps.latestUserAt,Date.now()).live;
       const executionDetails=[...detailGroups.map(renderGroup).filter(node=>node!=null),...compactionDiagnostics];
       for(const {acknowledgement} of summarySlots){
@@ -414,11 +410,10 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotTaskDire
       {mode==='activity'&&<ReplyDuration assistantIdentity={assistantIdentity} {...timingProps}/>}
       {mode==='conversation'?<TurnExecutionDetails {...timingProps}
         sessionId={snapshot.session.id} latest={latestExecutionTurn}
-        latestTaskId={latestInspectorTarget.taskId} canonicalGoalId={canonicalGoalId} detailsInHeader={detailsInHeader}
+        latestTaskId={latestInspectorTarget.taskId} canonicalGoalId={canonicalGoalId} compactLiveStatus={compactLiveStatus}
         assistantIdentity={assistantIdentity} hideIdentity={hideReplyIdentity} showThinkingAvatar={!hasPilotReplyAvatar}
         presentingReply={presentingReply} hideStatus={hideConversationStatus} hideLive={turn.some(entry=>entry.sre?.task.pilot)}
         processNotices={pilotLive?undefined:notices} details={pilotLive?[]:executionDetails} onInspect={onInspect}
-        pilotOverview={assistantIdentity?.pilot&&latestExecutionTurn?<PilotExecutionOverview workspace={pilotWorkspace} session={snapshot.session} source={replyUser} messages={snapshot.messages} turn={turn} summaries={summarySlots} active={pilotAnimated} onInspect={onInspectSpecialist}/>:undefined}
         footerReportId={footerReport?.id} specialistReplies={specialistReplies} collaboration={collaboration}
       >{replyContent}</TurnExecutionDetails>:replyContent}
       <FileChanges live={turn===currentTurn&&(currentTiming?currentTiming.status==='running':liveConversation)} deferUntilEnd={mode==='conversation'} cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>

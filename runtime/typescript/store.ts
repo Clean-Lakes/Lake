@@ -296,6 +296,12 @@ export class LakeStore {
       .all(sessionId)
       .map(row => JSON.parse(String(row.value)) as Message);
   }
+  recentMessages(sessionId: string, limit: number): Message[] {
+    return this.db
+      .prepare("SELECT value FROM records WHERE kind='messages' AND json_extract(value,'$.sessionId')=? ORDER BY rowid DESC LIMIT ?")
+      .all(sessionId, limit).reverse()
+      .map(row => JSON.parse(String(row.value)) as Message);
+  }
   viewPage(sessionId: string, before?: number, limit = 300): AIView {
     const view = this.view(sessionId), total = view.cards.length;
     const end = before == null ? total : before;
