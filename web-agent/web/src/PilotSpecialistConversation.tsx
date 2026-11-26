@@ -148,7 +148,11 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
  const transcript=report?.codexActivity??codexActivity(statusSnapshot?.ai,row.worker.task.executionGoalId??row.worker.task.taskId,
   report?.author?.rootTurnId??entry?.reply?.turnId??row.observedRootTurnId??statusSnapshot?.ai?.rootTurnId);
  const hasActivity=transcript.some(item=>item.kind!=='text');
- const thinking=moving&&row.activity.phase==='thinking'&&allowsAnimalThinking(snapshot?.ai)&&(!status||status.phase==='thinking')&&!text&&projected?.card?.type!=='plan_reference';
+ const hasTranscriptProse=transcript.some(item=>item.kind==='text'&&!!item.text.trim());
+ const showsTranscript=hasActivity||!report&&hasTranscriptProse;
+ const hasProse=!!text.trim()||hasTranscriptProse;
+ const statusMotion=working&&visible&&!awaitingReport&&status?.phase!=='settled';
+ const thinking=moving&&row.activity.phase==='thinking'&&allowsAnimalThinking(snapshot?.ai)&&(!status||status.phase==='thinking')&&!hasProse&&projected?.card?.type!=='plan_reference';
  const snapshotLabel=status&&(status.phase==='waiting'||status.phase==='settled'||row.activity.phase==='thinking'&&status.phase!=='thinking')?status.state:undefined;
  const updating=row.activity.phase==='updating';
  // A brief workspace gap must not hide a real question or failure. A terminal
@@ -167,14 +171,14 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
   arrive:!!text&&(report?arriveReport:working&&(!!livePacket||observed)),
  };
  return <section className="ai-chat-message ai-role-assistant pilot-specialist-reply" data-worker-id={row.worker.id} data-task-id={row.worker.task.taskId} data-phase={report?'settled':row.activity.phase} data-report-id={report?.id} aria-label={`${row.author.name}的回复`}>
-  <ReplyIdentity identity={pilotIdentity} author={report?.author??row.author} showBackendName={hasActivity} authorMotion={moving?'working':'still'} nameMotion={moving&&visible} onSpecialist={onSpecialist}/>
+  <ReplyIdentity identity={pilotIdentity} author={report?.author??row.author} showBackendName={hasActivity} authorMotion={moving?'working':'still'} nameMotion={statusMotion} onSpecialist={onSpecialist}/>
   {taskLabel&&<small className="pilot-specialist-task-label">{taskLabel}</small>}
-  {hasActivity&&!planState&&<CodexActivity items={transcript} live={working&&visible} reportText={report?.text} cursorAvatar={awaitingReport?undefined:appearance.icon}/>}
+  {showsTranscript&&!planState&&<CodexActivity items={transcript} live={working&&visible} animateInitial={livePacket||observed} reportText={report?.text} cursorAvatar={working&&!awaitingReport?appearance.icon:undefined}/>}
   <PilotReplyContent state={contentState} onPresented={report?reportPresented:undefined} active={(moving||!!report&&!['failed','cancelled'].includes(row.worker.task.state))&&available&&visible}>
-   {planState?<PlanReference state={planState}/>:hasActivity&&!report?null:text?<PilotReplyProse text={text} active={working&&visible&&!awaitingReport} animateInitial={livePacket} cursorAvatar={working?appearance.icon:undefined}/>:report||awaitingReport?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={moving&&visible} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={moving&&visible}>{label}</ReplyProcessStatus>}
+   {planState?<PlanReference state={planState}/>:showsTranscript&&!report?null:text?<PilotReplyProse text={text} active={working&&visible&&!awaitingReport} animateInitial={livePacket} cursorAvatar={working&&!awaitingReport?appearance.icon:undefined}/>:report||awaitingReport?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={statusMotion} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={statusMotion}>{label}</ReplyProcessStatus>}
    {report&&<MessageAttachments message={report} sessionId={report.sessionId}/>}
   </PilotReplyContent>
-  <SpecialistProcessLink author={report?.author??row.author} reportId={report?.id} onInspect={onInspectSpecialist} active={moving&&visible} liveStatus={hasActivity?waitingLabel:inlineWait}/>
+  <SpecialistProcessLink author={report?.author??row.author} reportId={report?.id} onInspect={onInspectSpecialist} active={statusMotion} liveStatus={showsTranscript?waitingLabel:inlineWait}/>
   {!report&&text&&(!available||updating&&!awaitingReport)&&<small className="pilot-specialist-connection" role="status">{label}</small>}
  </section>;
 }

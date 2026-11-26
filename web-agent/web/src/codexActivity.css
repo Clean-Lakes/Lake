@@ -6,6 +6,10 @@
 .codex-group-label { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .codex-group-ring { color:var(--info); }
 .codex-group-ring[data-complete="true"] { color:var(--success); }
+@media (prefers-reduced-motion:no-preference) {
+  .codex-group-ring { transition:color 180ms ease-out; }
+  .codex-ring-progress { transition:stroke-dasharray 180ms ease-out; }
+}
 .codex-ring-track { stroke:color-mix(in srgb,currentColor 22%,transparent); }
 .codex-group-toggle svg,.codex-tool-group li > svg { flex:none; }
 .codex-group-toggle:focus-visible,.codex-call-script:focus-visible,.codex-live-details:focus-visible { outline:2px solid var(--focus-outline); outline-offset:-2px; }

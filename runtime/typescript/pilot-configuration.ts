@@ -5,7 +5,7 @@ import {digest,text} from './tasks';
 import type {LakeSecurity} from './security';
 import type {LakeExtensions} from './extensions';
 import {LakeResourceManagement} from './resource-management';
-import {operationApproval} from './operation-permissions';
+import {effectiveExecutionPreferences,operationApproval} from './operation-permissions';
 import {redactModelValue} from './model-errors';
 
 export {pilotConfigurationToolNames} from './configuration-tool-names';
@@ -46,8 +46,14 @@ export class PilotConfiguration {
   readonly resources:LakeResourceManagement,readonly redact:(value:string)=>string){}
  private actor(sessionId:string){
   const session=this.store.session(sessionId),project=this.store.get<any>('superProjects',session.projectId);
-  if(session.workspaceRole!=='router'||project?.routerSessionId!==sessionId)throw new HttpError(403,'配置管理仅供当前项目 Pilot 使用');
-  this.store.project(session.projectId);return session;
+  this.store.project(session.projectId);
+  if(session.workspaceRole==='router'&&project?.routerSessionId===sessionId)return session;
+  if(session.workspaceRole==='group'&&project){
+   const group=this.store.get<{projectId:string;sessionId:string}>('superChatGroups',sessionId);
+   if(group?.projectId===session.projectId&&group.sessionId===session.id)
+    return {...session,options:{...session.options,...effectiveExecutionPreferences(this.store.session(project.routerSessionId).options)}};
+  }
+  throw new HttpError(403,'配置管理仅供当前项目 Pilot 使用');
  }
  private resourceState(projectId:string){
   const catalog=this.store.catalog(),resources=catalog.resources.filter(r=>r.projectId===projectId),nodes=(catalog.resourceTree??[]).filter(n=>n.projectId===projectId);

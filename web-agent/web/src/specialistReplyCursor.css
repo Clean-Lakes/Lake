@@ -1,8 +1,6 @@
 .specialist-reply-cursor-tail { white-space: nowrap; }
 
 .specialist-reply-cursor {
-  --reply-cursor-period: 1.32s;
-  --reply-cursor-light: .82;
   position: relative;
   display: inline-block;
   inline-size: 15px;
@@ -18,28 +16,23 @@
   --cursor-tone: light-dark(#9a6e5e, #d1ad9b);
   --cursor-shade: light-dark(#7e584e, #9a7767);
   --cursor-ear-inner: light-dark(#cb8d85, #ebafa7);
-  --cursor-glint: light-dark(#ffe6d4, #fff0dd);
-  --cursor-delay: -.12s;
 }
 
 .specialist-reply-cursor[data-cursor-avatar="kingfisher"] {
   --cursor-tone: light-dark(#537985, #9fbdca);
   --cursor-shade: light-dark(#48676e, #698c9a);
   --cursor-glint: light-dark(#e6f7f7, #e6f9ff);
-  --cursor-delay: -.57s;
 }
 
 .specialist-reply-cursor[data-cursor-avatar="owl"] {
   --cursor-tone: light-dark(#886f4d, #c6b089);
   --cursor-shade: light-dark(#766247, #968568);
   --cursor-glint: light-dark(#fff1c6, #fff1c7);
-  --cursor-delay: -1s;
 }
 
 .specialist-cursor-rabbit,
 .specialist-cursor-feather,
 .specialist-cursor-artwork { position: absolute; inset: 0; opacity: .78; }
-.specialist-cursor-rabbit { transform-origin: 50% 94%; }
 
 .specialist-cursor-ear {
   position: absolute;
@@ -108,83 +101,24 @@
 .specialist-cursor-artwork {
   inline-size: 100%;
   block-size: 100%;
-  --cursor-tilt: -9deg;
-  --cursor-lift: -.7px;
-  --cursor-squash: .94;
-  --cursor-delay: -.29s;
-  transform-origin: center 75%;
 }
-.specialist-cursor-artwork[data-part="tail"] { --cursor-tilt: 14deg; --cursor-delay: -.64s; transform-origin: 65% 70%; }
-.specialist-cursor-artwork[data-part="wing"] { --cursor-tilt: -5deg; --cursor-squash: .72; --cursor-delay: -.44s; }
-.specialist-cursor-artwork[data-part="fore"] { --cursor-tilt: 6deg; --cursor-squash: .78; --cursor-delay: -.86s; }
-.specialist-cursor-artwork[data-part="shell"] { --cursor-tilt: 5deg; --cursor-squash: .97; --cursor-delay: -.19s; }
-.specialist-cursor-artwork[data-family="lotus"] { --cursor-tilt: 8deg; --cursor-squash: .98; --cursor-lift: -.35px; }
 
 @media (prefers-reduced-motion: no-preference) {
-  .specialist-cursor-rabbit { animation: lake-cursor-ear-lift var(--reply-cursor-period) ease-in-out var(--cursor-delay) infinite; }
-  .specialist-cursor-feather { animation: lake-cursor-feather-tilt var(--reply-cursor-period) ease-in-out var(--cursor-delay) infinite; }
-  .specialist-cursor-eyes { animation: lake-cursor-eye-blink var(--reply-cursor-period) ease-in-out var(--cursor-delay) infinite; }
-  .specialist-cursor-artwork { animation: lake-cursor-part-move var(--reply-cursor-period) ease-in-out var(--cursor-delay) infinite; }
-
-  :is(.specialist-cursor-ear, .specialist-cursor-plume)::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    opacity: 0;
+  .specialist-reply-cursor[data-reply-waiting-sway] {
+    transform-origin: 55% 82%;
+    animation: lake-cursor-wait-sway 1.2s ease-in-out infinite;
   }
-  .specialist-cursor-ear::after {
-    background: radial-gradient(ellipse at 52% 8%, var(--cursor-glint), transparent 63%);
-    animation: lake-cursor-ear-glint var(--reply-cursor-period) ease-out var(--cursor-delay) infinite;
-  }
-  .specialist-cursor-plume::after {
-    background: linear-gradient(180deg, transparent 30%, var(--cursor-glint) 50%, transparent 72%);
-    animation: lake-cursor-feather-glint var(--reply-cursor-period) ease-out var(--cursor-delay) infinite;
-  }
-
-  .specialist-reply-cursor[data-paused] *,
-  .specialist-reply-cursor[data-paused] *::after { animation-play-state: paused; }
 }
 
-@keyframes lake-cursor-ear-lift {
-  0%, 100% { opacity: .72; transform: translateY(0); }
-  33% { opacity: .39; transform: translateY(.6px) scaleY(.9); }
-  48% { opacity: 1; transform: translateY(-.7px) scaleY(1.08); }
-  64% { opacity: .84; transform: translateY(0); }
-}
-@keyframes lake-cursor-feather-tilt {
-  0%, 100% { opacity: .71; transform: rotate(-7deg); }
-  31% { opacity: .41; transform: rotate(-11deg); }
-  52% { opacity: 1; transform: rotate(10deg) translateY(-.9px); }
-  71% { opacity: .82; transform: rotate(2deg); }
-}
-@keyframes lake-cursor-ear-glint {
-  0%, 37%, 72%, 100% { opacity: 0; }
-  48% { opacity: var(--reply-cursor-light); }
-  58% { opacity: calc(var(--reply-cursor-light) * .55); }
-}
-@keyframes lake-cursor-feather-glint {
-  0%, 34% { transform: translateY(70%); opacity: 0; }
-  49% { transform: translateY(2%); opacity: var(--reply-cursor-light); }
-  65%, 100% { transform: translateY(-75%); opacity: 0; }
-}
-@keyframes lake-cursor-eye-blink {
-  0%, 100% { opacity: .68; transform: scaleY(1); }
-  38% { opacity: .48; transform: scaleY(.18); }
-  52% { opacity: var(--reply-cursor-light); transform: scaleY(1.14); }
-  67% { opacity: .88; transform: scaleY(1); }
-}
-@keyframes lake-cursor-part-move {
-  0%, 100% { opacity: .74; transform: none; filter: drop-shadow(0 0 0 transparent); }
-  33% { opacity: .42; transform: scaleX(var(--cursor-squash)); filter: drop-shadow(0 0 0 transparent); }
-  51% { opacity: 1; transform: translateY(var(--cursor-lift)) rotate(var(--cursor-tilt)); filter: drop-shadow(0 0 .65px var(--avatar-soft)); }
-  69% { opacity: .8; transform: none; filter: drop-shadow(0 0 0 transparent); }
+@keyframes lake-cursor-wait-sway {
+  0%, 100% { transform: none; }
+  36% { transform: rotate(3deg); }
+  70% { transform: rotate(-2deg); }
 }
 
 @media (forced-colors: active) {
   .specialist-reply-cursor { forced-color-adjust: none; }
-  .specialist-reply-cursor *,
-  .specialist-reply-cursor *::after { animation: none; }
-  :is(.specialist-cursor-ear, .specialist-cursor-plume)::after { content: none; }
+  .specialist-reply-cursor[data-reply-waiting-sway] { animation: none; }
   .specialist-cursor-ear, .specialist-cursor-plume, .specialist-cursor-shaft,
   .specialist-cursor-eyes::before, .specialist-cursor-eyes::after { background: CanvasText; }
   .specialist-cursor-ear::before { background: Canvas; }

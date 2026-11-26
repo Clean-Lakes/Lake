@@ -50,7 +50,7 @@ function ToolGroup({calls,live}:{calls:Call[];live:boolean}){
     <button type="button" title={label} aria-expanded={open} aria-controls={bodyId} className="codex-group-toggle" onClick={()=>setDetails(open?'closed':live?'live':'saved')}>
       <svg className="codex-group-ring" data-complete={finished} viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" strokeWidth="2">
         <circle className="codex-ring-track" cx="8" cy="8" r="6"/>
-        <circle cx="8" cy="8" r="6" stroke="currentColor" pathLength="100" strokeDasharray={`${arc} 100`} transform="rotate(-90 8 8)"/>
+        <circle className="codex-ring-progress" cx="8" cy="8" r="6" stroke="currentColor" pathLength="100" strokeDasharray={`${arc} 100`} transform="rotate(-90 8 8)"/>
       </svg>
       <span className="codex-group-label">{label}</span><Glyph name={open?'chevron':'next'} size={12}/>
       {active&&<Elapsed start={current.at}/>}
@@ -92,7 +92,7 @@ function TaskEvent({call}:{call:Call}){
   </div>;
 }
 
-export function CodexActivity({items,live=false,reportText,cursorAvatar}:{items:CodexActivityItem[];live?:boolean;reportText?:string;cursorAvatar?:LakeAvatarName}){
+export function CodexActivity({items,live=false,animateInitial,reportText,cursorAvatar}:{items:CodexActivityItem[];live?:boolean;animateInitial?:boolean;reportText?:string;cursorAvatar?:LakeAvatarName}){
   const groups:(CodexActivityItem|Call[])[]=[];
   let latestProse:CodexActivityItem|undefined;
   for(const item of items){
@@ -122,7 +122,11 @@ export function CodexActivity({items,live=false,reportText,cursorAvatar}:{items:
     if(Array.isArray(group)){
       return <ToolGroup key={keys.get(group[0]!.id)} calls={group} live={live}/>;
     }
-    if(group.kind==='text')return <AssistantMarkdown key={group.id} cursorAvatar={live&&group===latestProse?cursorAvatar:undefined}>{group.text}</AssistantMarkdown>;
+    // The caller owns the current cursor. Tool timers can pause separately.
+    if(group.kind==='text'){
+      const current=group===latestProse;
+      return <AssistantMarkdown key={group.id} reveal={live&&current} animateInitial={current&&animateInitial} paceBursts cursorAvatar={current?cursorAvatar:undefined}>{group.text}</AssistantMarkdown>;
+    }
     return <TaskEvent key={group.id} call={group}/>;
   })}</div>;
 }

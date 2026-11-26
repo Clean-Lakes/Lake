@@ -181,7 +181,8 @@ test("one SDK invocation replaces progress in place and the final host report re
   const html = render(working, s);
   assert.match(html, /已取得库表清单/);
   assert.doesNotMatch(html, /正在连接两端|RAW_TOOL_RECEIPT/);
-  assert.match(html, /status-text--active/);
+  assert.match(html, /class="status-text specialist-interim-prose"/);
+  assert.doesNotMatch(html, /status-text--active/);
   assert.match(html, /class="specialist-reply-cursor-tail">异<span class="specialist-reply-cursor" data-cursor-avatar="[a-z-]+" aria-hidden="true"/);
   assert.doesNotMatch(html.replace(/<[^>]*>/g, ""), /正在核对差异。/);
   const ended = specialistReplies(
@@ -326,19 +327,21 @@ test("equal text in independent tasks remains distinct and keeps task dividers a
   assert.match(html, /保留我直接发送的补充/);
 });
 
-test("waiting, disconnected and inactive replies stop animation while actual model work remains animated", () => {
+test("working prose has its own motion and only the initial thinking state uses status sweep", () => {
   const s = snapshot([]),
     waiting = { ...s, ai: { ...s.ai!, status: "waiting_approval" } };
-  const draw = (connected: boolean, snap: SessionSnapshot) =>
+  const draw = (connected: boolean, snap: SessionSnapshot, text = "正在读取数据") =>
     renderToStaticMarkup(
       createElement(SpecialistLiveReply, {
         snapshot: snap,
         worker,
-        text: "正在读取数据",
+        text,
         connected,
       }),
     );
-  assert.match(draw(true, s), /status-text--active/);
+  assert.match(draw(true, s, ""), /status-text--active/);
+  assert.match(draw(true, s), /specialist-reply-cursor/);
+  assert.doesNotMatch(draw(true, s), /status-text--active/);
   for (const html of [
     draw(false, s),
     draw(true, waiting),

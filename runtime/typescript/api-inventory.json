@@ -166,6 +166,15 @@
       ]
     },
     {
+      "name": "createChatGroup",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/projects/${encodeURIComponent(project)}/superagent/groups`"
+        }
+      ]
+    },
+    {
       "name": "createGatewayConnection",
       "routes": [
         {
@@ -216,6 +225,15 @@
         {
           "method": "POST",
           "path": "`/api/projects/${encodeURIComponent(projectId)}/sessions`"
+        }
+      ]
+    },
+    {
+      "name": "createSpecialist",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/projects/${encodeURIComponent(project)}/superagent/specialists`"
         }
       ]
     },

@@ -31,21 +31,23 @@ function progress(phase:'thinking'|'tool'='thinking'){
 }
 const render=(props:ComponentProps<typeof PilotSpecialistReplyView>)=>renderToStaticMarkup(createElement(PilotSpecialistReplyView,{onInspectSpecialist(){},...props}));
 
-test('received public prose stays still while its process entry moves through thinking and tool execution',()=>{
+test('the specialist name and process link stay animated while public prose arrives',()=>{
  for(const phase of ['thinking','tool'] as const){
   const props=progress(phase),html=render(props);
   assertQuietProse(html);
+  assert.match(html,/reply-author-name-motion" data-live-motion="active" data-live-glow="active"/,phase);
   assert.match(processLink(html),/data-live-motion="active" data-live-glow="active"/,phase);
-  assert.equal((processLink(html).match(/live-text-motion-character/g)??[]).length,4,'only the four-character process label receives the shared wave');
   assert.doesNotMatch(html,/PRIVATE_TOOL_DETAIL/,'only the public progress text is exposed');
   assert.equal(render({...props,snapshot:{...props.snapshot,cursor:2}}),html,'unchanged snapshots retain the same body and process entry');
   props.snapshot.ai!.cards[0]!.status='running';
-  assertQuietProse(render(props));
-  assert.match(processLink(render(props)),/data-live-motion="active" data-live-glow="active"/,'card streaming/completion does not substitute for runtime activity');
+  const streaming=render(props);
+  assertQuietProse(streaming);
+  assert.match(streaming,/reply-author-name-motion" data-live-motion="active" data-live-glow="active"/);
+  assert.match(processLink(streaming),/data-live-motion="active" data-live-glow="active"/);
  }
 });
 
-test('a worker completion snapshot arriving before the workspace keeps motion through the report handoff',()=>{
+test('a worker completion snapshot arriving before the workspace keeps its identity during the quiet report handoff',()=>{
  const props=progress('tool');
  props.row.observedRootTurnId='current-root';
  props.snapshot.superagent!.task={...props.row.worker.task,state:'completed'};
@@ -54,7 +56,9 @@ test('a worker completion snapshot arriving before the workspace keeps motion th
  const html=render(props);
  assertQuietProse(html);
  assert.match(html,/<span class="response-avatar"[^>]*>[\s\S]*?data-motion="working"/);
- assert.match(processLink(html),/data-live-motion="active" data-live-glow="active"/);
+ assert.match(html,/reply-author-name-motion" data-live-motion="still" data-live-glow="still"/);
+ assert.match(processLink(html),/data-live-motion="still" data-live-glow="still"/);
+ assert.doesNotMatch(html,/class="specialist-reply-cursor"/);
 });
 
 test('the process entry stops for a real wait, terminal state, disconnection, or hidden surface without removing prose',()=>{
@@ -82,7 +86,7 @@ test('the process entry stops for a real wait, terminal state, disconnection, or
  }
 });
 
-test('ACP segmented public prose stays quiet and the exact process entry remains animated',()=>{
+test('ACP segmented public prose keeps the animated process entry bound to its task',()=>{
  const props=progress('tool');
  const execution={backend:{kind:'acp' as const,agent:'codex'},source:'task_assignment' as const,assignedAt:at,runs:[{id:'acp-run',agent:'codex',scope:'worker' as const,state:'running' as const,dispatchPhase:'sent' as const,createdAt:at,updatedAt:at,usage:null}],totalRuns:1};
  props.row.worker.execution=execution;props.row.author.execution=execution.backend;props.snapshot.superagent!.execution=execution;

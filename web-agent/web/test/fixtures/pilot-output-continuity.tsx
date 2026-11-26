@@ -2,11 +2,13 @@
 import './readme-workbench';
 import '../../src/assistantProse.css';
 import type {AIView, Message, SessionEvent, SessionSnapshot, SpecialistConversation, SuperWorker, SuperWorkspace} from '../../../shared/contracts';
+import {updateCodexActivity,type CodexActivityItem} from '../../../shared/codex-activity';
 
 const router = 'demo-session-0', project = 'demo-project';
 const baseFetch = window.fetch.bind(window);
 const dialogue = new URLSearchParams(location.search).has('dialogue');
 const taskSummary = new URLSearchParams(location.search).has('task-summary');
+const replyMotion = new URLSearchParams(location.search).has('reply-motion');
 const dialogueHandoffMs = 14_010;
 const started = Date.now() - 60_000;
 const at = (offset: number) => new Date(started + offset).toISOString();
@@ -14,7 +16,7 @@ const source: Message = {id:'output-request', sessionId:router, role:'user', tex
 const history: Message = {id:'output-history', sessionId:router, role:'assistant', text:'此前的样例记录。\n\n'.repeat(18), createdAt:at(-1000)};
 const opening = '我已安排专员核对样例';
 const conclusion = '样例记录一致，未发现遗漏。';
-const names = ['数据库专员','可观测性专员','发布专员','知识库专员','服务器运维排查专员'];
+const names = replyMotion ? ['发布专员'] : ['数据库专员','可观测性专员','发布专员','知识库专员','服务器运维排查专员'];
 if(dialogue)names.push('ACP 测试专员','河狸专员','巡检专员');
 type Stage = 'idle' | 'started' | 'working' | 'first-report' | 'second-report' | 'closing' | 'reports-delivered' | 'finished';
 type Network = 'connected' | 'worker-stream-drop' | 'worker-outage' | 'workspace-outage';
@@ -22,6 +24,7 @@ let stage: Stage = 'idle', cursor = 50;
 let network: Network = 'connected';
 const streams = new Set<FixtureStream>();
 const workerText=new Map<string,string>();
+let codexItems:CodexActivityItem[]=[];
 let workerSnapshotReads=0,pilotSnapshotReads=0;
 let summaryPreview:{seq:number;text:string}|undefined;
 
@@ -34,7 +37,7 @@ function workers(): SuperWorker[] {
       id, roleId:`output-role-${index}`, roleName:name, sessionId:id,
       assignmentState:completed ? 'parked' : 'active',
       task:{taskId:'output-task', executionGoalId:id, projectId:project, sessionId:id, title:'核对样例记录', state:completed?'completed':'running', acceptanceState:'not_evaluated', revision:1, originRootTurnId:'output-root', deadlineAt:at(120_000)},
-      activity:completed ? undefined : {phase:index===0?'thinking':'tool',label:'正在核对记录',updatedAt:at(200),sourceMessageId:source.id,sourceSessionId:router},
+      activity:completed ? undefined : {phase:index===0&&!replyMotion?'thinking':'tool',label:'正在核对记录',updatedAt:at(200),sourceMessageId:source.id,sourceSessionId:router},
       pilotReport:completed ? {messageId:`output-report-${index}`,executionSettled:stage==='finished'||taskSummary&&stage==='reports-delivered'||index===0} : undefined,
     };
   });
@@ -104,6 +107,9 @@ function snapshot(base: SessionSnapshot, worker?: SuperWorker): SessionSnapshot 
       {id:'pilot-invite',type:'operation',title:'convene_specialists',status:'completed',at:at(150),content:JSON.stringify(dialogueRound()),
         data:{root_turn_id:root,source_message_id:source.id}}];
   }
+  if(ai&&worker&&replyMotion)ai.cards=[{id:'codex-run',type:'operation',status:'running',at:at(300),data:{
+    root_turn_id:root,taskId:worker.id,source:'external_agent',external_agent:'codex',external_run_id:'codex-run',codex_activity:codexItems,
+  }}];
   if(ai)ai.totalCards=ai.cards.length;
   return {...base, cursor, messages, ai, superagent:worker?{roleId:worker.roleId, task:worker.task} as SessionSnapshot['superagent']:undefined,
     session:{...base.session,id:worker?.sessionId??router,projectId:project,title:worker?.roleName??'Pilot',workspaceRole:worker?'worker':'router',status:active?'investigating':'completed'},
@@ -181,6 +187,13 @@ Object.assign(window,{pilotOutputQA:{transport(){
   if(!worker)return;
   workerText.set(worker.sessionId,text);
   const event={sessionId:worker.sessionId,seq:++cursor,type:'message',textUpdate:{target:'card',cardType:'message',id:`stage-${worker.id}`,rootTurnId:`stage-root-${worker.id}`,at:at(300),content:text}} as SessionEvent;
+  for(const stream of streams)stream.publish(event);
+},codexItem(item:CodexActivityItem){
+  const worker=workers()[0];
+  if(!replyMotion||!worker)return;
+  codexItems=updateCodexActivity(codexItems,item);
+  const event:SessionEvent={sessionId:worker.sessionId,seq:++cursor,type:'message',createdAt:at(400),
+    textUpdate:{target:'card',cardType:'operation',id:'codex-run',rootTurnId:`stage-root-${worker.id}`,content:'',codexTaskId:worker.id,codexItem:item}};
   for(const stream of streams)stream.publish(event);
 },setNetwork(next:Network){
   network=next;

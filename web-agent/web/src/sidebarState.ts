@@ -27,7 +27,7 @@ export function initialWorkspaceSelection(catalog: WorkspaceCatalog, route: Work
     ?? defaultWorkspaceSession(catalog.sessions, projectId);
   const resource = catalog.resources.find(item => item.id === route.resourceId && item.projectId === projectId);
   const sessionId = session?.id ?? null;
-  const canShowPlans = sessionId === route.sessionId && session && isUserWorkspaceSession(session) && !resource;
+  const canShowPlans = sessionId === route.sessionId && session && (isUserWorkspaceSession(session)||session.workspaceRole==='group') && !resource;
   return {projectId, route: {
     sessionId, resourceId: resource?.id ?? null,
     ...(isWorkspacePageView(route.view) ? {view:route.view, ...(route.returnView && canShowPlans ? {returnView:route.returnView} : {})} :

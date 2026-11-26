@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {TextReveal,TEXT_REVEAL_MAX_LAG_MS} from '../src/textReveal';
+import {TextReveal,TEXT_REVEAL_BURST_MAX_LAG_MS,TEXT_REVEAL_MAX_LAG_MS} from '../src/textReveal';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {AssistantMarkdown} from '../src/AssistantMarkdown';
@@ -13,9 +13,9 @@ test('a specialist cursor keeps the final grapheme and leaves inline links intac
  const link=render('正在核对 [记录](https://example.com)');
  assert.match(link,/<a[^>]*>记录<\/a><span class="specialist-reply-cursor"/);
 });
-function fixture(initial=''){
+function fixture(initial='',paceBursts=false){
  let now=0,id=0;const pending=new Map<number,FrameRequestCallback>(),values:string[]=[];
- const reveal=new TextReveal(initial,text=>values.push(text),{request:cb=>{pending.set(++id,cb);return id},cancel:n=>{pending.delete(n)},now:()=>now});
+ const reveal=new TextReveal(initial,text=>values.push(text),{request:cb=>{pending.set(++id,cb);return id},cancel:n=>{pending.delete(n)},now:()=>now},paceBursts);
  const frame=(ms=16.67)=>{now+=ms;const callbacks=[...pending.values()];pending.clear();callbacks.forEach(cb=>cb(now))};
  return {reveal,values,pending,frame,time:()=>now};
 }
@@ -121,6 +121,34 @@ test('coalesced token bursts paint evenly across the gap and start on the first 
   assert.ok(value.length-previous.length<=2);
   previous=value;
  }
+});
+
+test('a large paced batch starts on the next frame and stays spread out when a short packet follows',()=>{
+ const f=fixture('',true),burst='按相同时间范围逐条核对。'.repeat(15),last=burst+'随后补充一条。';
+ f.reveal.update(burst,true);
+ f.frame(16);
+ assert.ok(f.values[0]!.length>0&&f.values[0]!.length<=9);
+ for(let i=0;i<5;i++)f.frame(16);
+ f.reveal.update(last,true);
+ while(f.time()<TEXT_REVEAL_BURST_MAX_LAG_MS)f.frame(Math.min(16,TEXT_REVEAL_BURST_MAX_LAG_MS-f.time()));
+ assert.equal(f.values.at(-1),last);
+ assert.equal(f.pending.size,0);
+ assert.ok(f.values.length>16);
+ for(let i=1;i<f.values.length;i++){
+  assert.ok(f.values[i]!.startsWith(f.values[i-1]!));
+  assert.ok(f.values[i]!.length-f.values[i-1]!.length<=14);
+ }
+});
+
+test('small paced packets share the clock and a new burst after a real gap starts promptly',()=>{
+ const f=fixture('',true);
+ f.reveal.update('甲',true);f.frame(16);assert.deepEqual(f.values,['甲']);
+ f.frame(70);f.reveal.update('甲乙',true);f.frame(16);
+ assert.deepEqual(f.values,['甲']);
+ while(f.pending.size)f.frame(16);
+ assert.equal(f.values.at(-1),'甲乙');
+ f.frame(205);f.reveal.update('甲乙丙',true);f.frame(16);
+ assert.equal(f.values.at(-1),'甲乙丙');
 });
 
 test('the display frame only owns the trailing literal text after a parsed reference',()=>{
