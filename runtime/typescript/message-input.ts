@@ -1,7 +1,12 @@
-import type {MessageMention, Resource} from '../../web-agent/shared/contracts';
+import type {MessageMention, Resource, TextFileAttachment} from '../../web-agent/shared/contracts';
+import {messageAttachments} from './chat-attachments';
 import {HttpError, LakeStore} from './store';
 
-export type MessageInput = {resourceIds: string[]; mentions: MessageMention[]; references: Record<string, unknown>[]};
+export type MessageReferences = {resourceIds: string[]; mentions: MessageMention[]; references: Record<string, unknown>[]};
+export type MessageInput = MessageReferences & {files?: TextFileAttachment[]};
+export function messageReferences(input: MessageInput | undefined): MessageReferences | undefined {
+  if (input) return {resourceIds: input.resourceIds, mentions: input.mentions, references: input.references};
+}
 export function messageInput(store: LakeStore, sessionId: string, text: string, raw: Record<string, unknown>): MessageInput {
   const {projectId} = store.session(sessionId); store.project(projectId);
   const list = (value: unknown): any[] => {
@@ -33,5 +38,6 @@ export function messageInput(store: LakeStore, sessionId: string, text: string, 
     return {kind, [key]: value[key], label: value.label, start: value.start, end: value.end};
   });
   // Selected identities do not grant service permissions or execution authority.
-  return {resourceIds, mentions, references};
+  const files = messageAttachments(store, sessionId, raw.files);
+  return {resourceIds, mentions, references, ...(files && {files})};
 }

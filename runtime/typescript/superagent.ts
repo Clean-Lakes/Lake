@@ -30,7 +30,8 @@ import { HttpError, id, LakeStore, now, type StoredSession } from "./store";
 import { canonical, digest, TaskLedger, terminal, text, type Goal, type Operation } from "./tasks";
 import { finalSummaryGuidance, superRouterPrompt, superWorkerPrompt } from "./super-prompts";
 import { buildRouterContext, normalizeSpecialistText, projectRouterHistory, type RouterMessage } from "./router-context";
-import type {MessageInput} from './message-input';
+import {messageReferences, type MessageInput, type MessageReferences} from './message-input';
+import {attachmentMetadata} from './chat-attachments';
 import { listProjectAssets } from "./assets";
 import { loadLegacyView } from "./migration";
 import type { LakeSecurity } from "./security";
@@ -64,7 +65,8 @@ type Role = { id: string; projectId: string; roleKey: string; name: string; duti
 type RoleMutation = {eventId: string; hash: string; result: Role; savedExecution?: {agentName: string; modelName: string}};
 type Channel = { id: string; projectId: string; roleId: string; sessionId: string; revision: number; createdAt: string };
 type InputEvent = { id: string; projectId: string; sessionId: string; messageId: string; payload: string;
-  selectedReferences?: MessageInput;
+  selectedReferences?: MessageReferences;
+  attachmentMetadata?: ReturnType<typeof attachmentMetadata>;
   ignoreMemory?: boolean;
   external?: import('../../web-agent/shared/contracts').ExternalMessageOrigin;
   replyTo?: string;
@@ -1359,7 +1361,7 @@ export class LakeSuperagent implements AgentHost {
       originalDeliverable: prior?.originalDeliverable ?? this.decisionAssignments(decision).find(a => a.workerId === source.workerId)?.instruction ?? decision.quote, summary: clip(this.agents.redact(source.summary ?? ""), 4096),
       resourceIds, historicalContextOnly: true };
   }
-  private async assignAgent(sessionId:string,value:string,raw:unknown,ignoreMemory:boolean,selectedReferences?:MessageInput){
+  private async assignAgent(sessionId:string,value:string,raw:unknown,ignoreMemory:boolean,inputDetails?:MessageInput){
     this.security?.check();
     const channel=this.channelFor(sessionId);
     if(!channel)throw new HttpError(409,'请在专员对话中分配新任务');
@@ -1370,7 +1372,8 @@ export class LakeSuperagent implements AgentHost {
     const requested=input.execution;
     if(!requested||typeof requested!=='object'||Array.isArray(requested)||!['native','acp'].includes(requested.kind)||
       Object.keys(requested).some(key=>!(requested.kind==='native'?['kind','model']:['kind','agent','revision','model']).includes(key)))throw new HttpError(400,'请选择实际执行 Agent');
-    const key=digest([channel.projectId,channel.id,input.requestId]),hash=digest({input,value,ignoreMemory,selectedReferences});
+    const selectedReferences=messageReferences(inputDetails),files=inputDetails?.files;
+    const key=digest([channel.projectId,channel.id,input.requestId]),hash=digest({input,value,ignoreMemory,selectedReferences,...(files&&{files})});
     const receipt=()=>{
       const prior=this.store.get<{hash:string;messageId:string;workerId:string}>('superAgentAssignments',key);
       if(!prior)return;
@@ -1405,11 +1408,12 @@ export class LakeSuperagent implements AgentHost {
         const current=this.agents.external.registry.get(channel.projectId,execution.agent);
         if(!current.enabled||current.revision!==execution.revision)throw new HttpError(409,'Agent 连接配置已变化，请刷新分配入口后重试');
       }
-      const message=this.store.addMessage(sessionId,'user',this.agents.redact(value),{mentions:selectedReferences?.mentions});
+      const message=this.store.addMessage(sessionId,'user',this.agents.redact(value),{mentions:selectedReferences?.mentions,files});
       if(selectedReferences)this.store.put('messageInputs',message.id,{messageId:message.id,projectId:channel.projectId,sessionId,...selectedReferences});
       if(selectedReferences?.resourceIds.length)this.store.put('sessionResourceReferences',sessionId,{resourceIds:selectedReferences.resourceIds,sourceMessageId:message.id});
       const event:InputEvent={id:id(),projectId:channel.projectId,sessionId,messageId:message.id,payload:message.text,
-        preferredRoleId:channel.roleId,disposition:'routed',receivedAt:message.createdAt,revision:1,ignoreMemory,selectedReferences};
+        preferredRoleId:channel.roleId,disposition:'routed',receivedAt:message.createdAt,revision:1,ignoreMemory,selectedReferences,
+        ...(files&&{attachmentMetadata:attachmentMetadata(files,name=>this.agents.redact(name))})};
       this.store.put('superInputs',event.id,event);
       const project=this.store.require<SuperProject>('superProjects',channel.projectId),suffix=key.slice(0,32);
       const worker=this.newAssignment(event,project.routerSessionId,suffix,{...role,execution},clip(value.replace(/\s+/g,' '),100),[],undefined,undefined,
@@ -1432,7 +1436,7 @@ export class LakeSuperagent implements AgentHost {
     return this.conversations.priorGroupMessage(sessionId,requestId,hash)??
       this.send(sessionId,value,undefined,false,undefined,undefined,undefined,{key:digest([sessionId,requestId]),hash,group:true});
   }
-  async send(sessionId: string, value: string, explicitTaskId?: string, ignoreMemory = false, selectedReferences?: MessageInput, assignment?:unknown, external?:import('../../web-agent/shared/contracts').ExternalMessageOrigin, receipt?: InputReceipt) {
+  async send(sessionId: string, value: string, explicitTaskId?: string, ignoreMemory = false, inputDetails?: MessageInput, assignment?:unknown, external?:import('../../web-agent/shared/contracts').ExternalMessageOrigin, receipt?: InputReceipt) {
     text(value, "message", 256000);
     await this.agents.prepareRedaction();
     const source = this.store.session(sessionId);
@@ -1442,6 +1446,7 @@ export class LakeSuperagent implements AgentHost {
     const group=this.conversations.group(source.projectId,sessionId);
     if(source.workspaceRole==='group'&&!group)throw new HttpError(404,'当前项目找不到该群组');
     if(group&&this.stoppingGroups.has(sessionId))throw new HttpError(409,'群组正在停止任务，请稍后发送');
+    const selectedReferences=messageReferences(inputDetails),files=inputDetails?.files;
     if(group&&selectedReferences){
       const mentionedRoles=new Set([
         ...selectedReferences.mentions.filter(mention=>mention.kind==='role').map(mention=>mention.id),
@@ -1457,9 +1462,9 @@ export class LakeSuperagent implements AgentHost {
       if(group)throw new HttpError(400,'群组的新任务由 Pilot 派给固定成员');
       if(explicitTaskId)throw new HttpError(400,'分配执行 Agent 只用于新任务，不能切换已有任务');
       if(external)throw new HttpError(400,'外部指令不能同时指定执行 Agent 分配');
-      return this.assignAgent(sessionId,value,assignment,ignoreMemory,selectedReferences);
+      return this.assignAgent(sessionId,value,assignment,ignoreMemory,inputDetails);
     }
-    if (!project) return this.agents.send(sessionId, value, { ignoreMemory, messageInput: selectedReferences });
+    if (!project) return this.agents.send(sessionId, value, { ignoreMemory, messageInput: inputDetails });
     const channel = this.channelFor(sessionId), worker = this.workerFor(sessionId);
     if(worker&&!worker.inline&&this.groupOfSource(worker.sourceEventId))throw new HttpError(409,'请在原群组继续沟通此任务');
     const preferredRoleId = receipt?.preferredRoleId ?? channel?.roleId ?? (worker?.inline?undefined:worker?.roleId);
@@ -1483,10 +1488,11 @@ export class LakeSuperagent implements AgentHost {
         if (prior.hash !== receipt!.hash) throw new HttpError(409, "同一 clientRequestId 的指令内容已变化；请改用新的幂等键发送新指令");
         return { message: this.store.require<Message>("messages", prior.messageId), duplicate: true };
       }
-      const message = this.store.addMessage(sessionId, "user", this.agents.redact(value), {mentions: selectedReferences?.mentions, ...(external&&{external}), ...(taskReference&&{taskReference})});
+      const message = this.store.addMessage(sessionId, "user", this.agents.redact(value), {mentions: selectedReferences?.mentions, files, ...(external&&{external}), ...(taskReference&&{taskReference})});
       if (selectedReferences) this.store.put('messageInputs', message.id, {messageId: message.id, projectId: source.projectId, sessionId, ...selectedReferences});
       if (selectedReferences?.resourceIds.length) this.store.put('sessionResourceReferences', sessionId, {resourceIds: selectedReferences.resourceIds, sourceMessageId: message.id});
       const event: InputEvent = { id: id(), projectId: source.projectId, sessionId, messageId: message.id, payload: this.agents.redact(value),
+        ...(files&&{attachmentMetadata:attachmentMetadata(files,name=>this.agents.redact(name))}),
         ...(external&&{external}),
         ...(receipt?.replyTo&&{replyTo:receipt.replyTo}),
         preferredRoleId, explicitTaskId: explicitTaskId ?? (worker && !worker.inline ? this.ledger.get(worker.taskId).sharedTaskId ?? worker.taskId : undefined), disposition: "pending", receivedAt: message.createdAt, revision: 1, ignoreMemory, selectedReferences };
@@ -1683,7 +1689,7 @@ export class LakeSuperagent implements AgentHost {
       const input = canonical({ assignment: { projectId: worker.projectId, roleId: worker.roleId, roleRevision: worker.roleSnapshot.revision,
         taskId: publicTaskId, executionId: goal.id, workerId: worker.id, sessionId: worker.sessionId,
         joint: !!goal.sharedTaskId, ...(targets && {targetResourceIds:targets}) }, roleSnapshot: worker.roleSnapshot,
-        originalRequirement: origin.payload, selectedReferences,
+        originalRequirement: origin.payload, selectedReferences, attachmentMetadata: origin.attachmentMetadata,
         readOnlyRecheck: goal.readOnlyRecoveryOf ? {sourceTaskId:goal.readOnlyRecoveryOf,
           originalHumanRequirement:this.store.require<InputEvent>("superInputs",this.ledger.get(goal.readOnlyRecoveryOf).sourceEventId).payload,
           instruction:"Use this fresh context for independent read-only observations only. Do not replay old operations. The source task and its operation records remain unchanged; completing this recheck does not complete the source task."} : undefined,
@@ -1691,7 +1697,7 @@ export class LakeSuperagent implements AgentHost {
         predecessor: this.store.get<TaskPredecessor>("superTaskPredecessors", worker.taskId),
         taskContext:this.recallContext(worker),
         humanControl: resume ? { command: resume.command, at: resume.at } : undefined,
-        followups: followups.map((event) => ({ id: event.id, text: event.payload })) });
+        followups: followups.map((event) => ({ id: event.id, text: event.payload, attachmentMetadata: event.attachmentMetadata })) });
       try { await this.agents.send(worker.sessionId, "[Task assignment] " + goal.title, { input, recordUser: false, recordAssistant: false,
         ignoreMemory: !!goal.readOnlyRecoveryOf || worker.invocationInputIds.some(eventId => this.store.get<InputEvent>("superInputs", eventId)?.ignoreMemory === true) }); }
       catch (error) { this.workerFinished(worker.sessionId, {error:String(error)}); }

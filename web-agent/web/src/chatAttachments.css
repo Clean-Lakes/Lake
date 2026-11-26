@@ -1,0 +1,101 @@
+.composer-input.attachment-drop-active {
+  --composer-stroke: var(--border-strong);
+  --composer-fill: var(--surface-hover);
+}
+.composer-file-drop-overlay {
+  position: absolute;
+  inset: 3px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: calc(var(--radius-window) - 3px);
+  corner-shape: var(--corner-window);
+  background: var(--surface-hover);
+  color: var(--foreground);
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-medium);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 145ms ease-out;
+}
+.composer-file-drop-overlay > svg { translate: 0 4px; transition: translate 170ms cubic-bezier(.22,1,.36,1); }
+.attachment-drop-active .composer-file-drop-overlay { opacity: 1; }
+.attachment-drop-active .composer-file-drop-overlay > svg { translate: 0 0; }
+
+.composer-attachment-tray {
+  display: flex;
+  gap: 7px;
+  min-width: 0;
+  margin: 0 0 5px;
+  padding: 2px 2px 5px;
+  overflow: auto hidden;
+  scrollbar-width: thin;
+}
+.chat-attachment-card {
+  display: grid;
+  grid-template-columns: 34px minmax(0,1fr) 24px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 48px;
+  padding: 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-settings-control);
+  corner-shape: var(--corner-window);
+  background: var(--surface);
+  color: var(--foreground);
+  text-align: start;
+}
+.composer-attachment-tray > .chat-attachment-card { flex: 0 0 min(204px,100%); }
+.chat-attachment-tile {
+  --attachment-color: var(--text-secondary);
+  display: grid;
+  place-items: center;
+  inline-size: 34px;
+  block-size: 34px;
+  overflow: hidden;
+  border-radius: 7px;
+  corner-shape: var(--corner-window);
+  background: color-mix(in srgb,var(--attachment-color) 12%,var(--surface));
+  color: var(--attachment-color);
+}
+.chat-attachment-tile:is([data-kind="archive"],[data-kind="package"]) { --attachment-color: var(--warning); }
+.chat-attachment-tile:is([data-kind="video"],[data-kind="audio"],[data-kind="document"]) { --attachment-color: var(--info); }
+.chat-attachment-tile:is([data-kind="image"],[data-kind="table"]) { --attachment-color: var(--resource-database-foreground); }
+.chat-attachment-tile > img { width: 100%; height: 100%; object-fit: cover; }
+.chat-attachment-text { min-width: 0; display: grid; gap: 1px; line-height: 1.25; }
+.chat-attachment-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-ui); }
+.chat-attachment-text > small { color: var(--text-muted); font-size: var(--font-size-toolbar); white-space: nowrap; }
+.chat-attachment-status { justify-self: center; color: var(--text-secondary); }
+.chat-attachment-remove {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  corner-shape: var(--corner-window);
+  background: transparent;
+  color: var(--text-secondary);
+}
+.chat-attachment-remove:hover:enabled { background: var(--surface-hover); color: var(--foreground); }
+.chat-attachment-remove:focus-visible,.message-attachments > a:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: -1px; }
+.chat-attachment-remove:disabled { opacity: .45; }
+.composer-attachment-arrival { animation: composer-attachment-appear 180ms cubic-bezier(.22,1,.36,1) both; }
+@keyframes composer-attachment-appear { from { opacity: 0; translate: 0 4px; } to { opacity: 1; translate: 0 0; } }
+.message-attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.message-attachments > a { inline-size: min(204px,100%); text-decoration: none; }
+.message-attachments > a:hover { background: var(--surface-hover); }
+
+@media (pointer: coarse) {
+  .composer-attachment-tray > .chat-attachment-card { grid-template-columns: 34px minmax(0,1fr) 44px; }
+  .chat-attachment-remove { width: 44px; height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .composer-file-drop-overlay,.composer-file-drop-overlay > svg { transition: none; }
+  .composer-attachment-arrival { animation: none; }
+}

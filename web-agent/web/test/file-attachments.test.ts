@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {clipboardFiles,partitionAttachments,attachmentLimit,fileSize} from '../src/fileAttachments';
+import {attachmentPresentation,clipboardFiles,hasFileTransfer,partitionAttachments,attachmentLimit,fileSize} from '../src/fileAttachments';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {AITranscript} from '../src/AIPanel';
@@ -20,8 +20,17 @@ test('file selection accepts unknown MIME, empty files and archives while keepin
  assert.throws(()=>partitionAttachments([file('too-big','',attachmentLimit+1)],[],false),/512 MiB/);
  assert.equal(fileSize(0),'0 B');assert.equal(fileSize(1024),'1.0 KiB');
 });
+test('protected drag data counts as files and classification survives an empty MIME type',()=>{
+ assert.equal(hasFileTransfer({types:['Files'],files:[],items:[]} as unknown as DataTransfer),true);
+ assert.equal(hasFileTransfer({types:['text/plain'],files:[],items:[{kind:'string'}]} as unknown as DataTransfer),false);
+ assert.equal(attachmentPresentation('巡检.MOV').icon,'film');
+ assert.deepEqual(attachmentPresentation('发布.TAR.GZ','application/octet-stream'),{kind:'archive',icon:'archive',label:'TAR.GZ'});
+ assert.equal(attachmentPresentation('photo','image/jpeg').kind,'image');
+ assert.equal(attachmentPresentation('readme','').kind,'file');
+});
 test('sent attachment remains visible with an encoded session-scoped download link',()=>{
  const snapshot={session:{id:'fixture'},messages:[{id:'m',role:'user',text:'deploy',createdAt:'2026-10-18T00:00:00Z',files:[{sourceId:'file-abc',name:'部署包.zip'}]}],actions:[],ai:{session:'fixture',status:'completed',profile:'core',cards:[],cardsOffset:0,turns:1}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
  assert.ok(html.includes('部署包.zip'));assert.ok(html.includes('/api/sessions/fixture/attachments/file-abc'));assert.ok(html.includes('download='));
+ assert.match(html,/data-kind="archive"/);
 });

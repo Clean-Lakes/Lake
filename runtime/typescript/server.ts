@@ -32,6 +32,7 @@ import {LakeResourceImport} from './resource-import';
 import type {HexHubImportOptions} from './hexhub-import';
 import {PilotConfiguration} from "./pilot-configuration";
 import {messageInput} from './message-input';
+import {saveChatAttachment, serveChatAttachment} from './chat-attachments';
 import {LakeMessageQueue} from './message-queue';
 import {LakeWorkflowCatalog} from './workflow-catalog';
 import {providerConnection, modelCatalogHeaders} from './provider-connection';
@@ -301,6 +302,20 @@ export async function startLakeServer(options: ServerOptions) {
           "Set-Cookie",
           `lake_session=${token}; HttpOnly; SameSite=Strict; Path=/`,
         );
+      if (path[1] === 'sessions' && path[3] === 'attachments') {
+        if (path.length === 4 && method === 'POST') {
+          const guard = () => {
+            if (draining) throw new HttpError(503, '服务正在退出');
+            security!.check();
+          };
+          guard();
+          try { json(response, 201, await saveChatAttachment(store, path[2]!, request, guard)); }
+          catch (error) { response.setHeader('Connection', 'close'); throw error; }
+        } else if (path.length === 5 && (method === 'GET' || method === 'HEAD')) {
+          await serveChatAttachment(store, path[2]!, path[4]!, url.searchParams.get('preview') === '1', method === 'HEAD', response);
+        } else throw new HttpError(405, '不支持此附件操作');
+        return;
+      }
       const data = method === "GET" || method === "HEAD" ? {} : await body(request);
       const cleanup=path[1]==="sessions"&&(path[3]==="host-key"&&data.accept===false||path[3]==="terminals"&&path[5]==="disconnect")||path[1]==="projects"&&path[3]==="superagent"&&path[4]==="stop"&&path.length===5&&method==="POST";
       if (!["GET", "HEAD"].includes(method) && !cleanup && !(path[1] === "superagent" && path[2] === "lifecycle")) security?.check();
@@ -799,20 +814,18 @@ export async function startLakeServer(options: ServerOptions) {
           finally { response.off('close', abort); }
         } else if (path[3] === "messages" && path.length === 4 && method === "POST") {
           if (draining) throw new HttpError(503, "服务正在退出");
-          if (
-            (data.images?.length ?? 0) ||
-            (data.files?.length ?? 0)
-          )
-            throw new HttpError(501, "附件与资源引用尚未迁移完成");
+          if (data.images?.length) throw new HttpError(501, '图片可以作为普通附件发送');
           if (data.terminalReuse) throw new HttpError(501, '终端交接尚未接入，未发送此消息');
           await agents.prepareRedaction();
-          const input = messageInput(store, sessionId, agents.redact(String(data.text ?? '')), data);
+          const original = String(data.text ?? '');
+          const input = messageInput(store, sessionId, agents.redact(original), data);
+          const text = !original.trim() && input.files?.length ? '请查看随消息附上的文件。' : original;
           if(data.assignment!==undefined){
             if(data.enqueue===true)throw new HttpError(400,'分配新任务须直接接单，不能作为普通待发送消息入队');
-            result=await superagent.send(sessionId,String(data.text??''),data.taskId,data.ignoreProjectMemory===true,input,data.assignment);
+            result=await superagent.send(sessionId,text,data.taskId,data.ignoreProjectMemory===true,input,data.assignment);
           }
-          else if (data.enqueue === true || !group && session.workspaceRole !== 'router' && messageQueue!.get(sessionId).items.length) result = messageQueue!.enqueue(sessionId, agents.redact(String(data.text ?? '')), {...data, ...input});
-          else result = await superagent.send(sessionId, String(data.text ?? ""), data.taskId, data.ignoreProjectMemory === true, input);
+          else if (data.enqueue === true || !group && session.workspaceRole !== 'router' && messageQueue!.get(sessionId).items.length) result = messageQueue!.enqueue(sessionId, agents.redact(text), {...data, ...input});
+          else result = await superagent.send(sessionId, text, data.taskId, data.ignoreProjectMemory === true, input);
           status = 202;
         } else if (path[3] === "message-queue") {
           if (path.length !== 4) throw new HttpError(404, '消息队列接口不存在');
