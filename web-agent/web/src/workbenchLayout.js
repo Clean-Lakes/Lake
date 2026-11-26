@@ -27,6 +27,16 @@
       translate:min(0px,calc(var(--sidebar-resize-chat-room) - var(--sidebar-resize-reading-width)));
       max-width:min(85%,calc(var(--sidebar-resize-chat-room) * .85));
     }
+    .app-shell[data-sidebar-resize-layer] > :is(.workbench-conversation-surface,.workspace,.lake-workbench-islands,.workbench-navigation,.workbench-splitter-sidebar) { will-change:transform; }
+    .app-shell[data-sidebar-resize-layer] > .sidebar .sidebar-navigation-content { inline-size:100%; }
+    .app-shell[data-sidebar-resize-layer] > .workspace,
+    .app-shell[data-sidebar-resize-layer] > .workspace :is(.session-layout,.session-layout > .session-view) { overflow:visible; }
+    .app-shell[data-sidebar-resize-layer] .conversation { overflow-x:hidden; }
+    .app-shell[data-sidebar-resize-layer] .composer-dock {
+      width:var(--sidebar-resize-viewport);
+      --session-content-width:min(960px,calc(var(--sidebar-resize-viewport) - var(--session-gutter) * 2));
+      --session-content-start:max(var(--session-gutter),calc((var(--sidebar-resize-viewport) - 960px) / 2));
+    }
     .workbench-splitter-terminal, .workbench-splitter-inspector { left:0; }
     .workbench-splitter-terminal::after, .workbench-splitter-inspector::after { left:0; }
     .workbench-resizing .session-inspector { animation:none !important; }
@@ -221,6 +231,155 @@
   function sidebarDragWidth(drag, x) {
     return drag.width + x - drag.x;
   }
+  function retainStyles(node, names) {
+    const original = names.map(name => [name, node.style.getPropertyValue(name), node.style.getPropertyPriority(name)]);
+    return () => {
+      for (const [name, value, priority] of original) {
+        if (value) node.style.setProperty(name, value, priority);
+        else node.style.removeProperty(name);
+      }
+    };
+  }
+  function alignVisibleUserMessages(conversation, initialWidth) {
+    const selector = '.ai-role-user,.timeline-item.message-user';
+    const overscan = 64;
+    const visible = new Map();
+    let width = initialWidth;
+    const align = (node, bubble) => {
+      node.style.setProperty('translate', `${width - initialWidth}px`);
+      const limit = Math.min(bubble.width, width * .85);
+      if (bubble.limit === limit) return;
+      bubble.limit = limit;
+      if (limit < bubble.width) node.style.setProperty('max-width', `${limit}px`);
+      else bubble.restoreWidth();
+    };
+    const show = (node, rect) => {
+      if (visible.has(node)) return;
+      const width = node.matches('.ai-role-user') ? rect.width : 0;
+      const bubble = {
+        width, limit: width,
+        restorePosition: retainStyles(node, ['translate']),
+        restoreWidth: retainStyles(node, ['max-width']),
+      };
+      visible.set(node, bubble);
+      align(node, bubble);
+    };
+    const hide = node => {
+      const bubble = visible.get(node);
+      if (!bubble) return;
+      bubble.restorePosition();
+      bubble.restoreWidth();
+      visible.delete(node);
+    };
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) show(entry.target, entry.boundingClientRect);
+        else hide(entry.target);
+      }
+    }, { root: conversation, rootMargin: `${overscan}px 0px` });
+    const bounds = conversation.getBoundingClientRect();
+    const messages = [...conversation.querySelectorAll(selector)].map(node => [node, node.getBoundingClientRect()]);
+    for (const [node, rect] of messages) {
+      observer.observe(node);
+      if (rect.bottom > bounds.top - overscan && rect.top < bounds.bottom + overscan) show(node, rect);
+    }
+    const changes = new MutationObserver(records => {
+      for (const record of records) {
+        for (const node of [...record.addedNodes, ...record.removedNodes]) {
+          if (node.nodeType !== 1) continue;
+          const bubbles = [...node.querySelectorAll(selector)];
+          if (node.matches(selector)) bubbles.push(node);
+          for (const bubble of bubbles) {
+            if (conversation.contains(bubble)) observer.observe(bubble);
+            else {
+              observer.unobserve(bubble);
+              hide(bubble);
+            }
+          }
+        }
+      }
+    });
+    changes.observe(conversation, { childList:true, subtree:true });
+    return {
+      resize(nextWidth) {
+        if (width === nextWidth) return;
+        width = nextWidth;
+        for (const [node, bubble] of visible) align(node, bubble);
+      },
+      restore() {
+        changes.disconnect();
+        observer.disconnect();
+        observer.takeRecords();
+        for (const node of visible.keys()) hide(node);
+      },
+    };
+  }
+  function layerSidebarResize(drag) {
+    if (!shell.classList.contains('has-docked-conversation') || shell.querySelector('.session-layout > .session-inspector')) return;
+    const owner = shell;
+    const sidebar = owner.querySelector('.sidebar');
+    const surface = owner.querySelector('.workbench-conversation-surface');
+    const workspace = owner.querySelector('.workspace');
+    const composer = workspace?.querySelector('.composer-dock');
+    const conversation = workspace?.querySelector('.conversation');
+    if (!sidebar || !surface || !composer || !conversation) return;
+
+    const [min, max] = limits('sidebar');
+    const viewport = composer.getBoundingClientRect().width;
+    if (!viewport) return;
+    const gutter = parseFloat(getComputedStyle(composer).paddingInlineStart) || 0;
+    const extra = drag.width - min;
+    const scrollWidth = conversation.getBoundingClientRect().width + extra;
+    const start = width => Math.max(gutter, (width - 960) / 2);
+    const readingWidth = width => Math.min(960, width - gutter * 2);
+    const initialStart = start(viewport);
+    const panes = [surface, workspace, drag.handle, owner.querySelector('.workbench-navigation')].filter(Boolean);
+    const header = owner.querySelector('.lake-workbench-islands');
+    const reading = workspace.querySelectorAll('.timeline-list,.conversation-header-backdrop');
+    const restore = [
+      retainStyles(sidebar, ['inline-size']),
+      retainStyles(surface, ['inset-inline-end']),
+      retainStyles(composer, ['--sidebar-resize-viewport']),
+      retainStyles(conversation, ['inline-size']),
+      ...[...panes, header, ...reading].filter(Boolean).map(node => retainStyles(node, ['transform'])),
+    ];
+    const userMessages = alignVisibleUserMessages(conversation, readingWidth(viewport));
+    // Lay out the scroll view once. Its largest possible clip fits both
+    // directions while the real rounded frame moves across it.
+    surface.style.setProperty('inset-inline-end', `${-extra}px`);
+    conversation.style.setProperty('inline-size', `${scrollWidth}px`);
+    owner.setAttribute('data-sidebar-resize-layer', '');
+    let lastWidth;
+    let lastReadingOffset;
+    const translate = (node, x) => { if (node) node.style.setProperty('transform', `translate3d(${x}px,0,0)`); };
+    const update = x => {
+      const width = clamp(sidebarDragWidth(drag, x), min, max);
+      if (width === lastWidth) return;
+      lastWidth = width;
+      const offset = width - drag.width;
+      const room = viewport - offset;
+      const readingOffset = start(room) - initialStart;
+      sidebar.style.setProperty('inline-size', `${width}px`);
+      composer.style.setProperty('--sidebar-resize-viewport', `${room}px`);
+      for (const pane of panes) translate(pane, offset);
+      if (lastReadingOffset !== readingOffset) {
+        lastReadingOffset = readingOffset;
+        for (const node of reading) translate(node, readingOffset);
+      }
+      translate(header, offset + readingOffset);
+      userMessages.resize(readingWidth(room));
+      drag.handle.setAttribute('aria-valuenow', String(width));
+    };
+    update(drag.x);
+    return {
+      workspace, conversation, windowWidth: innerWidth, windowHeight: innerHeight, update,
+      restore() {
+        owner.removeAttribute('data-sidebar-resize-layer');
+        for (const reset of restore) reset();
+        userMessages.restore();
+      },
+    };
+  }
   function holdReadingLayout(box) {
     const timeline = box?.querySelector(':scope > .timeline-list');
     const width = timeline?.getBoundingClientRect().width;
@@ -236,21 +395,19 @@
     const css = getComputedStyle(box);
     const values = properties.map(name => [name, css.getPropertyValue(name) || 'initial']);
     values.push(['--sidebar-resize-reading-width', `${width}px`]);
-    const original = values.map(([name]) => [name, box.style.getPropertyValue(name), box.style.getPropertyPriority(name)]);
+    const restore = retainStyles(box, values.map(([name]) => name));
     for (const [name, value] of values) box.style.setProperty(name, value);
     box.setAttribute('data-sidebar-resizing', '');
     return () => {
       box.removeAttribute('data-sidebar-resizing');
-      for (const [name, value, priority] of original) {
-        if (value) box.style.setProperty(name, value, priority);
-        else box.style.removeProperty(name);
-      }
+      restore();
     };
   }
   function clearDrag() {
-    const { handle, pointer, previewFrame, restoreReadingLayout } = active;
+    const { handle, pointer, previewFrame, restoreReadingLayout, sidebarLayer } = active;
     active = null;
     if (previewFrame) cancelAnimationFrame(previewFrame);
+    sidebarLayer?.restore();
     restoreReadingLayout?.();
     handle.classList.remove('is-dragging');
     document.documentElement.classList.remove('workbench-resizing');
@@ -272,7 +429,10 @@
       const width = pane === 'sidebar' ? Number(handle.getAttribute('aria-valuenow'))
         : shell.querySelector(pane === 'terminal' ? '.terminal-side-panel' : '.session-inspector').getBoundingClientRect().width;
       active = { pane, handle, x: event.clientX, clientX: event.clientX, width, pointer: event.pointerId };
-      if (pane === 'sidebar') active.restoreReadingLayout = holdReadingLayout(shell.querySelector('.conversation'));
+      if (pane === 'sidebar') {
+        active.sidebarLayer = layerSidebarResize(active);
+        if (!active.sidebarLayer) active.restoreReadingLayout = holdReadingLayout(shell.querySelector('.conversation'));
+      }
       handle.classList.add('is-dragging');
       document.documentElement.classList.add('workbench-resizing');
     });
@@ -283,7 +443,8 @@
         drag.clientX = event.clientX;
         if (!drag.previewFrame) drag.previewFrame = requestAnimationFrame(() => {
           drag.previewFrame = 0;
-          apply();
+          if (drag.sidebarLayer) drag.sidebarLayer.update(drag.clientX);
+          else apply();
         });
         return;
       }
@@ -311,9 +472,8 @@
         }
       }
       clearDrag();
-      apply();
+      window.dispatchEvent(new Event('lake-workbench-layout'));
       if (committed) save();
-      schedule();
     };
     handle.addEventListener('pointerup', finish);
     handle.addEventListener('pointercancel', finish);
@@ -322,6 +482,7 @@
     handle.addEventListener('keydown', event => {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
       event.preventDefault();
+      if (active?.sidebarLayer) return;
       const [min, max] = limits(pane);
       const current = Number(handle.getAttribute('aria-valuenow'));
       const delta = (event.key === 'ArrowRight' ? 1 : -1) * (pane === 'sidebar' ? 1 : -1) * (event.shiftKey ? 50 : 10);
@@ -378,6 +539,13 @@
     const nextShell = document.querySelector('.app-shell');
     if (active && (!active.handle.isConnected || active.pane === 'sidebar' &&
       (nextShell !== shell || document.hidden || innerWidth <= 700 || nextShell.classList.contains('has-collapsed-sidebar')))) clearDrag();
+    const layer = active?.sidebarLayer;
+    if (layer) {
+      if (innerWidth === layer.windowWidth && innerHeight === layer.windowHeight &&
+        layer.workspace.isConnected && layer.conversation.isConnected && nextShell.classList.contains('has-docked-conversation') &&
+        !nextShell.querySelector('.session-layout > .session-inspector')) return;
+      clearDrag();
+    }
     shell = nextShell;
     if (!shell) return;
     addHandle(shell, 'sidebar');

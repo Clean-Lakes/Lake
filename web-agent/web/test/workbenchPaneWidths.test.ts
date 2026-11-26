@@ -10,10 +10,15 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sid
  const properties=new Map<string,string>(),callbacks=new Map<number,(time:number)=>void>(),events=new Map<string,Function>();
  const widthSaves:Array<typeof saved>=[];
  let nextFrame=0;
+ const style=(vars=new Map<string,string>())=>({
+  setProperty:(key:string,value:string)=>vars.set(key,value),
+  getPropertyValue:(key:string)=>vars.get(key)??'',
+  getPropertyPriority:()=>'',removeProperty:(key:string)=>vars.delete(key),
+ });
  const animations:Array<{name:string;frames:Array<{transform?:string}>;duration:number;startTime:number|null;currentTime:number|null;paused:boolean;cancelled:boolean}>=[];
  const rect=(left:number)=>({left,right:left+28,top:0,bottom:28});
  const animatedNode=(left:()=>number,name='')=>({
-  style:{setProperty(){}},
+  style:style(),
   querySelector:()=>null,
   getBoundingClientRect:()=>rect(left()),
   animate(frames:Array<{transform?:string}>,timing:{duration:number}){
@@ -37,8 +42,7 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sid
   return match?handles.get(match[1]!):null;
  };
  const makeNode=(styles=new Map<string,string>())=>({
-  className:'',isConnected:true,
-  style:{setProperty:(key:string,value:string)=>styles.set(key,value),getPropertyValue:(key:string)=>styles.get(key)??'',getPropertyPriority:()=>'',removeProperty:(key:string)=>styles.delete(key)},
+  className:'',isConnected:true,style:style(styles),
   classList:{add(){},remove(){}},
   pointer:undefined as number|undefined,
   setPointerCapture(pointer:number){this.pointer=pointer;},
@@ -48,13 +52,19 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sid
   addEventListener(type:string,callback:Function){(this as any)[type]=callback;},querySelector:findHandle,
   appendChild(node:any){handles.set(node.className.split('-').at(-1),node);},
  });
- const conversation={...makeNode(),querySelector:(selector:string)=>selector===':scope > .timeline-list'?{getBoundingClientRect:()=>({width:750})}:null};
+ const sidebar=makeNode(),dock={...makeNode(),getBoundingClientRect:()=>({width:850})};
+ const conversation={...makeNode(),getBoundingClientRect:()=>({width:850,top:65,bottom:800}),querySelectorAll:()=>[],
+  querySelector:(selector:string)=>selector===':scope > .timeline-list'?{getBoundingClientRect:()=>({width:750})}:null};
+ const workspace={...makeNode(),clientWidth:1232,querySelector:(selector:string)=>
+  selector==='.composer-input'?composer:selector==='.composer-dock'?dock:selector==='.conversation'?conversation:null,
+  querySelectorAll:(selector:string)=>selector==='.timeline-list,.conversation-header-backdrop'?[]:composer?[composer]:[]};
  const inspector=makeNode(),terminal=makeNode(),shell={...makeNode(properties),clientWidth:1512,inspectorOpen:!docked,terminalOpen:!docked,sidebarCollapsed:false,
  getBoundingClientRect:()=>rect(0), animate:surface.animate,
  querySelectorAll:(selector:string)=>docked&&selector==='.workbench-navigation button'?[toggle]:[],
  classList:{contains:(name:string)=>name==='terminal-is-open'&&shell.terminalOpen||name==='has-collapsed-sidebar'&&shell.sidebarCollapsed||name==='has-docked-conversation'&&docked},querySelector(selector:string):any{
-  if(selector==='.workspace')return {clientWidth:this.clientWidth-sidebarWidth(),querySelector:(name:string)=>name==='.composer-input'?composer:null,querySelectorAll:()=>composer?[composer]:[]};
+  if(selector==='.workspace'){workspace.clientWidth=this.clientWidth-sidebarWidth();return workspace;}
   if(selector==='.conversation')return conversation;
+  if(selector==='.sidebar')return sidebar;
   if(selector==='.island-conversation')return island;
   if(selector==='.workbench-conversation-surface')return docked?surface:null;
   if(selector==='.terminal-side-panel')return this.terminalOpen?terminal:null;
@@ -64,13 +74,15 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sid
  const window={lakeWorkbenchWidths:saved,addEventListener:(type:string,callback:Function)=>events.set(type,callback),dispatchEvent:(event:Event)=>events.get(event.type)?.(event)};
  const getComputedStyle=(_node:unknown,pseudo?:string)=>({
   getPropertyValue:(name:string)=>name==='--workbench-sidebar-duration'?sidebarDuration:`${railWidth}px`,
+  paddingInlineStart:'30px',
   transitionDuration:pseudo==='::before'?'0.42s':'0s',
   transitionTimingFunction:'ease',
  });
- const context={window,Event,innerWidth:1512,innerHeight:900,localStorage:{getItem(){return null;},setItem(_key:string,value:string){widthSaves.push(JSON.parse(value));}},document:{body:{},head:{appendChild(){}},documentElement:{classList:{add(){},remove(){}}},timeline:{currentTime:10},createElement:()=>makeNode(),querySelector:()=>shell,addEventListener(){}},getComputedStyle,ResizeObserver:class{observe(){}disconnect(){}},MutationObserver:class{observe(){}},requestAnimationFrame:(callback:(time:number)=>void)=>{callbacks.set(++nextFrame,callback);return nextFrame;},cancelAnimationFrame:(frame:number)=>callbacks.delete(frame)};
+ const context={window,Event,innerWidth:1512,innerHeight:900,localStorage:{getItem(){return null;},setItem(_key:string,value:string){widthSaves.push(JSON.parse(value));}},document:{body:{},head:{appendChild(){}},documentElement:{classList:{add(){},remove(){}}},timeline:{currentTime:10},createElement:()=>makeNode(),querySelector:()=>shell,addEventListener(){}},getComputedStyle,ResizeObserver:class{observe(){}disconnect(){}},MutationObserver:class{observe(){}disconnect(){}},IntersectionObserver:class{observe(){}disconnect(){}takeRecords(){return [];}},requestAnimationFrame:(callback:(time:number)=>void)=>{callbacks.set(++nextFrame,callback);return nextFrame;},cancelAnimationFrame:(frame:number)=>callbacks.delete(frame)};
  runInNewContext(source,context);
  const flush=(time=0)=>{for(const [id,callback] of callbacks){callbacks.delete(id);callback(time);}};flush();
- return {properties,animations,flush,widthSaves,conversation,sidebar:handles.get('sidebar') as ReturnType<typeof makeNode>,
+ return {properties,animations,flush,widthSaves,conversation,surface,sidebarPane:sidebar,workspace,dock,shell,
+  sidebar:handles.get('sidebar') as ReturnType<typeof makeNode>,
   drag(type:string,clientX:number,pointerId=1){handles.get('sidebar')[type]({type,clientX,pointerId,button:0,preventDefault(){}});},
   resize(width:number){shell.clientWidth=width;context.innerWidth=width;events.get('resize')!();flush();},reset(pane:string){handles.get(pane).dblclick();flush();},toggle(inspectorOpen:boolean,terminalOpen:boolean){shell.inspectorOpen=inspectorOpen;shell.terminalOpen=terminalOpen;events.get('resize')!();flush();},commit(inspectorOpen:boolean,terminalOpen:boolean){shell.inspectorOpen=inspectorOpen;shell.terminalOpen=terminalOpen;events.get('lake-workbench-layout')!();},collapseSidebar(collapsed:boolean){events.get('lake-workbench-sidebar-toggle')!();shell.sidebarCollapsed=collapsed;events.get('lake-workbench-layout')!();},widths(){return ['--sidebar-width','--terminal-panel-width','--inspector-preferred-width'].map(key=>parseFloat(properties.get(key)!));}};
 }
@@ -100,6 +112,44 @@ test('sidebar pointer moves resize the panes on the frame and preserve the readi
  assert.equal(page.widths()[0],370);
  assert.equal(page.sidebar.getAttribute('aria-valuenow'),'370');
  assert.deepEqual(page.widthSaves,[{sidebar:370,terminal:400,inspector:382}]);
+});
+
+test('two-pane pointer dragging moves the whole boundary without applying the grid before release',()=>{
+ const page=fixture(undefined,true);
+ page.drag('pointerdown',280);
+ page.drag('pointermove',323);
+ page.drag('pointermove',348);
+ page.flush();
+ assert.equal(page.widths()[0],280);
+ assert.equal(page.shell.getAttribute('data-sidebar-resize-layer'),'');
+ assert.equal(page.sidebarPane.style.getPropertyValue('inline-size'),'348px');
+ assert.equal(page.surface.style.getPropertyValue('transform'),'translate3d(68px,0,0)');
+ assert.equal(page.workspace.style.getPropertyValue('transform'),'translate3d(68px,0,0)');
+ assert.equal(page.sidebar.getAttribute('aria-valuenow'),'348');
+ assert.equal(page.dock.style.getPropertyValue('--sidebar-resize-viewport'),'782px');
+ assert.deepEqual(page.widthSaves,[]);
+
+ page.drag('pointerup',360);
+ page.flush();
+ assert.equal(page.widths()[0],360);
+ assert.equal(page.shell.getAttribute('data-sidebar-resize-layer'),undefined);
+ assert.equal(page.surface.style.getPropertyValue('transform'),'');
+ assert.equal(page.conversation.style.getPropertyValue('inline-size'),'');
+ assert.equal(page.widthSaves.length,1);
+});
+
+test('opening the task inspector cancels the two-pane resize and restores the pane bounds',()=>{
+ const page=fixture(undefined,true);
+ page.drag('pointerdown',280);
+ page.drag('pointermove',218);
+ page.flush();
+ assert.equal(page.sidebarPane.style.getPropertyValue('inline-size'),'218px');
+ page.commit(true,false);
+ assert.equal(page.shell.getAttribute('data-sidebar-resize-layer'),undefined);
+ assert.equal(page.sidebarPane.style.getPropertyValue('inline-size'),'');
+ assert.equal(page.sidebar.getAttribute('aria-valuenow'),'280');
+ assert.equal(page.sidebar.hasPointerCapture(1),false);
+ assert.deepEqual(page.widthSaves,[]);
 });
 
 test('live sidebar resizing respects pane limits and restores the saved layout on cancellation',()=>{
