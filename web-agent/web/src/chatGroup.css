@@ -5,22 +5,14 @@
 .chat-group-navigation-heading {
   display:flex;
   align-items:center;
-  justify-content:space-between;
-  gap:8px;
-  min-height:36px;
-  padding-inline:var(--sidebar-row-inset) 4px;
+  min-height:32px;
+  padding-inline:var(--sidebar-row-inset);
   color:var(--text-secondary);
 }
 .chat-group-navigation-heading h2 {
   margin:0;
   font-size:var(--font-size-toolbar);
   font-weight:var(--font-weight-medium);
-}
-.chat-group-navigation-heading .icon-button {
-  width:30px;
-  height:30px;
-  border-radius:var(--radius-settings-control);
-  corner-shape:var(--corner-window);
 }
 .sidebar.workspace-navigation .chat-group-nav-row {
   min-height:50px;
@@ -104,7 +96,5 @@
   accent-color:var(--primary);
 }
 @media(pointer:coarse) {
-  .chat-group-navigation-heading .icon-button,
   .chat-group-member-list label { min-height:44px; }
-  .chat-group-navigation-heading .icon-button { width:44px; }
 }

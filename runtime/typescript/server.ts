@@ -182,6 +182,7 @@ export async function startLakeServer(options: ServerOptions) {
   let closed = false;
   const clients = new Map<string, Set<ServerResponse>>();
   const catalogStreams = new Set<ServerResponse>();
+  const catalogChanged=()=>{for(const stream of catalogStreams)stream.write("event: catalog\ndata: {}\n\n");};
   const token = randomBytes(32).toString("hex");
   let origin = "";
   const broadcast = (event: any) => {
@@ -604,7 +605,7 @@ export async function startLakeServer(options: ServerOptions) {
           if(draining)throw new HttpError(503,'服务正在退出');
           result=superagent.createSpecialist(path[2],data);
           status=201;
-          for(const stream of catalogStreams)stream.write("event: catalog\ndata: {}\n\n");
+          catalogChanged();
         }
         else if(path[4]==='groups'&&method==='POST'&&(path.length===5||path.length===7&&path[6]==='messages')){
           await agents.prepareRedaction();
@@ -613,7 +614,6 @@ export async function startLakeServer(options: ServerOptions) {
             result=superagent.conversations.createGroup(path[2],data);
             superagent.ensure(path[2]);
             status=201;
-            for(const stream of catalogStreams)stream.write("event: catalog\ndata: {}\n\n");
           }else{
             result=await superagent.sendGroupMessage(path[2],path[5],data);
             status=202;
@@ -1071,9 +1071,7 @@ export async function startLakeServer(options: ServerOptions) {
     security = new LakeSecurity(store);
     gateway = new LakeGateway(options.home, security);
     extensions = new LakeExtensions(store, security, (value) => agents!.redact(value));
-    jumpServer = new LakeJumpServer(store,security,value=>agents!.registerSecret(value),()=>{
-      for (const stream of catalogStreams) stream.write("event: catalog\ndata: {}\n\n");
-    });
+    jumpServer = new LakeJumpServer(store,security,value=>agents!.registerSecret(value),catalogChanged);
     ssh=new LakeSSH(store,security,(session)=>{broadcast(store!.event(session,"session"));superagent?.changed(session);},value=>extensions!.scrub(value),value=>agents!.registerSecret(value),jumpServer);
     mysql=new LakeMySQL(store,security,value=>agents!.registerSecret(value),value=>agents!.redact(value));
     services=new LakeServiceResources(store,security,value=>agents!.registerSecret(value),value=>agents!.redact(ssh!.scrub(extensions!.scrub(value))));
@@ -1104,7 +1102,7 @@ export async function startLakeServer(options: ServerOptions) {
     resourceImport=new LakeResourceImport(store,resourceManagement,value=>agents!.registerSecret(value),options.resourceImport);
     const configuration=new PilotConfiguration(store,security,extensions,resourceManagement,value=>agents!.redact(ssh!.scrub(extensions!.scrub(value))));
     const allowAutomationOverrides = options.allowAutomationOverrides === true;
-    superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql,execution,Date.now,configuration,services,allowAutomationOverrides);
+    superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql,execution,Date.now,configuration,services,allowAutomationOverrides,catalogChanged);
     memory = new LakeMemory(store, () => security!.check(), value => agents!.redact(ssh!.scrub(extensions!.scrub(value))), allowAutomationOverrides);
     try { await memory.initialize(); } catch { memory.disable("记忆文件需要核实，当前暂停记忆功能；原记录保留，普通新任务仍可运行"); }
     agents.memory = memory;

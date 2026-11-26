@@ -63,8 +63,8 @@ export function SpecialistCreate({projectId,disabled,onCreated,onClose,returnFoc
  return createPortal(<dialog ref={dialog} role="dialog" className="modal workbench-dialog specialist-create-dialog" aria-labelledby={titleId}
   onCancel={event=>{event.preventDefault();if(!saving.current)onClose();}}>
   <header className="workbench-dialog-header">
-   <h2 id={titleId}>添加专员</h2>
-   <button type="button" className="icon-button" aria-label="关闭添加专员" disabled={busy} onClick={onClose}><Glyph name="close" size={16}/></button>
+   <h2 id={titleId}>新建专员</h2>
+   <button type="button" className="icon-button" aria-label="关闭新建专员" disabled={busy} onClick={onClose}><Glyph name="close" size={16}/></button>
   </header>
   <form className="workbench-dialog-form" onSubmit={save}>
    <div className="workbench-dialog-body">
@@ -89,7 +89,7 @@ export function SpecialistCreate({projectId,disabled,onCreated,onClose,returnFoc
    </div>
    <footer className="workbench-dialog-footer">
     <button type="button" className="button secondary" disabled={busy} onClick={onClose}>取消</button>
-    <button type="submit" className="button primary" disabled={!ready}>{busy?'正在添加…':'添加专员'}</button>
+    <button type="submit" className="button primary" disabled={!ready}>{busy?'正在创建…':'创建专员'}</button>
    </footer>
   </form>
  </dialog>,document.body);

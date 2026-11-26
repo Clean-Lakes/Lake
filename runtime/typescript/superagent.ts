@@ -97,7 +97,7 @@ type Interaction = { id: string; workerId: string; generation: number; kind: "pl
 type InputDelivery = { id:string; workerId:string; sessionId:string; taskId:string; generation:number; eventId:string;
   state:'queued'|'consumed'|'deferred'; via:'guide'|'question'; createdAt:string; consumedAt?:string };
 const permissionKeys = ["silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "silentMCPCalls", "denyLocalExecution", "blockUnreferencedAssets", "permissions", "permissionRevision", "securityPolicyRevision"];
-const routerTools = [...pilotConfigurationToolNames,"list_specialists", "list_specialist_avatars", "list_specialist_execution_options", "manage_specialist", "search_super_tasks", "route_work", "read_super_object", "inspect_watchdog", "convene_specialists", "inspect_specialist_conversation"];
+const routerTools = [...pilotConfigurationToolNames,"list_specialists", "list_specialist_avatars", "list_specialist_execution_options", "manage_specialist", "create_chat_group", "search_super_tasks", "route_work", "read_super_object", "inspect_watchdog", "convene_specialists", "inspect_specialist_conversation"];
 const workTools = ["work_begin", "work_read", "work_update", "work_finish", "work_wait", "recall_task_context", "recall_memory", "ask_user_question", "list_assets", "list_project_files",
   "list_referenced_task_evidence", "read_referenced_task_evidence", "read_tool_output"];
 const hostTools=["inspect_host"];
@@ -158,7 +158,7 @@ export class LakeSuperagent implements AgentHost {
   private taskStops = new Map<string, Promise<void>>();
   private heartbeat: ReturnType<typeof setInterval>;
   private watchdogTimer: ReturnType<typeof setInterval>;
-  constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH,readonly mysql?:LakeMySQL,readonly execution?:LakeExecution, private readonly watchdogClock = Date.now,readonly configuration?:PilotConfiguration, readonly services?:LakeServiceResources, allowWatchdogModeOverrides = true) {
+  constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH,readonly mysql?:LakeMySQL,readonly execution?:LakeExecution, private readonly watchdogClock = Date.now,readonly configuration?:PilotConfiguration, readonly services?:LakeServiceResources, allowWatchdogModeOverrides = true, catalogChanged?:()=>void) {
     this.discoveryRecovery = new ProgramDiscoveryRecovery(store, agents.sessions);
     this.operatorReviews = new OperatorEffectReviewService(store, agents.sessions, operation => {
       if (!ssh || !operation.resourceId || !operation.hostConfigurationHash)
@@ -234,6 +234,7 @@ export class LakeSuperagent implements AgentHost {
         this.freezeRoleExecution(snapshot);
       },
       notify:(session,message)=>this.agents.publish(this.store.event(session,message?'message':'specialist',message?{}:{conversationProgress:true})),
+      catalogChanged,
       schedule:()=>this.schedule(),
     });
     prepareWatchdogEvidence(store);
@@ -918,6 +919,7 @@ export class LakeSuperagent implements AgentHost {
   }
   private manage(sessionId: string, input: Record<string, any>,available?:SpecialistExecutionOption[]) {
     const event = this.admitted(sessionId, input.event_id, text(input.quote, "quote", 16384));
+    if(this.groupOfEvent(event))throw new HttpError(403,'请在 Lake 主对话创建或管理专员');
     if(Object.keys(input).some(key=>!['event_id','part_key','action','role_id','role_key','expected_revision','quote'].includes(key) && !Object.hasOwn(specialistProfileFields, key)))
       throw new HttpError(400,'Unsupported specialist configuration field');
     const part = text(input.part_key, "part_key", 128), has=(key:string)=>Object.hasOwn(input,key);
@@ -950,6 +952,23 @@ export class LakeSuperagent implements AgentHost {
       return role;
     });
     this.notify(sessionId, "specialist"); return result;
+  }
+  private createGroupFromChat(sessionId:string,input:Record<string,any>) {
+    const session=this.store.session(sessionId);
+    const project=this.store.get<SuperProject>('superProjects',session.projectId);
+    if(session.workspaceRole!=='router'||project?.routerSessionId!==sessionId)
+      throw new HttpError(403,'请在 Lake 主对话创建群组');
+    const event=this.admitted(sessionId,input.event_id,text(input.quote,'quote',16384));
+    const message=this.store.get<Message>('messages',event.messageId);
+    if(event.sessionId!==sessionId||event.external||event.preferredRoleId||message?.role!=='user'||message.sessionId!==sessionId)
+      throw new HttpError(403,'建群请求须来自 Lake 主对话中的用户消息');
+    if(Object.keys(input).some(key=>!['event_id','part_key','quote','title','role_ids'].includes(key)))
+      throw new HttpError(400,'建群请求包含不支持的字段');
+    const part=text(input.part_key,'part_key',128);
+    const {sessionId:groupId,title,members}=this.conversations.createGroup(session.projectId,{
+      title:input.title,roleIds:input.role_ids,requestId:'pilot-'+digest([event.id,part]),
+    });
+    return {sessionId:groupId,title,members};
   }
   private assignment(worker: Worker, instruction?: string): Assignment {
     return { executionId: worker.taskId, workerId: worker.id, sessionId: worker.sessionId, roleId: worker.roleId, instruction,
@@ -1750,7 +1769,7 @@ export class LakeSuperagent implements AgentHost {
       const worker=this.pilotTemplate(project);
       const entries=this.routerEntries(sessionId),names=entries.map(entry=>entry.metadata.name);
       const group=this.conversations.group(project.projectId,sessionId);
-      const systemPrompt=group?superRouterPrompt+'\nThis Pilot conversation has a fixed group roster. Any instructions above for finding or creating project-wide specialists are superseded here. Use only existing members in this conversation’s specialists catalog. An explicit request for everyone refers to this group. If the roster cannot cover the request, explain it or use Pilot’s ordinary direct-work path when the user asks you to do it. Do not create or change specialists.':superRouterPrompt;
+      const systemPrompt=group?superRouterPrompt+'\nThis Pilot conversation has a fixed group roster. Use only existing members listed for this conversation. An explicit request for everyone refers to this group. If the roster cannot cover the work, explain it or use Pilot’s ordinary direct-work path if the user explicitly requests it. Creating groups or creating or changing specialists requires the Lake main conversation. Direct those requests there; do not attempt them with a different tool.':superRouterPrompt;
       if(!worker)return {version:'pilot:idle:'+sessionId,systemPrompt,tools:entries,allowlist:names};
       const common=this.taskProfile(worker);
       return {...common,get taskId(){return worker.taskId;},get workerId(){return worker.id;},version:'pilot:agent:'+worker.id+':'+worker.generation,systemPrompt,
@@ -2219,8 +2238,9 @@ export class LakeSuperagent implements AgentHost {
       handler: async (input, context) => handler(input, context) };
   }
   private routerEntries(sessionId: string) {
-    const projectId = this.store.session(sessionId).projectId;
+    const session=this.store.session(sessionId),projectId=session.projectId;
     const group=this.conversations.group(projectId,sessionId);
+    const mainLake=session.workspaceRole==='router'&&this.store.get<SuperProject>('superProjects',projectId)?.routerSessionId===sessionId;
     const entries = [
       this.entry('convene_specialists','Invite persistent specialists to personally reply in the current shared conversation. Use for roll call, introductions, asking everyone or selected specialists to speak, and text-only group discussion. audience=all freezes every current specialist, including beyond the bounded catalog; otherwise pass exact role_ids. Copy the exact human event_id and quote; use one stable part_key. Each recipient runs independently; the host tracks actual replies and missing/failed/timed-out states. In Pilot, a multi-speaker round ends with a brief conclusion from the actual replies. Leave summarize unset for this default, set it false only when the human asks to skip the conclusion, and true when explicitly asked to synthesize. The conclusion avoids repeating the roster and duties. Confirm the invitation once, then stop this turn; never answer on behalf of recipients or claim attendance from the catalog. No business task or resource execution is created. Use route_work separately for resource work.',
         objectSchema({event_id:str,part_key:str,quote:str,instruction:str,audience:{type:'string',enum:['all']},role_ids:array(str),timeout_seconds:integer,summarize:{type:'boolean'}},['event_id','part_key','quote','instruction']),async(a,context)=>{
@@ -2319,6 +2339,15 @@ export class LakeSuperagent implements AgentHost {
       this.entry("read_super_object", "Read exact project event/task/worker/task_digest with revision/hash checked before each page. For a shared task omit role_id to read the aggregate, or copy the ref.role_id to read a participant's own execution.",
         objectSchema({ kind: { type: "string", enum: ["event", "task", "worker", "task_digest"] }, id: str, role_id: str, revision: integer, expected_hash: str, offset: integer, limit: integer }, ["kind", "id"]), (a) => this.readObject(sessionId, a), false, 131072),
     ];
+    if(mainLake){
+      const createGroup=this.entry('create_chat_group','Create a persistent fixed-member group in this project from an explicit user request in the main Lake conversation. Pass the requested title and 2 to 64 distinct existing specialist IDs from the current roster or list_specialists. Use a stable part_key for this group and copy event_id and quote from the admitted user input. This creates a chat without sending a message or dispatching work. Confirm only after the saved group is returned.',
+        objectSchema({event_id:str,part_key:str,quote:str,title:str,role_ids:array(str)},['event_id','part_key','quote','title','role_ids']),
+        (a,context)=>{context.abortSignal.throwIfAborted();return this.createGroupFromChat(sessionId,a);},false,65536);
+      createGroup.metadata={...createGroup.metadata,readOnly:false,allowedInPlanMode:false,sideEffectScope:'workspace'};
+      createGroup.permission={...createGroup.permission,sideEffectScope:'workspace'};
+      createGroup.resolvePermissionCapability=()=>operationApproval(this.store.session(sessionId).options,'silentWriteFiles');
+      entries.push(createGroup);
+    }
     return group?entries.filter(entry=>!['manage_specialist','list_specialist_avatars','list_specialist_execution_options'].includes(entry.metadata.name)):entries;
   }
   private readObject(sessionId: string, input: Record<string, any>) {

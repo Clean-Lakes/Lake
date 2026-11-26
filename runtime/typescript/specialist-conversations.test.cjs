@@ -137,6 +137,71 @@ test('the specialist form creates one project-local profile and channel without 
  assert.equal(otherChannel.projectId,other.id);
 });
 
+test('Lake main chat can create a specialist and a fixed group, and group chat cannot create either',async t=>{
+ const create='创建证据核对专员，头像用河狸，负责核对发布清单。请把它和干员1加入新群「发布复核群」。';
+ const denied='在本群创建临时专员，并新建一个群组';
+ const f=await fixture(t,{count:2,acp:true,pilotReply:({event,reply})=>{
+  const source={event_id:event.id,quote:event.text};
+  if(event.text===denied){
+   if(reply.some(message=>message.role==='tool'))return {content:'请在 Lake 主对话新建专员和群组。'};
+   return toolCall('route_work',{...source,part_key:'new-role',action:'create',role_key:'unexpected-specialist',
+    new_specialist:{name:'临时专员',duties:'核对发布清单'},title:'检查清单',reason:'测试群组不能隐式创建角色'},'group-attempt');
+  }
+  const result=id=>reply.find(message=>message.role==='tool'&&message.tool_call_id===id);
+  const created=result('save-specialist');
+  if(!created)return toolCall('manage_specialist',{...source,part_key:'specialist',action:'create',role_key:'evidence-review',
+   name:'证据核对专员',duties:'核对发布清单',avatar_id:'beaver'},'save-specialist');
+  const specialist=JSON.parse(content(created));
+  const group={...source,part_key:'release-review',title:'发布复核群',role_ids:[specialist.id,'role-0']};
+  if(!result('save-group'))return toolCall('create_chat_group',group,'save-group');
+  if(!result('retry-group'))return toolCall('create_chat_group',group,'retry-group');
+  const saved=JSON.parse(content(result('save-group')));
+  assert.deepEqual(JSON.parse(content(result('retry-group'))),saved);
+  return {content:`已创建${saved.title}。`};
+ }});
+ const watch=new AbortController();
+ const changes=await fetch(f.app.origin+'/api/jumpserver/events',{headers:{Authorization:`Bearer ${f.app.token}`},signal:watch.signal});
+ assert.equal(changes.status,200);
+ const catalog=changes.body.getReader();
+ await catalog.read();
+ const pilotSession=`/api/sessions/${f.pilot.routerSessionId}`;
+ try{
+  await f.api(pilotSession+'/messages','POST',{text:create},202);
+  let previousApprovalId;
+  for(const groupCount of [0,1]){
+   const {pending}=await until(()=>f.api(pilotSession+'/ai'),view=>view.pending?.call.name==='create_chat_group'&&view.pending.id!==previousApprovalId);
+   assert.equal(f.app.store.list('superChatGroups').length,groupCount);
+   previousApprovalId=pending.id;
+   await f.api(pilotSession+'/ai/decision','POST',{id:pending.id,accept:true});
+  }
+  await until(()=>f.api(pilotSession+'/snapshot'),view=>view.messages.some(message=>message.text==='已创建发布复核群。'));
+  const change=await Promise.race([catalog.read(),new Promise(resolve=>{
+   const timer=setTimeout(()=>resolve({}),1600);timer.unref();
+  })]);
+  assert.match(Buffer.from(change.value??[]).toString(),/event: catalog/);
+ }finally{watch.abort();}
+ const workspace=await f.api(f.path),specialist=workspace.channels.find(row=>row.roleName==='证据核对专员');
+ assert.equal(specialist.avatarId,'beaver');
+ assert.equal(workspace.chatGroups.length,1);
+ const [group]=workspace.chatGroups;
+ assert.deepEqual(group.members.map(member=>member.roleId),[specialist.roleId,'role-0']);
+ assert.ok((await f.api('/api/catalog')).sessions.some(session=>session.id===group.sessionId&&session.workspaceRole==='group'));
+ assert.ok(f.requests.some(request=>request.tools?.some(tool=>tool.function.name==='create_chat_group')));
+ assert.deepEqual(f.app.store.messages(group.sessionId),[]);
+
+ const groupSession=`/api/sessions/${group.sessionId}`;
+ await f.api(groupSession+'/messages','POST',{text:denied},202);
+ await until(()=>f.api(groupSession+'/snapshot'),view=>view.messages.some(message=>message.text==='请在 Lake 主对话新建专员和群组。'));
+ const groupRequests=f.requests.filter(request=>pilotTurn(request).event.text===denied);
+ assert.ok(groupRequests.length);
+ assert.ok(groupRequests.every(request=>!request.tools?.some(tool=>['create_chat_group','manage_specialist'].includes(tool.function.name))));
+ assert.match(JSON.stringify(groupRequests.map(pilotTurn).flatMap(turn=>turn.reply)),/群组只可派单给固定成员/);
+ const after=await f.api(f.path);
+ assert.equal(after.chatGroups.length,1);
+ assert.equal(after.channels.length,workspace.channels.length);
+ for(const table of ['superGoals','superWorkers','acpRuns'])assert.equal(f.app.store.list(table).length,0,table);
+});
+
 test('groups save a fixed roster and use separate continuous Pilot conversations',async t=>{
  const f=await fixture(t,{count:3,pilotReply:async({event},gate)=>{
   if(event.text==='各位好')await gate;

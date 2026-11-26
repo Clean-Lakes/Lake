@@ -1,10 +1,17 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {registerHooks} from 'node:module';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {PilotWorkspace} from '../src/PilotWorkspace';
 import {ChatGroupNavigation} from '../src/ChatGroup';
+import {ProjectChatCreation} from '../src/ProjectChatCreation';
 import type {SuperWorkspace} from '../../shared/contracts';
+
+const css=registerHooks({load(url,context,nextLoad){return url.endsWith('.css')?{format:'module',source:'export {};',shortCircuit:true}:nextLoad(url,context)}});
+const {SidebarWorkspaceNavigation}=await import('../src/SidebarWorkspaceNavigation');
+const {WorkbenchSidebar}=await import('../src/WorkbenchNavigation');
+css.deregister();
 
 test('the project group list and the specialist rail have distinct entries',()=>{
  const channel={id:'channel-ops',projectId:'p',roleId:'ops',roleName:'运维专员',sessionId:'ops-channel',revision:1,createdAt:'',messageRead:{cursor:'2',seenCursor:'1'}};
@@ -17,22 +24,28 @@ test('the project group list and the specialist rail have distinct entries',()=>
  const entry=renderToStaticMarkup(createElement(PilotWorkspace,{...props,presentation:'entry'}));
  assert.match(entry,/sidebar-pilot-entry/);
  assert.doesNotMatch(entry,/运维专员/);
- const groups=renderToStaticMarkup(createElement(ChatGroupNavigation,{projectId:'p',channels:[channel],selectedId:'group',disabled:false,
+ const groups=renderToStaticMarkup(createElement(ChatGroupNavigation,{selectedId:'group',
   groups:[{sessionId:'group',projectId:'p',title:'运维协作群',updatedAt:'',members:[channel],latest:{text:'已更新巡检记录',author:'运维专员'}}],
-  onOpen(){},async onCreated(){}}));
- assert.match(groups,/aria-label="新建群组"/);
+  onOpen(){}}));
+ assert.doesNotMatch(groups,/aria-label="新建群组"/);
  assert.match(groups,/class="nav-row chat-group-nav-row" aria-current="page"/);
  assert.match(groups,/运维专员：已更新巡检记录/);
 });
 
-test('the specialist rail provides an add button in a project with no specialists',()=>{
+test('an empty project has one shared creation menu in the header or collapsed rail',()=>{
  const workspace:SuperWorkspace={active:true,project:{projectId:'p',routerSessionId:'pilot',version:1},workers:[],channels:[]};
- const props={workspace,error:'',selectedId:null,creation:{projectId:'p',onCreated(){}},onPilot(){},onWorker(){}};
- const rail=renderToStaticMarkup(createElement(PilotWorkspace,{...props,presentation:'rail'}));
- assert.match(rail,/aria-label="添加专员"[^>]+aria-haspopup="dialog"/);
- assert.doesNotMatch(rail,/sidebar-specialist-button|<dialog/);
- const entry=renderToStaticMarkup(createElement(PilotWorkspace,{...props,presentation:'entry'}));
- assert.doesNotMatch(entry,/添加专员/);
+ const props={workspace,error:'',selectedId:null,onPilot(){},onWorker(){}};
+ for(const collapsed of [false,true]){
+  const sidebar=createElement(SidebarWorkspaceNavigation,{projectId:'p',resourceCount:0,selectionId:'pilot',selectedPanel:'specialists',children:null,
+   specialists:createElement(PilotWorkspace,{...props,presentation:'entry'}),specialistRail:createElement(PilotWorkspace,{...props,presentation:'rail'}),
+   renderCreation:compact=>createElement(ProjectChatCreation,{projectId:'p',channels:[],compact,disabled:false,groupsReady:true,
+    onSpecialistCreated(){},async onGroupCreated(){}})});
+  const html=renderToStaticMarkup(createElement(WorkbenchSidebar.Provider,{value:{collapsed,expand(){}}},sidebar));
+  assert.equal((html.match(/aria-label="新建"/g)??[]).length,1);
+  assert.match(html,/class="(?:icon-button|sidebar-rail-button) sidebar-create-trigger"[^>]+aria-haspopup="menu"/);
+  assert.equal(html.indexOf('sidebar-create-trigger')<html.indexOf('sidebar-navigation-viewport'),collapsed);
+  assert.doesNotMatch(html,/aria-label="(?:添加专员|新建群组)"|<dialog/);
+ }
 });
 
 test('Pilot and real specialist instances replace session creation',()=>{

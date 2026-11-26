@@ -1,4 +1,4 @@
-import {useEffect, useId, useRef, useState, type FormEvent} from 'react';
+import {useEffect, useId, useRef, useState, type FormEvent, type RefObject} from 'react';
 import type {ChatGroup, ChatGroupMember, SpecialistChannelInfo} from '../../shared/contracts';
 import {api, readableError} from './api';
 import {Glyph} from './Icons';
@@ -12,22 +12,14 @@ export function ChatGroupAvatars({members,compact=false}:{members:readonly ChatG
   </span>;
 }
 
-export function ChatGroupNavigation({projectId, groups, channels, selectedId, disabled, onOpen, onCreated}:{
-  projectId:string;
+export function ChatGroupNavigation({groups,selectedId,onOpen}:{
   groups:readonly ChatGroup[];
-  channels:readonly SpecialistChannelInfo[];
   selectedId:string|null;
-  disabled:boolean;
   onOpen:(sessionId:string)=>void;
-  onCreated:(group:ChatGroup)=>Promise<void>;
 }) {
-  const [creating, setCreating] = useState(false);
   return <section className="chat-group-navigation" aria-label="群组">
     <div className="chat-group-navigation-heading">
       <h2>群组</h2>
-      <button type="button" className="icon-button" aria-label="新建群组" title="新建群组" disabled={disabled} onClick={()=>setCreating(true)}>
-        <Glyph name="plus" size={16}/>
-      </button>
     </div>
     {groups.map(group=><button key={group.sessionId} type="button" className="nav-row chat-group-nav-row"
       aria-current={selectedId===group.sessionId?'page':undefined} onClick={()=>onOpen(group.sessionId)}>
@@ -37,15 +29,14 @@ export function ChatGroupNavigation({projectId, groups, channels, selectedId, di
         <small>{group.latest ? [group.latest.author,group.latest.text].filter(Boolean).join('：') : `${group.members.length} 位专员`}</small>
       </span>
     </button>)}
-    {creating&&<CreateChatGroup projectId={projectId} channels={channels} disabled={disabled}
-      onCreated={onCreated} onClose={()=>setCreating(false)}/>}
   </section>;
 }
 
-function CreateChatGroup({projectId, channels, disabled, onCreated, onClose}:{
+export function CreateChatGroup({projectId,channels,disabled,returnFocus,onCreated,onClose}:{
   projectId:string;
   channels:readonly SpecialistChannelInfo[];
   disabled:boolean;
+  returnFocus:RefObject<HTMLButtonElement|null>;
   onCreated:(group:ChatGroup)=>Promise<void>;
   onClose:()=>void;
 }) {
@@ -61,15 +52,15 @@ function CreateChatGroup({projectId, channels, disabled, onCreated, onClose}:{
   const roleIds=channels.flatMap(channel=>selected.has(channel.roleId)?[channel.roleId]:[]);
   const ready=!disabled&&!busy&&title.trim()&&roleIds.length>=2&&roleIds.length<=64;
   useEffect(()=>{
-    const previous=document.activeElement;
+    const previous=returnFocus.current;
     const node=dialog.current;
     node?.showModal();
     input.current?.focus({preventScroll:true});
     return ()=>{
       node?.close();
-      if(previous instanceof HTMLElement&&previous.isConnected)previous.focus({preventScroll:true});
+      if(previous?.isConnected)previous.focus({preventScroll:true});
     };
-  },[]);
+  },[returnFocus]);
 
   async function create(event:FormEvent) {
     event.preventDefault();

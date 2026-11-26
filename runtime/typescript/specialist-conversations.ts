@@ -48,6 +48,7 @@ export class SpecialistConversations {
     check:(projectId?:string)=>void;
     channel:(role:ConversationRole)=>string;
     notify:(sessionId:string,message?:boolean)=>void;
+    catalogChanged?:()=>void;
     schedule:()=>void;
     clock?:()=>number;
     freeze?:(role:ConversationRole)=>ConversationRole;
@@ -131,6 +132,7 @@ export class SpecialistConversations {
       return this.store.put<GroupRecord>('superChatGroups',session.id,{sessionId:session.id,projectId,roleIds,createKey,requestHash});
     });
     this.notifyGroupProject(projectId);
+    this.ports.catalogChanged?.();
     return this.groupView(group);
   }
   priorGroupMessage(sessionId:string,requestId:string,hash:string) {
