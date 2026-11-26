@@ -1152,7 +1152,7 @@ a { color: inherit; }
 .workspace-actions{ display: flex; gap: 3px; flex-shrink: 0; }
 .workspace-refresh.is-refreshing svg { animation: spin 0.8s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .workspace-refresh.is-refreshing svg { animation: none; } }
-.composer-input:has(.composer-rich-input:focus, textarea:focus) { --composer-stroke: color-mix(in srgb, var(--focus) 56%, var(--border)); }
+.composer-input:not(.attachment-drop-active):has(.composer-rich-input:focus, textarea:focus) { --composer-stroke: color-mix(in srgb, var(--focus) 56%, var(--border)); }
 .ai-markdown h1, .ai-markdown h2, .ai-markdown h3{ color: var(--foreground); font-weight:var(--font-weight-semibold); line-height: 1.4; margin: 20px 0 10px; }
 .ai-markdown h1{ font-size: 25px; }
 .ai-markdown h2{ font-size: 21px; }

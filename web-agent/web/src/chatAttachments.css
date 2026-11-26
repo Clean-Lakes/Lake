@@ -1,6 +1,6 @@
 .composer-input.attachment-drop-active {
-  --composer-stroke: var(--info);
-  --composer-fill: var(--info-soft);
+  --composer-stroke: var(--border-strong);
+  --composer-fill: var(--surface-hover);
 }
 .composer-file-drop-overlay {
   position: absolute;
@@ -12,8 +12,8 @@
   gap: 8px;
   border-radius: calc(var(--radius-window) - 3px);
   corner-shape: var(--corner-window);
-  background: var(--info-soft);
-  color: var(--info);
+  background: var(--surface-hover);
+  color: var(--foreground);
   font-size: var(--font-size-ui);
   font-weight: var(--font-weight-medium);
   pointer-events: none;
