@@ -18,6 +18,7 @@
     .workbench-splitter:hover::after, .workbench-splitter:focus-visible::after { content:''; position:absolute; top:0; bottom:0; left:3px; width:2px; background:var(--focus); }
     .workbench-splitter-sidebar { left:calc(var(--sidebar-width) - 4px); }
     .workbench-splitter-sidebar:hover:not(:focus-visible)::after { width:1px; background:var(--border-strong); }
+    .workbench-splitter-sidebar.is-dragging::after { transform:translate3d(var(--sidebar-drag-offset,0px),0,0); will-change:transform; }
     .workbench-splitter-terminal, .workbench-splitter-inspector { left:0; }
     .workbench-splitter-terminal::after, .workbench-splitter-inspector::after { left:0; }
     .workbench-resizing .session-inspector { animation:none !important; }
@@ -208,6 +209,27 @@
     }
     if (startSlide) slideSidebar({ surface, from, fromIsland, width, expandedWidth: target.expandedSidebarWidth, railWidth: target.railWidth, collapsed, origin });
   }
+  function sidebarDragWidth(drag, x, min, max) {
+    return clamp(drag.width + x - drag.x, min, max);
+  }
+  function previewSidebarDrag(drag) {
+    drag.previewFrame = 0;
+    const { handle } = drag;
+    const min = Number(handle.getAttribute('aria-valuemin'));
+    const max = Number(handle.getAttribute('aria-valuemax'));
+    const settled = Number(handle.getAttribute('aria-valuenow'));
+    const width = sidebarDragWidth(drag, drag.clientX, min, max);
+    handle.style.setProperty('--sidebar-drag-offset', `${width - settled}px`);
+  }
+  function clearDrag() {
+    const { pane, handle, pointer, previewFrame } = active;
+    active = null;
+    if (previewFrame) cancelAnimationFrame(previewFrame);
+    if (pane === 'sidebar') handle.style.removeProperty('--sidebar-drag-offset');
+    handle.classList.remove('is-dragging');
+    document.documentElement.classList.remove('workbench-resizing');
+    if (handle.hasPointerCapture(pointer)) handle.releasePointerCapture(pointer);
+  }
   function addHandle(parent, pane) {
     if (parent.querySelector(`:scope > .workbench-splitter-${pane}`)) return;
     const handle = document.createElement('div');
@@ -218,23 +240,47 @@
     handle.setAttribute('aria-label', pane === 'sidebar' ? '调整项目导航宽度' : pane === 'terminal' ? '调整终端宽度' : '调整任务检查宽度');
     handle.title = '拖动调整宽度，双击恢复默认；方向键微调';
     handle.addEventListener('pointerdown', event => {
-      if (event.button !== 0) return;
+      if (event.button !== 0 || active) return;
       event.preventDefault();
-      const element = shell.querySelector(pane === 'sidebar' ? '.sidebar' : pane === 'terminal' ? '.terminal-side-panel' : '.session-inspector');
-      active = { pane, x: event.clientX, width: element.getBoundingClientRect().width, pointer: event.pointerId };
       handle.setPointerCapture(event.pointerId);
+      const width = pane === 'sidebar' ? Number(handle.getAttribute('aria-valuenow'))
+        : shell.querySelector(pane === 'terminal' ? '.terminal-side-panel' : '.session-inspector').getBoundingClientRect().width;
+      active = { pane, handle, x: event.clientX, width, pointer: event.pointerId };
       handle.classList.add('is-dragging');
       document.documentElement.classList.add('workbench-resizing');
     });
     handle.addEventListener('pointermove', event => {
-      if (!active || active.pointer !== event.pointerId) return;
+      const drag = active;
+      if (drag?.handle !== handle || drag.pointer !== event.pointerId) return;
+      if (pane === 'sidebar') {
+        // Keep the transcript at its settled width until release. Only the
+        // divider's painted position follows the pointer on each display frame.
+        drag.clientX = event.clientX;
+        if (!drag.previewFrame) drag.previewFrame = requestAnimationFrame(() => previewSidebarDrag(drag));
+        return;
+      }
       const [min, max] = limits(pane);
       if (min === max) return;
-      preferred[pane] = clamp(active.width + (event.clientX - active.x) * (pane === 'sidebar' ? 1 : -1), min, max);
+      preferred[pane] = clamp(drag.width + drag.x - event.clientX, min, max);
       apply();
       schedule();
     });
-    const finish = () => { active = null; handle.classList.remove('is-dragging'); document.documentElement.classList.remove('workbench-resizing'); save(); };
+    const finish = event => {
+      if (active?.handle !== handle || active.pointer !== event.pointerId) return;
+      if (pane !== 'sidebar') save();
+      else if (event.type === 'pointerup' && innerWidth > 700) {
+        const [min, max] = limits(pane);
+        const width = sidebarDragWidth(active, event.clientX, min, max);
+        if (min !== max && width !== clamp(preferred.sidebar, min, max)) {
+          window.dispatchEvent(new Event('lake-workbench-sidebar-will-resize'));
+          preferred.sidebar = width;
+          apply();
+          save();
+          schedule();
+        }
+      }
+      clearDrag();
+    };
     handle.addEventListener('pointerup', finish);
     handle.addEventListener('pointercancel', finish);
     handle.addEventListener('lostpointercapture', finish);
@@ -295,7 +341,10 @@
   }
   function sync() {
     frame = 0;
-    shell = document.querySelector('.app-shell');
+    const nextShell = document.querySelector('.app-shell');
+    if (active?.pane === 'sidebar' && (nextShell !== shell || !active.handle.isConnected ||
+      innerWidth <= 700 || nextShell.classList.contains('has-collapsed-sidebar'))) clearDrag();
+    shell = nextShell;
     if (!shell) return;
     addHandle(shell, 'sidebar');
     const terminal = shell.querySelector('.terminal-side-panel');
