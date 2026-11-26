@@ -9,8 +9,8 @@ export function hasTaskProcess(author?:SpecialistReplyAuthor):author is Speciali
 }
 
 /** Keep the same task button as live prose becomes a settled report. */
-export function SpecialistProcessLink({author,reportId,onInspect,active=false,liveStatus,text='执行过程'}:{
- author?:SpecialistReplyAuthor;reportId?:string;onInspect?:InspectSpecialist;active?:boolean;liveStatus?:string;text?:string;
+export function SpecialistProcessLink({author,reportId,onInspect,active=false,liveStatus}:{
+ author?:SpecialistReplyAuthor;reportId?:string;onInspect?:InspectSpecialist;active?:boolean;liveStatus?:string;
 }){
  const {pilot,footer}=useContext(ReplyProcessContext);
  const selection=useSessionInspector()?.selection;
@@ -22,7 +22,7 @@ export function SpecialistProcessLink({author,reportId,onInspect,active=false,li
  const expanded=sources?!!pilot&&sources.pilot.turnId===pilot.turnId&&sources.pilot.sessionId===pilot.sessionId&&
   sources.specialist.taskId===author.taskId&&sources.specialist.sessionId===author.sessionId:workerOpen;
  return <ReplyFooter status={status} liveStatus={liveStatus} duration={duration} action={{
-  text,label:`查看${author.name}的${text}`,controls:sessionInspectorId,side:true,
+  label:`查看${author.name}的执行过程`,controls:sessionInspectorId,side:true,
   taskId:author.taskId,expanded,liveMotion:active,onClick:()=>onInspect(author,pilot),
  }}/>;
 }

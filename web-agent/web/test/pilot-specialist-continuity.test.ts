@@ -191,17 +191,20 @@ test('a host-confirmed report replaces the same task slot across SDK invocations
 
 test('the live specialist process waits for the formal report presentation before folding',()=>{
  const row=advance([],workspace())[0]!;
- const final:Message={...report(row),codexActivity:[
+ const final:Message={...report(row),author:{...row.author,rootTurnId:'sdk-root',durationMs:135000},codexActivity:[
   {kind:'text',id:'step',text:'正在核对记录。'},
   {kind:'integration',id:'call',text:'查询记录',status:'completed',at},
  ]};
  const delivered={...row,finalReport:final};
  const render=(arriveReport:boolean)=>renderToStaticMarkup(createElement(PilotSpecialistReplyView,{
-  row:delivered,foldSpecialistProcess:true,arriveReport,
+  row:delivered,foldSpecialistProcess:true,arriveReport,onInspectSpecialist(){},
  }));
- assert.doesNotMatch(render(true),/aria-label="查看执行过程"[^>]*aria-expanded="false"/);
- assert.match(render(false),/aria-label="查看执行过程"[^>]*aria-expanded="false"/);
- assert.match(render(false),/正式结果/);
+ const presenting=render(true);
+ assert.match(presenting,/正在核对记录。[\s\S]*正式结果/);
+ assert.match(presenting,/data-placement="side"[^>]*aria-label="查看服务器专员的执行过程"/);
+ const settled=render(false);
+ assert.match(settled,/正式结果[\s\S]*aria-label="查看执行过程"[^>]*aria-expanded="false"[\s\S]*2 分钟 15 秒[\s\S]*正在核对记录。/);
+ assert.doesNotMatch(settled,/data-placement="side"/);
 });
 
 test('published stage prose keeps working motion and trims only its terminal full stop',()=>{

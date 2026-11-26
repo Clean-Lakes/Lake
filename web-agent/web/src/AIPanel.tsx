@@ -55,7 +55,7 @@ import {MarkdownCodeBlock} from './MarkdownCodeBlock';
 import {replyInfoComponents} from './ReplyInfoElements';
 import remarkGfm from "remark-gfm";
 import {ReplyDetailsSummary} from './ReplyDetailsSummary';
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { AIImage, AICard, AIView, AIPreset, TextFileAttachment, SessionSnapshot, TerminalSession } from "../../shared/contracts";
 import {AssistantMarkdown, ObjectReferencesProvider, ReplyReferenceScope} from './AssistantMarkdown';
 import { isCompactionFallbackEntry, isCompactionFailureEntry, orderedTranscript, replySourceMessageId, transcriptGroups, transcriptTurns } from "./timeline";
@@ -142,17 +142,19 @@ export function TranscriptMessage({
  // Handoffs belong to execution records, not the human-facing conversation.
  if(message.dispatch)return null;
  if(message.role==='system'&&isContextCompactionFailure(message.text||''))return <CompactionNotice message={message.text}/>;
- const attachments=<MessageAttachments message={message} sessionId={sessionId}/>;
  const activity=message.role==='assistant'&&message.author?.kind==='specialist'&&
   message.codexActivity?.some(item=>item.kind!=='text')?message.codexActivity:undefined;
  const reportText=message.role==='assistant'&&message.text?planMarkdown(message.text):'';
  const collapseProcess=!!activity&&foldSpecialistProcess&&!!reportText.trim();
+ const process=activity&&<SpecialistExecutionProcess key="process" items={activity} report={message} collapse={collapseProcess} onInspect={onInspectProcess}/>;
+ const reply=<Fragment key="reply">
+  {message.text && (message.role === 'assistant' ? <AssistantMarkdown arrive={arrive}>{reportText}</AssistantMarkdown> : <div className={message.role==='user'?'user-message-text':undefined}>{message.role === "system" ? displayAiError(message.text) : <MessageText text={message.text} mentions={message.mentions} resources={resources}/>}</div>)}
+  <MessageAttachments message={message} sessionId={sessionId}/>
+ </Fragment>;
    return <div className={`ai-chat-message ai-role-${message.role}${roleBreak?' is-role-break':''}${continued?' is-reply-continuation':''}${message.images?.length?" has-message-images":""}${animate?" user-message-arrival":""}`}>
           {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <ReplyIdentity identity={assistantIdentity} author={message.author} showBackendName={message.codexActivity?.some(item=>item.kind!=='text')} onSpecialist={onSpecialist} hidden={hideIdentity} continued={continued} motion={motion} nameMotion={nameMotion}/> }{message.role === "user" && message.external && <small className="external-origin-badge" title={message.external.connectionName?`接入渠道：${message.external.connectionName}${message.external.threadTitle?` · 会话：${message.external.threadTitle}`:""}（MCP）`:"来自外部 Agent 的消息（MCP）"}><Glyph name="plug" size={12}/>{message.external.connectionName||"外部 Agent"}</small>}{taskLabel&&<small className="pilot-specialist-task-label">{taskLabel}</small>}{message.role==='user'&&message.taskReference&&<div className="message-task-context"><PilotTaskReferenceChip task={message.taskReference}/></div>}
-          {activity&&<SpecialistExecutionProcess items={activity} reportText={message.text} collapse={collapseProcess} onInspect={onInspectProcess}/>}
-          {message.text && (message.role === 'assistant' ? <AssistantMarkdown arrive={arrive}>{reportText}</AssistantMarkdown> : <div className={message.role==='user'?'user-message-text':undefined}>{message.role === "system" ? displayAiError(message.text) : <MessageText text={message.text} mentions={message.mentions} resources={resources}/>}</div>)}
-          {attachments}
-          {message.role==='assistant'&&<SpecialistProcessLink author={message.author} reportId={message.id} onInspect={onInspectSpecialist} text={collapseProcess?'完整执行记录':undefined}/>}
+          {collapseProcess?[reply,process]:[process,reply]}
+          {message.role==='assistant'&&!collapseProcess&&<SpecialistProcessLink author={message.author} reportId={message.id} onInspect={onInspectSpecialist}/>}
           {pendingImages!==undefined&&<small className="supplement-delivery-status" role="status">补充已发送 · 等待接入{pendingImages>0?` · ${pendingImages} 张图片`:''}</small>}
           {message.role==='user'&&!!message.text&&<UserMessageCopy text={message.text}/>}
         </div>;

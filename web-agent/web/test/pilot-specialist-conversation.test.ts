@@ -187,7 +187,8 @@ test('completed specialists leave their distinct formal reports without another 
 const releaseReport:Message={
  id:'report-host',sessionId:'pilot',role:'assistant',replyToMessageId:user.id,text:'发布记录核对完成。',
  createdAt:'2026-11-06T00:00:03Z',
- author:{kind:'specialist',name:'发布专员',roleId:'role-host',workerId:'host',sessionId:'worker-host',taskId:'task-host'},
+ author:{kind:'specialist',name:'发布专员',roleId:'role-host',workerId:'host',sessionId:'worker-host',taskId:'task-host',durationMs:282000},
+ files:[{sourceId:'report-file',name:'发布记录.txt'}],
  codexActivity:[
   {kind:'text',id:'interim',text:'正在读取发布记录。'},
   {kind:'integration',id:'read',text:'读取记录',status:'completed',at},
@@ -203,17 +204,21 @@ function renderedReport(messages:Message[],status='completed',pilotWorkspace=wor
 }
 const collapsedExecution=/<button[^>]*data-placement="inline"[^>]*aria-label="查看执行过程"[^>]*aria-expanded="false"/;
 
-test('one dispatched specialist in a group leaves the final report outside the folded process',()=>{
+test('a finished single-specialist report has one inline process footer after the conclusion and attachments',()=>{
  const state=workspace();
  state.workers=[];
  state.channels!.push(...workspace([worker('database')]).channels!);
  const html=renderedReport([releaseReport],'completed',state);
- assert.match(html,collapsedExecution);
+ const footer=html.match(collapsedExecution);
+ assert.ok(footer);
+ assert.equal(html.match(/aria-label="查看执行过程"/g)?.length,1);
+ const attachment=html.indexOf('aria-label="下载 发布记录.txt"');
+ assert.ok(attachment>html.indexOf('发布记录核对完成。')&&attachment<footer.index!);
+ const duration=html.indexOf('4 分钟 42 秒');
  const hiddenProcess=html.indexOf('class="pilot-report-body" aria-hidden="true" inert=""');
- assert.ok(hiddenProcess>=0&&hiddenProcess<html.indexOf('正在读取发布记录。'));
- assert.ok(html.indexOf('正在读取发布记录。')<html.indexOf('发布记录核对完成。'));
+ assert.ok(footer.index!<duration&&duration<hiddenProcess&&hiddenProcess<html.indexOf('正在读取发布记录。'));
  assert.equal(html.split('发布记录核对完成。').length-1,1);
- assert.match(html,/查看发布专员的完整执行记录/);
+ assert.doesNotMatch(html,/data-placement="side"[^>]*data-specialist-process="task-host"/);
 });
 
 test('unfinished work or a dispatch to another specialist prevents the single-specialist fold',()=>{

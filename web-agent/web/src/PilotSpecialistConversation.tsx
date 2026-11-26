@@ -189,18 +189,19 @@ export function PilotSpecialistReplyView({
   live:working&&visible&&!awaitingReport,
   arrive:!!text&&(report?arriveReport:working&&(!!livePacket||observed)),
  };
+ const process=showsTranscript&&!planState&&<SpecialistExecutionProcess key="process" items={transcript} live={working&&visible}
+  animateInitial={livePacket||observed} report={report} cursorAvatar={working&&!awaitingReport?appearance.icon:undefined}
+  collapse={collapseProcess} connected={available&&visible} onInspect={onInspectProcess}/>;
+ const reply=<PilotReplyContent key="reply" state={contentState} onPresented={report?reportPresented:undefined} active={(moving||!!report&&!['failed','cancelled'].includes(row.worker.task.state))&&available&&visible}>
+   {planState?<PlanReference state={planState}/>:showsTranscript&&!report?null:text?<PilotReplyProse text={text} active={working&&visible&&!awaitingReport} animateInitial={livePacket} cursorAvatar={working&&!awaitingReport?appearance.icon:undefined}/>:report||awaitingReport?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={statusMotion} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={statusMotion}>{label}</ReplyProcessStatus>}
+   {report&&<MessageAttachments message={report} sessionId={report.sessionId}/>}
+ </PilotReplyContent>;
  return <section className="ai-chat-message ai-role-assistant pilot-specialist-reply" data-worker-id={row.worker.id} data-task-id={row.worker.task.taskId} data-phase={report?'settled':row.activity.phase} data-report-id={report?.id} aria-label={`${row.author.name}的回复`}>
   <ReplyIdentity identity={pilotIdentity} author={report?.author??row.author} showBackendName={hasActivity} authorMotion={moving?'working':'still'} nameMotion={statusMotion} onSpecialist={onSpecialist}/>
   {taskLabel&&<small className="pilot-specialist-task-label">{taskLabel}</small>}
-  {showsTranscript&&!planState&&<SpecialistExecutionProcess items={transcript} live={working&&visible}
-   animateInitial={livePacket||observed} reportText={report?.text} cursorAvatar={working&&!awaitingReport?appearance.icon:undefined}
-   collapse={collapseProcess} connected={available&&visible} onInspect={onInspectProcess}/>}
-  <PilotReplyContent state={contentState} onPresented={report?reportPresented:undefined} active={(moving||!!report&&!['failed','cancelled'].includes(row.worker.task.state))&&available&&visible}>
-   {planState?<PlanReference state={planState}/>:showsTranscript&&!report?null:text?<PilotReplyProse text={text} active={working&&visible&&!awaitingReport} animateInitial={livePacket} cursorAvatar={working&&!awaitingReport?appearance.icon:undefined}/>:report||awaitingReport?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={statusMotion} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={statusMotion}>{label}</ReplyProcessStatus>}
-   {report&&<MessageAttachments message={report} sessionId={report.sessionId}/>}
-  </PilotReplyContent>
-  <SpecialistProcessLink author={report?.author??row.author} reportId={report?.id} onInspect={onInspectSpecialist} active={statusMotion}
-   liveStatus={showsTranscript?waitingLabel:inlineWait} text={collapseProcess?'完整执行记录':undefined}/>
+  {collapseProcess?[reply,process]:[process,reply]}
+  {!collapseProcess&&<SpecialistProcessLink author={report?.author??row.author} reportId={report?.id} onInspect={onInspectSpecialist}
+   active={statusMotion} liveStatus={showsTranscript?waitingLabel:inlineWait}/>}
   {!report&&text&&(!available||updating&&!awaitingReport)&&<small className="pilot-specialist-connection" role="status">{label}</small>}
  </section>;
 }

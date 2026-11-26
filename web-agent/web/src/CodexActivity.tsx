@@ -1,11 +1,13 @@
-import {useEffect,useId,useLayoutEffect,useRef,useState,type ComponentProps} from 'react';
+import {useContext,useEffect,useId,useLayoutEffect,useRef,useState,type ComponentProps} from 'react';
 import type {CodexActivityItem,CodexAction} from '../../shared/codex-activity';
+import type {Message} from '../../shared/contracts';
 import {AssistantMarkdown} from './AssistantMarkdown';
 import {Glyph} from './Icons';
 import {bindConversationFollow} from './followScroll';
 import type {LakeAvatarName} from './lakeAvatarCatalog';
 import {PilotReportFold,readingPilotReport} from './PilotReportFold';
-import {ReplyFooter} from './ReplyFooter';
+import {ReplyFooter,ReplyProcessContext} from './ReplyFooter';
+import {specialistElapsed} from './replyDurationState';
 
 type Call=Exclude<CodexActivityItem,{kind:'text'}>;
 const verbs:Record<Exclude<CodexAction,'task'>,[string,string,string]>={
@@ -133,21 +135,25 @@ export function CodexActivity({items,live=false,animateInitial,reportText,cursor
   })}</div>;
 }
 
-/** Keep the live process mounted while its final report is shown separately. */
-export function SpecialistExecutionProcess({collapse=false,connected=true,onInspect,...activity}:ComponentProps<typeof CodexActivity>&{
+/** Keep the same process mounted when it moves below the report. */
+export function SpecialistExecutionProcess({collapse=false,connected=true,onInspect,report,...activity}:Omit<ComponentProps<typeof CodexActivity>,'reportText'>&{
   collapse?: boolean;
   connected?: boolean;
   onInspect?: ()=>void;
+  report?: Pick<Message,'id'|'text'|'author'>;
 }){
   const id=useId(),body=useRef<HTMLDivElement>(null);
   const [expanded,setExpanded]=useState<boolean>();
+  const {footer}=useContext(ReplyProcessContext);
   const keepReading=collapse&&expanded===undefined&&readingPilotReport(body.current);
   const open=!collapse||(expanded??keepReading);
   useLayoutEffect(()=>{if(keepReading)setExpanded(true);},[keepReading]);
 
   return <PilotReportFold id={id} bodyRef={body} open={open} automatic={collapse&&expanded===undefined}
     connected={connected} stripHidden={!collapse}
-    strip={<ReplyFooter action={{controls:id,expanded:open,onClick:()=>{onInspect?.();setExpanded(!open);}}}/>}>
-    <CodexActivity {...activity}/>
+    strip={collapse&&<ReplyFooter duration={specialistElapsed(report?.author?.durationMs)}
+      status={report&&footer?.reportId===report.id?footer.status:undefined}
+      action={{controls:id,expanded:open,onClick:()=>{onInspect?.();setExpanded(!open);}}}/>}>
+    <CodexActivity {...activity} reportText={report?.text}/>
   </PilotReportFold>;
 }
