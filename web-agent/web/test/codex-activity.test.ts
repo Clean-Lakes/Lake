@@ -66,3 +66,14 @@ test('a newly streamed Codex paragraph starts immediately while existing prose r
  assert.match(live,/<p>新<\/p>/);
  assert.match(renderToStaticMarkup(createElement(CodexActivity,{items,live:true})),/<p>新段继续核对。<\/p>/);
 });
+test('a checklist completion is a separate checked row and a legacy tool success remains neutral',()=>{
+ const items:CodexActivityItem[]=[
+  {kind:'task',id:'start',text:'核对巡检记录',status:'completed',at,createdTask:true,taskState:'in_progress'},
+  {kind:'task',id:'done',text:'核对巡检记录',status:'completed',at,taskState:'completed'},
+  {kind:'task',id:'old',text:'旧任务记录',status:'completed',at},
+ ];
+ const html=renderToStaticMarkup(createElement(CodexActivity,{items}));
+ assert.match(html,/添加了.*?data-state="in_progress".*?核对巡检记录.*?data-state="completed".*?核对巡检记录.*?标记为已完成/s);
+ assert.equal(html.match(/标记为已完成/g)?.length,1);
+ assert.match(html,/更新了任务.*?旧任务记录/s);
+});

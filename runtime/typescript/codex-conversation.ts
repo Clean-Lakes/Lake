@@ -33,7 +33,8 @@ export function captureCodexActivity(run:ExternalRun,event:ExternalEvent,card:AI
       ['cancelled','declined','interrupted'].includes(event.status??'')?'stopped':'unknown';
     if(previous&&previous.status!=='running'&&status==='running')return;
     item={kind:event.displayKind,id,text:event.detail||previous?.text||'调用工具',status,at:previous?.at??event.at,
-      ...(event.title==='TaskCreate'&&{createdTask:true}),output:event.preview??previous?.output,...(status!=='running'&&{endedAt:previous?.endedAt??event.at})};
+      ...((event.createdTask||event.title==='TaskCreate')&&{createdTask:true}),...(event.taskState&&{taskState:event.taskState}),
+      output:event.preview??previous?.output,...(status!=='running'&&{endedAt:previous?.endedAt??event.at})};
   }else return;
   data.codex_activity=updateCodexActivity(items,item);
   return {target:'card',id:card.id,content:card.content??'',cardType:'operation',rootTurnId:run.rootTurnId,at:card.at,

@@ -70,6 +70,28 @@ function ToolGroup({calls,live}:{calls:Call[];live:boolean}){
     })}</ul>
   </div>;
 }
+function TaskEvent({call}:{call:Call}){
+  const {taskState,createdTask,status,text}=call;
+  let prefix:string,suffix:string|undefined;
+  if(taskState==='completed'){
+    prefix='将';
+    suffix='标记为已完成';
+  }else if(taskState==='removed'){
+    prefix='移除了';
+  }else if(taskState){
+    prefix=createdTask?'添加了':'将';
+    if(!createdTask)suffix=taskState==='in_progress'?'标记为进行中':'标记为待处理';
+  }else{
+    prefix={failed:'任务更新失败',running:'正在更新任务',stopped:'任务更新已停止',unknown:'任务状态待确认',
+      completed:createdTask?'添加了任务':'更新了任务'}[status];
+  }
+  return <div className="codex-task-event"><Glyph name="listTasks" size={15}/><span>{prefix}</span>
+    <span className="codex-task-chip">{taskState&&<span className="codex-task-mark" data-state={taskState} aria-hidden="true">
+      {taskState==='completed'&&<Glyph name="check" size={8}/>}
+    </span>}{text}</span>{suffix&&<span>{suffix}</span>}
+  </div>;
+}
+
 export function CodexActivity({items,live=false,animateInitial,reportText,cursorAvatar}:{items:CodexActivityItem[];live?:boolean;animateInitial?:boolean;reportText?:string;cursorAvatar?:LakeAvatarName}){
   const groups:(CodexActivityItem|Call[])[]=[];
   let latestProse:CodexActivityItem|undefined;
@@ -105,6 +127,6 @@ export function CodexActivity({items,live=false,animateInitial,reportText,cursor
       const current=group===latestProse;
       return <AssistantMarkdown key={group.id} reveal={live&&current} animateInitial={current&&animateInitial} paceBursts cursorAvatar={current?cursorAvatar:undefined}>{group.text}</AssistantMarkdown>;
     }
-    return <div className="codex-task-event" key={group.id}><Glyph name="listTasks" size={15}/><span>{group.status==='failed'?'任务更新失败':group.status==='running'?'正在更新任务':group.status==='completed'?(group.createdTask?'添加了任务':'更新了任务'):'任务状态待确认'}</span><span className="codex-task-chip">{group.text}</span></div>;
+    return <TaskEvent key={group.id} call={group}/>;
   })}</div>;
 }

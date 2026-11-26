@@ -3,7 +3,7 @@ import type {SpecialistChannelInfo} from '../../shared/contracts';
 import type {ExternalAgentStatus,SpecialistAgentAssignment} from '../../shared/external-agents';
 import {api,readableError} from './api';
 
-export function useSpecialistModel(channel:SpecialistChannelInfo|undefined,settingsOpen:boolean,menuOpen=false,settingsProjectId?:string){
+export function useSpecialistModel(channel:SpecialistChannelInfo|undefined,configurationOpen:boolean,menuOpen=false,settingsProjectId?:string){
  const [agent,setAgent]=useState<ExternalAgentStatus>(),[loading,setLoading]=useState(false),[error,setError]=useState('');
  const request=useRef({sessionId:'',id:crypto.randomUUID()});
  const sessionId=channel?.sessionId,projectId=channel?.projectId??settingsProjectId;
@@ -16,7 +16,7 @@ export function useSpecialistModel(channel:SpecialistChannelInfo|undefined,setti
    .catch(cause=>{if(!controller.signal.aborted)setError(readableError(cause));})
    .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
   return()=>controller.abort();
- },[projectId,settingsOpen,menuOpen]);
+ },[projectId,configurationOpen,menuOpen]);
  const message=loading?'正在读取 Codex 配置':error||agent?.assignmentBlocker||(!agent?.assignmentReady?'请先配置 Codex':undefined);
  const savedModel=channel?.execution?.kind==='acp'&&channel.execution.agent==='codex'?channel.execution.model?.modelId:undefined;
  const model=agent?.modelOverride??savedModel??agent?.defaultTaskModel??agent?.model;
