@@ -60,6 +60,11 @@ function alignSelection(list: HTMLElement, background: HTMLElement, reveal = fal
   ], timing);
 }
 
+function consoleEntranceAnimations(dialog: HTMLDialogElement) {
+  return dialog.getAnimations({subtree: true}).filter(animation => 'animationName' in animation &&
+    (animation.animationName === 'workspace-console-frame-in' || animation.animationName === 'workspace-console-backdrop-in'));
+}
+
 export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy, overlay, notice, onClose, onPage, children}: {
   dialogRef: RefObject<HTMLDialogElement | null>;
   open: boolean;
@@ -73,6 +78,13 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
   children: ReactNode;
 }) {
   const [query, setQuery] = useState('');
+  const [present, setPresent] = useState(open);
+  const visible = open || present;
+  const closing = present && !open;
+  const currentView = {page, busy, children};
+  const lastOpenView = useRef(currentView);
+  const displayed = closing ? lastOpenView.current : currentView;
+  const exitAnimations = useRef<Animation[]>([]);
   const search = useRef<HTMLInputElement>(null);
   const tabs = useRef<HTMLDivElement>(null);
   const selectionBackground = useRef<HTMLSpanElement>(null);
@@ -82,35 +94,69 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
   const groups = consoleCategories(typescriptBackend, '');
   const matching = new Set(consoleCategories(typescriptBackend, query).flatMap(group => group.items.map(item => item.key)));
   const first = matching.values().next().value;
-  const tabbable = matching.has(page) ? page : first;
-  const hasOverlay = Boolean(overlay);
+  const tabbable = matching.has(displayed.page) ? displayed.page : first;
+  const hasOverlay = open && Boolean(overlay);
 
+  // Navigation can remove the page before the native dialog finishes reversing.
+  useLayoutEffect(() => { if (open) lastOpenView.current = currentView; });
   useLayoutEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    if (open && !dialog.open) {
-      setQuery('');
-      dialog.showModal();
+    if (open) {
+      if (!dialog.open) {
+        setQuery('');
+        dialog.showModal();
+        setPresent(true);
+      } else {
+        for (const animation of exitAnimations.current) {
+          if (animation.playState !== 'idle') animation.reverse();
+        }
+      }
+      exitAnimations.current = [];
       search.current?.focus();
-    } else if (!open && dialog.open) {
-      dialog.close();
+      return;
     }
+    if (!dialog.open) return;
+
+    const finish = () => {
+      exitAnimations.current = [];
+      dialog.close();
+      setPresent(false);
+    };
+    const motion = window.matchMedia(reducedMotion);
+    const animations = document.hidden || motion.matches ? [] : consoleEntranceAnimations(dialog);
+    // When no entrance frame has painted, there is nothing to play back.
+    if (!animations.some(animation => Number(animation.currentTime) > 0)) return finish();
+    exitAnimations.current = animations;
+    for (const animation of animations) animation.reverse();
+
+    const controller = new AbortController();
+    const settle = () => {
+      if (controller.signal.aborted) return;
+      controller.abort();
+      finish();
+    };
+    const skipMotion = () => { if (document.hidden || motion.matches) settle(); };
+    motion.addEventListener('change', skipMotion, {signal: controller.signal});
+    document.addEventListener('visibilitychange', skipMotion, {signal: controller.signal});
+    void Promise.allSettled(animations.map(animation => animation.finished)).then(settle);
+    return () => controller.abort();
   }, [dialogRef, open]);
   useLayoutEffect(() => {
     const list = tabs.current;
     const background = selectionBackground.current;
     if (!list || !background) return;
-    if (!open) {
+    if (!visible) {
       list.removeAttribute('data-selection-visible');
       cancelSelectionMotion(background);
       return;
     }
     alignSelection(list, background, !query);
-  }, [open, page, query, typescriptBackend]);
+  }, [visible, displayed.page, query, typescriptBackend]);
   useLayoutEffect(() => {
     const list = tabs.current;
     const background = selectionBackground.current;
-    if (!open || !list || !background) return;
+    if (!visible || !list || !background) return;
     const resize = new ResizeObserver(() => alignSelection(list, background));
     resize.observe(list);
     list.querySelectorAll('.workspace-console-group').forEach(group => resize.observe(group));
@@ -124,7 +170,7 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
       document.removeEventListener('visibilitychange', settle);
       cancelSelectionMotion(background);
     };
-  }, [open]);
+  }, [visible]);
   useLayoutEffect(() => {
     const layer = overlayRoot.current;
     if (open && layer && !layer.contains(document.activeElement)) settingsTabStops(layer)[0]?.focus();
@@ -144,17 +190,21 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
     }
   }
 
+  function requestClose() {
+    if (open && !hasOverlay) onClose();
+  }
+
   return <dialog ref={dialogRef} className="workspace-console" id="workspace-console" role="dialog" aria-label="控制台"
     onCancel={event => {
       event.preventDefault();
       // React's cancel event also bubbles from the provider's discard dialog.
-      if (event.target === event.currentTarget && !hasOverlay) onClose();
+      if (event.target === event.currentTarget) requestClose();
     }}
     onClick={event => {
-      if (event.target === event.currentTarget && !hasOverlay) onClose();
+      if (event.target === event.currentTarget) requestClose();
     }}
     onKeyDown={event => {
-      if (event.nativeEvent.isComposing || event.keyCode === 229 || event.defaultPrevented) return;
+      if (!open || event.nativeEvent.isComposing || event.keyCode === 229 || event.defaultPrevented) return;
       const target = event.target as HTMLElement;
       if (hasOverlay) {
         trapSettingsTab(event, overlayRoot.current);
@@ -168,7 +218,7 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
       }
       trapSettingsTab(event, dialogRef.current);
     }}>
-    <div className="workspace-console-frame" inert={hasOverlay} onFocusCapture={event => {
+    <div className="workspace-console-frame" inert={hasOverlay || closing} onFocusCapture={event => {
       lastFrameFocus.current = event.target as HTMLElement;
     }}>
       <nav className="workspace-console-nav" aria-label="控制台分类">
@@ -200,9 +250,9 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
             hidden={!group.items.some(item => matching.has(item.key))}>
             {group.showLabel && <span className="workspace-console-group-label" aria-hidden="true">{group.label}</span>}
             {group.items.map(item => <button type="button" key={item.key} id={consoleTabId(item.key)} role="tab"
-              className="workspace-console-tab" aria-selected={page === item.key}
-              aria-controls={page === item.key ? consolePanelId(item.key) : undefined}
-              tabIndex={tabbable === item.key ? 0 : -1} disabled={busy} hidden={!matching.has(item.key)}
+              className="workspace-console-tab" aria-selected={displayed.page === item.key}
+              aria-controls={displayed.page === item.key ? consolePanelId(item.key) : undefined}
+              tabIndex={tabbable === item.key ? 0 : -1} disabled={displayed.busy} hidden={!matching.has(item.key)}
               onClick={() => choose(item.key)} title={item.label}>
               <Glyph name={item.icon} size={16}/><span>{item.label}</span>
             </button>)}
@@ -212,8 +262,8 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
       </nav>
       <div className="workspace-console-content">
         <button type="button" className="icon-button workspace-console-close" title="关闭控制台"
-          aria-label="关闭控制台" onClick={onClose}><Glyph name="close" size={18}/></button>
-        {children}
+          aria-label="关闭控制台" onClick={requestClose}><Glyph name="close" size={18}/></button>
+        {displayed.children}
       </div>
     </div>
     {hasOverlay && <div ref={overlayRoot} className="workspace-console-overlays">{overlay}</div>}
