@@ -229,9 +229,11 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
             onChange={event => setQuery(event.target.value)}
             onKeyDown={event => {
               if (event.nativeEvent.isComposing || event.keyCode === 229) return;
-              if (event.key === 'Escape' && query) {
+              if (event.key === 'Escape') {
                 event.preventDefault();
-                setQuery('');
+                if (query) setQuery('');
+                else requestClose();
+                return;
               }
               if (event.key === 'ArrowDown' && first && !busy) {
                 event.preventDefault();
