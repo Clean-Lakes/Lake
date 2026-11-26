@@ -1,5 +1,5 @@
 import {hasUnreadMessages} from './ConversationReadMarker';
-import {useCallback,useEffect,useLayoutEffect,useRef,useState,type PointerEvent,type RefObject} from 'react';
+import {useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState,type PointerEvent,type RefObject} from 'react';
 import {createPortal} from 'react-dom';
 import type {SessionEvent,SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
 import {api,readableError} from './api';
@@ -21,6 +21,20 @@ function withSeenCursor(channel:SpecialistChannelInfo,cursor:string):SpecialistC
 
 type WorkerEventListener={receive:(event:SessionEvent)=>void;connection:(open:boolean)=>void};
 export type SubscribePilotWorkerEvents=(sessionId:string,listener:WorkerEventListener)=>()=>void;
+
+export function pilotConversationView(workspace:SuperWorkspace|null,sessionId?:string):SuperWorkspace|null {
+ if(!workspace?.active||!sessionId)return null;
+ const group=workspace.chatGroups?.find(row=>row.sessionId===sessionId&&row.projectId===workspace.project.projectId);
+ if(!group&&workspace.project.routerSessionId!==sessionId)return null;
+ return {...workspace,
+  project:group?{...workspace.project,routerSessionId:sessionId}:workspace.project,
+  workers:workspace.workers.filter(worker=>worker.pilotSessionId===group?.sessionId),
+  questions:workspace.questions?.filter(question=>question.pilotSessionId===group?.sessionId),
+  channels:group?workspace.channels?.filter(channel=>group.members.some(member=>member.roleId===channel.roleId)):workspace.channels,
+  conversations:workspace.conversations?.filter(round=>round.sessionId===sessionId),
+  ...(group&&{cursor:group.cursor,pilotMessageRead:undefined}),
+ };
+}
 
 export function usePilotWorkspace(projectId:string|undefined,connected:boolean,visiblePilotSessionId?:string){
  const [loadedWorkspace,setWorkspace]=useState<SuperWorkspace|null>(null),[error,setError]=useState('');
@@ -70,11 +84,11 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean,v
   void refresh();const timer=window.setInterval(()=>void refresh(),2500);
   return()=>{controller.abort();refreshRef.current=async()=>{};window.clearInterval(timer);};
  },[projectId,connected]);
- const routerId=workspace?.active?workspace.project.routerSessionId:undefined;
- const shared=!!routerId&&routerId===visiblePilotSessionId;
- const workerScope=JSON.stringify(shared?workspace!.workers.filter(worker=>!worker.parentWorkerId&&
+ const conversation=useMemo(()=>pilotConversationView(workspace,visiblePilotSessionId),[workspace,visiblePilotSessionId]);
+ const routerId=conversation?.project.routerSessionId??(workspace?.active?workspace.project.routerSessionId:undefined);
+ const workerScope=JSON.stringify(conversation?conversation.workers.filter(worker=>!worker.parentWorkerId&&
   (['active','queued'].includes(worker.assignmentState)||worker.pilotReport?.executionSettled===false)).map(worker=>worker.sessionId).sort():[]);
- const cursor=useRef(0);cursor.current=workspace?.cursor??0;
+ const cursor=useRef(0);cursor.current=(conversation??workspace)?.cursor??0;
  useEffect(()=>{
   if(!routerId||!connected||typeof EventSource==='undefined')return;
   const workers=new Set<string>(JSON.parse(workerScope));
@@ -129,7 +143,7 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean,v
    // The visible overview can retry if the receipt could not be saved.
   }
  };
- return {workspace,error,addRole,removeRole,readChannel,refresh:()=>refreshRef.current(),subscribeWorkerEvents:shared?subscribeWorkerEvents:undefined};
+ return {workspace,conversation,error,addRole,removeRole,readChannel,refresh:()=>refreshRef.current(),subscribeWorkerEvents:conversation?subscribeWorkerEvents:undefined};
 }
 
 type ReadMark = {requested: string; acknowledged: string; pending: boolean};

@@ -9,12 +9,19 @@ const {startLakeServer}=require('../../bin/lake-runtime/server.cjs');
 const {enableNativeSpecialistFixture} = require('./test-fixtures/native-specialists.cjs');
 
 const content=message=>typeof message.content==='string'?message.content:(message.content??[]).map(part=>part.text??'').join('');
+const toolCall=(name,args,id)=>({tool_calls:[{index:0,id,type:'function',function:{name,arguments:JSON.stringify(args)}}]});
+function pilotTurn(request){
+ const index=request.messages.findLastIndex(message=>message.role==='user'&&content(message).startsWith('[LAKE ADMITTED HUMAN EVENTS'));
+ const input=content(request.messages[index]);
+ return {event:JSON.parse(input.split('\n')[1])[0],reply:request.messages.slice(index+1),
+  context:JSON.parse(input.split('[CURRENT CONVERSATION WORKING SET]\n')[1])};
+}
 async function until(read,predicate){
  const deadline=Date.now()+15000;let value;
  while(Date.now()<deadline){value=await read();if(predicate(value))return value;await new Promise(resolve=>setTimeout(resolve,20));}
  assert.fail('Timed out: '+JSON.stringify(value));
 }
-async function fixture(t,{count=6,failRole,hold=false,acp=false,summarize=false,streamReplies=false}={}){
+async function fixture(t,{count=6,failRole,hold=false,acp=false,acpScenario='conversation',summarize=false,streamReplies=false,pilotReply}={}){
  const home=await mkdtemp(join(tmpdir(),'lake-dialogue-sdk-')),web=join(home,'web');
  await mkdir(web);await writeFile(join(web,'index.html'),'<html>dialogue fixture</html>');
  const requests=[];let release;const gate=new Promise(resolve=>{release=resolve;});
@@ -33,10 +40,11 @@ async function fixture(t,{count=6,failRole,hold=false,acp=false,summarize=false,
   }else if(system.includes('summarizing a shared conversation')){
    const data=JSON.parse(input),missing=data.members.filter(member=>member.state!=='replied').map(member=>member.name);
    delta={content:`${data.replied} / ${data.total} 位干员已回应。${missing.length?'未回应：'+missing.join('、')+'。':'全部到齐。'}`};
-  }else if(request.messages.some(message=>message.role==='tool'))delta={content:'已召集全部干员，请各自回应。'};
+  }else if(pilotReply)delta=await pilotReply(pilotTurn(request),gate);
+  else if(request.messages.some(message=>message.role==='tool'))delta={content:'已召集全部干员，请各自回应。'};
   else{
    const events=JSON.parse(input.match(/\[LAKE ADMITTED HUMAN EVENTS[^\n]*\n([^\n]+)/)[1]),event=events[0];
-   delta={tool_calls:[{index:0,id:'invite-'+event.id,type:'function',function:{name:'convene_specialists',arguments:JSON.stringify({event_id:event.id,part_key:'attendance',quote:event.text,instruction:'每位干员亲自回应',audience:'all',...(summarize===null?{}:{summarize})})}}]};
+   delta=toolCall('convene_specialists',{event_id:event.id,part_key:'attendance',quote:event.text,instruction:'每位干员亲自回应',audience:'all',...(summarize===null?{}:{summarize})},'invite-'+event.id);
   }
   res.writeHead(200,{'Content-Type':'text/event-stream'});
   const send=part=>res.write('data: '+JSON.stringify({id:'dialogue-fixture',object:'chat.completion.chunk',created:1,model:'fixture',choices:[{index:0,delta:part,finish_reason:null}]})+'\n\n');
@@ -67,7 +75,7 @@ async function fixture(t,{count=6,failRole,hold=false,acp=false,summarize=false,
   await writeFile(join(root,'node_modules/@openai/codex/package.json'),JSON.stringify({version:'0.170.0'}));
   app.agents.external.launch=async(_profile,directory,_signal,mcp,model)=>{
    launches.push({mcp,model});
-   return {executable:process.execPath,args:[join(__dirname,'test-fixtures/codex-app-server.cjs')],cwd:directory,env:{LAKE_TEST_ACP_SCENARIO:'conversation',LAKE_TEST_ACP_SOCKET:mcp?.args.at(-1)},observed:{model:model??'gpt-6.1-sol',modelProvider:'fixture',reasoningEffort:'max',authenticated:true,authMode:'chatgpt'}};
+   return {executable:process.execPath,args:[join(__dirname,'test-fixtures/codex-app-server.cjs')],cwd:directory,env:{LAKE_TEST_ACP_SCENARIO:acpScenario,LAKE_TEST_ACP_SOCKET:mcp?.args.at(-1)},observed:{model:model??'gpt-6.1-sol',modelProvider:'fixture',reasoningEffort:'max',authenticated:true,authMode:'chatgpt'}};
   };
   await registry.save(project.id,'codex',{enabled:true,expectedRevision:0,nodePath:process.execPath});
   await app.agents.external.probe(project.id,'codex',AbortSignal.timeout(5000));
@@ -129,8 +137,11 @@ test('the specialist form creates one project-local profile and channel without 
  assert.equal(otherChannel.projectId,other.id);
 });
 
-test('project groups save their selected roster and deliver text only to the exact group and turn',async t=>{
- const f=await fixture(t,{count:3,hold:true});
+test('groups save a fixed roster and use separate continuous Pilot conversations',async t=>{
+ const f=await fixture(t,{count:3,pilotReply:async({event},gate)=>{
+  if(event.text==='各位好')await gate;
+  return {content: `Pilot 收到「${event.text}」。`};
+ }});
  const roleIds=f.roles.slice(0,2).map(role=>role.id);
  const input={title:'运维协作群',roleIds,requestId:'group-a'};
  const group=await f.api(f.path+'/groups','POST',input,201);
@@ -145,49 +156,122 @@ test('project groups save their selected roster and deliver text only to the exa
  assert.ok((await f.api('/api/catalog')).sessions.some(session=>session.id===group.sessionId&&session.workspaceRole==='group'));
 
  const send=f.path+'/groups/'+group.sessionId+'/messages';
- const request={text:'只在运维协作群讨论',requestId:'first'};
+ const request={text:'各位好',requestId:'first'};
  const first=await f.api(send,'POST',request,202);
  assert.equal((await f.api(send,'POST',request,202)).id,first.id);
  await f.api(send,'POST',{...request,text:'不同的消息'},409);
- await f.api(send,'POST',{...request,requestId:'while-working'},409);
  await f.api(foreignPath+'/'+group.sessionId+'/messages','POST',request,404);
- await f.api(`/api/sessions/${group.sessionId}/messages`,'POST',request,409);
- await until(()=>f.requests,requests=>requests.length===2);
+ await until(()=>f.requests,requests=>requests.length===1);
+ const groupPath=`/api/sessions/${group.sessionId}`;
+ const second=await f.api(groupPath+'/messages','POST',{text:'结合前文继续'},202);
+ assert.equal(second.pilotSessionId,group.sessionId);
+ assert.deepEqual((await f.api(groupPath+'/snapshot')).messages.map(message=>message.id),[first.id,second.id]);
  f.release();
- const snapshot=()=>f.api(`/api/sessions/${group.sessionId}/snapshot`);
- const settled=await until(snapshot,result=>result.chatGroupRounds?.[0]?.state==='completed');
- assert.deepEqual(settled.messages.map(message=>message.role),['user','assistant','assistant']);
- assert.deepEqual(new Set(settled.messages.slice(1).map(message=>message.author.roleId)),new Set(roleIds));
- assert.ok(settled.messages.slice(1).every(message=>message.conversation.sourceMessageId===first.id));
+ const settled=await until(()=>f.api(groupPath+'/snapshot'),result=>result.messages.filter(message=>message.role==='assistant').length===2);
+ assert.deepEqual(settled.messages.filter(message=>message.role==='assistant').map(message=>[message.text,message.replyToMessageId]),[
+  ['Pilot 收到「各位好」。',first.id],['Pilot 收到「结合前文继续」。',second.id],
+ ]);
+ assert.equal(settled.chatGroupRounds?.length??0,0);
  assert.deepEqual((await f.api(f.path)).conversations,[]);
  assert.deepEqual(f.app.store.messages(f.pilot.routerSessionId),[]);
- assert.ok(settled.chatGroupRounds[0].members.every(member=>f.app.store.messages(member.channelSessionId).length===0));
  assert.equal((await f.api(f.path)).chatGroups.find(row=>row.sessionId===group.sessionId).latest.text,settled.messages.at(-1).text);
  assert.deepEqual(f.app.store.messages(other.sessionId),[]);
 
- await f.api(send,'POST',{text:'结合前文继续',requestId:'second'},202);
- await until(snapshot,result=>result.chatGroupRounds?.[1]?.state==='completed');
- await f.api(f.path+'/groups/'+other.sessionId+'/messages','POST',{text:'这是发布群的首条消息',requestId:'first'},202);
- await until(()=>f.api(`/api/sessions/${other.sessionId}/snapshot`),result=>result.chatGroupRounds?.[0]?.state==='completed');
- const turns=f.requests.map(request=>JSON.parse(content([...request.messages].reverse().find(message=>message.role==='user'))));
- assert.ok(turns.filter(turn=>turn.originalHumanRequest==='结合前文继续').every(turn=>turn.dialogue.some(message=>message.text===request.text)));
- assert.ok(turns.filter(turn=>turn.originalHumanRequest==='这是发布群的首条消息').every(turn=>turn.dialogue.length===0));
- assert.ok(f.requests.every(request=>!request.tools?.length));
- for(const table of ['superInputs','superGoals','superOperations'])assert.equal(f.app.store.list(table).length,0,table);
+ const otherPath=`/api/sessions/${other.sessionId}`;
+ await f.api(otherPath+'/messages','POST',{text:'这是发布群的首条消息'},202);
+ await until(()=>f.api(otherPath+'/snapshot'),result=>result.messages.some(message=>message.role==='assistant'));
+ const turns=f.requests.map(pilotTurn);
+ assert.ok(turns.find(turn=>turn.event.text==='结合前文继续').context.dialogue.some(message=>message.text===request.text));
+ const otherContext=turns.find(turn=>turn.event.text==='这是发布群的首条消息').context;
+ assert.ok(otherContext.dialogue.every(message=>message.sourceSessionId===other.sessionId));
+ assert.deepEqual(new Set(otherContext.specialists.items.map(role=>role.id)),new Set(other.members.map(member=>member.roleId)));
+ assert.ok(f.requests.every(request=>request.tools?.some(tool=>tool.function?.name==='route_work')&&
+  !request.tools?.some(tool=>tool.function?.name==='manage_specialist')));
+ for(const table of ['superGoals','superOperations','acpRuns'])assert.equal(f.app.store.list(table).length,0,table);
 });
 
-test('group replies use the verified text-only Codex profile for every selected member',async t=>{
- const f=await fixture(t,{count:2,acp:true});
- const group=await f.api(f.path+'/groups','POST',{title:'协作讨论',roleIds:f.roles.map(role=>role.id),requestId:'codex-group'},201);
- await f.api(f.path+'/groups/'+group.sessionId+'/messages','POST',{text:'请分别回应',requestId:'first'},202);
- const view=await until(()=>f.api('/api/sessions/'+group.sessionId+'/snapshot'),snapshot=>snapshot.chatGroupRounds?.[0]?.state==='completed');
- const replies=view.messages.filter(message=>message.role==='assistant');
+test('an explicit group invitation uses text-only Codex for the selected roster',async t=>{
+ const f=await fixture(t,{count:3,acp:true});
+ const group=await f.api(f.path+'/groups','POST',{title:'协作讨论',roleIds:f.roles.slice(0,2).map(role=>role.id),requestId:'codex-group'},201);
+ await f.api(`/api/sessions/${group.sessionId}/messages`,'POST',{text:'请本群成员分别回应'},202);
+ const state=await until(()=>f.api(f.path),result=>result.conversations.some(round=>round.sessionId===group.sessionId&&round.state==='completed'));
+ const round=state.conversations.find(round=>round.sessionId===group.sessionId);
+ const view=await f.api(`/api/sessions/${group.sessionId}/snapshot`);
+ const replies=view.messages.filter(message=>message.conversation?.kind==='reply');
  assert.equal(replies.length,2);
+ assert.deepEqual(new Set(replies.map(reply=>reply.author.roleId)),new Set(group.members.map(member=>member.roleId)));
  assert.ok(replies.every(reply=>reply.author.execution.kind==='acp'));
  assert.ok(f.launches.every(launch=>launch.mcp===undefined));
  const runs=f.app.store.list('acpRuns');
  assert.equal(new Set(runs.map(run=>run.externalSessionId)).size,2);
- assert.ok(runs.every(run=>run.purpose==='conversation'&&run.conversationId===view.chatGroupRounds[0].id));
+ assert.ok(runs.every(run=>run.purpose==='conversation'&&run.conversationId===round.id));
+ assert.deepEqual(f.app.store.messages(f.pilot.routerSessionId),[]);
+});
+
+test('group Pilot runs Codex work for a member and keeps the task, events and report in that group',async t=>{
+ const f=await fixture(t,{count:3,acp:true,acpScenario:'group-work',pilotReply:({event,reply})=>{
+  if(reply.some(message=>message.role==='tool'))return {content:'已处理分派请求。'};
+  return toolCall('route_work',{event_id:event.id,part_key:'inspect',action:'create',role_id:event.text.startsWith('群外')?'role-2':'role-0',
+   title:'核对项目目录',quote:event.text,reason:'用户请求核对项目目录'},'dispatch-'+event.id);
+ }});
+ const group=await f.api(f.path+'/groups','POST',{title:'协作讨论',roleIds:['role-0','role-1'],requestId:'group-work'},201);
+ const other=await f.api(f.path+'/groups','POST',{title:'其他讨论',roleIds:['role-0','role-2'],requestId:'other-work'},201);
+ const path=`/api/sessions/${group.sessionId}`;
+ const label='@干员3';
+ await f.api(path+'/messages','POST',{text:label,mentions:[{kind:'role',id:'role-2',label,start:0,end:label.length}]},403);
+ const refused=await f.api(path+'/messages','POST',{text:'群外专员核对项目目录'},202);
+ await until(()=>f.api(path+'/snapshot'),view=>view.messages.some(message=>message.role==='assistant'));
+ assert.equal(f.app.store.list('superWorkers').length,0);
+ assert.match(JSON.stringify(f.requests.map(pilotTurn).find(turn=>turn.event.text===refused.text&&turn.reply.some(row=>row.role==='tool'))?.reply),/群组只可派单给固定成员/);
+
+ const request=await f.api(path+'/messages','POST',{text:'请群内专员核对项目目录'},202);
+ const view=await until(()=>f.api(path+'/snapshot'),result=>result.messages.some(message=>message.author?.kind==='specialist'&&message.replyToMessageId===request.id));
+ const report=view.messages.find(message=>message.author?.kind==='specialist');
+ const {workers}=await f.api(f.path);
+ assert.equal(workers.length,1);
+ const [worker]=workers;
+ assert.equal(worker.roleId,'role-0');
+ assert.equal(worker.pilotSessionId,group.sessionId);
+ assert.equal(worker.pilotSourceMessageId,request.id);
+ assert.equal(worker.pilotReport.messageId,report.id);
+ assert.equal(report.author.execution.kind,'acp');
+ assert.match(report.text,/读取实际项目文件/);
+ assert.equal(f.launches.filter(launch=>launch.mcp).length,1);
+ assert.equal((await f.api(`/api/sessions/${worker.sessionId}/snapshot`)).superagent.pilotSessionId,group.sessionId);
+ assert.deepEqual(f.app.store.messages(f.pilot.routerSessionId),[]);
+ assert.deepEqual(f.app.store.messages(other.sessionId),[]);
+
+ for(const session of [f.pilot.routerSessionId,other.sessionId]){
+  await f.api(`/api/sessions/${session}/messages`,'POST',{text:'继续已有任务',taskId:worker.task.taskId},404);
+  await f.api(`/api/sessions/${session}/events?worker=${worker.sessionId}`,'GET',undefined,404);
+ }
+ const controller=new AbortController();
+ try {
+  const stream=await fetch(`${f.app.origin}${path}/events?worker=${worker.sessionId}`,{
+   headers:{Authorization:`Bearer ${f.app.token}`},signal:controller.signal});
+  assert.equal(stream.status,200);
+  assert.match(stream.headers.get('Content-Type'),/text\/event-stream/);
+ } finally {controller.abort();}
+ const followup=await f.api(path+'/messages','POST',{text:'继续已有任务',taskId:worker.task.taskId},202);
+ assert.equal(followup.taskReference.taskId,worker.task.taskId);
+});
+
+test('stopping a group leaves another group involving the same specialist active',async t=>{
+ const f=await fixture(t,{count:3,hold:true});
+ const group=await f.api(f.path+'/groups','POST',{title:'当前群',roleIds:['role-0','role-1'],requestId:'stop-a'},201);
+ const other=await f.api(f.path+'/groups','POST',{title:'另一群',roleIds:['role-0','role-2'],requestId:'stop-b'},201);
+ for(const sessionId of [group.sessionId,other.sessionId])
+  await f.api(`/api/sessions/${sessionId}/messages`,'POST',{text:'请本群成员报到'},202);
+ const scopes=()=>f.api(f.path).then(value=>new Map(value.conversations.map(round=>[round.sessionId,round])));
+ await until(scopes,rounds=>[group,other].every(row=>rounds.get(row.sessionId)?.members.every(member=>member.state==='running')));
+ await f.api(f.path+'/stop','POST',{routerSessionId:group.sessionId});
+ const stopped=await scopes();
+ assert.equal(stopped.get(group.sessionId).state,'cancelled');
+ assert.equal(stopped.get(other.sessionId).state,'running');
+ f.release();
+ await until(scopes,rounds=>rounds.get(other.sessionId).state==='completed');
+ assert.equal(f.app.store.messages(group.sessionId).filter(message=>message.conversation?.kind==='reply').length,0);
+ assert.equal(f.app.store.messages(other.sessionId).filter(message=>message.conversation?.kind==='reply').length,2);
 });
 
 test('a failed specialist remains absent without triggering a redundant summary or a substitute reply',async t=>{

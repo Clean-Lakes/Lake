@@ -40,6 +40,7 @@ type WorkerSource = {
   sessionId: string;
   createdAt: string;
   inputEventIds: string[];
+  sourceEventId?: string;
 };
 const clip = (value: string, max: number) => {
   const bytes = Buffer.from(value);
@@ -53,6 +54,7 @@ export class TaskContext {
   constructor(
     private store: LakeStore,
     private scrub: (text: string) => string,
+    private inScope: (worker: WorkerSource) => boolean = () => true,
   ) {}
   recall(
     actor: TaskContextActor,
@@ -92,7 +94,7 @@ export class TaskContext {
         (worker) =>
           worker.projectId === actor.projectId &&
           worker.roleId === actor.roleId &&
-          worker.taskId !== actor.taskId,
+          worker.taskId !== actor.taskId && this.inScope(worker),
       )
       .sort(
         (a, b) =>

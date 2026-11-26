@@ -55,7 +55,8 @@ test("startup prefers Pilot but preserves explicit task and legacy links", () =>
   assert.equal(select('missing').route.sessionId,'pilot');
   assert.equal(select('internal').route.sessionId,'pilot');
   assert.equal(select('legacy').route.sessionId,'legacy');
-  for(const id of ['role','worker','group']) assert.deepEqual(select(id,null,'plans').route,{sessionId:id,resourceId:null});
+  for(const id of ['role','worker']) assert.deepEqual(select(id,null,'plans').route,{sessionId:id,resourceId:null});
+  assert.deepEqual(select('group',null,'plans').route,{sessionId:'group',resourceId:null,view:'plans'});
   assert.deepEqual(select('foreign','host'),{projectId:'p',route:{sessionId:'pilot',resourceId:'host'}});
 });
 

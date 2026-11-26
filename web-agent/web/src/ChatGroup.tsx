@@ -1,8 +1,6 @@
-import {useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent} from 'react';
-import type {ChatGroup, ChatGroupMember, Message, SessionSnapshot, SpecialistChannelInfo} from '../../shared/contracts';
-import {TranscriptMessage} from './AIPanel';
+import {useEffect, useId, useRef, useState, type FormEvent} from 'react';
+import type {ChatGroup, ChatGroupMember, SpecialistChannelInfo} from '../../shared/contracts';
 import {api, readableError} from './api';
-import {CompositionGuard, isSendKey, type SendShortcut} from './composerKeyboard';
 import {Glyph} from './Icons';
 import {SuperRoleAvatar} from './SuperRoleAvatar';
 
@@ -130,77 +128,4 @@ function CreateChatGroup({projectId, channels, disabled, onCreated, onClose}:{
       </footer>
     </form>
   </dialog>;
-}
-
-export function chatGroupRoundOpen(round:NonNullable<SessionSnapshot['chatGroupRounds']>[number]) {
-  return round.state==='queued'||round.state==='running';
-}
-
-export function ChatGroupMessages({snapshot}:{snapshot:SessionSnapshot}) {
-  const rounds=new Map(snapshot.chatGroupRounds?.map(round=>[round.sourceMessageId,round]));
-  const replies=new Map<string,Message[]>();
-  for(const message of snapshot.messages){
-    const source=message.conversation?.sourceMessageId;
-    if(message.role!=='assistant'||!source)continue;
-    const received=replies.get(source)??[];
-    received.push(message);
-    replies.set(source,received);
-  }
-  const inputs=snapshot.messages.filter(message=>message.role==='user');
-  if(!inputs.length)return <div className="timeline-empty"><h2>开始群内对话</h2></div>;
-  return <div className="ai-transcript chat-group-transcript" data-transcript-mode="conversation">
-    {inputs.map(message=>{
-      const round=rounds.get(message.id);
-      const responding=round?.members.filter(member=>member.state==='running').length??0;
-      const queued=round?.members.filter(member=>member.state==='queued').length??0;
-      const live=[responding&&`${responding} 位专员正在回应`,queued&&`${queued} 位等待`].filter(Boolean).join(' · ');
-      const absent=round?.members.filter(member=>member.reason)??[];
-      return <div className="ai-turn" key={message.id}>
-        <TranscriptMessage message={message} sessionId={snapshot.session.id}/>
-        {replies.get(message.id)?.map(reply=><TranscriptMessage key={reply.id} message={reply} sessionId={snapshot.session.id} roleBreak/>)}
-        {(live||absent.length>0)&&<ul className="chat-group-round-status" aria-label="群组回应状态">
-          {live&&<li role="status"><Glyph name={responding?'loader':'clock'} size={13} className={responding?'activity-indicator':undefined}/>{live}</li>}
-          {absent.map(member=><li key={member.id}><Glyph name="circleAlert" size={13}/>{member.roleName} · {member.reason}</li>)}
-        </ul>}
-      </div>;
-    })}
-  </div>;
-}
-
-export function ChatGroupComposer({title,draft,onDraft,onSend,disabled,sending,shortcut,error}:{
-  title:string;
-  draft:string;
-  onDraft:(value:string)=>void;
-  onSend:(event:FormEvent)=>void;
-  disabled:boolean;
-  sending:boolean;
-  shortcut:SendShortcut;
-  error?:string;
-}) {
-  const input=useRef<HTMLTextAreaElement>(null);
-  const composition=useRef(new CompositionGuard());
-  useLayoutEffect(()=>{
-    if(!input.current)return;
-    input.current.style.height='auto';
-    input.current.style.height=`${input.current.scrollHeight}px`;
-  },[draft]);
-  return <form className="composer chat-group-composer" onSubmit={onSend}>
-    {error&&<p className="form-error" role="alert">{error}</p>}
-    <div className="composer-input chat-group-composer-input">
-      <div className="composer-body">
-        <textarea ref={input} rows={1} maxLength={4096} aria-label="群消息" placeholder={`发消息到${title}`} value={draft}
-          onChange={event=>onDraft(event.target.value)}
-          onCompositionStart={()=>composition.current.start()} onCompositionEnd={()=>composition.current.end()}
-          onKeyDown={event=>{
-            if(composition.current.ignores(event.nativeEvent)||!isSendKey(event.nativeEvent,shortcut))return;
-            event.preventDefault();
-            event.currentTarget.form?.requestSubmit();
-          }}/>
-        <button type="submit" className="send-button" aria-label={sending?'正在发送':'发送群消息'}
-          disabled={disabled||sending||!draft.trim()} data-send-ready={!!draft.trim()||undefined}>
-          <Glyph name={sending?'loader':'up'} size={17} className={sending?'activity-indicator':undefined}/>
-        </button>
-      </div>
-    </div>
-  </form>;
 }

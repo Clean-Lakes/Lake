@@ -61,12 +61,6 @@
 .chat-group-nav-row .chat-group-avatars .super-role-avatar + .super-role-avatar {
   margin-inline-start:-6px;
 }
-.chat-group-size {
-  flex:none;
-  font-size:var(--font-size-toolbar);
-  color:var(--text-muted);
-  white-space:nowrap;
-}
 .modal.chat-group-create-dialog {
   width:min(416px,calc(100vw - 32px));
   margin:auto;
@@ -109,24 +103,6 @@
   height:15px;
   accent-color:var(--primary);
 }
-.chat-group-round-status {
-  display:grid;
-  gap:4px;
-  list-style:none;
-  margin:0;
-  padding-inline-start:var(--reply-avatar-column,40px);
-  color:var(--text-secondary);
-  font-size:var(--font-size-toolbar);
-}
-.chat-group-round-status li { display:flex; align-items:baseline; gap:6px; overflow-wrap:anywhere; }
-.chat-group-round-status svg { align-self:center; flex:none; color:var(--text-muted); }
-.composer.chat-group-composer { min-block-size:0; }
-.chat-group-composer-input {
-  border-radius:var(--radius-window);
-  corner-shape:var(--corner-window);
-}
-.chat-group-composer .composer-body > textarea { overflow-y:auto; }
-.chat-group-composer .form-error { margin:0 0 7px; }
 @media(pointer:coarse) {
   .chat-group-navigation-heading .icon-button,
   .chat-group-member-list label { min-height:44px; }

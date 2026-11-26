@@ -12,7 +12,7 @@ import './specialistChannel.css';
 import './specialistTaskList.css';
 import {PilotWorkspace,usePilotWorkspace} from './PilotWorkspace';
 import './pilotWorkspace.css';
-import {ChatGroupAvatars,ChatGroupComposer,ChatGroupMessages,ChatGroupNavigation,chatGroupRoundOpen} from './ChatGroup';
+import {ChatGroupNavigation} from './ChatGroup';
 import './chatGroup.css';
 import './specialistAvatars.css';
 import {SpecialistAvatarProvider,SuperRoleAvatar} from './SuperRoleAvatar';
@@ -268,9 +268,6 @@ function AppContent() {
   const [sshBusy, setSshBusy] = useState(false);
   const inputQueue = useRef<TerminalInputQueue | null>(null);
   const {draft: composerDraft, setMessageDraft, setMessageDraftFor, setMentionRefs, setImageDraft, setFileDraft, clearSubmitted} = useSessionComposerDraft(route.sessionId);
-  const groupSendKeys=useRef(new Map<string,{text:string; id:string}>());
-  const [groupSending,setGroupSending]=useState<string|null>(null);
-  const [groupSendError,setGroupSendError]=useState<{sessionId:string; message:string}|null>(null);
   const [pilotTaskReferences,setPilotTaskReferences]=useState<ReadonlyMap<string,PilotTaskReference&{sent:boolean}>>(()=>new Map());
   const {message: messageDraft, references: mentionRefs, images: imageDraft, files: fileDraft, ignoreProjectMemory} = composerDraft;
   const attachmentReading = useRef(false);
@@ -570,7 +567,7 @@ function AppContent() {
     window.addEventListener('lake-open-updates',openUpdates);
     return ()=>window.removeEventListener('lake-open-updates',openUpdates);
   },[openWorkbenchPage]);
-  const isPlansPage=(route.view==='plans'||route.returnView==='plans')&&!route.resourceId&&!!route.sessionId&&!!catalog?.sessions.some(session=>session.id===route.sessionId&&isUserWorkspaceSession(session));
+  const isPlansPage=(route.view==='plans'||route.returnView==='plans')&&!route.resourceId&&!!route.sessionId&&!!catalog?.sessions.some(session=>session.id===route.sessionId&&(isUserWorkspaceSession(session)||session.workspaceRole==='group'));
   const openSessionPlans=useCallback((targetSession:string)=>{
     const box=conversationRef.current;
     if(box&&activeSession.current===targetSession)conversationResume.current.set(targetSession,{top:box.scrollTop,following:conversationScroll.current.following});
@@ -658,7 +655,8 @@ function AppContent() {
         streamCursor.current = event.seq;
         // The workspace stream owns the queue/attendance view. Only an actual
         // reply should invalidate the Pilot transcript.
-        if (event.type === "specialist" && event.conversationProgress && liveSnapshot.current?.session.workspaceRole === "router") return;
+        const role=liveSnapshot.current?.session.workspaceRole;
+        if (event.type === "specialist" && event.conversationProgress && (role==='router'||role==='group')) return;
         if(event.conversationMode==='plan'||event.conversationMode==='default'){
           setSnapshot(current=>applyConversationMode(current,sessionId,{mode:event.conversationMode!,cursor:event.seq}));
           return;
@@ -874,8 +872,8 @@ function AppContent() {
   const isSpecialistTasks=selectedSession?.workspaceRole==='role';
   const isSpecialistExecution=selectedSession?.workspaceRole==='worker'||selectedSession?.workspaceRole==='legacy'&&!!activeSnapshot?.superagent?.task;
   const isChatGroup=selectedSession?.workspaceRole==='group';
-  const activeGroupRound=activeSnapshot?.chatGroupRounds?.some(chatGroupRoundOpen)??false;
-  const canCompose=!!selectedSession&&isUserWorkspaceSession(selectedSession)&&selectedSession.workspaceRole!=='legacy';
+  const isPilotConversation=isChatGroup||selectedSession?.workspaceRole==='router';
+  const canCompose=!!selectedSession&&(isUserWorkspaceSession(selectedSession)||isChatGroup)&&selectedSession.workspaceRole!=='legacy';
   const currentSessionPresentation = selectedSession ? workGoalPresentation(activeSnapshot)??sreSessionPresentation(selectedSession,activeSnapshot?.sre?.tasks,activeSnapshot?.ai?.turnStartedAt) : {};
   const currentSessionStatus = currentSessionPresentation.status ?? selectedSession?.status;
   const selectedResource = catalog?.resources.find(item => item.id === route.resourceId);
@@ -970,7 +968,7 @@ function AppContent() {
   const inspectorOpen=!!inspectedSnapshot&&inspector.selection?.sessionId===inspectedSnapshot.session.id&&!selectedResource&&!isPlansPage;
   const headerPilot = !selectedResource && !isPlansPage ? pilotIslandModel(activeSnapshot) : null;
   const headerPilotMode: 'auto'|'manual'|undefined = !selectedResource&&!isPlansPage&&activeSnapshot?.sre?.pilot?.enabled&&(!activeSnapshot.ai?.profile||activeSnapshot.ai.profile==='core')?(activeSnapshot.sre.pilot.autoAdvance?'auto':'manual'):undefined;
-  const inspectorAvailable=!isSpecialistExecution&&(activeSnapshot?.session.workspaceRole==='role'?roleWorkers.length>0:!!(activeSnapshot?.ai??inspectedSnapshot?.ai))&&!selectedResource&&!isPlansPage&&!isChatGroup;
+  const inspectorAvailable=!isSpecialistExecution&&(activeSnapshot?.session.workspaceRole==='role'?roleWorkers.length>0:!!(activeSnapshot?.ai??inspectedSnapshot?.ai))&&!selectedResource&&!isPlansPage;
   const reopenInspector=()=>{
     if(activeSnapshot?.session.workspaceRole==='role'){
       const worker=preferredChannelTask(roleWorkers);if(worker)openSpecialistTask(worker);
@@ -1024,7 +1022,7 @@ function AppContent() {
   const terminalResource = resourceMap.get(currentTerminal?.resourceId ?? terminalOpeningResource ?? "");
   const pendingApproval = activeSnapshot?.actions.some(action => action.status === "pending") ?? false;
   const isLegacyHistory=selectedSession?.workspaceRole==='legacy';
-  const canConfigurePlan=selectedSession?.workspaceRole==='router';
+  const canConfigurePlan=isPilotConversation;
   const roleBusy=activeSnapshot?.session.workspaceRole==='role'&&roleReplyActivity?.sessionId===sessionId&&roleReplyActivity.state!=='idle';
   const turnActive = !isLegacyHistory&&(!!roleBusy||conversationActive(activeSnapshot, selectedSession?.status));
   const historyDataReady=!!activeSnapshot&&(activeSnapshot.session.workspaceRole!=='role'||roleContentReady===sessionId);
@@ -1116,15 +1114,19 @@ function AppContent() {
   const pilotWorkspace=usePilotWorkspace(pilotProjectId,!!bootstrap?.authenticated&&!!catalog,
     bootstrap?.backendRuntime==='typescript'&&!selectedResource?sessionId??undefined:undefined);
   const selectedChatGroup=isChatGroup?pilotWorkspace.workspace?.chatGroups?.find(group=>group.sessionId===sessionId):undefined;
-  const groupHasMembers=!!selectedChatGroup&&selectedChatGroup.members.filter(member=>!member.unavailable).length>=2;
-  const selectedSuperPilot=selectedSession?.workspaceRole==='router'||!!(pilotWorkspace.workspace?.active&&
+  const pilotConversation=useMemo(()=>{
+    const scoped=pilotWorkspace.conversation;
+    const historical=isChatGroup?activeSnapshot?.chatGroupRounds:undefined;
+    return scoped&&historical?.length?{...scoped,conversations:[...(scoped.conversations??[]),...historical]}:scoped;
+  },[pilotWorkspace.conversation,isChatGroup,activeSnapshot?.chatGroupRounds]);
+  const selectedSuperPilot=isPilotConversation||!!(pilotWorkspace.workspace?.active&&
     pilotWorkspace.workspace.project.projectId===selectedSession?.projectId&&pilotWorkspace.workspace.project.routerSessionId===selectedSession?.id);
   const {attachView:attachInspectorView,waitingForWindow:inspectorWaitingForWindow,nativePresence:inspectorNativePresence}=useInspectorWindow(inspectorOpen);
   const pilotTaskContinuation=selectedSuperPilot&&bootstrap?.backendRuntime==='typescript'&&canCompose;
   const pilotTaskReference=pilotTaskContinuation&&sessionId?pilotTaskReferences.get(sessionId):undefined;
   const pilotTaskMembers=useMemo(()=>selectedSession&&pilotTaskReference?
-    pilotTaskParticipants(pilotWorkspace.workspace,selectedSession,pilotTaskReference.taskId):[],
-  [selectedSession,pilotTaskReference,pilotWorkspace.workspace]);
+    pilotTaskParticipants(pilotConversation,selectedSession,pilotTaskReference.taskId):[],
+  [selectedSession,pilotTaskReference,pilotConversation]);
   const pilotWorkspaceConnected=sessionConnected&&!pilotWorkspace.error;
   const [pilotLiveSession,setPilotLiveSession]=useState<string|null>(null);
   useEffect(()=>{
@@ -1163,7 +1165,7 @@ function AppContent() {
   };
   const selectedSuperChannel=bootstrap?.backendRuntime==='typescript'?pilotWorkspace.workspace?.channels?.find(channel=>channel.sessionId===selectedSession?.id):undefined;
   const specialistComposer=bootstrap?.backendRuntime==='typescript'&&(!!selectedSuperChannel||selectedSession?.workspaceRole==='role');
-  const codexSettingsProject=bootstrap?.backendRuntime==='typescript'&&(specialistComposer||selectedSession?.workspaceRole==='router')?selectedSession?.projectId:undefined;
+  const codexSettingsProject=bootstrap?.backendRuntime==='typescript'&&(specialistComposer||isPilotConversation)?selectedSession?.projectId:undefined;
   const specialistModel=useSpecialistModel(selectedSuperChannel,isSettingsPage,modelMenuOpen,codexSettingsProject);
   useEffect(()=>{
     const selected=inspector.selection;if(!selected||selected.sessionId!==sessionId)return;
@@ -1173,7 +1175,7 @@ function AppContent() {
     const target=selectedRoleInspection(selected,pilotWorkspace.workspace?.workers??[]);
     if(target)void inspectRoleTask(sessionId,target.worker,target.tab,selected.replySources);
   },[sessionId,inspector.selection,pilotWorkspace.workspace?.workers,activeSnapshot?.superagent?.task.taskId]);
-  const pilotWorkActive=bootstrap?.backendRuntime==='typescript'&&!!superPilotActivity(pilotWorkspace.workspace,selectedSession,sessionConnected);
+  const pilotWorkActive=bootstrap?.backendRuntime==='typescript'&&!!superPilotActivity(pilotConversation,selectedSession,sessionConnected);
   const codexAssignment=specialistModel.assignment();
   const currentAssignment=specialistComposer?{assignment:codexAssignment,checking:specialistModel.loading||!selectedSuperChannel?.roleRevision,
     blockedReason:codexAssignment?undefined:specialistModel.message??"正在读取专员配置"}:undefined;
@@ -1345,16 +1347,19 @@ function AppContent() {
       if(start!==undefined&&end!==undefined)editor?.setSelectionRange(start,end);
     });
   }
-  async function openProjectPilot(projectId:string, task?:PilotTaskReference){
+  async function openProjectPilot(projectId:string, task?:PilotTaskReference, originSessionId?:string){
     try {
       const domain=await api.ensureSuperWorkspace(projectId);
-      await refreshCatalog();
-      if(task&&bootstrap?.backendRuntime==='typescript')updatePilotTaskReference(domain.routerSessionId,{taskId:task.taskId,title:task.title});
+      const fresh=await refreshCatalog();
+      const group=fresh.sessions.find(session=>session.id===originSessionId&&session.projectId===projectId&&session.workspaceRole==='group');
+      if(originSessionId&&!group)throw new Error('任务所属的群组已不可用');
+      const destination=group?.id??domain.routerSessionId;
+      if(task&&bootstrap?.backendRuntime==='typescript')updatePilotTaskReference(destination,{taskId:task.taskId,title:task.title});
       else if(task){
         const reference=`${task.title} (${task.taskId})`;
-        setMessageDraftFor(domain.routerSessionId,draft=>draft.includes(reference)?draft:draft?`${draft}\n\n${reference}`:`${reference}\n`);
+        setMessageDraftFor(destination,draft=>draft.includes(reference)?draft:draft?`${draft}\n\n${reference}`:`${reference}\n`);
       }
-      navigate({sessionId:domain.routerSessionId,resourceId:null});
+      navigate({sessionId:destination,resourceId:null},projectId);
     } catch(error){handleFailure(error);}
   }
   function openSessionDialog(projectId: string) {
@@ -1434,7 +1439,9 @@ function AppContent() {
   const mentionable = sessionId ? (activeSnapshot?.resources ?? catalog?.resources.filter(resource => resource.projectId === selectedSession?.projectId) ?? []) : [];
   const [mentionCategory,setMentionCategory]=useState<MentionCategory>("all");
   const mentionExtensions=useMentionExtensions(!!mention,sessionId);
-  const allMentionOptions=mentionOptions(mentionable,mentionExtensions.skills,mentionExtensions.servers,!!activeSnapshot?.sre?.enabled,pilotWorkspace.workspace?.project.projectId===selectedSession?.projectId?pilotWorkspace.workspace?.channels??[]:[]);
+  const mentionWorkspace=isChatGroup?pilotConversation:pilotWorkspace.workspace;
+  const mentionSpecialists=mentionWorkspace?.project.projectId===selectedSession?.projectId?mentionWorkspace?.channels:undefined;
+  const allMentionOptions=mentionOptions(mentionable,mentionExtensions.skills,mentionExtensions.servers,!isChatGroup&&!!activeSnapshot?.sre?.enabled,mentionSpecialists);
   const mentionMatches=mention?filterMentions(allMentionOptions,mention.query,mentionCategory):[];
   const mentionIndex=Math.min(mention?.index??0,Math.max(0,mentionMatches.length-1));
   function syncMention(value: string, caret: number) {
@@ -1474,7 +1481,7 @@ function AppContent() {
     const targetSession=sessionId;
     setStoppingTurn(true);
     try {
-      if(activeSnapshot?.session.workspaceRole==='router'&&bootstrap?.backendRuntime==='typescript')await api.stopSuperWorkspace(activeSnapshot.session.projectId,sessionId);
+      if(isPilotConversation&&selectedSession&&bootstrap?.backendRuntime==='typescript')await api.stopSuperWorkspace(selectedSession.projectId,sessionId);
       else if(activeSnapshot?.session.workspaceRole==='role')await api.stopSpecialistChannel(sessionId);
       else if(activeSnapshot?.superagent){const task=activeSnapshot.superagent.task;await api.aiOperation(sessionId,'workControl',{goalId:task.taskId,command:'cancel',revision:task.revision});}
       else await api.aiOperation(sessionId, "abort");
@@ -1519,31 +1526,6 @@ function AppContent() {
     } finally {
       modeSaveSessions.current.delete(targetSession);
       setModeSaving(current=>{const next=new Set(current);next.delete(targetSession);return next;});
-    }
-  }
-  async function sendChatGroupMessage(event:FormEvent) {
-    event.preventDefault();
-    const text=messageDraft.trim();
-    if(!sessionId||!selectedSession||!isChatGroup||!text||!sessionConnected||!groupHasMembers||activeGroupRound||messageSending.current)return;
-    const submittedSession=sessionId;
-    const previous=groupSendKeys.current.get(submittedSession);
-    const id=previous?.text===text?previous.id:crypto.randomUUID();
-    groupSendKeys.current.set(submittedSession,{text,id});
-    messageSending.current=true;
-    setGroupSending(submittedSession);
-    setGroupSendError(null);
-    conversationScroll.current.following=true;
-    conversationFollower.current?.setFollowing(true);
-    try {
-      await api.sendChatGroupMessage(selectedSession.projectId,submittedSession,{text,requestId:id});
-      groupSendKeys.current.delete(submittedSession);
-      clearSubmitted(submittedSession,composerDraft);
-      if(activeSession.current===submittedSession)await refreshCurrent();
-    }catch(reason){
-      setGroupSendError({sessionId:submittedSession,message:readableError(reason)});
-    }finally{
-      messageSending.current=false;
-      setGroupSending(null);
     }
   }
   async function sendMessage(event: FormEvent) {
@@ -1842,9 +1824,14 @@ function AppContent() {
     pilotWorkspace.workspace.workers.find(worker=>worker.sessionId===selectedSession?.id):undefined;
   const presentedReports=conversationMode==='conversation'&&pilotReports?.sessionId===sessionId?pilotReports?.ids:
     new Set(conversationMode==='conversation'?[]:activeSnapshot?.messages.map(message=>message.id));
-  const pilotHeaderActivity=selectedSuperPilot?superPilotActivity(pilotWorkspace.workspace,selectedSession,pilotActivityConnected,presentedReports):null;
-  const pilotParticipants=sessionHeader&&selectedSuperPilot?(pilotHeaderActivity?.participants??[]):undefined;
-  const showPilotParticipants=pilotHeaderActivity?.phase!=='summarizing';
+  const pilotHeaderActivity=selectedSuperPilot?superPilotActivity(pilotConversation,selectedSession,pilotActivityConnected,presentedReports):null;
+  const groupParticipants=selectedChatGroup?.members.map(member=>{
+    const active=pilotHeaderActivity?.participants.find(person=>person.roleId===member.roleId);
+    return {key:member.roleId,roleId:member.roleId,name:member.roleName,avatarId:member.avatarId,
+      detail:member.unavailable?'已移除':active?.detail??'',moving:!!active?.moving};
+  });
+  const pilotParticipants=sessionHeader&&selectedSuperPilot?(groupParticipants??pilotHeaderActivity?.participants??[]):undefined;
+  const showPilotParticipants=isChatGroup||pilotHeaderActivity?.phase!=='summarizing';
   const roleRunningCount=specialistTaskActivity(roleWorkers).runningCount;
   const superHeaderPresentation=pilotHeaderActivity??(selectedSuperChannel&&roleReplyActivity?.sessionId===sessionId&&roleReplyActivity.state!=='idle'?{status:roleReplyActivity.state==='running'?'investigating' as const:'waiting_approval' as const,label:roleReplyActivity.state==='running'?(roleRunningCount>1?`${roleRunningCount} 项执行中`:'处理中'):'需要处理'}:superTaskHeaderPresentation(activeSnapshot?.superagent?.task??selectedSuperWorker?.task,activeSnapshot)??currentSessionPresentation);
   const selectedRoleName=selectedSuperChannel?.roleName??selectedSuperWorker?.roleName??pilotWorkspace.workspace?.channels?.find(channel=>channel.roleId===activeSnapshot?.superagent?.roleId)?.roleName;
@@ -1853,7 +1840,7 @@ function AppContent() {
   const selectedAgentBackend=selectedSuperChannel?.execution??selectedSuperWorker?.execution?.backend??activeSnapshot?.superagent?.execution?.backend;
   const avatarActivity=activeSnapshot?{sessionId:activeSnapshot.session.id,state:selectedSuperChannel&&roleReplyActivity?.sessionId===activeSnapshot.session.id?roleReplyActivity.state:conversationActivity(activeSnapshot.ai,selectedSession?.status)}:undefined;
   const superHeaderIdentity=sessionHeader&&(selectedRoleName||selectedSuperPilot);
-  const headerTitle=sessionHeader&&selectedSuperPilot?pilotIdentity.name:selectedResource?.name??selectedSession?.title??'概览';
+  const headerTitle=sessionHeader&&selectedSuperPilot&&!isChatGroup?pilotIdentity.name:selectedResource?.name??selectedSession?.title??'概览';
   const processNavigation=<ReplyProcessSelect sessionId={activeSnapshot?.session.id} onSpecialist={inspectSpecialist} onPilot={()=>{
     roleInspectionRequest.current.cancel();pendingRoleInspection.current=undefined;setRoleInspection(null);
   }}/>;
@@ -1897,14 +1884,13 @@ function AppContent() {
           <div className={`breadcrumbs${showPilotParticipants&&pilotParticipants?.length?' has-pilot-participants':''}`}>
             {!sessionHeader&&<><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span></>}
             <strong>
-              {sessionHeader&&isChatGroup?<ChatGroupAvatars members={selectedChatGroup?.members??[]}/>:
-               superHeaderIdentity?<SuperRoleAvatar name={selectedRoleName} roleId={selectedRoleId} pilot={!!selectedSuperPilot} size={20} motion={pilotHeaderActivity?.motion??conversationAvatarMotion(avatarActivity?.state??'idle',activeSnapshot?.superagent?.task?.state??selectedSuperWorker?.task.state)}/>:<Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession ? selectedSession.icon??'chat' : 'document'} size={15}/>}
+              {superHeaderIdentity?<SuperRoleAvatar name={selectedRoleName} roleId={selectedRoleId} pilot={!!selectedSuperPilot} size={20} motion={pilotHeaderActivity?.motion??conversationAvatarMotion(avatarActivity?.state??'idle',activeSnapshot?.superagent?.task?.state??selectedSuperWorker?.task.state)}/>:<Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession ? selectedSession.icon??'chat' : 'document'} size={15}/>}
               <span className="crumb-title" title={headerTitle}>{superHeaderIdentity&&!selectedSuperPilot?selectedRoleName:headerTitle}</span>
               {superHeaderIdentity&&!selectedSuperPilot&&<AgentBackendLogo backend={selectedAgentBackend}/>}
             </strong>
-            {pilotParticipants&&<PilotActiveSpecialists key={sessionId} participants={pilotParticipants} visible={showPilotParticipants}/>}
+            {pilotParticipants&&<PilotActiveSpecialists key={sessionId} participants={pilotParticipants} visible={showPilotParticipants} fixedRoster={isChatGroup}/>}
           </div>}
-        {sessionHeader && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} mode={headerPilotMode} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}} normal={isChatGroup?selectedChatGroup&&<span className="chat-group-size" title={selectedChatGroup.members.map(member=>member.roleName).join('、')}>{selectedChatGroup.members.length} 位专员</span>:<SessionStateBadge session={selectedSession} {...superHeaderPresentation} iconOnly={selectedSuperPilot}/>} onInspect={targetId => {
+        {sessionHeader && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} mode={headerPilotMode} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}} normal={<SessionStateBadge session={selectedSession} {...superHeaderPresentation} iconOnly={selectedSuperPilot}/>} onInspect={targetId => {
           if(!activeSnapshot||!headerPilot)return;
           const task=activeSnapshot.sre?.tasks.find(t=>t.id===headerPilot.taskId);
           const entry=task?.messages?.find(m=>`sre-message-${m.id}`===targetId);
@@ -2161,26 +2147,20 @@ function AppContent() {
         </> : sessionId && selectedSession ? isPlansPage ? <SessionPlansPage key={sessionId} session={selectedSession} snapshot={activeSnapshot} error={visibleSessionError} disabled={!sessionConnected||turnActive||!!pendingOperation||modeSaving.has(sessionId)} onBack={returnToConversation} onRetry={()=>setSessionReload(value=>value+1)} onRevise={()=>{returnToConversation();requestAnimationFrame(()=>messageInputRef.current?.focus());}} onExecuted={async()=>{await refreshCurrent();returnToConversation();}}/> : <div className={`session-layout${specialistTaskPage?" is-specialist-tasks":""}`}><div className="session-view" ref={attachInspectorView}>
         {sessionHeader&&<span className="conversation-header-backdrop" aria-hidden="true"/>}
         <div className="conversation-stage" aria-busy={historyPending}>{historyPending&&<SessionLoading/>}<section id="session-view-panel" tabIndex={-1} ref={attachConversation} className={`conversation${historyPending?" is-entering":""}`} inert={historyPending} aria-label={specialistTaskPage?"专员任务":"会话记录"}>
-          {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true"/> : isChatGroup ? <div className="timeline-list"><ChatGroupMessages snapshot={activeSnapshot}/></div> : selectedSession.workspaceRole==='role'?<div className="timeline-list"><SpecialistChannel key={sessionId} snapshot={activeSnapshot} connected={sessionConnected}
+          {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true"/> : selectedSession.workspaceRole==='role'?<div className="timeline-list"><SpecialistChannel key={sessionId} snapshot={activeSnapshot} connected={sessionConnected}
             initialQuery={taskListVisits.current.get(sessionId)?.query} onTask={openSpecialistTask}
             onTasks={updateRoleTasks} onActivity={updateRoleReplyActivity} onReady={updateRoleContentReady}/></div>: isSpecialistExecution ?
             <SpecialistTaskDetail key={JSON.stringify([sessionId,activeSnapshot.superagent?.task.taskId])} snapshot={activeSnapshot} worker={selectedSuperWorker}
              connected={sessionConnected&&!modeSaving.has(sessionId)} onBack={taskOwner?()=>openSpecialistTaskList(taskOwner):undefined}
-             onContinue={isLegacyHistory?undefined:()=>void openProjectPilot(selectedSession.projectId,activeSnapshot.superagent?.task)} onUpdated={()=>void refreshCurrent()}
+             onContinue={isLegacyHistory?undefined:()=>void openProjectPilot(selectedSession.projectId,activeSnapshot.superagent?.task,activeSnapshot.superagent?.pilotSessionId)} onUpdated={()=>void refreshCurrent()}
              resultsFooter={detailChannelRead&&detailResultRead?<ConversationReadMarker session={detailChannelRead.channel.sessionId} state={detailChannelRead.channel.messageRead} enabled={sessionConnected}/>:undefined}/> : (hasConversationItems||pilotTaskContinuation) ? <div className="timeline-list">
             {!hasConversationItems&&emptyConversation}
-            {useConversationTranscript ? <AITranscript key={sessionId} pilotWorkspace={selectedSuperPilot?pilotWorkspace.workspace:undefined} pilotConnected={pilotActivityConnected} pilotTaskDirectory={pilotTaskContinuation?{currentTaskId:pilotTaskReference?.taskId,error:pilotWorkspace.error,onContinue:selectPilotTask}:undefined} subscribeWorkerEvents={pilotWorkspace.subscribeWorkerEvents} presentedPilotReports={presentedReports} onPilotReportsPresented={selectedSuperPilot?onPilotReportsPresented:undefined} connected={!isLegacyHistory&&sessionConnected} superTask={selectedSuperWorker?.task} onInspectSpecialist={inspectSpecialist} onSpecialist={author=>{const worker=pilotWorkspace.workspace?.workers.find(row=>row.id===author.workerId);const channel=pilotWorkspace.workspace?.channels?.find(row=>row.roleId===worker?.roleId);void api.superWorkspace(selectedSession.projectId).then(()=>refreshCatalog()).then(()=>navigate({sessionId:author.channelSessionId??channel?.sessionId??author.sessionId,resourceId:null})).catch(handleFailure);}} assistantIdentity={selectedSuperWorker?{name:selectedSuperWorker.roleName,roleId:selectedSuperWorker.roleId}:selectedSuperPilot?pilotIdentity:undefined} refresh={refreshCurrent} snapshot={activeSnapshot} mode={conversationMode} onOpenPlans={openPlans} onInspect={inspectConversation} onStopTurn={() => void stopCurrentTurn()} stopping={stoppingTurn} disabled={isLegacyHistory||!sessionConnected || modeSaving.has(sessionId)} renderAction={action => <TimelineNode entry={{ kind: "action", at: action.createdAt, id: action.id, item: action }} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={isLegacyHistory||!sessionConnected || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })}/>} /> : itemList.map(entry => <TimelineNode key={`${entry.kind}:${entry.id}`} entry={entry} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || messageBlocked || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })} />)}
+            {useConversationTranscript ? <AITranscript key={sessionId} pilotWorkspace={selectedSuperPilot?pilotConversation:undefined} pilotConnected={pilotActivityConnected} pilotTaskDirectory={pilotTaskContinuation?{currentTaskId:pilotTaskReference?.taskId,error:pilotWorkspace.error,onContinue:selectPilotTask}:undefined} subscribeWorkerEvents={pilotWorkspace.subscribeWorkerEvents} presentedPilotReports={presentedReports} onPilotReportsPresented={selectedSuperPilot?onPilotReportsPresented:undefined} connected={!isLegacyHistory&&sessionConnected} superTask={selectedSuperWorker?.task} onInspectSpecialist={inspectSpecialist} onSpecialist={author=>{const worker=pilotWorkspace.workspace?.workers.find(row=>row.id===author.workerId);const channel=pilotWorkspace.workspace?.channels?.find(row=>row.roleId===worker?.roleId);void api.superWorkspace(selectedSession.projectId).then(()=>refreshCatalog()).then(()=>navigate({sessionId:author.channelSessionId??channel?.sessionId??author.sessionId,resourceId:null})).catch(handleFailure);}} assistantIdentity={selectedSuperWorker?{name:selectedSuperWorker.roleName,roleId:selectedSuperWorker.roleId}:selectedSuperPilot?pilotIdentity:undefined} refresh={refreshCurrent} snapshot={activeSnapshot} mode={conversationMode} onOpenPlans={openPlans} onInspect={inspectConversation} onStopTurn={() => void stopCurrentTurn()} stopping={stoppingTurn} disabled={isLegacyHistory||!sessionConnected || modeSaving.has(sessionId)} renderAction={action => <TimelineNode entry={{ kind: "action", at: action.createdAt, id: action.id, item: action }} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={isLegacyHistory||!sessionConnected || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })}/>} /> : itemList.map(entry => <TimelineNode key={`${entry.kind}:${entry.id}`} entry={entry} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || messageBlocked || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })} />)}
             {selectedSession.status === "investigating" && !activeSnapshot.ai && <div className="timeline-item item-thinking" role="status" aria-live="polite"><span className="timeline-point"><Glyph name="spark" size={15}/></span><div className="timeline-content"><div className="thinking-line"><span className="thinking-dots" aria-hidden="true"><i/><i/><i/></span><span>正在处理…</span></div></div></div>}
           </div> : emptyConversation}
-          {activeSnapshot?.session.workspaceRole==='router'&&<ConversationReadMarker session={activeSnapshot.session.id} state={activeSnapshot.messageRead} enabled={sessionConnected&&!historyPending}/>}
+          {isPilotConversation&&activeSnapshot&&<ConversationReadMarker session={activeSnapshot.session.id} state={activeSnapshot.messageRead} enabled={sessionConnected&&!historyPending}/>}
         </section></div>
-        {isLegacyHistory?<div className="pilot-history-notice"><span>历史记录只读，原操作与证据保留。</span><button type="button" className="button secondary" onClick={()=>void openProjectPilot(selectedSession.projectId)}>前往 Pilot 继续沟通<Glyph name="arrow" size={14}/></button></div>:isChatGroup?<div className="composer-dock">
-          <ConversationLatest key={sessionId} container={conversationRef} onJump={jumpToLatest}/>
-          <ChatGroupComposer key={sessionId} title={selectedSession.title} draft={messageDraft}
-           onDraft={setMessageDraft} onSend={sendChatGroupMessage} shortcut={sendShortcut}
-           disabled={!sessionConnected||!groupHasMembers||activeGroupRound} sending={groupSending===sessionId}
-           error={groupSendError?.sessionId===sessionId?groupSendError.message:selectedChatGroup&&!groupHasMembers?'需要至少两位可用专员才能发送群消息。':undefined}/>
-        </div>:!canCompose?null:<div className="composer-dock">{!isSpecialistTasks&&<ConversationLatest key={`${sessionId}:${conversationMode}`} container={conversationRef} onJump={jumpToLatest}/>}{activeSnapshot?.ai && <div className="composer-session-controls">{selectedSuperPilot&&<PilotSpecialistQuestions questions={pilotWorkspace.workspace?.questions} connected={pilotWorkspaceConnected} onAnswered={pilotWorkspace.refresh}/>}<AIControls snapshot={activeSnapshot} refresh={refreshCurrent} optionsOpen={agentOptionsOpen} onCloseOptions={() => setAgentOptionsOpen(false)} permissionsOpen={permissionsOpen&&activeSnapshot.session.workspaceRole!=="role"&&activeSnapshot.session.workspaceRole!=="worker"} permissionAnchor={permissionButtonRef} onClosePermissions={() => setPermissionsOpen(false)}/></div>}<PendingMessages key={sessionId} supplementRootTurnId={conversationMode==='conversation'?activeSnapshot?.ai?.rootTurnId:undefined} sessionId={sessionId} queue={activeSnapshot?.messageQueue ?? {paused:false,revision:0,lastError:"",items:[]}} disabled={!sessionConnected} active={turnActive} sendShortcut={sendShortcut} resourceIds={mentionedResourceIds} onUpdated={messageQueue => setSnapshot(current => current?.session.id===sessionId && messageQueue.revision>=(current.messageQueue?.revision ?? 0) ? {...current,messageQueue} : current)}/>{activeSnapshot?.conversationMode==='plan'&&<p className="plan-mode-hint" role="status">Plan 模式 · 只读调查与制定方案，确认计划后再执行。{activeSnapshot.sre?.enabled?'SRE 协作将在退出 Plan 模式后恢复。':''}</p>}<form className="composer" onSubmit={sendMessage}><label htmlFor="message-input" className="visually-hidden">{"给 Lake 的消息"}</label><ComposerSurface sessionId={sessionId} dragging={attachmentDragOver} pinnedOpen={composerPinnedOpen} modelBrand={composerPreviewBrand}>
+        {isLegacyHistory?<div className="pilot-history-notice"><span>历史记录只读，原操作与证据保留。</span><button type="button" className="button secondary" onClick={()=>void openProjectPilot(selectedSession.projectId)}>前往 Pilot 继续沟通<Glyph name="arrow" size={14}/></button></div>:!canCompose?null:<div className="composer-dock">{!isSpecialistTasks&&<ConversationLatest key={`${sessionId}:${conversationMode}`} container={conversationRef} onJump={jumpToLatest}/>}{activeSnapshot?.ai && <div className="composer-session-controls">{selectedSuperPilot&&<PilotSpecialistQuestions questions={pilotConversation?.questions} connected={pilotWorkspaceConnected} onAnswered={pilotWorkspace.refresh}/>}<AIControls snapshot={activeSnapshot} refresh={refreshCurrent} optionsOpen={agentOptionsOpen} onCloseOptions={() => setAgentOptionsOpen(false)} permissionsOpen={permissionsOpen&&activeSnapshot.session.workspaceRole!=="role"&&activeSnapshot.session.workspaceRole!=="worker"} permissionAnchor={permissionButtonRef} onClosePermissions={() => setPermissionsOpen(false)}/></div>}<PendingMessages key={sessionId} supplementRootTurnId={conversationMode==='conversation'?activeSnapshot?.ai?.rootTurnId:undefined} sessionId={sessionId} queue={activeSnapshot?.messageQueue ?? {paused:false,revision:0,lastError:"",items:[]}} disabled={!sessionConnected} active={turnActive} sendShortcut={sendShortcut} resourceIds={mentionedResourceIds} onUpdated={messageQueue => setSnapshot(current => current?.session.id===sessionId && messageQueue.revision>=(current.messageQueue?.revision ?? 0) ? {...current,messageQueue} : current)}/>{activeSnapshot?.conversationMode==='plan'&&<p className="plan-mode-hint" role="status">Plan 模式 · 只读调查与制定方案，确认计划后再执行。{activeSnapshot.sre?.enabled?'SRE 协作将在退出 Plan 模式后恢复。':''}</p>}<form className="composer" onSubmit={sendMessage}><label htmlFor="message-input" className="visually-hidden">{"给 Lake 的消息"}</label><ComposerSurface sessionId={sessionId} dragging={attachmentDragOver} pinnedOpen={composerPinnedOpen} modelBrand={composerPreviewBrand}>
           {pilotTaskReference&&!pilotTaskReference.sent&&<div className="composer-task-context" aria-live="polite"><PilotTaskReferenceChip task={pilotTaskReference} members={pilotTaskMembers} onClear={()=>selectPilotTask()}/></div>}
           {mention && <ComposerMentions options={mentionMatches} allOptions={allMentionOptions} index={mentionIndex} category={mentionCategory} onActive={index=>setMention(current=>current&&current.index!==index?{...current,index}:current)} onCategory={kind=>{setMentionCategory(kind);setMention({...mention,index:0});}} onSelect={insertMention} loading={mentionExtensions.loading} error={mentionExtensions.error} onReload={mentionExtensions.reload} onClose={()=>setMention(null)} onImport={()=>{const target=projectList.find(item=>item.id===selectedSession?.projectId);setMention(null);if(target){setImportHexhub(true);setImportProject(target);}}}/>}
           {attachmentUploading&&<p className="attachment-upload-status" role="status">正在上传：{attachmentUploading}</p>}{attachmentDragOver&&<p className="attachment-upload-status" role="status">松开以添加文件 · 每个最多 512 MiB</p>}{fileDraft.length > 0 && <div className="text-file-drafts">{fileDraft.map(file => <span key={file.sourceId}><Glyph name="file" size={13}/>

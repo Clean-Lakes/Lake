@@ -2,7 +2,7 @@ import type {MessageQueue,SessionSnapshot} from "../../shared/contracts";
 
 /** Pilot admits each human message while its Router or Workers are occupied. */
 export function continuousPilotInput(snapshot:SessionSnapshot|null|undefined,backendRuntime?:string){
- return backendRuntime==='typescript'&&snapshot?.session.workspaceRole==='router';
+ return backendRuntime==='typescript'&&(snapshot?.session.workspaceRole==='router'||snapshot?.session.workspaceRole==='group');
 }
 export function queuesComposerMessage(snapshot:SessionSnapshot|null|undefined,backendRuntime:string|undefined,active:boolean){
  return !continuousPilotInput(snapshot,backendRuntime)&&snapshot?.session.workspaceRole!=='worker'&&snapshot?.session.workspaceRole!=='role'&&

@@ -1043,15 +1043,6 @@
       ]
     },
     {
-      "name": "sendChatGroupMessage",
-      "routes": [
-        {
-          "method": "POST",
-          "path": "`/api/projects/${encodeURIComponent(project)}/superagent/groups/${encodeURIComponent(session)}/messages`"
-        }
-      ]
-    },
-    {
       "name": "sendMessage",
       "routes": [
         {
