@@ -31,9 +31,21 @@ export function NavigationMenu({id,title,headerIcon,x=0,y=0,actions,onClose,clas
    const top=Math.max(8,Math.min(preferredTop,window.innerHeight-height-8));
    setPosition(current=>current.left===left&&current.top===top?current:{left,top});
   };
+  const anchorMoved=(event:Event)=>{
+   const target=event.target;
+   if(target===document||(target instanceof Element&&anchor?.current&&target.contains(anchor.current)))place();
+  };
   place();const observer=new ResizeObserver(place);if(menu.current)observer.observe(menu.current);
   window.addEventListener('resize',place);
-  return()=>{observer.disconnect();window.removeEventListener('resize',place);};
+  if(placement==='beside'){
+   window.addEventListener('scroll',anchorMoved,true);
+   window.addEventListener('transitionend',anchorMoved,true);
+  }
+  return()=>{
+   observer.disconnect();window.removeEventListener('resize',place);
+   window.removeEventListener('scroll',anchorMoved,true);
+   window.removeEventListener('transitionend',anchorMoved,true);
+  };
  },[x,y,width,anchor,placement]);
  useEffect(() => {
   const previous=document.activeElement as HTMLElement|null;
