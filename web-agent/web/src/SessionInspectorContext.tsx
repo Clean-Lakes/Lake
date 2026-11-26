@@ -19,8 +19,7 @@ export const inspectorExitMs=180;
 
 // Opening a side pane changes line wrapping. Keep the visible message anchored
 // rather than scrolling the conversation to the inspected plan or operation.
-export function retainConversation(){
- const box=document.querySelector<HTMLElement>('.conversation');
+export function retainConversation(box=document.querySelector<HTMLElement>('.conversation')){
  if(!box)return()=>{};
  // A reader already at the latest reply keeps the tail through reflow. Only
  // history reading needs a message anchor; opening a pane never pauses following.

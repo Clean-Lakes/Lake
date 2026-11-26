@@ -52,6 +52,9 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
   const container=document.querySelector<HTMLElement>('.conversation');if(!container)return;
   let frame=0,header:HTMLElement|null=null;
   function update(){
+   // The scroll view temporarily extends behind the window clip during drag.
+   // The directory stays at the window edge until the new width settles.
+   if(container!.closest('[data-sidebar-resize-layer]'))return;
    const nextHeader=header?.isConnected?header:document.querySelector<HTMLElement>('.island-conversation, .workspace > .workspace-header');
    if(nextHeader!==header){
     if(header)observer.unobserve(header);

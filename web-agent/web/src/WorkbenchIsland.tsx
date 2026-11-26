@@ -69,9 +69,9 @@ export function WorkbenchIsland({conversation,terminal,activity,terminalOpen,pil
    if(!workspace||!view)return;
    const dockedPane=shell.classList.contains('has-docked-conversation');
    const collapsed=shell.classList.contains('has-collapsed-sidebar');
-   // Sidebar motion translates the painted island using its settled layout.
-   // Keep text measurements and width updates outside the motion.
-   if(dockedPane&&shell.hasAttribute('data-sidebar-sliding')&&identity.dataset.ready==='true'){
+   // Sidebar motion translates the island with the conversation viewport.
+   // Measure its text and controls when the layout settles.
+   if(dockedPane&&(shell.hasAttribute('data-sidebar-sliding')||shell.hasAttribute('data-sidebar-resize-layer'))&&identity.dataset.ready==='true'){
     sidebarCollapsed=collapsed;
     return;
    }

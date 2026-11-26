@@ -23,7 +23,7 @@ import {superPilotActivity} from './superPilotActivity';
 import {useTerminalPopover} from './useTerminalPopover';
 import {WorkbenchIsland,useWideWorkbench} from './WorkbenchIsland';
 import {useInspectorWindow} from './inspectorWindow';
-import {inspectorExitMs,SessionInspectorProvider,useSessionInspector,type PilotProcessTarget,type ReplyProcessSources} from './SessionInspectorContext';
+import {inspectorExitMs,retainConversation,SessionInspectorProvider,useSessionInspector,type PilotProcessTarget,type ReplyProcessSources} from './SessionInspectorContext';
 import {ReplyProcessSelect,SessionInspector} from './SessionInspector';
 import {inspectorWorker,latestInspectorSelection} from './sessionInspectorModel';
 import {InspectionRequestGuard,matchesSpecialistInspection,selectedRoleInspection,snapshotInspectionTarget,specialistInspectionWorker,workerInspectionTarget} from './specialistInspection';
@@ -1054,7 +1054,19 @@ function AppContent() {
     conversationFollower.current=scroll;
     if(resume&&!resume.following)container.scrollTop=resume.top;
     else scroll.follower.jump();
-    return () => { scroll.dispose(); conversationFollower.current=null; };
+    let resizeFrame=0;
+    const beforeSidebarResize=()=>{
+      const restore=retainConversation(container);
+      cancelAnimationFrame(resizeFrame);
+      resizeFrame=requestAnimationFrame(restore);
+    };
+    window.addEventListener('lake-workbench-sidebar-will-resize',beforeSidebarResize);
+    return () => {
+      window.removeEventListener('lake-workbench-sidebar-will-resize',beforeSidebarResize);
+      cancelAnimationFrame(resizeFrame);
+      scroll.dispose();
+      conversationFollower.current=null;
+    };
   }, [conversationBox,activeSnapshot?.session.id,route.resourceId,isPlansPage,isSpecialistTasks,isSpecialistExecution]);
 
   useLayoutEffect(()=>{

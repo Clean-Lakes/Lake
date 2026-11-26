@@ -287,4 +287,10 @@ html .app-shell.has-docked-conversation .conversation-header-backdrop {
  -webkit-mask-image:none;
  mask-image:none;
 }
-.app-shell.has-docked-conversation > .workbench-splitter-sidebar:not(:hover,:focus-visible,.is-dragging)::after { opacity:0; }
+.app-shell.has-docked-conversation > .workbench-splitter-sidebar::after { content:none; }
+.app-shell.has-docked-conversation:has(> .workbench-splitter-sidebar:is(:hover,.is-dragging)) > .workbench-conversation-surface {
+ --conversation-frame-border:var(--border-strong);
+}
+.app-shell.has-docked-conversation:has(> .workbench-splitter-sidebar:focus-visible:not(.is-dragging)) > .workbench-conversation-surface {
+ --conversation-frame-border:var(--info);
+}
