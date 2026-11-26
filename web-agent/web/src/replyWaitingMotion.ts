@@ -53,7 +53,7 @@ function sweepImage(lines: Line[], progress: number, rtl: boolean) {
   return gradients.join(',');
 }
 
-/** One pass over the latest visible paragraph after playout stops. */
+/** Sweep the latest visible paragraph once, then sway its cursor while waiting. */
 export function useReplyWaitingMotion(body: RefObject<HTMLElement | null>, source: string, active: boolean) {
   useLayoutEffect(() => {
     const root = body.current;
@@ -66,7 +66,7 @@ export function useReplyWaitingMotion(body: RefObject<HTMLElement | null>, sourc
     let timer = 0, frame = 0;
     let paragraph: HTMLElement | undefined;
     let cursor: HTMLElement | undefined;
-    let played = false;
+    let swept = false;
     let lines: Line[] | undefined;
     const resize = new ResizeObserver(() => { lines = undefined; });
 
@@ -88,11 +88,15 @@ export function useReplyWaitingMotion(body: RefObject<HTMLElement | null>, sourc
       cursor?.removeAttribute('data-reply-waiting-sway');
       cursor = undefined;
     };
+    const startSway = (tail: HTMLElement | null) => {
+      if (!tail) return;
+      cursor = tail;
+      cursor.setAttribute('data-reply-waiting-sway', '');
+    };
     const start = () => {
       const {tail, block} = target();
       if (!tail) return;
       paragraph = block;
-      cursor = tail;
       const rtl = win.getComputedStyle(block).direction === 'rtl';
       lines = undefined;
       const startTime = win.performance.now();
@@ -101,8 +105,8 @@ export function useReplyWaitingMotion(body: RefObject<HTMLElement | null>, sourc
         lines ??= measureLines(block);
         if (progress >= 1 || !lines.length) {
           clearSweep();
-          played = true;
-          tail.setAttribute('data-reply-waiting-sway', '');
+          swept = true;
+          startSway(tail);
           return;
         }
         const image = sweepImage(lines, progress, rtl);
@@ -115,7 +119,9 @@ export function useReplyWaitingMotion(body: RefObject<HTMLElement | null>, sourc
     };
     const schedule = () => {
       stop();
-      if (!played && !doc.hidden && !reduced.matches && !forced.matches) timer = win.setTimeout(start, pauseMs);
+      if (doc.hidden || reduced.matches || forced.matches) return;
+      if (swept) startSway(target().tail);
+      else timer = win.setTimeout(start, pauseMs);
     };
     let previous = target();
     let displayed = previous.block.textContent;
@@ -126,7 +132,7 @@ export function useReplyWaitingMotion(body: RefObject<HTMLElement | null>, sourc
       const changed = displayed !== text;
       previous = next;
       displayed = text;
-      if (changed) played = false;
+      if (changed) swept = false;
       schedule();
     });
     // The Markdown reveal can paint more text after the last transport packet.

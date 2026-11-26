@@ -106,7 +106,7 @@
 @media (prefers-reduced-motion: no-preference) {
   .specialist-reply-cursor[data-reply-waiting-sway] {
     transform-origin: 55% 82%;
-    animation: lake-cursor-wait-sway 485ms ease-in-out;
+    animation: lake-cursor-wait-sway 1.2s ease-in-out infinite;
   }
 }
 
@@ -117,7 +117,8 @@
 }
 
 @media (forced-colors: active) {
-  .specialist-reply-cursor { forced-color-adjust: none; animation: none; }
+  .specialist-reply-cursor { forced-color-adjust: none; }
+  .specialist-reply-cursor[data-reply-waiting-sway] { animation: none; }
   .specialist-cursor-ear, .specialist-cursor-plume, .specialist-cursor-shaft,
   .specialist-cursor-eyes::before, .specialist-cursor-eyes::after { background: CanvasText; }
   .specialist-cursor-ear::before { background: Canvas; }

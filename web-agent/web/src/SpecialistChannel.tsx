@@ -53,7 +53,7 @@ export function SpecialistLiveReply({text,worker,snapshot,turnId,connected=true}
  const showCursor=hasProse&&!!(roleId||worker?.roleName);
  const prose=useRef<HTMLSpanElement>(null);
  useReplyWaitingMotion(prose,interim,showCursor&&!showsTranscript);
- if(showsTranscript)return <><CodexActivity items={items} live={moving&&visible} cursorAvatar={icon}/>{(!connected||waiting)&&<small>{label}</small>}</>;
+ if(showsTranscript)return <><CodexActivity items={items} live={moving&&visible} cursorAvatar={moving?icon:undefined}/>{(!connected||waiting)&&<small>{label}</small>}</>;
  return <div className={`specialist-live-reply${moving?' is-running':''}`} role="status" aria-live="polite" aria-atomic="true" data-phase={!connected?'disconnected':waiting?'waiting':moving?'running':'idle'}>
   <SpecialistReplyTransition revision="progress" text={label} enabled={moving&&visible}>
    {hasProse?<span ref={prose} className="status-text specialist-interim-prose">{showCursor?<SpecialistReplyCursorTail avatar={icon}>{shown}</SpecialistReplyCursorTail>:shown}</span>:<StatusText active={moving&&visible}>{shown}</StatusText>}

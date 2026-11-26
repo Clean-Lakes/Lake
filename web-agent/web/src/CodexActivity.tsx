@@ -100,7 +100,8 @@ export function CodexActivity({items,live=false,reportText,cursorAvatar}:{items:
     if(Array.isArray(group)){
       return <ToolGroup key={keys.get(group[0]!.id)} calls={group} live={live}/>;
     }
-    if(group.kind==='text')return <AssistantMarkdown key={group.id} cursorAvatar={live&&group===latestProse?cursorAvatar:undefined}>{group.text}</AssistantMarkdown>;
+    // The caller owns the current cursor. Tool timers can pause separately.
+    if(group.kind==='text')return <AssistantMarkdown key={group.id} cursorAvatar={group===latestProse?cursorAvatar:undefined}>{group.text}</AssistantMarkdown>;
     return <div className="codex-task-event" key={group.id}><Glyph name="listTasks" size={15}/><span>{group.status==='failed'?'任务更新失败':group.status==='running'?'正在更新任务':group.status==='completed'?(group.createdTask?'添加了任务':'更新了任务'):'任务状态待确认'}</span><span className="codex-task-chip">{group.text}</span></div>;
   })}</div>;
 }
