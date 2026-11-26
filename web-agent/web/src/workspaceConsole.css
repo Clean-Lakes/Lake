@@ -1,7 +1,6 @@
 .workspace-console {
   --console-edge:clamp(12px,3.636vw,40px);
   --console-header-height:58px;
-  --console-motion:180ms cubic-bezier(.2,.7,.2,1);
   --console-canvas:var(--surface-subtle);
   position:fixed;
   inset:0;
@@ -20,23 +19,16 @@
 .workspace-console[open] { display:grid; grid-template:minmax(0,1fr) / minmax(0,1fr); }
 :root.lake-native .workspace-console { padding-block-start:max(var(--console-edge), 32px); }
 :root.lake-windows-chrome .workspace-console { padding-block-start:max(var(--console-edge), 44px); }
-.workspace-console::backdrop {
-  background:rgb(0 0 0 / 17%);
-  -webkit-backdrop-filter:blur(8px);
-  backdrop-filter:blur(8px);
+.workspace-console::backdrop { background:transparent; }
+.workspace-console-scrim {
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  background:rgb(0 0 0 / 22%);
 }
-:root[data-theme="dark"] .workspace-console::backdrop { background:rgb(0 0 0 / 38%); }
-@supports not ((backdrop-filter:blur(8px)) or (-webkit-backdrop-filter:blur(8px))) {
-  .workspace-console::backdrop { background:rgb(0 0 0 / 40%); }
-}
-@media (prefers-reduced-transparency:reduce) {
-  .workspace-console::backdrop {
-    background:rgb(0 0 0 / 40%);
-    -webkit-backdrop-filter:none;
-    backdrop-filter:none;
-  }
-}
+:root[data-theme="dark"] .workspace-console-scrim { background:rgb(0 0 0 / 42%); }
 .workspace-console-frame {
+  position:relative;
   display:grid;
   grid-template-columns:clamp(112px,23.53%,240px) minmax(0,1fr);
   grid-template-rows:minmax(0,1fr);
@@ -183,12 +175,6 @@
 .workspace-console-close:focus-visible { outline-offset:-2px; }
 .workspace-console-content > .workspace-page { overflow:hidden; }
 .workspace-console .toast { z-index:var(--z-modal, 120); }
-@media (prefers-reduced-motion:no-preference) {
-  .workspace-console[open]::backdrop { animation:workspace-console-backdrop-in var(--console-motion) both; }
-  .workspace-console[open] .workspace-console-frame { animation:workspace-console-frame-in var(--console-motion) both; }
-}
-@keyframes workspace-console-backdrop-in { from { opacity:0; } }
-@keyframes workspace-console-frame-in { from { opacity:0; transform:translateY(5px); } }
 
 @media (max-width:620px) {
   .workspace-console-frame { grid-template-columns:clamp(112px,27%,170px) minmax(0,1fr); }

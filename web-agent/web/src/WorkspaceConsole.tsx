@@ -5,6 +5,7 @@ import {consoleCategories, consolePanelId, consoleTabId, type ConsolePage} from 
 import './workspaceConsole.css';
 
 const reducedMotion = '(prefers-reduced-motion: reduce)';
+const consoleMotion: KeyframeAnimationOptions = {duration:180,easing:'cubic-bezier(.2,.7,.2,1)',fill:'both'};
 // The Bento Card spring at 600 ms with 0.2 bounce, sampled every 30 ms.
 const selectionSpring = 'linear(0,.0794,.2486,.4375,.6093,.7484,.8518,.9231,.9688,.9954,1.0091,1.0144,1.015,1.0131,1.0104,1.0076,1.0051,1.0032,1.0018,1.0009,1)';
 
@@ -60,11 +61,6 @@ function alignSelection(list: HTMLElement, background: HTMLElement, reveal = fal
   ], timing);
 }
 
-function consoleEntranceAnimations(dialog: HTMLDialogElement) {
-  return dialog.getAnimations({subtree: true}).filter(animation => 'animationName' in animation &&
-    (animation.animationName === 'workspace-console-frame-in' || animation.animationName === 'workspace-console-backdrop-in'));
-}
-
 export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy, overlay, notice, onClose, onPage, children}: {
   dialogRef: RefObject<HTMLDialogElement | null>;
   open: boolean;
@@ -84,7 +80,9 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
   const currentView = {page, busy, children};
   const lastOpenView = useRef(currentView);
   const displayed = closing ? lastOpenView.current : currentView;
-  const exitAnimations = useRef<Animation[]>([]);
+  const appearance = useRef<Animation[]>([]);
+  const scrim = useRef<HTMLDivElement>(null);
+  const frame = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
   const tabs = useRef<HTMLDivElement>(null);
   const selectionBackground = useRef<HTMLSpanElement>(null);
@@ -101,45 +99,58 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
   useLayoutEffect(() => { if (open) lastOpenView.current = currentView; });
   useLayoutEffect(() => {
     const dialog = dialogRef.current;
-    if (!dialog) return;
+    const panel = frame.current;
+    const shade = scrim.current;
+    if (!dialog || !panel || !shade || (!open && !dialog.open)) return;
+
+    const controller = new AbortController();
+    const motion = window.matchMedia(reducedMotion);
+    const shouldSkip = () => document.hidden || motion.matches;
+    const clearAppearance = () => {
+      for (const animation of appearance.current) animation.cancel();
+      appearance.current = [];
+    };
+    const finish = () => {
+      if (controller.signal.aborted) return;
+      controller.abort();
+      dialog.close();
+      clearAppearance();
+      setPresent(false);
+    };
+
     if (open) {
       if (!dialog.open) {
         setQuery('');
         dialog.showModal();
         setPresent(true);
-      } else {
-        for (const animation of exitAnimations.current) {
-          if (animation.playState !== 'idle') animation.reverse();
+        if (!shouldSkip() && typeof panel.animate === 'function') {
+          // Each layer animates its own opacity. The shade never samples the page beneath it.
+          appearance.current = [
+            shade.animate([{opacity:0},{opacity:1}],consoleMotion),
+            panel.animate([{opacity:0,transform:'translateY(5px)'},{opacity:1,transform:'none'}],consoleMotion),
+          ];
         }
+      } else if (shouldSkip()) {
+        clearAppearance();
+      } else {
+        for (const animation of appearance.current) animation.reverse();
       }
-      exitAnimations.current = [];
-      search.current?.focus();
-      return;
+      search.current?.focus({preventScroll:true});
+    } else {
+      const animations = appearance.current;
+      // Before the first painted entrance frame there is nothing to reverse.
+      if (shouldSkip() || !animations.some(animation => Number(animation.currentTime) > 0)) return finish();
+      for (const animation of animations) animation.reverse();
+      void Promise.allSettled(animations.map(animation => animation.finished)).then(finish);
     }
-    if (!dialog.open) return;
 
-    const finish = () => {
-      exitAnimations.current = [];
-      dialog.close();
-      setPresent(false);
+    const skipMotion = () => {
+      if (!shouldSkip()) return;
+      if (open) clearAppearance();
+      else finish();
     };
-    const motion = window.matchMedia(reducedMotion);
-    const animations = document.hidden || motion.matches ? [] : consoleEntranceAnimations(dialog);
-    // When no entrance frame has painted, there is nothing to play back.
-    if (!animations.some(animation => Number(animation.currentTime) > 0)) return finish();
-    exitAnimations.current = animations;
-    for (const animation of animations) animation.reverse();
-
-    const controller = new AbortController();
-    const settle = () => {
-      if (controller.signal.aborted) return;
-      controller.abort();
-      finish();
-    };
-    const skipMotion = () => { if (document.hidden || motion.matches) settle(); };
     motion.addEventListener('change', skipMotion, {signal: controller.signal});
     document.addEventListener('visibilitychange', skipMotion, {signal: controller.signal});
-    void Promise.allSettled(animations.map(animation => animation.finished)).then(settle);
     return () => controller.abort();
   }, [dialogRef, open]);
   useLayoutEffect(() => {
@@ -218,7 +229,8 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
       }
       trapSettingsTab(event, dialogRef.current);
     }}>
-    <div className="workspace-console-frame" inert={hasOverlay || closing} onFocusCapture={event => {
+    <div ref={scrim} className="workspace-console-scrim" aria-hidden="true"/>
+    <div ref={frame} className="workspace-console-frame" inert={hasOverlay || closing} onFocusCapture={event => {
       lastFrameFocus.current = event.target as HTMLElement;
     }}>
       <nav className="workspace-console-nav" aria-label="控制台分类">
