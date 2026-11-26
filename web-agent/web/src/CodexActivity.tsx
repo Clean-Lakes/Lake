@@ -1,9 +1,11 @@
-import {useEffect,useId,useLayoutEffect,useRef,useState} from 'react';
+import {useEffect,useId,useLayoutEffect,useRef,useState,type ComponentProps} from 'react';
 import type {CodexActivityItem,CodexAction} from '../../shared/codex-activity';
 import {AssistantMarkdown} from './AssistantMarkdown';
 import {Glyph} from './Icons';
 import {bindConversationFollow} from './followScroll';
 import type {LakeAvatarName} from './lakeAvatarCatalog';
+import {PilotReportFold,readingPilotReport} from './PilotReportFold';
+import {ReplyFooter} from './ReplyFooter';
 
 type Call=Exclude<CodexActivityItem,{kind:'text'}>;
 const verbs:Record<Exclude<CodexAction,'task'>,[string,string,string]>={
@@ -129,4 +131,23 @@ export function CodexActivity({items,live=false,animateInitial,reportText,cursor
     }
     return <TaskEvent key={group.id} call={group}/>;
   })}</div>;
+}
+
+/** Keep the live process mounted while its final report is shown separately. */
+export function SpecialistExecutionProcess({collapse=false,connected=true,onInspect,...activity}:ComponentProps<typeof CodexActivity>&{
+  collapse?: boolean;
+  connected?: boolean;
+  onInspect?: ()=>void;
+}){
+  const id=useId(),body=useRef<HTMLDivElement>(null);
+  const [expanded,setExpanded]=useState<boolean>();
+  const keepReading=collapse&&expanded===undefined&&readingPilotReport(body.current);
+  const open=!collapse||(expanded??keepReading);
+  useLayoutEffect(()=>{if(keepReading)setExpanded(true);},[keepReading]);
+
+  return <PilotReportFold id={id} bodyRef={body} open={open} automatic={collapse&&expanded===undefined}
+    connected={connected} stripHidden={!collapse}
+    strip={<ReplyFooter action={{controls:id,expanded:open,onClick:()=>{onInspect?.();setExpanded(!open);}}}/>}>
+    <CodexActivity {...activity}/>
+  </PilotReportFold>;
 }

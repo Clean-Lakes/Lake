@@ -189,6 +189,21 @@ test('a host-confirmed report replaces the same task slot across SDK invocations
  assert.equal(advance(initial,workspace([item]),[user,wrongSource],roots)[0]!.finalReport,undefined);
 });
 
+test('the live specialist process waits for the formal report presentation before folding',()=>{
+ const row=advance([],workspace())[0]!;
+ const final:Message={...report(row),codexActivity:[
+  {kind:'text',id:'step',text:'正在核对记录。'},
+  {kind:'integration',id:'call',text:'查询记录',status:'completed',at},
+ ]};
+ const delivered={...row,finalReport:final};
+ const render=(arriveReport:boolean)=>renderToStaticMarkup(createElement(PilotSpecialistReplyView,{
+  row:delivered,foldSpecialistProcess:true,arriveReport,
+ }));
+ assert.doesNotMatch(render(true),/aria-label="查看执行过程"[^>]*aria-expanded="false"/);
+ assert.match(render(false),/aria-label="查看执行过程"[^>]*aria-expanded="false"/);
+ assert.match(render(false),/正式结果/);
+});
+
 test('published stage prose keeps working motion and trims only its terminal full stop',()=>{
  const item=worker(),row=advance([],workspace([item]))[0]!;
  const live=snapshot(row),ai=live.ai!;
