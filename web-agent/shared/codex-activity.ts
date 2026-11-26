@@ -1,9 +1,10 @@
 import type {AIView} from './contracts';
 
 export type CodexAction = 'command'|'read'|'edit'|'integration'|'task';
+export type CodexTaskState = 'pending'|'in_progress'|'completed'|'removed';
 export type CodexActivityItem =
   | {kind:'text'; id:string; text:string}
-  | {kind:CodexAction; id:string; text:string; status:'running'|'completed'|'failed'|'stopped'|'unknown'; at:string; createdTask?:boolean; output?:string; endedAt?:string};
+  | {kind:CodexAction; id:string; text:string; status:'running'|'completed'|'failed'|'stopped'|'unknown'; at:string; createdTask?:boolean; taskState?:CodexTaskState; output?:string; endedAt?:string};
 
 export function updateCodexActivity(items:readonly CodexActivityItem[], item:CodexActivityItem):CodexActivityItem[] {
   const index=items.findIndex(previous=>previous.id===item.id);

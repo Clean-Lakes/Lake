@@ -69,7 +69,7 @@ export class ExternalAgentRegistry {
       const modelOptions=[...new Set([...models.map(model=>model.id),localModel,profile.modelOverride].filter(isCodexModelId))];
       const modelEffortOptions=Object.fromEntries(models.map(model=>[model.id,model.reasoningEfforts]));
       const model=profile.modelOverride??localModel;
-      const assignmentBlocker=!profile.enabled?'尚未启用，请在 Agent 设置中启用并保存':
+      const assignmentBlocker=!profile.enabled?'请在「模型配置」中启用 Codex 并保存':
         process.platform!=='darwin'?'当前平台的 Codex 执行尚未开放':source.error??
         (!codexHomePresent(source.home)?'未找到本机 Codex 配置目录，请先在本机 Codex 完成登录':
         !installed?'尚未安装，请启用后自动准备 Codex 引擎':

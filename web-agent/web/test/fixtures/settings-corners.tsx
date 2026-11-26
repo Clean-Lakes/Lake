@@ -95,7 +95,7 @@ function SettingsFixture() {
   <WorkspaceConsole dialogRef={consoleRef} open={open} page={page} typescriptBackend busy={busy} onPage={setPage} onClose={close}>
    {page==='updates' ? <DesktopUpdate visible/> : page==='workspace' ?
     <section className="workspace-page"><WorkspacePageHeader id="fixture-title" title="项目"/></section> :
-    <ModelSettings tab={page} projectId={projectId} projectName={projectName}
+    <ModelSettings tab={page} projectId={projectId}
      onBusyChange={setBusy} onChanged={async()=>{}} sendShortcut="enter" onShortcutChange={()=>{}}
      completionEnabled onCompletionEnabledChange={()=>{}}/>}
   </WorkspaceConsole>

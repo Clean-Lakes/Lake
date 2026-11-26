@@ -1,11 +1,12 @@
 import type {AgentActivity,AgentConnection,AgentLaunch,AgentTurnResult} from './client';
-import {codexToolDetail,CodexOutputBuffer,outputLine,type CodexDetail} from './codex-activity';
+import {CodexChecklist,codexToolDetail,CodexOutputBuffer,outputLine,readCodexChecklist,type CodexChecklistSnapshot,type CodexDetail} from './codex-activity';
 import {JsonRpcProcess} from './process';
 
 type Tokens={inputTokens:number;outputTokens:number};
 type Turn={id?:string;done:boolean;resolve:(result:AgentTurnResult)=>void;reject:(error:Error)=>void;
   confirmed:Promise<void>;confirm:()=>void;mcpCalls:Map<string,{server:string;tool:string;pending:boolean}>;
   buffered:Array<{method:string;params:any}>;bytes:number;messages:Map<string,string>;text:string;baseline?:Tokens;
+  todoCalls:Map<string,CodexChecklistSnapshot|false|null>;todos:CodexChecklist;plan:CodexChecklist;taskEvents:number;
   inputs:Map<string,{text:string;consumed:boolean}>;};
 const tokens=(value:any):Tokens|undefined=>value&&Number.isSafeInteger(value.inputTokens)&&value.inputTokens>=0&&Number.isSafeInteger(value.outputTokens)&&value.outputTokens>=0?
   {inputTokens:value.inputTokens,outputTokens:value.outputTokens}:undefined;
@@ -76,7 +77,8 @@ export class CodexAppServer implements AgentConnection {
       resolve:result=>{if(!turn.done){turn.done=true;resolve(result);}},
       reject:error=>{if(!turn.done){turn.done=true;failConfirm(error);reject(error);}},
       confirmed,confirm,mcpCalls:new Map(),inputs:new Map(),
-      buffered:[],bytes:0,messages:new Map(),text:'',baseline:this.totalTokens};});
+      buffered:[],bytes:0,messages:new Map(),text:'',baseline:this.totalTokens,
+      todoCalls:new Map(),todos:new CodexChecklist(),plan:new CodexChecklist(),taskEvents:0};});
     void completed.catch(()=>{});
     this.turn=turn;
     const abort=()=>turn.reject(signal.reason instanceof Error?signal.reason:new Error('Codex 轮次已取消'));
@@ -140,6 +142,25 @@ export class CodexAppServer implements AgentConnection {
     if(Buffer.byteLength(combined)>1024*1024){turn.reject(new Error('Codex 正文超过本次输出上限'));void this.rpc.close();return;}
     if(changed){turn.text=combined;this.activity({kind:'text',text:combined,messageId:id,messageText:text});}
   }
+  private publishChecklist(turn:Turn,changes:CodexDetail[],title:string){
+    for(const change of changes)this.activity({kind:'tool_update',
+      callId:JSON.stringify(['checklist',turn.id,++turn.taskEvents]),title,status:'completed',...change});
+  }
+  private todoWrite(turn:Turn,item:any,started:boolean,status:string){
+    const callId=item.id,prior=turn.todoCalls.get(callId);
+    if(prior===null||started&&prior!==undefined)return;
+    const snapshot=readCodexChecklist(item.arguments?.todos,'content');
+    if(started){
+      turn.todoCalls.set(callId,snapshot??false);
+      this.activity({kind:'tool',callId,title:'TodoWrite',status});
+      return;
+    }
+    turn.todoCalls.set(callId,null);
+    const saved=item.arguments?.todos==null?(prior||undefined):snapshot;
+    this.activity({kind:'tool_update',callId,title:'TodoWrite',status,
+      ...((status!=='completed'||!saved)&&{displayKind:'task',detail:'更新任务清单'})});
+    if(status==='completed'&&saved)this.publishChecklist(turn,turn.todos.update(saved),'TodoWrite');
+  }
   private route(turn:Turn,method:string,params:any) {
     const id=method==='turn/completed'?params.turn?.id:params.turnId;
     if(turn.done||id!==turn.id)return;
@@ -156,9 +177,9 @@ export class CodexAppServer implements AgentConnection {
         call.timer=undefined;
         if(this.turn===turn&&!turn.done)this.activity({kind:'tool_update',callId:params.itemId,title:call.detail.detail,status:'running',...call.detail,preview:call.last,transient:true});
       },200);
-    }else if(method==='turn/plan/updated'&&Array.isArray(params.plan)){
-      const step=params.plan.find((s:any)=>s?.status==='inProgress'||s?.status==='in_progress')??params.plan[0];
-      if(typeof step?.step==='string')this.activity({kind:'tool_update',callId:'plan:'+turn.id,title:'更新计划',status:'completed',displayKind:'task',detail:step.step});
+    }else if(method==='turn/plan/updated'){
+      const plan=readCodexChecklist(params.plan,'step');
+      if(plan)this.publishChecklist(turn,turn.plan.update(plan),'更新计划');
     }else if(method==='item/started'||method==='item/completed') {
       const item=params.item;if(!item||typeof item.id!=='string')return;
       if(item.type==='userMessage'&&typeof item.clientId==='string') {
@@ -175,6 +196,12 @@ export class CodexAppServer implements AgentConnection {
       if(item.type==='agentMessage'&&method==='item/completed'&&typeof item.text==='string')this.messageText(turn,item.id,item.text);
       else if(['mcpToolCall','commandExecution','fileChange','dynamicToolCall','collabAgentToolCall','webSearch'].includes(item.type)){
         const started=method==='item/started';
+        const status=started?'running':item.status==='failed'||item.success===false||item.error||item.result?.isError||typeof item.exitCode==='number'&&item.exitCode!==0?'failed':
+          ['declined','cancelled','interrupted'].includes(item.status)?'cancelled':'completed';
+        if(item.type==='mcpToolCall'&&item.server==='lake'&&item.tool==='TodoWrite'){
+          this.todoWrite(turn,item,started,status);
+          return;
+        }
         const previous=this.previews.get(item.id);
         const missingInput=!item.arguments&&!item.command&&!item.changes;
         const detail=codexToolDetail(!started&&missingInput&&previous?.detail.displayKind==='command'
@@ -191,8 +218,7 @@ export class CodexAppServer implements AgentConnection {
         }
         this.activity({kind:method==='item/started'?'tool':'tool_update',callId:item.id,
           title:item.type==='mcpToolCall'?item.server==='lake'?item.tool:item.server+' / '+item.tool:item.tool??(item.type==='commandExecution'?detail?.detail:undefined)??item.type,
-          status:started?'running':item.status==='failed'||item.success===false||item.error||item.result?.isError||typeof item.exitCode==='number'&&item.exitCode!==0?'failed':
-            ['declined','cancelled','interrupted'].includes(item.status)?'cancelled':'completed',...detail});
+          status,...detail});
       }
     }else if(method==='thread/tokenUsage/updated') {
       const total=tokens(params.tokenUsage?.total);if(!total)return;

@@ -67,6 +67,25 @@ async function handle(message){
    note('item/completed',{item:{...cmd,status:'completed',exitCode:0,aggregatedOutput:'scan finished'}});
    note('turn/completed',{turn:{id:turnId,status:'completed',items:[]}});return;
   }
+  if(scenario==='inline-checklist'){
+   const inspect={content:'核对巡检记录',status:'in_progress'},optional={content:'补查历史',status:'pending'};
+   const update=(id,todos,status='completed')=>{
+    const item={id,type:'mcpToolCall',server:'lake',tool:'TodoWrite'};
+    note('item/started',{item:{...item,arguments:{todos}}});
+    note('item/completed',{item:{...item,status}});
+   };
+   update('tasks-added',[inspect,optional]);
+   update('tasks-unchanged',[inspect,optional]);
+   update('write-failed',[{...inspect,status:'completed'}],'failed');
+   note('item/agentMessage/delta',{itemId:'prose',delta:'巡检记录已核对。'});
+   update('tasks-finished',[{...inspect,status:'completed'}]);
+   update('tasks-added',[inspect,optional]); // Late repeat of the first result.
+   note('turn/plan/updated',{threadId:'foreign',plan:[{step:'另一线程',status:'completed'}]});
+   note('turn/plan/updated',{plan:[{step:'整理回执',status:'inProgress'}]});
+   note('turn/plan/updated',{plan:[{step:'整理回执',status:'completed'}]});
+   note('turn/plan/updated',{plan:[{step:'整理回执',status:'completed'}]});
+   note('turn/completed',{turn:{id:turnId,status:'completed',items:[]}});return;
+  }
   // Foreign output and an old terminal must not become the current report.
   note('item/agentMessage/delta',{threadId:'foreign',itemId:'foreign',delta:'WRONG_THREAD'});
   note('item/agentMessage/delta',{turnId:'old-turn',itemId:'foreign',delta:'WRONG_TURN'});

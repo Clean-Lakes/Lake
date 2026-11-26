@@ -63,6 +63,7 @@ import {ComposerModelSelect} from "./ComposerModelSelect";
 import {currentComposerModel,hasComposerModelChoices} from "./composerModelState";
 import {modelBrand} from "./modelBrand";
 import {useSpecialistModel} from "./useSpecialistModel";
+import {CodexModelConfiguration} from "./CodexModelConfiguration";
 import {BulkCheckbox, BulkNavigationDelete, type BulkSelection} from "./BulkNavigationDelete";
 import {addBulkTargets, bulkCatalogTargets, bulkKey, orderBulkDeletion, type BulkTarget, type BulkDeleteResult} from "./bulkNavigation";
 import {NavigationDelete,NavigationMenu,type NavigationDeleteTarget} from "./NavigationDelete";
@@ -336,6 +337,12 @@ function AppContent() {
   const [permissionsOpen, setPermissionsOpen] = useState(false);
   const permissionButtonRef = useRef<HTMLButtonElement>(null);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [codexConfiguration,setCodexConfiguration]=useState<{projectId:string;anchor?:HTMLElement|null}|null>(null);
+  const openCodexConfiguration=useCallback((projectId:string|undefined,anchor?:HTMLElement|null)=>{
+    if(!typescriptBackend||!projectId)return;
+    setModelMenuOpen(false);
+    setCodexConfiguration({projectId,anchor});
+  },[typescriptBackend]);
   const [reasoningSaving,setReasoningSaving]=useState<ReadonlySet<string>>(()=>new Set());
   const [modeSaving,setModeSaving]=useState<ReadonlySet<string>>(()=>new Set());
   const modeSaveSessions=useRef(new Set<string>());
@@ -542,7 +549,7 @@ function AppContent() {
     }
     afterSettings(()=>{
       setResourceTerminalMenu(null);setResourceConfigContext(null);
-      setAgentOptionsOpen(false);setPermissionsOpen(false);setModelMenuOpen(false);setAttachmentDragOver(false);
+      setAgentOptionsOpen(false);setPermissionsOpen(false);setModelMenuOpen(false);setAttachmentDragOver(false);setCodexConfiguration(null);
       if(view==='settings')setSettingsTab(tab);
       const returnView=current.view==='plans'?'plans':current.returnView;
       commitNavigation({...current,view,returnView},undefined,isWorkspacePageView(current.view));
@@ -1119,7 +1126,7 @@ function AppContent() {
   const selectedSuperChannel=bootstrap?.backendRuntime==='typescript'?pilotWorkspace.workspace?.channels?.find(channel=>channel.sessionId===selectedSession?.id):undefined;
   const specialistComposer=bootstrap?.backendRuntime==='typescript'&&(!!selectedSuperChannel||selectedSession?.workspaceRole==='role');
   const codexSettingsProject=bootstrap?.backendRuntime==='typescript'&&(specialistComposer||selectedSession?.workspaceRole==='router')?selectedSession?.projectId:undefined;
-  const specialistModel=useSpecialistModel(selectedSuperChannel,isSettingsPage,modelMenuOpen,codexSettingsProject);
+  const specialistModel=useSpecialistModel(selectedSuperChannel,!!codexConfiguration,modelMenuOpen,codexSettingsProject);
   useEffect(()=>{
     const selected=inspector.selection;if(!selected||selected.sessionId!==sessionId)return;
     if(!selected.canonicalGoalId||selected.followLatest){if(roleInspection?.session.id===sessionId){roleInspectionRequest.current.cancel();setRoleInspection(null);}return;}
@@ -1486,7 +1493,7 @@ function AppContent() {
       return;
     }
     if(currentAssignment?.checking)return;
-    if(currentAssignment?.blockedReason){openSettings("agents");return;}
+    if(currentAssignment?.blockedReason){openCodexConfiguration(codexSettingsProject);return;}
     if (!text && !imageDraft.length) return;
     if (imageDraft.length && !bootstrap?.supportsImageInput) { handleFailure(new Error("当前模型未启用图片输入，请切换到支持图片的模型后发送。")); return; }
     const targetSession=sessionId;
@@ -1979,6 +1986,7 @@ function AppContent() {
        attention={pilotWorkspace.workspace?.channels?.some(channel=>channel.needsConfirmation===true||hasUnreadMessages(channel.messageRead))}
        specialists={<>
         {sidebarProject&&<PilotWorkspace showHeading={false} activity={avatarActivity} pilotButton={sidebarPilotButton}
+         onCodexSettings={typescriptBackend?openCodexConfiguration:undefined}
          pilotActivity={conversationActivity(undefined,catalog.sessions.find(row=>row.id===pilotWorkspace.workspace?.project.routerSessionId)?.status)} pilotDisabled={!bootstrap?.authenticated}
          disabled={!connected} onDeleted={channel=>pilotWorkspace.removeRole(channel.roleId)} workspace={pilotWorkspace.workspace} error={pilotWorkspace.error} selectedId={sessionSelected ? route.sessionId : null} selectedRoleId={sessionSelected && selectedSession.projectId===pilotWorkspace.workspace?.project.projectId ? selectedSuperChannel?.roleId??activeSnapshot?.superagent?.roleId??selectedSuperWorker?.roleId : undefined} onPilot={()=>{const domain=pilotWorkspace.workspace;if(domain?.active)navigate({sessionId:domain.project.routerSessionId,resourceId:null});else void openProjectPilot(sidebarProject.id);}} onWorker={worker=>navigate({sessionId:worker.sessionId,resourceId:null})} onChannel={openSpecialistOverview}/>}
         {sidebarProject&&pilotWorkspace.workspace?.active===false&&<div className="nav-heading sidebar-session-heading" hidden={bulkMode}>
@@ -2106,7 +2114,7 @@ function AppContent() {
           {activeSnapshot&&!pilotWorkspace.workspace?.active&&<LakePilotControl key={activeSnapshot.session.projectId} snapshot={activeSnapshot} onUpdated={refreshCurrent} disabled={!sessionConnected||turnActive} disabledReason={!sessionConnected?"连接恢复后可切换 Lake Pilot。":"本轮运行中，结束后可切换 Lake Pilot。"}/> }
           {pilotTaskReference?.sent&&<PilotTaskReferenceChip task={pilotTaskReference} members={pilotTaskMembers} compact onClear={()=>selectPilotTask()}/>}
           <div className="composer-foot-actions"><div className="composer-status"><div className="model-switch-wrap">
-          <ComposerModelSelect key={sessionId} externalAgent={codexSettingsProject?{ready:!!specialistModel.agent?.assignmentReady,message:specialistModel.message,model:specialistModel.model,configurationOnly:!specialistComposer}:undefined} onExternalAgentSettings={()=>{setModelMenuOpen(false);openSettings("agents");}} contextUsage={activeSnapshot?.ai?{view:{session:activeSnapshot.ai.session,context:activeSnapshot.ai.context,usage:activeSnapshot.ai.usage},model:{modelId:bootstrap?.modelId},status:headerPilot?.status==='paused'?'idle':currentSessionStatus}:undefined} available={modelMenu} modelName={composerModelName} selection={composerModelSelection} configured={modelConfigured} open={modelMenuOpen} disabled={!!pendingOperation||reasoningSaving.size>0} onOpenChange={open=>{if(open) void openModelMenu();else setModelMenuOpen(false);}} onSelect={model=>void switchModel(model).catch(handleFailure)} onSettings={()=>{setModelMenuOpen(false);void openSettings();}} reasoning={activeSnapshot?.ai ? {session:sessionId,modelId:bootstrap?.modelId,disabled:!sessionConnected || turnActive || !!pendingOperation,disabledReason:!sessionConnected?"连接恢复后可调整思考级别。":turnActive?"本轮运行中，结束后可调整思考级别。":"正在保存设置，请稍后调整思考级别。",onSaving:(saving,savingSession=sessionId) => setReasoningSaving(current=>{const next=new Set(current);if(saving)next.add(savingSession);else next.delete(savingSession);return next;})}:undefined}/>
+          <ComposerModelSelect key={sessionId} externalAgent={codexSettingsProject?{ready:!!specialistModel.agent?.assignmentReady,message:specialistModel.message,model:specialistModel.model,configurationOnly:!specialistComposer}:undefined} onExternalAgentSettings={()=>openCodexConfiguration(codexSettingsProject)} contextUsage={activeSnapshot?.ai?{view:{session:activeSnapshot.ai.session,context:activeSnapshot.ai.context,usage:activeSnapshot.ai.usage},model:{modelId:bootstrap?.modelId},status:headerPilot?.status==='paused'?'idle':currentSessionStatus}:undefined} available={modelMenu} modelName={composerModelName} selection={composerModelSelection} configured={modelConfigured} open={modelMenuOpen} disabled={!!pendingOperation||reasoningSaving.size>0} onOpenChange={open=>{if(open) void openModelMenu();else setModelMenuOpen(false);}} onSelect={model=>void switchModel(model).catch(handleFailure)} onSettings={()=>{setModelMenuOpen(false);void openSettings();}} reasoning={activeSnapshot?.ai ? {session:sessionId,modelId:bootstrap?.modelId,disabled:!sessionConnected || turnActive || !!pendingOperation,disabledReason:!sessionConnected?"连接恢复后可调整思考级别。":turnActive?"本轮运行中，结束后可调整思考级别。":"正在保存设置，请稍后调整思考级别。",onSaving:(saving,savingSession=sessionId) => setReasoningSaving(current=>{const next=new Set(current);if(saving)next.add(savingSession);else next.delete(savingSession);return next;})}:undefined}/>
         </div>{!specialistComposer&&activeSnapshot?.ai && <ContextUsage view={activeSnapshot.ai} model={bootstrap || undefined} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} compact presentation="warning"/>}</div><div className="composer-send-actions">
           {sendFeedback && <span className="composer-send-feedback" role="status">{sendFeedback}</span>}
           {executionStoppable && <button
@@ -2140,7 +2148,7 @@ function AppContent() {
         completionEnabled={completionEnabled} onCompletionEnabledChange={setCompletionEnabled} onGatewayTask={inspectGatewayTask} capabilityDetectionEnabled={bootstrap?.backendRuntime==='go'}
         onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut}
         onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {commitNavigation({sessionId,resourceId:null});setAgentOptionsOpen(true);} : undefined}
-        projectId={selectedProjectId??sidebarProject?.id} projectName={projectList.find(project=>project.id===(selectedProjectId??sidebarProject?.id))?.name}
+        projectId={selectedProjectId??sidebarProject?.id}
       />:route.view==='workspace'?<WorkspacePage project={sidebarProject} projects={projectList} resources={catalog.resources}
         connected={workspaceConnected} bulkSelection={bulkSelection} bulkSelectedCount={bulkSelected.length}
         onCreateProject={openProjectDialog}
@@ -2150,6 +2158,9 @@ function AppContent() {
         onClearSelection={() => setBulkSelected([])}
         onDeleteSelected={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}/>:null}
     </WorkspaceConsole>
+    {codexConfiguration&&!isWorkspacePage&&<CodexModelConfiguration key={codexConfiguration.projectId}
+      {...codexConfiguration} projectName={projectList.find(project=>project.id===codexConfiguration.projectId)?.name??'当前项目'}
+      onClose={()=>setCodexConfiguration(null)}/>}
     {terminalTabContext && <NavigationMenu title="终端" x={terminalTabContext.x} y={terminalTabContext.y} onClose={() => setTerminalTabContext(null)} actions={[
       {label: "打开终端", run: () => selectTerminalTab(terminalTabContext.terminal)},
       {label: "新建终端", disabled: !!pendingOperation || connectingResources.includes(terminalTabContext.terminal.resourceId), run: () => { void openTerminalFor(terminalTabContext.terminal.resourceId, true); }},

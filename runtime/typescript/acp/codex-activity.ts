@@ -1,6 +1,6 @@
-import type {CodexAction} from '../../../web-agent/shared/codex-activity';
+import type {CodexAction,CodexTaskState} from '../../../web-agent/shared/codex-activity';
 
-export type CodexDetail = {displayKind:CodexAction; detail:string; preview?:string; suppressOutput?:boolean};
+export type CodexDetail = {displayKind:CodexAction; detail:string; preview?:string; suppressOutput?:boolean; taskState?:CodexTaskState; createdTask?:boolean};
 const privateText=/private[ _-]?key|authorization|bearer\s|(?:password|passwd|token|secret|api[_-]?key|access[_-]?key|oauth|cookie|credential|id_rsa|id_ed25519|\.netrc)|(?:sk-|gh[pousr]_)[a-z\d_-]{10,}|:\/\/[^\s/]+:[^\s/]+@|BEGIN [A-Z ]*KEY|\.env\b|\.ssh\b|\.pem\b|\b(?:printenv|env|set -x)\b/i;
 const credentialOption=/(?:^|\s)(?:--user|--pass|--password|--token|--api-key)(?:[=\s])|\bcurl\b[^\n]*?\s-u\s|\b(?:sshpass\s+-p|redis-cli\s+-a|mysql\s+-p\S)|\bBasic\s+[A-Za-z\d+/=]{6,}/i;
 const privateCommand=(value:string)=>privateText.test(value)||credentialOption.test(value);
@@ -9,6 +9,45 @@ const scrubLine=(s:string)=>s.replace(/\x1b\[[0-9;]*[A-Za-z]/g,'').replace(contr
 function label(value:unknown,fallback:string){
   if(typeof value!=='string'||!value.trim())return fallback;
   return privateText.test(value)?'内容已隐藏':scrubLine(value).slice(0,240);
+}
+
+type ChecklistEntry={text:string;state:Exclude<CodexTaskState,'removed'>};
+export type CodexChecklistSnapshot=Map<string,ChecklistEntry>;
+
+export function readCodexChecklist(value:unknown,field:'step'|'content'):CodexChecklistSnapshot|undefined {
+  // Reject a malformed snapshot as a whole. A missing or truncated row
+  // cannot prove that a previously visible task was removed.
+  if(!Array.isArray(value)||value.length>64)return;
+  const list:CodexChecklistSnapshot=new Map();
+  const duplicates=new Map<string,number>();
+  for(const item of value){
+    const title=item?.[field],state=item?.status==='inProgress'?'in_progress':item?.status;
+    if(typeof title!=='string'||title.length>4096||!title.trim()||!['pending','in_progress','completed'].includes(state))return;
+    const identity=typeof item.id==='string'&&item.id&&item.id.length<=256
+      ?JSON.stringify(['id',item.id]):JSON.stringify(['title',title.trim()]);
+    const ordinal=(duplicates.get(identity)??0)+1;
+    duplicates.set(identity,ordinal);
+    list.set(JSON.stringify([identity,ordinal]),{text:label(title,'任务'),state});
+  }
+  return list;
+}
+
+export class CodexChecklist {
+  private previous:CodexChecklistSnapshot=new Map();
+  update(list:CodexChecklistSnapshot):CodexDetail[]{
+    const changes:CodexDetail[]=[];
+    for(const [key,entry] of list){
+      const prior=this.previous.get(key);
+      if(prior?.state===entry.state)continue;
+      changes.push({displayKind:'task',detail:entry.text,taskState:entry.state,
+        ...(!prior&&entry.state!=='completed'&&{createdTask:true})});
+    }
+    for(const [key,entry] of this.previous){
+      if(!list.has(key)&&entry.state!=='completed')changes.push({displayKind:'task',detail:entry.text,taskState:'removed'});
+    }
+    this.previous=list;
+    return changes;
+  }
 }
 const masked='[已脱敏]';
 export const commandLimit=32768;

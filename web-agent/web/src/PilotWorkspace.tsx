@@ -170,6 +170,7 @@ type PilotWorkspaceProps = {
  pilotActivity?:ConversationActivity;pilotDisabled?:boolean;
  onPilot: () => void; onWorker: (worker: SuperWorker) => void; onChannel?: (channel: SpecialistChannelInfo) => void;
  disabled?:boolean; onDeleted?:(channel:SpecialistChannelInfo)=>void;
+ onCodexSettings?:(projectId:string,anchor:HTMLButtonElement|null)=>void;
 };
 
 function showClippedText(event: PointerEvent<HTMLElement>) {
@@ -178,7 +179,7 @@ function showClippedText(event: PointerEvent<HTMLElement>) {
  else text.removeAttribute('title');
 }
 
-export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,showHeading=true}: PilotWorkspaceProps) {
+export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,onCodexSettings,showHeading=true}: PilotWorkspaceProps) {
  const [context,setContext]=useState<{channel:SpecialistChannelInfo;x:number;y:number}|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null);
  const anchor=useRef<HTMLButtonElement|null>(null);
  useEffect(()=>{setContext(null);setDeleting(null);},[workspace?.project.projectId]);
@@ -241,7 +242,10 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
     </span>
    </button>;
   }) : null}
-  {context&&<NavigationMenu title={context.channel.roleName} x={context.x} y={context.y} anchor={anchor} onClose={()=>setContext(null)} actions={[{label:'删除专员',icon:'trash',danger:true,disabled:disabled||context.channel.roleRevision===undefined,run:()=>setDeleting(context.channel)}]}/>}
+  {context&&<NavigationMenu title={context.channel.roleName} x={context.x} y={context.y} anchor={anchor} onClose={()=>setContext(null)} actions={[
+   ...(onCodexSettings?[{label:'模型配置',icon:'settings' as const,disabled,run:()=>onCodexSettings(context.channel.projectId,anchor.current)}]:[]),
+   {label:'删除专员',icon:'trash',danger:true,disabled:disabled||context.channel.roleRevision===undefined,run:()=>setDeleting(context.channel)},
+  ]}/>}
   {deleting&&<SpecialistDelete channel={deleting} returnFocus={anchor} onClose={()=>setDeleting(null)} onDeleted={()=>{
    onDeleted?.(deleting);
    if(deleting.roleId===viewedRole){
