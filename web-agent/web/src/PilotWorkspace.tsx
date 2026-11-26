@@ -180,7 +180,7 @@ function showClippedText(event: PointerEvent<HTMLElement>) {
 }
 
 export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,onCodexSettings,showHeading=true}: PilotWorkspaceProps) {
- const [context,setContext]=useState<{channel:SpecialistChannelInfo;x:number;y:number}|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null);
+ const [context,setContext]=useState<SpecialistChannelInfo|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null);
  const anchor=useRef<HTMLButtonElement|null>(null);
  useEffect(()=>{setContext(null);setDeleting(null);},[workspace?.project.projectId]);
  const roots = workspace?.active?workspace.workers.filter(worker => !worker.parentWorkerId):[];
@@ -219,11 +219,17 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
    const detail=aggregate.detail??(channel?.duties||'持续沟通');
    const detailStatus = detail.endsWith(status) ? undefined : status;
    const label = `${name}${backend?` · Agent 类型：${agentTypeName(backend)}`:''} · ${detail}${detailStatus?` · ${detailStatus}`:''}`;
+   const openManagement=(button:HTMLButtonElement)=>{
+    if(!channel||disabled)return;
+    anchor.current=button;
+    setContext(channel);
+   };
    return <button type="button" key={channel?.id ?? worker!.id} className={`nav-row pilot-worker-row${selected ? ' active' : ''}`}
      aria-current={selected ? 'page' : undefined} aria-label={label}
      aria-haspopup={channel?'menu':undefined}
-     onContextMenu={event=>{event.preventDefault();event.stopPropagation();if(channel&&!disabled){anchor.current=event.currentTarget;setContext({channel,x:event.clientX,y:event.clientY});}}}
-     onKeyDown={event=>{if(channel&&!disabled&&(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10')){event.preventDefault();const bounds=event.currentTarget.getBoundingClientRect();anchor.current=event.currentTarget;setContext({channel,x:bounds.left+20,y:bounds.bottom});}}}
+     aria-keyshortcuts={channel&&!disabled?'Shift+F10':undefined}
+     onContextMenu={event=>{event.preventDefault();event.stopPropagation();openManagement(event.currentTarget);}}
+     onKeyDown={event=>{if(channel&&!disabled&&(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10')){event.preventDefault();openManagement(event.currentTarget);}}}
      onClick={event=>{greetRoleAvatar(event.currentTarget);if(channel&&onChannel)onChannel(channel);else if(worker)onWorker(worker);}}>
     <SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId} motion={preparing?'working':replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/>
     <span className="nav-row-text">
@@ -242,9 +248,11 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
     </span>
    </button>;
   }) : null}
-  {context&&<NavigationMenu title={context.channel.roleName} x={context.x} y={context.y} anchor={anchor} onClose={()=>setContext(null)} actions={[
-   ...(onCodexSettings?[{label:'模型配置',icon:'settings' as const,disabled,run:()=>onCodexSettings(context.channel.projectId,anchor.current)}]:[]),
-   {label:'删除专员',icon:'trash',danger:true,disabled:disabled||context.channel.roleRevision===undefined,run:()=>setDeleting(context.channel)},
+  {context&&<NavigationMenu key={context.id} title={context.roleName} placement="beside" anchor={anchor} className="specialist-context-menu"
+   headerIcon={<SuperRoleAvatar name={context.roleName} roleId={context.roleId} avatarId={context.avatarId} motion="still" size={19}/>}
+   onClose={()=>setContext(null)} actions={[
+   ...(onCodexSettings?[{label:'模型配置',icon:'filter' as const,trailingIcon:'next' as const,disabled,run:()=>onCodexSettings(context.projectId,anchor.current)}]:[]),
+   {label:'删除专员',icon:'trash',separatorBefore:true,danger:true,disabled:disabled||context.roleRevision===undefined,run:()=>setDeleting(context)},
   ]}/>}
   {deleting&&<SpecialistDelete channel={deleting} returnFocus={anchor} onClose={()=>setDeleting(null)} onDeleted={()=>{
    onDeleted?.(deleting);
