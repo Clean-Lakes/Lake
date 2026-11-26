@@ -11,10 +11,9 @@ export function pausesConversationFollow(box: ScrollBox, direction: number, foll
   return conversationCanScroll(box) && (direction < 0 || !following && !atConversationTail(box));
 }
 
-// DOM heights are integers, but scrollTop and the clamped tail may be fractional.
-// Resume following only at the actual tail, including this rounding tolerance.
+// The tail can be fractional, and WebKit can briefly scroll past it.
 export function atConversationTail(box: ScrollBox) {
-  return Math.abs(Math.max(0, box.scrollHeight - box.clientHeight) - box.scrollTop) < 2;
+  return Math.max(0, box.scrollHeight - box.clientHeight) - box.scrollTop < 2;
 }
 
 // Scroll events also come from layout/anchoring and our own last frame. Only
@@ -105,20 +104,52 @@ export function observeConversationGrowth(container: HTMLElement, request: (view
 // inside a nested log must not pause the conversation that contains it.
 export function bindConversationFollow(box:HTMLElement, state:{following:boolean}, entering=()=>false) {
   const motion=window.matchMedia('(prefers-reduced-motion: reduce)');
-  const follower=new FollowScroll(box,()=>state.following,undefined,motion.matches);
+  let gestureTail: {top:number;height:number;viewport:number} | undefined;
+  let gestureFrame: number | undefined;
+  const follower=new FollowScroll(box,()=>state.following&&!gestureTail,undefined,motion.matches);
   const events=new AbortController();
   const options={signal:events.signal,passive:true};
   const setFollowing=(value:boolean)=>{
+    if(gestureFrame!==undefined)window.cancelAnimationFrame(gestureFrame);
+    gestureFrame=undefined;
+    gestureTail=undefined;
     state.following=value;
     box.dataset.followScroll=value?'tail':'reading';
     if(!value)follower.stop();
   };
   setFollowing(state.following);
-  const owns=(event:Event)=>event.target instanceof Element && event.target.closest('[data-follow-scroll]')===box;
-  const gesture=(event:Event,delta:number)=>{
-    if(owns(event)&&pausesConversationFollow(box,delta,state.following))setFollowing(false);
+  const followGrowth=()=>{
+    if(entering())follower.jump();
+    else follower.request();
   };
-  box.addEventListener('wheel',event=>gesture(event,event.deltaY),options);
+  // A layout change can move scrollTop in WebKit even with no user scroll.
+  const movedUp=()=>!!gestureTail&&box.scrollHeight===gestureTail.height&&
+    box.clientHeight===gestureTail.viewport&&box.scrollTop<gestureTail.top-1;
+  const owns=(event:Event)=>event.target instanceof Element && event.target.closest('[data-follow-scroll]')===box;
+  const pauseForScrollInput=()=>{
+    if(!state.following||gestureTail)return;
+    if(!atConversationTail(box)){setFollowing(false);return;}
+    // Keep browser scroll anchoring disabled until input actually moves up.
+    const {scrollHeight:height,clientHeight:viewport}=box;
+    gestureTail={top:Math.min(box.scrollTop,height-viewport),height,viewport};
+    follower.stop();
+    // Unconsumed input produces no scroll event. Settle it after the browser
+    // has had a frame to scroll, independently of the next content update.
+    gestureFrame=window.requestAnimationFrame(()=>{
+      gestureFrame=window.requestAnimationFrame(()=>{
+        if(gestureTail)setFollowing(!movedUp());
+        followGrowth();
+      });
+    });
+  };
+  const gesture=(event:Event,delta:number)=>{
+    if(event.defaultPrevented||!owns(event))return;
+    if(delta<0&&pausesConversationFollow(box,delta,state.following))pauseForScrollInput();
+    if(delta>0&&(!state.following||gestureTail)&&atConversationTail(box))setFollowing(true);
+  };
+  box.addEventListener('wheel',event=>{
+    if(!event.ctrlKey&&Math.abs(event.deltaY)>Math.abs(event.deltaX))gesture(event,event.deltaY);
+  },options);
   let touchY=0;
   box.addEventListener('touchstart',event=>{touchY=event.touches[0]?.clientY??0;},options);
   box.addEventListener('touchmove',event=>{
@@ -133,20 +164,19 @@ export function bindConversationFollow(box:HTMLElement, state:{following:boolean
   box.addEventListener('pointerdown',event=>{
     if(event.target!==box||!conversationCanScroll(box))return;
     const left=box.getBoundingClientRect().left+box.clientLeft;
-    if(event.clientX<left||event.clientX>=left+box.clientWidth)setFollowing(false);
+    if(event.clientX<left||event.clientX>=left+box.clientWidth)pauseForScrollInput();
   },options);
   box.addEventListener('pointermove',event=>{
     if(event.buttons===1&&owns(event)&&window.getSelection()?.type==='Range'&&conversationCanScroll(box))setFollowing(false);
   },options);
   box.addEventListener('scroll',()=>{
-    if(!state.following&&atConversationTail(box))setFollowing(true);
+    if(movedUp())setFollowing(false);
+    else if((!state.following||gestureTail)&&atConversationTail(box))setFollowing(true);
   },options);
   motion.addEventListener('change',event=>follower.setReducedMotion(event.matches),options);
-  const stopObserving=observeConversationGrowth(box,()=>{
-    if(entering())follower.jump();
-    else follower.request();
-  });
+  const stopObserving=observeConversationGrowth(box,followGrowth);
   return {follower,setFollowing,dispose(){
+    if(gestureFrame!==undefined)window.cancelAnimationFrame(gestureFrame);
     stopObserving();events.abort();follower.stop();delete box.dataset.followScroll;
   }};
 }
