@@ -201,12 +201,6 @@ a { color: inherit; }
 .resource-import-row small { font-size: var(--font-size-ui); color: var(--text-secondary); overflow-wrap: anywhere; }
 .resource-import-row em { color: var(--text-secondary); font-size: var(--font-size-ui); font-style: normal; }
 .resource-import-actions { display: flex; justify-content: flex-end; gap: 10px; }
-.text-file-drafts { display: flex; flex-wrap: wrap; gap: 6px; margin: 1px 0 4px; }
-.text-file-drafts > span { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; padding-inline: 7px 2px; border-radius: 8px; corner-shape: var(--corner-window); background: var(--surface-hover); color: var(--foreground); font-size: var(--font-size-toolbar); }
-.text-file-drafts .attachment-draft-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.text-file-drafts > span > svg,.text-file-drafts small { flex-shrink: 0; }
-.text-file-drafts button { flex: none; width: 24px; height: 24px; border-radius: 8px; border: 0; padding: 0; background: transparent; color: var(--text-secondary); cursor: pointer; }
-.text-file-drafts button:hover { background: var(--surface-selected); color: var(--foreground); }
 .attention-dot { background: var(--warning); }
 .nav-empty { margin: 6px 0 11px 12px; font-size: var(--font-size-ui); color: var(--text-muted); }
 .sidebar-foot { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; margin: 0 18px; padding: 17px 4px 19px; border-top: 1px solid var(--border); color: var(--text-secondary); font-size: var(--font-size-ui); }
@@ -895,7 +889,7 @@ a { color: inherit; }
 .ai-options.modal { width: min(640px,100%); margin: 0; }
 .field-label select { display: block; width: 100%; margin-top: 7px; padding: 9px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); font: inherit; color: var(--foreground); }
 .reference-chips button { border-radius: var(--radius-window); border: 0; background: none; color: inherit; cursor: pointer; }
-.image-drafts button,.reference-chips button,.text-file-drafts button { display: inline-flex; align-items: center; justify-content: center; }
+.image-drafts button,.reference-chips button { display: inline-flex; align-items: center; justify-content: center; }
 .ssh-credential-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
 .ssh-credential-fields > .button { margin-bottom: 14px; }
 /* One expandable thinking timeline per contiguous group of model/tool steps. */
@@ -1275,12 +1269,6 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 
 .menu-selection-mark { display: grid; place-items: center; width: 14px; flex-shrink: 0; }
 
-.composer-input.attachment-drop-active { --composer-stroke: var(--focus); --composer-fill: var(--surface-hover); outline: 2px dashed var(--focus-outline); outline-offset: 3px; }
-.attachment-upload-status { margin: 0 0 9px; color: var(--text-muted); font-size: var(--font-size-ui); }
-.message-attachments a { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; overflow-wrap: anywhere; }
-.text-file-drafts small { color: var(--text-muted); white-space: nowrap; }
-.message-attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.message-attachments a { border: 1px solid var(--border); border-radius: var(--radius-window); padding: 6px 9px; color: var(--foreground); font-size: var(--font-size-ui); text-decoration: none; }
 
 /* Attachment decisions use a quiet file summary rather than the generic tool warning. */
 .attachment-approval { width: 100%; max-width: 660px; margin: 0 0 12px; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); color: var(--foreground); font-size: var(--font-size-ui); line-height: 1.6; }

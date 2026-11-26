@@ -2,6 +2,7 @@ import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from "react";
 import {animate,motionValue} from "motion";
 import {AnimatePresence,motion,useReducedMotion} from "motion/react";
 import {ProviderIcon} from "./ProviderIcon";
+import {Glyph} from './Icons';
 
 // Use the Prompt Box spring and hover timeline, applied to Lake's full-width dock.
 const shellSpring={type:"spring",stiffness:400,damping:25,mass:1.5} as const;
@@ -18,7 +19,7 @@ export function ComposerSurface({sessionId,dragging,pinnedOpen,modelBrand,childr
   const syncLayout=useRef<()=>void>(undefined);
   const [editingSession,setEditingSession]=useState<string>();
   const editing=editingSession===sessionId;
-  const compact=!editing&&!pinnedOpen&&!dragging;
+  const compact=!editing&&!pinnedOpen;
   const [previewHovered,setPreviewHovered]=useState(false);
   const [previewReady,setPreviewReady]=useState(compact);
   const reduceMotion=useReducedMotion();
@@ -139,6 +140,10 @@ export function ComposerSurface({sessionId,dragging,pinnedOpen,modelBrand,childr
       focusEditor();
     }}>
     <div className="composer-backplate" ref={face} aria-hidden="true"/>
+    <div className="composer-file-drop-overlay" aria-hidden="true">
+      <Glyph name="upload" size={18}/>松开添加附件
+    </div>
+    <span className="visually-hidden" role="status">{dragging?'松开添加附件':''}</span>
     <div className="composer-resizing-content" ref={contents}>
       {children}
       {compact&&modelBrand&&<span className="composer-model-preview" aria-hidden="true">

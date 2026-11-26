@@ -79,7 +79,10 @@ import {WorkspaceConsole} from './WorkspaceConsole';
 import {availableSettingsPage, type ConsolePage, type SettingsPage} from './workspaceConsoleTabs';
 import {gatewayTaskMatches,type GatewayTaskTarget} from "./GatewaySettings";
 import { readImageSelection } from "./imageAttachments";
-import {clipboardFiles,partitionAttachments,attachmentCountLimit,fileSize} from "./fileAttachments";
+import {clipboardFiles,partitionAttachments,attachmentCountLimit} from "./fileAttachments";
+import {ComposerAttachments,type PendingAttachment} from './ComposerAttachments';
+import {useComposerFileDrop} from './useComposerFileDrop';
+import './chatAttachments.css';
 import {JumpServerSettings, JumpServerAccounts} from "./JumpServerSettings";
 import { ResourceImport } from "./ResourceImport";
 import { SSHResourceFields, emptySSH } from "./SSHResourceFields";
@@ -268,13 +271,9 @@ function AppContent() {
   const {draft: composerDraft, setMessageDraft, setMessageDraftFor, setMentionRefs, setImageDraft, setFileDraft, clearSubmitted} = useSessionComposerDraft(route.sessionId);
   const [pilotTaskReferences,setPilotTaskReferences]=useState<ReadonlyMap<string,PilotTaskReference&{sent:boolean}>>(()=>new Map());
   const {message: messageDraft, references: mentionRefs, images: imageDraft, files: fileDraft, ignoreProjectMemory} = composerDraft;
-  const attachmentReading = useRef(false);
-  const attachmentEpoch = useRef(0);
-  useLayoutEffect(() => { attachmentEpoch.current++; }, [route.sessionId]);
-  const [attachmentDragOver,setAttachmentDragOver] = useState(false);
-  const [attachmentUploading,setAttachmentUploading] = useState("");
+  const attachmentReading = useRef(new Set<string>());
+  const [attachmentBatches,setAttachmentBatches] = useState<ReadonlyMap<string,readonly PendingAttachment[]>>(()=>new Map());
   const attachmentInputRef = useRef<HTMLInputElement>(null);
-  const attachmentButtonRef = useRef<HTMLButtonElement>(null);
   const messageComposition = useRef(new CompositionGuard());
   const [sendShortcut, setSendShortcut] = useState<SendShortcut>(() => {
     try { return parseSendShortcut(localStorage.getItem(sendShortcutStorageKey)); } catch { return "enter"; }
@@ -542,7 +541,7 @@ function AppContent() {
     }
     afterSettings(()=>{
       setResourceTerminalMenu(null);setResourceConfigContext(null);
-      setAgentOptionsOpen(false);setPermissionsOpen(false);setModelMenuOpen(false);setAttachmentDragOver(false);
+      setAgentOptionsOpen(false);setPermissionsOpen(false);setModelMenuOpen(false);
       if(view==='settings')setSettingsTab(tab);
       const returnView=current.view==='plans'?'plans':current.returnView;
       commitNavigation({...current,view,returnView},undefined,isWorkspacePageView(current.view));
@@ -1142,11 +1141,15 @@ function AppContent() {
     ? currentComposerModel(modelMenu,composerModelName,composerModelSelection) : undefined;
   const composerPreviewBrand=specialistComposer ? (codexAssignment?'openai':undefined)
     : modelConfigured&&composerModelName ? modelBrand(composerModelName,composerModelEntry?.displayName,composerModelEntry?.providerName) : undefined;
-  const composerPinnedOpen=!!(messageDraft||hasMessageDraft||attachmentUploading||pilotTaskReference||mention||executionStoppable||sendFeedback);
+  const attachmentUploads=sessionId?attachmentBatches.get(sessionId):undefined;
+  const canAttach=canCompose&&sessionConnected&&!selectedResource&&!isPlansPage&&!isWorkspacePage&&!isSpecialistTasks&&!pendingOperation&&!attachmentUploads;
+  const {dragging:attachmentDragOver,dropEvents:attachmentDropEvents}=useComposerFileDrop(isWorkspacePage?null:sessionId,canAttach,files=>void attachFiles(files));
+  const acceptsInlineImages=bootstrap?.backendRuntime!=='typescript'&&bootstrap?.supportsImageInput===true;
+  const composerPinnedOpen=!!(messageDraft||hasMessageDraft||attachmentUploads||pilotTaskReference||mention||executionStoppable||sendFeedback);
   const composerShowsSend=!executionStoppable||hasMessageDraft||!!sendFeedback;
   const composerSendGlyph=sendFeedback?"loader":composerNeedsModel&&!hasModelChoices?"plug":"up";
-  const composerSendReady=!composerNeedsModel&&composerSendGlyph==="up"&&hasMessageDraft&&!currentAssignment?.blockedReason;
-  const composerCompletion=sessionId&&completionEnabled&&!mention&&!queueMode&&!pendingApproval&&!imageDraft.length&&!fileDraft.length?{
+  const composerSendReady=!composerNeedsModel&&composerSendGlyph==="up"&&hasMessageDraft&&!attachmentUploads&&!currentAssignment?.blockedReason;
+  const composerCompletion=sessionId&&completionEnabled&&!mention&&!queueMode&&!pendingApproval&&!attachmentUploads&&!imageDraft.length&&!fileDraft.length?{
     sessionId,
     modelId:modelConfigured&&!currentAssignment?(bootstrap?.modelId??undefined):undefined,
     hasPreviousReply:!!activeSnapshot?.messages.some(message=>message.role==='assistant'&&message.text.trim()),
@@ -1431,25 +1434,46 @@ function AppContent() {
     catch (error) { handleFailure(error); }
     finally { setStoppingTurn(false); }
   }
-  async function attachFiles(files: FileList | File[] | null) {
-    if (!files?.length || !sessionId || isLegacyHistory || pendingOperation || attachmentReading.current) return;
-    attachmentReading.current = true;
-    const epoch = attachmentEpoch.current;
-    const targetSession = sessionId;
-    const selected = [...files];
-    setPendingOperation("attachment-upload");
+  async function attachFiles(files: File[]) {
+    if(!files.length||!sessionId||!canAttach||attachmentReading.current.has(sessionId))return;
+    const targetSession=sessionId;
+    attachmentReading.current.add(targetSession);
+    const updateBatch=(pending:readonly PendingAttachment[]|null)=>setAttachmentBatches(current=>{
+      const next=new Map(current);
+      if(pending)next.set(targetSession,pending);else next.delete(targetSession);
+      return next;
+    });
     try {
-      const {images:imageFiles,files:otherFiles}=partitionAttachments(selected,imageDraft,!!bootstrap?.supportsImageInput);
-      if(fileDraft.length+otherFiles.length>attachmentCountLimit)throw Error("每条消息最多附加 8 个文件。");
-      const images=imageFiles.length?await readImageSelection(imageDraft,imageFiles):[];
-      if(activeSession.current===targetSession&&epoch===attachmentEpoch.current)setImageDraft(current=>[...current,...images]);
-      for(const file of otherFiles) {
-        setAttachmentUploading(file.name);
-        const uploaded=await api.uploadAttachment(targetSession,file);
-        if(activeSession.current===targetSession&&epoch===attachmentEpoch.current)setFileDraft(current=>[...current,uploaded]);
+      const {images:imageFiles,files:otherFiles}=partitionAttachments(files,imageDraft,acceptsInlineImages);
+      if(fileDraft.length+otherFiles.length>attachmentCountLimit)throw Error(`每条消息最多附加 ${attachmentCountLimit} 个文件。`);
+      let remaining=[...imageFiles,...otherFiles].map(file=>({id:crypto.randomUUID(),name:file.name||'剪贴板图片',mimeType:file.type,sizeBytes:file.size}));
+      updateBatch(remaining);
+      requestAnimationFrame(()=>{
+        const route=routeRef.current;
+        if(route.sessionId===targetSession&&!route.resourceId&&!route.view)messageInputRef.current?.focus({preventScroll:true});
+      });
+      const failures:string[]=[];
+      if(imageFiles.length){
+        try { const images=await readImageSelection(imageDraft,imageFiles);setImageDraft(current=>[...current,...images]); }
+        catch (error) { failures.push(readableError(error)); }
+        remaining=remaining.slice(imageFiles.length);
+        updateBatch(remaining);
       }
+      for(const file of otherFiles) {
+        try { const uploaded=await api.uploadAttachment(targetSession,file);setFileDraft(current=>[...current,uploaded]); }
+        catch(error) {
+          if(error instanceof ApiRequestError&&error.status===401)throw error;
+          failures.push(`${file.name} 上传失败。${readableError(error)}`);
+        }
+        remaining=remaining.slice(1);
+        updateBatch(remaining);
+      }
+      if(failures.length)throw Error(failures.join('\n'));
     } catch (error) { handleFailure(error); }
-    finally { attachmentReading.current = false; setAttachmentUploading(""); setPendingOperation(""); if (attachmentInputRef.current) attachmentInputRef.current.value = ""; if (activeSession.current === targetSession && epoch === attachmentEpoch.current) requestAnimationFrame(() => messageInputRef.current?.focus()); }
+    finally {
+      attachmentReading.current.delete(targetSession);
+      updateBatch(null);
+    }
   }
   async function changeConversationMode(mode: 'default' | 'plan') {
     if(!canConfigurePlan)throw new Error('请在 Pilot 会话中切换 Plan 模式。');
@@ -1473,7 +1497,7 @@ function AppContent() {
     const {command:planCommand,text:messageBody,references:messageReferences}=planComposerDraft(messageDraft,mentionRefs);
     const payload=composerMessage(messageBody.trim() ? messageBody : (fileDraft.length ? "请查看附件信息，并说明可以如何处理；执行或部署前先确认目标和需求。" : ""),messageReferences,mentionable.map(resource=>resource.id));
     const text=payload.text;
-    if (!canCompose || !composerShowsSend || !sessionId || !sessionConnected || stoppingTurn || pendingOperation || messageSending.current || reasoningSaving.has(sessionId) || modeSaveSessions.current.has(sessionId)) return;
+    if (!canCompose || !composerShowsSend || !sessionId || !sessionConnected || stoppingTurn || pendingOperation || attachmentReading.current.has(sessionId) || messageSending.current || reasoningSaving.has(sessionId) || modeSaveSessions.current.has(sessionId)) return;
     if(planCommand){
       if(imageDraft.length||fileDraft.length){handleFailure(new Error("请先单独切换 Plan 模式，再发送附件。"));return;}
       try{await changeConversationMode(planCommand.prompt?'plan':activeSnapshot?.conversationMode==='plan'?'default':'plan');if(!planCommand.prompt){clearSubmitted(sessionId,composerDraft);setMention(null);return;}}
@@ -1488,7 +1512,7 @@ function AppContent() {
     if(currentAssignment?.checking)return;
     if(currentAssignment?.blockedReason){openSettings("agents");return;}
     if (!text && !imageDraft.length) return;
-    if (imageDraft.length && !bootstrap?.supportsImageInput) { handleFailure(new Error("当前模型未启用图片输入，请切换到支持图片的模型后发送。")); return; }
+    if (imageDraft.length && !acceptsInlineImages) { handleFailure(new Error("当前模型未启用图片输入，请切换到支持图片的模型后发送。")); return; }
     const targetSession=sessionId;
     messageSending.current=true;
     setMessageSubmission({session:targetSession,accepted:false});
@@ -2048,7 +2072,7 @@ function AppContent() {
     {detachedConversation&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={sharedIsland?terminalHeading:null}
       terminalOpen={sharedIsland&&terminalOpen} pilotTone={pilotTone}/>}
     {(dockedConversation||specialistTaskPage)&&<div className={`workbench-conversation-surface${specialistTaskPage?" is-specialist-task-surface":""}`} aria-hidden="true"/>}
-    <main className={`workspace${inspectorOpen?" has-session-inspector":""}${!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":specialistTaskPage?" has-specialist-task-list":""}`} onDragOver={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="none";return;}if(selectedSession&&!isLegacyHistory&&!isSpecialistTasks&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(isWorkspacePage)return;if(isSpecialistTasks&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.stopPropagation();return;}if(!selectedSession||isLegacyHistory||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
+    <main className={`workspace${inspectorOpen?" has-session-inspector":""}${!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":specialistTaskPage?" has-specialist-task-list":""}`} {...(!isWorkspacePage?attachmentDropEvents:{})}>
       {!detachedConversation&&(isSpecialistTasks?<header className="specialist-mobile-heading"><button type="button" className="icon-button" aria-label="打开项目导航" onClick={()=>setMobileMenu(true)}><Glyph name="menu" size={21}/></button><span>专员任务</span></header>:workspaceHeading)}
 
       {!persistentMode && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>服务端不支持持续终端。请核对服务端版本。</span></div>}
@@ -2077,13 +2101,15 @@ function AppContent() {
         {isLegacyHistory?<div className="pilot-history-notice"><span>历史记录只读，原操作与证据保留。</span><button type="button" className="button secondary" onClick={()=>void openProjectPilot(selectedSession.projectId)}>前往 Pilot 继续沟通<Glyph name="arrow" size={14}/></button></div>:!canCompose?null:<div className="composer-dock">{!isSpecialistTasks&&<ConversationLatest key={`${sessionId}:${conversationMode}`} container={conversationRef} onJump={jumpToLatest}/>}{activeSnapshot?.ai && <div className="composer-session-controls">{selectedSuperPilot&&<PilotSpecialistQuestions questions={pilotWorkspace.workspace?.questions} connected={pilotWorkspaceConnected} onAnswered={pilotWorkspace.refresh}/>}<AIControls snapshot={activeSnapshot} refresh={refreshCurrent} optionsOpen={agentOptionsOpen} onCloseOptions={() => setAgentOptionsOpen(false)} permissionsOpen={permissionsOpen&&activeSnapshot.session.workspaceRole!=="role"&&activeSnapshot.session.workspaceRole!=="worker"} permissionAnchor={permissionButtonRef} onClosePermissions={() => setPermissionsOpen(false)}/></div>}<PendingMessages key={sessionId} supplementRootTurnId={conversationMode==='conversation'?activeSnapshot?.ai?.rootTurnId:undefined} sessionId={sessionId} queue={activeSnapshot?.messageQueue ?? {paused:false,revision:0,lastError:"",items:[]}} disabled={!sessionConnected} active={turnActive} sendShortcut={sendShortcut} resourceIds={mentionedResourceIds} onUpdated={messageQueue => setSnapshot(current => current?.session.id===sessionId && messageQueue.revision>=(current.messageQueue?.revision ?? 0) ? {...current,messageQueue} : current)}/>{activeSnapshot?.conversationMode==='plan'&&<p className="plan-mode-hint" role="status">Plan 模式 · 只读调查与制定方案，确认计划后再执行。{activeSnapshot.sre?.enabled?'SRE 协作将在退出 Plan 模式后恢复。':''}</p>}<form className="composer" onSubmit={sendMessage}><label htmlFor="message-input" className="visually-hidden">{"给 Lake 的消息"}</label><ComposerSurface sessionId={sessionId} dragging={attachmentDragOver} pinnedOpen={composerPinnedOpen} modelBrand={composerPreviewBrand}>
           {pilotTaskReference&&!pilotTaskReference.sent&&<div className="composer-task-context" aria-live="polite"><PilotTaskReferenceChip task={pilotTaskReference} members={pilotTaskMembers} onClear={()=>selectPilotTask()}/></div>}
           {mention && <ComposerMentions options={mentionMatches} allOptions={allMentionOptions} index={mentionIndex} category={mentionCategory} onActive={index=>setMention(current=>current&&current.index!==index?{...current,index}:current)} onCategory={kind=>{setMentionCategory(kind);setMention({...mention,index:0});}} onSelect={insertMention} loading={mentionExtensions.loading} error={mentionExtensions.error} onReload={mentionExtensions.reload} onClose={()=>setMention(null)} onImport={()=>{const target=projectList.find(item=>item.id===selectedSession?.projectId);setMention(null);if(target){setImportHexhub(true);setImportProject(target);}}}/>}
-          {attachmentUploading&&<p className="attachment-upload-status" role="status">正在上传：{attachmentUploading}</p>}{attachmentDragOver&&<p className="attachment-upload-status" role="status">松开以添加文件 · 每个最多 512 MiB</p>}{fileDraft.length > 0 && <div className="text-file-drafts">{fileDraft.map(file => <span key={file.sourceId}><Glyph name="file" size={13}/>
-            <span className="attachment-draft-name" title={file.name}>{file.name}</span>
-            {file.sizeBytes!==undefined&&<small>{fileSize(file.sizeBytes)}</small>}
-            <button type="button" aria-label={`移除 ${file.name}`} onClick={() => {
-              setFileDraft(files => files.filter(item => item.sourceId !== file.sourceId));
-              attachmentButtonRef.current?.focus();
-            }}><Glyph name="close" size={14}/></button></span>)}</div>}{imageDraft.length > 0 && <div className="image-drafts">{imageDraft.map(image => <figure key={image.id}><img src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name || "待发送图片"}/><figcaption title={image.name}>{image.name || "剪贴板图片"}</figcaption><button type="button" aria-label={`移除 ${image.name || "图片"}`} onClick={() => setImageDraft(images => images.filter(item => item.id !== image.id))}><Glyph name="close" size={14}/></button></figure>)}</div>}{modelConfigured && imageDraft.length > 0 && !bootstrap?.supportsImageInput && <p className="composer-image-hint" role="status">当前模型不接受图片输入，请切换模型或在模型设置中手动调整。</p>}<div className="composer-body"><ComposerTextInput key={sessionId} completion={composerCompletion} references={mentionRefs} renderReference={ref=><>{ref.kind==="role"?<RoleMentionAvatar id={ref.resourceId} name={ref.label.slice(1)} size={14}/>:ref.kind==="resource"?<ResourceIcon kind={resourceMap.get(ref.resourceId)?.jumpServer ? "jumpserver" : resourceMap.get(ref.resourceId)?.kind ?? "ssh"} size={13}/>:<Glyph name={ref.kind==="skill"?"book":"plug"} size={13}/>}<span>{ref.label.slice(1)}</span>{ref.kind!=="resource"&&<small>{ref.kind==="role"?"专员":ref.kind==="skill"?"Skill":"MCP"}</small>}</>} id="message-input" ref={messageInputRef} aria-label={"给 Lake 的消息"} role="combobox" aria-haspopup="listbox" aria-autocomplete={mention?"list":undefined} aria-expanded={!!mention} aria-controls={mention?"composer-mention-options":undefined} aria-activedescendant={mention&&mentionMatches[mentionIndex]?mentionOptionId(mentionMatches[mentionIndex]!):undefined} placeholder={queueMode ? "继续输入，稍后发送…" : activeSnapshot?.conversationMode === "plan" ? "描述目标或修改意见，Lake 会先制定计划…" : pendingApproval ? "可以继续讨论，操作由确认按钮单独处理" : pilotTaskReference ? "接着问这项任务…" : continuousPilot&&turnActive ? "继续发送新任务或补充要求…" : "想让 Lake 帮你做什么？"} value={messageDraft} onPaste={event => { const files = clipboardFiles(event.clipboardData); if (!files.length) return; event.preventDefault(); void attachFiles(files); }} onCaretMove={moveMentionCaret} onChange={(value,refs,caret)=>{setMessageDraft(value);setMentionRefs(refs);syncMention(value,caret);}} disabled={!sessionConnected || !!pendingOperation} onCompositionStart={() => messageComposition.current.start()} onCompositionEnd={() => messageComposition.current.end()} onBlur={() => { messageComposition.current = new CompositionGuard(); }} onKeyDown={event => {
+          <ComposerAttachments key={sessionId} sessionId={sessionId} images={imageDraft} files={fileDraft} uploads={attachmentUploads??[]} disabled={!!pendingOperation}
+            onRemoveFile={id=>{
+              setFileDraft(files=>files.filter(file=>file.sourceId!==id));
+              messageInputRef.current?.focus({preventScroll:true});
+            }} onRemoveImage={id=>{
+              setImageDraft(images=>images.filter(image=>image.id!==id));
+              messageInputRef.current?.focus({preventScroll:true});
+            }}/>
+          {modelConfigured && imageDraft.length > 0 && !acceptsInlineImages && <p className="composer-image-hint" role="status">当前模型不接受图片输入，请切换模型或在模型设置中手动调整。</p>}<div className="composer-body"><ComposerTextInput key={sessionId} completion={composerCompletion} references={mentionRefs} renderReference={ref=><>{ref.kind==="role"?<RoleMentionAvatar id={ref.resourceId} name={ref.label.slice(1)} size={14}/>:ref.kind==="resource"?<ResourceIcon kind={resourceMap.get(ref.resourceId)?.jumpServer ? "jumpserver" : resourceMap.get(ref.resourceId)?.kind ?? "ssh"} size={13}/>:<Glyph name={ref.kind==="skill"?"book":"plug"} size={13}/>}<span>{ref.label.slice(1)}</span>{ref.kind!=="resource"&&<small>{ref.kind==="role"?"专员":ref.kind==="skill"?"Skill":"MCP"}</small>}</>} id="message-input" ref={messageInputRef} aria-label={"给 Lake 的消息"} role="combobox" aria-haspopup="listbox" aria-autocomplete={mention?"list":undefined} aria-expanded={!!mention} aria-controls={mention?"composer-mention-options":undefined} aria-activedescendant={mention&&mentionMatches[mentionIndex]?mentionOptionId(mentionMatches[mentionIndex]!):undefined} placeholder={queueMode ? "继续输入，稍后发送…" : activeSnapshot?.conversationMode === "plan" ? "描述目标或修改意见，Lake 会先制定计划…" : pendingApproval ? "可以继续讨论，操作由确认按钮单独处理" : pilotTaskReference ? "接着问这项任务…" : continuousPilot&&turnActive ? "继续发送新任务或补充要求…" : "想让 Lake 帮你做什么？"} value={messageDraft} onPaste={event => { const files = clipboardFiles(event.clipboardData); if (!files.length) return; event.preventDefault(); void attachFiles(files); }} onCaretMove={moveMentionCaret} onChange={(value,refs,caret)=>{setMessageDraft(value);setMentionRefs(refs);syncMention(value,caret);}} disabled={!sessionConnected || !!pendingOperation} onCompositionStart={() => messageComposition.current.start()} onCompositionEnd={() => messageComposition.current.end()} onBlur={() => { messageComposition.current = new CompositionGuard(); }} onKeyDown={event => {
             if (messageComposition.current.ignores(event.nativeEvent)) return;
             if (mention) {
               if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setMention(null); return; }
@@ -2096,8 +2122,12 @@ function AppContent() {
             }
             if (isSendKey(event.nativeEvent, sendShortcut)) { event.preventDefault(); event.currentTarget.closest("form")?.requestSubmit(); }
           }}/></div><div className="composer-foot" data-running={executionStoppable || undefined}>
-          <input ref={attachmentInputRef} hidden type="file" multiple aria-label="选择文件或图片" onChange={event => void attachFiles(event.target.files)}/>
-          <button type="button" ref={attachmentButtonRef} className="image-attach-button composer-attach-button" disabled={!sessionConnected || !!pendingOperation} title="添加任意文件或图片，也可拖入或粘贴文件" aria-label="添加附件" onClick={() => attachmentInputRef.current?.click()}>
+          <input ref={attachmentInputRef} hidden type="file" multiple aria-label="选择附件" onChange={event=>{
+            const input=event.currentTarget,files=Array.from(input.files??[]);
+            input.value="";
+            void attachFiles(files);
+          }}/>
+          <button type="button" className="image-attach-button composer-attach-button" disabled={!canAttach} title="添加任意文件或图片，也可拖入或粘贴文件" aria-label="添加附件" onClick={() => attachmentInputRef.current?.click()}>
             <Glyph name="paperclip" size={17}/>
           </button>
           {activeSnapshot?.ai && activeSnapshot.session.workspaceRole!=="role" && activeSnapshot.session.workspaceRole!=="worker" && <button type="button" ref={permissionButtonRef} className="composer-permission-button" aria-label="会话权限" title="会话权限" aria-haspopup="dialog" aria-expanded={permissionsOpen} onClick={() => setPermissionsOpen(current => !current)}>
@@ -2126,7 +2156,7 @@ function AppContent() {
             aria-label={sendFeedback ?? (composerNeedsModel ? `发送前${modelActionLabel}` : currentAssignment?.blockedReason ? "配置 Codex" : currentAssignment ? "发送给 Codex" : queueMode ? "加入待发送队列" : "发送消息")}
             title={sendFeedback ?? (composerNeedsModel ? `先${modelActionLabel}，草稿会保留` : currentAssignment?.blockedReason ? currentAssignment.blockedReason : `${currentAssignment ? "发送给 Codex" : queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`)}
             aria-busy={!!sendFeedback}
-            disabled={!!sendFeedback || !sessionConnected || !!pendingOperation || reasoningSaving.has(sessionId) || modeSaving.has(sessionId) || stoppingTurn || currentAssignment?.checking || ((modelConfigured || !!currentAssignment) && (!hasMessageDraft || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)))}
+            disabled={!!sendFeedback || !sessionConnected || !!pendingOperation || !!attachmentUploads || reasoningSaving.has(sessionId) || modeSaving.has(sessionId) || stoppingTurn || currentAssignment?.checking || ((modelConfigured || !!currentAssignment) && (!hasMessageDraft || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)))}
           ><Glyph name={composerSendGlyph} size={16}/></button>}
         </div></div></div></ComposerSurface></form></div>}
       </div>{inspectorView}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}

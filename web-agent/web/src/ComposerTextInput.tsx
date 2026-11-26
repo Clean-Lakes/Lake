@@ -7,6 +7,7 @@ import {CompositionGuard} from './composerKeyboard';
 import {composerClipboardFragment,composerToken,replaceComposerRange,type ComposerReference} from './composerMentionState';
 import {composerCaretCharacter,composerRangeOffsets,composerSelection,readComposerDocument,referenceKey,setComposerSelection} from './composerDocument';
 import {usePageVisible} from './usePageVisible';
+import {hasFileTransfer} from './fileAttachments';
 
 export type ComposerInputHandle={focus:(options?:FocusOptions)=>void;setSelectionRange:(start:number,end:number)=>void;readonly selectionStart:number;readonly selectionEnd:number;readonly value:string};
 type Completion = {sessionId:string;modelId?:string;hasPreviousReply:boolean};
@@ -132,7 +133,7 @@ export const ComposerTextInput=forwardRef<ComposerInputHandle,Props>(function Co
    onCopy={event=>copy(event)} onCut={event=>copy(event,true)}
    onPaste={event=>{onPaste?.(event);if(event.defaultPrevented||disabled)return;event.preventDefault();const range=syncSelection();const fragment=composerClipboardFragment(event.clipboardData.getData('application/x-lake-composer'),[...known.current.values()]);if(fragment)apply(range.start,range.end,fragment.value,fragment.references);else apply(range.start,range.end,event.clipboardData.getData('text/plain').replace(/\r\n?/g,'\n').replaceAll(composerToken,''));}}
    onDragOver={event=>{if(!Array.from(event.dataTransfer.types).includes('Files'))event.preventDefault();}}
-   onDrop={event=>{if(Array.from(event.dataTransfer.types).includes('Files'))return;event.preventDefault();event.stopPropagation();if(disabled)return;const target=input.current?.ownerDocument.caretRangeFromPoint?.(event.clientX,event.clientY);const range=target&&input.current?composerRangeOffsets(input.current,references,target):null;const where=range??syncSelection();apply(where.start,where.end,event.dataTransfer.getData('text/plain').replace(/\r\n?/g,'\n').replaceAll(composerToken,''));}}
+   onDrop={event=>{if(hasFileTransfer(event.dataTransfer))return;event.preventDefault();event.stopPropagation();if(disabled)return;const target=input.current?.ownerDocument.caretRangeFromPoint?.(event.clientX,event.clientY);const range=target&&input.current?composerRangeOffsets(input.current,references,target):null;const where=range??syncSelection();apply(where.start,where.end,event.dataTransfer.getData('text/plain').replace(/\r\n?/g,'\n').replaceAll(composerToken,''));}}
    onKeyDown={event=>{
     syncSelection();onKeyDown?.(event);if(event.defaultPrevented||guard.current.ignores(event.nativeEvent)||disabled)return;Object.assign(edits.current[editIndex.current]!,caret.current);
     const range=caret.current;

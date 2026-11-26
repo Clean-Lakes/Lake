@@ -595,10 +595,56 @@ test('referenced-only execution uses the real admitted user selection and cannot
   assert.equal(f.app.store.list('superOperations').length, operations, 'a sibling task cannot inherit an earlier user selection');
 });
 
+async function uploadChatFixture(f, sessionId, name, bytes, mimeType) {
+  const response=await fetch(`${f.app.origin}/api/sessions/${sessionId}/attachments`,{method:'POST',body:bytes,headers:{
+    Authorization:`Bearer ${f.app.token}`,'Content-Type':'application/octet-stream','X-Lake-Filename':encodeURIComponent(name),'X-Lake-File-Type':mimeType,
+  }});
+  assert.equal(response.status,201);
+  return response.json();
+}
+
+test('chat attachments upload mixed binaries, expose safe image previews and follow the source session',async t=>{
+  const f=await fixture(t),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+  const sessionId=project.routerSessionId,base=`/api/sessions/${sessionId}`,headers={Authorization:`Bearer ${f.app.token}`};
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB9sAAAAASUVORK5CYII=','base64');
+  const video=Buffer.alloc(25*1024*1024,0x41);video[video.length-1]=0x5a;
+  const archive=Buffer.from([0x50,0x4b,0x05,0x06,0,0,0xde,0xad]);
+  const photo=await uploadChatFixture(f,sessionId,'截图.png',png,'image/png');
+  const movie=await uploadChatFixture(f,sessionId,'录像.mov',video,'video/quicktime');
+  const bundle=await uploadChatFixture(f,sessionId,'资料.tar.gz',archive,'application/gzip');
+  const empty=await uploadChatFixture(f,sessionId,'unknown-file',Buffer.alloc(0),'application/octet-stream');
+  assert.equal(movie.sizeBytes,video.length);assert.equal(photo.preview,'image');assert.equal(bundle.preview,undefined);assert.equal(empty.sizeBytes,0);
+  const download=sourceId=>`${f.app.origin}${base}/attachments/${sourceId}`;
+  const thumbnail=await fetch(download(photo.sourceId)+'?preview=1',{headers});
+  assert.equal(thumbnail.status,200);assert.equal(thumbnail.headers.get('content-type'),'image/png');
+  assert.deepEqual(Buffer.from(await thumbnail.arrayBuffer()),png);
+  const file=await fetch(download(movie.sourceId),{headers});
+  assert.equal(file.status,200);assert.equal(file.headers.get('content-type'),'application/octet-stream');
+  assert.match(file.headers.get('content-disposition'),/^attachment; filename\*=UTF-8''%/);
+  assert.deepEqual(Buffer.from(await file.arrayBuffer()),video);
+  const fake=await uploadChatFixture(f,sessionId,'假图片.png',Buffer.from('<html>plain attachment</html>'),'image/png');
+  assert.equal((await fetch(download(fake.sourceId)+'?preview=1',{headers})).status,404);
+  assert.equal((await fetch(download(photo.sourceId))).status,401);
+  const otherPath=`/api/sessions/${f.session.id}`;
+  await f.api(otherPath+'/attachments/'+bundle.sourceId,'GET',undefined,403);
+  await f.api(otherPath+'/messages','POST',{text:'测试越界引用',files:[bundle]},403);
+  await f.api(base+'/messages','POST',{text:'重复文件',files:[bundle,bundle]},400);
+  const saved=await f.api(base+'/messages','POST',{files:[{sourceId:photo.sourceId,name:'伪造名称'},movie,bundle,empty]},202);
+  assert.deepEqual(saved.files,[photo,movie,bundle,empty]);
+  const sent=await until(()=>f.api(base+'/snapshot'),value=>value.messages.some(message=>message.role==='assistant'));
+  assert.deepEqual(sent.messages.find(message=>message.id===saved.id).files,saved.files);
+  assert.ok(f.requests.some(request=>JSON.stringify(request.messages).includes('录像.mov')));
+  assert.ok(f.requests.every(request=>!JSON.stringify(request.messages).includes(png.toString('base64'))));
+  await f.restart();
+  const after=await fetch(download(bundle.sourceId),{headers:{Authorization:`Bearer ${f.app.token}`}});
+  assert.deepEqual(Buffer.from(await after.arrayBuffer()),archive);
+});
+
 test('editable user queues persist pause, edit and ordering with revision checks and dispatch actual messages once after resume', async t => {
   const f = await fixture(t), base = `/api/sessions/${f.session.id}/message-queue`, messages = `/api/sessions/${f.session.id}/messages`;
+  const attachment=await uploadChatFixture(f,f.session.id,'notes.txt',Buffer.from('attachment fixture'),'text/plain');
   await f.api(base, 'POST', {operation: 'pause', revision: 0});
-  const a = await f.api(messages, 'POST', {text: '第一条排队消息', enqueue: true}, 202);
+  const a = await f.api(messages, 'POST', {text: '第一条排队消息', files:[attachment], enqueue: true}, 202);
   const b = await f.api(messages, 'POST', {text: '第二条排队消息', enqueue: true}, 202);
   let queue = await f.api(base); assert.equal(queue.items.length, 2); assert.equal(queue.paused, true);
   assert.equal(queue.pushSupported, false);
@@ -607,12 +653,14 @@ test('editable user queues persist pause, edit and ordering with revision checks
   assert.equal((await f.api(base)).items.length, 2, 'an unsupported supplement preserves the exact pending drafts');
   await f.api(base, 'POST', {operation: 'resume', revision: 0}, 409);
   queue = await f.api(base, 'POST', {operation: 'edit', revision: queue.revision, id: a.queuedMessageId, text: '已编辑的第一条消息', resourceIds: [], mentions: []});
+  assert.deepEqual(queue.items[0].files,[attachment]);
   queue = await f.api(base, 'POST', {operation: 'reorder', revision: queue.revision, ids: [b.queuedMessageId, a.queuedMessageId]});
   await f.restart(); queue = await f.api(base); assert.equal(queue.paused, true); assert.equal(f.calls, 0);
   assert.deepEqual((await f.api(`/api/sessions/${f.session.id}/snapshot`)).messageQueue.items.map(item => item.id), [b.queuedMessageId, a.queuedMessageId]);
   await f.api(base, 'POST', {operation: 'resume', revision: queue.revision});
   await until(() => f.api(base), value => value.items.length === 0); await f.wait(['completed']);
   assert.deepEqual(f.app.store.messages(f.session.id).filter(message => message.role === 'user').map(message => message.text), ['第二条排队消息', '已编辑的第一条消息']);
+  assert.deepEqual(f.app.store.messages(f.session.id).find(message=>message.text==='已编辑的第一条消息').files,[attachment]);
   assert.equal(f.calls, 2); assert.equal(f.app.store.list('messageQueueDispatches').filter(row => row.state === 'accepted').length, 2);
   await f.restart(); assert.equal(f.calls, 2); assert.deepEqual((await f.api(base)).items, []);
 });

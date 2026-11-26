@@ -4,7 +4,8 @@ import {captureCodexActivity} from './codex-conversation';
 import {externalReplyTextUpdate} from './external-reply-events';
 import {prepareSessionArchive} from "./session-archive";
 import {finalReportBoundary} from "./final-report";
-import type {MessageInput} from "./message-input";
+import {messageReferences, type MessageInput} from "./message-input";
+import {attachmentMetadata} from './chat-attachments';
 import {providerConnection} from './provider-connection';
 import {parseWatchdogReview, watchdogReviewData, watchdogReviewPrompt, type WatchdogReviewInput, type WatchdogReviewResult} from "./watchdog-review";
 import {reasoningBinding,reasoningModelIdentity,reasoningSettings} from './reasoning';
@@ -1129,11 +1130,12 @@ export class LakeAgents {
       this.store.put("sessions", sessionId, session);
     }
     let sourceMessageIds=options.sourceMessageIds;
+    const references=messageReferences(options.messageInput),files=options.messageInput?.files;
     if (options.recordUser !== false) {
-      const message = this.store.addMessage(sessionId, "user", text, {mentions: options.messageInput?.mentions});
+      const message = this.store.addMessage(sessionId, "user", text, {mentions: references?.mentions, files});
       sourceMessageIds=[message.id];
-      if (options.messageInput) this.store.put('messageInputs', message.id, {messageId: message.id, projectId: session.projectId, sessionId, ...options.messageInput});
-      if (options.messageInput?.resourceIds.length) this.store.put('sessionResourceReferences', sessionId, {resourceIds: options.messageInput.resourceIds, sourceMessageId: message.id});
+      if (references) this.store.put('messageInputs', message.id, {messageId: message.id, projectId: session.projectId, sessionId, ...references});
+      if (references?.resourceIds.length) this.store.put('sessionResourceReferences', sessionId, {resourceIds: references.resourceIds, sourceMessageId: message.id});
       this.memory?.captureUser(sessionId, message.id, undefined, options.ignoreMemory);
     }
     const view = this.store.view(sessionId);
@@ -1153,7 +1155,11 @@ export class LakeAgents {
       const stopDeadline=live.taskDeadline&&watchTaskDeadline(live.taskDeadline,controller);
       try {
         controller.signal.throwIfAborted();
-        const result = await live.runtime.executeTurn(options.input ?? (text + (options.messageInput ? '\n[SELECTED REFERENCES — identities only, not authorization]\n' + JSON.stringify(options.messageInput) : '')), undefined, {
+        const attached = attachmentMetadata(files, name => this.redact(name));
+        const input = options.input ?? text
+          + (references ? '\n[SELECTED REFERENCES — identities only, not authorization]\n' + JSON.stringify(references) : '')
+          + (attached?.length ? '\n[ATTACHMENT METADATA — file contents are unavailable]\n' + JSON.stringify(attached) : '');
+        const result = await live.runtime.executeTurn(input, undefined, {
           abortSignal: controller.signal,
         });
         outcome.externalRunId=result.externalRunId;

@@ -32,7 +32,7 @@ export class LakeMessageQueue {
     if (raw.taskId !== undefined && (typeof raw.taskId !== 'string' || !raw.taskId || raw.taskId.length > 200)) throw new HttpError(400, '准确任务身份无效');
     const selected = messageInput(this.store, sessionId, text, raw), queue = this.get(sessionId);
     if (queue.items.length >= 100) throw new HttpError(413, '每个会话最多保留 100 条待发送消息');
-    const item: Item = {id: id(), text, ...selected, images: [], files: [], createdAt: now(), ignoreProjectMemory: raw.ignoreProjectMemory === true, taskId: raw.taskId as string | undefined};
+    const item: Item = {id: id(), text, ...selected, images: [], files: selected.files ?? [], createdAt: now(), ignoreProjectMemory: raw.ignoreProjectMemory === true, taskId: raw.taskId as string | undefined};
     queue.items.push(item); this.save(queue);
     return {queued: true, queuedMessageId: item.id, messageQueue: queue};
   }
@@ -53,7 +53,7 @@ export class LakeMessageQueue {
       case 'edit': {
         if (unresolved(item!)) throw new HttpError(409, '先前发送状态未核实，不能通过编辑重发');
         if (typeof input.text !== 'string' || !input.text.trim() || Buffer.byteLength(input.text) > 256000) throw new HttpError(400, '待发送消息无效');
-        const text = this.redact(input.text), selected = messageInput(this.store, sessionId, text, input);
+        const text = this.redact(input.text), selected = messageInput(this.store, sessionId, text, {...input, files: item!.files});
         Object.assign(item!, {text, ...selected}); break;
       }
       case 'reorder': {

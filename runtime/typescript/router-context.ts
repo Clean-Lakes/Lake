@@ -9,7 +9,8 @@ const pilotCoordinationPolicy = {
 } as const;
 
 export type RouterEvent = { id: string; projectId: string; sessionId: string; messageId: string; payload: string;
-  selectedReferences?: import('./message-input').MessageInput;
+  selectedReferences?: import('./message-input').MessageReferences;
+  attachmentMetadata?: ReturnType<typeof import('./chat-attachments').attachmentMetadata>;
   receivedAt: string; revision: number; hash: string; preferredRoleId?: string; explicitTaskId?: string;
   external?: import('../../web-agent/shared/contracts').ExternalMessageOrigin;
   replyContext?: {messageId:string;eventId:string;text:string;pilotReply?:string} };
@@ -102,7 +103,7 @@ export function buildRouterContext(source: RouterContextInput) {
       ...(event.external && { externalOrigin: event.external.kind, ...(event.external.connectionId&&{connectionId:event.external.connectionId,
         threadId:event.external.threadId,threadTitle:event.external.threadTitle}) }),
       ...(event.replyContext&&{replyTo:{...event.replyContext,text:clip(event.replyContext.text,conversationBytes),pilotReply:event.replyContext.pilotReply&&clip(event.replyContext.pilotReply,conversationBytes)}}),
-      selectedReferences: event.selectedReferences, clipped: Buffer.byteLength(event.payload) > previewBytes }));
+      selectedReferences: event.selectedReferences, attachmentMetadata: event.attachmentMetadata, clipped: Buffer.byteLength(event.payload) > previewBytes }));
     const tasks = taskRows.slice(0, taskCount).map((task) => ({ taskId: task.taskId, roleId: task.roleId, title: clip(task.title, 128),
       state: task.state, reportedOutcome: task.reportedOutcome, pendingApproval: task.pendingApproval, unresolvedOperations: task.unresolvedOperations,
       archived: task.archived === true, updatedAt: task.updatedAt, summary: clip(task.summary ?? "", summaryBytes),
