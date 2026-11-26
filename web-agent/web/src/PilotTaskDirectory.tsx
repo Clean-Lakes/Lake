@@ -4,7 +4,6 @@ import {Glyph} from './Icons';
 import {specialistTaskMembers,specialistTaskTime,type SpecialistTaskMember} from './specialistTaskListModel';
 import {superTaskPresentation} from './superAgentPresentation';
 import {TaskSpecialistAvatars} from './TaskSpecialistAvatars';
-import {pilotTaskWorkers} from './pilotExecutionOverviewModel';
 
 export type PilotTaskDirectoryData = {
  workspace:SuperWorkspace|null;
@@ -54,6 +53,12 @@ function taskParticipants(workers:readonly SuperWorker[]){
   }
  }
  return [...participants.values()].sort((a,b)=>a.key.localeCompare(b.key));
+}
+
+function pilotTaskWorkers(workspace:SuperWorkspace|null|undefined,session:Pick<WorkSession,'id'|'projectId'>){
+ if(!workspace?.active||workspace.project.projectId!==session.projectId||workspace.project.routerSessionId!==session.id)return [];
+ return workspace.workers.filter(({parentWorkerId,sessionId,task})=>
+  !parentWorkerId&&task.sessionId===sessionId&&(!task.projectId||task.projectId===session.projectId));
 }
 
 export function pilotTaskParticipants(workspace:SuperWorkspace|null,session:PilotTaskDirectoryData['session'],taskId:string){

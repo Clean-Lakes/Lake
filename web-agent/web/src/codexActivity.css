@@ -6,6 +6,10 @@
 .codex-group-label { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .codex-group-ring { color:var(--info); }
 .codex-group-ring[data-complete="true"] { color:var(--success); }
+@media (prefers-reduced-motion:no-preference) {
+  .codex-group-ring { transition:color 180ms ease-out; }
+  .codex-ring-progress { transition:stroke-dasharray 180ms ease-out; }
+}
 .codex-ring-track { stroke:color-mix(in srgb,currentColor 22%,transparent); }
 .codex-group-toggle svg,.codex-tool-group li > svg { flex:none; }
 .codex-group-toggle:focus-visible,.codex-call-script:focus-visible,.codex-live-details:focus-visible { outline:2px solid var(--focus-outline); outline-offset:-2px; }
@@ -25,4 +29,6 @@
 .codex-task-event { display:flex; align-items:center; gap:7px; }
 .codex-task-event { font-size:var(--font-size-toolbar,12px); color:var(--text-muted); flex-wrap:wrap; }
 .codex-task-chip { padding:2px 7px; border-radius:6px; background:color-mix(in srgb,currentColor 7%,transparent); color:var(--foreground); overflow-wrap:anywhere; }
-.codex-task-chip::before { content:''; display:inline-block; width:7px; height:7px; margin-inline-end:5px; border:1.5px solid var(--warning,#b78122); border-radius:50%; }
+.codex-task-mark { display:inline-grid; place-items:center; vertical-align:-1px; width:11px; height:11px; box-sizing:border-box; margin-inline-end:5px; border:1.5px solid currentColor; border-radius:50%; color:var(--warning); }
+.codex-task-mark[data-state="completed"] { color:var(--success); }
+.codex-task-mark[data-state="removed"] { color:var(--text-muted); }

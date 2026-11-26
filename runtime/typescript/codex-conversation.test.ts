@@ -49,6 +49,25 @@ test('only root workers contribute, file contents and sensitive commands stay ou
  assert.equal(lines.append('ATE KEY-----\nkey bytes\n'),'敏感输出已隐藏');
  assert.equal(lines.append('-----END RSA PRIVATE KEY-----\nsafe\n'),'safe');
 });
+test('successful checklist snapshots record additions and explicit completions once, in the original turn',async t=>{
+ const card=operation();
+ const adapter=new CodexAppServer({executable:process.execPath,args:[join(__dirname,'test-fixtures/codex-app-server-wire.cjs')],
+  cwd:process.cwd(),env:{LAKE_WIRE_SCENARIO:'inline-checklist'}},update=>{
+  if(update.kind==='usage'||update.kind==='input')return;
+  const event:ExternalEvent=update.kind==='text'?{kind:'text',publicText:update.messageText,publicTextId:update.messageId,sequence:1,at}:{...update,sequence:1,at};
+  captureCodexActivity(run,event,card);
+ });
+ t.after(()=>adapter.close());
+ const signal=AbortSignal.timeout(6000);
+ await adapter.initialize(signal);await adapter.openSession({cwd:process.cwd()},signal);await adapter.exec('demo',signal);
+ const items=codexActivity({cards:[card]},'task','root');
+ assert.deepEqual(items.map(item=>item.kind==='text'?[item.kind,item.text]:[item.text,item.taskState??item.status,!!item.createdTask]),[
+  ['核对巡检记录','in_progress',true],['补查历史','pending',true],['更新任务清单','failed',false],
+  ['text','巡检记录已核对。'],['核对巡检记录','completed',false],['补查历史','removed',false],
+  ['整理回执','in_progress',true],['整理回执','completed',false],
+ ]);
+ assert.equal(new Set(items.map(item=>item.id)).size,items.length);
+});
 test('command text keeps newlines, masks literals before clipping, and withholds risky output',()=>{
  const script='pwd\n'+('ls -al\n'.repeat(90))+'date';
  assert.equal(publicCommand(script),script);

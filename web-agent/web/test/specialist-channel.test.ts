@@ -3,7 +3,7 @@ import {SpecialistTaskMenu} from '../src/SpecialistTaskMenu';
 import assert from 'node:assert/strict';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {channelTasksByRecentRecord,mergeChannelEntries,preferredChannelTask,SpecialistChannelEntries,SpecialistTaskControls,SpecialistTaskSelect} from '../src/SpecialistChannel';
+import {channelTasksByRecentRecord,mergeChannelEntries,preferredChannelTask,SpecialistChannelEntries,SpecialistTaskControls} from '../src/SpecialistChannel';
 import type {SessionSnapshot,SpecialistChannelEntry,SuperWorker} from '../../shared/contracts';
 import {isCompactionFallbackEntry} from '../src/timeline';
 import {TranscriptMessage} from '../src/AIPanel';
@@ -93,7 +93,7 @@ test('channel task boundaries use exact task identity while keeping each task’
  assert.ok(!html.includes('执行详情')&&!html.includes('specialist-channel-source'));
 });
 
-test('inspector task navigation keeps distinct source sessions even for equal task titles',()=>{
+test('preferred specialist tasks keep distinct source sessions even for equal titles',()=>{
  const worker=(id:string,state:SuperWorker['task']['state']):SuperWorker=>({id,roleId:'ops',roleName:'运维专员',sessionId:`session-${id}`,assignmentState:'active',task:{taskId:`task-${id}`,sessionId:`session-${id}`,title:'检查服务器',state,acceptanceState:'not_evaluated',revision:1,originRootTurnId:`root-${id}`,deadlineAt:''}});
  const a=worker('a','completed'),b=worker('b','paused'),c=worker('c','running'),d=worker('d','waiting_user');
  const entries:SpecialistChannelEntry[]=[{id:'latest',sourceSessionId:b.sessionId,taskId:b.task.taskId,createdAt:'2026-11-04T02:00:00Z'}];
@@ -103,10 +103,6 @@ test('inspector task navigation keeps distinct source sessions even for equal ta
  assert.equal(preferredChannelTask([b,c]),c,'active work is reachable before paused history');
  assert.equal(preferredChannelTask([c,d]),d,'a task needing confirmation is directly reachable');
  assert.equal(preferredChannelTask([]),undefined);
- const html=renderToStaticMarkup(createElement(SpecialistTaskSelect,{workers:[a,b],sessionId:b.sessionId,onTask:()=>{}}));
- assert.ok(html.includes('role="combobox"')&&html.includes('aria-label="查看专员任务"'));
- assert.ok(html.includes('value="session-a"')&&html.includes('value="session-b" selected=""'));
- assert.ok(html.includes('任务记录')&&html.includes('检查服务器'));
  assert.deepEqual([a,b].map(row=>row.id),['a','b'],'display ordering does not mutate task metadata');
 });
 

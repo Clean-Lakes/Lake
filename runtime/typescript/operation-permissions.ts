@@ -7,7 +7,7 @@ type AutomaticOperation = Extract<keyof typeof permissionDefaults, `silent${stri
 // confirmation authority after the user selected automatic operation in Pilot.
 const toolCategories: Partial<Record<AutomaticOperation, readonly string[]>> = {
   silentReadFiles: ['list_resource_config','list_skill_config','list_mcp_config','Read', 'Glob', 'Grep', 'FindFiles', 'SearchText', 'list_project_files', 'Skill', 'load_skill', 'WebFetch'],
-  silentWriteFiles: ['manage_resource','manage_skill','manage_mcp','Write', 'Edit'],
+  silentWriteFiles: ['manage_resource','manage_skill','manage_mcp','create_chat_group','Write', 'Edit'],
   silentReadSQL: ['list_db_objects', 'db_table_ddl', 'read_db_table'],
   silentCommands: ['Bash', 'inspect_host'],
   silentMCPCalls: ['test_mcp_config','list_mcp_tools', 'call_mcp_tool'],

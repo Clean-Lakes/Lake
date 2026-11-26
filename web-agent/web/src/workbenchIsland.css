@@ -167,7 +167,6 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .xter
    the remaining space and can truncate, while its disclosure stays reachable. */
 @container(max-width:300px) {
  .lake-workbench-island .workspace-header { display:grid; grid-template-columns:minmax(0,1fr) auto; }
- .lake-workbench-island .workspace-header.has-specialist-tasks { grid-template-columns:minmax(0,1fr) auto 28px; }
  .lake-workbench-island .workspace-header.has-pilot-island { grid-template-columns:minmax(48px,1fr) minmax(0,var(--pilot-state-width)); }
  .lake-workbench-island .breadcrumbs { display:flex; min-width:0; width:100%; max-width:none; }
  .lake-workbench-island .breadcrumbs strong { display:flex; align-items:center; min-width:0; width:100%; }

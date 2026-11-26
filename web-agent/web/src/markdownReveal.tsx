@@ -4,7 +4,7 @@ import {isLakeAvatarName,type LakeAvatarName} from './lakeAvatarCatalog';
 import {SpecialistReplyCursor,SpecialistReplyCursorTail} from './SpecialistReplyCursor';
 import {useSmoothText} from './useSmoothText';
 
-export type MarkdownRevealOptions = {active: boolean; animateInitial?: boolean; finishPending?: boolean};
+export type MarkdownRevealOptions = {active: boolean; animateInitial?: boolean; finishPending?: boolean; paceBursts?: boolean};
 
 type ProseNode = {
   type: string;
@@ -79,8 +79,8 @@ export function remarkSpecialistReplyCursor(avatar: LakeAvatarName) {
   };
 }
 
-export function MarkdownReveal({source,active,animateInitial,finishPending,render}: MarkdownRevealOptions & {source: string; render: (paintedThrough?:number)=>ReactNode}) {
-  const visible = useSmoothText(source,active,{animateInitial,finishPending});
+export function MarkdownReveal({source,active,animateInitial,finishPending,paceBursts,render}: MarkdownRevealOptions & {source: string; render: (paintedThrough?:number)=>ReactNode}) {
+  const visible = useSmoothText(source,active,{animateInitial,finishPending,paceBursts});
   // Completion with the same source leaves the parsed text nodes mounted,
   // even if references change and the Markdown needs to be parsed again.
   const packet=useRef({source,paintedThrough:visible.length});

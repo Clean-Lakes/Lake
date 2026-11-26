@@ -60,6 +60,7 @@ test('console category search matches labels and keywords without exposing TypeS
  assert.deepEqual(consoleCategories(true,'客户端 mcp').flatMap(group=>group.items.map(item=>item.key)),['channels']);
  assert.deepEqual(consoleCategories(false,'客户端 mcp'),[]);
  assert.deepEqual(consoleCategories(true,'默认模型').flatMap(group=>group.items.map(item=>item.key)),['models']);
+ assert.deepEqual(consoleCategories(true,'Agent 执行器'),[]);
 });
 
 test('memory and watchdog settings are absent from the console and category search',()=>{

@@ -1,8 +1,8 @@
 import {useLayoutEffect,useRef,useState} from 'react';
 import {firstGrapheme,TextReveal} from './textReveal';
 
-export function useSmoothText(text:string,streaming:boolean,{animateInitial=false,finishPending=false}:{
- animateInitial?:boolean;finishPending?:boolean;
+export function useSmoothText(text:string,streaming:boolean,{animateInitial=false,finishPending=false,paceBursts=false}:{
+ animateInitial?:boolean;finishPending?:boolean;paceBursts?:boolean;
 }={}){
  const initialPlayback=animateInitial&&(streaming||finishPending);
  const [shown,setShown]=useState(()=>initialPlayback?firstGrapheme(text):text);
@@ -21,12 +21,12 @@ export function useSmoothText(text:string,streaming:boolean,{animateInitial=fals
  useLayoutEffect(()=>{
   if(!play)return;
   const motion=window.matchMedia('(prefers-reduced-motion: reduce)');
-  const engine=new TextReveal(visible,setShown);
+  const engine=new TextReveal(visible,setShown,undefined,paceBursts);
   sync.current=()=>engine.update(latest.current,!motion.matches&&!document.hidden);
   motion.addEventListener('change',sync.current);document.addEventListener('visibilitychange',sync.current);
   sync.current();
   return()=>{engine.stop();motion.removeEventListener('change',sync.current);document.removeEventListener('visibilitychange',sync.current);sync.current=()=>{}};
- },[play]);
+ },[play,paceBursts]);
  useLayoutEffect(()=>sync.current(),[text,play]);
  return visible;
 }

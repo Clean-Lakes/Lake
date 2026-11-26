@@ -1,4 +1,3 @@
-import {ExternalAgentSettings} from './ExternalAgentSettings';
 import {GatewaySettings,type GatewayTaskTarget} from './GatewaySettings';
 import {MCPSettings,SkillSettings} from "./ExtensionSettings";
 import {ProviderIcon} from "./ProviderIcon";
@@ -31,9 +30,9 @@ function Switch({checked,label,onChange,disabled=false}: {checked:boolean;label:
 }
 export type SettingsNavigationHandle = {confirmLeave: () => boolean | Promise<boolean>};
 
-export function ModelSettings({tab,navigationGuard,onBusyChange,onChanged,sendShortcut,onShortcutChange,completionEnabled,onCompletionEnabledChange,onSessionConfig:openSessionConfig,projectId,projectName,capabilityDetectionEnabled=false,onGatewayTask:openGatewayTask}: {
+export function ModelSettings({tab,navigationGuard,onBusyChange,onChanged,sendShortcut,onShortcutChange,completionEnabled,onCompletionEnabledChange,onSessionConfig:openSessionConfig,projectId,capabilityDetectionEnabled=false,onGatewayTask:openGatewayTask}: {
   tab:SettingsPage;navigationGuard?:Ref<SettingsNavigationHandle>;onBusyChange:(busy:boolean)=>void;
-  onChanged:()=>Promise<void>;sendShortcut:SendShortcut;onShortcutChange:(value:SendShortcut)=>void;onSessionConfig?:()=>void;projectId?:string;projectName?:string;
+  onChanged:()=>Promise<void>;sendShortcut:SendShortcut;onShortcutChange:(value:SendShortcut)=>void;onSessionConfig?:()=>void;projectId?:string;
   completionEnabled?:boolean;onCompletionEnabledChange?:(value:boolean)=>void;
   capabilityDetectionEnabled?:boolean;onGatewayTask?:(target:GatewayTaskTarget)=>Promise<void>;
 }) {
@@ -283,7 +282,7 @@ export function ModelSettings({tab,navigationGuard,onBusyChange,onChanged,sendSh
   return <section ref={pageRef} id="workspace-settings-page" className="workspace-page model-settings-page" aria-labelledby="model-settings-title">
     <WorkspacePageHeader id="model-settings-title" title={consoleCategoryLabel(tab) ?? '设置'}
       actions={tab==='channels' ? <div ref={setActionsHost} className="workspace-console-page-action"/> : undefined}/>
-    {tab==="channels"?<GatewaySettings actionsHost={actionsHost} onBusyChange={setExtensionBusy} projectId={projectId} onTask={onGatewayTask}/>:tab==="agents"?<ExternalAgentSettings key={projectId??"none"} projectId={projectId} projectName={projectName} onBusyChange={setExtensionBusy}/>:tab==="mcp"?<MCPSettings onBusyChange={setExtensionBusy}/>:tab==="skills"?<SkillSettings onBusyChange={setExtensionBusy}/>:tab==="appearance" ? <AppearanceSettings/> : tab==="conversation" ? <section id="conversation-settings-panel" role="tabpanel" aria-labelledby="conversation-settings-tab" className="model-conversation conversation-settings">
+    {tab==="channels"?<GatewaySettings actionsHost={actionsHost} onBusyChange={setExtensionBusy} projectId={projectId} onTask={onGatewayTask}/>:tab==="mcp"?<MCPSettings onBusyChange={setExtensionBusy}/>:tab==="skills"?<SkillSettings onBusyChange={setExtensionBusy}/>:tab==="appearance" ? <AppearanceSettings/> : tab==="conversation" ? <section id="conversation-settings-panel" role="tabpanel" aria-labelledby="conversation-settings-tab" className="model-conversation conversation-settings">
       <WorkspaceSettingSection id="conversation-message-settings" title="消息">
         <div className="workspace-setting-card">
           <div className="workspace-setting-row">

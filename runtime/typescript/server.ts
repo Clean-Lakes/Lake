@@ -183,6 +183,7 @@ export async function startLakeServer(options: ServerOptions) {
   let closed = false;
   const clients = new Map<string, Set<ServerResponse>>();
   const catalogStreams = new Set<ServerResponse>();
+  const catalogChanged=()=>{for(const stream of catalogStreams)stream.write("event: catalog\ndata: {}\n\n");};
   const token = randomBytes(32).toString("hex");
   let origin = "";
   const broadcast = (event: any) => {
@@ -614,9 +615,31 @@ export async function startLakeServer(options: ServerOptions) {
         else throw new HttpError(405,"不支持此巡检请求");
       } else if (path[1] === "projects" && path[3] === "superagent") {
         store.project(path[2]);
-        if(path.length===5&&path[4]==="stop"&&method==="POST"){
-          if (superagent.workspace(path[2]).project.routerSessionId !== data.routerSessionId) throw new HttpError(409, 'Pilot 工作区身份已变化');
-          messageQueue!.pauseProject(path[2]);result=await superagent.stopWorkspace(path[2],String(data.routerSessionId??""));
+        if(path.length===5&&path[4]==='specialists'&&method==='POST'){
+          await agents.prepareRedaction();
+          if(draining)throw new HttpError(503,'服务正在退出');
+          result=superagent.createSpecialist(path[2],data);
+          status=201;
+          catalogChanged();
+        }
+        else if(path[4]==='groups'&&method==='POST'&&(path.length===5||path.length===7&&path[6]==='messages')){
+          await agents.prepareRedaction();
+          if(draining)throw new HttpError(503,'服务正在退出');
+          if(path.length===5){
+            result=superagent.conversations.createGroup(path[2],data);
+            superagent.ensure(path[2]);
+            status=201;
+          }else{
+            result=await superagent.sendGroupMessage(path[2],path[5],data);
+            status=202;
+          }
+        }
+        else if(path.length===5&&path[4]==="stop"&&method==="POST"){
+          const target=String(data.routerSessionId??'');
+          if(target&&superagent.workspace(path[2]).project.routerSessionId===target)messageQueue!.pauseProject(path[2]);
+          else if(superagent.conversations.group(path[2],target))messageQueue!.pause(target);
+          else throw new HttpError(409,'Pilot 工作区身份已变化');
+          result=await superagent.stopWorkspace(path[2],target);
         }
         else if (path.length === 6 && path[4] === "specialists" && method === "DELETE")
           result = await superagent.deleteRole(path[2], path[5], data.revision);
@@ -704,7 +727,10 @@ export async function startLakeServer(options: ServerOptions) {
       } else if (path[1] === "sessions") {
         const sessionId = path[2];
         const session = store.session(sessionId);
+        const group=session.workspaceRole==='group'?superagent.conversations.group(session.projectId,sessionId):undefined;
         if(session.workspaceRole==='conversation'&&!['GET','HEAD'].includes(method))throw new HttpError(409,'对话回应会话由宿主管理，请在 Pilot 或专员频道继续');
+        if(session.workspaceRole==='group'&&!group)throw new HttpError(404,'当前项目找不到该群组');
+        if(group&&!store.get('superProjects',session.projectId))superagent.ensure(session.projectId);
         if (session.workspaceRole === "legacy" && !["GET", "HEAD"].includes(method) && !(path[3] === "presentation" || path.length === 3 && method === "PATCH"))
           throw new HttpError(409, "旧 Go 会话为只读档案；请在 Pilot 中提出新的明确要求，历史任务与操作不会重放");
         if (method === "GET" && (path[3] === "snapshot" || path[3] === "ai")) {
@@ -750,13 +776,8 @@ export async function startLakeServer(options: ServerOptions) {
           const after = Number(url.searchParams.get("after") ?? 0);
           if (!Number.isSafeInteger(after) || after < 0) throw new HttpError(400, "无效的事件游标");
           const workers = [...new Set(url.searchParams.getAll('worker'))];
-          if (workers.length) {
-            if (session.workspaceRole!=='router') throw new HttpError(404, '专员事件须从项目 Pilot 订阅');
-            const workspace=superagent.workspace(session.projectId);
-            const allowed=new Set(workspace.workers.filter(worker=>!worker.parentWorkerId).map(worker=>worker.sessionId));
-            if (!workspace.active||workspace.project.routerSessionId!==sessionId||workers.some(worker=>!allowed.has(worker)))
-              throw new HttpError(404, '此专员会话不在当前 Pilot 工作区');
-          }
+          if (workers.length&&!superagent.allowsPilotWorkers(session.projectId,sessionId,workers))
+            throw new HttpError(404,'此专员会话不在当前 Pilot 对话');
           response.writeHead(200, {
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-store",
@@ -803,7 +824,7 @@ export async function startLakeServer(options: ServerOptions) {
             if(data.enqueue===true)throw new HttpError(400,'分配新任务须直接接单，不能作为普通待发送消息入队');
             result=await superagent.send(sessionId,text,data.taskId,data.ignoreProjectMemory===true,input,data.assignment);
           }
-          else if (data.enqueue === true || store.session(sessionId).workspaceRole !== 'router' && messageQueue!.get(sessionId).items.length) result = messageQueue!.enqueue(sessionId, agents.redact(text), {...data, ...input});
+          else if (data.enqueue === true || !group && session.workspaceRole !== 'router' && messageQueue!.get(sessionId).items.length) result = messageQueue!.enqueue(sessionId, agents.redact(text), {...data, ...input});
           else result = await superagent.send(sessionId, text, data.taskId, data.ignoreProjectMemory === true, input);
           status = 202;
         } else if (path[3] === "message-queue") {
@@ -834,18 +855,24 @@ export async function startLakeServer(options: ServerOptions) {
             case "options":
               result = { ...session.options, ...superagent.inheritedExecutionPreferences(sessionId), agentRuntime: "typescript" };
               break;
-            case "configure":
-              if (superagent.inheritedExecutionPreferences(sessionId) && Object.keys(data).some(key => Object.hasOwn(permissionDefaults, key)))
+            case "configure": {
+              const switches=Object.entries(data).filter(([key])=>Object.hasOwn(permissionDefaults,key));
+              if (!group && switches.length && superagent.inheritedExecutionPreferences(sessionId))
                 throw new HttpError(409, "专员统一使用 Pilot 的执行偏好，请在 Pilot 中修改权限");
-              for (const [key, value] of Object.entries(data))
-                if (Object.hasOwn(permissionDefaults, key) && typeof value !== 'boolean')
-                  throw new HttpError(400, "执行偏好必须是开启或关闭");
-              if (agents.isRunning(sessionId))
+              if(switches.some(([,value])=>typeof value!=='boolean'))throw new HttpError(400,'执行偏好必须是开启或关闭');
+              const owner=group&&switches.length?store.session(superagent.ensure(session.projectId).routerSessionId):undefined;
+              if (agents.isRunning(sessionId)||owner&&agents.isRunning(owner.id))
                 throw new HttpError(409, "请先停止当前任务再修改配置");
-              session.options = { ...session.options, ...data, agentRuntime: "typescript" };
-              store.put("sessions", sessionId, session);
+              const localOptions=owner?Object.fromEntries(Object.entries(data).filter(([key])=>!Object.hasOwn(permissionDefaults,key))):data;
+              session.options = { ...session.options, ...localOptions, agentRuntime: "typescript" };
+              store.transaction(()=>{
+                store!.put('sessions',sessionId,session);
+                if(owner)store!.put('sessions',owner.id,{...owner,options:{...owner.options,...Object.fromEntries(switches)}});
+              });
+              if(owner)broadcast(store.event(owner.id,'session'));
               result = { ...session.options, ...superagent.inheritedExecutionPreferences(sessionId), agentRuntime: "typescript" };
               break;
+            }
             case "abort":
               messageQueue!.pause(sessionId);
               await agents.abort(sessionId);
@@ -889,7 +916,7 @@ export async function startLakeServer(options: ServerOptions) {
           store.put("sessions", sessionId, session);
           result = session;
         } else if (method === "DELETE" && path.length === 3) {
-          if (["router", "role", "worker"].includes(session.workspaceRole ?? "")) throw new HttpError(409, "受管理会话保留任务与频道身份；请使用停止任务或删除专员");
+          if (["router", "role", "worker", "group"].includes(session.workspaceRole ?? "")) throw new HttpError(409, "受管理会话保留任务与频道身份；请使用停止任务或删除专员");
           await messageQueue!.archiveSession(sessionId);
           await agents.abort(sessionId);
           store.delete("sessions", sessionId);
@@ -1057,9 +1084,7 @@ export async function startLakeServer(options: ServerOptions) {
     security = new LakeSecurity(store);
     gateway = new LakeGateway(options.home, security);
     extensions = new LakeExtensions(store, security, (value) => agents!.redact(value));
-    jumpServer = new LakeJumpServer(store,security,value=>agents!.registerSecret(value),()=>{
-      for (const stream of catalogStreams) stream.write("event: catalog\ndata: {}\n\n");
-    });
+    jumpServer = new LakeJumpServer(store,security,value=>agents!.registerSecret(value),catalogChanged);
     ssh=new LakeSSH(store,security,(session)=>{broadcast(store!.event(session,"session"));superagent?.changed(session);},value=>extensions!.scrub(value),value=>agents!.registerSecret(value),jumpServer);
     mysql=new LakeMySQL(store,security,value=>agents!.registerSecret(value),value=>agents!.redact(value));
     services=new LakeServiceResources(store,security,value=>agents!.registerSecret(value),value=>agents!.redact(ssh!.scrub(extensions!.scrub(value))));
@@ -1090,7 +1115,7 @@ export async function startLakeServer(options: ServerOptions) {
     resourceImport=new LakeResourceImport(store,resourceManagement,value=>agents!.registerSecret(value),options.resourceImport);
     const configuration=new PilotConfiguration(store,security,extensions,resourceManagement,value=>agents!.redact(ssh!.scrub(extensions!.scrub(value))));
     const allowAutomationOverrides = options.allowAutomationOverrides === true;
-    superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql,execution,Date.now,configuration,services,allowAutomationOverrides);
+    superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql,execution,Date.now,configuration,services,allowAutomationOverrides,catalogChanged);
     memory = new LakeMemory(store, () => security!.check(), value => agents!.redact(ssh!.scrub(extensions!.scrub(value))), allowAutomationOverrides);
     try { await memory.initialize(); } catch { memory.disable("记忆文件需要核实，当前暂停记忆功能；原记录保留，普通新任务仍可运行"); }
     agents.memory = memory;

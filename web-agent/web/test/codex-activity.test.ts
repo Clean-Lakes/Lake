@@ -50,3 +50,30 @@ test('the group ring counts successful calls and stays incomplete after a failur
   assert.doesNotMatch(html,/data-kind="command"/);
  }
 });
+test('the active cursor stays on the latest paragraph when tool timers are paused',()=>{
+ const items:CodexActivityItem[]=[{id:'opening',kind:'text',text:'先整理材料'},{id:'current',kind:'text',text:'继续核对'},
+   {id:'tool',kind:'integration',text:'查阅记录',status:'running',at}];
+ const html=renderToStaticMarkup(createElement(CodexActivity,{items,cursorAvatar:'kingfisher'}));
+ assert.equal(html.match(/class="specialist-reply-cursor"/g)?.length,1);
+ assert.match(html,/继续核<span class="specialist-reply-cursor-tail">对<span class="specialist-reply-cursor" data-cursor-avatar="kingfisher"/);
+ assert.doesNotMatch(renderToStaticMarkup(createElement(CodexActivity,{items})),/class="specialist-reply-cursor"/);
+});
+test('a newly streamed Codex paragraph starts immediately while existing prose reads in full',()=>{
+ const items:CodexActivityItem[]=[{id:'earlier',kind:'text',text:'这一段已完整呈现。'},
+   {id:'current',kind:'text',text:'新段继续核对。'}];
+ const live=renderToStaticMarkup(createElement(CodexActivity,{items,live:true,animateInitial:true}));
+ assert.match(live,/<p>这一段已完整呈现。<\/p>/);
+ assert.match(live,/<p>新<\/p>/);
+ assert.match(renderToStaticMarkup(createElement(CodexActivity,{items,live:true})),/<p>新段继续核对。<\/p>/);
+});
+test('a checklist completion is a separate checked row and a legacy tool success remains neutral',()=>{
+ const items:CodexActivityItem[]=[
+  {kind:'task',id:'start',text:'核对巡检记录',status:'completed',at,createdTask:true,taskState:'in_progress'},
+  {kind:'task',id:'done',text:'核对巡检记录',status:'completed',at,taskState:'completed'},
+  {kind:'task',id:'old',text:'旧任务记录',status:'completed',at},
+ ];
+ const html=renderToStaticMarkup(createElement(CodexActivity,{items}));
+ assert.match(html,/添加了.*?data-state="in_progress".*?核对巡检记录.*?data-state="completed".*?核对巡检记录.*?标记为已完成/s);
+ assert.equal(html.match(/标记为已完成/g)?.length,1);
+ assert.match(html,/更新了任务.*?旧任务记录/s);
+});

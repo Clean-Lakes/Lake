@@ -72,7 +72,7 @@ type InputEvent = { id: string; projectId: string; sessionId: string; messageId:
   replyTo?: string;
   preferredRoleId?: string; explicitTaskId?: string; disposition: "pending" | "routed" | "blocked" | "stopped";
   receivedAt: string; revision: number; error?: string };
-type GatewayReceipt = { key?: string; hash: string; guard?:()=>void; preferredRoleId?:string; replyTo?:string };
+type InputReceipt = { key?: string; hash: string; group?:true; guard?:()=>void; preferredRoleId?:string; replyTo?:string };
 type GatewayReply = { sessionId: string; rootTurnId?: string; text: string; createdAt: string; action: 'respond' | 'ask' };
 type GatewayTaskReply = {eventId:string;workerId:string;taskId:string;reportKey:string;text:string;createdAt:string};
 type Worker = { inline?:boolean; preTaskModelRounds?:number; id: string; projectId: string; roleId: string; roleSnapshot: Role; sessionId: string; taskId: string;
@@ -99,7 +99,7 @@ type Interaction = { id: string; workerId: string; generation: number; kind: "pl
 type InputDelivery = { id:string; workerId:string; sessionId:string; taskId:string; generation:number; eventId:string;
   state:'queued'|'consumed'|'deferred'; via:'guide'|'question'; createdAt:string; consumedAt?:string };
 const permissionKeys = ["silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "silentMCPCalls", "denyLocalExecution", "blockUnreferencedAssets", "permissions", "permissionRevision", "securityPolicyRevision"];
-const routerTools = [...pilotConfigurationToolNames,"list_specialists", "list_specialist_avatars", "list_specialist_execution_options", "manage_specialist", "search_super_tasks", "route_work", "read_super_object", "inspect_watchdog", "convene_specialists", "inspect_specialist_conversation"];
+const routerTools = [...pilotConfigurationToolNames,"list_specialists", "list_specialist_avatars", "list_specialist_execution_options", "manage_specialist", "create_chat_group", "search_super_tasks", "route_work", "read_super_object", "inspect_watchdog", "convene_specialists", "inspect_specialist_conversation"];
 const workTools = ["work_begin", "work_read", "work_update", "work_finish", "work_wait", "recall_task_context", "recall_memory", "ask_user_question", "list_assets", "list_project_files",
   "list_referenced_task_evidence", "read_referenced_task_evidence", "read_tool_output"];
 const hostTools=["inspect_host"];
@@ -149,6 +149,7 @@ export class LakeSuperagent implements AgentHost {
   private batches = new Map<string, RouterBatch>();
   private routing = new Set<string>();
   private stoppingProjects = new Set<string>();
+  private stoppingGroups = new Set<string>();
   private active = new Set<string>();
   private pilotActors=new Map<string,Worker>();
   private interactions = new Map<string, Interaction>();
@@ -159,7 +160,7 @@ export class LakeSuperagent implements AgentHost {
   private taskStops = new Map<string, Promise<void>>();
   private heartbeat: ReturnType<typeof setInterval>;
   private watchdogTimer: ReturnType<typeof setInterval>;
-  constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH,readonly mysql?:LakeMySQL,readonly execution?:LakeExecution, private readonly watchdogClock = Date.now,readonly configuration?:PilotConfiguration, readonly services?:LakeServiceResources, allowWatchdogModeOverrides = true) {
+  constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH,readonly mysql?:LakeMySQL,readonly execution?:LakeExecution, private readonly watchdogClock = Date.now,readonly configuration?:PilotConfiguration, readonly services?:LakeServiceResources, allowWatchdogModeOverrides = true, catalogChanged?:()=>void) {
     this.discoveryRecovery = new ProgramDiscoveryRecovery(store, agents.sessions);
     this.operatorReviews = new OperatorEffectReviewService(store, agents.sessions, operation => {
       if (!ssh || !operation.resourceId || !operation.hostConfigurationHash)
@@ -221,7 +222,11 @@ export class LakeSuperagent implements AgentHost {
         throw new HttpError(409, "Resource ownership, availability or connection revision changed");
     }, operation => this.effectResolution(operation)); agents.host = this;
     this.conversations=new SpecialistConversations(store,agents,{
-      check:()=>{if(this.closed)throw new HttpError(409,'Lake 正在退出');this.security?.check();},
+      check:projectId=>{
+        if(this.closed)throw new HttpError(409,'Lake 正在退出');
+        if(projectId&&this.stoppingProjects.has(projectId))throw new HttpError(409,'当前项目正在停止活动任务，请稍后发送');
+        this.security?.check();
+      },
       channel:role=>this.ensureChannel(this.role(role.projectId,role.id)).sessionId,
       freeze:role=>({...role,execution:this.roleExecution(this.role(role.projectId,role.id),true)}),
       validate:role=>{
@@ -231,6 +236,7 @@ export class LakeSuperagent implements AgentHost {
         this.freezeRoleExecution(snapshot);
       },
       notify:(session,message)=>this.agents.publish(this.store.event(session,message?'message':'specialist',message?{}:{conversationProgress:true})),
+      catalogChanged,
       schedule:()=>this.schedule(),
     });
     prepareWatchdogEvidence(store);
@@ -561,7 +567,32 @@ export class LakeSuperagent implements AgentHost {
   }
   currentTask(sessionId:string){return this.pilotActors.get(sessionId)?.taskId??this.workerFor(sessionId)?.taskId;}
   private channelFor(sessionId: string) { return this.store.list<Channel>("superChannels").find((channel) => channel.sessionId === sessionId); }
-  private projectFor(sessionId: string) { return this.store.list<SuperProject>("superProjects").find((project) => project.routerSessionId === sessionId); }
+  private projectFor(sessionId: string):SuperProject|undefined {
+    const session=this.store.get<StoredSession>('sessions',sessionId);
+    if(!session)return;
+    const project=this.store.get<SuperProject>('superProjects',session.projectId);
+    if(project?.routerSessionId===sessionId)return project;
+    if(project&&this.conversations.group(project.projectId,sessionId))return {...project,routerSessionId:sessionId};
+  }
+  private groupOfEvent(event?:InputEvent) {
+    return event&&this.conversations.group(event.projectId,event.sessionId)?.sessionId;
+  }
+  private groupOfSource(eventId?:string) {
+    return eventId?this.groupOfEvent(this.store.get<InputEvent>('superInputs',eventId)):undefined;
+  }
+  private requireTaskScope(projectId:string,groupId:string|undefined,taskId:string) {
+    const goal=this.ledger.get(taskId);
+    if(goal.projectId!==projectId||this.groupOfSource(goal.sourceEventId)!==groupId)
+      throw new HttpError(404,'任务不属于当前 Pilot 对话');
+    return goal;
+  }
+  allowsPilotWorkers(projectId:string,sessionId:string,workerSessions:readonly string[]) {
+    const pilot=this.projectFor(sessionId);
+    if(pilot?.projectId!==projectId)return false;
+    const group=this.conversations.group(projectId,sessionId)?.sessionId;
+    const allowed=new Set(this.workers(projectId).filter(worker=>!worker.parentWorkerId&&worker.pilotSessionId===group).map(worker=>worker.sessionId));
+    return workerSessions.every(id=>allowed.has(id));
+  }
   private pendingInteraction(sessionId: string) {
     const running = this.agents.isRunning(sessionId);
     if (!running && !this.interactions.size) return false;
@@ -594,20 +625,23 @@ export class LakeSuperagent implements AgentHost {
   }
   private workerView(worker: Worker,runs?:ExternalRun[],pilotSessionId?:string): SuperWorker {
     const sourceEvent = worker.sourceEventId ? this.store.get<InputEvent>("superInputs", worker.sourceEventId) : undefined;
+    const groupId=this.groupOfEvent(sourceEvent);
+    const destination=groupId??pilotSessionId;
     const goal = this.ledger.get(worker.taskId);
     // work_finish commits the goal before the invocation returns. Preserve the
     // same report identity while it is queued and after it reaches Pilot.
     let pilotReport:SuperWorker['pilotReport'];
-    if (pilotSessionId && !worker.inline && goal.status === 'completed' && worker.state !== 'stopped') {
+    if (destination && !worker.inline && goal.status === 'completed' && worker.state !== 'stopped') {
       const key = digest([goal.id, goal.revision]);
-      const messageId = specialistReportMessageId(key, pilotSessionId);
+      const messageId = specialistReportMessageId(key, destination);
       if (this.store.get('superReports', key) || this.store.get('superPendingReports', key)) {
         pilotReport = {messageId, executionSettled:!this.active.has(worker.id)};
       }
     }
     return { id: worker.id, createdAt: worker.createdAt, roleId: worker.roleId, roleName: worker.roleSnapshot.name,
       sessionId: worker.sessionId, task: this.taskView(goal), assignmentState: worker.state, pilotReport,
-      ...(pilotSessionId && sourceEvent?.sessionId === pilotSessionId && {pilotSourceMessageId:sourceEvent.messageId}),
+      ...(groupId&&{pilotSessionId:groupId}),
+      ...(destination && sourceEvent?.sessionId === destination && {pilotSourceMessageId:sourceEvent.messageId}),
       ...(sourceEvent?.external && { sourceExternal: true }),
       activity: this.workerActivity(worker),execution:this.workerExecution(worker,this.workerRuns(worker,runs)) };
   }
@@ -689,6 +723,7 @@ export class LakeSuperagent implements AgentHost {
     const project = this.store.get<SuperProject>("superProjects", projectId);
     const workers=this.workers(projectId,project?.routerSessionId);
     return { pilotMessageRead: project ? conversationReadState(this.store, project.routerSessionId) : undefined, active: !!project, project: project ?? { projectId, routerSessionId: "", version: 0 }, workers, conversations:this.conversations.list(projectId),
+      chatGroups:this.conversations.groups(projectId),
       questions: this.specialistQuestions(projectId),
       channels: this.store.list<Channel>("superChannels").filter((channel) => channel.projectId === projectId && !this.role(projectId, channel.roleId, true).deletedAt)
         .map((channel) => this.channelView(channel, workers)), cursor: project ? this.store.cursor(project.routerSessionId) : 0 };
@@ -705,7 +740,8 @@ export class LakeSuperagent implements AgentHost {
       const channel=this.store.get<Channel>('superChannels',worker.roleId);
       return [{request,taskTitle:goal.title,author:{kind:'specialist' as const,name:worker.roleSnapshot.name,
         avatarId:worker.roleSnapshot.avatarId,roleId:worker.roleId,workerId:worker.id,sessionId:worker.sessionId,
-        taskId:goal.sharedTaskId??goal.id,channelSessionId:channel?.sessionId,execution:worker.roleSnapshot.execution??{kind:'native' as const}}}];
+        taskId:goal.sharedTaskId??goal.id,channelSessionId:channel?.sessionId,execution:worker.roleSnapshot.execution??{kind:'native' as const}},
+        pilotSessionId:this.groupOfSource(worker.sourceEventId)}];
     });
   }
   private policy(projectId: string) {
@@ -718,6 +754,8 @@ export class LakeSuperagent implements AgentHost {
     if (!batch?.eventIds.includes(eventId) || !batch.complete.has(eventId)) throw new HttpError(409, "Read the complete admitted event before making a decision");
     const event = this.store.require<InputEvent>("superInputs", eventId);
     if (event.projectId !== session.projectId || event.disposition !== "pending") throw new HttpError(409, "Event source or disposition changed");
+    if(this.groupOfEvent(event)!==this.conversations.group(session.projectId,sessionId)?.sessionId)
+      throw new HttpError(404,'输入不属于当前 Pilot 对话');
     if (quote != null && (!quote.trim() || !event.payload.includes(quote))) throw new HttpError(400, "quote must be an exact substring of the original user input");
     return event;
   }
@@ -729,10 +767,10 @@ export class LakeSuperagent implements AgentHost {
     const quote = ["create", "assign", "followup", "stop"].includes(input.action) ? text(input.quote, "quote", 16384) : undefined;
     return this.admitted(sessionId, input.event_id, quote);
   }
-  private listRoles(projectId: string, cursor = "", limit = 20, query?: string) {
+  private listRoles(projectId: string, cursor = "", limit = 20, query?: string, roleIds?:readonly string[]) {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) throw new HttpError(400, "limit must be 1 to 50");
     const term = query === undefined ? "" : normalizeSpecialistText(text(query, "query", 256).trim());
-    const rows = this.store.list<Role>("superRoles").filter(role => role.projectId === projectId && !role.deletedAt &&
+    const rows = this.store.list<Role>("superRoles").filter(role => role.projectId === projectId && !role.deletedAt && (!roleIds||roleIds.includes(role.id)) &&
       role.id.localeCompare(cursor) > 0 && (!term || [role.id, role.name, role.roleKey, role.duties].some(value => normalizeSpecialistText(value ?? "").includes(term))))
       .sort((a, b) => a.id.localeCompare(b.id));
     return { items: rows.slice(0, limit).map(role=>{
@@ -833,12 +871,12 @@ export class LakeSuperagent implements AgentHost {
     // Imported specialists can have IDs that predate the project/key digest.
     return this.store.list<Role>("superRoles").find(row => row.projectId === projectId && row.roleKey === roleKey);
   }
-  private roleForCreation(projectId: string, roleKey: string, profile: Record<string, any>, existing?: Role, available?: SpecialistExecutionOption[]): Role {
+  private roleForCreation(projectId: string, roleKey: string, profile: Record<string, any>, existing?: Role, available?: SpecialistExecutionOption[], defaultExecution?: AgentBackendRef): Role {
     if (roleKey.trim() !== roleKey) throw new HttpError(400, "Create requires an immutable role_key");
     if (profile.name === undefined || profile.duties === undefined) throw new HttpError(400, "Create requires specialist name and duties");
     const avatarId = profile.avatar_id === "auto" ? undefined : profile.avatar_id;
     if (!existing) return { id: digest([projectId, roleKey]), projectId, roleKey, name: profile.name, duties: profile.duties,
-      revision: 1, ...(avatarId && {avatarId}), execution: this.creationExecution(projectId, profile, available) };
+      revision: 1, ...(avatarId && {avatarId}), execution: defaultExecution ?? this.creationExecution(projectId, profile, available) };
     this.role(projectId, existing.id);
     const requested = profile.execution === undefined ? undefined : this.roleBackend(projectId, profile.execution);
     const sameBackend = !requested || existing.execution?.kind === requested.kind &&
@@ -852,6 +890,28 @@ export class LakeSuperagent implements AgentHost {
       throw new HttpError(409, "role_key exists; update the exact role_id and revision");
     return existing;
   }
+  createSpecialist(projectId: string, input: Record<string, unknown>): SpecialistChannelInfo {
+    this.security?.check();
+    if (Object.keys(input).some(key => !['name', 'duties', 'avatarId', 'requestId'].includes(key)))
+      throw new HttpError(400, '专员表单包含不支持的字段');
+    const {avatarId} = input;
+    if (typeof avatarId !== 'string' || !isLakeAvatarName(avatarId)) throw new HttpError(400, '请选择有效的专员头像');
+    const profile = {
+      name: this.agents.redact(text(input.name, '专员名称', 128).trim().replace(/\s+/g, ' ')),
+      duties: this.agents.redact(text(input.duties, '角色描述', 4096).trim()),
+      avatar_id: avatarId,
+    };
+    const roleKey = 'manual-' + digest(text(input.requestId, '添加专员请求', 128));
+    const project = this.ensure(projectId);
+    const {channel, created} = this.store.transaction(() => {
+      const existing = this.roleByKey(projectId, roleKey);
+      const role = this.roleForCreation(projectId, roleKey, profile, existing, undefined, {kind:'acp',agent:'codex'});
+      if (!existing) this.store.put('superRoles', role.id, role);
+      return {channel: this.ensureChannel(role), created: !existing};
+    });
+    if (created) this.notify(project.routerSessionId, 'specialist');
+    return this.channelView(channel);
+  }
   private savedExecutionLabel(role: Role) {
     const backend = role.execution, model = backend?.model;
     if (!backend || !model) return;
@@ -861,6 +921,7 @@ export class LakeSuperagent implements AgentHost {
   }
   private manage(sessionId: string, input: Record<string, any>,available?:SpecialistExecutionOption[]) {
     const event = this.admitted(sessionId, input.event_id, text(input.quote, "quote", 16384));
+    if(this.groupOfEvent(event))throw new HttpError(403,'请在 Lake 主对话创建或管理专员');
     if(Object.keys(input).some(key=>!['event_id','part_key','action','role_id','role_key','expected_revision','quote'].includes(key) && !Object.hasOwn(specialistProfileFields, key)))
       throw new HttpError(400,'Unsupported specialist configuration field');
     const part = text(input.part_key, "part_key", 128), has=(key:string)=>Object.hasOwn(input,key);
@@ -894,6 +955,23 @@ export class LakeSuperagent implements AgentHost {
     });
     this.notify(sessionId, "specialist"); return result;
   }
+  private createGroupFromChat(sessionId:string,input:Record<string,any>) {
+    const session=this.store.session(sessionId);
+    const project=this.store.get<SuperProject>('superProjects',session.projectId);
+    if(session.workspaceRole!=='router'||project?.routerSessionId!==sessionId)
+      throw new HttpError(403,'请在 Lake 主对话创建群组');
+    const event=this.admitted(sessionId,input.event_id,text(input.quote,'quote',16384));
+    const message=this.store.get<Message>('messages',event.messageId);
+    if(event.sessionId!==sessionId||event.external||event.preferredRoleId||message?.role!=='user'||message.sessionId!==sessionId)
+      throw new HttpError(403,'建群请求须来自 Lake 主对话中的用户消息');
+    if(Object.keys(input).some(key=>!['event_id','part_key','quote','title','role_ids'].includes(key)))
+      throw new HttpError(400,'建群请求包含不支持的字段');
+    const part=text(input.part_key,'part_key',128);
+    const {sessionId:groupId,title,members}=this.conversations.createGroup(session.projectId,{
+      title:input.title,roleIds:input.role_ids,requestId:'pilot-'+digest([event.id,part]),
+    });
+    return {sessionId:groupId,title,members};
+  }
   private assignment(worker: Worker, instruction?: string): Assignment {
     return { executionId: worker.taskId, workerId: worker.id, sessionId: worker.sessionId, roleId: worker.roleId, instruction,
       ...(worker.targetResourceIds && {resourceIds:worker.targetResourceIds}) };
@@ -925,20 +1003,26 @@ export class LakeSuperagent implements AgentHost {
     return this.store.list<Decision>("superDecisions").find(decision => ["create", "assign"].includes(decision.action) &&
       this.decisionAssignments(decision).some(assignment => assignment.workerId === worker.id));
   }
-  private existingRecipients(projectId: string, input: Record<string, any>): Role[] {
+  private existingRecipients(projectId: string, input: Record<string, any>, roster?:readonly string[]): Role[] {
     if ([input.role_ids, input.role_id, input.role_key].filter(value => value != null).length !== 1)
       throw new HttpError(400, "Provide exactly one of role_id, role_ids or role_key");
+    let recipients:Role[];
     if (input.role_ids != null) {
       const ids = strings(input.role_ids, 8);
       if (!ids.length) throw new HttpError(400, "role_ids must contain at least one specialist");
-      return ids.map(id => this.role(projectId, id));
+      recipients=ids.map(id => this.role(projectId,id));
+    }else if(input.role_id!=null){
+      recipients=[this.role(projectId,text(input.role_id,'role_id',128))];
+    }else{
+      const role=this.roleByKey(projectId,text(input.role_key,'role_key',128));
+      recipients=role?[this.role(projectId,role.id)]:[];
     }
-    if (input.role_id != null) return [this.role(projectId, text(input.role_id, "role_id", 128))];
-    const role = this.roleByKey(projectId, text(input.role_key, "role_key", 128));
-    return role ? [this.role(projectId, role.id)] : [];
+    if(roster&&(!recipients.length||input.new_specialist||recipients.some(role=>!roster.includes(role.id))))
+      throw new HttpError(403,'群组只可派单给固定成员');
+    return recipients;
   }
-  private assignmentRoles(projectId: string, input: Record<string, any>, available?: SpecialistExecutionOption[]) {
-    const recipients = this.existingRecipients(projectId, input);
+  private assignmentRoles(projectId: string, input: Record<string, any>, available?: SpecialistExecutionOption[], roster?:readonly string[]) {
+    const recipients = this.existingRecipients(projectId, input, roster);
     if (recipients.length && !input.new_specialist) return recipients;
     const profile = input.new_specialist ?? {name: input.role_key, duties: ""};
     const role = this.roleForCreation(projectId, input.role_key, profile, recipients[0], available);
@@ -947,16 +1031,18 @@ export class LakeSuperagent implements AgentHost {
   private async routeFromTool(sessionId: string, input: Record<string, any>, signal: AbortSignal) {
     signal.throwIfAborted();
     const event = this.routingEvent(sessionId, input);
+    const group=this.conversations.group(event.projectId,sessionId);
     const key = digest([event.id, text(input.part_key, "part_key", 128)]);
     let available: SpecialistExecutionOption[] | undefined;
     if (!this.store.get("superDecisions", key)) {
       let recipients: Role[] = [];
       if (input.action === "create" || input.action === "assign") {
-        recipients = this.existingRecipients(event.projectId, input);
+        recipients = this.existingRecipients(event.projectId, input, group?.roleIds);
         if (!recipients.length) available = await this.refreshedExecutionOptions(event.projectId, input.new_specialist?.execution?.kind);
       } else if (input.action === "followup" && this.agents.memory) {
         const taskId = text(input.task_id, "task_id", 128);
         if (event.external?.connectionId) this.requireGatewayTask(event, taskId);
+        this.requireTaskScope(event.projectId,group?.sessionId,taskId);
         const goal = this.routedGoal(event.projectId, taskId, input.role_id ?? event.preferredRoleId);
         const worker = this.store.require<Worker>("superWorkers", goal.workerId);
         if (!worker.inline && this.agents.memory.needsFreshContext({kind: "worker", projectId: worker.projectId, roleId: worker.roleId, sessionId: worker.sessionId}))
@@ -1085,8 +1171,12 @@ export class LakeSuperagent implements AgentHost {
     if (action === "create" && input.task_id != null) throw new HttpError(400, "Create must omit task_id");
     if (["ask", "respond"].includes(action) && (input.task_id != null || input.role_id != null)) throw new HttpError(400, "ask/respond must omit task_id and role_id");
     const event = this.routingEvent(sessionId, input);
-    if(event.external?.connectionId)for(const taskId of [input.task_id,input.predecessor_task_id,...refs].filter(value=>value!=null))
-      this.requireGatewayTask(event,text(taskId,'task_id',128));
+    const group=this.conversations.group(event.projectId,sessionId);
+    for(const taskId of [input.task_id,input.predecessor_task_id,...refs].filter(value=>value!=null)){
+      const id=text(taskId,'task_id',128);
+      if(event.external?.connectionId)this.requireGatewayTask(event,id);
+      this.requireTaskScope(event.projectId,group?.sessionId,id);
+    }
     const part = text(input.part_key, "part_key", 128), key = digest([event.id, part]), hash = digest(input);
     const result = this.store.transaction(() => {
       const previous = this.store.get<Decision>("superDecisions", key);
@@ -1104,7 +1194,7 @@ export class LakeSuperagent implements AgentHost {
       if (alias) return this.replayDecision(event.projectId, input, alias);
       if (parts.length >= 16) throw new HttpError(400, "Event decision limit exceeded");
       if (assigning) {
-        const roles = this.assignmentRoles(event.projectId, input,available);
+        const roles = this.assignmentRoles(event.projectId, input,available,group?.roleIds);
         if (event.preferredRoleId && (roles.length !== 1 || event.preferredRoleId !== roles[0]!.id || action === "assign"))
           throw new HttpError(409, "Use the exact source channel role_id; additional specialists must be assigned by Pilot");
         const instructions = this.roleInstructions(input.role_instructions, roles);
@@ -1338,39 +1428,64 @@ export class LakeSuperagent implements AgentHost {
     this.agents.memory?.captureUser(sessionId,accepted.id,channel.roleId,ignoreMemory);
     this.notify(sessionId,'specialist');this.schedule();return accepted;
   }
-  async send(sessionId: string, value: string, explicitTaskId?: string, ignoreMemory = false, inputDetails?: MessageInput, assignment?:unknown, external?:import('../../web-agent/shared/contracts').ExternalMessageOrigin, gatewayReceipt?: GatewayReceipt) {
+  async sendGroupMessage(projectId:string,sessionId:string,input:{text?:unknown;requestId?:unknown}) {
+    if(!this.conversations.group(projectId,sessionId))throw new HttpError(404,'当前项目找不到该群组');
+    await this.agents.prepareRedaction();
+    const value=this.agents.redact(text(input.text,'消息',16384).trim());
+    const requestId=text(input.requestId,'发送请求',128),hash=digest(value);
+    return this.conversations.priorGroupMessage(sessionId,requestId,hash)??
+      this.send(sessionId,value,undefined,false,undefined,undefined,undefined,{key:digest([sessionId,requestId]),hash,group:true});
+  }
+  async send(sessionId: string, value: string, explicitTaskId?: string, ignoreMemory = false, inputDetails?: MessageInput, assignment?:unknown, external?:import('../../web-agent/shared/contracts').ExternalMessageOrigin, receipt?: InputReceipt) {
     text(value, "message", 256000);
     await this.agents.prepareRedaction();
-    const source = this.store.session(sessionId), project = this.store.get<SuperProject>("superProjects", source.projectId);
+    const source = this.store.session(sessionId);
     if(source.workspaceRole==='conversation')throw new HttpError(409,'请在 Pilot 或专员频道继续对话');
     this.store.project(source.projectId);
     if(this.stoppingProjects.has(source.projectId))throw new HttpError(409,"当前项目正在停止活动任务，请稍后发送");
+    const group=this.conversations.group(source.projectId,sessionId);
+    if(source.workspaceRole==='group'&&!group)throw new HttpError(404,'当前项目找不到该群组');
+    if(group&&this.stoppingGroups.has(sessionId))throw new HttpError(409,'群组正在停止任务，请稍后发送');
+    const selectedReferences=messageReferences(inputDetails),files=inputDetails?.files;
+    if(group&&selectedReferences){
+      const mentionedRoles=new Set([
+        ...selectedReferences.mentions.filter(mention=>mention.kind==='role').map(mention=>mention.id),
+        ...selectedReferences.references.filter(reference=>reference.kind==='role').map(reference=>String(reference.role_id)),
+      ]);
+      for(const roleId of mentionedRoles){
+        if(!group.roleIds.includes(roleId))throw new HttpError(403,'群组只可提及固定成员');
+        this.role(source.projectId,roleId);
+      }
+    }
+    const project=group?this.ensure(source.projectId):this.store.get<SuperProject>('superProjects',source.projectId);
     if(assignment!==undefined){
+      if(group)throw new HttpError(400,'群组的新任务由 Pilot 派给固定成员');
       if(explicitTaskId)throw new HttpError(400,'分配执行 Agent 只用于新任务，不能切换已有任务');
       if(external)throw new HttpError(400,'外部指令不能同时指定执行 Agent 分配');
       return this.assignAgent(sessionId,value,assignment,ignoreMemory,inputDetails);
     }
     if (!project) return this.agents.send(sessionId, value, { ignoreMemory, messageInput: inputDetails });
-    const selectedReferences=messageReferences(inputDetails),files=inputDetails?.files;
     const channel = this.channelFor(sessionId), worker = this.workerFor(sessionId);
-    const preferredRoleId = gatewayReceipt?.preferredRoleId ?? channel?.roleId ?? (worker?.inline?undefined:worker?.roleId);
+    if(worker&&!worker.inline&&this.groupOfSource(worker.sourceEventId))throw new HttpError(409,'请在原群组继续沟通此任务');
+    const preferredRoleId = receipt?.preferredRoleId ?? channel?.roleId ?? (worker?.inline?undefined:worker?.roleId);
     if (preferredRoleId) this.role(source.projectId, preferredRoleId);
     let taskReference: Message["taskReference"];
     if (explicitTaskId) {
-      const goal = this.ledger.get(explicitTaskId);
+      const goal = this.requireTaskScope(source.projectId,group?.sessionId,explicitTaskId);
       if (goal.projectId !== source.projectId || goal.sharedTaskId && goal.sharedTaskId !== explicitTaskId)
         throw new HttpError(404, "Explicit task not found in this channel");
       if (preferredRoleId) this.routedGoal(source.projectId, explicitTaskId, preferredRoleId);
-      if (sessionId === project.routerSessionId)
+      if (group || sessionId === project.routerSessionId)
         taskReference = {taskId:explicitTaskId,title:this.agents.redact(this.ledger.jointTask(explicitTaskId)?.title ?? goal.title)};
     }
     // No await or observer notification may separate the idempotency check,
     // accepted input and durable receipt. A failed receipt rolls back the input.
     const accepted = this.store.transaction(() => {
-      gatewayReceipt?.guard?.();
-      const prior = gatewayReceipt?.key && this.store.get<{messageId: string; hash: string}>("superGatewayInstructions", gatewayReceipt.key);
+      receipt?.guard?.();
+      const receipts=receipt?.group?'superGroupInputs':'superGatewayInstructions';
+      const prior = receipt?.key && this.store.get<{messageId: string; hash: string}>(receipts, receipt.key);
       if (prior) {
-        if (prior.hash !== gatewayReceipt!.hash) throw new HttpError(409, "同一 clientRequestId 的指令内容已变化；请改用新的幂等键发送新指令");
+        if (prior.hash !== receipt!.hash) throw new HttpError(409, "同一 clientRequestId 的指令内容已变化；请改用新的幂等键发送新指令");
         return { message: this.store.require<Message>("messages", prior.messageId), duplicate: true };
       }
       const message = this.store.addMessage(sessionId, "user", this.agents.redact(value), {mentions: selectedReferences?.mentions, files, ...(external&&{external}), ...(taskReference&&{taskReference})});
@@ -1379,18 +1494,19 @@ export class LakeSuperagent implements AgentHost {
       const event: InputEvent = { id: id(), projectId: source.projectId, sessionId, messageId: message.id, payload: this.agents.redact(value),
         ...(files&&{attachmentMetadata:attachmentMetadata(files,name=>this.agents.redact(name))}),
         ...(external&&{external}),
-        ...(gatewayReceipt?.replyTo&&{replyTo:gatewayReceipt.replyTo}),
+        ...(receipt?.replyTo&&{replyTo:receipt.replyTo}),
         preferredRoleId, explicitTaskId: explicitTaskId ?? (worker && !worker.inline ? this.ledger.get(worker.taskId).sharedTaskId ?? worker.taskId : undefined), disposition: "pending", receivedAt: message.createdAt, revision: 1, ignoreMemory, selectedReferences };
       this.store.put("superInputs", event.id, event);
-      if (gatewayReceipt?.key) this.store.put("superGatewayInstructions", gatewayReceipt.key, {eventId: event.id, messageId: message.id, hash: gatewayReceipt.hash});
+      if (receipt?.key) this.store.put(receipts, receipt.key, {eventId: event.id, messageId: message.id, hash: receipt.hash});
       return { message, duplicate: false };
     });
     if (!accepted.duplicate) {
       this.notify(sessionId, "message");
+      if(group)this.notify(project.routerSessionId,'specialist');
       this.agents.memory?.captureUser(sessionId, accepted.message.id, preferredRoleId, ignoreMemory);
       this.schedule();
     }
-    return { ...accepted.message, pilotSessionId: channel?.sessionId ?? project.routerSessionId, ...(accepted.duplicate && {duplicate: true}) };
+    return { ...accepted.message, pilotSessionId: group?.sessionId ?? channel?.sessionId ?? project.routerSessionId, ...(accepted.duplicate && {duplicate: true}) };
   }
   private schedule() {
     if (this.closed || this.scheduled) return;
@@ -1405,6 +1521,8 @@ export class LakeSuperagent implements AgentHost {
   messageQueueBusy(sessionId: string) {
     const session = this.store.session(sessionId), project = this.store.get<SuperProject>('superProjects', session.projectId);
     if (!project) return this.agents.isRunning(sessionId);
+    if(this.conversations.group(session.projectId,sessionId))return this.batches.has(sessionId)||this.agents.isRunning(sessionId)||
+      this.store.list<InputEvent>('superInputs').some(event=>event.sessionId===sessionId&&event.disposition==='pending');
     const channel = this.channelFor(sessionId);
     if (channel) return this.store.list<Worker>('superWorkers').some(worker => worker.projectId === session.projectId && worker.roleId === channel.roleId && ['active', 'queued'].includes(worker.state));
     const worker = this.workerFor(sessionId);
@@ -1415,8 +1533,9 @@ export class LakeSuperagent implements AgentHost {
   private planGoals(sessionId: string) {
     const session = this.store.session(sessionId); this.store.project(session.projectId);
     const channel = this.channelFor(sessionId), project = this.store.get<SuperProject>('superProjects', session.projectId);
+    const groupId=this.conversations.group(session.projectId,sessionId)?.sessionId;
     return this.store.list<Goal>('superGoals').filter(goal => goal.projectId === session.projectId && goal.mode === 'plan' && !!goal.planHash &&
-      (goal.sessionId === sessionId || channel && goal.roleId === channel.roleId || project?.routerSessionId === sessionId));
+      (goal.sessionId === sessionId || channel && goal.roleId === channel.roleId || (groupId||project?.routerSessionId===sessionId)&&this.groupOfSource(goal.sourceEventId)===groupId));
   }
   private planView(goal: Goal) {
     return {id: 'plan_' + digest([goal.id, goal.planRevision, goal.planHash]), at: goal.updatedAt,
@@ -1437,12 +1556,15 @@ export class LakeSuperagent implements AgentHost {
   }
   private async pump() {
     if (this.closed) return;
-    for (const project of this.store.list<SuperProject>("superProjects")) if (!this.stoppingProjects.has(project.projectId)&&!this.routing.has(project.projectId) && !this.agents.isRunning(project.routerSessionId)) {
-      const pending = this.store.list<InputEvent>("superInputs").filter((event) => event.projectId === project.projectId && event.disposition === "pending");
+    for (const root of this.store.list<SuperProject>("superProjects")) if (!this.stoppingProjects.has(root.projectId)&&!this.routing.has(root.projectId) && !this.agents.isRunning(root.routerSessionId)) {
+      const pending = this.store.list<InputEvent>("superInputs").filter((event) => event.projectId === root.projectId && event.disposition === "pending" && !this.stoppingGroups.has(event.sessionId));
       // Admit inputs immediately, then route each source in order. A later
       // message cannot replace an active batch or share its reply identity.
       const events = pending.slice(0,1);
       if (events.length) {
+        const group=this.conversations.group(root.projectId,events[0].sessionId);
+        const project=group?{...root,routerSessionId:group.sessionId}:root;
+        if(this.agents.isRunning(project.routerSessionId))continue;
         this.routing.add(project.projectId);
         const external=events[0].external?.connectionId ? events[0] : undefined;
         const threadEvents=external ? this.store.list<InputEvent>('superInputs').filter(event=>this.sameGatewayThread(external,event)) : [];
@@ -1482,12 +1604,12 @@ export class LakeSuperagent implements AgentHost {
           WHERE kind='superOperations' AND json_extract(value,'$.status') IN ('unknown','dispatched') GROUP BY goalId`).all())
           unresolvedByGoal.set(String(row.goalId), Number(row.total));
         const context = buildRouterContext({ projectId: project.projectId, now: now(),
-          specialists: this.store.list<Role>("superRoles").filter(role => role.projectId === project.projectId && !role.deletedAt)
+          specialists: this.store.list<Role>("superRoles").filter(role => role.projectId === project.projectId && !role.deletedAt && (!group||group.roleIds.includes(role.id)))
             .map(role => ({id: role.id, projectId: role.projectId, name: this.agents.redact(role.name), revision: role.revision, duties: this.agents.redact(role.duties ?? "")})),
           events: events.map((event) => {const parent=event.replyTo&&event.external?.connectionId ? this.gatewayEvent(event.external.connectionId,event.replyTo) : undefined;
             return { ...event, hash: digest(this.eventObject(event)), ...(parent&&{replyContext:{messageId:parent.messageId,eventId:parent.id,text:parent.payload,
               pilotReply:this.store.get<GatewayReply>('superGatewayReplies',parent.id)?.text}}) };}), messages,
-          tasks: this.workers(project.projectId).filter(worker=>!external||threadWorkerIds.has(worker.id)).map((worker) => {
+          tasks: this.workers(project.projectId).filter(worker=>worker.pilotSessionId===group?.sessionId&&(!external||threadWorkerIds.has(worker.id))).map((worker) => {
             const goal = this.store.get<Goal>("superGoals", worker.task.executionGoalId ?? worker.task.taskId) ?? this.store.require<any>("legacyGoals", worker.task.taskId);
             return { ...worker.task, jointState: worker.task.collaboration?.state, jointAcceptanceState: worker.task.collaboration?.acceptanceState, projectId: project.projectId, sessionId: worker.sessionId, revision: goal.revision,
               roleId: worker.roleId!, hash: digest(goal), updatedAt: goal.updatedAt ?? worker.createdAt ?? "", createdAt: worker.createdAt,
@@ -1586,7 +1708,9 @@ export class LakeSuperagent implements AgentHost {
     if (this.store.get<Goal>("superGoals",worker.taskId)?.readOnlyRecoveryOf) return {items:[],nextCursor:"",historicalContextOnly:true as const,meaning:"Independent read-only recheck: previous task context is not reused."};
     const external=this.store.get<InputEvent>('superInputs',worker.sourceEventId);
     if(external?.external?.connectionId&&input.task_id)this.requireGatewayTask(external,input.task_id);
-    const result=new TaskContext(this.store,value=>this.agents.redact(value)).recall(this.contextActor(worker),input);
+    const groupId=this.groupOfEvent(external);
+    const result=new TaskContext(this.store,value=>this.agents.redact(value),
+      candidate=>this.groupOfSource(candidate.sourceEventId)===groupId).recall(this.contextActor(worker),input);
     if(external?.external?.connectionId){const ids=new Set(this.gatewayThreadWorkers(external).map(worker=>worker.taskId));result.items=result.items.filter(item=>ids.has(item.taskRef.id));}
     const ignored=worker.invocationInputIds?.some(id=>this.store.get<InputEvent>('superInputs',id)?.ignoreMemory)??false;
     if(this.agents.memory)result.items=this.agents.memory.projectTaskContext(result.items,{kind:worker.inline?'pilot':'worker',projectId:worker.projectId,roleId:worker.inline?undefined:worker.roleId,sessionId:worker.sessionId},track,ignored);
@@ -1594,7 +1718,9 @@ export class LakeSuperagent implements AgentHost {
   }
   private validateWorker(workerId: string, generation: number) {
     const worker = this.store.require<Worker>("superWorkers", workerId);
-    if(worker.inline){const project=this.store.require<SuperProject>('superProjects',worker.projectId);if(worker.roleId!=='pilot:'+worker.projectId||worker.sessionId!==project.routerSessionId)throw new HttpError(403,'Pilot 执行身份无效');}
+    const groupId=this.groupOfSource(worker.sourceEventId);
+    if(groupId&&this.stoppingGroups.has(groupId))throw new HttpError(409,'群组正在停止任务');
+    if(worker.inline){const project=this.projectFor(worker.sessionId);if(worker.roleId!=='pilot:'+worker.projectId||project?.projectId!==worker.projectId)throw new HttpError(403,'Pilot 执行身份无效');}
     else {
       this.role(worker.projectId,worker.roleId);
       this.requireSpecialistExecution(worker.roleSnapshot.execution,409);
@@ -1620,7 +1746,7 @@ export class LakeSuperagent implements AgentHost {
     this.pilotActors.set(project.routerSessionId,worker);return worker;
   }
   private ensurePilotTask(worker:Worker){
-    const batch=this.batches.get(worker.sessionId);if(!batch||this.stoppingProjects.has(worker.projectId)||!this.agents.isRunning(worker.sessionId))throw new HttpError(409,'Pilot 当前请求已结束，不能派发工具');
+    const batch=this.batches.get(worker.sessionId);if(!batch||this.stoppingProjects.has(worker.projectId)||this.stoppingGroups.has(worker.sessionId)||!this.agents.isRunning(worker.sessionId))throw new HttpError(409,'Pilot 当前请求已结束，不能派发工具');
     if(this.store.get<Worker>('superWorkers',worker.id)?.generation===worker.generation)return;
     const source=this.store.require<InputEvent>('superInputs',batch.eventIds[0]),session=this.store.session(worker.sessionId);
     if(batch.eventIds.some(id=>!!this.store.require<InputEvent>('superInputs',id).preferredRoleId))throw new HttpError(403,'专员频道的要求须在对应独立任务中执行');
@@ -1638,7 +1764,7 @@ export class LakeSuperagent implements AgentHost {
   }
   inheritedExecutionPreferences(sessionId: string) {
     const session = this.store.session(sessionId);
-    if (!['worker', 'role'].includes(session.workspaceRole ?? '')) return;
+    if (!['worker', 'role', 'group'].includes(session.workspaceRole ?? '')) return;
     const project = this.store.require<SuperProject>('superProjects', session.projectId);
     return effectiveExecutionPreferences(this.store.session(project.routerSessionId).options);
   }
@@ -1647,11 +1773,14 @@ export class LakeSuperagent implements AgentHost {
     const project=this.projectFor(sessionId);
     if(project){
       const worker=this.pilotTemplate(project);
-      if(!worker)return {version:'pilot:idle:'+project.projectId,systemPrompt:superRouterPrompt,tools:this.routerEntries(sessionId),allowlist:routerTools};
+      const entries=this.routerEntries(sessionId),names=entries.map(entry=>entry.metadata.name);
+      const group=this.conversations.group(project.projectId,sessionId);
+      const systemPrompt=group?superRouterPrompt+'\nThis Pilot conversation has a fixed group roster. Use only existing members listed for this conversation. An explicit request for everyone refers to this group. If the roster cannot cover the work, explain it or use Pilot’s ordinary direct-work path if the user explicitly requests it. Creating groups or creating or changing specialists requires the Lake main conversation. Direct those requests there; do not attempt them with a different tool.':superRouterPrompt;
+      if(!worker)return {version:'pilot:idle:'+sessionId,systemPrompt,tools:entries,allowlist:names};
       const common=this.taskProfile(worker);
-      return {...common,get taskId(){return worker.taskId;},get workerId(){return worker.id;},version:'pilot:agent:'+worker.id+':'+worker.generation,systemPrompt:superRouterPrompt,
-        memoryActor:{kind:'pilot',projectId:project.projectId},tools:[...this.routerEntries(sessionId),...common.tools],allowlist:[...routerTools,...common.allowlist],
-        projectRequest:request=>this.projectRouterRequest(project.projectId,request),
+      return {...common,get taskId(){return worker.taskId;},get workerId(){return worker.id;},version:'pilot:agent:'+worker.id+':'+worker.generation,systemPrompt,
+        memoryActor:{kind:'pilot',projectId:project.projectId},tools:[...entries,...common.tools],allowlist:[...names,...common.allowlist],
+        projectRequest:request=>this.projectRouterRequest(project.projectId,request,sessionId),
         beforeModel:()=>{
           // Selecting an earlier task supplies context before an actual
           // followup or tool invocation registers this generation.
@@ -2115,21 +2244,24 @@ export class LakeSuperagent implements AgentHost {
       handler: async (input, context) => handler(input, context) };
   }
   private routerEntries(sessionId: string) {
-    const projectId = this.store.session(sessionId).projectId;
-    return [
+    const session=this.store.session(sessionId),projectId=session.projectId;
+    const group=this.conversations.group(projectId,sessionId);
+    const mainLake=session.workspaceRole==='router'&&this.store.get<SuperProject>('superProjects',projectId)?.routerSessionId===sessionId;
+    const entries = [
       this.entry('convene_specialists','Invite persistent specialists to personally reply in the current shared conversation. Use for roll call, introductions, asking everyone or selected specialists to speak, and text-only group discussion. audience=all freezes every current specialist, including beyond the bounded catalog; otherwise pass exact role_ids. Copy the exact human event_id and quote; use one stable part_key. Each recipient runs independently; the host tracks actual replies and missing/failed/timed-out states. In Pilot, a multi-speaker round ends with a brief conclusion from the actual replies. Leave summarize unset for this default, set it false only when the human asks to skip the conclusion, and true when explicitly asked to synthesize. The conclusion avoids repeating the roster and duties. Confirm the invitation once, then stop this turn; never answer on behalf of recipients or claim attendance from the catalog. No business task or resource execution is created. Use route_work separately for resource work.',
         objectSchema({event_id:str,part_key:str,quote:str,instruction:str,audience:{type:'string',enum:['all']},role_ids:array(str),timeout_seconds:integer,summarize:{type:'boolean'}},['event_id','part_key','quote','instruction']),async(a,context)=>{
           const event=this.admitted(sessionId,a.event_id,text(a.quote,'quote',16384));
-          const project=this.store.require<SuperProject>('superProjects',projectId);
-          if(sessionId!==project.routerSessionId||event.sessionId!==sessionId||event.preferredRoleId||event.explicitTaskId)throw new HttpError(409,'多人召集须来自当前 Pilot 的独立人工要求');
+          if(this.projectFor(sessionId)?.projectId!==projectId||event.sessionId!==sessionId||event.preferredRoleId||event.explicitTaskId)throw new HttpError(409,'多人召集须来自当前 Pilot 的独立人工要求');
           if((a.audience==='all')===(a.role_ids!==undefined))throw new HttpError(400,'请选择全部专员或准确 role_ids');
           const ids=a.role_ids===undefined?undefined:strings(a.role_ids,64);
           if(ids&&!ids.length)throw new HttpError(400,'role_ids 不能为空');
+          if(group&&ids?.some(id=>!group.roleIds.includes(id)))throw new HttpError(403,'群组只可召集固定成员');
           await this.refreshSpecialistConnection(projectId);
           context.abortSignal.throwIfAborted();
           this.admitted(sessionId,a.event_id,a.quote);
-          if(this.stoppingProjects.has(projectId))throw new HttpError(409,'当前项目正在停止');
-          const roles=ids?ids.map(id=>this.role(projectId,id)):this.store.list<Role>('superRoles').filter(role=>role.projectId===projectId&&!role.deletedAt).sort((a,b)=>a.id.localeCompare(b.id));
+          if(this.stoppingProjects.has(projectId)||this.stoppingGroups.has(sessionId))throw new HttpError(409,'当前会话正在停止');
+          const roles=ids?ids.map(id=>this.role(projectId,id)):this.store.list<Role>('superRoles')
+            .filter(role=>role.projectId===projectId&&!role.deletedAt&&(!group||group.roleIds.includes(role.id))).sort((a,b)=>a.id.localeCompare(b.id));
           return this.conversations.start({eventId:event.id,partKey:text(a.part_key,'part_key',128),projectId,sessionId,sourceMessageId:event.messageId,
             quote:a.quote,instruction:a.instruction,roles,requestHash:digest(a),timeoutSeconds:a.timeout_seconds,
             summaryRequested:a.summarize??(!event.external?.connectionId&&roles.length>1),
@@ -2138,11 +2270,12 @@ export class LakeSuperagent implements AgentHost {
       this.entry('inspect_specialist_conversation','Read the host-tracked recipient and response states of a shared conversation in this project. A reply receipt establishes attendance only, never business task acceptance.',
         objectSchema({conversation_id:str},['conversation_id']),a=>{
           const round=this.conversations.read(projectId,text(a.conversation_id,'conversation_id',128)),scope=this.gatewayScope(sessionId);
+          if(round.sessionId!==sessionId)throw new HttpError(404,'召集不属于当前 Pilot 对话');
           if(scope){const event=this.gatewayEvent(scope.external!.connectionId!,round.sourceMessageId);if(!this.sameGatewayThread(scope,event))throw new HttpError(404,'对话不属于此接入会话');}
           return round;
         }),
       ...(this.configuration?.entries(sessionId,(eventId,quote)=>this.admitted(sessionId,eventId,quote),()=>this.notify(sessionId,"session"))??[]),
-      this.entry("list_specialists", "Find current project specialists by name, stable key, ID or a keyword in their duties. Omit query to list all. Use the same query with nextCursor. Returns exact IDs, revisions, full duties, avatar and future-task execution.", objectSchema({ query: str, cursor: str, limit: integer }), a => this.listRoles(projectId, a.cursor, a.limit, a.query)),
+      this.entry("list_specialists", "Find specialists in the current Pilot roster by name, stable key, ID or a keyword in their duties. Omit query to list all. Use the same query with nextCursor. Returns exact IDs, revisions, full duties, avatar and future-task execution.", objectSchema({ query: str, cursor: str, limit: integer }), a => this.listRoles(projectId, a.cursor, a.limit, a.query,group?.roleIds)),
       this.entry('list_specialist_execution_options','List currently available Codex model bindings for specialists. Copy execution for an exact choice. Metadata never grants resource permissions.',objectSchema({cursor:str,limit:integer}),async(a,context)=>{
         const available=await this.refreshedExecutionOptions(projectId);context.abortSignal.throwIfAborted();
         const limit=a.limit??20;if(!Number.isSafeInteger(limit)||limit<1||limit>50)throw new HttpError(400,'limit must be 1 to 50');
@@ -2185,13 +2318,14 @@ export class LakeSuperagent implements AgentHost {
             throw new HttpError(404,"任务与当前输入不匹配");
           const taskId=a.task_id == null ? event.explicitTaskId : text(a.task_id,"task_id",128);
           const roleId=a.role_id == null ? event.preferredRoleId : text(a.role_id,"role_id",128);
+          if(taskId)this.requireTaskScope(projectId,group?.sessionId,taskId);
           const joint=taskId ? this.ledger.jointTask(taskId) : undefined;
           if(joint && joint.projectId!==projectId) throw new HttpError(404,"当前项目没有此任务");
           const records=joint && !roleId ? joint.memberIds.flatMap((id:string)=>this.watchdog.records(projectId,id))
             : this.watchdog.records(projectId,taskId ? this.routedGoal(projectId,taskId,roleId).id : undefined,50);
           const findings=records.flatMap(record=>{
             const worker=this.store.require<Worker>("superWorkers",record.workerId);
-            if(roleId && worker.roleId!==roleId || worker.projectId!==projectId || record.sessionId!==worker.sessionId ||
+            if(roleId && worker.roleId!==roleId || worker.projectId!==projectId || record.sessionId!==worker.sessionId || this.groupOfSource(worker.sourceEventId)!==group?.sessionId ||
               event.external?.connectionId&&!this.gatewayThreadWorkers(event).some(entry=>entry.id===worker.id)) return [];
             return [{...this.watchdogFinding(record),taskId:record.taskId,roleId:worker.roleId,roleName:worker.roleSnapshot.name}];
           }).sort((a,b)=>b.at.localeCompare(a.at)).slice(0,20);
@@ -2201,7 +2335,7 @@ export class LakeSuperagent implements AgentHost {
         const limit = a.limit ?? 20; if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) throw new HttpError(400, "Invalid task page size");
         if (a.resource_id && this.store.require<{ projectId: string }>("resources", a.resource_id).projectId !== projectId) throw new HttpError(404, "Resource not found in project");
         const scope=this.gatewayScope(sessionId),owned=scope&&new Set(this.gatewayThreadWorkers(scope).map(worker=>worker.id));
-        const rows = this.workers(projectId).filter((worker) => (!owned||owned.has(worker.id)) && (!a.role_id || a.role_id === worker.roleId) && (!a.cursor || worker.id > a.cursor) &&
+        const rows = this.workers(projectId).filter((worker) => worker.pilotSessionId===group?.sessionId && (!owned||owned.has(worker.id)) && (!a.role_id || a.role_id === worker.roleId) && (!a.cursor || worker.id > a.cursor) &&
           (!a.resource_id || (() => { const goal = this.store.get<any>("superGoals", worker.task.executionGoalId ?? worker.task.taskId) ?? this.store.get<any>("legacyGoals", worker.task.taskId);
             return goal?.binding?.assetRef === a.resource_id || goal?.resourceBindings?.some((binding: any) => binding.assetRef === a.resource_id) || goal?.resourceIds?.includes(a.resource_id); })()) &&
           (!a.query || (worker.task.title + (worker.task.summary ?? "")).toLowerCase().includes(String(a.query).toLowerCase())) &&
@@ -2211,9 +2345,20 @@ export class LakeSuperagent implements AgentHost {
       this.entry("read_super_object", "Read exact project event/task/worker/task_digest with revision/hash checked before each page. For a shared task omit role_id to read the aggregate, or copy the ref.role_id to read a participant's own execution.",
         objectSchema({ kind: { type: "string", enum: ["event", "task", "worker", "task_digest"] }, id: str, role_id: str, revision: integer, expected_hash: str, offset: integer, limit: integer }, ["kind", "id"]), (a) => this.readObject(sessionId, a), false, 131072),
     ];
+    if(mainLake){
+      const createGroup=this.entry('create_chat_group','Create a persistent fixed-member group in this project from an explicit user request in the main Lake conversation. Pass the requested title and 2 to 64 distinct existing specialist IDs from the current roster or list_specialists. Use a stable part_key for this group and copy event_id and quote from the admitted user input. This creates a chat without sending a message or dispatching work. Confirm only after the saved group is returned.',
+        objectSchema({event_id:str,part_key:str,quote:str,title:str,role_ids:array(str)},['event_id','part_key','quote','title','role_ids']),
+        (a,context)=>{context.abortSignal.throwIfAborted();return this.createGroupFromChat(sessionId,a);},false,65536);
+      createGroup.metadata={...createGroup.metadata,readOnly:false,allowedInPlanMode:false,sideEffectScope:'workspace'};
+      createGroup.permission={...createGroup.permission,sideEffectScope:'workspace'};
+      createGroup.resolvePermissionCapability=()=>operationApproval(this.store.session(sessionId).options,'silentWriteFiles');
+      entries.push(createGroup);
+    }
+    return group?entries.filter(entry=>!['manage_specialist','list_specialist_avatars','list_specialist_execution_options'].includes(entry.metadata.name)):entries;
   }
   private readObject(sessionId: string, input: Record<string, any>) {
     const projectId = this.store.session(sessionId).projectId;
+    const groupId=this.conversations.group(projectId,sessionId)?.sessionId;
     const scope=this.gatewayScope(sessionId);
     if(scope){
       if(input.kind==='event'){
@@ -2224,10 +2369,15 @@ export class LakeSuperagent implements AgentHost {
       }else this.requireGatewayTask(scope,text(input.id,'id',128));
     }
     let value: any;
-    if (input.kind === "event") value = this.eventObject(this.store.require<InputEvent>("superInputs", input.id));
+    if (input.kind === "event") {
+      const event=this.store.require<InputEvent>('superInputs',input.id);
+      if(this.groupOfEvent(event)!==groupId)throw new HttpError(404,'输入不属于当前 Pilot 对话');
+      value=this.eventObject(event);
+    }
     else if (["task", "task_digest"].includes(input.kind)) {
       const goal = this.store.get<Goal>("superGoals", input.id);
       if (goal && goal.projectId !== projectId) throw new HttpError(404, "Object not found in project");
+      if(this.groupOfSource(goal?.sourceEventId)!==groupId)throw new HttpError(404,'任务不属于当前 Pilot 对话');
       const joint = goal && this.ledger.jointTask(goal.id);
       if (joint && input.role_id == null) {
         value = { ...joint, ...this.ledger.jointState(joint.id), participants: joint.memberIds.map(id => {
@@ -2255,6 +2405,7 @@ export class LakeSuperagent implements AgentHost {
       }
     } else if (input.kind === "worker") {
       const worker = this.store.get<Worker>("superWorkers", input.id);
+      if(this.groupOfSource(worker?.sourceEventId)!==groupId)throw new HttpError(404,'任务不属于当前 Pilot 对话');
       value = worker ? { ...this.workerView(worker), projectId: worker.projectId, revision: Math.max(1, worker.generation), sourceEventId: worker.sourceEventId, roleSnapshot: worker.roleSnapshot }
         : this.store.require<any>("legacyWorkers", input.id);
     }
@@ -2503,7 +2654,7 @@ export class LakeSuperagent implements AgentHost {
    * Corrections need the exact durable handoff, not a successful-looking report. */
   routingView(sessionId:string,view:NonNullable<SessionSnapshot['ai']>) {
     const session=this.store.session(sessionId);
-    if(session.workspaceRole!=="router")return view;
+    if(!this.projectFor(sessionId))return view;
     const cards=view.cards, laterRoles=new Map<string,typeof cards[number]>(), laterSelections=new Map<string,typeof cards[number]>();
     const recovered=new Map<string,{kind:"corrected_missing_specialist"|"corrected_resource_selection";recoveredBy:string}>();
     for(let index=cards.length-1;index>=0;index--){
@@ -2621,6 +2772,7 @@ export class LakeSuperagent implements AgentHost {
     if(Number.isFinite(duration)&&duration>=0)return duration;
   }
   decorate(snapshot: SessionSnapshot,taskId?:string): SessionSnapshot {
+    if(snapshot.session.workspaceRole==='group')snapshot.chatGroupRounds=this.conversations.groupRounds(snapshot.session.id);
     snapshot.hostKeyTrust=this.ssh?.prompt(snapshot.session.id)??null;
     snapshot.messages = [...snapshot.messages, ...this.store.list<Message>("superDispatchMessages").filter((message) => message.sessionId === snapshot.session.id)]
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
@@ -2630,7 +2782,8 @@ export class LakeSuperagent implements AgentHost {
     if (worker) {
       const goal = this.ledger.get(worker.taskId);
       const runs=resolveCodexRunOrigins(this.store.home,this.store.data,worker.projectId,this.workerRuns(worker));
-      snapshot.superagent = { task: this.taskView(goal), goal: this.publicGoal(goal), roleId: worker.roleId,execution:this.workerExecution(worker,runs) };
+      snapshot.superagent = { task: this.taskView(goal), goal: this.publicGoal(goal), roleId: worker.roleId,execution:this.workerExecution(worker,runs),
+        pilotSessionId:this.groupOfSource(worker.sourceEventId) };
       if(!worker.inline && snapshot.session.workspaceRole==="worker"){
         const channel=this.store.get<Channel>("superChannels",worker.roleId);
         if(channel?.projectId===goal.projectId) snapshot.superagent.deliveredReplies=workerDeliveries(this.store,goal,channel.sessionId)
@@ -2658,7 +2811,7 @@ export class LakeSuperagent implements AgentHost {
       const goal = legacy && this.store.get<any>("legacyGoals", legacy.task.taskId);
       if (goal) { snapshot.superagent = { task: legacy!.task, goal, roleId: legacy!.roleId }; if (snapshot.ai) snapshot.ai.workGoals = [goal]; }
     }
-    if(snapshot.session.workspaceRole === "router") {
+    if(this.projectFor(snapshot.session.id)) {
       snapshot.messageRead = conversationReadState(this.store, snapshot.session.id);
       if(snapshot.ai)snapshot.ai=this.routingView(snapshot.session.id,snapshot.ai);
     }
@@ -2676,7 +2829,11 @@ export class LakeSuperagent implements AgentHost {
     const project = this.store.require<SuperProject>("superProjects", worker.projectId);
     // A text delta is already delivered on the subscribed Worker stream. The
     // router transcript changes on a structural event or a delivered report.
-    if(!event?.textUpdate)this.notify(project.routerSessionId, "specialist");
+    if(!event?.textUpdate){
+      this.notify(project.routerSessionId,"specialist");
+      const groupId=this.groupOfSource(worker.sourceEventId);
+      if(groupId&&groupId!==sessionId)this.notify(groupId,'specialist');
+    }
     if(!worker.inline){
       const joint=goal.sharedTaskId && this.ledger.jointTask(goal.sharedTaskId);
       const roles=joint ? joint.memberIds.map(id=>this.ledger.get(id).roleId) : [worker.roleId];
@@ -2712,7 +2869,7 @@ export class LakeSuperagent implements AgentHost {
           text: this.agents.redact(response), createdAt: view.turnFinishedAt ?? now(), action: actions.includes('ask') ? 'ask' : 'respond'});
       }
     } });
-    if (success) this.store.put("superRouterArchives", digest(batch.input), { projectId: project.projectId, eventIds: batch.eventIds, hash: digest(batch.input) });
+    if (success) this.store.put("superRouterArchives", digest(batch.input), { projectId: project.projectId, sessionId, eventIds: batch.eventIds, hash: digest(batch.input) });
     if (success) for (const decision of this.store.list<Decision>("superDecisions").filter((decision) => batch.eventIds.includes(decision.eventId) && decision.action === "stop" && decision.taskId))
       for (const assignment of this.decisionAssignments(decision)) void this.stopTask(assignment.executionId);
     if (success) {
@@ -2735,7 +2892,10 @@ export class LakeSuperagent implements AgentHost {
         presentation: { body: goal.summary, channelBody: goal.summary }, createdAt: now() });
       this.deliverReports(); this.changed(worker.sessionId);
     }
-    this.batches.delete(sessionId); this.routing.delete(project.projectId); this.notify(sessionId, "specialist"); this.schedule();
+    this.batches.delete(sessionId); this.routing.delete(project.projectId); this.notify(sessionId, "specialist");
+    const root=this.store.get<SuperProject>('superProjects',project.projectId);
+    if(root&&root.routerSessionId!==sessionId)this.notify(root.routerSessionId,'specialist');
+    this.schedule();
   }
   private workerFinished(sessionId: string, outcome:TurnOutcome = {}) {
     const worker = this.workerFor(sessionId); if (!worker) return;
@@ -2910,7 +3070,7 @@ export class LakeSuperagent implements AgentHost {
   }
   private dispatchReady(worker: Worker) {
     const source = this.store.require<InputEvent>("superInputs", worker.sourceEventId);
-    if (source.disposition === "stopped" || worker.inputEventIds.some(eventId =>
+    if (source.disposition === "stopped" || this.stoppingGroups.has(source.sessionId) || worker.inputEventIds.some(eventId =>
       this.store.require<InputEvent>("superInputs", eventId).disposition === "pending")) return false;
     const inputs = this.routedInputs(worker);
     const resume = !!this.resumeControl(worker);
@@ -3007,11 +3167,12 @@ export class LakeSuperagent implements AgentHost {
       if(worker.inline){this.store.transaction(()=>{this.recordGatewayTaskReport(worker,pending,goal.summary??'');this.store.put("superReports",key,{key,workerId:worker.id,goalRevision:goal.revision,deliveredAt:now(),inline:true});this.store.delete("superPendingReports",digest([pending.taskId,pending.revision]));});continue;}
     if (!this.store.get("superReports", key)) {
       const project = this.store.require<SuperProject>("superProjects", worker.projectId), channel = this.store.require<Channel>("superChannels", worker.roleId);
+      const pilot=this.groupOfSource(worker.sourceEventId)??project.routerSessionId;
       const presentation = pending.presentation ?? { body: goal.summary ?? "这次检查还没完成。", channelBody: goal.summary ?? "这次检查还没完成。" };
       const activity = worker.roleSnapshot.execution?.kind==='acp' && worker.roleSnapshot.execution.agent==='codex'
         ? codexActivity(this.store.view(worker.sessionId),goal.id,pending.rootTurnId) : [];
       const source = this.reportSourceMessage(worker.projectId, pending.sourceEventId ?? this.reportSourceEventId(worker, pending.inputEventIds));
-      this.store.transaction(() => { for (const target of [project.routerSessionId, channel.sessionId]) {
+      this.store.transaction(() => { for (const target of [pilot, channel.sessionId]) {
         const body = target === channel.sessionId ? presentation.channelBody : presentation.body;
         if (body === null) continue;
         const message: Message = { id: specialistReportMessageId(key, target), sessionId: target, role: "assistant", text: this.agents.redact(body), createdAt: pending.createdAt,
@@ -3025,7 +3186,8 @@ export class LakeSuperagent implements AgentHost {
       this.store.put("superReports", key, { key, workerId: worker.id, goalRevision: goal.revision, deliveredAt: now() });
       this.recordGatewayTaskReport(worker,pending,presentation.body);
       });
-      for (const target of [project.routerSessionId, channel.sessionId,worker.sessionId]) this.notify(target, "message");
+      for (const target of [pilot, channel.sessionId,worker.sessionId]) this.notify(target, "message");
+      if(pilot!==project.routerSessionId)this.notify(project.routerSessionId,'specialist');
     }
     this.store.delete("superPendingReports", digest([pending.taskId, pending.revision]));
     }
@@ -3037,7 +3199,7 @@ export class LakeSuperagent implements AgentHost {
       // Each original report must have cleared its execution callback before
       // the joint receipt starts the Pilot's conclusion.
       if(members.some(member=>this.active.has(member.workerId)))continue;
-      const pilot=this.store.require<SuperProject>("superProjects",joint.projectId).routerSessionId;
+      const pilot=this.groupOfSource(members[0]?.sourceEventId)??this.store.require<SuperProject>("superProjects",joint.projectId).routerSessionId;
       const targets=[pilot,...members.map(member=>this.store.require<Channel>("superChannels",member.roleId).sessionId)];
       const originals=members.map(member=>this.store.get<Message>('messages',specialistReportMessageId(digest([member.id,member.revision]),pilot)));
       const sourceMessageId=originals[0]?.replyToMessageId;
@@ -3067,15 +3229,14 @@ export class LakeSuperagent implements AgentHost {
     }
   }
 
-  private projectRouterRequest<T>(projectId: string, request: T): T {
+  private projectRouterRequest<T>(projectId: string, request: T, sessionId=this.store.require<SuperProject>("superProjects",projectId).routerSessionId): T {
     // Current input already contains bounded channel dialogue and report facts.
     // Remove only acknowledged complete SDK groups, retaining original archives.
-    const project = this.store.require<SuperProject>("superProjects", projectId);
-    if(this.gatewayScope(project.routerSessionId)){
+    if(this.gatewayScope(sessionId)){
       // All relevant thread history is already in the bounded host working
       // set. Retain this invocation's tool rounds, not another caller's SDK
       // transcript (including previous failed/unacknowledged turns).
-      const value=request as any, input=this.batches.get(project.routerSessionId)?.input;
+      const value=request as any, input=this.batches.get(sessionId)?.input;
       if(Array.isArray(value?.messages)&&input){
         const content=(message:any)=>typeof message.content==='string'?message.content:Array.isArray(message.content)?message.content.filter((part:any)=>part.type==='text').map((part:any)=>part.text).join(''):'';
         const at=value.messages.findLastIndex((message:any)=>message.role==='user'&&content(message)===input);
@@ -3083,9 +3244,11 @@ export class LakeSuperagent implements AgentHost {
       }
       throw new HttpError(409,'接入会话的当前输入缺失，已停止发送模型请求');
     }
-    const markers = this.store.list<any>("superRouterArchives").filter((entry) => entry.projectId === projectId);
-    const routed = new Set(this.store.list<InputEvent>("superInputs").filter((event) => event.projectId === projectId && event.disposition === "routed").map((event) => event.id));
-    return projectRouterHistory(request, markers, routed, this.batches.get(project.routerSessionId)?.input);
+    const groupId=this.conversations.group(projectId,sessionId)?.sessionId;
+    const markers = this.store.list<any>("superRouterArchives").filter(entry=>entry.projectId===projectId&&
+      (entry.sessionId?entry.sessionId===sessionId:!groupId));
+    const routed = new Set(this.store.list<InputEvent>("superInputs").filter(event=>event.projectId===projectId&&event.disposition==='routed'&&this.groupOfEvent(event)===groupId).map(event=>event.id));
+    return projectRouterHistory(request, markers, routed, this.batches.get(sessionId)?.input);
   }
   async stopTask(taskId: string, pause = false) {
     const pending = this.taskStops.get(taskId); if (pending) return pending;
@@ -3160,24 +3323,32 @@ export class LakeSuperagent implements AgentHost {
     this.notify(sessionId, "specialist"); return { stopped: true };
   }
   async stopWorkspace(projectId:string,routerSessionId:string) {
-    const project=this.store.require<SuperProject>("superProjects",projectId);
-    if(project.routerSessionId!==routerSessionId||this.store.session(routerSessionId).projectId!==projectId)throw new HttpError(404,"Pilot 不属于当前项目");
-    if(this.stoppingProjects.has(projectId))return {stopped:true,tasks:0};
-    this.stoppingProjects.add(projectId);
+    this.store.project(projectId);
+    if(this.projectFor(routerSessionId)?.projectId!==projectId)throw new HttpError(404,'Pilot 不属于当前项目');
+    const groupId=this.conversations.group(projectId,routerSessionId)?.sessionId;
+    const stopping=groupId?this.stoppingGroups:this.stoppingProjects,key=groupId??projectId;
+    if(this.stoppingProjects.has(projectId)||stopping.has(key))return {stopped:true,tasks:0};
+    stopping.add(key);
+    let clearedRouting=false;
     try {
-      await this.conversations.stop(projectId);
-      this.clearWatchdogRetries(projectId);
-      this.batches.delete(routerSessionId);
-      for(const event of this.store.list<InputEvent>("superInputs"))if(event.projectId===projectId&&["pending","blocked"].includes(event.disposition)){
+      await this.conversations.stop(projectId,undefined,groupId);
+      if(!groupId)this.clearWatchdogRetries(projectId);
+      const routers=groupId?[groupId]:[routerSessionId,...this.conversations.groups(projectId).map(group=>group.sessionId)];
+      clearedRouting=!groupId||routers.some(id=>this.batches.has(id));
+      for(const id of routers)this.batches.delete(id);
+      for(const event of this.store.list<InputEvent>("superInputs"))if(event.projectId===projectId&&(!groupId||event.sessionId===groupId)&&["pending","blocked"].includes(event.disposition)){
         event.disposition="stopped";this.store.put("superInputs",event.id,event);
       }
-      const workers=this.store.list<Worker>("superWorkers").filter(worker=>worker.projectId===projectId&&
+      const workers=this.store.list<Worker>("superWorkers").filter(worker=>worker.projectId===projectId&&(!groupId||this.groupOfSource(worker.sourceEventId)===groupId)&&
         (this.active.has(worker.id)||worker.state==="active"||worker.state==="queued"||this.pendingInteraction(worker.sessionId)));
-      await Promise.all([this.agents.abort(routerSessionId),...workers.map(worker=>this.stopTask(worker.taskId))]);
-      this.routing.delete(projectId);this.notify(routerSessionId,"specialist");
+      await Promise.all([...routers.map(id=>this.agents.abort(id)),...workers.map(worker=>this.stopTask(worker.taskId))]);
+      for(const id of routers)this.notify(id,'specialist');
       for(const channel of this.store.list<Channel>("superChannels"))if(channel.projectId===projectId)this.notify(channel.sessionId,"specialist");
       return {stopped:true,tasks:workers.length};
-    } finally {this.stoppingProjects.delete(projectId);}
+    } finally {
+      if(clearedRouting)this.routing.delete(projectId);
+      stopping.delete(key);this.schedule();
+    }
   }
   async deleteRole(projectId: string, roleId: string, revision: number) {
     this.store.project(projectId);
@@ -3208,7 +3379,8 @@ export class LakeSuperagent implements AgentHost {
     for(const report of this.store.list<{key:string;workerId:string}>('superReports')){
       const worker=workers.find(worker=>worker.id===report.workerId);
       if(!worker||!report.key)continue;
-      const sibling=this.store.get<Message>('messages','report_'+digest([report.key,project.routerSessionId]));
+      const destination=worker.pilotSessionId??project.routerSessionId;
+      const sibling=this.store.get<Message>('messages',specialistReportMessageId(report.key,destination));
       if(sibling?.author?.workerId===worker.id&&sibling.author.taskId===worker.task.taskId)
         reportBodies.set('report_'+digest([report.key,sessionId]),stoppedReportProjection(this.store,sibling,id=>this.ledger.unresolved(id)));
     }

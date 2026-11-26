@@ -32,6 +32,17 @@ div.ai-markdown.assistant-prose:has(> .reply-info-facts) > :is(h1,h2,h3,h4) { fo
 .sre-report-facts > li > .sre-prose > .assistant-prose { display: inline; }
 .sre-report-facts > li > .sre-prose > .assistant-prose > p:last-child { display: inline; margin: 0; }
 .sre-report-section h4 { font-weight:var(--font-weight-semibold); }
+@media (prefers-reduced-motion:no-preference) {
+  :is(.ai-markdown.assistant-prose :is(p,li,h1,h2,h3,h4,h5,h6),.specialist-interim-prose)[data-reply-waiting-sweep] {
+    --reply-waiting-highlight: color-mix(in srgb, currentColor 38%, var(--info));
+    background-color: currentColor;
+    background-image: var(--reply-waiting-sweep);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  [data-reply-waiting-sweep] :is(a,button,code,.object-reference) { -webkit-text-fill-color: currentColor; }
+}
 /* Only an opted-in live reply moves, with a bounded tail. Keep received prose
    gently moving while work continues, including the gaps between tool updates. */
 .live-text-motion-character { position:relative; top:0; animation:4200ms ease-in-out var(--live-text-phase,0ms) infinite; animation-play-state:paused; }

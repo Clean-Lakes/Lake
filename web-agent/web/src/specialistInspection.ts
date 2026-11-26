@@ -33,7 +33,7 @@ export function snapshotInspectionTarget(snapshot:SessionSnapshot):SpecialistIns
 export function matchesSpecialistInspection(snapshot:SessionSnapshot,target:SpecialistInspectionTarget){
  const task=snapshot.superagent?.task;
  return snapshot.session.id===target.sessionId&&snapshot.session.projectId===target.projectId&&
-  (snapshot.session.workspaceRole==='worker'||snapshot.session.workspaceRole==='router'&&target.roleId===`pilot:${target.projectId}`)&&
+  (snapshot.session.workspaceRole==='worker'||(snapshot.session.workspaceRole==='router'||snapshot.session.workspaceRole==='group')&&target.roleId===`pilot:${target.projectId}`)&&
   snapshot.superagent?.roleId===target.roleId&&task?.taskId===target.taskId&&task.sessionId===target.sessionId&&
   (!task.projectId||task.projectId===target.projectId);
 }
