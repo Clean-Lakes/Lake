@@ -1468,6 +1468,8 @@ function AppContent() {
   const allMentionOptions=mentionOptions(mentionable,mentionExtensions.skills,mentionExtensions.servers,!isChatGroup&&!!activeSnapshot?.sre?.enabled,mentionSpecialists);
   const mentionMatches=mention?filterMentions(allMentionOptions,mention.query,mentionCategory):[];
   const mentionIndex=Math.min(mention?.index??0,Math.max(0,mentionMatches.length-1));
+  const closeComposerMention=useCallback(()=>setMention(null),[]);
+  const focusMessageInput=useCallback(()=>messageInputRef.current?.focus({preventScroll:true}),[]);
   function syncMention(value: string, caret: number) {
     const query=composerMentionQuery(value,caret);
     if(query&&query.start!==mention?.start)setMentionCategory("all");
@@ -1486,7 +1488,7 @@ function AppContent() {
     const {next,position,references}=selectComposerMention(messageDraft,input.selectionStart,mentionRefs,option,mention);
     setMentionRefs(references);
     setMessageDraft(next);
-    requestAnimationFrame(()=>{input?.focus();input?.setSelectionRange(position,position);});
+    requestAnimationFrame(()=>{input.focus({preventScroll:true});input.setSelectionRange(position,position);});
   }
   function addResourceToConversation(resource: Resource) {
     if (isSpecialistTasks || !sessionConnected || pendingOperation || bulkMode || !sessionId || selectedSession?.projectId !== resource.projectId || !mentionable.some(item=>item.id===resource.id)) return;
@@ -2209,7 +2211,17 @@ function AppContent() {
         </section></div>
         {isLegacyHistory?<div className="pilot-history-notice"><span>历史记录只读，原操作与证据保留。</span><button type="button" className="button secondary" onClick={()=>void openProjectPilot(selectedSession.projectId)}>前往 Pilot 继续沟通<Glyph name="arrow" size={14}/></button></div>:!canCompose?null:<div className="composer-dock">{!isSpecialistTasks&&<ConversationLatest key={`${sessionId}:${conversationMode}`} container={conversationRef} onJump={jumpToLatest}/>}{activeSnapshot?.ai && <div className="composer-session-controls">{selectedSuperPilot&&<PilotSpecialistQuestions questions={pilotConversation?.questions} connected={pilotWorkspaceConnected} onAnswered={pilotWorkspace.refresh}/>}<AIControls snapshot={activeSnapshot} refresh={refreshCurrent} optionsOpen={agentOptionsOpen} onCloseOptions={() => setAgentOptionsOpen(false)} permissionsOpen={permissionsOpen&&activeSnapshot.session.workspaceRole!=="role"&&activeSnapshot.session.workspaceRole!=="worker"} permissionAnchor={permissionButtonRef} onClosePermissions={() => setPermissionsOpen(false)}/></div>}<PendingMessages key={sessionId} supplementRootTurnId={conversationMode==='conversation'?activeSnapshot?.ai?.rootTurnId:undefined} sessionId={sessionId} queue={activeSnapshot?.messageQueue ?? {paused:false,revision:0,lastError:"",items:[]}} disabled={!sessionConnected} active={turnActive} sendShortcut={sendShortcut} resourceIds={mentionedResourceIds} onUpdated={messageQueue => setSnapshot(current => current?.session.id===sessionId && messageQueue.revision>=(current.messageQueue?.revision ?? 0) ? {...current,messageQueue} : current)}/>{activeSnapshot?.conversationMode==='plan'&&<p className="plan-mode-hint" role="status">Plan 模式 · 只读调查与制定方案，确认计划后再执行。{activeSnapshot.sre?.enabled?'SRE 协作将在退出 Plan 模式后恢复。':''}</p>}<form className="composer" onSubmit={sendMessage}><label htmlFor="message-input" className="visually-hidden">{"给 Lake 的消息"}</label><ComposerSurface sessionId={sessionId} dragging={attachmentDragOver} pinnedOpen={composerPinnedOpen} modelBrand={composerPreviewBrand}>
           {pilotTaskReference&&!pilotTaskReference.sent&&<div className="composer-task-context" aria-live="polite"><PilotTaskReferenceChip task={pilotTaskReference} members={pilotTaskMembers} onClear={()=>selectPilotTask()}/></div>}
-          {mention && <ComposerMentions options={mentionMatches} allOptions={allMentionOptions} index={mentionIndex} category={mentionCategory} onActive={index=>setMention(current=>current&&current.index!==index?{...current,index}:current)} onCategory={kind=>{setMentionCategory(kind);setMention({...mention,index:0});}} onSelect={insertMention} loading={mentionExtensions.loading} error={mentionExtensions.error} onReload={mentionExtensions.reload} onClose={()=>setMention(null)} onImport={()=>{const target=projectList.find(item=>item.id===selectedSession?.projectId);setMention(null);if(target){setImportHexhub(true);setImportProject(target);}}}/>}
+          {mention && <ComposerMentions options={mentionMatches} allOptions={allMentionOptions}
+            index={mentionIndex} query={mention.query} category={mentionCategory}
+            onActive={index=>setMention(current=>current&&current.index!==index?{...current,index}:current)}
+            onCategory={kind=>{setMentionCategory(kind);setMention({...mention,index:0});}}
+            onSelect={insertMention} loading={mentionExtensions.loading} error={mentionExtensions.error}
+            onReload={mentionExtensions.reload} onClose={closeComposerMention} onFocusInput={focusMessageInput}
+            onImport={()=>{
+              const target=projectList.find(item=>item.id===selectedSession?.projectId);
+              setMention(null);
+              if(target){setImportHexhub(true);setImportProject(target);}
+            }}/>}
           <ComposerAttachments key={sessionId} sessionId={sessionId} images={imageDraft} files={fileDraft} uploads={attachmentUploads??[]} disabled={!!pendingOperation}
             onRemoveFile={id=>{
               setFileDraft(files=>files.filter(file=>file.sourceId!==id));

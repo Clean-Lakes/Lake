@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type {MCPServerConfig,Resource,SkillConfig} from "../../shared/contracts";
 import {rebaseMentions,referencedExtensions,referencedResources,rebaseExtensionReferences} from "../../shared/references";
-import {composerMentionQuery,composerClipboardFragment,composerToken,replaceComposerRange,composerMessage,composerResourceIds,selectComposerMention,appendResourceMention,filterMentions,mentionCategoryCount,mentionInsertion,mentionOptions,nextMentionCategory,mentionTypeLabel,type MentionOption} from "../src/composerMentionState";
+import {composerMentionQuery,composerClipboardFragment,composerToken,replaceComposerRange,composerMessage,composerResourceIds,selectComposerMention,appendResourceMention,filterMentions,mentionInsertion,mentionOptions,nextMentionCategory,mentionTypeLabel,type MentionOption} from "../src/composerMentionState";
 
 test("left and right cycle visible categories including empty categories",()=>{
  assert.equal(nextMentionCategory("all",[],{key:"ArrowRight"}),"resource");
@@ -80,7 +80,7 @@ test("JumpServer separates managed assets in the menu and inserts an ordinary re
  assert.deepEqual(filterMentions(options,"","jumpserver").map(option=>option.id),["managed","browse"]);
  assert.deepEqual(filterMentions(options,"SSH","all").map(option=>option.id),["direct","managed"]);
  assert.deepEqual(filterMentions(options,"堡垒机","all").map(option=>option.id),["managed","browse"]);
- assert.equal(mentionCategoryCount(options,"all"),3);
+ assert.equal(filterMentions(options,"","all").length,3);
  const managed=filterMentions(options,"同名","jumpserver")[0]!;
  assert.equal(mentionTypeLabel(managed),"JumpServer");
  const picked=selectComposerMention("@同名",3,[],managed);
@@ -210,7 +210,7 @@ test('created specialists appear before resources and retain exact RoleID across
 test('specialists display only in their category while default tool references retain matching counts',()=>{
  const options:MentionOption[]=[{id:'r',kind:'resource',name:'资源',detail:''},{id:'role-a',kind:'role',name:'资源专员',detail:'维护资源'},{id:'s',kind:'skill',name:'流程',detail:''},{id:'m',kind:'mcp',name:'工具',detail:''}];
  assert.deepEqual(filterMentions(options,'','all').map(o=>o.id),['r','s','m']);
- assert.equal(mentionCategoryCount(options,'all'),3);assert.equal(mentionCategoryCount(options,'role'),1);
+ assert.equal(filterMentions(options,'','all').length,3);
  assert.deepEqual(filterMentions(options,'','role').map(o=>o.id),['role-a']);
  assert.deepEqual(filterMentions(options,'专员','all'),[]);
  assert.equal(filterMentions(options,'维护','role')[0]!.id,'role-a');
