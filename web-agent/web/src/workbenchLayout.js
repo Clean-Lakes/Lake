@@ -27,7 +27,7 @@
       translate:min(0px,calc(var(--sidebar-resize-chat-room) - var(--sidebar-resize-reading-width)));
       max-width:min(85%,calc(var(--sidebar-resize-chat-room) * .85));
     }
-    .app-shell[data-sidebar-resize-layer] > :is(.workbench-conversation-surface,.workspace,.lake-workbench-islands,.workbench-navigation,.workbench-splitter-sidebar) { will-change:transform; }
+    .app-shell[data-sidebar-resize-layer] > :is(.workbench-conversation-surface,.workspace,.lake-workbench-islands,.workbench-navigation,.workbench-sidebar-toggle,.workbench-splitter-sidebar) { will-change:transform; }
     .app-shell[data-sidebar-resize-layer] > .sidebar .sidebar-navigation-content { inline-size:100%; }
     .app-shell[data-sidebar-resize-layer] > .workspace,
     .app-shell[data-sidebar-resize-layer] > .workspace :is(.session-layout,.session-layout > .session-view) { overflow:visible; }
@@ -62,6 +62,7 @@
   let shell, active, frame = 0, lastChrome = '';
   let previousSidebar, sidebarSlide, sidebarOrigin;
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+  const navigationButtons = '.workbench-sidebar-toggle, .workbench-navigation button';
   let observedContextPanel;
   const contextResize = new ResizeObserver(() => schedule());
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -113,7 +114,7 @@
     const divider = island?.querySelector('.island-navigation-divider');
     sidebarOrigin = {
       shell,
-      buttons: [...shell.querySelectorAll('.workbench-navigation button')].map(button => [button, button.getBoundingClientRect()]),
+      buttons: [...shell.querySelectorAll(navigationButtons)].map(button => [button, button.getBoundingClientRect()]),
       headerInset: header ? header.getBoundingClientRect().left - island.getBoundingClientRect().left : undefined,
       padding: island ? getComputedStyle(island).paddingInlineStart : undefined,
       dividerOpacity: divider ? getComputedStyle(divider).opacity : undefined,
@@ -134,11 +135,13 @@
     const reading = workspace.querySelector('.composer-input') ?? workspace.querySelector('.timeline-list');
     const inset = parseFloat(css.getPropertyValue('--conversation-header-inset')) || 16;
     const navStart = parseFloat(css.getPropertyValue('--workbench-navigation-start')) || 0;
+    const toggle = collapsed ? shell.querySelector('.workbench-sidebar-toggle') : null;
+    const toggleGap = parseFloat(css.getPropertyValue('--workbench-sidebar-toggle-gap')) || 0;
     // The reading column is laid out at the rail width for either direction.
     // Give the island the same final horizontal offset as the composer.
     const readingShift = (width - railWidth) / 2;
     const readingTarget = reading ? reading.getBoundingClientRect().left - shell.getBoundingClientRect().left + readingShift : width + inset;
-    const islandTarget = collapsed ? Math.max(navStart, readingTarget) : readingTarget;
+    const islandTarget = collapsed ? Math.max(toggle ? toggle.offsetLeft + toggle.offsetWidth + toggleGap : navStart, readingTarget) : readingTarget;
     shell.style.setProperty('--workbench-island-navigation-left', `${islandTarget}px`);
 
     const buttons = (origin?.buttons ?? []).map(([button, before]) => ({ button, before, after: button.getBoundingClientRect() }));
@@ -335,7 +338,7 @@
     const initialStart = start(viewport);
     const navigation = owner.querySelector('.workbench-navigation');
     const navigationInIsland = !!navigation && (owner.classList.contains('has-workbench-conversation') || owner.classList.contains('has-docked-conversation'));
-    const panes = [surface, workspace, drag.handle, navigationInIsland ? null : navigation].filter(Boolean);
+    const panes = [surface, workspace, drag.handle, owner.querySelector('.workbench-sidebar-toggle'), navigationInIsland ? null : navigation].filter(Boolean);
     const header = [owner.querySelector('.lake-workbench-islands'), navigationInIsland ? navigation : null].filter(Boolean);
     const reading = workspace.querySelectorAll('.timeline-list,.conversation-header-backdrop');
     const restore = [
@@ -507,7 +510,7 @@
     if (sidebar) { const r = sidebar.getBoundingClientRect(); regions.push([r.x, 0, r.width, height]); }
     const sidebarControls = [...shell.querySelectorAll('.sidebar-brand-row :is(button, a, input, select, textarea, [role="button"], [role="combobox"])')]
       .filter(element => element.getBoundingClientRect().width > 0 && !element.closest('[aria-hidden="true"]') && getComputedStyle(element).visibility !== 'hidden');
-    const excluded = [...shell.querySelectorAll('.workbench-splitter, .workbench-navigation button'), ...sidebarControls, ...headers.flatMap(header => [...header.querySelectorAll('button, a, input, select, textarea, [role="button"]')])].map(rect);
+    const excluded = [...shell.querySelectorAll(`.workbench-splitter, ${navigationButtons}`), ...sidebarControls, ...headers.flatMap(header => [...header.querySelectorAll('button, a, input, select, textarea, [role="button"]')])].map(rect);
     if (sidebarSlide?.shell === shell) excluded.push(...sidebarSlide.buttonPaths);
     for (const element of document.querySelectorAll('.conversation-directory-trigger, .modal-scrim, dialog[open], [role="dialog"], [role="menu"], [role="listbox"]')) excluded.push(rect(element));
     const body = JSON.stringify({ regions, excluded, theme: document.documentElement.dataset.theme || 'light', appearance: window.lakeAppearance || 'light' });
@@ -570,6 +573,6 @@
   window.addEventListener('lake-workbench-layout', sync);
   document.addEventListener('scroll', () => { if (!sidebarSlide) schedule(); }, true);
   window.addEventListener('lake-chrome-resize', schedule);
-  document.addEventListener('transitionend', event => { if (event.target.matches('.app-shell, .terminal-side-panel, .workbench-navigation')) schedule(); });
+  document.addEventListener('transitionend', event => { if (event.target.matches('.app-shell, .terminal-side-panel, .workbench-navigation, .workbench-sidebar-toggle')) schedule(); });
   schedule();
 })();
