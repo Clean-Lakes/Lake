@@ -210,7 +210,7 @@
 .specialist-inspector-records > summary { display:flex; align-items:center; gap:8px; color:var(--text-secondary); font-size:12px; }
 .specialist-inspector-records > summary > small { margin-left:auto; color:var(--text-muted); }
 .specialist-inspector-records > .worker-execution-tree { margin-top:20px; }
-@container specialist-tasks (max-width:620px) {
+@container specialist-tasks (max-width:560px) {
  .specialist-task-toolbar { flex-wrap:wrap; gap:2px 10px; }
  .specialist-task-filters { flex-basis:100%; gap:14px; }
  .specialist-task-search { flex:1 1 100%; margin-left:0; }
