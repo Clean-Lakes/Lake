@@ -5,6 +5,7 @@ import type {SessionEvent,SuperWorkspace,SuperWorker,SpecialistChannelInfo} from
 import {api,readableError} from './api';
 import {greetRoleAvatar,SuperRoleAvatar} from './SuperRoleAvatar';
 import {conversationAvatarMotion,superAvatarMotion,channelTaskPresentation,specialistTaskActivity,type ConversationActivity,type ConversationAvatarActivity} from './superAgentPresentation';
+import {ActivityDots} from './ActivityIndicator';
 import {Glyph} from './Icons';
 import {NavigationMenu} from './NavigationDelete';
 import {SpecialistCreate} from './SpecialistCreate';
@@ -297,10 +298,12 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
     anchor.current=button;
     setMenu(channel);
    };
+   const railActivity = needsConfirmation ? 'waiting' : activityLabel ? 'running' : showUnread ? 'unread' : undefined;
    const avatar=<SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId}
      motion={preparing?'working':replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/>;
    return <button type="button" key={id} className={rail?'sidebar-rail-button sidebar-specialist-button':`nav-row pilot-worker-row${selected ? ' active' : ''}`}
      aria-current={selected ? 'page' : undefined} aria-label={label}
+     data-activity={rail?railActivity:undefined}
      aria-keyshortcuts={channel&&!disabled?'Shift+F10':undefined}
      onPointerEnter={rail?event=>{if(event.pointerType==='mouse'&&!menu&&!deleting)setNameHint({id,target:event.currentTarget});}:undefined}
      onPointerLeave={rail?dismissRowHint:undefined}
@@ -319,8 +322,8 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
       if(channel&&onChannel)onChannel(channel);else if(worker)onWorker(worker);
      }}>
     {avatar}
-    {rail?<span className="sidebar-specialist-status" aria-hidden="true">
-     {needsConfirmation?<Glyph name="circleAlert" size={10}/>:activityLabel?<Glyph name="loader" size={10} className="activity-indicator"/>:showUnread?<span className="pilot-worker-unread"/>:null}
+    {rail?<span className="sidebar-specialist-status" data-activity={railActivity} aria-hidden="true">
+     {needsConfirmation?<span className="sidebar-specialist-attention-dot"/>:activityLabel?<ActivityDots compact className="activity-indicator"/>:showUnread?<span className="pilot-worker-unread"/>:null}
     </span>:<span className="nav-row-text">
      <span className="pilot-worker-name">
       <strong onPointerEnter={showClippedText}>{name}</strong>
@@ -331,7 +334,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
       <span className="pilot-worker-status">
        {aggregate.runningCount>1&&<span className="pilot-worker-count" aria-label={`${aggregate.runningCount} 项任务执行中`}>{aggregate.runningCount}</span>}
        {needsConfirmation && <span className="pilot-worker-confirmation">需确认</span>}
-       {activityLabel ? <span className="pilot-worker-running" role="img" aria-label={activityLabel}><Glyph name="loader" size={12} className="activity-indicator"/></span> : showUnread && <span className="pilot-worker-unread" role="img" aria-label="有新消息未读"/>}
+       {activityLabel ? <span className="pilot-worker-running" role="img" aria-label={activityLabel}><ActivityDots className="activity-indicator"/></span> : showUnread && <span className="pilot-worker-unread" role="img" aria-label="有新消息未读"/>}
       </span>
      </span>
     </span>}

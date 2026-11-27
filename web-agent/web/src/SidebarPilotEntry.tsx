@@ -1,6 +1,7 @@
 import type {RefObject} from 'react';
 import type {ConversationReadState} from '../../shared/contracts';
 import {conversationAvatarMotion,pilotIdentity,type ConversationActivity} from './superAgentPresentation';
+import {ActivityDots} from './ActivityIndicator';
 import {hasUnreadMessages} from './ConversationReadMarker';
 import {Glyph} from './Icons';
 import {greetRoleAvatar,SuperRoleAvatar} from './SuperRoleAvatar';
@@ -15,7 +16,7 @@ export function SidebarPilotEntry({selected,activity='idle',messageRead,disabled
  const status=running?'处理中':waiting?'待确认':unread?'有新消息未读':'';
  const label=`${pilotIdentity.name} · 打开对话 · 内置专员${status?` · ${status}`:''}`;
  return <button ref={buttonRef} type="button" className={`nav-row sidebar-pilot-entry${selected?' active':''}`} aria-label={label}
-  aria-current={selected?'page':undefined} title={`打开 ${pilotIdentity.name} 对话`} disabled={disabled}
+  aria-current={selected?'page':undefined} data-activity={waiting?'waiting':running?'running':unread?'unread':undefined} title={`打开 ${pilotIdentity.name} 对话`} disabled={disabled}
   onContextMenu={event=>event.preventDefault()} onKeyDown={event=>{if(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10')event.preventDefault();}}
   onClick={event=>{greetRoleAvatar(event.currentTarget);onPilot();}}>
   <SuperRoleAvatar {...pilotIdentity} motion={conversationAvatarMotion(activity)}/>
@@ -23,7 +24,7 @@ export function SidebarPilotEntry({selected,activity='idle',messageRead,disabled
    <span className="pilot-worker-name">
     <strong>{pilotIdentity.name}</strong>
     {status && <span className="pilot-worker-status">
-     {running && <span className="pilot-worker-running" role="img" aria-label="处理中"><Glyph name="loader" size={12} className="activity-indicator"/></span>}
+     {running && <span className="pilot-worker-running" role="img" aria-label="处理中"><ActivityDots className="activity-indicator"/></span>}
      {waiting && <span className="pilot-worker-confirmation">需确认</span>}
      {unread && <span className="pilot-worker-unread" role="img" aria-label="有新消息未读"/>}
     </span>}

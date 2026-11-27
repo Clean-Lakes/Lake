@@ -11,7 +11,7 @@ import {PilotSpecialistQuestions} from './PilotSpecialistQuestions';
 import {SpecialistMcpDialog} from './SpecialistMcpDialog';
 import './specialistChannel.css';
 import './specialistTaskList.css';
-import {PilotWorkspace,usePilotWorkspace} from './PilotWorkspace';
+import {pilotConversationView,PilotWorkspace,usePilotWorkspace} from './PilotWorkspace';
 import './pilotWorkspace.css';
 import {ChatGroupNavigation} from './ChatGroup';
 import './chatGroup.css';
@@ -2083,9 +2083,11 @@ function AppContent() {
   </>;
 
   const groupsEnabled=bootstrap?.backendRuntime==='typescript';
+  const pilotRouterSession=catalog.sessions.find(row=>row.id===pilotWorkspace.workspace?.project.routerSessionId);
+  const pilotRouterLive=superPilotActivity(pilotConversationView(pilotWorkspace.workspace,pilotRouterSession?.id),pilotRouterSession,connected);
   const pilotNavigation={
     showHeading:false,activity:avatarActivity,pilotButton:sidebarPilotButton,
-    pilotActivity:conversationActivity(undefined,catalog.sessions.find(row=>row.id===pilotWorkspace.workspace?.project.routerSessionId)?.status),
+    pilotActivity:pilotRouterLive?.status==='waiting_approval'?'waiting':pilotRouterLive?.animated?'running':conversationActivity(undefined,pilotRouterSession?.status),
     pilotDisabled:!bootstrap?.authenticated,disabled:!connected,
     onDeleted:(channel:SpecialistChannelInfo)=>pilotWorkspace.removeRole(channel.roleId),
     onCodexSettings:typescriptBackend?openCodexConfiguration:undefined,
@@ -2142,7 +2144,8 @@ function AppContent() {
        specialists={<>
         {sidebarProject&&<PilotWorkspace {...pilotNavigation} presentation={groupsEnabled?'entry':'list'}/>}
         {groupsEnabled&&sidebarProject&&<ChatGroupNavigation key={sidebarProject.id} groups={pilotWorkspace.workspace?.chatGroups??[]}
-         selectedId={sessionSelected?sessionId:null} onOpen={id=>navigate({sessionId:id,resourceId:null})}
+         selectedId={sessionSelected?sessionId:null} workspace={pilotWorkspace.workspace} sessions={catalog.sessions}
+         activity={avatarActivity} connected={connected} onOpen={id=>navigate({sessionId:id,resourceId:null})}
          createGroup={{projectId:sidebarProject.id,channels:pilotWorkspace.workspace?.channels??[],
           disabled:!connected||!pilotWorkspace.workspace?.active,onCreated:openCreatedChatGroup}}/>}
         {sidebarProject&&pilotWorkspace.workspace?.active===false&&<div className="nav-heading sidebar-session-heading" hidden={bulkMode}>
