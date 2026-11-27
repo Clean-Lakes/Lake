@@ -215,6 +215,19 @@ export class LakeStore {
     this.put("resources", resource.id, resource);
     return project;
   }
+  renameProject(projectId: string, name: string) {
+    const project = this.project(projectId);
+    const trash = this.list<NavigationTrashItem>("navigationTrash");
+    if (trash.some(item => item.kind === "project" && item.id === projectId)) {
+      throw new HttpError(404, "项目不存在");
+    }
+    const trimmed = name.trim();
+    if (!trimmed) throw new HttpError(400, "项目名称不能为空");
+    if (trimmed.length > 120) throw new HttpError(400, "项目名称不能超过 120 个字符");
+    const updated: Project = { ...project, name: trimmed };
+    this.put("projects", projectId, updated);
+    return updated;
+  }
   catalog(): Catalog {
     const trash = this.list<NavigationTrashItem>('navigationTrash');
     const hidden = (kind: string, key: string) => trash.some(item => item.kind === kind && item.id === key);

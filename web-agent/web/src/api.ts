@@ -242,6 +242,7 @@ export const api = {
   availableModels: (signal?: AbortSignal) => request<AvailableModels>("/api/settings/model/available", { signal }),
   modelState: (signal?: AbortSignal) => request<ModelSyncState>("/api/settings/model/state", { signal }),
   createProject: (name: string) => post<Project>("/api/projects", { name }),
+  renameProject: (id: string, name: string) => request<Project>(`/api/projects/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ name }) }),
   projectMemories: (projectId: string, query = "", includeExpired = false, includeDeleted = false, offset = 0, signal?: AbortSignal) => request<ProjectMemoryList>(`/api/projects/${encodeURIComponent(projectId)}/memory?query=${encodeURIComponent(query)}&includeExpired=${includeExpired}&includeDeleted=${includeDeleted}&offset=${offset}&limit=50`, {signal}),
   projectMemory: (projectId: string, key: string, includeDeleted = false, signal?: AbortSignal) => request<ProjectMemoryEntry>(`/api/projects/${encodeURIComponent(projectId)}/memory/${encodeURIComponent(key)}${includeDeleted ? "?includeDeleted=true" : ""}`, {signal}),
   saveProjectMemory: (projectId: string, key: string, data: {type: ProjectMemoryEntry["type"]; description: string; body: string; expectedRevision: number; validUntil?: string; restoreDeleted?: boolean}) => request<{revision:number}>(`/api/projects/${encodeURIComponent(projectId)}/memory/${encodeURIComponent(key)}`, {method:"PUT", body:JSON.stringify(data)}),
