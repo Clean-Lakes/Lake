@@ -66,7 +66,11 @@
  background:transparent;
  pointer-events:none;
 }
-.island-expand-trigger:focus-visible { outline:2px solid var(--focus-outline); outline-offset:-2px; }
+.island-expand-trigger:focus-visible { outline:none; }
+.lake-workbench-island:has(> .island-expand-trigger:focus-visible) {
+ outline:2px solid var(--focus-outline);
+ outline-offset:2px;
+}
 .lake-workbench-island [hidden] { display:none!important; }
 .lake-workbench-island .workspace-header { justify-content:flex-start; position:relative; display:flex; align-items:center; gap:var(--island-header-gap); min-width:0; min-height:44px; height:44px; width:100%; padding:5px var(--island-header-inset); border:0; border-radius:0; background:transparent; box-shadow:none; }
 .lake-workbench-island .workspace-header > .workspace-header-glass { display:none; }
