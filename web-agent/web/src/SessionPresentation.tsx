@@ -45,10 +45,13 @@ export function SessionActions({session,disabled,onSaved,onRefresh,onEdit,view,o
  }
  const menuViews=sessionViews.filter(item=>hasViews||item.value==='plans');
  const visibleMenu=onMenuChange?menuPosition:menu;
+ const lastMenu=useRef<{x:number;y:number}|null>(null);
+ if(visibleMenu)lastMenu.current=visibleMenu;
+ const renderedMenu=visibleMenu??lastMenu.current;
  const changeMenu=onMenuChange??setMenu;
  return <>
   <button type="button" ref={trigger} className={`${className} session-actions-trigger`} title="更多操作" aria-label={label} aria-haspopup="menu" aria-expanded={!!visibleMenu} disabled={disabled} onClick={()=>{if(visibleMenu){changeMenu(null);return;}const rect=trigger.current?.getBoundingClientRect();if(rect)changeMenu({x:rect.right-208,y:rect.bottom+6});}}><Glyph name="more" size={15}/></button>
-  {visibleMenu&&<NavigationMenu title={session.title} className="session-actions-menu" anchor={trigger} width={208} x={visibleMenu.x} y={visibleMenu.y} onClose={()=>changeMenu(null)} actions={[
+  {renderedMenu&&<NavigationMenu open={!!visibleMenu} title={session.title} className="session-actions-menu" anchor={trigger} width={208} x={renderedMenu.x} y={renderedMenu.y} onClose={()=>changeMenu(null)} actions={[
    ...menuViews.map(item=>({label:item.label,icon:item.icon,checked:view===item.value,run:()=>onView(item.value)})),
    ...(onPin?[{label:session.pinned?"取消置顶":"置顶会话",icon:"pin" as const,separatorBefore:true,disabled,run:onPin}]:[]),
    {label:"重命名",icon:"edit",separatorBefore:true,disabled,run:onEdit},

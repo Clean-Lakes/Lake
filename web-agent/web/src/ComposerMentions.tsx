@@ -2,6 +2,8 @@ import {useEffect,useLayoutEffect,useRef,useState,type PointerEvent} from "react
 import {api,readableError} from "./api";
 import {Glyph,ResourceIcon,type GlyphName} from "./Icons";
 import {RoleMentionAvatar} from './RoleMentionAvatar';
+import {TabSelectionIndicator} from "./TabSelectionIndicator";
+import {useMenuMotion} from "./useMenuMotion";
 import type {MCPServerConfig,SkillConfig} from "../../shared/contracts";
 import {visibleMentionCategories,mentionTypeLabel,type MentionCategory,type MentionOption} from "./composerMentionState";
 import "./composerMentions.css";
@@ -83,6 +85,7 @@ export function ComposerMentions({
   document.addEventListener("mousedown",close);document.addEventListener("focusin",close);
   return()=>{document.removeEventListener("mousedown",close);document.removeEventListener("focusin",close);};
  },[onClose]);
+ useMenuMotion(menu,true,true);
  useLayoutEffect(()=>revealActiveItem(list.current,'[aria-selected="true"]'),[activeId,index,category,query,error]);
  useLayoutEffect(()=>revealActiveItem(categories.current,'[aria-pressed="true"]'),[category]);
 
@@ -91,7 +94,7 @@ export function ComposerMentions({
   onFocusInput();
  }
 
- return <div ref={menu} className="mention-menu composer-mentions" role="group" aria-label="插入引用"
+ return <div ref={menu} className="mention-menu composer-mentions" data-menu-motion="true" style={{transformOrigin:"bottom left"}} role="group" aria-label="插入引用"
   onMouseDown={event=>event.preventDefault()} onKeyDown={event=>{
    if(event.key!=="Escape")return;
    event.preventDefault();
@@ -115,6 +118,7 @@ export function ComposerMentions({
      onClick={()=>{onCategory(group.kind);onFocusInput();}}>
      <Glyph name={categoryGlyphs[group.kind]} size={15}/><span>{group.label}</span>
     </button>)}
+    <TabSelectionIndicator selection={category} selector='button[aria-pressed="true"]'/>
    </div>
    <div className="mention-result-pane">
     {error&&<div className="mention-error">

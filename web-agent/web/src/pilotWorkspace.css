@@ -23,10 +23,6 @@
 .specialist-context-menu > button > .navigation-menu-trailing { flex:0 0 13px; }
 .specialist-context-menu > button.danger-text:is(:hover:not(:disabled),:focus-visible) { background:var(--danger-soft); }
 .specialist-context-menu > .navigation-menu-separator { margin:3px 5px; }
-@media (prefers-reduced-motion:no-preference) {
- .specialist-context-menu { animation:specialist-menu-in 120ms cubic-bezier(.2,.7,.2,1) both; }
- @keyframes specialist-menu-in { from { opacity:0; transform:translateX(-3px); } }
-}
 @media (pointer:coarse) { .navigation-context-menu.specialist-context-menu > button { min-height:44px; } }
 .sidebar.workspace-navigation .pilot-workspace .nav-row {
  min-height:50px;

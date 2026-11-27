@@ -83,7 +83,7 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
  const tabs=<div className="session-inspector-tabs" role="tablist" aria-label="任务视图" onKeyDown={event=>{if((hasPlan||goal)&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();choose(event.key==='Home'?'plan':event.key==='End'?'execution':activeTab==='plan'?'execution':'plan');requestAnimationFrame(()=>panel.current?.querySelector<HTMLButtonElement>('[role=tab][aria-selected=true]')?.focus());}}}>
   <button type="button" role="tab" id="inspector-plan-tab" aria-selected={activeTab==='plan'} aria-controls="inspector-plan-panel" tabIndex={activeTab==='plan'?0:-1} disabled={!hasPlan&&!goal} title={!hasPlan&&!goal?'暂无最新计划':undefined} onClick={()=>choose('plan')}>{goal?'结果与证据':'计划'}</button>
   <button type="button" role="tab" id="inspector-execution-tab" aria-selected={activeTab==='execution'} aria-controls="inspector-execution-panel" tabIndex={activeTab==='execution'?0:-1} onClick={()=>choose('execution')}>{goal?'执行过程':'执行'}</button>
-  <TabSelectionIndicator selection={activeTab}/>
+  <TabSelectionIndicator selection={activeTab} axis="x"/>
  </div>;
  return <aside ref={panel} id={sessionInspectorId} tabIndex={-1} className={`session-inspector${selection?' is-open':' is-closing'}${waitingForWindow?' is-waiting':''}`} data-window-reveal={nativePresence||undefined} inert={!visible} aria-hidden={!visible} aria-label="任务检查" onKeyDown={event=>{if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();event.stopPropagation();inspector.close();}}}>
   <div className="session-inspector-card">

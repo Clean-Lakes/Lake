@@ -21,6 +21,7 @@ import {AgentBackendLogo} from './AgentBackendLogo';
 import {conversationActivity,conversationAvatarMotion,pilotIdentity,superTaskHeaderPresentation,specialistTaskActivity,stopControlPresentation} from './superAgentPresentation';
 import {superPilotActivity} from './superPilotActivity';
 import {useTerminalPopover} from './useTerminalPopover';
+import {useMenuMotion} from './useMenuMotion';
 import {WorkbenchIsland,useWideWorkbench} from './WorkbenchIsland';
 import {useInspectorWindow} from './inspectorWindow';
 import {inspectorExitMs,retainConversation,SessionInspectorProvider,useSessionInspector,type PilotProcessTarget,type ReplyProcessSources} from './SessionInspectorContext';
@@ -412,6 +413,8 @@ function AppContent() {
   const [terminalListOpen, setTerminalListOpen] = useState(false);
   const terminalOptionsPopup=useTerminalPopover(terminalOptionsOpen,()=>setTerminalOptionsOpen(false));
   const terminalListPopup=useTerminalPopover(terminalListOpen,()=>setTerminalListOpen(false));
+  const retainTerminalOptions=useMenuMotion(terminalOptionsPopup.menu,terminalOptionsOpen,true);
+  const retainTerminalList=useMenuMotion(terminalListPopup.menu,terminalListOpen,true);
   const [terminalTabContext, setTerminalTabContext] = useState<{terminal: TerminalSession; x: number; y: number} | null>(null);
   const [commandEditorOpen, setCommandEditorOpen] = useState(false);
   const [restoringStream, setRestoringStream] = useState(false);
@@ -1969,7 +1972,7 @@ function AppContent() {
           inspector.open(entry?{sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,task,attemptId:entry.attemptId,tab:'execution'}:latestInspectorSelection(activeSnapshot,'plan'));
         }}/>}
       </header>;
-  const terminalListMenu=terminalListOpen && <div className="terminal-list-menu" ref={terminalListPopup.menu} id="terminal-switcher" role="group" aria-label="已打开的终端">
+  const terminalListMenu=(terminalListOpen||retainTerminalList) && <div className="terminal-list-menu" ref={terminalListPopup.menu} id="terminal-switcher" role="group" aria-label="已打开的终端" data-menu-motion="true" inert={!terminalListOpen} aria-hidden={!terminalListOpen||undefined} style={{transformOrigin:"top left"}}>
     {terminalOptions.map(({terminal: item, label, shortLabel}) => <button type="button" className="terminal-picker-item" key={item.id} aria-label={label} title={label} aria-current={terminalId===item.id} onContextMenu={event=>{event.preventDefault();setTerminalTabContext({terminal:item,x:event.clientX,y:event.clientY});}} onClick={() => selectTerminalTab(item)}><Glyph name="terminal" size={14}/><span className="terminal-picker-copy"><span className="terminal-picker-name">{resourceLabel(resourceMap.get(item.resourceId))}</span><span className="terminal-picker-meta"><span>{shortLabel}</span><small>{terminalLabels[item.status]}</small></span></span></button>)}
     {!terminalOptions.length && <span>暂无在线终端</span>}
     {terminalResource && <button type="button" disabled={!!pendingOperation || !terminalConnected || connectingResources.includes(terminalResource.id)} onClick={() => { setTerminalListOpen(false); void openTerminalFor(terminalResource.id, true); }}><Glyph name="plus" size={14}/><span>新建终端</span></button>}
@@ -1991,7 +1994,7 @@ function AppContent() {
         <button type="button" className="icon-button" ref={terminalOptionsPopup.trigger} aria-label="终端选项" title="终端选项" aria-expanded={terminalOptionsOpen} onClick={() => {setTerminalListOpen(false);setTerminalOptionsOpen(value => !value);}}>⋮</button>
         <button type="button" className="icon-button" aria-label="收起终端" title="收起终端，保留连接" onClick={closeTerminalPanel}><Glyph name="close" size={17}/></button>
       </div>}
-      {!sharedIsland && terminalOptionsOpen && <div className="terminal-action-menu" ref={terminalOptionsPopup.menu} role="group" aria-label="终端选项菜单">
+      {!sharedIsland && (terminalOptionsOpen || retainTerminalOptions) && <div className="terminal-action-menu" ref={terminalOptionsPopup.menu} role="group" aria-label="终端选项菜单" data-menu-motion="true" inert={!terminalOptionsOpen} aria-hidden={!terminalOptionsOpen || undefined} style={{transformOrigin:"top right"}}>
         <label>本地 Shell<AppSelect value={localShell} onChange={event => setLocalShell(event.target.value)}>{["bash","zsh","sh","fish"].map(shell => <option key={shell}>{shell}</option>)}</AppSelect></label>
         <button type="button" disabled={!currentTerminal || !!currentTerminal.jumpServerAudit || currentTerminal.status !== "ready" || currentTerminal.holder !== "user"} onClick={() => { setTerminalOptionsOpen(false); setCommandEditorOpen(true); }}>运行完整命令…</button>
         {!terminalContext && !currentTerminal?.jumpServerAudit && currentTerminal?.holder === "user" && currentTerminal.status === "ready" && <button type="button" onClick={() => { setTerminalOptionsOpen(false); void changeHolder("agent"); }}>交给终端专员</button>}
