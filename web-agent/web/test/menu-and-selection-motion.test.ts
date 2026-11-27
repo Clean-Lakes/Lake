@@ -198,6 +198,26 @@ test('alignSelectionIndicator places silently first, springs across target chang
     assert.equal(indicator.hasAttribute('data-ready'), false);
     assert.equal(container.hasAttribute('data-selection-visible'), false);
     assert.equal(indicator.dataset.selectionKey, undefined);
+
+    // Zero-sized (hidden panel) targets also clear markers and skip animations.
+    const hiddenRow = fakeElement({left: 0, top: 0, width: 0, height: 0}, 'hidden-row');
+    alignSelectionIndicator(
+      container as unknown as HTMLElement,
+      indicator as unknown as HTMLElement,
+      first as unknown as HTMLElement,
+      {axis: 'both', animate: true, key: 'a'},
+    );
+    assert.equal(indicator.hasAttribute('data-ready'), true);
+    alignSelectionIndicator(
+      container as unknown as HTMLElement,
+      indicator as unknown as HTMLElement,
+      hiddenRow as unknown as HTMLElement,
+      {axis: 'both', animate: true, key: ''},
+    );
+    assert.equal(indicator.hasAttribute('data-ready'), false);
+    assert.equal(container.hasAttribute('data-selection-visible'), false);
+    assert.equal(indicator.dataset.selectionKey, undefined);
+    assert.equal(indicator.animateCalls.length, 0);
   } finally {
     (globalThis as unknown as {window: unknown}).window = prevWindow;
     (globalThis as unknown as {document: unknown}).document = prevDocument;
@@ -238,4 +258,9 @@ test('components with menu and selection motion remain SSR safe in Node ESM test
   assert.ok(typeof SidebarWorkspaceNavigation === 'function');
   assert.ok(typeof PilotWorkspace === 'function');
   assert.ok(typeof WorkspaceConsole === 'function');
+
+  const sidebarNavSource = readFileSync(new URL('../src/SidebarWorkspaceNavigation.tsx', import.meta.url), 'utf8');
+  assert.match(sidebarNavSource, /sidebar-conversation-selection/);
+  assert.match(sidebarNavSource, /sidebar-pilot-entry/);
+  assert.match(sidebarNavSource, /chat-group-nav-row/);
 });

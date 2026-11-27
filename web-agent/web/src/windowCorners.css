@@ -167,3 +167,7 @@
  background-clip:border-box;
  &::before { background:var(--user-message-background); }
 }
+:root.lake-corner-fallback .sidebar-conversation-selection {
+ border-radius:0;
+ -webkit-mask-box-image:url('/window-corner-fill.svg') 22 fill / var(--radius-window) / 0 stretch;
+}

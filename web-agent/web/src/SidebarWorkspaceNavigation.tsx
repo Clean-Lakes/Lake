@@ -70,7 +70,16 @@ export function SidebarWorkspaceNavigation({projectId,specialists,specialistRail
     </div>}
     {header}
     {projectId?<><section key={`specialists:${projectId}`} className="sidebar-navigation-panel" id={`${id}-specialists-panel`} aria-label={conversationLabel} hidden={!specialistsOpen}>
-     <SidebarScrollArea>{specialists}</SidebarScrollArea>
+     <SidebarScrollArea>
+      <div className="sidebar-conversation-list">
+       {specialists}
+       <TabSelectionIndicator
+         className="sidebar-conversation-selection"
+         selection={specialistsOpen?selectionId:''}
+         selector=':is(.sidebar-pilot-entry,.pilot-worker-row,.chat-group-nav-row)[aria-current="page"]'
+       />
+      </div>
+     </SidebarScrollArea>
     </section>
     <section key={`resources:${projectId}`} className="sidebar-navigation-panel sidebar-resources-panel" id={`${id}-resources-panel`} aria-labelledby={`${id}-resources-title`} hidden={!resourcesOpen}>
      <div className="sidebar-content-header">

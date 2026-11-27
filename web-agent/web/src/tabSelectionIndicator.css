@@ -1,4 +1,4 @@
-:is(.session-inspector-tabs,.conversation-directory-tabs,.mcp-mode-tabs,.codex-config-executors,.mention-categories,.sidebar-specialist-roster,.theme-options) {
+:is(.session-inspector-tabs,.conversation-directory-tabs,.mcp-mode-tabs,.codex-config-executors,.mention-categories,.sidebar-specialist-roster,.sidebar-conversation-list,.theme-options) {
   position:relative;
   isolation:isolate;
 }
@@ -84,6 +84,19 @@
 }
 .sidebar-specialist-roster:has(> .sidebar-specialist-selection[data-ready]) > .sidebar-specialist-button[aria-current="page"],
 .sidebar-specialist-roster:has(> .sidebar-specialist-selection[data-ready]) > .sidebar-specialist-button[aria-current="page"]:hover {
+  background:transparent;
+}
+.sidebar-conversation-list > :not(.tab-selection-indicator) {
+  position:relative;
+  z-index:1;
+}
+.sidebar-conversation-list > .sidebar-conversation-selection {
+  border-radius:var(--radius-window);
+  corner-shape:var(--corner-window);
+  background:color-mix(in srgb,var(--info) 11%,transparent);
+}
+.sidebar.workspace-navigation .sidebar-conversation-list:has(> .sidebar-conversation-selection[data-ready]) :is(.sidebar-pilot-entry,.pilot-worker-row,.chat-group-nav-row)[aria-current="page"],
+.sidebar.workspace-navigation .sidebar-conversation-list:has(> .sidebar-conversation-selection[data-ready]) :is(.sidebar-pilot-entry,.pilot-worker-row,.chat-group-nav-row)[aria-current="page"]:hover {
   background:transparent;
 }
 .theme-options > .tab-selection-indicator {

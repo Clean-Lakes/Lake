@@ -56,6 +56,13 @@ export function alignSelectionIndicator(
   const topVar = options.topVar ?? '--selection-top';
   const containerRect = container.getBoundingClientRect();
   const targetRect = target.getBoundingClientRect();
+  if (!targetRect.width && !targetRect.height) {
+    container.removeAttribute('data-selection-visible');
+    indicator.removeAttribute('data-ready');
+    delete indicator.dataset.selectionKey;
+    cancelSelectionMotion(indicator);
+    return;
+  }
   const scrollLeft = container.scrollLeft;
   const scrollTop = container.scrollTop;
   const originLeft = containerRect.left + container.clientLeft - scrollLeft;
