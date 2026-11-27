@@ -1,9 +1,49 @@
+import {useEffect, useState} from 'react';
 import type {SpecialistChannelInfo} from '../../shared/contracts';
 import {SuperRoleAvatar} from './SuperRoleAvatar';
 import type {PilotParticipant} from './superPilotActivity';
 
+const activeRunStarts = new Map<string, number>();
+
+function formatElapsed(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds));
+  const mins = String(Math.floor(safe / 60)).padStart(2, '0');
+  const secs = String(safe % 60).padStart(2, '0');
+  return `${mins}:${secs}`;
+}
+
+/** Tracks live elapsed running time per session without placing conditional hooks inside AppContent. */
+export function useIslandElapsed(active: boolean, resetKey = 'default'): string {
+  const [elapsedSec, setElapsedSec] = useState(0);
+  useEffect(() => {
+    if (!active) {
+      activeRunStarts.delete(resetKey);
+      setElapsedSec(0);
+      return;
+    }
+    const existingStart = activeRunStarts.get(resetKey);
+    const startedAt = existingStart ?? Date.now();
+    if (existingStart === undefined) activeRunStarts.set(resetKey, startedAt);
+    const sync = () => setElapsedSec(Math.floor((Date.now() - startedAt) / 1000));
+    sync();
+    const timer = window.setInterval(sync, 1000);
+    return () => window.clearInterval(timer);
+  }, [active, resetKey]);
+  return formatElapsed(elapsedSec);
+}
+
+/** Compact pill status widget showing bouncing three-dot bubble and ticking elapsed time. */
+export function LakeIslandCompactLive({active, resetKey, label}: {active: boolean; resetKey?: string; label: string}) {
+  const elapsed = useIslandElapsed(active, resetKey);
+  return <span className="lake-island-compact-live">
+    <span className="lake-island-dots" role="img" aria-label={label}><i/><i/><i/></span>
+    <span className="lake-island-elapsed">{elapsed}</span>
+  </span>;
+}
+
 export type LakeIslandDrawerProps = {
   title: string;
+  sessionKey?: string;
   projectName?: string;
   statusLabel: string;
   elapsedLabel?: string;
@@ -26,6 +66,7 @@ export type LakeIslandDrawerProps = {
 /** Expanded Dynamic Island card matching Lake's unified frosted surface and single-line worker rows. */
 export function LakeIslandDrawer({
   title,
+  sessionKey,
   projectName,
   statusLabel,
   elapsedLabel,
@@ -44,6 +85,8 @@ export function LakeIslandDrawer({
   onOpenSpecialist,
   onClose,
 }: LakeIslandDrawerProps) {
+  const liveElapsed = useIslandElapsed(running, sessionKey);
+  const displayElapsed = elapsedLabel ?? (running ? liveElapsed : undefined);
   const readyChannels = channels?.slice(0, 5) ?? [];
   const movingCount = participants.filter(person => person.moving).length;
   const headline = running && participants.length > 0
@@ -54,7 +97,7 @@ export function LakeIslandDrawer({
         ? `${title} · ${projectName}`
         : title;
   const subtitle = running
-    ? (elapsedLabel ? `本次排查已持续 ${elapsedLabel}` : statusLabel || '正在协作处理')
+    ? (displayElapsed ? `本次排查已持续 ${displayElapsed}` : statusLabel || '正在协作处理')
     : waiting
       ? '等待你的操作授权'
       : readyChannels.length > 0

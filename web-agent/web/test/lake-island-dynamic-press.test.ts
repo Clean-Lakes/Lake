@@ -5,7 +5,7 @@ import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {SpecialistChannelInfo} from '../../shared/contracts';
-import {LakeIslandDrawer} from '../src/LakeIslandDrawer';
+import {LakeIslandCompactLive, LakeIslandDrawer} from '../src/LakeIslandDrawer';
 import {
   centeredIslandLeft,
   expandedIslandWidth,
@@ -145,4 +145,26 @@ test('workbenchIsland.css and ConversationDirectory prevent bleed-through, doubl
   const dir = readFileSync(new URL('../src/ConversationDirectory.tsx', import.meta.url), 'utf8');
   assert.match(dir, /compactBarHeight/);
   assert.match(dir, /data-island-phase/);
+});
+
+test('AppContent declares no React hooks after conditional early returns and LakeIslandCompactLive renders timer markup', () => {
+  const compactHtml = renderToStaticMarkup(createElement(LakeIslandCompactLive, {
+    active: true,
+    resetKey: 'session-1',
+    label: '处理中',
+  }));
+  assert.match(compactHtml, /class="lake-island-compact-live"/);
+  assert.match(compactHtml, /class="lake-island-dots" role="img" aria-label="处理中"/);
+  assert.match(compactHtml, /class="lake-island-elapsed">00:00</);
+
+  const appSrc = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  const start = appSrc.indexOf('if (authRequired)');
+  const end = appSrc.indexOf('\nfunction Brand(', start);
+  assert.ok(start > 0 && end > start, 'Expected AppContent early return and Brand boundary in App.tsx');
+  const afterEarlyReturn = appSrc.slice(start, end);
+  assert.doesNotMatch(
+    afterEarlyReturn,
+    /\buse(?:State|Effect|LayoutEffect|Memo|Callback|Ref)\s*\(/,
+    'React hooks must never execute conditionally after an early return in AppContent',
+  );
 });

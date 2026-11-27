@@ -22,7 +22,7 @@ import {conversationActivity,conversationAvatarMotion,pilotIdentity,superTaskHea
 import {superPilotActivity} from './superPilotActivity';
 import {useTerminalPopover} from './useTerminalPopover';
 import {WorkbenchIsland,useWideWorkbench} from './WorkbenchIsland';
-import {LakeIslandDrawer} from './LakeIslandDrawer';
+import {LakeIslandCompactLive,LakeIslandDrawer} from './LakeIslandDrawer';
 import {useInspectorWindow} from './inspectorWindow';
 import {inspectorExitMs,retainConversation,SessionInspectorProvider,useSessionInspector,type PilotProcessTarget,type ReplyProcessSources} from './SessionInspectorContext';
 import {ReplyProcessSelect,SessionInspector} from './SessionInspector';
@@ -901,7 +901,6 @@ function AppContent() {
   },[sessionId]);
   const [roleReplyActivity,setRoleReplyActivity]=useState<{sessionId:string;state:'running'|'waiting'|'idle'}|null>(null);
   const updateRoleReplyActivity=useCallback((id:string,state:'running'|'waiting'|'idle')=>setRoleReplyActivity(previous=>previous?.sessionId===id&&previous.state===state?previous:{sessionId:id,state}),[]);
-  const [islandElapsedSec,setIslandElapsedSec]=useState(0);
   const [roleInspection,setRoleInspection]=useState<SessionSnapshot|null>(null);
   const [roleTasks,setRoleTasks]=useState<{sessionId:string;workers:SuperWorker[];page:SpecialistChannelPage}|null>(null);
   const taskListVisits=useRef(new Map<string,{query:string;scrollTop:number;taskId:string;sessionId:string}>());
@@ -1917,22 +1916,11 @@ function AppContent() {
   const sharedIsland=detachedConversation&&wideWorkbench;
   const dockedConversation=detachedConversation&&!terminalVisible;
   const islandRunning=!!(sessionHeader&&(pilotHeaderActivity?.animated??(avatarActivity?.state==='running')));
-  useEffect(()=>{
-    if(!islandRunning){setIslandElapsedSec(0);return;}
-    const startedAt=Date.now();
-    setIslandElapsedSec(0);
-    const timer=window.setInterval(()=>setIslandElapsedSec(Math.floor((Date.now()-startedAt)/1000)),1000);
-    return()=>window.clearInterval(timer);
-  },[islandRunning,sessionId]);
-  const islandElapsedLabel=`${String(Math.floor(islandElapsedSec/60)).padStart(2,'0')}:${String(islandElapsedSec%60).padStart(2,'0')}`;
   const headerSweep=sessionHeader&&<HeaderSweep key={`sweep-${selectedSession.id}`} active={pilotHeaderActivity?.animated??(avatarActivity?.state==='running')}/>;
   const pilotTone=sessionHeader&&selectedSuperPilot&&!headerPilot&&!headerPilotMode?
     sessionBadgeState(superHeaderPresentation?.status??selectedSession.status,superHeaderPresentation?.label).tone:undefined;
   const islandCompactNormal=detachedConversation&&selectedSuperPilot&&islandRunning&&!headerPilot&&!headerPilotMode
-    ?<span className="lake-island-compact-live">
-      <span className="lake-island-dots" role="img" aria-label={superHeaderPresentation?.label??'处理中'}><i/><i/><i/></span>
-      <span className="lake-island-elapsed">{islandElapsedLabel}</span>
-    </span>
+    ?<LakeIslandCompactLive active={islandRunning} resetKey={selectedSession?.id} label={superHeaderPresentation?.label??'处理中'}/>
     :(selectedSession?<SessionStateBadge session={selectedSession} {...superHeaderPresentation} iconOnly={selectedSuperPilot}/>:null);
   const workspaceHeading=<header className={`workspace-header${headerPilot||headerPilotMode ? ' has-pilot-island' : ''}${headerPilotMode&&!headerPilot?' has-pilot-mode':''}`} data-pilot-island-tone={pilotTone}>
         {sessionHeader&&!detachedConversation&&<span className="workspace-header-glass" aria-hidden="true"/>}
@@ -2199,9 +2187,9 @@ function AppContent() {
       terminalOpen={sharedIsland&&terminalOpen} pilotTone={pilotTone} sessionKey={selectedSession?.id}
       expandedPanel={selectedSession?({close})=><LakeIslandDrawer
         title={(superHeaderIdentity&&!selectedSuperPilot?selectedRoleName:headerTitle)??selectedSession.title}
+        sessionKey={selectedSession.id}
         projectName={projectList.find(project=>project.id===selectedSession.projectId)?.name}
         statusLabel={superHeaderPresentation?.label??sessionLabels[selectedSession.status]}
-        elapsedLabel={islandRunning?islandElapsedLabel:undefined}
         tone={pilotTone}
         pilot={!!selectedSuperPilot}
         running={pilotHeaderActivity?.animated??(avatarActivity?.state==='running')}
