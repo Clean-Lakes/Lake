@@ -347,6 +347,7 @@ export function SpecialistMcpDialog({
   return (
     <dialog
       ref={dialogRef}
+      role="dialog"
       className="specialist-mcp-dialog"
       aria-labelledby={titleId}
       onCancel={event => {
