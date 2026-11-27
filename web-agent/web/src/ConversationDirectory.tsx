@@ -20,6 +20,15 @@ export function activeDirectoryItem(positions:{id:string;top:number}[],viewportT
  return positions.filter(item=>item.top<=viewportTop+32).at(-1)?.id??positions[0]?.id??null;
 }
 
+export function directoryPopoverPosition(anchor:Pick<DOMRectReadOnly,'left'|'bottom'>,headerBottom:number,viewport:{width:number;height:number}) {
+ const inset=12;
+ const width=Math.max(0,Math.min(360,viewport.width-2*inset));
+ const top=Math.max(anchor.bottom,headerBottom)+12;
+ const left=Math.max(inset,Math.min(anchor.left,viewport.width-width-inset));
+ const maxHeight=Math.max(0,Math.min(520,viewport.height-top-inset));
+ return {left,top,width,maxHeight};
+}
+
 function directoryItemAtScrollPosition(container: HTMLElement, items: ConversationDirectoryItem[], sessionId: string) {
  const positions = items.flatMap(({id}) => {
   const turn = document.getElementById(conversationTurnId(sessionId, id));
@@ -36,9 +45,10 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
  const [open,setOpen]=useState(false),[selected,setSelected]=useState<string|null>(items[0]?.id??null);
  const [view,setView]=useState<'tasks'|'messages'>('tasks');
  const showTasks=!!taskDirectory&&view==='tasks';
- const [position,setPosition]=useState<{left:number;top:number;width:number;origin:string}|null>(null);
+ const [position,setPosition]=useState<ReturnType<typeof directoryPopoverPosition>&{origin:string}|null>(null);
  const trigger=useRef<HTMLButtonElement>(null),panel=useRef<HTMLElement>(null),list=useRef<HTMLElement>(null);
  const root=useRef<HTMLDivElement>(null);
+ const headerBottom=useRef(0);
  const rows=useRef(new Map<string,HTMLButtonElement>()),id=useId();
  const itemIds=JSON.stringify(items.map(item=>item.id));
  function close(restoreFocus=false){setOpen(false);if(restoreFocus)trigger.current?.focus({preventScroll:true});}
@@ -60,22 +70,34 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
    if(nextHeader!==header){
     if(header)observer.unobserve(header);
     headerObserver.disconnect();header=nextHeader;
-    if(header){observer.observe(header);headerObserver.observe(header,{attributes:true,attributeFilter:['class','style','data-ready','data-present']});}
+    if(header&&header.dataset.islandInteractive!=='true'){
+     observer.observe(header);
+     headerObserver.observe(header,{attributes:true,attributeFilter:['class','style','data-ready','data-present']});
+    }
    }
-   const bounds=container!.getBoundingClientRect(),heading=header?.getBoundingClientRect();
+   const bounds=container!.getBoundingClientRect();
+   const pinned=header?.dataset.islandInteractive==='true';
+   const heading=pinned?undefined:header?.getBoundingClientRect();
+   let rowBottom=heading?.bottom??0;
    let left=Math.max(bounds.left+4,bounds.right-76),top=Math.max(bounds.top+12,(heading?.top??bounds.top)+9);
-   if(heading&&container!.closest('.has-docked-conversation')){
+   if(pinned||heading&&container!.closest('.has-docked-conversation')){
     const style=getComputedStyle(container!);
-    const actionsOffset=parseFloat(style.getPropertyValue('--conversation-header-actions-offset'));
+    const actionsOffset=parseFloat(style.getPropertyValue('--conversation-header-actions-offset'))||76;
+    // Read the island's layout top and the compact row's fixed height. The
+    // painted header inside the island shrinks as the details slide in.
+    const rowTop=heading?.top??((header!.offsetParent?.getBoundingClientRect().top??0)+header!.offsetTop);
+    const rowHeight=heading?Math.min(heading.height,46):46;
+    rowBottom=rowTop+rowHeight;
     left=Math.max(bounds.left+4,bounds.right-actionsOffset);
-    top=heading.top+Math.max(0,(heading.height-(trigger.current?.offsetHeight??28))/2);
+    top=rowTop+Math.max(0,(rowHeight-(trigger.current?.offsetHeight??28))/2);
    }
    const compact=!!heading&&left<heading.right+8&&left+64>heading.left;
    if(compact){left=bounds.left+2;top=Math.max(bounds.top+12,heading!.bottom+10);}
    if(open&&!showTasks)setSelected(directoryItemAtScrollPosition(container!,items,sessionId));
    if(root.current){
     const nextLeft=`${left}px`,nextTop=`${top}px`;
-    const moved=root.current.style.left!==nextLeft||root.current.style.top!==nextTop;
+    const moved=root.current.style.left!==nextLeft||root.current.style.top!==nextTop||headerBottom.current!==rowBottom;
+    headerBottom.current=rowBottom;
     root.current.style.left=nextLeft;root.current.style.top=nextTop;root.current.toggleAttribute('data-compact',compact);
     if(moved)window.dispatchEvent(new Event('lake-chrome-resize'));
    }
@@ -86,32 +108,31 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
   const content=open&&!showTasks&&container.querySelector('.timeline-list');if(content)observer.observe(content);
   if(open&&!showTasks)container.addEventListener('scroll',schedule,{passive:true});
   window.addEventListener('resize',schedule);
-  return()=>{cancelAnimationFrame(frame);observer.disconnect();headerObserver.disconnect();container.removeEventListener('scroll',schedule);window.removeEventListener('resize',schedule);};
+  window.addEventListener('lake-workbench-layout',schedule);
+  return()=>{cancelAnimationFrame(frame);observer.disconnect();headerObserver.disconnect();container.removeEventListener('scroll',schedule);window.removeEventListener('resize',schedule);window.removeEventListener('lake-workbench-layout',schedule);};
  },[sessionId,itemIds,open,showTasks]);
  useLayoutEffect(()=>{
   if(!open)return;
   function measure(){
    const anchor=trigger.current?.getBoundingClientRect();if(!anchor)return;
-   const width=Math.min(360,window.innerWidth-24),height=panel.current?.getBoundingClientRect().height??240;
-   const left=Math.max(12,Math.min(anchor.left,window.innerWidth-width-12));
-   const below=anchor.bottom+6;
-   const top=below+height<=window.innerHeight-12?below:Math.max(12,anchor.top-height-6);
-   const origin=`${left+width/2<anchor.left+anchor.width/2?'right':'left'} ${top<anchor.top?'bottom':'top'}`;
-   setPosition(previous=>previous&&previous.left===left&&previous.top===top&&previous.width===width&&previous.origin===origin?previous:{left,top,width,origin});
+   const next=directoryPopoverPosition(anchor,headerBottom.current,{width:window.innerWidth,height:window.innerHeight});
+   const origin=next.left+next.width/2<anchor.left+anchor.width/2?'right top':'left top';
+   setPosition(previous=>previous&&previous.left===next.left&&previous.top===next.top&&previous.width===next.width&&previous.maxHeight===next.maxHeight&&previous.origin===origin?previous:{...next,origin});
   }
-  measure();const observer=new ResizeObserver(measure);if(panel.current)observer.observe(panel.current);
-  window.addEventListener('resize',measure);document.addEventListener('scroll',measure,true);
-  return()=>{observer.disconnect();window.removeEventListener('resize',measure);document.removeEventListener('scroll',measure,true);};
+  measure();
+  window.addEventListener('resize',measure);window.addEventListener('lake-chrome-resize',measure);document.addEventListener('scroll',measure,true);
+  return()=>{window.removeEventListener('resize',measure);window.removeEventListener('lake-chrome-resize',measure);document.removeEventListener('scroll',measure,true);};
  },[open]);
- const retainPanel=useMenuMotion(panel,open&&Boolean(position),true);
+ const positioned=Boolean(position);
+ const retainPanel=useMenuMotion(panel,open&&positioned,true);
  useLayoutEffect(()=>{
-  if(!open)return;
+  if(!open||!positioned)return;
   if(taskDirectory)panel.current?.querySelector<HTMLElement>('[role=tab][aria-selected=true]')?.focus({preventScroll:true});
   if(showTasks)return;
   const row=rows.current.get(selected??'')??rows.current.get(items[0]?.id??'');
   if(!taskDirectory)row?.focus({preventScroll:true});
   if(row&&list.current)list.current.scrollTop=row.offsetTop-list.current.clientHeight/2;
- },[open,showTasks,!!taskDirectory]);
+ },[open,positioned,showTasks,!!taskDirectory]);
  useEffect(()=>{
   if(!open)return;
   function outside(event:Event){const target=event.target as Node;if(!trigger.current?.contains(target)&&!panel.current?.contains(target))close();}
@@ -132,7 +153,7 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
   <button type="button" role="tab" id={`${id}-messages-tab`} aria-controls={`${id}-messages`} aria-selected={!showTasks} tabIndex={showTasks?-1:0} onClick={()=>setView('messages')}>消息</button>
   <TabSelectionIndicator selection={showTasks}/>
  </div>;
- const content=(open||retainPanel)&&<section ref={panel} className="conversation-directory-popover" data-menu-motion="true" inert={!open} aria-hidden={!open||undefined} style={position?{left:position.left,top:position.top,width:position.width,transformOrigin:position.origin}:{left:12,top:80,width:360,visibility:'hidden'}} id={id} role="dialog" aria-label="会话目录">
+ const content=(open||retainPanel)&&<section ref={panel} className="conversation-directory-popover" data-menu-motion="true" inert={!open} aria-hidden={!open||undefined} style={position?{left:position.left,top:position.top,width:position.width,maxHeight:position.maxHeight,transformOrigin:position.origin}:{left:12,top:80,width:360,visibility:'hidden'}} id={id} role="dialog" aria-label="会话目录">
   <header className="conversation-directory-heading">{tabs||<span>当前对话</span>}<button type="button" aria-label="关闭会话目录" onClick={()=>close(true)}><Glyph name="close" size={15}/></button></header>
   {taskDirectory&&<div id={`${id}-tasks`} role="tabpanel" aria-labelledby={`${id}-tasks-tab`} className="conversation-directory-view" hidden={!showTasks}>
    {showTasks&&<PilotTaskDirectory data={taskDirectory} visibleSources={new Set(items.map(item=>item.id))}

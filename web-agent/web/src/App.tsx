@@ -22,7 +22,8 @@ import {conversationActivity,conversationAvatarMotion,pilotIdentity,superTaskHea
 import {superPilotActivity} from './superPilotActivity';
 import {useTerminalPopover} from './useTerminalPopover';
 import {useMenuMotion} from './useMenuMotion';
-import {WorkbenchIsland,useWideWorkbench} from './WorkbenchIsland';
+import {WorkbenchIsland,useWideWorkbench,type WorkbenchIslandHeaderControls} from './WorkbenchIsland';
+import {LakeIslandCompactLive,LakeIslandDrawer} from './LakeIslandDrawer';
 import {useInspectorWindow} from './inspectorWindow';
 import {inspectorExitMs,retainConversation,SessionInspectorProvider,useSessionInspector,type PilotProcessTarget,type ReplyProcessSources} from './SessionInspectorContext';
 import {ReplyProcessSelect,SessionInspector} from './SessionInspector';
@@ -1944,10 +1945,14 @@ function AppContent() {
   const detachedConversation=sessionHeader&&!compactNavigation;
   const sharedIsland=detachedConversation&&wideWorkbench;
   const dockedConversation=detachedConversation&&!terminalVisible;
+  const islandRunning=!!(sessionHeader&&(pilotHeaderActivity?.animated??(avatarActivity?.state==='running')));
   const headerSweep=sessionHeader&&<HeaderSweep key={`sweep-${selectedSession.id}`} active={pilotHeaderActivity?.animated??(avatarActivity?.state==='running')}/>;
   const pilotTone=sessionHeader&&selectedSuperPilot&&!headerPilot&&!headerPilotMode?
     sessionBadgeState(superHeaderPresentation?.status??selectedSession.status,superHeaderPresentation?.label).tone:undefined;
-  const workspaceHeading=<header className={`workspace-header${headerPilot||headerPilotMode ? ' has-pilot-island' : ''}${headerPilotMode&&!headerPilot?' has-pilot-mode':''}`} data-pilot-island-tone={pilotTone}>
+  const islandCompactNormal=detachedConversation&&selectedSuperPilot&&islandRunning&&!headerPilot&&!headerPilotMode
+    ?<LakeIslandCompactLive active={islandRunning} resetKey={selectedSession?.id} label={superHeaderPresentation?.label??'处理中'}/>
+    :(selectedSession?<SessionStateBadge session={selectedSession} {...superHeaderPresentation} iconOnly={selectedSuperPilot}/>:null);
+  const workspaceHeading=(controls?:WorkbenchIslandHeaderControls)=><header className={`workspace-header${headerPilot||headerPilotMode ? ' has-pilot-island' : ''}${headerPilotMode&&!headerPilot?' has-pilot-mode':''}`} data-pilot-island-tone={pilotTone} inert={controls?.expanded}>
         {sessionHeader&&!detachedConversation&&<span className="workspace-header-glass" aria-hidden="true"/>}
         {!detachedConversation&&headerSweep}
         <button className="icon-button mobile-only" aria-label="打开项目导航" onClick={() => setMobileMenu(true)}><Glyph name="menu" size={21}/></button>
@@ -1963,9 +1968,9 @@ function AppContent() {
               <span className="crumb-title" title={headerTitle}>{superHeaderIdentity&&!selectedSuperPilot?selectedRoleName:headerTitle}</span>
               {superHeaderIdentity&&!selectedSuperPilot&&<AgentBackendLogo backend={selectedAgentBackend}/>}
             </strong>
-            {pilotParticipants&&<PilotActiveSpecialists key={sessionId} participants={pilotParticipants} visible={showPilotParticipants} fixedRoster={isChatGroup}/>}
+            {pilotParticipants&&<PilotActiveSpecialists key={sessionId} participants={pilotParticipants} visible={showPilotParticipants} fixedRoster={isChatGroup} popover={controls?.specialists}/>}
           </div>}
-        {sessionHeader && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} mode={headerPilotMode} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}} normal={<SessionStateBadge session={selectedSession} {...superHeaderPresentation} iconOnly={selectedSuperPilot}/>} onInspect={targetId => {
+        {sessionHeader && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} mode={headerPilotMode} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={!(detachedConversation&&selectedSuperPilot&&islandRunning)?{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}:undefined} normal={islandCompactNormal} onInspect={targetId => {
           if(!activeSnapshot||!headerPilot)return;
           const task=activeSnapshot.sre?.tasks.find(t=>t.id===headerPilot.taskId);
           const entry=task?.messages?.find(m=>`sre-message-${m.id}`===targetId);
@@ -2213,10 +2218,30 @@ function AppContent() {
     </aside>
 
     {detachedConversation&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={sharedIsland?terminalHeading:null}
-      terminalOpen={sharedIsland&&terminalOpen} pilotTone={pilotTone}/>}
+      terminalOpen={sharedIsland&&terminalOpen} pilotTone={pilotTone} sessionKey={selectedSession?.id}
+      expandedPanel={selectedSession?({close})=><LakeIslandDrawer
+        title={(superHeaderIdentity&&!selectedSuperPilot?selectedRoleName:headerTitle)??selectedSession.title}
+        sessionKey={selectedSession.id}
+        projectName={projectList.find(project=>project.id===selectedSession.projectId)?.name}
+        statusLabel={superHeaderPresentation?.label??sessionLabels[selectedSession.status]}
+        tone={pilotTone}
+        pilot={!!selectedSuperPilot}
+        running={pilotHeaderActivity?.animated??(avatarActivity?.state==='running')}
+        waiting={(superHeaderPresentation?.status??selectedSession.status)==='waiting_approval'}
+        participants={pilotParticipants??[]}
+        channels={pilotWorkspace.workspace?.channels}
+        inspectorAvailable={!!inspectorAvailable}
+        inspectorOpen={inspectorOpen}
+        stoppable={executionStoppable}
+        stopping={stoppingTurn}
+        onToggleInspector={()=>inspectorOpen?inspector.close():reopenInspector()}
+        onStop={()=>void stopCurrentTurn()}
+        onOpenSpecialist={roleId=>{const channel=pilotWorkspace.workspace?.channels?.find(row=>row.roleId===roleId);if(channel)openSpecialistTaskList(channel);}}
+        onClose={close}
+      />:undefined}/>}
     {(dockedConversation||specialistTaskPage)&&<div className={`workbench-conversation-surface${specialistTaskPage?" is-specialist-task-surface":""}`} aria-hidden="true"/>}
     <main className={`workspace${inspectorOpen?" has-session-inspector":""}${!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":specialistTaskPage?" has-specialist-task-page":""}`} {...(!isWorkspacePage?attachmentDropEvents:{})}>
-      {!detachedConversation&&(specialistTaskPage?<header className="specialist-mobile-heading"><button type="button" className="icon-button" aria-label="打开项目导航" onClick={()=>setMobileMenu(true)}><Glyph name="menu" size={21}/></button><span>专员任务</span></header>:workspaceHeading)}
+      {!detachedConversation&&(specialistTaskPage?<header className="specialist-mobile-heading"><button type="button" className="icon-button" aria-label="打开项目导航" onClick={()=>setMobileMenu(true)}><Glyph name="menu" size={21}/></button><span>专员任务</span></header>:workspaceHeading())}
 
       {!persistentMode && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>服务端不支持持续终端。请核对服务端版本。</span></div>}
       {connection.warning && warningSessionId === sessionId && <div className="system-banner offline-banner" role="alert"><Glyph name="alert" size={18}/><span>{visibleSessionError || "实时连接已断开。当前内容可能不是最新状态，操作已暂停。"}</span><button onClick={() => sessionId ? setSessionReload(value => value + 1) : void loadApp()}><Glyph name="refresh" size={15}/>重试</button></div>}

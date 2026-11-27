@@ -209,9 +209,9 @@ html.lake-windows-chrome .conversation-header-backdrop { top:48px; }
 .app-shell:has(> .workbench-conversation-surface) {
  --conversation-frame-radius:max(8px,calc(var(--radius-window) - 8px));
 }
+.app-shell.has-workbench-conversation { --conversation-header-actions-offset:76px; }
 .app-shell.has-docked-conversation {
  --conversation-header-inset:16px;
- --conversation-header-actions-offset:76px;
  --conversation-island-top:12px;
  --conversation-island-bottom:calc(var(--conversation-island-top) + 46px);
  --conversation-header-clearance:calc(var(--conversation-island-bottom) + 18px);

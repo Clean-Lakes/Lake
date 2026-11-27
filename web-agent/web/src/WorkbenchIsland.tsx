@@ -1,6 +1,15 @@
-import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
+import {useCallback,useEffect,useId,useLayoutEffect,useRef,useState,type PointerEvent as ReactPointerEvent,type ReactNode} from 'react';
 import './workbenchIsland.css';
 import {workbenchIslandLayout,type IslandPosition} from './workbenchIslandLayout';
+import {
+  centeredIslandLeft,
+  expandedIslandWidth,
+  ISLAND_DRAG_CANCEL_PX,
+  ISLAND_LONG_PRESS_MS,
+  ISLAND_PRESS_SWELL_MS,
+  isIslandPressTarget,
+  type IslandPressState,
+} from './lakeIslandPress';
 
 export function useWideWorkbench(){
  const [wide,setWide]=useState(()=>matchMedia('(min-width:1101px)').matches);
@@ -12,9 +21,75 @@ type IslandBox=IslandPosition&{top:number};
 type IslandFlight={open?:boolean;target?:IslandBox;animation?:Animation;deadline?:number};
 const sameBox=(a:IslandBox|undefined,b:IslandBox)=>!!a&&Math.abs(a.left-b.left)<.5&&Math.abs(a.top-b.top)<.5&&Math.abs(a.width-b.width)<.5;
 
+export type WorkbenchIslandHeaderControls={
+ expanded:boolean;
+ specialists:{open:boolean;onOpenChange:(open:boolean)=>void};
+};
+
 /** The terminal island separates from the conversation; the inspector owns its card header. */
-export function WorkbenchIsland({conversation,terminal,activity,terminalOpen,pilotTone}:{conversation:ReactNode;terminal:ReactNode;activity:ReactNode;terminalOpen:boolean;pilotTone?:string}){
+export function WorkbenchIsland({
+  conversation,
+  terminal,
+  activity,
+  terminalOpen,
+  pilotTone,
+  sessionKey,
+  expandedPanel,
+}: {
+  conversation:(controls:WorkbenchIslandHeaderControls)=>ReactNode;
+  terminal:ReactNode;
+  activity:ReactNode;
+  terminalOpen:boolean;
+  pilotTone?:string;
+  sessionKey?:string;
+  expandedPanel?:(controls:{close:()=>void})=>ReactNode;
+}){
  const root=useRef<HTMLDivElement>(null),conversationIsland=useRef<HTMLDivElement>(null),terminalIsland=useRef<HTMLDivElement>(null);
+ const drawer=useRef<HTMLDivElement>(null),drawerTrigger=useRef<HTMLButtonElement>(null),drawerId=useId();
+ const interactive=!!expandedPanel;
+ const [openPanel,setOpenPanel]=useState<'details'|'specialists'|null>(null);
+ const expanded=openPanel==='details';
+ const toggleDrawer=()=>setOpenPanel(current=>current==='details'?null:'details');
+ const setSpecialistsOpen=useCallback((open:boolean)=>{
+  setOpenPanel(current=>current==='details'?current:open?'specialists':null);
+ },[]);
+ const closeDrawer=useCallback((restoreFocus=false)=>{
+  setOpenPanel(current=>current==='details'?null:current);
+  if(restoreFocus&&drawer.current?.contains(document.activeElement))drawerTrigger.current?.focus({preventScroll:true});
+ },[]);
+ const [press,setPress]=useState<IslandPressState>('idle');
+ const expandedRef=useRef(expanded);
+ expandedRef.current=expanded;
+ const pressTimers=useRef<{swell?:number;longPress?:number}>({});
+ const pressState=useRef<{active:boolean;id:number;x:number;y:number;downAt:number}>({active:false,id:-1,x:0,y:0,downAt:0});
+ const clearPressTimers=()=>{
+  window.clearTimeout(pressTimers.current.swell);
+  window.clearTimeout(pressTimers.current.longPress);
+  pressTimers.current={};
+ };
+ const cancelPress=()=>{
+  clearPressTimers();
+  pressState.current.active=false;
+  setPress('idle');
+ };
+ useEffect(()=>{setOpenPanel(null);cancelPress();},[sessionKey,interactive]);
+ useEffect(()=>{
+  if(!expanded)return;
+  const onPointerDown=(event:PointerEvent)=>{
+   const node=conversationIsland.current;
+   if(node&&event.target instanceof Node&&!node.contains(event.target))closeDrawer();
+  };
+  const onKeyDown=(event:KeyboardEvent)=>{
+   if(event.key==='Escape'&&!event.defaultPrevented&&!event.isComposing)closeDrawer(true);
+  };
+  window.addEventListener('pointerdown',onPointerDown);
+  window.addEventListener('keydown',onKeyDown);
+  return()=>{
+   window.removeEventListener('pointerdown',onPointerDown);
+   window.removeEventListener('keydown',onKeyDown);
+  };
+ },[expanded,closeDrawer]);
+ useEffect(()=>cancelPress,[]);
  const open=useRef({terminal:terminalOpen});
  open.current={terminal:terminalOpen};
  const scheduleLayout=useRef<()=>void>(()=>{});
@@ -22,7 +97,7 @@ export function WorkbenchIsland({conversation,terminal,activity,terminalOpen,pil
   const element=root.current,shell=element?.closest<HTMLElement>('.app-shell'),identity=conversationIsland.current;
   if(!element||!shell||!identity)return;
   let frame=0;
-  let previousRoster:HTMLElement|null=null, previousRosterWidth=0, previousIslandWidth=0;
+  let previousRoster:HTMLElement|null=null, previousRosterWidth=0, previousIslandWidth=0, previousExpanded=expandedRef.current, lastCompactWidth=0;
   let rosterAnimation:Animation|undefined;
   let sidebarAnimation:Animation|undefined;
   let sidebarDeadline=0,previousLeft=0;
@@ -90,8 +165,9 @@ export function WorkbenchIsland({conversation,terminal,activity,terminalOpen,pil
     parseFloat(getComputedStyle(navigation).minInlineSize)+2*parseFloat(shellStyle.getPropertyValue('--workbench-navigation-island-padding')):0;
    const readingLeft=(reading?.left??paneLeft)-base.left;
    const left=collapsed?Math.max(readingLeft,navigationStart):readingLeft;
-   const actionsSpace=dockedPane?parseFloat(workspaceStyle.getPropertyValue('--conversation-header-actions-offset'))+12:0;
-   const paneRight=dockedPane?bounds.right-actionsSpace:frameInset?bounds.right-frameInset*2:reading?.right??bounds.right-48;
+   const interactiveIsland=identity.dataset.islandInteractive==='true';
+   const actionsOffset=parseFloat(workspaceStyle.getPropertyValue('--conversation-header-actions-offset'))||76;
+   const paneRight=dockedPane||interactiveIsland?bounds.right-actionsOffset-12:frameInset?bounds.right-frameInset*2:reading?.right??bounds.right-48;
    const right=paneRight-base.left;
    const available=Math.max(1,right-left);
    const identityAvailable=Math.max(1,available-navigationWidth);
@@ -164,7 +240,11 @@ export function WorkbenchIsland({conversation,terminal,activity,terminalOpen,pil
    const compactStatus=rosterOpen&&compactRoster&&badgeLabelWidth>0&&!pilotWidth&&identityAvailable<Math.ceil(rosterFittedWidth);
    identity.toggleAttribute('data-compact-pilot-roster',compactRoster);
    identity.toggleAttribute('data-compact-pilot-status',compactStatus);
-   const conversationWidth=rosterFittedWidth-(compactStatus?badgeLabelWidth:0);
+   const measuredCompactWidth=rosterFittedWidth-(compactStatus?badgeLabelWidth:0);
+   const isExpanded=expandedRef.current;
+   if(!isExpanded&&measuredCompactWidth>0)lastCompactWidth=measuredCompactWidth;
+   const compactConversationWidth=isExpanded&&lastCompactWidth>0?lastCompactWidth:measuredCompactWidth;
+   const conversationWidth=isExpanded?expandedIslandWidth(compactConversationWidth,identityAvailable):compactConversationWidth;
    const layout=workbenchIslandLayout({
     conversation:{left,width:available,inset:0},
     terminal:terminalPane,
@@ -172,7 +252,10 @@ export function WorkbenchIsland({conversation,terminal,activity,terminalOpen,pil
     inspectorWidth:144,
     terminalWidth:Math.min(320,Math.max(260,terminalNameWidth+(terminalNumber?.offsetWidth??0)+(terminalCount?.offsetWidth??0)+112)),
    });
-   const source={...layout.conversation,top:conversationTop};
+   const centeredLeft=interactiveIsland
+    ?centeredIslandLeft(bounds.left-base.left,bounds.width,layout.conversation.width,left,right)
+    :layout.conversation.left;
+   const source={...layout.conversation,left:centeredLeft,top:conversationTop};
    // CSS adds the navigation as padding around an unchanged identity width.
    const identityWidth=Math.max(0,source.width-navigationWidth-borders);
    shell.style.setProperty('--pane-rail-bottom',`${Math.max(12,base.bottom-(composer?.top??base.bottom)+12)}px`);
@@ -184,9 +267,9 @@ export function WorkbenchIsland({conversation,terminal,activity,terminalOpen,pil
    const fromLeft=slide?identity.getBoundingClientRect().left-base.left:source.left;
    if(dockedPane||slide||skipMotion){sidebarAnimation?.cancel();sidebarAnimation=undefined;}
    sidebarCollapsed=collapsed;previousLeft=source.left;
-   const resizeRoster=!!roster&&roster===previousRoster&&rosterWidth!==previousRosterWidth&&identityWidth!==previousIslandWidth&&!skipMotion&&!slide&&!sidebarAnimation;
+   const resizeRoster=!isExpanded&&previousExpanded===isExpanded&&!!roster&&roster===previousRoster&&rosterWidth!==previousRosterWidth&&identityWidth!==previousIslandWidth&&!skipMotion&&!slide&&!sidebarAnimation;
    const fromWidth=resizeRoster?parseFloat(islandStyle.width):identityWidth;
-   if(identityWidth!==previousIslandWidth||skipMotion||slide){rosterAnimation?.cancel();rosterAnimation=undefined;}
+   if(identityWidth!==previousIslandWidth||skipMotion||slide||isExpanded||previousExpanded!==isExpanded){rosterAnimation?.cancel();rosterAnimation=undefined;}
    write(identity,{...source,width:identityWidth},dockedPane);
    identity.dataset.ready='true';identity.dataset.present='true';identity.title=title?.textContent??'';
    if(slide&&Math.abs(fromLeft-source.left)>.5){
@@ -202,7 +285,7 @@ export function WorkbenchIsland({conversation,terminal,activity,terminalOpen,pil
    if(resizeRoster&&Math.abs(identityWidth-fromWidth)>.5)rosterAnimation=identity.animate([
     {width:`${fromWidth}px`},{width:`${identityWidth}px`},
    ],{duration:parseFloat(getComputedStyle(roster).transitionDuration)*1000,easing:islandStyle.getPropertyValue('--pilot-roster-ease').trim()});
-   previousRoster=roster;previousRosterWidth=rosterWidth;previousIslandWidth=identityWidth;
+   previousRoster=roster;previousRosterWidth=rosterWidth;previousIslandWidth=identityWidth;previousExpanded=isExpanded;
    if(terminalIsland.current)move('terminal',terminalIsland.current,layout.terminal?{...layout.terminal,top}:undefined,source,base);
    const candidates=new Set<Element>([shell,...shell.querySelectorAll('.workspace,.session-layout > .session-view,.session-layout > .session-inspector,.terminal-side-panel,.composer-input,.composer-dock,.header-morph-content,.crumb-title,.terminal-island-title')]);
    for(const node of observed)if(!candidates.has(node)){observer.unobserve(node);observed.delete(node);}
@@ -224,11 +307,71 @@ export function WorkbenchIsland({conversation,terminal,activity,terminalOpen,pil
   document.addEventListener('visibilitychange',schedule);reduced.addEventListener('change',schedule);measure();
   return()=>{scheduleLayout.current=()=>{};content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);window.removeEventListener('lake-workbench-layout',measure);document.removeEventListener('visibilitychange',schedule);reduced.removeEventListener('change',schedule);rosterAnimation?.cancel();sidebarAnimation?.cancel();for(const flight of Object.values(flights))flight.animation?.cancel();shell.style.removeProperty('--pane-rail-bottom');shell.style.removeProperty('--workbench-island-navigation-left');shell.style.removeProperty('--workbench-island-navigation-top');};
  },[]);
- useLayoutEffect(()=>scheduleLayout.current(),[terminalOpen]);
+ useLayoutEffect(()=>scheduleLayout.current(),[terminalOpen,expanded]);
+
+ const handleIslandPointerDown=(event:ReactPointerEvent<HTMLDivElement>)=>{
+  if(!interactive||event.button!==0||!event.isPrimary)return;
+  if(!isIslandPressTarget(event.target,event.currentTarget))return;
+  const shell=conversationIsland.current?.closest('.app-shell');
+  if(shell?.hasAttribute('data-sidebar-sliding')||document.documentElement.classList.contains('workbench-resizing'))return;
+  clearPressTimers();
+  pressState.current={active:true,id:event.pointerId,x:event.clientX,y:event.clientY,downAt:performance.now()};
+  try{conversationIsland.current?.setPointerCapture(event.pointerId);}catch{}
+  setPress('squish');
+  pressTimers.current.swell=window.setTimeout(()=>{
+   if(pressState.current.active)setPress('swell');
+  },ISLAND_PRESS_SWELL_MS);
+  pressTimers.current.longPress=window.setTimeout(()=>{
+   if(!pressState.current.active)return;
+   pressState.current.active=false;
+   clearPressTimers();
+   setPress('idle');
+   toggleDrawer();
+  },ISLAND_LONG_PRESS_MS);
+ };
+ const handleIslandPointerMove=(event:ReactPointerEvent<HTMLDivElement>)=>{
+  const current=pressState.current;
+  if(!current.active||current.id!==event.pointerId)return;
+  if(Math.hypot(event.clientX-current.x,event.clientY-current.y)>ISLAND_DRAG_CANCEL_PX)cancelPress();
+ };
+ const handleIslandPointerUp=(event:ReactPointerEvent<HTMLDivElement>)=>{
+  const current=pressState.current;
+  if(!current.active||current.id!==event.pointerId)return;
+  const elapsed=performance.now()-current.downAt;
+  cancelPress();
+  if(conversationIsland.current?.hasPointerCapture?.(event.pointerId)){
+   try{conversationIsland.current.releasePointerCapture(event.pointerId);}catch{}
+  }
+  if(elapsed<ISLAND_LONG_PRESS_MS)toggleDrawer();
+ };
+
  return <div ref={root} className="lake-workbench-islands" role="group" aria-label="Lake Island 工作台">
-  <div ref={conversationIsland} className="lake-workbench-island island-conversation" data-pilot-island-tone={pilotTone}>
+  <div
+   ref={conversationIsland}
+   className="lake-workbench-island island-conversation"
+   data-pilot-island-tone={pilotTone}
+   data-island-interactive={interactive?'true':undefined}
+   data-island-phase={interactive?(expanded?'expanded':'compact'):undefined}
+   data-island-press={interactive?press:undefined}
+   onPointerDown={interactive?handleIslandPointerDown:undefined}
+   onPointerMove={interactive?handleIslandPointerMove:undefined}
+   onPointerUp={interactive?handleIslandPointerUp:undefined}
+   onPointerCancel={interactive?cancelPress:undefined}
+   onLostPointerCapture={interactive?cancelPress:undefined}
+  >
    <span className="workspace-header-glass" aria-hidden="true"/>
-   <span className="island-navigation-divider" aria-hidden="true"/>{activity}{conversation}
+   <span className="island-navigation-divider" aria-hidden="true"/>{activity}
+   {interactive&&<button ref={drawerTrigger} type="button" className="island-expand-trigger"
+    aria-label={expanded?'收起小岛':'展开小岛'} aria-expanded={expanded} aria-controls={drawerId} onClick={toggleDrawer}/>}
+   {conversation({
+    expanded,
+    specialists:{open:openPanel==='specialists',onOpenChange:setSpecialistsOpen},
+   })}
+   {expandedPanel&&<div ref={drawer} id={drawerId} className="island-expand-drawer" data-open={expanded} aria-hidden={!expanded} inert={!expanded}>
+    <div className="island-expand-inner">
+     {expandedPanel({close:()=>closeDrawer(true)})}
+    </div>
+   </div>}
   </div>
   {terminal&&<div ref={terminalIsland} className="lake-workbench-island island-terminal" data-open={terminalOpen} inert={!terminalOpen} aria-hidden={!terminalOpen}><span className="workspace-header-glass" aria-hidden="true"/>{terminal}</div>}
  </div>;
