@@ -10,7 +10,7 @@ import {SpecialistTaskControls} from './SpecialistTaskControls';
 import {PilotSpecialistQuestions} from './PilotSpecialistQuestions';
 import './specialistChannel.css';
 import './specialistTaskList.css';
-import {PilotWorkspace,usePilotWorkspace} from './PilotWorkspace';
+import {pilotConversationView,PilotWorkspace,usePilotWorkspace} from './PilotWorkspace';
 import './pilotWorkspace.css';
 import {ChatGroupNavigation} from './ChatGroup';
 import {ProjectChatCreation} from './ProjectChatCreation';
@@ -2053,9 +2053,11 @@ function AppContent() {
   </>;
 
   const groupsEnabled=bootstrap?.backendRuntime==='typescript';
+  const pilotRouterSession=catalog.sessions.find(row=>row.id===pilotWorkspace.workspace?.project.routerSessionId);
+  const pilotRouterLive=superPilotActivity(pilotConversationView(pilotWorkspace.workspace,pilotRouterSession?.id),pilotRouterSession,connected);
   const pilotNavigation={
     showHeading:false,activity:avatarActivity,pilotButton:sidebarPilotButton,
-    pilotActivity:conversationActivity(undefined,catalog.sessions.find(row=>row.id===pilotWorkspace.workspace?.project.routerSessionId)?.status),
+    pilotActivity:pilotRouterLive?.status==='waiting_approval'?'waiting':pilotRouterLive?.animated?'running':conversationActivity(undefined,pilotRouterSession?.status),
     pilotDisabled:!bootstrap?.authenticated,disabled:!connected,
     onDeleted:(channel:SpecialistChannelInfo)=>pilotWorkspace.removeRole(channel.roleId),
     onCodexSettings:typescriptBackend?openCodexConfiguration:undefined,
@@ -2113,7 +2115,8 @@ function AppContent() {
        specialists={<>
         {sidebarProject&&<PilotWorkspace {...pilotNavigation} presentation={groupsEnabled?'entry':'list'}/>}
         {groupsEnabled&&sidebarProject&&<ChatGroupNavigation key={sidebarProject.id} groups={pilotWorkspace.workspace?.chatGroups??[]}
-         selectedId={sessionSelected?sessionId:null} onOpen={id=>navigate({sessionId:id,resourceId:null})}/>}
+         selectedId={sessionSelected?sessionId:null} workspace={pilotWorkspace.workspace} sessions={catalog.sessions}
+         activity={avatarActivity} connected={connected} onOpen={id=>navigate({sessionId:id,resourceId:null})}/>}
         {sidebarProject&&pilotWorkspace.workspace?.active===false&&<div className="nav-heading sidebar-session-heading" hidden={bulkMode}>
           <button type="button" className="nav-section-toggle" aria-label={`${sidebarSessionsExpanded?"折叠":"展开"}${sidebarProject.name}的会话`} aria-expanded={sidebarSessionsExpanded} aria-controls={navigationProjects.length?`project-sessions-${sidebarProject.id}`:undefined} disabled={!navigationProjects.length} onClick={()=>setClosedSessionGroups(items=>sidebarSessionsExpanded?[...items,sidebarProject.id]:items.filter(id=>id!==sidebarProject.id))}><Glyph name="chevron" size={13} className={sidebarSessionsExpanded?"chevron-open":""}/><span>会话</span></button>
           <button type="button" ref={newSessionButton} className="sidebar-new-session" hidden={bulkMode} disabled={!connected||!!pendingOperation} aria-label="新对话" aria-keyshortcuts="Meta+N Control+N" title={`新对话（${/Mac/.test(navigator.platform)?'⌘ N':'Ctrl N'}）`} onClick={()=>{setClosedSessionGroups(items=>items.filter(id=>id!==sidebarProject.id));openSessionDialog(sidebarProject.id);}}><Glyph name="edit" size={14}/></button>

@@ -36,6 +36,20 @@
   white-space:nowrap;
   font-size:var(--font-size-toolbar);
 }
+.chat-group-row-head {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  min-width:0;
+  line-height:20px;
+}
+.chat-group-row-head > strong {
+  flex:1;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
 .chat-group-avatars {
   display:inline-flex;
   align-items:center;
@@ -44,13 +58,26 @@
   min-inline-size:var(--sidebar-icon-column,22px);
   line-height:1;
 }
-.chat-group-avatars .super-role-avatar + .super-role-avatar {
+.chat-group-avatar-item {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  transition:box-shadow 180ms ease;
+}
+.chat-group-avatar-item[data-activity="running"] {
+  box-shadow:0 0 0 1.5px color-mix(in srgb,var(--info) 45%,transparent);
+}
+.chat-group-avatar-item[data-activity="waiting"] {
+  box-shadow:0 0 0 1.5px color-mix(in srgb,var(--warning) 55%,transparent);
+}
+.chat-group-avatars .chat-group-avatar-item + .chat-group-avatar-item {
   margin-inline-start:-4px;
 }
 .chat-group-nav-row .chat-group-avatars {
   inline-size:var(--sidebar-icon-column);
 }
-.chat-group-nav-row .chat-group-avatars .super-role-avatar + .super-role-avatar {
+.chat-group-nav-row .chat-group-avatars .chat-group-avatar-item + .chat-group-avatar-item {
   margin-inline-start:-6px;
 }
 .modal.chat-group-create-dialog {

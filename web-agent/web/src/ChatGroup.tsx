@@ -1,34 +1,61 @@
 import {useEffect, useId, useRef, useState, type FormEvent, type RefObject} from 'react';
-import type {ChatGroup, ChatGroupMember, SpecialistChannelInfo} from '../../shared/contracts';
+import type {ChatGroup, ChatGroupMember, SpecialistChannelInfo, SuperWorkspace, WorkSession} from '../../shared/contracts';
+import {ActivityDots} from './ActivityIndicator';
 import {api, readableError} from './api';
+import {chatGroupActivity} from './chatGroupActivity';
 import {Glyph} from './Icons';
+import type {ConversationAvatarActivity} from './superAgentPresentation';
 import {SuperRoleAvatar} from './SuperRoleAvatar';
 
-export function ChatGroupAvatars({members,compact=false}:{members:readonly ChatGroupMember[];compact?:boolean}) {
+export function ChatGroupAvatars({members,compact=false,activeRoleIds,waitingRoleIds}:{
+  members:readonly ChatGroupMember[];
+  compact?:boolean;
+  activeRoleIds?:ReadonlySet<string>;
+  waitingRoleIds?:ReadonlySet<string>;
+}) {
   return <span className="chat-group-avatars" aria-hidden="true">
-    {members.length ? members.slice(0,compact?2:3).map(member =>
-      <SuperRoleAvatar key={member.roleId} roleId={member.roleId} name={member.roleName} avatarId={member.avatarId} size={compact?14:16} motion="still"/>
-    ) : <Glyph name="lakeSpecialists" size={18}/>}
+    {members.length ? members.slice(0,compact?2:3).map(member => {
+      const activity = waitingRoleIds?.has(member.roleId) ? 'waiting' : activeRoleIds?.has(member.roleId) ? 'running' : undefined;
+      return <span className="chat-group-avatar-item" key={member.roleId} data-activity={activity}>
+        <SuperRoleAvatar roleId={member.roleId} name={member.roleName} avatarId={member.avatarId} size={compact?14:16} motion={activity==='running'?'working':'still'}/>
+      </span>;
+    }) : <Glyph name="lakeSpecialists" size={18}/>}
   </span>;
 }
 
-export function ChatGroupNavigation({groups,selectedId,onOpen}:{
+export function ChatGroupNavigation({groups,selectedId,workspace,sessions,activity,connected=true,onOpen}:{
   groups:readonly ChatGroup[];
   selectedId:string|null;
+  workspace?:SuperWorkspace|null;
+  sessions?:readonly WorkSession[];
+  activity?:ConversationAvatarActivity;
+  connected?:boolean;
   onOpen:(sessionId:string)=>void;
 }) {
   return <section className="chat-group-navigation" aria-label="群组">
     <div className="chat-group-navigation-heading">
       <h2>群组</h2>
     </div>
-    {groups.map(group=><button key={group.sessionId} type="button" className="nav-row chat-group-nav-row"
-      aria-current={selectedId===group.sessionId?'page':undefined} onClick={()=>onOpen(group.sessionId)}>
-      <ChatGroupAvatars members={group.members} compact/>
-      <span className="nav-row-text">
-        <strong title={group.title}>{group.title}</strong>
-        <small>{group.latest ? [group.latest.author,group.latest.text].filter(Boolean).join('：') : `${group.members.length} 位专员`}</small>
-      </span>
-    </button>)}
+    {groups.map(group=>{
+      const groupState=chatGroupActivity(group,workspace,sessions,activity,connected);
+      return <button key={group.sessionId} type="button" className="nav-row chat-group-nav-row"
+        aria-current={selectedId===group.sessionId?'page':undefined}
+        data-activity={groupState.state!=='idle'?groupState.state:undefined}
+        onClick={()=>onOpen(group.sessionId)}>
+        <ChatGroupAvatars members={group.members} compact activeRoleIds={groupState.workingRoleIds} waitingRoleIds={groupState.waitingRoleIds}/>
+        <span className="nav-row-text">
+          <span className="chat-group-row-head">
+            <strong title={group.title}>{group.title}</strong>
+            {groupState.state!=='idle'&&<span className="pilot-worker-status">
+              {groupState.state==='waiting'
+                ?<span className="pilot-worker-confirmation">需确认</span>
+                :<span className="pilot-worker-running" role="img" aria-label="处理中"><ActivityDots className="activity-indicator"/></span>}
+            </span>}
+          </span>
+          <small>{groupState.detail??(group.latest?[group.latest.author,group.latest.text].filter(Boolean).join('：'):`${group.members.length} 位专员`)}</small>
+        </span>
+      </button>;
+    })}
   </section>;
 }
 
