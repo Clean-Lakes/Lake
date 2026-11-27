@@ -308,6 +308,49 @@ test('auto_in_scope resource grant routes directly without manual approval card 
   assert.equal(ws.gatewayApprovals.length, 0);
 });
 
+test('a batch decision applies exactly the listed pending approvals in one transaction', async t => {
+  const f = await fixture(t);
+  const base = `/api/projects/${f.project.id}/superagent/specialists/${f.role.id}/mcp`;
+  await f.api(`${base}/grants`, 'PUT', {
+    resourceGrants: [f.stagingResource, f.ciResource].map(resource => ({
+      resourceId: resource.id, approvalPolicy: 'always_approve',
+    })),
+  });
+  const { invite } = await f.api(`${base}/invites`, 'POST', {}, 201);
+  const { token } = await f.api(`/api/gateway/invites/${invite.inviteUrl.split('/').at(-1)}/redeem`, 'POST', {}, 200, '');
+  const send = (clientMessageId, text) => f.api('/api/gateway/messages', 'POST', {
+    text, clientMessageId, threadId: 'batch-approval-test',
+  }, 202, token);
+  const first = await send('batch-first-1', '检查 GOS 预发');
+  const repeated = await send('batch-first-1', '检查 GOS 预发');
+  assert.equal(repeated.approvalId, first.approvalId);
+  const second = await send('batch-second-2', '检查 CI 构建流水线');
+  const ids = [first.approvalId, second.approvalId];
+  const later = await send('batch-later-3', '查询其他信息');
+  const decision = (approvalIds, expected = 200, project = f.project.id) =>
+    f.api(`/api/projects/${project}/superagent/gateway-approvals/decision`, 'POST', { approvalIds, approve: true }, expected);
+  const saved = item => f.app.store.get('superGatewayApprovals', item.approvalId);
+
+  await decision(ids, 404, f.otherProject.id);
+  await decision([ids[0], ids[0]], 400);
+  await decision([ids[0], 'missing-approval'], 404);
+  assert.equal(saved(first).status, 'pending');
+  assert.equal(f.app.store.get('messages', first.instructionId), undefined);
+  assert.equal(f.scheduledCount(), 0);
+
+  const result = await decision(ids);
+  assert.deepEqual(result.map(approval => [approval.id, approval.status]), ids.map(id => [id, 'approved']));
+  assert.deepEqual(f.app.store.get('messageInputs', first.instructionId).resourceIds, [f.stagingResource.id]);
+  assert.deepEqual(f.app.store.get('messageInputs', second.instructionId).resourceIds, [f.ciResource.id]);
+  assert.equal(saved(later).status, 'pending');
+  assert.equal(f.scheduledCount(), 1);
+
+  await decision([later.approvalId, first.approvalId], 409);
+  assert.equal(saved(later).status, 'pending');
+  assert.equal(f.app.store.get('messages', later.instructionId), undefined);
+  assert.equal(f.scheduledCount(), 1);
+});
+
 test('specialist MCP approvals keep bulk grant scope without repeating it in the card', async t => {
   const f = await fixture(t);
   const base = `/api/projects/${f.project.id}/superagent/specialists/${f.role.id}/mcp`;

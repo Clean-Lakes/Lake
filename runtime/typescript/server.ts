@@ -651,9 +651,12 @@ export async function startLakeServer(options: ServerOptions) {
           result = await superagent.deleteRole(path[2], path[5], data.revision);
         else if (path.length === 7 && path[4] === 'specialists' && path[6] === 'execution' && method === 'PUT')
           result = superagent.setRoleExecution(path[2],path[5],data);
-        else if (path.length === 7 && path[4] === 'gateway-approvals' && path[6] === 'decision' && method === 'POST') {
+        else if (path[4] === 'gateway-approvals' && path.at(-1) === 'decision' &&
+                 (path.length === 6 || path.length === 7) && method === 'POST') {
           if (draining) throw new HttpError(503, '服务正在退出');
-          result = await superagent.decideGatewayApproval(path[2], path[5], data);
+          result = path.length === 6
+            ? await superagent.decideGatewayApprovals(path[2], data.approvalIds, data)
+            : await superagent.decideGatewayApproval(path[2], path[5], data);
         }
         else if (path.length >= 7 && path[4] === 'specialists' && path[6] === 'mcp') {
           const project = store.project(path[2]);

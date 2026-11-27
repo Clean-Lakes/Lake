@@ -29,6 +29,7 @@ export function pilotConversationView(workspace:SuperWorkspace|null,sessionId?:s
   project:group?{...workspace.project,routerSessionId:sessionId}:workspace.project,
   workers:workspace.workers.filter(worker=>worker.pilotSessionId===group?.sessionId),
   questions:workspace.questions?.filter(question=>question.pilotSessionId===group?.sessionId),
+  gatewayApprovals:group?undefined:workspace.gatewayApprovals?.filter(approval=>approval.projectId===workspace.project.projectId&&approval.sessionId===sessionId),
   channels:group?workspace.channels?.filter(channel=>group.members.some(member=>member.roleId===channel.roleId)):workspace.channels,
   conversations:workspace.conversations?.filter(round=>round.sessionId===sessionId),
   ...(group&&{cursor:group.cursor,pilotMessageRead:undefined}),

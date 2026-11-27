@@ -2,15 +2,74 @@
   container: pilot-gateway-approvals / inline-size;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   max-inline-size: 760px;
   margin: 0 auto 10px;
   overflow-wrap: anywhere;
 }
-.pilot-gateway-approval {
+.pilot-gateway-approval-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-inline: 2px;
+}
+.pilot-gateway-approval-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-block-size: min(20rem, 37dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.pilot-gateway-approval,
+.pilot-gateway-approval-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pilot-gateway-approval { flex: none; }
+.pilot-gateway-approval-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-settings-panel);
+  corner-shape: var(--corner-window);
+  background: var(--surface);
+}
+.pilot-gateway-approval-item > .pilot-gateway-approval-toggle.lake-disclosure-summary {
+  inline-size: 100%;
+  padding: 8px 12px;
+  margin: 0;
+  border-radius: inherit;
+  corner-shape: inherit;
+}
+.pilot-gateway-approval-toggle:focus-visible { outline-offset: -2px; }
+.pilot-gateway-approval-caption {
+  flex: 1;
+  min-inline-size: 0;
+  display: grid;
+  gap: 2px;
+  line-height: 1.35;
+}
+.pilot-gateway-approval-caption strong {
+  color: var(--foreground);
+  font-weight: var(--font-weight-semibold);
+}
+.pilot-gateway-approval-caption small {
+  font-size: var(--font-size-toolbar);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pilot-gateway-approval-toggle .pilot-gateway-approval-state { flex: none; }
+.pilot-gateway-approval-item .pilot-gateway-approval-detail { padding: 0 12px 12px; }
+.pilot-gateway-approval-item .pilot-gateway-approval-ask { margin-inline-start: 0; }
+.pilot-gateway-approval-item .pilot-gateway-approval-card {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 .pilot-gateway-approval-author {
   display: flex;
@@ -175,7 +234,8 @@
   align-items: center;
   gap: 8px;
 }
-.pilot-gateway-approval-actions .button {
+.pilot-gateway-approval-actions .button,
+.pilot-gateway-approval-toolbar .button {
   min-block-size: 32px;
   padding: 0 13px;
   border-radius: var(--radius-settings-control);

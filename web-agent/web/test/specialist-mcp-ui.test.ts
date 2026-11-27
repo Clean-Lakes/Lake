@@ -4,6 +4,7 @@ import test from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { GatewayApprovalRequest, SuperWorkspace, WorkSession } from '../../shared/contracts';
+import { pilotConversationView } from '../src/PilotWorkspace';
 import { superPilotActivity } from '../src/superPilotActivity';
 
 const css = registerHooks({
@@ -91,18 +92,42 @@ test('PilotGatewayApprovals shows decided status and optional rejection reason',
   assert.doesNotMatch(rejectedHtml, /同意/);
 });
 
-test('superPilotActivity elevates pending external MCP approvals into Lake status island', () => {
+test('PilotGatewayApprovals offers one batch decision for the pending rows', () => {
+  const html = renderToStaticMarkup(createElement(PilotGatewayApprovals, {
+    approvals: [sampleApproval, { ...sampleApproval, id: 'appr-2' }, {
+      ...sampleApproval, id: 'appr-3', status: 'approved',
+    }],
+    connected: true,
+    onDecided: async () => {},
+  }));
+  assert.match(html, /全部同意（2）/);
+  assert.match(html, /class="pilot-gateway-approval-list"/);
+  assert.match(html, /class="pilot-gateway-approval-item"/);
+  assert.ok(html.includes(sampleApproval.title));
+  assert.ok(!html.includes(sampleApproval.rawRequest));
+});
+
+test('external MCP approvals belong to the Lake main chat', () => {
   const router = { id: 'pilot-1', projectId: 'proj-1', status: 'idle' } as WorkSession;
   const ws: SuperWorkspace = {
     active: true,
     project: { projectId: 'proj-1', routerSessionId: 'pilot-1', version: 1 },
     workers: [],
     gatewayApprovals: [sampleApproval],
+    chatGroups: [{
+      projectId: 'proj-1', sessionId: 'group-1', title: '发布工作群', members: [], updatedAt: '',
+    }],
   };
-  const activity = superPilotActivity(ws, router, true);
+  const main = pilotConversationView(ws, router.id)!;
+  const activity = superPilotActivity(main, router, true);
   assert.ok(activity);
   assert.equal(activity.status, 'waiting_approval');
   assert.equal(activity.phase, 'waiting_approval');
   assert.equal(activity.animated, false);
   assert.match(activity.label, /发布专员.*等待确认外部请求/);
+
+  const group = { ...router, id: 'group-1' };
+  const groupView = pilotConversationView(ws, group.id)!;
+  assert.equal(groupView.gatewayApprovals, undefined);
+  assert.equal(superPilotActivity(groupView, group, true), null);
 });

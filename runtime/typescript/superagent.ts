@@ -3504,16 +3504,25 @@ export class LakeSuperagent implements AgentHost {
       .map(presentGatewayApproval);
   }
   async decideGatewayApproval(projectId: string, approvalId: string, input: { approve?: unknown; reason?: unknown }): Promise<GatewayApprovalRequest> {
+    const [approval] = await this.decideGatewayApprovals(projectId, [approvalId], input);
+    return approval!;
+  }
+  async decideGatewayApprovals(projectId: string, ids: unknown, input: { approve?: unknown; reason?: unknown }): Promise<GatewayApprovalRequest[]> {
     if (typeof input?.approve !== "boolean") throw new HttpError(400, "approve 须为布尔值");
+    if (!Array.isArray(ids) || !ids.length) throw new HttpError(400, "请选择待审批请求");
+    const approvalIds = ids.map(id => text(id, "approvalId", 128));
+    if (new Set(approvalIds).size !== approvalIds.length) throw new HttpError(400, "审批请求不能重复");
     const reason = input.reason === undefined || input.reason === null || input.reason === "" ? undefined : text(input.reason, "reason", 500);
-    const current = this.store.get<GatewayApprovalRequest>("superGatewayApprovals", approvalId);
-    if (!current || current.projectId !== projectId) throw new HttpError(404, "外部审批请求不存在");
-    if (current.status !== "pending") throw new HttpError(409, "该审批请求已处理");
-    const event = this.store.require<InputEvent>("superInputs", current.eventId);
     const decidedAt = now();
-    const updated = this.store.transaction(() => {
-      const fresh = this.store.require<GatewayApprovalRequest>("superGatewayApprovals", approvalId);
-      if (fresh.status !== "pending") throw new HttpError(409, "该审批请求已处理");
+    const routerSessionId = this.store.get<SuperProject>("superProjects", projectId)?.routerSessionId;
+    if (!routerSessionId) throw new HttpError(404, "外部审批请求不存在");
+    const updated = this.store.transaction(() => approvalIds.map(approvalId => {
+      const fresh = this.store.get<GatewayApprovalRequest>("superGatewayApprovals", approvalId);
+      if (!fresh || fresh.projectId !== projectId || fresh.sessionId !== routerSessionId) {
+        throw new HttpError(404, "外部审批请求不存在");
+      }
+      if (fresh.status !== "pending") throw new HttpError(409, "有审批请求已处理，请刷新后重试");
+      const event = this.store.require<InputEvent>("superInputs", fresh.eventId);
       if (!input.approve) {
         const notice = reason ? `管理员已拒绝此次请求：${reason}` : "管理员已拒绝此次请求。";
         const nextApproval: GatewayApprovalRequest = { ...fresh, status: "rejected", ...(reason ? { decisionReason: reason } : {}), decidedAt };
@@ -3555,14 +3564,10 @@ export class LakeSuperagent implements AgentHost {
         }
       }
       return nextApproval;
-    });
-    if (input.approve) {
-      this.notify(updated.sessionId, "message");
-      this.notify(updated.sessionId, "specialist");
-      this.schedule();
-    } else {
-      this.notify(updated.sessionId, "specialist");
-    }
+    }));
+    if (input.approve) this.notify(routerSessionId, "message");
+    this.notify(routerSessionId, "specialist");
+    if (input.approve) this.schedule();
     return updated;
   }
   async gatewayMessage(connection:GatewayConnection,input:GatewayMessageInput,guard?:()=>void) {

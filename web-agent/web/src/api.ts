@@ -182,6 +182,7 @@ export const api = {
   revokeSpecialistMcpInvite:(projectId:string,roleId:string,inviteId:string)=>request<import('../../shared/contracts').SpecialistMcpState>(`/api/projects/${encodeURIComponent(projectId)}/superagent/specialists/${encodeURIComponent(roleId)}/mcp/invites/${encodeURIComponent(inviteId)}`,{method:"DELETE"}),
   disconnectSpecialistMcp:(projectId:string,roleId:string)=>request<import('../../shared/contracts').SpecialistMcpState>(`/api/projects/${encodeURIComponent(projectId)}/superagent/specialists/${encodeURIComponent(roleId)}/mcp/disconnect`,{method:"POST",body:"{}"}),
   decideGatewayApproval:(projectId:string,approvalId:string,value:{approve:boolean;reason?:string})=>request<import('../../shared/contracts').GatewayApprovalRequest>(`/api/projects/${encodeURIComponent(projectId)}/superagent/gateway-approvals/${encodeURIComponent(approvalId)}/decision`,{method:"POST",body:JSON.stringify(value)}),
+  decideGatewayApprovals:(projectId:string,value:{approvalIds:string[];approve:boolean})=>post<import('../../shared/contracts').GatewayApprovalRequest[]>(`/api/projects/${encodeURIComponent(projectId)}/superagent/gateway-approvals/decision`,value),
   grafanaResourceWebhook: (id: string, signal?: AbortSignal) =>
     request<{source: import('../../shared/contracts').LakeEventSource | null}>(`/api/resources/${encodeURIComponent(id)}/grafana-webhook`, {signal}),
   createGrafanaResourceWebhook: (id: string) =>
