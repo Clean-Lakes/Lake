@@ -1,0 +1,29 @@
+.workbench-modal-shell {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  padding: 16px;
+  box-sizing: border-box;
+  background: transparent;
+  color: var(--foreground);
+  overflow: visible;
+}
+.workbench-modal-shell:not([open]) { display: none; }
+.workbench-modal-shell[open] { display: grid; place-items: center; }
+.workbench-modal-shell::backdrop { background: transparent; }
+.workbench-modal-scrim {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: rgb(0 0 0 / 22%);
+}
+:root[data-theme="dark"] .workbench-modal-scrim { background: rgb(0 0 0 / 42%); }
+.workbench-modal-shell > .workbench-dialog {
+  position: relative;
+  margin: 0;
+}

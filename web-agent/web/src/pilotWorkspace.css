@@ -71,10 +71,7 @@
 .sidebar-specialist-create:disabled { opacity:.45; cursor:default; }
 .modal.specialist-create-dialog {
  width:min(416px,calc(100vw - 32px));
- margin:auto;
 }
-.specialist-create-dialog:not([open]) { display:none; }
-.specialist-create-dialog::backdrop { background:var(--overlay); }
 .specialist-create-dialog .app-select-trigger { height:40px; }
 .specialist-create-dialog textarea {
  display:block;
