@@ -333,15 +333,17 @@
     const start = width => Math.max(gutter, (width - 960) / 2);
     const readingWidth = width => Math.min(960, width - gutter * 2);
     const initialStart = start(viewport);
-    const panes = [surface, workspace, drag.handle, owner.querySelector('.workbench-navigation')].filter(Boolean);
-    const header = owner.querySelector('.lake-workbench-islands');
+    const navigation = owner.querySelector('.workbench-navigation');
+    const navigationInIsland = !!navigation && (owner.classList.contains('has-workbench-conversation') || owner.classList.contains('has-docked-conversation'));
+    const panes = [surface, workspace, drag.handle, navigationInIsland ? null : navigation].filter(Boolean);
+    const header = [owner.querySelector('.lake-workbench-islands'), navigationInIsland ? navigation : null].filter(Boolean);
     const reading = workspace.querySelectorAll('.timeline-list,.conversation-header-backdrop');
     const restore = [
       retainStyles(sidebar, ['inline-size']),
       retainStyles(surface, ['inset-inline-end']),
       retainStyles(composer, ['--sidebar-resize-viewport']),
       retainStyles(conversation, ['inline-size']),
-      ...[...panes, header, ...reading].filter(Boolean).map(node => retainStyles(node, ['transform'])),
+      ...[...panes, ...header, ...reading].filter(Boolean).map(node => retainStyles(node, ['transform'])),
     ];
     const userMessages = alignVisibleUserMessages(conversation, readingWidth(viewport));
     // Lay out the scroll view once. Its largest possible clip fits both
@@ -366,7 +368,7 @@
         lastReadingOffset = readingOffset;
         for (const node of reading) translate(node, readingOffset);
       }
-      translate(header, offset + readingOffset);
+      for (const node of header) translate(node, offset + readingOffset);
       userMessages.resize(readingWidth(room));
       drag.handle.setAttribute('aria-valuenow', String(width));
     };
@@ -503,7 +505,9 @@
     const workspace = shell.querySelector('.workspace');
     if (workspace) { const r = workspace.getBoundingClientRect(); regions.push([r.x, 0, r.width, height]); }
     if (sidebar) { const r = sidebar.getBoundingClientRect(); regions.push([r.x, 0, r.width, height]); }
-    const excluded = [...shell.querySelectorAll('.workbench-splitter, .workbench-navigation button'), ...headers.flatMap(header => [...header.querySelectorAll('button, a, input, select, textarea, [role="button"]')])].map(rect);
+    const sidebarControls = [...shell.querySelectorAll('.sidebar-brand-row :is(button, a, input, select, textarea, [role="button"], [role="combobox"])')]
+      .filter(element => element.getBoundingClientRect().width > 0 && !element.closest('[aria-hidden="true"]') && getComputedStyle(element).visibility !== 'hidden');
+    const excluded = [...shell.querySelectorAll('.workbench-splitter, .workbench-navigation button'), ...sidebarControls, ...headers.flatMap(header => [...header.querySelectorAll('button, a, input, select, textarea, [role="button"]')])].map(rect);
     if (sidebarSlide?.shell === shell) excluded.push(...sidebarSlide.buttonPaths);
     for (const element of document.querySelectorAll('.conversation-directory-trigger, .modal-scrim, dialog[open], [role="dialog"], [role="menu"], [role="listbox"]')) excluded.push(rect(element));
     const body = JSON.stringify({ regions, excluded, theme: document.documentElement.dataset.theme || 'light', appearance: window.lakeAppearance || 'light' });

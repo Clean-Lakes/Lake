@@ -6,9 +6,10 @@ import {runInNewContext} from 'node:vm';
 // Exercise the shipped browser/native script through its resize and splitter events.
 const source=readFileSync(new URL('../src/workbenchLayout.js',import.meta.url),'utf8');
 const railWidth=52;
-function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sidebarDuration='420ms',railReadingLeft?:number){
+function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sidebarDuration='420ms',railReadingLeft?:number,options?:{dockWidth?:number;chrome?:boolean;sidebarControls?:Array<{x:number;y:number;width:number;height:number;hidden?:boolean}>}){
  const properties=new Map<string,string>(),callbacks=new Map<number,(time:number)=>void>(),events=new Map<string,Function>();
  const widthSaves:Array<typeof saved>=[];
+ const chromeMessages:Array<{regions:number[][];excluded:number[][]}>=[];
  let nextFrame=0;
  const style=(vars=new Map<string,string>())=>({
   setProperty:(key:string,value:string)=>vars.set(key,value),
@@ -16,7 +17,7 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sid
   getPropertyPriority:()=>'',removeProperty:(key:string)=>vars.delete(key),
  });
  const animations:Array<{name:string;frames:Array<{transform?:string}>;duration:number;startTime:number|null;currentTime:number|null;paused:boolean;cancelled:boolean}>=[];
- const rect=(left:number)=>({left,right:left+28,top:0,bottom:28});
+ const rect=(left:number)=>({left,right:left+28,top:0,bottom:28,x:left,y:0,width:28,height:28});
  const animatedNode=(left:()=>number,name='')=>({
   style:style(),
   querySelector:()=>null,
@@ -52,36 +53,53 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sid
   addEventListener(type:string,callback:Function){(this as any)[type]=callback;},querySelector:findHandle,
   appendChild(node:any){handles.set(node.className.split('-').at(-1),node);},
  });
- const sidebar=makeNode(),dock={...makeNode(),getBoundingClientRect:()=>({width:850})};
- const conversation={...makeNode(),getBoundingClientRect:()=>({width:850,top:65,bottom:800}),querySelectorAll:()=>[],
+ const dockWidth=options?.dockWidth??850;
+ const sidebar={...makeNode(),getBoundingClientRect:()=>({x:0,y:0,width:sidebarWidth(),height:900,left:0,top:0,right:sidebarWidth(),bottom:900})};
+ const islands=makeNode(),navigation=makeNode();
+ const dock={...makeNode(),getBoundingClientRect:()=>({width:dockWidth})};
+ const conversation={...makeNode(),getBoundingClientRect:()=>({width:dockWidth,top:65,bottom:800}),querySelectorAll:()=>[],
   querySelector:(selector:string)=>selector===':scope > .timeline-list'?{getBoundingClientRect:()=>({width:750})}:null};
- const workspace={...makeNode(),clientWidth:1232,querySelector:(selector:string)=>
-  selector==='.composer-input'?composer:selector==='.composer-dock'?dock:selector==='.conversation'?conversation:null,
+ const workspace={...makeNode(),clientWidth:1232,
+  getBoundingClientRect:()=>({x:sidebarWidth(),y:0,width:1512-sidebarWidth(),height:900,left:sidebarWidth(),top:0,right:1512,bottom:900}),
+  querySelector:(selector:string)=>
+   selector==='.composer-input'?composer:selector==='.composer-dock'?dock:selector==='.conversation'?conversation:null,
   querySelectorAll:(selector:string)=>selector==='.timeline-list,.conversation-header-backdrop'?[]:composer?[composer]:[]};
+ const sidebarControlNodes=(options?.sidebarControls??[]).map(control=>({
+  getBoundingClientRect:()=>({x:control.x,y:control.y,width:control.width,height:control.height,left:control.x,top:control.y,right:control.x+control.width,bottom:control.y+control.height}),
+  closest:(selector:string)=>selector==='[aria-hidden="true"]'&&control.hidden?{}:null,
+ }));
  const inspector=makeNode(),terminal=makeNode(),shell={...makeNode(properties),clientWidth:1512,inspectorOpen:!docked,terminalOpen:!docked,sidebarCollapsed:false,
  getBoundingClientRect:()=>rect(0), animate:surface.animate,
- querySelectorAll:(selector:string)=>docked&&selector==='.workbench-navigation button'?[toggle]:[],
- classList:{contains:(name:string)=>name==='terminal-is-open'&&shell.terminalOpen||name==='has-collapsed-sidebar'&&shell.sidebarCollapsed||name==='has-docked-conversation'&&docked},querySelector(selector:string):any{
+ querySelectorAll:(selector:string)=>{
+  if(selector==='.workbench-navigation button')return docked?[toggle]:[];
+  if(selector.startsWith('.sidebar-brand-row'))return sidebarControlNodes;
+  return [];
+ },
+ classList:{contains:(name:string)=>name==='terminal-is-open'&&shell.terminalOpen||name==='has-collapsed-sidebar'&&shell.sidebarCollapsed||(name==='has-docked-conversation'||name==='has-workbench-conversation')&&docked},querySelector(selector:string):any{
   if(selector==='.workspace'){workspace.clientWidth=this.clientWidth-sidebarWidth();return workspace;}
   if(selector==='.conversation')return conversation;
   if(selector==='.sidebar')return sidebar;
+  if(selector==='.lake-workbench-islands')return docked?islands:null;
+  if(selector==='.workbench-navigation')return navigation;
   if(selector==='.island-conversation')return island;
   if(selector==='.workbench-conversation-surface')return docked?surface:null;
   if(selector==='.terminal-side-panel')return this.terminalOpen?terminal:null;
   if(selector==='.session-layout > .session-inspector'||selector==='.session-layout > .session-inspector.is-open')return this.inspectorOpen?inspector:null;
   return findHandle(selector);
  }};
- const window={lakeWorkbenchWidths:saved,addEventListener:(type:string,callback:Function)=>events.set(type,callback),dispatchEvent:(event:Event)=>events.get(event.type)?.(event)};
+ const window:any={lakeWorkbenchWidths:saved,addEventListener:(type:string,callback:Function)=>events.set(type,callback),dispatchEvent:(event:Event)=>events.get(event.type)?.(event)};
+ if(options?.chrome)window.webkit={messageHandlers:{lakeChrome:{postMessage:(message:{regions:number[][];excluded:number[][]})=>{if(message.regions)chromeMessages.push(message);}}}};
  const getComputedStyle=(_node:unknown,pseudo?:string)=>({
-  getPropertyValue:(name:string)=>name==='--workbench-sidebar-duration'?sidebarDuration:`${railWidth}px`,
+  getPropertyValue:(name:string)=>name==='--workbench-sidebar-duration'?sidebarDuration:name==='--lake-titlebar-height'?'52px':`${railWidth}px`,
   paddingInlineStart:'30px',
+  visibility:'visible',
   transitionDuration:pseudo==='::before'?'0.42s':'0s',
   transitionTimingFunction:'ease',
  });
- const context={window,Event,innerWidth:1512,innerHeight:900,localStorage:{getItem(){return null;},setItem(_key:string,value:string){widthSaves.push(JSON.parse(value));}},document:{body:{},head:{appendChild(){}},documentElement:{classList:{add(){},remove(){}}},timeline:{currentTime:10},createElement:()=>makeNode(),querySelector:()=>shell,addEventListener(){}},getComputedStyle,ResizeObserver:class{observe(){}disconnect(){}},MutationObserver:class{observe(){}disconnect(){}},IntersectionObserver:class{observe(){}disconnect(){}takeRecords(){return [];}},requestAnimationFrame:(callback:(time:number)=>void)=>{callbacks.set(++nextFrame,callback);return nextFrame;},cancelAnimationFrame:(frame:number)=>callbacks.delete(frame)};
+ const context={window,Event,innerWidth:1512,innerHeight:900,localStorage:{getItem(){return null;},setItem(_key:string,value:string){widthSaves.push(JSON.parse(value));}},document:{body:{},head:{appendChild(){}},documentElement:{dataset:{theme:'light'},classList:{add(){},remove(){}}},timeline:{currentTime:10},createElement:()=>makeNode(),querySelector:()=>shell,querySelectorAll:()=>[],addEventListener(){}},getComputedStyle,ResizeObserver:class{observe(){}disconnect(){}},MutationObserver:class{observe(){}disconnect(){}},IntersectionObserver:class{observe(){}disconnect(){}takeRecords(){return [];}},requestAnimationFrame:(callback:(time:number)=>void)=>{callbacks.set(++nextFrame,callback);return nextFrame;},cancelAnimationFrame:(frame:number)=>callbacks.delete(frame)};
  runInNewContext(source,context);
  const flush=(time=0)=>{for(const [id,callback] of callbacks){callbacks.delete(id);callback(time);}};flush();
- return {properties,animations,flush,widthSaves,conversation,surface,sidebarPane:sidebar,workspace,dock,shell,
+ return {properties,animations,flush,widthSaves,chromeMessages,conversation,surface,sidebarPane:sidebar,workspace,dock,islands,navigation,shell,
   sidebar:handles.get('sidebar') as ReturnType<typeof makeNode>,
   drag(type:string,clientX:number,pointerId=1){handles.get('sidebar')[type]({type,clientX,pointerId,button:0,preventDefault(){}});},
   resize(width:number){shell.clientWidth=width;context.innerWidth=width;events.get('resize')!();flush();},reset(pane:string){handles.get(pane).dblclick();flush();},toggle(inspectorOpen:boolean,terminalOpen:boolean){shell.inspectorOpen=inspectorOpen;shell.terminalOpen=terminalOpen;events.get('resize')!();flush();},commit(inspectorOpen:boolean,terminalOpen:boolean){shell.inspectorOpen=inspectorOpen;shell.terminalOpen=terminalOpen;events.get('lake-workbench-layout')!();},collapseSidebar(collapsed:boolean){events.get('lake-workbench-sidebar-toggle')!();shell.sidebarCollapsed=collapsed;events.get('lake-workbench-layout')!();},widths(){return ['--sidebar-width','--terminal-panel-width','--inspector-preferred-width'].map(key=>parseFloat(properties.get(key)!));}};
@@ -287,4 +305,35 @@ test('both sidebar directions keep the CSS duration when the desktop stylesheet 
    assert.deepEqual(page.animations.slice(first).map(animation=>animation.duration),[420,420],token);
   }
  }
+});
+
+test('two-pane sidebar dragging keeps workbench navigation locked to the conversation island',()=>{
+ const page=fixture(undefined,true,'420ms',undefined,{dockWidth:1200});
+ page.drag('pointerdown',280);
+ page.drag('pointermove',348);
+ page.flush();
+ assert.equal(page.surface.style.getPropertyValue('transform'),'translate3d(68px,0,0)');
+ assert.equal(page.islands.style.getPropertyValue('transform'),'translate3d(34px,0,0)');
+ assert.equal(page.navigation.style.getPropertyValue('transform'),'translate3d(34px,0,0)');
+
+ page.drag('pointerup',348);
+ page.flush();
+ assert.equal(page.islands.style.getPropertyValue('transform'),'');
+ assert.equal(page.navigation.style.getPropertyValue('transform'),'');
+});
+
+test('native titlebar chrome excludes visible merged sidebar brand controls from drag regions',()=>{
+ const page=fixture(undefined,true,'420ms',undefined,{
+  chrome:true,
+  sidebarControls:[
+   {x:80,y:11,width:134,height:30},
+   {x:216,y:12,width:28,height:28},
+   {x:10,y:11,width:134,height:30,hidden:true},
+  ],
+ });
+ const chrome=page.chromeMessages.at(-1);
+ assert.ok(chrome);
+ assert.ok(chrome.excluded.some(rect=>rect[0]===80&&rect[1]===11&&rect[2]===134&&rect[3]===30));
+ assert.ok(chrome.excluded.some(rect=>rect[0]===216&&rect[1]===12&&rect[2]===28&&rect[3]===28));
+ assert.equal(chrome.excluded.some(rect=>rect[0]===10&&rect[1]===11&&rect[2]===134&&rect[3]===30),false);
 });

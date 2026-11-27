@@ -24,6 +24,10 @@
     pointer-events:none;
     transition:opacity var(--workbench-sidebar-duration) var(--workbench-sidebar-ease);
   }
+  .app-shell.has-workbench-navigation:not(.has-workbench-conversation):not(:has(> .workbench-conversation-surface))::before {
+    inset:0 auto 0 0;
+    inline-size:var(--sidebar-width,280px);
+  }
   :root.lake-native .app-shell.has-workbench-navigation {
     --workbench-navigation-height:var(--lake-titlebar-height, 52px);
     --workbench-navigation-start:86px;
@@ -44,10 +48,47 @@
     pointer-events:none;
   }
   .app-shell.has-workbench-navigation .sidebar-navigation-content {
-    padding-block-start:var(--workbench-navigation-height);
+    padding-block-start:0;
     background:var(--workbench-sidebar-background,var(--sidebar));
     pointer-events:auto;
     transition:transform var(--workbench-sidebar-duration) var(--workbench-sidebar-ease), opacity var(--workbench-sidebar-duration) var(--workbench-sidebar-ease);
+  }
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-brand-row {
+    height:var(--workbench-navigation-height);
+    min-height:var(--workbench-navigation-height);
+    margin:0;
+    padding-block:0;
+    padding-inline:var(--sidebar-edge-inset);
+    gap:2px;
+  }
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-brand-row:has(.sidebar-project-select) {
+    padding-inline-start:var(--sidebar-edge-inset);
+  }
+  :root.lake-native .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-brand-row {
+    padding-inline-start:max(var(--sidebar-edge-inset),calc(var(--workbench-navigation-start) - var(--sidebar-rail-width)));
+    padding-inline-end:6px;
+  }
+  :root.lake-native .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-brand-row:has(.sidebar-project-select) {
+    padding-inline-start:max(6px,calc(var(--workbench-navigation-start) - var(--sidebar-rail-width) - 6px));
+  }
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-brand-row .sidebar-project-select > .app-select-trigger {
+    height:max(30px,var(--workbench-navigation-button-size));
+    padding-inline:6px;
+    gap:5px;
+  }
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-brand-actions :is(.sidebar-search-trigger,.sidebar-create-trigger) {
+    width:var(--workbench-navigation-button-size);
+    height:var(--workbench-navigation-button-size);
+    border-radius:var(--radius-settings-icon);
+    corner-shape:var(--corner-window);
+  }
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-navigation-panel .pilot-workspace,
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation:has(.sidebar-specialist-roster) .sidebar-navigation-panel .pilot-workspace {
+    padding-top:var(--sidebar-rail-top);
+  }
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-content-header {
+    min-height:var(--sidebar-rail-button-size);
+    margin-top:var(--sidebar-rail-top);
   }
   .app-shell.has-collapsed-sidebar .sidebar-navigation-content {
     transform:translate3d(-100%,0,0);
@@ -74,37 +115,31 @@
   .workbench-navigation {
     position:absolute;
     z-index:24;
-    grid-column:1 / 2;
+    grid-column:1 / -1;
     inset-block-start:0;
-    inset-inline-start:var(--workbench-navigation-start);
-    inset-inline-end:var(--workbench-navigation-end);
+    inset-inline-start:max(var(--workbench-navigation-start),calc(var(--sidebar-width,280px) + 12px));
+    inset-inline-end:auto;
+    inline-size:var(--workbench-navigation-min-width);
     min-inline-size:var(--workbench-navigation-min-width);
     height:var(--workbench-navigation-height);
     display:flex;
     align-items:center;
-    justify-content:flex-end;
+    justify-content:flex-start;
     gap:var(--workbench-navigation-gap);
     user-select:none;
     pointer-events:none;
   }
   .app-shell.has-workbench-conversation > .workbench-navigation {
     z-index:26;
-    inset-inline-end:auto;
-    inline-size:max(var(--workbench-navigation-min-width),calc(var(--sidebar-width,280px) - var(--workbench-navigation-start) - var(--workbench-navigation-end)));
+    inset-inline-start:calc(var(--workbench-island-navigation-left,calc(var(--sidebar-width,280px) + var(--conversation-header-inset,16px))) + var(--workbench-navigation-island-padding));
+    inset-block-start:var(--workbench-island-navigation-top,12px);
+    height:46px;
     transition:inset-inline-start var(--workbench-sidebar-duration) var(--workbench-sidebar-ease),
-      inset-block-start var(--workbench-sidebar-duration) var(--workbench-sidebar-ease),
-      inline-size var(--workbench-sidebar-duration) var(--workbench-sidebar-ease),
-      height var(--workbench-sidebar-duration) var(--workbench-sidebar-ease);
+      inset-block-start var(--workbench-sidebar-duration) var(--workbench-sidebar-ease);
   }
   .app-shell.has-docked-conversation > .workbench-navigation {
     --workbench-island-navigation-top:var(--conversation-island-top);
     transition:none;
-  }
-  .app-shell.has-workbench-conversation.has-collapsed-sidebar > .workbench-navigation {
-    inset-inline-start:calc(var(--workbench-island-navigation-left,var(--workbench-navigation-start)) + var(--workbench-navigation-island-padding));
-    inset-block-start:var(--workbench-island-navigation-top,12px);
-    inline-size:var(--workbench-navigation-min-width);
-    height:46px;
   }
   .workbench-resizing .app-shell.has-workbench-conversation > .workbench-navigation { transition:none; }
   .workbench-navigation button {
@@ -124,8 +159,8 @@
   .workbench-navigation button:hover:not(:disabled) { color:var(--foreground); background:var(--surface-hover); }
   .workbench-navigation button:disabled { opacity:.42; }
   .workbench-navigation button:focus-visible { outline-offset:-2px; }
-  .app-shell.has-collapsed-sidebar:not(.has-workbench-conversation) { padding-block-start:var(--workbench-navigation-height); }
-  .app-shell.has-collapsed-sidebar:not(.has-workbench-conversation) > .sidebar.workspace-navigation { margin-block-start:calc(-1 * var(--workbench-navigation-height)); }
+  .app-shell.has-workbench-navigation:not(.has-workbench-conversation) { padding-block-start:var(--workbench-navigation-height); }
+  .app-shell.has-workbench-navigation:not(.has-workbench-conversation) > .sidebar.workspace-navigation { margin-block-start:calc(-1 * var(--workbench-navigation-height)); }
   .app-shell.has-collapsed-sidebar > .workbench-splitter-sidebar { display:none; }
   .app-shell[data-sidebar-sliding] > .workbench-splitter-sidebar { visibility:hidden; }
 }
