@@ -19,6 +19,15 @@ export function activeDirectoryItem(positions:{id:string;top:number}[],viewportT
  return positions.filter(item=>item.top<=viewportTop+32).at(-1)?.id??positions[0]?.id??null;
 }
 
+export function directoryPopoverPosition(anchor:Pick<DOMRectReadOnly,'left'|'bottom'>,headerBottom:number,viewport:{width:number;height:number}) {
+ const inset=12;
+ const width=Math.max(0,Math.min(360,viewport.width-2*inset));
+ const top=Math.max(anchor.bottom,headerBottom)+12;
+ const left=Math.max(inset,Math.min(anchor.left,viewport.width-width-inset));
+ const maxHeight=Math.max(0,Math.min(520,viewport.height-top-inset));
+ return {left,top,width,maxHeight};
+}
+
 function directoryItemAtScrollPosition(container: HTMLElement, items: ConversationDirectoryItem[], sessionId: string) {
  const positions = items.flatMap(({id}) => {
   const turn = document.getElementById(conversationTurnId(sessionId, id));
@@ -35,9 +44,10 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
  const [open,setOpen]=useState(false),[selected,setSelected]=useState<string|null>(items[0]?.id??null);
  const [view,setView]=useState<'tasks'|'messages'>('tasks');
  const showTasks=!!taskDirectory&&view==='tasks';
- const [position,setPosition]=useState({left:12,top:80,width:360});
+ const [position,setPosition]=useState({left:12,top:80,width:360,maxHeight:520});
  const trigger=useRef<HTMLButtonElement>(null),panel=useRef<HTMLElement>(null),list=useRef<HTMLElement>(null);
  const root=useRef<HTMLDivElement>(null);
+ const headerBottom=useRef(0);
  const rows=useRef(new Map<string,HTMLButtonElement>()),id=useId();
  const itemIds=JSON.stringify(items.map(item=>item.id));
  function close(restoreFocus=false){setOpen(false);if(restoreFocus)trigger.current?.focus({preventScroll:true});}
@@ -67,6 +77,7 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
    const bounds=container!.getBoundingClientRect();
    const pinned=header?.dataset.islandInteractive==='true';
    const heading=pinned?undefined:header?.getBoundingClientRect();
+   let rowBottom=heading?.bottom??0;
    let left=Math.max(bounds.left+4,bounds.right-76),top=Math.max(bounds.top+12,(heading?.top??bounds.top)+9);
    if(pinned||heading&&container!.closest('.has-docked-conversation')){
     const style=getComputedStyle(container!);
@@ -75,6 +86,7 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
     // painted header inside the island shrinks as the details slide in.
     const rowTop=heading?.top??((header!.offsetParent?.getBoundingClientRect().top??0)+header!.offsetTop);
     const rowHeight=heading?Math.min(heading.height,46):46;
+    rowBottom=rowTop+rowHeight;
     left=Math.max(bounds.left+4,bounds.right-actionsOffset);
     top=rowTop+Math.max(0,(rowHeight-(trigger.current?.offsetHeight??28))/2);
    }
@@ -83,7 +95,8 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
    if(open&&!showTasks)setSelected(directoryItemAtScrollPosition(container!,items,sessionId));
    if(root.current){
     const nextLeft=`${left}px`,nextTop=`${top}px`;
-    const moved=root.current.style.left!==nextLeft||root.current.style.top!==nextTop;
+    const moved=root.current.style.left!==nextLeft||root.current.style.top!==nextTop||headerBottom.current!==rowBottom;
+    headerBottom.current=rowBottom;
     root.current.style.left=nextLeft;root.current.style.top=nextTop;root.current.toggleAttribute('data-compact',compact);
     if(moved)window.dispatchEvent(new Event('lake-chrome-resize'));
    }
@@ -101,15 +114,12 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
   if(!open)return;
   function measure(){
    const anchor=trigger.current?.getBoundingClientRect();if(!anchor)return;
-   const width=Math.min(360,window.innerWidth-24),height=panel.current?.getBoundingClientRect().height??240;
-   const left=Math.max(12,Math.min(anchor.left,window.innerWidth-width-12));
-   const below=anchor.bottom+6;
-   const top=below+height<=window.innerHeight-12?below:Math.max(12,anchor.top-height-6);
-   setPosition(previous=>previous.left===left&&previous.top===top&&previous.width===width?previous:{left,top,width});
+   const next=directoryPopoverPosition(anchor,headerBottom.current,{width:window.innerWidth,height:window.innerHeight});
+   setPosition(previous=>previous.left===next.left&&previous.top===next.top&&previous.width===next.width&&previous.maxHeight===next.maxHeight?previous:next);
   }
-  measure();const observer=new ResizeObserver(measure);if(panel.current)observer.observe(panel.current);
+  measure();
   window.addEventListener('resize',measure);window.addEventListener('lake-chrome-resize',measure);document.addEventListener('scroll',measure,true);
-  return()=>{observer.disconnect();window.removeEventListener('resize',measure);window.removeEventListener('lake-chrome-resize',measure);document.removeEventListener('scroll',measure,true);};
+  return()=>{window.removeEventListener('resize',measure);window.removeEventListener('lake-chrome-resize',measure);document.removeEventListener('scroll',measure,true);};
  },[open]);
  useLayoutEffect(()=>{
   if(!open)return;

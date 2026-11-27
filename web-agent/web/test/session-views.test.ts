@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AITranscript } from "../src/AIPanel";
 import { SessionActions, SessionStateBadge } from "../src/SessionPresentation";
-import { ConversationDirectory, activeDirectoryItem, conversationDirectoryItems, conversationTurnId } from "../src/ConversationDirectory";
+import { ConversationDirectory, activeDirectoryItem, conversationDirectoryItems, conversationTurnId, directoryPopoverPosition } from "../src/ConversationDirectory";
 import {PilotTaskReferenceChip,pilotDirectoryTasks,pilotTaskParticipants} from "../src/PilotTaskDirectory";
 import type { Message, SessionSnapshot, SuperWorker, SuperWorkspace } from "../../shared/contracts";
 
@@ -120,6 +120,13 @@ test("active directory entry follows reading position in either scroll direction
   assert.equal(activeDirectoryItem(positions,1400),"delivery");
   assert.equal(activeDirectoryItem(positions,100),"start");
   assert.equal(activeDirectoryItem([],0),null);
+});
+
+test('the directory popover keeps its gap below the header in short windows', () => {
+  assert.deepEqual(directoryPopoverPosition({left: 950, bottom: 49}, 58, {width: 1024, height: 720}),
+    {left: 652, top: 70, width: 360, maxHeight: 520});
+  assert.deepEqual(directoryPopoverPosition({left: 295, bottom: 78}, 58, {width: 320, height: 300}),
+    {left: 12, top: 90, width: 296, maxHeight: 198});
 });
 
 test("Pilot task directory groups collaborators by public task identity and keeps same-title older tasks",()=>{
