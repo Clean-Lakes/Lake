@@ -82,8 +82,7 @@ import { ActivityIndicator } from "./ActivityIndicator";
 import { PendingMessages } from "./PendingMessages";
 import { ModelSettings, type SettingsNavigationHandle } from "./ModelSettings";
 import {WorkspaceConsole} from './WorkspaceConsole';
-import {availableSettingsPage, type ConsolePage, type SettingsPage} from './workspaceConsoleTabs';
-import {gatewayTaskMatches,type GatewayTaskTarget} from "./GatewaySettings";
+import type {ConsolePage, SettingsPage} from './workspaceConsoleTabs';
 import { readImageSelection } from "./imageAttachments";
 import {clipboardFiles,partitionAttachments,attachmentCountLimit} from "./fileAttachments";
 import {ComposerAttachments,type PendingAttachment} from './ComposerAttachments';
@@ -314,7 +313,6 @@ function AppContent() {
   const [settingsBusy,setSettingsBusy] = useState(false);
   const consoleRef = useRef<HTMLDialogElement>(null);
   const typescriptBackend = bootstrap?.backendRuntime === 'typescript';
-  const activeSettingsTab = availableSettingsPage(settingsTab, typescriptBackend);
   const [navigationSearchOpen, setNavigationSearchOpen] = useState(false);
   const newSessionButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -928,7 +926,6 @@ function AppContent() {
   const roleInspectionRequest=useRef(new InspectionRequestGuard());
   const pendingRoleInspection=useRef<{selection:typeof inspector.selection;current:()=>boolean}|undefined>(undefined);
   const inspectionSelection=useRef(inspector.selection);inspectionSelection.current=inspector.selection;
-  const [gatewayInspection,setGatewayInspection]=useState<SessionSnapshot|null>(null);
   useLayoutEffect(()=>{roleInspectionRequest.current.cancel();pendingRoleInspection.current=undefined;setRoleInspection(null);},[sessionId,activeSnapshot?.session.projectId,route.resourceId,isPlansPage]);
   useLayoutEffect(()=>{
     const pending=pendingRoleInspection.current;
@@ -942,19 +939,6 @@ function AppContent() {
       setRoleInspection(null);
     }
   },[inspector.selection,roleInspection?.session.id,roleInspection?.superagent?.task.taskId]);
-  const inspectGatewayTask=async(target:GatewayTaskTarget)=>{
-    const next=await api.snapshot(target.sessionId,undefined,target.taskId);
-    if(!gatewayTaskMatches(next,target))throw new Error('任务的项目或执行身份已变化，请刷新消息后重试');
-    await refreshCatalog();
-    setSidebarProjectId(target.projectId);
-    commitNavigation({sessionId:target.sessionId,resourceId:null},target.projectId);setGatewayInspection(next);
-  };
-  useEffect(()=>{
-    if(!gatewayInspection||gatewayInspection.session.id!==sessionId||activeSnapshot?.session.id!==sessionId)return;
-    setRoleInspection(gatewayInspection);
-    const tab=gatewayInspection.superagent?.task.summary?'plan':'execution';
-    inspector.open({...latestInspectorSelection(gatewayInspection,tab),followLatest:false});setGatewayInspection(null);
-  },[gatewayInspection,sessionId,activeSnapshot?.session.id,inspector.open]);
   const inspectedSnapshot=roleInspection??activeSnapshot;
   const inspectRoleTask=async(target:string,selectedWorker?:SuperWorker,requestedTab?:'plan'|'execution',replySources?:ReplyProcessSources)=>{
     const expected=selectedWorker??roleWorkers.find(worker=>worker.sessionId===target);
@@ -2353,16 +2337,15 @@ function AppContent() {
         </div></div></div></ComposerSurface></form></div>}
       </div>{inspectorView}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
     </main>
-    <WorkspaceConsole dialogRef={consoleRef} open={isWorkspacePage} typescriptBackend={typescriptBackend}
-      page={route.view==='updates'?'updates':isSettingsPage?activeSettingsTab:'workspace'} busy={isSettingsPage&&settingsBusy}
+    <WorkspaceConsole dialogRef={consoleRef} open={isWorkspacePage}
+      page={route.view==='updates'?'updates':isSettingsPage?settingsTab:'workspace'} busy={isSettingsPage&&settingsBusy}
       onPage={selectConsolePage} onClose={closeWorkbenchConsole} overlay={isWorkspacePage&&workspaceOverlayOpen?workspaceOverlays:undefined}
       notice={isWorkspacePage?noticeView:undefined}>
       <DesktopUpdate visible={route.view==='updates'} onUnreadChange={setWorkspaceUpdateUnread}/>
-      {isSettingsPage?<ModelSettings key={settingsVisit.id} navigationGuard={settingsNavigation} tab={activeSettingsTab} onBusyChange={setSettingsBusy}
-        completionEnabled={completionEnabled} onCompletionEnabledChange={setCompletionEnabled} onGatewayTask={inspectGatewayTask} capabilityDetectionEnabled={bootstrap?.backendRuntime==='go'}
+      {isSettingsPage?<ModelSettings key={settingsVisit.id} navigationGuard={settingsNavigation} tab={settingsTab} onBusyChange={setSettingsBusy}
+        completionEnabled={completionEnabled} onCompletionEnabledChange={setCompletionEnabled} capabilityDetectionEnabled={bootstrap?.backendRuntime==='go'}
         onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut}
         onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {commitNavigation({sessionId,resourceId:null});setAgentOptionsOpen(true);} : undefined}
-        projectId={selectedProjectId??sidebarProject?.id}
       />:route.view==='workspace'?<WorkspacePage project={sidebarProject} projects={projectList} resources={catalog.resources}
         connected={workspaceConnected} bulkSelection={bulkSelection} bulkSelectedCount={bulkSelected.length}
         onCreateProject={openProjectDialog}

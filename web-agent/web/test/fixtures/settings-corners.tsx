@@ -6,7 +6,6 @@ import {DesktopUpdate} from '../../src/DesktopUpdate';
 import {WorkspaceConsole} from '../../src/WorkspaceConsole';
 import {WorkspacePageHeader} from '../../src/WorkspacePage';
 import {consoleCategories, type ConsolePage} from '../../src/workspaceConsoleTabs';
-import type {GatewayConnection} from '../../../shared/contracts';
 import type {ExternalAgentStatus} from '../../../shared/external-agents';
 import '../../src/styles.css';
 import '../../src/appSelect.css';
@@ -23,7 +22,6 @@ const providers=[
 const catalog={providers,activeProviderId:'deepseek',activeModelId:'deepseek-flash'};
 const projectId=params.has('other-project')?'other-settings-fixture':'settings-layout-fixture';
 const projectName=params.has('other-project')?'第二个测试项目':'隔离设置验收';
-const connection:GatewayConnection={id:'fixture-client',name:'研发使用',projectId,enabled:true,routing:{mode:'pilot'},createdAt:'2026-11-16T00:00:00Z',updatedAt:'2026-11-16T00:00:00Z'};
 const memoryScope={key:'project-fixture',kind:'project',name:projectName,projectId};
 const skill={name:'检查发布记录',description:'整理最近的发布记录',path:'/fixture/skills/check-release',source:'本机',enabled:true,managed:true};
 window.lakeDesktopUpdates={platform:'macOS arm64',development:true,command:async()=>({
@@ -41,7 +39,7 @@ const modelEffortOptions={
 };
 const agent:ExternalAgentStatus={id:'codex',projectId,name:'Codex',revision:1,enabled:true,installed:true,transportReady:true,assignmentReady:true,
  localModel,modelOptions:Object.keys(modelEffortOptions),modelEffortOptions,
- configPath:'/fixture/codex/config.toml',authMode:'chatgpt',updatedAt:connection.createdAt,
+ configPath:'/fixture/codex/config.toml',authMode:'chatgpt',updatedAt:'2026-11-16T00:00:00Z',
  ...JSON.parse(sessionStorage.getItem(preferenceKey)??'{}')};
 const agentStatus=()=>{
  const model=agent.modelOverride??localModel;
@@ -62,8 +60,6 @@ window.fetch=async(input,init)=>{
  if(path==='/api/settings/model')return json({name:'deepseek-flash',managedBy:'manual'});
  if(path==='/api/models')return json({models:[],entries:[]});
  if(path==='/api/settings/model/state')return json({providers:catalog,settings:{name:'deepseek-flash',managedBy:'manual'},available:{models:[],entries:[]}});
- if(path==='/api/settings/gateway/connections')return json({connections:[connection],command:{program:'lake',home:'/fixture/lake-dev'},projects:[{id:projectId,name:'隔离设置验收'}],specialists:[],legacyTokens:[]});
- if(path==='/api/settings/gateway/connections/fixture-client/messages')return json({messages:[]});
  if(path===agentPath)return json({agents:[agentStatus()]});
  if(path===`/api/projects/${projectId}/superagent`)return json({active:true,project:{projectId,routerSessionId:'fixture-pilot',version:1},workers:[],channels:[]});
  if(path===`/api/projects/${projectId}/watchdog`)return json({mode:'off'});
@@ -82,7 +78,7 @@ window.fetch=async(input,init)=>{
 function SettingsFixture() {
  const consoleRef=useRef<HTMLDialogElement>(null);
  const [open,setOpen]=useState(true),[busy,setBusy]=useState(false);
- const [page,setPage]=useState<ConsolePage>(()=>consoleCategories(true,'').flatMap(group=>group.items)
+ const [page,setPage]=useState<ConsolePage>(()=>consoleCategories('').flatMap(group=>group.items)
   .find(item=>item.key===params.get('tab'))?.key??'models');
  const close=()=>setOpen(false);
  return <>
@@ -92,10 +88,10 @@ function SettingsFixture() {
    <textarea aria-label="对话草稿" defaultValue="保留正在写的草稿"/>
    <button type="button" onClick={()=>setOpen(true)}>打开控制台</button>
   </main>
-  <WorkspaceConsole dialogRef={consoleRef} open={open} page={page} typescriptBackend busy={busy} onPage={setPage} onClose={close}>
+  <WorkspaceConsole dialogRef={consoleRef} open={open} page={page} busy={busy} onPage={setPage} onClose={close}>
    {page==='updates' ? <DesktopUpdate visible/> : page==='workspace' ?
     <section className="workspace-page"><WorkspacePageHeader id="fixture-title" title="项目"/></section> :
-    <ModelSettings tab={page} projectId={projectId}
+    <ModelSettings tab={page}
      onBusyChange={setBusy} onChanged={async()=>{}} sendShortcut="enter" onShortcutChange={()=>{}}
      completionEnabled onCompletionEnabledChange={()=>{}}/>}
   </WorkspaceConsole>

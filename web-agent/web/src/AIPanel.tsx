@@ -444,7 +444,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotTaskDire
       const lastMessage=reports.at(-1)??visibleGroups.at(-1)?.entries.at(-1)?.message;
       const footerReport=lastMessage?.role==='assistant'&&hasTaskProcess(lastMessage.author)&&onInspectSpecialist?lastMessage:undefined;
       const specialistReplies=(turnDispatchRows.length>0||savedReports.length>0)&&
-        <PilotReportGroup members={participants} count={reports.length} fold={fold} connected={pilotConnected&&connected} onInspect={onInspect}>
+        <PilotReportGroup members={participants} count={reports.length} fold={fold} connected={pilotConnected&&connected}>
           <PilotSpecialistConversation rows={turnDispatchRows} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} connected={pilotConnected} subscribeWorkerEvents={subscribeWorkerEvents} onObservedTurn={onObservedTurn} onReportPresented={onPilotReportsPresented?onReportPresented:undefined} reportArrives={replyArrives} taskLabels={taskLabels} foldSpecialistProcess={foldSpecialistProcess} onInspectProcess={onInspect}/>
           {savedReports.map(message=><TranscriptMessage key={message.id} message={message} sessionId={snapshot.session.id} arrive={replyArrives(message.id)} assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} hideIdentity={hideReplyIdentity} taskLabel={taskLabels.get(message.author!.workerId)}
             foldSpecialistProcess={foldSpecialistProcess&&!settlingReports.has(message.id)} onInspectProcess={onInspect}/>)}
@@ -453,7 +453,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotTaskDire
         const messages=dialogueReplies.get(round.id)??[];
         const summaryDelivered=summarySlots.some(slot=>slot.final?.conversation?.id===round.id);
         return <PilotConversationProgress key={round.id} round={round} connected={pilotConnected}
-          process={index===0?footer:undefined} onSpecialist={onSpecialist} onInspect={onInspect}
+          process={index===0?footer:undefined} onSpecialist={onSpecialist}
           summaryDelivered={summaryDelivered} replyMemberIds={summaryDelivered?new Set(messages.map(message=>message.author!.workerId)):undefined}
           replies={messages.map(message=><TranscriptMessage key={message.id} message={message} sessionId={snapshot.session.id} arrive={replyArrives(message.id)}
             assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist}/>)}/>;

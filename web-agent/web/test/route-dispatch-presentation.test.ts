@@ -238,7 +238,10 @@ test('a finished Ops handoff archives the pre-check narration through the exact 
  assert.doesNotMatch(main,new RegExp(acknowledgement));
  assert.equal((result.match(/两个样例均完成核对。/g)??[]).length,1);
  assert.ok(result.indexOf('两个样例均完成核对。')<result.indexOf('另一项检查'));
- assert.match(main,/2 份专员报告/);
+ const reports=main.match(/class="pilot-report-toggle" aria-expanded="false" aria-controls="([^"]+)"/);
+ assert.ok(reports);
+ assert.ok(main.includes(`id="${reports[1]}" class="pilot-report-body" aria-hidden="true" inert=""`));
+ assert.ok(main.indexOf('两个样例均完成核对。')<main.indexOf('2 份专员报告'));
  assert.ok(result.includes(acknowledgement));
 });
 

@@ -1,4 +1,3 @@
-import {GatewaySettings,type GatewayTaskTarget} from './GatewaySettings';
 import {MCPSettings,SkillSettings} from "./ExtensionSettings";
 import {ProviderIcon} from "./ProviderIcon";
 import {Glyph} from "./Icons";
@@ -20,7 +19,6 @@ import {WorkspacePageHeader, WorkspaceSettingSection} from './WorkspacePage';
 import {consoleCategoryLabel, type SettingsPage} from './workspaceConsoleTabs';
 import "./modelSettings.css";
 import "./externalAgents.css";
-import "./gatewaySettings.css";
 
 const formats = [["openai","OpenAI · Chat Completions"],["openai-response","OpenAI · Responses"],["claude","Anthropic · Messages"],["gemini","Gemini · Generate Content"],["azure-gpt","Azure OpenAI"],["ollama","Ollama"]];
 const magpieSelection = "__magpie__";
@@ -31,14 +29,13 @@ function Switch({checked,label,onChange,disabled=false}: {checked:boolean;label:
 }
 export type SettingsNavigationHandle = {confirmLeave: () => boolean | Promise<boolean>};
 
-export function ModelSettings({tab,navigationGuard,onBusyChange,onChanged,sendShortcut,onShortcutChange,completionEnabled,onCompletionEnabledChange,onSessionConfig:openSessionConfig,projectId,capabilityDetectionEnabled=false,onGatewayTask:openGatewayTask}: {
+export function ModelSettings({tab,navigationGuard,onBusyChange,onChanged,sendShortcut,onShortcutChange,completionEnabled,onCompletionEnabledChange,onSessionConfig:openSessionConfig,capabilityDetectionEnabled=false}: {
   tab:SettingsPage;navigationGuard?:Ref<SettingsNavigationHandle>;onBusyChange:(busy:boolean)=>void;
-  onChanged:()=>Promise<void>;sendShortcut:SendShortcut;onShortcutChange:(value:SendShortcut)=>void;onSessionConfig?:()=>void;projectId?:string;
+  onChanged:()=>Promise<void>;sendShortcut:SendShortcut;onShortcutChange:(value:SendShortcut)=>void;onSessionConfig?:()=>void;
   completionEnabled?:boolean;onCompletionEnabledChange?:(value:boolean)=>void;
-  capabilityDetectionEnabled?:boolean;onGatewayTask?:(target:GatewayTaskTarget)=>Promise<void>;
+  capabilityDetectionEnabled?:boolean;
 }) {
   const [extensionBusy,setExtensionBusy]=useState(false);
-  const [actionsHost,setActionsHost]=useState<HTMLDivElement|null>(null);
   const [catalog,setCatalog] = useState<ProviderCatalog>({providers:[],activeProviderId:"",activeModelId:""});
   const [magpieModel,setMagpieModel] = useState<{name:string}|null>(null);
   const [magpieModels,setMagpieModels] = useState<AvailableModels|null>(null);
@@ -67,7 +64,6 @@ export function ModelSettings({tab,navigationGuard,onBusyChange,onChanged,sendSh
   const addressInput = useRef<HTMLInputElement>(null), keyInput = useRef<HTMLInputElement>(null), modelsButton = useRef<HTMLButtonElement>(null);
   const [sourcesExpanded,setSourcesExpanded] = useState(false);
   const onSessionConfig=openSessionConfig && (()=>void leave(openSessionConfig));
-  const onGatewayTask=openGatewayTask && ((target:GatewayTaskTarget)=>leave(()=>openGatewayTask(target)));
   const draft = drafts[selected];
   const isBusy = !!busy||extensionBusy;
   useLayoutEffect(()=>{
@@ -281,9 +277,8 @@ export function ModelSettings({tab,navigationGuard,onBusyChange,onChanged,sendSh
   }
   const rows=Object.values(drafts);
   return <section ref={pageRef} id="workspace-settings-page" className="workspace-page model-settings-page" aria-labelledby="model-settings-title">
-    <WorkspacePageHeader id="model-settings-title" title={consoleCategoryLabel(tab) ?? '设置'}
-      actions={tab==='channels' ? <div ref={setActionsHost} className="workspace-console-page-action"/> : undefined}/>
-    {tab==="channels"?<GatewaySettings actionsHost={actionsHost} onBusyChange={setExtensionBusy} projectId={projectId} onTask={onGatewayTask}/>:tab==="mcp"?<MCPSettings onBusyChange={setExtensionBusy}/>:tab==="skills"?<SkillSettings onBusyChange={setExtensionBusy}/>:tab==="appearance" ? <AppearanceSettings/> : tab==="conversation" ? <section id="conversation-settings-panel" role="tabpanel" aria-labelledby="conversation-settings-tab" className="model-conversation conversation-settings">
+    <WorkspacePageHeader id="model-settings-title" title={consoleCategoryLabel(tab) ?? '设置'}/>
+    {tab==="mcp"?<MCPSettings onBusyChange={setExtensionBusy}/>:tab==="skills"?<SkillSettings onBusyChange={setExtensionBusy}/>:tab==="appearance" ? <AppearanceSettings/> : tab==="conversation" ? <section id="conversation-settings-panel" role="tabpanel" aria-labelledby="conversation-settings-tab" className="model-conversation conversation-settings">
       <WorkspaceSettingSection id="conversation-message-settings" title="消息">
         <div className="workspace-setting-card">
           <div className="workspace-setting-row">

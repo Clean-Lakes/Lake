@@ -56,21 +56,17 @@ test('a console opened over a plan keeps its plan context only for a valid sessi
  assert.equal(readWorkspaceRoute('?view=settings&session=s&resource=r&returnView=plans').returnView,undefined);
 });
 
-test('console category search matches labels and keywords without exposing TypeScript-only settings on Go',()=>{
- assert.deepEqual(consoleCategories(true,'客户端 mcp').flatMap(group=>group.items.map(item=>item.key)),['channels']);
- assert.deepEqual(consoleCategories(false,'客户端 mcp'),[]);
- assert.deepEqual(consoleCategories(true,'默认模型').flatMap(group=>group.items.map(item=>item.key)),['models']);
- assert.deepEqual(consoleCategories(true,'Agent 执行器'),[]);
+test('console category search matches labels and keywords',()=>{
+ assert.deepEqual(consoleCategories('默认模型').flatMap(group=>group.items.map(item=>item.key)),['models']);
+ assert.deepEqual(consoleCategories('MCP').flatMap(group=>group.items.map(item=>item.key)),['mcp']);
 });
 
-test('memory and watchdog settings are absent from the console and category search',()=>{
- for(const typescriptBackend of [true,false]){
-  const html=renderToStaticMarkup(createElement(WorkspaceConsole,{
-   dialogRef:{current:null}, open:false, page:'conversation', typescriptBackend, busy:false, onPage:noop, onClose:noop,
-  }));
-  assert.doesNotMatch(html,/记忆|巡检|memory-settings-tab|watchdog-settings-tab/);
-  for(const query of ['记忆','巡检','memory','watchdog']) assert.deepEqual(consoleCategories(typescriptBackend,query),[]);
- }
+test('retired settings are absent from the console and category search',()=>{
+ const html=renderToStaticMarkup(createElement(WorkspaceConsole,{
+  dialogRef:{current:null}, open:false, page:'conversation', busy:false, onPage:noop, onClose:noop,
+ }));
+ assert.doesNotMatch(html,/接入渠道|记忆|巡检|channels-settings-tab|memory-settings-tab|watchdog-settings-tab/);
+ for(const query of ['接入渠道','客户端 MCP','记忆','巡检','memory','watchdog','Agent 执行器']) assert.deepEqual(consoleCategories(query),[]);
 });
 
 test('workspace actions render in the page, including a creation path for an empty workspace',()=>{
@@ -91,7 +87,7 @@ test('workspace actions render in the page, including a creation path for an emp
 
 test('the console owns one close control outside the project page header',()=>{
  const html=renderToStaticMarkup(createElement(WorkspaceConsole,{
-  dialogRef:{current:null}, open:false, page:'workspace', typescriptBackend:true, busy:false, onPage:noop, onClose:noop,
+  dialogRef:{current:null}, open:false, page:'workspace', busy:false, onPage:noop, onClose:noop,
   children:createElement(WorkspacePage,{...props,project}),
  }));
  assert.equal((html.match(/aria-label="关闭控制台"/g)??[]).length,1);

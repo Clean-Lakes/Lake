@@ -19,7 +19,7 @@ function Participants({members,roundId,onSpecialist}:{members:readonly Specialis
   })}</ul>;
 }
 
-export function PilotConversationProgress({round,replies,replyMemberIds,summaryDelivered=false,process,connected=true,onSpecialist,onInspect}:{
+export function PilotConversationProgress({round,replies,replyMemberIds,summaryDelivered=false,process,connected=true,onSpecialist}:{
   round:SpecialistConversation;
   replies:readonly ReactNode[];
   replyMemberIds?:ReadonlySet<string>;
@@ -27,7 +27,6 @@ export function PilotConversationProgress({round,replies,replyMemberIds,summaryD
   process?:ReactNode;
   connected?:boolean;
   onSpecialist?:(author:SpecialistReplyAuthor)=>void;
-  onInspect?:()=>void;
 }) {
   const id=useId(), body=useRef<HTMLDivElement>(null);
   const folds=useContext(PilotReportFolds);
@@ -54,7 +53,6 @@ export function PilotConversationProgress({round,replies,replyMemberIds,summaryD
   const repliesOpen=pane==='replies'||pane===undefined&&(defaultOpen||keepReading);
   const waitingOpen=pane==='waiting';
   useLayoutEffect(()=>{if(keepReading)setPane('replies');},[keepReading]);
-  const toggle=(next:Exclude<Pane,null>,open:boolean)=>{onInspect?.();setPane(open?null:next);};
   const status=<>
     {!!shown.length&&<span className="pilot-conversation-avatars" aria-hidden="true">
       {shown.slice(0,3).map(member=><span className="pilot-conversation-avatar" key={member.id} data-report-avatar={member.roleId} title={member.roleName}>
@@ -66,12 +64,12 @@ export function PilotConversationProgress({round,replies,replyMemberIds,summaryD
   </>;
   const strip=<div className="pilot-conversation-bar">
       {hasReportDisclosure?<button type="button" className="pilot-conversation-toggle" data-active={connected&&running.length>0||undefined}
-        aria-expanded={repliesOpen} aria-controls={`${id}-replies`} aria-describedby={shown.length?`${id}-speakers`:undefined} onClick={()=>toggle('replies',repliesOpen)}>
+        aria-expanded={repliesOpen} aria-controls={`${id}-replies`} aria-describedby={shown.length?`${id}-speakers`:undefined} onClick={()=>setPane(repliesOpen?null:'replies')}>
         {status}<Glyph name="next" size={12} className="pilot-conversation-chevron"/>
       </button>:<span className="pilot-conversation-static">{status}</span>}
       {shown.length>0&&<span className="visually-hidden" id={`${id}-speakers`}>{shown.map(member=>member.roleName).join('、')}</span>}
       {(waitingLabel||waitingOpen)&&<button type="button" className="pilot-conversation-toggle is-secondary" data-missing={missing.length>0||undefined}
-        aria-expanded={waitingOpen} aria-controls={`${id}-waiting`} onClick={()=>toggle('waiting',waitingOpen)}>
+        aria-expanded={waitingOpen} aria-controls={`${id}-waiting`} onClick={()=>setPane(waitingOpen?null:'waiting')}>
         {waitingLabel||'排队情况'}<Glyph name="next" size={12} className="pilot-conversation-chevron"/>
       </button>}
       {running.length>0&&reported.length>0&&<span className="pilot-conversation-meta">{reported.length} 份已收到</span>}

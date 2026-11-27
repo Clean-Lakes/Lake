@@ -43,7 +43,7 @@
   text-overflow:ellipsis;
   white-space:nowrap;
 }
-.workspace-page-header-actions,.workspace-console-page-action {
+.workspace-page-header-actions {
   display:flex;
   flex:none;
   align-items:center;

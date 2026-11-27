@@ -52,7 +52,7 @@ function Preview(){
    <h1>{current?.name??'Pilot'}</h1>
    <output className="visually-hidden">{action}</output>
   </main>
-  <WorkspaceConsole dialogRef={consoleRef} open={open} page={page} typescriptBackend busy={false}
+  <WorkspaceConsole dialogRef={consoleRef} open={open} page={page} busy={false}
    onPage={setPage} onClose={()=>setOpen(false)}>
    {page==='workspace'?<WorkspacePage project={current} projects={projects} resources={resources} connected bulkSelectedCount={selection.length}
     bulkSelection={bulk?{has:target=>selection.includes(target.id),toggle:target=>mark(target.id),disabled:false}:undefined}
