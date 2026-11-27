@@ -31,6 +31,8 @@ export class HttpError extends Error {
 }
 export type Provider = ModelProvider;
 export type StoredSession = WorkSession & { options: Record<string, unknown> };
+type ModelChoice = {providerId: string; modelId: string};
+type SessionModelChoice = ModelChoice & {revision: number};
 
 export async function privateDirectory(path: string) {
   await mkdir(path, { recursive: true, mode: 0o700 });
@@ -44,28 +46,47 @@ export async function privateDirectory(path: string) {
   await chmod(path, 0o700);
 }
 
+// Deleted messages remain addressable by ID for stored input receipts.
+const visibleMessagesQuery = `SELECT value FROM records WHERE kind='messages'
+  AND json_extract(value,'$.sessionId')=? AND json_extract(value,'$.deletedAt') IS NULL`;
+
 export class LakeStore {
   magpie?: LakeMagpie;
   async refreshModels() { await this.magpie?.refresh(); }
   modelProvider(providerId: string) { return providerId === 'magpie' ? this.magpie?.provider() : this.get<ModelProvider>('providers', providerId); }
   modelProviders() { const native = this.list<ModelProvider>('providers').filter(value => value.id !== 'magpie'); const managed = this.magpie?.provider(); return managed ? [...native, managed] : native; }
-  modelSelection() {
-    type Selection = {providerId: string; modelId: string};
-    const valid = (choice: Selection | undefined) => {
+  sessionModelChoice(sessionId: string) { return this.get<SessionModelChoice>('sessionModelChoices', sessionId); }
+  modelSelection(sessionId?: string): ModelChoice | undefined {
+    // Keep unavailable explicit choices so a turn cannot silently route to another provider.
+    const sessionChoice = sessionId && this.sessionModelChoice(sessionId);
+    if (sessionChoice) return {providerId: sessionChoice.providerId, modelId: sessionChoice.modelId};
+    const valid = (choice: ModelChoice | undefined) => {
       if (!choice || choice.providerId === 'magpie') return false;
       const provider = this.modelProvider(choice.providerId);
       return provider?.enabled && provider.models.some(model => model.id === choice.modelId && model.enabled);
     };
-    const selected = this.get<Selection>('settings', 'modelSelection');
+    const selected = this.get<ModelChoice>('settings', 'modelSelection');
     if (valid(selected)) return selected;
     const managed = this.magpie?.selectedId();
     if (managed) return {providerId: 'magpie', modelId: managed};
-    const native = this.get<Selection>('settings', 'nativeModelSelection');
+    const native = this.get<ModelChoice>('settings', 'nativeModelSelection');
     return valid(native) ? native : undefined;
   }
+  resolveModel(choice: ModelChoice | undefined) {
+    const provider = choice && this.modelProvider(choice.providerId);
+    return {provider, model: provider?.enabled ? provider.models.find(model => model.id === choice?.modelId && model.enabled) : undefined};
+  }
+  selectSessionModel(sessionId: string, choice: ModelChoice) {
+    if (!this.resolveModel(choice).model) throw new HttpError(400, '模型不可用');
+    const previous = this.sessionModelChoice(sessionId);
+    if (previous?.providerId === choice.providerId && previous.modelId === choice.modelId) return;
+    return this.transaction(() => {
+      this.put('sessionModelChoices', sessionId, {...choice, revision: (previous?.revision ?? 0) + 1});
+      return this.event(sessionId, 'session');
+    });
+  }
   selectModel(providerId: string, modelId: string) {
-    const provider = this.modelProvider(providerId);
-    if (!provider?.enabled || !provider.models.some(model => model.id === modelId && model.enabled)) throw new HttpError(400, '模型不可用');
+    if (!this.resolveModel({providerId, modelId}).model) throw new HttpError(400, '模型不可用');
     this.transaction(() => {
       const previous = this.modelSelection();
       if (providerId === 'magpie') {
@@ -215,6 +236,19 @@ export class LakeStore {
     this.put("resources", resource.id, resource);
     return project;
   }
+  renameProject(projectId: string, name: string) {
+    const project = this.project(projectId);
+    const trash = this.list<NavigationTrashItem>("navigationTrash");
+    if (trash.some(item => item.kind === "project" && item.id === projectId)) {
+      throw new HttpError(404, "项目不存在");
+    }
+    const trimmed = name.trim();
+    if (!trimmed) throw new HttpError(400, "项目名称不能为空");
+    if (trimmed.length > 120) throw new HttpError(400, "项目名称不能超过 120 个字符");
+    const updated: Project = { ...project, name: trimmed };
+    this.put("projects", projectId, updated);
+    return updated;
+  }
   catalog(): Catalog {
     const trash = this.list<NavigationTrashItem>('navigationTrash');
     const hidden = (kind: string, key: string) => trash.some(item => item.kind === kind && item.id === key);
@@ -292,13 +326,13 @@ export class LakeStore {
     // Unread/channel polling reads many sessions. Select before decoding JSON
     // so another conversation's entire history never blocks this session.
     return this.db
-      .prepare("SELECT value FROM records WHERE kind='messages' AND json_extract(value,'$.sessionId')=? ORDER BY rowid")
+      .prepare(`${visibleMessagesQuery} ORDER BY rowid`)
       .all(sessionId)
       .map(row => JSON.parse(String(row.value)) as Message);
   }
   recentMessages(sessionId: string, limit: number): Message[] {
     return this.db
-      .prepare("SELECT value FROM records WHERE kind='messages' AND json_extract(value,'$.sessionId')=? ORDER BY rowid DESC LIMIT ?")
+      .prepare(`${visibleMessagesQuery} ORDER BY rowid DESC LIMIT ?`)
       .all(sessionId, limit).reverse()
       .map(row => JSON.parse(String(row.value)) as Message);
   }

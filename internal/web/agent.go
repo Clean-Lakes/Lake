@@ -39,7 +39,7 @@ func (b *Server) sessionOptions(id string) Object {
 		options["contextBudgetMode"] = "manual"
 	}
 	if options["contextBudgetMode"] == "auto" {
-		model := b.Models.CachedCapacity(b.Models.Active())
+		model := b.Models.CachedCapacity(b.sessionModel(id))
 		if model != nil {
 			options["contextWindow"] = ai.AutomaticContextWindow(model.ContextLimit)
 		}
@@ -163,7 +163,7 @@ func (b *Server) configureSessionOptions(id string, updates Object, saveOptions 
 		options["runtime"] = b.Store.Resource(stringOf(term["resourceId"]))["kind"]
 		options["terminal_generation"] = term["generation"]
 	}
-	activeModel, modelSelection := b.Models.ActiveSelection()
+	activeModel, modelSelection := b.sessionModelSelection(id)
 	model := b.Models.CachedCapacity(activeModel)
 	if model == nil {
 		if explicitPermissions {
@@ -373,7 +373,7 @@ func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachm
 			}
 		}
 	}()
-	if b.Models.Active() == nil {
+	if b.sessionModel(id) == nil {
 		fail(400, "尚未配置模型")
 	}
 	options := b.configure(id, nil)

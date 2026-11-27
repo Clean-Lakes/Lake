@@ -674,7 +674,7 @@
       "routes": [
         {
           "method": "GET",
-          "path": "\"/api/settings/model/state\""
+          "path": "`/api/settings/model/state${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : \"\"}`"
         }
       ]
     },
@@ -1039,6 +1039,15 @@
         {
           "method": "POST",
           "path": "\"/api/settings/model/select\""
+        }
+      ]
+    },
+    {
+      "name": "selectSessionModel",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/sessions/${encodeURIComponent(session)}/ai/model`"
         }
       ]
     },

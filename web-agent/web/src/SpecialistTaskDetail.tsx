@@ -48,7 +48,7 @@ export function SpecialistTaskDetail({snapshot,worker,connected,onBack,onContinu
    }}>
     {tabs.map(tab=><button type="button" role="tab" key={tab.id} id={`${id}-${tab.id}-tab`} aria-selected={selected===tab.id}
      aria-controls={`${id}-${tab.id}-panel`} tabIndex={selected===tab.id?0:-1} onClick={()=>setSelected(tab.id)}>{tab.label}</button>)}
-    <TabSelectionIndicator selection={selected}/>
+    <TabSelectionIndicator selection={selected} axis="x"/>
    </div>
    <div className="specialist-task-detail-panel" role="tabpanel" id={`${id}-results-panel`} aria-labelledby={`${id}-results-tab`} hidden={selected!=='results'}>
     <WorkerExecutionResults snapshot={snapshot} readMarker={selected==='results'?resultsFooter:undefined}/>

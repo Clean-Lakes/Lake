@@ -478,11 +478,12 @@ func (b *Server) contextView(view ai.View) ai.View {
 	if view.ReplyStatus == "running" || view.ReplyStatus == "waiting_approval" {
 		view.Status = view.ReplyStatus
 	}
-	model := b.Models.Active()
-	if view.Context != nil && model != nil && view.Context.ModelID == ai.ModelIdentity(*model) {
-		model = b.Models.CachedCapacity(model)
-		view.Context.Window = model.ContextLimit
-		view.Context.WindowSource = model.ContextLimitSource
+	if view.Context != nil {
+		if model := b.sessionModel(view.Session); model != nil && view.Context.ModelID == ai.ModelIdentity(*model) {
+			model = b.Models.CachedCapacity(model)
+			view.Context.Window = model.ContextLimit
+			view.Context.WindowSource = model.ContextLimitSource
+		}
 	}
 	return view
 }

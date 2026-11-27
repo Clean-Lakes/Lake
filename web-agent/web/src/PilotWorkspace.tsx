@@ -5,9 +5,12 @@ import type {SessionEvent,SuperWorkspace,SuperWorker,SpecialistChannelInfo} from
 import {api,readableError} from './api';
 import {greetRoleAvatar,SuperRoleAvatar} from './SuperRoleAvatar';
 import {conversationAvatarMotion,superAvatarMotion,channelTaskPresentation,specialistTaskActivity,type ConversationActivity,type ConversationAvatarActivity} from './superAgentPresentation';
+import {ActivityDots} from './ActivityIndicator';
 import {Glyph} from './Icons';
 import {NavigationMenu} from './NavigationDelete';
+import {SpecialistCreate} from './SpecialistCreate';
 import {SpecialistDelete} from './SpecialistDelete';
+import {TabSelectionIndicator} from './TabSelectionIndicator';
 import {SidebarPilotEntry} from './SidebarPilotEntry';
 import {AgentBackendLogo,agentTypeName} from './AgentBackendLogo';
 import {reuseUnchanged} from './snapshotUpdates';
@@ -195,6 +198,8 @@ type PilotWorkspaceProps = {
  onPilot: () => void; onWorker: (worker: SuperWorker) => void; onChannel?: (channel: SpecialistChannelInfo) => void;
  disabled?:boolean; onDeleted?:(channel:SpecialistChannelInfo)=>void;
  onCodexSettings?:(projectId:string,anchor:HTMLButtonElement|null)=>void;
+ onSpecialistMcp?:(channel:SpecialistChannelInfo,anchor:HTMLButtonElement|null)=>void;
+ createSpecialist?:{projectId:string;onCreated:(channel:SpecialistChannelInfo)=>void};
 };
 function showClippedText(event: PointerEvent<HTMLElement>) {
  const text = event.currentTarget;
@@ -234,12 +239,15 @@ function SpecialistNameBubble({name,target,onClose}:{name:string;target:HTMLButt
  return createPortal(<span ref={bubble} className="specialist-name-bubble" aria-hidden="true">{name}</span>,document.body);
 }
 
-export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,onCodexSettings,showHeading=true,presentation='list'}: PilotWorkspaceProps) {
- const [menu,setMenu]=useState<SpecialistChannelInfo|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null);
+export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,onCodexSettings,onSpecialistMcp,createSpecialist,showHeading=true,presentation='list'}: PilotWorkspaceProps) {
+ const [menu,setMenu]=useState<SpecialistChannelInfo|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null),[creating,setCreating]=useState(false);
+ const lastMenu=useRef<SpecialistChannelInfo|null>(null);
+ if(menu)lastMenu.current=menu;
+ const renderedMenu=menu??lastMenu.current;
  const [nameHint,setNameHint]=useState<{id:string;target:HTMLButtonElement}|null>(null);
- const anchor=useRef<HTMLButtonElement|null>(null);
+ const anchor=useRef<HTMLButtonElement|null>(null),createButton=useRef<HTMLButtonElement|null>(null);
  const closeNameHint=useCallback(()=>setNameHint(null),[]);
- useEffect(()=>{setMenu(null);setDeleting(null);closeNameHint();},[workspace?.project.projectId,closeNameHint]);
+ useEffect(()=>{lastMenu.current=null;setMenu(null);setDeleting(null);setCreating(false);closeNameHint();},[workspace?.project.projectId,closeNameHint]);
  const roots = workspace?.active?workspace.workers.filter(worker => !worker.parentWorkerId):[];
  const channels = workspace?.active?workspace.channels:undefined;
  const viewedRole = selectedId ? selectedRoleId ?? channels?.find(channel => channel.sessionId === selectedId)?.roleId ??
@@ -251,7 +259,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
   roots.map(worker => ({channel: undefined, workers: [worker]}));
  const hintedEntry=nameHint&&entries.find(({channel,workers})=>(channel?.id??workers[0].id)===nameHint.id);
  const hintedName=hintedEntry&&(hintedEntry.channel?.roleName??hintedEntry.workers[0].roleName);
- if(rail&&!entries.length)return null;
+ if(rail&&!entries.length&&!createSpecialist)return null;
  return <section className={rail?'sidebar-specialist-roster':'pilot-workspace'} aria-label={rail||showHeading?'专员':undefined}>
   {!rail&&<>
    {showHeading&&<div className="nav-heading"><span>专员</span><small>{entries.length+1}</small></div>}
@@ -290,10 +298,12 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
     anchor.current=button;
     setMenu(channel);
    };
+   const railActivity = needsConfirmation ? 'waiting' : activityLabel ? 'running' : showUnread ? 'unread' : undefined;
    const avatar=<SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId}
      motion={preparing?'working':replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/>;
    return <button type="button" key={id} className={rail?'sidebar-rail-button sidebar-specialist-button':`nav-row pilot-worker-row${selected ? ' active' : ''}`}
      aria-current={selected ? 'page' : undefined} aria-label={label}
+     data-activity={rail?railActivity:undefined}
      aria-keyshortcuts={channel&&!disabled?'Shift+F10':undefined}
      onPointerEnter={rail?event=>{if(event.pointerType==='mouse'&&!menu&&!deleting)setNameHint({id,target:event.currentTarget});}:undefined}
      onPointerLeave={rail?dismissRowHint:undefined}
@@ -312,8 +322,8 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
       if(channel&&onChannel)onChannel(channel);else if(worker)onWorker(worker);
      }}>
     {avatar}
-    {rail?<span className="sidebar-specialist-status" aria-hidden="true">
-     {needsConfirmation?<Glyph name="circleAlert" size={10}/>:activityLabel?<Glyph name="loader" size={10} className="activity-indicator"/>:showUnread?<span className="pilot-worker-unread"/>:null}
+    {rail?<span className="sidebar-specialist-status" data-activity={railActivity} aria-hidden="true">
+     {needsConfirmation?<span className="sidebar-specialist-attention-dot"/>:activityLabel?<ActivityDots compact className="activity-indicator"/>:showUnread?<span className="pilot-worker-unread"/>:null}
     </span>:<span className="nav-row-text">
      <span className="pilot-worker-name">
       <strong onPointerEnter={showClippedText}>{name}</strong>
@@ -324,18 +334,25 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
       <span className="pilot-worker-status">
        {aggregate.runningCount>1&&<span className="pilot-worker-count" aria-label={`${aggregate.runningCount} 项任务执行中`}>{aggregate.runningCount}</span>}
        {needsConfirmation && <span className="pilot-worker-confirmation">需确认</span>}
-       {activityLabel ? <span className="pilot-worker-running" role="img" aria-label={activityLabel}><Glyph name="loader" size={12} className="activity-indicator"/></span> : showUnread && <span className="pilot-worker-unread" role="img" aria-label="有新消息未读"/>}
+       {activityLabel ? <span className="pilot-worker-running" role="img" aria-label={activityLabel}><ActivityDots className="activity-indicator"/></span> : showUnread && <span className="pilot-worker-unread" role="img" aria-label="有新消息未读"/>}
       </span>
      </span>
     </span>}
    </button>;
   })}
+  {rail&&createSpecialist&&<button ref={createButton} type="button" className="sidebar-rail-button sidebar-specialist-create"
+   aria-label="新建专员" title="新建专员" disabled={disabled}
+   onClick={()=>{closeNameHint();setCreating(true);}}>
+   <Glyph name="plus" size={18}/>
+  </button>}
+  {rail&&<TabSelectionIndicator className="sidebar-specialist-selection" selection={viewedRole??''} selector='.sidebar-specialist-button[aria-current="page"]'/>}
   {rail&&nameHint&&hintedName&&<SpecialistNameBubble key={nameHint.id} name={hintedName} target={nameHint.target} onClose={closeNameHint}/>}
-  {menu&&<NavigationMenu key={menu.id} title={menu.roleName} placement="beside" anchor={anchor} className="specialist-context-menu"
-   headerIcon={<SuperRoleAvatar name={menu.roleName} roleId={menu.roleId} avatarId={menu.avatarId} motion="still" size={19}/>}
+  {renderedMenu&&<NavigationMenu key={renderedMenu.id} open={Boolean(menu)} title={renderedMenu.roleName} placement="beside" anchor={anchor} className="specialist-context-menu"
+   headerIcon={<SuperRoleAvatar name={renderedMenu.roleName} roleId={renderedMenu.roleId} avatarId={renderedMenu.avatarId} motion="still" size={19}/>}
    onClose={()=>setMenu(null)} actions={[
-   ...(onCodexSettings?[{label:'模型配置',icon:'filter' as const,trailingIcon:'next' as const,disabled,run:()=>onCodexSettings(menu.projectId,anchor.current)}]:[]),
-   {label:'删除专员',icon:'trash',separatorBefore:true,danger:true,disabled:disabled||menu.roleRevision===undefined,run:()=>setDeleting(menu)},
+   ...(onCodexSettings?[{label:'模型配置',icon:'filter' as const,trailingIcon:'next' as const,disabled,run:()=>onCodexSettings(renderedMenu.projectId,anchor.current)}]:[]),
+   ...(onSpecialistMcp?[{label:'MCP 接入',icon:'plug' as const,trailingIcon:'next' as const,disabled,run:()=>onSpecialistMcp(renderedMenu,anchor.current)}]:[]),
+   {label:'删除专员',icon:'trash',separatorBefore:true,danger:true,disabled:disabled||renderedMenu.roleRevision===undefined,run:()=>setDeleting(renderedMenu)},
   ]}/>}
   {deleting&&<SpecialistDelete channel={deleting} returnFocus={anchor} onClose={()=>setDeleting(null)} onDeleted={()=>{
    onDeleted?.(deleting);
@@ -345,5 +362,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
     anchor.current?.scrollIntoView({block:'nearest'});
    }
   }}/>}
+  {creating&&createSpecialist&&<SpecialistCreate projectId={createSpecialist.projectId} disabled={disabled} returnFocus={createButton}
+   onCreated={createSpecialist.onCreated} onClose={()=>setCreating(false)}/>}
  </section>;
 }

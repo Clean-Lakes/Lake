@@ -42,7 +42,6 @@ export function filterMentions(options:MentionOption[],query:string,category:Men
   return `${option.name} ${option.detail} ${option.kind} ${mentionTypeLabel(option)} ${protocol} ${source}`.toLocaleLowerCase().includes(needle);
  });
 }
-export const mentionCategoryCount=(options:MentionOption[],category:MentionCategory)=>filterMentions(options,'',category).length;
 export function mentionInsertion(draft:string,caret:number,option:MentionOption) {
  const before=draft.slice(0,caret),token=before.match(/(?:^|\s)@([^\s@]*)$/);
  const start=token?before.lastIndexOf("@"):caret;

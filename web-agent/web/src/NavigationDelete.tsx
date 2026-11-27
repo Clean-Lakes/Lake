@@ -2,6 +2,7 @@ import {Fragment,useEffect,useLayoutEffect,useRef,useState,type ReactNode,type R
 import {Glyph,type GlyphName} from "./Icons";
 import {createPortal} from "react-dom";
 import {api,readableError} from "./api";
+import {useMenuMotion} from "./useMenuMotion";
 
 export type NavigationDeleteTarget = {kind:"project" | "resource" | "folder";id:string;projectId:string;name:string};
 export function TrashIcon() {return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13M10 11v5M14 11v5"/></svg>;}
@@ -9,11 +10,12 @@ type NavigationMenuPosition =
  | {x:number;y:number;anchor?:RefObject<HTMLButtonElement|null>;placement?:undefined}
  | {x?:never;y?:never;anchor:RefObject<HTMLButtonElement|null>;placement:'above'|'beside'};
 
-export function NavigationMenu({id,title,headerIcon,x=0,y=0,actions,onClose,className="",width,anchor,placement}: {id?:string;title:string;headerIcon?:ReactNode;actions:{label:string;description?:string;icon?:GlyphName;trailingIcon?:GlyphName;separatorBefore?:boolean;danger?:boolean;disabled?:boolean;current?:boolean;checked?:boolean;selectionType?:'radio'|'checkbox';run:()=>void}[];onClose:()=>void;className?:string;width?:number} & NavigationMenuPosition) {
+export function NavigationMenu({id,open=true,title,headerIcon,x=0,y=0,actions,onClose,className="",width,anchor,placement}: {id?:string;open?:boolean;title:string;headerIcon?:ReactNode;actions:{label:string;description?:string;icon?:GlyphName;trailingIcon?:GlyphName;separatorBefore?:boolean;danger?:boolean;disabled?:boolean;current?:boolean;checked?:boolean;selectionType?:'radio'|'checkbox';run:()=>void}[];onClose:()=>void;className?:string;width?:number} & NavigationMenuPosition) {
  const menu=useRef<HTMLDivElement>(null);
  const closeRef=useRef(onClose);closeRef.current=onClose;
- const [position,setPosition]=useState({left:x,top:y});
+ const [position,setPosition]=useState({left:x,top:y,origin:'left top',measured:false});
  useLayoutEffect(()=>{
+  if(!open)return;
   const place=()=>{
    const node=menu.current;if(!node)return;
    const button=placement?anchor?.current:null;
@@ -29,7 +31,12 @@ export function NavigationMenu({id,title,headerIcon,x=0,y=0,actions,onClose,clas
    const left=Math.max(8,Math.min(preferredLeft,window.innerWidth-menuWidth-8));
    const preferredTop=bounds?bounds.top-(placement==='above'?height+8:0):y;
    const top=Math.max(8,Math.min(preferredTop,window.innerHeight-height-8));
-   setPosition(current=>current.left===left&&current.top===top?current:{left,top});
+   const origin=bounds&&placement==='beside'
+    ? `${left<bounds.left?'right':'left'} top`
+    : placement==='above'
+     ? 'left bottom'
+     : `${left<x?'right':'left'} ${top<y?'bottom':'top'}`;
+   setPosition(current=>current.measured&&current.left===left&&current.top===top&&current.origin===origin?current:{left,top,origin,measured:true});
   };
   const anchorMoved=(event:Event)=>{
    const target=event.target;
@@ -46,8 +53,10 @@ export function NavigationMenu({id,title,headerIcon,x=0,y=0,actions,onClose,clas
    window.removeEventListener('scroll',anchorMoved,true);
    window.removeEventListener('transitionend',anchorMoved,true);
   };
- },[x,y,width,anchor,placement]);
+ },[open,x,y,width,anchor,placement]);
+ const retain=useMenuMotion(menu,open&&position.measured,true);
  useEffect(() => {
+  if(!open)return;
   const previous=document.activeElement as HTMLElement|null;
   (menu.current?.querySelector<HTMLButtonElement>('button[aria-checked="true"]') ?? menu.current?.querySelector<HTMLButtonElement>('button:not(:disabled)'))?.focus({preventScroll:true});
   const dismiss=(event:PointerEvent)=>{if(!menu.current?.contains(event.target as Node)&&!anchor?.current?.contains(event.target as Node))closeRef.current();};
@@ -60,8 +69,9 @@ export function NavigationMenu({id,title,headerIcon,x=0,y=0,actions,onClose,clas
   };
   document.addEventListener('pointerdown',dismiss);document.addEventListener('keydown',key);
   return()=>{document.removeEventListener('pointerdown',dismiss);document.removeEventListener('keydown',key);};
- },[]);
- return createPortal(<div ref={menu} id={id} role="menu" aria-label={`${title} 管理菜单`} className={`navigation-context-menu ${className}`} style={{width,...position}} onContextMenu={event=>event.preventDefault()} onPointerMove={event=>{const button=(event.target as Element).closest<HTMLButtonElement>('button');if(button&&!button.disabled&&document.activeElement!==button)button.focus({preventScroll:true});}} onKeyDown={event=>{if(!["ArrowDown","ArrowUp","Home","End"].includes(event.key))return;event.preventDefault();const buttons=[...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];const index=buttons.indexOf(document.activeElement as HTMLButtonElement);buttons[event.key==="Home"?0:event.key==="End"?buttons.length-1:(index+(event.key==="ArrowUp"?-1:1)+buttons.length)%buttons.length]?.focus();}}>
+ },[open]);
+ if(!open&&!retain)return null;
+ return createPortal(<div ref={menu} id={id} role="menu" aria-label={`${title} 管理菜单`} className={`navigation-context-menu ${className}`} data-menu-motion="true" inert={!open} aria-hidden={!open||undefined} style={{width,left:position.left,top:position.top,visibility:position.measured?undefined:'hidden',transformOrigin:position.origin}} onContextMenu={event=>event.preventDefault()} onPointerMove={event=>{const button=(event.target as Element).closest<HTMLButtonElement>('button');if(button&&!button.disabled&&document.activeElement!==button)button.focus({preventScroll:true});}} onKeyDown={event=>{if(!["ArrowDown","ArrowUp","Home","End"].includes(event.key))return;event.preventDefault();const buttons=[...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];const index=buttons.indexOf(document.activeElement as HTMLButtonElement);buttons[event.key==="Home"?0:event.key==="End"?buttons.length-1:(index+(event.key==="ArrowUp"?-1:1)+buttons.length)%buttons.length]?.focus();}}>
   <small className="navigation-menu-heading" title={title}>{headerIcon&&<span aria-hidden="true">{headerIcon}</span>}<span className="navigation-menu-title">{title}</span></small>
   {actions.map((action,index)=><Fragment key={action.label}>
   {action.separatorBefore&&index>0&&<div role="separator" className="navigation-menu-separator"/>}

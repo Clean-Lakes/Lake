@@ -1,6 +1,8 @@
 /* Major surfaces share one visible corner contour, not just a CSS radius value.
    Both dimensions must fit two complete corners to prevent browser scaling. */
 :root :is(
+ .sidebar.workspace-navigation .pilot-workspace .nav-row,
+ .sidebar.workspace-navigation .chat-group-nav-row,
  .sidebar.workspace-navigation .navigation-search,
  .sidebar.workspace-navigation .session-nav-row,
  .sidebar.workspace-navigation .resource-row,
@@ -21,7 +23,7 @@
  .composer-mentions .mention-item
 ) {
  min-width:calc(var(--window-corner-radius,var(--radius-window)) * 2);
- min-height:calc(var(--window-corner-radius,var(--radius-window)) * 2);
+ min-height:max(var(--window-corner-min-height,0px),calc(var(--window-corner-radius,var(--radius-window)) * 2));
  border-radius:var(--window-corner-radius,var(--radius-window));
  corner-shape:var(--corner-window);
 }
@@ -40,7 +42,6 @@
   --window-corner-stroke-slice:22;
  }
 }
-:root .sidebar.workspace-navigation .pilot-workspace .nav-row { --window-corner-radius:var(--radius-settings-control); }
 
 /* Compact badges and composer actions retain their size and scale the same curve. */
 :root :is(.session-state-badge,.composer-reference-token,.message-reference-token,:where(.composer-input) .composer-attach-button,:where(.composer-input) .send-button:where(.stop-button),:where(.composer-foot) > .composer-permission-button:where(:not(.sre-mode-toggle))) {
@@ -59,6 +60,7 @@
    are native CSS changes; no observer or per-frame JavaScript is needed. */
 :root.lake-corner-fallback :is(
  .sidebar.workspace-navigation .pilot-workspace .nav-row,
+ .sidebar.workspace-navigation .chat-group-nav-row,
  .sidebar.workspace-navigation .navigation-search,
  .sidebar.workspace-navigation .session-nav-row,
  .sidebar.workspace-navigation .resource-row,
@@ -124,6 +126,7 @@
 ) { --window-corner-inset:-1px; }
 :root.lake-corner-fallback :is(
  .sidebar.workspace-navigation .pilot-workspace .nav-row,
+ .sidebar.workspace-navigation .chat-group-nav-row,
  .sidebar.workspace-navigation .navigation-search,
  .sidebar.workspace-navigation .session-nav-row,
  .sidebar.workspace-navigation .resource-row,
@@ -166,4 +169,8 @@
  -webkit-background-clip:border-box;
  background-clip:border-box;
  &::before { background:var(--user-message-background); }
+}
+:root.lake-corner-fallback .sidebar-conversation-selection {
+ border-radius:0;
+ -webkit-mask-box-image:url('/window-corner-fill.svg') 22 fill / var(--radius-window) / 0 stretch;
 }

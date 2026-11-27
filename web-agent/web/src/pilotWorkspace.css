@@ -23,22 +23,18 @@
 .specialist-context-menu > button > .navigation-menu-trailing { flex:0 0 13px; }
 .specialist-context-menu > button.danger-text:is(:hover:not(:disabled),:focus-visible) { background:var(--danger-soft); }
 .specialist-context-menu > .navigation-menu-separator { margin:3px 5px; }
-@media (prefers-reduced-motion:no-preference) {
- .specialist-context-menu { animation:specialist-menu-in 120ms cubic-bezier(.2,.7,.2,1) both; }
- @keyframes specialist-menu-in { from { opacity:0; transform:translateX(-3px); } }
-}
 @media (pointer:coarse) { .navigation-context-menu.specialist-context-menu > button { min-height:44px; } }
 .sidebar.workspace-navigation .pilot-workspace .nav-row {
  min-height:50px;
  margin-bottom:2px;
  padding:6px var(--sidebar-row-inset);
  gap:var(--sidebar-icon-gap);
- border-radius:var(--radius-settings-control);
+ border-radius:var(--radius-window);
  corner-shape:var(--corner-window);
 }
 .sidebar.workspace-navigation .pilot-workspace .sidebar-pilot-entry {
- min-height:var(--sidebar-rail-button-size);
- padding-block:4px;
+ min-height:48px;
+ padding-block:8px;
 }
 .sidebar.workspace-navigation .pilot-workspace .nav-row:hover { background:color-mix(in srgb,var(--foreground) 4%,transparent); }
 .sidebar.workspace-navigation .pilot-workspace .nav-row[aria-current=page] { background:color-mix(in srgb,var(--info) 11%,transparent); }
@@ -66,12 +62,12 @@
  margin-block:var(--sidebar-specialist-divider-inset) 5px;
  background:var(--border);
 }
+.sidebar-specialist-create { color:var(--pilot-header-muted); }
+.sidebar-specialist-create:hover:not(:disabled) { color:var(--foreground); }
+.sidebar-specialist-create:disabled { opacity:.45; cursor:default; }
 .modal.specialist-create-dialog {
  width:min(416px,calc(100vw - 32px));
- margin:auto;
 }
-.specialist-create-dialog:not([open]) { display:none; }
-.specialist-create-dialog::backdrop { background:var(--overlay); }
 .specialist-create-dialog .app-select-trigger { height:40px; }
 .specialist-create-dialog textarea {
  display:block;
@@ -97,6 +93,77 @@
  place-items:center;
  color:var(--info);
  pointer-events:none;
+}
+.sidebar-specialist-status[data-activity="running"] {
+ inset-block-start:auto;
+ inset-block-end:0;
+ inset-inline-end:0;
+}
+.sidebar-specialist-button[data-activity="running"] {
+ background:color-mix(in srgb,var(--surface) 88%,transparent);
+ box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--info) 34%,transparent);
+}
+.sidebar-specialist-button[data-activity="waiting"] {
+ background:color-mix(in srgb,var(--surface) 88%,transparent);
+ box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warning) 48%,transparent);
+}
+.sidebar-specialist-attention-dot {
+ width:8px;
+ height:8px;
+ border-radius:50%;
+ background:var(--warning);
+ box-shadow:0 0 0 2px var(--sidebar);
+ animation:lake-attention-pulse 1.6s ease-in-out infinite;
+}
+.sidebar-specialist-status .pilot-worker-unread {
+ box-shadow:0 0 0 1.5px var(--sidebar);
+}
+.activity-dots-bubble,
+.activity-dots-bubble.activity-indicator {
+ display:inline-flex;
+ align-items:center;
+ justify-content:center;
+ gap:2.5px;
+ height:16px;
+ padding:0 6px;
+ border-radius:999px;
+ border:1px solid color-mix(in srgb,var(--info) 24%,var(--border));
+ background:var(--surface);
+ color:var(--info);
+ box-shadow:0 1px 2px rgb(0 0 0 / 5%);
+ animation:none;
+}
+.activity-dots-bubble.is-compact {
+ height:12px;
+ padding:0 4px;
+ gap:2px;
+ box-shadow:0 1px 2px rgb(0 0 0 / 7%);
+}
+.activity-dot {
+ width:3.5px;
+ height:3.5px;
+ border-radius:50%;
+ background:currentColor;
+ animation:lake-activity-dot-bounce 1.15s ease-in-out infinite;
+}
+.activity-dots-bubble.is-compact .activity-dot {
+ width:3px;
+ height:3px;
+}
+.activity-dot:nth-child(2) { animation-delay:.18s; }
+.activity-dot:nth-child(3) { animation-delay:.36s; }
+@keyframes lake-activity-dot-bounce {
+ 0%, 60%, 100% { transform:translateY(0); opacity:.45; }
+ 30% { transform:translateY(-2px); opacity:1; }
+}
+@keyframes lake-attention-pulse {
+ 0%, 100% { transform:scale(1); opacity:1; }
+ 50% { transform:scale(.84); opacity:.45; }
+}
+@media (prefers-reduced-motion:reduce) {
+ .activity-dot,
+ .sidebar-specialist-attention-dot { animation:none; }
+ .activity-dot { opacity:.85; }
 }
 .specialist-name-bubble {
  position:fixed;

@@ -236,7 +236,10 @@ func (m *Models) providerKeyLocked(ref string) (string, bool) {
 }
 func (m *Models) catalogModelLocked(catalog *providerCatalog) *ai.Model {
 	provider := findProvider(catalog, catalog.ActiveProviderID)
-	model := findProviderModel(provider, catalog.ActiveModelID)
+	return m.providerModelLocked(provider, findProviderModel(provider, catalog.ActiveModelID))
+}
+
+func (m *Models) providerModelLocked(provider *ModelProvider, model *ProviderModel) *ai.Model {
 	if provider == nil || !provider.Enabled || model == nil || !model.Enabled {
 		return nil
 	}

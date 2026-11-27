@@ -30,6 +30,7 @@
     "createProject",
     "createSession",
     "saveModelSettings",
+    "selectSessionModel",
     "sendMessage",
     "snapshot",
     "saveSessionPresentation",

@@ -4,6 +4,7 @@ import {api,readableError} from './api';
 import {AppSelect} from './AppSelect';
 import {Glyph} from './Icons';
 import {DisclosureSummary} from './DisclosureSummary';
+import {TabSelectionIndicator} from './TabSelectionIndicator';
 import {WorkspaceSettingSection} from './WorkspacePage';
 import {formatMCPArgs,mcpJSON,mcpProtocols,mcpSecretMap,parseMCPArgs,parseMCPJSON,validateMCPInput,type MCPInput} from './mcpConfig';
 import './extensionSettings.css';
@@ -51,7 +52,7 @@ export function MCPSettings({onBusyChange}:{onBusyChange:(busy:boolean)=>void}){
  return <section id="mcp-settings-panel" role="tabpanel" aria-labelledby="mcp-settings-tab" className="extension-settings mcp-settings"><div className="mcp-content" ref={detail}>
   {error&&<p className="form-error" role="alert">{error}</p>}{notice&&<p className="provider-success" role="status">{notice}</p>}
   {draft?<WorkspaceSettingSection id="mcp-editor-title" title={draft.id?'编辑 MCP 服务器':'新建 MCP 服务器'} actions={
-   <div className="mcp-mode-tabs" role="tablist" aria-label="MCP 配置方式">{(['form','json'] as const).map(value=><button type="button" key={value} role="tab" id={`mcp-mode-${value}`} aria-controls="mcp-config-editor" aria-selected={mode===value} tabIndex={mode===value?0:-1} disabled={!!busy} onClick={()=>switchMode(value)} onKeyDown={event=>{if(['ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();const next=value==='form'?'json':'form';if(switchMode(next))event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`#mcp-mode-${next}`)?.focus();}}}>{value==='form'?'表单':'JSON'}</button>)}</div>
+   <div className="mcp-mode-tabs" role="tablist" aria-label="MCP 配置方式">{(['form','json'] as const).map(value=><button type="button" key={value} role="tab" id={`mcp-mode-${value}`} aria-controls="mcp-config-editor" aria-selected={mode===value} tabIndex={mode===value?0:-1} disabled={!!busy} onClick={()=>switchMode(value)} onKeyDown={event=>{if(['ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();const next=value==='form'?'json':'form';if(switchMode(next))event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`#mcp-mode-${next}`)?.focus();}}}>{value==='form'?'表单':'JSON'}</button>)}<TabSelectionIndicator selection={mode}/></div>
   }>
    <div id="mcp-config-editor" role="tabpanel" aria-labelledby={`mcp-mode-${mode}`} className="workspace-setting-card">
     <div className="workspace-setting-row">

@@ -4,6 +4,7 @@ import {api,readableError} from './api';
 import {Glyph} from './Icons';
 import {ProviderIcon} from './ProviderIcon';
 import {reasoningLabels} from './reasoningLabels';
+import {TabSelectionIndicator} from './TabSelectionIndicator';
 import {navigateSettingsTabs} from './settingsFocus';
 import './codexModelConfiguration.css';
 
@@ -195,6 +196,7 @@ export function CodexModelConfiguration({projectId,projectName,anchor,onClose}:{
           disabled={busy} onClick={()=>setExecutor(option)}>
           <ExecutorIcon executor={option} size={16}/><span>{option.name}</span>
         </button>)}
+        <TabSelectionIndicator selection={executor.id}/>
       </div>
       <div className="codex-config-panel" id={panelId} role="tabpanel" aria-labelledby={titleId+'-'+executor.id}
         tabIndex={!codexSelected||!draft?0:undefined}>

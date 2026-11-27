@@ -59,7 +59,7 @@ func (b *Server) executeProposedPlan(id string, data Object) Object {
 	if b.Store.Session(id)["status"] != "completed" || view.Status != "completed" || view.ProposedPlan == nil || view.ProposedPlan.ID != stringOf(data["planId"]) {
 		fail(409, "计划已更新或尚未完成，请审阅最新计划")
 	}
-	if b.Models.Active() == nil {
+	if b.sessionModel(id) == nil {
 		fail(400, "尚未配置模型")
 	}
 	// Use the authoritative persisted content. The client supplies an ID only;

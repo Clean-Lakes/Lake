@@ -77,8 +77,24 @@ export type WorkSession = {
 export type MessageMention = {kind: "resource" | "skill" | "mcp" | "role"; id: string; label: string; start: number; end: number; resourceKind?: Resource["kind"]};
 
 export type SpecialistReplyAuthor = {kind:'specialist';name:string;roleId?:string;workerId:string;sessionId:string;taskId?:string;conversationId?:string;channelSessionId?:string;rootTurnId?:string;execution?:AgentBackendRef;avatarId?:LakeAvatarName;durationMs?:number};
+export type ExternalSpecialistNotice = {
+  roleId: string;
+  roleName: string;
+  avatarId?: LakeAvatarName;
+  channelSessionId?: string;
+  execution?: AgentBackendRef;
+  resourceNames?: string[];
+};
 /** An instruction that entered Lake from an external developer agent client. */
-export type ExternalMessageOrigin = {kind:'mcp';connectionId?:string;connectionName?:string;threadId?:string;threadTitle?:string;clientMessageId?:string};
+export type ExternalMessageOrigin = {
+  kind:'mcp';
+  connectionId?:string;
+  connectionName?:string;
+  threadId?:string;
+  threadTitle?:string;
+  clientMessageId?:string;
+  specialistNotice?: ExternalSpecialistNotice;
+};
 export type Message = {
   codexActivity?:import('./codex-activity').CodexActivityItem[];
   taskReference?: PilotTaskReference;
@@ -273,6 +289,8 @@ export type SessionSnapshot = {
 	sre?:SRESnapshot;
  replyTimings?:ReplyTiming[];
   messageQueue?: MessageQueue;
+  /** Present when the conversation has its own model choice, even if it is now unavailable. */
+  model?: SessionModelState;
  aiBinding?: {terminalId?: string; generation?: string};
   session: WorkSession;
   resources: Resource[];
@@ -334,6 +352,9 @@ export type ModelProvider = {id: string; name: string; baseURL: string; protocol
 export type ProviderCatalog = {providers: ModelProvider[]; activeProviderId: string; activeModelId: string; savedProviderId?: string};
 export type ProviderInput = Omit<ModelProvider,"id" | "keyConfigured"> & {apiKey?: string | null};
 export type AvailableModelEntry = {providerId: string; providerName: string; modelId: string; name: string; displayName: string; contextWindow?: number};
+export type ModelDisplayState = {modelConfigured: boolean; modelName: string | null; modelId?: string | null; modelSelection?: AvailableModelEntry | null; supportsImageInput?: boolean};
+export type SessionModelState = ModelDisplayState & {revision: number};
+export type SessionModelInput = {providerId: string; modelId: string} | {name: string};
 export type AvailableModels = { models: string[]; contextLimits?: Record<string, number>; entries?: AvailableModelEntry[]; activeProviderId?: string; activeModelId?: string; source?: "magpie"; message?: string; imageInputCapabilities?: Record<string, boolean>; reasoningCapabilities?: Record<string, ModelReasoningCapability> };
 
 export type ReasoningSettings = { modelId?: string; levels: string[]; default?: string; source?: string; effort: string };
@@ -440,11 +461,24 @@ export type ChatGroup = {
   latest?:{text:string;author?:string};
 };
 export type SpecialistQuestion = {author:SpecialistReplyAuthor;taskTitle:string;request:AIQuestionRequest;pilotSessionId?:string};
+export type GatewayApprovalPolicy = 'always_approve' | 'auto_in_scope';
+export type GatewayResourceGrant = {resourceId:string;approvalPolicy?:GatewayApprovalPolicy;expiresAt?:string};
+export type GatewayInviteStatus = 'active' | 'redeemed' | 'expired' | 'revoked';
+export type GatewayInviteView = {
+  id:string;name?:string;recipient?:string;createdAt:string;expiresAt?:string;redeemedAt?:string;redeemedCount?:number;reusable?:boolean;revokedAt?:string;
+  status:GatewayInviteStatus;inviteUrl?:string;invitePrompt?:string;
+};
+export type SpecialistMcpResourceOption = {id:string;name:string;kind:Resource['kind'];status?:string;host?:string;path?:string};
+export type SpecialistMcpState = {
+  projectId:string;projectName:string;roleId:string;roleName:string;avatarId?:LakeAvatarName;
+  connection:GatewayConnection|null;resources:SpecialistMcpResourceOption[];
+  invites:GatewayInviteView[];remoteEndpoint:string;
+};
 export type SuperWorkspace = {pilotMessageRead?:ConversationReadState;active:boolean;project:SuperProject;workers:SuperWorker[];questions?:SpecialistQuestion[];channels?:SpecialistChannelInfo[];conversations?:SpecialistConversation[];chatGroups?:ChatGroup[];cursor?:number};
 export type GatewayTokenView = {id:string;name:string;roles?:string[];createdAt:string};
 export type GatewayCommand = {program:string;script?:string;home:string;data?:string};
 export type GatewayRouting = {mode:'pilot'} | {mode:'specialist';roleId:string};
-export type GatewayConnection = {id:string;name:string;projectId:string;enabled:boolean;routing:GatewayRouting;createdAt:string;updatedAt:string;lastReceivedAt?:string};
+export type GatewayConnection = {id:string;name:string;projectId:string;enabled:boolean;routing:GatewayRouting;resourceGrants?:GatewayResourceGrant[];createdAt:string;updatedAt:string;lastReceivedAt?:string};
 export type GatewayConnections = {connections:GatewayConnection[];command:GatewayCommand;projects:{id:string;name:string}[];specialists:GatewaySpecialistRef[];legacyTokens:GatewayTokenView[];eventSources?:LakeEventSource[]};
 export type LakeEventSource = {
   id: string;
