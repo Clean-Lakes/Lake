@@ -5,7 +5,7 @@ import "github.com/Clean-Lakes/Lake/internal/ai"
 // Backlog/handbacks have the same serialized Router and host message outbox as
 // a fresh user turn. This is invocation admission; ADK still owns the loop.
 func (b *Server) startSuperRouter(domain ai.SuperProject) {
-	if b.Context.Err() != nil || b.Models.Active() == nil {
+	if b.Context.Err() != nil || b.sessionModel(domain.RouterSessionID) == nil {
 		return
 	}
 	pending, err := b.Engine.PendingSuperProjectEvents(b.Context, domain.ProjectID, 16)

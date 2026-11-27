@@ -119,7 +119,7 @@ func (b *Server) summarizeProgress(ctx context.Context, id, turn string, load fu
 		}
 	}
 	input := progressSummaryInput(view)
-	model := b.Models.Active()
+	model := b.sessionModel(id)
 	if input == "" || model == nil {
 		return Object{"text": "", "pending": false}
 	}
@@ -181,7 +181,7 @@ func (b *Server) summarizeProgress(ctx context.Context, id, turn string, load fu
 	}
 	// Never publish a completion for an obsolete turn or obsolete evidence.
 	latest, latestErr := load()
-	active := b.Models.Active()
+	active := b.sessionModel(id)
 	current := active != nil && ai.ModelIdentity(*active) == ai.ModelIdentity(*model) && latestErr == nil && latest.TurnStartedAt == turn && progressSummaryInput(latest) == input
 	b.progressSummaryMu.Lock()
 	if current && b.progressSummaries[id] == state {
