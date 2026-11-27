@@ -4,6 +4,7 @@ import {AppSelect} from "./AppSelect";
 import {Glyph} from "./Icons";
 import {BulkCheckbox, type BulkSelection} from "./BulkNavigationDelete";
 import {NavigationMenu,type NavigationDeleteTarget} from "./NavigationDelete";
+import {useMenuMotion} from "./useMenuMotion";
 import { useContext, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import type { Project, Resource, ResourceTreeNode } from "../../shared/contracts";
 import { api, readableError } from "./api";
@@ -153,6 +154,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   const addControl = useRef<HTMLDivElement>(null);
   const addButton = useRef<HTMLButtonElement>(null);
   const addMenu = useRef<HTMLDivElement>(null);
+  const retainAddMenu = useMenuMotion(addMenu, addOpen, true);
   const enabledMenuButtons = "button:not(:disabled)";
   // 指针打开菜单时不移动焦点：程序化 focus 会让首项呈现悬停底色，看起来像未悬停就已被选中。
   const addFocusTarget = useRef<"first" | "last" | null>("first");
@@ -302,7 +304,10 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
     while(parent && !seen.has(parent)){seen.add(parent);const node=nodeMap.get(parent);if(!node)break;names.unshift(node.name);parent=node.parentId;}
     return names.join(" / ");
   }
-  const contextNode=context ? nodeMap.get(context.id) : undefined;
+  const lastContext = useRef(context);
+  if (context) lastContext.current = context;
+  const renderedContext = context ?? lastContext.current;
+  const contextNode=renderedContext ? nodeMap.get(renderedContext.id) : undefined;
   const contextResource=contextNode?.resourceId ? resourceMap.get(contextNode.resourceId) : undefined;
   const heading=<div className={navigationPanel?"resource-panel-actions":"nav-heading resources-heading"}>{!navigationPanel&&<button type="button" className="nav-section-toggle" aria-label={`${sectionExpanded ? "折叠" : "展开"}${project.name}的资源`} aria-expanded={sectionExpanded} aria-controls={`project-resources-${project.id}`} onClick={() => setSectionExpanded(value => !value)}><Glyph name="chevron" size={13} className={`resource-section-chevron ${sectionExpanded ? "chevron-open" : ""}`}/><span className="resource-section-label">资源 <small>{resources.length}</small></span></button>}{selection && <button type="button" className="bulk-group-toggle" disabled={blocked || selection.disabled || !resources.length && !tree.length} aria-label={`全选 ${project.name} 的资源和文件夹`} onClick={onSelectAll}>全选</button>}<div hidden={!!selection} className="resource-add-control" ref={addControl} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setAddOpen(false); }}>
     <button type="button" ref={addButton} className="nav-add resource-create-trigger" aria-label={`在${project.name}新建资源或目录`} title="新建资源或目录" aria-haspopup="menu" aria-expanded={addOpen} aria-controls={`resource-add-${project.id}`} disabled={addBlocked} onPointerDown={() => { addFocusTarget.current = null; }} onKeyDown={event => {
@@ -315,7 +320,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
       const items = Array.from(addMenu.current?.querySelectorAll<HTMLButtonElement>(enabledMenuButtons) ?? []);
       (event.key === "ArrowDown" ? items[0] : items.at(-1))?.focus();
     }} onClick={() => setAddOpen(value => !value)}><Glyph name="plus" size={16}/><span>新建</span></button>
-    {addOpen && <div ref={addMenu} id={`resource-add-${project.id}`} className="resource-add-menu" role="menu" aria-label="新建资源或目录" onMouseDown={event => {
+    {(addOpen || retainAddMenu) && <div ref={addMenu} id={`resource-add-${project.id}`} className="resource-add-menu" data-menu-motion="true" inert={!addOpen} aria-hidden={!addOpen || undefined} style={{transformOrigin: "top right"}} role="menu" aria-label="新建资源或目录" onMouseDown={event => {
       // Safari 点击按钮时会先 blur 到 body；保留菜单焦点，避免 onBlur 在 click 前卸载菜单。
       if (event.button === 0) event.preventDefault();
     }} onKeyDown={event => {
@@ -330,7 +335,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
       <button type="button" role="menuitem" disabled={blocked} onClick={() => { setAddOpen(false); openEditor({parentId:null,name:""},addButton.current); }}><FolderIcon/>新建目录</button>
     </div>}
   </div></div>;
-  return <>{context && contextNode && <NavigationMenu title={contextResource?.name || contextNode.name} anchor={contextAnchor} x={context.x} y={context.y} onClose={()=>setContext(null)} actions={[
+  return <>{renderedContext && contextNode && <NavigationMenu open={Boolean(context)} title={contextResource?.name || contextNode.name} anchor={contextAnchor} x={renderedContext.x} y={renderedContext.y} onClose={()=>setContext(null)} actions={[
    ...(contextNode.kind==="folder" ? [
     {label:"新建资源",icon:"server" as const,disabled:blocked,run:()=>onAddResource(contextNode.id)},
     {label:"新建子目录",icon:"folder" as const,disabled:blocked,run:()=>openEditor({parentId:contextNode.id,name:""},contextAnchor.current)},

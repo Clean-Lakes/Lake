@@ -1,6 +1,7 @@
 import {useEffect,useId,useLayoutEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {TabSelectionIndicator} from "./TabSelectionIndicator";
+import {useMenuMotion} from "./useMenuMotion";
 import {Glyph} from './Icons';
 import type {Message} from '../../shared/contracts';
 import {PilotTaskDirectory,type PilotTaskDirectoryData} from './PilotTaskDirectory';
@@ -35,7 +36,7 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
  const [open,setOpen]=useState(false),[selected,setSelected]=useState<string|null>(items[0]?.id??null);
  const [view,setView]=useState<'tasks'|'messages'>('tasks');
  const showTasks=!!taskDirectory&&view==='tasks';
- const [position,setPosition]=useState({left:12,top:80,width:360});
+ const [position,setPosition]=useState<{left:number;top:number;width:number;origin:string}|null>(null);
  const trigger=useRef<HTMLButtonElement>(null),panel=useRef<HTMLElement>(null),list=useRef<HTMLElement>(null);
  const root=useRef<HTMLDivElement>(null);
  const rows=useRef(new Map<string,HTMLButtonElement>()),id=useId();
@@ -95,12 +96,14 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
    const left=Math.max(12,Math.min(anchor.left,window.innerWidth-width-12));
    const below=anchor.bottom+6;
    const top=below+height<=window.innerHeight-12?below:Math.max(12,anchor.top-height-6);
-   setPosition(previous=>previous.left===left&&previous.top===top&&previous.width===width?previous:{left,top,width});
+   const origin=`${left+width/2<anchor.left+anchor.width/2?'right':'left'} ${top<anchor.top?'bottom':'top'}`;
+   setPosition(previous=>previous&&previous.left===left&&previous.top===top&&previous.width===width&&previous.origin===origin?previous:{left,top,width,origin});
   }
   measure();const observer=new ResizeObserver(measure);if(panel.current)observer.observe(panel.current);
   window.addEventListener('resize',measure);document.addEventListener('scroll',measure,true);
   return()=>{observer.disconnect();window.removeEventListener('resize',measure);document.removeEventListener('scroll',measure,true);};
  },[open]);
+ const retainPanel=useMenuMotion(panel,open&&Boolean(position),true);
  useLayoutEffect(()=>{
   if(!open)return;
   if(taskDirectory)panel.current?.querySelector<HTMLElement>('[role=tab][aria-selected=true]')?.focus({preventScroll:true});
@@ -129,7 +132,7 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
   <button type="button" role="tab" id={`${id}-messages-tab`} aria-controls={`${id}-messages`} aria-selected={!showTasks} tabIndex={showTasks?-1:0} onClick={()=>setView('messages')}>消息</button>
   <TabSelectionIndicator selection={showTasks}/>
  </div>;
- const content=open&&<section ref={panel} className="conversation-directory-popover" style={position} id={id} role="dialog" aria-label="会话目录">
+ const content=(open||retainPanel)&&<section ref={panel} className="conversation-directory-popover" data-menu-motion="true" inert={!open} aria-hidden={!open||undefined} style={position?{left:position.left,top:position.top,width:position.width,transformOrigin:position.origin}:{left:12,top:80,width:360,visibility:'hidden'}} id={id} role="dialog" aria-label="会话目录">
   <header className="conversation-directory-heading">{tabs||<span>当前对话</span>}<button type="button" aria-label="关闭会话目录" onClick={()=>close(true)}><Glyph name="close" size={15}/></button></header>
   {taskDirectory&&<div id={`${id}-tasks`} role="tabpanel" aria-labelledby={`${id}-tasks-tab`} className="conversation-directory-view" hidden={!showTasks}>
    {showTasks&&<PilotTaskDirectory data={taskDirectory} visibleSources={new Set(items.map(item=>item.id))}

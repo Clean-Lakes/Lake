@@ -3,6 +3,7 @@ import {SidebarScrollArea} from './SidebarScrollArea';
 import {SidebarResourceActions} from './SidebarResourceActions';
 import {Glyph} from './Icons';
 import {ProjectSwitcher, type ProjectSwitcherProps} from './ProjectSwitcher';
+import {TabSelectionIndicator} from './TabSelectionIndicator';
 import {WorkbenchSidebar} from './WorkbenchNavigation';
 
 type NavigationPanel = 'specialists'|'resources';
@@ -17,12 +18,11 @@ function initialPanel(projectId:string|undefined,selected:NavigationPanel):Navig
 }
 
 /** Both lists stay mounted so switching preserves their scroll and folder state. */
-export function SidebarWorkspaceNavigation({projectId,specialists,specialistRail,children,resourceCount,selectionId,selectedPanel,attention=false,onSelectPanel,workspace,empty,header,headerActions,renderCreation,projectPicker,contentId}:{
+export function SidebarWorkspaceNavigation({projectId,specialists,specialistRail,children,resourceCount,selectionId,selectedPanel,attention=false,onSelectPanel,workspace,empty,header,headerActions,projectPicker,contentId}:{
  projectId?:string;specialists:ReactNode;children:ReactNode;resourceCount:number;
  specialistRail?:ReactNode;
  selectionId:string;selectedPanel:NavigationPanel;attention?:boolean;onSelectPanel?:(panel:NavigationPanel,select:()=>void)=>void;workspace?:WorkspaceNavigation;empty?:ReactNode;
  header?:ReactNode;headerActions?:ReactNode;projectPicker?:ProjectSwitcherProps;contentId?:string;
- renderCreation?:(compact:boolean)=>ReactNode;
 }) {
  const id=useId();
  const {collapsed,expand}=useContext(WorkbenchSidebar);
@@ -41,7 +41,6 @@ export function SidebarWorkspaceNavigation({projectId,specialists,specialistRail
  const resourcesOpen=panel==='resources';
  const conversationLabel=specialistRail?'对话':'专员';
  const attentionLabel=specialistRail?'对话，专员有待确认事项或未读消息':'专员，有待确认事项或未读消息';
- const creation=renderCreation?.(collapsed);
  return <div className="sidebar-workspace-navigation">
   <nav className="sidebar-navigation-rail" aria-label="侧栏视图">
    {projectId&&<><button type="button" className="sidebar-rail-button" aria-label={attention?attentionLabel:conversationLabel} aria-pressed={specialistsOpen}
@@ -50,9 +49,9 @@ export function SidebarWorkspaceNavigation({projectId,specialists,specialistRail
     <Glyph name="lakeSpecialists" size={22} filled={specialistsOpen}/>{attention&&<span className="sidebar-specialist-attention" aria-hidden="true"/>}
    </button>
    <button type="button" className="sidebar-rail-button" aria-label="资源" aria-pressed={resourcesOpen}
-    aria-controls={`${id}-resources-panel`} title="资源" onClick={()=>selectPanel('resources')}><Glyph name="lakeResources" size={22} filled={resourcesOpen}/></button></>}
+    aria-controls={`${id}-resources-panel`} title="资源" onClick={()=>selectPanel('resources')}><Glyph name="lakeResources" size={22} filled={resourcesOpen}/></button>
+   <TabSelectionIndicator className="sidebar-rail-selection" selection={panel} selector=':scope > .sidebar-rail-button[aria-pressed="true"]'/></>}
    {collapsed && projectPicker && <ProjectSwitcher {...projectPicker} iconOnly/>}
-   {collapsed&&creation}
    {specialistRail}
    {workspace&&<button type="button" className="sidebar-rail-button workspace-rail-button" aria-label={workspace.unreadUpdate?'控制台，有新版本':'控制台'}
     aria-haspopup="dialog" aria-expanded={workspace.open} aria-controls="workspace-console" title="控制台" onClick={workspace.onOpen}>
@@ -61,14 +60,23 @@ export function SidebarWorkspaceNavigation({projectId,specialists,specialistRail
   </nav>
   <div className="sidebar-navigation-viewport">
    <div id={contentId} className="sidebar-navigation-content" inert={collapsed} aria-hidden={collapsed||undefined}>
-    {(projectPicker || headerActions || !collapsed&&creation) && <div className="sidebar-brand-row">
+    {(projectPicker || headerActions) && <div className="sidebar-brand-row">
      {projectPicker ? <ProjectSwitcher {...projectPicker} disabled={collapsed || projectPicker.disabled}/> :
      <span className="brand" aria-label="Lake"><strong>Lake</strong></span>}
-     {(headerActions || !collapsed&&creation) && <div className="sidebar-brand-actions">{!collapsed&&creation}{headerActions}</div>}
+     {headerActions && <div className="sidebar-brand-actions">{headerActions}</div>}
     </div>}
     {header}
     {projectId?<><section key={`specialists:${projectId}`} className="sidebar-navigation-panel" id={`${id}-specialists-panel`} aria-label={conversationLabel} hidden={!specialistsOpen}>
-     <SidebarScrollArea>{specialists}</SidebarScrollArea>
+     <SidebarScrollArea>
+      <div className="sidebar-conversation-list">
+       {specialists}
+       <TabSelectionIndicator
+         className="sidebar-conversation-selection"
+         selection={specialistsOpen?selectionId:''}
+         selector=':is(.sidebar-pilot-entry,.pilot-worker-row,.chat-group-nav-row)[aria-current="page"]'
+       />
+      </div>
+     </SidebarScrollArea>
     </section>
     <section key={`resources:${projectId}`} className="sidebar-navigation-panel sidebar-resources-panel" id={`${id}-resources-panel`} aria-labelledby={`${id}-resources-title`} hidden={!resourcesOpen}>
      <div className="sidebar-content-header">

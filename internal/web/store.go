@@ -553,6 +553,14 @@ func (s *Store) CreateProject(name string) Object {
 	}
 	return project
 }
+func (s *Store) RenameProject(projectID, name string) Object {
+	return s.resourceUpdate(func() any {
+		p := s.activeProject(projectID)
+		s.exec("UPDATE projects SET name=? WHERE id=?", name, projectID)
+		p["name"] = name
+		return p
+	}, "").(Object)
+}
 func (s *Store) CreateResource(project, name, kind string, config Object) Object {
 	return s.resourceUpdate(func() any {
 		s.activeProject(project)
@@ -664,7 +672,7 @@ func (s *Store) DeleteSession(id string) {
 		s.strategyEraseSessionSources(id)
 		s.exec("UPDATE terminalEntries SET actionId=NULL WHERE actionId IN (SELECT id FROM actions WHERE sessionId=?)", id)
 		s.exec("DELETE FROM terminalEntries WHERE terminalId IN (SELECT id FROM terminals WHERE sessionId=?)", id)
-		for _, table := range []string{"aiOptions", "events", "evidence", "specialists", "actions", "terminals", "messages", "sessionResources"} {
+		for _, table := range []string{"aiOptions", "sessionModelChoices", "events", "evidence", "specialists", "actions", "terminals", "messages", "sessionResources"} {
 			s.exec("DELETE FROM "+table+" WHERE sessionId=?", id)
 		}
 		s.exec("DELETE FROM sessions WHERE id=?", id)

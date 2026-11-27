@@ -202,6 +202,46 @@
 .workspace-text-button.danger-text:hover:not(:disabled) { background:var(--danger-soft); }
 .workspace-text-button:disabled { opacity:.55; }
 #workspace-current-project .danger-text:not(:hover,:focus-visible) { color:var(--pilot-header-muted); }
+.workspace-project-actions {
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:4px;
+  margin-inline-start:auto;
+}
+.workspace-project-rename-form {
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:var(--workspace-row-padding);
+  border-block-start:1px solid var(--workspace-card-line,var(--border));
+}
+.workspace-project-rename-controls {
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.workspace-project-rename-controls input {
+  flex:1 1 200px;
+  min-width:0;
+  min-height:36px;
+  padding:6px 10px;
+  border:1px solid var(--border);
+  border-radius:var(--radius-settings-control);
+  corner-shape:var(--corner-window);
+  background:var(--surface);
+  color:var(--foreground);
+  font:inherit;
+  font-size:var(--font-size-ui);
+}
+.workspace-project-rename-controls input:focus-visible { outline:2px solid var(--focus-outline); outline-offset:0; border-color:var(--focus); }
+.workspace-project-rename-controls .button {
+  min-height:36px;
+  border-radius:var(--radius-settings-control);
+  corner-shape:var(--corner-window);
+}
+.workspace-project-rename-form .form-error { margin:0; }
 .workspace-directory-count {
   color:var(--pilot-header-muted);
   font-size:var(--font-size-toolbar);
@@ -339,7 +379,8 @@
 }
 @media (pointer:coarse) {
   .workspace-page-header-actions .button,
-  .workspace-page .workspace-text-button, .workspace-project-search, .workspace-project-search > .icon-button { min-height:44px; }
+  .workspace-page .workspace-text-button, .workspace-project-search, .workspace-project-search > .icon-button,
+  .workspace-project-rename-controls input, .workspace-project-rename-controls .button { min-height:44px; }
   .workspace-project-search > .icon-button { width:44px; }
   .workspace-project-sheet { --project-checkbox-width:36px; }
 }

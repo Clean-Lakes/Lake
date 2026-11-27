@@ -409,11 +409,12 @@ export class LakeAgents {
   }
   private keys = new Set<string>();
   registerSecret(value:string){if(value)this.keys.add(value);}
-  async prepareRedaction() {
+  async prepareRedaction(sessionId?: string) {
     await this.store.refreshModels();
-    const selection = this.store.modelSelection();
-    if (selection) {
-      const key = await this.store.secret(selection.providerId);
+    const providers = new Set([this.store.modelSelection()?.providerId, this.store.modelSelection(sessionId)?.providerId]);
+    for (const providerId of providers) {
+      if (!providerId) continue;
+      const key = await this.store.secret(providerId);
       if (key) this.keys.add(key);
     }
   }
@@ -580,10 +581,8 @@ export class LakeAgents {
     this.store.project(this.store.session(sessionId).projectId);
 
     const currentModel = () => {
-      const selection = this.store.modelSelection();
-      const provider = selection && this.store.modelProvider(selection.providerId);
-      const model = provider?.models.find(item => item.enabled && item.id === selection?.modelId);
-      return provider?.enabled && model ? {provider, model, modelId: reasoningModelIdentity(provider, model)} : undefined;
+      const {provider, model} = this.store.resolveModel(this.store.modelSelection(sessionId));
+      return provider && model ? {provider, model, modelId: reasoningModelIdentity(provider, model)} : undefined;
     };
     const request = new AbortController();
     this.draftCompletions.get(sessionId)?.abort();
@@ -668,9 +667,7 @@ export class LakeAgents {
     const messages = this.store.messages(sessionId).filter(message => ['user', 'assistant'].includes(message.role)).slice(-20);
     if (!messages.length) throw new HttpError(400, '会话中还没有可提取的内容');
     await this.store.refreshModels();
-    const selection = this.store.modelSelection();
-    const provider = selection && this.store.modelProvider(selection.providerId);
-    const model = provider?.models.find(value => value.id === selection?.modelId && value.enabled);
+    const {provider, model} = this.store.resolveModel(this.store.modelSelection(sessionId));
     if (!provider || !model) throw new HttpError(409, '提取预设需要当前可用模型');
     const bound = await this.model(provider, model);
     let result;
@@ -881,17 +878,19 @@ export class LakeAgents {
     const profile = this.host?.profile(sessionId);
     if(profile?.execution?.kind==='acp'&&profile.execution.agent!=='codex')throw new HttpError(409,'该任务的外部 Agent 已移除，不能切换或重放旧执行');
     await this.store.refreshModels();
+    const modelSession = profile?.modelSessionId ? this.store.session(profile.modelSessionId) : session;
+    const modelOptions = modelSession === session ? session.options : {...session.options,
+      reasoningModelId: modelSession.options.reasoningModelId, reasoningEffort: modelSession.options.reasoningEffort};
     const selection = profile?.execution?.kind==='native'&&profile.execution.model
-      ? {providerId:profile.execution.model.providerId!,modelId:profile.execution.model.modelId}:this.store.modelSelection();
+      ? {providerId:profile.execution.model.providerId!,modelId:profile.execution.model.modelId}:this.store.modelSelection(modelSession.id);
     const externalWorker=profile?.execution?.kind==='acp'&&profile.execution.agent==='codex';
     if (!selection&&!externalWorker) throw new HttpError(409, "请先配置模型");
-    const selectedProvider = selection&&this.store.modelProvider(selection.providerId);
+    const {provider:selectedProvider, model:selectedModel} = this.store.resolveModel(selection);
     if (!selectedProvider&&!externalWorker) throw new HttpError(409, '所选模型来源不可用');
-    const selectedModel = selectedProvider?.models.find((model) => model.id === selection?.modelId && model.enabled);
-    if ((!selectedProvider?.enabled || !selectedModel)&&!externalWorker) throw new HttpError(409, "所选模型不可用");
+    if (!selectedModel&&!externalWorker) throw new HttpError(409, "所选模型不可用");
     const provider:ModelProvider=selectedProvider??{id:'lake-tool-host',name:'Lake 工具宿主',protocol:'openai',baseURL:'',enabled:false,keyConfigured:false,models:[]};
     const model:ProviderModel=selectedModel??{id:'unconfigured',name:'unconfigured',enabled:false,supportsImageInput:false,supportsImageOutput:false};
-    const selectionKey = JSON.stringify([selection, provider, this.store.modelConnectionVersion(provider), session.options, profile?.version,this.external.registry.revision(session.projectId)]);
+    const selectionKey = JSON.stringify([selection, provider, this.store.modelConnectionVersion(provider), modelOptions, profile?.version,this.external.registry.revision(session.projectId)]);
     let live = this.live.get(sessionId);
     if (live?.selection === selectionKey) return live;
     if (live?.controller) throw new HttpError(409, "请先停止当前任务，再切换模型");
@@ -918,7 +917,7 @@ export class LakeAgents {
     const report = finalReportBoundary(profile?.requestFinalReport);
     const modelProfile = profile ? { ...profile, projectRequest: <T>(request: T) => report.project(profile.projectRequest?.(request) ?? request) } : undefined;
     let boundModel:Model;
-    try{boundModel=selectedProvider?.enabled&&selectedModel?await this.model(provider,model,modelProfile,memoryActor,undefined,session.options):unavailableNativeModel();}
+    try{boundModel=selectedProvider?.enabled&&selectedModel?await this.model(provider,model,modelProfile,memoryActor,undefined,modelOptions):unavailableNativeModel();}
     catch(error){if(!externalWorker)throw error;boundModel=unavailableNativeModel();}
     const broker = new ManualPermissionBroker({
       onRequest: (request) => {

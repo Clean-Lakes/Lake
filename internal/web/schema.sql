@@ -76,6 +76,10 @@
         exitCode INTEGER, actionId TEXT REFERENCES actions(id), createdAt TEXT NOT NULL
       );
       CREATE TABLE IF NOT EXISTS aiOptions (sessionId TEXT PRIMARY KEY REFERENCES sessions(id), value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS sessionModelChoices (
+        sessionId TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+        providerId TEXT NOT NULL, modelId TEXT NOT NULL, legacyConnection TEXT NOT NULL, revision INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS events (
         seq INTEGER PRIMARY KEY AUTOINCREMENT,
         sessionId TEXT NOT NULL REFERENCES sessions(id),
