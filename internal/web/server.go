@@ -621,6 +621,10 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parts := strings.Split(strings.Trim(name, "/"), "/")
+	if len(parts) == 3 && parts[0] == "api" && parts[1] == "projects" && method == "PATCH" {
+		reply(w, 200, b.Store.RenameProject(parts[2], text(body(w, r, 16384)["name"], "name", 120)))
+		return
+	}
 	if len(parts) == 3 && parts[0] == "api" && parts[1] == "resources" && method == "PATCH" {
 		b.editTerminalResourceRoute(w, r, parts[2])
 		return

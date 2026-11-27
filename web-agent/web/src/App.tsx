@@ -2336,6 +2336,11 @@ function AppContent() {
         connected={workspaceConnected} bulkSelection={bulkSelection} bulkSelectedCount={bulkSelected.length}
         onCreateProject={openProjectDialog}
         onOpenProject={project => switchProject(project.id)}
+        onRenameProject={async (target, name) => {
+          const updated = await api.renameProject(target.id, name);
+          setCatalog(current => current ? {...current, projects: current.projects.map(item => item.id === updated.id ? updated : item)} : current);
+          notify(`已将项目重命名为「${updated.name}」`);
+        }}
         onDeleteProject={project=>setNavigationDelete({kind:"project",id:project.id,projectId:project.id,name:project.name})}
         onToggleBulk={() => {setBulkMode(!bulkMode);setBulkSelected([]);}}
         onClearSelection={() => setBulkSelected([])}

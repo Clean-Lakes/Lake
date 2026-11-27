@@ -566,6 +566,8 @@ export async function startLakeServer(options: ServerOptions) {
       else if(path[1]==="agent-capabilities"&&path.length===2&&method==="GET")result={upstreamVersion:"3.17.2",tools:agentCapabilityCatalog({nativeWebSearch:nativeSearchSupported(selected().provider?.protocol,selected().model?.supportsNativeWebSearch)}),resourceExecution:{local:process.platform==="darwin",ssh:!!execution}};
       else if (path[1] === "projects" && path.length === 2 && method === "POST")
         result = store.createProject(String(data.name ?? ""));
+      else if (path[1] === "projects" && path.length === 3 && method === "PATCH")
+        result = store.renameProject(path[2], String(data.name ?? ""));
       else if (path[1] === "projects" && path[3] === "sessions" && method === "POST")
         result = store.createSession(path[2]);
       else if (path[1] === "projects" && path[3] === "resource-tree" && path.length === 4) {

@@ -553,6 +553,14 @@ func (s *Store) CreateProject(name string) Object {
 	}
 	return project
 }
+func (s *Store) RenameProject(projectID, name string) Object {
+	return s.resourceUpdate(func() any {
+		p := s.activeProject(projectID)
+		s.exec("UPDATE projects SET name=? WHERE id=?", name, projectID)
+		p["name"] = name
+		return p
+	}, "").(Object)
+}
 func (s *Store) CreateResource(project, name, kind string, config Object) Object {
 	return s.resourceUpdate(func() any {
 		s.activeProject(project)
