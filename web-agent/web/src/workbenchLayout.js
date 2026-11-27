@@ -27,7 +27,7 @@
       translate:min(0px,calc(var(--sidebar-resize-chat-room) - var(--sidebar-resize-reading-width)));
       max-width:min(85%,calc(var(--sidebar-resize-chat-room) * .85));
     }
-    .app-shell[data-sidebar-resize-layer] > :is(.workbench-conversation-surface,.workspace,.lake-workbench-islands,.workbench-navigation,.workbench-sidebar-toggle,.workbench-splitter-sidebar) { will-change:transform; }
+    .app-shell[data-sidebar-resize-layer] > :is(.workbench-conversation-surface,.workspace,.lake-workbench-islands,.workbench-navigation,.workbench-splitter-sidebar) { will-change:transform; }
     .app-shell[data-sidebar-resize-layer] > .sidebar .sidebar-navigation-content { inline-size:100%; }
     .app-shell[data-sidebar-resize-layer] > .workspace,
     .app-shell[data-sidebar-resize-layer] > .workspace :is(.session-layout,.session-layout > .session-view) { overflow:visible; }
@@ -62,7 +62,7 @@
   let shell, active, frame = 0, lastChrome = '';
   let previousSidebar, sidebarSlide, sidebarOrigin;
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-  const navigationButtons = '.workbench-sidebar-toggle, .workbench-navigation button';
+  const navigationButtons = '.workbench-navigation button';
   let observedContextPanel;
   const contextResize = new ResizeObserver(() => schedule());
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -135,13 +135,11 @@
     const reading = workspace.querySelector('.composer-input') ?? workspace.querySelector('.timeline-list');
     const inset = parseFloat(css.getPropertyValue('--conversation-header-inset')) || 16;
     const navStart = parseFloat(css.getPropertyValue('--workbench-navigation-start')) || 0;
-    const toggle = collapsed ? shell.querySelector('.workbench-sidebar-toggle') : null;
-    const toggleGap = parseFloat(css.getPropertyValue('--workbench-sidebar-toggle-gap')) || 0;
     // The reading column is laid out at the rail width for either direction.
     // Give the island the same final horizontal offset as the composer.
     const readingShift = (width - railWidth) / 2;
     const readingTarget = reading ? reading.getBoundingClientRect().left - shell.getBoundingClientRect().left + readingShift : width + inset;
-    const islandTarget = collapsed ? Math.max(toggle ? toggle.offsetLeft + toggle.offsetWidth + toggleGap : navStart, readingTarget) : readingTarget;
+    const islandTarget = collapsed ? Math.max(navStart, readingTarget) : readingTarget;
     shell.style.setProperty('--workbench-island-navigation-left', `${islandTarget}px`);
 
     const buttons = (origin?.buttons ?? []).map(([button, before]) => ({ button, before, after: button.getBoundingClientRect() }));
@@ -337,16 +335,15 @@
     const readingWidth = width => Math.min(960, width - gutter * 2);
     const initialStart = start(viewport);
     const navigation = owner.querySelector('.workbench-navigation');
-    const navigationInIsland = !!navigation && (owner.classList.contains('has-workbench-conversation') || owner.classList.contains('has-docked-conversation'));
-    const panes = [surface, workspace, drag.handle, owner.querySelector('.workbench-sidebar-toggle'), navigationInIsland ? null : navigation].filter(Boolean);
-    const header = [owner.querySelector('.lake-workbench-islands'), navigationInIsland ? navigation : null].filter(Boolean);
+    const panes = [surface, workspace, drag.handle, navigation].filter(Boolean);
+    const islandLayer = owner.querySelector('.lake-workbench-islands');
     const reading = workspace.querySelectorAll('.timeline-list,.conversation-header-backdrop');
     const restore = [
       retainStyles(sidebar, ['inline-size']),
       retainStyles(surface, ['inset-inline-end']),
       retainStyles(composer, ['--sidebar-resize-viewport']),
       retainStyles(conversation, ['inline-size']),
-      ...[...panes, ...header, ...reading].filter(Boolean).map(node => retainStyles(node, ['transform'])),
+      ...[...panes, islandLayer, ...reading].filter(Boolean).map(node => retainStyles(node, ['transform'])),
     ];
     const userMessages = alignVisibleUserMessages(conversation, readingWidth(viewport));
     // Lay out the scroll view once. Its largest possible clip fits both
@@ -371,7 +368,7 @@
         lastReadingOffset = readingOffset;
         for (const node of reading) translate(node, readingOffset);
       }
-      for (const node of header) translate(node, offset + readingOffset);
+      translate(islandLayer, offset + readingOffset);
       userMessages.resize(readingWidth(room));
       drag.handle.setAttribute('aria-valuenow', String(width));
     };

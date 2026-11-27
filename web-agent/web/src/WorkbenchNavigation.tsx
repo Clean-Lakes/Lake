@@ -26,8 +26,6 @@ export function WorkbenchShell({className, compact, inspectorOpen, back, forward
 
   const label = collapsed ? '展开侧栏' : '收起侧栏';
   return <div className={className + (collapsed ? ' has-collapsed-sidebar' : '')}>
-    <button type="button" className="workbench-sidebar-toggle" aria-label={label} title={label} aria-expanded={!collapsed}
-      aria-controls="lake-project-navigation" onClick={() => changeSidebar(!folded)}><Glyph name="panel" size={16}/></button>
     <div className="workbench-navigation" role="group" aria-label="工作台导航">
       <button type="button" aria-label="后退" title="后退" disabled={!back} onClick={() => onStep(-1)}>
         <Glyph name="previous" size={17}/>
@@ -35,6 +33,8 @@ export function WorkbenchShell({className, compact, inspectorOpen, back, forward
       <button type="button" aria-label="前进" title="前进" disabled={!forward} onClick={() => onStep(1)}>
         <Glyph name="next" size={17}/>
       </button>
+      <button type="button" className="workbench-sidebar-toggle" aria-label={label} title={label} aria-expanded={!collapsed}
+        aria-controls="lake-project-navigation" onClick={() => changeSidebar(!folded)}><Glyph name="panel" size={16}/></button>
     </div>
     <WorkbenchSidebar.Provider value={{collapsed, expand: () => changeSidebar(false)}}>{children}</WorkbenchSidebar.Provider>
   </div>;

@@ -86,12 +86,10 @@ export function WorkbenchIsland({conversation,terminal,activity,terminalOpen,pil
    const paneLeft=dockedPane?workspaceBounds.left+parseFloat(workspaceStyle.getPropertyValue('--conversation-header-inset')):bounds.left+(frameInset?frameInset*2:48);
    const navigation=shell.querySelector<HTMLElement>('.workbench-navigation');
    const navigationStart=parseFloat(shellStyle.getPropertyValue('--workbench-navigation-start'))||0;
-   const navigationWidth=navigation?
+   const navigationWidth=collapsed&&navigation?
     parseFloat(getComputedStyle(navigation).minInlineSize)+2*parseFloat(shellStyle.getPropertyValue('--workbench-navigation-island-padding')):0;
    const readingLeft=(reading?.left??paneLeft)-base.left;
-   const sidebarToggle=collapsed?shell.querySelector<HTMLElement>('.workbench-sidebar-toggle'):null;
-   const toggleClearance=sidebarToggle?sidebarToggle.offsetLeft+sidebarToggle.offsetWidth+(parseFloat(shellStyle.getPropertyValue('--workbench-sidebar-toggle-gap'))||0):navigationStart;
-   const left=collapsed?Math.max(readingLeft,toggleClearance):readingLeft;
+   const left=collapsed?Math.max(readingLeft,navigationStart):readingLeft;
    const actionsSpace=dockedPane?parseFloat(workspaceStyle.getPropertyValue('--conversation-header-actions-offset'))+12:0;
    const paneRight=dockedPane?bounds.right-actionsSpace:frameInset?bounds.right-frameInset*2:reading?.right??bounds.right-48;
    const right=paneRight-base.left;

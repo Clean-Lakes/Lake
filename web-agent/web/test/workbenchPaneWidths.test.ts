@@ -31,8 +31,14 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sid
  });
  const sidebarWidth=()=>parseFloat(properties.get('--sidebar-width')||'280');
  const surface=animatedNode(sidebarWidth);
- const toggleLeft=()=>shell.sidebarCollapsed?86:sidebarWidth()-34;
- const toggle={...animatedNode(toggleLeft,'toggle'),get offsetLeft(){return toggleLeft();},offsetWidth:28};
+ const navigationStart=86;
+ const titlebarButton=(name:string,index:number)=>animatedNode(()=>{
+  const groupLeft=shell.sidebarCollapsed
+   ?parseFloat(properties.get('--workbench-island-navigation-left')||String(navigationStart))+8
+   :sidebarWidth()-125;
+  return groupLeft+index*31+(!shell.sidebarCollapsed&&name==='toggle'?29:0);
+ },name);
+ const navigationButtons=['back','forward','toggle'].map(titlebarButton);
  const composer=railReadingLeft===undefined?null:animatedNode(()=>railReadingLeft,'composer');
  const island=composer&&animatedNode(()=>{
   const settled=(railReadingLeft??0)+(sidebarWidth()-railWidth)/2;
@@ -72,7 +78,7 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sid
  const inspector=makeNode(),terminal=makeNode(),shell={...makeNode(properties),clientWidth:1512,inspectorOpen:!docked,terminalOpen:!docked,sidebarCollapsed:false,
  getBoundingClientRect:()=>rect(0), animate:surface.animate,
  querySelectorAll:(selector:string)=>{
-  if(selector==='.workbench-sidebar-toggle, .workbench-navigation button'||selector==='.workbench-splitter, .workbench-sidebar-toggle, .workbench-navigation button')return [toggle];
+  if(selector==='.workbench-navigation button'||selector==='.workbench-splitter, .workbench-navigation button')return navigationButtons;
   if(selector.startsWith('.sidebar-brand-row'))return sidebarControlNodes;
   return [];
  },
@@ -82,7 +88,6 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sid
   if(selector==='.sidebar')return sidebar;
   if(selector==='.lake-workbench-islands')return docked?islands:null;
   if(selector==='.workbench-navigation')return navigation;
-  if(selector==='.workbench-sidebar-toggle')return toggle;
   if(selector==='.island-conversation')return island;
   if(selector==='.workbench-conversation-surface')return docked?surface:null;
   if(selector==='.terminal-side-panel')return this.terminalOpen?terminal:null;
@@ -92,7 +97,7 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sid
  const window:any={lakeWorkbenchWidths:saved,addEventListener:(type:string,callback:Function)=>events.set(type,callback),dispatchEvent:(event:Event)=>events.get(event.type)?.(event)};
  if(options?.chrome)window.webkit={messageHandlers:{lakeChrome:{postMessage:(message:{regions:number[][];excluded:number[][]})=>{if(message.regions)chromeMessages.push(message);}}}};
  const getComputedStyle=(_node:unknown,pseudo?:string)=>({
-  getPropertyValue:(name:string)=>name==='--workbench-sidebar-duration'?sidebarDuration:name==='--workbench-sidebar-toggle-gap'?'8px':`${railWidth}px`,
+  getPropertyValue:(name:string)=>name==='--workbench-sidebar-duration'?sidebarDuration:name==='--workbench-navigation-start'?`${navigationStart}px`:`${railWidth}px`,
   paddingInlineStart:'30px',
   visibility:'visible',
   transitionDuration:pseudo==='::before'?'0.42s':'0s',
@@ -101,7 +106,7 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sid
  const context={window,Event,innerWidth:1512,innerHeight:900,localStorage:{getItem(){return null;},setItem(_key:string,value:string){widthSaves.push(JSON.parse(value));}},document:{body:{},head:{appendChild(){}},documentElement:{dataset:{theme:'light'},classList:{add(){},remove(){}}},timeline:{currentTime:10},createElement:()=>makeNode(),querySelector:()=>shell,querySelectorAll:()=>[],addEventListener(){}},getComputedStyle,ResizeObserver:class{observe(){}disconnect(){}},MutationObserver:class{observe(){}disconnect(){}},IntersectionObserver:class{observe(){}disconnect(){}takeRecords(){return [];}},requestAnimationFrame:(callback:(time:number)=>void)=>{callbacks.set(++nextFrame,callback);return nextFrame;},cancelAnimationFrame:(frame:number)=>callbacks.delete(frame)};
  runInNewContext(source,context);
  const flush=(time=0)=>{for(const [id,callback] of callbacks){callbacks.delete(id);callback(time);}};flush();
- return {properties,animations,flush,widthSaves,chromeMessages,conversation,surface,sidebarPane:sidebar,workspace,dock,islands,navigation,shell,sidebarToggle:toggle,
+ return {properties,animations,flush,widthSaves,chromeMessages,conversation,surface,sidebarPane:sidebar,workspace,dock,islands,navigation,shell,
   sidebar:handles.get('sidebar') as ReturnType<typeof makeNode>,
   drag(type:string,clientX:number,pointerId=1){handles.get('sidebar')[type]({type,clientX,pointerId,button:0,preventDefault(){}});},
   resize(width:number){shell.clientWidth=width;context.innerWidth=width;events.get('resize')!();flush();},reset(pane:string){handles.get(pane).dblclick();flush();},toggle(inspectorOpen:boolean,terminalOpen:boolean){shell.inspectorOpen=inspectorOpen;shell.terminalOpen=terminalOpen;events.get('resize')!();flush();},commit(inspectorOpen:boolean,terminalOpen:boolean){shell.inspectorOpen=inspectorOpen;shell.terminalOpen=terminalOpen;events.get('lake-workbench-layout')!();},collapseSidebar(collapsed:boolean){events.get('lake-workbench-sidebar-toggle')!();shell.sidebarCollapsed=collapsed;events.get('lake-workbench-layout')!();},widths(){return ['--sidebar-width','--terminal-panel-width','--inspector-preferred-width'].map(key=>parseFloat(properties.get(key)!));}};
@@ -275,23 +280,23 @@ test('the docked island and composer share their left edge throughout both slide
  assert.deepEqual(transforms('composer'),['translate3d(0px,0px,0)','translate3d(126px,0,0)']);
 });
 
-test('the collapsed island leaves room for the titlebar sidebar toggle',()=>{
- const page=fixture(undefined,true,'420ms',90);
+test('the collapsed island and its controls clear the native window buttons',()=>{
+ const page=fixture(undefined,true,'420ms',65);
  page.collapseSidebar(true);
- assert.equal(page.properties.get('--workbench-island-navigation-left'),'122px');
+ assert.equal(page.properties.get('--workbench-island-navigation-left'),'86px');
 });
 
-test('the sidebar and toggle start together on the first frame even after a long input task',()=>{
+test('the sidebar, history and toggle start together on the first frame even after a long input task',()=>{
  const page=fixture(undefined,true);
  page.collapseSidebar(true);
- assert.equal(page.animations.length,2);
+ assert.deepEqual(page.animations.slice(1).map(animation=>animation.name),['back','forward','toggle']);
  for(const animation of page.animations){
   assert.equal(animation.startTime,null);
   assert.equal(animation.currentTime,0);
   assert.equal(animation.paused,true);
  }
  page.flush(550);
- assert.deepEqual(page.animations.map(animation=>animation.startTime),[550,550]);
+ assert.deepEqual(page.animations.map(animation=>animation.startTime),[550,550,550,550]);
 });
 
 test('reversing before the first frame does not start the cancelled slide',()=>{
@@ -310,41 +315,41 @@ test('both sidebar directions keep the CSS duration when the desktop stylesheet 
    const first=page.animations.length;
    page.collapseSidebar(collapsed);
    page.flush();
-   assert.deepEqual(page.animations.slice(first).map(animation=>animation.duration),[420,420],token);
+   assert.deepEqual(page.animations.slice(first).map(animation=>animation.duration),[420,420,420,420],token);
   }
  }
 });
 
-test('two-pane sidebar dragging keeps the toggle on the sidebar and history on the island',()=>{
+test('two-pane sidebar dragging keeps the navigation controls on the project titlebar',()=>{
  const page=fixture(undefined,true,'420ms',undefined,{dockWidth:1200});
  page.drag('pointerdown',280);
  page.drag('pointermove',348);
  page.flush();
  assert.equal(page.surface.style.getPropertyValue('transform'),'translate3d(68px,0,0)');
- assert.equal(page.sidebarToggle.style.getPropertyValue('transform'),'translate3d(68px,0,0)');
  assert.equal(page.islands.style.getPropertyValue('transform'),'translate3d(34px,0,0)');
- assert.equal(page.navigation.style.getPropertyValue('transform'),'translate3d(34px,0,0)');
+ assert.equal(page.navigation.style.getPropertyValue('transform'),'translate3d(68px,0,0)');
 
  page.drag('pointerup',348);
  page.flush();
  assert.equal(page.islands.style.getPropertyValue('transform'),'');
  assert.equal(page.navigation.style.getPropertyValue('transform'),'');
- assert.equal(page.sidebarToggle.style.getPropertyValue('transform'),'');
 });
 
 test('native titlebar chrome excludes visible merged sidebar brand controls from drag regions',()=>{
  const page=fixture(undefined,true,'420ms',undefined,{
   chrome:true,
   sidebarControls:[
-   {x:80,y:11,width:134,height:30},
+   {x:80,y:11,width:72,height:30},
    {x:216,y:12,width:28,height:28},
    {x:10,y:11,width:134,height:30,hidden:true},
   ],
  });
  const chrome=page.chromeMessages.at(-1);
  assert.ok(chrome);
- assert.ok(chrome.excluded.some(rect=>rect[0]===80&&rect[1]===11&&rect[2]===134&&rect[3]===30));
+ assert.ok(chrome.excluded.some(rect=>rect[0]===80&&rect[1]===11&&rect[2]===72&&rect[3]===30));
  assert.ok(chrome.excluded.some(rect=>rect[0]===216&&rect[1]===12&&rect[2]===28&&rect[3]===28));
  assert.ok(chrome.excluded.some(rect=>rect[0]===246&&rect[2]===28&&rect[3]===28));
+ assert.ok(chrome.excluded.some(rect=>rect[0]===155&&rect[2]===28&&rect[3]===28));
+ assert.ok(chrome.excluded.some(rect=>rect[0]===186&&rect[2]===28&&rect[3]===28));
  assert.equal(chrome.excluded.some(rect=>rect[0]===10&&rect[1]===11&&rect[2]===134&&rect[3]===30),false);
 });
