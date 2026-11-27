@@ -37,6 +37,7 @@
   font-size:var(--font-size-toolbar);
 }
 .chat-group-avatars {
+  --avatar-fan-spring:linear(0,.0794,.2486,.4375,.6093,.7484,.8518,.9231,.9688,.9954,1.0091,1.0144,1.015,1.0131,1.0104,1.0076,1.0051,1.0032,1.0018,1.0009,1);
   display:inline-flex;
   align-items:center;
   justify-content:center;
@@ -44,14 +45,49 @@
   min-inline-size:var(--sidebar-icon-column,22px);
   line-height:1;
 }
-.chat-group-avatars .super-role-avatar + .super-role-avatar {
-  margin-inline-start:-4px;
+@supports not (transition-timing-function: linear(0,1)) {
+  .chat-group-avatars { --avatar-fan-spring:cubic-bezier(.2,.85,.3,1); }
+}
+.chat-group-avatar-chip,
+.chat-group-avatar-overflow {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:none;
+  height:22px;
+  border-radius:999px;
+  background:var(--surface);
+  box-shadow:0 0 0 1.5px var(--sidebar), inset 0 0 0 1px color-mix(in srgb,var(--border) 82%,transparent);
+  transition:margin-inline-start 600ms var(--avatar-fan-spring), transform 600ms var(--avatar-fan-spring);
+}
+.chat-group-avatar-chip { width:22px; }
+.chat-group-avatar-overflow {
+  width:auto;
+  min-width:22px;
+  padding:0 5px;
+  color:var(--text-secondary);
+  font-size:10px;
+  font-weight:var(--font-weight-medium);
+  font-variant-numeric:tabular-nums;
+}
+.chat-group-avatars[data-multiple] > :is(.chat-group-avatar-chip,.chat-group-avatar-overflow) + :is(.chat-group-avatar-chip,.chat-group-avatar-overflow) {
+  margin-inline-start:-7px;
 }
 .chat-group-nav-row .chat-group-avatars {
-  inline-size:var(--sidebar-icon-column);
+  inline-size:auto;
+  min-inline-size:var(--sidebar-icon-column);
+  justify-content:flex-start;
 }
-.chat-group-nav-row .chat-group-avatars .super-role-avatar + .super-role-avatar {
-  margin-inline-start:-6px;
+.chat-group-nav-row:is(:hover,:focus-visible) .chat-group-avatars[data-multiple] > :is(.chat-group-avatar-chip,.chat-group-avatar-overflow) + :is(.chat-group-avatar-chip,.chat-group-avatar-overflow) {
+  margin-inline-start:3px;
+}
+.chat-group-nav-row:is(:hover,:focus-visible) .chat-group-avatars[data-multiple] > :is(.chat-group-avatar-chip,.chat-group-avatar-overflow) {
+  transform:translateY(-1px) scale(1.06);
+}
+@media (prefers-reduced-motion:reduce) {
+  .chat-group-avatar-chip,
+  .chat-group-avatar-overflow { transition:none; }
+  .chat-group-nav-row:is(:hover,:focus-visible) .chat-group-avatars[data-multiple] > :is(.chat-group-avatar-chip,.chat-group-avatar-overflow) { transform:none; }
 }
 .modal.chat-group-create-dialog {
   width:min(416px,calc(100vw - 32px));
