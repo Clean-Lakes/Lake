@@ -3,8 +3,8 @@
   inset: 0;
   margin: auto;
   box-sizing: border-box;
-  inline-size: min(700px, calc(100vw - 32px));
-  block-size: min(600px, calc(100dvh - 48px));
+  inline-size: min(740px, calc(100vw - 32px));
+  block-size: min(640px, calc(100dvh - 48px));
   max-inline-size: none;
   max-block-size: calc(100dvh - 32px);
   padding: 0;
@@ -184,13 +184,67 @@
 .specialist-mcp-body > * {
   flex: none;
 }
+.specialist-mcp-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.specialist-mcp-search-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.specialist-mcp-search {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  block-size: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-settings-control);
+  corner-shape: var(--corner-window);
+  background: var(--surface-subtle);
+  color: var(--text-muted);
+}
+.specialist-mcp-search:focus-within {
+  border-color: var(--focus);
+  background: var(--surface);
+}
+.specialist-mcp-search input {
+  flex: 1;
+  min-inline-size: 0;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: var(--font-size-process);
+}
+.specialist-mcp-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  font-size: var(--font-size-toolbar);
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.specialist-mcp-filter-toggle input {
+  accent-color: var(--primary);
+  cursor: pointer;
+}
 .specialist-mcp-batch-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 9px 12px;
+  padding: 8px 12px;
   background: var(--surface-subtle);
   border: 1px solid var(--border);
   border-radius: var(--radius-settings-panel);
@@ -202,17 +256,36 @@
   gap: 10px;
   font-size: var(--font-size-toolbar);
   color: var(--text-muted);
+  white-space: nowrap;
 }
 .specialist-mcp-batch-controls {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
+}
+.specialist-mcp-batch-controls .app-select,
+.specialist-mcp-resource-controls .app-select {
+  width: auto;
+  flex: none;
+}
+.specialist-mcp-select-policy {
+  min-inline-size: 132px;
+}
+.specialist-mcp-select-expiry {
+  min-inline-size: 96px;
+}
+.specialist-mcp-row-policy {
+  min-inline-size: 118px;
+}
+.specialist-mcp-row-expiry {
+  min-inline-size: 78px;
 }
 .specialist-mcp-batch-controls .app-select-trigger,
 .specialist-mcp-resource-controls .app-select-trigger {
   min-block-size: 30px;
   height: 30px;
+  padding-inline: 9px 7px;
   font-size: var(--font-size-toolbar);
   border-radius: var(--radius-settings-control);
   corner-shape: var(--corner-window);
@@ -549,6 +622,9 @@
   corner-shape: var(--corner-window);
 }
 @media (max-width: 600px) {
+  .specialist-mcp-batch-controls {
+    flex-wrap: wrap;
+  }
   .specialist-mcp-resource-row {
     flex-direction: column;
     align-items: stretch;

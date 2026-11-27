@@ -117,6 +117,8 @@ export function SpecialistMcpDialog({
   const [draft, setDraft] = useState<Record<string, DraftGrant>>({});
   const [batchPolicy, setBatchPolicy] = useState<GatewayApprovalPolicy>("always_approve");
   const [batchExpiry, setBatchExpiry] = useState<ExpiryPreset>("7d");
+  const [resourceQuery, setResourceQuery] = useState("");
+  const [onlySelected, setOnlySelected] = useState(false);
   const [recipient, setRecipient] = useState("");
   const [ttlMinutes, setTtlMinutes] = useState("15");
   const [loading, setLoading] = useState(true);
@@ -164,6 +166,25 @@ export function SpecialistMcpDialog({
     [state?.resources, draft],
   );
 
+  const visibleResources = useMemo(() => {
+    const query = resourceQuery.trim().toLowerCase();
+    return (state?.resources ?? []).filter(resource => {
+      if (onlySelected && !draft[resource.id]?.selected) return false;
+      if (!query) return true;
+      return (
+        resource.name.toLowerCase().includes(query) ||
+        resource.kind.toLowerCase().includes(query) ||
+        resourceKindLabel(resource.kind).toLowerCase().includes(query) ||
+        (resource.host?.toLowerCase().includes(query) ?? false)
+      );
+    });
+  }, [state?.resources, resourceQuery, onlySelected, draft]);
+
+  const visibleSelectedCount = useMemo(
+    () => visibleResources.filter(resource => draft[resource.id]?.selected).length,
+    [visibleResources, draft],
+  );
+
   const confirmedGrants = useMemo(() => {
     const grants = state?.connection?.resourceGrants ?? [];
     const byId = new Map((state?.resources ?? []).map(resource => [resource.id, resource]));
@@ -189,12 +210,12 @@ export function SpecialistMcpDialog({
     }));
   };
 
-  const toggleAll = (selectAll: boolean) => {
+  const toggleVisible = (selectAll: boolean) => {
     setFeedback("");
     setDraft(current => {
-      const next: Record<string, DraftGrant> = {};
-      for (const resource of state?.resources ?? []) {
-        const existing = current[resource.id] ?? { selected: false, approvalPolicy: batchPolicy, expiry: batchExpiry };
+      const next: Record<string, DraftGrant> = { ...current };
+      for (const resource of visibleResources) {
+        const existing = next[resource.id] ?? { selected: false, approvalPolicy: batchPolicy, expiry: batchExpiry };
         next[resource.id] = { ...existing, selected: selectAll };
       }
       return next;
@@ -467,54 +488,80 @@ export function SpecialistMcpDialog({
           aria-labelledby={grantsTabId}
           className="specialist-mcp-body"
         >
-          <div className="specialist-mcp-batch-bar">
-            <div className="specialist-mcp-batch-selection">
-              <span>已勾选 {selectedIds.length} / {state?.resources.length ?? 0}</span>
-              {(state?.resources.length ?? 0) > 0 && (
+          <div className="specialist-mcp-toolbar">
+            <div className="specialist-mcp-search-row">
+              <label className="specialist-mcp-search">
+                <Glyph name="search" size={14} />
+                <input
+                  type="search"
+                  value={resourceQuery}
+                  placeholder="搜索资源名称、类型或主机…"
+                  aria-label="搜索项目资源"
+                  onChange={event => setResourceQuery(event.target.value)}
+                />
+              </label>
+              <label className="specialist-mcp-filter-toggle">
+                <input
+                  type="checkbox"
+                  checked={onlySelected}
+                  onChange={event => setOnlySelected(event.target.checked)}
+                />
+                <span>仅看已勾选</span>
+              </label>
+            </div>
+            <div className="specialist-mcp-batch-bar">
+              <div className="specialist-mcp-batch-selection">
+                <span>已勾选 {selectedIds.length} / {state?.resources.length ?? 0}</span>
+                {visibleResources.length > 0 && (
+                  <button
+                    type="button"
+                    className="specialist-mcp-link-btn"
+                    disabled={!!busy}
+                    onClick={() => toggleVisible(visibleSelectedCount < visibleResources.length)}
+                  >
+                    {visibleSelectedCount < visibleResources.length
+                      ? (resourceQuery.trim() || onlySelected ? "全选当前" : "全选")
+                      : (resourceQuery.trim() || onlySelected ? "取消当前" : "取消全选")}
+                  </button>
+                )}
+              </div>
+              <div className="specialist-mcp-batch-controls">
+                <AppSelect
+                  className="specialist-mcp-select-policy"
+                  label="批量审批方式"
+                  value={batchPolicy}
+                  disabled={!!busy}
+                  onChange={event => setBatchPolicy(event.target.value as GatewayApprovalPolicy)}
+                >
+                  <option value="always_approve">每次人工审批</option>
+                  <option value="auto_in_scope">授权范围内免审批</option>
+                </AppSelect>
+                <AppSelect
+                  className="specialist-mcp-select-expiry"
+                  label="批量有效期"
+                  value={batchExpiry}
+                  disabled={!!busy}
+                  onChange={event => setBatchExpiry(event.target.value as ExpiryPreset)}
+                >
+                  <option value="7d">7 天</option>
+                  <option value="30d">30 天</option>
+                  <option value="forever">长期有效</option>
+                </AppSelect>
                 <button
                   type="button"
-                  className="specialist-mcp-link-btn"
-                  disabled={!!busy}
-                  onClick={() => toggleAll(selectedIds.length < (state?.resources.length ?? 0))}
+                  className="button secondary specialist-mcp-compact-btn"
+                  disabled={!!busy || !selectedIds.length}
+                  onClick={applyBatchToSelected}
                 >
-                  {selectedIds.length < (state?.resources.length ?? 0) ? "全选" : "取消全选"}
+                  批量应用
                 </button>
-              )}
-            </div>
-            <div className="specialist-mcp-batch-controls">
-              <AppSelect
-                label="批量审批方式"
-                value={batchPolicy}
-                disabled={!!busy}
-                onChange={event => setBatchPolicy(event.target.value as GatewayApprovalPolicy)}
-              >
-                <option value="always_approve">每次人工审批</option>
-                <option value="auto_in_scope">授权范围内免审批</option>
-              </AppSelect>
-              <AppSelect
-                label="批量有效期"
-                value={batchExpiry}
-                disabled={!!busy}
-                onChange={event => setBatchExpiry(event.target.value as ExpiryPreset)}
-              >
-                <option value="7d">7 天</option>
-                <option value="30d">30 天</option>
-                <option value="forever">长期有效</option>
-              </AppSelect>
-              <button
-                type="button"
-                className="button secondary specialist-mcp-compact-btn"
-                disabled={!!busy || !selectedIds.length}
-                onClick={applyBatchToSelected}
-              >
-                批量应用
-              </button>
+              </div>
             </div>
           </div>
 
-          {state?.resources.length ? (
+          {visibleResources.length ? (
             <div className="specialist-mcp-resource-list" role="group" aria-label="项目资源授权清单">
-              {state.resources.map(resource => {
+              {visibleResources.map(resource => {
                 const item = draft[resource.id] ?? { selected: false, approvalPolicy: "always_approve", expiry: "7d" };
                 return (
                   <div
@@ -541,6 +588,7 @@ export function SpecialistMcpDialog({
                     </label>
                     <div className="specialist-mcp-resource-controls">
                       <AppSelect
+                        className="specialist-mcp-row-policy"
                         label={`${resource.name} 审批方式`}
                         value={item.approvalPolicy}
                         disabled={!!busy || !item.selected}
@@ -552,6 +600,7 @@ export function SpecialistMcpDialog({
                         <option value="auto_in_scope">范围内免审批</option>
                       </AppSelect>
                       <AppSelect
+                        className="specialist-mcp-row-expiry"
                         label={`${resource.name} 有效期`}
                         value={item.expiry}
                         disabled={!!busy || !item.selected}
@@ -572,7 +621,11 @@ export function SpecialistMcpDialog({
               })}
             </div>
           ) : (
-            <p className="specialist-mcp-empty">当前项目暂无可授权资源。请先在项目资源中添加主机、数据库或服务。</p>
+            <p className="specialist-mcp-empty">
+              {state?.resources.length
+                ? "没有匹配的资源，请调整搜索关键词或取消「仅看已勾选」。"
+                : "当前项目暂无可授权资源。请先在项目资源中添加主机、数据库或服务。"}
+            </p>
           )}
 
           <p className="specialist-mcp-note">

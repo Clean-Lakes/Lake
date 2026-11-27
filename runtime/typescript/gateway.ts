@@ -20,7 +20,7 @@ type GatewayConfig = { version: 1; tokens: TokenRecord[] };
 export type GatewayTokenView = { id: string; name: string; roles?: string[]; createdAt: string };
 export type GatewayAuth = { id: string; roles?: string[]; connection?: GatewayConnection };
 
-const maximum = 1000000;
+const maximum = 4000000;
 const empty = (): GatewayConfig => ({ version: 1, tokens: [] });
 function privateFile(path: string) {
   const info = lstatSync(path), parent = lstatSync(dirname(path));
@@ -50,7 +50,7 @@ function fields(input: Record<string, unknown>, allowed: string[]) {
     throw new HttpError(400, '接入连接字段无效');
 }
 function resourceGrants(value: unknown): GatewayResourceGrant[] {
-  if (!Array.isArray(value) || value.length > 256) throw new HttpError(400, '资源授权列表无效');
+  if (!Array.isArray(value) || value.length > 4096) throw new HttpError(400, '资源授权列表无效');
   const seen = new Set<string>(), out: GatewayResourceGrant[] = [];
   for (const item of value) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) throw new HttpError(400, '资源授权条目无效');

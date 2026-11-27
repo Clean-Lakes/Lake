@@ -285,3 +285,23 @@ test('auto_in_scope resource grant routes directly without manual approval card 
   const ws = await f.api(`/api/projects/${f.project.id}/superagent`);
   assert.equal(ws.gatewayApprovals.length, 0);
 });
+
+test('specialist MCP resource grants scale beyond 256 project resources cleanly', async t => {
+  const f = await fixture(t);
+  const base = `/api/projects/${f.project.id}/superagent/specialists/${f.role.id}/mcp`;
+  const grants = [];
+  for (let i = 0; i < 320; i++) {
+    const rid = `res-bulk-${i}`;
+    f.app.store.put('resources', rid, {
+      id: rid,
+      projectId: f.project.id,
+      name: `主机-${i}`,
+      kind: 'ssh',
+      description: '批量主机',
+      status: 'available',
+    });
+    grants.push({ resourceId: rid, approvalPolicy: 'always_approve' });
+  }
+  const saved = await f.api(`${base}/grants`, 'PUT', { resourceGrants: grants });
+  assert.equal(saved.connection.resourceGrants.length, 320);
+});
