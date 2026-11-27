@@ -69,7 +69,7 @@
 .sidebar-project-popup .app-select-check { color:var(--info); }
 .sidebar.workspace-navigation .navigation-search { position: relative; margin: 0 13px 34px; padding: 7px 10px; min-height: 36px; background: var(--surface-hover); border-radius: var(--sidebar-row-radius); }
 .sidebar-brand-actions { display:flex; align-items:center; gap:2px; margin-left:auto; flex:none; }
-.sidebar.workspace-navigation .sidebar-brand-actions :is(.sidebar-search-trigger,.sidebar-create-trigger) { width:32px; height:32px; padding:0; color:var(--pilot-header-muted); }
+.sidebar.workspace-navigation .sidebar-brand-actions .sidebar-search-trigger { width:32px; height:32px; padding:0; color:var(--pilot-header-muted); }
 .sidebar-navigation-gap { flex:0 0 0; margin:8px 13px 16px; }
 .sidebar.workspace-navigation:has(.sidebar-navigation-rail) {
  padding-inline-start:var(--sidebar-rail-width);
@@ -124,7 +124,7 @@
  .sidebar-resource-actions,.sidebar-resource-actions:has(.bulk-group-toggle) { flex-basis:44px; width:44px; }
  .sidebar.workspace-navigation .sidebar-resource-actions .resource-create-trigger,.sidebar-resource-actions .bulk-group-toggle { width:44px; height:44px; min-height:44px; }
 }
-@media(pointer:coarse) { .sidebar.workspace-navigation .sidebar-brand-actions :is(.sidebar-search-trigger,.sidebar-create-trigger) { width:44px; height:44px; } }
+@media(pointer:coarse) { .sidebar.workspace-navigation .sidebar-brand-actions .sidebar-search-trigger { width:44px; height:44px; } }
 .sidebar.workspace-navigation .navigation-search-key { font-size: var(--font-size-ui); }
 html.lake-windows-chrome .sidebar.workspace-navigation { --sidebar-brand-height:48px; --sidebar-brand-gap:0px; }
 html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { height:var(--sidebar-brand-height); padding-block:0; }
@@ -197,14 +197,9 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar.workspace-navigation .sidebar-settings { min-height: 32px; padding: 7px; border-radius:var(--sidebar-row-radius); }
 /* Icon targets share the row curvature, clamped to a circle at their own size. */
 .sidebar.workspace-navigation :is(.icon-button,.navigation-more-button,.session-more,.session-edit,.nav-add,.resource-terminal-button) { border-radius:var(--sidebar-row-radius); }
-.sidebar.workspace-navigation .sidebar-brand-actions :is(.sidebar-search-trigger,.sidebar-create-trigger) { border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); background:transparent; }
-.sidebar.workspace-navigation .sidebar-brand-actions :is(.sidebar-search-trigger,.sidebar-create-trigger):is(:hover,[aria-expanded="true"]):not(:disabled) { color:var(--foreground); background:var(--surface-hover); }
-.sidebar.workspace-navigation .sidebar-brand-actions :is(.sidebar-search-trigger,.sidebar-create-trigger):focus-visible { outline:2px solid var(--focus-outline); outline-offset:2px; }
-.sidebar-create-trigger[aria-expanded="true"] { background:var(--surface-hover); color:var(--foreground); }
-.navigation-context-menu.project-chat-creation-menu { min-width:0; border-radius:var(--radius-settings-panel); corner-shape:var(--corner-window); color:var(--foreground); }
-.navigation-context-menu.project-chat-creation-menu > small { display:none; }
-.navigation-context-menu.project-chat-creation-menu > button { min-height:32px; border-radius:var(--radius-settings-control); }
-@media(pointer:coarse) { .navigation-context-menu.project-chat-creation-menu > button { min-height:44px; } }
+.sidebar.workspace-navigation .sidebar-brand-actions .sidebar-search-trigger { border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); background:transparent; }
+.sidebar.workspace-navigation .sidebar-brand-actions .sidebar-search-trigger:is(:hover,[aria-expanded="true"]):not(:disabled) { color:var(--foreground); background:var(--surface-hover); }
+.sidebar.workspace-navigation .sidebar-brand-actions .sidebar-search-trigger:focus-visible { outline:2px solid var(--focus-outline); outline-offset:2px; }
 @media (prefers-reduced-motion: reduce) { .sidebar.workspace-navigation .folder-chevron, .sidebar-scroll-thumb { transition: none; } }
 
 .sidebar.workspace-navigation .nav-show-more:is(:hover,:focus-visible,:active) { background:transparent; text-decoration:underline; text-underline-offset:3px; }

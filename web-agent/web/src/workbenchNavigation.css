@@ -76,7 +76,7 @@
     padding-inline:6px;
     gap:5px;
   }
-  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-brand-actions :is(.sidebar-search-trigger,.sidebar-create-trigger) {
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-brand-actions .sidebar-search-trigger {
     width:var(--workbench-navigation-button-size);
     height:var(--workbench-navigation-button-size);
     border-radius:var(--radius-settings-icon);

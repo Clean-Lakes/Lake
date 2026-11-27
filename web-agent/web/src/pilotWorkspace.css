@@ -66,6 +66,9 @@
  margin-block:var(--sidebar-specialist-divider-inset) 5px;
  background:var(--border);
 }
+.sidebar-specialist-create { color:var(--pilot-header-muted); }
+.sidebar-specialist-create:hover:not(:disabled) { color:var(--foreground); }
+.sidebar-specialist-create:disabled { opacity:.45; cursor:default; }
 .modal.specialist-create-dialog {
  width:min(416px,calc(100vw - 32px));
  margin:auto;
