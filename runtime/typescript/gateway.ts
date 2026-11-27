@@ -8,6 +8,7 @@ import type { GatewayApprovalPolicy, GatewayConnection, GatewayInviteStatus, Gat
 type InviteRecord = {
   id: string;
   token: string;
+  name?: string;
   recipient?: string;
   createdAt: string;
   expiresAt: string;
@@ -78,10 +79,14 @@ function inviteStatus(row: InviteRecord, at = Date.now()): GatewayInviteStatus {
 }
 function inviteView(row: InviteRecord, origin: string, roleName?: string): GatewayInviteView {
   const status = inviteStatus(row);
+  const label = row.name ?? row.recipient;
   const inviteUrl = status === 'active' ? `${origin}/api/gateway/invites/${row.token}` : undefined;
-  const invitePrompt = inviteUrl ? `帮我连接 Lake 的${roleName || '专员'}：${inviteUrl}` : undefined;
+  const invitePrompt = inviteUrl
+    ? (label ? `帮我连接 Lake 的「${label}」（${roleName || '专员'}）：${inviteUrl}` : `帮我连接 Lake 的${roleName || '专员'}：${inviteUrl}`)
+    : undefined;
   return {
     id: row.id,
+    ...(label ? { name: label } : {}),
     ...(row.recipient ? { recipient: row.recipient } : {}),
     createdAt: row.createdAt,
     expiresAt: row.expiresAt,
@@ -272,10 +277,11 @@ export class LakeGateway {
   }
   createInvite(connectionId: string, input: Record<string, unknown>, origin: string, roleName: string): GatewayInviteView {
     this.security?.check();
-    fields(input, ['recipient', 'ttlMinutes']);
+    fields(input, ['name', 'recipient', 'ttlMinutes']);
     const config = this.config(), row = config.tokens.find(entry => entry.id === connectionId && entry.connection);
     if (!row?.connection) throw new HttpError(404, '接入连接不存在');
     if (!row.connection.enabled) throw new HttpError(409, '连接已停用，请先启用后再生成邀请');
+    const customName = input.name === undefined || input.name === '' ? undefined : text(input.name, 'name', 80);
     const recipient = input.recipient === undefined || input.recipient === '' ? undefined : text(input.recipient, 'recipient', 80);
     const ttlMinutes = input.ttlMinutes === undefined ? 15 : Number(input.ttlMinutes);
     if (!Number.isSafeInteger(ttlMinutes) || ttlMinutes < 5 || ttlMinutes > 1440) throw new HttpError(400, '邀请有效期须为 5–1440 分钟');
@@ -284,7 +290,8 @@ export class LakeGateway {
     const invite: InviteRecord = {
       id: id(),
       token: 'lkiv_' + randomBytes(24).toString('hex'),
-      ...(recipient ? {recipient} : {}),
+      ...(customName ? { name: customName } : {}),
+      ...(recipient ? { recipient } : {}),
       createdAt,
       expiresAt,
     };
@@ -335,6 +342,7 @@ export class LakeGateway {
     const connection = LakeGateway.connectionView(row);
     return {
       id: invite.id,
+      ...(invite.name ? { name: invite.name } : {}),
       connectionId: connection.id,
       connectionName: connection.name,
       projectId: connection.projectId,
@@ -374,6 +382,7 @@ export class LakeGateway {
       token: row.token,
       connectionId: connection.id,
       connectionName: connection.name,
+      ...(invite.name ? { inviteName: invite.name } : {}),
       projectId: connection.projectId,
       ...(connection.routing.mode === 'specialist' ? {roleId: connection.routing.roleId} : {}),
       ...(invite.recipient ? {recipient: invite.recipient} : {}),

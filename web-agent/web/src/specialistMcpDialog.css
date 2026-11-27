@@ -449,6 +449,20 @@
   border-color: var(--warning-border);
   color: var(--warning);
 }
+.specialist-mcp-scope-more {
+  padding: 3px 9px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-settings-icon);
+  corner-shape: var(--corner-window);
+  background: transparent;
+  color: var(--info);
+  font: inherit;
+  font-size: var(--font-size-toolbar);
+  cursor: pointer;
+}
+.specialist-mcp-scope-more:hover {
+  background: var(--surface);
+}
 .specialist-mcp-endpoint-row {
   display: flex;
   align-items: center;

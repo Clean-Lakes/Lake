@@ -133,27 +133,49 @@ test('specialist MCP grants, single-use invite redemption and revocation enforce
   assert.equal(saved.connection.enabled, true);
   assert.equal(saved.connection.resourceGrants.length, 2);
 
-  // Create and inspect a one-time invite, then redeem it once.
-  const { invite } = await f.api(`${base}/invites`, 'POST', { recipient: '林明', ttlMinutes: 15 }, 201);
+  // Create and inspect a one-time invite with custom name, then redeem it over its actual endpoint URL.
+  const { invite } = await f.api(`${base}/invites`, 'POST', { name: '研发预发发布接入', ttlMinutes: 15 }, 201);
   assert.equal(invite.status, 'active');
-  assert.match(invite.invitePrompt, /帮我连接 Lake 的发布专员：/);
-  const inviteToken = invite.inviteUrl.split('/').at(-1);
+  assert.equal(invite.name, '研发预发发布接入');
+  assert.match(invite.invitePrompt, /帮我连接 Lake 的「研发预发发布接入」（发布专员）：/);
+  assert.doesNotMatch(invite.invitePrompt, /WorkBuddy/i);
+  const inviteUrl = new URL(invite.inviteUrl);
+  assert.notEqual(inviteUrl.hostname, 'localhost', 'invite URL should use LAN IPv4 when available');
 
-  const inspected = await f.api(`/api/gateway/invites/${inviteToken}`, 'GET', undefined, 200, '');
+  const inspectedResponse = await fetch(invite.inviteUrl);
+  assert.equal(inspectedResponse.status, 200);
+  const inspected = await inspectedResponse.json();
   assert.equal(inspected.status, 'active');
+  assert.equal(inspected.name, '研发预发发布接入');
   assert.equal(inspected.resourceCount, 2);
   assert.equal(inspected.transport, 'streamable-http');
 
-  const redeemed = await f.api(`/api/gateway/invites/${inviteToken}/redeem`, 'POST', {}, 200, '');
+  const redeemedResponse = await fetch(inspected.redeemUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  assert.equal(redeemedResponse.status, 200);
+  const redeemed = await redeemedResponse.json();
   assert.ok(redeemed.token.startsWith('lkgw_'));
+  assert.equal(redeemed.inviteName, '研发预发发布接入');
   assert.equal(redeemed.transport, 'streamable-http');
   assert.equal(redeemed.resourceGrants.length, 2);
 
+  // Verify the LAN MCP endpoint actually responds to JSON-RPC initialize & rejects non-gateway paths.
+  const lanMcpResp = await fetch(redeemed.mcpUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${redeemed.token}` },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26' } }),
+  });
+  assert.equal(lanMcpResp.status, 200);
+  const lanMcpInit = await lanMcpResp.json();
+  assert.equal(lanMcpInit.result.serverInfo.name, 'lake-remote-mcp');
+  const blockedUiResp = await fetch(`${inviteUrl.origin}/api/projects`);
+  assert.equal(blockedUiResp.status, 404);
+
   // Single-use invite cannot be redeemed a second time.
-  await f.api(`/api/gateway/invites/${inviteToken}/redeem`, 'POST', {}, 410, '');
+  const secondRedeem = await fetch(inspected.redeemUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  assert.equal(secondRedeem.status, 410);
 
   // Revoked invite cannot be redeemed.
-  const second = await f.api(`${base}/invites`, 'POST', { recipient: '测试同学' }, 201);
+  const second = await f.api(`${base}/invites`, 'POST', { name: '临时测试链接' }, 201);
   const secondToken = second.invite.inviteUrl.split('/').at(-1);
   await f.api(`${base}/invites/${second.invite.id}`, 'DELETE');
   await f.api(`/api/gateway/invites/${secondToken}/redeem`, 'POST', {}, 410, '');

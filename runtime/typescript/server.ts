@@ -45,6 +45,7 @@ import { importLegacyModelSettings } from "./dev-settings";
 import {validateRuntimeProfile} from './runtime-profile';
 import { LakeSuperagent } from "./superagent";
 import { LakeGateway, type GatewayAuth } from "./gateway";
+import { GatewayLanIngress } from "./gateway-ingress";
 import { LakeEventReceiver } from "./event-receiver";
 import { applyLegacyMigration, importLegacySSH, importLegacyMySQL, importLegacyMCP, importLegacyServices, importLegacyWorkflows, loadLegacyView } from "./migration";
 import { digest } from "./tasks";
@@ -166,6 +167,7 @@ export async function startLakeServer(options: ServerOptions) {
   let agents: LakeAgents | undefined;
   let superagent: LakeSuperagent | undefined;
   let gateway: LakeGateway | undefined;
+  let gatewayIngress: GatewayLanIngress | undefined;
   let eventReceiver: LakeEventReceiver | undefined;
   let security: LakeSecurity | undefined;
   let memory: LakeMemory | undefined;
@@ -206,14 +208,15 @@ export async function startLakeServer(options: ServerOptions) {
     home: options.home,
     data: options.data,
   });
-  const server = createServer(async (request, response) => {
+  const handleRequest = async (request: IncomingMessage, response: ServerResponse, ingressOrigin?: string) => {
     response.setHeader("X-Content-Type-Options", "nosniff");
     response.setHeader("Referrer-Policy", "no-referrer");
     try {
-      const url = new URL(request.url ?? "/", origin || "http://localhost");
+      const requestOrigin = ingressOrigin ?? origin;
+      const url = new URL(request.url ?? "/", requestOrigin || "http://localhost");
       const path = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
       const method = request.method ?? "GET";
-      if (request.headers.origin && request.headers.origin !== origin)
+      if (request.headers.origin && request.headers.origin !== origin && (!ingressOrigin || request.headers.origin !== ingressOrigin))
         throw new HttpError(403, "请求来源不受信任");
       if (path[0] !== "api") {
         if (method !== "GET" && method !== "HEAD") throw new HttpError(405, "不支持此请求方法");
@@ -659,7 +662,8 @@ export async function startLakeServer(options: ServerOptions) {
           const specialistChannel = superagent.workspace(path[2]).channels?.find(item => item.roleId === path[5]);
           const projectResources = store.catalog().resources.filter(resource => resource.projectId === path[2]);
           const resourceIds = new Set(projectResources.map(resource => resource.id));
-          const readMcpState = () => {
+          const readMcpState = async () => {
+            const gatewayOrigin = await gatewayIngress!.ensure(origin);
             const connection = gateway!.specialistConnection(path[2], path[5]);
             return {
               projectId: path[2],
@@ -675,13 +679,13 @@ export async function startLakeServer(options: ServerOptions) {
                 status: resource.status,
                 host: resource.ssh?.host ?? (typeof resource.settings?.host === 'string' ? resource.settings.host : typeof resource.settings?.endpoint === 'string' ? resource.settings.endpoint : typeof resource.settings?.baseUrl === 'string' ? resource.settings.baseUrl : undefined),
               })),
-              invites: connection ? gateway!.listInvites(connection.id, origin, roleInfo.name) : [],
-              remoteEndpoint: `${origin}/api/gateway/mcp`,
+              invites: connection ? gateway!.listInvites(connection.id, gatewayOrigin, roleInfo.name) : [],
+              remoteEndpoint: `${gatewayOrigin}/api/gateway/mcp`,
               pendingApprovalCount: superagent!.gatewayApprovals(path[2]).filter(item => item.roleId === path[5] && item.status === 'pending').length,
             };
           };
           if (path.length === 7 && method === 'GET') {
-            result = readMcpState();
+            result = await readMcpState();
           } else if (path.length === 8 && path[7] === 'grants' && method === 'PUT') {
             const rawGrants = Array.isArray(data.resourceGrants) ? data.resourceGrants : [];
             for (const entry of rawGrants) {
@@ -696,23 +700,24 @@ export async function startLakeServer(options: ServerOptions) {
               ...(data.enabled !== undefined ? { enabled: Boolean(data.enabled) } : {}),
               ...(typeof data.expectedUpdatedAt === 'string' ? { expectedUpdatedAt: data.expectedUpdatedAt } : {}),
             });
-            result = readMcpState();
+            result = await readMcpState();
           } else if (path.length === 8 && path[7] === 'invites' && method === 'POST') {
             const connection = gateway!.specialistConnection(path[2], path[5]);
             if (!connection) throw new HttpError(409, '请先确认资源授权，再生成接入邀请');
-            const invite = gateway!.createInvite(connection.id, data, origin, roleInfo.name);
+            const gatewayOrigin = await gatewayIngress!.ensure(origin);
+            const invite = gateway!.createInvite(connection.id, data, gatewayOrigin, roleInfo.name);
             status = 201;
-            result = { invite, state: readMcpState() };
+            result = { invite, state: await readMcpState() };
           } else if (path.length === 9 && path[7] === 'invites' && method === 'DELETE') {
             const connection = gateway!.specialistConnection(path[2], path[5]);
             if (!connection) throw new HttpError(404, '接入连接不存在');
             gateway!.revokeInvite(connection.id, path[8]);
-            result = readMcpState();
+            result = await readMcpState();
           } else if (path.length === 8 && path[7] === 'disconnect' && method === 'POST') {
             const connection = gateway!.specialistConnection(path[2], path[5]);
             if (!connection) throw new HttpError(404, '接入连接不存在');
             gateway!.updateConnection(connection.id, { enabled: false, expectedUpdatedAt: connection.updatedAt });
-            result = readMcpState();
+            result = await readMcpState();
           } else throw new HttpError(405, '不支持此专员 MCP 接入操作');
         }
         else if (path.length !== 4) throw new HttpError(404, "Super-agent 接口不存在");
@@ -1019,10 +1024,12 @@ export async function startLakeServer(options: ServerOptions) {
         else throw new HttpError(405, "不支持此 Skill 配置操作");
       } else if (path[1] === "gateway") {
         if (path[2] === "invites" && path.length === 4 && method === "GET") {
-          result = gateway!.inspectInvite(path[3], origin);
+          const gatewayOrigin = ingressOrigin ?? (await gatewayIngress!.ensure(origin));
+          result = gateway!.inspectInvite(path[3], gatewayOrigin);
         } else if (path[2] === "invites" && path.length === 5 && path[4] === "redeem" && method === "POST") {
           if (draining) throw new HttpError(503, "服务正在退出");
-          result = gateway!.redeemInvite(path[3], origin);
+          const gatewayOrigin = ingressOrigin ?? (await gatewayIngress!.ensure(origin));
+          result = gateway!.redeemInvite(path[3], gatewayOrigin);
         } else if (path[2] === "mcp" && path.length === 3 && method === "POST") {
           const auth = gateway!.authenticate(bearer);
           const connection = gateway!.requireConnection(auth);
@@ -1237,7 +1244,15 @@ export async function startLakeServer(options: ServerOptions) {
         ssh?.scrub(error instanceof Error ? error.message : String(error)) ?? agents?.redact(error instanceof Error ? error.message : String(error)) ?? "请求失败";
       json(response, status, { error: message });
     }
+  };
+  const server = createServer((request, response) => {
+    void handleRequest(request, response);
   });
+  gatewayIngress = new GatewayLanIngress(
+    (request, response, lanOrigin) => { void handleRequest(request, response, lanOrigin); },
+    () => store?.get<number>("settings", "gatewayLanPort"),
+    port => { store?.put("settings", "gatewayLanPort", port); },
+  );
   const close = async () => {
     if (closed) return;
     closed = true;
@@ -1253,6 +1268,7 @@ export async function startLakeServer(options: ServerOptions) {
     await ssh?.close();
     services?.close();mysql?.close();
     await eventReceiver?.close();
+    await gatewayIngress?.close();
     await execution?.close();
     await extensions?.close();
     gateway?.close();
@@ -1320,6 +1336,11 @@ export async function startLakeServer(options: ServerOptions) {
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("无法确定服务端口");
     origin = `http://localhost:${address.port}`;
+    try {
+      if (gateway?.connections().some(connection => connection.enabled && connection.resourceGrants !== undefined)) {
+        await gatewayIngress?.ensure(origin);
+      }
+    } catch { /* LAN ingress remains lazily retryable on demand. */ }
     const runtimePath = join(options.data, "runtime.json");
     const pending = join(options.data, `.runtime-${id()}`);
     await writeFile(pending, encode({ origin, token, pid: process.pid }), { mode: 0o600 });

@@ -119,7 +119,8 @@ export function SpecialistMcpDialog({
   const [batchExpiry, setBatchExpiry] = useState<ExpiryPreset>("7d");
   const [resourceQuery, setResourceQuery] = useState("");
   const [onlySelected, setOnlySelected] = useState(false);
-  const [recipient, setRecipient] = useState("");
+  const [scopeExpanded, setScopeExpanded] = useState(false);
+  const [inviteName, setInviteName] = useState("");
   const [ttlMinutes, setTtlMinutes] = useState("15");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -284,18 +285,18 @@ export function SpecialistMcpDialog({
     setFeedback("");
     try {
       const { invite, state: next } = await api.createSpecialistMcpInvite(channel.projectId, channel.roleId, {
-        ...(recipient.trim() ? { recipient: recipient.trim() } : {}),
+        ...(inviteName.trim() ? { name: inviteName.trim() } : {}),
         ttlMinutes: Number(ttlMinutes) || 15,
       });
       if (!mounted.current) return;
       setState(next);
-      setRecipient("");
+      setInviteName("");
       if (invite.invitePrompt) {
         try {
           await navigator.clipboard.writeText(invite.invitePrompt);
-          setFeedback("已生成并复制接入邀请，直接发给 WorkBuddy 即可接入");
+          setFeedback("已生成并复制接入邀请，发给外部 Agent 或 MCP 客户端即可接入");
         } catch {
-          setFeedback("已生成一次性接入邀请，点击下方按钮复制发送给 WorkBuddy");
+          setFeedback("已生成一次性接入邀请，点击下方按钮复制发送给外部 MCP 客户端");
         }
       } else {
         setFeedback("已生成一次性接入邀请");
@@ -641,7 +642,7 @@ export function SpecialistMcpDialog({
         >
           <div className="specialist-mcp-scope-card">
             <div className="specialist-mcp-scope-top">
-              <strong>当前已生效授权范围</strong>
+              <strong>当前已生效授权范围（{confirmedGrants.length} 项）</strong>
               <button
                 type="button"
                 className="specialist-mcp-link-btn"
@@ -652,7 +653,7 @@ export function SpecialistMcpDialog({
             </div>
             {confirmedGrants.length ? (
               <div className="specialist-mcp-scope-tags">
-                {confirmedGrants.map(grant => (
+                {(scopeExpanded ? confirmedGrants : confirmedGrants.slice(0, 6)).map(grant => (
                   <span
                     key={grant.resourceId}
                     className={`specialist-mcp-scope-tag${grant.expired ? " is-expired" : ""}`}
@@ -667,6 +668,15 @@ export function SpecialistMcpDialog({
                     </small>
                   </span>
                 ))}
+                {confirmedGrants.length > 6 && (
+                  <button
+                    type="button"
+                    className="specialist-mcp-scope-more"
+                    onClick={() => setScopeExpanded(current => !current)}
+                  >
+                    {scopeExpanded ? "收起" : `其余 ${confirmedGrants.length - 6} 项`}
+                  </button>
+                )}
               </div>
             ) : (
               <p className="specialist-mcp-note">尚未确认授权资源，请先在「资源授权」勾选并确认。</p>
@@ -696,14 +706,14 @@ export function SpecialistMcpDialog({
             }}
           >
             <label className="specialist-mcp-field">
-              <span>接收者（可选）</span>
+              <span>邀请名称</span>
               <input
                 type="text"
-                value={recipient}
+                value={inviteName}
                 maxLength={80}
-                placeholder="例如：林明（研发）"
+                placeholder={`例如：${channel.roleName} · 研发预发接入`}
                 disabled={!!busy || !state?.connection?.enabled}
-                onChange={event => setRecipient(event.target.value)}
+                onChange={event => setInviteName(event.target.value)}
               />
             </label>
             <label className="specialist-mcp-field specialist-mcp-ttl-field">
@@ -735,7 +745,7 @@ export function SpecialistMcpDialog({
                 <div key={invite.id} className="specialist-mcp-invite-row">
                   <div className="specialist-mcp-invite-meta">
                     <strong>
-                      {invite.recipient ? `发给 ${invite.recipient}` : "WorkBuddy 接入邀请"}
+                      {invite.name || invite.recipient || `${channel.roleName} MCP 接入邀请`}
                       <span className="specialist-mcp-invite-status" data-status={invite.status}>
                         {inviteStatusLabel(invite.status)}
                       </span>
@@ -766,7 +776,7 @@ export function SpecialistMcpDialog({
                           className="button primary specialist-mcp-compact-btn"
                           disabled={!!busy}
                           onClick={() =>
-                            void copyText(invite.invitePrompt!, "已复制接入邀请，发给 WorkBuddy 即可自动配置 MCP")
+                            void copyText(invite.invitePrompt!, "已复制接入邀请，发给外部 MCP 客户端即可配置连接")
                           }
                         >
                           <Glyph name="copy" size={13} />
@@ -780,7 +790,7 @@ export function SpecialistMcpDialog({
             </div>
           ) : (
             <p className="specialist-mcp-empty">
-              生成一次性邀请链接后，点击「复制接入邀请」发给 WorkBuddy，对方确认信任后即自动完成连接配置。
+              生成一次性邀请链接后，点击「复制接入邀请」发给任意支持 Streamable HTTP 的外部 Agent 或 MCP 客户端，确认信任后即可完成接入。
             </p>
           )}
 
