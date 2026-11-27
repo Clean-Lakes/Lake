@@ -440,11 +440,33 @@ export type ChatGroup = {
   latest?:{text:string;author?:string};
 };
 export type SpecialistQuestion = {author:SpecialistReplyAuthor;taskTitle:string;request:AIQuestionRequest;pilotSessionId?:string};
-export type SuperWorkspace = {pilotMessageRead?:ConversationReadState;active:boolean;project:SuperProject;workers:SuperWorker[];questions?:SpecialistQuestion[];channels?:SpecialistChannelInfo[];conversations?:SpecialistConversation[];chatGroups?:ChatGroup[];cursor?:number};
+export type GatewayApprovalPolicy = 'always_approve' | 'auto_in_scope';
+export type GatewayResourceGrant = {resourceId:string;approvalPolicy:GatewayApprovalPolicy;expiresAt?:string};
+export type GatewayInviteStatus = 'active' | 'redeemed' | 'expired' | 'revoked';
+export type GatewayInviteView = {
+  id:string;recipient?:string;createdAt:string;expiresAt:string;redeemedAt?:string;revokedAt?:string;
+  status:GatewayInviteStatus;inviteUrl?:string;invitePrompt?:string;
+};
+export type GatewayApprovalField = {label:string;value:string};
+export type GatewayApprovalRequest = {
+  id:string;projectId:string;sessionId:string;connectionId:string;connectionName:string;
+  roleId:string;roleName:string;avatarId?:LakeAvatarName;requester:string;
+  threadId:string;threadTitle?:string;instructionId:string;eventId:string;
+  askText:string;title:string;summary:string;fields:GatewayApprovalField[];
+  resourceIds:string[];resourceNames:string[];rawRequest:string;
+  status:'pending'|'approved'|'rejected';decisionReason?:string;decidedAt?:string;createdAt:string;taskId?:string;
+};
+export type SpecialistMcpResourceOption = {id:string;name:string;kind:Resource['kind'];status?:string;host?:string;path?:string};
+export type SpecialistMcpState = {
+  projectId:string;projectName:string;roleId:string;roleName:string;avatarId?:LakeAvatarName;
+  connection:GatewayConnection|null;resources:SpecialistMcpResourceOption[];
+  invites:GatewayInviteView[];remoteEndpoint:string;pendingApprovalCount:number;
+};
+export type SuperWorkspace = {pilotMessageRead?:ConversationReadState;active:boolean;project:SuperProject;workers:SuperWorker[];questions?:SpecialistQuestion[];gatewayApprovals?:GatewayApprovalRequest[];channels?:SpecialistChannelInfo[];conversations?:SpecialistConversation[];chatGroups?:ChatGroup[];cursor?:number};
 export type GatewayTokenView = {id:string;name:string;roles?:string[];createdAt:string};
 export type GatewayCommand = {program:string;script?:string;home:string;data?:string};
 export type GatewayRouting = {mode:'pilot'} | {mode:'specialist';roleId:string};
-export type GatewayConnection = {id:string;name:string;projectId:string;enabled:boolean;routing:GatewayRouting;createdAt:string;updatedAt:string;lastReceivedAt?:string};
+export type GatewayConnection = {id:string;name:string;projectId:string;enabled:boolean;routing:GatewayRouting;resourceGrants?:GatewayResourceGrant[];createdAt:string;updatedAt:string;lastReceivedAt?:string};
 export type GatewayConnections = {connections:GatewayConnection[];command:GatewayCommand;projects:{id:string;name:string}[];specialists:GatewaySpecialistRef[];legacyTokens:GatewayTokenView[];eventSources?:LakeEventSource[]};
 export type LakeEventSource = {
   id: string;
@@ -495,6 +517,7 @@ export type GatewayInstructionStatus = {
   tasks:GatewayInstructionTask[];
   conversations?:SpecialistConversation[];
   replies:{text:string;taskId?:string;conversationId?:string;roleName?:string;createdAt:string;from:'specialist'|'pilot'}[];
+  approval?:Pick<GatewayApprovalRequest,'id'|'title'|'summary'|'fields'|'resourceNames'|'status'|'decisionReason'|'decidedAt'>;
   error?:string;
 };
 export type SRESnapshot = {featureVersion:number;enabled:boolean;tasks:SRETask[];pilot?:PilotSettings};

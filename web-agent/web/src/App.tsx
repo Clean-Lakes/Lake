@@ -8,6 +8,8 @@ import {SpecialistTaskDetail} from './SpecialistTaskDetail';
 import {SpecialistTaskMetadata} from './SpecialistTaskList';
 import {SpecialistTaskControls} from './SpecialistTaskControls';
 import {PilotSpecialistQuestions} from './PilotSpecialistQuestions';
+import {PilotGatewayApprovals} from './PilotGatewayApprovals';
+import {SpecialistMcpDialog} from './SpecialistMcpDialog';
 import './specialistChannel.css';
 import './specialistTaskList.css';
 import {PilotWorkspace,usePilotWorkspace} from './PilotWorkspace';
@@ -349,6 +351,12 @@ function AppContent() {
     if(!typescriptBackend||!projectId)return;
     setModelMenuOpen(false);
     setCodexConfiguration({projectId,anchor});
+  },[typescriptBackend]);
+  const [specialistMcp,setSpecialistMcp]=useState<{channel:SpecialistChannelInfo;anchor?:HTMLElement|null}|null>(null);
+  const openSpecialistMcp=useCallback((channel:SpecialistChannelInfo,anchor?:HTMLElement|null)=>{
+    if(!typescriptBackend)return;
+    setModelMenuOpen(false);
+    setSpecialistMcp({channel,anchor});
   },[typescriptBackend]);
   const [reasoningSaving,setReasoningSaving]=useState<ReadonlySet<string>>(()=>new Set());
   const [modeSaving,setModeSaving]=useState<ReadonlySet<string>>(()=>new Set());
@@ -2059,6 +2067,7 @@ function AppContent() {
     pilotDisabled:!bootstrap?.authenticated,disabled:!connected,
     onDeleted:(channel:SpecialistChannelInfo)=>pilotWorkspace.removeRole(channel.roleId),
     onCodexSettings:typescriptBackend?openCodexConfiguration:undefined,
+    onSpecialistMcp:typescriptBackend?openSpecialistMcp:undefined,
     workspace:pilotWorkspace.workspace,error:pilotWorkspace.error,
     selectedId:sessionSelected?route.sessionId:null,
     selectedRoleId:sessionSelected&&selectedSession.projectId===pilotWorkspace.workspace?.project.projectId?
@@ -2207,7 +2216,7 @@ function AppContent() {
           </div> : emptyConversation}
           {isPilotConversation&&activeSnapshot&&<ConversationReadMarker session={activeSnapshot.session.id} state={activeSnapshot.messageRead} enabled={sessionConnected&&!historyPending}/>}
         </section></div>
-        {isLegacyHistory?<div className="pilot-history-notice"><span>历史记录只读，原操作与证据保留。</span><button type="button" className="button secondary" onClick={()=>void openProjectPilot(selectedSession.projectId)}>前往 Pilot 继续沟通<Glyph name="arrow" size={14}/></button></div>:!canCompose?null:<div className="composer-dock">{!isSpecialistTasks&&<ConversationLatest key={`${sessionId}:${conversationMode}`} container={conversationRef} onJump={jumpToLatest}/>}{activeSnapshot?.ai && <div className="composer-session-controls">{selectedSuperPilot&&<PilotSpecialistQuestions questions={pilotConversation?.questions} connected={pilotWorkspaceConnected} onAnswered={pilotWorkspace.refresh}/>}<AIControls snapshot={activeSnapshot} refresh={refreshCurrent} optionsOpen={agentOptionsOpen} onCloseOptions={() => setAgentOptionsOpen(false)} permissionsOpen={permissionsOpen&&activeSnapshot.session.workspaceRole!=="role"&&activeSnapshot.session.workspaceRole!=="worker"} permissionAnchor={permissionButtonRef} onClosePermissions={() => setPermissionsOpen(false)}/></div>}<PendingMessages key={sessionId} supplementRootTurnId={conversationMode==='conversation'?activeSnapshot?.ai?.rootTurnId:undefined} sessionId={sessionId} queue={activeSnapshot?.messageQueue ?? {paused:false,revision:0,lastError:"",items:[]}} disabled={!sessionConnected} active={turnActive} sendShortcut={sendShortcut} resourceIds={mentionedResourceIds} onUpdated={messageQueue => setSnapshot(current => current?.session.id===sessionId && messageQueue.revision>=(current.messageQueue?.revision ?? 0) ? {...current,messageQueue} : current)}/>{activeSnapshot?.conversationMode==='plan'&&<p className="plan-mode-hint" role="status">Plan 模式 · 只读调查与制定方案，确认计划后再执行。{activeSnapshot.sre?.enabled?'SRE 协作将在退出 Plan 模式后恢复。':''}</p>}<form className="composer" onSubmit={sendMessage}><label htmlFor="message-input" className="visually-hidden">{"给 Lake 的消息"}</label><ComposerSurface sessionId={sessionId} dragging={attachmentDragOver} pinnedOpen={composerPinnedOpen} modelBrand={composerPreviewBrand}>
+        {isLegacyHistory?<div className="pilot-history-notice"><span>历史记录只读，原操作与证据保留。</span><button type="button" className="button secondary" onClick={()=>void openProjectPilot(selectedSession.projectId)}>前往 Pilot 继续沟通<Glyph name="arrow" size={14}/></button></div>:!canCompose?null:<div className="composer-dock">{!isSpecialistTasks&&<ConversationLatest key={`${sessionId}:${conversationMode}`} container={conversationRef} onJump={jumpToLatest}/>}{activeSnapshot?.ai && <div className="composer-session-controls">{selectedSuperPilot&&!isChatGroup&&<PilotGatewayApprovals approvals={pilotWorkspace.workspace?.gatewayApprovals} connected={pilotWorkspaceConnected} onDecided={async()=>{await Promise.all([pilotWorkspace.refresh(),refreshCurrent()]);}}/>}{selectedSuperPilot&&<PilotSpecialistQuestions questions={pilotConversation?.questions} connected={pilotWorkspaceConnected} onAnswered={pilotWorkspace.refresh}/>}<AIControls snapshot={activeSnapshot} refresh={refreshCurrent} optionsOpen={agentOptionsOpen} onCloseOptions={() => setAgentOptionsOpen(false)} permissionsOpen={permissionsOpen&&activeSnapshot.session.workspaceRole!=="role"&&activeSnapshot.session.workspaceRole!=="worker"} permissionAnchor={permissionButtonRef} onClosePermissions={() => setPermissionsOpen(false)}/></div>}<PendingMessages key={sessionId} supplementRootTurnId={conversationMode==='conversation'?activeSnapshot?.ai?.rootTurnId:undefined} sessionId={sessionId} queue={activeSnapshot?.messageQueue ?? {paused:false,revision:0,lastError:"",items:[]}} disabled={!sessionConnected} active={turnActive} sendShortcut={sendShortcut} resourceIds={mentionedResourceIds} onUpdated={messageQueue => setSnapshot(current => current?.session.id===sessionId && messageQueue.revision>=(current.messageQueue?.revision ?? 0) ? {...current,messageQueue} : current)}/>{activeSnapshot?.conversationMode==='plan'&&<p className="plan-mode-hint" role="status">Plan 模式 · 只读调查与制定方案，确认计划后再执行。{activeSnapshot.sre?.enabled?'SRE 协作将在退出 Plan 模式后恢复。':''}</p>}<form className="composer" onSubmit={sendMessage}><label htmlFor="message-input" className="visually-hidden">{"给 Lake 的消息"}</label><ComposerSurface sessionId={sessionId} dragging={attachmentDragOver} pinnedOpen={composerPinnedOpen} modelBrand={composerPreviewBrand}>
           {pilotTaskReference&&!pilotTaskReference.sent&&<div className="composer-task-context" aria-live="polite"><PilotTaskReferenceChip task={pilotTaskReference} members={pilotTaskMembers} onClear={()=>selectPilotTask()}/></div>}
           {mention && <ComposerMentions options={mentionMatches} allOptions={allMentionOptions} index={mentionIndex} category={mentionCategory} onActive={index=>setMention(current=>current&&current.index!==index?{...current,index}:current)} onCategory={kind=>{setMentionCategory(kind);setMention({...mention,index:0});}} onSelect={insertMention} loading={mentionExtensions.loading} error={mentionExtensions.error} onReload={mentionExtensions.reload} onClose={()=>setMention(null)} onImport={()=>{const target=projectList.find(item=>item.id===selectedSession?.projectId);setMention(null);if(target){setImportHexhub(true);setImportProject(target);}}}/>}
           <ComposerAttachments key={sessionId} sessionId={sessionId} images={imageDraft} files={fileDraft} uploads={attachmentUploads??[]} disabled={!!pendingOperation}
@@ -2292,6 +2301,10 @@ function AppContent() {
     {codexConfiguration&&!isWorkspacePage&&<CodexModelConfiguration key={codexConfiguration.projectId}
       {...codexConfiguration} projectName={projectList.find(project=>project.id===codexConfiguration.projectId)?.name??'当前项目'}
       onClose={()=>setCodexConfiguration(null)}/>}
+    {specialistMcp&&!isWorkspacePage&&<SpecialistMcpDialog key={`${specialistMcp.channel.projectId}:${specialistMcp.channel.roleId}`}
+      channel={specialistMcp.channel} anchor={specialistMcp.anchor}
+      projectName={projectList.find(project=>project.id===specialistMcp.channel.projectId)?.name??'当前项目'}
+      onClose={()=>setSpecialistMcp(null)} onUpdated={()=>void pilotWorkspace.refresh()}/>}
     {terminalTabContext && <NavigationMenu title="终端" x={terminalTabContext.x} y={terminalTabContext.y} onClose={() => setTerminalTabContext(null)} actions={[
       {label: "打开终端", run: () => selectTerminalTab(terminalTabContext.terminal)},
       {label: "新建终端", disabled: !!pendingOperation || connectingResources.includes(terminalTabContext.terminal.resourceId), run: () => { void openTerminalFor(terminalTabContext.terminal.resourceId, true); }},

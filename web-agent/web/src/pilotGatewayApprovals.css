@@ -1,0 +1,221 @@
+.pilot-gateway-approvals {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-inline-size: 760px;
+  margin: 0 auto 10px;
+}
+.pilot-gateway-approval {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pilot-gateway-approval-author {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pilot-gateway-approval-avatar {
+  display: grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 24px;
+  flex: none;
+}
+.pilot-gateway-approval-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--font-size-ui);
+}
+.pilot-gateway-approval-meta strong {
+  font-weight: var(--font-weight-semibold);
+}
+.pilot-gateway-approval-source {
+  padding: 1px 7px;
+  border-radius: var(--radius-settings-badge);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  font-size: var(--font-size-toolbar);
+  color: var(--text-muted);
+}
+.pilot-gateway-approval-state {
+  padding: 1px 7px;
+  border-radius: var(--radius-settings-badge);
+  font-size: var(--font-size-toolbar);
+  font-weight: var(--font-weight-ui);
+}
+.pilot-gateway-approval-state[data-status="pending"] {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.pilot-gateway-approval-state[data-status="approved"] {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.pilot-gateway-approval-state[data-status="rejected"] {
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+.pilot-gateway-approval-ask {
+  margin: 0 0 0 34px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--foreground);
+}
+.pilot-gateway-approval-card {
+  margin-inline-start: 34px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-settings-panel);
+  corner-shape: var(--corner-window);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pilot-gateway-approval-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pilot-gateway-approval-head h3 {
+  margin: 0;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-semibold);
+}
+.pilot-gateway-approval-head p {
+  margin: 4px 0 0;
+  font-size: var(--font-size-toolbar);
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+.pilot-gateway-approval-resources {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: none;
+}
+.pilot-gateway-approval-resource {
+  padding: 2px 7px;
+  border-radius: var(--radius-settings-badge);
+  border: 1px solid var(--border);
+  background: var(--surface-subtle);
+  font-size: var(--font-size-toolbar);
+  color: var(--text-muted);
+}
+.pilot-gateway-approval-fields {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.pilot-gateway-approval-fields.cols-1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+.pilot-gateway-approval-fields.cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.pilot-gateway-approval-fields.cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.pilot-gateway-approval-fields > div {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-settings-control);
+  corner-shape: var(--corner-window);
+  background: var(--surface-subtle);
+  min-inline-size: 0;
+}
+.pilot-gateway-approval-fields dt {
+  font-size: var(--font-size-toolbar);
+  color: var(--text-muted);
+}
+.pilot-gateway-approval-fields dd {
+  margin: 2px 0 0;
+  font-size: var(--font-size-process);
+  font-weight: var(--font-weight-ui);
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+.pilot-gateway-approval-raw pre {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-settings-control);
+  corner-shape: var(--corner-window);
+  background: var(--surface-subtle);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.pilot-gateway-approval-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-block-start: 10px;
+  border-block-start: 1px solid var(--border);
+}
+.pilot-gateway-approval-footer small {
+  font-size: var(--font-size-toolbar);
+  color: var(--text-muted);
+}
+.pilot-gateway-approval-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pilot-gateway-approval-actions .button {
+  min-block-size: 32px;
+  padding: 0 13px;
+  border-radius: var(--radius-settings-control);
+  corner-shape: var(--corner-window);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.pilot-gateway-approval-reject {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-block-start: 10px;
+  border-block-start: 1px solid var(--border);
+}
+.pilot-gateway-approval-reject input {
+  min-block-size: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-settings-control);
+  corner-shape: var(--corner-window);
+  background: var(--surface-subtle);
+  color: var(--foreground);
+  font: inherit;
+  font-size: var(--font-size-process);
+}
+.pilot-gateway-approval-reject input:focus {
+  outline: none;
+  border-color: var(--focus);
+}
+.pilot-gateway-approval-reject .pilot-gateway-approval-actions {
+  justify-content: flex-end;
+}
+@media (max-width: 560px) {
+  .pilot-gateway-approval-ask,
+  .pilot-gateway-approval-card {
+    margin-inline-start: 0;
+  }
+  .pilot-gateway-approval-head {
+    flex-direction: column;
+  }
+  .pilot-gateway-approval-fields.cols-2,
+  .pilot-gateway-approval-fields.cols-3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

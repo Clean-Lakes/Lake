@@ -1,0 +1,94 @@
+import { registerHooks } from 'node:module';
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import type { GatewayApprovalRequest, SuperWorkspace, WorkSession } from '../../shared/contracts';
+import { superPilotActivity } from '../src/superPilotActivity';
+
+const css = registerHooks({
+  load(url, context, nextLoad) {
+    return url.endsWith('.css') ? { format: 'module', source: 'export {};', shortCircuit: true } : nextLoad(url, context);
+  },
+});
+const { PilotGatewayApprovals } = await import('../src/PilotGatewayApprovals');
+css.deregister();
+
+const sampleApproval: GatewayApprovalRequest = {
+  id: 'appr-1',
+  projectId: 'proj-1',
+  sessionId: 'pilot-1',
+  connectionId: 'conn-1',
+  connectionName: '发布专员 MCP',
+  roleId: 'role-release',
+  roleName: '发布专员',
+  avatarId: 'beaver',
+  requester: '林明 · WorkBuddy',
+  threadId: 'thread-1',
+  instructionId: 'msg-1',
+  eventId: 'ev-1',
+  askText: '林明请我把订单服务发布到 GOS 预发。需要我创建任务并执行吗？',
+  title: '发布订单服务至 GOS 预发',
+  summary: '将在已授权资源（GOS 预发）范围内由「发布专员」创建独立任务并同步执行进度。',
+  fields: [
+    { label: '发布目标', value: '订单服务' },
+    { label: '目标环境', value: 'GOS 预发' },
+    { label: '目标版本', value: 'v2.14.3-rc2' },
+    { label: '发布后检查', value: '服务健康状态' },
+  ],
+  resourceIds: ['res-1'],
+  resourceNames: ['GOS 预发'],
+  rawRequest: '帮我把订单服务发到 GOS 预发 v2.14.3-rc2',
+  status: 'pending',
+  createdAt: '2026-11-27T02:00:00Z',
+};
+
+test('PilotGatewayApprovals renders specialist identity, dynamic fields, raw request and approve/reject actions', () => {
+  const html = renderToStaticMarkup(
+    createElement(PilotGatewayApprovals, {
+      approvals: [sampleApproval],
+      connected: true,
+      onDecided: async () => {},
+    }),
+  );
+  assert.ok(html.includes('发布专员'));
+  assert.ok(html.includes('来自 林明 · WorkBuddy'));
+  assert.ok(html.includes(sampleApproval.askText));
+  assert.ok(html.includes('发布目标') && html.includes('订单服务'));
+  assert.ok(html.includes('目标版本') && html.includes('v2.14.3-rc2'));
+  assert.ok(html.includes('查看原始请求') && html.includes(sampleApproval.rawRequest));
+  assert.ok(html.includes('拒绝') && html.includes('同意'));
+  assert.equal(
+    renderToStaticMarkup(createElement(PilotGatewayApprovals, { approvals: [], connected: true, onDecided: async () => {} })),
+    '',
+  );
+});
+
+test('PilotGatewayApprovals shows decided status and optional rejection reason', () => {
+  const rejectedHtml = renderToStaticMarkup(
+    createElement(PilotGatewayApprovals, {
+      approvals: [{ ...sampleApproval, status: 'rejected', decisionReason: '封板窗口暂停发布' }],
+      connected: true,
+      onDecided: async () => {},
+    }),
+  );
+  assert.ok(rejectedHtml.includes('已拒绝'));
+  assert.ok(rejectedHtml.includes('封板窗口暂停发布'));
+  assert.doesNotMatch(rejectedHtml, /同意/);
+});
+
+test('superPilotActivity elevates pending external MCP approvals into Lake status island', () => {
+  const router = { id: 'pilot-1', projectId: 'proj-1', status: 'idle' } as WorkSession;
+  const ws: SuperWorkspace = {
+    active: true,
+    project: { projectId: 'proj-1', routerSessionId: 'pilot-1', version: 1 },
+    workers: [],
+    gatewayApprovals: [sampleApproval],
+  };
+  const activity = superPilotActivity(ws, router, true);
+  assert.ok(activity);
+  assert.equal(activity.status, 'waiting_approval');
+  assert.equal(activity.phase, 'waiting_approval');
+  assert.equal(activity.animated, false);
+  assert.match(activity.label, /发布专员.*等待确认外部请求/);
+});
