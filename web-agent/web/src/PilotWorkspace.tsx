@@ -1,6 +1,5 @@
 import {hasUnreadMessages} from './ConversationReadMarker';
 import {useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState,type PointerEvent as ReactPointerEvent,type RefObject} from 'react';
-import {createPortal} from 'react-dom';
 import type {SessionEvent,SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {greetRoleAvatar,SuperRoleAvatar} from './SuperRoleAvatar';
@@ -220,11 +219,13 @@ function showClippedText(event: ReactPointerEvent<HTMLElement>) {
  else text.removeAttribute('title');
 }
 
-function SpecialistNameBubble({name,target,onClose}:{name:string;target:HTMLButtonElement;onClose:()=>void}) {
+type SpecialistNameHint={id:string;target:HTMLButtonElement;source:'pointer'|'keyboard'};
+
+function SpecialistNameBubble({name,target,onClose}:{name:string;target?:HTMLButtonElement;onClose:()=>void}) {
  const bubble=useRef<HTMLSpanElement>(null);
  useLayoutEffect(()=>{
   const node=bubble.current;
-  if(!node)return;
+  if(!node||!target)return;
   const roster=target.closest('.sidebar-specialist-roster');
   const place=()=>{
    const bounds=target.getBoundingClientRect(),visible=roster?.getBoundingClientRect();
@@ -234,12 +235,12 @@ function SpecialistNameBubble({name,target,onClose}:{name:string;target:HTMLButt
    }
    const center=bounds.top+bounds.height/2,height=node.offsetHeight;
    const top=Math.max(8,Math.min(center-height/2,window.innerHeight-height-8));
-   node.style.left=`${bounds.right+12}px`;
-   node.style.top=`${top}px`;
+   const parent=node.offsetParent?.getBoundingClientRect();
+   node.style.left=`${bounds.right+12-(parent?.left??0)}px`;
+   node.style.top=`${top-(parent?.top??0)}px`;
    node.style.setProperty('--specialist-bubble-tail',`${Math.min(height-8,Math.max(8,center-top))}px`);
   };
   const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')onClose();};
-  const moved=(event:PointerEvent)=>{if(!event.composedPath().includes(target))onClose();};
   const leftDocument=(event:PointerEvent)=>{if(!event.relatedTarget)onClose();};
   const listeners=new AbortController();
   const {signal}=listeners;
@@ -250,11 +251,11 @@ function SpecialistNameBubble({name,target,onClose}:{name:string;target:HTMLButt
   window.addEventListener('keydown',escape,{signal});
   document.addEventListener('visibilitychange',onClose,{signal});
   document.addEventListener('pointerdown',onClose,{signal,capture:true});
-  document.addEventListener('pointermove',moved,{signal,capture:true,passive:true});
   document.addEventListener('pointerout',leftDocument,{signal,capture:true,passive:true});
   return()=>listeners.abort();
  },[target,name,onClose]);
- return createPortal(<span ref={bubble} className="specialist-name-bubble" aria-hidden="true">{name}</span>,document.body);
+ // Hide the same rail element in place so switching roles cannot leave a painted portal behind.
+ return <span ref={bubble} className="specialist-name-bubble" aria-hidden="true" hidden={!target}>{name}</span>;
 }
 
 export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,onCodexSettings,onSpecialistMcp,onSpecialistSaved,createSpecialist,showHeading=true,presentation='list'}: PilotWorkspaceProps) {
@@ -263,7 +264,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
  const lastMenu=useRef<SpecialistChannelInfo|null>(null);
  if(menu)lastMenu.current=menu;
  const renderedMenu=menu??lastMenu.current;
- const [nameHint,setNameHint]=useState<{id:string;target:HTMLButtonElement}|null>(null);
+ const [nameHint,setNameHint]=useState<SpecialistNameHint|null>(null);
  const anchor=useRef<HTMLButtonElement|null>(null),createButton=useRef<HTMLButtonElement|null>(null);
  const closeNameHint=useCallback(()=>setNameHint(null),[]);
  useEffect(()=>{lastMenu.current=null;setMenu(null);setDeleting(null);setEditing(null);setCreating(false);closeNameHint();},[workspace?.project.projectId,closeNameHint]);
@@ -275,13 +276,14 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
  const readMarks = useCompletionReads(presentation==='entry'?null:workspace, viewedRole);
  const rail=presentation==='rail';
  const canShowNameHint=rail&&!menu&&!deleting&&!editing&&!creating;
+ const visibleHint=canShowNameHint?nameHint:null;
  const routerId=workspace?.active?workspace.project.routerSessionId:undefined;
  const entries = channels ? channels.map(channel => ({channel, workers: roots.filter(worker => worker.roleId === channel.roleId)})) :
   roots.map(worker => ({channel: undefined, workers: [worker]}));
- const hintedEntry=nameHint&&entries.find(({channel,workers})=>(channel?.id??workers[0].id)===nameHint.id);
+ const hintedEntry=visibleHint&&entries.find(({channel,workers})=>(channel?.id??workers[0].id)===visibleHint.id);
  const hintedName=hintedEntry&&(hintedEntry.channel?.roleName??hintedEntry.workers[0].roleName);
  if(rail&&!entries.length&&!createSpecialist)return null;
- return <section className={rail?'sidebar-specialist-roster':'pilot-workspace'} aria-label={rail||showHeading?'专员':undefined}>
+ return <><section className={rail?'sidebar-specialist-roster':'pilot-workspace'} aria-label={rail||showHeading?'专员':undefined}>
   {!rail&&<>
    {showHeading&&<div className="nav-heading"><span>专员</span><small>{entries.length+1}</small></div>}
    <SidebarPilotEntry buttonRef={pilotButton} selected={!!routerId&&selectedId===routerId}
@@ -325,11 +327,13 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
    return <button type="button" key={id} className={rail?'sidebar-rail-button sidebar-specialist-button':`nav-row pilot-worker-row${selected ? ' active' : ''}`}
      aria-current={selected ? 'page' : undefined} aria-label={label}
      data-activity={rail?railActivity:undefined}
+     data-name-hint={visibleHint?.id===id?visibleHint.source:undefined}
      aria-keyshortcuts={channel&&!disabled?'Shift+F10':undefined}
-     onPointerEnter={rail?event=>{if(event.pointerType==='mouse'&&canShowNameHint)setNameHint({id,target:event.currentTarget});}:undefined}
+     onPointerEnter={canShowNameHint?event=>{if(event.pointerType==='mouse'&&!event.buttons)setNameHint({id,target:event.currentTarget,source:'pointer'});}:undefined}
      onPointerLeave={rail?dismissRowHint:undefined}
      onPointerCancel={rail?dismissRowHint:undefined}
-     onFocus={rail?event=>{if(canShowNameHint&&event.currentTarget.matches(':focus-visible'))setNameHint({id,target:event.currentTarget});}:undefined}
+     onFocus={canShowNameHint?event=>{if(event.currentTarget.matches(':focus-visible')&&document.documentElement.dataset.inputModality!=='pointer')
+      setNameHint({id,target:event.currentTarget,source:'keyboard'});}:undefined}
      onBlur={rail?dismissRowHint:undefined}
      onContextMenu={event=>{event.preventDefault();event.stopPropagation();openManagement(event.currentTarget);}}
      onKeyDown={event=>{
@@ -368,7 +372,6 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
    <Glyph name="plus" size={18}/>
   </button>}
   {rail&&<TabSelectionIndicator className="sidebar-specialist-selection" selection={viewedRole??''} selector='.sidebar-specialist-button[aria-current="page"]'/>}
-  {canShowNameHint&&nameHint&&hintedName&&<SpecialistNameBubble key={nameHint.id} name={hintedName} target={nameHint.target} onClose={closeNameHint}/>}
   {renderedMenu&&<NavigationMenu key={renderedMenu.id} open={Boolean(menu)} title={renderedMenu.roleName} placement="beside" anchor={anchor} className="specialist-context-menu"
    headerIcon={<SuperRoleAvatar name={renderedMenu.roleName} roleId={renderedMenu.roleId} avatarId={renderedMenu.avatarId} motion="still" size={19}/>}
    onClose={()=>setMenu(null)} actions={[
@@ -389,5 +392,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
    onSaved={onSpecialistSaved} onClose={()=>setEditing(null)}/>}
   {creating&&createSpecialist&&<SpecialistCreate projectId={createSpecialist.projectId} disabled={disabled} returnFocus={createButton}
    onCreated={createSpecialist.onCreated} onClose={()=>setCreating(false)}/>}
- </section>;
+ </section>
+ {rail&&<SpecialistNameBubble name={hintedName||''} target={hintedEntry?visibleHint?.target:undefined} onClose={closeNameHint}/>}
+ </>;
 }
