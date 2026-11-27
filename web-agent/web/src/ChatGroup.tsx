@@ -6,10 +6,17 @@ import {SuperRoleAvatar} from './SuperRoleAvatar';
 import {WorkbenchModalDialog} from './WorkbenchModalDialog';
 
 export function ChatGroupAvatars({members,compact=false}:{members:readonly ChatGroupMember[];compact?:boolean}) {
-  return <span className="chat-group-avatars" aria-hidden="true">
-    {members.length ? members.slice(0,compact?2:3).map(member =>
-      <SuperRoleAvatar key={member.roleId} roleId={member.roleId} name={member.roleName} avatarId={member.avatarId} size={compact?14:16} motion="still"/>
-    ) : <Glyph name="lakeSpecialists" size={18}/>}
+  const limit=compact?3:4;
+  const shown=members.slice(0,limit);
+  const remaining=members.length-shown.length;
+  const size=compact?16:17;
+  return <span className="chat-group-avatars" data-multiple={members.length>1||undefined} aria-hidden="true">
+    {shown.length ? <>
+      {shown.map(member => <span className="chat-group-avatar-chip" key={member.roleId}>
+        <SuperRoleAvatar roleId={member.roleId} name={member.roleName} avatarId={member.avatarId} size={size} motion="still"/>
+      </span>)}
+      {remaining>0 && <span className="chat-group-avatar-overflow">+{remaining}</span>}
+    </> : <Glyph name="lakeSpecialists" size={18}/>}
   </span>;
 }
 
