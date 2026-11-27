@@ -14,6 +14,7 @@ import './specialistTaskList.css';
 import {pilotConversationView,PilotWorkspace,usePilotWorkspace} from './PilotWorkspace';
 import './pilotWorkspace.css';
 import {ChatGroupNavigation} from './ChatGroup';
+import {ChatGroupWelcome} from './ChatGroupWelcome';
 import './chatGroup.css';
 import './specialistAvatars.css';
 import {SpecialistAvatarProvider,SuperRoleAvatar} from './SuperRoleAvatar';
@@ -60,7 +61,7 @@ import {sessionBadgeState} from './sessionBadgeState';
 import {pilotIslandModel} from './pilotIslandModel';
 import './pilotIsland.css';
 import './pilot.css';
-import {composerMentionQuery,type ComposerMentionQuery,appendResourceMention,composerMessage,composerResourceIds,selectComposerMention,filterMentions,mentionOptions,nextMentionCategory,type MentionCategory,type MentionOption} from "./composerMentionState";
+import {composerMentionQuery,type ComposerMentionQuery,appendComposerMention,appendResourceMention,composerMessage,composerResourceIds,selectComposerMention,filterMentions,mentionOptions,nextMentionCategory,type MentionCategory,type MentionOption} from "./composerMentionState";
 import {ComposerSurface} from "./ComposerSurface";
 import {ComposerTextInput,type ComposerInputHandle} from "./ComposerTextInput";
 import {AppSelect} from "./AppSelect";
@@ -1137,7 +1138,7 @@ function AppContent() {
   const pilotProjectId=sidebarProjectId??selectedProjectId??catalog?.projects[0]?.id;
   const pilotWorkspace=usePilotWorkspace(pilotProjectId,!!bootstrap?.authenticated&&!!catalog,
     bootstrap?.backendRuntime==='typescript'&&!selectedResource?sessionId??undefined:undefined);
-  const selectedChatGroup=isChatGroup?pilotWorkspace.workspace?.chatGroups?.find(group=>group.sessionId===sessionId):undefined;
+  const selectedChatGroup=isChatGroup?pilotWorkspace.workspace?.chatGroups?.find(group=>group.sessionId===sessionId&&group.projectId===selectedSession.projectId):undefined;
   const pilotConversation=useMemo(()=>{
     const scoped=pilotWorkspace.conversation;
     const historical=isChatGroup?activeSnapshot?.chatGroupRounds:undefined;
@@ -1495,6 +1496,7 @@ function AppContent() {
   const mentionWorkspace=isChatGroup?pilotConversation:pilotWorkspace.workspace;
   const mentionSpecialists=mentionWorkspace?.project.projectId===selectedSession?.projectId?mentionWorkspace?.channels:undefined;
   const allMentionOptions=mentionOptions(mentionable,mentionExtensions.skills,mentionExtensions.servers,!isChatGroup&&!!activeSnapshot?.sre?.enabled,mentionSpecialists);
+  const canMentionFromGroupWelcome=canCompose&&sessionConnected&&!historyPending&&!pendingOperation;
   const mentionMatches=mention?filterMentions(allMentionOptions,mention.query,mentionCategory):[];
   const mentionIndex=Math.min(mention?.index??0,Math.max(0,mentionMatches.length-1));
   const closeComposerMention=useCallback(()=>setMention(null),[]);
@@ -1518,6 +1520,25 @@ function AppContent() {
     setMentionRefs(references);
     setMessageDraft(next);
     requestAnimationFrame(()=>{input.focus({preventScroll:true});input.setSelectionRange(position,position);});
+  }
+  function mentionGroupMember(roleId:string) {
+    if(!canMentionFromGroupWelcome||!selectedChatGroup?.members.some(member=>member.roleId===roleId&&!member.unavailable))return;
+    const input=messageInputRef.current;
+    const option=allMentionOptions.find(item=>item.kind==='role'&&item.id===roleId);
+    if(!input||!option)return;
+    const caret=input.selectionEnd;
+    const query=mention&&composerMentionQuery(messageDraft,input.selectionStart,caret);
+    const {next,references,position}=query
+      ?selectComposerMention(messageDraft,caret,mentionRefs,option,query)
+      :appendComposerMention(messageDraft,mentionRefs,option,caret);
+    setMention(null);
+    setMessageDraft(next);
+    setMentionRefs(references);
+    requestAnimationFrame(()=>{
+      if(activeSession.current!==sessionId||messageInputRef.current!==input)return;
+      input.focus({preventScroll:true});
+      input.setSelectionRange(position,position);
+    });
   }
   function addResourceToConversation(resource: Resource) {
     if (isSpecialistTasks || !sessionConnected || pendingOperation || bulkMode || !sessionId || selectedSession?.projectId !== resource.projectId || !mentionable.some(item=>item.id===resource.id)) return;
@@ -1931,7 +1952,13 @@ function AppContent() {
   const navigationProjects = projectList.filter(project => project.id === sidebarProject?.id);
   const itemList = activeSnapshot ? timelineItems(activeSnapshot) : [];
   const hasConversationItems=!!(itemList.length||activeSnapshot?.ai?.cards.length||activeSnapshot?.superagent||activeSnapshot?.sre?.tasks.length||activeSnapshot?.ai?.operationOutcomes?.length);
-  const emptyConversation=<div className={selectedSuperPilot?"timeline-empty is-pilot":"timeline-empty"}>
+  const groupWelcomeMembers=selectedChatGroup?.members.flatMap(member=>{
+    const channel=mentionSpecialists?.find(item=>item.roleId===member.roleId);
+    return channel&&!member.unavailable?[{...member,roleName:channel.roleName,duties:channel.duties}]:[];
+  })??[];
+  const emptyConversation=isChatGroup?<ChatGroupWelcome title={selectedChatGroup?.title??selectedSession.title}
+    members={groupWelcomeMembers} canMention={canMentionFromGroupWelcome} onMention={mentionGroupMember}/>
+    :<div className={selectedSuperPilot?"timeline-empty is-pilot":"timeline-empty"}>
     {selectedSuperPilot?<div className="pilot-empty-shore" aria-hidden="true">
       <SuperRoleAvatar avatarId="kingfisher" size={58} motion="still"/>
     </div>:<div className="empty-icon"><Glyph name="chat" size={25}/></div>}

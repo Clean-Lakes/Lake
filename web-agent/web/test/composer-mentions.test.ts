@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type {MCPServerConfig,Resource,SkillConfig} from "../../shared/contracts";
 import {rebaseMentions,referencedExtensions,referencedResources,rebaseExtensionReferences} from "../../shared/references";
-import {composerMentionQuery,composerClipboardFragment,composerToken,replaceComposerRange,composerMessage,composerResourceIds,selectComposerMention,appendResourceMention,filterMentions,mentionInsertion,mentionOptions,nextMentionCategory,mentionTypeLabel,type MentionOption} from "../src/composerMentionState";
+import {composerMentionQuery,composerClipboardFragment,composerToken,replaceComposerRange,composerMessage,composerResourceIds,selectComposerMention,appendComposerMention,appendResourceMention,filterMentions,mentionInsertion,mentionOptions,nextMentionCategory,mentionTypeLabel,type MentionOption} from "../src/composerMentionState";
 
 test("left and right cycle visible categories including empty categories",()=>{
  assert.equal(nextMentionCategory("all",[],{key:"ArrowRight"}),"resource");
@@ -154,6 +154,18 @@ test("@ selection at any sentence position replaces the query and keeps followin
  assert.equal(payload.text,"@同名检查@同名 后续");
  assert.deepEqual(payload.resourceIds,["host"]);
  assert.equal(payload.references[0]?.kind,"skill");assert.equal(payload.references[0]?.start,5);assert.equal(payload.references[0]?.end,8);
+});
+test("a group welcome mention keeps the draft and uses the specialist identity",()=>{
+ const resource=appendResourceMention("检查",[],{id:"same",name:"同名"});
+ const specialist={id:"same",name:"同名",kind:"role" as const};
+ const added=appendComposerMention(resource.next,resource.references,specialist);
+ assert.equal(added.next,`检查${composerToken}${composerToken}`);
+ const repeated=appendComposerMention(added.next,added.references,specialist,0);
+ assert.deepEqual(repeated,added);
+ assert.deepEqual(composerMessage(added.next,added.references,["same"]).mentions,[
+  {kind:"resource",id:"same",label:"@同名",start:2,end:5},
+  {kind:"role",id:"same",label:"@同名",start:5,end:8},
+ ]);
 });
 test("editing before, between and across tokens shifts or removes exactly the selected references",()=>{
  let doc=appendResourceMention("和",[],{id:"a",name:"A"},0);
