@@ -46,6 +46,10 @@ export async function privateDirectory(path: string) {
   await chmod(path, 0o700);
 }
 
+// Deleted messages remain addressable by ID for stored input receipts.
+const visibleMessagesQuery = `SELECT value FROM records WHERE kind='messages'
+  AND json_extract(value,'$.sessionId')=? AND json_extract(value,'$.deletedAt') IS NULL`;
+
 export class LakeStore {
   magpie?: LakeMagpie;
   async refreshModels() { await this.magpie?.refresh(); }
@@ -309,13 +313,13 @@ export class LakeStore {
     // Unread/channel polling reads many sessions. Select before decoding JSON
     // so another conversation's entire history never blocks this session.
     return this.db
-      .prepare("SELECT value FROM records WHERE kind='messages' AND json_extract(value,'$.sessionId')=? ORDER BY rowid")
+      .prepare(`${visibleMessagesQuery} ORDER BY rowid`)
       .all(sessionId)
       .map(row => JSON.parse(String(row.value)) as Message);
   }
   recentMessages(sessionId: string, limit: number): Message[] {
     return this.db
-      .prepare("SELECT value FROM records WHERE kind='messages' AND json_extract(value,'$.sessionId')=? ORDER BY rowid DESC LIMIT ?")
+      .prepare(`${visibleMessagesQuery} ORDER BY rowid DESC LIMIT ?`)
       .all(sessionId, limit).reverse()
       .map(row => JSON.parse(String(row.value)) as Message);
   }
