@@ -238,6 +238,15 @@
       ]
     },
     {
+      "name": "createSpecialistMcpInvite",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/projects/${encodeURIComponent(projectId)}/superagent/specialists/${encodeURIComponent(roleId)}/mcp/invites`"
+        }
+      ]
+    },
+    {
       "name": "createSshResource",
       "routes": [
         {
@@ -351,6 +360,15 @@
         {
           "method": "POST",
           "path": "`/api/settings/providers/${encodeURIComponent(id)}/detect-capabilities`"
+        }
+      ]
+    },
+    {
+      "name": "disconnectSpecialistMcp",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/projects/${encodeURIComponent(projectId)}/superagent/specialists/${encodeURIComponent(roleId)}/mcp/disconnect`"
         }
       ]
     },
@@ -868,6 +886,15 @@
       ]
     },
     {
+      "name": "renameProject",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "`/api/projects/${encodeURIComponent(id)}`"
+        }
+      ]
+    },
+    {
       "name": "renameSession",
       "routes": [
         {
@@ -918,6 +945,15 @@
         {
           "method": "POST",
           "path": "`/api/resources/${encodeURIComponent(id)}/grafana-token`"
+        }
+      ]
+    },
+    {
+      "name": "revokeSpecialistMcpInvite",
+      "routes": [
+        {
+          "method": "DELETE",
+          "path": "`/api/projects/${encodeURIComponent(projectId)}/superagent/specialists/${encodeURIComponent(roleId)}/mcp/invites/${encodeURIComponent(inviteId)}`"
         }
       ]
     },
@@ -1017,6 +1053,15 @@
         {
           "method": "PUT",
           "path": "`/api/settings/skills/${encodeURIComponent(name)}`"
+        }
+      ]
+    },
+    {
+      "name": "saveSpecialistMcpGrants",
+      "routes": [
+        {
+          "method": "PUT",
+          "path": "`/api/projects/${encodeURIComponent(projectId)}/superagent/specialists/${encodeURIComponent(roleId)}/mcp/grants`"
         }
       ]
     },
@@ -1165,6 +1210,15 @@
         {
           "method": "GET",
           "path": "`/api/sessions/${encodeURIComponent(session)}/channel${cursor?`?cursor=${encodeURIComponent(cursor)}`:''}`"
+        }
+      ]
+    },
+    {
+      "name": "specialistMcp",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "`/api/projects/${encodeURIComponent(projectId)}/superagent/specialists/${encodeURIComponent(roleId)}/mcp`"
         }
       ]
     },
@@ -1444,6 +1498,15 @@
         {
           "method": "POST",
           "path": "`/api/sessions/${encodeURIComponent(sessionId)}/message-queue`"
+        }
+      ]
+    },
+    {
+      "name": "updateSpecialist",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "`/api/projects/${encodeURIComponent(project)}/superagent/specialists/${encodeURIComponent(role)}`"
         }
       ]
     },

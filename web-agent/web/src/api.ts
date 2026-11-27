@@ -126,6 +126,10 @@ export const api = {
 	superWorkspace:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperWorkspace>(`/api/projects/${encodeURIComponent(project)}/superagent`,{signal}),
   createSpecialist:(project:string,input:{name:string;duties:string;avatarId:LakeAvatarName;requestId:string})=>
     post<SpecialistChannelInfo>(`/api/projects/${encodeURIComponent(project)}/superagent/specialists`,input),
+  updateSpecialist:(project:string,role:string,input:{name?:string;duties?:string;expectedRevision:number})=>
+    request<SpecialistChannelInfo>(`/api/projects/${encodeURIComponent(project)}/superagent/specialists/${encodeURIComponent(role)}`,{
+      method:'PATCH',body:JSON.stringify(input),
+    }),
   createChatGroup:(project:string,input:{title:string;roleIds:string[];requestId:string})=>
     post<ChatGroup>(`/api/projects/${encodeURIComponent(project)}/superagent/groups`,input),
   operationReview: (sessionId: string, operationId: string, signal?: AbortSignal) =>

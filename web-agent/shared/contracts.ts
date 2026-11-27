@@ -450,7 +450,7 @@ export type SpecialistConversation = {
   createdAt:string;deadlineAt:string;members:SpecialistConversationMember[];summaryMessageId?:string;summaryRequested?:boolean;
   summary?: {id:string;taskId?:string;preview?:{seq:number;text:string}};
 };
-export type ChatGroupMember = {roleId:string;roleName:string;avatarId?:LakeAvatarName;unavailable?:boolean};
+export type ChatGroupMember = {roleId:string;roleName:string;duties?:string;avatarId?:LakeAvatarName;unavailable?:boolean};
 export type ChatGroup = {
   sessionId:string;
   projectId:string;

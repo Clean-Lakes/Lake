@@ -914,6 +914,36 @@ export class LakeSuperagent implements AgentHost {
     if (created) this.notify(project.routerSessionId, 'specialist');
     return this.channelView(channel);
   }
+  updateSpecialist(projectId: string, roleId: string, input: Record<string, unknown>): SpecialistChannelInfo {
+    this.security?.check();
+    const {name, duties, expectedRevision} = input;
+    if (!Number.isSafeInteger(expectedRevision) || (name === undefined && duties === undefined) ||
+        Object.keys(input).some(key => !['name', 'duties', 'expectedRevision'].includes(key)))
+      throw new HttpError(400, '专员资料或版本无效');
+    validateSpecialistFields(input);
+    const channel = this.store.transaction(() => {
+      const role = this.role(projectId, roleId);
+      if (role.revision !== expectedRevision) throw new HttpError(409, '专员资料已更新，请重新打开编辑后重试');
+      return this.saveRoleProfile({
+        ...role,
+        name: typeof name === 'string' ? this.agents.redact(name.trim().replace(/\s+/g, ' ')) : role.name,
+        duties: typeof duties === 'string' ? this.agents.redact(duties.trim()) : role.duties,
+        revision: role.revision + 1,
+      });
+    });
+    this.notify(channel.sessionId, 'specialist');
+    const project = this.store.get<SuperProject>('superProjects', projectId);
+    if (project) this.notify(project.routerSessionId, 'specialist');
+    this.conversations.memberProfileChanged(projectId, roleId);
+    return this.channelView(channel);
+  }
+  private saveRoleProfile(role: Role) {
+    this.store.put('superRoles', role.id, role);
+    const channel = this.ensureChannel(role);
+    const session = this.store.session(channel.sessionId);
+    if (session.title !== role.name) this.store.put('sessions', session.id, {...session, title: role.name});
+    return channel;
+  }
   private savedExecutionLabel(role: Role) {
     const backend = role.execution, model = backend?.model;
     if (!backend || !model) return;
@@ -948,9 +978,7 @@ export class LakeSuperagent implements AgentHost {
           ...(has('avatar_id')?{avatarId:input.avatar_id==='auto'?undefined:input.avatar_id}:{}),
           ...(['execution','model_id'].some(has)?{execution:this.updatedExecution(role,input,available)}:{}),revision:role.revision+1 };
       } else throw new HttpError(400, "Specialist action must be create or update");
-      this.store.put("superRoles", role.id, role);
-      const channel = this.ensureChannel(role);
-      const session = this.store.session(channel.sessionId); session.title = role.name; this.store.put("sessions", session.id, session);
+      this.saveRoleProfile(role);
       this.store.put<RoleMutation>("superRoleMutations", key, { eventId: event.id, hash, result: role,
         savedExecution: this.savedExecutionLabel(role) });
       return role;

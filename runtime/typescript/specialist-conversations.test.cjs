@@ -137,6 +137,40 @@ test('the specialist form creates one project-local profile and channel without 
  assert.equal(otherChannel.projectId,other.id);
 });
 
+test('specialist profile edits update fixed group members and preserve original message authors',async t=>{
+ const f=await fixture(t,{count:0});
+ const original=await f.api(f.path+'/specialists','POST',{name:'检查专员',duties:'检查任务记录',avatarId:'beaver',requestId:'inspection'},201);
+ const teammate=await f.api(f.path+'/specialists','POST',{name:'协作专员',duties:'汇报复核证据',avatarId:'rabbit',requestId:'collaboration'},201);
+ const roleIds=[original.roleId,teammate.roleId];
+ const group=await f.api(f.path+'/groups','POST',{title:'协作群',roleIds,requestId:'create-group'},201);
+ const history={id:'original-reply',sessionId:group.sessionId,role:'assistant',text:'已完成检查。',createdAt:new Date().toISOString(),
+  author:{kind:'specialist',name:original.roleName,roleId:original.roleId,workerId:'old-worker',sessionId:original.sessionId}};
+ f.app.store.put('messages',history.id,history);
+ const profile={name:'  巡检专员  ',duties:'复核当前项目的运行状态',expectedRevision:original.roleRevision};
+ const rolePath=f.path+'/specialists/'+original.roleId;
+ const other=await f.api('/api/projects','POST',{name:'另一项目'});
+ await f.api(`/api/projects/${other.id}/superagent/specialists/${original.roleId}`,'PATCH',profile,404);
+ await f.api(rolePath,'PATCH',{...profile,execution:{kind:'native'}},400);
+
+ const saved=await f.api(rolePath,'PATCH',profile);
+ assert.equal(saved.roleId,original.roleId);
+ assert.equal(saved.sessionId,original.sessionId);
+ assert.equal(saved.roleRevision,original.roleRevision+1);
+ assert.equal(saved.roleName,'巡检专员');
+ assert.equal(saved.duties,profile.duties);
+ await f.api(rolePath,'PATCH',{...profile,name:'迟到的修改'},409);
+
+ const session=await f.api(`/api/sessions/${original.sessionId}`);
+ assert.equal(session.title,saved.roleName);
+ const state=await f.api(f.path);
+ assert.deepEqual(state.channels.find(channel=>channel.roleId===original.roleId),saved);
+ assert.deepEqual(state.chatGroups[0].members.map(member=>member.roleId),roleIds);
+ assert.deepEqual(state.chatGroups[0].members.map(member=>[member.roleName,member.duties]),
+  [[saved.roleName,saved.duties],[teammate.roleName,teammate.duties]]);
+ assert.deepEqual(f.app.store.messages(group.sessionId).find(message=>message.id===history.id),history);
+ assert.equal(f.requests.length,0);
+});
+
 test('Lake main chat can create a specialist and a fixed group, and group chat cannot create either',async t=>{
  const create='创建证据核对专员，头像用河狸，负责核对发布清单。请把它和干员1加入新群「发布复核群」。';
  const denied='在本群创建临时专员，并新建一个群组';

@@ -21,7 +21,8 @@ test('the project group list and the specialist rail have distinct entries',()=>
  assert.match(rail,/aria-label="运维专员.*有新消息未读"/);
  assert.match(rail,/class="sidebar-rail-button sidebar-specialist-create" aria-label="新建专员"/);
  assert.ok(rail.indexOf('sidebar-specialist-button')<rail.indexOf('sidebar-specialist-create'));
- assert.doesNotMatch(rail,/sidebar-pilot-entry|specialist-name-bubble|title="运维专员|aria-haspopup|aria-expanded/);
+ assert.match(rail,/<\/section><span class="specialist-name-bubble" aria-hidden="true" hidden=""><\/span>$/);
+ assert.doesNotMatch(rail,/sidebar-pilot-entry|title="运维专员|aria-haspopup|aria-expanded/);
  const entry=renderToStaticMarkup(createElement(PilotWorkspace,{...props,presentation:'entry'}));
  assert.match(entry,/sidebar-pilot-entry/);
  assert.doesNotMatch(entry,/运维专员|新建专员/);
