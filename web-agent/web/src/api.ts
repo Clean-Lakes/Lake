@@ -10,7 +10,6 @@ import type {
   AIView,
   AIPreset,
   AvailableModels,
-  AvailableModelEntry,
   Catalog,
   ChatGroup,
   SpecialistChannelInfo,
@@ -22,6 +21,7 @@ import type {
   QueueOperation,
   SendMessageResult,
   NavigationTrashItem,
+  ModelDisplayState,
   ModelSettings,
   ProviderCatalog,
   ProviderInput,
@@ -34,6 +34,8 @@ import type {
   Resource,
   ResourceTreeNode,
   SessionSnapshot,
+  SessionModelInput,
+  SessionModelState,
   ReasoningSettings,
   TerminalHistory,
   TerminalSession,
@@ -86,23 +88,19 @@ function post<T>(path: string, body: object): Promise<T> {
   return request<T>(path, { method: "POST", body: JSON.stringify(body) });
 }
 
-export type Bootstrap = {
+export type Bootstrap = ModelDisplayState & {
   authenticated: boolean;
-  modelConfigured: boolean;
-  modelName: string | null;
-  modelId?: string | null;
-  modelSelection?: AvailableModelEntry | null;
   terminalMode: "command" | "pty";
-  supportsImageInput?: boolean;
   aiRuntime?: "typescript" | "go" | "legacy";
   backendRuntime?: "typescript" | "go";
   memoryEngine?: "layered";
 };
 
-export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"modelId"|"modelSelection"|"supportsImageInput"> & {
+export type ModelSyncState = ModelDisplayState & {
   available: AvailableModels | null;
   providers: ProviderCatalog;
   settings: ModelSettings;
+  sessionModel?: SessionModelState;
 };
 
 export const api = {
@@ -176,6 +174,11 @@ export const api = {
   deleteGatewayConnection:(id:string)=>request(`/api/settings/gateway/connections/${encodeURIComponent(id)}`,{method:"DELETE"}),
   gatewayMessages:(id:string,cursor?:string,signal?:AbortSignal)=>request<import('../../shared/contracts').GatewayMessagePage>(`/api/settings/gateway/connections/${encodeURIComponent(id)}/messages?limit=20${cursor?`&cursor=${encodeURIComponent(cursor)}`:''}`,{signal}),
   testGatewayConnection:(id:string)=>request<{ready:boolean;message:string;lastReceivedAt?:string}>(`/api/settings/gateway/connections/${encodeURIComponent(id)}/test`,{method:"POST",body:"{}"}),
+  specialistMcp:(projectId:string,roleId:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SpecialistMcpState>(`/api/projects/${encodeURIComponent(projectId)}/superagent/specialists/${encodeURIComponent(roleId)}/mcp`,{signal}),
+  saveSpecialistMcpGrants:(projectId:string,roleId:string,value:{resourceGrants:import('../../shared/contracts').GatewayResourceGrant[];enabled?:boolean;expectedUpdatedAt?:string})=>request<import('../../shared/contracts').SpecialistMcpState>(`/api/projects/${encodeURIComponent(projectId)}/superagent/specialists/${encodeURIComponent(roleId)}/mcp/grants`,{method:"PUT",body:JSON.stringify(value)}),
+  createSpecialistMcpInvite:(projectId:string,roleId:string,value:{name?:string;recipient?:string;ttlMinutes?:number})=>request<{invite:import('../../shared/contracts').GatewayInviteView;state:import('../../shared/contracts').SpecialistMcpState}>(`/api/projects/${encodeURIComponent(projectId)}/superagent/specialists/${encodeURIComponent(roleId)}/mcp/invites`,{method:"POST",body:JSON.stringify(value)}),
+  revokeSpecialistMcpInvite:(projectId:string,roleId:string,inviteId:string)=>request<import('../../shared/contracts').SpecialistMcpState>(`/api/projects/${encodeURIComponent(projectId)}/superagent/specialists/${encodeURIComponent(roleId)}/mcp/invites/${encodeURIComponent(inviteId)}`,{method:"DELETE"}),
+  disconnectSpecialistMcp:(projectId:string,roleId:string)=>request<import('../../shared/contracts').SpecialistMcpState>(`/api/projects/${encodeURIComponent(projectId)}/superagent/specialists/${encodeURIComponent(roleId)}/mcp/disconnect`,{method:"POST",body:"{}"}),
   grafanaResourceWebhook: (id: string, signal?: AbortSignal) =>
     request<{source: import('../../shared/contracts').LakeEventSource | null}>(`/api/resources/${encodeURIComponent(id)}/grafana-webhook`, {signal}),
   createGrafanaResourceWebhook: (id: string) =>
@@ -240,7 +243,7 @@ export const api = {
       body: JSON.stringify({ url, name, protocol, ...(supportsImageInput === undefined ? {} : { supportsImageInput }), ...(supportsImageOutput === undefined ? {} : { supportsImageOutput }), ...(apiKey === undefined ? {} : { apiKey }) }),
     }),
   availableModels: (signal?: AbortSignal) => request<AvailableModels>("/api/settings/model/available", { signal }),
-  modelState: (signal?: AbortSignal) => request<ModelSyncState>("/api/settings/model/state", { signal }),
+  modelState: (signal?: AbortSignal, sessionId?: string | null) => request<ModelSyncState>(`/api/settings/model/state${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ""}`, { signal }),
   createProject: (name: string) => post<Project>("/api/projects", { name }),
   projectMemories: (projectId: string, query = "", includeExpired = false, includeDeleted = false, offset = 0, signal?: AbortSignal) => request<ProjectMemoryList>(`/api/projects/${encodeURIComponent(projectId)}/memory?query=${encodeURIComponent(query)}&includeExpired=${includeExpired}&includeDeleted=${includeDeleted}&offset=${offset}&limit=50`, {signal}),
   projectMemory: (projectId: string, key: string, includeDeleted = false, signal?: AbortSignal) => request<ProjectMemoryEntry>(`/api/projects/${encodeURIComponent(projectId)}/memory/${encodeURIComponent(key)}${includeDeleted ? "?includeDeleted=true" : ""}`, {signal}),
@@ -269,6 +272,7 @@ export const api = {
   aiOptions: (session: string) => request<Record<string, unknown>>(`/api/sessions/${encodeURIComponent(session)}/ai/options`),
   reasoning: (session: string) => request<ReasoningSettings>(`/api/sessions/${encodeURIComponent(session)}/ai/reasoning`),
   setReasoning: (session: string, modelId: string, effort: string) => post<ReasoningSettings>(`/api/sessions/${encodeURIComponent(session)}/ai/reasoning`, { modelId, effort }),
+  selectSessionModel: (session: string, input: SessionModelInput) => post<SessionModelState>(`/api/sessions/${encodeURIComponent(session)}/ai/model`, input),
   aiOperation: <T = unknown>(session: string, operation: string, data: object = {}) => post<T>(`/api/sessions/${encodeURIComponent(session)}/ai/${operation}`, data),
   aiPresets: () => request<AIPreset[]>("/api/ai/presets"),
   saveAIPreset: (preset: { id?: string; title: string; content: string }) => post<unknown>("/api/ai/presets", preset),

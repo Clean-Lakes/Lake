@@ -57,7 +57,7 @@ func (b *Server) validateHumanMessage(id string, data Object) humanMessage {
 			fail(400, "Invalid image attachments")
 		}
 		{
-			cfg := b.Models.Active()
+			cfg := b.sessionModel(id)
 			if cfg == nil || !cfg.SupportsImageInput {
 				fail(400, "所选模型未启用图片输入能力")
 			}
@@ -160,9 +160,9 @@ func (b *Server) submitHumanMessage(id string, data Object) Object {
 	if b.Store.ActiveWorkflowRun(id) != "" && b.Store.superSessionKind(id) != "worker" {
 		fail(409, "此会话正在执行工作流，请停止或等待工作流结束后再发送消息")
 	}
-	message := b.validateHumanMessage(id, data)
 	b.messageMu.Lock()
 	defer b.messageMu.Unlock()
+	message := b.validateHumanMessage(id, data)
 	if b.Store.superSessionKind(id) == "worker" || b.Store.superSessionKind(id) == "legacy" || b.Store.superSessionKind(id) == "role" {
 		return b.acceptSuperWorkerMessage(id, message, "")
 	}
@@ -240,7 +240,7 @@ func (b *Server) dispatchMessageQueueLocked(id string) {
 	head := b.Store.queuedHead(id)
 	data := object(parsed(stringOf(head["payload"])))
 	message := b.validateHumanMessage(id, data)
-	if b.Models.Active() == nil {
+	if b.sessionModel(id) == nil {
 		fail(400, "尚未配置模型")
 	}
 	b.bindManualTerminalForHuman(id, message.References, message.Reuse)

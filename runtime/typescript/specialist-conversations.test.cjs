@@ -255,6 +255,43 @@ test('groups save a fixed roster and use separate continuous Pilot conversations
  for(const table of ['superGoals','superOperations','acpRuns'])assert.equal(f.app.store.list(table).length,0,table);
 });
 
+test('Lake and two groups bind their own Pilot models and can save while another group is replying', async t => {
+ const f = await fixture(t, {count: 2, pilotReply: async ({event}, gate) => {
+  if (event.text === 'group A') await gate;
+  return {content: `收到 ${event.text}`};
+ }});
+ const roleIds = f.roles.map(role => role.id);
+ const groupA = await f.api(f.path + '/groups', 'POST', {title: '甲群', roleIds, requestId: 'model-a'}, 201);
+ const groupB = await f.api(f.path + '/groups', 'POST', {title: '乙群', roleIds, requestId: 'model-b'}, 201);
+ const provider = (await f.api('/api/settings/providers')).providers[0];
+ for (const name of ['model-a', 'model-b', 'model-lake']) {
+  provider.models.push({id: name, name, enabled: true, reasoningCapability: {levels: ['low', 'high']}});
+ }
+ await f.api(`/api/settings/providers/${provider.id}`, 'PUT', provider);
+ const paths = [groupA.sessionId, groupB.sessionId, f.pilot.routerSessionId].map(id => `/api/sessions/${id}`);
+ const save = (index, modelId, status = 200) => f.api(paths[index] + '/ai/model', 'POST', {providerId: provider.id, modelId}, status);
+ const send = (index, text) => f.api(paths[index] + '/messages', 'POST', {text, ignoreProjectMemory: true}, 202);
+ const stateA = await save(0, 'model-a');
+ await f.api(paths[0] + '/ai/reasoning', 'POST', {modelId: stateA.modelId, effort: 'low'});
+ await send(0, 'group A');
+ await until(() => f.requests, requests => requests.length === 1);
+ await save(0, 'model-b', 409);
+ const stateB = await save(1, 'model-b');
+ const stateLake = await save(2, 'model-lake');
+ await f.api(paths[1] + '/ai/reasoning', 'POST', {modelId: stateB.modelId, effort: 'high'});
+ f.release();
+ await send(1, 'group B');
+ await send(2, 'Lake');
+ for (const path of paths) await until(() => f.api(path + '/snapshot'), snap => snap.messages.some(message => message.role === 'assistant'));
+ assert.deepEqual(f.requests.map(request => [pilotTurn(request).event.text, request.model, request.reasoning_effort]), [
+  ['group A', 'model-a', 'low'], ['group B', 'model-b', 'high'], ['Lake', 'model-lake', undefined],
+ ]);
+ for (const [index, state] of [stateA, stateB, stateLake].entries()) {
+  assert.deepEqual((await f.api(paths[index] + '/snapshot')).model, state);
+ }
+ assert.equal((await f.api('/api/bootstrap')).modelName, 'fixture');
+});
+
 test('an explicit group invitation uses text-only Codex for the selected roster',async t=>{
  const f=await fixture(t,{count:3,acp:true});
  const group=await f.api(f.path+'/groups','POST',{title:'协作讨论',roleIds:f.roles.slice(0,2).map(role=>role.id),requestId:'codex-group'},201);

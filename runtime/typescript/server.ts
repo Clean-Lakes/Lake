@@ -17,11 +17,13 @@ import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { isSea } from "node:sea";
 import { homedir } from "node:os";
 import type {
+  ModelDisplayState,
   ModelProvider,
   ProviderModel,
   Resource,
   Project,
   ResourceTreeNode,
+  SessionModelState,
 } from "../../web-agent/shared/contracts";
 import { LakeStore, HttpError, id, now, privateDirectory } from "./store";
 import { LakeAgents } from "./agent";
@@ -45,6 +47,7 @@ import { importLegacyModelSettings } from "./dev-settings";
 import {validateRuntimeProfile} from './runtime-profile';
 import { LakeSuperagent } from "./superagent";
 import { LakeGateway, type GatewayAuth } from "./gateway";
+import { GatewayLanIngress } from "./gateway-ingress";
 import { LakeEventReceiver } from "./event-receiver";
 import { applyLegacyMigration, importLegacySSH, importLegacyMySQL, importLegacyMCP, importLegacyServices, importLegacyWorkflows, loadLegacyView } from "./migration";
 import { digest } from "./tasks";
@@ -166,6 +169,7 @@ export async function startLakeServer(options: ServerOptions) {
   let agents: LakeAgents | undefined;
   let superagent: LakeSuperagent | undefined;
   let gateway: LakeGateway | undefined;
+  let gatewayIngress: GatewayLanIngress | undefined;
   let eventReceiver: LakeEventReceiver | undefined;
   let security: LakeSecurity | undefined;
   let memory: LakeMemory | undefined;
@@ -206,14 +210,15 @@ export async function startLakeServer(options: ServerOptions) {
     home: options.home,
     data: options.data,
   });
-  const server = createServer(async (request, response) => {
+  const handleRequest = async (request: IncomingMessage, response: ServerResponse, ingressOrigin?: string) => {
     response.setHeader("X-Content-Type-Options", "nosniff");
     response.setHeader("Referrer-Policy", "no-referrer");
     try {
-      const url = new URL(request.url ?? "/", origin || "http://localhost");
+      const requestOrigin = ingressOrigin ?? origin;
+      const url = new URL(request.url ?? "/", requestOrigin || "http://localhost");
       const path = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
       const method = request.method ?? "GET";
-      if (request.headers.origin && request.headers.origin !== origin)
+      if (request.headers.origin && request.headers.origin !== origin && (!ingressOrigin || request.headers.origin !== ingressOrigin))
         throw new HttpError(403, "请求来源不受信任");
       if (path[0] !== "api") {
         if (method !== "GET" && method !== "HEAD") throw new HttpError(405, "不支持此请求方法");
@@ -262,7 +267,10 @@ export async function startLakeServer(options: ServerOptions) {
           .find((part) => part.startsWith("lake_session="))
           ?.slice("lake_session=".length) ?? "";
       let gatewayAuth: GatewayAuth | undefined;
-      if (path[1] === "gateway") {
+      const isGatewayInviteEndpoint = path[1] === "gateway" && path[2] === "invites" && (path.length === 4 && method === "GET" || path.length === 5 && path[4] === "redeem" && method === "POST");
+      if (isGatewayInviteEndpoint) {
+        if (!gateway) throw new HttpError(503, "服务正在启动");
+      } else if (path[1] === "gateway") {
         // External agent clients authenticate with their own scoped token.
         // The UI session token deliberately cannot open the gateway, and the
         // gateway token deliberately cannot open anything else.
@@ -329,18 +337,13 @@ export async function startLakeServer(options: ServerOptions) {
         if (route?.mode === 'specialist' && !superagent!.gatewaySpecialists(projectId).specialists.some(role => role.roleId === route.roleId))
           throw new HttpError(400, '指定专员不属于当前项目或已删除');
       };
-      const selection = () =>
-        store!.modelSelection();
+      const selection = () => store!.modelSelection();
       const catalog = () => ({
         providers: store!.list<ModelProvider>("providers"),
         activeProviderId: selection()?.providerId ?? "",
         activeModelId: selection()?.modelId ?? "",
       });
-      const selected = () => {
-        const choice = selection();
-        const provider = choice && store!.modelProvider(choice.providerId);
-        return { provider, model: provider?.models.find((model) => model.id === choice?.modelId) };
-      };
+      const selected = (sessionId?: string) => store!.resolveModel(store!.modelSelection(sessionId));
       const modelSettings = () => {
         const { provider, model } = selected();
         return {
@@ -377,23 +380,31 @@ export async function startLakeServer(options: ServerOptions) {
           ...(provider?.id === 'magpie' ? {source: 'magpie'} : {}),
         };
       };
-      const bootstrap = () => {
-        const { provider, model } = selected();
+      const modelDisplay = (sessionId?: string): ModelDisplayState => {
+        const { provider, model } = selected(sessionId);
         return {
-          authenticated: true,
           modelConfigured: !!model,
           modelName: model?.name ?? null,
           modelId: model && provider ? reasoningModelIdentity(provider, model) : null,
           modelSelection: model && provider ? entry(provider, model) : null,
           supportsImageInput: model?.supportsImageInput ?? false,
-          terminalMode: terminals?.supported ? "pty" : "command",
-          aiRuntime: "typescript",
-          memoryEngine: "layered",
-          backendRuntime: "typescript",
-          upstreamVersion: "3.17.2",
-          recoveryReadOnly: security?.readOnly() ?? true,
         };
       };
+      const sessionModel = (sessionId: string | null): SessionModelState | undefined => {
+        if (!sessionId) return;
+        const choice = store!.sessionModelChoice(sessionId);
+        return choice && {...modelDisplay(sessionId), revision: choice.revision};
+      };
+      const bootstrap = () => ({
+        authenticated: true,
+        ...modelDisplay(),
+        terminalMode: terminals?.supported ? "pty" : "command",
+        aiRuntime: "typescript",
+        memoryEngine: "layered",
+        backendRuntime: "typescript",
+        upstreamVersion: "3.17.2",
+        recoveryReadOnly: security?.readOnly() ?? true,
+      });
       let result: unknown;
       let status = 200;
       if (path[1] === "bootstrap") result = bootstrap();
@@ -495,12 +506,7 @@ export async function startLakeServer(options: ServerOptions) {
         if (action && method !== (["test", "select"].includes(action) ? "POST" : "GET")) throw new HttpError(405, "不支持此模型请求");
         if (action === "test") result = await agents.testModel(data);
         else if (path[3] === "select") {
-          const provider = store.modelProvider(String(data.providerId));
-          if (
-            !provider?.enabled ||
-            !provider.models.some((model) => model.id === data.modelId && model.enabled)
-          )
-            throw new HttpError(400, "模型不可用");
+          if (typeof data.providerId !== 'string' || typeof data.modelId !== 'string') throw new HttpError(400, '模型不可用');
           store.selectModel(data.providerId, data.modelId);
           result = catalog();
         } else if (path[3] === "state")
@@ -509,6 +515,7 @@ export async function startLakeServer(options: ServerOptions) {
             available: available(),
             providers: catalog(),
             settings: modelSettings(),
+            sessionModel: sessionModel(url.searchParams.get('sessionId')),
           };
         else if (path[3] === "available") result = available();
         else if (path[3] === "capacity")
@@ -645,6 +652,70 @@ export async function startLakeServer(options: ServerOptions) {
           result = await superagent.deleteRole(path[2], path[5], data.revision);
         else if (path.length === 7 && path[4] === 'specialists' && path[6] === 'execution' && method === 'PUT')
           result = superagent.setRoleExecution(path[2],path[5],data);
+        else if (path.length >= 7 && path[4] === 'specialists' && path[6] === 'mcp') {
+          const project = store.project(path[2]);
+          const roleInfo = superagent.gatewaySpecialists(path[2]).specialists.find(item => item.roleId === path[5]);
+          if (!roleInfo) throw new HttpError(404, '专员不存在或已删除');
+          const specialistChannel = superagent.workspace(path[2]).channels?.find(item => item.roleId === path[5]);
+          const projectResources = store.catalog().resources.filter(resource => resource.projectId === path[2]);
+          const resourceIds = new Set(projectResources.map(resource => resource.id));
+          const readMcpState = async () => {
+            const gatewayOrigin = await gatewayIngress!.ensure(origin);
+            const connection = gateway!.specialistConnection(path[2], path[5]);
+            return {
+              projectId: path[2],
+              projectName: project.name,
+              roleId: roleInfo.roleId,
+              roleName: roleInfo.name,
+              ...(specialistChannel?.avatarId ? { avatarId: specialistChannel.avatarId } : {}),
+              connection: connection ? { ...connection, lastReceivedAt: superagent!.lastGatewayMessageAt(connection.id) } : null,
+              resources: projectResources.map(resource => ({
+                id: resource.id,
+                name: resource.name,
+                kind: resource.kind,
+                status: resource.status,
+                host: resource.ssh?.host ?? (typeof resource.settings?.host === 'string' ? resource.settings.host : typeof resource.settings?.endpoint === 'string' ? resource.settings.endpoint : typeof resource.settings?.baseUrl === 'string' ? resource.settings.baseUrl : undefined),
+              })),
+              invites: connection ? gateway!.listInvites(connection.id, gatewayOrigin, roleInfo.name) : [],
+              remoteEndpoint: `${gatewayOrigin}/api/gateway/mcp`,
+            };
+          };
+          if (path.length === 7 && method === 'GET') {
+            result = await readMcpState();
+          } else if (path.length === 8 && path[7] === 'grants' && method === 'PUT') {
+            const rawGrants = Array.isArray(data.resourceGrants) ? data.resourceGrants : [];
+            for (const entry of rawGrants) {
+              const rid = typeof entry?.resourceId === 'string' ? entry.resourceId : '';
+              if (!resourceIds.has(rid)) throw new HttpError(400, '授权资源不属于当前项目');
+            }
+            gateway!.saveSpecialistGrants({
+              projectId: path[2],
+              roleId: path[5],
+              roleName: roleInfo.name,
+              resourceGrants: rawGrants,
+              ...(data.enabled !== undefined ? { enabled: Boolean(data.enabled) } : {}),
+              ...(typeof data.expectedUpdatedAt === 'string' ? { expectedUpdatedAt: data.expectedUpdatedAt } : {}),
+            });
+            result = await readMcpState();
+          } else if (path.length === 8 && path[7] === 'invites' && method === 'POST') {
+            const connection = gateway!.specialistConnection(path[2], path[5]);
+            if (!connection) throw new HttpError(409, '请先确认资源授权，再生成接入邀请');
+            const gatewayOrigin = await gatewayIngress!.ensure(origin);
+            const invite = gateway!.createInvite(connection.id, data, gatewayOrigin, roleInfo.name);
+            status = 201;
+            result = { invite, state: await readMcpState() };
+          } else if (path.length === 9 && path[7] === 'invites' && method === 'DELETE') {
+            const connection = gateway!.specialistConnection(path[2], path[5]);
+            if (!connection) throw new HttpError(404, '接入连接不存在');
+            gateway!.revokeInvite(connection.id, path[8]);
+            result = await readMcpState();
+          } else if (path.length === 8 && path[7] === 'disconnect' && method === 'POST') {
+            const connection = gateway!.specialistConnection(path[2], path[5]);
+            if (!connection) throw new HttpError(404, '接入连接不存在');
+            gateway!.updateConnection(connection.id, { enabled: false, expectedUpdatedAt: connection.updatedAt });
+            result = await readMcpState();
+          } else throw new HttpError(405, '不支持此专员 MCP 接入操作');
+        }
         else if (path.length !== 4) throw new HttpError(404, "Super-agent 接口不存在");
         else if (method === "GET") result = superagent.workspace(path[2]);
         else if (method === "POST") result = superagent.ensure(path[2]);
@@ -734,7 +805,7 @@ export async function startLakeServer(options: ServerOptions) {
         if (session.workspaceRole === "legacy" && !["GET", "HEAD"].includes(method) && !(path[3] === "presentation" || path.length === 3 && method === "PATCH"))
           throw new HttpError(409, "旧 Go 会话为只读档案；请在 Pilot 中提出新的明确要求，历史任务与操作不会重放");
         if (method === "GET" && (path[3] === "snapshot" || path[3] === "ai")) {
-          await agents.prepareRedaction();
+          await agents.prepareRedaction(sessionId);
           await loadLegacyView(store, sessionId, (value) => agents!.redact(value));
         }
         if (path[3] === "messages-read" && path.length === 4 && method === "PUT") result = acknowledgeConversation(store, sessionId, data.cursor);
@@ -771,7 +842,12 @@ export async function startLakeServer(options: ServerOptions) {
         } else if (path.length === 4 && path[3] === "presentation") {
           if (method !== "PUT") throw new HttpError(405, "不支持此请求方法");
           result = navigation.presentation(sessionId, data);
-        } else if (path[3] === "snapshot" && path.length === 4 && method === "GET") { const snapshot = store.snapshot(sessionId); snapshot.ai = store.viewPage(sessionId); result = superagent.decorate(snapshot,url.searchParams.get("taskId")??undefined); }
+        } else if (path[3] === "snapshot" && path.length === 4 && method === "GET") {
+          const snapshot = store.snapshot(sessionId);
+          snapshot.ai = store.viewPage(sessionId);
+          snapshot.model = sessionModel(sessionId);
+          result = superagent.decorate(snapshot,url.searchParams.get("taskId")??undefined);
+        }
         else if (path[3] === "events" && path.length === 4 && method === "GET") {
           const after = Number(url.searchParams.get("after") ?? 0);
           if (!Number.isSafeInteger(after) || after < 0) throw new HttpError(400, "无效的事件游标");
@@ -816,7 +892,7 @@ export async function startLakeServer(options: ServerOptions) {
           if (draining) throw new HttpError(503, "服务正在退出");
           if (data.images?.length) throw new HttpError(501, '图片可以作为普通附件发送');
           if (data.terminalReuse) throw new HttpError(501, '终端交接尚未接入，未发送此消息');
-          await agents.prepareRedaction();
+          await agents.prepareRedaction(sessionId);
           const original = String(data.text ?? '');
           const input = messageInput(store, sessionId, agents.redact(original), data);
           const text = !original.trim() && input.files?.length ? '请查看随消息附上的文件。' : original;
@@ -897,17 +973,30 @@ export async function startLakeServer(options: ServerOptions) {
             case 'clearReferences':
               if (superagent.messageQueueBusy(sessionId)) throw new HttpError(409, '请先结束当前回复再清除资源访问记忆');
               store.delete('sessionResourceReferences', sessionId); result = {}; break;
-            case "reasoning":
+            case "model": {
+              if (session.workspaceRole === 'worker' || session.workspaceRole === 'role')
+                throw new HttpError(409, '专员模型由专员配置管理');
+              if (typeof data.providerId !== 'string' || typeof data.modelId !== 'string')
+                throw new HttpError(400, '请选择已启用的供应商和模型');
+              if (superagent.modelChangeBusy(sessionId) || messageQueue!.get(sessionId).items.length)
+                throw new HttpError(409, '请先结束本轮并处理待发送消息，再切换模型');
+              const event = store.selectSessionModel(sessionId, {providerId: data.providerId, modelId: data.modelId});
+              if (event) broadcast(event);
+              result = sessionModel(sessionId);
+              break;
+            }
+            case "reasoning": {
+              const {provider, model} = selected(sessionId);
               if (method === 'POST') {
                 if (session.workspaceRole === 'worker') throw new HttpError(409, '当前任务的模型选项已冻结，请在 Pilot 或专员频道设置后续任务');
-                if (superagent.messageQueueBusy(sessionId) || messageQueue!.get(sessionId).items.length) throw new HttpError(409, '请先结束本轮并处理待发送消息，再设置思考级别');
-                const {provider, model} = selected();
+                if (superagent.modelChangeBusy(sessionId) || messageQueue!.get(sessionId).items.length) throw new HttpError(409, '请先结束本轮并处理待发送消息，再设置思考级别');
                 session.options = {...session.options, ...reasoningUpdate(provider, model, data)};
                 store.put('sessions', sessionId, session);
                 broadcast(store.event(sessionId, 'session'));
               }
-              result = reasoningSettings(selected().provider, selected().model, session.options);
+              result = reasoningSettings(provider, model, session.options);
               break;
+            }
             default:
               throw new HttpError(501, "此会话操作尚未迁移完成");
           }
@@ -919,7 +1008,10 @@ export async function startLakeServer(options: ServerOptions) {
           if (["router", "role", "worker", "group"].includes(session.workspaceRole ?? "")) throw new HttpError(409, "受管理会话保留任务与频道身份；请使用停止任务或删除专员");
           await messageQueue!.archiveSession(sessionId);
           await agents.abort(sessionId);
-          store.delete("sessions", sessionId);
+          store.transaction(() => {
+            store!.delete('sessionModelChoices', sessionId);
+            store!.delete('sessions', sessionId);
+          });
           result = {};
         } else if (method === "GET" && path.length === 3) result = session;
         else throw new HttpError(path.length === 3 ? 405 : 404, "会话接口不存在或不支持此请求方法");
@@ -948,6 +1040,123 @@ export async function startLakeServer(options: ServerOptions) {
         else if (path.length === 4 && method === "DELETE") result = extensions!.removeSkill(path[3]);
         else throw new HttpError(405, "不支持此 Skill 配置操作");
       } else if (path[1] === "gateway") {
+        if (path[2] === "invites" && path.length === 4 && method === "GET") {
+          const gatewayOrigin = ingressOrigin ?? (await gatewayIngress!.ensure(origin));
+          result = gateway!.inspectInvite(path[3], gatewayOrigin);
+        } else if (path[2] === "invites" && path.length === 5 && path[4] === "redeem" && method === "POST") {
+          if (draining) throw new HttpError(503, "服务正在退出");
+          const gatewayOrigin = ingressOrigin ?? (await gatewayIngress!.ensure(origin));
+          result = gateway!.redeemInvite(path[3], gatewayOrigin);
+        } else if (path[2] === "mcp" && path.length === 3 && method === "POST") {
+          const auth = gateway!.authenticate(bearer);
+          const connection = gateway!.requireConnection(auth);
+          const guard = () => {
+            const current = gateway!.requireConnection(gateway!.authenticate(bearer));
+            if (current.id !== connection.id || current.updatedAt !== connection.updatedAt) throw new HttpError(409, '连接配置已变化，请重新读取后重试');
+            validateGatewayScope(current.projectId, current.routing);
+          };
+          guard();
+          const rpcId = data.id ?? null;
+          const rpcMethod = typeof data.method === "string" ? data.method : "";
+          const params = (data.params && typeof data.params === "object" && !Array.isArray(data.params) ? data.params : {}) as Record<string, unknown>;
+          const mcpTools = [
+            {
+              name: "send_message",
+              description: "向此连接绑定的 Lake 专员/项目发送请求。若涉及需审批资源，专员会在 Lake 主对话发起人工审批，获批后执行。",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  text: { type: "string" },
+                  thread_id: { type: "string" },
+                  client_message_id: { type: "string" },
+                  thread_title: { type: "string" },
+                  reply_to: { type: "string" },
+                },
+                required: ["text", "thread_id", "client_message_id"],
+                additionalProperties: false,
+              },
+            },
+            {
+              name: "get_message_status",
+              description: "查询本连接发送消息的处理状态、审批结果与专员报告。",
+              inputSchema: {
+                type: "object",
+                properties: { message_id: { type: "string" } },
+                required: ["message_id"],
+                additionalProperties: false,
+              },
+            },
+            {
+              name: "wait_message",
+              description: "等待消息进入审批、回复或结束状态。",
+              inputSchema: {
+                type: "object",
+                properties: { message_id: { type: "string" }, timeout_seconds: { type: "integer" } },
+                required: ["message_id"],
+                additionalProperties: false,
+              },
+            },
+            {
+              name: "test_connection",
+              description: "检查当前 Streamable HTTP MCP 连接和已授权资源范围。",
+              inputSchema: { type: "object", properties: {}, additionalProperties: false },
+            },
+          ];
+          if (rpcMethod === "initialize") {
+            result = {
+              jsonrpc: "2.0",
+              id: rpcId,
+              result: {
+                protocolVersion: typeof params.protocolVersion === "string" ? params.protocolVersion : "2025-03-26",
+                capabilities: { tools: {} },
+                serverInfo: { name: "lake-remote-mcp", version: __LAKE_VERSION__ },
+              },
+            };
+          } else if (rpcMethod === "notifications/initialized" || rpcMethod === "ping") {
+            result = { jsonrpc: "2.0", id: rpcId, result: {} };
+          } else if (rpcMethod === "tools/list") {
+            result = { jsonrpc: "2.0", id: rpcId, result: { tools: mcpTools } };
+          } else if (rpcMethod === "tools/call") {
+            const toolName = typeof params.name === "string" ? params.name : "";
+            const args = (params.arguments && typeof params.arguments === "object" && !Array.isArray(params.arguments) ? params.arguments : {}) as Record<string, unknown>;
+            try {
+              let payload: unknown;
+              if (toolName === "test_connection") {
+                payload = { connection, ready: true, message: "Lake 远程 MCP 连接已就绪。", lastReceivedAt: superagent.lastGatewayMessageAt(connection.id) };
+              } else if (toolName === "send_message") {
+                if (draining) throw new HttpError(503, "服务正在退出");
+                payload = await superagent.gatewayMessage(connection, {
+                  text: String(args.text ?? ""),
+                  threadId: String(args.thread_id ?? ""),
+                  clientMessageId: String(args.client_message_id ?? ""),
+                  ...(args.thread_title !== undefined ? { threadTitle: String(args.thread_title) } : {}),
+                  ...(args.reply_to !== undefined ? { replyTo: String(args.reply_to) } : {}),
+                }, guard);
+              } else if (toolName === "get_message_status") {
+                payload = await superagent.gatewayMessageStatus(connection.id, args.message_id, 0, guard);
+              } else if (toolName === "wait_message") {
+                const waitSeconds = Math.min(60, Math.max(0, Number(args.timeout_seconds ?? 30) || 0));
+                payload = await superagent.gatewayMessageStatus(connection.id, args.message_id, waitSeconds, guard);
+              } else {
+                throw new HttpError(404, `未知 MCP 工具：${toolName}`);
+              }
+              guard();
+              result = {
+                jsonrpc: "2.0",
+                id: rpcId,
+                result: { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] },
+              };
+            } catch (error) {
+              result = {
+                jsonrpc: "2.0",
+                id: rpcId,
+                result: { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], isError: true },
+              };
+            }
+          } else {
+            result = { jsonrpc: "2.0", id: rpcId, error: { code: -32601, message: `Unsupported MCP method: ${rpcMethod}` } };
+          }
+        } else {
         const auth = gateway!.authenticate(bearer);
         if (path[2] === 'connection' || path[2] === 'messages') {
           const connection = gateway!.requireConnection(auth);
@@ -993,6 +1202,7 @@ export async function startLakeServer(options: ServerOptions) {
           result = await superagent.instructionStatus(path[3], waitSeconds);
           gateway!.requireRole(gateway!.authenticate(bearer), event.preferredRoleId ?? '');
         } else throw new HttpError(405, "不支持此网关请求");
+        }
       } else if (path[1] === "settings" && path[2] === "gateway") {
         if (path[3] === 'connections') {
           if (path.length === 4 && method === 'GET') {
@@ -1051,7 +1261,15 @@ export async function startLakeServer(options: ServerOptions) {
         ssh?.scrub(error instanceof Error ? error.message : String(error)) ?? agents?.redact(error instanceof Error ? error.message : String(error)) ?? "请求失败";
       json(response, status, { error: message });
     }
+  };
+  const server = createServer((request, response) => {
+    void handleRequest(request, response);
   });
+  gatewayIngress = new GatewayLanIngress(
+    (request, response, lanOrigin) => { void handleRequest(request, response, lanOrigin); },
+    () => store?.get<number>("settings", "gatewayLanPort"),
+    port => { store?.put("settings", "gatewayLanPort", port); },
+  );
   const close = async () => {
     if (closed) return;
     closed = true;
@@ -1067,6 +1285,7 @@ export async function startLakeServer(options: ServerOptions) {
     await ssh?.close();
     services?.close();mysql?.close();
     await eventReceiver?.close();
+    await gatewayIngress?.close();
     await execution?.close();
     await extensions?.close();
     gateway?.close();
@@ -1134,6 +1353,11 @@ export async function startLakeServer(options: ServerOptions) {
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("无法确定服务端口");
     origin = `http://localhost:${address.port}`;
+    try {
+      if (gateway?.connections().some(connection => connection.enabled && connection.resourceGrants !== undefined)) {
+        await gatewayIngress?.ensure(origin);
+      }
+    } catch { /* LAN ingress remains lazily retryable on demand. */ }
     const runtimePath = join(options.data, "runtime.json");
     const pending = join(options.data, `.runtime-${id()}`);
     await writeFile(pending, encode({ origin, token, pid: process.pid }), { mode: 0o600 });
