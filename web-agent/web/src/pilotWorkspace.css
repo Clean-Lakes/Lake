@@ -29,7 +29,7 @@
  margin-bottom:2px;
  padding:6px var(--sidebar-row-inset);
  gap:var(--sidebar-icon-gap);
- border-radius:var(--radius-settings-control);
+ border-radius:var(--radius-window);
  corner-shape:var(--corner-window);
 }
 .sidebar.workspace-navigation .pilot-workspace .sidebar-pilot-entry {
