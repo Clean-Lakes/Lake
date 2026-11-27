@@ -22,6 +22,8 @@ import type { ToolEntry, ToolExecutionContext } from "./sdk";
 import type { AIApproval, AIQuestionRequest, GatewayInstructionStatus, Message, SessionEvent, SessionSnapshot, SpecialistChannelInfo,
   SpecialistChannelPage, SpecialistQuestion, SuperProject, SuperTask, SuperWorker, SuperWorkspace } from "../../web-agent/shared/contracts";
 import type { GatewaySpecialistRef, GatewayConnection, GatewayMessage, GatewayMessageInput, GatewayMessagePage } from "../../web-agent/shared/contracts";
+import { activeResourceGrants } from "./gateway";
+import { resolveGatewayResourceScope } from "./gateway-approvals";
 import type { AgentHost, HostProfile, HostToolContext, TurnOutcome } from "./agent-host";
 import {TaskDeadlineReached} from "./task-deadline";
 import {chooseSpecialistExecution,specialistExecutionOptions,type SpecialistExecutionOption} from './specialist-execution';
@@ -3506,10 +3508,62 @@ export class LakeSuperagent implements AgentHost {
       if(source.projectId!==connection.projectId || source.external?.threadId!==threadId)throw new HttpError(404,'回复目标不属于此接入会话');
     }
     const project=this.ensure(connection.projectId);
-    const preferredRoleId=connection.routing.mode==='specialist' ? this.role(connection.projectId,connection.routing.roleId).id : undefined;
-    const message=await this.send(project.routerSessionId,instruction,undefined,false,undefined,undefined,
-      {kind:'mcp',connectionId:connection.id,connectionName:connection.name,threadId,...(threadTitle&&{threadTitle}),clientMessageId},
-      {key:digest(['gatewayMessage',connection.id,threadId,clientMessageId]),hash:digest({instruction,threadId,threadTitle,replyTo}),guard,preferredRoleId,replyTo}) as {id:string;duplicate?:boolean};
+    const preferredRole=connection.routing.mode==='specialist' ? this.role(connection.projectId,connection.routing.roleId) : undefined;
+    const preferredRoleId=preferredRole?.id;
+    const external={kind:'mcp' as const,connectionId:connection.id,connectionName:connection.name,threadId,...(threadTitle&&{threadTitle}),clientMessageId};
+    const receiptKey=digest(['gatewayMessage',connection.id,threadId,clientMessageId]);
+    const receiptHash=digest({instruction,threadId,threadTitle,replyTo});
+
+    if (connection.resourceGrants !== undefined) {
+      const grants = activeResourceGrants(connection);
+      const allProjectResources = this.store.catalog().resources.filter(resource => resource.projectId === connection.projectId);
+      const grantMap = new Map(grants.map(grant => [grant.resourceId, grant]));
+      const resourceHost = (resource: Resource) =>
+        resource.ssh?.host ?? (typeof resource.settings?.host === 'string' ? resource.settings.host : typeof resource.settings?.endpoint === 'string' ? resource.settings.endpoint : typeof resource.settings?.baseUrl === 'string' ? resource.settings.baseUrl : undefined);
+      const grantedResources = allProjectResources
+        .filter(resource => grantMap.has(resource.id))
+        .map(resource => ({ id: resource.id, name: resource.name, kind: resource.kind, host: resourceHost(resource) }));
+      if (!grantedResources.length) throw new HttpError(403, '此 MCP 连接暂无有效授权资源或授权已过期，请在 Lake 中确认资源授权');
+      const scope = resolveGatewayResourceScope({
+        text: instruction,
+        grantedResources,
+        allProjectResources: allProjectResources.map(resource => ({ id: resource.id, name: resource.name, kind: resource.kind, host: resourceHost(resource) })),
+      });
+      if (scope.blocked) throw new HttpError(403, `请求涉及未授权资源「${scope.unauthorizedResource}」，已拦截`);
+      const channel = preferredRole ? this.ensureChannel(preferredRole) : undefined;
+      const specialistNotice = preferredRole ? {
+        roleId: preferredRole.id,
+        roleName: preferredRole.name,
+        ...(preferredRole.avatarId ? { avatarId: preferredRole.avatarId } : {}),
+        ...(channel ? { channelSessionId: channel.sessionId } : {}),
+        execution: this.roleExecution(preferredRole),
+        ...(scope.matchedResourceNames.length ? { resourceNames: scope.matchedResourceNames } : {}),
+      } : undefined;
+      const message = await this.send(
+        project.routerSessionId,
+        instruction,
+        undefined,
+        false,
+        { resourceIds: scope.resourceIds, mentions: [], references: [] },
+        undefined,
+        { ...external, ...(specialistNotice && { specialistNotice }) },
+        { key: receiptKey, hash: receiptHash, guard, preferredRoleId, replyTo },
+      ) as { id: string; duplicate?: boolean };
+      const event = this.gatewayEvent(connection.id, message.id);
+      return {
+        instructionId: message.id,
+        eventId: event.id,
+        sessionId: event.sessionId,
+        projectId: event.projectId,
+        connectionId: connection.id,
+        threadId,
+        ...(event.preferredRoleId && { roleId: event.preferredRoleId }),
+        ...(message.duplicate && { duplicate: true }),
+      };
+    }
+
+    const message=await this.send(project.routerSessionId,instruction,undefined,false,undefined,undefined,external,
+      {key:receiptKey,hash:receiptHash,guard,preferredRoleId,replyTo}) as {id:string;duplicate?:boolean};
     const event=this.gatewayEvent(connection.id,message.id);
     return {instructionId:message.id,eventId:event.id,sessionId:event.sessionId,projectId:event.projectId,connectionId:connection.id,threadId,
       ...(event.preferredRoleId&&{roleId:event.preferredRoleId}),...(message.duplicate&&{duplicate:true})};

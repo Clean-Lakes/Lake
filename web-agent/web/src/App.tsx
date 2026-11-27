@@ -8,6 +8,7 @@ import {SpecialistTaskDetail} from './SpecialistTaskDetail';
 import {SpecialistTaskMetadata} from './SpecialistTaskList';
 import {SpecialistTaskControls} from './SpecialistTaskControls';
 import {PilotSpecialistQuestions} from './PilotSpecialistQuestions';
+import {SpecialistMcpDialog} from './SpecialistMcpDialog';
 import './specialistChannel.css';
 import './specialistTaskList.css';
 import {PilotWorkspace,usePilotWorkspace} from './PilotWorkspace';
@@ -352,6 +353,12 @@ function AppContent() {
     if(!typescriptBackend||!projectId)return;
     setModelMenuOpen(false);
     setCodexConfiguration({projectId,anchor});
+  },[typescriptBackend,setModelMenuOpen]);
+  const [specialistMcp,setSpecialistMcp]=useState<{channel:SpecialistChannelInfo;anchor?:HTMLElement|null}|null>(null);
+  const openSpecialistMcp=useCallback((channel:SpecialistChannelInfo,anchor?:HTMLElement|null)=>{
+    if(!typescriptBackend)return;
+    setModelMenuOpen(false);
+    setSpecialistMcp({channel,anchor});
   },[typescriptBackend,setModelMenuOpen]);
   const [reasoningSaving,setReasoningSaving]=useState<ReadonlySet<string>>(()=>new Set());
   const modelSaveSessions = useRef(new Set<string>());
@@ -2080,6 +2087,7 @@ function AppContent() {
     pilotDisabled:!bootstrap?.authenticated,disabled:!connected,
     onDeleted:(channel:SpecialistChannelInfo)=>pilotWorkspace.removeRole(channel.roleId),
     onCodexSettings:typescriptBackend?openCodexConfiguration:undefined,
+    onSpecialistMcp:typescriptBackend?openSpecialistMcp:undefined,
     workspace:pilotWorkspace.workspace,error:pilotWorkspace.error,
     selectedId:sessionSelected?route.sessionId:null,
     selectedRoleId:sessionSelected&&selectedSession.projectId===pilotWorkspace.workspace?.project.projectId?
@@ -2337,6 +2345,10 @@ function AppContent() {
     {codexConfiguration&&!isWorkspacePage&&<CodexModelConfiguration key={codexConfiguration.projectId}
       {...codexConfiguration} projectName={projectList.find(project=>project.id===codexConfiguration.projectId)?.name??'当前项目'}
       onClose={()=>setCodexConfiguration(null)}/>}
+    {specialistMcp&&!isWorkspacePage&&<SpecialistMcpDialog key={`${specialistMcp.channel.projectId}:${specialistMcp.channel.roleId}`}
+      channel={specialistMcp.channel} anchor={specialistMcp.anchor}
+      projectName={projectList.find(project=>project.id===specialistMcp.channel.projectId)?.name??'当前项目'}
+      onClose={()=>setSpecialistMcp(null)} onUpdated={()=>void pilotWorkspace.refresh()}/>}
     {terminalTabContext && <NavigationMenu title="终端" x={terminalTabContext.x} y={terminalTabContext.y} onClose={() => setTerminalTabContext(null)} actions={[
       {label: "打开终端", run: () => selectTerminalTab(terminalTabContext.terminal)},
       {label: "新建终端", disabled: !!pendingOperation || connectingResources.includes(terminalTabContext.terminal.resourceId), run: () => { void openTerminalFor(terminalTabContext.terminal.resourceId, true); }},

@@ -195,6 +195,7 @@ type PilotWorkspaceProps = {
  onPilot: () => void; onWorker: (worker: SuperWorker) => void; onChannel?: (channel: SpecialistChannelInfo) => void;
  disabled?:boolean; onDeleted?:(channel:SpecialistChannelInfo)=>void;
  onCodexSettings?:(projectId:string,anchor:HTMLButtonElement|null)=>void;
+ onSpecialistMcp?:(channel:SpecialistChannelInfo,anchor:HTMLButtonElement|null)=>void;
 };
 function showClippedText(event: PointerEvent<HTMLElement>) {
  const text = event.currentTarget;
@@ -234,7 +235,7 @@ function SpecialistNameBubble({name,target,onClose}:{name:string;target:HTMLButt
  return createPortal(<span ref={bubble} className="specialist-name-bubble" aria-hidden="true">{name}</span>,document.body);
 }
 
-export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,onCodexSettings,showHeading=true,presentation='list'}: PilotWorkspaceProps) {
+export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,onCodexSettings,onSpecialistMcp,showHeading=true,presentation='list'}: PilotWorkspaceProps) {
  const [menu,setMenu]=useState<SpecialistChannelInfo|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null);
  const [nameHint,setNameHint]=useState<{id:string;target:HTMLButtonElement}|null>(null);
  const anchor=useRef<HTMLButtonElement|null>(null);
@@ -335,6 +336,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
    headerIcon={<SuperRoleAvatar name={menu.roleName} roleId={menu.roleId} avatarId={menu.avatarId} motion="still" size={19}/>}
    onClose={()=>setMenu(null)} actions={[
    ...(onCodexSettings?[{label:'模型配置',icon:'filter' as const,trailingIcon:'next' as const,disabled,run:()=>onCodexSettings(menu.projectId,anchor.current)}]:[]),
+   ...(onSpecialistMcp?[{label:'MCP 接入',icon:'plug' as const,trailingIcon:'next' as const,disabled,run:()=>onSpecialistMcp(menu,anchor.current)}]:[]),
    {label:'删除专员',icon:'trash',separatorBefore:true,danger:true,disabled:disabled||menu.roleRevision===undefined,run:()=>setDeleting(menu)},
   ]}/>}
   {deleting&&<SpecialistDelete channel={deleting} returnFocus={anchor} onClose={()=>setDeleting(null)} onDeleted={()=>{
