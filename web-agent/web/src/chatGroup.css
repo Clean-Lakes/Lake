@@ -1,65 +1,35 @@
-.timeline-list:has(> .group-welcome) { height:100%; }
-.timeline-empty.group-welcome {
-  width:min(440px,calc(100% - 28px)); min-height:262px;
-  align-items:center; padding:30px 0 42px; text-align:center;
+/* The first-message actions sit in the same flex column as the visible composer. */
+.chat-group-start {
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px 14px;
+  min-width:0; margin-bottom:8px; padding-inline:1px;
 }
-.group-welcome-mark {
-  position:relative; isolation:isolate; display:grid; place-items:center;
-  width:100px; height:68px; flex:none;
+.chat-group-start[inert] { visibility:hidden; }
+.chat-group-start h2 {
+  flex:none; margin:0; font-size:var(--font-size-ui); font-weight:var(--font-weight-semibold); line-height:1.4;
 }
-.group-welcome-mark::before,.group-welcome-mark::after {
-  content:""; position:absolute; z-index:-1; pointer-events:none;
+.chat-group-start-members {
+  display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px; min-width:0; max-width:100%;
+  max-height:112px; padding:3px; margin:-3px; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin;
 }
-.group-welcome-mark::before {
-  width:56px; height:56px; inset-block-start:2px;
-  border:1px solid color-mix(in srgb,var(--agent-coordinator) 24%,var(--border));
-  border-radius:var(--radius-settings-dialog); corner-shape:var(--corner-window);
-  background:linear-gradient(155deg,var(--surface),color-mix(in srgb,var(--agent-coordinator) 9%,var(--surface-subtle)));
+.chat-group-start-member {
+  display:inline-flex; align-items:center; gap:5px; min-width:0; max-width:100%; min-height:27px;
+  padding:4px 8px; border:0; border-radius:var(--radius-settings-icon); corner-shape:var(--corner-window);
+  background:var(--surface-hover); color:var(--text-secondary); font:inherit; font-size:var(--font-size-toolbar);
+  text-align:start; cursor:pointer;
 }
-.group-welcome-mark::after {
-  width:96px; height:13px; inset-block-end:2px;
-  border-radius:50%; background:radial-gradient(ellipse,color-mix(in srgb,var(--agent-coordinator) 14%,transparent),transparent 70%);
+.chat-group-start-member > svg { flex:none; }
+.chat-group-start-member > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.chat-group-start-member:hover:enabled { background:var(--surface-selected); color:var(--foreground); }
+.chat-group-start-member[data-selected] {
+  background:color-mix(in srgb,var(--pilot-wordmark-active) 12%,var(--surface-hover)); color:var(--pilot-wordmark-active);
 }
-.group-welcome-mark > .super-role-avatar { margin-block-end:8px; }
-.group-welcome-mark > .super-role-avatar > svg { width:34px; height:34px; }
-.timeline-empty.group-welcome h2 {
-  margin:13px 0 4px; max-width:100%; font-size:22px; line-height:1.4; overflow-wrap:anywhere;
+.chat-group-start-member:focus-visible { outline:2px solid var(--focus-outline); outline-offset:1px; }
+.chat-group-start-member:disabled { opacity:.6; cursor:default; }
+@container lake-composer (max-width:400px) {
+  .chat-group-start-members { justify-content:flex-start; }
 }
-.timeline-empty.group-welcome p { font-size:13px; line-height:1.6; }
-.group-welcome-members {
-  width:100%; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));
-  gap:8px; max-height:180px; margin:18px 0 0; padding:3px; list-style:none;
-  overflow:auto; overscroll-behavior-y:contain; scrollbar-width:thin;
-}
-.group-welcome-members:has(> li:only-child) { max-width:252px; }
-.group-welcome-members > li { min-width:0; }
-.group-welcome-member {
-  display:flex; align-items:center; gap:9px; width:100%; min-width:0; min-height:52px; padding:7px 10px 7px 8px;
-  border:1px solid var(--border); border-radius:var(--radius-settings-panel); corner-shape:var(--corner-window);
-  background:color-mix(in srgb,var(--surface) 76%,transparent); color:var(--foreground);
-  font:inherit; text-align:start; cursor:pointer;
-  transition:background-color .16s,border-color .16s,transform .16s;
-}
-.group-welcome-member:not(:disabled):hover {
-  border-color:var(--border-strong); background:var(--surface-hover); transform:translateY(-1px);
-}
-.group-welcome-member:not(:disabled):active { transform:scale(.985); }
-.group-welcome-member:focus-visible { outline:2px solid var(--focus-outline); outline-offset:0; }
-.group-welcome-member:disabled { cursor:default; opacity:.65; }
-.group-welcome-member-avatar {
-  flex:none; display:grid; place-items:center; width:33px; height:33px;
-  border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); background:var(--surface-muted);
-}
-.group-welcome-member-avatar .super-role-avatar > svg { width:24px; height:24px; }
-.group-welcome-member-label { flex:1; min-width:0; }
-.group-welcome-member-label > :is(strong,small) { display:block; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.group-welcome-member-label > strong { font-size:13px; font-weight:var(--font-weight-medium); line-height:1.4; }
-.group-welcome-member-label > small { margin-top:2px; font-size:11px; line-height:1.35; color:var(--text-secondary); }
-.group-welcome-member > svg { flex:none; color:var(--text-muted); }
-.group-welcome-member:not(:disabled):is(:hover,:focus-visible) > svg { color:var(--foreground); }
-@media(prefers-reduced-motion:reduce) {
-  .group-welcome-member { transition:none; }
-  .group-welcome-member:not(:disabled):is(:hover,:active) { transform:none; }
+@media(pointer:coarse) {
+  .chat-group-start-member { min-height:44px; }
 }
 
 .chat-group-navigation {

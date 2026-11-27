@@ -8,8 +8,16 @@ import {composerClipboardFragment,composerToken,replaceComposerRange,type Compos
 import {composerCaretCharacter,composerRangeOffsets,composerSelection,readComposerDocument,referenceKey,setComposerSelection} from './composerDocument';
 import {usePageVisible} from './usePageVisible';
 import {hasFileTransfer} from './fileAttachments';
+import {canAnimateControls,controlMotionEase} from './controlMotion';
 
-export type ComposerInputHandle={focus:(options?:FocusOptions)=>void;setSelectionRange:(start:number,end:number)=>void;readonly selectionStart:number;readonly selectionEnd:number;readonly value:string};
+export type ComposerInputHandle={
+ focus:(options?:FocusOptions)=>void;
+ setSelectionRange:(start:number,end:number)=>void;
+ animateReferenceFrom:(reference:ComposerReference,origin:DOMRectReadOnly)=>void;
+ readonly selectionStart:number;
+ readonly selectionEnd:number;
+ readonly value:string;
+};
 type Completion = {sessionId:string;modelId?:string;hasPreviousReply:boolean};
 type Props=Omit<HTMLAttributes<HTMLDivElement>,'onChange'|'onSelect'> & {value:string;references:ComposerReference[];renderReference:(ref:ComposerReference)=>ReactNode;disabled?:boolean;placeholder?:string;completion?:Completion;onChange:(value:string,references:ComposerReference[],caret:number)=>void;onCaretMove?:(start:number,end:number)=>void};
 type Edit={value:string;references:ComposerReference[];start:number;end:number};
@@ -77,7 +85,28 @@ export const ComposerTextInput=forwardRef<ComposerInputHandle,Props>(function Co
  }
  function apply(start:number,end:number,text:string,inserted:ComposerReference[]=[]){const current=latest.current;const next=replaceComposerRange(current.value,current.references,start,end,text,inserted);publish(next.next,next.references,{start:next.position,end:next.position},true);}
  function undo(redo=false){const next=editIndex.current+(redo?1:-1);if(next<0||next>=edits.current.length)return;editIndex.current=next;const entry=edits.current[next]!;restore.current={start:entry.start,end:entry.end};caret.current=restore.current;setSelection(restore.current);setDismissed(entry.value);onChange(entry.value,entry.references,entry.end);}
- useImperativeHandle(forwardedRef,()=>({focus:options=>{input.current?.focus(options);syncSelection();},setSelectionRange:(start,end)=>{caret.current={start,end};setSelection(caret.current);if(input.current)setComposerSelection(input.current,start,end);Object.assign(edits.current[editIndex.current]!,{start,end});},get selectionStart(){return caret.current.start},get selectionEnd(){return caret.current.end},get value(){return latest.current.value}}),[]);
+ useImperativeHandle(forwardedRef,()=>({
+  focus:options=>{input.current?.focus(options);syncSelection();},
+  setSelectionRange:(start,end)=>{
+   caret.current={start,end};setSelection(caret.current);
+   if(input.current)setComposerSelection(input.current,start,end);
+   Object.assign(edits.current[editIndex.current]!,{start,end});
+  },
+  animateReferenceFrom:(reference,origin)=>{
+   if(!canAnimateControls())return;
+   const token=input.current?.querySelector<HTMLElement>(`[data-composer-token="${CSS.escape(referenceKey(reference))}"]`);
+   if(!token?.animate)return;
+   const target=token.getBoundingClientRect();
+   if(!target.width||!target.height)return;
+   token.animate([
+    {transform:`translate3d(${origin.left-target.left}px,${origin.top-target.top}px,0)`,opacity:.45},
+    {transform:'translate3d(0,0,0)',opacity:1},
+   ],{duration:180,easing:controlMotionEase});
+  },
+  get selectionStart(){return caret.current.start},
+  get selectionEnd(){return caret.current.end},
+  get value(){return latest.current.value},
+ }),[]);
  useEffect(()=>{const changed=()=>{if(input.current?.ownerDocument.activeElement===input.current)syncSelection();};document.addEventListener('selectionchange',changed);return()=>document.removeEventListener('selectionchange',changed);},[]);
  useLayoutEffect(()=>{
   const root=input.current;if(!root||composing)return;

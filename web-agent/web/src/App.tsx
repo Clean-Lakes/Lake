@@ -14,7 +14,7 @@ import './specialistTaskList.css';
 import {pilotConversationView,PilotWorkspace,usePilotWorkspace} from './PilotWorkspace';
 import './pilotWorkspace.css';
 import {ChatGroupNavigation} from './ChatGroup';
-import {ChatGroupWelcome} from './ChatGroupWelcome';
+import {ChatGroupStart} from './ChatGroupStart';
 import './chatGroup.css';
 import './specialistAvatars.css';
 import {SpecialistAvatarProvider,SuperRoleAvatar} from './SuperRoleAvatar';
@@ -1496,7 +1496,7 @@ function AppContent() {
   const mentionWorkspace=isChatGroup?pilotConversation:pilotWorkspace.workspace;
   const mentionSpecialists=mentionWorkspace?.project.projectId===selectedSession?.projectId?mentionWorkspace?.channels:undefined;
   const allMentionOptions=mentionOptions(mentionable,mentionExtensions.skills,mentionExtensions.servers,!isChatGroup&&!!activeSnapshot?.sre?.enabled,mentionSpecialists);
-  const canMentionFromGroupWelcome=canCompose&&sessionConnected&&!historyPending&&!pendingOperation;
+  const canMentionFromGroupStart=canCompose&&sessionConnected&&!historyPending&&!pendingOperation;
   const mentionMatches=mention?filterMentions(allMentionOptions,mention.query,mentionCategory):[];
   const mentionIndex=Math.min(mention?.index??0,Math.max(0,mentionMatches.length-1));
   const closeComposerMention=useCallback(()=>setMention(null),[]);
@@ -1521,8 +1521,8 @@ function AppContent() {
     setMessageDraft(next);
     requestAnimationFrame(()=>{input.focus({preventScroll:true});input.setSelectionRange(position,position);});
   }
-  function mentionGroupMember(roleId:string) {
-    if(!canMentionFromGroupWelcome||!selectedChatGroup?.members.some(member=>member.roleId===roleId&&!member.unavailable))return;
+  function mentionGroupMember(roleId:string,origin:DOMRectReadOnly) {
+    if(!canMentionFromGroupStart||!selectedChatGroup?.members.some(member=>member.roleId===roleId&&!member.unavailable))return;
     const input=messageInputRef.current;
     const option=allMentionOptions.find(item=>item.kind==='role'&&item.id===roleId);
     if(!input||!option)return;
@@ -1531,6 +1531,7 @@ function AppContent() {
     const {next,references,position}=query
       ?selectComposerMention(messageDraft,caret,mentionRefs,option,query)
       :appendComposerMention(messageDraft,mentionRefs,option,caret);
+    const added=references.length>mentionRefs.length?references.find(ref=>ref.kind==='role'&&ref.resourceId===roleId):undefined;
     setMention(null);
     setMessageDraft(next);
     setMentionRefs(references);
@@ -1538,6 +1539,7 @@ function AppContent() {
       if(activeSession.current!==sessionId||messageInputRef.current!==input)return;
       input.focus({preventScroll:true});
       input.setSelectionRange(position,position);
+      if(added)input.animateReferenceFrom(added,origin);
     });
   }
   function addResourceToConversation(resource: Resource) {
@@ -1952,13 +1954,12 @@ function AppContent() {
   const navigationProjects = projectList.filter(project => project.id === sidebarProject?.id);
   const itemList = activeSnapshot ? timelineItems(activeSnapshot) : [];
   const hasConversationItems=!!(itemList.length||activeSnapshot?.ai?.cards.length||activeSnapshot?.superagent||activeSnapshot?.sre?.tasks.length||activeSnapshot?.ai?.operationOutcomes?.length);
-  const groupWelcomeMembers=selectedChatGroup?.members.flatMap(member=>{
+  const groupStartMembers=activeSnapshot&&!hasConversationItems&&!historyPending?(selectedChatGroup?.members??[]).flatMap(member=>{
     const channel=mentionSpecialists?.find(item=>item.roleId===member.roleId);
-    return channel&&!member.unavailable?[{...member,roleName:channel.roleName,duties:channel.duties}]:[];
-  })??[];
-  const emptyConversation=isChatGroup?<ChatGroupWelcome title={selectedChatGroup?.title??selectedSession.title}
-    members={groupWelcomeMembers} canMention={canMentionFromGroupWelcome} onMention={mentionGroupMember}/>
-    :<div className={selectedSuperPilot?"timeline-empty is-pilot":"timeline-empty"}>
+    return channel&&!member.unavailable?[{roleId:member.roleId,roleName:channel.roleName,
+      selected:mentionRefs.some(ref=>ref.kind==='role'&&ref.resourceId===member.roleId)}]:[];
+  }):[];
+  const emptyConversation=isChatGroup?null:<div className={selectedSuperPilot?"timeline-empty is-pilot":"timeline-empty"}>
     {selectedSuperPilot?<div className="pilot-empty-shore" aria-hidden="true">
       <SuperRoleAvatar avatarId="kingfisher" size={58} motion="still"/>
     </div>:<div className="empty-icon"><Glyph name="chat" size={25}/></div>}
@@ -2293,7 +2294,9 @@ function AppContent() {
           </div> : emptyConversation}
           {isPilotConversation&&activeSnapshot&&<ConversationReadMarker session={activeSnapshot.session.id} state={activeSnapshot.messageRead} enabled={sessionConnected&&!historyPending}/>}
         </section></div>
-        {isLegacyHistory?<div className="pilot-history-notice"><span>历史记录只读，原操作与证据保留。</span><button type="button" className="button secondary" onClick={()=>void openProjectPilot(selectedSession.projectId)}>前往 Pilot 继续沟通<Glyph name="arrow" size={14}/></button></div>:!canCompose?null:<div className="composer-dock">{!isSpecialistTasks&&<ConversationLatest key={`${sessionId}:${conversationMode}`} container={conversationRef} onJump={jumpToLatest}/>}{activeSnapshot?.ai && <div className="composer-session-controls">{selectedSuperPilot&&<PilotSpecialistQuestions questions={pilotConversation?.questions} connected={pilotWorkspaceConnected} onAnswered={pilotWorkspace.refresh}/>}<AIControls snapshot={activeSnapshot} refresh={refreshCurrent} optionsOpen={agentOptionsOpen} onCloseOptions={() => setAgentOptionsOpen(false)} permissionsOpen={permissionsOpen&&activeSnapshot.session.workspaceRole!=="role"&&activeSnapshot.session.workspaceRole!=="worker"} permissionAnchor={permissionButtonRef} onClosePermissions={() => setPermissionsOpen(false)}/></div>}<PendingMessages key={sessionId} supplementRootTurnId={conversationMode==='conversation'?activeSnapshot?.ai?.rootTurnId:undefined} sessionId={sessionId} queue={activeSnapshot?.messageQueue ?? {paused:false,revision:0,lastError:"",items:[]}} disabled={!sessionConnected} active={turnActive} sendShortcut={sendShortcut} resourceIds={mentionedResourceIds} onUpdated={messageQueue => setSnapshot(current => current?.session.id===sessionId && messageQueue.revision>=(current.messageQueue?.revision ?? 0) ? {...current,messageQueue} : current)}/>{activeSnapshot?.conversationMode==='plan'&&<p className="plan-mode-hint" role="status">Plan 模式 · 只读调查与制定方案，确认计划后再执行。{activeSnapshot.sre?.enabled?'SRE 协作将在退出 Plan 模式后恢复。':''}</p>}<form className="composer" onSubmit={sendMessage}><label htmlFor="message-input" className="visually-hidden">{"给 Lake 的消息"}</label><ComposerSurface sessionId={sessionId} dragging={attachmentDragOver} pinnedOpen={composerPinnedOpen} modelBrand={composerPreviewBrand}>
+        {isLegacyHistory?<div className="pilot-history-notice"><span>历史记录只读，原操作与证据保留。</span><button type="button" className="button secondary" onClick={()=>void openProjectPilot(selectedSession.projectId)}>前往 Pilot 继续沟通<Glyph name="arrow" size={14}/></button></div>:!canCompose?null:<div className="composer-dock">{!isSpecialistTasks&&<ConversationLatest key={`${sessionId}:${conversationMode}`} container={conversationRef} onJump={jumpToLatest}/>}{activeSnapshot?.ai && <div className="composer-session-controls">{selectedSuperPilot&&<PilotSpecialistQuestions questions={pilotConversation?.questions} connected={pilotWorkspaceConnected} onAnswered={pilotWorkspace.refresh}/>}<AIControls snapshot={activeSnapshot} refresh={refreshCurrent} optionsOpen={agentOptionsOpen} onCloseOptions={() => setAgentOptionsOpen(false)} permissionsOpen={permissionsOpen&&activeSnapshot.session.workspaceRole!=="role"&&activeSnapshot.session.workspaceRole!=="worker"} permissionAnchor={permissionButtonRef} onClosePermissions={() => setPermissionsOpen(false)}/></div>}<PendingMessages key={sessionId} supplementRootTurnId={conversationMode==='conversation'?activeSnapshot?.ai?.rootTurnId:undefined} sessionId={sessionId} queue={activeSnapshot?.messageQueue ?? {paused:false,revision:0,lastError:"",items:[]}} disabled={!sessionConnected} active={turnActive} sendShortcut={sendShortcut} resourceIds={mentionedResourceIds} onUpdated={messageQueue => setSnapshot(current => current?.session.id===sessionId && messageQueue.revision>=(current.messageQueue?.revision ?? 0) ? {...current,messageQueue} : current)}/>{activeSnapshot?.conversationMode==='plan'&&<p className="plan-mode-hint" role="status">Plan 模式 · 只读调查与制定方案，确认计划后再执行。{activeSnapshot.sre?.enabled?'SRE 协作将在退出 Plan 模式后恢复。':''}</p>}<form className="composer" onSubmit={sendMessage}><label htmlFor="message-input" className="visually-hidden">{"给 Lake 的消息"}</label>
+          {groupStartMembers.length>0&&<ChatGroupStart members={groupStartMembers} disabled={!canMentionFromGroupStart} inert={!!mention} onMention={mentionGroupMember}/>}
+          <ComposerSurface sessionId={sessionId} dragging={attachmentDragOver} pinnedOpen={composerPinnedOpen} modelBrand={composerPreviewBrand}>
           {pilotTaskReference&&!pilotTaskReference.sent&&<div className="composer-task-context" aria-live="polite"><PilotTaskReferenceChip task={pilotTaskReference} members={pilotTaskMembers} onClear={()=>selectPilotTask()}/></div>}
           {mention && <ComposerMentions options={mentionMatches} allOptions={allMentionOptions}
             index={mentionIndex} query={mention.query} category={mentionCategory}
@@ -2314,7 +2317,7 @@ function AppContent() {
               setImageDraft(images=>images.filter(image=>image.id!==id));
               messageInputRef.current?.focus({preventScroll:true});
             }}/>
-          {composerModelConfigured && imageDraft.length > 0 && !acceptsInlineImages && <p className="composer-image-hint" role="status">当前模型不接受图片输入，请切换模型或在模型设置中手动调整。</p>}<div className="composer-body"><ComposerTextInput key={sessionId} completion={composerCompletion} references={mentionRefs} renderReference={ref=><>{ref.kind==="role"?<RoleMentionAvatar id={ref.resourceId} name={ref.label.slice(1)} size={14}/>:ref.kind==="resource"?<ResourceIcon kind={resourceMap.get(ref.resourceId)?.jumpServer ? "jumpserver" : resourceMap.get(ref.resourceId)?.kind ?? "ssh"} size={13}/>:<Glyph name={ref.kind==="skill"?"book":"plug"} size={13}/>}<span>{ref.label.slice(1)}</span>{ref.kind!=="resource"&&<small>{ref.kind==="role"?"专员":ref.kind==="skill"?"Skill":"MCP"}</small>}</>} id="message-input" ref={messageInputRef} aria-label={"给 Lake 的消息"} role="combobox" aria-haspopup="listbox" aria-autocomplete={mention?"list":undefined} aria-expanded={!!mention} aria-controls={mention?"composer-mention-options":undefined} aria-activedescendant={mention&&mentionMatches[mentionIndex]?mentionOptionId(mentionMatches[mentionIndex]!):undefined} placeholder={queueMode ? "继续输入，稍后发送…" : activeSnapshot?.conversationMode === "plan" ? "描述目标或修改意见，Lake 会先制定计划…" : pendingApproval ? "可以继续讨论，操作由确认按钮单独处理" : pilotTaskReference ? "接着问这项任务…" : continuousPilot&&turnActive ? "继续发送新任务或补充要求…" : "想让 Lake 帮你做什么？"} value={messageDraft} onPaste={event => { const files = clipboardFiles(event.clipboardData); if (!files.length) return; event.preventDefault(); void attachFiles(files); }} onCaretMove={moveMentionCaret} onChange={(value,refs,caret)=>{setMessageDraft(value);setMentionRefs(refs);syncMention(value,caret);}} disabled={!sessionConnected || !!pendingOperation} onCompositionStart={() => messageComposition.current.start()} onCompositionEnd={() => messageComposition.current.end()} onBlur={() => { messageComposition.current = new CompositionGuard(); }} onKeyDown={event => {
+          {composerModelConfigured && imageDraft.length > 0 && !acceptsInlineImages && <p className="composer-image-hint" role="status">当前模型不接受图片输入，请切换模型或在模型设置中手动调整。</p>}<div className="composer-body"><ComposerTextInput key={sessionId} completion={composerCompletion} references={mentionRefs} renderReference={ref=><>{ref.kind==="role"?<RoleMentionAvatar id={ref.resourceId} name={ref.label.slice(1)} size={14}/>:ref.kind==="resource"?<ResourceIcon kind={resourceMap.get(ref.resourceId)?.jumpServer ? "jumpserver" : resourceMap.get(ref.resourceId)?.kind ?? "ssh"} size={13}/>:<Glyph name={ref.kind==="skill"?"book":"plug"} size={13}/>}<span>{ref.label.slice(1)}</span>{ref.kind!=="resource"&&<small>{ref.kind==="role"?"专员":ref.kind==="skill"?"Skill":"MCP"}</small>}</>} id="message-input" ref={messageInputRef} aria-label={"给 Lake 的消息"} role="combobox" aria-haspopup="listbox" aria-autocomplete={mention?"list":undefined} aria-expanded={!!mention} aria-controls={mention?"composer-mention-options":undefined} aria-activedescendant={mention&&mentionMatches[mentionIndex]?mentionOptionId(mentionMatches[mentionIndex]!):undefined} placeholder={queueMode ? "继续输入，稍后发送…" : activeSnapshot?.conversationMode === "plan" ? "描述目标或修改意见，Lake 会先制定计划…" : pendingApproval ? "可以继续讨论，操作由确认按钮单独处理" : pilotTaskReference ? "接着问这项任务…" : continuousPilot&&turnActive ? "继续发送新任务或补充要求…" : groupStartMembers.length ? "描述你想处理的事…" : "想让 Lake 帮你做什么？"} value={messageDraft} onPaste={event => { const files = clipboardFiles(event.clipboardData); if (!files.length) return; event.preventDefault(); void attachFiles(files); }} onCaretMove={moveMentionCaret} onChange={(value,refs,caret)=>{setMessageDraft(value);setMentionRefs(refs);syncMention(value,caret);}} disabled={!sessionConnected || !!pendingOperation} onCompositionStart={() => messageComposition.current.start()} onCompositionEnd={() => messageComposition.current.end()} onBlur={() => { messageComposition.current = new CompositionGuard(); }} onKeyDown={event => {
             if (messageComposition.current.ignores(event.nativeEvent)) return;
             if (mention) {
               if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setMention(null); return; }

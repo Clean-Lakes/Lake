@@ -61,8 +61,9 @@
   background:transparent;
 }
 .mention-categories > .tab-selection-indicator {
-  border-radius:var(--radius-window);
-  background:var(--surface-hover);
+  border-radius:var(--radius-settings-control);
+  corner-shape:var(--corner-window);
+  background:var(--surface-selected);
 }
 .mention-categories:has(> .tab-selection-indicator[data-ready]) > button[aria-pressed="true"],
 .mention-categories:has(> .tab-selection-indicator[data-ready]) > button[aria-pressed="true"]:hover {
