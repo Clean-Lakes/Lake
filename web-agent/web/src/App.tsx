@@ -82,6 +82,7 @@ import { ActivityIndicator } from "./ActivityIndicator";
 import { PendingMessages } from "./PendingMessages";
 import { ModelSettings, type SettingsNavigationHandle } from "./ModelSettings";
 import {WorkspaceConsole} from './WorkspaceConsole';
+import {SpecialistManagement} from './SpecialistManagement';
 import {availableSettingsPage, type ConsolePage, type SettingsPage} from './workspaceConsoleTabs';
 import {gatewayTaskMatches,type GatewayTaskTarget} from "./GatewaySettings";
 import { readImageSelection } from "./imageAttachments";
@@ -570,7 +571,10 @@ function AppContent() {
   const openWorkbenchPage=useCallback((view:WorkspacePageView,tab:SettingsPage='models')=>{
     const current=routeRef.current;
     if(current.view===view){
-      if(view==='settings')setSettingsTab(tab);
+      if(view==='settings'){
+        if(tab==='specialists')afterSettings(()=>setSettingsTab(tab));
+        else setSettingsTab(tab);
+      }
       return;
     }
     afterSettings(()=>{
@@ -1904,7 +1908,7 @@ function AppContent() {
   const groupParticipants=selectedChatGroup?.members.map(member=>{
     const active=pilotHeaderActivity?.participants.find(person=>person.roleId===member.roleId);
     return {key:member.roleId,roleId:member.roleId,name:member.roleName,avatarId:member.avatarId,
-      detail:member.unavailable?'已移除':active?.detail??'',moving:!!active?.moving};
+      detail:member.unavailable?'已移除':active?.detail||member.duties||'',moving:!!active?.moving};
   });
   const pilotParticipants=sessionHeader&&selectedSuperPilot?(groupParticipants??pilotHeaderActivity?.participants??[]):undefined;
   const showPilotParticipants=isChatGroup||pilotHeaderActivity?.phase!=='summarizing';
@@ -2097,6 +2101,7 @@ function AppContent() {
     onDeleted:(channel:SpecialistChannelInfo)=>pilotWorkspace.removeRole(channel.roleId),
     onCodexSettings:typescriptBackend?openCodexConfiguration:undefined,
     onSpecialistMcp:typescriptBackend?openSpecialistMcp:undefined,
+    onSpecialistSaved:typescriptBackend?pilotWorkspace.saveRole:undefined,
     workspace:pilotWorkspace.workspace,error:pilotWorkspace.error,
     selectedId:sessionSelected?route.sessionId:null,
     selectedRoleId:sessionSelected&&selectedSession.projectId===pilotWorkspace.workspace?.project.projectId?
@@ -2145,7 +2150,7 @@ function AppContent() {
        resourceCount={catalog.resources.filter(resource=>resource.projectId===sidebarProject?.id).length}
        attention={pilotWorkspace.workspace?.channels?.some(channel=>channel.needsConfirmation===true||hasUnreadMessages(channel.messageRead))}
        specialistRail={groupsEnabled&&sidebarProject?<PilotWorkspace key={sidebarProject.id} {...pilotNavigation} presentation="rail"
-        createSpecialist={{projectId:sidebarProject.id,onCreated:pilotWorkspace.addRole}}/>:undefined}
+        createSpecialist={{projectId:sidebarProject.id,onCreated:pilotWorkspace.saveRole}}/>:undefined}
        specialists={<>
         {sidebarProject&&<PilotWorkspace {...pilotNavigation} presentation={groupsEnabled?'entry':'list'}/>}
         {groupsEnabled&&sidebarProject&&<ChatGroupNavigation key={sidebarProject.id} groups={pilotWorkspace.workspace?.chatGroups??[]}
@@ -2358,12 +2363,19 @@ function AppContent() {
       onPage={selectConsolePage} onClose={closeWorkbenchConsole} overlay={isWorkspacePage&&workspaceOverlayOpen?workspaceOverlays:undefined}
       notice={isWorkspacePage?noticeView:undefined}>
       <DesktopUpdate visible={route.view==='updates'} onUnreadChange={setWorkspaceUpdateUnread}/>
-      {isSettingsPage?<ModelSettings key={settingsVisit.id} navigationGuard={settingsNavigation} tab={activeSettingsTab} onBusyChange={setSettingsBusy}
+      {isSettingsPage?(activeSettingsTab==='specialists'?<SpecialistManagement key={sidebarProject?.id} project={sidebarProject}
+        channels={pilotWorkspace.workspace?.active?pilotWorkspace.workspace.channels??[]:undefined}
+        connected={connected} error={pilotWorkspace.error} onSaved={pilotWorkspace.saveRole}
+        onDeleted={channel=>{
+          pilotWorkspace.removeRole(channel.roleId);
+          if(pilotNavigation.selectedRoleId===channel.roleId&&pilotRouterSession)
+            commitNavigation({sessionId:pilotRouterSession.id,resourceId:null,view:'settings'},channel.projectId,true);
+        }}/>:<ModelSettings key={settingsVisit.id} navigationGuard={settingsNavigation} tab={activeSettingsTab} onBusyChange={setSettingsBusy}
         completionEnabled={completionEnabled} onCompletionEnabledChange={setCompletionEnabled} onGatewayTask={inspectGatewayTask} capabilityDetectionEnabled={bootstrap?.backendRuntime==='go'}
         onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut}
         onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {commitNavigation({sessionId,resourceId:null});setAgentOptionsOpen(true);} : undefined}
         projectId={selectedProjectId??sidebarProject?.id}
-      />:route.view==='workspace'?<WorkspacePage project={sidebarProject} projects={projectList} resources={catalog.resources}
+      />):route.view==='workspace'?<WorkspacePage project={sidebarProject} projects={projectList} resources={catalog.resources}
         connected={workspaceConnected} bulkSelection={bulkSelection} bulkSelectedCount={bulkSelected.length}
         onCreateProject={openProjectDialog}
         onOpenProject={project => switchProject(project.id)}

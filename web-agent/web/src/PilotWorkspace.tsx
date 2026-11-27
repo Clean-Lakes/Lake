@@ -1,5 +1,5 @@
 import {hasUnreadMessages} from './ConversationReadMarker';
-import {useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState,type PointerEvent,type RefObject} from 'react';
+import {useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState,type PointerEvent as ReactPointerEvent,type RefObject} from 'react';
 import {createPortal} from 'react-dom';
 import type {SessionEvent,SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
 import {api,readableError} from './api';
@@ -8,7 +8,7 @@ import {conversationAvatarMotion,superAvatarMotion,channelTaskPresentation,speci
 import {ActivityDots} from './ActivityIndicator';
 import {Glyph} from './Icons';
 import {NavigationMenu} from './NavigationDelete';
-import {SpecialistCreate} from './SpecialistCreate';
+import {SpecialistCreate, SpecialistEdit} from './SpecialistCreate';
 import {SpecialistDelete} from './SpecialistDelete';
 import {TabSelectionIndicator} from './TabSelectionIndicator';
 import {SidebarPilotEntry} from './SidebarPilotEntry';
@@ -124,11 +124,23 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean,v
   return()=>{stream.close();ready(false);window.clearTimeout(timer);};
  },[routerId,connected,workerScope]);
  useEffect(()=>{const refresh=()=>refreshRef.current();window.addEventListener('lake:conversation-read',refresh);return()=>window.removeEventListener('lake:conversation-read',refresh);},[]);
- const addRole=(channel:SpecialistChannelInfo)=>{
-  // Discard an in-flight poll that started before this creation was saved.
+ const saveRole=(channel:SpecialistChannelInfo)=>{
+  if(channel.projectId!==projectId||deletedRoles.current.has(channel.roleId))return;
+  // A poll that started before the save must not restore the previous profile.
   rosterRevision.current++;
-  setWorkspace(current=>current?.project.projectId===channel.projectId&&!current.channels?.some(row=>row.roleId===channel.roleId)
-   ? {...current,channels:[...(current.channels??[]),channel]}:current);
+  setWorkspace(current=>{
+   if(current?.project.projectId!==channel.projectId)return current;
+   const channels=current.channels??[];
+   const previous=channels.find(row=>row.roleId===channel.roleId);
+   if((previous?.roleRevision??0)>(channel.roleRevision??0))return current;
+   const next=withSeenCursor(channel,previous?.messageRead?.seenCursor??'');
+   return {...current,
+    channels:previous?channels.map(row=>row===previous?next:row):[...channels,next],
+    chatGroups:current.chatGroups?.map(group=>group.members.some(member=>member.roleId===channel.roleId)
+     ? {...group,members:group.members.map(member=>member.roleId===channel.roleId
+      ? {...member,roleName:channel.roleName,duties:channel.duties}:member)} : group),
+   };
+  });
   void refreshRef.current();
  };
  const removeRole=(roleId:string)=>{deletedRoles.current.add(roleId);setWorkspace(current=>current?{...current,questions:current.questions?.filter(question=>question.author.roleId!==roleId),channels:current.channels?.filter(channel=>channel.roleId!==roleId),workers:current.workers.filter(worker=>worker.roleId!==roleId)}:current);void refreshRef.current();};
@@ -145,7 +157,7 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean,v
    // The visible overview can retry if the receipt could not be saved.
   }
  };
- return {workspace,conversation,error,addRole,removeRole,readChannel,refresh:()=>refreshRef.current(),subscribeWorkerEvents:conversation?subscribeWorkerEvents:undefined};
+ return {workspace,conversation,error,saveRole,removeRole,readChannel,refresh:()=>refreshRef.current(),subscribeWorkerEvents:conversation?subscribeWorkerEvents:undefined};
 }
 
 type ReadMark = {requested: string; acknowledged: string; pending: boolean};
@@ -199,9 +211,10 @@ type PilotWorkspaceProps = {
  disabled?:boolean; onDeleted?:(channel:SpecialistChannelInfo)=>void;
  onCodexSettings?:(projectId:string,anchor:HTMLButtonElement|null)=>void;
  onSpecialistMcp?:(channel:SpecialistChannelInfo,anchor:HTMLButtonElement|null)=>void;
+ onSpecialistSaved?:(channel:SpecialistChannelInfo)=>void;
  createSpecialist?:{projectId:string;onCreated:(channel:SpecialistChannelInfo)=>void};
 };
-function showClippedText(event: PointerEvent<HTMLElement>) {
+function showClippedText(event: ReactPointerEvent<HTMLElement>) {
  const text = event.currentTarget;
  if (text.scrollWidth > text.clientWidth) text.title = text.textContent ?? '';
  else text.removeAttribute('title');
@@ -226,34 +239,42 @@ function SpecialistNameBubble({name,target,onClose}:{name:string;target:HTMLButt
    node.style.setProperty('--specialist-bubble-tail',`${Math.min(height-8,Math.max(8,center-top))}px`);
   };
   const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')onClose();};
+  const moved=(event:PointerEvent)=>{if(!event.composedPath().includes(target))onClose();};
+  const leftDocument=(event:PointerEvent)=>{if(!event.relatedTarget)onClose();};
+  const listeners=new AbortController();
+  const {signal}=listeners;
   place();
-  window.addEventListener('resize',place);
-  window.addEventListener('scroll',place,true);
-  window.addEventListener('keydown',escape);
-  return()=>{
-   window.removeEventListener('resize',place);
-   window.removeEventListener('scroll',place,true);
-   window.removeEventListener('keydown',escape);
-  };
+  window.addEventListener('resize',place,{signal});
+  window.addEventListener('scroll',onClose,{signal,capture:true,passive:true});
+  window.addEventListener('blur',onClose,{signal});
+  window.addEventListener('keydown',escape,{signal});
+  document.addEventListener('visibilitychange',onClose,{signal});
+  document.addEventListener('pointerdown',onClose,{signal,capture:true});
+  document.addEventListener('pointermove',moved,{signal,capture:true,passive:true});
+  document.addEventListener('pointerout',leftDocument,{signal,capture:true,passive:true});
+  return()=>listeners.abort();
  },[target,name,onClose]);
  return createPortal(<span ref={bubble} className="specialist-name-bubble" aria-hidden="true">{name}</span>,document.body);
 }
 
-export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,onCodexSettings,onSpecialistMcp,createSpecialist,showHeading=true,presentation='list'}: PilotWorkspaceProps) {
+export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,onCodexSettings,onSpecialistMcp,onSpecialistSaved,createSpecialist,showHeading=true,presentation='list'}: PilotWorkspaceProps) {
  const [menu,setMenu]=useState<SpecialistChannelInfo|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null),[creating,setCreating]=useState(false);
+ const [editing,setEditing]=useState<SpecialistChannelInfo|null>(null);
  const lastMenu=useRef<SpecialistChannelInfo|null>(null);
  if(menu)lastMenu.current=menu;
  const renderedMenu=menu??lastMenu.current;
  const [nameHint,setNameHint]=useState<{id:string;target:HTMLButtonElement}|null>(null);
  const anchor=useRef<HTMLButtonElement|null>(null),createButton=useRef<HTMLButtonElement|null>(null);
  const closeNameHint=useCallback(()=>setNameHint(null),[]);
- useEffect(()=>{lastMenu.current=null;setMenu(null);setDeleting(null);setCreating(false);closeNameHint();},[workspace?.project.projectId,closeNameHint]);
+ useEffect(()=>{lastMenu.current=null;setMenu(null);setDeleting(null);setEditing(null);setCreating(false);closeNameHint();},[workspace?.project.projectId,closeNameHint]);
  const roots = workspace?.active?workspace.workers.filter(worker => !worker.parentWorkerId):[];
  const channels = workspace?.active?workspace.channels:undefined;
  const viewedRole = selectedId ? selectedRoleId ?? channels?.find(channel => channel.sessionId === selectedId)?.roleId ??
   roots.find(worker => worker.sessionId === selectedId)?.roleId : undefined;
+ useLayoutEffect(closeNameHint,[closeNameHint,selectedId,viewedRole,presentation]);
  const readMarks = useCompletionReads(presentation==='entry'?null:workspace, viewedRole);
  const rail=presentation==='rail';
+ const canShowNameHint=rail&&!menu&&!deleting&&!editing&&!creating;
  const routerId=workspace?.active?workspace.project.routerSessionId:undefined;
  const entries = channels ? channels.map(channel => ({channel, workers: roots.filter(worker => worker.roleId === channel.roleId)})) :
   roots.map(worker => ({channel: undefined, workers: [worker]}));
@@ -305,9 +326,10 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
      aria-current={selected ? 'page' : undefined} aria-label={label}
      data-activity={rail?railActivity:undefined}
      aria-keyshortcuts={channel&&!disabled?'Shift+F10':undefined}
-     onPointerEnter={rail?event=>{if(event.pointerType==='mouse'&&!menu&&!deleting)setNameHint({id,target:event.currentTarget});}:undefined}
+     onPointerEnter={rail?event=>{if(event.pointerType==='mouse'&&canShowNameHint)setNameHint({id,target:event.currentTarget});}:undefined}
      onPointerLeave={rail?dismissRowHint:undefined}
-     onFocus={rail?event=>{if(event.currentTarget.matches(':focus-visible')&&!menu&&!deleting)setNameHint({id,target:event.currentTarget});}:undefined}
+     onPointerCancel={rail?dismissRowHint:undefined}
+     onFocus={rail?event=>{if(canShowNameHint&&event.currentTarget.matches(':focus-visible'))setNameHint({id,target:event.currentTarget});}:undefined}
      onBlur={rail?dismissRowHint:undefined}
      onContextMenu={event=>{event.preventDefault();event.stopPropagation();openManagement(event.currentTarget);}}
      onKeyDown={event=>{
@@ -346,10 +368,11 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
    <Glyph name="plus" size={18}/>
   </button>}
   {rail&&<TabSelectionIndicator className="sidebar-specialist-selection" selection={viewedRole??''} selector='.sidebar-specialist-button[aria-current="page"]'/>}
-  {rail&&nameHint&&hintedName&&<SpecialistNameBubble key={nameHint.id} name={hintedName} target={nameHint.target} onClose={closeNameHint}/>}
+  {canShowNameHint&&nameHint&&hintedName&&<SpecialistNameBubble key={nameHint.id} name={hintedName} target={nameHint.target} onClose={closeNameHint}/>}
   {renderedMenu&&<NavigationMenu key={renderedMenu.id} open={Boolean(menu)} title={renderedMenu.roleName} placement="beside" anchor={anchor} className="specialist-context-menu"
    headerIcon={<SuperRoleAvatar name={renderedMenu.roleName} roleId={renderedMenu.roleId} avatarId={renderedMenu.avatarId} motion="still" size={19}/>}
    onClose={()=>setMenu(null)} actions={[
+   ...(onSpecialistSaved?[{label:'编辑专员',icon:'edit' as const,disabled:disabled||renderedMenu.roleRevision===undefined,run:()=>setEditing(renderedMenu)}]:[]),
    ...(onCodexSettings?[{label:'模型配置',icon:'filter' as const,trailingIcon:'next' as const,disabled,run:()=>onCodexSettings(renderedMenu.projectId,anchor.current)}]:[]),
    ...(onSpecialistMcp?[{label:'MCP 接入',icon:'plug' as const,trailingIcon:'next' as const,disabled,run:()=>onSpecialistMcp(renderedMenu,anchor.current)}]:[]),
    {label:'删除专员',icon:'trash',separatorBefore:true,danger:true,disabled:disabled||renderedMenu.roleRevision===undefined,run:()=>setDeleting(renderedMenu)},
@@ -362,6 +385,8 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
     anchor.current?.scrollIntoView({block:'nearest'});
    }
   }}/>}
+  {editing&&onSpecialistSaved&&<SpecialistEdit channel={editing} disabled={disabled} returnFocus={anchor}
+   onSaved={onSpecialistSaved} onClose={()=>setEditing(null)}/>}
   {creating&&createSpecialist&&<SpecialistCreate projectId={createSpecialist.projectId} disabled={disabled} returnFocus={createButton}
    onCreated={createSpecialist.onCreated} onClose={()=>setCreating(false)}/>}
  </section>;

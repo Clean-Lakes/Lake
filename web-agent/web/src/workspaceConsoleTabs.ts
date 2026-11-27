@@ -1,6 +1,6 @@
 import type {GlyphName} from './Icons';
 
-export type SettingsPage = 'channels' | 'appearance' | 'conversation' | 'models' | 'mcp' | 'skills';
+export type SettingsPage = 'channels' | 'appearance' | 'conversation' | 'specialists' | 'models' | 'mcp' | 'skills';
 export type ConsolePage = SettingsPage | 'workspace' | 'updates';
 type Category = {
   key: ConsolePage;
@@ -18,6 +18,7 @@ const categories: readonly {label: string; showLabel?: boolean; items: readonly 
     {key: 'workspace', label: '项目', icon: 'folder', keywords: '切换 工作区'},
   ]},
   {label: 'Pilot', showLabel: true, items: [
+    {key: 'specialists', label: '专员管理', icon: 'lakeSpecialists', keywords: '名称 角色描述 职责', typescriptOnly: true},
     {key: 'models', label: 'Pilot 模型', icon: 'brain', keywords: '供应商 默认模型 思考强度'},
     {key: 'mcp', label: 'MCP 工具', icon: 'plug', keywords: '服务 服务器'},
     {key: 'skills', label: 'Skills', icon: 'spark', keywords: '技能'},
@@ -42,7 +43,7 @@ export function consoleCategoryLabel(page: ConsolePage) {
 
 export function availableSettingsPage(page: SettingsPage, typescriptBackend: boolean): SettingsPage {
   if (typescriptBackend) return page;
-  if (page === 'channels') return 'models';
+  if (page === 'channels' || page === 'specialists') return 'models';
   return page;
 }
 

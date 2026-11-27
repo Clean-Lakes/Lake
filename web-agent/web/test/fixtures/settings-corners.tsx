@@ -4,6 +4,7 @@ import {createRoot} from 'react-dom/client';
 import {ModelSettings} from '../../src/ModelSettings';
 import {DesktopUpdate} from '../../src/DesktopUpdate';
 import {WorkspaceConsole} from '../../src/WorkspaceConsole';
+import {SpecialistManagement} from '../../src/SpecialistManagement';
 import {WorkspacePageHeader} from '../../src/WorkspacePage';
 import {consoleCategories, type ConsolePage} from '../../src/workspaceConsoleTabs';
 import type {GatewayConnection} from '../../../shared/contracts';
@@ -94,7 +95,8 @@ function SettingsFixture() {
   </main>
   <WorkspaceConsole dialogRef={consoleRef} open={open} page={page} typescriptBackend busy={busy} onPage={setPage} onClose={close}>
    {page==='updates' ? <DesktopUpdate visible/> : page==='workspace' ?
-    <section className="workspace-page"><WorkspacePageHeader id="fixture-title" title="项目"/></section> :
+    <section className="workspace-page"><WorkspacePageHeader id="fixture-title" title="项目"/></section> : page==='specialists' ?
+    <SpecialistManagement project={{id:projectId,name:projectName,createdAt:'2026-11-16T00:00:00Z'}} channels={[]} connected={false} onSaved={()=>{}} onDeleted={()=>{}}/> :
     <ModelSettings tab={page} projectId={projectId}
      onBusyChange={setBusy} onChanged={async()=>{}} sendShortcut="enter" onShortcutChange={()=>{}}
      completionEnabled onCompletionEnabledChange={()=>{}}/>}

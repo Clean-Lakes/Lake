@@ -59,6 +59,8 @@ test('a console opened over a plan keeps its plan context only for a valid sessi
 test('console category search matches labels and keywords without exposing TypeScript-only settings on Go',()=>{
  assert.deepEqual(consoleCategories(true,'客户端 mcp').flatMap(group=>group.items.map(item=>item.key)),['channels']);
  assert.deepEqual(consoleCategories(false,'客户端 mcp'),[]);
+ assert.deepEqual(consoleCategories(true,'角色描述').flatMap(group=>group.items.map(item=>item.key)),['specialists']);
+ assert.deepEqual(consoleCategories(false,'专员管理'),[]);
  assert.deepEqual(consoleCategories(true,'默认模型').flatMap(group=>group.items.map(item=>item.key)),['models']);
  assert.deepEqual(consoleCategories(true,'Agent 执行器'),[]);
 });

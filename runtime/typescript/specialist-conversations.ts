@@ -90,6 +90,11 @@ export class SpecialistConversations {
     const session=this.store.get<{projectId:string;workspaceRole?:string}>('sessions',sessionId);
     if(session?.projectId===projectId&&session.workspaceRole==='group')return group;
   }
+  memberProfileChanged(projectId:string,roleId:string) {
+    for(const {projectId:owner,sessionId,roleIds} of this.store.list<GroupRecord>('superChatGroups')) {
+      if(owner===projectId&&roleIds.includes(roleId)&&this.group(projectId,sessionId))this.ports.notify(sessionId);
+    }
+  }
   private groupView(group:GroupRecord):ChatGroup {
     const session=this.store.session(group.sessionId);
     const [message]=this.store.recentMessages(group.sessionId,1);
@@ -99,7 +104,7 @@ export class SpecialistConversations {
       members:group.roleIds.map(roleId=>{
         const role=this.store.get<ConversationRole>('superRoles',roleId);
         if(role?.projectId!==group.projectId)return {roleId,roleName:'已移除的专员',unavailable:true};
-        return {roleId,roleName:role.name,avatarId:role.avatarId,unavailable:!!role.deletedAt};
+        return {roleId,roleName:role.name,duties:role.duties,avatarId:role.avatarId,unavailable:!!role.deletedAt};
       }),
       latest:message&&{text:bounded(this.agents.redact(message.text),360),author:message.role==='user'?'你':message.author?.name},
     };

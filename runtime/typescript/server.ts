@@ -631,6 +631,12 @@ export async function startLakeServer(options: ServerOptions) {
           status=201;
           catalogChanged();
         }
+        else if(path.length===6&&path[4]==='specialists'&&method==='PATCH'){
+          await agents.prepareRedaction();
+          if(draining)throw new HttpError(503,'服务正在退出');
+          result=superagent.updateSpecialist(path[2],path[5],data);
+          catalogChanged();
+        }
         else if(path[4]==='groups'&&method==='POST'&&(path.length===5||path.length===7&&path[6]==='messages')){
           await agents.prepareRedaction();
           if(draining)throw new HttpError(503,'服务正在退出');

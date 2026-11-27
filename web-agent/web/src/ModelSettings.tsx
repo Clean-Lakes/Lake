@@ -32,7 +32,7 @@ function Switch({checked,label,onChange,disabled=false}: {checked:boolean;label:
 export type SettingsNavigationHandle = {confirmLeave: () => boolean | Promise<boolean>};
 
 export function ModelSettings({tab,navigationGuard,onBusyChange,onChanged,sendShortcut,onShortcutChange,completionEnabled,onCompletionEnabledChange,onSessionConfig:openSessionConfig,projectId,capabilityDetectionEnabled=false,onGatewayTask:openGatewayTask}: {
-  tab:SettingsPage;navigationGuard?:Ref<SettingsNavigationHandle>;onBusyChange:(busy:boolean)=>void;
+  tab:Exclude<SettingsPage,'specialists'>;navigationGuard?:Ref<SettingsNavigationHandle>;onBusyChange:(busy:boolean)=>void;
   onChanged:()=>Promise<void>;sendShortcut:SendShortcut;onShortcutChange:(value:SendShortcut)=>void;onSessionConfig?:()=>void;projectId?:string;
   completionEnabled?:boolean;onCompletionEnabledChange?:(value:boolean)=>void;
   capabilityDetectionEnabled?:boolean;onGatewayTask?:(target:GatewayTaskTarget)=>Promise<void>;

@@ -117,6 +117,18 @@
   padding:var(--workspace-row-padding);
 }
 .workspace-setting-row + .workspace-setting-row { border-block-start:1px solid var(--workspace-card-line,var(--border)); }
+.specialist-management-list { margin:0; padding:0; list-style:none; }
+.specialist-management-profile { display:flex; align-items:flex-start; gap:12px; flex:1 1 205px; min-width:0; }
+.specialist-management-profile > .super-role-avatar { flex:none; }
+.specialist-management-profile .settings-note {
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  overflow:hidden;
+}
+.specialist-management-actions { display:flex; align-items:center; gap:7px; margin-inline-start:auto; }
+.specialist-management-actions > .button { display:inline-flex; align-items:center; gap:6px; }
+.specialist-management-actions > .icon-button:hover:not(:disabled) { color:var(--danger); }
 .workspace-setting-copy { flex:1 1 180px; min-width:0; overflow-wrap:anywhere; }
 .workspace-setting-copy > :is(strong,label) { display:block; font-weight:var(--font-weight-medium); line-height:1.35; }
 .workspace-page .workspace-setting-copy .settings-note {
