@@ -4,12 +4,11 @@ import {TaskSpecialistAvatars} from './TaskSpecialistAvatars';
 import {PilotReportFold, readingPilotReport} from './PilotReportFold';
 import type {SpecialistTaskMember} from './specialistTaskListModel';
 
-export function PilotReportGroup({members, count, fold, connected, onInspect, children}: {
+export function PilotReportGroup({members, count, fold, connected, children}: {
   members: readonly SpecialistTaskMember[];
   count: number;
   fold: boolean;
   connected: boolean;
-  onInspect?: () => void;
   children: ReactNode;
 }) {
   const id = useId();
@@ -22,7 +21,7 @@ export function PilotReportGroup({members, count, fold, connected, onInspect, ch
   return <PilotReportFold id={id} bodyRef={body} open={open} automatic={fold && expanded === undefined}
     connected={connected} stripHidden={!fold} strip={
     <button type="button" className="pilot-report-toggle" aria-expanded={open}
-      aria-controls={id} aria-describedby={`${id}-authors`} onClick={() => {onInspect?.(); setExpanded(!open);}}>
+      aria-controls={id} aria-describedby={`${id}-authors`} onClick={() => setExpanded(!open)}>
       {fold && <TaskSpecialistAvatars members={members} descriptionId={`${id}-authors`}/>}
       <span>{count} 份专员报告</span>
       <Glyph name="next" size={12} className="pilot-report-chevron"/>

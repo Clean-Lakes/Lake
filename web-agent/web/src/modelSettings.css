@@ -5,7 +5,7 @@
  --workbench-dialog-inset: var(--workspace-gutter);
  --settings-pane-padding:var(--workspace-page-padding);
 }
-.model-settings-page :where(.model-conversation,.memory-settings,.provider-list,.model-settings-body,.gateway-settings,
+.model-settings-page :where(.model-conversation,.memory-settings,.provider-list,.model-settings-body,
  .extension-settings,.extension-list,.extension-detail,.mcp-content) {
  scrollbar-width: thin;
 }

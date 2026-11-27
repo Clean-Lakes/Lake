@@ -742,6 +742,7 @@ a { color: inherit; }
 .ai-transcript { display: flex; flex-direction: column; padding: 4px 0 16px; gap: 20px; font-size: var(--font-size-ui); }
 .ai-card, .ai-chat-message { line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ai-role-user { align-self: flex-end; background: var(--surface-muted); padding: 10px 14px; max-width: 85%; border-radius: var(--radius-window); }
+.external-origin-badge {display:inline-flex;align-items:center;gap:4px;font-size:var(--font-size-badge);line-height:1;padding:3px 7px;border-radius:var(--radius-settings-badge);corner-shape:var(--corner-window);border:1px solid var(--border);color:var(--text-secondary);margin:2px 6px 2px 0;vertical-align:middle}
 .specialist-mcp-notice { display: flex; flex-direction: column; gap: 8px; max-width: 100%; }
 .specialist-mcp-notice-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .specialist-mcp-notice-head .response-identity { margin: 0; }

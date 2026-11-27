@@ -24,7 +24,7 @@
 
 「手动接入」仍可生成和复制单独的手动凭据。手动凭据仅在生成或重新生成时显示。
 
-接收配置和投递记录绑定资源 ID。改名或移动目录会保留原配置和记录。资源或所属项目在回收站期间，接收入口暂停。恢复资源后可继续使用原配置。早期在「设置 → 接入渠道」中创建的独立 Grafana 来源仍在该页管理。
+接收配置和投递记录绑定资源 ID。改名或移动目录会保留原配置和记录。资源或所属项目在回收站期间，接收入口暂停。恢复资源后可继续使用原配置。早期的独立 Grafana 来源沿用原接收配置，新接入从资源详情配置。
 
 在 Grafana 的「Alerting → Contact points」使用内置的 Grafana Alertmanager，点击「Add contact point」，将 Integration 设为 **Webhook**。 [Grafana 11.1 接入点说明](https://archive.grafana.com/docs/grafana/v11.1/alerting/configure-notifications/manage-contact-points/integrations/webhook-notifier/)
 

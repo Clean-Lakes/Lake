@@ -19,11 +19,10 @@ function alignSelection(list: HTMLElement, background: HTMLElement, reveal = fal
   });
 }
 
-export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy, overlay, notice, onClose, onPage, children}: {
+export function WorkspaceConsole({dialogRef, open, page, busy, overlay, notice, onClose, onPage, children}: {
   dialogRef: RefObject<HTMLDialogElement | null>;
   open: boolean;
   page: ConsolePage;
-  typescriptBackend: boolean;
   busy: boolean;
   overlay?: ReactNode;
   notice?: ReactNode;
@@ -47,8 +46,8 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
   const overlayRoot = useRef<HTMLDivElement>(null);
   const lastFrameFocus = useRef<HTMLElement | null>(null);
   const hadOverlay = useRef(false);
-  const groups = consoleCategories(typescriptBackend, '');
-  const matching = new Set(consoleCategories(typescriptBackend, query).flatMap(group => group.items.map(item => item.key)));
+  const groups = consoleCategories('');
+  const matching = new Set(consoleCategories(query).flatMap(group => group.items.map(item => item.key)));
   const first = matching.values().next().value;
   const tabbable = matching.has(displayed.page) ? displayed.page : first;
   const hasOverlay = open && Boolean(overlay);
@@ -121,7 +120,7 @@ export function WorkspaceConsole({dialogRef, open, page, typescriptBackend, busy
       return;
     }
     alignSelection(list, background, !query);
-  }, [visible, displayed.page, query, typescriptBackend]);
+  }, [visible, displayed.page, query]);
   useLayoutEffect(() => {
     const list = tabs.current;
     const background = selectionBackground.current;
