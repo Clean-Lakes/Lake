@@ -22,6 +22,7 @@ import {conversationActivity,conversationAvatarMotion,pilotIdentity,superTaskHea
 import {superPilotActivity} from './superPilotActivity';
 import {useTerminalPopover} from './useTerminalPopover';
 import {WorkbenchIsland,useWideWorkbench} from './WorkbenchIsland';
+import {LakeIslandDrawer} from './LakeIslandDrawer';
 import {useInspectorWindow} from './inspectorWindow';
 import {inspectorExitMs,retainConversation,SessionInspectorProvider,useSessionInspector,type PilotProcessTarget,type ReplyProcessSources} from './SessionInspectorContext';
 import {ReplyProcessSelect,SessionInspector} from './SessionInspector';
@@ -2179,7 +2180,24 @@ function AppContent() {
     </aside>
 
     {detachedConversation&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={sharedIsland?terminalHeading:null}
-      terminalOpen={sharedIsland&&terminalOpen} pilotTone={pilotTone}/>}
+      terminalOpen={sharedIsland&&terminalOpen} pilotTone={pilotTone} sessionKey={selectedSession?.id}
+      expandedPanel={selectedSession?({close})=><LakeIslandDrawer
+        title={(superHeaderIdentity&&!selectedSuperPilot?selectedRoleName:headerTitle)??selectedSession.title}
+        statusLabel={superHeaderPresentation?.label??sessionLabels[selectedSession.status]}
+        tone={pilotTone}
+        running={pilotHeaderActivity?.animated??(avatarActivity?.state==='running')}
+        waiting={(superHeaderPresentation?.status??selectedSession.status)==='waiting_approval'}
+        participants={pilotParticipants??[]}
+        channels={pilotWorkspace.workspace?.channels}
+        inspectorAvailable={!!inspectorAvailable}
+        inspectorOpen={inspectorOpen}
+        stoppable={executionStoppable}
+        stopping={stoppingTurn}
+        onToggleInspector={()=>inspectorOpen?inspector.close():reopenInspector()}
+        onStop={()=>void stopCurrentTurn()}
+        onOpenSpecialist={roleId=>{const channel=pilotWorkspace.workspace?.channels?.find(row=>row.roleId===roleId);if(channel)openSpecialistTaskList(channel);}}
+        onClose={close}
+      />:undefined}/>}
     {(dockedConversation||specialistTaskPage)&&<div className={`workbench-conversation-surface${specialistTaskPage?" is-specialist-task-surface":""}`} aria-hidden="true"/>}
     <main className={`workspace${inspectorOpen?" has-session-inspector":""}${!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":specialistTaskPage?" has-specialist-task-page":""}`} {...(!isWorkspacePage?attachmentDropEvents:{})}>
       {!detachedConversation&&(specialistTaskPage?<header className="specialist-mobile-heading"><button type="button" className="icon-button" aria-label="打开项目导航" onClick={()=>setMobileMenu(true)}><Glyph name="menu" size={21}/></button><span>专员任务</span></header>:workspaceHeading)}
