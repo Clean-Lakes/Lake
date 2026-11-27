@@ -55,10 +55,7 @@
 }
 .modal.chat-group-create-dialog {
   width:min(416px,calc(100vw - 32px));
-  margin:auto;
 }
-.chat-group-create-dialog:not([open]) { display:none; }
-.chat-group-create-dialog::backdrop { background:var(--overlay); }
 .chat-group-member-picker {
   min-inline-size:0;
   padding:0;

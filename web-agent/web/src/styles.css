@@ -11,6 +11,7 @@
 @import "./tabSelectionIndicator.css";
 @import "./resourceFolderRename.css";
 @import "./surfaceGeometry.css";
+@import "./workbenchModalDialog.css";
 @import "./statusText.css";
 @import "./contextUsage.css";
 @import "./resourceReferences.css";

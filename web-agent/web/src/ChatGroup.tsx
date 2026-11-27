@@ -1,8 +1,9 @@
-import {useEffect, useId, useRef, useState, type FormEvent, type RefObject} from 'react';
+import {useId, useRef, useState, type FormEvent, type RefObject} from 'react';
 import type {ChatGroup, ChatGroupMember, SpecialistChannelInfo} from '../../shared/contracts';
 import {api, readableError} from './api';
 import {Glyph} from './Icons';
 import {SuperRoleAvatar} from './SuperRoleAvatar';
+import {WorkbenchModalDialog} from './WorkbenchModalDialog';
 
 export function ChatGroupAvatars({members,compact=false}:{members:readonly ChatGroupMember[];compact?:boolean}) {
   return <span className="chat-group-avatars" aria-hidden="true">
@@ -41,7 +42,6 @@ export function CreateChatGroup({projectId,channels,disabled,returnFocus,onCreat
   onClose:()=>void;
 }) {
   const id=useId();
-  const dialog=useRef<HTMLDialogElement>(null);
   const input=useRef<HTMLInputElement>(null);
   const request=useRef<{signature:string;id:string}>(undefined);
   const sending=useRef(false);
@@ -51,18 +51,8 @@ export function CreateChatGroup({projectId,channels,disabled,returnFocus,onCreat
   const [error,setError]=useState('');
   const roleIds=channels.flatMap(channel=>selected.has(channel.roleId)?[channel.roleId]:[]);
   const ready=!disabled&&!busy&&title.trim()&&roleIds.length>=2&&roleIds.length<=64;
-  useEffect(()=>{
-    const previous=returnFocus.current;
-    const node=dialog.current;
-    node?.showModal();
-    input.current?.focus({preventScroll:true});
-    return ()=>{
-      node?.close();
-      if(previous?.isConnected)previous.focus({preventScroll:true});
-    };
-  },[returnFocus]);
 
-  async function create(event:FormEvent) {
+  async function create(event:FormEvent,closeDialog:(force?:boolean)=>void) {
     event.preventDefault();
     if(!ready||sending.current)return;
     sending.current=true;
@@ -71,52 +61,56 @@ export function CreateChatGroup({projectId,channels,disabled,returnFocus,onCreat
     const name=title.trim();
     const signature=JSON.stringify([name,roleIds]);
     if(request.current?.signature!==signature)request.current={signature,id:crypto.randomUUID()};
+    let created=false;
     try {
       const group=await api.createChatGroup(projectId,{title:name,roleIds,requestId:request.current.id});
       await onCreated(group);
-      onClose();
+      created=true;
     }catch(reason){
       setError(readableError(reason));
     }finally{
       sending.current=false;
       setBusy(false);
     }
+    if(created)closeDialog(true);
   }
 
-  return <dialog ref={dialog} className="modal workbench-dialog chat-group-create-dialog" aria-labelledby={id}
-    onCancel={event=>{event.preventDefault();if(!busy)onClose();}}>
-    <header className="workbench-dialog-header">
-      <h2 id={id}>新建群组</h2>
-      <button type="button" className="icon-button" aria-label="关闭新建群组" disabled={busy} onClick={onClose}><Glyph name="close" size={16}/></button>
-    </header>
-    <form className="workbench-dialog-form" onSubmit={create}>
-      <div className="workbench-dialog-body">
-        <label className="field-label">群名<input ref={input} maxLength={80} placeholder="例如：运维协作群" disabled={busy}
-          value={title} onChange={event=>setTitle(event.target.value)}/></label>
-        <fieldset className="chat-group-member-picker" disabled={busy}>
-          <legend>选择至少两位专员</legend>
-          {channels.length ? <div className="chat-group-member-list">
-            {channels.map(channel=><label key={channel.roleId}>
-              <input type="checkbox" checked={selected.has(channel.roleId)} disabled={roleIds.length>=64&&!selected.has(channel.roleId)}
-                onChange={event=>{
-                  const checked=event.target.checked;
-                  setSelected(current=>{
-                    const next=new Set(current);
-                    if(checked)next.add(channel.roleId);else next.delete(channel.roleId);
-                    return next;
-                  });
-                }}/>
-              <SuperRoleAvatar roleId={channel.roleId} name={channel.roleName} avatarId={channel.avatarId} motion="still"/>
-              <span>{channel.roleName}</span>
-            </label>)}
-          </div> : <p>当前项目还没有可选专员。</p>}
-        </fieldset>
-        {error&&<p className="form-error" role="alert">{error}</p>}
-      </div>
-      <footer className="workbench-dialog-footer">
-        <button type="button" className="button secondary" onClick={onClose} disabled={busy}>取消</button>
-        <button type="submit" className="button primary" disabled={!ready}>{busy?'正在创建…':'创建群组'}</button>
-      </footer>
-    </form>
-  </dialog>;
+  return <WorkbenchModalDialog className="chat-group-create-dialog" labelledBy={id} busy={busy}
+    returnFocus={returnFocus} initialFocus={input} onClose={onClose}>
+    {requestClose=><>
+      <header className="workbench-dialog-header">
+        <h2 id={id}>新建群组</h2>
+        <button type="button" className="icon-button" aria-label="关闭新建群组" disabled={busy} onClick={()=>requestClose()}><Glyph name="close" size={16}/></button>
+      </header>
+      <form className="workbench-dialog-form" onSubmit={event=>void create(event,requestClose)}>
+        <div className="workbench-dialog-body">
+          <label className="field-label">群名<input ref={input} maxLength={80} placeholder="例如：运维协作群" disabled={busy}
+            value={title} onChange={event=>setTitle(event.target.value)}/></label>
+          <fieldset className="chat-group-member-picker" disabled={busy}>
+            <legend>选择至少两位专员</legend>
+            {channels.length ? <div className="chat-group-member-list">
+              {channels.map(channel=><label key={channel.roleId}>
+                <input type="checkbox" checked={selected.has(channel.roleId)} disabled={roleIds.length>=64&&!selected.has(channel.roleId)}
+                  onChange={event=>{
+                    const checked=event.target.checked;
+                    setSelected(current=>{
+                      const next=new Set(current);
+                      if(checked)next.add(channel.roleId);else next.delete(channel.roleId);
+                      return next;
+                    });
+                  }}/>
+                <SuperRoleAvatar roleId={channel.roleId} name={channel.roleName} avatarId={channel.avatarId} motion="still"/>
+                <span>{channel.roleName}</span>
+              </label>)}
+            </div> : <p>当前项目还没有可选专员。</p>}
+          </fieldset>
+          {error&&<p className="form-error" role="alert">{error}</p>}
+        </div>
+        <footer className="workbench-dialog-footer">
+          <button type="button" className="button secondary" onClick={()=>requestClose()} disabled={busy}>取消</button>
+          <button type="submit" className="button primary" disabled={!ready}>{busy?'正在创建…':'创建群组'}</button>
+        </footer>
+      </form>
+    </>}
+  </WorkbenchModalDialog>;
 }
