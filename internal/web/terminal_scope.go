@@ -51,6 +51,9 @@ func (s *Store) AvailableTerminals(id string) []Object {
 
 func (b *Server) sessionSnapshot(id string) Object {
 	snap := b.Store.Snapshot(id)
+	if model := b.sessionModelState(id); model != nil {
+		snap["model"] = model
+	}
 	if b.Engine == nil || b.Engine.CheckSecurityMemoryEligibility(b.Context, stringOf(object(snap["session"])["projectId"]), ai.SecurityMemoryRead) != nil {
 		snap["naturalMemoryNotices"] = []Object{}
 	}

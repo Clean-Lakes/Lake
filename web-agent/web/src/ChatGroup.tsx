@@ -1,4 +1,4 @@
-import {useId, useRef, useState, type FormEvent, type RefObject} from 'react';
+import {useEffect, useId, useRef, useState, type FormEvent, type RefObject} from 'react';
 import type {ChatGroup, ChatGroupMember, SpecialistChannelInfo} from '../../shared/contracts';
 import {api, readableError} from './api';
 import {Glyph} from './Icons';
@@ -13,14 +13,27 @@ export function ChatGroupAvatars({members,compact=false}:{members:readonly ChatG
   </span>;
 }
 
-export function ChatGroupNavigation({groups,selectedId,onOpen}:{
+export function ChatGroupNavigation({groups,selectedId,onOpen,createGroup}:{
   groups:readonly ChatGroup[];
   selectedId:string|null;
   onOpen:(sessionId:string)=>void;
+  createGroup?:{
+    projectId:string;
+    channels:readonly SpecialistChannelInfo[];
+    disabled:boolean;
+    onCreated:(group:ChatGroup)=>Promise<void>;
+  };
 }) {
+  const [creating,setCreating]=useState(false);
+  const createButton=useRef<HTMLButtonElement>(null);
+  useEffect(()=>{setCreating(false);},[createGroup?.projectId]);
+
   return <section className="chat-group-navigation" aria-label="群组">
     <div className="chat-group-navigation-heading">
       <h2>群组</h2>
+      {createGroup&&<button ref={createButton} type="button" className="icon-button chat-group-create-trigger"
+        aria-label="新建群组" title="新建群组" disabled={createGroup.disabled}
+        onClick={()=>setCreating(true)}><Glyph name="plus" size={15}/></button>}
     </div>
     {groups.map(group=><button key={group.sessionId} type="button" className="nav-row chat-group-nav-row"
       aria-current={selectedId===group.sessionId?'page':undefined} onClick={()=>onOpen(group.sessionId)}>
@@ -30,6 +43,9 @@ export function ChatGroupNavigation({groups,selectedId,onOpen}:{
         <small>{group.latest ? [group.latest.author,group.latest.text].filter(Boolean).join('：') : `${group.members.length} 位专员`}</small>
       </span>
     </button>)}
+    {creating&&createGroup&&<CreateChatGroup projectId={createGroup.projectId} channels={createGroup.channels}
+      disabled={createGroup.disabled} returnFocus={createButton} onCreated={createGroup.onCreated}
+      onClose={()=>setCreating(false)}/>}
   </section>;
 }
 

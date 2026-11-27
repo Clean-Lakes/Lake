@@ -272,6 +272,12 @@ test('draft completion uses only current text, cancels stale requests, and never
   assert.deepEqual(await complete('样例服务运行正常吗？'), {suffix:'可以列出核对指标吗？',modelId});
   assert.match(f.requests.at(-1).messages[0].content, /follow-up question/);
   assert.equal((await complete('这是样例结果吗?')).suffix, '', 'a statement is not a follow-up question');
+  const magpie = await writeMagpie(f);
+  const scoped = await f.api(`/api/sessions/${f.session.id}/ai/model`, 'POST', {providerId: 'magpie', modelId: 'magpie-second'});
+  assert.deepEqual(await complete('查看样例服务', scoped.modelId), {suffix: '运行状态和最近一次异常。', modelId: scoped.modelId});
+  assert.equal(f.requests.at(-1).model, 'magpie-second');
+  assert.equal((await f.api('/api/bootstrap')).modelName, 'fixture');
+  assert.equal(JSON.parse(await readFile(join(f.home, 'secrets/magpie-agent.json'), 'utf8')).model, magpie.model);
   assert.deepEqual(f.app.store.messages(f.session.id), []);
 });
 
@@ -809,6 +815,41 @@ test('declared reasoning options persist, reach the actual SDK request and canno
   await f.api(base, 'POST', {modelId: initialIdentity, effort: 'high'}, 409);
   await f.api(`/api/sessions/${f.session.id}/messages`, 'POST', {text: 'New identity default'}, 202); await f.wait(['completed']);
   assert.equal(f.requests.at(-1).reasoning_effort, undefined);
+});
+
+test('ordinary conversation model choices and reasoning survive restart without changing the application default', async t => {
+  const f = await fixture(t);
+  const provider = (await f.api('/api/settings/providers')).providers[0];
+  const alternate = {id: 'alternate', name: 'alternate', enabled: true, reasoningCapability: {levels: ['low', 'high']}};
+  provider.models.push(alternate);
+  await f.api(`/api/settings/providers/${provider.id}`, 'PUT', provider);
+  const other = await f.api(`/api/projects/${f.project.id}/sessions`, 'POST', {});
+  const path = `/api/sessions/${f.session.id}`, otherPath = `/api/sessions/${other.id}`;
+  const choice = {providerId: provider.id, modelId: alternate.id};
+  await f.api(`${path}/ai/model`, 'POST', {...choice, modelId: 'missing'}, 400);
+  const state = await f.api(`${path}/ai/model`, 'POST', choice);
+  assert.equal(state.modelName, alternate.name);
+  assert.equal((await f.api(`${path}/ai/model`, 'POST', choice)).revision, state.revision);
+  await f.api(`${path}/ai/reasoning`, 'POST', {modelId: state.modelId, effort: 'high'});
+  assert.equal((await f.api(`${otherPath}/snapshot`)).model, undefined);
+  assert.equal((await f.api('/api/bootstrap')).modelName, 'fixture');
+  await f.restart();
+  assert.deepEqual((await f.api(`${path}/snapshot`)).model, state);
+  assert.equal((await f.api(`${path}/ai/reasoning`)).effort, 'high');
+  assert.equal((await f.api(`${otherPath}/ai/reasoning`)).effort, '');
+  await f.api(`${path}/messages`, 'POST', {text: 'Which conversation model?', ignoreProjectMemory: true}, 202);
+  await f.wait(['completed']);
+  assert.equal(f.requests.at(-1).model, alternate.name);
+  assert.equal(f.requests.at(-1).reasoning_effort, 'high');
+
+  alternate.enabled = false;
+  await f.api(`/api/settings/providers/${provider.id}`, 'PUT', provider);
+  const sync = await f.api(`/api/settings/model/state?sessionId=${f.session.id}`);
+  assert.equal(sync.modelName, 'fixture');
+  assert.equal(sync.sessionModel.modelConfigured, false);
+  assert.equal(sync.sessionModel.revision, state.revision);
+  await f.api(`${path}/messages`, 'POST', {text: 'Do not use the global fallback'}, 409);
+  assert.equal(f.requests.at(-1).model, alternate.name);
 });
 
 test('the existing exact DeepSeek reasoning registry reaches the wire and explicit empty metadata disables the fallback', async t => {

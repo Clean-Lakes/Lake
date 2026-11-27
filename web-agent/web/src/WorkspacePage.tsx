@@ -1,5 +1,6 @@
-import {useMemo, useRef, useState, type KeyboardEvent, type ReactNode} from 'react';
+import {useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode} from 'react';
 import type {Project, Resource} from '../../shared/contracts';
+import {readableError} from './api';
 import {BulkCheckbox, type BulkSelection} from './BulkNavigationDelete';
 import {Glyph} from './Icons';
 
@@ -31,13 +32,60 @@ export function WorkspaceSettingSection({id, title, actions, children}: {
   </section>;
 }
 
-function CurrentProject({project, resourceCount, canDelete, onDelete}: {
+function CurrentProject({project, resourceCount, canRename, canDelete, onRename, onDelete}: {
   project: Project;
   resourceCount: number;
+  canRename: boolean;
   canDelete: boolean;
+  onRename?: (name: string) => Promise<void>;
   onDelete: () => void;
 }) {
   const createdAt = new Date(project.createdAt);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(project.name);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    setEditing(false);
+    setDraft(project.name);
+    setSaving(false);
+    setError('');
+  }, [project.id]);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.select();
+  }, [editing]);
+
+  const trimmed = draft.trim();
+  const canSubmit = !!trimmed && trimmed !== project.name && canRename && !saving;
+
+  const cancelEdit = () => {
+    if (saving) return;
+    setEditing(false);
+    setDraft(project.name);
+    setError('');
+    requestAnimationFrame(() => triggerRef.current?.focus({preventScroll: true}));
+  };
+
+  const submitRename = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!onRename || !canSubmit) return;
+    setSaving(true);
+    setError('');
+    try {
+      await onRename(trimmed);
+      setEditing(false);
+      requestAnimationFrame(() => triggerRef.current?.focus({preventScroll: true}));
+    } catch (reason) {
+      setError(readableError(reason));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return <WorkspaceSettingSection id="workspace-current-project-title" title="当前项目">
     <div id="workspace-current-project" className="workspace-setting-card">
       <div className="workspace-setting-row">
@@ -50,16 +98,32 @@ function CurrentProject({project, resourceCount, canDelete, onDelete}: {
             </div>}
           </dl>
         </div>
-        <button type="button" className="workspace-text-button danger-text" disabled={!canDelete} onClick={onDelete}>
-          <Glyph name="trash" size={15}/>删除项目…
-        </button>
+        <div className="workspace-project-actions">
+          {onRename && <button ref={triggerRef} type="button" className="workspace-text-button"
+            disabled={!canRename || editing} onClick={() => {setDraft(project.name); setError(''); setEditing(true);}}>
+            <Glyph name="edit" size={15}/>重命名
+          </button>}
+          <button type="button" className="workspace-text-button danger-text" disabled={!canDelete || saving} onClick={onDelete}>
+            <Glyph name="trash" size={15}/>删除项目…
+          </button>
+        </div>
       </div>
+      {editing && <form className="workspace-project-rename-form" onSubmit={submitRename}
+        onKeyDown={event => {if (event.key === 'Escape') {event.stopPropagation(); cancelEdit();}}}>
+        <div className="workspace-project-rename-controls">
+          <input ref={inputRef} type="text" aria-label="项目名称" placeholder="输入项目名称" maxLength={120}
+            autoFocus disabled={saving} value={draft} onChange={event => {setDraft(event.target.value); setError('');}}/>
+          <button type="submit" className="button primary" disabled={!canSubmit}>{saving ? '正在保存…' : '保存'}</button>
+          <button type="button" className="button secondary" disabled={saving} onClick={cancelEdit}>取消</button>
+        </div>
+        {error && <p className="form-error" role="alert">{error}</p>}
+      </form>}
     </div>
   </WorkspaceSettingSection>;
 }
 
 export function WorkspacePage({projects, project, resources, connected, bulkSelection, bulkSelectedCount,
-  onOpenProject, onCreateProject, onDeleteProject, onToggleBulk,
+  onOpenProject, onCreateProject, onRenameProject, onDeleteProject, onToggleBulk,
   onClearSelection, onDeleteSelected}: {
   projects: readonly Project[];
   project?: Project;
@@ -69,6 +133,7 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
   bulkSelectedCount: number;
   onOpenProject: (project: Project) => void;
   onCreateProject: () => void;
+  onRenameProject?: (project: Project, name: string) => Promise<void>;
   onDeleteProject: (project: Project) => void;
   onToggleBulk: () => void;
   onClearSelection: () => void;
@@ -169,7 +234,9 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
         </div>
       </WorkspaceSettingSection>
       {project && <CurrentProject project={project} resourceCount={resourceCounts.get(project.id) ?? 0}
-        canDelete={connected && !bulkSelection} onDelete={() => onDeleteProject(project)}/>}
+        canRename={connected && !bulkSelection} canDelete={connected && !bulkSelection}
+        onRename={onRenameProject ? name => onRenameProject(project, name) : undefined}
+        onDelete={() => onDeleteProject(project)}/>}
     </div>
   </section>;
 }

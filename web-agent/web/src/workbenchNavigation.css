@@ -4,10 +4,12 @@
   :root .app-shell.has-workbench-navigation {
     --workbench-navigation-height:36px;
     --workbench-navigation-start:8px;
-    --workbench-navigation-end:16px;
-    --workbench-navigation-button-size:28px;
+    --workbench-navigation-button-size:clamp(22px,calc((var(--sidebar-expanded-width,280px) - 94px) / 4),28px);
     --workbench-navigation-gap:3px;
     --workbench-navigation-min-width:calc(3 * var(--workbench-navigation-button-size) + 2 * var(--workbench-navigation-gap));
+    --workbench-titlebar-gap:2px;
+    --workbench-titlebar-inset:8px;
+    --workbench-history-width:calc(2 * var(--workbench-navigation-button-size) + var(--workbench-navigation-gap));
     --workbench-navigation-island-padding:8px;
     --workbench-navigation-island-width:calc(var(--workbench-navigation-min-width) + 2 * var(--workbench-navigation-island-padding));
     --workbench-sidebar-duration:420ms;
@@ -24,9 +26,15 @@
     pointer-events:none;
     transition:opacity var(--workbench-sidebar-duration) var(--workbench-sidebar-ease);
   }
+  .app-shell.has-workbench-navigation:not(.has-workbench-conversation):not(:has(> .workbench-conversation-surface))::before {
+    inset:0 auto 0 0;
+    inline-size:var(--sidebar-width,280px);
+  }
   :root.lake-native .app-shell.has-workbench-navigation {
     --workbench-navigation-height:var(--lake-titlebar-height, 52px);
     --workbench-navigation-start:86px;
+    --workbench-titlebar-inset:6px;
+    --workbench-navigation-button-size:clamp(22px,calc((var(--sidebar-expanded-width,280px) - 112px) / 4),28px);
   }
   :root.lake-windows-chrome .app-shell.has-workbench-navigation { --workbench-navigation-height:48px; }
   .app-shell.has-workbench-navigation > .sidebar.workspace-navigation {
@@ -44,10 +52,61 @@
     pointer-events:none;
   }
   .app-shell.has-workbench-navigation .sidebar-navigation-content {
-    padding-block-start:var(--workbench-navigation-height);
+    padding-block-start:0;
     background:var(--workbench-sidebar-background,var(--sidebar));
     pointer-events:auto;
     transition:transform var(--workbench-sidebar-duration) var(--workbench-sidebar-ease), opacity var(--workbench-sidebar-duration) var(--workbench-sidebar-ease);
+  }
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-brand-row {
+    height:var(--workbench-navigation-height);
+    min-height:var(--workbench-navigation-height);
+    margin:0;
+    padding-block:0;
+    padding-inline:var(--sidebar-edge-inset);
+    padding-inline-end:calc(var(--workbench-titlebar-inset) + var(--workbench-navigation-button-size) + var(--workbench-titlebar-gap));
+    gap:var(--workbench-titlebar-gap);
+  }
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-brand-row:has(.sidebar-project-select) {
+    padding-inline-start:var(--sidebar-edge-inset);
+  }
+  :root.lake-native .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-brand-row {
+    padding-inline-start:max(var(--sidebar-edge-inset),calc(var(--workbench-navigation-start) - var(--sidebar-rail-width)));
+  }
+  :root.lake-native .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-brand-row:has(.sidebar-project-select) {
+    padding-inline-start:max(6px,calc(var(--workbench-navigation-start) - var(--sidebar-rail-width) - 6px));
+  }
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-brand-row .sidebar-project-select > .app-select-trigger {
+    height:max(30px,var(--workbench-navigation-button-size));
+    padding-inline:6px;
+    gap:5px;
+  }
+  .app-shell.has-workbench-navigation .sidebar-brand-row .sidebar-project-select {
+    container:workbench-project / inline-size;
+  }
+  @container workbench-project (max-width:46px) {
+    .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-brand-row .sidebar-project-select > .app-select-trigger {
+      justify-content:center;
+      padding-inline:0;
+      gap:0;
+    }
+    .sidebar-brand-row .sidebar-project-select :is(.app-select-value,.app-select-chevron) { display:none; }
+  }
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-brand-actions {
+    padding-inline-start:calc(var(--workbench-history-width) + var(--workbench-titlebar-gap));
+  }
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-brand-actions .sidebar-search-trigger {
+    width:var(--workbench-navigation-button-size);
+    height:var(--workbench-navigation-button-size);
+    border-radius:var(--radius-settings-icon);
+    corner-shape:var(--corner-window);
+  }
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-navigation-panel .pilot-workspace,
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation:has(.sidebar-specialist-roster) .sidebar-navigation-panel .pilot-workspace {
+    padding-top:var(--sidebar-rail-top);
+  }
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-content-header {
+    min-height:var(--sidebar-rail-button-size);
+    margin-top:var(--sidebar-rail-top);
   }
   .app-shell.has-collapsed-sidebar .sidebar-navigation-content {
     transform:translate3d(-100%,0,0);
@@ -73,40 +132,40 @@
   }
   .workbench-navigation {
     position:absolute;
-    z-index:24;
-    grid-column:1 / 2;
+    z-index:26;
+    grid-column:1 / -1;
     inset-block-start:0;
-    inset-inline-start:var(--workbench-navigation-start);
-    inset-inline-end:var(--workbench-navigation-end);
+    /* The search button occupies the space between history and the sidebar toggle. */
+    inset-inline-start:calc(var(--sidebar-width,280px) - var(--workbench-titlebar-inset) - var(--workbench-history-width) - 2 * (var(--workbench-navigation-button-size) + var(--workbench-titlebar-gap)));
     min-inline-size:var(--workbench-navigation-min-width);
     height:var(--workbench-navigation-height);
     display:flex;
     align-items:center;
-    justify-content:flex-end;
+    justify-content:flex-start;
     gap:var(--workbench-navigation-gap);
     user-select:none;
     pointer-events:none;
-  }
-  .app-shell.has-workbench-conversation > .workbench-navigation {
-    z-index:26;
-    inset-inline-end:auto;
-    inline-size:max(var(--workbench-navigation-min-width),calc(var(--sidebar-width,280px) - var(--workbench-navigation-start) - var(--workbench-navigation-end)));
     transition:inset-inline-start var(--workbench-sidebar-duration) var(--workbench-sidebar-ease),
       inset-block-start var(--workbench-sidebar-duration) var(--workbench-sidebar-ease),
-      inline-size var(--workbench-sidebar-duration) var(--workbench-sidebar-ease),
       height var(--workbench-sidebar-duration) var(--workbench-sidebar-ease);
   }
-  .app-shell.has-docked-conversation > .workbench-navigation {
-    --workbench-island-navigation-top:var(--conversation-island-top);
-    transition:none;
+  .workbench-navigation .workbench-sidebar-toggle {
+    margin-inline-start:calc(var(--workbench-navigation-button-size) + 2 * var(--workbench-titlebar-gap) - var(--workbench-navigation-gap));
+    transition:margin-inline-start var(--workbench-sidebar-duration) var(--workbench-sidebar-ease);
   }
+  .app-shell.has-collapsed-sidebar > .workbench-navigation { inset-inline-start:var(--workbench-navigation-start); }
+  .app-shell.has-collapsed-sidebar .workbench-sidebar-toggle { margin-inline-start:0; }
   .app-shell.has-workbench-conversation.has-collapsed-sidebar > .workbench-navigation {
     inset-inline-start:calc(var(--workbench-island-navigation-left,var(--workbench-navigation-start)) + var(--workbench-navigation-island-padding));
     inset-block-start:var(--workbench-island-navigation-top,12px);
-    inline-size:var(--workbench-navigation-min-width);
     height:46px;
   }
-  .workbench-resizing .app-shell.has-workbench-conversation > .workbench-navigation { transition:none; }
+  .app-shell.has-docked-conversation > .workbench-navigation {
+    --workbench-island-navigation-top:var(--conversation-island-top);
+  }
+  .app-shell.has-docked-conversation > .workbench-navigation,
+  .app-shell.has-docked-conversation .workbench-navigation .workbench-sidebar-toggle,
+  .workbench-resizing :is(.workbench-navigation,.workbench-navigation .workbench-sidebar-toggle) { transition:none; }
   .workbench-navigation button {
     display:grid;
     place-items:center;
@@ -124,17 +183,29 @@
   .workbench-navigation button:hover:not(:disabled) { color:var(--foreground); background:var(--surface-hover); }
   .workbench-navigation button:disabled { opacity:.42; }
   .workbench-navigation button:focus-visible { outline-offset:-2px; }
-  .app-shell.has-collapsed-sidebar:not(.has-workbench-conversation) { padding-block-start:var(--workbench-navigation-height); }
-  .app-shell.has-collapsed-sidebar:not(.has-workbench-conversation) > .sidebar.workspace-navigation { margin-block-start:calc(-1 * var(--workbench-navigation-height)); }
+  .app-shell.has-workbench-navigation:not(.has-workbench-conversation) { padding-block-start:var(--workbench-navigation-height); }
+  .app-shell.has-workbench-navigation:not(.has-workbench-conversation) > .sidebar.workspace-navigation { margin-block-start:calc(-1 * var(--workbench-navigation-height)); }
   .app-shell.has-collapsed-sidebar > .workbench-splitter-sidebar { display:none; }
   .app-shell[data-sidebar-sliding] > .workbench-splitter-sidebar { visibility:hidden; }
 }
 @media (min-width:701px) and (pointer:coarse) {
   :root .app-shell.has-workbench-navigation { --workbench-navigation-height:48px; --workbench-navigation-button-size:44px; }
+  :root.lake-native .app-shell.has-workbench-navigation { --workbench-navigation-button-size:44px; }
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-brand-row {
+    padding-inline-end:var(--workbench-titlebar-inset);
+    margin-block-end:var(--workbench-navigation-height);
+  }
+  .app-shell.has-workbench-navigation > .sidebar.workspace-navigation .sidebar-brand-actions { padding-inline-start:0; }
+  .app-shell:not(.has-collapsed-sidebar) > .workbench-navigation {
+    inset-block-start:var(--workbench-navigation-height);
+    inset-inline-start:calc(var(--sidebar-width,280px) - var(--workbench-titlebar-inset) - var(--workbench-navigation-min-width));
+  }
+  .workbench-navigation .workbench-sidebar-toggle { margin-inline-start:0; }
 }
 @media (min-width:701px) and (prefers-reduced-motion:reduce) {
   .app-shell.has-workbench-navigation::before,
   .app-shell.has-workbench-navigation .sidebar-navigation-content,
   .app-shell.has-workbench-navigation .sidebar-navigation-rail::after { transition-property:none; }
-  .app-shell.has-workbench-conversation > .workbench-navigation { transition:none; }
+  .workbench-navigation,
+  .workbench-navigation .workbench-sidebar-toggle { transition:none; }
 }

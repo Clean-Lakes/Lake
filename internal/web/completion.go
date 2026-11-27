@@ -19,7 +19,7 @@ func (b *Server) completeDraft(w http.ResponseWriter, r *http.Request, id string
 	if !ok || !utf8.ValidString(draft) || strings.ContainsRune(draft, '\x00') || utf8.RuneCountInString(draft) > 2000 {
 		fail(400, "补齐文本无效或过长")
 	}
-	model := b.Models.Active()
+	model := b.sessionModel(id)
 	if model == nil {
 		reply(w, 200, Object{"suffix": ""})
 		return
@@ -49,7 +49,7 @@ func (b *Server) completeDraft(w http.ResponseWriter, r *http.Request, id string
 		aiFailure(b.Engine.CheckSecurityRuntime())
 	}
 	suffix, err := ai.CompleteDraft(ctx, *model, draft, history)
-	current := b.Models.Active()
+	current := b.sessionModel(id)
 	if err != nil || ctx.Err() != nil || current == nil || ai.ModelIdentity(*current) != identity {
 		suffix = ""
 	}

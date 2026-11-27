@@ -742,6 +742,14 @@ a { color: inherit; }
 .ai-transcript { display: flex; flex-direction: column; padding: 4px 0 16px; gap: 20px; font-size: var(--font-size-ui); }
 .ai-card, .ai-chat-message { line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ai-role-user { align-self: flex-end; background: var(--surface-muted); padding: 10px 14px; max-width: 85%; border-radius: var(--radius-window); }
+.specialist-mcp-notice { display: flex; flex-direction: column; gap: 8px; max-width: 100%; }
+.specialist-mcp-notice-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.specialist-mcp-notice-head .response-identity { margin: 0; }
+.specialist-mcp-notice-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: var(--radius-settings-badge); corner-shape: var(--corner-window); border: 1px solid var(--border); background: var(--surface-muted); color: var(--text-muted); font-size: var(--font-size-toolbar); line-height: 1.5; }
+.specialist-mcp-notice-lead { margin: 0; font-size: 14px; line-height: 1.6; color: var(--text-muted); }
+.specialist-mcp-notice-resources { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.specialist-mcp-notice-resources li { padding: 1px 7px; border-radius: var(--radius-settings-badge); border: 1px solid var(--border); background: var(--surface-subtle); color: var(--text-muted); font-size: var(--font-size-toolbar); }
+.specialist-mcp-notice-quote { margin: 0; padding: 10px 12px; border: 1px solid var(--border); border-inline-start: 3px solid var(--info); border-radius: var(--radius-settings-control); corner-shape: var(--corner-window); background: var(--surface-subtle); color: var(--foreground); font-size: 14px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ai-chat-message small { display: block; color: var(--text-secondary); font-size: var(--font-size-ui); margin-bottom: 3px; }
 .ai-role-system, .ai-error { font-size: var(--font-size-ui); color: var(--danger); }
 .ai-compaction-notice { display:flex; align-items:flex-start; gap:7px; font-size:var(--font-size-ui); line-height:1.75; color:var(--text-secondary); }
