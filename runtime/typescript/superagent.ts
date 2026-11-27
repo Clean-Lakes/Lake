@@ -21,9 +21,9 @@ import { basename, dirname, join, resolve, sep } from "node:path";
 import type { ToolEntry, ToolExecutionContext } from "./sdk";
 import type { AIApproval, AIQuestionRequest, GatewayInstructionStatus, Message, SessionEvent, SessionSnapshot, SpecialistChannelInfo,
   SpecialistChannelPage, SpecialistQuestion, SuperProject, SuperTask, SuperWorker, SuperWorkspace } from "../../web-agent/shared/contracts";
-import type { GatewayApprovalRequest, GatewaySpecialistRef, GatewayConnection, GatewayMessage, GatewayMessageInput, GatewayMessagePage } from "../../web-agent/shared/contracts";
+import type { GatewaySpecialistRef, GatewayConnection, GatewayMessage, GatewayMessageInput, GatewayMessagePage } from "../../web-agent/shared/contracts";
 import { activeResourceGrants } from "./gateway";
-import { buildDynamicGatewayApproval, presentGatewayApproval } from "./gateway-approvals";
+import { resolveGatewayResourceScope } from "./gateway-approvals";
 import type { AgentHost, HostProfile, HostToolContext, TurnOutcome } from "./agent-host";
 import {TaskDeadlineReached} from "./task-deadline";
 import {chooseSpecialistExecution,specialistExecutionOptions,type SpecialistExecutionOption} from './specialist-execution';
@@ -698,8 +698,8 @@ export class LakeSuperagent implements AgentHost {
     const completed = workers.filter(({task}) => task.state === "completed").length;
     return { ...channel, roleName: role.name, duties: role.duties, roleRevision: role.revision,avatarId:role.avatarId,execution:this.roleExecution(role),
       running: this.conversations.roleState(role.id).running || workers.some((worker) => this.active.has(worker.id) && this.agents.isRunning(worker.sessionId)),
-      preparing: this.conversations.roleState(role.id).queued || workers.some((worker) => worker.assignmentState === "queued") || this.store.list<InputEvent>("superInputs").some((event) => event.preferredRoleId === role.id && event.disposition === "pending" && !this.isAwaitingGatewayApproval(event.id)),
-      needsConfirmation: workers.some((worker) => this.pendingInteraction(worker.sessionId)) || this.hasPendingGatewayApproval(channel.projectId, role.id),
+      preparing: this.conversations.roleState(role.id).queued || workers.some((worker) => worker.assignmentState === "queued") || this.store.list<InputEvent>("superInputs").some((event) => event.preferredRoleId === role.id && event.disposition === "pending"),
+      needsConfirmation: workers.some((worker) => this.pendingInteraction(worker.sessionId)),
       messageRead: conversationReadState(this.store, channel.sessionId, [channel.sessionId, ...workers.map(worker => worker.sessionId)]),
       completionCursor: completed ? String(completed).padStart(20, "0") : "",
       seenCompletionCursor: this.store.get<string>("superChannelReads", channel.id) ?? "" };
@@ -727,7 +727,6 @@ export class LakeSuperagent implements AgentHost {
     return { pilotMessageRead: project ? conversationReadState(this.store, project.routerSessionId) : undefined, active: !!project, project: project ?? { projectId, routerSessionId: "", version: 0 }, workers, conversations:this.conversations.list(projectId),
       chatGroups:this.conversations.groups(projectId),
       questions: this.specialistQuestions(projectId),
-      gatewayApprovals: this.gatewayApprovals(projectId),
       channels: this.store.list<Channel>("superChannels").filter((channel) => channel.projectId === projectId && !this.role(projectId, channel.roleId, true).deletedAt)
         .map((channel) => this.channelView(channel, workers)), cursor: project ? this.store.cursor(project.routerSessionId) : 0 };
   }
@@ -1531,7 +1530,7 @@ export class LakeSuperagent implements AgentHost {
     const worker = this.workerFor(sessionId);
     if (worker) return ['active', 'queued'].includes(worker.state) || this.agents.isRunning(worker.sessionId);
     return this.routing.has(session.projectId) || this.agents.isRunning(project.routerSessionId) ||
-      this.store.list<InputEvent>('superInputs').some(event => event.projectId === session.projectId && event.disposition === 'pending' && !this.isAwaitingGatewayApproval(event.id));
+      this.store.list<InputEvent>('superInputs').some(event => event.projectId === session.projectId && event.disposition === 'pending');
   }
   private planGoals(sessionId: string) {
     const session = this.store.session(sessionId); this.store.project(session.projectId);
@@ -1560,7 +1559,7 @@ export class LakeSuperagent implements AgentHost {
   private async pump() {
     if (this.closed) return;
     for (const root of this.store.list<SuperProject>("superProjects")) if (!this.stoppingProjects.has(root.projectId)&&!this.routing.has(root.projectId) && !this.agents.isRunning(root.routerSessionId)) {
-      const pending = this.store.list<InputEvent>("superInputs").filter((event) => event.projectId === root.projectId && event.disposition === "pending" && !this.stoppingGroups.has(event.sessionId) && !this.isAwaitingGatewayApproval(event.id));
+      const pending = this.store.list<InputEvent>("superInputs").filter((event) => event.projectId === root.projectId && event.disposition === "pending" && !this.stoppingGroups.has(event.sessionId));
       // Admit inputs immediately, then route each source in order. A later
       // message cannot replace an active batch or share its reply identity.
       const events = pending.slice(0,1);
@@ -3486,90 +3485,6 @@ export class LakeSuperagent implements AgentHost {
     if(!event || event.external?.connectionId!==connectionId)throw new HttpError(404,'消息不属于此接入连接');
     return event;
   }
-  private gatewayApprovalForEvent(eventId: string): GatewayApprovalRequest | undefined {
-    return this.store.list<GatewayApprovalRequest>("superGatewayApprovals").find(row => row.eventId === eventId);
-  }
-  private isAwaitingGatewayApproval(eventId: string): boolean {
-    return this.gatewayApprovalForEvent(eventId)?.status === "pending";
-  }
-  private hasPendingGatewayApproval(projectId: string, roleId: string): boolean {
-    return this.store.list<GatewayApprovalRequest>("superGatewayApprovals")
-      .some(row => row.projectId === projectId && row.roleId === roleId && row.status === "pending");
-  }
-  gatewayApprovals(projectId: string): GatewayApprovalRequest[] {
-    const cutoff = Date.now() - 15 * 60_000;
-    return this.store.list<GatewayApprovalRequest>("superGatewayApprovals")
-      .filter(row => row.projectId === projectId && (row.status === "pending" || (row.decidedAt && Date.parse(row.decidedAt) >= cutoff)))
-      .sort((a, b) => Number(b.status === "pending") - Number(a.status === "pending") || b.createdAt.localeCompare(a.createdAt))
-      .map(presentGatewayApproval);
-  }
-  async decideGatewayApproval(projectId: string, approvalId: string, input: { approve?: unknown; reason?: unknown }): Promise<GatewayApprovalRequest> {
-    const [approval] = await this.decideGatewayApprovals(projectId, [approvalId], input);
-    return approval!;
-  }
-  async decideGatewayApprovals(projectId: string, ids: unknown, input: { approve?: unknown; reason?: unknown }): Promise<GatewayApprovalRequest[]> {
-    if (typeof input?.approve !== "boolean") throw new HttpError(400, "approve 须为布尔值");
-    if (!Array.isArray(ids) || !ids.length) throw new HttpError(400, "请选择待审批请求");
-    const approvalIds = ids.map(id => text(id, "approvalId", 128));
-    if (new Set(approvalIds).size !== approvalIds.length) throw new HttpError(400, "审批请求不能重复");
-    const reason = input.reason === undefined || input.reason === null || input.reason === "" ? undefined : text(input.reason, "reason", 500);
-    const decidedAt = now();
-    const routerSessionId = this.store.get<SuperProject>("superProjects", projectId)?.routerSessionId;
-    if (!routerSessionId) throw new HttpError(404, "外部审批请求不存在");
-    const updated = this.store.transaction(() => approvalIds.map(approvalId => {
-      const fresh = this.store.get<GatewayApprovalRequest>("superGatewayApprovals", approvalId);
-      if (!fresh || fresh.projectId !== projectId || fresh.sessionId !== routerSessionId) {
-        throw new HttpError(404, "外部审批请求不存在");
-      }
-      if (fresh.status !== "pending") throw new HttpError(409, "有审批请求已处理，请刷新后重试");
-      const event = this.store.require<InputEvent>("superInputs", fresh.eventId);
-      if (!input.approve) {
-        const notice = reason ? `管理员已拒绝此次请求：${reason}` : "管理员已拒绝此次请求。";
-        const nextApproval: GatewayApprovalRequest = { ...fresh, status: "rejected", ...(reason ? { decisionReason: reason } : {}), decidedAt };
-        this.store.put("superGatewayApprovals", approvalId, nextApproval);
-        this.store.put("superInputs", event.id, { ...event, disposition: "stopped", error: notice });
-        this.store.put<GatewayReply>("superGatewayReplies", event.id, {
-          sessionId: fresh.sessionId,
-          text: this.agents.redact(notice),
-          createdAt: decidedAt,
-          action: "respond",
-        });
-        return nextApproval;
-      }
-      const nextApproval: GatewayApprovalRequest = { ...fresh, status: "approved", decidedAt };
-      this.store.put("superGatewayApprovals", approvalId, nextApproval);
-      if (!this.store.get<Message>("messages", event.messageId)) {
-        const message: Message = {
-          id: event.messageId,
-          sessionId: fresh.sessionId,
-          role: "user",
-          text: event.payload,
-          createdAt: decidedAt,
-          ...(event.external ? { external: event.external } : {}),
-        };
-        this.store.put("messages", message.id, message);
-      }
-      if (event.selectedReferences) {
-        this.store.put("messageInputs", event.messageId, {
-          messageId: event.messageId,
-          projectId: fresh.projectId,
-          sessionId: fresh.sessionId,
-          ...event.selectedReferences,
-        });
-        if (event.selectedReferences.resourceIds.length) {
-          this.store.put("sessionResourceReferences", fresh.sessionId, {
-            resourceIds: event.selectedReferences.resourceIds,
-            sourceMessageId: event.messageId,
-          });
-        }
-      }
-      return nextApproval;
-    }));
-    if (input.approve) this.notify(routerSessionId, "message");
-    this.notify(routerSessionId, "specialist");
-    if (input.approve) this.schedule();
-    return updated;
-  }
   async gatewayMessage(connection:GatewayConnection,input:GatewayMessageInput,guard?:()=>void) {
     guard?.();
     if(!connection.enabled)throw new HttpError(403,'接入连接已停用');
@@ -3601,88 +3516,41 @@ export class LakeSuperagent implements AgentHost {
         .filter(resource => grantMap.has(resource.id))
         .map(resource => ({ id: resource.id, name: resource.name, kind: resource.kind, host: resourceHost(resource) }));
       if (!grantedResources.length) throw new HttpError(403, '此 MCP 连接暂无有效授权资源或授权已过期，请在 Lake 中确认资源授权');
-      const plan = buildDynamicGatewayApproval({
+      const scope = resolveGatewayResourceScope({
         text: instruction,
-        threadTitle,
-        requester: connection.name,
-        roleName: preferredRole?.name ?? 'Lake',
         grantedResources,
         allProjectResources: allProjectResources.map(resource => ({ id: resource.id, name: resource.name, kind: resource.kind, host: resourceHost(resource) })),
       });
-      if (plan.blocked) throw new HttpError(403, `请求涉及未授权资源「${plan.unauthorizedResource}」，已拦截`);
-      const autoInScope = plan.resourceIds.length > 0 && plan.resourceIds.every(resourceId => grantMap.get(resourceId)?.approvalPolicy === 'auto_in_scope');
-      if (autoInScope) {
-        const message = await this.send(project.routerSessionId, instruction, undefined, false, { resourceIds: plan.resourceIds, mentions: [], references: [] }, undefined, external,
-          { key: receiptKey, hash: receiptHash, guard, preferredRoleId, replyTo }) as { id: string; duplicate?: boolean };
-        const event = this.gatewayEvent(connection.id, message.id);
-        return { instructionId: message.id, eventId: event.id, sessionId: event.sessionId, projectId: event.projectId, connectionId: connection.id, threadId,
-          ...(event.preferredRoleId && { roleId: event.preferredRoleId }), ...(message.duplicate && { duplicate: true }) };
-      }
-      const created = this.store.transaction(() => {
-        guard?.();
-        const prior = this.store.get<{ eventId: string; messageId: string; hash: string }>('superGatewayInstructions', receiptKey);
-        if (prior) {
-          if (prior.hash !== receiptHash) throw new HttpError(409, '同一 clientRequestId 的指令内容已变化；请改用新的幂等键发送新指令');
-          const existingEvent = this.store.require<InputEvent>('superInputs', prior.eventId);
-          const existingApproval = this.gatewayApprovalForEvent(existingEvent.id);
-          return { event: existingEvent, approvalId: existingApproval?.id, duplicate: true };
-        }
-        const createdAt = now(), messageId = id(), eventId = id(), approvalId = id();
-        const selectedReferences = plan.resourceIds.length ? { resourceIds: plan.resourceIds, mentions: [], references: [] } : undefined;
-        const event: InputEvent = {
-          id: eventId,
-          projectId: connection.projectId,
-          sessionId: project.routerSessionId,
-          messageId,
-          payload: this.agents.redact(instruction),
-          external,
-          ...(replyTo && { replyTo }),
-          preferredRoleId,
-          disposition: 'pending',
-          receivedAt: createdAt,
-          revision: 1,
-          selectedReferences,
-        };
-        const approval: GatewayApprovalRequest = {
-          id: approvalId,
-          projectId: connection.projectId,
-          sessionId: project.routerSessionId,
-          connectionId: connection.id,
-          connectionName: connection.name,
-          roleId: preferredRole?.id ?? `pilot:${connection.projectId}`,
-          roleName: preferredRole?.name ?? 'Lake',
-          ...(preferredRole?.avatarId ? { avatarId: preferredRole.avatarId } : {}),
-          requester: connection.name,
-          threadId,
-          ...(threadTitle ? { threadTitle } : {}),
-          instructionId: messageId,
-          eventId,
-          askText: this.agents.redact(plan.askText),
-          title: this.agents.redact(plan.title),
-          summary: this.agents.redact(plan.summary),
-          fields: plan.fields.map(field => ({ label: field.label, value: this.agents.redact(field.value) })),
-          resourceIds: plan.resourceIds,
-          resourceNames: plan.resourceNames,
-          rawRequest: this.agents.redact(instruction),
-          status: 'pending',
-          createdAt,
-        };
-        this.store.put('superInputs', event.id, event);
-        this.store.put('superGatewayApprovals', approval.id, approval);
-        this.store.put('superGatewayInstructions', receiptKey, { eventId: event.id, messageId, hash: receiptHash });
-        return { event, approvalId: approval.id, duplicate: false };
-      });
-      if (!created.duplicate) this.notify(project.routerSessionId, 'specialist');
+      if (scope.blocked) throw new HttpError(403, `请求涉及未授权资源「${scope.unauthorizedResource}」，已拦截`);
+      const channel = preferredRole ? this.ensureChannel(preferredRole) : undefined;
+      const specialistNotice = preferredRole ? {
+        roleId: preferredRole.id,
+        roleName: preferredRole.name,
+        ...(preferredRole.avatarId ? { avatarId: preferredRole.avatarId } : {}),
+        ...(channel ? { channelSessionId: channel.sessionId } : {}),
+        execution: this.roleExecution(preferredRole),
+        ...(scope.matchedResourceNames.length ? { resourceNames: scope.matchedResourceNames } : {}),
+      } : undefined;
+      const message = await this.send(
+        project.routerSessionId,
+        instruction,
+        undefined,
+        false,
+        { resourceIds: scope.resourceIds, mentions: [], references: [] },
+        undefined,
+        { ...external, ...(specialistNotice && { specialistNotice }) },
+        { key: receiptKey, hash: receiptHash, guard, preferredRoleId, replyTo },
+      ) as { id: string; duplicate?: boolean };
+      const event = this.gatewayEvent(connection.id, message.id);
       return {
-        instructionId: created.event.messageId,
-        eventId: created.event.id,
-        sessionId: created.event.sessionId,
-        projectId: created.event.projectId,
+        instructionId: message.id,
+        eventId: event.id,
+        sessionId: event.sessionId,
+        projectId: event.projectId,
         connectionId: connection.id,
         threadId,
-        ...(created.event.preferredRoleId && { roleId: created.event.preferredRoleId }),
-        ...(created.approvalId && { approvalId: created.approvalId }),
-        ...(created.duplicate && { duplicate: true }),
+        ...(event.preferredRoleId && { roleId: event.preferredRoleId }),
+        ...(message.duplicate && { duplicate: true }),
       };
     }
 
@@ -3796,9 +3664,7 @@ export class LakeSuperagent implements AgentHost {
     if (pilotReply) replies.push({text: pilotReply.text, createdAt: pilotReply.createdAt, from: "pilot"});
     const waiting = tasks.find(task => task.waitingInput) ?? tasks.find(task => task.waitingApproval);
     const running = tasks.some(task => ["queued", "active"].includes(task.state) || task.activity) || conversations.some(round=>['queued','running','summarizing'].includes(round.state));
-    const approval = this.gatewayApprovalForEvent(event.id);
     const state: GatewayInstructionStatus["state"] = event.external?.connectionId ? (
-      approval?.status==='pending'?'waiting_approval':
       event.disposition==='stopped'?'stopped':event.disposition==='blocked'?'failed':
       event.disposition==='pending'?'routing':
       waiting?.waitingInput?'waiting_input':waiting?.waitingApproval?'waiting_approval':
@@ -3818,7 +3684,6 @@ export class LakeSuperagent implements AgentHost {
     return { instructionId: event.messageId, eventId: event.id, sessionId: event.sessionId, ...(role&&{roleId:role.id,roleName:role.name}),
       projectId: event.projectId, state, disposition: event.disposition, tasks, replies,
       ...(conversations.length&&{conversations}),
-      ...(approval&&{approval:{id:approval.id,title:approval.title,summary:approval.summary,fields:approval.fields,resourceNames:approval.resourceNames,status:approval.status,...(approval.decisionReason&&{decisionReason:approval.decisionReason}),...(approval.decidedAt&&{decidedAt:approval.decidedAt})}}),
       ...(event.disposition === "blocked" && event.error && { error: this.agents.redact(event.error) }) };
   }
   async close() {

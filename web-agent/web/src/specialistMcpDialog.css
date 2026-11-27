@@ -269,14 +269,8 @@
   width: auto;
   flex: none;
 }
-.specialist-mcp-select-policy {
-  min-inline-size: 132px;
-}
 .specialist-mcp-select-expiry {
   min-inline-size: 96px;
-}
-.specialist-mcp-row-policy {
-  min-inline-size: 118px;
 }
 .specialist-mcp-row-expiry {
   min-inline-size: 78px;

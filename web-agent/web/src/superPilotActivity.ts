@@ -46,19 +46,10 @@ export function superPilotActivity(workspace:SuperWorkspace|null|undefined,sessi
   const active=connected&&moving,previous=people.get(roleId);
   if(!previous||active&&!previous.moving)people.set(roleId,{key:roleId,roleId,name,detail:connected?detail:'等待重新连接',moving:active});
  };
- const pendingApprovals=workspace.gatewayApprovals?.filter(item=>item.status==='pending')??[];
- for(const approval of pendingApprovals)add(approval.roleId,approval.roleName,'等待外部请求审批',false);
  for(const worker of workers)add(worker.roleId,worker.roleName,activityLabel(worker.activity),['thinking','tool'].includes(worker.activity.phase));
  for(const worker of closing)add(worker.roleId,worker.roleName,'正在提交报告',true);
  for(const member of roundMembers)add(member.roleId,member.roleName,member.state==='running'?'正在回应':'等待回应',member.state==='running');
  const participants=[...people.values()].sort((a,b)=>a.key.localeCompare(b.key));
- if(pendingApprovals.length){
-  if(!connected)return reconnecting('waiting_approval',pendingApprovals.length,participants);
-  const label=pendingApprovals.length===1
-   ? `${pendingApprovals[0]!.roleName}：等待确认外部请求`
-   : `${pendingApprovals.length} 项外部请求等待审批`;
-  return {status:'waiting_approval',label,phase:'waiting_approval',animated:false,motion:'still',workerCount:pendingApprovals.length,participants};
- }
  if(!workers.length){
   if(rounds.length){
    const count=roundMembers.length;

@@ -133,6 +133,38 @@ export function TranscriptMessage({message,sessionId,resources,arrive=false,pend
  if(message.dispatch)return null;
  if(message.role==='system'&&isContextCompactionFailure(message.text||''))return <CompactionNotice message={message.text}/>;
  const attachments=<MessageAttachments message={message} sessionId={sessionId}/>;
+ const specialistNotice=message.role==='user'?message.external?.specialistNotice:undefined;
+ if(specialistNotice){
+  const author:SpecialistReplyAuthor={
+   kind:'specialist',
+   name:specialistNotice.roleName,
+   roleId:specialistNotice.roleId,
+   avatarId:specialistNotice.avatarId,
+   workerId:'',
+   sessionId:specialistNotice.channelSessionId??sessionId,
+   channelSessionId:specialistNotice.channelSessionId,
+   execution:specialistNotice.execution,
+  };
+  const sourceLabel=message.external?.connectionName||`${specialistNotice.roleName} MCP`;
+  const threadLabel=message.external?.threadTitle?` · ${message.external.threadTitle}`:'';
+  return <div className={`ai-chat-message ai-role-assistant specialist-mcp-notice${animate?' reply-arrival':''}`}>
+   <div className="specialist-mcp-notice-head">
+    <ReplyIdentity identity={assistantIdentity??{name:'Lake',pilot:true}} author={author} onSpecialist={onSpecialist} hidden={hideIdentity}/>
+    <span className="specialist-mcp-notice-badge" title={`通过 ${sourceLabel}${threadLabel} 收到外部 MCP 消息`}>
+     <Glyph name="plug" size={11}/>
+     <span>来自 {sourceLabel}</span>
+    </span>
+   </div>
+   <p className="specialist-mcp-notice-lead">我收到一条外部 MCP 消息，已开始在授权范围内处理：</p>
+   {!!specialistNotice.resourceNames?.length&&<ul className="specialist-mcp-notice-resources" aria-label="涉及已授权资源">
+    {specialistNotice.resourceNames.map(name=><li key={name}>{name}</li>)}
+   </ul>}
+   <blockquote className="specialist-mcp-notice-quote">
+    <MessageText text={message.text} mentions={message.mentions} resources={resources}/>
+   </blockquote>
+   {attachments}
+  </div>;
+ }
    return <div className={`ai-chat-message ai-role-${message.role}${roleBreak?' is-role-break':''}${continued?' is-reply-continuation':''}${message.images?.length?" has-message-images":""}${animate?" user-message-arrival":""}`}>
           {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <ReplyIdentity identity={assistantIdentity} author={message.author} showBackendName={message.codexActivity?.some(item=>item.kind!=='text')} onSpecialist={onSpecialist} hidden={hideIdentity} continued={continued} motion={motion} nameMotion={nameMotion}/> }{message.role === "user" && message.external && <small className="external-origin-badge" title={message.external.connectionName?`接入渠道：${message.external.connectionName}${message.external.threadTitle?` · 会话：${message.external.threadTitle}`:""}（MCP）`:"来自外部 Agent 的消息（MCP）"}><Glyph name="plug" size={12}/>{message.external.connectionName||"外部 Agent"}</small>}{taskLabel&&<small className="pilot-specialist-task-label">{taskLabel}</small>}{message.role==='user'&&message.taskReference&&<div className="message-task-context"><PilotTaskReferenceChip task={message.taskReference}/></div>}{message.role==='assistant'&&message.author?.kind==='specialist'&&message.codexActivity?.some(item=>item.kind!=='text')&&<CodexActivity items={message.codexActivity} reportText={message.text}/>}{message.text && (message.role === 'assistant' ? <AssistantMarkdown arrive={arrive}>{planMarkdown(message.text)}</AssistantMarkdown> : <div className={message.role==='user'?'user-message-text':undefined}>{message.role === "system" ? displayAiError(message.text) : <MessageText text={message.text} mentions={message.mentions} resources={resources}/>}</div>)}
           {attachments}
@@ -406,7 +438,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotTaskDire
       for(const slot of summarySlots)if(!placedSummaries.has(slot.id))replyContent.push(renderSummary(slot));
       const latestExecutionTurn=latestUser?turn===currentTurn:turn===turns.at(-1);
       return <ReplyReferenceScope key={turn[0]!.id} cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}><div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)}>
-      {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources} arrive={entry.message!.id===latestUser?.id&&!restoredMessageIds.current.has(entry.message!.id)}/>)}
+      {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources} assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} hideIdentity={hideReplyIdentity} arrive={entry.message!.id===latestUser?.id&&!restoredMessageIds.current.has(entry.message!.id)}/>)}
       {mode==='activity'&&<ReplyDuration assistantIdentity={assistantIdentity} {...timingProps}/>}
       {mode==='conversation'?<TurnExecutionDetails {...timingProps}
         sessionId={snapshot.session.id} latest={latestExecutionTurn}

@@ -61,13 +61,19 @@ function resourceGrants(value: unknown): GatewayResourceGrant[] {
     if (seen.has(resourceId)) throw new HttpError(400, '资源授权列表包含重复资源');
     seen.add(resourceId);
     const policy = row.approvalPolicy;
-    if (policy !== 'always_approve' && policy !== 'auto_in_scope') throw new HttpError(400, '审批方式无效');
+    if (policy !== undefined && policy !== null && policy !== '' && policy !== 'always_approve' && policy !== 'auto_in_scope') {
+      throw new HttpError(400, '审批方式无效');
+    }
     let expiresAt: string | undefined;
     if (row.expiresAt !== undefined && row.expiresAt !== null && row.expiresAt !== '') {
       if (typeof row.expiresAt !== 'string' || !Number.isFinite(Date.parse(row.expiresAt))) throw new HttpError(400, '授权有效期格式无效');
       expiresAt = new Date(Date.parse(row.expiresAt)).toISOString();
     }
-    out.push({ resourceId, approvalPolicy: policy as GatewayApprovalPolicy, ...(expiresAt ? { expiresAt } : {}) });
+    out.push({
+      resourceId,
+      ...(policy === 'always_approve' || policy === 'auto_in_scope' ? { approvalPolicy: policy as GatewayApprovalPolicy } : {}),
+      ...(expiresAt ? { expiresAt } : {}),
+    });
   }
   return out;
 }

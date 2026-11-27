@@ -103,7 +103,7 @@ async function fixture(t) {
   };
 }
 
-test('specialist MCP grants, single-use invite redemption and revocation enforce project scope', async t => {
+test('specialist MCP grants, single-invite enforcement, redemption and revocation enforce project scope', async t => {
   const f = await fixture(t);
   const base = `/api/projects/${f.project.id}/superagent/specialists/${f.role.id}/mcp`;
 
@@ -115,17 +115,17 @@ test('specialist MCP grants, single-use invite redemption and revocation enforce
   assert.ok(initial.remoteEndpoint.endsWith('/api/gateway/mcp'));
 
   // Creating an invite before confirming grants is rejected.
-  await f.api(`${base}/invites`, 'POST', { recipient: '林明' }, 409);
+  await f.api(`${base}/invites`, 'POST', { name: '研发预发发布接入' }, 409);
 
   // Cross-project resources cannot be granted.
   await f.api(`${base}/grants`, 'PUT', {
-    resourceGrants: [{ resourceId: f.foreignResource.id, approvalPolicy: 'always_approve' }],
+    resourceGrants: [{ resourceId: f.foreignResource.id }],
   }, 400);
 
-  // Confirm resource grants for staging + CI.
+  // Confirm resource grants without approvalPolicy (and verify legacy approvalPolicy remains accepted).
   const saved = await f.api(`${base}/grants`, 'PUT', {
     resourceGrants: [
-      { resourceId: f.stagingResource.id, approvalPolicy: 'always_approve' },
+      { resourceId: f.stagingResource.id },
       { resourceId: f.ciResource.id, approvalPolicy: 'always_approve' },
     ],
   });
@@ -163,7 +163,7 @@ test('specialist MCP grants, single-use invite redemption and revocation enforce
   assert.equal(redeemed.transport, 'streamable-http');
   assert.equal(redeemed.resourceGrants.length, 2);
 
-  // Verify the LAN MCP endpoint actually responds to JSON-RPC initialize & rejects non-gateway paths.
+  // Verify the LAN MCP endpoint responds to JSON-RPC initialize & rejects non-gateway paths.
   const lanMcpResp = await fetch(redeemed.mcpUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${redeemed.token}` },
@@ -201,17 +201,17 @@ test('specialist MCP grants, single-use invite redemption and revocation enforce
   await f.api(`/api/gateway/invites/${secondToken}/redeem`, 'POST', {}, 410, '');
 });
 
-test('Streamable HTTP MCP creates dynamic approval cards, blocks unauthorized resources, and enforces approve/reject decisions', async t => {
+test('Streamable HTTP MCP blocks unauthorized resources and delivers scoped messages as proactive specialist notifications in Lake', async t => {
   const f = await fixture(t);
   const base = `/api/projects/${f.project.id}/superagent/specialists/${f.role.id}/mcp`;
 
   await f.api(`${base}/grants`, 'PUT', {
     resourceGrants: [
-      { resourceId: f.stagingResource.id, approvalPolicy: 'always_approve' },
-      { resourceId: f.ciResource.id, approvalPolicy: 'always_approve' },
+      { resourceId: f.stagingResource.id },
+      { resourceId: f.ciResource.id },
     ],
   });
-  const { invite } = await f.api(`${base}/invites`, 'POST', { recipient: '林明' }, 201);
+  const { invite } = await f.api(`${base}/invites`, 'POST', { name: '研发预发接入' }, 201);
   const inviteToken = invite.inviteUrl.split('/').at(-1);
   const { token } = await f.api(`/api/gateway/invites/${inviteToken}/redeem`, 'POST', {}, 200, '');
 
@@ -223,155 +223,57 @@ test('Streamable HTTP MCP creates dynamic approval cards, blocks unauthorized re
   const tools = await rpc('tools/list');
   assert.deepEqual(tools.result.tools.map(item => item.name), ['send_message', 'get_message_status', 'wait_message', 'test_connection']);
 
-  // Request referencing unauthorized production resource is intercepted.
+  // Request referencing unauthorized production resource is intercepted before reaching Lake.
   const blocked = await rpc('tools/call', {
     name: 'send_message',
     arguments: {
       text: '帮我把订单服务发布到 GOS 生产 v2.14.3',
-      thread_id: 'wb-thread-prod',
-      client_message_id: 'wb-msg-prod-0001',
+      thread_id: 'mcp-thread-prod',
+      client_message_id: 'mcp-msg-prod-0001',
     },
   });
   assert.equal(blocked.result.isError, true);
   assert.match(blocked.result.content[0].text, /未授权资源.*GOS 生产/);
+  assert.equal(f.scheduledCount(), 0);
 
-  // 1) Staging deploy request generates deploy-specific dynamic fields and waits for approval.
+  // Scoped request dispatches directly without approval gate and posts a specialist notification in Lake main chat.
   const deployCall = await rpc('tools/call', {
     name: 'send_message',
     arguments: {
       text: '帮我把订单服务发布到 GOS 预发，版本 v2.14.3-rc2，发完确认服务健康状态',
-      thread_id: 'wb-thread-deploy',
-      client_message_id: 'wb-msg-deploy-0001',
+      thread_id: 'mcp-thread-deploy',
+      client_message_id: 'mcp-msg-deploy-0001',
     },
   });
   assert.notEqual(deployCall.result.isError, true);
   const deployPayload = JSON.parse(deployCall.result.content[0].text);
-  assert.ok(deployPayload.approvalId);
-  assert.equal(f.scheduledCount(), 0, 'unapproved external request must not schedule execution');
-
-  // 2) CI rebuild request generates different dynamic fields (pipeline/build/branch).
-  const rebuildCall = await rpc('tools/call', {
-    name: 'send_message',
-    arguments: {
-      text: '麻烦帮我重跑 pay-gateway-ci 的 #4821，分支 release/2.14',
-      thread_id: 'wb-thread-ci',
-      client_message_id: 'wb-msg-ci-0001',
-    },
-  });
-  const rebuildPayload = JSON.parse(rebuildCall.result.content[0].text);
-  assert.ok(rebuildPayload.approvalId);
+  assert.equal(deployPayload.approvalId, undefined);
+  assert.equal(f.scheduledCount(), 1, 'scoped external request should schedule immediately without pre-approval');
 
   const ws = await f.api(`/api/projects/${f.project.id}/superagent`);
-  assert.equal(ws.gatewayApprovals.length, 2);
-  const deployApproval = ws.gatewayApprovals.find(item => item.id === deployPayload.approvalId);
-  const rebuildApproval = ws.gatewayApprovals.find(item => item.id === rebuildPayload.approvalId);
-  assert.equal(deployApproval.status, 'pending');
-  assert.ok(deployApproval.fields.some(field => field.label === '发布目标' && field.value.includes('订单服务')));
-  assert.ok(deployApproval.fields.some(field => field.label === '目标版本' && field.value === 'v2.14.3-rc2'));
-  assert.ok(rebuildApproval.fields.some(field => field.label === '流水线' && field.value === 'pay-gateway-ci'));
-  assert.ok(rebuildApproval.fields.some(field => field.label === '构建编号' && field.value === '#4821'));
-  assert.ok(rebuildApproval.fields.some(field => field.label === '目标分支' && field.value === 'release/2.14'));
-  assert.notDeepEqual(deployApproval.fields.map(x => x.label), rebuildApproval.fields.map(x => x.label));
+  assert.equal(ws.gatewayApprovals, undefined);
 
-  // External status reports waiting_approval before admin decides.
-  const waitingStatus = await rpc('tools/call', {
+  // Verify Lake main chat message carries proactive specialistNotice metadata and exact scoped resource reference.
+  const message = f.app.store.get('messages', deployPayload.instructionId);
+  assert.ok(message);
+  assert.equal(message.sessionId, ws.project.routerSessionId);
+  assert.equal(message.external.connectionName, '发布专员 MCP');
+  assert.equal(message.external.specialistNotice.roleId, f.role.id);
+  assert.equal(message.external.specialistNotice.roleName, '发布专员');
+  assert.equal(message.external.specialistNotice.avatarId, 'beaver');
+  assert.deepEqual(message.external.specialistNotice.resourceNames, ['GOS 预发']);
+  assert.deepEqual(f.app.store.get('messageInputs', deployPayload.instructionId).resourceIds, [f.stagingResource.id]);
+
+  // Status reports routing (not waiting_approval).
+  const status = JSON.parse((await rpc('tools/call', {
     name: 'get_message_status',
     arguments: { message_id: deployPayload.instructionId },
-  });
-  assert.equal(JSON.parse(waitingStatus.result.content[0].text).state, 'waiting_approval');
-
-  // Reject CI rebuild with an explicit reason and confirm caller receives it.
-  const rejected = await f.api(
-    `/api/projects/${f.project.id}/superagent/gateway-approvals/${rebuildApproval.id}/decision`,
-    'POST',
-    { approve: false, reason: '当前封板窗口，14:00 后再重跑' },
-  );
-  assert.equal(rejected.status, 'rejected');
-  assert.equal(rejected.decisionReason, '当前封板窗口，14:00 后再重跑');
-  assert.equal(f.scheduledCount(), 0);
-  const rejectedStatus = JSON.parse((await rpc('tools/call', {
-    name: 'get_message_status',
-    arguments: { message_id: rebuildPayload.instructionId },
   })).result.content[0].text);
-  assert.equal(rejectedStatus.state, 'stopped');
-  assert.ok(rejectedStatus.replies.some(reply => reply.text.includes('当前封板窗口')));
-
-  // Approve staging deploy -> creates user message with bound resourceIds and schedules execution.
-  const approved = await f.api(
-    `/api/projects/${f.project.id}/superagent/gateway-approvals/${deployApproval.id}/decision`,
-    'POST',
-    { approve: true },
-  );
-  assert.equal(approved.status, 'approved');
-  assert.equal(f.scheduledCount(), 1);
-  assert.ok(f.app.store.get('messages', deployPayload.instructionId));
+  assert.equal(status.state, 'routing');
+  assert.equal(status.approval, undefined);
 });
 
-test('auto_in_scope resource grant routes directly without manual approval card while staying scoped', async t => {
-  const f = await fixture(t);
-  const base = `/api/projects/${f.project.id}/superagent/specialists/${f.role.id}/mcp`;
-
-  await f.api(`${base}/grants`, 'PUT', {
-    resourceGrants: [{ resourceId: f.stagingResource.id, approvalPolicy: 'auto_in_scope' }],
-  });
-  const { invite } = await f.api(`${base}/invites`, 'POST', { recipient: '自动发布测试' }, 201);
-  const { token } = await f.api(`/api/gateway/invites/${invite.inviteUrl.split('/').at(-1)}/redeem`, 'POST', {}, 200, '');
-
-  const sent = await f.api('/api/gateway/messages', 'POST', {
-    text: '检查 GOS 预发服务状态',
-    threadId: 'wb-auto-1',
-    clientMessageId: 'wb-auto-msg-0001',
-  }, 202, token);
-  assert.equal(sent.approvalId, undefined);
-  assert.equal(f.scheduledCount(), 1);
-  const ws = await f.api(`/api/projects/${f.project.id}/superagent`);
-  assert.equal(ws.gatewayApprovals.length, 0);
-});
-
-test('a batch decision applies exactly the listed pending approvals in one transaction', async t => {
-  const f = await fixture(t);
-  const base = `/api/projects/${f.project.id}/superagent/specialists/${f.role.id}/mcp`;
-  await f.api(`${base}/grants`, 'PUT', {
-    resourceGrants: [f.stagingResource, f.ciResource].map(resource => ({
-      resourceId: resource.id, approvalPolicy: 'always_approve',
-    })),
-  });
-  const { invite } = await f.api(`${base}/invites`, 'POST', {}, 201);
-  const { token } = await f.api(`/api/gateway/invites/${invite.inviteUrl.split('/').at(-1)}/redeem`, 'POST', {}, 200, '');
-  const send = (clientMessageId, text) => f.api('/api/gateway/messages', 'POST', {
-    text, clientMessageId, threadId: 'batch-approval-test',
-  }, 202, token);
-  const first = await send('batch-first-1', '检查 GOS 预发');
-  const repeated = await send('batch-first-1', '检查 GOS 预发');
-  assert.equal(repeated.approvalId, first.approvalId);
-  const second = await send('batch-second-2', '检查 CI 构建流水线');
-  const ids = [first.approvalId, second.approvalId];
-  const later = await send('batch-later-3', '查询其他信息');
-  const decision = (approvalIds, expected = 200, project = f.project.id) =>
-    f.api(`/api/projects/${project}/superagent/gateway-approvals/decision`, 'POST', { approvalIds, approve: true }, expected);
-  const saved = item => f.app.store.get('superGatewayApprovals', item.approvalId);
-
-  await decision(ids, 404, f.otherProject.id);
-  await decision([ids[0], ids[0]], 400);
-  await decision([ids[0], 'missing-approval'], 404);
-  assert.equal(saved(first).status, 'pending');
-  assert.equal(f.app.store.get('messages', first.instructionId), undefined);
-  assert.equal(f.scheduledCount(), 0);
-
-  const result = await decision(ids);
-  assert.deepEqual(result.map(approval => [approval.id, approval.status]), ids.map(id => [id, 'approved']));
-  assert.deepEqual(f.app.store.get('messageInputs', first.instructionId).resourceIds, [f.stagingResource.id]);
-  assert.deepEqual(f.app.store.get('messageInputs', second.instructionId).resourceIds, [f.ciResource.id]);
-  assert.equal(saved(later).status, 'pending');
-  assert.equal(f.scheduledCount(), 1);
-
-  await decision([later.approvalId, first.approvalId], 409);
-  assert.equal(saved(later).status, 'pending');
-  assert.equal(f.app.store.get('messages', later.instructionId), undefined);
-  assert.equal(f.scheduledCount(), 1);
-});
-
-test('specialist MCP approvals keep bulk grant scope without repeating it in the card', async t => {
+test('bulk specialist grants stay scoped without listing all 320 resources on the Lake notification', async t => {
   const f = await fixture(t);
   const base = `/api/projects/${f.project.id}/superagent/specialists/${f.role.id}/mcp`;
   const grants = [];
@@ -385,36 +287,39 @@ test('specialist MCP approvals keep bulk grant scope without repeating it in the
       description: '批量主机',
       status: 'available',
     });
-    grants.push({ resourceId: rid, approvalPolicy: 'always_approve' });
+    grants.push({ resourceId: rid });
   }
   const saved = await f.api(`${base}/grants`, 'PUT', { resourceGrants: grants });
   assert.equal(saved.connection.resourceGrants.length, 320);
 
   const { invite } = await f.api(`${base}/invites`, 'POST', {}, 201);
   const { token } = await f.api(`/api/gateway/invites/${invite.inviteUrl.split('/').at(-1)}/redeem`, 'POST', {}, 200, '');
-  const request = '用文字说明支持的内容类型';
   const sent = await f.api('/api/gateway/messages', 'POST', {
-    text: request,
+    text: '请用文字说明你支持的内容类型和发布能力',
     threadId: 'bulk-grants',
     clientMessageId: 'bulk-grants-message-1',
   }, 202, token);
-  const workspace = () => f.api(`/api/projects/${f.project.id}/superagent`);
-  const [approval] = (await workspace()).gatewayApprovals;
-  assert.equal(approval.id, sent.approvalId);
-  assert.deepEqual(new Set(approval.resourceIds), new Set(grants.map(grant => grant.resourceId)));
-  assert.equal(approval.resourceNames.length, 320);
-  assert.doesNotMatch(approval.summary, /主机-/);
-  assert.deepEqual(approval.fields, [{ label: '请求内容', value: request }]);
 
-  const names = approval.resourceNames.join('、');
-  const legacy = {
-    ...approval,
-    summary: `将在已授权资源（${names}）范围内由「${approval.roleName}」创建独立任务并同步执行进度。`,
-    fields: [...approval.fields, { label: '授权资源', value: names.slice(0, 140) }],
-  };
-  f.app.store.put('superGatewayApprovals', approval.id, legacy);
-  const [visible] = (await workspace()).gatewayApprovals;
-  assert.deepEqual(visible, approval);
-  assert.deepEqual(f.app.store.get('superGatewayApprovals', approval.id), legacy);
+  assert.equal(f.scheduledCount(), 1);
+  const message = f.app.store.get('messages', sent.instructionId);
+  assert.equal(message.external.specialistNotice.roleName, '发布专员');
+  assert.equal(message.external.specialistNotice.resourceNames, undefined);
+  assert.equal(f.app.store.get('messageInputs', sent.instructionId).resourceIds.length, 320);
+});
+
+test('expired specialist resource grants block external MCP messages', async t => {
+  const f = await fixture(t);
+  const base = `/api/projects/${f.project.id}/superagent/specialists/${f.role.id}/mcp`;
+  await f.api(`${base}/grants`, 'PUT', {
+    resourceGrants: [{ resourceId: f.stagingResource.id, expiresAt: '2020-01-01T00:00:00.000Z' }],
+  });
+  const { invite } = await f.api(`${base}/invites`, 'POST', {}, 201);
+  const { token } = await f.api(`/api/gateway/invites/${invite.inviteUrl.split('/').at(-1)}/redeem`, 'POST', {}, 200, '');
+  const denied = await f.api('/api/gateway/messages', 'POST', {
+    text: '检查 GOS 预发服务状态',
+    threadId: 'expired-grant',
+    clientMessageId: 'expired-grant-msg-1',
+  }, 403, token);
+  assert.match(denied.error, /暂无有效授权资源或授权已过期/);
   assert.equal(f.scheduledCount(), 0);
 });

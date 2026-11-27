@@ -651,13 +651,6 @@ export async function startLakeServer(options: ServerOptions) {
           result = await superagent.deleteRole(path[2], path[5], data.revision);
         else if (path.length === 7 && path[4] === 'specialists' && path[6] === 'execution' && method === 'PUT')
           result = superagent.setRoleExecution(path[2],path[5],data);
-        else if (path[4] === 'gateway-approvals' && path.at(-1) === 'decision' &&
-                 (path.length === 6 || path.length === 7) && method === 'POST') {
-          if (draining) throw new HttpError(503, '服务正在退出');
-          result = path.length === 6
-            ? await superagent.decideGatewayApprovals(path[2], data.approvalIds, data)
-            : await superagent.decideGatewayApproval(path[2], path[5], data);
-        }
         else if (path.length >= 7 && path[4] === 'specialists' && path[6] === 'mcp') {
           const project = store.project(path[2]);
           const roleInfo = superagent.gatewaySpecialists(path[2]).specialists.find(item => item.roleId === path[5]);
@@ -684,7 +677,6 @@ export async function startLakeServer(options: ServerOptions) {
               })),
               invites: connection ? gateway!.listInvites(connection.id, gatewayOrigin, roleInfo.name) : [],
               remoteEndpoint: `${gatewayOrigin}/api/gateway/mcp`,
-              pendingApprovalCount: superagent!.gatewayApprovals(path[2]).filter(item => item.roleId === path[5] && item.status === 'pending').length,
             };
           };
           if (path.length === 7 && method === 'GET') {

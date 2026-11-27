@@ -1,6 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
-  GatewayApprovalPolicy,
   GatewayInviteStatus,
   GatewayInviteView,
   GatewayResourceGrant,
@@ -19,7 +18,6 @@ type ExpiryPreset = "7d" | "30d" | "forever";
 
 type DraftGrant = {
   selected: boolean;
-  approvalPolicy: GatewayApprovalPolicy;
   expiry: ExpiryPreset;
   customExpiresAt?: string;
 };
@@ -85,13 +83,11 @@ function buildDraft(state: SpecialistMcpState): Record<string, DraftGrant> {
     draft[resource.id] = saved
       ? {
           selected: true,
-          approvalPolicy: saved.approvalPolicy,
           expiry: presetFromExpiry(saved.expiresAt),
           customExpiresAt: saved.expiresAt,
         }
       : {
           selected: false,
-          approvalPolicy: "always_approve",
           expiry: "7d",
         };
   }
@@ -270,7 +266,6 @@ export function SpecialistMcpDialog({
   const [tab, setTab] = useState<TabId>("grants");
   const [state, setState] = useState<SpecialistMcpState | null>(null);
   const [draft, setDraft] = useState<Record<string, DraftGrant>>({});
-  const [batchPolicy, setBatchPolicy] = useState<GatewayApprovalPolicy>("always_approve");
   const [batchExpiry, setBatchExpiry] = useState<ExpiryPreset>("7d");
   const [resourceQuery, setResourceQuery] = useState("");
   const [onlySelected, setOnlySelected] = useState(false);
@@ -366,7 +361,7 @@ export function SpecialistMcpDialog({
     setDraft(current => ({
       ...current,
       [resourceId]: {
-        ...(current[resourceId] ?? { selected: false, approvalPolicy: "always_approve", expiry: "7d" }),
+        ...(current[resourceId] ?? { selected: false, expiry: "7d" }),
         ...patch,
       },
     }));
@@ -377,7 +372,7 @@ export function SpecialistMcpDialog({
     setDraft(current => {
       const next: Record<string, DraftGrant> = { ...current };
       for (const resource of visibleResources) {
-        const existing = next[resource.id] ?? { selected: false, approvalPolicy: batchPolicy, expiry: batchExpiry };
+        const existing = next[resource.id] ?? { selected: false, expiry: batchExpiry };
         next[resource.id] = { ...existing, selected: selectAll };
       }
       return next;
@@ -391,9 +386,8 @@ export function SpecialistMcpDialog({
       const next = { ...current };
       for (const resourceId of selectedIds) {
         next[resourceId] = {
-          ...(next[resourceId] ?? { selected: true, approvalPolicy: batchPolicy, expiry: batchExpiry }),
+          ...(next[resourceId] ?? { selected: true, expiry: batchExpiry }),
           selected: true,
-          approvalPolicy: batchPolicy,
           expiry: batchExpiry,
           customExpiresAt: undefined,
         };
@@ -417,7 +411,6 @@ export function SpecialistMcpDialog({
             : expiryIso(item.expiry);
           return {
             resourceId: resource.id,
-            approvalPolicy: item.approvalPolicy,
             ...(expiresAt ? { expiresAt } : {}),
           };
         });
@@ -704,16 +697,6 @@ export function SpecialistMcpDialog({
               </div>
               <div className="specialist-mcp-batch-controls">
                 <AppSelect
-                  className="specialist-mcp-select-policy"
-                  label="批量审批方式"
-                  value={batchPolicy}
-                  disabled={!!busy}
-                  onChange={event => setBatchPolicy(event.target.value as GatewayApprovalPolicy)}
-                >
-                  <option value="always_approve">每次人工审批</option>
-                  <option value="auto_in_scope">授权范围内免审批</option>
-                </AppSelect>
-                <AppSelect
                   className="specialist-mcp-select-expiry"
                   label="批量有效期"
                   value={batchExpiry}
@@ -739,7 +722,7 @@ export function SpecialistMcpDialog({
           {visibleResources.length ? (
             <div className="specialist-mcp-resource-list" role="group" aria-label="项目资源授权清单">
               {visibleResources.map(resource => {
-                const item = draft[resource.id] ?? { selected: false, approvalPolicy: "always_approve", expiry: "7d" };
+                const item = draft[resource.id] ?? { selected: false, expiry: "7d" };
                 return (
                   <div
                     key={resource.id}
@@ -764,18 +747,6 @@ export function SpecialistMcpDialog({
                       </span>
                     </label>
                     <div className="specialist-mcp-resource-controls">
-                      <AppSelect
-                        className="specialist-mcp-row-policy"
-                        label={`${resource.name} 审批方式`}
-                        value={item.approvalPolicy}
-                        disabled={!!busy || !item.selected}
-                        onChange={event =>
-                          updateRow(resource.id, { approvalPolicy: event.target.value as GatewayApprovalPolicy })
-                        }
-                      >
-                        <option value="always_approve">每次审批</option>
-                        <option value="auto_in_scope">范围内免审批</option>
-                      </AppSelect>
                       <AppSelect
                         className="specialist-mcp-row-expiry"
                         label={`${resource.name} 有效期`}
@@ -806,7 +777,7 @@ export function SpecialistMcpDialog({
           )}
 
           <p className="specialist-mcp-note">
-            勾选仅确定候选范围，点击「确认授权」后生效。默认每次外部执行均在 Lake 主对话发起人工审批；启用免审批时后端仍逐次核对连接、专员、资源和有效期，越权或过期直接拦截。
+            勾选仅确定候选范围，点击「确认授权」后生效。收到外部 MCP 消息时，专员会在已授权且未过期的资源范围内直接处理，并主动在 Lake 主对话发通知；涉及未授权或已过期资源的请求会被后端直接拦截。
           </p>
         </section>
       ) : (
@@ -835,13 +806,7 @@ export function SpecialistMcpDialog({
                     className={`specialist-mcp-scope-tag${grant.expired ? " is-expired" : ""}`}
                   >
                     {grant.name}
-                    <small>
-                      {grant.expired
-                        ? "已过期"
-                        : grant.approvalPolicy === "auto_in_scope"
-                          ? "免审批"
-                          : "每次审批"}
-                    </small>
+                    {grant.expired && <small>已过期</small>}
                   </span>
                 ))}
                 {confirmedGrants.length > 6 && (
