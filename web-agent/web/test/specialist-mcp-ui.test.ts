@@ -13,7 +13,7 @@ const css = registerHooks({
   },
 });
 const { PilotGatewayApprovals } = await import('../src/PilotGatewayApprovals');
-const { selectSpecialistInviteSlot } = await import('../src/SpecialistMcpDialog');
+const { SpecialistMcpInviteSlot, selectSpecialistInviteSlot } = await import('../src/SpecialistMcpDialog');
 css.deregister();
 
 const sampleApproval: GatewayApprovalRequest = {
@@ -162,4 +162,57 @@ test('selectSpecialistInviteSlot allows at most one live invite per specialist',
   ]);
   assert.equal(revoked.canCreate, true);
   assert.equal(revoked.current, null);
+});
+
+test('SpecialistMcpInviteSlot hides creation form when an active or redeemed invite exists', () => {
+  const baseProps = {
+    roleName: '发布专员',
+    connectionEnabled: true,
+    busy: '',
+    inviteName: '',
+    ttlMinutes: '15',
+    onInviteNameChange: () => {},
+    onTtlMinutesChange: () => {},
+    onCreateInvite: () => {},
+    onRevokeInvite: () => {},
+    onCopyPrompt: () => {},
+  };
+
+  const emptyHtml = renderToStaticMarkup(createElement(SpecialistMcpInviteSlot, { ...baseProps, invites: [] }));
+  assert.match(emptyHtml, /specialist-mcp-invite-form/);
+  assert.match(emptyHtml, /生成接入链接/);
+
+  const activeHtml = renderToStaticMarkup(createElement(SpecialistMcpInviteSlot, {
+    ...baseProps,
+    invites: [{
+      id: 'inv-1',
+      name: '研发预发接入',
+      createdAt: '2026-11-27T02:00:00Z',
+      expiresAt: '2026-11-28T02:00:00Z',
+      status: 'active',
+      invitePrompt: '帮我连接 Lake 的「研发预发接入」（发布专员）：http://192.168.50.12:51824/api/gateway/invites/lkiv_abc',
+    }],
+  }));
+  assert.doesNotMatch(activeHtml, /specialist-mcp-invite-form/);
+  assert.doesNotMatch(activeHtml, /生成接入链接/);
+  assert.match(activeHtml, /研发预发接入/);
+  assert.match(activeHtml, /待兑换/);
+  assert.match(activeHtml, /撤销/);
+  assert.match(activeHtml, /复制接入邀请/);
+
+  const redeemedHtml = renderToStaticMarkup(createElement(SpecialistMcpInviteSlot, {
+    ...baseProps,
+    invites: [{
+      id: 'inv-2',
+      name: '研发预发接入',
+      createdAt: '2026-11-27T02:00:00Z',
+      expiresAt: '2026-11-28T02:00:00Z',
+      redeemedAt: '2026-11-27T02:05:00Z',
+      status: 'redeemed',
+    }],
+  }));
+  assert.doesNotMatch(redeemedHtml, /specialist-mcp-invite-form/);
+  assert.doesNotMatch(redeemedHtml, /生成接入链接/);
+  assert.match(redeemedHtml, /已接入/);
+  assert.match(redeemedHtml, /撤销并重置/);
 });
