@@ -12,8 +12,8 @@ import {channelExecutionTimeline,currentChannelReplies,mergeChannelPage} from '.
 import {conversationPlanEntry} from './planConversation';
 import {useSmoothText} from './useSmoothText';
 import {usePageVisible} from './usePageVisible';
-import {SpecialistTaskList} from './SpecialistTaskList';
-import {specialistTaskRows} from './specialistTaskListModel';
+import {SpecialistTaskList,type OpenSpecialistTaskSource} from './SpecialistTaskList';
+import {specialistTaskRows,type SpecialistTaskFilters,type SpecialistTaskSources} from './specialistTaskListModel';
 import {SpecialistReplyCursorTail,specialistInterimText} from './SpecialistReplyCursor';
 import {useReplyWaitingMotion} from './replyWaitingMotion';
 import {useSpecialistAppearance} from './SuperRoleAvatar';
@@ -122,7 +122,12 @@ export function SpecialistChannelEntries({entries,resources,workers=[],activeSou
  })}</>;
 }
 
-export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,onReady,initialQuery}:{snapshot:SessionSnapshot;connected:boolean;onTask:(worker:SuperWorker,query:string)=>void;onTasks?:(sessionId:string,workers:SuperWorker[],page:SpecialistChannelPage)=>void;onActivity?:(sessionId:string,state:"running"|"waiting"|"idle")=>void;onReady?:(sessionId:string,ready:boolean)=>void;initialQuery?:string}){
+export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,onReady,sources,initialFilters,onOpenSource}:{
+ snapshot:SessionSnapshot;connected:boolean;onTask:(worker:SuperWorker,filters:SpecialistTaskFilters)=>void;
+ onTasks?:(sessionId:string,workers:SuperWorker[],page:SpecialistChannelPage)=>void;
+ onActivity?:(sessionId:string,state:"running"|"waiting"|"idle")=>void;onReady?:(sessionId:string,ready:boolean)=>void;
+ sources?:SpecialistTaskSources;initialFilters?:SpecialistTaskFilters;onOpenSource?:OpenSpecialistTaskSource;
+}){
  const session=snapshot.session.id;
  const [page,setPage]=useState<SpecialistChannelPage|null>(null),[entries,setEntries]=useState<SpecialistChannelEntry[]>([]),[error,setError]=useState('');
  const generation=useRef(0);
@@ -158,7 +163,8 @@ export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,
  const admitting=latestOwn?.role==='user'&&(!page||!entries.length||Date.parse(latestOwn.createdAt)>Date.parse(entries.at(-1)!.createdAt));
  const activity=page?.routing||admitting||!!page?.queued||page?.active.some(active=>conversationActivity(active.ai)==='running')?'running':page?.active.length?'waiting':'idle';
  useEffect(()=>{onActivity?.(session,activity)},[session,activity,onActivity]);
- const rows=specialistTaskRows({workers:page?.workers??[],entries,active:page?.active,projectId:snapshot.session.projectId,resources:snapshot.resources,resourceTree:snapshot.resourceTree});
+ const rows=specialistTaskRows({workers:page?.workers??[],entries,active:page?.active,projectId:snapshot.session.projectId,resources:snapshot.resources,resourceTree:snapshot.resourceTree,sources});
  const channel=page?.channel??{id:session,sessionId:session,projectId:snapshot.session.projectId,roleId:'',roleName:snapshot.session.title,revision:0,createdAt:''};
- return <SpecialistTaskList channel={channel} rows={rows} initialQuery={initialQuery} onTask={onTask} connected={connected} loading={!page&&!error} routing={!!page?.routing||admitting} queued={page?.queued} error={error} onRetry={()=>refreshCurrent.current()}/>;
+ return <SpecialistTaskList channel={channel} rows={rows} sources={sources} initialFilters={initialFilters} onTask={onTask} onOpenSource={onOpenSource}
+  connected={connected} loading={!page&&!error} routing={!!page?.routing||admitting} queued={page?.queued} error={error} onRetry={()=>refreshCurrent.current()}/>;
 }

@@ -6,6 +6,7 @@ import './sessionEntrance.css';
 import {preferredChannelTask,SpecialistChannel} from './SpecialistChannel';
 import {SpecialistTaskDetail} from './SpecialistTaskDetail';
 import {SpecialistTaskMetadata} from './SpecialistTaskList';
+import type {SpecialistTaskFilters,SpecialistTaskSources} from './specialistTaskListModel';
 import {SpecialistTaskControls} from './SpecialistTaskControls';
 import {PilotSpecialistQuestions} from './PilotSpecialistQuestions';
 import {SpecialistMcpDialog} from './SpecialistMcpDialog';
@@ -921,7 +922,7 @@ function AppContent() {
   const updateRoleReplyActivity=useCallback((id:string,state:'running'|'waiting'|'idle')=>setRoleReplyActivity(previous=>previous?.sessionId===id&&previous.state===state?previous:{sessionId:id,state}),[]);
   const [roleInspection,setRoleInspection]=useState<SessionSnapshot|null>(null);
   const [roleTasks,setRoleTasks]=useState<{sessionId:string;workers:SuperWorker[];page:SpecialistChannelPage}|null>(null);
-  const taskListVisits=useRef(new Map<string,{query:string;scrollTop:number;taskId:string;sessionId:string}>());
+  const taskListVisits=useRef(new Map<string,SpecialistTaskFilters&{scrollTop:number;taskId?:string;sessionId?:string}>());
   const taskDetailFocus=useRef<string|undefined>(undefined);
   const updateRoleTasks=useCallback((id:string,workers:SuperWorker[],page:SpecialistChannelPage)=>setRoleTasks({sessionId:id,workers,page}),[]);
   const roleWorkers=roleTasks?.sessionId===sessionId?roleTasks.workers:[];
@@ -1104,7 +1105,7 @@ function AppContent() {
     }else if(isSpecialistTasks){
       const visit=taskListVisits.current.get(sessionId);
       if(!visit)return;
-      const row=conversationBox.querySelector<HTMLButtonElement>(`[data-task-id="${CSS.escape(visit.taskId)}"][data-session-id="${CSS.escape(visit.sessionId)}"] > .specialist-task-open`);
+      const row=visit.taskId&&visit.sessionId?conversationBox.querySelector<HTMLButtonElement>(`[data-task-id="${CSS.escape(visit.taskId)}"][data-session-id="${CSS.escape(visit.sessionId)}"] > .specialist-task-open`):null;
       conversationBox.scrollTop=visit.scrollTop;
       row?.focus({preventScroll:true});
     }
@@ -1137,6 +1138,12 @@ function AppContent() {
   const pilotProjectId=sidebarProjectId??selectedProjectId??catalog?.projects[0]?.id;
   const pilotWorkspace=usePilotWorkspace(pilotProjectId,!!bootstrap?.authenticated&&!!catalog,
     bootstrap?.backendRuntime==='typescript'&&!selectedResource?sessionId??undefined:undefined);
+  const specialistSources=useMemo<SpecialistTaskSources|undefined>(()=>{
+    const workspace=pilotWorkspace.workspace;
+    if(!workspace?.active)return;
+    return {projectId:workspace.project.projectId,lakeSessionId:workspace.project.routerSessionId,
+      groups:workspace.chatGroups??[],specialistSessionIds:workspace.channels?.map(channel=>channel.sessionId)??[]};
+  },[pilotWorkspace.workspace]);
   const selectedChatGroup=isChatGroup?pilotWorkspace.workspace?.chatGroups?.find(group=>group.sessionId===sessionId):undefined;
   const pilotConversation=useMemo(()=>{
     const scoped=pilotWorkspace.conversation;
@@ -1176,7 +1183,19 @@ function AppContent() {
     return()=>clearTimeout(timer);
   },[selectedSuperPilot,sessionId,pilotWorkspaceConnected]);
   const pilotActivityConnected=pilotWorkspaceConnected||!!sessionId&&pilotLiveSession===sessionId;
-  const openSpecialistTask=(worker:SuperWorker,query?:string)=>{
+  const saveTaskListVisit=(filters?:SpecialistTaskFilters,worker?:SuperWorker)=>{
+    if(isSpecialistTasks&&sessionId&&filters){
+      taskListVisits.current.set(sessionId,{...filters,scrollTop:conversationBox?.scrollTop??0,taskId:worker?.task.taskId,sessionId:worker?.sessionId});
+    }
+  };
+  const openSpecialistTaskSource=(sourceSessionId:string,filters?:SpecialistTaskFilters,worker?:SuperWorker)=>{
+    const origin=catalog?.sessions.find(session=>session.id===sourceSessionId&&session.projectId===activeSnapshot?.session.projectId&&
+      (session.workspaceRole==='router'||session.workspaceRole==='group'));
+    if(!origin){handleFailure(new Error('任务的原对话已不可用'));return;}
+    saveTaskListVisit(filters,worker);
+    navigate({sessionId:origin.id,resourceId:null},origin.projectId);
+  };
+  const openSpecialistTask=(worker:SuperWorker,filters?:SpecialistTaskFilters)=>{
     const identity=workerInspectionTarget(worker,activeSnapshot?.session.projectId??'');
     const target=catalog?.sessions.find(session=>session.id===identity?.sessionId);
     if(!identity||identity.sessionId===pilotWorkspace.workspace?.project.routerSessionId||
@@ -1184,9 +1203,7 @@ function AppContent() {
       handleFailure(new Error('任务不属于当前项目或执行身份已变化'));
       return;
     }
-    if(isSpecialistTasks&&sessionId&&query!==undefined){
-      taskListVisits.current.set(sessionId,{query,scrollTop:conversationBox?.scrollTop??0,taskId:identity.taskId,sessionId:identity.sessionId});
-    }
+    saveTaskListVisit(filters,worker);
     inspector.reset();
     if(sessionId===identity.sessionId)return;
     taskDetailFocus.current=identity.sessionId;
@@ -2254,10 +2271,11 @@ function AppContent() {
         {sessionHeader&&<span className="conversation-header-backdrop" aria-hidden="true"/>}
         <div className="conversation-stage" aria-busy={historyPending}>{historyPending&&<SessionLoading/>}<section id="session-view-panel" tabIndex={-1} ref={attachConversation} className={`conversation${historyPending?" is-entering":""}`} inert={historyPending} aria-label={specialistTaskPage?"专员任务":"会话记录"}>
           {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true"/> : selectedSession.workspaceRole==='role'?<div className="timeline-list"><SpecialistChannel key={sessionId} snapshot={activeSnapshot} connected={sessionConnected}
-            initialQuery={taskListVisits.current.get(sessionId)?.query} onTask={openSpecialistTask}
+            sources={specialistSources} initialFilters={taskListVisits.current.get(sessionId)} onTask={openSpecialistTask} onOpenSource={openSpecialistTaskSource}
             onTasks={updateRoleTasks} onActivity={updateRoleReplyActivity} onReady={updateRoleContentReady}/></div>: isSpecialistExecution ?
             <SpecialistTaskDetail key={JSON.stringify([sessionId,activeSnapshot.superagent?.task.taskId])} snapshot={activeSnapshot} worker={selectedSuperWorker}
              connected={sessionConnected&&!modeSaving.has(sessionId)} onBack={taskOwner?()=>openSpecialistTaskList(taskOwner):undefined}
+             sources={specialistSources} onOpenSource={openSpecialistTaskSource}
              onContinue={isLegacyHistory?undefined:()=>void openProjectPilot(selectedSession.projectId,activeSnapshot.superagent?.task,activeSnapshot.superagent?.pilotSessionId)} onUpdated={()=>void refreshCurrent()}
              resultsFooter={detailChannelRead&&detailResultRead?<ConversationReadMarker session={detailChannelRead.channel.sessionId} state={detailChannelRead.channel.messageRead} enabled={sessionConnected}/>:undefined}/> : (hasConversationItems||pilotTaskContinuation) ? <div className="timeline-list">
             {!hasConversationItems&&emptyConversation}
