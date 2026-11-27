@@ -598,6 +598,24 @@
   justify-content: flex-end;
   gap: 8px;
 }
+.specialist-mcp-invite-actions.is-split {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+.specialist-mcp-invite-hint {
+  font-size: var(--font-size-toolbar);
+  color: var(--text-muted);
+  line-height: 1.5;
+  flex: 1 1 220px;
+}
+.specialist-mcp-invite-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  margin-inline-start: auto;
+}
 .specialist-mcp-connection-footer {
   display: flex;
   align-items: center;

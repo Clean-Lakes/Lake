@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "re
 import type {
   GatewayApprovalPolicy,
   GatewayInviteStatus,
+  GatewayInviteView,
   GatewayResourceGrant,
   SpecialistChannelInfo,
   SpecialistMcpState,
@@ -95,6 +96,13 @@ function buildDraft(state: SpecialistMcpState): Record<string, DraftGrant> {
         };
   }
   return draft;
+}
+
+export function selectSpecialistInviteSlot(invites?: readonly GatewayInviteView[]) {
+  const list = invites ?? [];
+  const current = list.find(invite => invite.status === "active" || invite.status === "redeemed") ?? null;
+  const lastInactive = current ? null : (list[0] ?? null);
+  return { current, lastInactive, canCreate: current === null };
 }
 
 export function SpecialistMcpDialog({
@@ -196,6 +204,11 @@ export function SpecialistMcpDialog({
     }));
   }, [state]);
 
+  const { current: currentInvite, lastInactive: lastInactiveInvite } = useMemo(
+    () => selectSpecialistInviteSlot(state?.invites),
+    [state?.invites],
+  );
+
   const requestClose = () => {
     if (!busy) onClose();
   };
@@ -279,7 +292,7 @@ export function SpecialistMcpDialog({
   }
 
   async function createInvite() {
-    if (!state || busy) return;
+    if (!state || busy || currentInvite) return;
     setBusy("invite");
     setError("");
     setFeedback("");
@@ -309,7 +322,7 @@ export function SpecialistMcpDialog({
     }
   }
 
-  async function revokeInvite(inviteId: string) {
+  async function revokeInvite(inviteId: string, wasRedeemed: boolean) {
     if (busy) return;
     setBusy("revoke:" + inviteId);
     setError("");
@@ -318,7 +331,11 @@ export function SpecialistMcpDialog({
       const next = await api.revokeSpecialistMcpInvite(channel.projectId, channel.roleId, inviteId);
       if (!mounted.current) return;
       setState(next);
-      setFeedback("接入邀请已撤销");
+      setFeedback(
+        wasRedeemed
+          ? "已撤销当前接入并重置凭据，现在可重新生成新的邀请链接"
+          : "接入邀请已撤销，现在可重新生成新的邀请链接",
+      );
       onUpdated?.();
     } catch (cause) {
       if (mounted.current) setError(readableError(cause));
@@ -698,100 +715,121 @@ export function SpecialistMcpDialog({
             )}
           </div>
 
-          <form
-            className="specialist-mcp-invite-form"
-            onSubmit={event => {
-              event.preventDefault();
-              void createInvite();
-            }}
-          >
-            <label className="specialist-mcp-field">
-              <span>邀请名称</span>
-              <input
-                type="text"
-                value={inviteName}
-                maxLength={80}
-                placeholder={`例如：${channel.roleName} · 研发预发接入`}
-                disabled={!!busy || !state?.connection?.enabled}
-                onChange={event => setInviteName(event.target.value)}
-              />
-            </label>
-            <label className="specialist-mcp-field specialist-mcp-ttl-field">
-              <span>链接有效期</span>
-              <AppSelect
-                label="邀请链接有效期"
-                value={ttlMinutes}
-                disabled={!!busy || !state?.connection?.enabled}
-                onChange={event => setTtlMinutes(event.target.value)}
-              >
-                <option value="15">15 分钟</option>
-                <option value="60">1 小时</option>
-                <option value="1440">24 小时</option>
-              </AppSelect>
-            </label>
-            <button
-              type="submit"
-              className="button primary specialist-mcp-generate-btn"
-              disabled={!!busy || !state?.connection?.enabled}
-            >
-              <Glyph name="link" size={14} />
-              <span>{busy === "invite" ? "生成中…" : "生成接入链接"}</span>
-            </button>
-          </form>
-
-          {state?.invites.length ? (
+          {currentInvite ? (
             <div className="specialist-mcp-invite-list">
-              {state.invites.map(invite => (
-                <div key={invite.id} className="specialist-mcp-invite-row">
-                  <div className="specialist-mcp-invite-meta">
-                    <strong>
-                      {invite.name || invite.recipient || `${channel.roleName} MCP 接入邀请`}
-                      <span className="specialist-mcp-invite-status" data-status={invite.status}>
-                        {inviteStatusLabel(invite.status)}
+              <div className="specialist-mcp-invite-row">
+                <div className="specialist-mcp-invite-meta">
+                  <strong>
+                    {currentInvite.name || currentInvite.recipient || `${channel.roleName} MCP 接入邀请`}
+                    <span className="specialist-mcp-invite-status" data-status={currentInvite.status}>
+                      {inviteStatusLabel(currentInvite.status)}
+                    </span>
+                  </strong>
+                  <small>
+                    创建于 {formatDateTime(currentInvite.createdAt)} ·{" "}
+                    {currentInvite.redeemedAt
+                      ? `兑换于 ${formatDateTime(currentInvite.redeemedAt)}`
+                      : `有效期至 ${formatDateTime(currentInvite.expiresAt)}`}
+                  </small>
+                </div>
+                {currentInvite.status === "active" && currentInvite.invitePrompt ? (
+                  <>
+                    <pre className="specialist-mcp-invite-prompt">{currentInvite.invitePrompt}</pre>
+                    <div className="specialist-mcp-invite-actions is-split">
+                      <span className="specialist-mcp-invite-hint">
+                        每个专员仅支持一个邀请链接，如需更换请先撤销
                       </span>
-                    </strong>
-                    <small>
-                      创建于 {formatDateTime(invite.createdAt)} ·{" "}
-                      {invite.redeemedAt
-                        ? `兑换于 ${formatDateTime(invite.redeemedAt)}`
-                        : invite.revokedAt
-                          ? `撤销于 ${formatDateTime(invite.revokedAt)}`
-                          : `有效期至 ${formatDateTime(invite.expiresAt)}`}
-                    </small>
-                  </div>
-                  {invite.status === "active" && invite.invitePrompt && (
-                    <>
-                      <pre className="specialist-mcp-invite-prompt">{invite.invitePrompt}</pre>
-                      <div className="specialist-mcp-invite-actions">
+                      <div className="specialist-mcp-invite-buttons">
                         <button
                           type="button"
                           className="button secondary specialist-mcp-compact-btn"
                           disabled={!!busy}
-                          onClick={() => void revokeInvite(invite.id)}
+                          onClick={() => void revokeInvite(currentInvite.id, false)}
                         >
                           撤销
                         </button>
                         <button
                           type="button"
                           className="button primary specialist-mcp-compact-btn"
-                          disabled={!!busy}
+                          disabled={!!busy || !state?.connection?.enabled}
                           onClick={() =>
-                            void copyText(invite.invitePrompt!, "已复制接入邀请，发给外部 MCP 客户端即可配置连接")
+                            void copyText(currentInvite.invitePrompt!, "已复制接入邀请，发给外部 MCP 客户端即可配置连接")
                           }
                         >
                           <Glyph name="copy" size={13} />
                           <span>复制接入邀请</span>
                         </button>
                       </div>
-                    </>
-                  )}
-                </div>
-              ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="specialist-mcp-invite-actions is-split">
+                    <span className="specialist-mcp-invite-hint">
+                      每个专员仅支持一个邀请链接；撤销当前接入后原客户端凭据会立即失效，届时可重新生成。
+                    </span>
+                    <div className="specialist-mcp-invite-buttons">
+                      <button
+                        type="button"
+                        className="button secondary specialist-mcp-compact-btn"
+                        disabled={!!busy}
+                        onClick={() => void revokeInvite(currentInvite.id, true)}
+                      >
+                        撤销并重置
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
-            <p className="specialist-mcp-empty">
-              生成一次性邀请链接后，点击「复制接入邀请」发给任意支持 Streamable HTTP 的外部 Agent 或 MCP 客户端，确认信任后即可完成接入。
-            </p>
+            <>
+              <form
+                className="specialist-mcp-invite-form"
+                onSubmit={event => {
+                  event.preventDefault();
+                  void createInvite();
+                }}
+              >
+                <label className="specialist-mcp-field">
+                  <span>邀请名称</span>
+                  <input
+                    type="text"
+                    value={inviteName}
+                    maxLength={80}
+                    placeholder={`例如：${channel.roleName} · 研发预发接入`}
+                    disabled={!!busy || !state?.connection?.enabled}
+                    onChange={event => setInviteName(event.target.value)}
+                  />
+                </label>
+                <label className="specialist-mcp-field specialist-mcp-ttl-field">
+                  <span>链接有效期</span>
+                  <AppSelect
+                    label="邀请链接有效期"
+                    value={ttlMinutes}
+                    disabled={!!busy || !state?.connection?.enabled}
+                    onChange={event => setTtlMinutes(event.target.value)}
+                  >
+                    <option value="15">15 分钟</option>
+                    <option value="60">1 小时</option>
+                    <option value="1440">24 小时</option>
+                  </AppSelect>
+                </label>
+                <button
+                  type="submit"
+                  className="button primary specialist-mcp-generate-btn"
+                  disabled={!!busy || !state?.connection?.enabled}
+                >
+                  <Glyph name="link" size={14} />
+                  <span>{busy === "invite" ? "生成中…" : "生成接入链接"}</span>
+                </button>
+              </form>
+
+              <p className="specialist-mcp-empty">
+                {lastInactiveInvite?.status === "expired"
+                  ? "上次生成的邀请链接已过期。每个专员仅支持一个邀请链接，可在此重新生成后发给外部 MCP 客户端。"
+                  : "每个专员仅支持一个邀请链接。生成后点击「复制接入邀请」发给任意支持 Streamable HTTP 的外部 Agent 或 MCP 客户端，确认信任后即可完成接入。"}
+              </p>
+            </>
           )}
 
           {state?.connection && (
@@ -815,7 +853,7 @@ export function SpecialistMcpDialog({
 
       <footer className="specialist-mcp-footer">
         <span className="specialist-mcp-footer-hint">
-          {tab === "grants" ? "单条和批量授权均须确认后生效" : "邀请链接单次有效，可随时撤销"}
+          {tab === "grants" ? "单条和批量授权均须确认后生效" : "每个专员仅保留一个邀请链接，可随时撤销"}
         </span>
         <div className="specialist-mcp-footer-actions">
           <button type="button" className="button secondary" disabled={!!busy} onClick={requestClose}>

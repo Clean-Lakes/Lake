@@ -271,9 +271,13 @@ export class LakeGateway {
   listInvites(connectionId: string, origin: string, roleName?: string): GatewayInviteView[] {
     const row = this.config().tokens.find(entry => entry.id === connectionId && entry.connection);
     if (!row?.connection) throw new HttpError(404, '接入连接不存在');
-    return (row.connection.invites ?? [])
+    const views = (row.connection.invites ?? [])
       .map(invite => inviteView(invite, origin, roleName))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const current = views.find(item => item.status === 'active')
+      ?? views.find(item => item.status === 'redeemed')
+      ?? views[0];
+    return current ? [current] : [];
   }
   createInvite(connectionId: string, input: Record<string, unknown>, origin: string, roleName: string): GatewayInviteView {
     this.security?.check();
@@ -281,6 +285,13 @@ export class LakeGateway {
     const config = this.config(), row = config.tokens.find(entry => entry.id === connectionId && entry.connection);
     if (!row?.connection) throw new HttpError(404, '接入连接不存在');
     if (!row.connection.enabled) throw new HttpError(409, '连接已停用，请先启用后再生成邀请');
+    const existingInvites = row.connection.invites ?? [];
+    if (existingInvites.some(entry => inviteStatus(entry) === 'active')) {
+      throw new HttpError(409, '当前专员已有待兑换的邀请链接，不能重复创建；请先撤销现有链接');
+    }
+    if (existingInvites.some(entry => inviteStatus(entry) === 'redeemed')) {
+      throw new HttpError(409, '当前专员已有已接入的邀请链接，不能重复创建；如需更换请先撤销当前链接');
+    }
     const customName = input.name === undefined || input.name === '' ? undefined : text(input.name, 'name', 80);
     const recipient = input.recipient === undefined || input.recipient === '' ? undefined : text(input.recipient, 'recipient', 80);
     const ttlMinutes = input.ttlMinutes === undefined ? 15 : Number(input.ttlMinutes);
@@ -295,12 +306,12 @@ export class LakeGateway {
       createdAt,
       expiresAt,
     };
-    const prior = (row.connection.invites ?? []).filter(entry => inviteStatus(entry) === 'active' || Date.now() - Date.parse(entry.createdAt) < 7 * 86400_000).slice(-31);
     const next: TokenRecord = {
       ...row,
       connection: {
         ...row.connection,
-        invites: [...prior, invite],
+        // Each specialist connection keeps at most one invite link.
+        invites: [invite],
         updatedAt: new Date(Math.max(Date.now(), Date.parse(row.connection.updatedAt) + 1)).toISOString(),
       },
     };
@@ -312,19 +323,30 @@ export class LakeGateway {
     this.security?.check();
     const config = this.config(), row = config.tokens.find(entry => entry.id === connectionId && entry.connection);
     if (!row?.connection) throw new HttpError(404, '接入连接不存在');
-    const target = (row.connection.invites ?? []).find(entry => entry.id === inviteId);
+    const existing = row.connection.invites ?? [];
+    const target = existing.find(entry => entry.id === inviteId);
     if (!target) throw new HttpError(404, '接入邀请不存在');
     if (target.revokedAt) return {ok: true};
     const revokedAt = now();
+    const rotatesToken = existing.some(entry => !entry.revokedAt && Boolean(entry.redeemedAt));
+    const nextToken = rotatesToken ? 'lkgw_' + randomBytes(24).toString('hex') : row.token;
     const next: TokenRecord = {
       ...row,
+      token: nextToken,
       connection: {
         ...row.connection,
-        invites: (row.connection.invites ?? []).map(entry => entry.id === inviteId ? {...entry, revokedAt} : entry),
+        invites: existing.map(entry => {
+          const st = inviteStatus(entry);
+          if (entry.id === inviteId || st === 'active' || st === 'redeemed') {
+            return { ...entry, revokedAt };
+          }
+          return entry;
+        }),
         updatedAt: new Date(Math.max(Date.now(), Date.parse(row.connection.updatedAt) + 1)).toISOString(),
       },
     };
     this.write({...config, tokens: config.tokens.map(entry => entry.id === row.id ? next : entry)});
+    if (rotatesToken) this.secretValues.add(nextToken);
     return {ok: true};
   }
   private findInviteByToken(config: GatewayConfig, inviteToken: unknown): {row: TokenRecord; invite: InviteRecord} {

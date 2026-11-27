@@ -133,14 +133,19 @@ test('specialist MCP grants, single-use invite redemption and revocation enforce
   assert.equal(saved.connection.enabled, true);
   assert.equal(saved.connection.resourceGrants.length, 2);
 
-  // Create and inspect a one-time invite with custom name, then redeem it over its actual endpoint URL.
-  const { invite } = await f.api(`${base}/invites`, 'POST', { name: '研发预发发布接入', ttlMinutes: 15 }, 201);
+  // Create and inspect a one-time invite with custom name, then verify duplicate creation is blocked.
+  const { invite, state: afterFirstCreate } = await f.api(`${base}/invites`, 'POST', { name: '研发预发发布接入', ttlMinutes: 15 }, 201);
   assert.equal(invite.status, 'active');
   assert.equal(invite.name, '研发预发发布接入');
+  assert.equal(afterFirstCreate.invites.length, 1);
   assert.match(invite.invitePrompt, /帮我连接 Lake 的「研发预发发布接入」（发布专员）：/);
   assert.doesNotMatch(invite.invitePrompt, /WorkBuddy/i);
   const inviteUrl = new URL(invite.inviteUrl);
   assert.notEqual(inviteUrl.hostname, 'localhost', 'invite URL should use LAN IPv4 when available');
+
+  // A specialist can only have one invite link; duplicate creation while active must be rejected.
+  const dupActive = await f.api(`${base}/invites`, 'POST', { name: '重复链接' }, 409);
+  assert.match(dupActive.error, /不能重复创建/);
 
   const inspectedResponse = await fetch(invite.inviteUrl);
   assert.equal(inspectedResponse.status, 200);
@@ -174,8 +179,23 @@ test('specialist MCP grants, single-use invite redemption and revocation enforce
   const secondRedeem = await fetch(inspected.redeemUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   assert.equal(secondRedeem.status, 410);
 
-  // Revoked invite cannot be redeemed.
+  // Duplicate creation while an existing invite is redeemed is also blocked until revoked.
+  const dupRedeemed = await f.api(`${base}/invites`, 'POST', { name: '第二个链接' }, 409);
+  assert.match(dupRedeemed.error, /不能重复创建/);
+
+  // Revoking the redeemed invite rotates the connection bearer token and unlocks creating one replacement invite.
+  await f.api(`${base}/invites/${invite.id}`, 'DELETE');
+  const staleTokenResp = await fetch(redeemed.mcpUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${redeemed.token}` },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'initialize', params: { protocolVersion: '2025-03-26' } }),
+  });
+  assert.equal(staleTokenResp.status, 401);
+
+  // Now creating a single replacement invite succeeds, and revoking it blocks redemption.
   const second = await f.api(`${base}/invites`, 'POST', { name: '临时测试链接' }, 201);
+  assert.equal(second.state.invites.length, 1);
+  assert.equal(second.state.invites[0].id, second.invite.id);
   const secondToken = second.invite.inviteUrl.split('/').at(-1);
   await f.api(`${base}/invites/${second.invite.id}`, 'DELETE');
   await f.api(`/api/gateway/invites/${secondToken}/redeem`, 'POST', {}, 410, '');

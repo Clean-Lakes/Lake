@@ -13,6 +13,7 @@ const css = registerHooks({
   },
 });
 const { PilotGatewayApprovals } = await import('../src/PilotGatewayApprovals');
+const { selectSpecialistInviteSlot } = await import('../src/SpecialistMcpDialog');
 css.deregister();
 
 const sampleApproval: GatewayApprovalRequest = {
@@ -130,4 +131,35 @@ test('external MCP approvals belong to the Lake main chat', () => {
   const groupView = pilotConversationView(ws, group.id)!;
   assert.equal(groupView.gatewayApprovals, undefined);
   assert.equal(superPilotActivity(groupView, group, true), null);
+});
+
+test('selectSpecialistInviteSlot allows at most one live invite per specialist', () => {
+  const empty = selectSpecialistInviteSlot([]);
+  assert.equal(empty.canCreate, true);
+  assert.equal(empty.current, null);
+
+  const active = selectSpecialistInviteSlot([
+    { id: 'inv-1', name: '研发预发接入', createdAt: '2026-11-27T02:00:00Z', expiresAt: '2026-11-28T02:00:00Z', status: 'active' },
+  ]);
+  assert.equal(active.canCreate, false);
+  assert.equal(active.current?.id, 'inv-1');
+
+  const redeemed = selectSpecialistInviteSlot([
+    { id: 'inv-2', name: '生产巡检接入', createdAt: '2026-11-27T02:00:00Z', expiresAt: '2026-11-28T02:00:00Z', redeemedAt: '2026-11-27T02:05:00Z', status: 'redeemed' },
+  ]);
+  assert.equal(redeemed.canCreate, false);
+  assert.equal(redeemed.current?.id, 'inv-2');
+
+  const expired = selectSpecialistInviteSlot([
+    { id: 'inv-3', name: '过期链接', createdAt: '2026-11-25T02:00:00Z', expiresAt: '2026-11-26T02:00:00Z', status: 'expired' },
+  ]);
+  assert.equal(expired.canCreate, true);
+  assert.equal(expired.current, null);
+  assert.equal(expired.lastInactive?.id, 'inv-3');
+
+  const revoked = selectSpecialistInviteSlot([
+    { id: 'inv-4', name: '已撤销链接', createdAt: '2026-11-25T02:00:00Z', expiresAt: '2026-11-26T02:00:00Z', revokedAt: '2026-11-25T03:00:00Z', status: 'revoked' },
+  ]);
+  assert.equal(revoked.canCreate, true);
+  assert.equal(revoked.current, null);
 });
