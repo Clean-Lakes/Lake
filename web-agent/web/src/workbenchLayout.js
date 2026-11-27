@@ -62,6 +62,7 @@
   let shell, active, frame = 0, lastChrome = '';
   let previousSidebar, sidebarSlide, sidebarOrigin;
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+  const navigationButtons = '.workbench-navigation button';
   let observedContextPanel;
   const contextResize = new ResizeObserver(() => schedule());
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -113,7 +114,7 @@
     const divider = island?.querySelector('.island-navigation-divider');
     sidebarOrigin = {
       shell,
-      buttons: [...shell.querySelectorAll('.workbench-navigation button')].map(button => [button, button.getBoundingClientRect()]),
+      buttons: [...shell.querySelectorAll(navigationButtons)].map(button => [button, button.getBoundingClientRect()]),
       headerInset: header ? header.getBoundingClientRect().left - island.getBoundingClientRect().left : undefined,
       padding: island ? getComputedStyle(island).paddingInlineStart : undefined,
       dividerOpacity: divider ? getComputedStyle(divider).opacity : undefined,
@@ -333,15 +334,16 @@
     const start = width => Math.max(gutter, (width - 960) / 2);
     const readingWidth = width => Math.min(960, width - gutter * 2);
     const initialStart = start(viewport);
-    const panes = [surface, workspace, drag.handle, owner.querySelector('.workbench-navigation')].filter(Boolean);
-    const header = owner.querySelector('.lake-workbench-islands');
+    const navigation = owner.querySelector('.workbench-navigation');
+    const panes = [surface, workspace, drag.handle, navigation].filter(Boolean);
+    const islandLayer = owner.querySelector('.lake-workbench-islands');
     const reading = workspace.querySelectorAll('.timeline-list,.conversation-header-backdrop');
     const restore = [
       retainStyles(sidebar, ['inline-size']),
       retainStyles(surface, ['inset-inline-end']),
       retainStyles(composer, ['--sidebar-resize-viewport']),
       retainStyles(conversation, ['inline-size']),
-      ...[...panes, header, ...reading].filter(Boolean).map(node => retainStyles(node, ['transform'])),
+      ...[...panes, islandLayer, ...reading].filter(Boolean).map(node => retainStyles(node, ['transform'])),
     ];
     const userMessages = alignVisibleUserMessages(conversation, readingWidth(viewport));
     // Lay out the scroll view once. Its largest possible clip fits both
@@ -366,7 +368,7 @@
         lastReadingOffset = readingOffset;
         for (const node of reading) translate(node, readingOffset);
       }
-      translate(header, offset + readingOffset);
+      translate(islandLayer, offset + readingOffset);
       userMessages.resize(readingWidth(room));
       drag.handle.setAttribute('aria-valuenow', String(width));
     };
@@ -503,7 +505,9 @@
     const workspace = shell.querySelector('.workspace');
     if (workspace) { const r = workspace.getBoundingClientRect(); regions.push([r.x, 0, r.width, height]); }
     if (sidebar) { const r = sidebar.getBoundingClientRect(); regions.push([r.x, 0, r.width, height]); }
-    const excluded = [...shell.querySelectorAll('.workbench-splitter, .workbench-navigation button'), ...headers.flatMap(header => [...header.querySelectorAll('button, a, input, select, textarea, [role="button"]')])].map(rect);
+    const sidebarControls = [...shell.querySelectorAll('.sidebar-brand-row :is(button, a, input, select, textarea, [role="button"], [role="combobox"])')]
+      .filter(element => element.getBoundingClientRect().width > 0 && !element.closest('[aria-hidden="true"]') && getComputedStyle(element).visibility !== 'hidden');
+    const excluded = [...shell.querySelectorAll(`.workbench-splitter, ${navigationButtons}`), ...sidebarControls, ...headers.flatMap(header => [...header.querySelectorAll('button, a, input, select, textarea, [role="button"]')])].map(rect);
     if (sidebarSlide?.shell === shell) excluded.push(...sidebarSlide.buttonPaths);
     for (const element of document.querySelectorAll('.conversation-directory-trigger, .modal-scrim, dialog[open], [role="dialog"], [role="menu"], [role="listbox"]')) excluded.push(rect(element));
     const body = JSON.stringify({ regions, excluded, theme: document.documentElement.dataset.theme || 'light', appearance: window.lakeAppearance || 'light' });
@@ -566,6 +570,6 @@
   window.addEventListener('lake-workbench-layout', sync);
   document.addEventListener('scroll', () => { if (!sidebarSlide) schedule(); }, true);
   window.addEventListener('lake-chrome-resize', schedule);
-  document.addEventListener('transitionend', event => { if (event.target.matches('.app-shell, .terminal-side-panel, .workbench-navigation')) schedule(); });
+  document.addEventListener('transitionend', event => { if (event.target.matches('.app-shell, .terminal-side-panel, .workbench-navigation, .workbench-sidebar-toggle')) schedule(); });
   schedule();
 })();

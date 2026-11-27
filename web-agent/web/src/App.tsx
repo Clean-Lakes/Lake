@@ -14,7 +14,6 @@ import './specialistTaskList.css';
 import {PilotWorkspace,usePilotWorkspace} from './PilotWorkspace';
 import './pilotWorkspace.css';
 import {ChatGroupNavigation} from './ChatGroup';
-import {ProjectChatCreation} from './ProjectChatCreation';
 import './chatGroup.css';
 import './specialistAvatars.css';
 import {SpecialistAvatarProvider,SuperRoleAvatar} from './SuperRoleAvatar';
@@ -2122,9 +2121,6 @@ function AppContent() {
        contentId="lake-project-navigation"
        projectPicker={sidebarProject ? {projects:projectList,value:sidebarProject.id,onChange:switchProject} : undefined}
        headerActions={<>{navigationSearchTrigger}{closeNavigation}</>}
-       renderCreation={groupsEnabled&&sidebarProject?compact=><ProjectChatCreation key={`create:${sidebarProject.id}`} projectId={sidebarProject.id}
-        compact={compact} disabled={!connected} groupsReady={!!pilotWorkspace.workspace?.active} channels={pilotWorkspace.workspace?.channels??[]}
-        onSpecialistCreated={pilotWorkspace.addRole} onGroupCreated={openCreatedChatGroup}/>:undefined}
        header={<>
         {bulkMode && <div className="bulk-navigation-toolbar"><button type="button" onClick={()=>{setBulkMode(false);setBulkSelected([]);}}>完成</button><span>已选 {bulkSelected.length} 项</span><button type="button" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkSelected([])}>清空</button><button type="button" className="danger-text" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}>删除所选</button></div>}
        </>}
@@ -2138,11 +2134,14 @@ function AppContent() {
        })}
        resourceCount={catalog.resources.filter(resource=>resource.projectId===sidebarProject?.id).length}
        attention={pilotWorkspace.workspace?.channels?.some(channel=>channel.needsConfirmation===true||hasUnreadMessages(channel.messageRead))}
-       specialistRail={groupsEnabled&&sidebarProject?<PilotWorkspace key={sidebarProject.id} {...pilotNavigation} presentation="rail"/>:undefined}
+       specialistRail={groupsEnabled&&sidebarProject?<PilotWorkspace key={sidebarProject.id} {...pilotNavigation} presentation="rail"
+        createSpecialist={{projectId:sidebarProject.id,onCreated:pilotWorkspace.addRole}}/>:undefined}
        specialists={<>
         {sidebarProject&&<PilotWorkspace {...pilotNavigation} presentation={groupsEnabled?'entry':'list'}/>}
         {groupsEnabled&&sidebarProject&&<ChatGroupNavigation key={sidebarProject.id} groups={pilotWorkspace.workspace?.chatGroups??[]}
-         selectedId={sessionSelected?sessionId:null} onOpen={id=>navigate({sessionId:id,resourceId:null})}/>}
+         selectedId={sessionSelected?sessionId:null} onOpen={id=>navigate({sessionId:id,resourceId:null})}
+         createGroup={{projectId:sidebarProject.id,channels:pilotWorkspace.workspace?.channels??[],
+          disabled:!connected||!pilotWorkspace.workspace?.active,onCreated:openCreatedChatGroup}}/>}
         {sidebarProject&&pilotWorkspace.workspace?.active===false&&<div className="nav-heading sidebar-session-heading" hidden={bulkMode}>
           <button type="button" className="nav-section-toggle" aria-label={`${sidebarSessionsExpanded?"折叠":"展开"}${sidebarProject.name}的会话`} aria-expanded={sidebarSessionsExpanded} aria-controls={navigationProjects.length?`project-sessions-${sidebarProject.id}`:undefined} disabled={!navigationProjects.length} onClick={()=>setClosedSessionGroups(items=>sidebarSessionsExpanded?[...items,sidebarProject.id]:items.filter(id=>id!==sidebarProject.id))}><Glyph name="chevron" size={13} className={sidebarSessionsExpanded?"chevron-open":""}/><span>会话</span></button>
           <button type="button" ref={newSessionButton} className="sidebar-new-session" hidden={bulkMode} disabled={!connected||!!pendingOperation} aria-label="新对话" aria-keyshortcuts="Meta+N Control+N" title={`新对话（${/Mac/.test(navigator.platform)?'⌘ N':'Ctrl N'}）`} onClick={()=>{setClosedSessionGroups(items=>items.filter(id=>id!==sidebarProject.id));openSessionDialog(sidebarProject.id);}}><Glyph name="edit" size={14}/></button>

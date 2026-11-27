@@ -7,6 +7,7 @@ import {greetRoleAvatar,SuperRoleAvatar} from './SuperRoleAvatar';
 import {conversationAvatarMotion,superAvatarMotion,channelTaskPresentation,specialistTaskActivity,type ConversationActivity,type ConversationAvatarActivity} from './superAgentPresentation';
 import {Glyph} from './Icons';
 import {NavigationMenu} from './NavigationDelete';
+import {SpecialistCreate} from './SpecialistCreate';
 import {SpecialistDelete} from './SpecialistDelete';
 import {SidebarPilotEntry} from './SidebarPilotEntry';
 import {AgentBackendLogo,agentTypeName} from './AgentBackendLogo';
@@ -196,6 +197,7 @@ type PilotWorkspaceProps = {
  disabled?:boolean; onDeleted?:(channel:SpecialistChannelInfo)=>void;
  onCodexSettings?:(projectId:string,anchor:HTMLButtonElement|null)=>void;
  onSpecialistMcp?:(channel:SpecialistChannelInfo,anchor:HTMLButtonElement|null)=>void;
+ createSpecialist?:{projectId:string;onCreated:(channel:SpecialistChannelInfo)=>void};
 };
 function showClippedText(event: PointerEvent<HTMLElement>) {
  const text = event.currentTarget;
@@ -235,12 +237,12 @@ function SpecialistNameBubble({name,target,onClose}:{name:string;target:HTMLButt
  return createPortal(<span ref={bubble} className="specialist-name-bubble" aria-hidden="true">{name}</span>,document.body);
 }
 
-export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,onCodexSettings,onSpecialistMcp,showHeading=true,presentation='list'}: PilotWorkspaceProps) {
- const [menu,setMenu]=useState<SpecialistChannelInfo|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null);
+export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,onCodexSettings,onSpecialistMcp,createSpecialist,showHeading=true,presentation='list'}: PilotWorkspaceProps) {
+ const [menu,setMenu]=useState<SpecialistChannelInfo|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null),[creating,setCreating]=useState(false);
  const [nameHint,setNameHint]=useState<{id:string;target:HTMLButtonElement}|null>(null);
- const anchor=useRef<HTMLButtonElement|null>(null);
+ const anchor=useRef<HTMLButtonElement|null>(null),createButton=useRef<HTMLButtonElement|null>(null);
  const closeNameHint=useCallback(()=>setNameHint(null),[]);
- useEffect(()=>{setMenu(null);setDeleting(null);closeNameHint();},[workspace?.project.projectId,closeNameHint]);
+ useEffect(()=>{setMenu(null);setDeleting(null);setCreating(false);closeNameHint();},[workspace?.project.projectId,closeNameHint]);
  const roots = workspace?.active?workspace.workers.filter(worker => !worker.parentWorkerId):[];
  const channels = workspace?.active?workspace.channels:undefined;
  const viewedRole = selectedId ? selectedRoleId ?? channels?.find(channel => channel.sessionId === selectedId)?.roleId ??
@@ -252,7 +254,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
   roots.map(worker => ({channel: undefined, workers: [worker]}));
  const hintedEntry=nameHint&&entries.find(({channel,workers})=>(channel?.id??workers[0].id)===nameHint.id);
  const hintedName=hintedEntry&&(hintedEntry.channel?.roleName??hintedEntry.workers[0].roleName);
- if(rail&&!entries.length)return null;
+ if(rail&&!entries.length&&!createSpecialist)return null;
  return <section className={rail?'sidebar-specialist-roster':'pilot-workspace'} aria-label={rail||showHeading?'专员':undefined}>
   {!rail&&<>
    {showHeading&&<div className="nav-heading"><span>专员</span><small>{entries.length+1}</small></div>}
@@ -331,6 +333,11 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
     </span>}
    </button>;
   })}
+  {rail&&createSpecialist&&<button ref={createButton} type="button" className="sidebar-rail-button sidebar-specialist-create"
+   aria-label="新建专员" title="新建专员" disabled={disabled}
+   onClick={()=>{closeNameHint();setCreating(true);}}>
+   <Glyph name="plus" size={18}/>
+  </button>}
   {rail&&nameHint&&hintedName&&<SpecialistNameBubble key={nameHint.id} name={hintedName} target={nameHint.target} onClose={closeNameHint}/>}
   {menu&&<NavigationMenu key={menu.id} title={menu.roleName} placement="beside" anchor={anchor} className="specialist-context-menu"
    headerIcon={<SuperRoleAvatar name={menu.roleName} roleId={menu.roleId} avatarId={menu.avatarId} motion="still" size={19}/>}
@@ -347,5 +354,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
     anchor.current?.scrollIntoView({block:'nearest'});
    }
   }}/>}
+  {creating&&createSpecialist&&<SpecialistCreate projectId={createSpecialist.projectId} disabled={disabled} returnFocus={createButton}
+   onCreated={createSpecialist.onCreated} onClose={()=>setCreating(false)}/>}
  </section>;
 }
