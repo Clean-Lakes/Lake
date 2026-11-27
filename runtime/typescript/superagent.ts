@@ -645,6 +645,7 @@ export class LakeSuperagent implements AgentHost {
       ...(groupId&&{pilotSessionId:groupId}),
       ...(destination && sourceEvent?.sessionId === destination && {pilotSourceMessageId:sourceEvent.messageId}),
       ...(sourceEvent?.external && { sourceExternal: true }),
+      ...(sourceEvent?.projectId===worker.projectId && {sourceSessionId:sourceEvent.sessionId}),
       activity: this.workerActivity(worker),execution:this.workerExecution(worker,this.workerRuns(worker,runs)) };
   }
   private workerRuns(worker:Worker,externalRuns=this.store.list<ExternalRun>('acpRuns')) {

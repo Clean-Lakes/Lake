@@ -334,6 +334,7 @@ test('group Pilot runs Codex work for a member and keeps the task, events and re
  const [worker]=workers;
  assert.equal(worker.roleId,'role-0');
  assert.equal(worker.pilotSessionId,group.sessionId);
+ assert.equal(worker.sourceSessionId,group.sessionId);
  assert.equal(worker.pilotSourceMessageId,request.id);
  assert.equal(worker.pilotReport.messageId,report.id);
  assert.equal(report.author.execution.kind,'acp');

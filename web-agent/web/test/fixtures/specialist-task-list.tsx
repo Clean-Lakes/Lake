@@ -1,6 +1,6 @@
 // The real App with fictional in-memory API data; never calls a model or host.
 import './readme-workbench';
-import type {Message,Resource,ResourceTreeNode,SessionSnapshot,SpecialistChannelInfo,SpecialistChannelPage,SuperWorker,WorkSession} from '../../../shared/contracts';
+import type {ChatGroup,Message,Resource,ResourceTreeNode,SessionSnapshot,SpecialistChannelInfo,SpecialistChannelPage,SuperWorker,WorkSession} from '../../../shared/contracts';
 import {isLakeAvatarName} from '../../../shared/specialist-avatars';
 const base=window.fetch.bind(window),query=new URLSearchParams(location.search),projectId='demo-project',at='2026-11-11T01:20:00Z';
 const roleId='fixture-ops-33';
@@ -85,6 +85,18 @@ if(query.has('collaboration')){
  channels.forEach((item,i)=>{item.avatarId=avatars[i];});
  workers.slice(0,3).forEach((worker,i)=>collaborate(worker,[2,3,6][i]));
 }
+const groups:ChatGroup[]=query.has('sources')?['联调发布群','日常巡检群'].map((title,index)=>({
+ sessionId:`fixture-group-${index}`,projectId,title,updatedAt:at,members:[channels[0],channels[index+1]].map(member=>({roleId:member.roleId,roleName:member.roleName,avatarId:member.avatarId})),
+})):[];
+if(groups.length){
+ const origins=[groups[0].sessionId,'demo-session-0','demo-session-0',groups[0].sessionId,groups[1].sessionId,channel.sessionId,'demo-session-0'];
+ workers.forEach((worker,index)=>{
+  worker.sourceSessionId=origins[index%titles.length];
+  if(index%titles.length===2)worker.sourceExternal=true;
+  const group=groups.find(item=>item.sessionId===worker.sourceSessionId);
+  if(group){worker.pilotSessionId=group.sessionId;snapshots.get(worker.sessionId)!.superagent!.pilotSessionId=group.sessionId;}
+ });
+}
 Object.assign(window,{lakeReadQA:{
  state(session=channel.sessionId){return {...channels.find(item=>item.sessionId===session)?.messageRead};},
  attention(value:boolean){reading=value;},
@@ -116,7 +128,7 @@ window.fetch=async(input,init)=>{
   if(path.endsWith('/workControl')){const worker=workers.find(item=>path.includes('/'+item.sessionId+'/'));if(worker){worker.task.state='cancelled';worker.assignmentState='parked';}}
   return json({});
  }
- if(path.endsWith('/superagent'))return json({active:true,project:{projectId,routerSessionId:'demo-session-0',version:1},channels,workers,cursor:revision});
+ if(path.endsWith('/superagent'))return json({active:true,project:{projectId,routerSessionId:'demo-session-0',version:1},channels,workers,chatGroups:groups,cursor:revision});
  if(path.endsWith('/external-agents'))return json({agents:[{id:'codex',name:'Codex',projectId,revision:2,enabled:true,installed:true,transportReady:true,assignmentReady:true,model:'本机 Codex 配置',authMode:'chatgpt',updatedAt:at}]});
  if(path.endsWith('/channel')){
   const current=channels.find(item=>path.includes('/'+item.sessionId+'/'))??channel,own=current===channel?workers:[];
@@ -129,6 +141,9 @@ window.fetch=async(input,init)=>{
   if(liveUnavailable&&path.includes('fixture-session'))return json({error:'Fixture offline'},503);
   const id=path.split('/')[3],own=snapshots.get(id);if(own)return json({...own,cursor:revision});
   if(channels.some(item=>item.sessionId===id)){const ch=channels.find(item=>item.sessionId===id)!;return json({...channelSnapshot,session:{...channelSnapshot.session,id,title:ch.roleName},cursor:revision});}
+  const group=groups.find(item=>item.sessionId===id);
+  if(group)return json({...channelSnapshot,cursor:revision,session:{...channelSnapshot.session,id,title:group.title,workspaceRole:'group'},chatGroupRounds:[],
+   messages:[{id:`message-${id}`,sessionId:id,role:'user',text:`${group.title}的原始任务请求`,createdAt:at}]});
   if(query.has('agent-logos')&&id==='demo-session-0'){
    const source=await(await base(input,init)).json(),pilot='demo-session-0';
    return json({...source,session:{...source.session,id:pilot,title:'Pilot',workspaceRole:'router'},messages:agentLogoMessages,resources,resourceTree:tree,cursor:revision,sre:{enabled:false,tasks:[]},ai:{...source.ai,status:'completed',cards:[],cardsOffset:0,totalCards:0}});
@@ -138,7 +153,7 @@ window.fetch=async(input,init)=>{
  if(path==='/api/bootstrap'){const info=await response.json();return json({...info,backendRuntime:'typescript',aiRuntime:'typescript'});}
  if(path==='/api/catalog'){
   const value=await response.json();value.projects[0].name='默认工作区';value.resources=resources;value.resourceTree=tree;
-  value.sessions=[{...value.sessions[0],id:'demo-session-0',title:'Pilot',workspaceRole:'router'},...channels.map(ch=>({...value.sessions[0],id:ch.sessionId,title:ch.roleName,workspaceRole:'role'}))] as WorkSession[];
+  value.sessions=[{...value.sessions[0],id:'demo-session-0',title:'Pilot',workspaceRole:'router'},...channels.map(ch=>({...value.sessions[0],id:ch.sessionId,title:ch.roleName,workspaceRole:'role'})),...groups.map(group=>({...value.sessions[0],id:group.sessionId,title:group.title,workspaceRole:'group'}))] as WorkSession[];
   return json(value);
  }
  return response;

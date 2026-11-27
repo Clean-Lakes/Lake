@@ -1,10 +1,32 @@
-import type {AICard,Resource,ResourceTreeNode,SessionSnapshot,SpecialistChannelEntry,SuperWorker,TaskCollaboration} from '../../shared/contracts';
+import type {AICard,ChatGroup,Resource,ResourceTreeNode,SessionSnapshot,SpecialistChannelEntry,SuperWorker,TaskCollaboration} from '../../shared/contracts';
 import {agentBackendName} from '../../shared/external-agents';
 import {turnTodos} from './TaskProgress';
 
 export type SpecialistTaskMember={key:string;roleId?:string;name:string;moving:boolean};
-export type SpecialistTaskRow={worker:SuperWorker;members:SpecialistTaskMember[];moving:boolean;paths:string[];agent:string;updatedAt?:string;progress?:{completed:number;total:number}};
+export type SpecialistTaskSource={key:string;kind:'lake'|'group'|'external'|'specialist'|'unknown';label:string;sessionId?:string};
+export type SpecialistTaskSources={projectId:string;lakeSessionId?:string;groups:readonly ChatGroup[];specialistSessionIds:readonly string[]};
+export type SpecialistTaskFilters={query:string;source:string};
+export type SpecialistTaskRow={worker:SuperWorker;members:SpecialistTaskMember[];moving:boolean;needsConfirmation:boolean;paths:string[];
+ source:SpecialistTaskSource;agent:string;preview?:string;updatedAt?:string;progress?:{completed:number;total:number}};
 const time=(value?:string)=>Date.parse(value??'')||0;
+
+export function groupTaskSource(group:ChatGroup):SpecialistTaskSource{
+ return {key:`group:${group.sessionId}`,kind:'group',label:group.title,sessionId:group.sessionId};
+}
+
+export function specialistTaskSource(worker:SuperWorker,projectId:string,sources?:SpecialistTaskSources):SpecialistTaskSource{
+ if(!worker.task.projectId||worker.task.projectId===projectId){
+  if(worker.sourceExternal)return {key:'external',kind:'external',label:'外部 Agent'};
+  const sessionId=worker.sourceSessionId??worker.pilotSessionId;
+  if(sessionId&&sources?.projectId===projectId){
+   const group=sources.groups.find(group=>group.projectId===projectId&&group.sessionId===sessionId);
+   if(group)return groupTaskSource(group);
+   if(sessionId===sources.lakeSessionId)return {key:'lake',kind:'lake',label:'Lake',sessionId};
+   if(sources.specialistSessionIds.includes(sessionId))return {key:'specialist',kind:'specialist',label:'专员对话'};
+  }
+ }
+ return {key:'unknown',kind:'unknown',label:'来源未记录'};
+}
 
 /** Display-only identities: keep the current specialist first, never merge names. */
 export function specialistTaskMembers(worker:SuperWorker,moving:boolean,collaboration:TaskCollaboration|undefined=worker.task.collaboration):SpecialistTaskMember[]{
@@ -44,7 +66,7 @@ export function specialistResourcePaths(projectId:string,resources:Resource[],tr
  }));
 }
 
-export function specialistTaskRows({workers,entries=[],active=[],resources,resourceTree=[],projectId}:{workers:SuperWorker[];entries?:SpecialistChannelEntry[];active?:SessionSnapshot[];resources:Resource[];resourceTree?:ResourceTreeNode[];projectId:string}):SpecialistTaskRow[]{
+export function specialistTaskRows({workers,entries=[],active=[],resources,resourceTree=[],projectId,sources}:{workers:SuperWorker[];entries?:SpecialistChannelEntry[];active?:SessionSnapshot[];resources:Resource[];resourceTree?:ResourceTreeNode[];projectId:string;sources?:SpecialistTaskSources}):SpecialistTaskRow[]{
  const paths=specialistResourcePaths(projectId,resources,resourceTree);
  return workers.filter(worker=>!worker.task.projectId||worker.task.projectId===projectId).map(worker=>{
   const snapshot=active.find(item=>item.session.id===worker.sessionId&&item.session.projectId===projectId&&item.superagent?.task.taskId===worker.task.taskId);
@@ -55,23 +77,32 @@ export function specialistTaskRows({workers,entries=[],active=[],resources,resou
   const todos=turnTodos(recorded,worker.task.executionGoalId??worker.task.taskId);
   const items=snapshot?.superagent?.goal?.items??[];
   const progress=todos.length?{completed:todos.filter(todo=>todo.status==='completed').length,total:todos.length}:items.length?{completed:items.filter(item=>item.status==='completed').length,total:items.length}:undefined;
-  const terminal=['completed','failed','cancelled'].includes(worker.task.state);
-  const waiting=!terminal&&(!!snapshot?.ai?.question||!!snapshot?.ai?.pending||!!snapshot?.hostKeyTrust||['waiting_approval','waiting_input'].includes(worker.activity?.phase??''));
-  const moving=!waiting&&!terminal&&(snapshot?.ai?.status==='running'||worker.task.state==='running');
+  const state=snapshot?.superagent?.task.state??worker.task.state;
+  const terminal=['completed','failed','cancelled'].includes(state);
+  const waiting=['waiting_approval','waiting_input'];
+  const needsConfirmation=!terminal&&(!!snapshot?.ai?.question||!!snapshot?.ai?.pending||!!snapshot?.ai?.pendingApprovals?.length||!!snapshot?.hostKeyTrust||waiting.includes(snapshot?.ai?.status??'')||waiting.includes(worker.activity?.phase??''));
+  const moving=!needsConfirmation&&!terminal&&(snapshot?.ai?.status==='running'||state==='running');
   const ids=new Set((worker.task.resources??[]).flatMap(resource=>resource.assetRef?[resource.assetRef]:[]));
   for(const card of recorded){const data=card.data as {resource_id?:string;taskId?:string}|undefined;if(data?.resource_id&&data.taskId===(worker.task.executionGoalId??worker.task.taskId))ids.add(data.resource_id);}
   const updated=[worker.task.updatedAt,worker.createdAt,...history.map(entry=>entry.createdAt),...(worker.execution?.runs??[]).map(run=>run.updatedAt)].filter((value):value is string=>!!value&&!!time(value)).sort((a,b)=>time(b)-time(a))[0];
-  return {worker,moving,members:specialistTaskMembers(worker,moving,snapshot?.superagent?.task.collaboration),paths:[...ids].flatMap(id=>paths.has(id)?[paths.get(id)!]:[]),agent:agentBackendName(worker.execution?.backend??{kind:'native'}),updatedAt:updated,progress};
+  const summary=worker.task.summary?.trim();
+  const preview=(moving||needsConfirmation?worker.activity?.label:summary)||summary;
+  const visiblePaths=[...new Set([...ids].flatMap(id=>paths.has(id)?[paths.get(id)!]:[]))];
+  return {worker,moving,needsConfirmation,members:specialistTaskMembers(worker,moving,snapshot?.superagent?.task.collaboration),
+   source:specialistTaskSource(worker,projectId,sources),paths:visiblePaths,
+   agent:agentBackendName(worker.execution?.backend??{kind:'native'}),preview,updatedAt:updated,progress};
  }).sort((a,b)=>{
   // Keep task positions stable during streaming; new assignments enter first.
   return time(b.worker.createdAt)-time(a.worker.createdAt)||b.worker.id.localeCompare(a.worker.id);
  });
 }
 
-export function filterSpecialistTasks(rows:SpecialistTaskRow[],query:string){
+export function filterSpecialistTasks(rows:SpecialistTaskRow[],query:string,source='all'){
  const normalized=(value:string)=>value.normalize('NFKC').toLowerCase().replace(/\s*\/\s*/g,'/');
  const search=normalized(query.trim());
- return rows.filter(row=>!search||[row.worker.task.title,...row.paths,row.agent].some(value=>normalized(value).includes(search)));
+ return rows.filter(row=>(source==='all'||row.source.key===source)&&(!search||[
+  row.worker.task.title,row.source.label,...row.paths,row.agent,row.preview??'',...row.members.map(member=>member.name),
+ ].some(value=>normalized(value).includes(search))));
 }
 
 export function specialistTaskTime(value?:string,now=Date.now()){

@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import type {SessionSnapshot,SpecialistChannelEntry,SuperWorker,Resource,ResourceTreeNode,TaskCollaboration,TaskParticipant} from '../../shared/contracts';
+import type {ChatGroup,SessionSnapshot,SpecialistChannelEntry,SuperWorker,Resource,ResourceTreeNode,TaskCollaboration,TaskParticipant} from '../../shared/contracts';
 import {filterSpecialistTasks,specialistResourcePaths,specialistTaskMembers,specialistTaskRows,specialistTaskTime} from '../src/specialistTaskListModel';
 import {SpecialistTaskList} from '../src/SpecialistTaskList';
 import {ConversationReadButton} from '../src/ConversationReadMarker';
@@ -97,7 +97,7 @@ test('task rows retain exact identities, Lake role avatars and frozen executor b
  assert.deepEqual(rows[0].paths,['演示环境 / 业务集群 / 应用节点']);
  const html=renderToStaticMarkup(createElement(SpecialistTaskList,{channel:{id:'channel',sessionId:'channel',projectId:'project',roleId:'ops',roleName:'服务器专员',revision:1,createdAt:at},rows,onTask:()=>{}}));
  assert.match(html,/aria-label="专员任务列表"/);assert.match(html,/data-task-id="task-a" data-session-id="session-a"/);assert.match(html,/data-task-id="task-b" data-session-id="session-b"/);
- assert.match(html,/openai.svg/);assert.match(html,/super-role-avatar/);assert.match(html,/未报告/);assert.doesNotMatch(html,/private-host|private-user|private-ref|private-description/);
+ assert.match(html,/openai.svg/);assert.match(html,/super-role-avatar/);assert.match(html,/来源未记录/);assert.doesNotMatch(html,/progressbar|private-host|private-user|private-ref|private-description/);
  assert.equal(JSON.stringify([a,b]),before);
 });
 
@@ -108,6 +108,7 @@ test('live animation follows the exact task instead of an external answer or sib
  const rows=specialistTaskRows({...source,workers:[done,stopped,waiting,active]});
  const byId=(id:string)=>rows.find(row=>row.worker.id===id)!;
  assert.equal(byId('done').moving,false);assert.equal(byId('waiting').moving,false);assert.equal(byId('active').moving,true);
+ assert.equal(byId('waiting').needsConfirmation,true);assert.equal(byId('done').needsConfirmation,false);
  assert.equal(byId('stopped').moving,false);
 });
 
@@ -133,6 +134,26 @@ test('directory search uses only visible project metadata and tolerates broken l
  const broken=[node('cluster','循环','cluster'),node('leaf','应用节点','cluster','host')];
  assert.equal(specialistResourcePaths('project',[resource],broken).get('host'),'应用节点');
  assert.equal(specialistTaskRows({...source,workers:[{...worker('foreign'),task:{...worker('foreign').task,projectId:'foreign'}}]}).length,0);
+});
+
+test('source filters and links use recorded session IDs even when group titles are equal',()=>{
+ const group=(sessionId:string,projectId='project'):ChatGroup=>({sessionId,projectId,title:'协作群',updatedAt:at,members:[{roleId:'ops',roleName:'服务器专员'}]});
+ const sources={projectId:'project',lakeSessionId:'lake',groups:[group('group-a'),group('group-b'),group('foreign','other-project')],specialistSessionIds:['channel']};
+ const rows=specialistTaskRows({...source,sources,workers:[
+  {...worker('a'),sourceSessionId:'group-a'}, {...worker('b'),pilotSessionId:'group-b'}, {...worker('lake'),sourceSessionId:'lake'},
+  {...worker('external'),sourceExternal:true,sourceSessionId:'lake'}, {...worker('direct'),sourceSessionId:'channel'},
+  {...worker('unknown'),sourceSessionId:'foreign'},
+ ]});
+ assert.deepEqual(filterSpecialistTasks(rows,'协作群').map(row=>row.worker.id).sort(),['a','b']);
+ assert.deepEqual(filterSpecialistTasks(rows,'应用节点','group:group-b').map(row=>row.worker.id),['b']);
+ const origin=(id:string)=>rows.find(row=>row.worker.id===id)!.source;
+ assert.equal(origin('a').sessionId,'group-a');assert.equal(origin('lake').sessionId,'lake');
+ assert.equal(origin('external').kind,'external');assert.equal(origin('external').sessionId,undefined);
+ assert.equal(origin('direct').kind,'specialist');assert.equal(origin('unknown').kind,'unknown');
+ const html=renderToStaticMarkup(createElement(SpecialistTaskList,{channel:{id:'role',sessionId:'channel',projectId:'project',roleId:'ops',roleName:'服务器专员',revision:1,createdAt:at},rows,sources,initialFilters:{query:'应用节点',source:'group:group-b'},onTask(){},onOpenSource(){}}));
+ assert.match(html,/role="tab"[^>]+group:group-b[^>]+aria-selected="true"/);
+ assert.match(html,/data-task-id="task-b"/);assert.doesNotMatch(html,/data-task-id="task-a"|打开原对话：外部 Agent/);
+ assert.match(html,/打开原对话：协作群/);
 });
 
 test('invalid or future timestamps never claim a fresh update',()=>{
