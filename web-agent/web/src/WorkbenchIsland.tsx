@@ -1,4 +1,4 @@
-import {useEffect,useLayoutEffect,useRef,useState,type PointerEvent as ReactPointerEvent,type ReactNode} from 'react';
+import {useCallback,useEffect,useId,useLayoutEffect,useRef,useState,type PointerEvent as ReactPointerEvent,type ReactNode} from 'react';
 import './workbenchIsland.css';
 import {workbenchIslandLayout,type IslandPosition} from './workbenchIslandLayout';
 import {
@@ -7,7 +7,7 @@ import {
   ISLAND_DRAG_CANCEL_PX,
   ISLAND_LONG_PRESS_MS,
   ISLAND_PRESS_SWELL_MS,
-  isInteractiveIslandTarget,
+  isIslandPressTarget,
   type IslandPressState,
 } from './lakeIslandPress';
 
@@ -21,6 +21,11 @@ type IslandBox=IslandPosition&{top:number};
 type IslandFlight={open?:boolean;target?:IslandBox;animation?:Animation;deadline?:number};
 const sameBox=(a:IslandBox|undefined,b:IslandBox)=>!!a&&Math.abs(a.left-b.left)<.5&&Math.abs(a.top-b.top)<.5&&Math.abs(a.width-b.width)<.5;
 
+export type WorkbenchIslandHeaderControls={
+ expanded:boolean;
+ specialists:{open:boolean;onOpenChange:(open:boolean)=>void};
+};
+
 /** The terminal island separates from the conversation; the inspector owns its card header. */
 export function WorkbenchIsland({
   conversation,
@@ -31,7 +36,7 @@ export function WorkbenchIsland({
   sessionKey,
   expandedPanel,
 }: {
-  conversation:ReactNode;
+  conversation:(controls:WorkbenchIslandHeaderControls)=>ReactNode;
   terminal:ReactNode;
   activity:ReactNode;
   terminalOpen:boolean;
@@ -40,8 +45,18 @@ export function WorkbenchIsland({
   expandedPanel?:(controls:{close:()=>void})=>ReactNode;
 }){
  const root=useRef<HTMLDivElement>(null),conversationIsland=useRef<HTMLDivElement>(null),terminalIsland=useRef<HTMLDivElement>(null);
+ const drawer=useRef<HTMLDivElement>(null),drawerTrigger=useRef<HTMLButtonElement>(null),drawerId=useId();
  const interactive=!!expandedPanel;
- const [expanded,setExpanded]=useState(false);
+ const [openPanel,setOpenPanel]=useState<'details'|'specialists'|null>(null);
+ const expanded=openPanel==='details';
+ const toggleDrawer=()=>setOpenPanel(current=>current==='details'?null:'details');
+ const setSpecialistsOpen=useCallback((open:boolean)=>{
+  setOpenPanel(current=>current==='details'?current:open?'specialists':null);
+ },[]);
+ const closeDrawer=useCallback((restoreFocus=false)=>{
+  setOpenPanel(current=>current==='details'?null:current);
+  if(restoreFocus&&drawer.current?.contains(document.activeElement))drawerTrigger.current?.focus({preventScroll:true});
+ },[]);
  const [press,setPress]=useState<IslandPressState>('idle');
  const expandedRef=useRef(expanded);
  expandedRef.current=expanded;
@@ -57,15 +72,15 @@ export function WorkbenchIsland({
   pressState.current.active=false;
   setPress('idle');
  };
- useEffect(()=>{setExpanded(false);cancelPress();},[sessionKey,interactive]);
+ useEffect(()=>{setOpenPanel(null);cancelPress();},[sessionKey,interactive]);
  useEffect(()=>{
   if(!expanded)return;
   const onPointerDown=(event:PointerEvent)=>{
    const node=conversationIsland.current;
-   if(node&&event.target instanceof Node&&!node.contains(event.target))setExpanded(false);
+   if(node&&event.target instanceof Node&&!node.contains(event.target))closeDrawer();
   };
   const onKeyDown=(event:KeyboardEvent)=>{
-   if(event.key==='Escape')setExpanded(false);
+   if(event.key==='Escape'&&!event.defaultPrevented&&!event.isComposing)closeDrawer(true);
   };
   window.addEventListener('pointerdown',onPointerDown);
   window.addEventListener('keydown',onKeyDown);
@@ -73,7 +88,7 @@ export function WorkbenchIsland({
    window.removeEventListener('pointerdown',onPointerDown);
    window.removeEventListener('keydown',onKeyDown);
   };
- },[expanded]);
+ },[expanded,closeDrawer]);
  useEffect(()=>cancelPress,[]);
  const open=useRef({terminal:terminalOpen});
  open.current={terminal:terminalOpen};
@@ -152,8 +167,9 @@ export function WorkbenchIsland({
    const readingLeft=(reading?.left??paneLeft)-base.left;
    const left=collapsed?Math.max(readingLeft,navigationStart):
     toolbar&&toolbar.bottom>base.top+conversationTop?Math.max(readingLeft,toolbar.right-base.left+12):readingLeft;
-   const actionsSpace=dockedPane?parseFloat(workspaceStyle.getPropertyValue('--conversation-header-actions-offset'))+12:0;
-   const paneRight=dockedPane?bounds.right-actionsSpace:frameInset?bounds.right-frameInset*2:reading?.right??bounds.right-48;
+   const interactiveIsland=identity.dataset.islandInteractive==='true';
+   const actionsOffset=parseFloat(workspaceStyle.getPropertyValue('--conversation-header-actions-offset'))||76;
+   const paneRight=dockedPane||interactiveIsland?bounds.right-actionsOffset-12:frameInset?bounds.right-frameInset*2:reading?.right??bounds.right-48;
    const right=paneRight-base.left;
    const available=Math.max(1,right-left);
    const identityAvailable=Math.max(1,available-navigationWidth);
@@ -238,7 +254,7 @@ export function WorkbenchIsland({
     inspectorWidth:144,
     terminalWidth:Math.min(320,Math.max(260,terminalNameWidth+(terminalNumber?.offsetWidth??0)+(terminalCount?.offsetWidth??0)+112)),
    });
-   const centeredLeft=interactive
+   const centeredLeft=interactiveIsland
     ?centeredIslandLeft(bounds.left-base.left,bounds.width,layout.conversation.width,left,right)
     :layout.conversation.left;
    const source={...layout.conversation,left:centeredLeft,top:conversationTop};
@@ -296,8 +312,8 @@ export function WorkbenchIsland({
  useLayoutEffect(()=>scheduleLayout.current(),[terminalOpen,expanded]);
 
  const handleIslandPointerDown=(event:ReactPointerEvent<HTMLDivElement>)=>{
-  if(!interactive||event.button!==0)return;
-  if(isInteractiveIslandTarget(event.target,conversationIsland.current))return;
+  if(!interactive||event.button!==0||!event.isPrimary)return;
+  if(!isIslandPressTarget(event.target,event.currentTarget))return;
   const shell=conversationIsland.current?.closest('.app-shell');
   if(shell?.hasAttribute('data-sidebar-sliding')||document.documentElement.classList.contains('workbench-resizing'))return;
   clearPressTimers();
@@ -312,7 +328,7 @@ export function WorkbenchIsland({
    pressState.current.active=false;
    clearPressTimers();
    setPress('idle');
-   setExpanded(current=>!current);
+   toggleDrawer();
   },ISLAND_LONG_PRESS_MS);
  };
  const handleIslandPointerMove=(event:ReactPointerEvent<HTMLDivElement>)=>{
@@ -328,7 +344,7 @@ export function WorkbenchIsland({
   if(conversationIsland.current?.hasPointerCapture?.(event.pointerId)){
    try{conversationIsland.current.releasePointerCapture(event.pointerId);}catch{}
   }
-  if(elapsed<ISLAND_LONG_PRESS_MS)setExpanded(value=>!value);
+  if(elapsed<ISLAND_LONG_PRESS_MS)toggleDrawer();
  };
 
  return <div ref={root} className="lake-workbench-islands" role="group" aria-label="Lake Island 工作台">
@@ -343,12 +359,19 @@ export function WorkbenchIsland({
    onPointerMove={interactive?handleIslandPointerMove:undefined}
    onPointerUp={interactive?handleIslandPointerUp:undefined}
    onPointerCancel={interactive?cancelPress:undefined}
+   onLostPointerCapture={interactive?cancelPress:undefined}
   >
    <span className="workspace-header-glass" aria-hidden="true"/>
-   <span className="island-navigation-divider" aria-hidden="true"/>{activity}{conversation}
-   {expandedPanel&&<div className="island-expand-drawer" data-open={expanded} aria-hidden={!expanded} inert={!expanded}>
+   <span className="island-navigation-divider" aria-hidden="true"/>{activity}
+   {interactive&&<button ref={drawerTrigger} type="button" className="island-expand-trigger"
+    aria-label={expanded?'收起小岛':'展开小岛'} aria-expanded={expanded} aria-controls={drawerId} onClick={toggleDrawer}/>}
+   {conversation({
+    expanded,
+    specialists:{open:openPanel==='specialists',onOpenChange:setSpecialistsOpen},
+   })}
+   {expandedPanel&&<div ref={drawer} id={drawerId} className="island-expand-drawer" data-open={expanded} aria-hidden={!expanded} inert={!expanded}>
     <div className="island-expand-inner">
-     {expandedPanel({close:()=>setExpanded(false)})}
+     {expandedPanel({close:()=>closeDrawer(true)})}
     </div>
    </div>}
   </div>

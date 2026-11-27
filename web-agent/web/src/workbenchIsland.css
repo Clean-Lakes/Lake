@@ -53,7 +53,20 @@
 /* Auxiliary pane entrances animate their own surfaces. */
 .app-shell.has-workbench-island { transition:none; }
 .lake-workbench-island > .workspace-header-glass { z-index:-1; }
-.lake-workbench-island > :not(.workspace-header-glass,.workspace-header-sweep,.island-navigation-divider) { position:relative; z-index:2; min-width:0; }
+.lake-workbench-island > :not(.workspace-header-glass,.workspace-header-sweep,.island-navigation-divider,.island-expand-trigger) { position:relative; z-index:2; min-width:0; }
+.island-expand-trigger {
+ position:absolute;
+ z-index:1;
+ inset:0 0 auto;
+ height:44px;
+ padding:0;
+ border:0;
+ border-radius:inherit;
+ corner-shape:inherit;
+ background:transparent;
+ pointer-events:none;
+}
+.island-expand-trigger:focus-visible { outline:2px solid var(--focus-outline); outline-offset:-2px; }
 .lake-workbench-island [hidden] { display:none!important; }
 .lake-workbench-island .workspace-header { justify-content:flex-start; position:relative; display:flex; align-items:center; gap:var(--island-header-gap); min-width:0; min-height:44px; height:44px; width:100%; padding:5px var(--island-header-inset); border:0; border-radius:0; background:transparent; box-shadow:none; }
 .lake-workbench-island .workspace-header > .workspace-header-glass { display:none; }

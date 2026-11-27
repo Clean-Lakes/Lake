@@ -9,11 +9,11 @@ export const ISLAND_DRAG_CANCEL_PX = 8;
 const INTERACTIVE_DESCENDANT_SELECTOR =
   'button, a, input, select, textarea, summary, [role="button"], [role="menuitem"], .island-expand-drawer';
 
-/** Returns true when a pointer event targets a nested control rather than the island chrome itself. */
-export function isInteractiveIslandTarget(target: EventTarget | null, islandRoot?: Element | null): boolean {
+/** React portal events bubble through the island even when their DOM is outside it. */
+export function isIslandPressTarget(target: EventTarget | null, islandRoot: Element): boolean {
   if (!target || typeof (target as Element).closest !== 'function') return false;
-  const matched = (target as Element).closest(INTERACTIVE_DESCENDANT_SELECTOR);
-  return !!matched && matched !== islandRoot;
+  const element = target as Element;
+  return islandRoot.contains(element) && !element.closest(INTERACTIVE_DESCENDANT_SELECTOR);
 }
 
 /** Clamps the widened Dynamic Island width between its compact width and the pane budget. */

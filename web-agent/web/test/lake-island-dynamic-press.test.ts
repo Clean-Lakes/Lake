@@ -13,7 +13,7 @@ import {
   ISLAND_EXPANDED_WIDTH,
   ISLAND_LONG_PRESS_MS,
   ISLAND_PRESS_SWELL_MS,
-  isInteractiveIslandTarget,
+  isIslandPressTarget,
 } from '../src/lakeIslandPress';
 import type {PilotParticipant} from '../src/superPilotActivity';
 
@@ -21,7 +21,7 @@ const css = registerHooks({load(url, context, nextLoad) { return url.endsWith('.
 const {WorkbenchIsland} = await import('../src/WorkbenchIsland');
 css.deregister();
 
-test('lakeIslandPress helper centers the island in pane bounds and filters nested interactive targets', () => {
+test('the island centers within the pane and handles only its own press area', () => {
   assert.equal(ISLAND_PRESS_SWELL_MS, 110);
   assert.equal(ISLAND_LONG_PRESS_MS, 260);
   assert.equal(ISLAND_EXPANDED_WIDTH, 392);
@@ -35,13 +35,20 @@ test('lakeIslandPress helper centers the island in pane bounds and filters neste
   assert.equal(centeredIslandLeft(280, 800, 260, 296, 1004), 550);
   assert.equal(centeredIslandLeft(280, 420, 392, 296, 624), 296);
 
-  const islandRoot = {closest: () => islandRoot} as unknown as Element;
-  const nestedButton = {closest: () => ({} as Element)} as unknown as Element;
+  const avatar = {closest: () => ({} as Element)} as unknown as Element;
   const plainTitle = {closest: () => null} as unknown as Element;
+  const statusMark = {closest: () => null} as unknown as Element;
+  const portalRow = {closest: () => null} as unknown as Element;
+  const islandRoot = {
+    closest: () => null,
+    contains: (target: Element) => [islandRoot, avatar, plainTitle, statusMark].includes(target),
+  } as unknown as Element;
 
-  assert.equal(isInteractiveIslandTarget(islandRoot, islandRoot), false);
-  assert.equal(isInteractiveIslandTarget(nestedButton, islandRoot), true);
-  assert.equal(isInteractiveIslandTarget(plainTitle, islandRoot), false);
+  assert.equal(isIslandPressTarget(islandRoot, islandRoot), true);
+  assert.equal(isIslandPressTarget(plainTitle, islandRoot), true);
+  assert.equal(isIslandPressTarget(statusMark, islandRoot), true);
+  assert.equal(isIslandPressTarget(avatar, islandRoot), false);
+  assert.equal(isIslandPressTarget(portalRow, islandRoot), false);
 });
 
 test('LakeIslandDrawer matches unified Dynamic Island card layout across running, waiting, and idle states', () => {
@@ -105,15 +112,15 @@ test('LakeIslandDrawer matches unified Dynamic Island card layout across running
 
 test('WorkbenchIsland exposes Style 3 interactive press attributes only when expandedPanel is wired', () => {
   const plain = renderToStaticMarkup(createElement(WorkbenchIsland, {
-    conversation: createElement('div', null, 'header'),
+    conversation: () => createElement('div', null, 'header'),
     terminal: null,
     activity: null,
     terminalOpen: false,
   }));
-  assert.doesNotMatch(plain, /data-island-interactive|island-expand-drawer/);
+  assert.doesNotMatch(plain, /data-island-interactive|island-expand-trigger|island-expand-drawer/);
 
   const interactive = renderToStaticMarkup(createElement(WorkbenchIsland, {
-    conversation: createElement('div', null, 'header'),
+    conversation: ({expanded}) => createElement('header', {inert: expanded}, 'header'),
     terminal: null,
     activity: null,
     terminalOpen: false,
@@ -128,6 +135,7 @@ test('WorkbenchIsland exposes Style 3 interactive press attributes only when exp
   assert.match(interactive, /data-island-interactive="true"/);
   assert.match(interactive, /data-island-phase="compact"/);
   assert.match(interactive, /data-island-press="idle"/);
+  assert.match(interactive, /aria-label="展开小岛" aria-expanded="false" aria-controls=/);
   assert.match(interactive, /class="island-expand-drawer" data-open="false"/);
 });
 
@@ -143,8 +151,9 @@ test('workbenchIsland.css and ConversationDirectory prevent bleed-through, doubl
   assert.match(css, /@media \(prefers-reduced-motion:reduce\)/);
 
   const dir = readFileSync(new URL('../src/ConversationDirectory.tsx', import.meta.url), 'utf8');
-  assert.match(dir, /compactBarHeight/);
-  assert.match(dir, /data-island-phase/);
+  assert.match(dir, /--conversation-header-actions-offset/);
+  assert.match(dir, /header!\.offsetTop/);
+  assert.doesNotMatch(dir, /data-island-phase|compactBarHeight/);
 });
 
 test('AppContent declares no React hooks after conditional early returns and LakeIslandCompactLive renders timer markup', () => {

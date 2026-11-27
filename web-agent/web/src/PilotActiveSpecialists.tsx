@@ -4,10 +4,13 @@ import {SuperRoleAvatar} from './SuperRoleAvatar';
 import {useTerminalPopover} from './useTerminalPopover';
 import type {PilotParticipant} from './superPilotActivity';
 
-export function PilotActiveSpecialists({participants, visible = true, fixedRoster = false}: {
+export function PilotActiveSpecialists({participants, visible = true, fixedRoster = false, popover}: {
   participants: readonly PilotParticipant[]; visible?: boolean; fixedRoster?: boolean;
+  popover?: {open:boolean;onOpenChange:(open:boolean)=>void};
 }) {
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = popover?.open ?? localOpen;
+  const setOpen = popover?.onOpenChange ?? setLocalOpen;
   const id = useId();
   const expanded = visible && participants.length > 0;
   const retained = useRef(participants);
@@ -48,7 +51,7 @@ export function PilotActiveSpecialists({participants, visible = true, fixedRoste
     observer.observe(anchor);
     window.addEventListener('resize', place);
     return () => {observer.disconnect(); window.removeEventListener('resize', place);};
-  }, [open, expanded, trigger, menu]);
+  }, [open, expanded, setOpen, trigger, menu]);
 
   const names = shown.map(person => person.name).join('、');
   return <>

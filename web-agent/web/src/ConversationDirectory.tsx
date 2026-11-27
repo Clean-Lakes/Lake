@@ -59,20 +59,26 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
    if(nextHeader!==header){
     if(header)observer.unobserve(header);
     headerObserver.disconnect();header=nextHeader;
-    if(header){observer.observe(header);headerObserver.observe(header,{attributes:true,attributeFilter:['class','style','data-ready','data-present','data-island-phase']});}
+    if(header&&header.dataset.islandInteractive!=='true'){
+     observer.observe(header);
+     headerObserver.observe(header,{attributes:true,attributeFilter:['class','style','data-ready','data-present']});
+    }
    }
-   const bounds=container!.getBoundingClientRect(),heading=header?.getBoundingClientRect();
-   const compactBarHeight=header?.querySelector<HTMLElement>('.workspace-header')?.getBoundingClientRect().height||0;
-   const anchorHeight=heading?(compactBarHeight>0?Math.min(compactBarHeight,46):Math.min(heading.height,46)):44;
+   const bounds=container!.getBoundingClientRect();
+   const pinned=header?.dataset.islandInteractive==='true';
+   const heading=pinned?undefined:header?.getBoundingClientRect();
    let left=Math.max(bounds.left+4,bounds.right-76),top=Math.max(bounds.top+12,(heading?.top??bounds.top)+9);
-   if(heading&&container!.closest('.has-docked-conversation')){
+   if(pinned||heading&&container!.closest('.has-docked-conversation')){
     const style=getComputedStyle(container!);
-    const actionsOffset=parseFloat(style.getPropertyValue('--conversation-header-actions-offset'));
+    const actionsOffset=parseFloat(style.getPropertyValue('--conversation-header-actions-offset'))||76;
+    // Read the island's layout top and the compact row's fixed height. The
+    // painted header inside the island shrinks as the details slide in.
+    const rowTop=heading?.top??((header!.offsetParent?.getBoundingClientRect().top??0)+header!.offsetTop);
+    const rowHeight=heading?Math.min(heading.height,46):46;
     left=Math.max(bounds.left+4,bounds.right-actionsOffset);
-    top=heading.top+Math.max(0,(anchorHeight-(trigger.current?.offsetHeight??28))/2);
+    top=rowTop+Math.max(0,(rowHeight-(trigger.current?.offsetHeight??28))/2);
    }
-   const islandExpanded=header?.getAttribute('data-island-phase')==='expanded';
-   const compact=!islandExpanded&&!!heading&&left<heading.right+8&&left+64>heading.left;
+   const compact=!!heading&&left<heading.right+8&&left+64>heading.left;
    if(compact){left=bounds.left+2;top=Math.max(bounds.top+12,heading!.bottom+10);}
    if(open&&!showTasks)setSelected(directoryItemAtScrollPosition(container!,items,sessionId));
    if(root.current){
@@ -88,7 +94,8 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
   const content=open&&!showTasks&&container.querySelector('.timeline-list');if(content)observer.observe(content);
   if(open&&!showTasks)container.addEventListener('scroll',schedule,{passive:true});
   window.addEventListener('resize',schedule);
-  return()=>{cancelAnimationFrame(frame);observer.disconnect();headerObserver.disconnect();container.removeEventListener('scroll',schedule);window.removeEventListener('resize',schedule);};
+  window.addEventListener('lake-workbench-layout',schedule);
+  return()=>{cancelAnimationFrame(frame);observer.disconnect();headerObserver.disconnect();container.removeEventListener('scroll',schedule);window.removeEventListener('resize',schedule);window.removeEventListener('lake-workbench-layout',schedule);};
  },[sessionId,itemIds,open,showTasks]);
  useLayoutEffect(()=>{
   if(!open)return;
@@ -101,8 +108,8 @@ export function ConversationDirectory({sessionId,items,onJump,onLatest,onLoadOld
    setPosition(previous=>previous.left===left&&previous.top===top&&previous.width===width?previous:{left,top,width});
   }
   measure();const observer=new ResizeObserver(measure);if(panel.current)observer.observe(panel.current);
-  window.addEventListener('resize',measure);document.addEventListener('scroll',measure,true);
-  return()=>{observer.disconnect();window.removeEventListener('resize',measure);document.removeEventListener('scroll',measure,true);};
+  window.addEventListener('resize',measure);window.addEventListener('lake-chrome-resize',measure);document.addEventListener('scroll',measure,true);
+  return()=>{observer.disconnect();window.removeEventListener('resize',measure);window.removeEventListener('lake-chrome-resize',measure);document.removeEventListener('scroll',measure,true);};
  },[open]);
  useLayoutEffect(()=>{
   if(!open)return;
