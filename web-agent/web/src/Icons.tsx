@@ -3,37 +3,45 @@ import { ListChecks, LayoutGrid, LoaderCircle, Pause, Eye, EyeOff, ArrowUpRight,
 const icons = {listTasks:ListChecks,workspace:LayoutGrid,loader:LoaderCircle,pause:Pause,eye:Eye,eyeOff:EyeOff,pin:Pin,grip:GripVertical,more:Ellipsis,search:Search,layers:Layers,folder:Folder,shield:ShieldCheck,shieldOutline:Shield,plus:Plus,paperclip:Paperclip,chevron:ChevronDown,terminal:Terminal,chat:MessageCircle,chatAdd:MessageCirclePlus,server:Server,arrow:ArrowRight,outbound:ArrowUpRight,up:ArrowUp,down:ArrowDown,close:X,menu:Menu,refresh:RefreshCw,check:Check,alert:TriangleAlert,circleAlert:CircleAlert,spark:Sparkles,clock:Clock,lock:Lock,link:Link,send:Send,return:CornerDownLeft,stop:Square,copy:Copy,expand:Maximize2,settings:Settings,trash:Trash2,database:Database,docker:Container,local:Monitor,redis:Database,kubernetes:Layers,apisix:Network,prometheus:ChartNoAxesCombined,victoriametrics:Database,network:Network,code:Code,chart:ChartNoAxesCombined,bug:Bug,book:BookOpen,document:FileText,box:Box,filter:SlidersHorizontal,panel:PanelLeft,edit:Pencil,previous:ChevronLeft,next:ChevronRight,plug:Plug,image:Image,brain:Brain,users:UsersRound,palette:Palette,archive:Archive,file:File,film:Film,headphones:Headphones,table:Table2,upload:Upload,at:AtSign} satisfies Record<string,LucideIcon>;
 const lakeWaterline='M4 19c2-1.6 4 1.6 6 0s4 1.6 6 0 3 1 4 .3';
 
-const specialistDrop='M9.15 3.1a.6.6 0 0 1 .9 0l2.5 3.05a3.8 3.8 0 1 1-5.9 0l2.5-3.05Z';
-const resourceLayer='M11.3 3.65a1.55 1.55 0 0 1 1.4 0l7.93 3.84a.85.85 0 0 1 0 1.53l-7.93 3.84a1.55 1.55 0 0 1-1.4 0L3.37 9.02a.85.85 0 0 1 0-1.53Z';
-const workspaceFrame='M6 3.6h12a2.8 2.8 0 0 1 2.8 2.8v11.2a2.8 2.8 0 0 1-2.8 2.8h-.7c-2.3 0-3.6-1-5.3-1s-3 1-5.3 1H6a2.8 2.8 0 0 1-2.8-2.8V6.4A2.8 2.8 0 0 1 6 3.6Z';
 const lakeNavigationIcons={
  lakeSpecialists:{
-  outline:[
-   specialistDrop,
-   'M15.52 4.8c1.7 1.7 3.05 3 3.05 4.55a3.05 3.05 0 0 1-2.55 2.99',
-   'M3.3 17.6c.55-2.25 3.08-4.1 6.3-4.1s5.65 1.8 6.2 4.1M17 13.9c1.7.4 3.1 1.7 3.55 3.5',
-   'M3.7 20.2c2.1-1.45 4.2 1.45 6.3 0s4.2 1.45 6.3 0 2.7.75 4 .1',
-  ].join(' '),
-  solid:[
-   specialistDrop,
-   'M14.9 5.6c-.13-.22.13-.5.34-.33 1.52 1.25 3.58 3.07 3.58 4.1 0 1.82-1.3 3.02-2.95 3.02-.32 0-.65-.06-.91-.16.67-.92 1.02-1.94 1.02-3.06 0-1.5-.5-2.48-1.08-3.57Z',
-   'M3.3 17.65c0-2.34 2.8-4.17 6.3-4.17s6.3 1.83 6.3 4.17v1.47a.9.9 0 0 1-1.23.84c-1.2-.45-2.04-.62-3.2-.18-1.37.52-2.38.66-3.74.12-1.27-.5-2.09-.42-3.21.02a.9.9 0 0 1-1.22-.84Z',
-   'M16.3 13.8c2.45.3 4.5 1.97 4.5 3.74v1.44a.85.85 0 0 1-1.15.8c-.72-.26-1.4-.46-2.35-.45.18-.44.23-1.22.18-1.91-.14-1.36-.59-2.57-1.18-3.62Z',
-  ].join(' '),
+  outline:<>
+   <path d="M4.3 7A3.1 3.1 0 0 1 7.4 3.9h6.3A3.1 3.1 0 0 1 16.8 7v3.5a3.1 3.1 0 0 1-3.1 3.1H9.6l-3 2.25c-.44.33-1.08.02-1.08-.53v-1.9A3.1 3.1 0 0 1 4.3 11V7Z"/>
+   <path d="M5.6 10.6c1.9-.95 3.6-.45 5.4.3 1.7.7 3.4.75 5-.05" strokeOpacity={0.58}/>
+   <path d="M18.4 9.3c1.15.52 1.9 1.6 1.9 2.9v2.5c0 1.25-.8 2.35-1.95 2.8v1.35l-2.35-1.65h-2.8"/>
+  </>,
+  solid:<>
+   <path d="M4.2 7A3.2 3.2 0 0 1 7.4 3.8h6.4A3.2 3.2 0 0 1 17 7v3.6a3.2 3.2 0 0 1-3.2 3.2H9.6l-3.1 2.35c-.45.35-1.1.03-1.1-.54V13.6A3.2 3.2 0 0 1 4.2 11.1V7Z" fill="currentColor" fillOpacity={0.22} stroke="currentColor" strokeWidth={1.4}/>
+   <path d="M4.4 10.6c2.1-1.1 4-.55 6.1.3 2 .85 4 .9 6.3.1v.3A3 3 0 0 1 13.8 14H9.6l-3.1 2.2c-.45.32-1.1.02-1.1-.52v-2.1c-.6-.5-.95-1.35-1-2.98Z" fill="currentColor" fillOpacity={0.86}/>
+   <path d="M18.4 9.2c1.1.55 1.9 1.65 1.9 2.95v2.6c0 1.3-.85 2.4-2 2.85v1.4l-2.4-1.7h-2.8" fill="none" stroke="currentColor" strokeWidth={1.45}/>
+  </>,
  },
  lakeResources:{
-  outline:[
-   resourceLayer,
-   'M3.3 12.3l8 3.9a1.55 1.55 0 0 0 1.4 0l8-3.9M4.4 17.7c2.75 0 4.5 2.7 7.6 2.7s4.85-2.7 7.6-2.7',
-  ].join(' '),
-  solid:[
-   resourceLayer,
-   'M3.04 11.45a.7.7 0 0 1 1-.62l7.04 3.4c.58.28 1.26.28 1.84 0l7.04-3.4a.7.7 0 0 1 1 .62v2.9c0 .34-.19.64-.5.8l-7.26 3.78c-.83.43-1.82.43-2.65 0l-7.01-3.78a.9.9 0 0 1-.5-.8Z',
-  ].join(' '),
+  outline:<>
+   <rect x="4" y="4.4" width="16" height="6.4" rx="2.3"/>
+   <path d="M5.4 8c2.2-.75 4.4-.2 6.6.45 2.2.65 4.4.65 6.6-.05" strokeOpacity={0.58}/>
+   <rect x="4" y="13.2" width="16" height="6.4" rx="2.3"/>
+   <circle cx="7.4" cy="16.4" r="0.85" fill="currentColor" stroke="none"/>
+   <path d="M11 16.4h5"/>
+  </>,
+  solid:<>
+   <rect x="4" y="4.2" width="16" height="6.6" rx="2.4" fill="currentColor" fillOpacity={0.22} stroke="currentColor" strokeWidth={1.4}/>
+   <path d="M4.2 7.8c2.6-.9 5.2-.3 7.8.5 2.6.8 5.2.8 7.8-.1v.5A2.2 2.2 0 0 1 17.6 10.8H6.4a2.2 2.2 0 0 1-2.2-2.2v-.8Z" fill="currentColor" fillOpacity={0.86}/>
+   <rect x="4" y="13.2" width="16" height="6.6" rx="2.4" fill="currentColor" fillOpacity={0.22} stroke="currentColor" strokeWidth={1.4}/>
+   <circle cx="7.4" cy="16.5" r="1.05" fill="currentColor"/>
+   <path d="M11 16.5h5.2" stroke="currentColor" strokeWidth={1.5}/>
+  </>,
  },
  lakeWorkspace:{
-  outline:`${workspaceFrame} M9.2 3.6v16.48M9.2 9.35h11.6`,
-  solid:`${workspaceFrame} M8.45 5.4h1.5v3.25h9v1.5h-9v7.65h-1.5Z`,
+  outline:<>
+   <rect x="3.8" y="4.2" width="16.4" height="15.6" rx="3.4"/>
+   <path d="M9.6 4.4v15.2M12.8 14.8c1.35-.75 2.75.75 4.1 0"/>
+  </>,
+  solid:<>
+   <rect x="3.8" y="4.2" width="16.4" height="15.6" rx="3.4" fill="currentColor" fillOpacity={0.22} stroke="currentColor" strokeWidth={1.4}/>
+   <rect x="3.8" y="4.2" width="6.2" height="15.6" rx="3.1" fill="currentColor" fillOpacity={0.86}/>
+   <path d="M12.8 14.8c1.35-.75 2.75.75 4.1 0" stroke="currentColor" strokeWidth={1.45}/>
+  </>,
  },
 } as const;
 
@@ -67,10 +75,12 @@ export function Glyph({name,size=18,className="",filled=false}:{name:string;size
   <rect x="10" y="2" width="2.5" height="10.5" rx="1"/>
  </svg>;
  const navigationIcon=lakeNavigationIcons[name as keyof typeof lakeNavigationIcons];
- const solid=filled?navigationIcon?.solid:undefined;
- const path=solid??navigationIcon?.outline??lakeIcons[name as keyof typeof lakeIcons];
- if(path)return <svg width={size} height={size} viewBox="0 0 24 24" fill={solid?'currentColor':'none'} stroke={solid?'none':'currentColor'} strokeWidth={navigationIcon?1.55:1.4} strokeLinecap="round" strokeLinejoin="round" className={className} data-glyph={name} aria-hidden="true">
-  <path d={path} fillRule={solid?'evenodd':undefined}/>
+ if(navigationIcon)return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={filled?undefined:'currentColor'} strokeWidth={filled?undefined:1.55} strokeLinecap="round" strokeLinejoin="round" className={className} data-glyph={name} aria-hidden="true">
+  {filled?navigationIcon.solid:navigationIcon.outline}
+ </svg>;
+ const path=lakeIcons[name as keyof typeof lakeIcons];
+ if(path)return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" className={className} data-glyph={name} aria-hidden="true">
+  <path d={path}/>
  </svg>;
  const Icon = icons[name as keyof typeof icons] ?? FileText;
  // Every loading glyph shares the existing motion and reduced-motion rules.
