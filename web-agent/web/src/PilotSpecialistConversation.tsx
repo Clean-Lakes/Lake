@@ -1,6 +1,6 @@
 import {useCallback,useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {SessionEvent,SessionSnapshot,SpecialistReplyAuthor} from '../../shared/contracts';
-import {CodexActivity} from './CodexActivity';
+import {SpecialistExecutionProcess} from './CodexActivity';
 import {codexActivity} from '../../shared/codex-activity';
 import {api} from './api';
 import {applyLiveText} from './liveTextUpdates';
@@ -103,10 +103,24 @@ function useSpecialistReply(row:PilotSpecialistRow,connected:boolean,visible:boo
 
 type ObservedTurn=(row:PilotSpecialistRow,root:string)=>void;
 type ReportPresented=(id:string)=>void;
+type SpecialistReplyProps={
+ row:PilotSpecialistRow;
+ onSpecialist?:(author:SpecialistReplyAuthor)=>void;
+ onInspectSpecialist?:InspectSpecialist;
+ onInspectProcess?:()=>void;
+ onObservedTurn?:ObservedTurn;
+ onReportPresented?:ReportPresented;
+ arriveReport?:boolean;
+ taskLabel?:string;
+ foldSpecialistProcess?:boolean;
+};
 
-function PilotSpecialistReply({row,onSpecialist,onInspectSpecialist,connected,onObservedTurn,onReportPresented,arriveReport,taskLabel,subscribeWorkerEvents}:{row:PilotSpecialistRow;onSpecialist?: (author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:InspectSpecialist;connected:boolean;onObservedTurn?:ObservedTurn;onReportPresented?:ReportPresented;arriveReport?:boolean;taskLabel?:string;subscribeWorkerEvents?:SubscribePilotWorkerEvents}){
+function PilotSpecialistReply({row,connected,subscribeWorkerEvents,...props}:SpecialistReplyProps&{
+ connected:boolean;subscribeWorkerEvents?:SubscribePilotWorkerEvents;
+}){
  const visible=usePageVisible(),state=useSpecialistReply(row,connected,visible,subscribeWorkerEvents);
- return <PilotSpecialistReplyView row={row} snapshot={state?.snapshot} livePacket={state?.livePacket} available={connected&&!state?.failed} visible={visible} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} onObservedTurn={onObservedTurn} onReportPresented={onReportPresented} arriveReport={arriveReport} taskLabel={taskLabel}/>;
+ return <PilotSpecialistReplyView {...props} row={row} snapshot={state?.snapshot} livePacket={state?.livePacket}
+  available={connected&&!state?.failed} visible={visible}/>;
 }
 
 function PilotReplyProse({text,active,animateInitial,cursorAvatar}:{text:string;active:boolean;animateInitial?:boolean;cursorAvatar?:LakeAvatarName}){
@@ -114,7 +128,10 @@ function PilotReplyProse({text,active,animateInitial,cursorAvatar}:{text:string;
 }
 
 /** Public reply presentation is separate from the exact-worker live subscription. */
-export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true,visible=true,onSpecialist,onInspectSpecialist,onObservedTurn,onReportPresented,arriveReport,taskLabel}:{row:PilotSpecialistRow;snapshot?:SessionSnapshot;livePacket?:boolean;available?:boolean;visible?:boolean;onSpecialist?:(author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:InspectSpecialist;onObservedTurn?:ObservedTurn;onReportPresented?:ReportPresented;arriveReport?:boolean;taskLabel?:string}){
+export function PilotSpecialistReplyView({
+ row,snapshot,livePacket,available=true,visible=true,onSpecialist,onInspectSpecialist,onInspectProcess,onObservedTurn,onReportPresented,
+ arriveReport,taskLabel,foldSpecialistProcess=false,
+}:SpecialistReplyProps&{snapshot?:SessionSnapshot;livePacket?:boolean;available?:boolean;visible?:boolean}){
  const appearance=useSpecialistAppearance(row.author);
  const previous=useRef<PilotReplyPresentation&{observed:boolean}>(undefined),binding=pilotSpecialistBinding(row);
  const entry=pilotSpecialistPresentation(row,snapshot,previous.current);
@@ -150,6 +167,8 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
  const hasActivity=transcript.some(item=>item.kind!=='text');
  const hasTranscriptProse=transcript.some(item=>item.kind==='text'&&!!item.text.trim());
  const showsTranscript=hasActivity||!report&&hasTranscriptProse;
+ const collapseProcess=foldSpecialistProcess&&hasActivity&&!!report&&!!text.trim()&&
+  (!arriveReport||presented===report.id);
  const hasProse=!!text.trim()||hasTranscriptProse;
  const statusMotion=working&&visible&&!awaitingReport&&status?.phase!=='settled';
  const thinking=moving&&row.activity.phase==='thinking'&&allowsAnimalThinking(snapshot?.ai)&&(!status||status.phase==='thinking')&&!hasProse&&projected?.card?.type!=='plan_reference';
@@ -170,20 +189,32 @@ export function PilotSpecialistReplyView({row,snapshot,livePacket,available=true
   live:working&&visible&&!awaitingReport,
   arrive:!!text&&(report?arriveReport:working&&(!!livePacket||observed)),
  };
+ const process=showsTranscript&&!planState&&<SpecialistExecutionProcess key="process" items={transcript} live={working&&visible}
+  animateInitial={livePacket||observed} report={report} cursorAvatar={working&&!awaitingReport?appearance.icon:undefined}
+  collapse={collapseProcess} connected={available&&visible} onInspect={onInspectProcess}/>;
+ const reply=<PilotReplyContent key="reply" state={contentState} onPresented={report?reportPresented:undefined} active={(moving||!!report&&!['failed','cancelled'].includes(row.worker.task.state))&&available&&visible}>
+   {planState?<PlanReference state={planState}/>:showsTranscript&&!report?null:text?<PilotReplyProse text={text} active={working&&visible&&!awaitingReport} animateInitial={livePacket} cursorAvatar={working&&!awaitingReport?appearance.icon:undefined}/>:report||awaitingReport?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={statusMotion} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={statusMotion}>{label}</ReplyProcessStatus>}
+   {report&&<MessageAttachments message={report} sessionId={report.sessionId}/>}
+ </PilotReplyContent>;
  return <section className="ai-chat-message ai-role-assistant pilot-specialist-reply" data-worker-id={row.worker.id} data-task-id={row.worker.task.taskId} data-phase={report?'settled':row.activity.phase} data-report-id={report?.id} aria-label={`${row.author.name}的回复`}>
   <ReplyIdentity identity={pilotIdentity} author={report?.author??row.author} showBackendName={hasActivity} authorMotion={moving?'working':'still'} nameMotion={statusMotion} onSpecialist={onSpecialist}/>
   {taskLabel&&<small className="pilot-specialist-task-label">{taskLabel}</small>}
-  {showsTranscript&&!planState&&<CodexActivity items={transcript} live={working&&visible} animateInitial={livePacket||observed} reportText={report?.text} cursorAvatar={working&&!awaitingReport?appearance.icon:undefined}/>}
-  <PilotReplyContent state={contentState} onPresented={report?reportPresented:undefined} active={(moving||!!report&&!['failed','cancelled'].includes(row.worker.task.state))&&available&&visible}>
-   {planState?<PlanReference state={planState}/>:showsTranscript&&!report?null:text?<PilotReplyProse text={text} active={working&&visible&&!awaitingReport} animateInitial={livePacket} cursorAvatar={working&&!awaitingReport?appearance.icon:undefined}/>:report||awaitingReport?null:thinking?<ReplyProcessStatus><LiveTextMotionLabel active={statusMotion} glow className="pilot-specialist-thinking-label">{lakeAvatarThinking[appearance.icon].label}</LiveTextMotionLabel></ReplyProcessStatus>:<ReplyProcessStatus active={statusMotion}>{label}</ReplyProcessStatus>}
-   {report&&<MessageAttachments message={report} sessionId={report.sessionId}/>}
-  </PilotReplyContent>
-  <SpecialistProcessLink author={report?.author??row.author} reportId={report?.id} onInspect={onInspectSpecialist} active={statusMotion} liveStatus={showsTranscript?waitingLabel:inlineWait}/>
+  {collapseProcess?[reply,process]:[process,reply]}
+  {!collapseProcess&&<SpecialistProcessLink author={report?.author??row.author} reportId={report?.id} onInspect={onInspectSpecialist}
+   active={statusMotion} liveStatus={showsTranscript?waitingLabel:inlineWait}/>}
   {!report&&text&&(!available||updating&&!awaitingReport)&&<small className="pilot-specialist-connection" role="status">{label}</small>}
  </section>;
 }
 
-export function PilotSpecialistConversation({rows,onSpecialist,onInspectSpecialist,connected=true,onObservedTurn,onReportPresented,reportArrives,taskLabels,subscribeWorkerEvents}:{rows:PilotSpecialistRow[];onSpecialist?: (author:SpecialistReplyAuthor)=>void;onInspectSpecialist?:InspectSpecialist;connected?:boolean;onObservedTurn?:ObservedTurn;onReportPresented?:ReportPresented;reportArrives?:(id:string)=>boolean;taskLabels?:ReadonlyMap<string,string>;subscribeWorkerEvents?:SubscribePilotWorkerEvents}){
+export function PilotSpecialistConversation({
+ rows,connected=true,reportArrives,taskLabels,subscribeWorkerEvents,...props
+}:Omit<SpecialistReplyProps,'row'|'arriveReport'|'taskLabel'>&{
+ rows:PilotSpecialistRow[];connected?:boolean;reportArrives?:(id:string)=>boolean;
+ taskLabels?:ReadonlyMap<string,string>;subscribeWorkerEvents?:SubscribePilotWorkerEvents;
+}){
  if(!rows.length)return null;
- return <div className="pilot-specialist-conversation">{rows.map(row=><PilotSpecialistReply key={row.worker.id} row={row} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} connected={connected} onObservedTurn={onObservedTurn} onReportPresented={onReportPresented} arriveReport={!!row.finalReport&&reportArrives?.(row.finalReport.id)} taskLabel={taskLabels?.get(row.worker.id)} subscribeWorkerEvents={subscribeWorkerEvents}/>)}</div>;
+ return <div className="pilot-specialist-conversation">{rows.map(row=><PilotSpecialistReply
+  {...props} key={row.worker.id} row={row} connected={connected} subscribeWorkerEvents={subscribeWorkerEvents}
+  arriveReport={!!row.finalReport&&reportArrives?.(row.finalReport.id)} taskLabel={taskLabels?.get(row.worker.id)}
+ />)}</div>;
 }

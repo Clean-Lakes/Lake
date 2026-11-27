@@ -183,3 +183,60 @@ test('completed specialists leave their distinct formal reports without another 
  assert.equal(html.split('服务器检查结果。').length-1,1);assert.equal(html.split('发布查询结果。').length-1,1);
  assert.doesNotMatch(html,/pilot-specialist-reply|pilot-dispatch-progress/);
 });
+
+const releaseReport:Message={
+ id:'report-host',sessionId:'pilot',role:'assistant',replyToMessageId:user.id,text:'发布记录核对完成。',
+ createdAt:'2026-11-06T00:00:03Z',
+ author:{kind:'specialist',name:'发布专员',roleId:'role-host',workerId:'host',sessionId:'worker-host',taskId:'task-host',durationMs:282000},
+ files:[{sourceId:'report-file',name:'发布记录.txt'}],
+ codexActivity:[
+  {kind:'text',id:'interim',text:'正在读取发布记录。'},
+  {kind:'integration',id:'read',text:'读取记录',status:'completed',at},
+  {kind:'text',id:'result',text:'发布记录核对完成。'},
+ ],
+};
+function renderedReport(messages:Message[],status='completed',pilotWorkspace=workspace([])){
+ const snapshot={session:{id:'pilot',projectId:'project',workspaceRole:'group'},messages:[user,...messages],
+  resources:[],actions:[],ai:{session:'pilot',status,cards:[],cardsOffset:0}} as SessionSnapshot;
+ return renderToStaticMarkup(createElement(AITranscript,{
+  snapshot,pilotWorkspace,assistantIdentity:{name:'Lake',pilot:true},onInspectSpecialist(){},
+ }));
+}
+const collapsedExecution=/<button[^>]*data-placement="inline"[^>]*aria-label="查看执行过程"[^>]*aria-expanded="false"/;
+
+test('a finished single-specialist report has one inline process footer after the conclusion and attachments',()=>{
+ const state=workspace();
+ state.workers=[];
+ state.channels!.push(...workspace([worker('database')]).channels!);
+ const html=renderedReport([releaseReport],'completed',state);
+ const footer=html.match(collapsedExecution);
+ assert.ok(footer);
+ assert.equal(html.match(/aria-label="查看执行过程"/g)?.length,1);
+ const attachment=html.indexOf('aria-label="下载 发布记录.txt"');
+ assert.ok(attachment>html.indexOf('发布记录核对完成。')&&attachment<footer.index!);
+ const duration=html.indexOf('4 分钟 42 秒');
+ const hiddenProcess=html.indexOf('class="pilot-report-body" aria-hidden="true" inert=""');
+ assert.ok(footer.index!<duration&&duration<hiddenProcess&&hiddenProcess<html.indexOf('正在读取发布记录。'));
+ assert.equal(html.split('发布记录核对完成。').length-1,1);
+ assert.doesNotMatch(html,/data-placement="side"[^>]*data-specialist-process="task-host"/);
+});
+
+test('unfinished work or a dispatch to another specialist prevents the single-specialist fold',()=>{
+ for(const status of ['running','paused','waiting_approval']){
+  assert.doesNotMatch(renderedReport([releaseReport],status),collapsedExecution,status);
+ }
+ const otherDispatch:Message={
+  id:'another-dispatch',sessionId:'pilot',role:'assistant',text:'',createdAt:'2026-11-06T00:00:01Z',
+  dispatch:{id:'dispatch',sourceMessageId:user.id,roleId:'another-role',roleName:'发布专员',
+   workerId:'another-worker',sessionId:'another-session',taskId:'another-task',channelSessionId:'another-channel',instruction:'复核',action:'create'},
+ };
+ assert.doesNotMatch(renderedReport([otherDispatch,releaseReport]),collapsedExecution);
+ const newerQuestion={...user,id:'newer',createdAt:'2026-11-06T00:00:02Z'};
+ const delayedDispatch={...otherDispatch,createdAt:'2026-11-06T00:00:04Z'};
+ assert.doesNotMatch(renderedReport([releaseReport,newerQuestion,delayedDispatch]),collapsedExecution);
+ assert.doesNotMatch(renderedReport([{...releaseReport,text:''}]),collapsedExecution);
+ const settling=worker();
+ settling.task.state='completed';
+ settling.pilotReport={messageId:releaseReport.id,executionSettled:false};
+ assert.doesNotMatch(renderedReport([releaseReport],'completed',workspace([settling])),collapsedExecution);
+});
