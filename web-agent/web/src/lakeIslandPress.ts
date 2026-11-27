@@ -22,3 +22,16 @@ export function expandedIslandWidth(compactWidth: number, availableWidth: number
   const ceiling = Math.max(safeCompact, Math.floor(availableWidth));
   return Math.max(safeCompact, Math.min(ISLAND_EXPANDED_WIDTH, ceiling));
 }
+
+/** Centers the floating island horizontally inside its conversation pane while honoring side clearances. */
+export function centeredIslandLeft(
+  paneLeft: number,
+  paneWidth: number,
+  islandWidth: number,
+  minLeft: number,
+  maxRight: number,
+): number {
+  const ideal = Math.round(paneLeft + (paneWidth - islandWidth) / 2);
+  const maxLeft = Math.max(minLeft, Math.floor(maxRight - islandWidth));
+  return Math.max(minLeft, Math.min(maxLeft, ideal));
+}

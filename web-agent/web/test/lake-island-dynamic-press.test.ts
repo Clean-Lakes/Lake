@@ -7,6 +7,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import type {SpecialistChannelInfo} from '../../shared/contracts';
 import {LakeIslandDrawer} from '../src/LakeIslandDrawer';
 import {
+  centeredIslandLeft,
   expandedIslandWidth,
   ISLAND_DRAG_CANCEL_PX,
   ISLAND_EXPANDED_WIDTH,
@@ -20,7 +21,7 @@ const css = registerHooks({load(url, context, nextLoad) { return url.endsWith('.
 const {WorkbenchIsland} = await import('../src/WorkbenchIsland');
 css.deregister();
 
-test('lakeIslandPress helper clamps expanded width and filters nested interactive targets', () => {
+test('lakeIslandPress helper centers the island in pane bounds and filters nested interactive targets', () => {
   assert.equal(ISLAND_PRESS_SWELL_MS, 110);
   assert.equal(ISLAND_LONG_PRESS_MS, 260);
   assert.equal(ISLAND_EXPANDED_WIDTH, 392);
@@ -29,6 +30,10 @@ test('lakeIslandPress helper clamps expanded width and filters nested interactiv
   assert.equal(expandedIslandWidth(240, 600), 392);
   assert.equal(expandedIslandWidth(240, 320), 320);
   assert.equal(expandedIslandWidth(240, 180), 240);
+
+  // Centers inside pane [280, 1080] while keeping right directory lane [..., 1004] clear
+  assert.equal(centeredIslandLeft(280, 800, 260, 296, 1004), 550);
+  assert.equal(centeredIslandLeft(280, 420, 392, 296, 624), 296);
 
   const islandRoot = {closest: () => islandRoot} as unknown as Element;
   const nestedButton = {closest: () => ({} as Element)} as unknown as Element;
@@ -39,7 +44,7 @@ test('lakeIslandPress helper clamps expanded width and filters nested interactiv
   assert.equal(isInteractiveIslandTarget(plainTitle, islandRoot), false);
 });
 
-test('LakeIslandDrawer renders running three-dot bubbles, waiting dot, and idle specialist strip accurately', () => {
+test('LakeIslandDrawer matches unified Dynamic Island card layout across running, waiting, and idle states', () => {
   const runningParticipants: PilotParticipant[] = [
     {key: 'obs', roleId: 'obs', name: '发布专员', detail: '核查抓帧链路', moving: true},
     {key: 'owl', roleId: 'owl', name: '应用专员', detail: '比对 Inspector 指标', moving: false},
@@ -52,7 +57,9 @@ test('LakeIslandDrawer renders running three-dot bubbles, waiting dot, and idle 
   const runningHtml = renderToStaticMarkup(createElement(LakeIslandDrawer, {
     title: '可观测群',
     statusLabel: '处理中',
+    elapsedLabel: '01:23',
     tone: 'active',
+    pilot: true,
     running: true,
     participants: runningParticipants,
     inspectorAvailable: true,
@@ -61,11 +68,14 @@ test('LakeIslandDrawer renders running three-dot bubbles, waiting dot, and idle 
     onStop() {},
     onClose() {},
   }));
+  assert.match(runningHtml, /可观测群 · 1 位专员协作中/);
+  assert.match(runningHtml, /本次排查已持续 01:23/);
   assert.match(runningHtml, /class="lake-island-dots" role="img" aria-label="处理中"/);
   assert.match(runningHtml, /发布专员/);
   assert.match(runningHtml, /执行中/);
+  assert.match(runningHtml, /收起小岛/);
   assert.match(runningHtml, /查看过程/);
-  assert.match(runningHtml, /停止任务/);
+  assert.match(runningHtml, /停止全部任务/);
 
   const waitingHtml = renderToStaticMarkup(createElement(LakeIslandDrawer, {
     title: '发布工作群',
@@ -75,19 +85,22 @@ test('LakeIslandDrawer renders running three-dot bubbles, waiting dot, and idle 
     participants: runningParticipants,
     onClose() {},
   }));
-  assert.match(waitingHtml, /class="lake-island-wait-dot"/);
+  assert.match(waitingHtml, /class="lake-island-wait-pill"/);
   assert.doesNotMatch(waitingHtml, /class="lake-island-dots"/);
 
   const idleHtml = renderToStaticMarkup(createElement(LakeIslandDrawer, {
     title: 'Lake',
+    projectName: 'Zmy项目组',
     statusLabel: '待命',
     participants: [],
     channels,
     onClose() {},
   }));
+  assert.match(idleHtml, /Lake · Zmy项目组/);
   assert.match(idleHtml, /class="lake-island-idle-dot"/);
   assert.match(idleHtml, /2 位专员就绪/);
-  assert.doesNotMatch(idleHtml, /停止任务/);
+  assert.match(idleHtml, /收起小岛/);
+  assert.doesNotMatch(idleHtml, /停止全部任务/);
 });
 
 test('WorkbenchIsland exposes Style 3 interactive press attributes only when expandedPanel is wired', () => {
@@ -118,12 +131,18 @@ test('WorkbenchIsland exposes Style 3 interactive press attributes only when exp
   assert.match(interactive, /class="island-expand-drawer" data-open="false"/);
 });
 
-test('workbenchIsland.css encodes Style 3 widen-then-drop stagger delays, press squish/swell, and reduced motion guard', () => {
+test('workbenchIsland.css and ConversationDirectory prevent bleed-through, double headers, and directory shifting', () => {
   const css = readFileSync(new URL('../src/workbenchIsland.css', import.meta.url), 'utf8');
-  assert.match(css, /\[data-island-interactive="true"\]/);
+  assert.match(css, /transform-origin:center top;/);
+  assert.match(css, /color-mix\(in srgb,var\(--surface\) 98%,transparent\)/);
+  assert.match(css, /\[data-island-phase="expanded"\] > \.workspace-header\s*\{[^}]*height:0;/);
   assert.match(css, /\[data-island-press="squish"\]/);
   assert.match(css, /\[data-island-press="swell"\]/);
   assert.match(css, /\.island-expand-drawer\[data-open="true"\][^}]*100ms/);
   assert.match(css, /width 480ms var\(--island-spring\) 90ms/);
   assert.match(css, /@media \(prefers-reduced-motion:reduce\)/);
+
+  const dir = readFileSync(new URL('../src/ConversationDirectory.tsx', import.meta.url), 'utf8');
+  assert.match(dir, /compactBarHeight/);
+  assert.match(dir, /data-island-phase/);
 });

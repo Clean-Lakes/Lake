@@ -2,6 +2,7 @@ import {useEffect,useLayoutEffect,useRef,useState,type PointerEvent as ReactPoin
 import './workbenchIsland.css';
 import {workbenchIslandLayout,type IslandPosition} from './workbenchIslandLayout';
 import {
+  centeredIslandLeft,
   expandedIslandWidth,
   ISLAND_DRAG_CANCEL_PX,
   ISLAND_LONG_PRESS_MS,
@@ -81,7 +82,7 @@ export function WorkbenchIsland({
   const element=root.current,shell=element?.closest<HTMLElement>('.app-shell'),identity=conversationIsland.current;
   if(!element||!shell||!identity)return;
   let frame=0;
-  let previousRoster:HTMLElement|null=null, previousRosterWidth=0, previousIslandWidth=0, previousExpanded=expandedRef.current;
+  let previousRoster:HTMLElement|null=null, previousRosterWidth=0, previousIslandWidth=0, previousExpanded=expandedRef.current, lastCompactWidth=0;
   let rosterAnimation:Animation|undefined;
   let sidebarAnimation:Animation|undefined;
   let sidebarDeadline=0,previousLeft=0;
@@ -225,8 +226,10 @@ export function WorkbenchIsland({
    const compactStatus=rosterOpen&&compactRoster&&badgeLabelWidth>0&&!pilotWidth&&identityAvailable<Math.ceil(rosterFittedWidth);
    identity.toggleAttribute('data-compact-pilot-roster',compactRoster);
    identity.toggleAttribute('data-compact-pilot-status',compactStatus);
-   const compactConversationWidth=rosterFittedWidth-(compactStatus?badgeLabelWidth:0);
+   const measuredCompactWidth=rosterFittedWidth-(compactStatus?badgeLabelWidth:0);
    const isExpanded=expandedRef.current;
+   if(!isExpanded&&measuredCompactWidth>0)lastCompactWidth=measuredCompactWidth;
+   const compactConversationWidth=isExpanded&&lastCompactWidth>0?lastCompactWidth:measuredCompactWidth;
    const conversationWidth=isExpanded?expandedIslandWidth(compactConversationWidth,identityAvailable):compactConversationWidth;
    const layout=workbenchIslandLayout({
     conversation:{left,width:available,inset:0},
@@ -235,7 +238,10 @@ export function WorkbenchIsland({
     inspectorWidth:144,
     terminalWidth:Math.min(320,Math.max(260,terminalNameWidth+(terminalNumber?.offsetWidth??0)+(terminalCount?.offsetWidth??0)+112)),
    });
-   const source={...layout.conversation,top:conversationTop};
+   const centeredLeft=interactive
+    ?centeredIslandLeft(bounds.left-base.left,bounds.width,layout.conversation.width,left,right)
+    :layout.conversation.left;
+   const source={...layout.conversation,left:centeredLeft,top:conversationTop};
    // CSS adds the navigation as padding around an unchanged identity width.
    const identityWidth=Math.max(0,source.width-navigationWidth-borders);
    shell.style.setProperty('--pane-rail-bottom',`${Math.max(12,base.bottom-(composer?.top??base.bottom)+12)}px`);
