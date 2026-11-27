@@ -15,10 +15,11 @@
   font-weight:var(--font-weight-medium);
 }
 .sidebar.workspace-navigation .chat-group-nav-row {
+  --window-corner-min-height:50px;
   min-height:50px;
   margin-block-end:2px;
   padding:6px var(--sidebar-row-inset);
-  border-radius:var(--radius-settings-control);
+  border-radius:var(--radius-window);
   corner-shape:var(--corner-window);
   gap:var(--sidebar-icon-gap);
 }
