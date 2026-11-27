@@ -83,15 +83,13 @@ test('selectSpecialistInviteSlot allows at most one live invite per specialist',
   assert.equal(revoked.current, null);
 });
 
-test('SpecialistMcpInviteSlot hides creation form when an active or redeemed invite exists', () => {
+test('SpecialistMcpInviteSlot keeps reusable invite prompt available across redemptions and omits expiry selector', () => {
   const baseProps = {
     roleName: '发布专员',
     connectionEnabled: true,
     busy: '',
     inviteName: '',
-    ttlMinutes: '15',
     onInviteNameChange: () => {},
-    onTtlMinutesChange: () => {},
     onCreateInvite: () => {},
     onRevokeInvite: () => {},
     onCopyPrompt: () => {},
@@ -100,6 +98,7 @@ test('SpecialistMcpInviteSlot hides creation form when an active or redeemed inv
   const emptyHtml = renderToStaticMarkup(createElement(SpecialistMcpInviteSlot, { ...baseProps, invites: [] }));
   assert.match(emptyHtml, /specialist-mcp-invite-form/);
   assert.match(emptyHtml, /生成接入链接/);
+  assert.doesNotMatch(emptyHtml, /链接有效期/);
 
   const activeHtml = renderToStaticMarkup(createElement(SpecialistMcpInviteSlot, {
     ...baseProps,
@@ -107,7 +106,8 @@ test('SpecialistMcpInviteSlot hides creation form when an active or redeemed inv
       id: 'inv-1',
       name: '研发预发接入',
       createdAt: '2026-11-27T02:00:00Z',
-      expiresAt: '2026-11-28T02:00:00Z',
+      reusable: true,
+      redeemedCount: 0,
       status: 'active',
       invitePrompt: '帮我连接 Lake 的「研发预发接入」（发布专员）：http://192.168.50.12:51824/api/gateway/invites/lkiv_abc',
     }],
@@ -115,23 +115,27 @@ test('SpecialistMcpInviteSlot hides creation form when an active or redeemed inv
   assert.doesNotMatch(activeHtml, /specialist-mcp-invite-form/);
   assert.doesNotMatch(activeHtml, /生成接入链接/);
   assert.match(activeHtml, /研发预发接入/);
-  assert.match(activeHtml, /待兑换/);
-  assert.match(activeHtml, /撤销/);
+  assert.match(activeHtml, /永久可用/);
+  assert.match(activeHtml, /永久有效 · 可重复使用/);
+  assert.match(activeHtml, />撤销<\/button>/);
   assert.match(activeHtml, /复制接入邀请/);
 
-  const redeemedHtml = renderToStaticMarkup(createElement(SpecialistMcpInviteSlot, {
+  const reusedHtml = renderToStaticMarkup(createElement(SpecialistMcpInviteSlot, {
     ...baseProps,
     invites: [{
       id: 'inv-2',
       name: '研发预发接入',
       createdAt: '2026-11-27T02:00:00Z',
-      expiresAt: '2026-11-28T02:00:00Z',
       redeemedAt: '2026-11-27T02:05:00Z',
-      status: 'redeemed',
+      redeemedCount: 2,
+      reusable: true,
+      status: 'active',
+      invitePrompt: '帮我连接 Lake 的「研发预发接入」（发布专员）：http://192.168.50.12:51824/api/gateway/invites/lkiv_abc',
     }],
   }));
-  assert.doesNotMatch(redeemedHtml, /specialist-mcp-invite-form/);
-  assert.doesNotMatch(redeemedHtml, /生成接入链接/);
-  assert.match(redeemedHtml, /已接入/);
-  assert.match(redeemedHtml, /撤销并重置/);
+  assert.doesNotMatch(reusedHtml, /specialist-mcp-invite-form/);
+  assert.match(reusedHtml, /永久可用/);
+  assert.match(reusedHtml, /已接入 2 次/);
+  assert.match(reusedHtml, /复制接入邀请/);
+  assert.match(reusedHtml, /撤销并重置/);
 });

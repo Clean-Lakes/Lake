@@ -11,8 +11,9 @@ type InviteRecord = {
   name?: string;
   recipient?: string;
   createdAt: string;
-  expiresAt: string;
+  expiresAt?: string;
   redeemedAt?: string;
+  redeemedCount?: number;
   revokedAt?: string;
 };
 type ConnectionRecord = Pick<GatewayConnection, 'projectId' | 'enabled' | 'routing' | 'resourceGrants' | 'updatedAt'> & { invites?: InviteRecord[] };
@@ -77,15 +78,14 @@ function resourceGrants(value: unknown): GatewayResourceGrant[] {
   }
   return out;
 }
-function inviteStatus(row: InviteRecord, at = Date.now()): GatewayInviteStatus {
+function inviteStatus(row: InviteRecord): GatewayInviteStatus {
   if (row.revokedAt) return 'revoked';
-  if (row.redeemedAt) return 'redeemed';
-  if (Date.parse(row.expiresAt) <= at) return 'expired';
   return 'active';
 }
 function inviteView(row: InviteRecord, origin: string, roleName?: string): GatewayInviteView {
   const status = inviteStatus(row);
   const label = row.name ?? row.recipient;
+  const redeemedCount = row.redeemedCount ?? (row.redeemedAt ? 1 : 0);
   const inviteUrl = status === 'active' ? `${origin}/api/gateway/invites/${row.token}` : undefined;
   const invitePrompt = inviteUrl
     ? (label ? `帮我连接 Lake 的「${label}」（${roleName || '专员'}）：${inviteUrl}` : `帮我连接 Lake 的${roleName || '专员'}：${inviteUrl}`)
@@ -95,7 +95,8 @@ function inviteView(row: InviteRecord, origin: string, roleName?: string): Gatew
     ...(label ? { name: label } : {}),
     ...(row.recipient ? { recipient: row.recipient } : {}),
     createdAt: row.createdAt,
-    expiresAt: row.expiresAt,
+    redeemedCount,
+    reusable: true,
     ...(row.redeemedAt ? { redeemedAt: row.redeemedAt } : {}),
     ...(row.revokedAt ? { revokedAt: row.revokedAt } : {}),
     status,
@@ -135,8 +136,9 @@ export class LakeGateway {
           if (!Array.isArray(row.connection.invites) || row.connection.invites.length > 64) throw new Error('invalid invites');
           for (const invite of row.connection.invites) {
             if (!invite || typeof invite !== 'object' || typeof invite.id !== 'string' || typeof invite.token !== 'string' ||
-              typeof invite.createdAt !== 'string' || typeof invite.expiresAt !== 'string' ||
-              !Number.isFinite(Date.parse(invite.createdAt)) || !Number.isFinite(Date.parse(invite.expiresAt)))
+              typeof invite.createdAt !== 'string' || !Number.isFinite(Date.parse(invite.createdAt)) ||
+              (invite.expiresAt !== undefined && (typeof invite.expiresAt !== 'string' || !Number.isFinite(Date.parse(invite.expiresAt)))) ||
+              (invite.redeemedCount !== undefined && (!Number.isSafeInteger(invite.redeemedCount) || invite.redeemedCount < 0)))
               throw new Error('invalid invite');
           }
         }
@@ -293,24 +295,18 @@ export class LakeGateway {
     if (!row.connection.enabled) throw new HttpError(409, '连接已停用，请先启用后再生成邀请');
     const existingInvites = row.connection.invites ?? [];
     if (existingInvites.some(entry => inviteStatus(entry) === 'active')) {
-      throw new HttpError(409, '当前专员已有待兑换的邀请链接，不能重复创建；请先撤销现有链接');
-    }
-    if (existingInvites.some(entry => inviteStatus(entry) === 'redeemed')) {
-      throw new HttpError(409, '当前专员已有已接入的邀请链接，不能重复创建；如需更换请先撤销当前链接');
+      throw new HttpError(409, '当前专员已有永久接入链接，不能重复创建；如需更换请先撤销现有链接');
     }
     const customName = input.name === undefined || input.name === '' ? undefined : text(input.name, 'name', 80);
     const recipient = input.recipient === undefined || input.recipient === '' ? undefined : text(input.recipient, 'recipient', 80);
-    const ttlMinutes = input.ttlMinutes === undefined ? 15 : Number(input.ttlMinutes);
-    if (!Number.isSafeInteger(ttlMinutes) || ttlMinutes < 5 || ttlMinutes > 1440) throw new HttpError(400, '邀请有效期须为 5–1440 分钟');
     const createdAt = now();
-    const expiresAt = new Date(Date.parse(createdAt) + ttlMinutes * 60_000).toISOString();
     const invite: InviteRecord = {
       id: id(),
       token: 'lkiv_' + randomBytes(24).toString('hex'),
       ...(customName ? { name: customName } : {}),
       ...(recipient ? { recipient } : {}),
       createdAt,
-      expiresAt,
+      redeemedCount: 0,
     };
     const next: TokenRecord = {
       ...row,
@@ -334,7 +330,7 @@ export class LakeGateway {
     if (!target) throw new HttpError(404, '接入邀请不存在');
     if (target.revokedAt) return {ok: true};
     const revokedAt = now();
-    const rotatesToken = existing.some(entry => !entry.revokedAt && Boolean(entry.redeemedAt));
+    const rotatesToken = existing.some(entry => !entry.revokedAt && (Boolean(entry.redeemedAt) || (entry.redeemedCount ?? 0) > 0));
     const nextToken = rotatesToken ? 'lkgw_' + randomBytes(24).toString('hex') : row.token;
     const next: TokenRecord = {
       ...row,
@@ -368,6 +364,7 @@ export class LakeGateway {
     const config = this.config(), {row, invite} = this.findInviteByToken(config, inviteToken);
     const status = inviteStatus(invite);
     const connection = LakeGateway.connectionView(row);
+    const redeemedCount = invite.redeemedCount ?? (invite.redeemedAt ? 1 : 0);
     return {
       id: invite.id,
       ...(invite.name ? { name: invite.name } : {}),
@@ -376,7 +373,9 @@ export class LakeGateway {
       projectId: connection.projectId,
       ...(connection.routing.mode === 'specialist' ? {roleId: connection.routing.roleId} : {}),
       ...(invite.recipient ? {recipient: invite.recipient} : {}),
-      expiresAt: invite.expiresAt,
+      reusable: true,
+      redeemedCount,
+      ...(invite.redeemedAt ? { redeemedAt: invite.redeemedAt } : {}),
       status: !connection.enabled && status === 'active' ? 'revoked' as const : status,
       resourceCount: activeResourceGrants(connection).length,
       redeemUrl: `${origin}/api/gateway/invites/${invite.token}/redeem`,
@@ -391,14 +390,15 @@ export class LakeGateway {
     if (!row.connection.enabled) throw new HttpError(403, '接入连接已停用');
     const status = inviteStatus(invite);
     if (status === 'revoked') throw new HttpError(410, '接入邀请已撤销');
-    if (status === 'redeemed') throw new HttpError(410, '接入邀请已被使用（单次有效）');
-    if (status === 'expired') throw new HttpError(410, '接入邀请已过期');
     const redeemedAt = now();
+    const redeemedCount = (invite.redeemedCount ?? (invite.redeemedAt ? 1 : 0)) + 1;
     const next: TokenRecord = {
       ...row,
       connection: {
         ...row.connection,
-        invites: (row.connection.invites ?? []).map(entry => entry.id === invite.id ? {...entry, redeemedAt} : entry),
+        invites: (row.connection.invites ?? []).map(entry =>
+          entry.id === invite.id ? {...entry, redeemedAt, redeemedCount} : entry
+        ),
         updatedAt: new Date(Math.max(Date.now(), Date.parse(row.connection.updatedAt) + 1)).toISOString(),
       },
     };
@@ -416,6 +416,8 @@ export class LakeGateway {
       ...(invite.recipient ? {recipient: invite.recipient} : {}),
       resourceGrants: activeResourceGrants(connection),
       redeemedAt,
+      redeemedCount,
+      reusable: true,
     };
   }
   removeConnection(connectionId: string) { this.connection(connectionId); return this.remove(connectionId); }

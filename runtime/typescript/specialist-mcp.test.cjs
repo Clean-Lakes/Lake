@@ -133,9 +133,12 @@ test('specialist MCP grants, single-invite enforcement, redemption and revocatio
   assert.equal(saved.connection.enabled, true);
   assert.equal(saved.connection.resourceGrants.length, 2);
 
-  // Create and inspect a one-time invite with custom name, then verify duplicate creation is blocked.
+  // Create and inspect a permanent, reusable invite with custom name, then verify duplicate creation is blocked.
   const { invite, state: afterFirstCreate } = await f.api(`${base}/invites`, 'POST', { name: '研发预发发布接入', ttlMinutes: 15 }, 201);
   assert.equal(invite.status, 'active');
+  assert.equal(invite.reusable, true);
+  assert.equal(invite.expiresAt, undefined);
+  assert.equal(invite.redeemedCount, 0);
   assert.equal(invite.name, '研发预发发布接入');
   assert.equal(afterFirstCreate.invites.length, 1);
   assert.match(invite.invitePrompt, /帮我连接 Lake 的「研发预发发布接入」（发布专员）：/);
@@ -151,6 +154,8 @@ test('specialist MCP grants, single-invite enforcement, redemption and revocatio
   assert.equal(inspectedResponse.status, 200);
   const inspected = await inspectedResponse.json();
   assert.equal(inspected.status, 'active');
+  assert.equal(inspected.reusable, true);
+  assert.equal(inspected.expiresAt, undefined);
   assert.equal(inspected.name, '研发预发发布接入');
   assert.equal(inspected.resourceCount, 2);
   assert.equal(inspected.transport, 'streamable-http');
@@ -160,6 +165,8 @@ test('specialist MCP grants, single-invite enforcement, redemption and revocatio
   const redeemed = await redeemedResponse.json();
   assert.ok(redeemed.token.startsWith('lkgw_'));
   assert.equal(redeemed.inviteName, '研发预发发布接入');
+  assert.equal(redeemed.reusable, true);
+  assert.equal(redeemed.redeemedCount, 1);
   assert.equal(redeemed.transport, 'streamable-http');
   assert.equal(redeemed.resourceGrants.length, 2);
 
@@ -175,11 +182,20 @@ test('specialist MCP grants, single-invite enforcement, redemption and revocatio
   const blockedUiResp = await fetch(`${inviteUrl.origin}/api/projects`);
   assert.equal(blockedUiResp.status, 404);
 
-  // Single-use invite cannot be redeemed a second time.
-  const secondRedeem = await fetch(inspected.redeemUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-  assert.equal(secondRedeem.status, 410);
+  // Permanent invite remains inspectable & reusable for subsequent clients.
+  const secondRedeemResp = await fetch(inspected.redeemUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  assert.equal(secondRedeemResp.status, 200);
+  const secondRedeem = await secondRedeemResp.json();
+  assert.equal(secondRedeem.token, redeemed.token);
+  assert.equal(secondRedeem.redeemedCount, 2);
 
-  // Duplicate creation while an existing invite is redeemed is also blocked until revoked.
+  const afterReuseState = await f.api(base);
+  assert.equal(afterReuseState.invites.length, 1);
+  assert.equal(afterReuseState.invites[0].status, 'active');
+  assert.equal(afterReuseState.invites[0].redeemedCount, 2);
+  assert.equal(afterReuseState.invites[0].inviteUrl, invite.inviteUrl);
+
+  // Duplicate creation while the permanent invite is active is still blocked until revoked.
   const dupRedeemed = await f.api(`${base}/invites`, 'POST', { name: '第二个链接' }, 409);
   assert.match(dupRedeemed.error, /不能重复创建/);
 

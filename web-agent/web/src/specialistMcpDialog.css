@@ -482,7 +482,7 @@
 }
 .specialist-mcp-invite-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 128px auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: 8px;
 }
@@ -507,12 +507,6 @@
 .specialist-mcp-field input:focus {
   outline: none;
   border-color: var(--focus);
-}
-.specialist-mcp-ttl-field .app-select-trigger {
-  min-block-size: 34px;
-  height: 34px;
-  border-radius: var(--radius-settings-control);
-  corner-shape: var(--corner-window);
 }
 .specialist-mcp-generate-btn {
   min-block-size: 34px;
@@ -565,8 +559,8 @@
   color: var(--text-muted);
 }
 .specialist-mcp-invite-status[data-status="active"] {
-  background: var(--warning-soft);
-  color: var(--warning);
+  background: var(--success-soft);
+  color: var(--success);
 }
 .specialist-mcp-invite-status[data-status="redeemed"] {
   background: var(--success-soft);

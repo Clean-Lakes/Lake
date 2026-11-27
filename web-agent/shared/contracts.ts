@@ -460,7 +460,7 @@ export type GatewayApprovalPolicy = 'always_approve' | 'auto_in_scope';
 export type GatewayResourceGrant = {resourceId:string;approvalPolicy?:GatewayApprovalPolicy;expiresAt?:string};
 export type GatewayInviteStatus = 'active' | 'redeemed' | 'expired' | 'revoked';
 export type GatewayInviteView = {
-  id:string;name?:string;recipient?:string;createdAt:string;expiresAt:string;redeemedAt?:string;revokedAt?:string;
+  id:string;name?:string;recipient?:string;createdAt:string;expiresAt?:string;redeemedAt?:string;redeemedCount?:number;reusable?:boolean;revokedAt?:string;
   status:GatewayInviteStatus;inviteUrl?:string;invitePrompt?:string;
 };
 export type SpecialistMcpResourceOption = {id:string;name:string;kind:Resource['kind'];status?:string;host?:string;path?:string};
