@@ -2,6 +2,8 @@ import {useEffect,useRef,useState,type PointerEvent} from "react";
 import {api,readableError} from "./api";
 import {Glyph,ResourceIcon} from "./Icons";
 import {RoleMentionAvatar} from './RoleMentionAvatar';
+import {TabSelectionIndicator} from "./TabSelectionIndicator";
+import {useMenuMotion} from "./useMenuMotion";
 import type {MCPServerConfig,SkillConfig} from "../../shared/contracts";
 import {visibleMentionCategories,mentionCategoryCount,mentionTypeLabel,type MentionCategory,type MentionOption} from "./composerMentionState";
 import "./composerMentions.css";
@@ -40,9 +42,10 @@ export function ComposerMentions({options,allOptions,index,category,onCategory,o
   return()=>{document.removeEventListener("mousedown",close);document.removeEventListener("focusin",close);};
  },[onClose]);
  useEffect(()=>{list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({block:"nearest"});},[index,options]);
- return <div ref={menu} className="mention-menu composer-mentions" aria-label={allOptions.some(o=>o.kind==="role")?"引用资源、JumpServer 资产、专员、Skills 或 MCP":"引用资源、JumpServer 资产、Skills 或 MCP"} onMouseDown={event=>event.preventDefault()}
+ useMenuMotion(menu,true,true);
+ return <div ref={menu} className="mention-menu composer-mentions" data-menu-motion="true" style={{transformOrigin:"bottom left"}} aria-label={allOptions.some(o=>o.kind==="role")?"引用资源、JumpServer 资产、专员、Skills 或 MCP":"引用资源、JumpServer 资产、Skills 或 MCP"} onMouseDown={event=>event.preventDefault()}
   onKeyDown={event=>{if(event.key==="Escape"){event.preventDefault();event.stopPropagation();onClose();document.getElementById("message-input")?.focus({preventScroll:true});}}}>
-  <div className="mention-categories" role="group" aria-label="引用类型">{visibleMentionCategories(allOptions).map(group=><button key={group.kind} type="button" aria-pressed={group.kind===category} onClick={()=>onCategory(group.kind)}>{group.label}<small>{mentionCategoryCount(allOptions,group.kind)}</small></button>)}</div>
+  <div className="mention-categories" role="group" aria-label="引用类型">{visibleMentionCategories(allOptions).map(group=><button key={group.kind} type="button" aria-pressed={group.kind===category} onClick={()=>onCategory(group.kind)}>{group.label}<small>{mentionCategoryCount(allOptions,group.kind)}</small></button>)}<TabSelectionIndicator selection={category} selector='button[aria-pressed="true"]'/></div>
   <div className="mention-results" id="composer-mention-options" ref={list} role="listbox" aria-label="引用候选" aria-busy={loading}>
    {options.map((option,i)=><button key={`${option.kind}:${option.id}`} id={mentionOptionId(option)} tabIndex={-1} type="button" role="option" aria-selected={i===index} className={`mention-item ${i===index?"selected":""}`} onPointerEnter={event=>activate(event,i)} onPointerMove={event=>activate(event,i)} onClick={()=>onSelect(option)}>{option.kind==="role"?<RoleMentionAvatar id={option.id} name={option.name} size={18}/>:option.kind==='resource'?<ResourceIcon kind={option.fromJumpServer ? "jumpserver" : option.resourceKind ?? "ssh"} size={16}/>:<Glyph name={option.kind==="skill"?"book":"plug"} size={16}/>}<span className="mention-copy"><strong title={option.name}>{option.name}</strong><small title={option.detail}>{option.detail}</small></span><span className="mention-kind">{mentionTypeLabel(option)}</span></button>)}
    {!options.length&&<p className="mention-empty">{loading?"正在加载…":category==="jumpserver"?"没有匹配的 JumpServer 资产":category==="skill"?"没有匹配的已启用 Skill":category==="mcp"?"没有匹配的已启用 MCP 服务":"没有匹配的引用"}</p>}

@@ -3,6 +3,7 @@ import {SidebarScrollArea} from './SidebarScrollArea';
 import {SidebarResourceActions} from './SidebarResourceActions';
 import {Glyph} from './Icons';
 import {ProjectSwitcher, type ProjectSwitcherProps} from './ProjectSwitcher';
+import {TabSelectionIndicator} from './TabSelectionIndicator';
 import {WorkbenchSidebar} from './WorkbenchNavigation';
 
 type NavigationPanel = 'specialists'|'resources';
@@ -50,7 +51,8 @@ export function SidebarWorkspaceNavigation({projectId,specialists,specialistRail
     <Glyph name="lakeSpecialists" size={22} filled={specialistsOpen}/>{attention&&<span className="sidebar-specialist-attention" aria-hidden="true"/>}
    </button>
    <button type="button" className="sidebar-rail-button" aria-label="资源" aria-pressed={resourcesOpen}
-    aria-controls={`${id}-resources-panel`} title="资源" onClick={()=>selectPanel('resources')}><Glyph name="lakeResources" size={22} filled={resourcesOpen}/></button></>}
+    aria-controls={`${id}-resources-panel`} title="资源" onClick={()=>selectPanel('resources')}><Glyph name="lakeResources" size={22} filled={resourcesOpen}/></button>
+   <TabSelectionIndicator className="sidebar-rail-selection" selection={panel} selector=':scope > .sidebar-rail-button[aria-pressed="true"]'/></>}
    {collapsed && projectPicker && <ProjectSwitcher {...projectPicker} iconOnly/>}
    {collapsed&&creation}
    {specialistRail}

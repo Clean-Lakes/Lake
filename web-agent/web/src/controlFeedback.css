@@ -78,10 +78,14 @@
   }
 }
 
-.app-select-popup[data-menu-motion][inert] { pointer-events:none; }
+[data-menu-motion][inert] { pointer-events:none; }
 @media (prefers-reduced-motion:no-preference) {
   .app-select-popup[data-menu-motion] .app-select-option,
-  .lake-native-model-panel .composer-model-popup .app-select-option {
+  .lake-native-model-panel .composer-model-popup .app-select-option,
+  .navigation-context-menu[data-menu-motion] > button,
+  .resource-add-menu[data-menu-motion] > button,
+  .terminal-list-menu[data-menu-motion] button,
+  .terminal-action-menu[data-menu-motion] button {
     transition:background-color 100ms ease-out;
   }
 }

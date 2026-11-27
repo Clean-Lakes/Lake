@@ -4,6 +4,7 @@ import {ProviderIcon} from "./ProviderIcon";
 import {Glyph} from "./Icons";
 import {SaveAction} from "./SaveAction";
 import {AppSelect} from "./AppSelect";
+import {TabSelectionIndicator} from "./TabSelectionIndicator";
 import {useAutoRefresh} from "./useAutoRefresh";
 import {reuseUnchanged} from "./snapshotUpdates";
 import {useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type Ref} from "react";
@@ -480,7 +481,7 @@ function AppearanceSettings() {
   const [preference, setPreference] = useState<ThemePreference>(themePreference);
   return <section id="appearance-settings-panel" role="tabpanel" aria-labelledby="appearance-settings-tab" className="model-conversation">
     <WorkspaceSettingSection id="appearance-theme-title" title="工作台主题">
-      <div className="theme-options workspace-setting-card" role="radiogroup" aria-labelledby="appearance-theme-title">{([['light','浅色'],['dark','深色'],['system','跟随系统']] as const).map(([value,label]) => <button key={value} type="button" role="radio" aria-checked={preference===value} className="theme-choice" tabIndex={preference===value ? 0 : -1} onKeyDown={event => { if (!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key)) return; event.preventDefault(); const values:ThemePreference[]=["light","dark","system"]; const next=values[(values.indexOf(value)+(event.key==="ArrowLeft"||event.key==="ArrowUp"?2:1))%3]!; setPreference(next); setThemePreference(next); const buttons=event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("button"); buttons?.[values.indexOf(next)]?.focus(); }} onClick={() => { setPreference(value); setThemePreference(value); }}><span className="theme-preview" data-preview={value} aria-hidden="true"><i/><span/></span><strong>{label}</strong>{preference===value&&<Glyph name="check" size={16}/>}</button>)}</div>
+      <div className="theme-options workspace-setting-card" role="radiogroup" aria-labelledby="appearance-theme-title">{([['light','浅色'],['dark','深色'],['system','跟随系统']] as const).map(([value,label]) => <button key={value} type="button" role="radio" aria-checked={preference===value} className="theme-choice" tabIndex={preference===value ? 0 : -1} onKeyDown={event => { if (!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key)) return; event.preventDefault(); const values:ThemePreference[]=["light","dark","system"]; const next=values[(values.indexOf(value)+(event.key==="ArrowLeft"||event.key==="ArrowUp"?2:1))%3]!; setPreference(next); setThemePreference(next); const buttons=event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("button"); buttons?.[values.indexOf(next)]?.focus(); }} onClick={() => { setPreference(value); setThemePreference(value); }}><span className="theme-preview" data-preview={value} aria-hidden="true"><i/><span/></span><strong>{label}</strong>{preference===value&&<Glyph name="check" size={16}/>}</button>)}<TabSelectionIndicator selection={preference} selector='.theme-choice[aria-checked="true"]'/></div>
     </WorkspaceSettingSection>
   </section>;
 }

@@ -1,27 +1,38 @@
 import {useLayoutEffect,useRef} from "react";
+import {alignSelectionIndicator,cancelSelectionMotion,type SelectionAxis} from "./selectionMotion";
 
-/** Paint the selection without moving or re-rendering the tab buttons. */
-export function TabSelectionIndicator({selection}:{selection:string|boolean}) {
+/** Paint the selection with the shared spring without moving or re-rendering buttons. */
+export function TabSelectionIndicator({
+  selection,
+  selector='[role="tab"][aria-selected="true"]',
+  axis='both',
+  className='',
+}:{
+  selection:string|boolean|null|undefined;
+  selector?:string;
+  axis?:SelectionAxis;
+  className?:string;
+}) {
   const indicator=useRef<HTMLSpanElement>(null);
+  useLayoutEffect(()=>{
+    const line=indicator.current;
+    return()=>{if(line)cancelSelectionMotion(line);};
+  },[]);
   useLayoutEffect(()=>{
     const line=indicator.current;
     const list=line?.parentElement;
     if(!line||!list)return;
-    const tab=list.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
-    if(!tab)return;
-    const place=()=>{
-      line.style.setProperty("--tab-selection-left",`${tab.offsetLeft}px`);
-      line.style.setProperty("--tab-selection-top",`${tab.offsetTop}px`);
-      line.style.setProperty("--tab-selection-width",`${tab.offsetWidth}px`);
-      line.style.setProperty("--tab-selection-height",`${tab.offsetHeight}px`);
-      line.dataset.ready="true";
+    const target=()=>list.querySelector<HTMLElement>(selector);
+    const sync=(animate:boolean)=>{
+      alignSelectionIndicator(list,line,target(),{axis,animate,key:String(selection??'')});
     };
-    place();
-    const resize=new ResizeObserver(place);
+    sync(true);
+    const resize=new ResizeObserver(()=>sync(false));
     resize.observe(list);
-    // A preceding label can resize without changing the selected label's width.
-    for(const button of list.querySelectorAll('[role="tab"]'))resize.observe(button);
+    for(const child of list.children){
+      if(child!==line&&child instanceof HTMLElement)resize.observe(child);
+    }
     return()=>resize.disconnect();
-  },[selection]);
-  return <span ref={indicator} className="tab-selection-indicator" aria-hidden="true"/>;
+  },[selection,selector,axis]);
+  return <span ref={indicator} className={className?`tab-selection-indicator ${className}`:"tab-selection-indicator"} data-axis={axis} aria-hidden="true"/>;
 }

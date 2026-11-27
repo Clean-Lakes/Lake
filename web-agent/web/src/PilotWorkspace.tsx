@@ -8,6 +8,7 @@ import {conversationAvatarMotion,superAvatarMotion,channelTaskPresentation,speci
 import {Glyph} from './Icons';
 import {NavigationMenu} from './NavigationDelete';
 import {SpecialistDelete} from './SpecialistDelete';
+import {TabSelectionIndicator} from './TabSelectionIndicator';
 import {SidebarPilotEntry} from './SidebarPilotEntry';
 import {AgentBackendLogo,agentTypeName} from './AgentBackendLogo';
 import {reuseUnchanged} from './snapshotUpdates';
@@ -236,10 +237,13 @@ function SpecialistNameBubble({name,target,onClose}:{name:string;target:HTMLButt
 
 export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotButton,pilotActivity='idle',pilotDisabled=false,onPilot,onWorker,onChannel,disabled=false,onDeleted,onCodexSettings,showHeading=true,presentation='list'}: PilotWorkspaceProps) {
  const [menu,setMenu]=useState<SpecialistChannelInfo|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null);
+ const lastMenu=useRef<SpecialistChannelInfo|null>(null);
+ if(menu)lastMenu.current=menu;
+ const renderedMenu=menu??lastMenu.current;
  const [nameHint,setNameHint]=useState<{id:string;target:HTMLButtonElement}|null>(null);
  const anchor=useRef<HTMLButtonElement|null>(null);
  const closeNameHint=useCallback(()=>setNameHint(null),[]);
- useEffect(()=>{setMenu(null);setDeleting(null);closeNameHint();},[workspace?.project.projectId,closeNameHint]);
+ useEffect(()=>{lastMenu.current=null;setMenu(null);setDeleting(null);closeNameHint();},[workspace?.project.projectId,closeNameHint]);
  const roots = workspace?.active?workspace.workers.filter(worker => !worker.parentWorkerId):[];
  const channels = workspace?.active?workspace.channels:undefined;
  const viewedRole = selectedId ? selectedRoleId ?? channels?.find(channel => channel.sessionId === selectedId)?.roleId ??
@@ -330,12 +334,13 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
     </span>}
    </button>;
   })}
+  {rail&&<TabSelectionIndicator className="sidebar-specialist-selection" selection={viewedRole??''} selector='.sidebar-specialist-button[aria-current="page"]'/>}
   {rail&&nameHint&&hintedName&&<SpecialistNameBubble key={nameHint.id} name={hintedName} target={nameHint.target} onClose={closeNameHint}/>}
-  {menu&&<NavigationMenu key={menu.id} title={menu.roleName} placement="beside" anchor={anchor} className="specialist-context-menu"
-   headerIcon={<SuperRoleAvatar name={menu.roleName} roleId={menu.roleId} avatarId={menu.avatarId} motion="still" size={19}/>}
+  {renderedMenu&&<NavigationMenu key={renderedMenu.id} open={Boolean(menu)} title={renderedMenu.roleName} placement="beside" anchor={anchor} className="specialist-context-menu"
+   headerIcon={<SuperRoleAvatar name={renderedMenu.roleName} roleId={renderedMenu.roleId} avatarId={renderedMenu.avatarId} motion="still" size={19}/>}
    onClose={()=>setMenu(null)} actions={[
-   ...(onCodexSettings?[{label:'模型配置',icon:'filter' as const,trailingIcon:'next' as const,disabled,run:()=>onCodexSettings(menu.projectId,anchor.current)}]:[]),
-   {label:'删除专员',icon:'trash',separatorBefore:true,danger:true,disabled:disabled||menu.roleRevision===undefined,run:()=>setDeleting(menu)},
+   ...(onCodexSettings?[{label:'模型配置',icon:'filter' as const,trailingIcon:'next' as const,disabled,run:()=>onCodexSettings(renderedMenu.projectId,anchor.current)}]:[]),
+   {label:'删除专员',icon:'trash',separatorBefore:true,danger:true,disabled:disabled||renderedMenu.roleRevision===undefined,run:()=>setDeleting(renderedMenu)},
   ]}/>}
   {deleting&&<SpecialistDelete channel={deleting} returnFocus={anchor} onClose={()=>setDeleting(null)} onDeleted={()=>{
    onDeleted?.(deleting);

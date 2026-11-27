@@ -2,6 +2,7 @@ import { useId, useLayoutEffect, useRef, useState, type RefObject } from "react"
 import { createPortal } from "react-dom";
 import { Glyph } from "./Icons";
 import {DisclosureSummary} from "./DisclosureSummary";
+import { useMenuMotion } from "./useMenuMotion";
 
 import {permissionDefaults} from '../../shared/execution-preferences';
 export {permissionDefaults} from '../../shared/execution-preferences';
@@ -21,9 +22,9 @@ const groups: Array<{title: string; showTitle?: boolean; fields: Array<{key: key
   ]},
 ];
 
-export function PermissionSettings({anchor, options, disabled, saving=false, error, onChange, onClose}: {
+export function PermissionSettings({anchor, options, open=true, disabled, saving=false, error, onChange, onClose}: {
   anchor: RefObject<HTMLButtonElement | null>;
-  options: Record<string, unknown>; disabled: boolean; saving?: boolean; error?: string;
+  options: Record<string, unknown>; open?: boolean; disabled: boolean; saving?: boolean; error?: string;
   onChange: (key: string, value: boolean) => void; onClose: () => void;
 }) {
   const panel = useRef<HTMLElement>(null);
@@ -32,6 +33,7 @@ export function PermissionSettings({anchor, options, disabled, saving=false, err
   close.current = onClose;
   const [position, setPosition] = useState<{left: number; top?: number; bottom?: number; maxHeight: number}>();
   useLayoutEffect(() => {
+    if (!open) return;
     const trigger = anchor.current;
     const content = panel.current;
     if (!trigger || !content) return;
@@ -89,11 +91,14 @@ export function PermissionSettings({anchor, options, disabled, saving=false, err
       document.removeEventListener("keydown", keyboard);
       document.removeEventListener("focusin", dismissOutside);
     };
-  }, [anchor]);
+  }, [anchor, open]);
+  const retain = useMenuMotion(panel, open && Boolean(position), true);
+  if (!open && !retain) return null;
 
   return createPortal(
     <section ref={panel} className="permission-popover" role="dialog" aria-labelledby={`${id}-title`}
-      style={position ?? {visibility: "hidden"}}>
+      data-menu-motion="true" inert={!open} aria-hidden={!open || undefined}
+      style={position ? {...position, transformOrigin: position.bottom !== undefined ? "left bottom" : "left top"} : {visibility: "hidden"}}>
       <header className="permission-header">
         <strong id={`${id}-title`}>执行偏好</strong>
         <span className="permission-save-state" role="status">{saving && "正在保存…"}</span>

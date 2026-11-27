@@ -18,6 +18,9 @@ export function ProjectChatCreation({projectId,channels,compact,disabled,groupsR
 }) {
  const id=useId(),trigger=useRef<HTMLButtonElement>(null);
  const [menu,setMenu]=useState<{x:number;y:number}|null>(null);
+ const lastMenu=useRef<{x:number;y:number}|null>(null);
+ if(menu)lastMenu.current=menu;
+ const renderedMenu=menu??lastMenu.current;
  const [form,setForm]=useState<'specialist'|'group'|null>(null);
  const closeForm=()=>setForm(null);
 
@@ -29,7 +32,7 @@ export function ProjectChatCreation({projectId,channels,compact,disabled,groupsR
       const headerLeft=event.currentTarget.closest('.sidebar-brand-row')?.getBoundingClientRect().left??0;
       setMenu(current=>current?null:{x:compact?bounds.right+6:Math.max(headerLeft,bounds.right-menuWidth),y:compact?bounds.top:bounds.bottom+6});
     }}><Glyph name="plus" size={18}/></button>
-  {menu&&<NavigationMenu id={id} title="项目新建" className="project-chat-creation-menu" width={menuWidth} x={menu.x} y={menu.y}
+  {renderedMenu&&<NavigationMenu id={id} open={!!menu} title="项目新建" className="project-chat-creation-menu" width={menuWidth} x={renderedMenu.x} y={renderedMenu.y}
     anchor={trigger} onClose={()=>setMenu(null)} actions={[
     {label:'新建专员',icon:'lakeSpecialists',disabled,run:()=>setForm('specialist')},
     {label:'新建群组',icon:'users',disabled:disabled||!groupsReady,run:()=>setForm('group')},
