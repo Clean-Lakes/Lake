@@ -17,8 +17,7 @@
   background:var(--surface-hover); color:var(--text-secondary); font:inherit; font-size:var(--font-size-toolbar);
   text-align:start; cursor:pointer;
 }
-.chat-group-start-member > svg { flex:none; }
-.chat-group-start-member > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.chat-group-start-member-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .chat-group-start-member:hover:enabled { background:var(--surface-selected); color:var(--foreground); }
 .chat-group-start-member[data-selected] {
   background:color-mix(in srgb,var(--pilot-wordmark-active) 12%,var(--surface-hover)); color:var(--pilot-wordmark-active);

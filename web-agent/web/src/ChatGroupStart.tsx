@@ -1,8 +1,9 @@
 import {useId} from 'react';
-import {Glyph} from './Icons';
+import {SuperRoleAvatar} from './SuperRoleAvatar';
+import type {LakeAvatarName} from './lakeAvatarCatalog';
 
 export function ChatGroupStart({members,disabled,inert,onMention}:{
- members:readonly {roleId:string;roleName:string;selected:boolean}[];
+ members:readonly {roleId:string;roleName:string;avatarId?:LakeAvatarName;selected:boolean}[];
  disabled:boolean;
  inert:boolean;
  onMention:(roleId:string,origin:DOMRectReadOnly)=>void;
@@ -15,7 +16,8 @@ export function ChatGroupStart({members,disabled,inert,onMention}:{
     title={member.roleName} aria-label={member.selected?`定位${member.roleName}引用`:`提及${member.roleName}`}
     data-selected={member.selected||undefined} disabled={disabled}
     onClick={event=>onMention(member.roleId,event.currentTarget.getBoundingClientRect())}>
-    <Glyph name="at" size={13}/><span>{member.roleName}</span>
+    <SuperRoleAvatar roleId={member.roleId} name={member.roleName} avatarId={member.avatarId} size={18} motion="still"/>
+    <span className="chat-group-start-member-name">{member.roleName}</span>
    </button>)}
   </div>
  </section>;

@@ -1956,7 +1956,7 @@ function AppContent() {
   const hasConversationItems=!!(itemList.length||activeSnapshot?.ai?.cards.length||activeSnapshot?.superagent||activeSnapshot?.sre?.tasks.length||activeSnapshot?.ai?.operationOutcomes?.length);
   const groupStartMembers=activeSnapshot&&!hasConversationItems&&!historyPending?(selectedChatGroup?.members??[]).flatMap(member=>{
     const channel=mentionSpecialists?.find(item=>item.roleId===member.roleId);
-    return channel&&!member.unavailable?[{roleId:member.roleId,roleName:channel.roleName,
+    return channel&&!member.unavailable?[{roleId:member.roleId,roleName:channel.roleName,avatarId:channel.avatarId??member.avatarId,
       selected:mentionRefs.some(ref=>ref.kind==='role'&&ref.resourceId===member.roleId)}]:[];
   }):[];
   const emptyConversation=isChatGroup?null:<div className={selectedSuperPilot?"timeline-empty is-pilot":"timeline-empty"}>
