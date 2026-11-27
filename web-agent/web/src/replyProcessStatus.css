@@ -23,6 +23,7 @@
  margin-block-start:calc(8px - var(--turn-entry-gap,12px));
 }
 .ai-role-assistant > .reply-duration.reply-footer,
+.ai-role-assistant > .pilot-report-fold > .pilot-report-strip > .reply-footer,
 .reply-duration.reply-process-text.specialist-process-link { margin-block-start:8px; }
 .reply-duration:is(.reply-footer,.specialist-process-link) > .turn-duration-disclosure {
  width:auto; min-height:24px; gap:5px; white-space:nowrap; color:var(--reply-process-ink);

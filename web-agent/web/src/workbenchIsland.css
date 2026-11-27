@@ -38,7 +38,7 @@
  transition:inset-inline-start var(--workbench-sidebar-duration) var(--workbench-sidebar-ease),
   opacity var(--workbench-sidebar-duration) var(--workbench-sidebar-ease);
 }
-.app-shell.has-collapsed-sidebar .island-navigation-divider { opacity:1; }
+.app-shell.has-workbench-conversation.has-collapsed-sidebar .island-navigation-divider { opacity:1; }
 .app-shell.has-docked-conversation .island-navigation-divider { transition:none; }
 @media(prefers-reduced-motion:reduce) {
  .app-shell:is(.has-workbench-conversation,.has-docked-conversation) .island-conversation { transition:none!important; }

@@ -1,11 +1,11 @@
-import {useEffect,useRef,useState,type PointerEvent} from "react";
+import {useEffect,useLayoutEffect,useRef,useState,type PointerEvent} from "react";
 import {api,readableError} from "./api";
-import {Glyph,ResourceIcon} from "./Icons";
+import {Glyph,ResourceIcon,type GlyphName} from "./Icons";
 import {RoleMentionAvatar} from './RoleMentionAvatar';
 import {TabSelectionIndicator} from "./TabSelectionIndicator";
 import {useMenuMotion} from "./useMenuMotion";
 import type {MCPServerConfig,SkillConfig} from "../../shared/contracts";
-import {visibleMentionCategories,mentionCategoryCount,mentionTypeLabel,type MentionCategory,type MentionOption} from "./composerMentionState";
+import {visibleMentionCategories,mentionTypeLabel,type MentionCategory,type MentionOption} from "./composerMentionState";
 import "./composerMentions.css";
 
 export function useMentionExtensions(open:boolean,sessionId:string|null) {
@@ -25,9 +25,53 @@ export function useMentionExtensions(open:boolean,sessionId:string|null) {
  return {...catalog,loading,error,reload:()=>reload(value=>value+1)};
 }
 export const mentionOptionId=(option:MentionOption)=>`composer-mention-${option.kind}-${encodeURIComponent(option.id)}`;
-export function ComposerMentions({options,allOptions,index,category,onCategory,onActive,onSelect,loading,error,onReload,onImport,onClose}:{options:MentionOption[];allOptions:MentionOption[];index:number;category:MentionCategory;onCategory:(kind:MentionCategory)=>void;onActive:(index:number)=>void;onSelect:(option:MentionOption)=>void;loading:boolean;error:string;onReload:()=>void;onImport:()=>void;onClose:()=>void}) {
- const list=useRef<HTMLDivElement>(null),menu=useRef<HTMLDivElement>(null);
+
+const categoryGlyphs: Record<MentionCategory,GlyphName> = {
+ all: "listTasks", role: "lakeSpecialists", resource: "lakeResources",
+ jumpserver: "shield", skill: "book", mcp: "plug",
+};
+const emptyMessages: Partial<Record<MentionCategory,string>> = {
+ jumpserver: "没有匹配的 JumpServer 资产",
+ skill: "没有匹配的已启用 Skill",
+ mcp: "没有匹配的已启用 MCP 服务",
+};
+
+function revealActiveItem(scroller: HTMLDivElement|null, selector: string) {
+ const item=scroller?.querySelector<HTMLButtonElement>(selector);
+ if(!scroller||!item)return;
+ const top=item.offsetTop, bottom=top+item.offsetHeight;
+ // Keep automatic scrolling inside the picker, even when it overlays the transcript.
+ if(top<scroller.scrollTop)scroller.scrollTop=top;
+ else if(bottom>scroller.scrollTop+scroller.clientHeight)scroller.scrollTop=bottom-scroller.clientHeight;
+}
+
+type ComposerMentionsProps = {
+ options: MentionOption[];
+ allOptions: MentionOption[];
+ index: number;
+ query: string;
+ category: MentionCategory;
+ onCategory: (kind: MentionCategory)=>void;
+ onActive: (index: number)=>void;
+ onSelect: (option: MentionOption)=>void;
+ loading: boolean;
+ error: string;
+ onReload: ()=>void;
+ onImport: ()=>void;
+ onClose: ()=>void;
+ onFocusInput: ()=>void;
+};
+
+export function ComposerMentions({
+ options, allOptions, index, query, category, onCategory, onActive, onSelect,
+ loading, error, onReload, onImport, onClose, onFocusInput,
+}: ComposerMentionsProps) {
+ const list=useRef<HTMLDivElement>(null),menu=useRef<HTMLDivElement>(null),categories=useRef<HTMLDivElement>(null);
  const pointer=useRef<{x:number;y:number}|null>(null);
+ const activeOption=options[index];
+ const activeId=activeOption&&mentionOptionId(activeOption);
+ const activeDetail=activeOption&&(activeOption.detail||mentionTypeLabel(activeOption));
+
  function activate(event:PointerEvent<HTMLButtonElement>,next:number){
   if(event.pointerType==='touch')return;
   const previous=pointer.current,moved=!previous||previous.x!==event.clientX||previous.y!==event.clientY;
@@ -41,16 +85,76 @@ export function ComposerMentions({options,allOptions,index,category,onCategory,o
   document.addEventListener("mousedown",close);document.addEventListener("focusin",close);
   return()=>{document.removeEventListener("mousedown",close);document.removeEventListener("focusin",close);};
  },[onClose]);
- useEffect(()=>{list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({block:"nearest"});},[index,options]);
  useMenuMotion(menu,true,true);
- return <div ref={menu} className="mention-menu composer-mentions" data-menu-motion="true" style={{transformOrigin:"bottom left"}} aria-label={allOptions.some(o=>o.kind==="role")?"引用资源、JumpServer 资产、专员、Skills 或 MCP":"引用资源、JumpServer 资产、Skills 或 MCP"} onMouseDown={event=>event.preventDefault()}
-  onKeyDown={event=>{if(event.key==="Escape"){event.preventDefault();event.stopPropagation();onClose();document.getElementById("message-input")?.focus({preventScroll:true});}}}>
-  <div className="mention-categories" role="group" aria-label="引用类型">{visibleMentionCategories(allOptions).map(group=><button key={group.kind} type="button" aria-pressed={group.kind===category} onClick={()=>onCategory(group.kind)}>{group.label}<small>{mentionCategoryCount(allOptions,group.kind)}</small></button>)}<TabSelectionIndicator selection={category} selector='button[aria-pressed="true"]'/></div>
-  <div className="mention-results" id="composer-mention-options" ref={list} role="listbox" aria-label="引用候选" aria-busy={loading}>
-   {options.map((option,i)=><button key={`${option.kind}:${option.id}`} id={mentionOptionId(option)} tabIndex={-1} type="button" role="option" aria-selected={i===index} className={`mention-item ${i===index?"selected":""}`} onPointerEnter={event=>activate(event,i)} onPointerMove={event=>activate(event,i)} onClick={()=>onSelect(option)}>{option.kind==="role"?<RoleMentionAvatar id={option.id} name={option.name} size={18}/>:option.kind==='resource'?<ResourceIcon kind={option.fromJumpServer ? "jumpserver" : option.resourceKind ?? "ssh"} size={16}/>:<Glyph name={option.kind==="skill"?"book":"plug"} size={16}/>}<span className="mention-copy"><strong title={option.name}>{option.name}</strong><small title={option.detail}>{option.detail}</small></span><span className="mention-kind">{mentionTypeLabel(option)}</span></button>)}
-   {!options.length&&<p className="mention-empty">{loading?"正在加载…":category==="jumpserver"?"没有匹配的 JumpServer 资产":category==="skill"?"没有匹配的已启用 Skill":category==="mcp"?"没有匹配的已启用 MCP 服务":"没有匹配的引用"}</p>}
+ useLayoutEffect(()=>revealActiveItem(list.current,'[aria-selected="true"]'),[activeId,index,category,query,error]);
+ useLayoutEffect(()=>revealActiveItem(categories.current,'[aria-pressed="true"]'),[category]);
+
+ function dismiss() {
+  onClose();
+  onFocusInput();
+ }
+
+ return <div ref={menu} className="mention-menu composer-mentions" data-menu-motion="true" style={{transformOrigin:"bottom left"}} role="group" aria-label="插入引用"
+  onMouseDown={event=>event.preventDefault()} onKeyDown={event=>{
+   if(event.key!=="Escape")return;
+   event.preventDefault();
+   event.stopPropagation();
+   dismiss();
+  }}>
+  <div className="mention-header">
+   <strong className="mention-title"><Glyph name="at" size={15}/>插入引用</strong>
+   <button type="button" className="mention-query" aria-label="在输入框中搜索引用" onClick={onFocusInput}
+    data-filled={!!query||undefined} title={query||"名称、地址或类型"}>
+    <Glyph name="search" size={13}/><span>{query||"名称、地址或类型"}</span>
+   </button>
+   <button type="button" className="mention-close" aria-label="关闭引用" title="关闭引用 · Esc" onClick={dismiss}>
+    <Glyph name="close" size={14}/>
+   </button>
   </div>
-  {error&&<div className="mention-error" role="status">{error}<button type="button" onClick={onReload}>重试</button></div>}
-  <div className="mention-footer"><span className="mention-shortcuts"><span>←→ 分类</span>{" "}<span>↑↓ 选择</span>{" "}<span>Tab / Enter 引用</span></span>{(category==="all"||category==="resource")&&<button type="button" onClick={onImport}><Glyph name="plus" size={13}/>导入资源</button>}</div>
+  <div className="mention-columns">
+   <div className="mention-categories" ref={categories} role="group" aria-label="引用分类">
+    {visibleMentionCategories(allOptions).map(group=><button key={group.kind} type="button"
+     data-category={group.kind} aria-pressed={group.kind===category}
+     onClick={()=>{onCategory(group.kind);onFocusInput();}}>
+     <Glyph name={categoryGlyphs[group.kind]} size={15}/><span>{group.label}</span>
+    </button>)}
+    <TabSelectionIndicator selection={category} selector='button[aria-pressed="true"]'/>
+   </div>
+   <div className="mention-result-pane">
+    {error&&<div className="mention-error">
+     <span role="status" title={error}>{error}</span>
+     <button type="button" onClick={()=>{onReload();onFocusInput();}}>重试</button>
+    </div>}
+    <div className="mention-results" id="composer-mention-options" ref={list} role="listbox" aria-label="引用候选" aria-busy={loading}>
+     {options.map((option,i)=>{
+      const type=mentionTypeLabel(option);
+      return <button key={`${option.kind}:${option.id}`} id={mentionOptionId(option)} tabIndex={-1} type="button"
+       role="option" aria-selected={i===index} aria-label={`${option.name}，${type}`}
+       aria-describedby={i===index?"composer-mention-detail":undefined} className="mention-item"
+       onPointerEnter={event=>activate(event,i)} onPointerMove={event=>activate(event,i)} onClick={()=>onSelect(option)}>
+       {option.kind==="role"?<RoleMentionAvatar id={option.id} name={option.name} size={18}/>
+        :option.kind==="resource"?<ResourceIcon kind={option.fromJumpServer?"jumpserver":option.resourceKind??"ssh"} size={16}/>
+        :<Glyph name={option.kind==="skill"?"book":"plug"} size={16}/>}
+       <span className="mention-name" title={option.name}>{option.name}</span>
+       <span className="mention-kind">{type}</span>
+      </button>;
+     })}
+     {!options.length&&<p className="mention-empty" role="status">
+      {loading?"正在加载…":emptyMessages[category]??"没有匹配的引用"}
+     </p>}
+    </div>
+    <div className="mention-detail" id="composer-mention-detail" title={activeDetail}>{activeDetail}</div>
+   </div>
+  </div>
+  <div className="mention-footer">
+   <div className="mention-shortcuts" aria-hidden="true">
+    <span className="mention-category-shortcut"><kbd>←</kbd><kbd>→</kbd> 分类</span>
+    <span className="mention-move-shortcut"><kbd>↑</kbd><kbd>↓</kbd> 选择</span>
+    <span><kbd>Tab</kbd><kbd>↵</kbd> 引用</span>
+   </div>
+   {(category==="all"||category==="resource")&&<button type="button" onClick={onImport}>
+    <Glyph name="plus" size={13}/>导入资源
+   </button>}
+  </div>
  </div>;
 }

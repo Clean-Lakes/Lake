@@ -1,7 +1,7 @@
 package web
 
 import (
-	"github.com/Clean-Lakes/Lake/internal/ai"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,6 +9,9 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/Clean-Lakes/Lake/internal/ai"
 )
 
 func TestModelSyncFollowsMagpieCatalogAndDefaultWithoutChangingSource(t *testing.T) {
@@ -84,5 +87,58 @@ func TestModelSyncWithoutConfiguredCatalogDoesNotDiscoverOrWrite(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(b.Models.Dir, "providers.json")); !os.IsNotExist(err) {
 		t.Fatal("polling created a provider catalog")
+	}
+	id, _ := newSession(t, h)
+	state := apiTest(t, h, "POST", "/api/sessions/"+id+"/ai/model", Object{"name": "legacy-alternate"}, 200)
+	if state["modelName"] != "legacy-alternate" || b.Models.Active().Name != "legacy" || requests.Load() != 0 {
+		t.Fatal("a legacy selection changed the configured default or contacted the provider")
+	}
+}
+
+func TestSessionModelChoiceIsUsedForGoConversationRequests(t *testing.T) {
+	home := t.TempDir()
+	b, h := fixtureAtHome(t, home)
+	first, _ := newSession(t, h)
+	second, _ := newSession(t, h)
+	requests := make(chan Object, 8)
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			reply(w, 200, Object{"data": []Object{}})
+			return
+		}
+		var request Object
+		if json.NewDecoder(r.Body).Decode(&request) == nil {
+			requests <- request
+		}
+		emitModel(w, "已收到。", nil)
+	}))
+	defer provider.Close()
+	models := []Object{
+		{"id": "default", "name": "fixture-default", "enabled": true, "imageInputMode": "off"},
+		{"id": "alternate", "name": "deepseek-flash", "enabled": true, "imageInputMode": "off"},
+	}
+	saved := apiTest(t, h, "POST", "/api/settings/providers", Object{"name": "Fixture", "baseURL": provider.URL + "/v1", "protocol": "openai", "models": models}, 201)
+	providerID := saved["savedProviderId"]
+	apiTest(t, h, "POST", "/api/settings/model/select", Object{"providerId": providerID, "modelId": "default"}, 200)
+	base := "/api/sessions/" + first
+	choice := apiTest(t, h, "POST", base+"/ai/model", Object{"providerId": providerID, "modelId": "alternate"}, 200)
+	apiTest(t, h, "POST", base+"/ai/reasoning", Object{"modelId": choice["modelId"], "effort": "max"}, 200)
+	if state := apiTest(t, h, "GET", "/api/settings/model/state?sessionId="+first, nil, 200); state["modelName"] != "fixture-default" || object(state["sessionModel"])["modelName"] != "deepseek-flash" {
+		t.Fatalf("settings could not distinguish the conversation and default models: %v", state)
+	}
+	h.Close()
+	b.Close()
+	b, h = fixtureAtHome(t, home)
+	for _, expected := range []struct{ id, name, effort string }{{first, "deepseek-flash", "max"}, {second, "fixture-default", ""}} {
+		apiTest(t, h, "POST", "/api/sessions/"+expected.id+"/messages", Object{"text": "你好", "ignoreProjectMemory": true}, 202)
+		select {
+		case request := <-requests:
+			if request["model"] != expected.name || stringOf(request["reasoning_effort"]) != expected.effort {
+				t.Fatalf("conversation request used %q / %q, want %q / %q", stringOf(request["model"]), stringOf(request["reasoning_effort"]), expected.name, expected.effort)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("missing conversation request")
+		}
+		b.workers.Wait()
 	}
 }

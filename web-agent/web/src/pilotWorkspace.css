@@ -33,8 +33,8 @@
  corner-shape:var(--corner-window);
 }
 .sidebar.workspace-navigation .pilot-workspace .sidebar-pilot-entry {
- min-height:var(--sidebar-rail-button-size);
- padding-block:4px;
+ min-height:48px;
+ padding-block:8px;
 }
 .sidebar.workspace-navigation .pilot-workspace .nav-row:hover { background:color-mix(in srgb,var(--foreground) 4%,transparent); }
 .sidebar.workspace-navigation .pilot-workspace .nav-row[aria-current=page] { background:color-mix(in srgb,var(--info) 11%,transparent); }
@@ -62,12 +62,12 @@
  margin-block:var(--sidebar-specialist-divider-inset) 5px;
  background:var(--border);
 }
+.sidebar-specialist-create { color:var(--pilot-header-muted); }
+.sidebar-specialist-create:hover:not(:disabled) { color:var(--foreground); }
+.sidebar-specialist-create:disabled { opacity:.45; cursor:default; }
 .modal.specialist-create-dialog {
  width:min(416px,calc(100vw - 32px));
- margin:auto;
 }
-.specialist-create-dialog:not([open]) { display:none; }
-.specialist-create-dialog::backdrop { background:var(--overlay); }
 .specialist-create-dialog .app-select-trigger { height:40px; }
 .specialist-create-dialog textarea {
  display:block;

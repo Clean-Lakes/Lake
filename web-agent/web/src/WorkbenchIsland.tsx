@@ -85,13 +85,11 @@ export function WorkbenchIsland({conversation,terminal,activity,terminalOpen,pil
    const conversationTop=dockedPane?workspaceBounds.top-base.top+parseFloat(workspaceStyle.getPropertyValue('--conversation-island-top')):frameInset?workspaceBounds.top-base.top+parseFloat(workspaceStyle.borderTopWidth)+parseFloat(workspaceStyle.paddingTop)+frameInset:top;
    const paneLeft=dockedPane?workspaceBounds.left+parseFloat(workspaceStyle.getPropertyValue('--conversation-header-inset')):bounds.left+(frameInset?frameInset*2:48);
    const navigation=shell.querySelector<HTMLElement>('.workbench-navigation');
-   const toolbar=navigation?.getBoundingClientRect();
    const navigationStart=parseFloat(shellStyle.getPropertyValue('--workbench-navigation-start'))||0;
    const navigationWidth=collapsed&&navigation?
     parseFloat(getComputedStyle(navigation).minInlineSize)+2*parseFloat(shellStyle.getPropertyValue('--workbench-navigation-island-padding')):0;
    const readingLeft=(reading?.left??paneLeft)-base.left;
-   const left=collapsed?Math.max(readingLeft,navigationStart):
-    toolbar&&toolbar.bottom>base.top+conversationTop?Math.max(readingLeft,toolbar.right-base.left+12):readingLeft;
+   const left=collapsed?Math.max(readingLeft,navigationStart):readingLeft;
    const actionsSpace=dockedPane?parseFloat(workspaceStyle.getPropertyValue('--conversation-header-actions-offset'))+12:0;
    const paneRight=dockedPane?bounds.right-actionsSpace:frameInset?bounds.right-frameInset*2:reading?.right??bounds.right-48;
    const right=paneRight-base.left;

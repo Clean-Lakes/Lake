@@ -482,15 +482,10 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if name == "/api/bootstrap" && method == "GET" {
 		http.SetCookie(w, &http.Cookie{Name: "lake_web_token", Value: b.token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
 		model, selection := b.Models.ActiveSelection()
-		var modelName any
-		var modelID any
-		imageInput := false
-		if model != nil {
-			modelName = model.Name
-			modelID = ai.ModelIdentity(*model)
-			imageInput = model.SupportsImageInput
-		}
-		reply(w, 200, Object{"authenticated": true, "modelConfigured": model != nil, "modelName": modelName, "modelId": modelID, "modelSelection": selection, "supportsImageInput": imageInput, "terminalMode": "pty", "aiRuntime": "go", "backendRuntime": "go", "recoveryReadOnly": b.securityRuntime != nil && b.securityRuntime.ReadOnlyView()})
+		state := modelDisplayState(model, selection)
+		state["authenticated"], state["terminalMode"], state["aiRuntime"], state["backendRuntime"] = true, "pty", "go", "go"
+		state["recoveryReadOnly"] = b.securityRuntime != nil && b.securityRuntime.ReadOnlyView()
+		reply(w, 200, state)
 		return
 	}
 	if b.pilotSettingsRoute(w, r, name, method) {
@@ -575,7 +570,11 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if name == "/api/settings/model/state" && method == "GET" {
-		reply(w, 200, b.Models.SyncState())
+		state := b.Models.SyncState()
+		if model := b.sessionModelState(r.URL.Query().Get("sessionId")); model != nil {
+			state["sessionModel"] = model
+		}
+		reply(w, 200, state)
 		return
 	}
 	if name == "/api/settings/model/available" && method == "GET" {
@@ -622,6 +621,10 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parts := strings.Split(strings.Trim(name, "/"), "/")
+	if len(parts) == 3 && parts[0] == "api" && parts[1] == "projects" && method == "PATCH" {
+		reply(w, 200, b.Store.RenameProject(parts[2], text(body(w, r, 16384)["name"], "name", 120)))
+		return
+	}
 	if len(parts) == 3 && parts[0] == "api" && parts[1] == "resources" && method == "PATCH" {
 		b.editTerminalResourceRoute(w, r, parts[2])
 		return
@@ -1005,6 +1008,10 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 				if op == "reasoning" {
 					reply(w, 200, b.setReasoning(r.Context(), id, body(w, r, 16384)))
+					return
+				}
+				if op == "model" {
+					reply(w, 200, b.selectSessionModel(id, body(w, r, 16384)))
 					return
 				}
 				if op == "configure" {

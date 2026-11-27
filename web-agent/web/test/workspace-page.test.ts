@@ -17,7 +17,7 @@ css.deregister();
 const project:Project={id:'p',name:'测试项目',createdAt:'2026-11-23T01:00:00Z'};
 const noop=()=>{};
 const props={connected:true, projects:[project], resources:[{projectId:project.id}], bulkSelectedCount:0,
- onOpenProject:noop, onCreateProject:noop, onDeleteProject:noop,
+ onOpenProject:noop, onCreateProject:noop, onRenameProject:async()=>{}, onDeleteProject:noop,
  onToggleBulk:noop, onClearSelection:noop, onDeleteSelected:noop};
 
 const workspaceViews=['workspace','settings','updates'] as const;
@@ -75,16 +75,18 @@ test('memory and watchdog settings are absent from the console and category sear
 
 test('workspace actions render in the page, including a creation path for an empty workspace',()=>{
  const html=renderToStaticMarkup(createElement(WorkspacePage,{...props,project}));
- for(const label of ['当前项目',project.name,'新建项目','批量管理','删除项目','打开当前项目','搜索项目'])assert.ok(html.includes(label),label);
+ for(const label of ['当前项目',project.name,'新建项目','批量管理','重命名','删除项目','打开当前项目','搜索项目'])assert.ok(html.includes(label),label);
  assert.match(html,/id="workspace-page"/);
  assert.match(html,/<h1 id="workspace-page-title"[^>]*>项目<\/h1>/);
  assert.match(html,/<header[\s\S]*新建项目[\s\S]*<\/header>[\s\S]*搜索项目[\s\S]*批量管理/);
  assert.doesNotMatch(html,/关闭控制台/);
  assert.equal((html.match(/type="search"/g)??[]).length,1);
  assert.doesNotMatch(html,/role="dialog"|composer-dock|message-input|检查更新|已删除|搜索会话和资源|进入项目/);
+ const offline=renderToStaticMarkup(createElement(WorkspacePage,{...props,connected:false,project}));
+ assert.match(offline,/<button type="button" class="workspace-text-button" disabled=""><svg[^>]*><\/svg>|<button type="button" class="workspace-text-button" disabled="">[^]*重命名<\/button>/);
  const empty=renderToStaticMarkup(createElement(WorkspacePage,{...props,projects:[]}));
  assert.match(empty,/新建项目[\s\S]*暂无项目/);
- assert.doesNotMatch(empty,/删除项目|批量管理|搜索项目/);
+ assert.doesNotMatch(empty,/重命名|删除项目|批量管理|搜索项目/);
 });
 
 test('the console owns one close control outside the project page header',()=>{

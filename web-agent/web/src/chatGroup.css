@@ -5,14 +5,36 @@
 .chat-group-navigation-heading {
   display:flex;
   align-items:center;
+  justify-content:space-between;
+  gap:8px;
   min-height:32px;
-  padding-inline:var(--sidebar-row-inset);
+  padding-inline:var(--sidebar-row-inset) 4px;
   color:var(--text-secondary);
 }
 .chat-group-navigation-heading h2 {
   margin:0;
   font-size:var(--font-size-toolbar);
   font-weight:var(--font-weight-medium);
+}
+.chat-group-create-trigger {
+  flex:none;
+  width:28px;
+  height:28px;
+  padding:0;
+  border:0;
+  border-radius:var(--radius-settings-icon);
+  corner-shape:var(--corner-window);
+  background:transparent;
+  color:var(--pilot-header-muted);
+}
+.chat-group-create-trigger:hover:not(:disabled) {
+  color:var(--foreground);
+  background:var(--surface-hover);
+}
+.chat-group-create-trigger:focus-visible { outline-offset:-2px; }
+.chat-group-create-trigger:disabled { opacity:.45; }
+@media(pointer:coarse) {
+  .chat-group-create-trigger { width:44px; height:44px; }
 }
 .sidebar.workspace-navigation .chat-group-nav-row {
   min-height:50px;
@@ -55,10 +77,7 @@
 }
 .modal.chat-group-create-dialog {
   width:min(416px,calc(100vw - 32px));
-  margin:auto;
 }
-.chat-group-create-dialog:not([open]) { display:none; }
-.chat-group-create-dialog::backdrop { background:var(--overlay); }
 .chat-group-member-picker {
   min-inline-size:0;
   padding:0;

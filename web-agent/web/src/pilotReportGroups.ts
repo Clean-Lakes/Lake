@@ -30,3 +30,14 @@ export function pilotReportParticipants(authors: readonly SpecialistReplyAuthor[
     return [key, {key, roleId: author.roleId, name: author.name, moving: false}];
   })).values()];
 }
+
+export type PilotSpecialistParticipant = Pick<SpecialistReplyAuthor,'roleId'|'workerId'>;
+
+/** Older reports may omit the role ID that is still known by their dispatch. */
+export function pilotSpecialistCount(participants: readonly PilotSpecialistParticipant[]) {
+  const roleByWorker = new Map<string,string>();
+  for (const {roleId,workerId} of participants) {
+    if (roleId) roleByWorker.set(workerId,roleId);
+  }
+  return new Set(participants.map(({roleId,workerId}) => roleId || roleByWorker.get(workerId) || workerId)).size;
+}
