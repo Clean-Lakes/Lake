@@ -24,7 +24,8 @@ test('existing message archives gain a session index without rewriting history o
   store.list = <T>(kind: string): T[] => {assert.notEqual(kind, 'messages', 'a session read must not deserialize the global message archive'); return list<T>(kind);};
   assert.deepEqual(store.messages('wanted').map(value => [value.id, value.text]), [['z-first', 'first'], ['a-second', 'second']]);
   assert.deepEqual(store.messages('absent'), []);
-  const plan = store.db.prepare("EXPLAIN QUERY PLAN SELECT value FROM records WHERE kind='messages' AND json_extract(value,'$.sessionId')=? ORDER BY rowid").all('wanted');
+  const plan = store.db.prepare(`EXPLAIN QUERY PLAN SELECT value FROM records WHERE kind='messages'
+    AND json_extract(value,'$.sessionId')=? AND json_extract(value,'$.deletedAt') IS NULL ORDER BY rowid`).all('wanted');
   assert.ok(plan.some(row => String(row.detail).includes('messages_by_session')), 'the existing archive must use the session index');
 });
 
@@ -44,4 +45,20 @@ test('indexed message reads track edits, reassignments, deletions and restart in
   store.close(); store = await LakeStore.open(home, data);
   assert.deepEqual(store.messages(a.id), []);
   assert.deepEqual(store.snapshot(b.id).messages.map(value => value.id), [second.id, unrelated.id]);
+});
+
+test('soft-deleted messages disappear from the conversation and remain available to input receipts', async t => {
+  const home = await mkdtemp(join(tmpdir(), 'lake-message-soft-delete-')), data = join(home, 'data');
+  let store = await LakeStore.open(home, data);
+  t.after(async () => {store.close(); await rm(home, {recursive: true, force: true});});
+  const project = store.createProject('receipts'), session = store.createSession(project.id);
+  const visible = store.addMessage(session.id, 'user', '消息已删除');
+  const incoming = store.addMessage(session.id, 'user', '消息已删除', {external: {kind: 'mcp'}});
+  const deleted = store.put('messages', incoming.id, {...incoming, deletedAt: '2026-11-27T00:00:00.000Z'});
+  store.put('superGatewayInstructions', 'receipt', {messageId: incoming.id});
+  store.close(); store = await LakeStore.open(home, data);
+  assert.deepEqual(store.snapshot(session.id).messages, [visible]);
+  assert.deepEqual(store.recentMessages(session.id, 1), [visible]);
+  const receipt = store.require<{messageId: string}>('superGatewayInstructions', 'receipt');
+  assert.deepEqual(store.require('messages', receipt.messageId), deleted);
 });
