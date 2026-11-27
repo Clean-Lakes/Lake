@@ -29,7 +29,7 @@ const sampleApproval: GatewayApprovalRequest = {
   eventId: 'ev-1',
   askText: '林明请我把订单服务发布到 GOS 预发。需要我创建任务并执行吗？',
   title: '发布订单服务至 GOS 预发',
-  summary: '将在已授权资源（GOS 预发）范围内由「发布专员」创建独立任务并同步执行进度。',
+  summary: '将由「发布专员」创建独立任务执行，并实时同步进度与结果给外部请求方。',
   fields: [
     { label: '发布目标', value: '订单服务' },
     { label: '目标环境', value: 'GOS 预发' },
@@ -56,12 +56,26 @@ test('PilotGatewayApprovals renders specialist identity, dynamic fields, raw req
   assert.ok(html.includes(sampleApproval.askText));
   assert.ok(html.includes('发布目标') && html.includes('订单服务'));
   assert.ok(html.includes('目标版本') && html.includes('v2.14.3-rc2'));
+  assert.match(html, /<li class="pilot-gateway-approval-resource">GOS 预发<\/li>/);
   assert.ok(html.includes('查看原始请求') && html.includes(sampleApproval.rawRequest));
   assert.ok(html.includes('拒绝') && html.includes('同意'));
   assert.equal(
     renderToStaticMarkup(createElement(PilotGatewayApprovals, { approvals: [], connected: true, onDecided: async () => {} })),
     '',
   );
+});
+
+test('PilotGatewayApprovals defers rendering a large resource list until expanded', () => {
+  const resourceNames = Array.from({ length: 320 }, (_, index) => `测试主机-${index}`);
+  const html = renderToStaticMarkup(createElement(PilotGatewayApprovals, {
+    approvals: [{ ...sampleApproval, resourceNames, resourceIds: resourceNames }],
+    connected: true,
+    onDecided: async () => {},
+  }));
+  assert.match(html, /授权资源（320 项）/);
+  assert.doesNotMatch(html, /测试主机-/);
+  assert.match(html, /查看原始请求/);
+  assert.match(html, /同意/);
 });
 
 test('PilotGatewayApprovals shows decided status and optional rejection reason', () => {

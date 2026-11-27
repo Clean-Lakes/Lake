@@ -308,7 +308,7 @@ test('auto_in_scope resource grant routes directly without manual approval card 
   assert.equal(ws.gatewayApprovals.length, 0);
 });
 
-test('specialist MCP resource grants scale beyond 256 project resources cleanly', async t => {
+test('specialist MCP approvals keep bulk grant scope without repeating it in the card', async t => {
   const f = await fixture(t);
   const base = `/api/projects/${f.project.id}/superagent/specialists/${f.role.id}/mcp`;
   const grants = [];
@@ -326,4 +326,32 @@ test('specialist MCP resource grants scale beyond 256 project resources cleanly'
   }
   const saved = await f.api(`${base}/grants`, 'PUT', { resourceGrants: grants });
   assert.equal(saved.connection.resourceGrants.length, 320);
+
+  const { invite } = await f.api(`${base}/invites`, 'POST', {}, 201);
+  const { token } = await f.api(`/api/gateway/invites/${invite.inviteUrl.split('/').at(-1)}/redeem`, 'POST', {}, 200, '');
+  const request = '用文字说明支持的内容类型';
+  const sent = await f.api('/api/gateway/messages', 'POST', {
+    text: request,
+    threadId: 'bulk-grants',
+    clientMessageId: 'bulk-grants-message-1',
+  }, 202, token);
+  const workspace = () => f.api(`/api/projects/${f.project.id}/superagent`);
+  const [approval] = (await workspace()).gatewayApprovals;
+  assert.equal(approval.id, sent.approvalId);
+  assert.deepEqual(new Set(approval.resourceIds), new Set(grants.map(grant => grant.resourceId)));
+  assert.equal(approval.resourceNames.length, 320);
+  assert.doesNotMatch(approval.summary, /主机-/);
+  assert.deepEqual(approval.fields, [{ label: '请求内容', value: request }]);
+
+  const names = approval.resourceNames.join('、');
+  const legacy = {
+    ...approval,
+    summary: `将在已授权资源（${names}）范围内由「${approval.roleName}」创建独立任务并同步执行进度。`,
+    fields: [...approval.fields, { label: '授权资源', value: names.slice(0, 140) }],
+  };
+  f.app.store.put('superGatewayApprovals', approval.id, legacy);
+  const [visible] = (await workspace()).gatewayApprovals;
+  assert.deepEqual(visible, approval);
+  assert.deepEqual(f.app.store.get('superGatewayApprovals', approval.id), legacy);
+  assert.equal(f.scheduledCount(), 0);
 });

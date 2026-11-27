@@ -23,7 +23,7 @@ import type { AIApproval, AIQuestionRequest, GatewayInstructionStatus, Message, 
   SpecialistChannelPage, SpecialistQuestion, SuperProject, SuperTask, SuperWorker, SuperWorkspace } from "../../web-agent/shared/contracts";
 import type { GatewayApprovalRequest, GatewaySpecialistRef, GatewayConnection, GatewayMessage, GatewayMessageInput, GatewayMessagePage } from "../../web-agent/shared/contracts";
 import { activeResourceGrants } from "./gateway";
-import { buildDynamicGatewayApproval } from "./gateway-approvals";
+import { buildDynamicGatewayApproval, presentGatewayApproval } from "./gateway-approvals";
 import type { AgentHost, HostProfile, HostToolContext, TurnOutcome } from "./agent-host";
 import {TaskDeadlineReached} from "./task-deadline";
 import {chooseSpecialistExecution,specialistExecutionOptions,type SpecialistExecutionOption} from './specialist-execution';
@@ -3500,7 +3500,8 @@ export class LakeSuperagent implements AgentHost {
     const cutoff = Date.now() - 15 * 60_000;
     return this.store.list<GatewayApprovalRequest>("superGatewayApprovals")
       .filter(row => row.projectId === projectId && (row.status === "pending" || (row.decidedAt && Date.parse(row.decidedAt) >= cutoff)))
-      .sort((a, b) => Number(b.status === "pending") - Number(a.status === "pending") || b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => Number(b.status === "pending") - Number(a.status === "pending") || b.createdAt.localeCompare(a.createdAt))
+      .map(presentGatewayApproval);
   }
   async decideGatewayApproval(projectId: string, approvalId: string, input: { approve?: unknown; reason?: unknown }): Promise<GatewayApprovalRequest> {
     if (typeof input?.approve !== "boolean") throw new HttpError(400, "approve 须为布尔值");

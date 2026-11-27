@@ -1,10 +1,27 @@
 import { useState } from "react";
 import type { GatewayApprovalRequest } from "../../shared/contracts";
 import { api, readableError } from "./api";
-import { DisclosureSummary } from "./DisclosureSummary";
+import { DeferredDisclosure, DisclosureSummary } from "./DisclosureSummary";
 import { Glyph } from "./Icons";
 import { SuperRoleAvatar } from "./SuperRoleAvatar";
 import "./pilotGatewayApprovals.css";
+
+const inlineResourceLimit = 3;
+
+function ApprovalResourceList({ resourceIds, resourceNames }: Pick<GatewayApprovalRequest, "resourceIds" | "resourceNames">) {
+  return (
+    <ul
+      className="pilot-gateway-approval-resources"
+      role="list"
+      aria-label="授权资源"
+      tabIndex={resourceNames.length > inlineResourceLimit ? 0 : undefined}
+    >
+      {resourceNames.map((name, index) => (
+        <li key={resourceIds[index] ?? index} className="pilot-gateway-approval-resource">{name}</li>
+      ))}
+    </ul>
+  );
+}
 
 function ApprovalCard({
   approval,
@@ -41,6 +58,10 @@ function ApprovalCard({
 
   const fieldCount = approval.fields.length;
   const gridClass = fieldCount === 1 ? "cols-1" : fieldCount === 3 ? "cols-3" : "cols-2";
+  const resourceCount = approval.resourceNames.length;
+  const resourceList = resourceCount > 0
+    ? <ApprovalResourceList resourceIds={approval.resourceIds} resourceNames={approval.resourceNames} />
+    : null;
 
   return (
     <article className="pilot-gateway-approval" aria-label={`${approval.roleName}的外部请求审批`}>
@@ -67,20 +88,18 @@ function ApprovalCard({
 
       <div className="pilot-gateway-approval-card">
         <header className="pilot-gateway-approval-head">
-          <div>
-            <h3>{approval.title}</h3>
-            <p>{approval.summary}</p>
-          </div>
-          {approval.resourceNames.length > 0 && (
-            <div className="pilot-gateway-approval-resources">
-              {approval.resourceNames.map(name => (
-                <span key={name} className="pilot-gateway-approval-resource">
-                  {name}
-                </span>
-              ))}
-            </div>
-          )}
+          <h3>{approval.title}</h3>
+          <p>{approval.summary}</p>
         </header>
+
+        {resourceCount > inlineResourceLimit ? (
+          <DeferredDisclosure
+            className="pilot-gateway-approval-resource-details"
+            summary={`授权资源（${resourceCount} 项）`}
+          >
+            {resourceList}
+          </DeferredDisclosure>
+        ) : resourceList}
 
         {approval.fields.length > 0 && (
           <dl className={`pilot-gateway-approval-fields ${gridClass}`}>

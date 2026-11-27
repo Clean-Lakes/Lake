@@ -1,9 +1,11 @@
 .pilot-gateway-approvals {
+  container: pilot-gateway-approvals / inline-size;
   display: flex;
   flex-direction: column;
   gap: 12px;
   max-inline-size: 760px;
   margin: 0 auto 10px;
+  overflow-wrap: anywhere;
 }
 .pilot-gateway-approval {
   display: flex;
@@ -75,12 +77,6 @@
   flex-direction: column;
   gap: 12px;
 }
-.pilot-gateway-approval-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
 .pilot-gateway-approval-head h3 {
   margin: 0;
   font-size: var(--font-size-ui);
@@ -95,11 +91,18 @@
 .pilot-gateway-approval-resources {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
   gap: 6px;
-  flex: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pilot-gateway-approval-resource-details .pilot-gateway-approval-resources {
+  max-block-size: min(11rem, 28vh);
+  margin-block-start: 8px;
+  overflow-y: auto;
 }
 .pilot-gateway-approval-resource {
+  max-inline-size: 100%;
   padding: 2px 7px;
   border-radius: var(--radius-settings-badge);
   border: 1px solid var(--border);
@@ -190,6 +193,7 @@
 }
 .pilot-gateway-approval-reject input {
   min-block-size: 34px;
+  min-inline-size: 0;
   padding: 0 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-settings-control);
@@ -206,13 +210,10 @@
 .pilot-gateway-approval-reject .pilot-gateway-approval-actions {
   justify-content: flex-end;
 }
-@media (max-width: 560px) {
+@container pilot-gateway-approvals (max-width: 460px) {
   .pilot-gateway-approval-ask,
   .pilot-gateway-approval-card {
     margin-inline-start: 0;
-  }
-  .pilot-gateway-approval-head {
-    flex-direction: column;
   }
   .pilot-gateway-approval-fields.cols-2,
   .pilot-gateway-approval-fields.cols-3 {

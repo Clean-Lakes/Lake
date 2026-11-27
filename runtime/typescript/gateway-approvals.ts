@@ -1,4 +1,4 @@
-import type { GatewayApprovalField } from "../../web-agent/shared/contracts";
+import type { GatewayApprovalField, GatewayApprovalRequest } from "../../web-agent/shared/contracts";
 
 export type ApprovalResourceSummary = {
   id: string;
@@ -21,6 +21,25 @@ export type DynamicGatewayApprovalPlan =
 
 function clean(value: string, max = 120) {
   return value.replace(/\s+/g, " ").trim().replace(/[，。；、,.;]+$/, "").slice(0, max);
+}
+
+function approvalSummary(roleName: string) {
+  return `将由「${roleName}」创建独立任务执行，并实时同步进度与结果给外部请求方。`;
+}
+
+export function presentGatewayApproval(approval: GatewayApprovalRequest): GatewayApprovalRequest {
+  const prefix = "将在已授权资源（";
+  if (!approval.summary.startsWith(prefix)) return approval;
+  const resourceNames = approval.resourceNames.join("、");
+  const legacySummary = `${prefix}${resourceNames}）范围内由「${approval.roleName}」创建独立任务并同步执行进度。`;
+  if (approval.summary !== legacySummary) return approval;
+
+  const legacyField = clean(resourceNames, 140);
+  return {
+    ...approval,
+    summary: approvalSummary(approval.roleName),
+    fields: approval.fields.filter(field => field.label !== "授权资源" || field.value !== legacyField),
+  };
 }
 
 function normalizeMatch(value: string) {
@@ -131,9 +150,6 @@ export function buildDynamicGatewayApproval(input: {
     pushField(fields, "分支", branchMatch?.[1]);
   }
 
-  if (resourceNames.length && !fields.some(field => resourceNames.some(name => field.value.includes(name)))) {
-    pushField(fields, "授权资源", resourceNames.join("、"));
-  }
   if (!fields.length) {
     pushField(fields, "请求内容", clean(raw, 80));
   }
@@ -158,15 +174,11 @@ export function buildDynamicGatewayApproval(input: {
   ) || title;
   const requester = clean(input.requester, 40) || "外部请求方";
   const askText = `${requester}请我${actionClause}。需要我创建任务并执行吗？`;
-  const summary = resourceNames.length
-    ? `将在已授权资源（${resourceNames.join("、")}）范围内由「${input.roleName}」创建独立任务并同步执行进度。`
-    : `将由「${input.roleName}」创建独立任务执行，并实时同步进度与结果给外部请求方。`;
-
   return {
     blocked: false,
     askText,
     title: clean(title, 64),
-    summary,
+    summary: approvalSummary(input.roleName),
     fields,
     resourceIds,
     resourceNames,
