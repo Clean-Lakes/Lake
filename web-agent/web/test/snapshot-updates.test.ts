@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {acceptSnapshot,applyConversationMode,reuseUnchanged} from '../src/snapshotUpdates';
+import {acceptSnapshot,applyConversationMode,applySessionModel,reuseUnchanged} from '../src/snapshotUpdates';
 import type {SessionSnapshot} from '../../shared/contracts';
 
 test('a saved Plan mode only updates mode and cursor, retaining resource, terminal and transcript objects',()=>{
@@ -20,6 +20,20 @@ test('late mode replies and replies for another session cannot overwrite newer c
  const next=applyConversationMode(before,'s',{mode:'plan',cursor:13})!;
  assert.equal(acceptSnapshot(next,{...before,cursor:12}),next);
  assert.equal(applyConversationMode(next,'s',{mode:'default',cursor:14})!.conversationMode,'default');
+});
+
+test('a model save updates only its session and survives an older snapshot', () => {
+ const before = {session: {id: 'one'}, cursor: 10, messages: [{id: 'existing'}], ai: {cards: []}} as unknown as SessionSnapshot;
+ const saved = {revision: 2, modelConfigured: true, modelName: 'conversation-model'};
+ const after = applySessionModel(before, 'one', saved)!;
+ assert.equal(after.messages, before.messages);
+ assert.equal(after.ai, before.ai);
+ assert.equal(after.cursor, before.cursor);
+ assert.equal(applySessionModel(after, 'two', saved), after);
+ assert.equal(applySessionModel(after, 'one', {...saved, revision: 1}), after);
+ assert.equal(acceptSnapshot(after, {...before, cursor: 11}).model, saved);
+ const unavailable = {revision: 2, modelConfigured: false, modelName: null};
+ assert.deepEqual(applySessionModel(after, 'one', unavailable)?.model, unavailable);
 });
 
 test('polling identical JSON retains the catalog and all transcript branches',()=>{

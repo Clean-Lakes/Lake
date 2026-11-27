@@ -31,6 +31,8 @@ export class HttpError extends Error {
 }
 export type Provider = ModelProvider;
 export type StoredSession = WorkSession & { options: Record<string, unknown> };
+type ModelChoice = {providerId: string; modelId: string};
+type SessionModelChoice = ModelChoice & {revision: number};
 
 export async function privateDirectory(path: string) {
   await mkdir(path, { recursive: true, mode: 0o700 });
@@ -49,23 +51,38 @@ export class LakeStore {
   async refreshModels() { await this.magpie?.refresh(); }
   modelProvider(providerId: string) { return providerId === 'magpie' ? this.magpie?.provider() : this.get<ModelProvider>('providers', providerId); }
   modelProviders() { const native = this.list<ModelProvider>('providers').filter(value => value.id !== 'magpie'); const managed = this.magpie?.provider(); return managed ? [...native, managed] : native; }
-  modelSelection() {
-    type Selection = {providerId: string; modelId: string};
-    const valid = (choice: Selection | undefined) => {
+  sessionModelChoice(sessionId: string) { return this.get<SessionModelChoice>('sessionModelChoices', sessionId); }
+  modelSelection(sessionId?: string): ModelChoice | undefined {
+    // Keep unavailable explicit choices so a turn cannot silently route to another provider.
+    const sessionChoice = sessionId && this.sessionModelChoice(sessionId);
+    if (sessionChoice) return {providerId: sessionChoice.providerId, modelId: sessionChoice.modelId};
+    const valid = (choice: ModelChoice | undefined) => {
       if (!choice || choice.providerId === 'magpie') return false;
       const provider = this.modelProvider(choice.providerId);
       return provider?.enabled && provider.models.some(model => model.id === choice.modelId && model.enabled);
     };
-    const selected = this.get<Selection>('settings', 'modelSelection');
+    const selected = this.get<ModelChoice>('settings', 'modelSelection');
     if (valid(selected)) return selected;
     const managed = this.magpie?.selectedId();
     if (managed) return {providerId: 'magpie', modelId: managed};
-    const native = this.get<Selection>('settings', 'nativeModelSelection');
+    const native = this.get<ModelChoice>('settings', 'nativeModelSelection');
     return valid(native) ? native : undefined;
   }
+  resolveModel(choice: ModelChoice | undefined) {
+    const provider = choice && this.modelProvider(choice.providerId);
+    return {provider, model: provider?.enabled ? provider.models.find(model => model.id === choice?.modelId && model.enabled) : undefined};
+  }
+  selectSessionModel(sessionId: string, choice: ModelChoice) {
+    if (!this.resolveModel(choice).model) throw new HttpError(400, '模型不可用');
+    const previous = this.sessionModelChoice(sessionId);
+    if (previous?.providerId === choice.providerId && previous.modelId === choice.modelId) return;
+    return this.transaction(() => {
+      this.put('sessionModelChoices', sessionId, {...choice, revision: (previous?.revision ?? 0) + 1});
+      return this.event(sessionId, 'session');
+    });
+  }
   selectModel(providerId: string, modelId: string) {
-    const provider = this.modelProvider(providerId);
-    if (!provider?.enabled || !provider.models.some(model => model.id === modelId && model.enabled)) throw new HttpError(400, '模型不可用');
+    if (!this.resolveModel({providerId, modelId}).model) throw new HttpError(400, '模型不可用');
     this.transaction(() => {
       const previous = this.modelSelection();
       if (providerId === 'magpie') {

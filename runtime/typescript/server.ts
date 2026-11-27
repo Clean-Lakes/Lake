@@ -17,11 +17,13 @@ import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { isSea } from "node:sea";
 import { homedir } from "node:os";
 import type {
+  ModelDisplayState,
   ModelProvider,
   ProviderModel,
   Resource,
   Project,
   ResourceTreeNode,
+  SessionModelState,
 } from "../../web-agent/shared/contracts";
 import { LakeStore, HttpError, id, now, privateDirectory } from "./store";
 import { LakeAgents } from "./agent";
@@ -335,18 +337,13 @@ export async function startLakeServer(options: ServerOptions) {
         if (route?.mode === 'specialist' && !superagent!.gatewaySpecialists(projectId).specialists.some(role => role.roleId === route.roleId))
           throw new HttpError(400, '指定专员不属于当前项目或已删除');
       };
-      const selection = () =>
-        store!.modelSelection();
+      const selection = () => store!.modelSelection();
       const catalog = () => ({
         providers: store!.list<ModelProvider>("providers"),
         activeProviderId: selection()?.providerId ?? "",
         activeModelId: selection()?.modelId ?? "",
       });
-      const selected = () => {
-        const choice = selection();
-        const provider = choice && store!.modelProvider(choice.providerId);
-        return { provider, model: provider?.models.find((model) => model.id === choice?.modelId) };
-      };
+      const selected = (sessionId?: string) => store!.resolveModel(store!.modelSelection(sessionId));
       const modelSettings = () => {
         const { provider, model } = selected();
         return {
@@ -383,23 +380,31 @@ export async function startLakeServer(options: ServerOptions) {
           ...(provider?.id === 'magpie' ? {source: 'magpie'} : {}),
         };
       };
-      const bootstrap = () => {
-        const { provider, model } = selected();
+      const modelDisplay = (sessionId?: string): ModelDisplayState => {
+        const { provider, model } = selected(sessionId);
         return {
-          authenticated: true,
           modelConfigured: !!model,
           modelName: model?.name ?? null,
           modelId: model && provider ? reasoningModelIdentity(provider, model) : null,
           modelSelection: model && provider ? entry(provider, model) : null,
           supportsImageInput: model?.supportsImageInput ?? false,
-          terminalMode: terminals?.supported ? "pty" : "command",
-          aiRuntime: "typescript",
-          memoryEngine: "layered",
-          backendRuntime: "typescript",
-          upstreamVersion: "3.17.2",
-          recoveryReadOnly: security?.readOnly() ?? true,
         };
       };
+      const sessionModel = (sessionId: string | null): SessionModelState | undefined => {
+        if (!sessionId) return;
+        const choice = store!.sessionModelChoice(sessionId);
+        return choice && {...modelDisplay(sessionId), revision: choice.revision};
+      };
+      const bootstrap = () => ({
+        authenticated: true,
+        ...modelDisplay(),
+        terminalMode: terminals?.supported ? "pty" : "command",
+        aiRuntime: "typescript",
+        memoryEngine: "layered",
+        backendRuntime: "typescript",
+        upstreamVersion: "3.17.2",
+        recoveryReadOnly: security?.readOnly() ?? true,
+      });
       let result: unknown;
       let status = 200;
       if (path[1] === "bootstrap") result = bootstrap();
@@ -501,12 +506,7 @@ export async function startLakeServer(options: ServerOptions) {
         if (action && method !== (["test", "select"].includes(action) ? "POST" : "GET")) throw new HttpError(405, "不支持此模型请求");
         if (action === "test") result = await agents.testModel(data);
         else if (path[3] === "select") {
-          const provider = store.modelProvider(String(data.providerId));
-          if (
-            !provider?.enabled ||
-            !provider.models.some((model) => model.id === data.modelId && model.enabled)
-          )
-            throw new HttpError(400, "模型不可用");
+          if (typeof data.providerId !== 'string' || typeof data.modelId !== 'string') throw new HttpError(400, '模型不可用');
           store.selectModel(data.providerId, data.modelId);
           result = catalog();
         } else if (path[3] === "state")
@@ -515,6 +515,7 @@ export async function startLakeServer(options: ServerOptions) {
             available: available(),
             providers: catalog(),
             settings: modelSettings(),
+            sessionModel: sessionModel(url.searchParams.get('sessionId')),
           };
         else if (path[3] === "available") result = available();
         else if (path[3] === "capacity")
@@ -804,7 +805,7 @@ export async function startLakeServer(options: ServerOptions) {
         if (session.workspaceRole === "legacy" && !["GET", "HEAD"].includes(method) && !(path[3] === "presentation" || path.length === 3 && method === "PATCH"))
           throw new HttpError(409, "旧 Go 会话为只读档案；请在 Pilot 中提出新的明确要求，历史任务与操作不会重放");
         if (method === "GET" && (path[3] === "snapshot" || path[3] === "ai")) {
-          await agents.prepareRedaction();
+          await agents.prepareRedaction(sessionId);
           await loadLegacyView(store, sessionId, (value) => agents!.redact(value));
         }
         if (path[3] === "messages-read" && path.length === 4 && method === "PUT") result = acknowledgeConversation(store, sessionId, data.cursor);
@@ -841,7 +842,12 @@ export async function startLakeServer(options: ServerOptions) {
         } else if (path.length === 4 && path[3] === "presentation") {
           if (method !== "PUT") throw new HttpError(405, "不支持此请求方法");
           result = navigation.presentation(sessionId, data);
-        } else if (path[3] === "snapshot" && path.length === 4 && method === "GET") { const snapshot = store.snapshot(sessionId); snapshot.ai = store.viewPage(sessionId); result = superagent.decorate(snapshot,url.searchParams.get("taskId")??undefined); }
+        } else if (path[3] === "snapshot" && path.length === 4 && method === "GET") {
+          const snapshot = store.snapshot(sessionId);
+          snapshot.ai = store.viewPage(sessionId);
+          snapshot.model = sessionModel(sessionId);
+          result = superagent.decorate(snapshot,url.searchParams.get("taskId")??undefined);
+        }
         else if (path[3] === "events" && path.length === 4 && method === "GET") {
           const after = Number(url.searchParams.get("after") ?? 0);
           if (!Number.isSafeInteger(after) || after < 0) throw new HttpError(400, "无效的事件游标");
@@ -886,7 +892,7 @@ export async function startLakeServer(options: ServerOptions) {
           if (draining) throw new HttpError(503, "服务正在退出");
           if (data.images?.length) throw new HttpError(501, '图片可以作为普通附件发送');
           if (data.terminalReuse) throw new HttpError(501, '终端交接尚未接入，未发送此消息');
-          await agents.prepareRedaction();
+          await agents.prepareRedaction(sessionId);
           const original = String(data.text ?? '');
           const input = messageInput(store, sessionId, agents.redact(original), data);
           const text = !original.trim() && input.files?.length ? '请查看随消息附上的文件。' : original;
@@ -967,17 +973,30 @@ export async function startLakeServer(options: ServerOptions) {
             case 'clearReferences':
               if (superagent.messageQueueBusy(sessionId)) throw new HttpError(409, '请先结束当前回复再清除资源访问记忆');
               store.delete('sessionResourceReferences', sessionId); result = {}; break;
-            case "reasoning":
+            case "model": {
+              if (session.workspaceRole === 'worker' || session.workspaceRole === 'role')
+                throw new HttpError(409, '专员模型由专员配置管理');
+              if (typeof data.providerId !== 'string' || typeof data.modelId !== 'string')
+                throw new HttpError(400, '请选择已启用的供应商和模型');
+              if (superagent.modelChangeBusy(sessionId) || messageQueue!.get(sessionId).items.length)
+                throw new HttpError(409, '请先结束本轮并处理待发送消息，再切换模型');
+              const event = store.selectSessionModel(sessionId, {providerId: data.providerId, modelId: data.modelId});
+              if (event) broadcast(event);
+              result = sessionModel(sessionId);
+              break;
+            }
+            case "reasoning": {
+              const {provider, model} = selected(sessionId);
               if (method === 'POST') {
                 if (session.workspaceRole === 'worker') throw new HttpError(409, '当前任务的模型选项已冻结，请在 Pilot 或专员频道设置后续任务');
-                if (superagent.messageQueueBusy(sessionId) || messageQueue!.get(sessionId).items.length) throw new HttpError(409, '请先结束本轮并处理待发送消息，再设置思考级别');
-                const {provider, model} = selected();
+                if (superagent.modelChangeBusy(sessionId) || messageQueue!.get(sessionId).items.length) throw new HttpError(409, '请先结束本轮并处理待发送消息，再设置思考级别');
                 session.options = {...session.options, ...reasoningUpdate(provider, model, data)};
                 store.put('sessions', sessionId, session);
                 broadcast(store.event(sessionId, 'session'));
               }
-              result = reasoningSettings(selected().provider, selected().model, session.options);
+              result = reasoningSettings(provider, model, session.options);
               break;
+            }
             default:
               throw new HttpError(501, "此会话操作尚未迁移完成");
           }
@@ -989,7 +1008,10 @@ export async function startLakeServer(options: ServerOptions) {
           if (["router", "role", "worker", "group"].includes(session.workspaceRole ?? "")) throw new HttpError(409, "受管理会话保留任务与频道身份；请使用停止任务或删除专员");
           await messageQueue!.archiveSession(sessionId);
           await agents.abort(sessionId);
-          store.delete("sessions", sessionId);
+          store.transaction(() => {
+            store!.delete('sessionModelChoices', sessionId);
+            store!.delete('sessions', sessionId);
+          });
           result = {};
         } else if (method === "GET" && path.length === 3) result = session;
         else throw new HttpError(path.length === 3 ? 405 : 404, "会话接口不存在或不支持此请求方法");

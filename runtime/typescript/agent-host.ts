@@ -23,6 +23,8 @@ export type HostProfile = {
   workerId?: string;
   taskDeadline?: () => string;
   execution?: AgentBackendRef;
+  /** Host-owned conversation whose model is used for a separate Pilot summary. */
+  modelSessionId?: string;
   conversation?: {id:string;participantId:string;deadlineAt:string};
   validateExecution?: () => void;
   memoryActor?: LayeredMemoryActor;

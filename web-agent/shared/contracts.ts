@@ -289,6 +289,8 @@ export type SessionSnapshot = {
 	sre?:SRESnapshot;
  replyTimings?:ReplyTiming[];
   messageQueue?: MessageQueue;
+  /** Present when the conversation has its own model choice, even if it is now unavailable. */
+  model?: SessionModelState;
  aiBinding?: {terminalId?: string; generation?: string};
   session: WorkSession;
   resources: Resource[];
@@ -350,6 +352,9 @@ export type ModelProvider = {id: string; name: string; baseURL: string; protocol
 export type ProviderCatalog = {providers: ModelProvider[]; activeProviderId: string; activeModelId: string; savedProviderId?: string};
 export type ProviderInput = Omit<ModelProvider,"id" | "keyConfigured"> & {apiKey?: string | null};
 export type AvailableModelEntry = {providerId: string; providerName: string; modelId: string; name: string; displayName: string; contextWindow?: number};
+export type ModelDisplayState = {modelConfigured: boolean; modelName: string | null; modelId?: string | null; modelSelection?: AvailableModelEntry | null; supportsImageInput?: boolean};
+export type SessionModelState = ModelDisplayState & {revision: number};
+export type SessionModelInput = {providerId: string; modelId: string} | {name: string};
 export type AvailableModels = { models: string[]; contextLimits?: Record<string, number>; entries?: AvailableModelEntry[]; activeProviderId?: string; activeModelId?: string; source?: "magpie"; message?: string; imageInputCapabilities?: Record<string, boolean>; reasoningCapabilities?: Record<string, ModelReasoningCapability> };
 
 export type ReasoningSettings = { modelId?: string; levels: string[]; default?: string; source?: string; effort: string };
