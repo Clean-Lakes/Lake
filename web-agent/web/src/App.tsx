@@ -1916,7 +1916,7 @@ function AppContent() {
   const selectedAgentBackend=selectedSuperChannel?.execution??selectedSuperWorker?.execution?.backend??activeSnapshot?.superagent?.execution?.backend;
   const avatarActivity=activeSnapshot?{sessionId:activeSnapshot.session.id,state:selectedSuperChannel&&roleReplyActivity?.sessionId===activeSnapshot.session.id?roleReplyActivity.state:conversationActivity(activeSnapshot.ai,selectedSession?.status)}:undefined;
   const superHeaderIdentity=sessionHeader&&(selectedRoleName||selectedSuperPilot);
-  const headerTitle=sessionHeader&&selectedSuperPilot&&!isChatGroup?pilotIdentity.name:selectedResource?.name??selectedSession?.title??'概览';
+  const headerTitle=sessionHeader&&selectedSuperPilot&&!isChatGroup?pilotIdentity.name:selectedResource?.name??selectedChatGroup?.title??selectedSession?.title??'概览';
   const processNavigation=<ReplyProcessSelect sessionId={activeSnapshot?.session.id} onSpecialist={inspectSpecialist} onPilot={()=>{
     roleInspectionRequest.current.cancel();pendingRoleInspection.current=undefined;setRoleInspection(null);
   }}/>;
@@ -2151,6 +2151,7 @@ function AppContent() {
         {groupsEnabled&&sidebarProject&&<ChatGroupNavigation key={sidebarProject.id} groups={pilotWorkspace.workspace?.chatGroups??[]}
          selectedId={sessionSelected?sessionId:null} workspace={pilotWorkspace.workspace} sessions={catalog.sessions}
          activity={avatarActivity} connected={connected} onOpen={id=>navigate({sessionId:id,resourceId:null})}
+         onUpdated={pilotWorkspace.updateGroup}
          createGroup={{projectId:sidebarProject.id,channels:pilotWorkspace.workspace?.channels??[],
           disabled:!connected||!pilotWorkspace.workspace?.active,onCreated:openCreatedChatGroup}}/>}
         {sidebarProject&&pilotWorkspace.workspace?.active===false&&<div className="nav-heading sidebar-session-heading" hidden={bulkMode}>

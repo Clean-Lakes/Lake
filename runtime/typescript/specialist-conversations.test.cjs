@@ -255,6 +255,52 @@ test('groups save a fixed roster and use separate continuous Pilot conversations
  for(const table of ['superGoals','superOperations','acpRuns'])assert.equal(f.app.store.list(table).length,0,table);
 });
 
+test('editing group members and basic information preserves committed replies and changes future invitations',async t=>{
+ const f=await fixture(t,{count:3,hold:true,pilotReply:({event,reply})=>{
+  if(reply.some(message=>message.role==='tool'))return {content:'已召集本群成员。'};
+  return toolCall('convene_specialists',{event_id:event.id,quote:event.text,part_key:'group-edit-test',
+   instruction:'每位群成员亲自回应',audience:'all',summarize:false},'invite-'+event.id);
+ }});
+ const group=await f.api(f.path+'/groups','POST',{title:'值班群',roleIds:['role-0','role-1'],requestId:'edit-group'},201);
+ const path=f.path+'/groups/'+group.sessionId;
+ const sessionPath='/api/sessions/'+group.sessionId;
+ const initial=await f.api(sessionPath+'/messages','POST',{text:'请原名单的成员分别回应'},202);
+ const readRound=async sourceMessageId=>(await f.api(f.path)).conversations.find(round=>round.sourceMessageId===sourceMessageId);
+ await until(()=>readRound(initial.id),round=>round?.members.length===2&&round.members.every(member=>member.state==='running'));
+
+ const foreign=await f.api('/api/projects','POST',{name:'另一个项目'});
+ f.app.store.put('superRoles','foreign-role',{...f.roles[0],id:'foreign-role',projectId:foreign.id});
+ const newMembers={expectedRevision:1,roleIds:['role-0','role-2']};
+ await f.api(`/api/projects/${foreign.id}/superagent/groups/${group.sessionId}`,'PATCH',{expectedRevision:1,title:'其他项目覆盖'},404);
+ await f.api(path,'PATCH',{expectedRevision:1,title:'整次保存应回滚',roleIds:['role-0','foreign-role']},404);
+ await f.api(path,'PATCH',{expectedRevision:1,roleIds:['role-0']},400);
+ await f.api(path,'PATCH',{expectedRevision:1,roleIds:['role-0','role-0']},400);
+ assert.equal((await f.api(sessionPath)).title,group.title);
+ const edited=await f.api(path,'PATCH',newMembers);
+ assert.equal(edited.revision,2);
+ assert.deepEqual(edited.members.map(member=>member.roleId),['role-0','role-2']);
+ assert.equal((await f.api(path,'PATCH',newMembers)).revision,edited.revision,'a repeated saved change is idempotent');
+ await f.api(path,'PATCH',{expectedRevision:1,roleIds:['role-0','role-1']},409);
+ const information=await f.api(path,'PATCH',{expectedRevision:2,title:'周末值班群',description:'例行工作交接'});
+ assert.equal(information.revision,3);
+ assert.equal(information.description,'例行工作交接');
+ assert.equal(information.sessionId,group.sessionId);
+ assert.equal((await f.api(sessionPath+'/snapshot')).session.title,'周末值班群');
+ assert.equal((await f.api('/api/catalog')).sessions.find(row=>row.id===group.sessionId).title,'周末值班群');
+ const saved=(await f.api(f.path)).chatGroups.find(row=>row.sessionId===group.sessionId);
+ assert.deepEqual([saved.title,saved.description,saved.members,saved.revision],[information.title,information.description,information.members,information.revision]);
+
+ f.release();
+ const original=await until(()=>readRound(initial.id),round=>round?.state==='completed');
+ assert.deepEqual(original.members.map(member=>[member.roleId,member.state]),[['role-0','replied'],['role-1','replied']]);
+ const next=await f.api(sessionPath+'/messages','POST',{text:'请现在的群成员分别回应'},202);
+ const following=await until(()=>readRound(next.id),round=>round?.state==='completed');
+ assert.deepEqual(following.members.map(member=>[member.roleId,member.state]),[['role-0','replied'],['role-2','replied']]);
+ const messages=(await f.api(sessionPath+'/snapshot')).messages;
+ assert.ok(messages.some(message=>message.id===initial.id));
+ assert.ok(messages.some(message=>message.conversation?.sourceMessageId===initial.id&&message.author?.roleId==='role-1'));
+});
+
 test('Lake and two groups bind their own Pilot models and can save while another group is replying', async t => {
  const f = await fixture(t, {count: 2, pilotReply: async ({event}, gate) => {
   if (event.text === 'group A') await gate;

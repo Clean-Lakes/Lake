@@ -132,8 +132,22 @@
   .chat-group-avatar-overflow { transition:none; }
   .chat-group-nav-row:is(:hover,:focus-visible) .chat-group-avatars[data-multiple] > :is(.chat-group-avatar-chip,.chat-group-avatar-overflow) { transform:none; }
 }
-.modal.chat-group-create-dialog {
+.modal.chat-group-create-dialog,
+.modal.chat-group-edit-dialog {
   width:min(416px,calc(100vw - 32px));
+}
+.chat-group-edit-dialog .workbench-dialog-header p { overflow-wrap:anywhere; }
+.chat-group-edit-dialog .field-label textarea {
+  display:block;
+  width:100%;
+  margin-top:8px;
+  padding:11px 12px;
+  border:1px solid var(--border);
+  border-radius:var(--radius-settings-control);
+  background:var(--surface);
+  color:var(--foreground);
+  font-size:var(--font-size-ui);
+  resize:vertical;
 }
 .chat-group-member-picker {
   min-inline-size:0;

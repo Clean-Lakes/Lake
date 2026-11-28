@@ -17,7 +17,10 @@ type Round = Omit<SpecialistConversation, 'members'|'summary'> & {
   taskSummary?:TaskSummary;
   summarySessionId:string; summaryDeadlineAt?:string;
 };
-type GroupRecord = {sessionId:string;projectId:string;roleIds:string[];createKey:string;requestHash:string};
+type GroupRecord = {
+  sessionId:string;projectId:string;roleIds:string[];createKey:string;requestHash:string;
+  revision?:number;description?:string;
+};
 const waiting = (member:Member) => member.state === 'queued' || member.state === 'running';
 const open = (round:Round) => ['queued','running','summarizing'].includes(round.state);
 const summaryId = (round:Round) => 'conversation_summary_'+digest(round.id).slice(0,32);
@@ -95,6 +98,7 @@ export class SpecialistConversations {
     const [message]=this.store.recentMessages(group.sessionId,1);
     return {
       sessionId:session.id,projectId:session.projectId,title:session.title,updatedAt:message?.createdAt??session.createdAt,
+      description:group.description,revision:group.revision??1,
       cursor:this.store.cursor(session.id),
       members:group.roleIds.map(roleId=>{
         const role=this.store.get<ConversationRole>('superRoles',roleId);
@@ -109,13 +113,25 @@ export class SpecialistConversations {
       .map(group=>this.groupView(group))
       .sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)||a.sessionId.localeCompare(b.sessionId));
   }
-  createGroup(projectId:string,input:{title?:unknown;roleIds?:unknown;requestId?:unknown}):ChatGroup {
-    this.ports.check(projectId);this.store.project(projectId);
-    const title=this.agents.redact(text(input.title,'群名',320).trim().replace(/\s+/g,' '));
+  private groupTitle(value:unknown) {
+    const title=this.agents.redact(text(value,'群名',320).trim().replace(/\s+/g,' '));
     if(Array.from(title).length>80)throw new HttpError(400,'群名最多 80 个字');
-    const roleIds=input.roleIds;
+    return title;
+  }
+  private groupRoleIds(roleIds:unknown):string[] {
     if(!Array.isArray(roleIds)||roleIds.length<2||roleIds.length>64||new Set(roleIds).size!==roleIds.length||
       roleIds.some(id=>typeof id!=='string'||!id||id.length>128))throw new HttpError(400,'请选择 2 至 64 位不同的专员');
+    return roleIds;
+  }
+  private checkGroupMembers(projectId:string,roleIds:string[]) {
+    for(const id of roleIds){
+      const role=this.store.get<ConversationRole>('superRoles',id);
+      if(role?.projectId!==projectId||role.deletedAt)throw new HttpError(404,'所选专员已不可用或不属于当前项目');
+    }
+  }
+  createGroup(projectId:string,input:{title?:unknown;roleIds?:unknown;requestId?:unknown}):ChatGroup {
+    this.ports.check(projectId);this.store.project(projectId);
+    const title=this.groupTitle(input.title),roleIds=this.groupRoleIds(input.roleIds);
     const createKey=text(input.requestId,'建群请求',128),requestHash=digest([title,roleIds]);
     const prior=this.store.list<GroupRecord>('superChatGroups').find(group=>group.projectId===projectId&&group.createKey===createKey);
     if(prior){
@@ -123,16 +139,49 @@ export class SpecialistConversations {
       return this.groupView(prior);
     }
     const group=this.store.transaction(()=>{
-      for(const id of roleIds){
-        const role=this.store.get<ConversationRole>('superRoles',id);
-        if(role?.projectId!==projectId||role.deletedAt)throw new HttpError(404,'所选专员已不可用或不属于当前项目');
-      }
+      this.checkGroupMembers(projectId,roleIds);
       const session=this.store.createSession(projectId);
       this.store.put('sessions',session.id,{...session,title,workspaceRole:'group'});
       return this.store.put<GroupRecord>('superChatGroups',session.id,{sessionId:session.id,projectId,roleIds,createKey,requestHash});
     });
     this.notifyGroupProject(projectId);
     this.ports.catalogChanged?.();
+    return this.groupView(group);
+  }
+  updateGroup(projectId:string,sessionId:string,input:{title?:unknown;description?:unknown;roleIds?:unknown;expectedRevision?:unknown}):ChatGroup {
+    this.ports.check(projectId);this.store.project(projectId);
+    if(typeof input.expectedRevision!=='number'||!Number.isSafeInteger(input.expectedRevision)||input.expectedRevision<1)
+      throw new HttpError(400,'群组版本无效');
+    const newTitle=input.title===undefined?undefined:this.groupTitle(input.title);
+    const newRoles=input.roleIds===undefined?undefined:this.groupRoleIds(input.roleIds);
+    let newDescription:string|undefined;
+    if(input.description!==undefined){
+      if(typeof input.description!=='string'||Array.from(input.description).length>240)
+        throw new HttpError(400,'群简介最多 240 个字');
+      const description=input.description.trim();
+      newDescription=description?this.agents.redact(text(description,'群简介',960)):'';
+    }
+    if(newTitle===undefined&&newRoles===undefined&&newDescription===undefined)
+      throw new HttpError(400,'请选择要保存的群组信息');
+    const {group,changed}=this.store.transaction(()=>{
+      const current=this.group(projectId,sessionId);
+      if(!current)throw new HttpError(404,'当前项目找不到该群组');
+      if(newRoles)this.checkGroupMembers(projectId,newRoles);
+      const session=this.store.session(sessionId);
+      const title=newTitle??session.title,description=newDescription??current.description??'';
+      const roleIds=newRoles??current.roleIds,revision=current.revision??1;
+      if(title===session.title&&description===(current.description??'')&&canonical(roleIds)===canonical(current.roleIds))
+        return {group:current,changed:false};
+      if(input.expectedRevision!==revision)throw new HttpError(409,'群组已更新，请重新打开后编辑');
+      if(title!==session.title)this.store.put('sessions',sessionId,{...session,title});
+      const group=this.store.put<GroupRecord>('superChatGroups',sessionId,{...current,description:description||undefined,roleIds,revision:revision+1});
+      return {group,changed:true};
+    });
+    if(changed){
+      this.ports.notify(sessionId);
+      this.notifyGroupProject(projectId);
+      this.ports.catalogChanged?.();
+    }
     return this.groupView(group);
   }
   priorGroupMessage(sessionId:string,requestId:string,hash:string) {
@@ -150,7 +199,7 @@ export class SpecialistConversations {
     if(this.closed||!open(round))throw new HttpError(409,'本次对话已结束');
     this.ports.check(round.projectId);this.store.project(round.projectId);
     const group=this.group(round.projectId,round.sessionId);
-    if(group&&member&&!group.roleIds.includes(member.roleId))throw new HttpError(409,'该专员不属于当前群组');
+    // A committed round owns its frozen audience. Current membership is checked when admitting new work.
     if(round.kind==='group'){
       const message=this.store.get<Message>('messages',round.sourceMessageId);
       if(!group||message?.role!=='user'||message.sessionId!==round.sessionId||message.text!==round.quote)

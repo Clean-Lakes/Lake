@@ -1,7 +1,7 @@
 import {hasUnreadMessages} from './ConversationReadMarker';
 import {useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState,type PointerEvent,type RefObject} from 'react';
 import {createPortal} from 'react-dom';
-import type {SessionEvent,SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
+import type {ChatGroup,SessionEvent,SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {greetRoleAvatar,SuperRoleAvatar} from './SuperRoleAvatar';
 import {conversationAvatarMotion,superAvatarMotion,channelTaskPresentation,specialistTaskActivity,type ConversationActivity,type ConversationAvatarActivity} from './superAgentPresentation';
@@ -132,6 +132,15 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean,v
   void refreshRef.current();
  };
  const removeRole=(roleId:string)=>{deletedRoles.current.add(roleId);setWorkspace(current=>current?{...current,questions:current.questions?.filter(question=>question.author.roleId!==roleId),channels:current.channels?.filter(channel=>channel.roleId!==roleId),workers:current.workers.filter(worker=>worker.roleId!==roleId)}:current);void refreshRef.current();};
+ const updateGroup=(group:ChatGroup)=>{
+  rosterRevision.current++;
+  setWorkspace(current=>current?.project.projectId===group.projectId?{
+   ...current,
+   chatGroups:current.chatGroups?.map(row=>row.sessionId===group.sessionId&&(row.revision??1)<=(group.revision??1)
+    ? {...row,title:group.title,description:group.description,members:group.members,revision:group.revision}:row),
+  }:current);
+  void refreshRef.current();
+ };
  const readChannel=async(channel:SpecialistChannelInfo)=>{
   const state=channel.messageRead;
   if(!state||!hasUnreadMessages(state))return;
@@ -145,7 +154,7 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean,v
    // The visible overview can retry if the receipt could not be saved.
   }
  };
- return {workspace,conversation,error,addRole,removeRole,readChannel,refresh:()=>refreshRef.current(),subscribeWorkerEvents:conversation?subscribeWorkerEvents:undefined};
+ return {workspace,conversation,error,addRole,removeRole,updateGroup,readChannel,refresh:()=>refreshRef.current(),subscribeWorkerEvents:conversation?subscribeWorkerEvents:undefined};
 }
 
 type ReadMark = {requested: string; acknowledged: string; pending: boolean};

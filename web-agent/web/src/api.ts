@@ -128,6 +128,8 @@ export const api = {
     post<SpecialistChannelInfo>(`/api/projects/${encodeURIComponent(project)}/superagent/specialists`,input),
   createChatGroup:(project:string,input:{title:string;roleIds:string[];requestId:string})=>
     post<ChatGroup>(`/api/projects/${encodeURIComponent(project)}/superagent/groups`,input),
+  updateChatGroup:(project:string,sessionId:string,input:{expectedRevision:number;title?:string;description?:string;roleIds?:string[]})=>
+    request<ChatGroup>(`/api/projects/${encodeURIComponent(project)}/superagent/groups/${encodeURIComponent(sessionId)}`,{method:'PATCH',body:JSON.stringify(input)}),
   operationReview: (sessionId: string, operationId: string, signal?: AbortSignal) =>
     request<OperationReview>(`/api/sessions/${encodeURIComponent(sessionId)}/operation-reconciliation/${encodeURIComponent(operationId)}`, {signal}),
   confirmOperationReview: (sessionId: string, operationId: string, confirmation: OperationReviewConfirmation) =>
