@@ -3,9 +3,10 @@ import {createHash,randomUUID} from 'node:crypto';
 import {join} from 'node:path';
 import {promisify} from 'node:util';
 import type {AgentActivity,AgentConnection,AgentLaunch,AgentTurnResult,ObserveAgentModel,ScopedStdioMcp} from './client';
-import {isCliModelId} from './cli-profile';
+import {isCliModelId,isCliReasoningEffort} from './cli-profile';
 import {privateFile} from './private';
 import {JsonLineProcess} from './process';
+import type {CodexModelOption} from './types';
 
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const textLimit=65536;
@@ -60,9 +61,17 @@ export async function discoverClaudeModels(launch:CliLaunch,signal:AbortSignal){
     if(!Array.isArray(catalog)||!catalog.length)throw new Error('Claude Code 未返回可用模型');
     const defaultModel=catalog.find(model=>model?.value==='default')?.resolvedModel;
     const localModel=isCliModelId(defaultModel)?defaultModel:undefined;
-    const models=[...new Set(catalog.map(model=>model?.value).filter((id):id is string=>id!=='default'&&isCliModelId(id)))].slice(0,256);
-    if(!models.length&&!localModel)throw new Error('Claude Code 未返回可用模型');
-    return {models,localModel};
+    const models=new Map<string,CodexModelOption>();
+    for(const entry of catalog){
+      const id=entry?.value==='default'?localModel:entry?.value;
+      if(!isCliModelId(id))continue;
+      const reasoningEfforts=entry.supportsEffort===true&&Array.isArray(entry.supportedEffortLevels)?
+        [...new Set<string>(entry.supportedEffortLevels.filter(isCliReasoningEffort))]:[];
+      if(!models.has(id)||reasoningEfforts.length)models.set(id,{id,reasoningEfforts});
+      if(models.size>=256)break;
+    }
+    if(!models.size)throw new Error('Claude Code 未返回可用模型');
+    return {models:[...models.values()],localModel};
   }finally{cleanup();await process.close();}
 }
 
@@ -71,7 +80,8 @@ export class ClaudeCode implements AgentConnection {
   private session?:{id:string;args:string[]};
   private process?:JsonLineProcess;
   constructor(private readonly launch:CliLaunch,private readonly publish:(event:AgentActivity)=>void,
-    private readonly mcp:ScopedStdioMcp|undefined,private readonly model:string|undefined,private readonly observeModel:ObserveAgentModel){}
+    private readonly mcp:ScopedStdioMcp|undefined,private readonly model:string|undefined,private readonly observeModel:ObserveAgentModel,
+    private readonly reasoningEffort?:string){}
 
   async initialize(signal:AbortSignal){signal.throwIfAborted();return {streaming:true,resume:true,cancel:true};}
 
@@ -86,6 +96,7 @@ export class ClaudeCode implements AgentConnection {
         '--allowedTools',...this.mcp.tools.map(tool=>'mcp__lake__'+tool.name));
     }
     if(this.model)args.push('--model',this.model);
+    if(this.reasoningEffort)args.push('--effort',this.reasoningEffort);
     if(options.systemPrompt){
       await privateFile(options.cwd,'system-prompt.txt',options.systemPrompt);
       args.push('--system-prompt-file',join(options.cwd,'system-prompt.txt'));
@@ -108,7 +119,7 @@ export class ClaudeCode implements AgentConnection {
       const process=new JsonLineProcess({...this.launch,args:session.args},frame=>{
         if(frame.session_id!==session.id||frame.parent_tool_use_id)return;
         if(frame.type==='system'&&frame.subtype==='init'){
-          if(isCliModelId(frame.model))this.observeModel(frame.model,'anthropic');
+          if(isCliModelId(frame.model))this.observeModel(frame.model,'anthropic',this.reasoningEffort);
         }else if(frame.type==='stream_event'){
           const event=frame.event;
           if(event?.type==='message_start'&&typeof event.message?.id==='string'){

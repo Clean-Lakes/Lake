@@ -1,22 +1,23 @@
 import {rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import type {AgentActivity,AgentConnection,AgentLaunch,AgentTurnResult,ObserveAgentModel,ScopedHttpMcp} from './client';
-import {antigravityProfileArgs,isCliModelId} from './cli-profile';
+import {antigravityProfileArgs,isCliModelId,isCliReasoningEffort} from './cli-profile';
 import {JsonRpcProcess} from './process';
 import {privateFile,privatePath} from './private';
 import {digest} from '../tasks';
+import type {CodexModelOption} from './types';
 
 export const antigravityLoginRequired='Google Antigravity 尚未登录，请使用 Google 登录';
-type ModelConfig={id:string;currentValue:string;options:unknown[]};
-function modelConfig(result:any):ModelConfig|undefined {
-  return Array.isArray(result?.configOptions)?result.configOptions.find((item:any)=>item?.type==='select'&&(item.category==='model'||item.id==='model')&&
-    typeof item.id==='string'&&isCliModelId(item.currentValue)&&Array.isArray(item.options)):undefined;
+type SelectConfig={id:string;currentValue:string;options:unknown[]};
+function selectConfig(result:any,category:'model'|'thought_level'):SelectConfig|undefined {
+  if(!Array.isArray(result?.configOptions))return;
+  const valid=category==='model'?isCliModelId:isCliReasoningEffort;
+  return result.configOptions.find((item:any)=>item?.type==='select'&&
+    (item.category===category||item.id===category||category==='thought_level'&&item.id==='thinking_level')&&
+    typeof item.id==='string'&&valid(item.currentValue)&&Array.isArray(item.options));
 }
-function modelOptions(config:ModelConfig|undefined,legacy:any):string[]{
-  const options=config?.options??[];
-  const values=options.flatMap((option:any)=>Array.isArray(option?.options)?option.options.map((item:any)=>item?.value):[option?.value]);
-  if(!config&&Array.isArray(legacy?.availableModels))values.push(...legacy.availableModels.map((item:any)=>item?.modelId));
-  return [...new Set(values.filter(isCliModelId))].slice(0,256);
+function optionValues(config:SelectConfig){
+  return config.options.flatMap((option:any)=>Array.isArray(option?.options)?option.options.map((item:any)=>item?.value):[option?.value]);
 }
 
 /** Google Antigravity's official ACP v1 endpoint. Native action requests are declined. */
@@ -25,13 +26,15 @@ export class Antigravity implements AgentConnection {
   private sessionId?:string;
   private resume=false;
   private readonly googleLogin:boolean;
+  private modelSelection?:SelectConfig;
+  private reasoningSelection?:SelectConfig;
   private turn?:{messages:Map<string,string>;calls:Map<string,string|false>};
   localModel?:string;
   model?:string;
   models:string[]=[];
 
   static async launch(launch:Omit<AgentLaunch,'args'>,publish:(event:AgentActivity)=>void,mcp?:ScopedHttpMcp,
-    model?:string,systemPrompt?:string,observeModel?:ObserveAgentModel){
+    model?:string,systemPrompt?:string,observeModel?:ObserveAgentModel,reasoningEffort?:string){
     const config=await privatePath(launch.env.HOME!,'.gemini','config');
     const agents=await privatePath(config,'agents');
     const servers=mcp?{lake:{serverUrl:mcp.serverUrl,headers:mcp.headers}}:{};
@@ -42,11 +45,12 @@ export class Antigravity implements AgentConnection {
       'tools: []','commandExecutionPolicy: off',`inheritMcp: ${!!mcp}`,'inheritCustomizations: false','---',systemPrompt??'',manifest].join('\n');
     await privateFile(agents,'lake.md',instructions);
     await privateFile(config,'mcp_config.json',JSON.stringify({mcpServers:servers}));
-    return new Antigravity(launch,publish,join(config,'mcp_config.json'),mcp,model,observeModel);
+    return new Antigravity(launch,publish,join(config,'mcp_config.json'),mcp,model,observeModel,reasoningEffort);
   }
 
   private constructor(launch:Omit<AgentLaunch,'args'>,private readonly publish:(event:AgentActivity)=>void,
-    private readonly configFile:string,private readonly mcp?:ScopedHttpMcp,private readonly requestedModel?:string,private readonly observeModel?:ObserveAgentModel){
+    private readonly configFile:string,private readonly mcp?:ScopedHttpMcp,private readonly requestedModel?:string,
+    private readonly observeModel?:ObserveAgentModel,private readonly requestedEffort?:string){
     this.googleLogin=!!launch.env.GEMINI_HOME;
     this.rpc=new JsonRpcProcess({...launch,args:['acp','--disable-telemetry','--agent','lake',...antigravityProfileArgs(launch.env),
       ...(mcp?['--process-per-session']:[])]},{
@@ -102,26 +106,71 @@ export class Antigravity implements AgentConnection {
     const id=result?.sessionId??options.threadId;
     if(typeof id!=='string'||!id||id.length>256||options.threadId&&id!==options.threadId)throw new Error('Google Antigravity 没有返回对应会话');
     this.sessionId=id;
-    const config=modelConfig(result),legacy=result?.models;
-    this.localModel=config?.currentValue??(isCliModelId(legacy?.currentModelId)?legacy.currentModelId:undefined);
-    this.models=modelOptions(config,legacy);
+    this.modelSelection=selectConfig(result,'model');
+    this.reasoningSelection=selectConfig(result,'thought_level');
+    const legacy=result?.models;
+    this.localModel=this.modelSelection?.currentValue??(isCliModelId(legacy?.currentModelId)?legacy.currentModelId:undefined);
+    const values=this.modelSelection?optionValues(this.modelSelection):
+      Array.isArray(legacy?.availableModels)?legacy.availableModels.map((item:any)=>item?.modelId):[];
+    this.models=[...new Set<string>([...values,this.localModel].filter(isCliModelId))].slice(0,256);
     this.model=this.localModel;
-    if(this.requestedModel&&this.requestedModel!==this.localModel){
-      if(!this.models.includes(this.requestedModel))throw new Error('当前 Google Antigravity 账户未提供所选模型');
-      if(config){
-        const updated=await this.request('session/set_config_option',{sessionId:id,configId:config.id,value:this.requestedModel},signal);
-        if(modelConfig(updated)?.currentValue!==this.requestedModel)throw new Error('Google Antigravity 未确认使用所选模型');
-      }else{
-        await this.request('session/set_model',{sessionId:id,modelId:this.requestedModel},signal);
+    if(this.requestedModel&&this.requestedModel!==this.localModel)await this.selectModel(this.requestedModel,signal);
+    if(this.requestedEffort){
+      const config=this.reasoningSelection;
+      if(!config||!optionValues(config).includes(this.requestedEffort))throw new Error('Antigravity 所选模型不支持这个思考强度');
+      if(config.currentValue!==this.requestedEffort){
+        const updated=await this.request('session/set_config_option',{sessionId:id,configId:config.id,value:this.requestedEffort},signal);
+        const confirmed=selectConfig(updated,'thought_level');
+        if(confirmed?.currentValue!==this.requestedEffort)throw new Error('Antigravity 未确认使用所选思考强度');
+        this.reasoningSelection=confirmed;
       }
-      this.model=this.requestedModel;
     }
     return id;
+  }
+  private async selectModel(model:string,signal:AbortSignal){
+    if(!this.models.includes(model))throw new Error('当前 Google Antigravity 账户未提供所选模型');
+    if(this.modelSelection){
+      const updated=await this.request('session/set_config_option',
+        {sessionId:this.sessionId,configId:this.modelSelection.id,value:model},signal);
+      const confirmed=selectConfig(updated,'model');
+      if(confirmed?.currentValue!==model)throw new Error('Google Antigravity 未确认使用所选模型');
+      this.modelSelection=confirmed;
+      this.reasoningSelection=selectConfig(updated,'thought_level');
+    }else{
+      await this.request('session/set_model',{sessionId:this.sessionId,modelId:model},signal);
+      this.reasoningSelection=undefined;
+    }
+    this.model=model;
+  }
+  /** Read model-specific options in the disposable probe session without sending a turn. */
+  async discoverModels(signal:AbortSignal):Promise<CodexModelOption[]> {
+    const inspection=AbortSignal.any([signal,AbortSignal.timeout(20000)]);
+    const catalog=new Map<string,CodexModelOption>(this.models.map(id=>[id,{id,reasoningEfforts:[]}]));
+    const record=()=>{
+      const entry=this.model&&catalog.get(this.model);
+      const config=this.reasoningSelection;
+      if(entry&&config){
+        entry.reasoningEfforts=[...new Set(optionValues(config).filter(isCliReasoningEffort))].slice(0,32);
+        entry.defaultReasoningEffort=config.currentValue;
+      }
+    };
+    const initialModel=this.model;
+    record();
+    if(this.modelSelection){
+      for(const model of this.models){
+        if(inspection.aborted||this.rpc.signal.aborted)break;
+        if(model===initialModel)continue;
+        try{await this.selectModel(model,inspection);record();}
+        catch{signal.throwIfAborted();/* Some listed models cannot be selected for a probe. */}
+      }
+    }
+    signal.throwIfAborted();
+    return [...catalog.values()];
   }
   async exec(text:string,signal:AbortSignal):Promise<AgentTurnResult>{
     if(!this.sessionId||this.turn)throw new Error('Google Antigravity 会话当前不可用');
     this.turn={messages:new Map(),calls:new Map()};
-    if(this.model)this.observeModel?.(this.model,'google-antigravity');
+    if(this.model)this.observeModel?.(this.model,'google-antigravity',this.reasoningSelection?.currentValue);
     try{
       const prompt=[{type:'text',text}];
       const result=await this.request('session/prompt',{sessionId:this.sessionId,prompt},signal);

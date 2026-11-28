@@ -51,7 +51,7 @@ flowchart TD
 
 两者自动识别已安装的 CLI。Claude Code 默认让官方 CLI 复用用户登录，Lake 通过 `claude auth status` 核对登录，通过流式初始化读取模型。CLI 自己管理用户登录凭据，Lake 保存登录状态及账户标识的摘要。Google Antigravity 默认通过 `agy acp --login` 打开 Google 授权，授权码交回 agy，凭据由 agy 写入项目在 Lake Home 下的私有目录。随后使用同一凭据建立 ACP 探测会话，检测通过后一起更新连接版本和模型目录。授权取消或探测失败保留先前验证过的连接。
 
-已有项目可继续使用保存在 Lake 私有目录中的 API Key。用 Anthropic API Key 时，Lake 从 Anthropic Models API 读取模型。Antigravity 的模型始终来自当前权限下的 ACP 会话。模型发现只初始化会话。配置中可以选择发现的模型或跟随 CLI 默认值，Claude Code 也支持手动填写模型 ID。连接变更会使已冻结的项目执行版本失效。运行工作目录、工具连接和会话标识按执行上下文隔离。
+已有项目可继续使用保存在 Lake 私有目录中的 API Key。用 Anthropic API Key 时，Lake 从 Anthropic Models API 读取模型及支持的思考档位。Claude Code 本机登录由 CLI 初始化返回这些信息。Antigravity 在独立探测会话中读取模型和每个模型的思考选项。配置支持选择模型、思考档位或跟随默认值，Claude Code 也支持手动填写模型 ID。执行时将选定档位传给 Claude Code 的 `--effort`，或由 Antigravity ACP 在发送任务前确认会话配置。连接变更会使已冻结的项目执行版本失效。运行工作目录、工具连接和会话标识按执行上下文隔离。
 
 | 执行器 | 支持版本及接口 | 本机执行约束 |
 | --- | --- | --- |

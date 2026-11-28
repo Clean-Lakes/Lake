@@ -22,4 +22,4 @@ export interface AgentConnection {
 type ScopedTools = {tools:import('./bridge').BridgeTool[];guard:()=>void};
 export type ScopedStdioMcp = ScopedTools & {command:string;args:string[]};
 export type ScopedHttpMcp = ScopedTools & {serverUrl:string;headers:Record<string,string>};
-export type ObserveAgentModel = (model:string,provider:string)=>void;
+export type ObserveAgentModel = (model:string,provider:string,reasoningEffort?:string)=>void;

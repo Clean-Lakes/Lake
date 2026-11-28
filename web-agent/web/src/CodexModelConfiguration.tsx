@@ -6,7 +6,6 @@ import {api,ApiRequestError,readableError} from './api';
 import {AppSelect} from './AppSelect';
 import {ExecutionAgentIcon} from './ExecutionAgentIcon';
 import {Glyph} from './Icons';
-import {ProviderIcon} from './ProviderIcon';
 import {reasoningLabels} from './reasoningLabels';
 import {TabSelectionIndicator} from './TabSelectionIndicator';
 import {navigateSettingsTabs} from './settingsFocus';
@@ -74,10 +73,13 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
   const agent=agents.find(agent=>agent.id===executor);
   const initial=agent&&preferences(agent),draft=drafts[executor]??initial;
   const codexSelected=executor==='codex';
-  const editingModel=executor==='claude-code'&&editingClaudeModel;
+  const showModels=codexSelected||agent?.transportReady===true;
+  const manualModel=executor==='claude-code';
+  const editingModel=manualModel&&(editingClaudeModel||!!(draft?.model&&!agent?.modelOptions?.includes(draft.model)));
   const apiKey=keys[executor];
   const googleSelected=draft?.authentication==='antigravity-google';
   const awaitingGoogle=googleSelected&&!!googleLogin;
+  const connectionExpanded=!showModels||connectionOpen||awaitingGoogle;
 
   useLayoutEffect(()=>{
     const node=dialog.current;
@@ -139,13 +141,16 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
 
   const dirty=apiKey!==undefined||!!(initial&&draft&&Object.keys(initial).some(key=>initial[key as keyof Preferences]!==draft[key as keyof Preferences]));
   const options=agent&&draft?modelEfforts(agent,draft.model):[];
-  const observed=agent&&[agent.authMode==='chatgpt'?'ChatGPT 登录':agent.authMode==='api_key'?'Codex API 登录':
-    agent.authMode==='provider'?'本机服务':undefined,agent.model,agent.reasoningEffort&&
+  const observed=agent&&[agent.authMode==='chatgpt'?'ChatGPT 登录':agent.authMode==='api_key'?(codexSelected?'Codex API 登录':'API Key'):
+    agent.authMode==='provider'?'本机服务':agent.authMode==='claude_login'?'本机 Claude Code 登录':
+    agent.authMode==='google'?'Google 登录':undefined,agent.defaultTaskModel??agent.model,agent.reasoningEffort&&
     (reasoningLabels[agent.reasoningEffort]??agent.reasoningEffort)].filter(Boolean).join(' · ');
-  const models=[...new Set([...(agent?.modelOptions??[]),draft?.model].filter((model):model is string=>!!model))];
+  const models=[...new Set([...(agent?.modelOptions??[]),editingModel?undefined:draft?.model].filter((model):model is string=>!!model))];
   const filter=query.trim().toLowerCase();
   const matching=models.filter(model=>model.toLowerCase().includes(filter));
-  const cliStatus=agent?.enabled&&agent.transportReady&&!agent.assignmentReady?agent.assignmentBlocker:
+  const followsLocal=codexSelected||draft?.authentication==='claude-local';
+  const followModel=followsLocal?`跟随本机 ${name}`:`跟随 ${name} 默认`;
+  const cliStatus=agent?.transportReady?agent.assignmentBlocker:
     agent?.message??(agent?.installed
       ?draft?.authentication==='cli-api-key'&&!agent.keyConfigured?'配置项目 API Key 并启用后，自动读取可用模型。':
         googleSelected?'完成 Google 授权后自动加载模型。':
@@ -159,7 +164,7 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
 
   useLayoutEffect(()=>{
     dialog.current?.querySelectorAll<HTMLElement>('.codex-config-options').forEach(revealSelected);
-  },[agent,codexSelected,draft?.model,draft?.effort,filter]);
+  },[agent,showModels,draft?.model,draft?.effort,filter]);
 
   async function change(operation:()=>Promise<{agents?:ExternalAgentStatus[]}>,success:string){
     if(flight.current)return;
@@ -172,6 +177,7 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
       if(!mounted.current)return;
       if(!next)throw new Error(`未找到此项目的 ${name} 配置`);
       setAgents(current);setDrafts(previous=>({...previous,[executor]:undefined}));setKeys(previous=>({...previous,[executor]:undefined}));
+      if(!agent?.transportReady&&next.transportReady)setConnectionOpen(false);
       setFeedback(next.enabled&&!next.assignmentReady?next.assignmentBlocker??success:success);
     }catch(cause){
       if(!mounted.current)return;
@@ -192,11 +198,12 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
     if(!agent||!draft)return;
     const runtime=codexSelected?{
       nodePath:autoDetect?'':draft.nodePath,npmPath:autoDetect?'':draft.npmPath,
-      reasoningEffortOverride:draft.effort||null,...(autoDetect&&{autoDetect}),
+      ...(autoDetect&&{autoDetect}),
     }:{executablePath:draft.executablePath.trim(),authentication:draft.authentication,
       ...(draft.authentication==='cli-api-key'&&{apiKey:apiKey?.trim()||apiKey})};
     void change(()=>api.prepareExternalAgent(projectId,executor,{
-      expectedRevision:agent.revision,enabled:draft.enabled,modelOverride:draft.model.trim()||null,...runtime,
+      expectedRevision:agent.revision,enabled:draft.enabled,modelOverride:draft.model.trim()||null,
+      reasoningEffortOverride:draft.effort||null,...runtime,
     }),autoDetect?'已重新识别运行路径':'模型配置已保存');
   }
 
@@ -233,7 +240,7 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
     void change(async()=>{
       try{
         const result=await api.completeAntigravityGoogleLogin(projectId,googleLogin.id,googleCode.trim());
-        if(mounted.current)clearGoogleLogin();
+        if(mounted.current){clearGoogleLogin();setConnectionOpen(false);}
         return result;
       }catch(cause){
         if(mounted.current&&!(cause instanceof ApiRequestError&&cause.status===400)){
@@ -293,43 +300,51 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
         onKeyDown={event=>navigateSettingsTabs(event,event.currentTarget)}>
         {executors.map(option=><button key={option} type="button" role="tab" id={titleId+'-'+option} title={externalAgentName(option)}
           aria-selected={option===executor} aria-controls={option===executor?panelId:undefined} tabIndex={option===executor?0:-1}
-          disabled={busy} onClick={()=>{setExecutor(option);setQuery('');setError('');setFeedback('');}}>
+          disabled={busy} onClick={()=>{setExecutor(option);setQuery('');setError('');setFeedback('');setConnectionOpen(false);setEditingClaudeModel(false);}}>
           <ExecutionAgentIcon agent={option} size={16}/><span>{option==='antigravity'?'Antigravity':externalAgentName(option)}</span>
         </button>)}
         <TabSelectionIndicator selection={executor}/>
       </div>
       <div className="codex-config-panel" id={panelId} role="tabpanel" aria-labelledby={titleId+'-'+executor}
-        tabIndex={!codexSelected||!draft?0:undefined}>
+        tabIndex={!showModels||!draft?0:undefined}>
         {role&&<div className="codex-config-role">
           <div><strong title={role.roleName}>{role.roleName}</strong><span><ExecutionAgentIcon agent={roleAgent} size={13}/>{externalAgentName(roleAgent)}</span></div>
           {roleAgent===executor?<span className="codex-config-role-current"><Glyph name="check" size={14}/>当前执行器</span>:
             <button type="button" className="button secondary" disabled={busy||dirty||!role.roleRevision||!agent?.assignmentReady} onClick={applyRole}>用于此专员</button>}
         </div>}
-        {codexSelected?<>
-          {agent&&draft&&<fieldset className="codex-config-fields" disabled={busy}>
-            <div className="codex-config-columns">
+        {agent&&draft&&<fieldset className={codexSelected?'codex-config-fields':'codex-config-fields codex-config-cli'} disabled={busy}>
+            {showModels&&<div className="codex-config-columns">
               <section className="codex-config-models" aria-label="模型">
                 <label className="codex-config-search"><Glyph name="search" size={16}/><input ref={search} type="search"
                   placeholder="搜索模型" aria-label="搜索模型" value={query} onChange={event=>setQuery(event.target.value)}/></label>
-                <div className="codex-config-options" role="radiogroup" aria-label="Codex 模型">
-                  {!filter&&<Choice name={titleId+'-model'} value="" selected={!draft.model} icon={<Glyph name="local" size={15}/>}
-                    onChange={()=>update({model:'',effort:optionsFor('')})}>跟随本机 Codex</Choice>}
-                  {matching.map(model=><Choice key={model} name={titleId+'-model'} value={model} selected={draft.model===model}
-                    icon={<ProviderIcon brand="openai" size={15}/>} onChange={()=>update({model,effort:optionsFor(model)})}>{model}</Choice>)}
+                <div className="codex-config-options" role="radiogroup" aria-label={name+' 模型'}>
+                  {!filter&&<Choice name={titleId+'-model'} value="" selected={!draft.model&&!editingModel} icon={<Glyph name="local" size={15}/>}
+                    onChange={()=>{setEditingClaudeModel(false);update({model:'',effort:optionsFor('')});}}>{followModel}</Choice>}
+                  {matching.map(model=><Choice key={model} name={titleId+'-model'} value={model} selected={!editingModel&&draft.model===model}
+                    icon={<ExecutionAgentIcon agent={executor} size={15}/>}
+                    onChange={()=>{setEditingClaudeModel(false);update({model,effort:optionsFor(model)});}}>{model}</Choice>)}
+                  {manualModel&&!filter&&<Choice name={titleId+'-model'} value={manualModelOption} selected={editingModel}
+                    icon={<Glyph name="edit" size={15}/>} onChange={()=>setEditingClaudeModel(true)}>手动填写模型</Choice>}
                   {filter&&!matching.length&&<p>没有匹配的模型</p>}
                 </div>
+                {editingModel&&<label className="codex-config-search"><input autoFocus aria-label="模型 ID"
+                  value={draft.model} placeholder="输入模型 ID" spellCheck={false}
+                  onChange={event=>update({model:event.target.value,effort:optionsFor(event.target.value.trim())})}/></label>}
               </section>
               <section className="codex-config-reasoning" aria-label="思考强度">
                 <h3>思考强度</h3>
-                <div className="codex-config-options" role="radiogroup" aria-label="Codex 思考强度">
-                  <Choice name={titleId+'-effort'} value="" selected={!draft.effort} onChange={()=>update({effort:''})}>跟随本机</Choice>
-                  {[...new Set([...options,...(draft.effort?[draft.effort]:[])])].map(effort=><Choice key={effort}
+                <div className="codex-config-options" role="radiogroup" aria-label={name+' 思考强度'}>
+                  <Choice name={titleId+'-effort'} value="" selected={!draft.effort} onChange={()=>update({effort:''})}>
+                    {followsLocal?'跟随本机':'跟随默认'}
+                  </Choice>
+                  {(codexSelected?[...new Set([...options,...(draft.effort?[draft.effort]:[])])]:options).map(effort=><Choice key={effort}
                     name={titleId+'-effort'} value={effort} selected={draft.effort===effort}
                     onChange={()=>update({effort})}>{reasoningLabels[effort]??effort}</Choice>)}
+                  {!codexSelected&&!options.length&&<p>此模型由 CLI 决定思考强度。</p>}
                 </div>
               </section>
-            </div>
-            <div id={connectionId} className="codex-config-connection-fields" hidden={!connectionOpen}>
+            </div>}
+            {codexSelected?<div id={connectionId} className="codex-config-connection-fields" hidden={!connectionExpanded}>
               {observed&&<p>{observed}</p>}
               <label><span>启用 Codex</span><input type="checkbox" checked={draft.enabled} onChange={event=>update({enabled:event.target.checked})}/></label>
               <label><span>Node 路径</span><input value={draft.nodePath} placeholder="自动识别" spellCheck={false} onChange={event=>update({nodePath:event.target.value})}/></label>
@@ -338,26 +353,13 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
                 <button type="button" className="button secondary" onClick={()=>save(true)}>重新识别路径</button>
                 <button type="button" className="button secondary" disabled={dirty||!agent.installed||!agent.enabled} onClick={reconnect}>重新连接</button>
               </div>
-            </div>
-          </fieldset>}
-          {(loading||status)&&<p className="codex-config-feedback" role={error?'alert':'status'}>{loading?'正在读取 Codex 模型…':status}</p>}
-          {agent&&draft&&<footer className="codex-config-footer">
-            {dirty&&agent.enabled&&<small>保存会中止此项目正在运行的 Codex 调用。</small>}
-            <button type="button" className="codex-config-connection" disabled={busy} aria-controls={connectionId}
-              aria-expanded={connectionOpen} onClick={()=>setConnectionOpen(open=>!open)}>
-              <Glyph name="plug" size={15}/><span>连接设置</span>
-              <span className="codex-config-readiness" data-ready={agent.assignmentReady===true}>{agent.assignmentReady?'已就绪':'待连接'}</span>
-              <Glyph name={connectionOpen?'chevron':'next'} size={13}/>
-            </button>
-            <button type="button" className="button primary" disabled={busy||!dirty} onClick={()=>save()}>{busy?'正在处理…':'保存配置'}</button>
-          </footer>}
-        </>:<>
-          {agent&&draft&&<fieldset className="codex-config-fields codex-config-cli" disabled={busy}>
+            </div>:<div id={connectionId} hidden={!connectionExpanded}>
             <div className="codex-config-cli-status">
               <strong>{agent.installed?(agent.cliVersion?`CLI ${agent.cliVersion}`:'已检测到 CLI'):'未检测到 CLI'}</strong>
               <a href={installGuides[executor]} target="_blank" rel="noreferrer">CLI 安装说明 <Glyph name="next" size={12}/></a>
             </div>
             <div className="codex-config-connection-fields">
+              {observed&&<p>{observed}</p>}
               <label><span>项目启用</span><input type="checkbox" checked={draft.enabled} disabled={awaitingGoogle}
                 onChange={event=>update({enabled:event.target.checked})}/></label>
               <label><span>CLI 路径</span><input value={draft.executablePath} placeholder={agent.detectedExecutable??'自动识别或填写绝对路径'} spellCheck={false} disabled={awaitingGoogle}
@@ -365,24 +367,13 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
               <label><span>登录方式</span><AppSelect label="登录方式" value={draft.authentication??cliDefaultAuthentication[executor]} disabled={busy||awaitingGoogle}
                 onChange={event=>{
                   setKeys(previous=>({...previous,[executor]:undefined}));
-                  update({authentication:event.target.value as CliAuthentication});
+                  update({authentication:event.target.value as CliAuthentication,effort:''});
                 }}>
                 <option value={cliDefaultAuthentication[executor]}>{executor==='claude-code'?'复用本机登录':'Google 登录'}</option>
                 <option value="cli-api-key">{executor==='claude-code'?'Anthropic API Key':'Gemini API Key'}</option>
               </AppSelect></label>
-              <label><span>默认模型</span><AppSelect label="默认模型" value={editingModel?manualModelOption:draft.model} disabled={busy||awaitingGoogle}
-                onChange={event=>{
-                  const manual=event.target.value===manualModelOption;
-                  if(executor==='claude-code')setEditingClaudeModel(manual);
-                  if(!manual)update({model:event.target.value});
-                }}>
-                <option value="">{agent.localModel?`跟随 CLI · ${agent.localModel}`:'跟随 CLI'}</option>
-                {models.map(model=><option key={model} value={model}>{model}</option>)}
-                {executor==='claude-code'&&<option value={manualModelOption}>手动填写</option>}
-              </AppSelect>
-              </label>
-              {editingModel&&<label><span>模型 ID</span><input autoFocus value={draft.model} placeholder="跟随 CLI" spellCheck={false}
-                onChange={event=>update({model:event.target.value})}/></label>}
+              {!showModels&&manualModel&&<label><span>模型 ID</span><input value={draft.model} placeholder="跟随 CLI" spellCheck={false}
+                onChange={event=>update({model:event.target.value,effort:''})}/></label>}
               {draft.authentication==='cli-api-key'&&<div className="codex-config-credential">
                 <label><span>API Key</span><input type="password" autoComplete="off" spellCheck={false} value={apiKey??''}
                   placeholder={apiKey===null?'保存后移除':agent.keyConfigured?'已保存 · 输入新 Key 替换':executor==='antigravity'?'Gemini API Key':'Anthropic API Key'}
@@ -400,19 +391,26 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
                   <button className="button secondary" type="button" onClick={()=>void cancelGoogleLogin()}>取消</button>
                   <button className="button primary" type="submit" disabled={!googleCode.trim()}>完成登录</button>
                 </div>
-              </form>:<div className="codex-config-actions">
-                <button className="button secondary" type="button" disabled={dirty||!agent.installed}
-                  onClick={()=>void startGoogleLogin()}>{agent.authMode==='google'?'重新授权':'使用 Google 登录'}</button>
-              </div>)}
+              </form>:null)}
+              {!awaitingGoogle&&<div className="codex-config-actions">
+                {googleSelected&&<button className="button secondary" type="button" disabled={dirty||!agent.installed}
+                 onClick={()=>void startGoogleLogin()}>{agent.authMode==='google'?'重新授权':'使用 Google 登录'}</button>}
+                <button type="button" className="button secondary" disabled={dirty||!agent.installed} onClick={reconnect}>检测连接</button>
+              </div>}
             </div>
-          </fieldset>}
-          {(loading||status)&&<p className="codex-config-feedback" role={error?'alert':'status'}>{loading?'正在读取连接…':status}</p>}
-          {agent&&draft&&<footer className="codex-config-footer">
+            </div>}
+        </fieldset>}
+        {(loading||status)&&<p className="codex-config-feedback" role={error?'alert':'status'}>{loading?`正在读取 ${name} 配置…`:status}</p>}
+        {agent&&draft&&<footer className="codex-config-footer">
             {dirty&&agent.enabled&&<small>保存会中止此项目正在运行的 {name} 调用。</small>}
-            <button type="button" className="button secondary" disabled={busy||dirty||!agent.installed||awaitingGoogle} onClick={reconnect}>检测连接</button>
+            {showModels&&<button type="button" className="codex-config-connection" disabled={busy||awaitingGoogle} aria-controls={connectionId}
+              aria-expanded={connectionExpanded} onClick={()=>setConnectionOpen(open=>!open)}>
+              <Glyph name="plug" size={15}/><span>连接设置</span>
+              <span className="codex-config-readiness" data-ready={agent.assignmentReady===true}>{agent.assignmentReady?'已就绪':'待连接'}</span>
+              <Glyph name={connectionExpanded?'chevron':'next'} size={13}/>
+            </button>}
             <button type="button" className="button primary" disabled={busy||!dirty} onClick={()=>save()}>{busy?'正在处理…':'保存配置'}</button>
-          </footer>}
-        </>}
+        </footer>}
       </div>
     </div>
   </dialog>;

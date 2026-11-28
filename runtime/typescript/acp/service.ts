@@ -20,7 +20,7 @@ import {privatePath} from './private';
 import {codexConfig,tomlValue} from './codex-profile';
 import {ExternalPublicText} from './public-text';
 import type { CliAgentProfile,CodexAgentProfile,CodexConnectionProbe,CodexModelOption,ExternalActor,ExternalEvent,ExternalResult,ExternalRun } from './types';
-import {codexConnectionVersion,maxExternalConversationRuns} from './types';
+import {cliCatalogVersion,codexConnectionVersion,maxExternalConversationRuns} from './types';
 import type {SpecialistReplyAuthor} from '../../../web-agent/shared/contracts';
 import {codexClosingMessageIds,legacyCommandBodies} from '../codex-conversation';
 
@@ -43,6 +43,8 @@ type GoogleLogin={
   cleanup?:Promise<void>;
 };
 const googleExpired='本次 Google 登录已结束，请重新获取授权链接';
+const claudeEfforts=['low','medium','high','xhigh','max'] as const;
+type ClaudeEffortMetadata={supported?:boolean}&Partial<Record<typeof claudeEfforts[number],{supported?:boolean}>>;
 export class LakeExternalAgents {
   readonly registry:ExternalAgentRegistry;
   private probes=new Map<string,{controller:AbortController;work:Promise<unknown>}>();
@@ -118,7 +120,7 @@ export class LakeExternalAgents {
     this.registerSecret(key);
     return key;
   }
-  private async verifyCliCredential(profile:CliAgentProfile,key:string,signal:AbortSignal){
+  private async verifyCliCredential(profile:CliAgentProfile,key:string,signal:AbortSignal):Promise<CodexModelOption[]>{
     const claude=profile.id==='claude-code';
     const url=claude?'https://api.anthropic.com/v1/models?limit=256':'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1';
     const headers:HeadersInit=claude?{'x-api-key':key,'anthropic-version':'2023-06-01'}:{'x-goog-api-key':key};
@@ -130,20 +132,28 @@ export class LakeExternalAgents {
       if(!response.ok)throw new Error([400,401,403].includes(response.status)?'API Key 未通过验证，请检查 Key 和账户权限':`官方 API 返回 HTTP ${response.status}`);
       return [];
     }
-    const result:{data?:({id?:unknown}|null)[]}|null=await response.json().catch(()=>null);
+    const result:{data?:({id?:unknown;capabilities?:{effort?:ClaudeEffortMetadata}}|null)[]}|null=await response.json().catch(()=>null);
     signal.throwIfAborted();
     if(!Array.isArray(result?.data))throw new Error('Anthropic 未返回可用模型目录');
-    return [...new Set(result.data.map(entry=>entry?.id)
-      .filter((model):model is string=>isCliModelId(model)&&model.startsWith('claude-')))].slice(0,256);
+    const models=new Map<string,CodexModelOption>();
+    for(const entry of result.data){
+      const id=entry?.id;
+      if(!isCliModelId(id)||!id.startsWith('claude-')||models.has(id))continue;
+      const effort=entry?.capabilities?.effort;
+      const reasoningEfforts=effort?.supported===true?claudeEfforts.filter(level=>effort[level]?.supported===true):[];
+      models.set(id,{id,reasoningEfforts});
+      if(models.size>=256)break;
+    }
+    return [...models.values()];
   }
   private async antigravityCatalog(environment:Omit<AgentLaunch,'args'>,signal:AbortSignal){
     const connection=await Antigravity.launch(environment,()=>{});
     try{
       const capabilities=await connection.initialize(signal);
       await connection.openSession({cwd:environment.cwd},signal);
-      if(!connection.models.length&&!connection.localModel)throw new Error('Google Antigravity 未返回可用模型');
-      return {capabilities,model:connection.model,localModel:connection.localModel,
-        models:connection.models.map(id=>({id,reasoningEfforts:[]}))};
+      const models=await connection.discoverModels(signal),localModel=connection.localModel;
+      if(!models.length)throw new Error('Google Antigravity 未返回可用模型');
+      return {capabilities,model:localModel,localModel,models};
     }finally{await connection.close();}
   }
   private async googleCredentialFile(directory:string){
@@ -162,7 +172,7 @@ export class LakeExternalAgents {
   }
   private async probeCli(profile:CliAgentProfile,directory:string,signal:AbortSignal){
     const {projectId,id,authentication}=profile,name=externalAgentName(id);
-    const probe:CodexConnectionProbe={revision:profile.revision,authentication:profile.authentication,ready:false};
+    const probe:CodexConnectionProbe={revision:profile.revision,authentication:profile.authentication,ready:false,cliCatalogVersion};
     try{
       const inspected=await this.inspectCli(profile,directory,signal);
       probe.cliVersion=inspected.version;
@@ -170,8 +180,7 @@ export class LakeExternalAgents {
       if(authentication==='claude-local'){
         probe.accountFingerprint=await claudeLocalAccount(inspected.environment,signal);
         const {models,localModel}=await discoverClaudeModels(inspected.environment,signal);
-        Object.assign(probe,{authMode:'claude_login',model:profile.modelOverride??localModel,localModel,
-          models:models.map(id=>({id,reasoningEfforts:[]}))});
+        Object.assign(probe,{authMode:'claude_login',model:profile.modelOverride??localModel,localModel,models});
       }else if(authentication==='antigravity-google'){
         if(!profile.googleLoginId)throw new HttpError(409,antigravityLoginRequired);
         await this.googleCredentialFile(await antigravityCredentials(this.store.home,projectId,profile.googleLoginId));
@@ -181,7 +190,7 @@ export class LakeExternalAgents {
         const models=await this.verifyCliCredential(profile,key,signal);
         if(id==='claude-code'){
           probe.model=profile.modelOverride;
-          probe.models=models.map(id=>({id,reasoningEfforts:[]}));
+          probe.models=models;
         }else{
           inspected.environment.env.GEMINI_API_KEY=key;
           Object.assign(probe,await this.antigravityCatalog(inspected.environment,signal));
@@ -239,9 +248,9 @@ export class LakeExternalAgents {
     await Promise.all(agents.map(async agent=>{
       const probe=this.registry.probe(projectId,agent.id);
       const current=probe?.revision===agent.revision&&probe.authentication===agent.authentication;
-      const needsClaudeCatalog=agent.id==='claude-code'&&probe?.ready===true&&probe.models===undefined;
+      const needsCliCatalog=agent.id!=='codex'&&probe?.ready===true&&(probe.cliCatalogVersion!==cliCatalogVersion||probe.models===undefined);
       const needsLocalStatus=agent.authentication==='claude-local'&&Date.now()-(probe?.checkedAt??0)>30000;
-      if(!agent.enabled||!agent.installed||current&&!needsClaudeCatalog&&!needsLocalStatus)return;
+      if(!agent.enabled||!agent.installed||current&&!needsCliCatalog&&!needsLocalStatus)return;
       const key=projectId+':'+agent.id;
       const previous=this.probes.get(key);if(previous){await previous.work;return;}
       const controller=new AbortController(),timer=setTimeout(()=>controller.abort(new Error('读取本机执行器状态超时')),90000);
@@ -335,7 +344,7 @@ export class LakeExternalAgents {
         const key=projectId+':antigravity',revision=profile.revision+1;
         this.store.transaction(()=>{
           this.store.put('acpProfiles',key,{...profile,googleLoginId:login.id,revision,updatedAt:now()});
-          this.store.put<CodexConnectionProbe>('acpProbes',key,{...catalog,authentication:profile.authentication,
+          this.store.put<CodexConnectionProbe>('acpProbes',key,{...catalog,authentication:profile.authentication,cliCatalogVersion,
             ready:true,authenticated:true,authMode:'google',revision,cliVersion:login.cliVersion,checkedAt:Date.now(),
             message:'Google 登录已就绪，已加载可用模型'});
         });
@@ -357,22 +366,28 @@ export class LakeExternalAgents {
   private async connectCli(profile:CliAgentProfile,directory:string,signal:AbortSignal,publish:(event:AgentActivity)=>void,mcp:ScopedStdioMcp|ScopedHttpMcp|undefined,model:string|undefined,systemPrompt:string|undefined,observeModel:ObserveAgentModel){
     const selected=model??profile.modelOverride;
     if(selected!==undefined&&!isCliModelId(selected))throw new HttpError(400,'模型 ID 无效');
+    const probe=this.registry.probe(profile.projectId,profile.id);
+    const selectedDefault=profile.modelOverride??probe?.localModel??probe?.model;
+    const effort=profile.reasoningEffortOverride;
+    const supportedEffort=effort&&probe?.revision===profile.revision&&
+      probe.models?.find(option=>option.id===(selected??selectedDefault))?.reasoningEfforts.includes(effort)?effort:undefined;
+    if(effort&&!supportedEffort&&(!selected||selected===selectedDefault))
+      throw new HttpError(409,'所选模型的思考强度已变化，请重新检测连接并选择');
     const inspected=await this.inspectCli(profile,directory,signal);
     if(!inspected.supported)throw new HttpError(409,this.cliVersionMessage(profile,inspected.version));
     if(profile.id==='claude-code'){
       if(profile.authentication==='claude-local'){
         const account=await claudeLocalAccount(inspected.environment,signal);
-        const probe=this.registry.probe(profile.projectId,profile.id);
         if(probe?.revision!==profile.revision||probe.accountFingerprint!==account)
           throw new HttpError(409,'本机 Claude Code 登录已变化，请重新检测连接');
       }else inspected.environment.env.ANTHROPIC_API_KEY=await this.cliCredential(profile);
-      return new ClaudeCode(inspected.environment,publish,mcp&&'command' in mcp?mcp:undefined,selected,observeModel);
+      return new ClaudeCode(inspected.environment,publish,mcp&&'command' in mcp?mcp:undefined,selected,observeModel,supportedEffort);
     }
     if(profile.authentication==='antigravity-google'){
       if(!profile.googleLoginId)throw new HttpError(409,antigravityLoginRequired);
       await this.googleCredentialFile(await antigravityCredentials(this.store.home,profile.projectId,profile.googleLoginId));
     }else inspected.environment.env.GEMINI_API_KEY=await this.cliCredential(profile);
-    return Antigravity.launch(inspected.environment,publish,mcp&&'serverUrl' in mcp?mcp:undefined,selected,systemPrompt,observeModel);
+    return Antigravity.launch(inspected.environment,publish,mcp&&'serverUrl' in mcp?mcp:undefined,selected,systemPrompt,observeModel,supportedEffort);
   }
   private result(run:ExternalRun):ExternalResult{const last=run.events.findLast(event=>event.kind==='text'&&event.publicTextId&&typeof event.publicText==='string');return {run_id:run.id,agent:externalAgentName(run.agent),state:run.state,summary:run.summary??run.error??'',
     ...(run.stopReason==='deadline_reached'&&{stop_reason:'deadline_reached' as const}),
@@ -461,8 +476,8 @@ export class LakeExternalAgents {
         transport=new CodexAppServer(launch,publish,bridge?{server:'lake',tools:new Set(toolDefinitions.map(tool=>tool.name)),guard:activePrompt}:undefined,this.redact);
       }else{
         const endpoint=httpBridge?{serverUrl:httpBridge.serverUrl,headers:httpBridge.headers}:mcp;
-        transport=await this.connectCli(profile,directory,controller.signal,publish,endpoint&&{...endpoint,tools:toolDefinitions,guard:activePrompt},model,actor.systemPrompt,(reported,provider)=>{
-          run.model=reported;run.modelProvider=provider;persist();
+        transport=await this.connectCli(profile,directory,controller.signal,publish,endpoint&&{...endpoint,tools:toolDefinitions,guard:activePrompt},model,actor.systemPrompt,(reported,provider,effort)=>{
+          run.model=reported;run.modelProvider=provider;run.reasoningEffort=effort;persist();
         });
       }
       live.process=transport;

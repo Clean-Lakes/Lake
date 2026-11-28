@@ -24,8 +24,10 @@ export type CodexModelOption = {
   defaultReasoningEffort?: string;
 };
 export const codexConnectionVersion = 2;
+export const cliCatalogVersion = 1;
 export type CodexConnectionProbe = {
   connectionVersion?: 1 | typeof codexConnectionVersion;
+  cliCatalogVersion?:number;
   revision: number;
   authentication?: string;
   ready: boolean;

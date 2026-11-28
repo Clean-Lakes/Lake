@@ -10,7 +10,7 @@ import { codexCatalogRevision, codexModelCatalog, codexStartupArgs, isCodexModel
 import {CodexLocalSource,codexHomePresent} from './codex-local';
 import {discoverCodexRuntime,validateCodexNode} from './runtime-paths';
 import {codexConnectionVersion} from './types';
-import {cliExecutable,cliRuntimeKinds,cliSecretId,cliSource,isCliModelId} from './cli-profile';
+import {cliExecutable,cliRuntimeKinds,cliSecretId,cliSource,isCliModelId,isCliReasoningEffort} from './cli-profile';
 import {cliDefaultAuthentication} from '../../../web-agent/shared/external-agents';
 
 function projectOverride(input:unknown,current:string|undefined,isValid:(value:unknown)=>value is string,invalid:string){
@@ -116,17 +116,25 @@ export class ExternalAgentRegistry {
     const current=probe?.revision===profile.revision&&probe.authentication===profile.authentication?probe:undefined;
     const name=externalProducts[id].name;
     const transportReady=!!executable&&current?.ready===true;
+    const selectedModel=profile.modelOverride??current?.localModel??current?.model;
+    const modelOptions=current?.models?.map(model=>model.id);
+    const selectedOption=current?.models?.find(model=>model.id===selectedModel);
+    const reasoningEffortOptions=selectedOption?.reasoningEfforts;
+    const effortUnavailable=profile.reasoningEffortOverride&&!reasoningEffortOptions?.includes(profile.reasoningEffortOverride);
     const assignmentBlocker=!profile.enabled?`请启用 ${name} 并保存`:
       process.platform!=='darwin'?'当前平台尚未开放本机 CLI 执行':!executable?`未找到 ${name} CLI，请安装或填写路径`:
       !current?`正在检测 ${name} 连接`:!transportReady||!current.authenticated?current.message??`${name} 连接不可用`:
       id==='antigravity'&&profile.modelOverride&&profile.modelOverride!==current.localModel&&
-      !current.models?.some(model=>model.id===profile.modelOverride)?'所选模型在当前账号下不可用，请重新选择':undefined;
+      !modelOptions?.includes(profile.modelOverride)?'所选模型在当前账号下不可用，请重新选择':
+      effortUnavailable?'所选模型的思考强度已变化，请重新选择':undefined;
     const {googleLoginId:_login,...preferences}=profile;
     return {...preferences,name,installed:!!executable,transportReady,assignmentReady:!assignmentBlocker,assignmentBlocker,
       detectedExecutable:executable?.path,cliVersion:current?.cliVersion,keyConfigured,
       authMode:current?.authMode??'none',
-      localModel:current?.localModel,model:current?.model,defaultTaskModel:profile.modelOverride??current?.model,
-      modelOptions:current?.models?.map(model=>model.id),message:current?.message};
+      localModel:current?.localModel,model:current?.model,defaultTaskModel:selectedModel,
+      modelOptions,modelEffortOptions:current?.models&&Object.fromEntries(current.models.map(model=>[model.id,model.reasoningEfforts])),
+      reasoningEffortOptions,reasoningEffort:effortUnavailable?undefined:profile.reasoningEffortOverride??selectedOption?.defaultReasoningEffort,
+      message:current?.message};
   }
   probe(projectId:string,agent:ExternalAgentId) {
     const probe = this.store.get<CodexConnectionProbe>('acpProbes',this.key(projectId,agent));
@@ -178,9 +186,17 @@ export class ExternalAgentRegistry {
   }
   private async saveCli(current:CliAgentProfile,input:Record<string,unknown>,key:string){
     const {id}=current;
-    if(input.model!==undefined||input.reasoningEffortOverride!=null||input.nodePath!==undefined||input.npmPath!==undefined)
+    if(input.model!==undefined||input.nodePath!==undefined||input.npmPath!==undefined)
       throw new HttpError(400,'请使用当前 CLI 支持的配置项');
     const modelOverride=projectOverride(input.modelOverride,current.modelOverride,isCliModelId,'模型 ID 无效');
+    const reasoningEffortOverride=projectOverride(input.reasoningEffortOverride,current.reasoningEffortOverride,isCliReasoningEffort,'思考强度无效');
+    if(reasoningEffortOverride&&(modelOverride!==current.modelOverride||reasoningEffortOverride!==current.reasoningEffortOverride)){
+      const probe=this.probe(current.projectId,id);
+      const model=modelOverride??probe?.localModel??probe?.model;
+      if(probe?.revision!==current.revision||!probe.ready||probe.authentication!==current.authentication||
+        !probe.models?.find(option=>option.id===model)?.reasoningEfforts.includes(reasoningEffortOverride))
+        throw new HttpError(400,'所选模型不支持这个思考强度');
+    }
     let executablePath=current.executablePath;
     if(input.executablePath!==undefined){
       const path=input.executablePath;
@@ -205,7 +221,7 @@ export class ExternalAgentRegistry {
       await this.store.secret(cliSecretId(current.projectId,id),apiKey);
     }
     const verified=this.get(current.projectId,id);
-    const profile:CliAgentProfile={...current,authentication,executablePath,modelOverride,enabled:input.enabled===true,
+    const profile:CliAgentProfile={...current,authentication,executablePath,modelOverride,reasoningEffortOverride,enabled:input.enabled===true,
       sourceFingerprint:cliSource(this.store.home,current.projectId,id,executablePath,authentication).fingerprint,
       revision:Math.max(verified.revision,current.revision+1),updatedAt:now()};
     return this.store.put('acpProfiles',key,profile);

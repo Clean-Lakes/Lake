@@ -71,12 +71,15 @@ if(agent==='claude-code'){
     assert.equal(request.type,'control_request');
     assert.equal(request.request.subtype,'initialize');
     send({type:'control_response',response:{subtype:'success',request_id:request.request_id,response:{models:[
-     {value:'default',resolvedModel:'claude-test-model'},{value:'claude-test-model'},{value:'claude-test-alt'},
+     {value:'default',resolvedModel:'claude-test-model',supportsEffort:true,supportedEffortLevels:['low','high']},
+     {value:'claude-test-model',supportsEffort:true,supportedEffortLevels:['low','high']},
+     {value:'claude-test-alt',supportsEffort:true,supportedEffortLevels:['medium','max']},
     ]}}});
    });
    return;
   }
  }
+ if(localClaude)assert.equal(args[args.indexOf('--effort')+1],'high');
  assert.equal(args[args.indexOf('--tools')+1],'');
  const session_id=args[args.indexOf('--session-id')+1];
  const mcp=JSON.parse(args[args.indexOf('--mcp-config')+1]).mcpServers;
@@ -120,6 +123,14 @@ if(agent==='claude-code'){
  assert.match(custom,/tools: \[\]/);assert.match(custom,/inheritCustomizations: false/);
  const mcp=JSON.parse(readFileSync(join(config,'mcp_config.json'),'utf8')).mcpServers;
  const sessionId='antigravity-fixture-session';
+ const modelIds=google?['gemini-google-plan','gemini-google-pro']:['gemini-test'];
+ let modelId=modelIds[0],effort='low';
+ function effortOptions(){return modelId==='gemini-google-pro'?['medium','extra']:['low','high'];}
+ function configOptions(){
+  const model={id:'model',type:'select',category:'model',currentValue:modelId,options:modelIds.map(value=>({value}))};
+  return google?[model,{id:'thinking_level',type:'select',category:'thought_level',currentValue:effort,
+   options:[{group:'levels',options:effortOptions().map(value=>({value}))}]}]:[model];
+ }
  const permissionOptions=[{kind:'allow_once',optionId:'allow'},{kind:'reject_once',optionId:'deny'}];
  const responses=new Map();
  function update(data){send({jsonrpc:'2.0',method:'session/update',params:{sessionId,update:data}});}
@@ -138,10 +149,17 @@ if(agent==='claude-code'){
   }
   if(frame.method==='session/new'){
    const empty=google&&readFileSync(credential,'utf8')==='empty-catalog';
-   response(frame.id,{sessionId,configOptions:empty?[]:[{id:'model',type:'select',category:'model',
-    currentValue:google?'gemini-google-plan':'gemini-test',options:[{value:google?'gemini-google-plan':'gemini-test'}]}]});
+   response(frame.id,{sessionId,configOptions:empty?[]:configOptions()});
+  }
+  if(frame.method==='session/set_config_option'){
+   const {configId,value}=frame.params;
+   assert.equal(frame.params.sessionId,sessionId);
+   if(configId==='model'){assert.ok(modelIds.includes(value));modelId=value;effort=effortOptions()[0];}
+   else {assert.equal(configId,'thinking_level');assert.ok(effortOptions().includes(value));effort=value;}
+   response(frame.id,{configOptions:configOptions()});
   }
   if(frame.method!=='session/prompt')return;
+  if(google)assert.deepEqual([modelId,effort],['gemini-google-pro','extra']);
   assert.deepEqual(Object.keys(mcp),['lake']);
   assert.ok(args.includes('--process-per-session'));
   const tool={sessionUpdate:'tool_call',toolCallId:'fixture-call',name:'call_mcp_tool',status:'pending',rawInput:{ServerName:'lake',ToolName:'work_finish',Arguments:{summary:'ISOLATED_CLI_REPORT',outcome:'completed'}}};
@@ -172,7 +190,9 @@ test('CLI profiles bind specialists, dispatch through the private bridge, and pu
   if(typeof url==='string'&&url.startsWith('https://api.anthropic.com/v1/models?')){
    assert.equal(options.headers['x-api-key'],'synthetic-fixture-claude-code');
    catalogReads++;
-   return Response.json({data:[...claudeModels,'invalid id',claudeModels[0]].map(id=>({id}))});
+   return Response.json({data:[...claudeModels,'invalid id',claudeModels[0]].map(id=>({id,capabilities:{effort:{
+    supported:true,low:{supported:true},high:{supported:true},max:{supported:false},
+   }}}))});
   }
   if(typeof url==='string'&&url.startsWith('https://generativelanguage.googleapis.com/v1beta/models?')){
    assert.equal(options.headers['x-goog-api-key'],'synthetic-fixture-antigravity');
@@ -199,6 +219,7 @@ test('CLI profiles bind specialists, dispatch through the private bridge, and pu
   assert.equal(status.assignmentReady,true,status.assignmentBlocker);
   assert.deepEqual(status.modelOptions,agent==='claude-code'?claudeModels:['gemini-test']);
   if(agent==='claude-code'){
+   assert.deepEqual(status.modelEffortOptions[claudeModels[0]],['low','high']);
    assert.equal(catalogReads,1);
    const probe=app.agents.external.registry.probe(project.id,agent);
    delete probe.models;app.store.put('acpProbes',project.id+':'+agent,probe);
@@ -263,7 +284,7 @@ test('CLI account authentication loads the real catalog shape and preserves the 
  }
  const claude=join(home,'claude'),agy=join(home,'agy');
  await writeFile(claude,cliFixture('claude-code'),{mode:0o700});await writeFile(agy,cliFixture('antigravity'),{mode:0o700});
- async function dispatch(agent,agentRevision,model){
+ async function dispatch(agent,agentRevision,model,effort){
   const channel=app.superagent.createSpecialist(project.id,{name:agent,duties:'Report a fixture',avatarId:'beaver',requestId:'create-'+agent});
   const execution={kind:'acp',agent,revision:agentRevision};
   const binding=app.superagent.setRoleExecution(project.id,channel.roleId,{expectedRevision:channel.roleRevision,execution});
@@ -276,7 +297,7 @@ test('CLI account authentication loads the real catalog shape and preserves the 
    await new Promise(resolve=>setTimeout(resolve,35));
   }
   assert.equal(run?.state,'completed',run?.error);
-  assert.deepEqual([run.agent,run.model,run.summary],[agent,model,'ISOLATED_CLI_REPORT']);
+  assert.deepEqual([run.agent,run.model,run.reasoningEffort,run.summary],[agent,model,effort,'ISOLATED_CLI_REPORT']);
  }
  const accountFile=join(claudeConfig,'fixture-login.json');
  await writeFile(accountFile,JSON.stringify({loggedIn:false,authMethod:'none'}));
@@ -290,10 +311,15 @@ test('CLI account authentication loads the real catalog shape and preserves the 
  assert.equal(signedIn.assignmentReady,true);
  assert.deepEqual(signedIn.modelOptions,['claude-test-model','claude-test-alt']);
  assert.equal(signedIn.localModel,'claude-test-model');
- await dispatch('claude-code',signedIn.revision,'claude-test-model');
+ assert.deepEqual(signedIn.reasoningEffortOptions,['low','high']);
+ await request('/claude-code/prepare','POST',{expectedRevision:signedIn.revision,enabled:true,reasoningEffortOverride:'max'},400);
+ const claudeConfigured=claudeStatus((await request('/claude-code/prepare','POST',{
+  expectedRevision:signedIn.revision,enabled:true,reasoningEffortOverride:'high',
+ })).agents);
+ await dispatch('claude-code',claudeConfigured.revision,'claude-test-model','high');
  await writeFile(accountFile,JSON.stringify({loggedIn:true,authMethod:'claude.ai',email:'other-fixture@example.invalid'}));
  await request('/claude-code/probe','POST',{});
- assert.equal(claudeStatus((await request('')).agents).revision,signedIn.revision+1);
+ assert.equal(claudeStatus((await request('')).agents).revision,claudeConfigured.revision+1);
  assert.ok(!JSON.stringify(app.store.list('acpProbes')).includes('@example.invalid'));
 
  const {agents}=await request('/antigravity/prepare','POST',{expectedRevision:0,enabled:true,executablePath:agy});
@@ -311,16 +337,26 @@ test('CLI account authentication loads the real catalog shape and preserves the 
  const google=googleStatus(completed.agents);
  assert.equal(google.authMode,'google');
  assert.equal(google.assignmentReady,true);
- assert.deepEqual(google.modelOptions,['gemini-google-plan']);
+ assert.deepEqual(google.modelOptions,['gemini-google-plan','gemini-google-pro']);
+ assert.deepEqual(google.modelEffortOptions,{'gemini-google-plan':['low','high'],'gemini-google-pro':['medium','extra']});
+ assert.equal(google.reasoningEffort,'low','catalog probing keeps the initial model and default effort');
  assert.equal(google.revision,initial.revision+1);
  assert.ok(!JSON.stringify(completed).includes(login.id));
- await dispatch('antigravity',google.revision,'gemini-google-plan');
+ const stored=app.agents.external.registry.probe(project.id,'antigravity');
+ delete stored.cliCatalogVersion;delete stored.models[0].reasoningEfforts;
+ app.store.put('acpProbes',project.id+':antigravity',stored);
+ assert.deepEqual(googleStatus((await request('')).agents).modelEffortOptions,google.modelEffortOptions);
+ await request('/antigravity/prepare','POST',{expectedRevision:google.revision,enabled:true,
+  modelOverride:'gemini-google-pro',reasoningEffortOverride:'high'},400);
+ const googleConfigured=googleStatus((await request('/antigravity/prepare','POST',{expectedRevision:google.revision,enabled:true,
+  modelOverride:'gemini-google-pro',reasoningEffortOverride:'extra'})).agents);
+ await dispatch('antigravity',googleConfigured.revision,'gemini-google-pro','extra');
  const credentials=join(home,'secrets','antigravity',project.id,login.id);
  assert.equal((await stat(join(credentials,'antigravity-oauth-token'))).mode&0o077,0);
- const retry=await begin(google.revision);
+ const retry=await begin(googleConfigured.revision);
  await request(loginPath+'/'+retry.id,'POST',{code:'fixture-empty-models'},409);
  const current=googleStatus((await request('')).agents);
- assert.equal(current.revision,google.revision);
+ assert.equal(current.revision,googleConfigured.revision);
  assert.deepEqual(current.modelOptions,google.modelOptions);
  assert.deepEqual(await readdir(join(home,'secrets','antigravity',project.id)),[login.id]);
  await request('/antigravity/probe','POST',{});

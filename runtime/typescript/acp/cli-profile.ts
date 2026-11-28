@@ -18,6 +18,9 @@ export const antigravityAppData = 'antigravity-acp';
 export function isCliModelId(value:unknown):value is string {
   return typeof value==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_.:+/@-]{0,199}$/.test(value);
 }
+export function isCliReasoningEffort(value:unknown):value is string {
+  return typeof value==='string'&&/^[a-z][a-z0-9_-]{0,31}$/i.test(value);
+}
 export function cliExecutable(home:string,id:CliAgentId,custom?:string) {
   const folders=[join(home,'external-agents','adapters',id,'bin'),join(homedir(),'.local','bin'),'/opt/homebrew/bin','/usr/local/bin',...(process.env.PATH??'').split(':')];
   for(const path of custom?[custom]:folders.filter(folder=>isAbsolute(folder)).map(folder=>join(folder,binaries[id]))){
