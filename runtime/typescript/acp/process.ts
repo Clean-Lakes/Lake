@@ -1,4 +1,4 @@
-import {spawn,type ChildProcessWithoutNullStreams} from 'node:child_process';
+import {spawn,type ChildProcess,type ChildProcessWithoutNullStreams} from 'node:child_process';
 import type {AgentLaunch} from './client';
 
 type Pending = {resolve:(value:any)=>void;reject:(error:Error)=>void};
@@ -9,6 +9,21 @@ export type RpcHandlers = {
 };
 const maxFrameBytes=8*1024*1024;
 const failure=(reason:unknown)=>reason instanceof Error?reason:new Error('智能体连接已停止');
+
+export async function stopAgentProcess(child:ChildProcess){
+  const pid=child.pid;if(!pid)return;
+  const kill=(signal:NodeJS.Signals)=>{
+    try{if(process.platform==='win32')child.kill(signal);else process.kill(-pid,signal);}catch{/* Already reaped. */}
+  };
+  let timer:ReturnType<typeof setTimeout>|undefined;
+  let onClose=()=>{};
+  const exited=new Promise<void>(resolve=>{onClose=resolve;child.once('close',onClose);});
+  kill('SIGTERM');
+  try {
+    if(child.exitCode===null&&child.signalCode===null)
+      await Promise.race([exited,new Promise<void>(resolve=>{timer=setTimeout(resolve,300);})]);
+  }finally{clearTimeout(timer);child.removeListener('close',onClose);kill('SIGKILL');}
+}
 
 /** Owns one process and bounds its NDJSON input and output. */
 export class JsonLineProcess {
@@ -64,18 +79,7 @@ export class JsonLineProcess {
   private async end() {
     this.fail(new Error('智能体连接已关闭'));
     this.process.stdin.end();
-    const pid=this.process.pid;if(!pid)return;
-    const kill=(signal:NodeJS.Signals)=>{
-      try{if(process.platform==='win32')this.process.kill(signal);else process.kill(-pid,signal);}catch{/* Already reaped. */}
-    };
-    let timer:ReturnType<typeof setTimeout>|undefined;
-    let onClose=()=>{};
-    const exited=new Promise<void>(resolve=>{onClose=resolve;this.process.once('close',onClose);});
-    kill('SIGTERM');
-    try {
-      if(this.process.exitCode===null&&this.process.signalCode===null)
-        await Promise.race([exited,new Promise<void>(resolve=>{timer=setTimeout(resolve,300);})]);
-    }finally{clearTimeout(timer);this.process.removeListener('close',onClose);kill('SIGKILL');}
+    await stopAgentProcess(this.process);
   }
 }
 

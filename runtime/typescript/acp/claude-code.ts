@@ -1,5 +1,7 @@
-import {randomUUID} from 'node:crypto';
+import {execFile} from 'node:child_process';
+import {createHash,randomUUID} from 'node:crypto';
 import {join} from 'node:path';
+import {promisify} from 'node:util';
 import type {AgentActivity,AgentConnection,AgentLaunch,AgentTurnResult,ObserveAgentModel,ScopedStdioMcp} from './client';
 import {isCliModelId} from './cli-profile';
 import {privateFile} from './private';
@@ -7,12 +9,68 @@ import {JsonLineProcess} from './process';
 
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const textLimit=65536;
+const run=promisify(execFile);
+const localLoginRequired='本机 Claude Code 尚未登录，请运行 claude auth login 后重新检测连接';
+const restrictedArgs=['--restricted','--setting-sources','','--strict-mcp-config',
+  '--settings',JSON.stringify({disableAllHooks:true,autoMemoryEnabled:false})];
+const streamArgs=['-p',...restrictedArgs,'--tools','','--no-chrome','--disable-slash-commands',
+  '--permission-mode','dontAsk','--input-format','stream-json','--output-format','stream-json','--verbose'];
+type CliLaunch=Omit<AgentLaunch,'args'>;
+
+export async function claudeLocalAccount(launch:CliLaunch,signal:AbortSignal){
+  const result=await run(launch.executable,[...restrictedArgs,'auth','status','--json'],{
+    ...launch,signal,timeout:15000,maxBuffer:65536,
+  }).catch(error=>{
+    signal.throwIfAborted();
+    if(error.code===1)throw new Error(localLoginRequired);
+    throw new Error('无法读取本机 Claude Code 登录状态');
+  });
+  let account;
+  try{account=JSON.parse(result.stdout);}catch{throw new Error('Claude Code 未返回登录状态');}
+  if(account?.loggedIn!==true||!['claude.ai','oauth_token'].includes(account.authMethod))throw new Error(localLoginRequired);
+  // Keep only a stable binding to the login. The CLI owns the credentials.
+  return createHash('sha256').update(JSON.stringify([
+    account.authMethod,account.configDirectory,account.email,account.orgId,
+  ])).digest('hex');
+}
+
+/** The same initialization exchange used by the Agent SDK, without sending a user turn. */
+export async function discoverClaudeModels(launch:CliLaunch,signal:AbortSignal){
+  const requestId=randomUUID(),deadline=AbortSignal.any([signal,AbortSignal.timeout(25000)]);
+  deadline.throwIfAborted();
+  let cleanup=()=>{};
+  const process=new JsonLineProcess({...launch,args:[...streamArgs,'--no-session-persistence']},frame=>{
+    if(frame.type==='control_response'&&frame.response?.request_id===requestId)onResponse(frame.response);
+  });
+  let onResponse:(response:any)=>void=()=>{};
+  try{
+    const catalog=await new Promise<unknown>((resolve,reject)=>{
+      onResponse=response=>response.subtype==='success'?resolve(response.response?.models):
+        reject(new Error('Claude Code 未返回可用模型'));
+      const abort=()=>reject(deadline.reason);
+      const disconnected=()=>reject(new Error('Claude Code 在返回模型前断开'));
+      cleanup=()=>{
+        deadline.removeEventListener('abort',abort);
+        process.signal.removeEventListener('abort',disconnected);
+      };
+      deadline.addEventListener('abort',abort,{once:true});
+      process.signal.addEventListener('abort',disconnected,{once:true});
+      process.send({type:'control_request',request_id:requestId,request:{subtype:'initialize'}});
+    });
+    if(!Array.isArray(catalog)||!catalog.length)throw new Error('Claude Code 未返回可用模型');
+    const defaultModel=catalog.find(model=>model?.value==='default')?.resolvedModel;
+    const localModel=isCliModelId(defaultModel)?defaultModel:undefined;
+    const models=[...new Set(catalog.map(model=>model?.value).filter((id):id is string=>id!=='default'&&isCliModelId(id)))].slice(0,256);
+    if(!models.length&&!localModel)throw new Error('Claude Code 未返回可用模型');
+    return {models,localModel};
+  }finally{cleanup();await process.close();}
+}
 
 /** Claude Code's documented headless JSON stream. Lake owns every business tool. */
 export class ClaudeCode implements AgentConnection {
   private session?:{id:string;args:string[]};
   private process?:JsonLineProcess;
-  constructor(private readonly launch:Omit<AgentLaunch,'args'>,private readonly publish:(event:AgentActivity)=>void,
+  constructor(private readonly launch:CliLaunch,private readonly publish:(event:AgentActivity)=>void,
     private readonly mcp:ScopedStdioMcp|undefined,private readonly model:string|undefined,private readonly observeModel:ObserveAgentModel){}
 
   async initialize(signal:AbortSignal){signal.throwIfAborted();return {streaming:true,resume:true,cancel:true};}
@@ -21,9 +79,7 @@ export class ClaudeCode implements AgentConnection {
     signal.throwIfAborted();
     if(this.session||options.threadId&&!uuid.test(options.threadId))throw new Error('Claude Code 会话标识无效');
     const id=options.threadId??randomUUID();
-    const args=['-p','--bare','--restricted','--setting-sources','','--tools','','--strict-mcp-config','--no-chrome','--disable-slash-commands',
-      '--settings',JSON.stringify({disableAllHooks:true,autoMemoryEnabled:false}),'--permission-mode','dontAsk',
-      '--input-format','stream-json','--output-format','stream-json','--verbose','--include-partial-messages',
+    const args=[...streamArgs,...(this.launch.env.ANTHROPIC_API_KEY?['--bare']:[]),'--include-partial-messages',
       options.threadId?'--resume':'--session-id',id];
     if(this.mcp){
       args.push('--mcp-config',JSON.stringify({mcpServers:{lake:{type:'stdio',command:this.mcp.command,args:this.mcp.args}}}),

@@ -9,7 +9,7 @@ const {startLakeServer}=require('../../bin/lake-runtime/server.cjs');
 function cliFixture(agent){
  return `#!${process.execPath}\nconst agent=${JSON.stringify(agent)};\n`+String.raw`
 const assert=require('node:assert/strict');
-const {readFileSync}=require('node:fs');
+const {existsSync,readFileSync,writeFileSync}=require('node:fs');
 const {spawn}=require('node:child_process');
 const {createInterface}=require('node:readline');
 const {join}=require('node:path');
@@ -18,7 +18,8 @@ if(args.includes('--version')){console.log(agent==='claude-code'?'2.1.332':'1.5.
 const lines=createInterface({input:process.stdin});
 const send=frame=>console.log(JSON.stringify(frame));
 const response=(id,result)=>send({jsonrpc:'2.0',id,result});
-assert.ok(process.env.HOME.startsWith(process.cwd()+'/'));
+const localClaude=agent==='claude-code'&&!process.env.ANTHROPIC_API_KEY;
+assert.equal(process.env.HOME.startsWith(process.cwd()+'/'),!localClaude);
 assert.ok(!process.env.LAKE_TEST_PARENT_ENV);
 let sequence=0;
 async function reportViaBridge(mcp){
@@ -56,9 +57,27 @@ async function reportViaBridge(mcp){
 }
 
 if(agent==='claude-code'){
- assert.ok(process.env.ANTHROPIC_API_KEY);
+ assert.ok(args.includes('--restricted')&&args.includes('--strict-mcp-config'));
+ assert.equal(args.includes('--bare'),!localClaude);
+ if(localClaude){
+  const login=JSON.parse(readFileSync(join(process.env.CLAUDE_CONFIG_DIR,'fixture-login.json'),'utf8'));
+  if(args.includes('auth')){
+   assert.ok(args.includes('status')&&args.includes('--json'));
+   send(login);process.exit(login.loggedIn?0:1);
+  }
+  if(args.includes('--no-session-persistence')){
+   lines.once('line',line=>{
+    const request=JSON.parse(line);
+    assert.equal(request.type,'control_request');
+    assert.equal(request.request.subtype,'initialize');
+    send({type:'control_response',response:{subtype:'success',request_id:request.request_id,response:{models:[
+     {value:'default',resolvedModel:'claude-test-model'},{value:'claude-test-model'},{value:'claude-test-alt'},
+    ]}}});
+   });
+   return;
+  }
+ }
  assert.equal(args[args.indexOf('--tools')+1],'');
- assert.ok(args.includes('--bare')&&args.includes('--strict-mcp-config'));
  const session_id=args[args.indexOf('--session-id')+1];
  const mcp=JSON.parse(args[args.indexOf('--mcp-config')+1]).mcpServers;
  assert.deepEqual(Object.keys(mcp),['lake']);
@@ -71,14 +90,35 @@ if(agent==='claude-code'){
   send({type:'result',session_id,subtype:'success',usage:{input_tokens:3,output_tokens:5}});
  });
 }else{
- assert.ok(process.env.GEMINI_API_KEY);
+ const google=!!process.env.GEMINI_HOME;
+ const appData=google?join(process.env.GEMINI_HOME,args[args.indexOf('--app-data-dir')+1]):
+  join(process.env.HOME,'.gemini','antigravity-cli');
+ const credential=join(appData,'antigravity-oauth-token');
+ const settings=JSON.parse(readFileSync(join(appData,'settings.json'),'utf8'));
+ assert.ok(settings.permissions.deny.includes('command(*)'));
+ if(google){
+  assert.ok(!process.env.GEMINI_API_KEY);
+  assert.equal(settings.auth.type,'oauth-personal');
+  assert.equal(args[args.indexOf('--gemini-dir')+1],process.env.GEMINI_HOME);
+  assert.equal(process.env.AGY_ACP_FORCE_FILE_STORAGE,'1');
+  if(args.includes('--login')){
+   console.log('https://accounts.google.com/o/oauth2/auth?state=fixture-state&response_type=code&code_challenge=fixture&redirect_uri=https%3A%2F%2Fantigravity.google%2Foauth-callback');
+   lines.once('line',code=>{
+    if(!['fixture-code','fixture-empty-models'].includes(code))process.exit(1);
+    writeFileSync(credential,code==='fixture-code'?'synthetic-local-google-credential':'empty-catalog',{mode:0o644});
+    process.exit(0);
+   });
+   return;
+  }
+ }else{
+  assert.ok(process.env.GEMINI_API_KEY);
+  assert.equal(settings.modelProvider,'gemini');
+ }
  assert.deepEqual(args.slice(0,4),['acp','--disable-telemetry','--agent','lake']);
  const config=join(process.env.HOME,'.gemini','config');
  const custom=readFileSync(join(config,'agents','lake.md'),'utf8');
  assert.match(custom,/tools: \[\]/);assert.match(custom,/inheritCustomizations: false/);
  const mcp=JSON.parse(readFileSync(join(config,'mcp_config.json'),'utf8')).mcpServers;
- const settings=JSON.parse(readFileSync(join(process.env.HOME,'.gemini','antigravity-cli','settings.json'),'utf8'));
- assert.ok(settings.permissions.deny.includes('command(*)'));assert.equal(settings.modelProvider,'gemini');
  const sessionId='antigravity-fixture-session';
  const permissionOptions=[{kind:'allow_once',optionId:'allow'},{kind:'reject_once',optionId:'deny'}];
  const responses=new Map();
@@ -91,7 +131,16 @@ if(agent==='claude-code'){
   const frame=JSON.parse(line);assert.equal(frame.jsonrpc,'2.0');
   if(responses.has(frame.id)){const resolve=responses.get(frame.id);responses.delete(frame.id);resolve(frame.result.outcome.optionId);return;}
   if(frame.method==='initialize')response(frame.id,{protocolVersion:1,agentCapabilities:{sessionCapabilities:{resume:{}}}});
-  if(frame.method==='session/new')response(frame.id,{sessionId,configOptions:[{id:'model',type:'select',category:'model',currentValue:'gemini-test',options:[{value:'gemini-test'}]}]});
+  if(frame.method==='authenticate'){
+   assert.equal(frame.params.methodId,'oauth-personal');
+   if(existsSync(credential))response(frame.id,{});
+   else send({jsonrpc:'2.0',id:frame.id,error:{code:-32000,message:'Authentication required'}});
+  }
+  if(frame.method==='session/new'){
+   const empty=google&&readFileSync(credential,'utf8')==='empty-catalog';
+   response(frame.id,{sessionId,configOptions:empty?[]:[{id:'model',type:'select',category:'model',
+    currentValue:google?'gemini-google-plan':'gemini-test',options:[{value:google?'gemini-google-plan':'gemini-test'}]}]});
+  }
   if(frame.method!=='session/prompt')return;
   assert.deepEqual(Object.keys(mcp),['lake']);
   assert.ok(args.includes('--process-per-session'));
@@ -190,4 +239,90 @@ test('CLI profiles bind specialists, dispatch through the private bridge, and pu
   assert.equal(disconnected.modelOptions,undefined);
   assert.equal(app.store.require('superWorkers',worker.id).roleSnapshot.execution.revision,status.revision);
  }
+});
+
+test('CLI account authentication loads the real catalog shape and preserves the last verified Google login on failure',
+ {skip:process.platform!=='darwin',timeout:45000},async t=>{
+ const home=await mkdtemp(join(tmpdir(),'lake-external-login-'));
+ const web=join(home,'web'),claudeConfig=join(home,'fixture-claude-config');
+ await mkdir(web);await mkdir(claudeConfig);await writeFile(join(web,'index.html'),'fixture');
+ const previousConfig=process.env.CLAUDE_CONFIG_DIR;
+ process.env.CLAUDE_CONFIG_DIR=claudeConfig;
+ const app=await startLakeServer({home,data:join(home,'data'),port:0,staticRoot:web});
+ t.after(async()=>{
+  if(previousConfig===undefined)delete process.env.CLAUDE_CONFIG_DIR;
+  else process.env.CLAUDE_CONFIG_DIR=previousConfig;
+  await app.close();await rm(home,{recursive:true,force:true});
+ });
+ const project=app.store.createProject('local and browser login');
+ const base='/api/projects/'+project.id+'/external-agents';
+ async function request(path,method='GET',body,expected=200){
+  const response=await fetch(app.origin+base+path,{method,headers:{Authorization:'Bearer '+app.token,
+   'Content-Type':'application/json'},...(body&&{body:JSON.stringify(body)})});
+  assert.equal(response.status,expected,await response.clone().text());return response.json();
+ }
+ const claude=join(home,'claude'),agy=join(home,'agy');
+ await writeFile(claude,cliFixture('claude-code'),{mode:0o700});await writeFile(agy,cliFixture('antigravity'),{mode:0o700});
+ async function dispatch(agent,agentRevision,model){
+  const channel=app.superagent.createSpecialist(project.id,{name:agent,duties:'Report a fixture',avatarId:'beaver',requestId:'create-'+agent});
+  const execution={kind:'acp',agent,revision:agentRevision};
+  const binding=app.superagent.setRoleExecution(project.id,channel.roleId,{expectedRevision:channel.roleRevision,execution});
+  const receipt=await app.superagent.send(channel.sessionId,'Run the authenticated fixture',undefined,false,undefined,
+   {requestId:'authenticated-fixture-'+agent,roleRevision:binding.revision,execution});
+  let run;
+  for(let attempt=0;attempt<250;attempt++){
+   run=app.store.list('acpRuns').find(row=>row.workerId===receipt.assignment.workerId);
+   if(run&&!['starting','running'].includes(run.state))break;
+   await new Promise(resolve=>setTimeout(resolve,35));
+  }
+  assert.equal(run?.state,'completed',run?.error);
+  assert.deepEqual([run.agent,run.model,run.summary],[agent,model,'ISOLATED_CLI_REPORT']);
+ }
+ const accountFile=join(claudeConfig,'fixture-login.json');
+ await writeFile(accountFile,JSON.stringify({loggedIn:false,authMethod:'none'}));
+ const prepared=await request('/claude-code/prepare','POST',{expectedRevision:0,enabled:true,executablePath:claude});
+ const claudeStatus=agents=>agents.find(agent=>agent.id==='claude-code');
+ assert.match(claudeStatus(prepared.agents).message,/尚未登录/);
+ await writeFile(accountFile,JSON.stringify({loggedIn:true,authMethod:'claude.ai',email:'fixture-account@example.invalid'}));
+ await request('/claude-code/probe','POST',{});
+ const signedIn=claudeStatus((await request('')).agents);
+ assert.equal(signedIn.authMode,'claude_login');
+ assert.equal(signedIn.assignmentReady,true);
+ assert.deepEqual(signedIn.modelOptions,['claude-test-model','claude-test-alt']);
+ assert.equal(signedIn.localModel,'claude-test-model');
+ await dispatch('claude-code',signedIn.revision,'claude-test-model');
+ await writeFile(accountFile,JSON.stringify({loggedIn:true,authMethod:'claude.ai',email:'other-fixture@example.invalid'}));
+ await request('/claude-code/probe','POST',{});
+ assert.equal(claudeStatus((await request('')).agents).revision,signedIn.revision+1);
+ assert.ok(!JSON.stringify(app.store.list('acpProbes')).includes('@example.invalid'));
+
+ const {agents}=await request('/antigravity/prepare','POST',{expectedRevision:0,enabled:true,executablePath:agy});
+ const googleStatus=agents=>agents.find(agent=>agent.id==='antigravity');
+ const initial=googleStatus(agents),loginPath='/antigravity/google-login';
+ assert.match(initial.message,/尚未登录/);
+ const begin=revision=>request(loginPath,'POST',{expectedRevision:revision});
+ const cancelled=await begin(initial.revision);
+ await request(loginPath+'/'+cancelled.id,'DELETE');
+ await request(loginPath+'/'+cancelled.id,'POST',{code:'fixture-code'},409);
+ const login=await begin(initial.revision);
+ assert.equal(new URL(login.authorizationUrl).origin,'https://accounts.google.com');
+ await request(loginPath+'/'+login.id,'POST',{code:'https://antigravity.google/oauth-callback?state=other&code=fixture-code'},400);
+ const completed=await request(loginPath+'/'+login.id,'POST',{code:'fixture-code'});
+ const google=googleStatus(completed.agents);
+ assert.equal(google.authMode,'google');
+ assert.equal(google.assignmentReady,true);
+ assert.deepEqual(google.modelOptions,['gemini-google-plan']);
+ assert.equal(google.revision,initial.revision+1);
+ assert.ok(!JSON.stringify(completed).includes(login.id));
+ await dispatch('antigravity',google.revision,'gemini-google-plan');
+ const credentials=join(home,'secrets','antigravity',project.id,login.id);
+ assert.equal((await stat(join(credentials,'antigravity-oauth-token'))).mode&0o077,0);
+ const retry=await begin(google.revision);
+ await request(loginPath+'/'+retry.id,'POST',{code:'fixture-empty-models'},409);
+ const current=googleStatus((await request('')).agents);
+ assert.equal(current.revision,google.revision);
+ assert.deepEqual(current.modelOptions,google.modelOptions);
+ assert.deepEqual(await readdir(join(home,'secrets','antigravity',project.id)),[login.id]);
+ await request('/antigravity/probe','POST',{});
+ assert.equal(googleStatus((await request('')).agents).assignmentReady,true);
 });

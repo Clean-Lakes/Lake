@@ -611,6 +611,20 @@ export async function startLakeServer(options: ServerOptions) {
         const registry=agents.external.registry;
         if(path.length===4&&method==='GET')result={agents:await agents.external.status(path[2])};
         else if(path.length===5&&method==='PUT')result=await registry.save(path[2],path[4],data);
+        else if(path[4]==='antigravity'&&path[5]==='google-login'){
+          if(draining)throw new HttpError(503,'Lake 正在退出');
+          const cancel=new AbortController(),abort=()=>cancel.abort();
+          response.on('close',abort);
+          try{
+            if(path.length===6&&method==='POST')
+              result=await agents.external.startGoogleLogin(path[2],data.expectedRevision,cancel.signal);
+            else if(path.length===7&&method==='POST')
+              result=await agents.external.completeGoogleLogin(path[2],path[6],data.code,cancel.signal);
+            else if(path.length===7&&method==='DELETE')
+              result=await agents.external.cancelGoogleLogin(path[2],path[6]);
+            else throw new HttpError(405,'不支持此 Google 登录操作');
+          }finally{response.off('close',abort);}
+        }
         else if(path.length===6&&method==='POST'&&['probe','install','prepare'].includes(path[5])){
           const cancel=new AbortController(),abort=()=>cancel.abort();response.on('close',abort);
           const timeout=setTimeout(abort,path[5]==='probe'?90000:300000);

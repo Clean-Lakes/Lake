@@ -1,15 +1,15 @@
 import {rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import type {AgentActivity,AgentConnection,AgentLaunch,AgentTurnResult,ObserveAgentModel,ScopedHttpMcp} from './client';
-import {isCliModelId} from './cli-profile';
+import {antigravityProfileArgs,isCliModelId} from './cli-profile';
 import {JsonRpcProcess} from './process';
 import {privateFile,privatePath} from './private';
 import {digest} from '../tasks';
 
-const loginRequired='Google Antigravity 未接受 Gemini API Key，请检测连接';
+export const antigravityLoginRequired='Google Antigravity 尚未登录，请使用 Google 登录';
 type ModelConfig={id:string;currentValue:string;options:unknown[]};
 function modelConfig(result:any):ModelConfig|undefined {
-  return Array.isArray(result?.configOptions)?result.configOptions.find((item:any)=>item?.type==='select'&&item.category==='model'&&
+  return Array.isArray(result?.configOptions)?result.configOptions.find((item:any)=>item?.type==='select'&&(item.category==='model'||item.id==='model')&&
     typeof item.id==='string'&&isCliModelId(item.currentValue)&&Array.isArray(item.options)):undefined;
 }
 function modelOptions(config:ModelConfig|undefined,legacy:any):string[]{
@@ -24,6 +24,7 @@ export class Antigravity implements AgentConnection {
   private readonly rpc:JsonRpcProcess;
   private sessionId?:string;
   private resume=false;
+  private readonly googleLogin:boolean;
   private turn?:{messages:Map<string,string>;calls:Map<string,string|false>};
   localModel?:string;
   model?:string;
@@ -46,7 +47,9 @@ export class Antigravity implements AgentConnection {
 
   private constructor(launch:Omit<AgentLaunch,'args'>,private readonly publish:(event:AgentActivity)=>void,
     private readonly configFile:string,private readonly mcp?:ScopedHttpMcp,private readonly requestedModel?:string,private readonly observeModel?:ObserveAgentModel){
-    this.rpc=new JsonRpcProcess({...launch,args:['acp','--disable-telemetry','--agent','lake',...(mcp?['--process-per-session']:[])]},{
+    this.googleLogin=!!launch.env.GEMINI_HOME;
+    this.rpc=new JsonRpcProcess({...launch,args:['acp','--disable-telemetry','--agent','lake',...antigravityProfileArgs(launch.env),
+      ...(mcp?['--process-per-session']:[])]},{
       request:async(method,params)=>{
         if(method!=='session/request_permission')throw new Error('该 ACP 请求未获得 Lake 授权');
         return this.permission(params);
@@ -77,13 +80,16 @@ export class Antigravity implements AgentConnection {
     try{return await this.rpc.request(method,params,signal,method==='session/prompt'?2_147_483_647:20000);}
     catch(error){
       signal.throwIfAborted();
-      if(error instanceof Error&&/authentication required/i.test(error.message))throw new Error(loginRequired);
+      if(error instanceof Error&&((error as Error & {code?:number}).code===-32000||
+        /authentication required|no browser is available/i.test(error.message)))
+        throw new Error(this.googleLogin?antigravityLoginRequired:'Google Antigravity 未接受 Gemini API Key，请检测连接');
       throw new Error(`Google Antigravity 的 ${method} 请求未完成`);
     }
   }
   async initialize(signal:AbortSignal){
     const result=await this.request('initialize',{protocolVersion:1,clientCapabilities:{},clientInfo:{name:'lake',title:'Lake',version:'1'}},signal);
     if(result?.protocolVersion!==1)throw new Error('Google Antigravity 的 ACP 协议版本不受支持');
+    if(this.googleLogin)await this.request('authenticate',{methodId:'oauth-personal'},signal);
     const capabilities=result.agentCapabilities?.sessionCapabilities;
     this.resume=!!capabilities?.resume;
     return {streaming:true,resume:this.resume,cancel:true};

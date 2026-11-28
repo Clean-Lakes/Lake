@@ -1,6 +1,6 @@
 import type { ToolEntry } from '../sdk';
 
-import type {CodexProjectOverrides,ExternalAgentId,ExternalAgentStatus as PublicAgentStatus,ExternalRuntimeKind,StoredExternalAgentId} from '../../../web-agent/shared/external-agents';
+import type {CliAuthentication,CodexProjectOverrides,ExternalAgentId,ExternalAgentStatus as PublicAgentStatus,ExternalRuntimeKind,StoredExternalAgentId} from '../../../web-agent/shared/external-agents';
 export type {ExternalAgentId,AgentBackendRef} from '../../../web-agent/shared/external-agents';
 type ProfileFields = CodexProjectOverrides & {
   schemaVersion:3;projectId:string;revision:number;enabled:boolean;sourceFingerprint:string;updatedAt:string;
@@ -9,8 +9,10 @@ export type CodexAgentProfile = ProfileFields & {
   id:'codex';runtimeKind:'codex-app-server';authentication:'codex-local';nodePath?:string;npmPath?:string;
 };
 export type CliAgentId = Exclude<ExternalAgentId,'codex'>;
-export type CliAgentProfile = ProfileFields & {
-  id:CliAgentId;runtimeKind:'claude-code-cli'|'antigravity-acp';authentication:'cli-api-key';executablePath?:string;
+export type CliAgentProfile = Omit<ProfileFields,'schemaVersion'> & {
+  schemaVersion:4;
+  id:CliAgentId;runtimeKind:'claude-code-cli'|'antigravity-acp';authentication:CliAuthentication;executablePath?:string;
+  googleLoginId?:string;
 };
 export type ExternalAgentProfile = CodexAgentProfile | CliAgentProfile;
 export type ExternalAgentStatus = ExternalAgentProfile & PublicAgentStatus & {
@@ -37,6 +39,8 @@ export type CodexConnectionProbe = {
   capabilities?: Record<string, unknown>;
   message?: string;
   cliVersion?:string;
+  accountFingerprint?:string;
+  checkedAt?:number;
 };
 export type ExternalRunState = 'starting' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted' | 'unknown';
 export type ExternalRun = {

@@ -220,6 +220,9 @@
 .codex-config-cli .app-select-trigger { inline-size:100%; min-block-size:30px; }
 .codex-config-credential { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:6px; }
 .codex-config-credential .button { min-block-size:30px; padding:4px 9px; font-size:var(--font-size-toolbar); }
+.codex-config-google { display:grid; gap:8px; min-inline-size:0; }
+.codex-config-google .codex-config-actions { justify-content:flex-end; }
+.codex-config-google .button { display:inline-flex; align-items:center; gap:4px; text-decoration:none; }
 @media (prefers-reduced-motion:no-preference) {
  .codex-config[open] { animation:codex-config-in 140ms cubic-bezier(.2,.7,.2,1) both; }
  @keyframes codex-config-in { from { opacity:0; } }

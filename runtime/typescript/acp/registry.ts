@@ -11,6 +11,7 @@ import {CodexLocalSource,codexHomePresent} from './codex-local';
 import {discoverCodexRuntime,validateCodexNode} from './runtime-paths';
 import {codexConnectionVersion} from './types';
 import {cliExecutable,cliRuntimeKinds,cliSecretId,cliSource,isCliModelId} from './cli-profile';
+import {cliDefaultAuthentication} from '../../../web-agent/shared/external-agents';
 
 function projectOverride(input:unknown,current:string|undefined,isValid:(value:unknown)=>value is string,invalid:string){
   if(input===undefined)return current;
@@ -53,15 +54,24 @@ export class ExternalAgentRegistry {
     return current??{schemaVersion:3,runtimeKind:'codex-app-server',id,projectId,revision:0,enabled:false,authentication:'codex-local',sourceFingerprint:source.fingerprint,updatedAt:now()};
   }
   private getCli(projectId:string,id:CliAgentId,key:string):CliAgentProfile {
-    const current=this.store.get<CliAgentProfile>('acpProfiles',key);
-    if(current&&(current.schemaVersion!==3||current.runtimeKind!==cliRuntimeKinds[id]||current.authentication!=='cli-api-key'))
+    const current=this.store.get<CliAgentProfile|(Omit<CliAgentProfile,'schemaVersion'> & {schemaVersion:3})>('acpProfiles',key);
+    const defaultAuthentication=cliDefaultAuthentication[id];
+    if(current&&(
+      ![3,4].includes(current.schemaVersion)||current.runtimeKind!==cliRuntimeKinds[id]||
+      current.authentication!=='cli-api-key'&&current.authentication!==defaultAuthentication
+    ))
       throw new HttpError(409,'外部 Agent 配置版本不受当前版本支持');
-    const {fingerprint:sourceFingerprint}=cliSource(this.store.home,projectId,id,current?.executablePath);
+    const source=cliSource(this.store.home,projectId,id,current?.executablePath,current?.authentication??defaultAuthentication);
+    const authentication=current?.schemaVersion===3&&!source.keyConfigured?defaultAuthentication:
+      current?.authentication??defaultAuthentication;
+    const sourceFingerprint=authentication===current?.authentication||!current?source.fingerprint:
+      cliSource(this.store.home,projectId,id,current.executablePath,authentication).fingerprint;
     if(current){
-      if(current.sourceFingerprint===sourceFingerprint)return current;
-      return this.store.put('acpProfiles',key,{...current,sourceFingerprint,revision:current.revision+1,updatedAt:now()});
+      if(current.schemaVersion===4&&current.sourceFingerprint===sourceFingerprint)return current;
+      const revision=current.revision+Number(current.sourceFingerprint!==sourceFingerprint);
+      return this.store.put('acpProfiles',key,{...current,schemaVersion:4,authentication,sourceFingerprint,revision,updatedAt:now()});
     }
-    return {schemaVersion:3,id,projectId,runtimeKind:cliRuntimeKinds[id],revision:0,enabled:false,authentication:'cli-api-key',sourceFingerprint,updatedAt:now()};
+    return {schemaVersion:4,id,projectId,runtimeKind:cliRuntimeKinds[id],revision:0,enabled:false,authentication,sourceFingerprint,updatedAt:now()};
   }
   revision(projectId: string) { return externalAgentIds.map(id => this.get(projectId, id).revision).join(':'); }
   // Retain the installed engine location across the transport migration.
@@ -101,17 +111,20 @@ export class ExternalAgentRegistry {
   }
   private cliStatus(profile:CliAgentProfile):ExternalAgentStatus {
     const {id,projectId}=profile;
-    const {executable,keyConfigured}=cliSource(this.store.home,projectId,id,profile.executablePath);
+    const {executable,keyConfigured}=cliSource(this.store.home,projectId,id,profile.executablePath,profile.authentication);
     const probe=this.probe(projectId,id);
     const current=probe?.revision===profile.revision&&probe.authentication===profile.authentication?probe:undefined;
     const name=externalProducts[id].name;
     const transportReady=!!executable&&current?.ready===true;
     const assignmentBlocker=!profile.enabled?`请启用 ${name} 并保存`:
       process.platform!=='darwin'?'当前平台尚未开放本机 CLI 执行':!executable?`未找到 ${name} CLI，请安装或填写路径`:
-      !current?`正在检测 ${name} 连接`:!transportReady||!current.authenticated?current.message??`${name} 连接不可用`:undefined;
-    return {...profile,name,installed:!!executable,transportReady,assignmentReady:!assignmentBlocker,assignmentBlocker,
+      !current?`正在检测 ${name} 连接`:!transportReady||!current.authenticated?current.message??`${name} 连接不可用`:
+      id==='antigravity'&&profile.modelOverride&&profile.modelOverride!==current.localModel&&
+      !current.models?.some(model=>model.id===profile.modelOverride)?'所选模型在当前账号下不可用，请重新选择':undefined;
+    const {googleLoginId:_login,...preferences}=profile;
+    return {...preferences,name,installed:!!executable,transportReady,assignmentReady:!assignmentBlocker,assignmentBlocker,
       detectedExecutable:executable?.path,cliVersion:current?.cliVersion,keyConfigured,
-      authMode:current?.authenticated?'api_key':'none',
+      authMode:current?.authMode??'none',
       localModel:current?.localModel,model:current?.model,defaultTaskModel:profile.modelOverride??current?.model,
       modelOptions:current?.models?.map(model=>model.id),message:current?.message};
   }
@@ -180,13 +193,21 @@ export class ExternalAgentRegistry {
     }
     if(this.get(current.projectId,id).revision!==current.revision)throw new HttpError(409,'外部 Agent 配置已变化，请刷新后重试');
     const apiKey=input.apiKey;
+    const requestedAuthentication=input.authentication;
+    const defaultAuthentication=cliDefaultAuthentication[id];
+    if(requestedAuthentication!==undefined&&requestedAuthentication!=='cli-api-key'&&requestedAuthentication!==defaultAuthentication)
+      throw new HttpError(400,'请选择当前执行器支持的登录方式');
+    const authentication=requestedAuthentication===undefined?(typeof apiKey==='string'?'cli-api-key':current.authentication):
+      requestedAuthentication==='cli-api-key'?'cli-api-key':defaultAuthentication;
     if(apiKey!==undefined){
+      if(authentication!=='cli-api-key')throw new HttpError(400,'请选择 API Key 登录方式后保存凭据');
       if(apiKey!==null&&(typeof apiKey!=='string'||!apiKey||apiKey.length>4096||/[^\x21-\x7e]/.test(apiKey)))throw new HttpError(400,'API Key 格式无效');
       await this.store.secret(cliSecretId(current.projectId,id),apiKey);
     }
     const verified=this.get(current.projectId,id);
-    const profile:CliAgentProfile={...current,executablePath,modelOverride,enabled:input.enabled===true,
-      sourceFingerprint:cliSource(this.store.home,current.projectId,id,executablePath).fingerprint,revision:Math.max(verified.revision,current.revision+1),updatedAt:now()};
+    const profile:CliAgentProfile={...current,authentication,executablePath,modelOverride,enabled:input.enabled===true,
+      sourceFingerprint:cliSource(this.store.home,current.projectId,id,executablePath,authentication).fingerprint,
+      revision:Math.max(verified.revision,current.revision+1),updatedAt:now()};
     return this.store.put('acpProfiles',key,profile);
   }
   async validateNode(path:string){await validateCodexNode(path);}

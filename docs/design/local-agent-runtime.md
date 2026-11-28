@@ -49,12 +49,14 @@ flowchart TD
 
 ## Claude Code 和 Google Antigravity
 
-两者自动识别已安装的 CLI，使用项目级 API Key 认证。Lake 将 Key 保存在当前 Home 的私有凭据目录，按进程环境传给提供商。连接后，Claude Code 从 Anthropic Models API 读取账号可用模型，Antigravity 从 ACP 会话读取实际模型选项。两者都可以从模型配置选择已发现的模型或跟随 CLI 默认值，Claude Code 支持手动填写模型 ID。模型发现不发起推理。二进制或凭据文件变化会使已冻结的连接版本失效。运行目录和提供商会话文件按执行上下文隔离。
+两者自动识别已安装的 CLI。Claude Code 默认让官方 CLI 复用用户登录，Lake 通过 `claude auth status` 核对登录，通过流式初始化读取模型。CLI 自己管理用户登录凭据，Lake 保存登录状态及账户标识的摘要。Google Antigravity 默认通过 `agy acp --login` 打开 Google 授权，授权码交回 agy，凭据由 agy 写入项目在 Lake Home 下的私有目录。随后使用同一凭据建立 ACP 探测会话，检测通过后一起更新连接版本和模型目录。授权取消或探测失败保留先前验证过的连接。
+
+已有项目可继续使用保存在 Lake 私有目录中的 API Key。用 Anthropic API Key 时，Lake 从 Anthropic Models API 读取模型。Antigravity 的模型始终来自当前权限下的 ACP 会话。模型发现只初始化会话。配置中可以选择发现的模型或跟随 CLI 默认值，Claude Code 也支持手动填写模型 ID。连接变更会使已冻结的项目执行版本失效。运行工作目录、工具连接和会话标识按执行上下文隔离。
 
 | 执行器 | 支持版本及接口 | 本机执行约束 |
 | --- | --- | --- |
-| Claude Code | 2.1.286 或更新版本，`-p` 的 stream JSON | Bare 模式使用 Anthropic API Key。关闭原生工具、通用配置和 hooks，显式传入本次 Lake MCP |
-| Google Antigravity | 1.5.18 或更新版本，`agy acp` | Gemini API Key。独立主 Agent 配置排除原生命令、文件、网页和后台调度工具。使用本轮独立的 loopback MCP 端口和短时凭据，针对已观察且匹配的调用发放单次传输许可 |
+| Claude Code | 2.1.286 或更新版本，`-p` 的 stream JSON | 本机登录和 API Key 都使用受限模式，关闭原生工具、通用配置和 hooks，显式传入本次 Lake MCP。API Key 路径额外启用 Bare 模式 |
+| Google Antigravity | 1.5.18 或更新版本，`agy acp` | 使用 Google 授权或 Gemini API Key。独立主 Agent 配置排除原生命令、文件、网页和后台调度工具。使用本轮独立的 loopback MCP 端口和短时凭据，针对已观察且匹配的调用发放单次传输许可 |
 
 两者复用 Task/Worker 身份、审批、终止和操作账本。模型选用、CLI 连接及传输许可各自校验。需要延续时使用相同执行上下文的会话标识，Antigravity 的续接依赖本机 CLI 声明 `session/resume`。无法实时确认消费的补充沿 Lake 的既有排队机制处理。
 

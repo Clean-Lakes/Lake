@@ -1,7 +1,8 @@
 import {useEffect,useId,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 import type {SpecialistChannelInfo} from '../../shared/contracts';
-import {externalAgentName,isExternalAgentId,type ExternalAgentId,type ExternalAgentStatus} from '../../shared/external-agents';
-import {api,readableError} from './api';
+import {cliDefaultAuthentication,externalAgentName,isExternalAgentId,type AntigravityGoogleAuthorization,type CliAuthentication,
+  type ExternalAgentId,type ExternalAgentStatus} from '../../shared/external-agents';
+import {api,ApiRequestError,readableError} from './api';
 import {AppSelect} from './AppSelect';
 import {ExecutionAgentIcon} from './ExecutionAgentIcon';
 import {Glyph} from './Icons';
@@ -11,15 +12,17 @@ import {TabSelectionIndicator} from './TabSelectionIndicator';
 import {navigateSettingsTabs} from './settingsFocus';
 import './codexModelConfiguration.css';
 
-type Preferences = {model:string;effort:string;enabled:boolean;nodePath:string;npmPath:string;executablePath:string};
+type Preferences = {model:string;effort:string;enabled:boolean;nodePath:string;npmPath:string;executablePath:string;authentication?:CliAuthentication};
 const executors:ExternalAgentId[]=['codex','claude-code','antigravity'];
-const installGuides={'claude-code':'https://code.claude.com/docs/en/quickstart',antigravity:'https://antigravity.google/docs/cli/acp/'};
+const installGuides={'claude-code':'https://code.claude.com/docs/en/quickstart',antigravity:'https://antigravity.google/docs/ide/extensions/acp/'};
 const narrowPanel = '(max-width: 600px)';
 const manualModelOption = ':manual';
 
 function preferences(agent:ExternalAgentStatus):Preferences {
   return {model:agent.modelOverride??'',effort:agent.reasoningEffortOverride??'',enabled:agent.enabled,
-    nodePath:agent.nodePath??'',npmPath:agent.npmPath??'',executablePath:agent.executablePath??''};
+    nodePath:agent.nodePath??'',npmPath:agent.npmPath??'',executablePath:agent.executablePath??'',
+    authentication:agent.id==='codex'?undefined:
+      agent.authentication==='cli-api-key'?'cli-api-key':cliDefaultAuthentication[agent.id]};
 }
 
 function modelEfforts(agent:ExternalAgentStatus,model:string){
@@ -64,11 +67,17 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
   const [query,setQuery]=useState(''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
   const [error,setError]=useState(''),[feedback,setFeedback]=useState('');
   const flight=useRef(false),mounted=useRef(false);
+  const loginRequest=useRef<AbortController>(null),pendingLogin=useRef<AntigravityGoogleAuthorization>(null);
+  const googleLink=useRef<HTMLAnchorElement>(null);
+  const [googleLogin,setGoogleLogin]=useState<AntigravityGoogleAuthorization>();
+  const [googleCode,setGoogleCode]=useState('');
   const agent=agents.find(agent=>agent.id===executor);
   const initial=agent&&preferences(agent),draft=drafts[executor]??initial;
   const codexSelected=executor==='codex';
   const editingModel=executor==='claude-code'&&editingClaudeModel;
   const apiKey=keys[executor];
+  const googleSelected=draft?.authentication==='antigravity-google';
+  const awaitingGoogle=googleSelected&&!!googleLogin;
 
   useLayoutEffect(()=>{
     const node=dialog.current;
@@ -113,12 +122,20 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
     }).finally(()=>{
       if(!controller.signal.aborted)setLoading(false);
     });
-    return ()=>{mounted.current=false;controller.abort();};
+    return ()=>{
+      mounted.current=false;controller.abort();loginRequest.current?.abort();
+      const pending=pendingLogin.current;
+      if(pending)void api.cancelAntigravityGoogleLogin(projectId,pending.id).catch(()=>{});
+      pendingLogin.current=null;
+    };
   },[projectId]);
 
   useLayoutEffect(()=>{
     if(!loading)search.current?.focus({preventScroll:true});
   },[loading]);
+  useLayoutEffect(()=>{
+    if(awaitingGoogle)googleLink.current?.focus({preventScroll:true});
+  },[awaitingGoogle]);
 
   const dirty=apiKey!==undefined||!!(initial&&draft&&Object.keys(initial).some(key=>initial[key as keyof Preferences]!==draft[key as keyof Preferences]));
   const options=agent&&draft?modelEfforts(agent,draft.model):[];
@@ -128,9 +145,14 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
   const models=[...new Set([...(agent?.modelOptions??[]),draft?.model].filter((model):model is string=>!!model))];
   const filter=query.trim().toLowerCase();
   const matching=models.filter(model=>model.toLowerCase().includes(filter));
-  const cliStatus=agent?.message??(agent?.installed&&!agent.keyConfigured
-    ?'配置项目 API Key 并启用后，自动读取可用模型。':agent?.assignmentBlocker);
-  const status=error||feedback||(codexSelected?agent?.assignmentBlocker:cliStatus);
+  const cliStatus=agent?.enabled&&agent.transportReady&&!agent.assignmentReady?agent.assignmentBlocker:
+    agent?.message??(agent?.installed
+      ?draft?.authentication==='cli-api-key'&&!agent.keyConfigured?'配置项目 API Key 并启用后，自动读取可用模型。':
+        googleSelected?'完成 Google 授权后自动加载模型。':
+        draft?.authentication==='claude-local'?'启用后自动读取本机 Claude Code 的登录和模型。':agent.assignmentBlocker
+      :agent?.assignmentBlocker);
+  const status=error||feedback||(awaitingGoogle?(busy?'正在处理 Google 授权…':''):
+    codexSelected?agent?.assignmentBlocker:cliStatus);
   const update=(value:Partial<Preferences>)=>{setFeedback('');if(draft)setDrafts(current=>({...current,[executor]:{...draft,...value}}));};
   const requestClose=()=>{if(!flight.current)onClose();};
   const optionsFor=(model:string)=>agent&&draft&&modelEfforts(agent,model).includes(draft.effort)?draft.effort:'';
@@ -171,7 +193,8 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
     const runtime=codexSelected?{
       nodePath:autoDetect?'':draft.nodePath,npmPath:autoDetect?'':draft.npmPath,
       reasoningEffortOverride:draft.effort||null,...(autoDetect&&{autoDetect}),
-    }:{executablePath:draft.executablePath.trim(),apiKey:apiKey?.trim()||apiKey};
+    }:{executablePath:draft.executablePath.trim(),authentication:draft.authentication,
+      ...(draft.authentication==='cli-api-key'&&{apiKey:apiKey?.trim()||apiKey})};
     void change(()=>api.prepareExternalAgent(projectId,executor,{
       expectedRevision:agent.revision,enabled:draft.enabled,modelOverride:draft.model.trim()||null,...runtime,
     }),autoDetect?'已重新识别运行路径':'模型配置已保存');
@@ -179,6 +202,61 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
 
   function reconnect(){
     void change(async()=>{await api.probeExternalAgent(projectId,executor);return {};},`${name} 连接已刷新`);
+  }
+
+  function clearGoogleLogin(){
+    pendingLogin.current=null;
+    setGoogleLogin(undefined);
+    setGoogleCode('');
+  }
+
+  async function startGoogleLogin(){
+    if(!agent||!agent.installed||dirty||flight.current)return;
+    const controller=new AbortController();
+    loginRequest.current=controller;
+    flight.current=true;setBusy(true);setError('');setFeedback('');
+    try{
+      const authorization=await api.startAntigravityGoogleLogin(projectId,agent.revision,controller.signal);
+      if(controller.signal.aborted){void api.cancelAntigravityGoogleLogin(projectId,authorization.id).catch(()=>{});return;}
+      pendingLogin.current=authorization;
+      setGoogleLogin(authorization);
+    }catch(cause){
+      if(!controller.signal.aborted)setError(readableError(cause));
+    }finally{
+      loginRequest.current=null;flight.current=false;
+      if(mounted.current)setBusy(false);
+    }
+  }
+
+  function submitGoogleCode(){
+    if(!googleLogin||!googleCode.trim())return;
+    void change(async()=>{
+      try{
+        const result=await api.completeAntigravityGoogleLogin(projectId,googleLogin.id,googleCode.trim());
+        if(mounted.current)clearGoogleLogin();
+        return result;
+      }catch(cause){
+        if(mounted.current&&!(cause instanceof ApiRequestError&&cause.status===400)){
+          clearGoogleLogin();
+          void api.cancelAntigravityGoogleLogin(projectId,googleLogin.id).catch(()=>{});
+        }
+        throw cause;
+      }
+    },'Google 登录已就绪，已加载可用模型');
+  }
+
+  async function cancelGoogleLogin(){
+    if(!googleLogin||flight.current)return;
+    flight.current=true;setBusy(true);setError('');setFeedback('');
+    try{
+      await api.cancelAntigravityGoogleLogin(projectId,googleLogin.id);
+      if(mounted.current)clearGoogleLogin();
+    }catch(cause){
+      if(mounted.current)setError(readableError(cause));
+    }finally{
+      flight.current=false;
+      if(mounted.current)setBusy(false);
+    }
   }
 
   function applyRole(){
@@ -280,10 +358,19 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
               <a href={installGuides[executor]} target="_blank" rel="noreferrer">CLI 安装说明 <Glyph name="next" size={12}/></a>
             </div>
             <div className="codex-config-connection-fields">
-              <label><span>项目启用</span><input type="checkbox" checked={draft.enabled} onChange={event=>update({enabled:event.target.checked})}/></label>
-              <label><span>CLI 路径</span><input value={draft.executablePath} placeholder={agent.detectedExecutable??'自动识别或填写绝对路径'} spellCheck={false}
+              <label><span>项目启用</span><input type="checkbox" checked={draft.enabled} disabled={awaitingGoogle}
+                onChange={event=>update({enabled:event.target.checked})}/></label>
+              <label><span>CLI 路径</span><input value={draft.executablePath} placeholder={agent.detectedExecutable??'自动识别或填写绝对路径'} spellCheck={false} disabled={awaitingGoogle}
                 onChange={event=>update({executablePath:event.target.value})}/></label>
-              <label><span>默认模型</span><AppSelect label="默认模型" value={editingModel?manualModelOption:draft.model} disabled={busy}
+              <label><span>登录方式</span><AppSelect label="登录方式" value={draft.authentication??cliDefaultAuthentication[executor]} disabled={busy||awaitingGoogle}
+                onChange={event=>{
+                  setKeys(previous=>({...previous,[executor]:undefined}));
+                  update({authentication:event.target.value as CliAuthentication});
+                }}>
+                <option value={cliDefaultAuthentication[executor]}>{executor==='claude-code'?'复用本机登录':'Google 登录'}</option>
+                <option value="cli-api-key">{executor==='claude-code'?'Anthropic API Key':'Gemini API Key'}</option>
+              </AppSelect></label>
+              <label><span>默认模型</span><AppSelect label="默认模型" value={editingModel?manualModelOption:draft.model} disabled={busy||awaitingGoogle}
                 onChange={event=>{
                   const manual=event.target.value===manualModelOption;
                   if(executor==='claude-code')setEditingClaudeModel(manual);
@@ -296,18 +383,33 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
               </label>
               {editingModel&&<label><span>模型 ID</span><input autoFocus value={draft.model} placeholder="跟随 CLI" spellCheck={false}
                 onChange={event=>update({model:event.target.value})}/></label>}
-              <div className="codex-config-credential">
+              {draft.authentication==='cli-api-key'&&<div className="codex-config-credential">
                 <label><span>API Key</span><input type="password" autoComplete="off" spellCheck={false} value={apiKey??''}
                   placeholder={apiKey===null?'保存后移除':agent.keyConfigured?'已保存 · 输入新 Key 替换':executor==='antigravity'?'Gemini API Key':'Anthropic API Key'}
                   onChange={event=>{setFeedback('');const value=event.target.value;setKeys(previous=>({...previous,[executor]:value||undefined}));}}/></label>
                 {agent.keyConfigured&&<button type="button" className="button secondary" onClick={()=>setKeys(previous=>({...previous,[executor]:apiKey===null?undefined:null}))}>{apiKey===null?'撤销':'移除'}</button>}
-              </div>
+              </div>}
+              {googleSelected&&(googleLogin?<form className="codex-config-google" aria-label="Google 授权" onSubmit={event=>{event.preventDefault();submitGoogleCode();}}>
+                <p>在浏览器完成授权后，将页面显示的授权码粘贴到这里。</p>
+                <label><span>授权码</span><input type="password" autoComplete="off" spellCheck={false}
+                  value={googleCode} onChange={event=>setGoogleCode(event.target.value)}/></label>
+                <div className="codex-config-actions">
+                  <a ref={googleLink} className="button secondary" href={googleLogin.authorizationUrl} target="_blank" rel="noopener noreferrer">
+                    打开 Google 授权 <Glyph name="arrow" size={13}/>
+                  </a>
+                  <button className="button secondary" type="button" onClick={()=>void cancelGoogleLogin()}>取消</button>
+                  <button className="button primary" type="submit" disabled={!googleCode.trim()}>完成登录</button>
+                </div>
+              </form>:<div className="codex-config-actions">
+                <button className="button secondary" type="button" disabled={dirty||!agent.installed}
+                  onClick={()=>void startGoogleLogin()}>{agent.authMode==='google'?'重新授权':'使用 Google 登录'}</button>
+              </div>)}
             </div>
           </fieldset>}
           {(loading||status)&&<p className="codex-config-feedback" role={error?'alert':'status'}>{loading?'正在读取连接…':status}</p>}
           {agent&&draft&&<footer className="codex-config-footer">
             {dirty&&agent.enabled&&<small>保存会中止此项目正在运行的 {name} 调用。</small>}
-            <button type="button" className="button secondary" disabled={busy||dirty||!agent.installed} onClick={reconnect}>检测连接</button>
+            <button type="button" className="button secondary" disabled={busy||dirty||!agent.installed||awaitingGoogle} onClick={reconnect}>检测连接</button>
             <button type="button" className="button primary" disabled={busy||!dirty} onClick={()=>save()}>{busy?'正在处理…':'保存配置'}</button>
           </footer>}
         </>}

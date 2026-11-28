@@ -2,7 +2,7 @@
 
 2026-11-20 Pilot 的纯文字召集使用独立并发容量，每项目 8 个，全局 16 个。多人召集全部收件人结清后，Pilot 依据实际回应给出简短结论。原始回应按同一人工来源和召集轮次归档，界面以多头像入口展开，失败原因可查看。
 
-2026-11-28 TypeScript 专员支持 Codex、Claude Code 和 Google Antigravity。项目共享连接和模型，由用户在「模型配置」中选定每位专员的默认执行器。新任务和协作回复冻结执行器与配置版本。Claude Code 使用官方流式 CLI，Antigravity 使用官方 ACP，两者从 Lake 私有目录取得项目凭据，业务工具经原 Task/Worker 的私有 MCP 桥及 ToolExecutor。Pilot 使用项目的协调模型。见[本机执行架构](docs/design/local-agent-runtime.md)。
+2026-11-28 TypeScript 专员支持 Codex、Claude Code 和 Google Antigravity。项目共享连接和模型，由用户在「模型配置」中选定每位专员的默认执行器。新任务和协作回复冻结执行器与配置版本。Claude Code 由官方流式 CLI 复用本机登录，Antigravity 由官方 CLI 完成项目 Google 授权并通过 ACP 加载模型。已有项目 API Key 仍可选用。业务工具经原 Task/Worker 的私有 MCP 桥及 ToolExecutor。Pilot 使用项目的协调模型。见[本机执行架构](docs/design/local-agent-runtime.md)。
 
 2026-11-20 TypeScript 长期专员的新任务、协作回复和受托子任务统一使用本机 Codex App Server。新派单按当前已验证的连接冻结角色、模型与执行身份。旧 Lake Agent 绑定和回执仍可查看，旧执行不能续跑。Pilot 继续使用项目的对话模型。
 

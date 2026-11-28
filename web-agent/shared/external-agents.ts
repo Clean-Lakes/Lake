@@ -1,6 +1,9 @@
 import type {AICard} from './contracts';
 export const externalAgentNames={codex:'Codex','claude-code':'Claude Code',antigravity:'Google Antigravity'} as const;
 export type ExternalAgentId = keyof typeof externalAgentNames;
+export const cliDefaultAuthentication = {'claude-code':'claude-local',antigravity:'antigravity-google'} as const;
+export type CliAuthentication = typeof cliDefaultAuthentication[keyof typeof cliDefaultAuthentication] | 'cli-api-key';
+export type AntigravityGoogleAuthorization = {id:string;authorizationUrl:string};
 export type ExternalRuntimeKind = 'codex-app-server' | 'claude-code-cli' | 'antigravity-acp';
 /** Read compatibility only; retired bindings never authorize a new run. */
 export type StoredExternalAgentId = ExternalAgentId | 'runtime-acp';
@@ -26,9 +29,9 @@ export type CodexProjectOverrides = {modelOverride?:string;reasoningEffortOverri
 export type ExternalAgentStatus = CodexProjectOverrides & {
  id:ExternalAgentId;projectId:string;revision:number;enabled:boolean;name:string;installed:boolean;transportReady:boolean;
  assignmentReady?:boolean;assignmentBlocker?:string;nodePath?:string;npmPath?:string;
- executablePath?:string;detectedExecutable?:string;cliVersion?:string;keyConfigured?:boolean;
+ executablePath?:string;detectedExecutable?:string;cliVersion?:string;keyConfigured?:boolean;authentication?:'codex-local'|CliAuthentication;
  model?:string;localModel?:string;defaultTaskModel?:string;modelOptions?:string[];modelEffortOptions?:Record<string,string[]>;modelProvider?:string;
- reasoningEffort?:string;reasoningEffortOptions?:string[];configPath?:string;authMode?:'chatgpt'|'api_key'|'provider'|'none';
+ reasoningEffort?:string;reasoningEffortOptions?:string[];configPath?:string;authMode?:'chatgpt'|'api_key'|'provider'|'claude_login'|'google'|'none';
  message?:string;updatedAt:string;
 };
 

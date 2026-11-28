@@ -1,4 +1,5 @@
-import { readFile } from 'node:fs/promises';
+import { chmod,lstat,mkdtemp,readFile,rm } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { isSea } from 'node:sea';
 import { LakeStore,HttpError,id,now } from '../store';
@@ -7,12 +8,13 @@ import {TaskDeadlineReached,watchTaskDeadline} from '../task-deadline';
 import type {AgentActivity,AgentConnection,AgentLaunch,ObserveAgentModel,ScopedHttpMcp,ScopedStdioMcp} from './client';
 import {commandLimit} from './codex-activity';
 import {CodexAppServer} from './codex-app-server';
-import {ClaudeCode} from './claude-code';
-import {Antigravity} from './antigravity';
-import {cliEnvironment,cliSecretId,cliVersion,isCliModelId} from './cli-profile';
+import {ClaudeCode,claudeLocalAccount,discoverClaudeModels} from './claude-code';
+import {Antigravity,antigravityLoginRequired} from './antigravity';
+import {antigravityAuthorizationCode,launchAntigravityLogin} from './antigravity-login';
+import {antigravityCredentials,cliEnvironment,cliSecretId,cliVersion,isCliModelId} from './cli-profile';
 import { ExternalAgentRegistry } from './registry';
 import { externalAgentId,externalControlTools,externalProducts } from './catalog';
-import {externalAgentName} from '../../../web-agent/shared/external-agents';
+import {externalAgentName,type AntigravityGoogleAuthorization} from '../../../web-agent/shared/external-agents';
 import { openHttpToolBridge,openToolBridge } from './bridge';
 import {privatePath} from './private';
 import {codexConfig,tomlValue} from './codex-profile';
@@ -24,9 +26,27 @@ import {codexClosingMessageIds,legacyCommandBodies} from '../codex-conversation'
 
 function ownLauncher(flag:string,args:string[]=[]){return {executable:process.execPath,args:isSea()?[flag,...args]:[__filename,flag,...args]};}
 type LiveRun={process?:AgentConnection;controller:AbortController;scopeHash:string;conversation:boolean;guard?:()=>void};
+type GoogleLogin={
+  id:string;
+  profile:CliAgentProfile;
+  controller:AbortController;
+  timer?:ReturnType<typeof setTimeout>;
+  directory?:string;
+  credentials?:string;
+  cli?:ReturnType<typeof launchAntigravityLogin>;
+  environment?:Omit<AgentLaunch,'args'>;
+  cliVersion?:string;
+  authorization?:AntigravityGoogleAuthorization;
+  started?:Promise<AntigravityGoogleAuthorization>;
+  verifying?:Promise<void>;
+  committed?:boolean;
+  cleanup?:Promise<void>;
+};
+const googleExpired='本次 Google 登录已结束，请重新获取授权链接';
 export class LakeExternalAgents {
   readonly registry:ExternalAgentRegistry;
   private probes=new Map<string,{controller:AbortController;work:Promise<unknown>}>();
+  private googleLogins=new Map<string,GoogleLogin>();
   private live=new Map<string,LiveRun>();
   private closingMessages=new Set<string>();
   private legacyCommands=new Map<string,{text:string;worker:string;session:string;task:string;root:string}>();
@@ -82,9 +102,9 @@ export class LakeExternalAgents {
       cwd:directory,observed:prepared.observed,threadConfig,env:{...prepared.environment,TMPDIR:directory},
       models:prepared.models,localModel:prepared.localModel};
   }
-  private async inspectCli(profile:CliAgentProfile,directory:string,signal:AbortSignal){
+  private async inspectCli(profile:CliAgentProfile,directory:string,signal:AbortSignal,googleLoginId?:string){
     if(process.platform!=='darwin')throw new HttpError(409,'当前平台尚未开放本机 CLI 执行');
-    const environment=await cliEnvironment(this.store.home,profile,directory);
+    const environment=await cliEnvironment(this.store.home,profile,directory,googleLoginId);
     const version=await cliVersion(profile.id,environment,signal);
     return {environment,...version};
   }
@@ -116,39 +136,85 @@ export class LakeExternalAgents {
     return [...new Set(result.data.map(entry=>entry?.id)
       .filter((model):model is string=>isCliModelId(model)&&model.startsWith('claude-')))].slice(0,256);
   }
+  private async antigravityCatalog(environment:Omit<AgentLaunch,'args'>,signal:AbortSignal){
+    const connection=await Antigravity.launch(environment,()=>{});
+    try{
+      const capabilities=await connection.initialize(signal);
+      await connection.openSession({cwd:environment.cwd},signal);
+      if(!connection.models.length&&!connection.localModel)throw new Error('Google Antigravity 未返回可用模型');
+      return {capabilities,model:connection.model,localModel:connection.localModel,
+        models:connection.models.map(id=>({id,reasoningEfforts:[]}))};
+    }finally{await connection.close();}
+  }
+  private async googleCredentialFile(directory:string){
+    // Current agy and earlier ACP builds use different names for the private token file.
+    for(const name of ['antigravity-oauth-token','acp_token.json']){
+      const file=join(directory,name),info=await lstat(file).catch(()=>undefined);
+      if(!info?.isFile()||info.uid!==process.getuid?.())continue;
+      if(info.mode&0o077)await chmod(file,0o600);
+      return;
+    }
+    throw new HttpError(409,'Antigravity 未生成独立的 Google 登录凭据，请重新授权');
+  }
+  private async probeDirectory(projectId:string,agent:string){
+    const parent=await privatePath(this.store.data,'external-agents','probe',projectId,agent);
+    return mkdtemp(join(parent,'check-'));
+  }
   private async probeCli(profile:CliAgentProfile,directory:string,signal:AbortSignal){
-    const {projectId,id}=profile,name=externalAgentName(id);
+    const {projectId,id,authentication}=profile,name=externalAgentName(id);
     const probe:CodexConnectionProbe={revision:profile.revision,authentication:profile.authentication,ready:false};
-    let connection:Antigravity|undefined;
     try{
       const inspected=await this.inspectCli(profile,directory,signal);
       probe.cliVersion=inspected.version;
       if(!inspected.supported)throw new Error(this.cliVersionMessage(profile,inspected.version));
-      const key=await this.cliCredential(profile);
-      const models=await this.verifyCliCredential(profile,key,signal);
-      if(id==='claude-code'){
-        probe.model=profile.modelOverride;
-        probe.models=models.map(id=>({id,reasoningEfforts:[]}));
+      if(authentication==='claude-local'){
+        probe.accountFingerprint=await claudeLocalAccount(inspected.environment,signal);
+        const {models,localModel}=await discoverClaudeModels(inspected.environment,signal);
+        Object.assign(probe,{authMode:'claude_login',model:profile.modelOverride??localModel,localModel,
+          models:models.map(id=>({id,reasoningEfforts:[]}))});
+      }else if(authentication==='antigravity-google'){
+        if(!profile.googleLoginId)throw new HttpError(409,antigravityLoginRequired);
+        await this.googleCredentialFile(await antigravityCredentials(this.store.home,projectId,profile.googleLoginId));
+        Object.assign(probe,await this.antigravityCatalog(inspected.environment,signal),{authMode:'google'});
       }else{
-        inspected.environment.env.GEMINI_API_KEY=key;
-        connection=await Antigravity.launch(inspected.environment,()=>{},undefined,profile.modelOverride);
-        probe.capabilities=await connection.initialize(signal);
-        await connection.openSession({cwd:directory},signal);
-        probe.model=connection.model;probe.localModel=connection.localModel;
-        probe.models=connection.models.map(id=>({id,reasoningEfforts:[]}));
+        const key=await this.cliCredential(profile);
+        const models=await this.verifyCliCredential(profile,key,signal);
+        if(id==='claude-code'){
+          probe.model=profile.modelOverride;
+          probe.models=models.map(id=>({id,reasoningEfforts:[]}));
+        }else{
+          inspected.environment.env.GEMINI_API_KEY=key;
+          Object.assign(probe,await this.antigravityCatalog(inspected.environment,signal));
+        }
+        probe.authMode='api_key';
       }
-      probe.ready=true;probe.authenticated=true;probe.authMode='api_key';probe.message=`${name} 已连接`;
+      probe.ready=true;probe.authenticated=true;
+      probe.message=authentication==='claude-local'?'已复用本机 Claude Code 登录':`${name} 已连接`;
     }catch(error){probe.message=this.redact(error instanceof Error?error.message:`${name} 连接失败`);}
-    finally{await connection?.close();}
     signal.throwIfAborted();
     if(this.registry.get(projectId,id).revision!==profile.revision)throw new HttpError(409,'CLI 配置已变化，请重新检测连接');
-    this.store.put('acpProbes',projectId+':'+id,probe);
+    const key=projectId+':'+id,previous=this.registry.probe(projectId,id);
+    this.store.transaction(()=>{
+      if(previous?.revision===profile.revision&&previous.accountFingerprint){
+        if(probe.accountFingerprint&&previous.accountFingerprint!==probe.accountFingerprint){
+          probe.revision++;
+          this.store.put('acpProfiles',key,{...profile,revision:probe.revision,updatedAt:now()});
+        }
+        probe.accountFingerprint??=previous.accountFingerprint;
+      }
+      this.store.put('acpProbes',key,{...probe,checkedAt:Date.now()});
+    });
     if(!probe.ready)throw new HttpError(409,probe.message??`${name} 连接失败`);
     return {ok:true,capabilities:probe.capabilities};
   }
   async probe(projectId:string,agent:unknown,signal:AbortSignal){
-    const profile=this.registry.get(projectId,agent),directory=await privatePath(this.store.data,'external-agents','probe',projectId,profile.id);
-    if(profile.id!=='codex')return this.probeCli(profile,directory,signal);
+    const profile=this.registry.get(projectId,agent);
+    if(profile.id!=='codex'){
+      const directory=await this.probeDirectory(projectId,profile.id);
+      try{return await this.probeCli(profile,directory,signal);}
+      finally{await rm(directory,{recursive:true,force:true});}
+    }
+    const directory=await privatePath(this.store.data,'external-agents','probe',projectId,profile.id);
     let transport:AgentConnection|undefined;
     try{
       const launch=await this.launch(profile,directory,signal,undefined,undefined,'probe');
@@ -174,7 +240,8 @@ export class LakeExternalAgents {
       const probe=this.registry.probe(projectId,agent.id);
       const current=probe?.revision===agent.revision&&probe.authentication===agent.authentication;
       const needsClaudeCatalog=agent.id==='claude-code'&&probe?.ready===true&&probe.models===undefined;
-      if(!agent.enabled||!agent.installed||current&&!needsClaudeCatalog)return;
+      const needsLocalStatus=agent.authentication==='claude-local'&&Date.now()-(probe?.checkedAt??0)>30000;
+      if(!agent.enabled||!agent.installed||current&&!needsClaudeCatalog&&!needsLocalStatus)return;
       const key=projectId+':'+agent.id;
       const previous=this.probes.get(key);if(previous){await previous.work;return;}
       const controller=new AbortController(),timer=setTimeout(()=>controller.abort(new Error('读取本机执行器状态超时')),90000);
@@ -198,17 +265,113 @@ export class LakeExternalAgents {
     }
     return {agents:await this.registry.list(projectId)};
   }
+  private finishGoogleLogin(login:GoogleLogin){
+    return login.cleanup??=(async()=>{
+      clearTimeout(login.timer);
+      login.controller.abort(new HttpError(409,googleExpired));
+      await login.cli?.close();
+      await Promise.allSettled([login.started,login.verifying]);
+      await Promise.allSettled([
+        login.directory&&rm(login.directory,{recursive:true,force:true}),
+        login.credentials&&!login.committed&&rm(login.credentials,{recursive:true,force:true}),
+      ]);
+      if(this.googleLogins.get(login.profile.projectId)===login)this.googleLogins.delete(login.profile.projectId);
+    })();
+  }
+  async startGoogleLogin(projectId:string,expectedRevision:unknown,signal:AbortSignal){
+    const profile=this.registry.get(projectId,'antigravity');
+    if(profile.id!=='antigravity'||profile.authentication!=='antigravity-google'||profile.revision!==expectedRevision)
+      throw new HttpError(409,'请保存 Google 登录方式后重新授权');
+    if(this.googleLogins.has(projectId))throw new HttpError(409,'已有 Google 登录正在进行');
+    const login:GoogleLogin={id:randomUUID(),profile,controller:new AbortController()};
+    this.googleLogins.set(projectId,login);
+    login.timer=setTimeout(()=>void this.finishGoogleLogin(login),5*60*1000);
+    const startup=AbortSignal.any([signal,login.controller.signal,AbortSignal.timeout(45000)]);
+    login.started=(async()=>{
+      login.directory=await this.probeDirectory(projectId,profile.id);
+      login.credentials=await antigravityCredentials(this.store.home,projectId,login.id);
+      const inspected=await this.inspectCli(profile,login.directory,startup,login.id);
+      if(!inspected.supported)throw new HttpError(409,this.cliVersionMessage(profile,inspected.version));
+      startup.throwIfAborted();
+      login.environment=inspected.environment;
+      login.cliVersion=inspected.version;
+      const cli=login.cli=launchAntigravityLogin(inspected.environment);
+      const abort=()=>void cli.close();
+      startup.addEventListener('abort',abort,{once:true});
+      try{
+        const authorizationUrl=await cli.authorization;
+        startup.throwIfAborted();
+        // If agy stops while waiting for the code, release the pending login.
+        void cli.exited.then(()=>{if(!login.verifying)void this.finishGoogleLogin(login);});
+        return login.authorization={id:login.id,authorizationUrl};
+      }finally{startup.removeEventListener('abort',abort);}
+    })();
+    try{return await login.started;}
+    catch(error){await this.finishGoogleLogin(login);throw error;}
+  }
+  async completeGoogleLogin(projectId:string,loginId:string,code:unknown,signal:AbortSignal){
+    const login=this.googleLogins.get(projectId);
+    if(!login||login.id!==loginId||!login.authorization||login.cleanup)throw new HttpError(409,googleExpired);
+    if(login.verifying)throw new HttpError(409,'正在验证 Google 授权');
+    const authorizationCode=antigravityAuthorizationCode(code,login.authorization.authorizationUrl);
+    const verification=AbortSignal.any([signal,login.controller.signal,AbortSignal.timeout(90000)]);
+    const cli=login.cli!,profile=login.profile;
+    const assertRevision=()=>{
+      verification.throwIfAborted();
+      if(this.registry.get(projectId,'antigravity').revision!==profile.revision)
+        throw new HttpError(409,'CLI 配置已变化，请重新登录 Google');
+    };
+    login.verifying=(async()=>{
+      assertRevision();
+      const abort=()=>void cli.close();
+      verification.addEventListener('abort',abort,{once:true});
+      try{
+        cli.submit(authorizationCode);
+        if(!await cli.exited)throw new HttpError(409,'Google 授权失败，请重新获取授权链接');
+        assertRevision();
+        await this.googleCredentialFile(login.credentials!);
+        const catalog=await this.antigravityCatalog(login.environment!,verification);
+        assertRevision();
+        const key=projectId+':antigravity',revision=profile.revision+1;
+        this.store.transaction(()=>{
+          this.store.put('acpProfiles',key,{...profile,googleLoginId:login.id,revision,updatedAt:now()});
+          this.store.put<CodexConnectionProbe>('acpProbes',key,{...catalog,authentication:profile.authentication,
+            ready:true,authenticated:true,authMode:'google',revision,cliVersion:login.cliVersion,checkedAt:Date.now(),
+            message:'Google 登录已就绪，已加载可用模型'});
+        });
+        login.committed=true;
+      }finally{verification.removeEventListener('abort',abort);}
+    })();
+    try{await login.verifying;return {agents:await this.registry.list(projectId)};}
+    catch(error){
+      if(error instanceof HttpError)throw error;
+      throw new HttpError(409,this.redact(error instanceof Error?error.message:'Google 登录验证失败'));
+    }
+    finally{await this.finishGoogleLogin(login);}
+  }
+  async cancelGoogleLogin(projectId:string,loginId:string){
+    const login=this.googleLogins.get(projectId);
+    if(login?.id===loginId)await this.finishGoogleLogin(login);
+    return {ok:true};
+  }
   private async connectCli(profile:CliAgentProfile,directory:string,signal:AbortSignal,publish:(event:AgentActivity)=>void,mcp:ScopedStdioMcp|ScopedHttpMcp|undefined,model:string|undefined,systemPrompt:string|undefined,observeModel:ObserveAgentModel){
     const selected=model??profile.modelOverride;
     if(selected!==undefined&&!isCliModelId(selected))throw new HttpError(400,'模型 ID 无效');
     const inspected=await this.inspectCli(profile,directory,signal);
     if(!inspected.supported)throw new HttpError(409,this.cliVersionMessage(profile,inspected.version));
-    const key=await this.cliCredential(profile);
     if(profile.id==='claude-code'){
-      inspected.environment.env.ANTHROPIC_API_KEY=key;
+      if(profile.authentication==='claude-local'){
+        const account=await claudeLocalAccount(inspected.environment,signal);
+        const probe=this.registry.probe(profile.projectId,profile.id);
+        if(probe?.revision!==profile.revision||probe.accountFingerprint!==account)
+          throw new HttpError(409,'本机 Claude Code 登录已变化，请重新检测连接');
+      }else inspected.environment.env.ANTHROPIC_API_KEY=await this.cliCredential(profile);
       return new ClaudeCode(inspected.environment,publish,mcp&&'command' in mcp?mcp:undefined,selected,observeModel);
     }
-    inspected.environment.env.GEMINI_API_KEY=key;
+    if(profile.authentication==='antigravity-google'){
+      if(!profile.googleLoginId)throw new HttpError(409,antigravityLoginRequired);
+      await this.googleCredentialFile(await antigravityCredentials(this.store.home,profile.projectId,profile.googleLoginId));
+    }else inspected.environment.env.GEMINI_API_KEY=await this.cliCredential(profile);
     return Antigravity.launch(inspected.environment,publish,mcp&&'serverUrl' in mcp?mcp:undefined,selected,systemPrompt,observeModel);
   }
   private result(run:ExternalRun):ExternalResult{const last=run.events.findLast(event=>event.kind==='text'&&event.publicTextId&&typeof event.publicText==='string');return {run_id:run.id,agent:externalAgentName(run.agent),state:run.state,summary:run.summary??run.error??'',
@@ -341,5 +504,10 @@ export class LakeExternalAgents {
     const [,live]=matches[0];live.guard?.();
     return {kind:await live.process?.steer(input,inputId,live.controller.signal)?'queued':'rejected'};
   }
-  async close(){for(const probe of this.probes.values())probe.controller.abort();await Promise.allSettled([...this.probes.values()].map(probe=>probe.work));await Promise.allSettled([...this.live.values()].map(async live=>{live.controller.abort();await live.process?.close();}));}
+  async close(){
+    for(const probe of this.probes.values())probe.controller.abort();
+    await Promise.allSettled([...this.googleLogins.values()].map(login=>this.finishGoogleLogin(login)));
+    await Promise.allSettled([...this.probes.values()].map(probe=>probe.work));
+    await Promise.allSettled([...this.live.values()].map(async live=>{live.controller.abort();await live.process?.close();}));
+  }
 }

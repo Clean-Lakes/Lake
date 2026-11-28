@@ -225,7 +225,7 @@ Pilot、专员、临时子智能体和多专员共同任务不再因累计模型
 
 右键侧栏的专员头像，打开「模型配置」。Codex、Claude Code 和 Google Antigravity 分别配置连接。连接和模型是项目共享设置。「用于此专员」将当前就绪的执行器用于该专员之后的新任务及协作回复。专员的发送入口会冻结实际执行器和连接版本，已创建的任务按原执行绑定处理。
 
-Codex 读取本机 CODEX_HOME 的登录与模型设置。Claude Code 使用 Anthropic API Key，Google Antigravity 使用 Gemini API Key。安装相应 CLI 后可以自动识别路径，也可填写绝对路径。「检测连接」检查 CLI 版本及提供商连接，Antigravity 还返回可用模型。具体版本和凭据处理见[本机执行架构](design/local-agent-runtime.md)。
+Codex 读取本机 CODEX_HOME 的登录与模型设置。Claude Code 默认沿用官方 CLI 的本机登录。Google Antigravity 选择「使用 Google 登录」，在浏览器完成授权后将授权码粘贴回 Lake，确认后自动加载账号可用模型。两者也支持项目 API Key。安装相应 CLI 后可以自动识别路径，也可填写绝对路径。「检测连接」可以重新检查 CLI 和刷新模型。具体版本和凭据处理见[本机执行架构](design/local-agent-runtime.md)。
 
 专员频道与任务详情显示原执行器的品牌、实际进度和报告。各 CLI 通过本次任务的私有工具桥访问 Lake 工具。模型的执行结果仍依照 Task/Worker 记录汇总。Pilot 使用项目的协调模型。
 
