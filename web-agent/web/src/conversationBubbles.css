@@ -11,7 +11,7 @@
 }
 
 /* Assistant replies share a reading column; only human messages use bubbles. */
-.ai-transcript { --reply-avatar-size:24px; --reply-avatar-column:40px; --reply-body-width:720px; --reply-body-size:15px; }
+.ai-transcript { --reply-avatar-size:24px; --reply-avatar-column:40px; --reply-body-width:720px; }
 .ai-transcript[data-reply-avatar=hidden] { --reply-avatar-column:0px; }
 .ai-transcript[data-reply-avatar=hidden] :is(.response-avatar,.turn-thinking-avatar) { display:none; }
 .ai-chat-message.ai-role-assistant,
@@ -60,10 +60,10 @@
 .reply-continued-author { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 .ai-transcript :is(.ai-chat-message.ai-role-assistant,.ai-card.ai-text,.ai-card.ai-message,.sre-role-body) .ai-markdown.assistant-prose {
   width:100%; min-width:0; max-width:var(--reply-body-width,720px);
-  font-size:var(--reply-body-size,15px); line-height:1.75;
+  font-size:var(--font-size-reading); line-height:1.75;
 }
 .ai-transcript :is(.ai-chat-message.ai-role-assistant,.ai-card.ai-text,.ai-card.ai-message,.sre-role-body) .assistant-prose > p:not(:last-child) { margin-bottom:14px; }
-.ai-transcript[data-transcript-mode=conversation] .ai-role-user { font-size:var(--reply-body-size); line-height:1.55; }
+.ai-transcript[data-transcript-mode=conversation] .ai-role-user { font-size:var(--font-size-reading); line-height:1.55; }
 .settled-reply.is-reply-continuation:not(.is-archived):not(.is-awaiting-reply) { margin-block-start:calc(8px - var(--turn-entry-gap,12px)); }
 
 /* Activity stays on its own quiet row, aligned with the reading column. */
@@ -88,7 +88,7 @@
 
 /* Older specialist report components share the same body geometry. */
 .ai-transcript .sre-role-message { width:100%; max-width:calc(var(--reply-body-width,720px) + 40px); }
-.ai-transcript .sre-role-message .sre-role-body { width:100%; max-width:var(--reply-body-width,720px); padding:0; font-size:var(--reply-body-size,15px); line-height:1.75; }
+.ai-transcript .sre-role-message .sre-role-body { width:100%; max-width:var(--reply-body-width,720px); padding:0; font-size:var(--font-size-reading); line-height:1.75; }
 .ai-transcript .sre-role-conversation .sre-role-content { padding-inline-start:40px; }
 .ai-transcript .sre-role-conversation .sre-role-content > header { padding-inline-start:0; margin-bottom:8px; }
 

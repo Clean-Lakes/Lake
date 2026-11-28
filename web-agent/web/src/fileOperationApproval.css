@@ -1,7 +1,7 @@
 .file-operation-approval { max-width: 860px; padding: 16px 18px; }
 .file-approval-name { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; margin: 15px 0 10px; }
 .file-approval-name > strong { font-size: var(--font-size-ui); font-weight:var(--font-weight-medium); overflow-wrap: anywhere; }
-.file-approval-name > span { display: inline-flex; gap: 8px; font: 11px var(--font-mono); white-space: nowrap; }
+.file-approval-name > span { display: inline-flex; gap: 8px; font: var(--font-size-caption) var(--font-mono); white-space: nowrap; }
 .file-approval-name i { font-style: normal; color: var(--success); }
 .file-approval-name b { font-weight:var(--font-weight-ui); color: var(--danger); }
 .file-approval-preview { min-width: 0; margin-top: 14px; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: hidden; }
@@ -13,7 +13,7 @@
 .file-approval-preview-toolbar button { border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); padding: 3px 6px; font-size: var(--font-size-ui); }
 .file-approval-preview-toolbar button:hover { background: var(--surface-hover); color: var(--foreground); }
 .file-approval-content { max-height: min(220px,30vh); overflow: auto; padding: 12px 14px; scrollbar-width: thin; }
-.file-approval-content > pre { margin: 0; color: var(--text-secondary); font: 11px/1.75 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.file-approval-content > pre { margin: 0; color: var(--text-secondary); font: var(--font-size-caption)/1.75 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .file-approval-content .assistant-prose { font-size: var(--font-size-ui); line-height: 1.8; }
 .file-approval-content .assistant-prose > :first-child { margin-top: 0; }
 .file-approval-content .assistant-prose > :last-child { margin-bottom: 0; }

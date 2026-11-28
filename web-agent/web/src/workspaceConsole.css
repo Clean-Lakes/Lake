@@ -141,10 +141,10 @@
 .workspace-console-empty { padding-inline:8px; color:var(--pilot-header-muted); font-size:var(--font-size-toolbar); }
 .workspace-console-content,
 .workspace-console > .app-select-popup {
-  --font-size-ui:15px;
+  --font-size-ui:var(--font-size-reading);
   --font-size-body:var(--font-size-ui);
-  --font-size-process:14px;
-  --font-size-toolbar:13px;
+  --font-size-process:calc(var(--font-size-ui) - 1px);
+  --font-size-toolbar:calc(var(--font-size-ui) - 2px);
   --text-muted:var(--pilot-header-muted);
   --text-secondary:var(--text-muted);
   font-size:var(--font-size-ui);

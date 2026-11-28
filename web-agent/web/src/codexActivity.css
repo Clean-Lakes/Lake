@@ -1,6 +1,6 @@
-.codex-agent-name { font-size:var(--font-size-toolbar,12px); color:var(--text-muted); font-weight:500; }
+.codex-agent-name { font-size:var(--font-size-toolbar); color:var(--text-muted); font-weight:500; }
 .codex-activity { display:grid; gap:10px; min-width:0; margin:5px 0 9px; }
-.codex-tool-group { min-width:0; overflow:hidden; border:1px solid var(--border); border-radius:var(--radius-settings-control,10px); color:var(--text-muted); font-size:var(--font-size-toolbar,12px); }
+.codex-tool-group { min-width:0; overflow:hidden; border:1px solid var(--border); border-radius:var(--radius-settings-control,10px); color:var(--text-muted); font-size:var(--font-size-toolbar); }
 .codex-group-toggle { display:flex; box-sizing:border-box; width:100%; height:30px; align-items:center; gap:7px; padding:5px 10px; border:0; background:transparent; color:inherit; text-align:start; font:inherit; cursor:pointer; }
 .codex-group-toggle:hover { background:var(--surface-hover); }
 .codex-group-label { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -27,7 +27,7 @@
 .codex-call-body .codex-call-output { margin-top:2px; }
 .codex-tool-group li > small { font:inherit; }
 .codex-task-event { display:flex; align-items:center; gap:7px; }
-.codex-task-event { font-size:var(--font-size-toolbar,12px); color:var(--text-muted); flex-wrap:wrap; }
+.codex-task-event { font-size:var(--font-size-toolbar); color:var(--text-muted); flex-wrap:wrap; }
 .codex-task-chip { padding:2px 7px; border-radius:6px; background:color-mix(in srgb,currentColor 7%,transparent); color:var(--foreground); overflow-wrap:anywhere; }
 .codex-task-mark { display:inline-grid; place-items:center; vertical-align:-1px; width:11px; height:11px; box-sizing:border-box; margin-inline-end:5px; border:1.5px solid currentColor; border-radius:50%; color:var(--warning); }
 .codex-task-mark[data-state="completed"] { color:var(--success); }

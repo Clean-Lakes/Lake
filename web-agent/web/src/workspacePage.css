@@ -8,7 +8,6 @@
   --workspace-gutter:max(clamp(12px,4.6cqw,38px),calc((100cqw - 900px) / 2));
   --workspace-page-padding:clamp(16px,3.7cqw,30px) var(--workspace-gutter) 32px;
   --workspace-section-gap:clamp(20px,4.2cqw,32px);
-  --workspace-section-size:18px;
   --workspace-card-inset:clamp(12px,2.8cqw,20px);
   --workspace-row-padding:12px var(--workspace-card-inset);
   --workspace-card-fill:var(--surface);
@@ -36,7 +35,7 @@
   margin:0;
   overflow:hidden;
   color:var(--foreground);
-  font-size:21px;
+  font-size:var(--font-size-page-title);
   font-weight:var(--font-weight-semibold);
   letter-spacing:-.02em;
   line-height:1.25;
@@ -61,7 +60,7 @@
   font-size:var(--font-size-process);
 }
 @container workspace-page (max-width:410px) {
-  .workspace-page-title { font-size:18px; }
+  .workspace-page-title { font-size:var(--font-size-section); }
   .workspace-console-content .workspace-page-header-actions .button {
     inline-size:32px;
     padding-inline:0;
@@ -71,12 +70,12 @@
 }
 @container workspace-page (max-width:245px) {
   .workspace-page-header { gap:6px; }
-  .workspace-page-title { font-size:17px; }
+  .workspace-page-title { font-size:1.25rem; }
 }
 .workspace-section-title {
   margin:0 0 12px;
   color:var(--foreground);
-  font-size:var(--workspace-section-size);
+  font-size:var(--font-size-section);
   line-height:1.35;
 }
 .workspace-setting-section { min-width:0; }

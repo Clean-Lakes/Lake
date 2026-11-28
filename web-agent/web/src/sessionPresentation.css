@@ -44,13 +44,13 @@
 .presentation-dialog { border: 1px solid var(--border); border-radius: var(--radius-dialog); background: var(--surface); color: var(--foreground); box-shadow: var(--shadow-dialog); padding: 22px; width: min(420px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); overflow-y: auto; }
 .presentation-dialog::backdrop { background: var(--overlay); }
 .presentation-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
-.presentation-dialog-head h2 { margin: 0; font-size: 17px; font-weight:var(--font-weight-semibold); }
+.presentation-dialog-head h2 { margin: 0; font-size: 1.25rem; font-weight:var(--font-weight-semibold); }
 .session-icon-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
 .session-icon-grid button { display: flex; align-items: center; flex-direction: column; gap: 9px; padding: 13px 4px; border: 1px solid var(--border); border-radius: var(--radius-panel); color: var(--text-secondary); background: var(--surface); font-size: var(--font-size-ui); }
 .session-icon-grid button:hover, .session-icon-grid button[aria-pressed="true"] { background: var(--surface-selected); color: var(--foreground); border-color: var(--border-strong); }
 .breadcrumbs > svg, .breadcrumbs strong > svg { flex-shrink: 0; color: var(--text-secondary); }
 .breadcrumbs strong { display: flex; align-items: center; gap: 7px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-brand-row .brand > strong { font-size: 19px; }
+.sidebar-brand-row .brand > strong { font-size: 1.375rem; }
 .nav-row.session-nav-row .nav-row-text small { display: none; }
 .nav-row.session-nav-row { min-height: 33px; padding-top: 8px; padding-bottom: 8px; }
 @media(max-width:700px) {

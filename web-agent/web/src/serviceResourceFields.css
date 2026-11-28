@@ -10,7 +10,7 @@
 .kubeconfig-file-field input[hidden] { display:none; }
 .kubeconfig-file-field + .field-label { margin-top:15px; }
 .kubeconfig-editor { position:relative; margin-top:7px; }
-.kubeconfig-editor textarea { display:block; width:100%; min-height:150px; max-height:260px; resize:vertical; box-sizing:border-box; padding:10px 38px 10px 12px; border:1px solid var(--border); border-radius:var(--radius-settings-control); background:var(--surface); color:var(--foreground); font:12px/1.6 var(--font-mono); corner-shape:var(--corner-window); }
+.kubeconfig-editor textarea { display:block; width:100%; min-height:150px; max-height:260px; resize:vertical; box-sizing:border-box; padding:10px 38px 10px 12px; border:1px solid var(--border); border-radius:var(--radius-settings-control); background:var(--surface); color:var(--foreground); font:var(--font-size-toolbar)/1.6 var(--font-mono); corner-shape:var(--corner-window); }
 .kubeconfig-editor textarea:focus { border-color:var(--focus); outline:1px solid var(--focus); }
 .kubeconfig-editor .kubeconfig-masked { -webkit-text-security:disc; }
 .kubeconfig-editor > button { position:absolute; top:6px; right:6px; }

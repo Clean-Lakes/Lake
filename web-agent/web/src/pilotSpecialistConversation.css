@@ -2,7 +2,7 @@
 .pilot-specialist-conversation:empty { display:none; }
 .pilot-specialist-reply-content { min-width:0; }
 .pilot-specialist-reply-body { display:flow-root; min-width:0; }
-.pilot-specialist-connection { display:block; margin-top:8px; color:var(--text-muted); font-size:12px; }
+.pilot-specialist-connection { display:block; margin-top:8px; color:var(--text-muted); font-size:var(--font-size-toolbar); }
 .pilot-report-fold { position:relative; min-width:0; }
 .pilot-report-body { display:grid; grid-template-rows:1fr; min-width:0; transition:grid-template-rows 200ms ease, margin-top 200ms ease, visibility 0s; }
 .pilot-report-items { display:grid; min-width:0; min-height:0; gap:24px; }
