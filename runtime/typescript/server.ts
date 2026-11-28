@@ -643,6 +643,11 @@ export async function startLakeServer(options: ServerOptions) {
             status=202;
           }
         }
+        else if(path[4]==='groups'&&path.length===6&&method==='PATCH'){
+          await agents.prepareRedaction();
+          if(draining)throw new HttpError(503,'服务正在退出');
+          result=superagent.conversations.updateGroup(path[2],path[5],data);
+        }
         else if(path.length===5&&path[4]==="stop"&&method==="POST"){
           const target=String(data.routerSessionId??'');
           if(target&&superagent.workspace(path[2]).project.routerSessionId===target)messageQueue!.pauseProject(path[2]);
@@ -1003,9 +1008,18 @@ export async function startLakeServer(options: ServerOptions) {
               throw new HttpError(501, "此会话操作尚未迁移完成");
           }
         } else if (method === "PATCH" && path.length === 3) {
-          session.title = String(data.title ?? session.title);
-          store.put("sessions", sessionId, session);
-          result = session;
+          if(group){
+            if(data.title!=null){
+              await agents.prepareRedaction(sessionId);
+              if(draining)throw new HttpError(503,'服务正在退出');
+              superagent.conversations.updateGroup(session.projectId,sessionId,{title:String(data.title),expectedRevision:group.revision??1});
+            }
+            result=store.session(sessionId);
+          }else{
+            session.title = String(data.title ?? session.title);
+            store.put("sessions", sessionId, session);
+            result = session;
+          }
         } else if (method === "DELETE" && path.length === 3) {
           if (["router", "role", "worker", "group"].includes(session.workspaceRole ?? "")) throw new HttpError(409, "受管理会话保留任务与频道身份；请使用停止任务或删除专员");
           await messageQueue!.archiveSession(sessionId);

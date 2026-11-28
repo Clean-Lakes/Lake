@@ -455,6 +455,8 @@ export type ChatGroup = {
   sessionId:string;
   projectId:string;
   title:string;
+  description?:string;
+  revision?:number;
   members:ChatGroupMember[];
   updatedAt:string;
   cursor?:number;
