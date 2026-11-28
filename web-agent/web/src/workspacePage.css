@@ -6,8 +6,8 @@
   min-height:0;
   container:workspace-page / inline-size;
   --workspace-gutter:max(clamp(12px,4.6cqw,38px),calc((100cqw - 900px) / 2));
-  --workspace-page-padding:clamp(16px,3.7cqw,30px) var(--workspace-gutter) 32px;
-  --workspace-section-gap:clamp(20px,4.2cqw,32px);
+  --workspace-page-padding:clamp(6px,1.6cqw,14px) var(--workspace-gutter) 32px;
+  --workspace-section-gap:clamp(18px,3.6cqw,26px);
   --workspace-section-size:18px;
   --workspace-card-inset:clamp(12px,2.8cqw,20px);
   --workspace-row-padding:12px var(--workspace-card-inset);
@@ -28,7 +28,6 @@
   height:var(--console-header-height);
   padding-block:0;
   padding-inline:var(--workspace-gutter) max(var(--workspace-gutter),var(--console-close-space));
-  box-shadow:inset 0 -1px var(--border);
   background:var(--console-canvas);
 }
 .workspace-page-title {
@@ -91,6 +90,51 @@
   margin-block-end:10px;
 }
 .workspace-setting-heading .workspace-section-title { min-width:0; margin:0; overflow-wrap:anywhere; }
+.workspace-section-title-group {
+  display:inline-flex;
+  align-items:baseline;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.workspace-current-project-head {
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.workspace-current-project-badge {
+  display:inline-flex;
+  align-items:center;
+  padding:1px 6px;
+  border-radius:var(--radius-settings-badge);
+  corner-shape:var(--corner-window);
+  background:var(--info-soft);
+  color:var(--info);
+  font-size:12px;
+  font-weight:var(--font-weight-medium);
+  line-height:18px;
+}
+.workspace-page .workspace-soft-primary {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  min-height:34px;
+  padding:4px 11px;
+  border:1px solid color-mix(in srgb,var(--info) 22%,transparent);
+  border-radius:var(--radius-settings-control);
+  corner-shape:var(--corner-window);
+  background:color-mix(in srgb,var(--info) 11%,transparent);
+  color:var(--info);
+  font-size:var(--font-size-process);
+  font-weight:var(--font-weight-medium);
+  white-space:nowrap;
+}
+.workspace-page .workspace-soft-primary:hover:not(:disabled) {
+  background:color-mix(in srgb,var(--info) 17%,transparent);
+  border-color:color-mix(in srgb,var(--info) 32%,transparent);
+}
+.workspace-page .workspace-soft-primary:disabled { opacity:.55; }
 .workspace-setting-actions {
   display:flex;
   align-items:center;
@@ -379,6 +423,7 @@
 }
 @media (pointer:coarse) {
   .workspace-page-header-actions .button,
+  .workspace-page .workspace-soft-primary,
   .workspace-page .workspace-text-button, .workspace-project-search, .workspace-project-search > .icon-button,
   .workspace-project-rename-controls input, .workspace-project-rename-controls .button { min-height:44px; }
   .workspace-project-search > .icon-button { width:44px; }
