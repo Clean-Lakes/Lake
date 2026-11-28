@@ -225,6 +225,20 @@ test('alignSelectionIndicator places silently first, springs across target chang
   }
 });
 
+test('an opening menu measures its selection in unscaled layout coordinates', () => {
+  const container = Object.assign(fakeElement({left: 200, top: 300, width: 96, height: 144}), {
+    offsetWidth: 128, offsetHeight: 192, clientLeft: 1, clientTop: 1, scrollTop: 16,
+  });
+  const target = fakeElement({left: 205.25, top: 294, width: 87, height: 23.25});
+  const indicator = fakeElement({left: 0, top: 0, width: 0, height: 0});
+
+  alignSelectionIndicator(container as unknown as HTMLElement, indicator as unknown as HTMLElement, target as unknown as HTMLElement);
+  assert.equal(indicator.style.getPropertyValue('--selection-left'), '6px');
+  assert.equal(indicator.style.getPropertyValue('--selection-top'), '7px');
+  assert.equal(indicator.style.width, '116px');
+  assert.equal(indicator.style.height, '31px');
+});
+
 test('components with menu and selection motion remain SSR safe in Node ESM tests', () => {
   const indicatorHtml = renderToStaticMarkup(createElement(TabSelectionIndicator, {selection: 'form', axis: 'both'}));
   assert.match(indicatorHtml, /tab-selection-indicator/);

@@ -65,12 +65,15 @@ export function alignSelectionIndicator(
   }
   const scrollLeft = container.scrollLeft;
   const scrollTop = container.scrollTop;
-  const originLeft = containerRect.left + container.clientLeft - scrollLeft;
-  const originTop = containerRect.top + container.clientTop - scrollTop;
-  const left = roundPx(targetRect.left - originLeft);
-  const top = roundPx(targetRect.top - originTop);
-  const width = roundPx(targetRect.width);
-  const height = roundPx(targetRect.height);
+  // The indicator is positioned in layout coordinates even while its menu scales on screen.
+  const scaleX = containerRect.width && container.offsetWidth ? containerRect.width / container.offsetWidth : 1;
+  const scaleY = containerRect.height && container.offsetHeight ? containerRect.height / container.offsetHeight : 1;
+  const originLeft = containerRect.left + (container.clientLeft - scrollLeft) * scaleX;
+  const originTop = containerRect.top + (container.clientTop - scrollTop) * scaleY;
+  const left = roundPx((targetRect.left - originLeft) / scaleX);
+  const top = roundPx((targetRect.top - originTop) / scaleY);
+  const width = roundPx(targetRect.width / scaleX);
+  const height = roundPx(targetRect.height / scaleY);
 
   const visible =
     container.hasAttribute('data-selection-visible') &&
@@ -128,10 +131,10 @@ export function alignSelectionIndicator(
   const timing = selectionSpringTiming();
   if (axis === 'y') {
     if (!height) return;
-    const fromTop = from.top - originTop;
+    const fromTop = (from.top - originTop) / scaleY;
     indicator.animate(
       [
-        {transform: `translate3d(0,${fromTop}px,0) scaleY(${from.height / height})`},
+        {transform: `translate3d(0,${fromTop}px,0) scaleY(${from.height / scaleY / height})`},
         {transform: `translate3d(0,${top}px,0) scaleY(1)`},
       ],
       timing,
@@ -141,10 +144,10 @@ export function alignSelectionIndicator(
 
   if (axis === 'x') {
     if (!width) return;
-    const fromLeft = from.left - originLeft;
+    const fromLeft = (from.left - originLeft) / scaleX;
     indicator.animate(
       [
-        {transform: `translate3d(${fromLeft}px,0,0) scaleX(${from.width / width})`},
+        {transform: `translate3d(${fromLeft}px,0,0) scaleX(${from.width / scaleX / width})`},
         {transform: `translate3d(${left}px,0,0) scaleX(1)`},
       ],
       timing,
@@ -153,12 +156,12 @@ export function alignSelectionIndicator(
   }
 
   if (!width || !height) return;
-  const fromLeft = from.left - originLeft;
-  const fromTop = from.top - originTop;
+  const fromLeft = (from.left - originLeft) / scaleX;
+  const fromTop = (from.top - originTop) / scaleY;
   indicator.animate(
     [
       {
-        transform: `translate3d(${fromLeft}px,${fromTop}px,0) scale(${from.width / width},${from.height / height})`,
+        transform: `translate3d(${fromLeft}px,${fromTop}px,0) scale(${from.width / scaleX / width},${from.height / scaleY / height})`,
       },
       {transform: `translate3d(${left}px,${top}px,0) scale(1,1)`},
     ],

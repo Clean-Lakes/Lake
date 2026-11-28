@@ -76,10 +76,13 @@ export function selectComposerMention(draft:string,caret:number,references:Compo
  const existing=references.find(ref=>ref.kind===option.kind&&ref.resourceId===option.id);
  return replaceComposerRange(draft,references,token.start,caret,existing?"":composerToken,existing?[]:[{kind:option.kind,resourceId:option.id,label:`@${option.name}`,position:0}]);
 }
-export function appendResourceMention(draft:string,references:ComposerReference[],resource:Pick<Resource,"id"|"name">,caret=draft.length,end=caret) {
- const existing=references.find(ref=>ref.kind==="resource"&&ref.resourceId===resource.id);
+export function appendComposerMention(draft:string,references:ComposerReference[],option:Pick<MentionOption,'kind'|'id'|'name'>,caret=draft.length,end=caret) {
+ const existing=references.find(ref=>ref.kind===option.kind&&ref.resourceId===option.id);
  if(existing)return {next:draft,references,position:existing.position+1};
- return replaceComposerRange(draft,references,caret,end,composerToken,[{kind:"resource",resourceId:resource.id,label:`@${resource.name}`,position:0}]);
+ return replaceComposerRange(draft,references,caret,end,composerToken,[{kind:option.kind,resourceId:option.id,label:`@${option.name}`,position:0}]);
+}
+export function appendResourceMention(draft:string,references:ComposerReference[],resource:Pick<Resource,"id"|"name">,caret=draft.length,end=caret) {
+ return appendComposerMention(draft,references,{kind:'resource',id:resource.id,name:resource.name},caret,end);
 }
 export function composerResourceIds(references:ComposerReference[],scope:string[]) {
  return [...new Set(references.filter(ref=>ref.kind==="resource"&&scope.includes(ref.resourceId)).map(ref=>ref.resourceId))];
