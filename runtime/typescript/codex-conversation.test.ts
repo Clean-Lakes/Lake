@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {join} from 'node:path';
 import {CodexAppServer} from './acp/codex-app-server';
 import {codexToolDetail,CodexOutputBuffer,publicCommand} from './acp/codex-activity';
-import {captureCodexActivity,codexClosingMessageIds,legacyCommandBodies} from './codex-conversation';
-import {codexActivity} from '../../web-agent/shared/codex-activity';
+import {captureSpecialistActivity,specialistClosingMessageIds,legacyCommandBodies} from './codex-conversation';
+import {specialistActivity} from '../../web-agent/shared/codex-activity';
 import type {AICard} from '../../web-agent/shared/contracts';
 import type {ExternalRun,ExternalEvent} from './acp/types';
 
@@ -16,31 +16,33 @@ test('only messages first spoken after a successful work_finish belong to the re
  const text=(publicTextId:string):ExternalEvent=>({kind:'text',publicTextId,sequence:1,at});
  const finish:ExternalEvent={kind:'tool_update',title:'work_finish',status:'completed',sequence:2,at};
  const events=[text('stage'),finish,text('stage'),text('closing'),text('closing')];
- assert.deepEqual(codexClosingMessageIds({...run,events}),['closing']);
- assert.deepEqual(codexClosingMessageIds({...run,events:[{...finish,status:'failed'},text('retry')]}),[]);
- assert.deepEqual(codexClosingMessageIds({...run,events,childSessionId:'child'}),[]);
+ assert.deepEqual(specialistClosingMessageIds({...run,events}),['closing']);
+ assert.deepEqual(specialistClosingMessageIds({...run,events:[{...finish,status:'failed'},text('retry')]}),[]);
+ assert.deepEqual(specialistClosingMessageIds({...run,events,childSessionId:'child'}),[]);
+ assert.deepEqual(specialistClosingMessageIds({...run,agent:'antigravity',events}),[]);
+ assert.deepEqual(specialistClosingMessageIds({...run,agent:'claude-code',events:[text('stage'),{...finish,toolSource:'lake-bridge'},text('closing')]}),['closing']);
 });
 test('Codex wire appends commentary in place around concrete calls and streams complete output lines',async t=>{
  const card=operation(), seen:string[]=[];
  const adapter=new CodexAppServer({executable:process.execPath,args:[join(__dirname,'test-fixtures/codex-app-server-wire.cjs')],cwd:process.cwd(),env:{LAKE_WIRE_SCENARIO:'inline-activity'}},update=>{
    if(update.kind==='usage'||update.kind==='input')return;
    const event:ExternalEvent=update.kind==='text'?{kind:'text',publicText:update.messageText,publicTextId:update.messageId,sequence:1,at}:{...update,sequence:1,at};
-   const item=captureCodexActivity(run,event,card)?.codexItem;
+   const item=captureSpecialistActivity(run,event,card)?.codexItem;
    if(item&&item.kind!=='text'&&item.output)seen.push(item.status+' '+item.output);
  });
  t.after(()=>adapter.close());
  const signal=AbortSignal.timeout(6000);
  await adapter.initialize(signal);await adapter.openSession({cwd:process.cwd()},signal);await adapter.exec('demo',signal);
- const items=codexActivity({cards:[card]},'task','root');
+ const items=specialistActivity({cards:[card]},'task','root');
  assert.deepEqual(items.map(item=>[item.kind,item.text]),[['text','检查服务'],['read','inspector.yaml'],['text','核对日志'],['command','journalctl -u inspector -n 20']]);
  assert.deepEqual(seen,['running scan started','completed scan finished']);
- assert.deepEqual(codexActivity({cards:[card]},'other','root'),[]);
- assert.deepEqual(codexActivity({cards:[card]},'task','other'),[]);
+ assert.deepEqual(specialistActivity({cards:[card]},'other','root'),[]);
+ assert.deepEqual(specialistActivity({cards:[card]},'task','other'),[]);
 });
 test('only root workers contribute, file contents and sensitive commands stay outside the transcript',()=>{
  const card=operation(),event:ExternalEvent={kind:'tool',callId:'a',displayKind:'read',detail:'file',status:'running',sequence:1,at};
  for(const other of [{...run,purpose:'child' as const},{...run,childSessionId:'x'},{...run,rootTurnId:undefined}])
-   assert.equal(captureCodexActivity(other,event,card),undefined);
+   assert.equal(captureSpecialistActivity(other,event,card),undefined);
  assert.equal(codexToolDetail({type:'mcpToolCall',tool:'Read',arguments:{path:'file'},result:{content:[{text:'private file contents'}]}})?.preview,undefined);
  const hidden=codexToolDetail({type:'commandExecution',command:'cat .env',aggregatedOutput:'secret value'});
  assert.equal(hidden?.detail,'cat .env');assert.equal(hidden?.preview,undefined);
@@ -55,12 +57,12 @@ test('successful checklist snapshots record additions and explicit completions o
   cwd:process.cwd(),env:{LAKE_WIRE_SCENARIO:'inline-checklist'}},update=>{
   if(update.kind==='usage'||update.kind==='input')return;
   const event:ExternalEvent=update.kind==='text'?{kind:'text',publicText:update.messageText,publicTextId:update.messageId,sequence:1,at}:{...update,sequence:1,at};
-  captureCodexActivity(run,event,card);
+  captureSpecialistActivity(run,event,card);
  });
  t.after(()=>adapter.close());
  const signal=AbortSignal.timeout(6000);
  await adapter.initialize(signal);await adapter.openSession({cwd:process.cwd()},signal);await adapter.exec('demo',signal);
- const items=codexActivity({cards:[card]},'task','root');
+ const items=specialistActivity({cards:[card]},'task','root');
  assert.deepEqual(items.map(item=>item.kind==='text'?[item.kind,item.text]:[item.text,item.taskState??item.status,!!item.createdTask]),[
   ['核对巡检记录','in_progress',true],['补查历史','pending',true],['更新任务清单','failed',false],
   ['text','巡检记录已核对。'],['核对巡检记录','completed',false],['补查历史','removed',false],

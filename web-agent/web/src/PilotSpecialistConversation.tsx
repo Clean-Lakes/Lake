@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {SessionEvent,SessionSnapshot,SpecialistReplyAuthor} from '../../shared/contracts';
 import {SpecialistExecutionProcess} from './CodexActivity';
-import {codexActivity} from '../../shared/codex-activity';
+import {specialistActivity} from '../../shared/codex-activity';
 import {api} from './api';
 import {applyLiveText} from './liveTextUpdates';
 import {acceptSnapshot} from './snapshotUpdates';
@@ -162,7 +162,7 @@ export function PilotSpecialistReplyView({
  },[entry?.reply?.turnId,onObservedTurn,row]);
  const observedRoot=entry?.reply?.turnId??row.observedRootTurnId;
  if(!report&&observedRoot&&row.reportedTurns.includes(observedRoot))return null;
- const transcript=report?.codexActivity??codexActivity(statusSnapshot?.ai,row.worker.task.executionGoalId??row.worker.task.taskId,
+ const transcript=report?.codexActivity??specialistActivity(statusSnapshot?.ai,row.worker.task.executionGoalId??row.worker.task.taskId,
   report?.author?.rootTurnId??entry?.reply?.turnId??row.observedRootTurnId??statusSnapshot?.ai?.rootTurnId);
  const hasActivity=transcript.some(item=>item.kind!=='text');
  const hasTranscriptProse=transcript.some(item=>item.kind==='text'&&!!item.text.trim());

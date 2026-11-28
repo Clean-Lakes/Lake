@@ -1,4 +1,5 @@
 import {updateCodexActivity,type CodexActivityItem} from '../../shared/codex-activity';
+import {isExternalAgentId} from '../../shared/external-agents';
 import type {SessionEvent,SessionSnapshot} from '../../shared/contracts';
 
 // Live events address one item. They carry its received prefix, making replay,
@@ -25,7 +26,7 @@ export function applyLiveText(previous:SessionSnapshot|null,event:SessionEvent):
  if(update.externalReply&&(update.cardType!=='operation'||typeof update.externalReply.id!=='string'||!update.externalReply.id||typeof update.externalReply.content!=='string'))return null;
  if(update.codexItem){
   const data=ai.cards[index]?.data as {taskId?:string;codex_activity?:CodexActivityItem[];external_agent?:string}|undefined;
-  if(update.cardType!=='operation'||!data||data.external_agent!=='codex'||!update.codexTaskId||data.taskId!==update.codexTaskId)return null;
+  if(update.cardType!=='operation'||!data||!isExternalAgentId(data.external_agent)||!update.codexTaskId||data.taskId!==update.codexTaskId)return null;
   const cards=ai.cards.slice();
   cards[index]={...cards[index]!,content:update.content,data:{...data,codex_activity:updateCodexActivity(data.codex_activity??[],update.codexItem),
     ...(update.externalReply&&{external_reply:update.externalReply})}};

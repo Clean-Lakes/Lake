@@ -39,6 +39,22 @@ test('both specialist surfaces keep one animal on the latest Codex prose through
  }
 });
 
+test('an Antigravity turn with only saved tool events renders the process before public prose',()=>{
+ const row=advance([],workspace())[0]!,state=snapshot(row),turnId=state.ai!.rootTurnId;
+ state.ai!.cards=[{id:'run',type:'operation',at,status:'running',data:{
+  source:'external_agent',external_agent:'antigravity',external_run_id:'run',taskId:row.worker.task.executionGoalId,root_turn_id:turnId,
+  external_events:[
+   {kind:'tool',callId:'one',title:'检查资源',status:'pending',at},
+   {kind:'tool_update',callId:'one',status:'completed',at},
+   {kind:'tool',callId:'two',title:'核对记录',status:'in_progress',at},
+  ],
+ }}];
+ assert.match(html(row,state),/已调用 1 个工具，正在调用 1 个工具/);
+ assert.doesNotMatch(html(row,state),/工具调用 ·|>检查资源<|>核对记录</);
+ const foreign={...state,ai:{...state.ai!,rootTurnId:'other-root'}};
+ assert.doesNotMatch(html(row,foreign),/已调用 1 个工具|正在调用 1 个工具/);
+});
+
 test('an observed dispatch survives an activity gap in its original slot without inventing work',()=>{
  const state=workspace([worker(),worker('database')]),initial=advance([],state);
  state.workers[0]!.activity=undefined;

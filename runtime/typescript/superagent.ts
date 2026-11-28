@@ -1,4 +1,4 @@
-import {codexActivity} from '../../web-agent/shared/codex-activity';
+import {specialistActivity} from '../../web-agent/shared/codex-activity';
 import {redactModelValue} from "./model-errors";
 import type {PilotConfiguration} from "./pilot-configuration";
 import {pilotConfigurationToolNames} from "./configuration-tool-names";
@@ -2756,7 +2756,9 @@ export class LakeSuperagent implements AgentHost {
         message={...message,codexActivity:restored};
     }
     const recoverDuration=isReport&&author?.execution?.kind==='acp'&&author.durationMs===undefined&&!!author.rootTurnId;
-    if(!author?.taskId || (!recoverDuration&&author.execution&&(message.replyToMessageId||!isReport)))return message;
+    const recoverActivity=isReport&&author?.execution?.kind==='acp'&&author.execution.agent==='antigravity'&&!!author.rootTurnId&&
+      !message.codexActivity&&!!message.text.trim();
+    if(!author?.taskId || (!recoverDuration&&!recoverActivity&&author.execution&&(message.replyToMessageId||!isReport)))return message;
     const worker=this.store.get<Worker>('superWorkers',author.workerId);
     const target=this.store.get<StoredSession>('sessions',message.sessionId);
     if(!worker||!target||worker.projectId!==target.projectId||worker.sessionId!==author.sessionId||worker.roleId!==author.roleId||
@@ -2772,6 +2774,10 @@ export class LakeSuperagent implements AgentHost {
           result = {...message, replyToMessageId:source.id};
         }
       }
+    }
+    if(recoverActivity){
+      const activity=specialistActivity(this.store.view(worker.sessionId),worker.taskId,author.rootTurnId);
+      if(activity.some(item=>item.kind!=='text'))result={...result,codexActivity:activity};
     }
     const durationMs=recoverDuration?this.legacyExternalDuration(worker,message):author.durationMs;
     if(author.execution&&durationMs===author.durationMs)return result;
@@ -3195,8 +3201,8 @@ export class LakeSuperagent implements AgentHost {
       const project = this.store.require<SuperProject>("superProjects", worker.projectId), channel = this.store.require<Channel>("superChannels", worker.roleId);
       const pilot=this.groupOfSource(worker.sourceEventId)??project.routerSessionId;
       const presentation = pending.presentation ?? { body: goal.summary ?? "这次检查还没完成。", channelBody: goal.summary ?? "这次检查还没完成。" };
-      const activity = worker.roleSnapshot.execution?.kind==='acp' && worker.roleSnapshot.execution.agent==='codex'
-        ? codexActivity(this.store.view(worker.sessionId),goal.id,pending.rootTurnId) : [];
+      const activity = worker.roleSnapshot.execution?.kind==='acp'
+        ? specialistActivity(this.store.view(worker.sessionId),goal.id,pending.rootTurnId) : [];
       const source = this.reportSourceMessage(worker.projectId, pending.sourceEventId ?? this.reportSourceEventId(worker, pending.inputEventIds));
       this.store.transaction(() => { for (const target of [pilot, channel.sessionId]) {
         const body = target === channel.sessionId ? presentation.channelBody : presentation.body;

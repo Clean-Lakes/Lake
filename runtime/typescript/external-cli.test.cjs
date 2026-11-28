@@ -34,6 +34,7 @@ async function reportViaBridge(mcp){
    assert.equal(response.status,200);return (await response.json()).result;
   };
   assert.ok((await rpc('tools/list',{})).tools.some(tool=>tool.name==='work_finish'));
+  assert.ok(!(await rpc('tools/call',{name:'list_assets',arguments:{query:'isolated-fixture'}})).isError);
   const result=await rpc('tools/call',{name:'work_finish',arguments:{summary:'ISOLATED_CLI_REPORT',outcome:'completed'}});
   assert.ok(result&&!result.isError);
   return;
@@ -52,6 +53,7 @@ async function reportViaBridge(mcp){
   child.stdin.write(JSON.stringify({jsonrpc:'2.0',method:'notifications/initialized'})+'\n');
   const tools=await rpc('tools/list',{});
   assert.ok(tools.tools.some(tool=>tool.name==='work_finish'));
+  assert.ok(!(await rpc('tools/call',{name:'list_assets',arguments:{query:'isolated-fixture'}})).isError);
   const result=await rpc('tools/call',{name:'work_finish',arguments:{summary:'ISOLATED_CLI_REPORT',outcome:'completed'}});
   assert.ok(!result.isError);
  }finally{child.stdin.end();child.kill();}
@@ -256,6 +258,34 @@ test('CLI profiles bind specialists, dispatch through the private bridge, and pu
   assert.deepEqual(run.usage,{inputTokens:3,outputTokens:5});
   assert.equal(run.events.findLast(event=>event.kind==='text').publicText,'ISOLATED_CLI_REPORT');
   const worker=app.store.require('superWorkers',receipt.assignment.workerId);
+  const toolSteps=run.events.filter(event=>event.title==='list_assets');
+  assert.deepEqual(toolSteps.map(event=>[event.kind,event.status,event.toolSource]),[
+   ['tool','running','lake-bridge'],['tool_update','completed','lake-bridge'],
+  ]);
+  assert.equal(toolSteps[0].callId,toolSteps[1].callId);
+  const liveProcess=app.store.view(worker.sessionId).cards.find(card=>card.id===run.id)?.data.codex_activity;
+  assert.equal(liveProcess?.filter(item=>item.text==='list_assets'&&item.status==='completed').length,1);
+  let report;
+  for(let attempt=0;attempt<150&&!report;attempt++){
+   report=app.store.list('messages').find(message=>message.sessionId===channel.sessionId&&message.author?.workerId===worker.id&&message.id.startsWith('report_'));
+   if(!report)await new Promise(resolve=>setTimeout(resolve,35));
+  }
+  assert.ok(report?.codexActivity?.some(item=>item.text==='list_assets'&&item.status==='completed'),'delivered report keeps the process');
+  if(agent==='antigravity'){
+   const {codexActivity,...oldReport}=report;
+   app.store.put('messages',oldReport.id,oldReport);
+   const view=app.store.view(worker.sessionId),card=view.cards.find(card=>card.id===run.id);
+   delete card.data.codex_activity;
+   card.data.external_events=[
+    {kind:'tool',callId:'saved-call',title:'读取历史样例',status:'in_progress',at:toolSteps[0].at},
+    {kind:'tool_update',callId:'saved-call',status:'completed',at:toolSteps[1].at},
+   ];
+   app.store.put('views',worker.sessionId,view);
+   const history=await request('/api/sessions/'+channel.sessionId+'/channel');
+   const restored=history.entries.find(entry=>entry.message?.id===oldReport.id)?.message;
+   assert.deepEqual(restored?.codexActivity?.map(item=>[item.text,item.status]),[['读取历史样例','completed']]);
+   assert.equal(app.store.require('messages',oldReport.id).codexActivity,undefined);
+  }
   assert.equal(worker.roleSnapshot.execution.agent,agent);
   assert.equal(worker.roleSnapshot.execution.revision,status.revision);
   assert.equal(app.store.require('superGoals',worker.taskId).summary,'ISOLATED_CLI_REPORT');

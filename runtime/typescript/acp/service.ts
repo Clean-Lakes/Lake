@@ -6,7 +6,7 @@ import { LakeStore,HttpError,id,now } from '../store';
 import { digest } from '../tasks';
 import {TaskDeadlineReached,watchTaskDeadline} from '../task-deadline';
 import type {AgentActivity,AgentConnection,AgentLaunch,ObserveAgentModel,ScopedHttpMcp,ScopedStdioMcp} from './client';
-import {commandLimit} from './codex-activity';
+import {codexToolDetail,commandLimit,outputLine} from './codex-activity';
 import {CodexAppServer} from './codex-app-server';
 import {ClaudeCode,claudeLocalAccount,discoverClaudeModels} from './claude-code';
 import {Antigravity,antigravityLoginRequired} from './antigravity';
@@ -22,7 +22,7 @@ import {ExternalPublicText} from './public-text';
 import type { CliAgentProfile,CodexAgentProfile,CodexConnectionProbe,CodexModelOption,ExternalActor,ExternalEvent,ExternalResult,ExternalRun } from './types';
 import {cliCatalogVersion,codexConnectionVersion,maxExternalConversationRuns} from './types';
 import type {SpecialistReplyAuthor} from '../../../web-agent/shared/contracts';
-import {codexClosingMessageIds,legacyCommandBodies} from '../codex-conversation';
+import {specialistClosingMessageIds,legacyCommandBodies} from '../codex-conversation';
 
 function ownLauncher(flag:string,args:string[]=[]){return {executable:process.execPath,args:isSea()?[flag,...args]:[__filename,flag,...args]};}
 type LiveRun={process?:AgentConnection;controller:AbortController;scopeHash:string;conversation:boolean;guard?:()=>void};
@@ -105,7 +105,7 @@ export class LakeExternalAgents {
       return this.redact(record.text);
   }
   private indexClosingMessages(run:ExternalRun){
-    for(const id of codexClosingMessageIds(run))this.closingMessages.add(id);
+    for(const id of specialistClosingMessageIds(run))this.closingMessages.add(id);
   }
   isClosingMessage(id:string){return this.closingMessages.has(id);}
   private async launch(profile:CodexAgentProfile,directory:string,signal:AbortSignal,mcp?:{command:string;args:string[]},model?:string,purpose:'run'|'probe'='run'):
@@ -506,10 +506,33 @@ export class LakeExternalAgents {
     const tools=actor.tools.filter(tool=>(!externalControlTools.has(tool.metadata.name)||actor.purpose==='worker'&&['Agent','Task','TaskOutput','TaskStop','SendMessage'].includes(tool.metadata.name))&&
       (actor.purpose==='worker'||!['work_begin','work_update','work_finish','work_wait','ask_user_question','recall_memory','recall_task_context'].includes(tool.metadata.name)));
     const activePrompt=()=>{guard();if(run.state!=='running'||!['dispatching','sent'].includes(run.dispatchPhase))throw new HttpError(409,'当前没有可执行工具的外部 prompt');};
-    const invoke=async(name:string,input:unknown,callId:string)=>{activePrompt();if(!tools.some(tool=>tool.metadata.name===name))throw new HttpError(403,'外部执行不能调用此工具');
-      const result=await actor.executeTool(name,input,run.id+':'+callId,controller.signal);guard();
-      if(actor.purpose==='worker'&&name==='work_finish'&&typeof (input as any)?.summary==='string')submittedReport=this.redact((input as any).summary).slice(0,32768);
-      return result;};
+    const bridgeActivity=agentId!=='codex'&&run.purpose==='worker'&&!!run.rootTurnId&&!run.childSessionId&&!run.agentRunId;
+    const invoke=async(name:string,input:unknown,callId:string)=>{
+      activePrompt();
+      if(!tools.some(tool=>tool.metadata.name===name))throw new HttpError(403,'外部执行不能调用此工具');
+      const detail=bridgeActivity?codexToolDetail({type:'mcpToolCall',server:'lake',tool:name,arguments:input},this.redact):undefined;
+      const recorded=bridgeActivity&&(detail||name==='work_finish');
+      const tool={callId,title:name,toolSource:'lake-bridge' as const,...detail};
+      if(recorded)event({kind:'tool',status:'running',...tool});
+      let status='failed';
+      let preview:string|undefined;
+      try{
+        const result=await actor.executeTool(name,input,run.id+':'+callId,controller.signal);
+        guard();
+        status='completed';
+        if(actor.purpose==='worker'&&name==='work_finish'&&typeof (input as any)?.summary==='string')
+          submittedReport=this.redact((input as any).summary).slice(0,32768);
+        if(detail?.displayKind==='command'&&!detail.suppressOutput){
+          const stdout=(result as {stdout?:string|{text?:unknown}}|undefined)?.stdout;
+          const text=typeof stdout==='string'?stdout:stdout?.text;
+          if(typeof text==='string')preview=outputLine(this.redact(text));
+        }
+        return result;
+      }finally{
+        if(recorded&&!controller.signal.aborted&&run.state==='running')
+          event({kind:'tool_update',status,...tool,...(preview&&{preview})});
+      }
+    };
     persist();
     try{
       guard();
@@ -527,6 +550,7 @@ export class LakeExternalAgents {
         if(controller.signal.aborted||!['dispatching','sent'].includes(run.dispatchPhase))return;
         if(update.kind==='input'){guard();actor.inputConsumed?.(update.inputId);}
         else if(update.kind==='usage'){run.usage=update.usage;persist();}
+        else if((update.kind==='tool_update'||update.kind==='tool')&&bridgeActivity&&update.scopedTool)return;
         else if((update.kind==='tool_update'||update.kind==='tool')&&update.transient){
           if(actor.purpose==='worker'&&update.preview)actor.event(run,{kind:'tool_update',status:update.status,callId:this.redact(update.callId),
             displayKind:update.displayKind,detail:this.redact(update.detail??'').slice(0,update.displayKind==='command'?commandLimit:512),preview:this.redact(update.preview,true).slice(0,200),sequence:run.events.length,at:now()});

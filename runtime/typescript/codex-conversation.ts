@@ -1,13 +1,15 @@
 import {publicCommand} from './acp/codex-activity';
-import {updateCodexActivity,type CodexActivityItem} from '../../web-agent/shared/codex-activity';
+import {activityCallStatus,updateCodexActivity,type CodexActivityItem} from '../../web-agent/shared/codex-activity';
+import {isExternalAgentId} from '../../web-agent/shared/external-agents';
 import type {AICard,SessionEvent} from '../../web-agent/shared/contracts';
 import type {ExternalRun,ExternalEvent} from './acp/types';
 
-/** A fresh Codex message after the host accepted work_finish is closing prose.
+/** A fresh message after the host accepted work_finish is closing prose.
  * Keep its audit events, and let the delivered report own the final paragraph. */
-export function codexClosingMessageIds(run:ExternalRun):string[]{
-  if(run.agent!=='codex'||run.purpose!=='worker'||run.childSessionId||run.agentRunId||!run.rootTurnId)return [];
-  const finish=run.events.findIndex(e=>e.kind==='tool_update'&&e.title==='work_finish'&&e.status==='completed');
+export function specialistClosingMessageIds(run:ExternalRun):string[]{
+  if(!isExternalAgentId(run.agent)||run.purpose!=='worker'||run.childSessionId||run.agentRunId||!run.rootTurnId)return [];
+  const finish=run.events.findIndex(e=>e.kind==='tool_update'&&e.title==='work_finish'&&e.status==='completed'&&
+    (run.agent==='codex'||e.toolSource==='lake-bridge'));
   if(finish<0)return [];
   const progress=new Set<string>(),closing=new Set<string>();
   for(const [index,event] of run.events.entries()){
@@ -18,19 +20,19 @@ export function codexClosingMessageIds(run:ExternalRun):string[]{
   return [...closing];
 }
 
-export function captureCodexActivity(run:ExternalRun,event:ExternalEvent,card:AICard):SessionEvent['textUpdate']|undefined {
-  if(run.agent!=='codex'||run.purpose!=='worker'||!run.rootTurnId||!run.taskId||run.childSessionId||run.agentRunId)return;
+export function captureSpecialistActivity(run:ExternalRun,event:ExternalEvent,card:AICard):SessionEvent['textUpdate']|undefined {
+  if(!isExternalAgentId(run.agent)||run.purpose!=='worker'||!run.rootTurnId||!run.taskId||run.childSessionId||run.agentRunId)return;
   const data=card.data as Record<string,unknown>;
   const items=(data.codex_activity??[]) as CodexActivityItem[];
   let item:CodexActivityItem;
   if(event.kind==='text'&&event.publicTextId&&typeof event.publicText==='string'){
     item={id:event.publicTextId,kind:'text',text:event.publicText};
-  }else if((event.kind==='tool'||event.kind==='tool_update')&&event.displayKind&&event.callId){
+  }else if((event.kind==='tool'||event.kind==='tool_update')&&event.displayKind&&event.callId&&
+    (run.agent==='codex'||event.toolSource==='lake-bridge')){
     const id=JSON.stringify([run.id,event.callId]);
     const old=items.find(entry=>entry.id===id&&entry.kind!=='text');
     const previous=old?.kind==='text'?undefined:old;
-    const status=event.status==='running'?'running':event.status==='completed'?'completed':event.status==='failed'?'failed':
-      ['cancelled','declined','interrupted'].includes(event.status??'')?'stopped':'unknown';
+    const status=activityCallStatus(event.status);
     if(previous&&previous.status!=='running'&&status==='running')return;
     item={kind:event.displayKind,id,text:event.detail||previous?.text||'调用工具',status,at:previous?.at??event.at,
       ...((event.createdTask||event.title==='TaskCreate')&&{createdTask:true}),...(event.taskState&&{taskState:event.taskState}),

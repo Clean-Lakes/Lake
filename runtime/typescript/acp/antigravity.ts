@@ -195,13 +195,15 @@ export class Antigravity implements AgentConnection {
       }
     }else if(['tool_call','tool_call_update'].includes(event?.sessionUpdate)&&typeof event.toolCallId==='string'){
       const calls=this.turn.calls;
+      const knownCall=calls.has(event.toolCallId),scopedTool=knownCall||this.scopedCall(event);
       if(['completed','failed','cancelled'].includes(event.status)){
-        if(calls.has(event.toolCallId))calls.set(event.toolCallId,false);
-      }else if(event.sessionUpdate==='tool_call'&&this.scopedCall(event)&&!calls.has(event.toolCallId)&&calls.size<2048){
+        if(knownCall)calls.set(event.toolCallId,false);
+      }else if(event.sessionUpdate==='tool_call'&&scopedTool&&!knownCall&&calls.size<2048){
         calls.set(event.toolCallId,digest(event.rawInput));
       }
       this.publish({kind:event.sessionUpdate==='tool_call'?'tool':'tool_update',callId:event.toolCallId,
-        title:typeof event.title==='string'?event.title:'Google Antigravity 工具',status:typeof event.status==='string'?event.status:'pending'});
+        title:typeof event.title==='string'?event.title:'Google Antigravity 工具',status:typeof event.status==='string'?event.status:'pending',
+        ...(scopedTool&&{scopedTool:true})});
     }
   }
   async steer(){return false;}

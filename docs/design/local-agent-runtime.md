@@ -62,6 +62,8 @@ Claude Code 的「自定义 API」支持兼容 Anthropic Messages 的第三方�
 
 两者复用 Task/Worker 身份、审批、终止和操作账本。模型选用、CLI 连接及传输许可各自校验。需要延续时使用相同执行上下文的会话标识，Antigravity 的续接依赖本机 CLI 声明 `session/resume`。无法实时确认消费的补充沿 Lake 的既有排队机制处理。
 
+Claude Code 和 Antigravity 的专员任务在群聊、Pilot 对话和专员频道展示已公开的阶段说明与实际 Lake 工具调用。调用按原 Worker 和执行轮次更新，命令和简短输出沿用脱敏规则，过程随报告保存。历史 Antigravity 报告可从属于同一轮的已存记录显示工具标题与状态。
+
 ## 迁移与交付边界
 
 profile 升级为 schema3，记录 `runtimeKind: codex-app-server`。schema1/schema2 迁移增加 revision，旧 Worker/run 和来源记录保持原样；新的配置不能静默续接旧执行。官方引擎 0.170.0 安装在现有 Lake Home 的运行时目录。固定引擎和模型目录纳入连接版本。
