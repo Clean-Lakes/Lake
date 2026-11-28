@@ -5,7 +5,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import type {SessionSnapshot,SuperTask,SuperWorkspace,WorkGoal} from '../../shared/contracts';
 import {SessionStateBadge} from '../src/SessionPresentation';
 import {superTaskHeaderPresentation} from '../src/superAgentPresentation';
-import {superPilotActivity} from '../src/superPilotActivity';
+import {pendingPilotWorkPresentation,superPilotActivity} from '../src/superPilotActivity';
 import {workGoalPresentation} from '../src/workGoalPresentation';
 
 function snapshot():SessionSnapshot {
@@ -20,10 +20,11 @@ function workspace():SuperWorkspace {
   task:{taskId:'latest-task',sessionId:'latest-worker',projectId:'project',title:'当前检查',state:'completed',acceptanceState:'pass',revision:1,originRootTurnId:'worker-root',deadlineAt:''},
  }]};
 }
-function badge(s:SessionSnapshot,w=workspace(),connected=true) {
+function badge(s:SessionSnapshot,w:SuperWorkspace|null=workspace(),connected=true) {
  // The header uses this same precedence: real project activity, selected
  // invocation/task presentation, then the current turn's goal/session state.
- const presentation=superPilotActivity(w,s.session,connected)??superTaskHeaderPresentation(s.superagent?.task,s)??workGoalPresentation(s);
+ const presentation=superPilotActivity(w,s.session,connected)??superTaskHeaderPresentation(s.superagent?.task,s)
+   ??pendingPilotWorkPresentation(s,w)??workGoalPresentation(s);
  return renderToStaticMarkup(createElement(SessionStateBadge,{session:s.session,...presentation}));
 }
 
@@ -81,6 +82,30 @@ test('live sibling activity wins and settling it restores the current reply rath
  assert.match(badge(s,w),/data-badge-state="approval"/);
  worker.task.state='completed';worker.assignmentState='parked';delete worker.activity;
  assert.match(badge(s,w),/data-badge-state="ended"/);
+});
+
+test('a group acknowledgement keeps a neutral preparation badge while the specialist roster catches up',()=>{
+ const s=snapshot();
+ s.session={...s.session,id:'group',workspaceRole:'group'};
+ s.cursor=20;s.pilotWorkPending=true;s.ai!.replyStatus='completed';
+ const stale={...workspace(),project:{...workspace().project,routerSessionId:'group'},cursor:19,workers:[]};
+ const other={...stale,project:{...stale.project,routerSessionId:'other-group'},cursor:99};
+ for(const w of [null,stale,other]){
+  assert.match(badge(s,w),/data-badge-state="idle"[^>]*title="准备处理"/);
+ }
+ const ready={...stale,cursor:20,workers:workspace().workers};
+ const worker=ready.workers[0]!;
+ worker.task.state='running';worker.assignmentState='active';
+ worker.activity={phase:'queued',label:'准备处理',updatedAt:'2026-11-28T12:00:00Z'};
+ assert.match(badge(s,ready),/data-badge-state="idle"[^>]*aria-label="运维专员：准备处理"/);
+ worker.activity.phase='thinking';
+ assert.match(badge(s,ready),/data-badge-state="working"/);
+ worker.activity.phase='waiting_approval';
+ assert.match(badge(s,ready),/data-badge-state="approval"/);
+ worker.task.state='completed';worker.assignmentState='parked';delete worker.activity;
+ assert.match(badge(s,{...ready,cursor:21}),/data-badge-state="ended"/);
+ delete s.pilotWorkPending;
+ assert.match(badge(s,stale),/data-badge-state="ended"/);
 });
 
 test('unidentified turns and foreign task ownership cannot lend a pause to this Router',()=>{

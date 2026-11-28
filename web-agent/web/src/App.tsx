@@ -19,7 +19,7 @@ import './specialistAvatars.css';
 import {SpecialistAvatarProvider,SuperRoleAvatar} from './SuperRoleAvatar';
 import {AgentBackendLogo} from './AgentBackendLogo';
 import {conversationActivity,conversationAvatarMotion,pilotIdentity,superTaskHeaderPresentation,specialistTaskActivity,stopControlPresentation} from './superAgentPresentation';
-import {superPilotActivity} from './superPilotActivity';
+import {pendingPilotWorkPresentation,superPilotActivity} from './superPilotActivity';
 import {useTerminalPopover} from './useTerminalPopover';
 import {useMenuMotion} from './useMenuMotion';
 import {WorkbenchIsland,useWideWorkbench,type WorkbenchIslandHeaderControls} from './WorkbenchIsland';
@@ -1909,7 +1909,10 @@ function AppContent() {
   const pilotParticipants=sessionHeader&&selectedSuperPilot?(groupParticipants??pilotHeaderActivity?.participants??[]):undefined;
   const showPilotParticipants=isChatGroup||pilotHeaderActivity?.phase!=='summarizing';
   const roleRunningCount=specialistTaskActivity(roleWorkers).runningCount;
-  const superHeaderPresentation=pilotHeaderActivity??(selectedSuperChannel&&roleReplyActivity?.sessionId===sessionId&&roleReplyActivity.state!=='idle'?{status:roleReplyActivity.state==='running'?'investigating' as const:'waiting_approval' as const,label:roleReplyActivity.state==='running'?(roleRunningCount>1?`${roleRunningCount} 项执行中`:'处理中'):'需要处理'}:superTaskHeaderPresentation(activeSnapshot?.superagent?.task??selectedSuperWorker?.task,activeSnapshot)??currentSessionPresentation);
+  const superHeaderPresentation=pilotHeaderActivity??(selectedSuperChannel&&roleReplyActivity?.sessionId===sessionId&&roleReplyActivity.state!=='idle'
+    ?{status:roleReplyActivity.state==='running'?'investigating' as const:'waiting_approval' as const,label:roleReplyActivity.state==='running'?(roleRunningCount>1?`${roleRunningCount} 项执行中`:'处理中'):'需要处理'}
+    :superTaskHeaderPresentation(activeSnapshot?.superagent?.task??selectedSuperWorker?.task,activeSnapshot)
+      ??pendingPilotWorkPresentation(activeSnapshot,pilotConversation)??currentSessionPresentation);
   const selectedRoleName=selectedSuperChannel?.roleName??selectedSuperWorker?.roleName??pilotWorkspace.workspace?.channels?.find(channel=>channel.roleId===activeSnapshot?.superagent?.roleId)?.roleName;
   const selectedRoleId=selectedSuperChannel?.roleId??selectedSuperWorker?.roleId??activeSnapshot?.superagent?.roleId;
   const taskOwner=isSpecialistExecution?pilotWorkspace.workspace?.channels?.find(channel=>channel.projectId===selectedSession?.projectId&&channel.roleId===selectedRoleId):undefined;

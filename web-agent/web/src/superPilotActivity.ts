@@ -1,4 +1,4 @@
-import type {SuperWorker,SuperWorkerActivity,SuperWorkspace,WorkSession} from '../../shared/contracts';
+import type {SessionSnapshot,SuperWorker,SuperWorkerActivity,SuperWorkspace,WorkSession} from '../../shared/contracts';
 import type {LakeAvatarName} from '../../shared/specialist-avatars';
 import type {AvatarMotion} from './superAgentPresentation';
 import type {SpecialistTaskMember} from './specialistTaskListModel';
@@ -27,6 +27,15 @@ function reconnecting(phase:SuperPilotActivity['phase'],workerCount:number,parti
 
 function activityLabel(activity:SuperWorkerActivity) {
  return activity.label.trim()||fallbackLabels[activity.phase];
+}
+
+/** A finished coordinator reply can reach the UI before the Worker roster. */
+export function pendingPilotWorkPresentation(snapshot:SessionSnapshot|null|undefined,workspace:SuperWorkspace|null|undefined) {
+ if(!snapshot?.pilotWorkPending)return;
+ const {session,cursor}=snapshot;
+ if(workspace?.active&&workspace.project.projectId===session.projectId&&workspace.project.routerSessionId===session.id&&
+   (workspace.cursor??-1)>=cursor)return;
+ return {status:'idle' as const,label:'准备处理',idleLabel:'准备处理'};
 }
 
 // This is a view of live host activity, never an inference from a task's last
