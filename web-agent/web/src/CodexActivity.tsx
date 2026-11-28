@@ -5,7 +5,7 @@ import {AssistantMarkdown} from './AssistantMarkdown';
 import {Glyph} from './Icons';
 import {bindConversationFollow} from './followScroll';
 import type {LakeAvatarName} from './lakeAvatarCatalog';
-import {PilotReportFold,readingPilotReport} from './PilotReportFold';
+import {PilotReportFold} from './PilotReportFold';
 import {ReplyFooter,ReplyProcessContext} from './ReplyFooter';
 import {specialistElapsed} from './replyDurationState';
 
@@ -143,17 +143,16 @@ export function SpecialistExecutionProcess({collapse=false,connected=true,onInsp
   report?: Pick<Message,'id'|'text'|'author'>;
 }){
   const id=useId(),body=useRef<HTMLDivElement>(null);
-  const [expanded,setExpanded]=useState<boolean>();
+  const [expandedReport,setExpandedReport]=useState<string>();
   const {footer}=useContext(ReplyProcessContext);
-  const keepReading=collapse&&expanded===undefined&&readingPilotReport(body.current);
-  const open=!collapse||(expanded??keepReading);
-  useLayoutEffect(()=>{if(keepReading)setExpanded(true);},[keepReading]);
+  const open=!collapse||!!report&&expandedReport===report.id;
 
-  return <PilotReportFold id={id} bodyRef={body} open={open} automatic={collapse&&expanded===undefined}
-    connected={connected} stripHidden={!collapse}
+  return <PilotReportFold id={id} bodyRef={body} open={open} automatic={false}
+    connected={connected} immediate={collapse} stripHidden={!collapse}
     strip={collapse&&<ReplyFooter duration={specialistElapsed(report?.author?.durationMs)}
       status={report&&footer?.reportId===report.id?footer.status:undefined}
-      action={{controls:id,expanded:open,onClick:()=>{onInspect?.();setExpanded(!open);}}}/>}>
+      action={{controls:id,expanded:open,label:report?.author?.name?`查看${report.author.name}的执行过程`:undefined,
+        onClick:()=>{onInspect?.();setExpandedReport(open?undefined:report?.id);}}}/>}>
     <CodexActivity {...activity} reportText={report?.text}/>
   </PilotReportFold>;
 }

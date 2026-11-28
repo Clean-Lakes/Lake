@@ -190,7 +190,7 @@ if(agent==='claude-code'){
    const entry={content:'核查发布样例',priority:'medium',status:'pending'};
    const plan={sessionUpdate:'plan',entries:[entry]};
    update({...plan,entries:[{...entry,content:'外部会话的计划'}]},'foreign-session');
-   update({sessionUpdate:'agent_message_chunk',messageId:'progress',content:{type:'text',text:openingUpdate}});
+   update({sessionUpdate:'agent_message_chunk',content:{type:'text',text:openingUpdate}});
    update({sessionUpdate:'agent_thought_chunk',content:{type:'text',text:'PRIVATE_FIXTURE_THOUGHT'}});
    update(plan);
    update(plan);
@@ -206,7 +206,7 @@ if(agent==='claude-code'){
   assert.equal(await ask(tool),'allow');
   assert.equal(await ask(tool),'deny','transport approvals can only be used once');
   await reportViaBridge(mcp.lake);
-  for(const text of ['ISOLATED_','CLI_REPORT'])update({sessionUpdate:'agent_message_chunk',messageId:'report',content:{type:'text',text}});
+  for(const text of [progress?'\n\nISOLATED_':'ISOLATED_','CLI_REPORT'])update({sessionUpdate:'agent_message_chunk',content:{type:'text',text}});
   response(frame.id,{stopReason:'end_turn',usage:{inputTokens:3,outputTokens:5}});
  });
 }
@@ -281,7 +281,8 @@ test('CLI profiles bind specialists, dispatch through the private bridge, and pu
   assert.deepEqual([run.agent,run.runtimeKind,run.model],[agent,kind,model]);
   assert.equal(run.summary,agy?openingUpdate+'\n\nISOLATED_CLI_REPORT':'ISOLATED_CLI_REPORT');
   assert.deepEqual(run.usage,{inputTokens:3,outputTokens:5});
-  assert.equal(run.events.findLast(event=>event.kind==='text').publicText,'ISOLATED_CLI_REPORT');
+  const proseEvents=run.events.filter(event=>event.kind==='text');
+  assert.equal(proseEvents.at(-1).publicText,run.summary);
   const worker=app.store.require('superWorkers',receipt.assignment.workerId);
   const toolSteps=run.events.filter(event=>event.title==='list_assets');
   assert.deepEqual(toolSteps.map(event=>[event.kind,event.status,event.toolSource]),[
@@ -305,7 +306,9 @@ test('CLI profiles bind specialists, dispatch through the private bridge, and pu
   ]:[];
   assert.deepEqual(checklist(liveProcess),[...planChanges,...changes]);
   if(agy){
-   assert.deepEqual(liveProcess[0].text,openingUpdate);
+   assert.equal(new Set(proseEvents.map(event=>event.publicTextId)).size,1);
+   assert.equal(liveProcess[0].text,openingUpdate);
+   assert.deepEqual(liveProcess.filter(item=>item.kind==='text').map(item=>item.text),[openingUpdate]);
    assert.ok(!JSON.stringify(run).includes('PRIVATE_FIXTURE_THOUGHT'));
    assert.deepEqual(run.events.filter(event=>event.toolSource==='agent-plan').map(event=>[event.detail,event.taskState,!!event.createdTask]),planChanges);
   }
@@ -316,8 +319,17 @@ test('CLI profiles bind specialists, dispatch through the private bridge, and pu
   }
   assert.ok(report?.codexActivity?.some(item=>item.text==='list_assets'&&item.status==='completed'),'delivered report keeps the process');
   assert.deepEqual(checklist(report.codexActivity),[...planChanges,...changes]);
-  if(agy)assert.equal(report.codexActivity[0].text,openingUpdate);
-  if(agent==='antigravity'){
+  if(agy){
+   assert.equal(report.text,'ISOLATED_CLI_REPORT');
+   assert.deepEqual(report.codexActivity.filter(item=>item.kind==='text').map(item=>item.text),[openingUpdate]);
+   const oldActivity=report.codexActivity.map(item=>item.kind==='text'?{...item,text:run.summary}:item);
+   app.store.put('messages',report.id,{...report,codexActivity:oldActivity});
+   const historyWithDuplicate=await request('/api/sessions/'+channel.sessionId+'/channel');
+   const repaired=historyWithDuplicate.entries.find(entry=>entry.message?.id===report.id)?.message;
+   assert.equal(repaired?.text,report.text);
+   assert.deepEqual(repaired?.codexActivity,report.codexActivity);
+   assert.deepEqual(app.store.require('messages',report.id).codexActivity,oldActivity);
+
    const {codexActivity,...oldReport}=report;
    app.store.put('messages',oldReport.id,oldReport);
    const view=app.store.view(worker.sessionId),card=view.cards.find(card=>card.id===run.id);

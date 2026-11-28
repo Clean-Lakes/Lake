@@ -22,7 +22,7 @@ import {ExternalPublicText} from './public-text';
 import type { CliAgentProfile,CodexAgentProfile,CodexConnectionProbe,CodexModelOption,ExternalActor,ExternalEvent,ExternalResult,ExternalRun } from './types';
 import {cliCatalogVersion,codexConnectionVersion,maxExternalConversationRuns} from './types';
 import type {SpecialistReplyAuthor} from '../../../web-agent/shared/contracts';
-import {specialistClosingMessageIds,legacyCommandBodies} from '../codex-conversation';
+import {specialistClosingMessages,legacyCommandBodies} from '../codex-conversation';
 
 function ownLauncher(flag:string,args:string[]=[]){return {executable:process.execPath,args:isSea()?[flag,...args]:[__filename,flag,...args]};}
 type LiveRun={process?:AgentConnection;controller:AbortController;scopeHash:string;conversation:boolean;guard?:()=>void};
@@ -71,7 +71,7 @@ export class LakeExternalAgents {
   private probes=new Map<string,{controller:AbortController;work:Promise<unknown>}>();
   private googleLogins=new Map<string,GoogleLogin>();
   private live=new Map<string,LiveRun>();
-  private closingMessages=new Set<string>();
+  private closingMessages=new Map<string,string>();
   private legacyCommands=new Map<string,{text:string;worker:string;session:string;task:string;root:string}>();
   constructor(readonly store:LakeStore,readonly redact:(text:string,live?:boolean)=>string,readonly registerSecret:(value:string)=>void,codexHome?:string){
     this.registry=new ExternalAgentRegistry(store,{codexHome,registerSecret});
@@ -105,9 +105,16 @@ export class LakeExternalAgents {
       return this.redact(record.text);
   }
   private indexClosingMessages(run:ExternalRun){
-    for(const id of specialistClosingMessageIds(run))this.closingMessages.add(id);
+    for(const [id,progress] of specialistClosingMessages(run))this.closingMessages.set(id,progress);
   }
-  isClosingMessage(id:string){return this.closingMessages.has(id);}
+  reportProgressText(id:string,text:string,report:string){
+    const progress=this.closingMessages.get(id);
+    if(progress===undefined)return text;
+    if(!progress)return;
+    // Older reports may contain the whole cumulative message in the timeline.
+    // Restore the recorded prefix only when the appended prose is this report.
+    return text.startsWith(progress)&&text.slice(progress.length).trim()===report.trim()?progress:text;
+  }
   private async launch(profile:CodexAgentProfile,directory:string,signal:AbortSignal,mcp?:{command:string;args:string[]},model?:string,purpose:'run'|'probe'='run'):
     Promise<AgentLaunch & {localModel:string;models:CodexModelOption[]}>{
     if(process.platform!=='darwin')throw new HttpError(409,'当前平台的 Codex 工具隔离尚未验证');
@@ -516,14 +523,17 @@ export class LakeExternalAgents {
       const tool={callId,title:name,toolSource:'lake-bridge' as const,...detail};
       if(recorded)event({kind:'tool',status:'running',...tool});
       let status='failed';
+      let completionDeferred=false;
       let preview:string|undefined;
       let changes:CodexDetail[]|undefined;
       try{
         const result=await actor.executeTool(name,input,run.id+':'+callId,controller.signal);
         guard();
         status='completed';
-        if(actor.purpose==='worker'&&name==='work_finish'&&typeof (input as any)?.summary==='string')
-          submittedReport=this.redact((input as any).summary).slice(0,32768);
+        if(actor.purpose==='worker'&&name==='work_finish'){
+          completionDeferred=(result as {completionDeferred?:unknown}|undefined)?.completionDeferred===true;
+          if(typeof (input as any)?.summary==='string')submittedReport=this.redact((input as any).summary).slice(0,32768);
+        }
         if(checklistWrite){
           // TodoWrite returns the prior and saved snapshots from this Worker.
           const saved=result as {oldTodos?:unknown;todos?:unknown}|undefined;
@@ -540,6 +550,7 @@ export class LakeExternalAgents {
       }finally{
         if(recorded&&!controller.signal.aborted&&run.state==='running'){
           event({kind:'tool_update',status,...tool,...(preview&&{preview}),
+            ...(completionDeferred&&{completionDeferred:true as const}),
             ...(checklistWrite&&!changes&&{displayKind:'task',detail:'更新任务清单'})});
           for(const [index,change] of (changes??[]).entries()){
             if(controller.signal.aborted)break;

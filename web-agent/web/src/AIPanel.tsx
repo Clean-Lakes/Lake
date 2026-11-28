@@ -209,8 +209,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotTaskDire
     dispatches.push(dispatch);
     dispatchesBySource.set(dispatch.sourceMessageId,dispatches);
   }
-  const settlingReports=new Set(pilotWorkspace?.workers.flatMap(({pilotReport})=>
-    pilotReport?.executionSettled===false?[pilotReport.messageId]:[]));
+  const foldSpecialistProcess=mode==='conversation'&&!!assistantIdentity?.pilot;
   // Restoring a session shows existing text immediately. Replies first observed
   // after mount reveal their first packet too (cards mount only once nonempty).
   const restoredMessageIds=useRef(new Set(snapshot.messages.map(message=>message.id)));
@@ -354,8 +353,6 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotTaskDire
         for(const member of round.members)knownSpecialists.push({roleId:member.roleId,workerId:member.id});
       }
       const singleSpecialist=!!sourceUser&&pilotSpecialistCount(knownSpecialists)===1;
-      const foldSpecialistProcess=!!canFoldPilotProcess&&singleSpecialist&&!pilotTurnLive&&!collaborationLive&&specialistRowsSettled&&
-        !['paused','blocked'].includes(completed??'');
       const miniStartedAt=timingProps.timing?.startedAt||timingProps.latestUserAt||turn[0]!.at;
       const miniEndedAt=timingProps.timing?(timingProps.timing.finishedAt||undefined):turns[index+1]?.find(entry=>entry.message?.role==='user')?.at;
       const miniScope={session:snapshot.session.id,taskId:snapshot.superagent?.task.executionGoalId??snapshot.superagent?.task.taskId,executions:snapshot.commandExecutions,terminals:snapshot.terminals??[],startedAt:miniStartedAt,endedAt:miniEndedAt,live:turn===currentTurn&&liveConversation,waiting:snapshot.ai?.status==='waiting_approval',connected:!disabled,multiResource:hasMultipleMiniResources(processGroups)};
@@ -391,7 +388,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotTaskDire
         }
         if (entry.card && ["thinking", "operation", "shell"].includes(entry.card.type)) return <ThinkingTimeline key={entry.id} cards={group.map(item => item.card!)} live={thinkingVisible && group.at(-1)?.id === visibleEntries.at(-1)?.id} onInspect={onInspect}/>;
         if (entry.message) return entry.message.role==='user'?null:<TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message} arrive={entry.message.role==='assistant'&&replyArrives(entry.id)} roleBreak={!!entry.message.author&&roleBreaks.has(entry.id)} assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} hideIdentity={hideReplyIdentity} continued={continuations.has(entry.id)} motion={replyMotion(entry.id)}
-          foldSpecialistProcess={foldSpecialistProcess&&!settlingReports.has(entry.id)} onInspectProcess={onInspect}/>;
+          foldSpecialistProcess={foldSpecialistProcess} onInspectProcess={onInspect}/>;
         if (entry.action) return <div key={entry.id}>{renderAction?.(entry.action)}</div>;
         const card=entry.card!;
         const freshText=connected&&turn===currentTurn&&!restoredText.current.has(card.id);
@@ -445,9 +442,9 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotTaskDire
       const footerReport=lastMessage?.role==='assistant'&&hasTaskProcess(lastMessage.author)&&onInspectSpecialist?lastMessage:undefined;
       const specialistReplies=(turnDispatchRows.length>0||savedReports.length>0)&&
         <PilotReportGroup members={participants} count={reports.length} fold={fold} connected={pilotConnected&&connected} onInspect={onInspect}>
-          <PilotSpecialistConversation rows={turnDispatchRows} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} connected={pilotConnected} subscribeWorkerEvents={subscribeWorkerEvents} onObservedTurn={onObservedTurn} onReportPresented={onPilotReportsPresented?onReportPresented:undefined} reportArrives={replyArrives} taskLabels={taskLabels} foldSpecialistProcess={foldSpecialistProcess} onInspectProcess={onInspect}/>
+          <PilotSpecialistConversation rows={turnDispatchRows} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} connected={pilotConnected} subscribeWorkerEvents={subscribeWorkerEvents} onObservedTurn={onObservedTurn} onReportPresented={onPilotReportsPresented?onReportPresented:undefined} reportArrives={replyArrives} taskLabels={taskLabels} onInspectProcess={onInspect}/>
           {savedReports.map(message=><TranscriptMessage key={message.id} message={message} sessionId={snapshot.session.id} arrive={replyArrives(message.id)} assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist} hideIdentity={hideReplyIdentity} taskLabel={taskLabels.get(message.author!.workerId)}
-            foldSpecialistProcess={foldSpecialistProcess&&!settlingReports.has(message.id)} onInspectProcess={onInspect}/>)}
+            foldSpecialistProcess={foldSpecialistProcess} onInspectProcess={onInspect}/>)}
         </PilotReportGroup>;
       const collaboration=turnConversations.length?(footer:ReactNode)=>turnConversations.map((round,index)=>{
         const messages=dialogueReplies.get(round.id)??[];
@@ -456,7 +453,8 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotTaskDire
           process={index===0?footer:undefined} onSpecialist={onSpecialist} onInspect={onInspect}
           summaryDelivered={summaryDelivered} replyMemberIds={summaryDelivered?new Set(messages.map(message=>message.author!.workerId)):undefined}
           replies={messages.map(message=><TranscriptMessage key={message.id} message={message} sessionId={snapshot.session.id} arrive={replyArrives(message.id)}
-            assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist}/>)}/>;
+            assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} onInspectSpecialist={onInspectSpecialist}
+            foldSpecialistProcess={foldSpecialistProcess} onInspectProcess={onInspect}/>)}/>;
       }):undefined;
       const replyGroups=visibleGroups.filter(group=>!dialogueGroups.has(group)&&!groupedReports.includes(group));
       const hasPilotReplyAvatar=assistantIdentity?.pilot&&!hideReplyIdentity&&(summarySlots.length>0||replyGroups.some(({entries:[entry]})=>

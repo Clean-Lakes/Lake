@@ -1,4 +1,4 @@
-import {specialistActivity} from '../../web-agent/shared/codex-activity';
+import {specialistActivity,type CodexActivityItem} from '../../web-agent/shared/codex-activity';
 import {redactModelValue} from "./model-errors";
 import type {PilotConfiguration} from "./pilot-configuration";
 import {pilotConfigurationToolNames} from "./configuration-tool-names";
@@ -2740,18 +2740,25 @@ export class LakeSuperagent implements AgentHost {
     const message = this.store.get<Message>("messages", event.messageId);
     if (message?.role === "user" && message.sessionId === event.sessionId) return message;
   }
+  private reportActivity(activity:CodexActivityItem[],report:Message) {
+    return activity.flatMap<CodexActivityItem>(item=>{
+      if(item.kind==='text'){
+        const text=this.agents.external.reportProgressText(item.id,item.text,report.text);
+        if(text===undefined)return [];
+        return [text===item.text?item:{...item,text}];
+      }
+      const text=item.kind==='command'&&(item.text==='内容已隐藏'||item.text.length===240)
+        ?this.agents.external.historicalCommand(item.id,report.author):undefined;
+      return [text?{...item,text}:item];
+    });
+  }
   /** Enrich old report display from its frozen Worker, without rewriting history. */
   private reportMessage(original:Message):Message {
     let message=stoppedReportProjection(this.store,original,id=>this.ledger.unresolved(id));
     const author=message.author;
     const isReport=message.id.startsWith('report_')&&message.role==='assistant'&&!message.conversation;
     if(isReport&&message.text.trim()&&message.codexActivity){
-      const codexActivity=message.codexActivity.filter(item=>item.kind!=='text'||!this.agents.external.isClosingMessage(item.id));
-      const restored=codexActivity.map(item=>{
-        const text=item.kind==='command'&&(item.text==='内容已隐藏'||item.text.length===240)
-          ?this.agents.external.historicalCommand(item.id,author):undefined;
-        return text?{...item,text}:item;
-      });
+      const restored=this.reportActivity(message.codexActivity,message);
       if(restored.some((item,i)=>item!==message.codexActivity![i])||restored.length!==message.codexActivity.length)
         message={...message,codexActivity:restored};
     }
@@ -2777,7 +2784,7 @@ export class LakeSuperagent implements AgentHost {
     }
     if(recoverActivity){
       const activity=specialistActivity(this.store.view(worker.sessionId),worker.taskId,author.rootTurnId);
-      if(activity.some(item=>item.kind!=='text'))result={...result,codexActivity:activity};
+      if(activity.some(item=>item.kind!=='text'))result={...result,codexActivity:this.reportActivity(activity,message)};
     }
     const durationMs=recoverDuration?this.legacyExternalDuration(worker,message):author.durationMs;
     if(author.execution&&durationMs===author.durationMs)return result;

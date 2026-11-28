@@ -25,18 +25,23 @@ type Props = {
   connected: boolean;
   strip: ReactNode;
   stripHidden?: boolean;
+  immediate?: boolean;
   onFold?: (settled: Promise<void>) => void;
   children: ReactNode;
 };
-export class PilotReportFold extends Component<Props, object, number | null> {
+type FoldSnapshot = number | 'restore-focus' | null;
+
+export class PilotReportFold extends Component<Props, object, FoldSnapshot> {
   private root = createRef<HTMLDivElement>();
   private strip = createRef<HTMLDivElement>();
   private stop?: () => void;
 
-  getSnapshotBeforeUpdate(previous: Props): number | null {
-    const {automatic, open, connected, bodyRef} = this.props;
+  getSnapshotBeforeUpdate(previous: Props): FoldSnapshot {
+    const {automatic, open, connected, bodyRef, immediate} = this.props;
     const body = bodyRef.current;
-    if (!previous.open || open || !automatic || !previous.connected || !connected || !body || document.hidden ||
+    if (!previous.open || open || !body) return null;
+    if (immediate) return body.contains(document.activeElement) ? 'restore-focus' : null;
+    if (!automatic || !previous.connected || !connected || document.hidden ||
         window.matchMedia('(prefers-reduced-motion: reduce)').matches || readingPilotReport(body) ||
         typeof body.animate !== 'function') return null;
 
@@ -47,9 +52,13 @@ export class PilotReportFold extends Component<Props, object, number | null> {
     return bounds.height;
   }
 
-  componentDidUpdate(previous: Props, _state: object, previousHeight: number | null) {
+  componentDidUpdate(previous: Props, _state: object, previousHeight: FoldSnapshot) {
     if (this.props.open || !this.props.connected) this.stop?.();
     if (previousHeight === null) return;
+    if (previousHeight === 'restore-focus') {
+      this.strip.current?.querySelector('button')?.focus({preventScroll: true});
+      return;
+    }
     const {bodyRef, onFold} = this.props;
     const body = bodyRef.current!, root = this.root.current!, strip = this.strip.current!;
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -92,10 +101,10 @@ export class PilotReportFold extends Component<Props, object, number | null> {
   }
 
   render() {
-    const {id, bodyRef, open, strip, stripHidden, children} = this.props;
+    const {id, bodyRef, open, strip, stripHidden, immediate, children} = this.props;
     return <div ref={this.root} className="pilot-report-fold" onFocusCapture={() => this.stop?.()}>
       <div ref={this.strip} className="pilot-report-strip" hidden={stripHidden}>{strip}</div>
-      <div ref={bodyRef} id={id} className="pilot-report-body" aria-hidden={!open || undefined} inert={!open}>
+      <div ref={bodyRef} id={id} className="pilot-report-body" aria-hidden={!open || undefined} inert={!open} hidden={immediate&&!open}>
         <div className="pilot-report-items">{children}</div>
       </div>
     </div>;

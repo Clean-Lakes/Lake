@@ -1,23 +1,37 @@
 import {publicCommand} from './acp/codex-activity';
+import {externalMessageId} from './acp/public-text';
 import {activityCallStatus,updateCodexActivity,type CodexActivityItem} from '../../web-agent/shared/codex-activity';
 import {isExternalAgentId} from '../../web-agent/shared/external-agents';
 import type {AICard,SessionEvent} from '../../web-agent/shared/contracts';
 import type {ExternalRun,ExternalEvent} from './acp/types';
 
-/** A fresh message after the host accepted work_finish is closing prose.
- * Keep its audit events, and let the delivered report own the final paragraph. */
-export function specialistClosingMessageIds(run:ExternalRun):string[]{
-  if(!isExternalAgentId(run.agent)||run.purpose!=='worker'||run.childSessionId||run.agentRunId||!run.rootTurnId)return [];
-  const finish=run.events.findIndex(e=>e.kind==='tool_update'&&e.title==='work_finish'&&e.status==='completed'&&
-    (run.agent==='codex'||e.toolSource==='lake-bridge'));
-  if(finish<0)return [];
-  const progress=new Set<string>(),closing=new Set<string>();
+function reportSubmitted(run:ExternalRun,event:ExternalEvent){
+  return event.kind==='tool_update'&&event.title==='work_finish'&&event.status==='completed'&&
+    !event.completionDeferred&&(run.agent==='codex'||event.toolSource==='lake-bridge');
+}
+
+function anonymousAntigravityMessageId(run:ExternalRun){
+  if(run.agent==='antigravity'&&run.externalSessionId)return externalMessageId(run.id,run.externalSessionId);
+}
+
+/** Map closing prose to the public progress that preceded the submitted report. */
+export function specialistClosingMessages(run:ExternalRun){
+  const closing=new Map<string,string>();
+  if(!isExternalAgentId(run.agent)||run.purpose!=='worker'||run.childSessionId||run.agentRunId||!run.rootTurnId)return closing;
+  const finish=run.events.findIndex(event=>reportSubmitted(run,event));
+  if(finish<0)return closing;
+  const progress=new Map<string,string>(),anonymousId=anonymousAntigravityMessageId(run);
   for(const [index,event] of run.events.entries()){
-    if(event.kind!=='text'||!event.publicTextId)continue;
-    if(index<finish)progress.add(event.publicTextId);
-    else if(!progress.has(event.publicTextId))closing.add(event.publicTextId);
+    const id=event.publicTextId;
+    if(event.kind!=='text'||!id)continue;
+    if(index<finish)progress.set(id,event.publicText??'');
+    else {
+      const before=progress.get(id);
+      if(before===undefined)closing.set(id,'');
+      else if(id===anonymousId&&event.publicText?.startsWith(before))closing.set(id,before);
+    }
   }
-  return [...closing];
+  return closing;
 }
 
 export function captureSpecialistActivity(run:ExternalRun,event:ExternalEvent,card:AICard):SessionEvent['textUpdate']|undefined {
@@ -27,6 +41,10 @@ export function captureSpecialistActivity(run:ExternalRun,event:ExternalEvent,ca
   const antigravityPlan=run.agent==='antigravity'&&event.toolSource==='agent-plan'&&event.displayKind==='task'&&!!event.taskState;
   let item:CodexActivityItem;
   if(event.kind==='text'&&event.publicTextId&&typeof event.publicText==='string'){
+    // Anonymous Antigravity chunks share one ID across progress and closing prose.
+    // Keep the last progress text in the timeline once Lake accepts the report.
+    if(event.publicTextId===anonymousAntigravityMessageId(run)&&
+       run.events.some(earlier=>earlier.sequence<event.sequence&&reportSubmitted(run,earlier)))return;
     item={id:event.publicTextId,kind:'text',text:event.publicText};
   }else if((event.kind==='tool'||event.kind==='tool_update')&&event.displayKind&&event.callId&&
     (run.agent==='codex'||event.toolSource==='lake-bridge'||antigravityPlan)){

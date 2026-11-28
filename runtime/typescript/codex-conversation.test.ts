@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {join} from 'node:path';
 import {CodexAppServer} from './acp/codex-app-server';
 import {codexToolDetail,CodexOutputBuffer,publicCommand} from './acp/codex-activity';
-import {captureSpecialistActivity,specialistClosingMessageIds,legacyCommandBodies} from './codex-conversation';
+import {externalMessageId} from './acp/public-text';
+import {captureSpecialistActivity,specialistClosingMessages,legacyCommandBodies} from './codex-conversation';
 import {specialistActivity} from '../../web-agent/shared/codex-activity';
 import type {AICard} from '../../web-agent/shared/contracts';
 import type {ExternalRun,ExternalEvent} from './acp/types';
@@ -16,11 +17,27 @@ test('only messages first spoken after a successful work_finish belong to the re
  const text=(publicTextId:string):ExternalEvent=>({kind:'text',publicTextId,sequence:1,at});
  const finish:ExternalEvent={kind:'tool_update',title:'work_finish',status:'completed',sequence:2,at};
  const events=[text('stage'),finish,text('stage'),text('closing'),text('closing')];
- assert.deepEqual(specialistClosingMessageIds({...run,events}),['closing']);
- assert.deepEqual(specialistClosingMessageIds({...run,events:[{...finish,status:'failed'},text('retry')]}),[]);
- assert.deepEqual(specialistClosingMessageIds({...run,events,childSessionId:'child'}),[]);
- assert.deepEqual(specialistClosingMessageIds({...run,agent:'antigravity',events}),[]);
- assert.deepEqual(specialistClosingMessageIds({...run,agent:'claude-code',events:[text('stage'),{...finish,toolSource:'lake-bridge'},text('closing')]}),['closing']);
+ assert.deepEqual([...specialistClosingMessages({...run,events})],[['closing','']]);
+ assert.equal(specialistClosingMessages({...run,events:[{...finish,status:'failed'},text('retry')]}).size,0);
+ assert.equal(specialistClosingMessages({...run,events,childSessionId:'child'}).size,0);
+ assert.equal(specialistClosingMessages({...run,agent:'antigravity',events}).size,0);
+ assert.deepEqual([...specialistClosingMessages({...run,agent:'claude-code',events:[text('stage'),{...finish,toolSource:'lake-bridge'},text('closing')]})],[['closing','']]);
+});
+test('anonymous Antigravity text preserves the last progress once a report is submitted',()=>{
+ const publicTextId=externalMessageId(run.id,'session');
+ const stage:ExternalEvent={kind:'text',publicTextId,publicText:'正在比较。',sequence:1,at};
+ const finish:ExternalEvent={kind:'tool_update',title:'work_finish',status:'completed',toolSource:'lake-bridge',sequence:2,at};
+ const closing:ExternalEvent={...stage,publicText:'正在比较。\n\n已完成对比。',sequence:3};
+ const antigravity:ExternalRun={...run,agent:'antigravity',externalSessionId:'session',events:[stage,finish,closing]};
+ const card=operation();
+ assert.equal(captureSpecialistActivity(antigravity,stage,card)?.codexItem?.text,stage.publicText);
+ assert.equal(captureSpecialistActivity(antigravity,closing,card),undefined);
+ assert.equal(specialistClosingMessages(antigravity).get(publicTextId),stage.publicText);
+ for(const unaccepted of [{...finish,completionDeferred:true as const},{...finish,status:'failed'}]){
+   const waiting={...antigravity,events:[stage,unaccepted,closing]};
+   assert.equal(captureSpecialistActivity(waiting,closing,card)?.codexItem?.text,closing.publicText);
+   assert.equal(specialistClosingMessages(waiting).size,0);
+ }
 });
 test('Codex wire appends commentary in place around concrete calls and streams complete output lines',async t=>{
  const card=operation(), seen:string[]=[];

@@ -65,6 +65,7 @@ export type ExternalEvent = {
   publicText?: string; publicTextId?: string;
   callId?: string; title?: string; status?: string; at: string;
   toolSource?:'lake-bridge'|'agent-plan';
+  completionDeferred?:true;
   displayKind?:import('../../../web-agent/shared/codex-activity').CodexAction; detail?:string; preview?:string;
   taskState?:import('../../../web-agent/shared/codex-activity').CodexTaskState; createdTask?:boolean;
 };
