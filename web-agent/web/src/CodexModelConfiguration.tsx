@@ -57,11 +57,13 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
   projectId:string;projectName:string;anchor?:HTMLElement|null;channel?:SpecialistChannelInfo;onClose:()=>void;onRoleChanged?:()=>void;
 }){
   const titleId=useId(),dialog=useRef<HTMLDialogElement>(null),search=useRef<HTMLInputElement>(null);
+  const content=useRef<HTMLDivElement>(null);
   const gatewayAddress=useRef<HTMLInputElement>(null);
-  const panelId=titleId+'-panel',connectionId=titleId+'-connection';
+  const panelId=titleId+'-panel',connectionId=titleId+'-connection',statusId=titleId+'-status';
   const [role,setRole]=useState(channel);
   const binding=role?.execution?.kind==='acp'?role.execution.agent:undefined;
   const roleAgent=isExternalAgentId(binding)?binding:'codex';
+  const roleAgentName=externalAgentName(roleAgent);
   const [executor,setExecutor]=useState<ExternalAgentId>(roleAgent);
   const name=externalAgentName(executor);
   const [compact,setCompact]=useState(()=>window.matchMedia(narrowPanel).matches);
@@ -82,14 +84,15 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
   const codexSelected=executor==='codex';
   const manualModel=executor==='claude-code';
   const customGateway=draft?.authentication==='claude-custom-api';
+  const apiKey=keys[executor];
   const gatewayChanged=initial?.gatewayBaseURL!==draft?.gatewayBaseURL||initial?.gatewayCredentialHeader!==draft?.gatewayCredentialHeader;
   const authChanged=initial?.authentication!==draft?.authentication;
-  const connectionChanged=authChanged||customGateway&&gatewayChanged||initial?.executablePath!==draft?.executablePath;
+  const connectionChanged=apiKey!==undefined||authChanged||customGateway&&gatewayChanged||
+    initial?.executablePath!==draft?.executablePath||initial?.nodePath!==draft?.nodePath||initial?.npmPath!==draft?.npmPath;
   const showModels=codexSelected||agent?.transportReady===true&&!connectionChanged;
   const keyMode=draft?.authentication==='cli-api-key'||customGateway;
   const keyConfigured=agent?.keyConfigured&&(customGateway?!authChanged&&!gatewayChanged:initial?.authentication!=='claude-custom-api');
   const editingModel=manualModel&&(editingClaudeModel||!!(draft?.model&&!agent?.modelOptions?.includes(draft.model)));
-  const apiKey=keys[executor];
   const googleSelected=draft?.authentication==='antigravity-google';
   const awaitingGoogle=googleSelected&&!!googleLogin;
   const connectionExpanded=!showModels||connectionOpen||awaitingGoogle;
@@ -154,8 +157,19 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
   useLayoutEffect(()=>{
     if(customGateway&&authChanged)gatewayAddress.current?.focus({preventScroll:true});
   },[customGateway,authChanged]);
+  useLayoutEffect(()=>{
+    if(content.current)content.current.scrollTop=0;
+  },[executor,connectionExpanded]);
 
   const dirty=apiKey!==undefined||!!(initial&&draft&&Object.keys(initial).some(key=>initial[key as keyof Preferences]!==draft[key as keyof Preferences]));
+  const canSave=!!draft&&(!customGateway||!!draft.gatewayBaseURL.trim());
+  const canPrepareForAssignment=canSave&&agent?.transportReady===true&&agent.authMode!=='none'&&!connectionChanged&&
+    (!customGateway||!!draft?.model.trim());
+  const enableOnApply=canPrepareForAssignment&&agent?.enabled===false;
+  const saveOnApply=canPrepareForAssignment&&dirty&&draft?.enabled===true;
+  const canApply=!!role?.roleRevision&&!awaitingGoogle&&
+    (enableOnApply||saveOnApply||(!dirty&&agent?.assignmentReady===true));
+  const applyLabel=enableOnApply?'启用并用于此专员':saveOnApply?'保存并用于此专员':'用于此专员';
   const options=agent&&draft?modelEfforts(agent,draft.model):[];
   const observed=agent&&[agent.authMode==='chatgpt'?'ChatGPT 登录':agent.authMode==='api_key'?(codexSelected?'Codex API 登录':'API Key'):
     agent.authMode==='provider'?'本机服务':agent.authMode==='claude_login'?'本机 Claude Code 登录':
@@ -173,8 +187,10 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
         googleSelected?'完成 Google 授权后自动加载模型。':
         draft?.authentication==='claude-local'?'启用后自动读取本机 Claude Code 的登录和模型。':agent.assignmentBlocker
       :agent?.assignmentBlocker);
+  const blocker=enableOnApply&&!!role?.roleRevision&&roleAgent!==executor?undefined:
+    codexSelected?agent?.assignmentBlocker:cliStatus;
   const status=error||feedback||(awaitingGoogle?(busy?'正在处理 Google 授权…':''):
-    codexSelected?agent?.assignmentBlocker:cliStatus);
+    dirty&&agent?.enabled?`保存会中止此项目正在运行的 ${name} 调用。`:blocker);
   const update=(value:Partial<Preferences>)=>{setFeedback('');if(draft)setDrafts(current=>({...current,[executor]:{...draft,...value}}));};
   const selectAuthentication=(authentication:CliAuthentication)=>{
     const gatewaySwitch=authentication==='claude-custom-api'||customGateway;
@@ -188,7 +204,7 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
 
   useLayoutEffect(()=>{
     dialog.current?.querySelectorAll<HTMLElement>('.codex-config-options').forEach(revealSelected);
-  },[agent,showModels,draft?.model,draft?.effort,filter]);
+  },[agent,connectionExpanded,draft?.model,draft?.effort,filter]);
 
   async function change(operation:()=>Promise<{agents?:ExternalAgentStatus[]}>,success:string){
     if(flight.current)return;
@@ -218,18 +234,22 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
     }
   }
 
-  function save(autoDetect=false){
-    if(!agent||!draft)return;
+  function prepare(current:ExternalAgentStatus,settings:Preferences,autoDetect=false){
     const runtime=codexSelected?{
-      nodePath:autoDetect?'':draft.nodePath,npmPath:autoDetect?'':draft.npmPath,
+      nodePath:autoDetect?'':settings.nodePath,npmPath:autoDetect?'':settings.npmPath,
       ...(autoDetect&&{autoDetect}),
-    }:{executablePath:draft.executablePath.trim(),authentication:draft.authentication,
+    }:{executablePath:settings.executablePath.trim(),authentication:settings.authentication,
       ...(keyMode&&{apiKey:apiKey?.trim()||apiKey}),
-      ...(customGateway&&{claudeGateway:{baseURL:draft.gatewayBaseURL.trim(),credentialHeader:draft.gatewayCredentialHeader}})};
-    void change(()=>api.prepareExternalAgent(projectId,executor,{
-      expectedRevision:agent.revision,enabled:draft.enabled,modelOverride:draft.model.trim()||null,
-      reasoningEffortOverride:draft.effort||null,...runtime,
-    }),autoDetect?'已重新识别运行路径':'模型配置已保存');
+      ...(customGateway&&{claudeGateway:{baseURL:settings.gatewayBaseURL.trim(),credentialHeader:settings.gatewayCredentialHeader}})};
+    return api.prepareExternalAgent(projectId,executor,{
+      expectedRevision:current.revision,enabled:settings.enabled,modelOverride:settings.model.trim()||null,
+      reasoningEffortOverride:settings.effort||null,...runtime,
+    });
+  }
+
+  function save(autoDetect=false){
+    if(!agent||!draft||!canSave)return;
+    void change(()=>prepare(agent,draft,autoDetect),autoDetect?'已重新识别运行路径':'模型配置已保存');
   }
 
   function reconnect(){
@@ -292,14 +312,17 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
   }
 
   function applyRole(){
-    if(!role?.roleRevision||!agent?.assignmentReady||dirty||roleAgent===executor)return;
+    if(!role?.roleRevision||!agent||!draft||!canApply||roleAgent===executor)return;
     const {roleId,roleRevision}=role;
     void change(async()=>{
-      const result=await api.setRoleExecution(projectId,roleId,roleRevision,{kind:'acp',agent:executor,revision:agent.revision});
+      const prepared=enableOnApply||saveOnApply?await prepare(agent,{...draft,enabled:true}):undefined;
+      const selected=prepared?prepared.agents.find(row=>row.id===executor):agent;
+      if(!selected?.assignmentReady)return prepared??{};
+      const result=await api.setRoleExecution(projectId,roleId,roleRevision,{kind:'acp',agent:executor,revision:selected.revision});
       if(mounted.current)setRole({...role,execution:result.execution,roleRevision:result.revision});
       onRoleChanged?.();
-      return {};
-    },`已为${role.roleName}启用 ${name}`);
+      return prepared??{};
+    },`已为「${role.roleName}」设置 ${name}`);
   }
 
   return <dialog ref={dialog} role="dialog" className="codex-config" aria-labelledby={titleId} data-anchored={anchor?true:undefined}
@@ -333,12 +356,19 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
       <div className="codex-config-panel" id={panelId} role="tabpanel" aria-labelledby={titleId+'-'+executor}
         tabIndex={!showModels||!draft?0:undefined}>
         {role&&<div className="codex-config-role">
-          <div><strong title={role.roleName}>{role.roleName}</strong><span><ExecutionAgentIcon agent={roleAgent} size={13}/>{externalAgentName(roleAgent)}</span></div>
+          <div>
+            <strong title={role.roleName}>{role.roleName}</strong>
+            <span className="codex-config-bound-agent" title={roleAgentName}>
+              <ExecutionAgentIcon agent={roleAgent} size={13}/><span>{roleAgent===executor?roleAgentName:`当前 ${roleAgentName}`}</span>
+            </span>
+          </div>
           {roleAgent===executor?<span className="codex-config-role-current"><Glyph name="check" size={14}/>当前执行器</span>:
-            <button type="button" className="button secondary" disabled={busy||dirty||!role.roleRevision||!agent?.assignmentReady} onClick={applyRole}>用于此专员</button>}
+            <button type="button" className={canApply?'button primary':'button secondary'} disabled={busy||!canApply}
+              aria-describedby={status?statusId:undefined} onClick={applyRole}>{applyLabel}</button>}
         </div>}
+        <div className="codex-config-content" ref={content}>
         {agent&&draft&&<fieldset className={codexSelected?'codex-config-fields':'codex-config-fields codex-config-cli'} disabled={busy}>
-            {showModels&&<div className="codex-config-columns">
+            {!connectionExpanded?<div className="codex-config-columns">
               <section className="codex-config-models" aria-label="模型">
                 <label className="codex-config-search"><Glyph name="search" size={16}/><input ref={search} type="search"
                   placeholder="搜索模型" aria-label="搜索模型" value={query} onChange={event=>setQuery(event.target.value)}/></label>
@@ -368,17 +398,15 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
                   {!codexSelected&&!options.length&&<p>此模型由 CLI 决定思考强度。</p>}
                 </div>
               </section>
-            </div>}
-            {codexSelected?<div id={connectionId} className="codex-config-connection-fields" hidden={!connectionExpanded}>
+            </div>:codexSelected?<div id={connectionId} className="codex-config-connection-fields">
               {observed&&<p>{observed}</p>}
               <label><span>启用 Codex</span><input type="checkbox" checked={draft.enabled} onChange={event=>update({enabled:event.target.checked})}/></label>
               <label><span>Node 路径</span><input value={draft.nodePath} placeholder="自动识别" spellCheck={false} onChange={event=>update({nodePath:event.target.value})}/></label>
               <label><span>npm 路径</span><input value={draft.npmPath} placeholder="自动识别" spellCheck={false} onChange={event=>update({npmPath:event.target.value})}/></label>
               <div className="codex-config-actions">
                 <button type="button" className="button secondary" onClick={()=>save(true)}>重新识别路径</button>
-                <button type="button" className="button secondary" disabled={dirty||!agent.installed||!agent.enabled} onClick={reconnect}>重新连接</button>
               </div>
-            </div>:<div id={connectionId} hidden={!connectionExpanded}>
+            </div>:<div id={connectionId}>
             <div className="codex-config-cli-status">
               <strong>{agent.installed?(agent.cliVersion?`CLI ${agent.cliVersion}`:'已检测到 CLI'):'未检测到 CLI'}</strong>
               <div className="codex-config-actions">
@@ -437,27 +465,34 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
                   <button className="button primary" type="submit" disabled={!googleCode.trim()}>完成登录</button>
                 </div>
               </form>:null)}
-              {!awaitingGoogle&&<div className="codex-config-actions">
-                {googleSelected&&<button className="button secondary" type="button" disabled={dirty||!agent.installed}
-                 onClick={()=>void startGoogleLogin()}>{agent.authMode==='google'?'重新授权':'使用 Google 登录'}</button>}
-                <button type="button" className="button secondary" disabled={dirty||!agent.installed} onClick={reconnect}>检测连接</button>
+              {googleSelected&&!awaitingGoogle&&<div className="codex-config-actions">
+                <button className="button secondary" type="button" disabled={dirty||!agent.installed}
+                  onClick={()=>void startGoogleLogin()}>{agent.authMode==='google'?'重新授权':'使用 Google 登录'}</button>
               </div>}
             </div>
             </div>}
         </fieldset>}
-        {(loading||status)&&<p className="codex-config-feedback" role={error?'alert':'status'}>{loading?`正在读取 ${name} 配置…`:status}</p>}
-        {agent&&draft&&<footer className="codex-config-footer">
-            {dirty&&agent.enabled&&<small>保存会中止此项目正在运行的 {name} 调用。</small>}
-            {showModels&&<button type="button" className="codex-config-connection" disabled={busy||awaitingGoogle} aria-controls={connectionId}
+        </div>
+        {(agent&&draft||loading||status)&&<footer className="codex-config-footer">
+          {(loading||status)&&<p id={statusId} className="codex-config-feedback" role={error?'alert':'status'}>{loading?`正在读取 ${name} 配置…`:status}</p>}
+          {agent&&draft&&<div className="codex-config-footer-actions">
+            {showModels&&<button type="button" className="codex-config-connection" disabled={busy||awaitingGoogle}
+              aria-controls={connectionExpanded?connectionId:undefined}
               aria-expanded={connectionExpanded} onClick={()=>setConnectionOpen(open=>!open)}>
-              <Glyph name="plug" size={15}/><span>连接设置</span>
+              <Glyph name={connectionExpanded?'previous':'plug'} size={15}/><span>{connectionExpanded?'返回模型':'连接设置'}</span>
               <span className="codex-config-readiness" data-ready={agent.assignmentReady===true}>
-                {agent.assignmentReady?'已就绪':customGateway&&agent.transportReady&&!agent.defaultTaskModel?'待选模型':'待连接'}
+                {agent.assignmentReady?'已就绪':!agent.enabled?'待启用':
+                  customGateway&&agent.transportReady&&!agent.defaultTaskModel?'待选模型':'待连接'}
               </span>
-              <Glyph name={connectionExpanded?'chevron':'next'} size={13}/>
             </button>}
-            <button type="button" className="button primary" disabled={busy||!dirty||customGateway&&!draft.gatewayBaseURL.trim()}
-              onClick={()=>save()}>{busy?'正在处理…':'保存配置'}</button>
+            <div className="codex-config-footer-buttons">
+              {connectionExpanded&&!awaitingGoogle&&<button type="button" className="button secondary"
+                disabled={busy||dirty||!agent.installed||codexSelected&&!agent.enabled}
+                onClick={reconnect}>{codexSelected?'重新连接':'检测连接'}</button>}
+              <button type="button" className="button primary" disabled={busy||!dirty||!canSave}
+                onClick={()=>save()}>{busy?'正在处理…':'保存配置'}</button>
+            </div>
+          </div>}
         </footer>}
       </div>
     </div>

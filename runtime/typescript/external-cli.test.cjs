@@ -538,17 +538,33 @@ test('Claude custom API loads third-party models and isolates gateway credential
  assert.equal(selected.defaultTaskModel,models[0]);
  assert.equal(selected.reasoningEffort,'high');
  assert.ok(requests.every(row=>row.method==='GET'&&row.version==='v1'&&row.route==='models'));
+
+ const disabled=await prepare(selected.revision,{enabled:false});
+ await request('/claude-code/probe','POST',{});
+ const connectedWhileDisabled=(await request('')).agents.find(row=>row.id===agent);
+ assert.equal(connectedWhileDisabled.revision,disabled.revision);
+ assert.equal(connectedWhileDisabled.transportReady,true);
+ assert.equal(connectedWhileDisabled.assignmentReady,false);
+ const reenabled=await prepare(connectedWhileDisabled.revision,{});
+ assert.equal(reenabled.assignmentReady,true);
+ assert.equal(reenabled.modelOverride,models[0]);
+ const specialist=app.superagent.createSpecialist(project.id,{name:'Re-enabled gateway specialist',duties:'Report a fixture',
+  avatarId:'beaver',requestId:'enable-gateway-specialist'});
+ assert.equal(app.superagent.setRoleExecution(project.id,specialist.roleId,{expectedRevision:specialist.roleRevision,
+  execution:{kind:'acp',agent,revision:reenabled.revision}}).execution.agent,agent);
+
  const manual={baseURL:url+'/manual',credentialHeader:'x-api-key'};
  const beforeChange=requests.length;
- const changed=await prepare(selected.revision,{claudeGateway:manual});
+ const changed=await prepare(reenabled.revision,{claudeGateway:manual});
  assert.equal(changed.keyConfigured,false);
  assert.equal(changed.modelOverride,undefined);
  assert.equal(requests.length,beforeChange,'a different endpoint cannot reuse the original gateway key');
  const manualModel=await prepare(changed.revision,{apiKey:headerKey,modelOverride:models[1]});
  assert.equal(manualModel.assignmentReady,false);
  assert.match(manualModel.message,/检测连接/);
+ const beforeRefresh=requests.filter(row=>row.method==='POST').length;
  await request('');
- assert.equal(requests.filter(row=>row.method==='POST').length,0,'automatic refresh must not run an inference');
+ assert.equal(requests.filter(row=>row.method==='POST').length,beforeRefresh,'automatic refresh must not run an inference');
  await request('/claude-code/probe','POST',{});
  const verified=(await request('')).agents.find(row=>row.id===agent);
  assert.equal(verified.assignmentReady,true);
