@@ -2,7 +2,7 @@
 .workflow-entry:hover { background: var(--surface-hover); }
 .workflow-dialog { display: flex; flex-direction: column; width: min(1050px,calc(100vw - 40px)); max-height: calc(100dvh - 50px); background: var(--surface); color: var(--foreground); border: 1px solid var(--border); border-radius: var(--radius-dialog); box-shadow: var(--shadow-dialog); overflow: hidden; }
 .workflow-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 22px 24px; border-bottom: 1px solid var(--border); }
-.workflow-header h2 { font-size: 21px; margin: 0 0 5px; }
+.workflow-header h2 { font-size: var(--font-size-page-title); margin: 0 0 5px; }
 .workflow-header p { font-size: var(--font-size-ui); color: var(--text-secondary); margin: 0; }
 .workflow-error { margin: 12px 20px; color: var(--danger); font-size: var(--font-size-ui); overflow-wrap: anywhere; }
 .workflow-layout { display: grid; grid-template-columns: 280px minmax(0,1fr); overflow: hidden; min-height: 0; flex: 1; }

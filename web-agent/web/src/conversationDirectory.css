@@ -96,6 +96,6 @@
 }
 @media(pointer:coarse) {
  .conversation-task-actions > .conversation-task-continue,.conversation-task-search > input { min-height:44px; }
- .conversation-task-search > input { font-size:16px; }
+ .conversation-task-search > input { font-size:1.15rem; }
  .pilot-task-reference > button { width:36px; height:36px; }
 }

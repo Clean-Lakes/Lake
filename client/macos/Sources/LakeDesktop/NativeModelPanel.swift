@@ -32,18 +32,18 @@ import LakeDesktopCore
 // Keep the AppKit-drawn menu aligned with theme.css and the desktop reference.
 @MainActor private enum ModelMenuTypography {
     static let font: NSFont = {
-        let base = NSFont.systemFont(ofSize: 14)
+        let base = NSFont.systemFont(ofSize: 13)
         let descriptor = base.fontDescriptor.addingAttributes([
             .variation: [NSNumber(value: 0x77676874): NSNumber(value: 500)] // OpenType wght
         ])
-        return NSFont(descriptor: descriptor, size: 14) ?? base
+        return NSFont(descriptor: descriptor, size: base.pointSize) ?? base
     }()
 
     static let selectedFont: NSFont = {
         let descriptor = font.fontDescriptor.addingAttributes([
             .variation: [NSNumber(value: 0x77676874): NSNumber(value: 500)]
         ])
-        return NSFont(descriptor: descriptor, size: 14) ?? font
+        return NSFont(descriptor: descriptor, size: font.pointSize) ?? font
     }()
 
     static func foreground(_ appearance: NSAppearance) -> NSColor {

@@ -5,7 +5,7 @@
 .mini-box-material { position:absolute; z-index:-1; inset:0; border-radius:inherit; background:linear-gradient(130deg,color-mix(in srgb,var(--surface) 88%,transparent),color-mix(in srgb,var(--surface-muted) 70%,transparent)); backdrop-filter:blur(14px) saturate(1.1); box-shadow:inset 0 1px 0 color-mix(in srgb,var(--surface) 85%,transparent); pointer-events:none; }
 .mini-box-header { display:flex; align-items:center; gap:8px; height:36px; padding:0 10px; border-bottom:1px solid color-mix(in srgb,var(--border) 55%,transparent); font-size:var(--font-size-toolbar); color:var(--text-muted); }
 .mini-box-title { color:var(--foreground); white-space:nowrap; }
-.mini-box-header .mini-box-header-command { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:12px/20px var(--font-mono); background:none; padding:0; }
+.mini-box-header .mini-box-header-command { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:var(--font-size-toolbar)/20px var(--font-mono); background:none; padding:0; }
 .mini-box.is-collapsed .mini-box-status,.mini-box.is-collapsed .mini-box-protocol { flex-shrink:0; }
 .mini-box-header > svg { flex-shrink:0; }
 .mini-box-protocol { font-size:inherit; }
@@ -35,16 +35,16 @@
 /* A stable command and three preview lines; raw output expands separately. */
 .mini-box-preview { height:106px; display:flex; flex-direction:column; opacity:1; transform:translateY(0); transition:opacity 180ms ease,transform 280ms cubic-bezier(.22,1,.36,1); }
 .mini-box.is-collapsed .mini-box-preview { opacity:0; transform:translateY(-4px); pointer-events:none; }
-.mini-box-command { display:flex; align-items:center; flex:0 0 25px; gap:7px; padding:0 10px; min-width:0; font:12px/20px var(--font-mono); color:var(--foreground); }
+.mini-box-command { display:flex; align-items:center; flex:0 0 25px; gap:7px; padding:0 10px; min-width:0; font:var(--font-size-toolbar)/20px var(--font-mono); color:var(--foreground); }
 .mini-box-command > span { color:var(--text-muted); }
 .mini-box-command code { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:inherit; background:none; padding:0; }
-.mini-box-output { flex:1; min-height:0; padding:0 10px; color:var(--terminal-foreground); font:12px/17px var(--font-mono); }
+.mini-box-output { flex:1; min-height:0; padding:0 10px; color:var(--terminal-foreground); font:var(--font-size-toolbar)/17px var(--font-mono); }
 .mini-box-output-line { display:flex; gap:6px; min-width:0; height:17px; }
 .mini-box-output-line > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:pre; }
 .mini-box-output-line > small { flex-shrink:0; color:var(--text-muted); font:inherit; }
 .mini-box-output-line.is-anomaly { color:var(--danger); }
 .mini-box-output-empty { color:var(--text-muted); }
-.mini-box-footer { display:flex; align-items:center; gap:10px; flex:0 0 26px; padding:0 10px; min-width:0; font-size:11px; color:var(--text-muted); }
+.mini-box-footer { display:flex; align-items:center; gap:10px; flex:0 0 26px; padding:0 10px; min-width:0; font-size:var(--font-size-caption); color:var(--text-muted); }
 .mini-box-footer button,.mini-box-details button { display:inline-flex; align-items:center; justify-content:center; gap:4px; border:0; background:transparent; color:inherit; padding:2px 0; min-height:22px; border-radius:5px; font:inherit; cursor:pointer; }
 .mini-box-footer button:hover { color:var(--foreground); }
 .mini-box-footer .mini-box-anomalies { color:var(--danger); white-space:nowrap; }
@@ -56,13 +56,13 @@
 .mini-box-details { margin-top:8px; border:1px solid var(--border); border-radius:var(--radius-settings-panel); corner-shape:var(--corner-window); overflow:hidden; background:var(--surface); }
 .mini-box-details > header { display:flex; align-items:center; justify-content:space-between; padding:5px 10px; color:var(--text-muted); font-size:var(--font-size-toolbar); border-bottom:1px solid var(--border); }
 .mini-box-details button { width:24px; }
-.mini-box-raw { position:relative; max-height:280px; overflow:auto; padding:10px; font:12px/1.6 var(--font-mono); color:var(--terminal-foreground); }
+.mini-box-raw { position:relative; max-height:280px; overflow:auto; padding:10px; font:var(--font-size-toolbar)/1.6 var(--font-mono); color:var(--terminal-foreground); }
 .mini-box-raw pre { margin:0; padding:0; white-space:pre; font:inherit; background:none; color:inherit; }
 .mini-box-raw .mini-box-raw-command { margin-bottom:5px; color:var(--foreground); }
 .mini-box-raw-entry + .mini-box-raw-entry { margin-top:14px; }
 .mini-box-raw .is-anomaly,.mini-box-retained-anomaly { color:var(--danger); }
 .mini-box-retained-anomaly { margin-block:6px; }
-.mini-box-retention-note { margin:0; padding:7px 10px; color:var(--text-muted); font-size:11px; line-height:1.5; border-bottom:1px solid var(--border); }
+.mini-box-retention-note { margin:0; padding:7px 10px; color:var(--text-muted); font-size:var(--font-size-caption); line-height:1.5; border-bottom:1px solid var(--border); }
 .mini-box button:focus-visible,.mini-box-details button:focus-visible,.mini-box-raw:focus-visible { outline:2px solid var(--focus-outline); outline-offset:-2px; }
 @container (max-width:330px) { .mini-box-expand small { display:none; } .mini-box-footer { gap:6px; } }
 
@@ -101,7 +101,7 @@
   .mini-box-control-flow rect { animation-duration:5.2s!important; animation-iteration-count:infinite!important; animation-play-state:paused!important; }
 }
 
-.mini-box .mini-box-folded-anomalies { flex-shrink:0; border:0; background:transparent; color:var(--danger); font:inherit; font-size:11px; white-space:nowrap; padding:2px 3px; min-height:22px; border-radius:5px; cursor:pointer; }
+.mini-box .mini-box-folded-anomalies { flex-shrink:0; border:0; background:transparent; color:var(--danger); font:inherit; font-size:var(--font-size-caption); white-space:nowrap; padding:2px 3px; min-height:22px; border-radius:5px; cursor:pointer; }
 .mini-box .mini-box-folded-anomalies:hover { text-decoration:underline; }
 
 @media(prefers-reduced-motion:reduce) {

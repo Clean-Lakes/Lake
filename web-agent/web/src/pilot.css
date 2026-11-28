@@ -1,7 +1,7 @@
 .pilot-control{display:inline-flex;align-items:center;gap:0;flex-shrink:0}
 .sre-mode-toggle.pilot-mode-toggle[aria-pressed="false"],.sre-mode-toggle.pilot-mode-toggle[aria-pressed="false"]:hover{color:var(--text-muted)}
 .sre-mode-toggle.pilot-mode-toggle[aria-pressed="true"],.sre-mode-toggle.pilot-mode-toggle[aria-pressed="true"]:hover{color:var(--foreground)}
-.pilot-auto-badge{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;height:16px;margin-left:1px;padding:0 4px;border-radius:5px;background:var(--info-soft);color:var(--info);font-size:10px;line-height:16px;font-weight:var(--font-weight-ui)}
+.pilot-auto-badge{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;height:16px;margin-left:1px;padding:0 4px;border-radius:5px;background:var(--info-soft);color:var(--info);font-size:var(--font-size-badge);line-height:16px;font-weight:var(--font-weight-ui)}
 .menu-action-description{display:block;white-space:normal;color:var(--text-muted);font-size:var(--font-size-toolbar);font-weight:var(--font-weight-normal);line-height:1.6;margin-top:5px}
 .pilot-agent-work{margin:8px 0 12px;min-width:0}
 .pilot-step-navigation{display:flex;align-items:center;gap:12px;max-width:100%;color:var(--text-muted);font-size:var(--font-size-toolbar)}

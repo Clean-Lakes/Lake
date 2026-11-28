@@ -48,7 +48,8 @@ export function TerminalPane({ active = true, entries, output, interactive, show
   }
 
   useEffect(() => {
-    if (!hostRef.current) return;
+    const host = hostRef.current;
+    if (!host) return;
     let closed = false;
     const terminal = new Terminal({
       allowTransparency: transparentBackground,
@@ -57,7 +58,7 @@ export function TerminalPane({ active = true, entries, output, interactive, show
       screenReaderMode: true,
       disableStdin: false,
       fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
-      fontSize: 13,
+      fontSize: Number.parseFloat(getComputedStyle(host).fontSize),
       lineHeight: 1.15,
       scrollback: 5000,
       theme: terminalTheme(transparentBackground),
@@ -65,14 +66,13 @@ export function TerminalPane({ active = true, entries, output, interactive, show
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     fitRef.current = fit;
-    terminal.open(hostRef.current);
+    terminal.open(host);
     terminalRef.current = terminal;
     const themeObserver = new MutationObserver(() => { terminal.options.theme = terminalTheme(transparentBackground); });
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     const sendInput = (data: string) => { if (propsRef.current.active && propsRef.current.interactive) propsRef.current.onInput(data); };
     const textInput = usesWebKitTextInput(navigator.platform, navigator.userAgent) ? new TerminalTextInput(sendInput) : undefined;
     const inputListener = terminal.onData(data => textInput ? textInput.data(data) : sendInput(data));
-    const host = hostRef.current;
     const keydown = () => textInput?.keydown();
     const keyup = () => textInput?.keyup();
     const compositionStart = () => textInput?.compositionStart();
@@ -98,7 +98,7 @@ export function TerminalPane({ active = true, entries, output, interactive, show
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(resize, 100);
     });
-    observer.observe(hostRef.current);
+    observer.observe(host);
     // Size the emulator before parsing the initial history.
     if (propsRef.current.active) { try { fit.fit(); } catch {} }
     resize();

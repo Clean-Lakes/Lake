@@ -58,7 +58,7 @@
   font-size:var(--font-size-toolbar);
 }
 .provider-discard-dialog { corner-shape:var(--corner-window); }
-.provider-discard-dialog h3 { margin:0; font-size:17px; }
+.provider-discard-dialog h3 { margin:0; font-size:1.25rem; }
 .provider-discard-dialog p { margin:10px 0 20px; color:var(--text-secondary); }
 .provider-list { overflow:auto; max-height:min(270px,34dvh); scroll-padding:4px; }
 .provider-item { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; text-align: left; background: none; border: 1px solid transparent; border-radius: var(--radius-control); padding: 12px 9px; cursor: pointer; margin-bottom: 4px; color: inherit; }

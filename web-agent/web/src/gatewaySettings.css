@@ -105,7 +105,7 @@
   border-radius:var(--radius-settings-control);
   corner-shape:var(--corner-window);
   background:var(--surface-muted);
-  font-size:12px;
+  font-size:var(--font-size-toolbar);
   line-height:1.6;
 }
 .gateway-load-more {margin-bottom:18px}
@@ -152,11 +152,11 @@
   .gateway-source-meta span {flex-basis:100%}
 }
 
-.gateway-discussions {margin:16px 0;padding-left:16px;border-left:1px solid var(--border);font-size:13px}
-.gateway-discussions h5 {font-size:13px;color:var(--text-secondary);font-weight:400;margin:0 0 10px}
+.gateway-discussions {margin:16px 0;padding-left:16px;border-left:1px solid var(--border);font-size:var(--font-size-process)}
+.gateway-discussions h5 {font-size:var(--font-size-process);color:var(--text-secondary);font-weight:400;margin:0 0 10px}
 .gateway-discussions ul {list-style:none;padding:0;margin:10px 0}
 .gateway-discussions li {display:flex;gap:12px;justify-content:space-between;line-height:1.6;margin:4px 0}
-.gateway-discussions small {color:var(--text-secondary);font-size:12px}
+.gateway-discussions small {color:var(--text-secondary);font-size:var(--font-size-toolbar)}
 
 .gateway-event-setup {display:grid;gap:10px;padding:14px 0;border-block:1px solid var(--border);justify-items:start}
 .gateway-event-setup p {margin:0}

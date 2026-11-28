@@ -29,7 +29,7 @@
 }
 .grafana-resource-identity h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: 1.6rem;
   line-height: 1.25;
   font-weight: var(--font-weight-semibold);
   overflow-wrap: anywhere;
@@ -67,7 +67,7 @@
 .grafana-metric-label { color: var(--text-secondary); font-size: var(--font-size-ui); }
 .grafana-metric strong {
   margin-top: 4px;
-  font-size: 24px;
+  font-size: 1.75rem;
   font-weight: var(--font-weight-semibold);
   font-variant-numeric: tabular-nums;
 }
@@ -123,7 +123,7 @@
 .grafana-timeline h2,
 .grafana-management h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 1.45rem;
   font-weight: var(--font-weight-semibold);
 }
 .grafana-timeline .gateway-section-heading {
@@ -173,7 +173,7 @@
   background: var(--primary);
 }
 .grafana-timeline-event { min-width: 0; overflow-wrap: anywhere; }
-.grafana-timeline-event strong { display: block; color: var(--foreground); font-size: 15px; }
+.grafana-timeline-event strong { display: block; color: var(--foreground); font-size: var(--font-size-reading); }
 .grafana-timeline-event small {
   display: inline-block;
   margin-top: 5px;

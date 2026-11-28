@@ -109,7 +109,7 @@
   min-width:22px;
   padding:0 5px;
   color:var(--text-secondary);
-  font-size:10px;
+  font-size:var(--font-size-badge);
   font-weight:var(--font-weight-medium);
   font-variant-numeric:tabular-nums;
 }

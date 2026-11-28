@@ -126,11 +126,11 @@ html.lake-windows-chrome .app-shell.has-workbench-island:where(:not(.has-docked-
 .terminal-picker-item > svg { margin-top:3px; }
 .terminal-list-menu button .terminal-picker-copy { display:flex; flex:1; min-width:0; flex-direction:column; gap:2px; }
 .terminal-list-menu button .terminal-picker-name { display:block; flex:none; color:var(--foreground); }
-.terminal-list-menu button .terminal-picker-meta { display:flex; flex:none; align-items:center; gap:8px; font-size:12px; line-height:18px; color:var(--text-muted); }
+.terminal-list-menu button .terminal-picker-meta { display:flex; flex:none; align-items:center; gap:8px; font-size:var(--font-size-toolbar); line-height:18px; color:var(--text-muted); }
 .terminal-list-menu button .terminal-picker-meta > span { flex:1; }
 .terminal-list-menu .terminal-picker-meta small { flex:none; font-size:inherit; line-height:inherit; }
 .terminal-list-settings { border-top:1px solid var(--border); margin-top:4px; padding-top:4px; }
-.terminal-list-settings label { display:flex; flex-direction:column; align-items:stretch; gap:6px; padding:8px; font-size:12px; line-height:18px; color:var(--text-muted); }
+.terminal-list-settings label { display:flex; flex-direction:column; align-items:stretch; gap:6px; padding:8px; font-size:var(--font-size-toolbar); line-height:18px; color:var(--text-muted); }
 .terminal-list-settings label .app-select { width:100%; min-width:0; margin-top:0; font-size:var(--font-size-ui); line-height:20px; color:var(--foreground); }
 .terminal-list-menu button[aria-current=true] { color:var(--foreground); background:var(--surface-hover); }
 @media(prefers-reduced-motion:reduce) { .terminal-island-switcher > svg { transition:none; } }
@@ -382,7 +382,7 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .xter
   min-width:0;
 }
 .lake-island-drawer-titles > strong {
-  font-size:13px;
+  font-size:var(--font-size-process);
   font-weight:var(--font-weight-semibold);
   color:var(--foreground);
   overflow:hidden;

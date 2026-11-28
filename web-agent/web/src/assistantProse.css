@@ -15,10 +15,10 @@ div.ai-markdown.assistant-prose:has(> .reply-info-facts) > :is(h1,h2,h3,h4) { fo
 .ai-markdown.assistant-prose :not(pre) > code { padding: 2px 5px; border-radius: 4px; background: var(--surface-muted); font-size: .9em; font-weight:var(--font-weight-normal); }
 .ai-markdown.assistant-prose pre { margin: 16px 0 20px; padding: 14px 16px; line-height: 1.65; }
 .ai-markdown.assistant-prose pre { font-weight:var(--font-weight-normal); }
-.ai-markdown.assistant-prose pre code { font-size: 12px; font-weight:var(--font-weight-normal); }
+.ai-markdown.assistant-prose pre code { font-size: var(--font-size-toolbar); font-weight:var(--font-weight-normal); }
 .ai-markdown.assistant-prose h1,.ai-markdown.assistant-prose h2,.ai-markdown.assistant-prose h3,.ai-markdown.assistant-prose h4 { margin: 24px 0 12px; line-height: 1.5; font-weight:var(--font-weight-semibold); }
-.ai-markdown.assistant-prose h1 { font-size: 22px; }
-.ai-markdown.assistant-prose h2 { font-size: 19px; }
+.ai-markdown.assistant-prose h1 { font-size: 1.6rem; }
+.ai-markdown.assistant-prose h2 { font-size: 1.375rem; }
 .ai-markdown.assistant-prose h3 { font-size: var(--font-size-ui); }
 .ai-markdown.assistant-prose h4 { font-size: var(--font-size-body); }
 .ai-markdown.assistant-prose p.assistant-summary { margin: 0 0 16px; padding: 0; border: 0; border-radius: 0; background: none; }
