@@ -4277,7 +4277,7 @@ for(const entrance of ['child','segment'])test(`Codex ACP ${entrance} returns re
 
 test('Codex settings reuse local login without storing credentials and probe without inference',async t=>{
  const f=await fixture(t),path=`/api/projects/${f.project.id}/external-agents`;
- const initial=await f.api(path);assert.deepEqual(initial.agents.map(agent=>agent.id),['codex']);assert.equal(initial.agents[0].enabled,false);
+ const initial=await f.api(path);assert.deepEqual(initial.agents.map(agent=>agent.id),['codex','claude-code','antigravity']);assert.equal(initial.agents[0].enabled,false);
  await f.enableCodexFixture();
  await f.api(path+'/codex','PUT',{expectedRevision:0,enabled:true});
  await f.api(path+'/codex','PUT',{expectedRevision:0,enabled:false},409);

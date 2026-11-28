@@ -777,19 +777,20 @@ export class LakeSuperagent implements AgentHost {
       .sort((a, b) => a.id.localeCompare(b.id));
     return { items: rows.slice(0, limit).map(role=>{
       const backend=this.roleExecution(role);
-      return {...role,execution:{kind:'acp',agent:backend.agent,...(backend.model?{model:backend.model}:{})}};
+      return {...role,execution:backend.kind==='native'?backend:{kind:'acp',agent:backend.agent,...(backend.model?{model:backend.model}:{})}};
     }), nextCursor: rows.length > limit ? rows[limit - 1].id : "" };
   }
-  private roleBackend(projectId:string,backend:unknown,allowRevision=false):{kind:'acp';agent:ExternalAgentId;model?:AgentBackendRef['model']} {
+  private roleBackend(projectId:string,backend:unknown,allowRevision=false):AgentBackendRef {
     if(!backend||typeof backend!=='object'||Array.isArray(backend)||Object.keys(backend).some(key=>!['kind','agent','model',...(allowRevision?['revision']:[])].includes(key)))
       throw new HttpError(400,'请选择当前支持的专员执行后端');
-    const value=backend as Record<string,unknown>;
-    const agent=this.requireSpecialistExecution(value as AgentBackendRef,400);
-    if(value.revision!==undefined&&(!Number.isSafeInteger(value.revision)||(value.revision as number)<1))throw new HttpError(400,'执行后端版本无效');
+    const value=backend as AgentBackendRef;
+    this.requireSpecialistExecution(value,400);
+    const agent=value.agent;
+    if(value.revision!==undefined&&(!Number.isSafeInteger(value.revision)||value.revision<1))throw new HttpError(400,'执行后端版本无效');
     let model:AgentBackendRef['model'];
     if(value.model!==undefined){
       if(!value.model||typeof value.model!=='object'||Array.isArray(value.model)||Object.keys(value.model).some(key=>!['modelId','providerId'].includes(key)))throw new HttpError(400,'模型引用无效');
-      const ref=value.model as Record<string,unknown>;
+      const ref=value.model;
       model={modelId:text(ref.modelId,'modelId',256),...(ref.providerId!==undefined?{providerId:text(ref.providerId,'providerId',256)}:{})};
       if(model.providerId!==undefined||!isExternalModelId(agent,model.modelId))throw new HttpError(400,'外部执行器模型引用无效');
     }
@@ -797,10 +798,9 @@ export class LakeSuperagent implements AgentHost {
     if(value.revision!==undefined&&profile.revision!==value.revision)throw new HttpError(409,'执行器配置已变化，请重新检测连接');
     return {kind:'acp',agent:profile.id,...(model?{model}:{})};
   }
-  private requireSpecialistExecution(execution:AgentBackendRef|undefined,status:400|409){
+  private requireSpecialistExecution(execution:AgentBackendRef|undefined,status:400|409):asserts execution is Extract<AgentBackendRef,{kind:'acp'}>&{agent:ExternalAgentId} {
     if(execution?.kind!=='acp'||!isExternalAgentId(execution.agent))
       throw new HttpError(status,status===400?'请选择当前支持的专员执行器':legacySpecialistExecution);
-    return execution.agent;
   }
   private executionOptions(projectId:string, kind?: AgentBackendRef["kind"]){
     const registry=this.agents.external?.registry;
@@ -828,7 +828,8 @@ export class LakeSuperagent implements AgentHost {
     if(!backend&&input.model_id===undefined&&options.some(option=>option.execution.kind==='acp'&&option.execution.agent==='codex'&&!option.explicitOnly))
       options=options.filter(option=>option.execution.kind==='acp'&&option.execution.agent==='codex');
     if(backend?.model)options=options.filter(option=>canonical(option.execution.model)===canonical(backend.model));
-    return chooseSpecialistExecution(options,{kind:backend?.kind,agent:backend?.agent,
+    const agent=backend?.kind==='acp'&&isExternalAgentId(backend.agent)?backend.agent:undefined;
+    return chooseSpecialistExecution(options,{kind:backend?.kind,agent,
       modelId:input.model_id??backend?.model?.modelId,providerId:input.provider_id});
   }
   private updatedExecution(role:Role,input:Record<string,any>,available?:SpecialistExecutionOption[]):AgentBackendRef|undefined{
@@ -836,8 +837,9 @@ export class LakeSuperagent implements AgentHost {
     const backend=explicit??role.execution;
     if(input.model_id!==undefined||input.provider_id!==undefined){
       const current=explicit??this.roleExecution(role);
-      return chooseSpecialistExecution(available??this.executionOptions(role.projectId,current.kind),{kind:current.kind,agent:current.agent,
-        modelId:input.model_id,providerId:input.provider_id});
+      const agent=current.kind==='acp'&&isExternalAgentId(current.agent)?current.agent:undefined;
+      return chooseSpecialistExecution(available??this.executionOptions(role.projectId,current.kind),{kind:current.kind,agent,
+        modelId:input.model_id,providerId:input.provider_id??(current.kind==='native'?current.model?.providerId:undefined)});
     }
     const same=backend?.kind===role.execution?.kind&&(backend?.kind!=='acp'||role.execution?.kind==='acp'&&backend.agent===role.execution.agent);
     return backend&&!backend.model&&same&&role.execution?.model?{...backend,model:role.execution.model}:backend;
@@ -850,7 +852,7 @@ export class LakeSuperagent implements AgentHost {
     this.store.put('superRoles',role.id,updated);this.notify(this.ensureChannel(updated).sessionId,'specialist');
     return updated;
   }
-  private roleExecution(role:Role,freezeModel=false):{kind:'acp';agent:ExternalAgentId;revision:number;model?:AgentBackendRef['model']} {
+  private roleExecution(role:Role,freezeModel=false):AgentBackendRef {
     const binding=role.execution?.kind==='acp'?role.execution:undefined;
     const agent=isExternalAgentId(binding?.agent)?binding.agent:'codex';
     const registry=this.agents.external.registry,profile=registry.get(role.projectId,agent);
@@ -863,6 +865,7 @@ export class LakeSuperagent implements AgentHost {
   }
   private freezeRoleExecution(role:Role):Role {
     const execution=this.roleExecution(role,true);
+    this.requireSpecialistExecution(execution,409);
     const id=execution.agent,name=externalAgentName(id);
     const profile=this.agents.external.registry.get(role.projectId,id);
     const probe=this.agents.external.registry.probe(role.projectId,id);
