@@ -64,7 +64,7 @@ export type ExternalEvent = {
   /** Read-only current ACP message projection; text remains the full run audit. */
   publicText?: string; publicTextId?: string;
   callId?: string; title?: string; status?: string; at: string;
-  toolSource?:'lake-bridge';
+  toolSource?:'lake-bridge'|'agent-plan';
   displayKind?:import('../../../web-agent/shared/codex-activity').CodexAction; detail?:string; preview?:string;
   taskState?:import('../../../web-agent/shared/codex-activity').CodexTaskState; createdTask?:boolean;
 };

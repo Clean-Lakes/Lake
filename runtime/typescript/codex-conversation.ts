@@ -24,11 +24,12 @@ export function captureSpecialistActivity(run:ExternalRun,event:ExternalEvent,ca
   if(!isExternalAgentId(run.agent)||run.purpose!=='worker'||!run.rootTurnId||!run.taskId||run.childSessionId||run.agentRunId)return;
   const data=card.data as Record<string,unknown>;
   const items=(data.codex_activity??[]) as CodexActivityItem[];
+  const antigravityPlan=run.agent==='antigravity'&&event.toolSource==='agent-plan'&&event.displayKind==='task'&&!!event.taskState;
   let item:CodexActivityItem;
   if(event.kind==='text'&&event.publicTextId&&typeof event.publicText==='string'){
     item={id:event.publicTextId,kind:'text',text:event.publicText};
   }else if((event.kind==='tool'||event.kind==='tool_update')&&event.displayKind&&event.callId&&
-    (run.agent==='codex'||event.toolSource==='lake-bridge')){
+    (run.agent==='codex'||event.toolSource==='lake-bridge'||antigravityPlan)){
     const id=JSON.stringify([run.id,event.callId]);
     const old=items.find(entry=>entry.id===id&&entry.kind!=='text');
     const previous=old?.kind==='text'?undefined:old;

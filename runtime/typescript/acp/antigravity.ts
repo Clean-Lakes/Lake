@@ -2,12 +2,18 @@ import {rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import type {AgentActivity,AgentConnection,AgentLaunch,AgentTurnResult,ObserveAgentModel,ScopedHttpMcp} from './client';
 import {antigravityProfileArgs,isCliModelId,isCliReasoningEffort} from './cli-profile';
+import {CodexChecklist,readCodexChecklist} from './codex-activity';
 import {JsonRpcProcess} from './process';
 import {privateFile,privatePath} from './private';
 import {digest} from '../tasks';
 import type {CodexModelOption} from './types';
 
 export const antigravityLoginRequired='Google Antigravity 尚未登录，请使用 Google 登录';
+const specialistProgressInstructions=`For work with dependent stages, a wait, or several independently checkable results, create a short checklist once you know the work involved, before starting the substantive checks. Use call_mcp_tool with this input shape, filling in the specific checkpoints in the user's language:
+{"ServerName":"lake","ToolName":"TodoWrite","Arguments":{"todos":[{"content":"First checkpoint","status":"in_progress","priority":"high"},{"content":"Next checkpoint","status":"pending","priority":"medium"}]}}
+Send the full current list on each material change. Mark a checkpoint completed when its result is actually confirmed. Keep unresolved checks open and explain the blocker. A single simple lookup or short answer needs no checklist.
+For substantial work, send a short public assistant message when starting and again when there is a meaningful finding or obstacle. Describe the current check or observed result in the user's language. Continue working after each update. Keep private reasoning separate and avoid narrating every tool call.`;
+
 type SelectConfig={id:string;currentValue:string;options:unknown[]};
 function selectConfig(result:any,category:'model'|'thought_level'):SelectConfig|undefined {
   if(!Array.isArray(result?.configOptions))return;
@@ -28,7 +34,12 @@ export class Antigravity implements AgentConnection {
   private readonly googleLogin:boolean;
   private modelSelection?:SelectConfig;
   private reasoningSelection?:SelectConfig;
-  private turn?:{messages:Map<string,string>;calls:Map<string,string|false>};
+  private turn?:{
+    messages:Map<string,string>;
+    calls:Map<string,string|false>;
+    plan:CodexChecklist;
+    planSequence:number;
+  };
   localModel?:string;
   model?:string;
   models:string[]=[];
@@ -41,8 +52,9 @@ export class Antigravity implements AgentConnection {
     // The restricted primary agent excludes the native shell, filesystem,
     // browser, scheduling and subagent tools. It sees this run's MCP only.
     const manifest=mcp?`Use call_mcp_tool with ServerName "lake", the exact ToolName, and Arguments from the following tool schemas. Use these Lake tools for any task progress, approvals and actions.\n${JSON.stringify(mcp.tools)}`:'';
+    const progress=mcp?.tools.some(tool=>tool.name==='TodoWrite')?specialistProgressInstructions:'';
     const instructions=['---','name: lake','description: Lake specialist execution','mainAgent: true','subagent: false',
-      'tools: []','commandExecutionPolicy: off',`inheritMcp: ${!!mcp}`,'inheritCustomizations: false','---',systemPrompt??'',manifest].join('\n');
+      'tools: []','commandExecutionPolicy: off',`inheritMcp: ${!!mcp}`,'inheritCustomizations: false','---',progress,systemPrompt??'',manifest].join('\n');
     await privateFile(agents,'lake.md',instructions);
     await privateFile(config,'mcp_config.json',JSON.stringify({mcpServers:servers}));
     return new Antigravity(launch,publish,join(config,'mcp_config.json'),mcp,model,observeModel,reasoningEffort);
@@ -169,7 +181,7 @@ export class Antigravity implements AgentConnection {
   }
   async exec(text:string,signal:AbortSignal):Promise<AgentTurnResult>{
     if(!this.sessionId||this.turn)throw new Error('Google Antigravity 会话当前不可用');
-    this.turn={messages:new Map(),calls:new Map()};
+    this.turn={messages:new Map(),calls:new Map(),plan:new CodexChecklist(),planSequence:0};
     if(this.model)this.observeModel?.(this.model,'google-antigravity',this.reasoningSelection?.currentValue);
     try{
       const prompt=[{type:'text',text}];
@@ -182,19 +194,27 @@ export class Antigravity implements AgentConnection {
     }finally{this.turn=undefined;}
   }
   private update(method:string,params:any){
-    if(!this.turn||method!=='session/update'||params?.sessionId!==this.sessionId)return;
+    const turn=this.turn;
+    if(!turn||method!=='session/update'||params?.sessionId!==this.sessionId)return;
     const event=params.update;
-    if(event?.sessionUpdate==='agent_message_chunk'&&event.content?.type==='text'&&typeof event.content.text==='string'){
+    if(event?.sessionUpdate==='plan'&&this.mcp){
+      const plan=readCodexChecklist(event.entries,'content');
+      if(!plan)return;
+      for(const change of turn.plan.update(plan)){
+        this.publish({kind:'tool_update',callId:JSON.stringify(['plan',++turn.planSequence]),
+          title:'更新计划',status:'completed',toolSource:'agent-plan',...change});
+      }
+    }else if(event?.sessionUpdate==='agent_message_chunk'&&event.content?.type==='text'&&typeof event.content.text==='string'){
       const messageId=typeof event.messageId==='string'?event.messageId:this.sessionId!;
-      const current=this.turn.messages.get(messageId)??'';
+      const current=turn.messages.get(messageId)??'';
       const delta=event.content.text.slice(0,Math.max(0,65536-current.length));
       if(delta){
         const messageText=current+delta;
-        this.turn.messages.set(messageId,messageText);
+        turn.messages.set(messageId,messageText);
         this.publish({kind:'text',text:delta,messageId,messageText});
       }
     }else if(['tool_call','tool_call_update'].includes(event?.sessionUpdate)&&typeof event.toolCallId==='string'){
-      const calls=this.turn.calls;
+      const calls=turn.calls;
       const knownCall=calls.has(event.toolCallId),scopedTool=knownCall||this.scopedCall(event);
       if(['completed','failed','cancelled'].includes(event.status)){
         if(knownCall)calls.set(event.toolCallId,false);

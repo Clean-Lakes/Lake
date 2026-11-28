@@ -7,8 +7,9 @@ const {join}=require('node:path');
 process.env.LAKE_TS_IMPORT_ONLY='1';
 const {startLakeServer}=require('../../bin/lake-runtime/server.cjs');
 
-function cliFixture(agent){
- return `#!${process.execPath}\nconst agent=${JSON.stringify(agent)};\n`+String.raw`
+const openingUpdate='我会先核对样例目录，再比较两份记录。';
+function cliFixture(agent,progress=false){
+ return `#!${process.execPath}\nconst agent=${JSON.stringify(agent)};\nconst progress=${progress};\nconst openingUpdate=${JSON.stringify(openingUpdate)};\n`+String.raw`
 const assert=require('node:assert/strict');
 const {existsSync,readFileSync,writeFileSync}=require('node:fs');
 const {spawn}=require('node:child_process');
@@ -144,6 +145,7 @@ if(agent==='claude-code'){
  const custom=readFileSync(join(config,'agents','lake.md'),'utf8');
  assert.match(custom,/tools: \[\]/);assert.match(custom,/inheritCustomizations: false/);
  const mcp=JSON.parse(readFileSync(join(config,'mcp_config.json'),'utf8')).mcpServers;
+ assert.equal(custom.includes('"ServerName":"lake","ToolName":"TodoWrite","Arguments":'),!!mcp.lake);
  const sessionId='antigravity-fixture-session';
  const modelIds=google?['gemini-google-plan','gemini-google-pro']:['gemini-test'];
  let modelId=modelIds[0],effort='low';
@@ -155,7 +157,7 @@ if(agent==='claude-code'){
  }
  const permissionOptions=[{kind:'allow_once',optionId:'allow'},{kind:'reject_once',optionId:'deny'}];
  const responses=new Map();
- function update(data){send({jsonrpc:'2.0',method:'session/update',params:{sessionId,update:data}});}
+ function update(data,target=sessionId){send({jsonrpc:'2.0',method:'session/update',params:{sessionId:target,update:data}});}
  function ask(toolCall){const id='permission-'+(++sequence);return new Promise(resolve=>{
   responses.set(id,resolve);
   send({jsonrpc:'2.0',method:'session/request_permission',id,params:{sessionId,toolCall,options:permissionOptions}});
@@ -184,6 +186,18 @@ if(agent==='claude-code'){
   if(google)assert.deepEqual([modelId,effort],['gemini-google-pro','extra']);
   assert.deepEqual(Object.keys(mcp),['lake']);
   assert.ok(args.includes('--process-per-session'));
+  if(progress){
+   const entry={content:'核查发布样例',priority:'medium',status:'pending'};
+   const plan={sessionUpdate:'plan',entries:[entry]};
+   update({...plan,entries:[{...entry,content:'外部会话的计划'}]},'foreign-session');
+   update({sessionUpdate:'agent_message_chunk',messageId:'progress',content:{type:'text',text:openingUpdate}});
+   update({sessionUpdate:'agent_thought_chunk',content:{type:'text',text:'PRIVATE_FIXTURE_THOUGHT'}});
+   update(plan);
+   update(plan);
+   update({...plan,entries:[{...entry,status:'in_progress'}]});
+   update({...plan,entries:[{...entry,status:'invalid'}]});
+   update({...plan,entries:[{...entry,status:'completed'}]});
+  }
   const tool={sessionUpdate:'tool_call',toolCallId:'fixture-call',name:'call_mcp_tool',status:'pending',rawInput:{ServerName:'lake',ToolName:'work_finish',Arguments:{summary:'ISOLATED_CLI_REPORT',outcome:'completed'}}};
   assert.equal(await ask(tool),'deny','a call without a matching tool event is not admitted');
   assert.equal(await ask({...tool,name:'run_command'}),'deny');
@@ -232,7 +246,8 @@ test('CLI profiles bind specialists, dispatch through the private bridge, and pu
  for(const [agent,kind,model] of [['claude-code','claude-code-cli','claude-test-model'],['antigravity','antigravity-acp','gemini-test']]){
   const project=app.store.createProject(agent+' fixture'),p='/api/projects/'+project.id;
   const channel=app.superagent.createSpecialist(project.id,{name:'Test specialist',duties:'Report a fixture',avatarId:'beaver',requestId:'create-specialist-fixture'});
-  const cli=join(home,agent);await writeFile(cli,cliFixture(agent),{mode:0o700});
+  const agy=agent==='antigravity';
+  const cli=join(home,agent);await writeFile(cli,cliFixture(agent,agy),{mode:0o700});
   const apiKey='synthetic-fixture-'+agent;
   const prepared=await request(p+'/external-agents/'+agent+'/prepare','POST',{expectedRevision:0,enabled:true,executablePath:cli,apiKey});
   assert.deepEqual(prepared.agents.map(row=>row.id),['codex','claude-code','antigravity']);
@@ -263,7 +278,8 @@ test('CLI profiles bind specialists, dispatch through the private bridge, and pu
    await new Promise(resolve=>setTimeout(resolve,35));
   }
   assert.equal(run?.state,'completed',run?.error);
-  assert.deepEqual([run.agent,run.runtimeKind,run.model,run.summary],[agent,kind,model,'ISOLATED_CLI_REPORT']);
+  assert.deepEqual([run.agent,run.runtimeKind,run.model],[agent,kind,model]);
+  assert.equal(run.summary,agy?openingUpdate+'\n\nISOLATED_CLI_REPORT':'ISOLATED_CLI_REPORT');
   assert.deepEqual(run.usage,{inputTokens:3,outputTokens:5});
   assert.equal(run.events.findLast(event=>event.kind==='text').publicText,'ISOLATED_CLI_REPORT');
   const worker=app.store.require('superWorkers',receipt.assignment.workerId);
@@ -284,14 +300,23 @@ test('CLI profiles bind specialists, dispatch through the private bridge, and pu
   const liveProcess=app.store.view(worker.sessionId).cards.find(card=>card.id===run.id)?.data.codex_activity;
   assert.equal(liveProcess?.filter(item=>item.text==='list_assets'&&item.status==='completed').length,1);
   const checklist=items=>items?.filter(item=>item.kind==='task'&&item.taskState).map(item=>[item.text,item.taskState,!!item.createdTask]);
-  assert.deepEqual(checklist(liveProcess),changes);
+  const planChanges=agy?[
+   ['核查发布样例','pending',true],['核查发布样例','in_progress',false],['核查发布样例','completed',false],
+  ]:[];
+  assert.deepEqual(checklist(liveProcess),[...planChanges,...changes]);
+  if(agy){
+   assert.deepEqual(liveProcess[0].text,openingUpdate);
+   assert.ok(!JSON.stringify(run).includes('PRIVATE_FIXTURE_THOUGHT'));
+   assert.deepEqual(run.events.filter(event=>event.toolSource==='agent-plan').map(event=>[event.detail,event.taskState,!!event.createdTask]),planChanges);
+  }
   let report;
   for(let attempt=0;attempt<150&&!report;attempt++){
    report=app.store.list('messages').find(message=>message.sessionId===channel.sessionId&&message.author?.workerId===worker.id&&message.id.startsWith('report_'));
    if(!report)await new Promise(resolve=>setTimeout(resolve,35));
   }
   assert.ok(report?.codexActivity?.some(item=>item.text==='list_assets'&&item.status==='completed'),'delivered report keeps the process');
-  assert.deepEqual(checklist(report.codexActivity),changes);
+  assert.deepEqual(checklist(report.codexActivity),[...planChanges,...changes]);
+  if(agy)assert.equal(report.codexActivity[0].text,openingUpdate);
   if(agent==='antigravity'){
    const {codexActivity,...oldReport}=report;
    app.store.put('messages',oldReport.id,oldReport);

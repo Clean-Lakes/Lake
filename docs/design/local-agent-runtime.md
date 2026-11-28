@@ -64,6 +64,8 @@ Claude Code 的「自定义 API」支持兼容 Anthropic Messages 的第三方�
 
 Claude Code 和 Antigravity 的专员任务在群聊、Pilot 对话和专员频道展示已公开的阶段说明与实际 Lake 工具调用。Lake 根据本轮 `TodoWrite` 成功返回的写入前后清单展示逐条待办变化。调用按原 Worker 和执行轮次更新，命令、待办和简短输出沿用脱敏规则，过程随报告保存。历史 Antigravity 报告可从属于同一轮的已存记录显示工具标题与状态。
 
+支持待办的 Antigravity 任务会收到多步骤工作的 `TodoWrite` 调用示例，指引模型在主要检查前创建待办、在阶段变化时更新。单项查询可直接执行。当前轮收到的 ACP `plan` 清单按变化展示，公开阶段说明沿公开消息流进入执行过程。计划通知只投影进度，工具授权及任务完成仍沿原 Worker 流程。[ACP Agent Plan](https://agentclientprotocol.com/protocol/v1/agent-plan)
+
 ## 迁移与交付边界
 
 profile 升级为 schema3，记录 `runtimeKind: codex-app-server`。schema1/schema2 迁移增加 revision，旧 Worker/run 和来源记录保持原样；新的配置不能静默续接旧执行。官方引擎 0.170.0 安装在现有 Lake Home 的运行时目录。固定引擎和模型目录纳入连接版本。
