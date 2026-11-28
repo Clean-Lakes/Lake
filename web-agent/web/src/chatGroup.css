@@ -1,6 +1,6 @@
 /* The first-message actions sit in the same flex column as the visible composer. */
 .chat-group-start {
-  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px 14px;
+  position:relative; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px 14px;
   min-width:0; margin-bottom:8px; padding-inline:1px;
 }
 .chat-group-start[inert] { visibility:hidden; }
@@ -8,8 +8,7 @@
   flex:none; margin:0; font-size:var(--font-size-ui); font-weight:var(--font-weight-semibold); line-height:1.4;
 }
 .chat-group-start-members {
-  display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px; min-width:0; max-width:100%;
-  max-height:112px; padding:3px; margin:-3px; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin;
+  display:flex; justify-content:flex-end; gap:5px; min-width:0; max-width:100%;
 }
 .chat-group-start-member {
   display:inline-flex; align-items:center; gap:5px; min-width:0; max-width:100%; min-height:27px;
@@ -24,8 +23,20 @@
 }
 .chat-group-start-member:focus-visible { outline:2px solid var(--focus-outline); outline-offset:1px; }
 .chat-group-start-member:disabled { opacity:.6; cursor:default; }
+.chat-group-start-more-toggle { flex:none; min-width:32px; justify-content:center; font-variant-numeric:tabular-nums; }
+.chat-group-start-more-toggle[aria-expanded="true"] { background:var(--surface-selected); color:var(--foreground); }
+.chat-group-start-more-panel {
+  position:absolute; inset-inline-end:1px; bottom:calc(100% + 6px); z-index:3;
+  width:min(280px,100%); max-height:min(252px,40dvh); padding:5px;
+  overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin;
+  border:1px solid var(--border); border-radius:var(--radius-settings-panel); corner-shape:var(--corner-window);
+  background:var(--surface); box-shadow:var(--shadow-popover);
+}
+.chat-group-start-more-panel:not([hidden]) { display:grid; gap:2px; }
+.chat-group-start-more-panel > .chat-group-start-member:where(:not(:hover,[data-selected])) { background:transparent; }
 @container lake-composer (max-width:400px) {
   .chat-group-start-members { justify-content:flex-start; }
+  .chat-group-start-more-panel { inset-inline:1px auto; }
 }
 @media(pointer:coarse) {
   .chat-group-start-member { min-height:44px; }
