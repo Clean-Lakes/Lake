@@ -78,7 +78,7 @@ test('LakeIslandDrawer matches unified Dynamic Island card layout across running
   assert.match(runningHtml, /可观测群 · 1 位专员协作中/);
   assert.match(runningHtml, /本次排查已持续 01:23/);
   assert.match(runningHtml, /class="lake-island-dots" role="img" aria-label="处理中"/);
-  assert.match(runningHtml, /发布专员/);
+  assert.match(runningHtml, /class="lake-island-participant-row" title="发布专员 · 核查抓帧链路"/);
   assert.match(runningHtml, /执行中/);
   assert.match(runningHtml, /收起小岛/);
   assert.match(runningHtml, /查看过程/);
@@ -146,6 +146,7 @@ test('workbenchIsland.css and ConversationDirectory prevent bleed-through, doubl
   assert.match(css, /\[data-island-phase="expanded"\] > \.workspace-header\s*\{[^}]*height:0;/);
   assert.match(css, /\[data-island-press="squish"\]/);
   assert.match(css, /\[data-island-press="swell"\]/);
+  assert.match(css, /\.island-expand-drawer\s*\{[^}]*grid-template-columns:\s*minmax\(0,1fr\)/);
   assert.match(css, /\.island-expand-drawer\[data-open="true"\][^}]*100ms/);
   assert.match(css, /width 480ms var\(--island-spring\) 90ms/);
   assert.match(css, /@media \(prefers-reduced-motion:reduce\)/);
