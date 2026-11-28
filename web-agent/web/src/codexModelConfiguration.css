@@ -222,7 +222,7 @@
 .codex-config-credential .button { min-block-size:30px; padding:4px 9px; font-size:var(--font-size-toolbar); }
 @media (prefers-reduced-motion:no-preference) {
  .codex-config[open] { animation:codex-config-in 140ms cubic-bezier(.2,.7,.2,1) both; }
- @keyframes codex-config-in { from { opacity:0; transform:translateY(3px); } }
+ @keyframes codex-config-in { from { opacity:0; } }
 }
 @media (max-width:600px) {
   .codex-config-body { grid-template-columns:minmax(0,1fr); }
