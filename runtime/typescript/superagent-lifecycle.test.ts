@@ -265,7 +265,51 @@ for (const fail of [false, true]) test(`a committed assignment shows preparation
   f.settleRouter(fail ? 'synthetic routing failure' : undefined); await f.activate();
   assert.equal(f.worker(handoff.taskId).state, fail ? 'parked' : 'active');
   assert.equal(f.requests.filter(request => request.sessionId === handoff.sessionId).length, fail ? 0 : 1);
-  if (fail) assert.equal(f.host.workers(f.project.id).find(worker => worker.id === handoff.workerId)?.activity, undefined);
+  const activity = f.host.workers(f.project.id).find(worker => worker.id === handoff.workerId)?.activity;
+  assert.equal(activity?.phase, fail ? undefined : 'queued');
+  const session = f.store.session(f.router);
+  f.store.put('sessions', session.id, {...session, status:fail ? 'failed' : 'completed'});
+  assert.equal(f.host.decorate(f.store.snapshot(f.router)).pilotWorkPending, fail ? undefined : true);
+});
+
+test('a group keeps its claimed specialist in preparation until execution starts or settles', async t => {
+  const f = await fixture(t);
+  const second = {...f.role,id:'role-notes',roleKey:'notes',name:'记录专员'};
+  f.store.put('superRoles', second.id, second);
+  const group = f.host.conversations.createGroup(f.project.id, {
+    title:'交接验证群',roleIds:[f.role.id,second.id],requestId:'create-handoff-group',
+  });
+  const message = await f.host.sendGroupMessage(f.project.id, group.sessionId, {text:'整理样例清单',requestId:'group-handoff'});
+  assert.ok('id' in message);
+  const event = f.store.list<any>('superInputs').find(input => input.messageId === message.id)!;
+  await f.activate();
+  const handoff = f.internal.route(group.sessionId, {
+    event_id:event.id,part_key:'work',action:'create',role_id:f.role.id,title:'整理样例清单',quote:event.payload,reason:'本轮请求',
+  });
+  const groupSession = f.store.session(group.sessionId);
+  f.store.put('sessions', group.sessionId, {...groupSession,status:'completed'});
+  f.store.put('views', group.sessionId, {...f.store.view(group.sessionId),status:'completed'});
+  f.internal.routerFinished(group.sessionId);
+  const snapshot = () => f.host.decorate(f.store.snapshot(group.sessionId));
+  const activity = () => f.host.workspace(f.project.id).workers.find(worker => worker.id === handoff.workerId)?.activity;
+  assert.equal(snapshot().pilotWorkPending, true);
+  const pilotSession = f.store.session(f.router);
+  f.store.put('sessions', f.router, {...pilotSession,status:'completed'});
+  assert.equal(f.host.decorate(f.store.snapshot(f.router)).pilotWorkPending, undefined, 'group work does not appear in Lake’s main chat');
+  await f.activate();
+  assert.equal(f.worker(handoff.taskId).state, 'active');
+  assert.equal(activity()?.phase, 'queued');
+  assert.equal(activity()?.label, '准备处理');
+  assert.equal(activity()?.sourceMessageId, message.id);
+  assert.equal(snapshot().pilotWorkPending, true);
+  Object.assign(f.agents, {isRunning:()=>true,currentActivity:()=>undefined});
+  assert.equal(activity()?.phase, 'thinking');
+  assert.equal(snapshot().pilotWorkPending, true);
+  await f.read(handoff.taskId);
+  await f.finish(handoff.taskId);
+  f.settleWorker(handoff.taskId);
+  assert.equal(snapshot().pilotWorkPending, undefined);
+  assert.equal(activity(), undefined);
 });
 
 test('Pilot accepts B and C during A, routes their exact sources in order and keeps same-role tasks independent',async t=>{

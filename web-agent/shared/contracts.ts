@@ -282,6 +282,8 @@ export type SessionSnapshot = {
  commandExecutions?:HostCommandView[];
  messageRead?:ConversationReadState;
  chatGroupRounds?:SpecialistConversation[];
+ /** The coordinator's reply ended while this conversation still has live specialist work. */
+ pilotWorkPending?:true;
 	superagent?:{task:SuperTask;goal?:WorkGoal;roleId?:string;pilotSessionId?:string;execution?:import('./external-agents').AgentExecutionSummary;deliveredReplies?:Message[];watchdog?:WatchdogView};
  naturalMemoryNotices?:{changeId:string;scope:string;entryId:string;revision:number;batchId?:string}[];
   commandStopNotices?: CommandStopNotice[];

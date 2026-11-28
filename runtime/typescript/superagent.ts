@@ -680,7 +680,10 @@ export class LakeSuperagent implements AgentHost {
     if (worker.state === 'queued' && source.disposition !== 'pending' && !this.dispatchReady(worker)) return;
     const origin = { sourceMessageId: source?.messageId, sourceSessionId: source?.sessionId };
     if (worker.state === "queued") return { phase: "queued", label: source.disposition === 'pending' ? '准备处理' : '等待开始', updatedAt: source.receivedAt ?? worker.createdAt, ...origin };
-    if (!this.active.has(worker.id) || !this.agents.isRunning(worker.sessionId)) return;
+    if (!this.active.has(worker.id)) return;
+    // The host has claimed this assignment, but the executor is still starting.
+    if (!this.agents.isRunning(worker.sessionId))
+      return { phase: "queued", label: "准备处理", updatedAt: source.receivedAt ?? worker.createdAt, ...origin };
     const view = this.store.view(worker.sessionId), updatedAt = view.turnStartedAt ?? goal.updatedAt;
     if (this.ssh?.prompt(worker.sessionId)) return { phase: "waiting_approval", label: "等待确认服务器指纹", updatedAt, ...origin };
     const interaction = [...this.interactions.values()].find((entry) => entry.workerId === worker.id && entry.generation === worker.generation);
@@ -2821,9 +2824,16 @@ export class LakeSuperagent implements AgentHost {
       const goal = legacy && this.store.get<any>("legacyGoals", legacy.task.taskId);
       if (goal) { snapshot.superagent = { task: legacy!.task, goal, roleId: legacy!.roleId }; if (snapshot.ai) snapshot.ai.workGoals = [goal]; }
     }
-    if(this.projectFor(snapshot.session.id)) {
+    const pilot=this.projectFor(snapshot.session.id);
+    if(pilot) {
       snapshot.messageRead = conversationReadState(this.store, snapshot.session.id);
       if(snapshot.ai)snapshot.ai=this.routingView(snapshot.session.id,snapshot.ai);
+      if(snapshot.session.status==='completed'){
+        const groupId=snapshot.session.workspaceRole==='group'?snapshot.session.id:undefined;
+        if(this.store.list<Worker>('superWorkers').some(worker=>!worker.inline&&worker.projectId===pilot.projectId&&
+          (worker.state==='queued'||this.active.has(worker.id))&&this.groupOfSource(worker.sourceEventId)===groupId&&!!this.workerActivity(worker)))
+          snapshot.pilotWorkPending=true;
+      }
     }
     return snapshot;
   }
