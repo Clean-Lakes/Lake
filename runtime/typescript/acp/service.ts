@@ -100,13 +100,21 @@ export class LakeExternalAgents {
   }
   private async verifyCliCredential(profile:CliAgentProfile,key:string,signal:AbortSignal){
     const claude=profile.id==='claude-code';
-    const url=claude?'https://api.anthropic.com/v1/models?limit=1':'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1';
+    const url=claude?'https://api.anthropic.com/v1/models?limit=256':'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1';
     const headers:HeadersInit=claude?{'x-api-key':key,'anthropic-version':'2023-06-01'}:{'x-goog-api-key':key};
     const response=await fetch(url,{headers,redirect:'error',signal:AbortSignal.any([signal,AbortSignal.timeout(10000)])}).catch(()=>{
       signal.throwIfAborted();throw new Error('无法连接官方 API，请检查网络后重试');
     });
-    await response.body?.cancel();
-    if(!response.ok)throw new Error([400,401,403].includes(response.status)?'API Key 未通过验证，请检查 Key 和账户权限':`官方 API 返回 HTTP ${response.status}`);
+    if(!response.ok||!claude){
+      await response.body?.cancel();
+      if(!response.ok)throw new Error([400,401,403].includes(response.status)?'API Key 未通过验证，请检查 Key 和账户权限':`官方 API 返回 HTTP ${response.status}`);
+      return [];
+    }
+    const result:{data?:({id?:unknown}|null)[]}|null=await response.json().catch(()=>null);
+    signal.throwIfAborted();
+    if(!Array.isArray(result?.data))throw new Error('Anthropic 未返回可用模型目录');
+    return [...new Set(result.data.map(entry=>entry?.id)
+      .filter((model):model is string=>isCliModelId(model)&&model.startsWith('claude-')))].slice(0,256);
   }
   private async probeCli(profile:CliAgentProfile,directory:string,signal:AbortSignal){
     const {projectId,id}=profile,name=externalAgentName(id);
@@ -117,9 +125,10 @@ export class LakeExternalAgents {
       probe.cliVersion=inspected.version;
       if(!inspected.supported)throw new Error(this.cliVersionMessage(profile,inspected.version));
       const key=await this.cliCredential(profile);
-      await this.verifyCliCredential(profile,key,signal);
+      const models=await this.verifyCliCredential(profile,key,signal);
       if(id==='claude-code'){
         probe.model=profile.modelOverride;
+        probe.models=models.map(id=>({id,reasoningEfforts:[]}));
       }else{
         inspected.environment.env.GEMINI_API_KEY=key;
         connection=await Antigravity.launch(inspected.environment,()=>{},undefined,profile.modelOverride);
@@ -163,7 +172,9 @@ export class LakeExternalAgents {
     const agents=await this.registry.list(projectId);
     await Promise.all(agents.map(async agent=>{
       const probe=this.registry.probe(projectId,agent.id);
-      if(!agent.enabled||!agent.installed||probe?.revision===agent.revision&&probe.authentication===agent.authentication)return;
+      const current=probe?.revision===agent.revision&&probe.authentication===agent.authentication;
+      const needsClaudeCatalog=agent.id==='claude-code'&&probe?.ready===true&&probe.models===undefined;
+      if(!agent.enabled||!agent.installed||current&&!needsClaudeCatalog)return;
       const key=projectId+':'+agent.id;
       const previous=this.probes.get(key);if(previous){await previous.work;return;}
       const controller=new AbortController(),timer=setTimeout(()=>controller.abort(new Error('读取本机执行器状态超时')),90000);

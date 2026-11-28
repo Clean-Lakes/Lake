@@ -15,6 +15,7 @@ type Preferences = {model:string;effort:string;enabled:boolean;nodePath:string;n
 const executors:ExternalAgentId[]=['codex','claude-code','antigravity'];
 const installGuides={'claude-code':'https://code.claude.com/docs/en/quickstart',antigravity:'https://antigravity.google/docs/cli/acp/'};
 const narrowPanel = '(max-width: 600px)';
+const manualModelOption = ':manual';
 
 function preferences(agent:ExternalAgentStatus):Preferences {
   return {model:agent.modelOverride??'',effort:agent.reasoningEffortOverride??'',enabled:agent.enabled,
@@ -56,6 +57,7 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
   const name=externalAgentName(executor);
   const [compact,setCompact]=useState(()=>window.matchMedia(narrowPanel).matches);
   const [connectionOpen,setConnectionOpen]=useState(false);
+  const [editingClaudeModel,setEditingClaudeModel]=useState(false);
   const [agents,setAgents]=useState<ExternalAgentStatus[]>([]);
   const [drafts,setDrafts]=useState<Partial<Record<ExternalAgentId,Preferences>>>({});
   const [keys,setKeys]=useState<Partial<Record<ExternalAgentId,string|null>>>({});
@@ -65,6 +67,7 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
   const agent=agents.find(agent=>agent.id===executor);
   const initial=agent&&preferences(agent),draft=drafts[executor]??initial;
   const codexSelected=executor==='codex';
+  const editingModel=executor==='claude-code'&&editingClaudeModel;
   const apiKey=keys[executor];
 
   useLayoutEffect(()=>{
@@ -125,7 +128,9 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
   const models=[...new Set([...(agent?.modelOptions??[]),draft?.model].filter((model):model is string=>!!model))];
   const filter=query.trim().toLowerCase();
   const matching=models.filter(model=>model.toLowerCase().includes(filter));
-  const status=error||feedback||(codexSelected?agent?.assignmentBlocker:agent?.message??agent?.assignmentBlocker);
+  const cliStatus=agent?.message??(agent?.installed&&!agent.keyConfigured
+    ?'配置项目 API Key 并启用后，自动读取可用模型。':agent?.assignmentBlocker);
+  const status=error||feedback||(codexSelected?agent?.assignmentBlocker:cliStatus);
   const update=(value:Partial<Preferences>)=>{setFeedback('');if(draft)setDrafts(current=>({...current,[executor]:{...draft,...value}}));};
   const requestClose=()=>{if(!flight.current)onClose();};
   const optionsFor=(model:string)=>agent&&draft&&modelEfforts(agent,model).includes(draft.effort)?draft.effort:'';
@@ -278,12 +283,19 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
               <label><span>项目启用</span><input type="checkbox" checked={draft.enabled} onChange={event=>update({enabled:event.target.checked})}/></label>
               <label><span>CLI 路径</span><input value={draft.executablePath} placeholder={agent.detectedExecutable??'自动识别或填写绝对路径'} spellCheck={false}
                 onChange={event=>update({executablePath:event.target.value})}/></label>
-              <label><span>默认模型</span>{executor==='antigravity'?<AppSelect label="默认模型" value={draft.model} disabled={busy}
-                onChange={event=>update({model:event.target.value})}>
+              <label><span>默认模型</span><AppSelect label="默认模型" value={editingModel?manualModelOption:draft.model} disabled={busy}
+                onChange={event=>{
+                  const manual=event.target.value===manualModelOption;
+                  if(executor==='claude-code')setEditingClaudeModel(manual);
+                  if(!manual)update({model:event.target.value});
+                }}>
                 <option value="">{agent.localModel?`跟随 CLI · ${agent.localModel}`:'跟随 CLI'}</option>
                 {models.map(model=><option key={model} value={model}>{model}</option>)}
-              </AppSelect>:<input value={draft.model} placeholder="跟随 CLI" spellCheck={false} onChange={event=>update({model:event.target.value})}/>}
+                {executor==='claude-code'&&<option value={manualModelOption}>手动填写</option>}
+              </AppSelect>
               </label>
+              {editingModel&&<label><span>模型 ID</span><input autoFocus value={draft.model} placeholder="跟随 CLI" spellCheck={false}
+                onChange={event=>update({model:event.target.value})}/></label>}
               <div className="codex-config-credential">
                 <label><span>API Key</span><input type="password" autoComplete="off" spellCheck={false} value={apiKey??''}
                   placeholder={apiKey===null?'保存后移除':agent.keyConfigured?'已保存 · 输入新 Key 替换':executor==='antigravity'?'Gemini API Key':'Anthropic API Key'}

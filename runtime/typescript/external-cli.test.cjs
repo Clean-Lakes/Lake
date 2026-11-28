@@ -116,7 +116,21 @@ test('CLI profiles bind specialists, dispatch through the private bridge, and pu
  const web=join(home,'web');await mkdir(web);await writeFile(join(web,'index.html'),'fixture');
  const app=await startLakeServer({home,data:join(home,'data'),port:0,staticRoot:web});
  t.after(async()=>{await app.close();await rm(home,{recursive:true,force:true});});
- t.mock.method(app.agents.external,'verifyCliCredential',async()=>{});
+ const realFetch=globalThis.fetch;
+ const claudeModels=['claude-test-model','claude-test-alt'];
+ let catalogReads=0;
+ t.mock.method(globalThis,'fetch',async (url,options)=>{
+  if(typeof url==='string'&&url.startsWith('https://api.anthropic.com/v1/models?')){
+   assert.equal(options.headers['x-api-key'],'synthetic-fixture-claude-code');
+   catalogReads++;
+   return Response.json({data:[...claudeModels,'invalid id',claudeModels[0]].map(id=>({id}))});
+  }
+  if(typeof url==='string'&&url.startsWith('https://generativelanguage.googleapis.com/v1beta/models?')){
+   assert.equal(options.headers['x-goog-api-key'],'synthetic-fixture-antigravity');
+   return Response.json({models:[]});
+  }
+  return realFetch(url,options);
+ });
  process.env.LAKE_TEST_PARENT_ENV='not passed to providers';
  t.after(()=>delete process.env.LAKE_TEST_PARENT_ENV);
  async function request(path,method='GET',body,expected=200){
@@ -134,6 +148,18 @@ test('CLI profiles bind specialists, dispatch through the private bridge, and pu
   assert.ok(!JSON.stringify(prepared).includes(apiKey));
   const status=prepared.agents.find(row=>row.id===agent);
   assert.equal(status.assignmentReady,true,status.assignmentBlocker);
+  assert.deepEqual(status.modelOptions,agent==='claude-code'?claudeModels:['gemini-test']);
+  if(agent==='claude-code'){
+   assert.equal(catalogReads,1);
+   const probe=app.agents.external.registry.probe(project.id,agent);
+   delete probe.models;app.store.put('acpProbes',project.id+':'+agent,probe);
+   const reopened=(await request(p+'/external-agents')).agents.find(row=>row.id===agent);
+   assert.deepEqual(reopened.modelOptions,claudeModels);
+   assert.equal(reopened.revision,status.revision);
+   assert.equal(catalogReads,2);
+   await request(p+'/external-agents');
+   assert.equal(catalogReads,2,'opening repeatedly reuses the catalog for this configuration');
+  }
   const {revision}=await request(p+'/superagent/specialists/'+channel.roleId+'/execution','PUT',{
    expectedRevision:channel.roleRevision,execution:{kind:'acp',agent,revision:status.revision}});
   const receipt=await app.superagent.send(channel.sessionId,'Run the isolated report fixture',undefined,false,undefined,
@@ -161,6 +187,7 @@ test('CLI profiles bind specialists, dispatch through the private bridge, and pu
   const cleared=await request(p+'/external-agents/'+agent+'/prepare','POST',{expectedRevision:status.revision,enabled:true,apiKey:null});
   const disconnected=cleared.agents.find(row=>row.id===agent);
   assert.ok(disconnected.revision>status.revision);assert.equal(disconnected.keyConfigured,false);assert.equal(disconnected.assignmentReady,false);
+  assert.equal(disconnected.modelOptions,undefined);
   assert.equal(app.store.require('superWorkers',worker.id).roleSnapshot.execution.revision,status.revision);
  }
 });

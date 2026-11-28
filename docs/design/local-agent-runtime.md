@@ -49,7 +49,7 @@ flowchart TD
 
 ## Claude Code 和 Google Antigravity
 
-两者使用项目级 API Key 和独立 CLI 路径。Lake 将 Key 保存在当前 Home 的私有凭据目录，按进程环境传给提供商。检测连接读取 CLI 版本并验证官方模型 API。二进制或凭据文件变化会使已冻结的连接版本失效。运行目录和提供商会话文件按执行上下文隔离。
+两者自动识别已安装的 CLI，使用项目级 API Key 认证。Lake 将 Key 保存在当前 Home 的私有凭据目录，按进程环境传给提供商。连接后，Claude Code 从 Anthropic Models API 读取账号可用模型，Antigravity 从 ACP 会话读取实际模型选项。两者都可以从模型配置选择已发现的模型或跟随 CLI 默认值，Claude Code 支持手动填写模型 ID。模型发现不发起推理。二进制或凭据文件变化会使已冻结的连接版本失效。运行目录和提供商会话文件按执行上下文隔离。
 
 | 执行器 | 支持版本及接口 | 本机执行约束 |
 | --- | --- | --- |
