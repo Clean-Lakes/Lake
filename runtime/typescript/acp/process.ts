@@ -1,4 +1,4 @@
-import {spawn,type ChildProcessWithoutNullStreams} from 'node:child_process';
+import {spawn,type ChildProcess,type ChildProcessWithoutNullStreams} from 'node:child_process';
 import type {AgentLaunch} from './client';
 
 type Pending = {resolve:(value:any)=>void;reject:(error:Error)=>void};
@@ -10,18 +10,30 @@ export type RpcHandlers = {
 const maxFrameBytes=8*1024*1024;
 const failure=(reason:unknown)=>reason instanceof Error?reason:new Error('智能体连接已停止');
 
-/** Owns one process and its NDJSON transport; no provider or task semantics. */
-export class JsonRpcProcess {
-  readonly process:ChildProcessWithoutNullStreams;
+export async function stopAgentProcess(child:ChildProcess){
+  const pid=child.pid;if(!pid)return;
+  const kill=(signal:NodeJS.Signals)=>{
+    try{if(process.platform==='win32')child.kill(signal);else process.kill(-pid,signal);}catch{/* Already reaped. */}
+  };
+  let timer:ReturnType<typeof setTimeout>|undefined;
+  let onClose=()=>{};
+  const exited=new Promise<void>(resolve=>{onClose=resolve;child.once('close',onClose);});
+  kill('SIGTERM');
+  try {
+    if(child.exitCode===null&&child.signalCode===null)
+      await Promise.race([exited,new Promise<void>(resolve=>{timer=setTimeout(resolve,300);})]);
+  }finally{clearTimeout(timer);child.removeListener('close',onClose);kill('SIGKILL');}
+}
+
+/** Owns one process and bounds its NDJSON input and output. */
+export class JsonLineProcess {
+  private readonly process:ChildProcessWithoutNullStreams;
   private readonly controller=new AbortController();
   readonly signal=this.controller.signal;
-  private sequence=0;
-  private pending=new Map<number,Pending>();
-  private requests=new Set<RpcId>();
   private buffer='';
   private stderr=Buffer.alloc(0);
   private closing?:Promise<void>;
-  constructor(launch:AgentLaunch,private readonly handlers:RpcHandlers={}) {
+  constructor(launch:AgentLaunch,private readonly message:(frame:any)=>void) {
     this.process=spawn(launch.executable,launch.args,{cwd:launch.cwd,env:launch.env,shell:false,
       detached:process.platform!=='win32',windowsHide:true,stdio:['pipe','pipe','pipe']});
     this.process.stdout.setEncoding('utf8');
@@ -36,8 +48,7 @@ export class JsonRpcProcess {
   private fail(error:Error) {
     if(this.signal.aborted)return;
     this.controller.abort(error);
-    for(const pending of this.pending.values())pending.reject(error);
-    this.pending.clear();this.buffer='';
+    this.buffer='';
   }
   private receive(chunk:string) {
     if(this.signal.aborted)return;
@@ -47,20 +58,53 @@ export class JsonRpcProcess {
       while((newline=this.buffer.indexOf('\n'))>=0) {
         const line=this.buffer.slice(0,newline);this.buffer=this.buffer.slice(newline+1);
         if(Buffer.byteLength(line)>maxFrameBytes)throw new Error('智能体协议消息超过 8 MiB');
-        if(line.trim())this.message(JSON.parse(line));
+        if(line.trim()){
+          const frame=JSON.parse(line);
+          if(!frame||typeof frame!=='object'||Array.isArray(frame))throw new Error('Invalid protocol envelope');
+          this.message(frame);
+        }
         if(this.signal.aborted)return;
       }
       if(Buffer.byteLength(this.buffer)>maxFrameBytes)throw new Error('智能体协议消息超过 8 MiB');
     }catch {this.fail(new Error('智能体返回了无效或过大的协议消息'));void this.close();}
   }
+  send(message:unknown) {
+    this.signal.throwIfAborted();
+    const frame=JSON.stringify(message)+'\n';
+    if(Buffer.byteLength(frame)>maxFrameBytes)throw new Error('智能体请求超过 8 MiB');
+    this.process.stdin.write(frame);
+  }
+  diagnostics(){return this.stderr.toString('utf8');}
+  close(){return this.closing??=this.end();}
+  private async end() {
+    this.fail(new Error('智能体连接已关闭'));
+    this.process.stdin.end();
+    await stopAgentProcess(this.process);
+  }
+}
+
+export class JsonRpcProcess {
+  private readonly line:JsonLineProcess;
+  readonly signal:AbortSignal;
+  private sequence=0;
+  private pending=new Map<number,Pending>();
+  private requests=new Set<RpcId>();
+  constructor(launch:AgentLaunch,private readonly handlers:RpcHandlers={},private readonly standardEnvelope=false){
+    this.line=new JsonLineProcess(launch,message=>this.message(message));
+    this.signal=this.line.signal;
+    this.signal.addEventListener('abort',()=>{
+      for(const pending of this.pending.values())pending.reject(failure(this.signal.reason));
+      this.pending.clear();
+    },{once:true});
+  }
   private message(message:any) {
-    if(!message||typeof message!=='object'||Array.isArray(message))throw new Error('Invalid RPC envelope');
+    if(this.standardEnvelope&&message.jsonrpc!=='2.0')throw new Error('Invalid RPC version');
     if(typeof message.method==='string') {
       if(message.id===undefined){this.handlers.notification?.(message.method,message.params);return;}
       if(!['string','number'].includes(typeof message.id)||this.requests.has(message.id)||this.requests.size>=256)throw new Error('Invalid RPC request ID');
       const id:RpcId=message.id;this.requests.add(id);
       void Promise.resolve().then(()=>{
-        if(this.signal.aborted)throw failure(this.signal.reason);
+        this.signal.throwIfAborted();
         if(!this.handlers.request)throw new Error('Unsupported request');
         return this.handlers.request(message.method,message.params,id);
       }).then(result=>this.send({id,result}),()=>this.send({id,error:{code:-32601,message:'Lake 未提供该智能体请求'}}))
@@ -74,12 +118,7 @@ export class JsonRpcProcess {
       {code:message.error.code}));
     else pending.resolve(message.result);
   }
-  private send(message:unknown) {
-    this.signal.throwIfAborted();
-    const frame=JSON.stringify(message)+'\n';
-    if(Buffer.byteLength(frame)>maxFrameBytes)throw new Error('智能体请求超过 8 MiB');
-    this.process.stdin.write(frame);
-  }
+  private send(message:Record<string,unknown>){this.line.send(this.standardEnvelope?{jsonrpc:'2.0',...message}:message);}
   notify(method:string,params?:unknown) {this.send({method,...(params===undefined?{}:{params})});}
   async request<T=any>(method:string,params:unknown,signal:AbortSignal,timeout=120000):Promise<T> {
     signal.throwIfAborted();this.signal.throwIfAborted();
@@ -96,22 +135,6 @@ export class JsonRpcProcess {
       });
     }finally{clearTimeout(timer);signal.removeEventListener('abort',abort);}
   }
-  diagnostics(){return this.stderr.toString('utf8');}
-  close(){return this.closing??=this.end();}
-  private async end() {
-    this.fail(new Error('智能体连接已关闭'));
-    this.process.stdin.end();
-    const pid=this.process.pid;if(!pid)return;
-    const kill=(signal:NodeJS.Signals)=>{
-      try{if(process.platform==='win32')this.process.kill(signal);else process.kill(-pid,signal);}catch{/* Already reaped. */}
-    };
-    let timer:ReturnType<typeof setTimeout>|undefined;
-    let onClose=()=>{};
-    const exited=new Promise<void>(resolve=>{onClose=resolve;this.process.once('close',onClose);});
-    kill('SIGTERM');
-    try {
-      if(this.process.exitCode===null&&this.process.signalCode===null)
-        await Promise.race([exited,new Promise<void>(resolve=>{timer=setTimeout(resolve,300);})]);
-    }finally{clearTimeout(timer);this.process.removeListener('close',onClose);kill('SIGKILL');}
-  }
+  diagnostics(){return this.line.diagnostics();}
+  close(){return this.line.close();}
 }

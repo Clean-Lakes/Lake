@@ -20,6 +20,11 @@
       "sha256": "a3101f3047a119aa11825ad9369510f0c472428c8c52d420e31bc62db44a8364"
     },
     {
+      "file": "antigravity.svg",
+      "source": "package/icons/antigravity-color.svg",
+      "sha256": "652128cf55a28bb958563ee372d0bd00208d9e6fd446f523f77aafd811eef8ca"
+    },
+    {
       "file": "gemini.svg",
       "source": "package/icons/gemini-color.svg",
       "sha256": "8ab0a9bafec11f7e69bcb9fc4ffd8f1bc927d1ddcbbb6ff36dee5ae8b5a9d602"

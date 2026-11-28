@@ -7,18 +7,20 @@ import {applyLiveText} from '../src/liveTextUpdates';
 import {CodexActivity} from '../src/CodexActivity';
 import {updateCodexActivity,type CodexActivityItem} from '../../shared/codex-activity';
 const at='2026-11-25T01:00:00Z';
-test('SSE updates the matching root call in place and rejects a different task',()=>{
- const data={source:'external_agent',external_run_id:'run',external_agent:'codex',taskId:'task',root_turn_id:'root'};
- const snapshot={cursor:1,session:{id:'worker'},ai:{rootTurnId:'root',status:'running',cards:[{id:'run',type:'operation',status:'running',at,data}]}} as unknown as SessionSnapshot;
- const item:CodexActivityItem={kind:'command',id:'call',text:'example',status:'running',at};
- const update={target:'card',id:'run',rootTurnId:'root',cardType:'operation',content:'',codexTaskId:'task',codexItem:item} as const;
- const event={sessionId:'worker',type:'session',seq:2,textUpdate:update} as SessionEvent;
- const first=applyLiveText(snapshot,event)!;
- assert.equal((first.ai!.cards[0]!.data as any).codex_activity[0].text,'example');
- const second=applyLiveText(first,{...event,seq:3,textUpdate:{...update,codexItem:{...item,output:'hello'}}})!;
- assert.equal((second.ai!.cards[0]!.data as any).codex_activity.length,1);
- assert.equal((second.ai!.cards[0]!.data as any).codex_activity[0].output,'hello');
- assert.equal(applyLiveText(snapshot,{...event,textUpdate:{...update,codexTaskId:'other'}}),null);
+test('SSE updates the matching root call in place for all executors and rejects a different task',()=>{
+ for(const agent of ['codex','claude-code','antigravity']){
+  const data={source:'external_agent',external_run_id:'run',external_agent:agent,taskId:'task',root_turn_id:'root'};
+  const snapshot={cursor:1,session:{id:'worker'},ai:{rootTurnId:'root',status:'running',cards:[{id:'run',type:'operation',status:'running',at,data}]}} as unknown as SessionSnapshot;
+  const item:CodexActivityItem={kind:'command',id:'call',text:'example',status:'running',at};
+  const update={target:'card',id:'run',rootTurnId:'root',cardType:'operation',content:'',codexTaskId:'task',codexItem:item} as const;
+  const event={sessionId:'worker',type:'session',seq:2,textUpdate:update} as SessionEvent;
+  const first=applyLiveText(snapshot,event)!;
+  assert.equal((first.ai!.cards[0]!.data as any).codex_activity[0].text,'example');
+  const second=applyLiveText(first,{...event,seq:3,textUpdate:{...update,codexItem:{...item,output:'hello'}}})!;
+  assert.equal((second.ai!.cards[0]!.data as any).codex_activity.length,1);
+  assert.equal((second.ai!.cards[0]!.data as any).codex_activity[0].output,'hello');
+  assert.equal(applyLiveText(snapshot,{...event,textUpdate:{...update,codexTaskId:'other'}}),null);
+ }
 });
 test('live and saved transcripts start with collapsed call groups in message order',()=>{
  const items:CodexActivityItem[]=[{id:'1',kind:'text',text:'检查服务'},{id:'2',kind:'read',text:'inspector.yaml',status:'completed',at},

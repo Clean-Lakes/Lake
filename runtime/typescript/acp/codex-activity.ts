@@ -32,19 +32,24 @@ export function readCodexChecklist(value:unknown,field:'step'|'content'):CodexCh
   return list;
 }
 
+export function codexChecklistChanges(previous:CodexChecklistSnapshot,list:CodexChecklistSnapshot):CodexDetail[]{
+  const changes:CodexDetail[]=[];
+  for(const [key,entry] of list){
+    const prior=previous.get(key);
+    if(prior?.state===entry.state)continue;
+    changes.push({displayKind:'task',detail:entry.text,taskState:entry.state,
+      ...(!prior&&entry.state!=='completed'&&{createdTask:true})});
+  }
+  for(const [key,entry] of previous){
+    if(!list.has(key)&&entry.state!=='completed')changes.push({displayKind:'task',detail:entry.text,taskState:'removed'});
+  }
+  return changes;
+}
+
 export class CodexChecklist {
   private previous:CodexChecklistSnapshot=new Map();
   update(list:CodexChecklistSnapshot):CodexDetail[]{
-    const changes:CodexDetail[]=[];
-    for(const [key,entry] of list){
-      const prior=this.previous.get(key);
-      if(prior?.state===entry.state)continue;
-      changes.push({displayKind:'task',detail:entry.text,taskState:entry.state,
-        ...(!prior&&entry.state!=='completed'&&{createdTask:true})});
-    }
-    for(const [key,entry] of this.previous){
-      if(!list.has(key)&&entry.state!=='completed')changes.push({displayKind:'task',detail:entry.text,taskState:'removed'});
-    }
+    const changes=codexChecklistChanges(this.previous,list);
     this.previous=list;
     return changes;
   }

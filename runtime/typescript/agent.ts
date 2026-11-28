@@ -1,6 +1,6 @@
 import {pilotConfigurationToolNames} from './configuration-tool-names';
-import {externalExecutionName} from '../../web-agent/shared/external-agents';
-import {captureCodexActivity} from './codex-conversation';
+import {externalExecutionName,isExternalAgentId} from '../../web-agent/shared/external-agents';
+import {captureSpecialistActivity} from './codex-conversation';
 import {externalReplyTextUpdate} from './external-reply-events';
 import {prepareSessionArchive} from "./session-archive";
 import {finalReportBoundary} from "./final-report";
@@ -53,7 +53,7 @@ import {connectAgentToolCatalog,nativeSearchSupported} from "./capabilities";
 connectAgentToolCatalog(builtInTools);
 import type { LakeMemory, NativeMemoryWork } from "./memory";
 import {LakeExternalAgents} from './acp/service';
-import {externalControlTools} from './acp/catalog';
+import {externalAgentIds,externalControlTools} from './acp/catalog';
 import type {ExternalActor,ExternalRun,ExternalEvent,ExternalResult} from './acp/types';
 
 class ExternalWorkerFailure extends HttpError {
@@ -136,7 +136,7 @@ export class LakeAgents {
     if(event.kind==='status'){card.status=event.status==='completed'?'completed':['failed','cancelled','unknown','interrupted'].includes(event.status??'')?event.status!:'running';if(run.summary||run.error)card.content=run.summary||run.error||'';}
     card.title=externalExecutionName(run.agent,run.runtimeKind);
     card.data={...(card.data??{}),external_agent:run.agent,external_runtime_kind:run.runtimeKind,external_state:run.state,external_usage:run.usage,external_events:run.events.filter(item=>item.kind==='tool'||item.kind==='tool_update').slice(-16)};
-    const activity=captureCodexActivity(run,event,card);
+    const activity=captureSpecialistActivity(run,event,card);
     this.update(sessionId,view,activity?{textUpdate:activity}:externalReplyTextUpdate(run,event,{...card,content:this.redact(card.content??'')},rootTurnId));
   }
   private externalActor(sessionId:string,profile:HostProfile,runtime:AgentRuntime,context:Pick<HostToolContext,'toolCallId'|'abortSignal'|'lakeSubagent'>,purpose:ExternalActor['purpose']='segment'):ExternalActor{
@@ -183,7 +183,7 @@ export class LakeAgents {
   }
   private externalTool(sessionId:string,profile:HostProfile,runtime:()=>AgentRuntime,available:string[]):ToolEntry{
     const base=profile.tools[0];
-    return {...base,metadata:{...base.metadata,name:'run_external_agent',description:'Delegate a bounded segment of this task to an enabled external agent. The host supplies task identity, tools and scope. Use agent codex. Review the external findings and actual tool results, then submit the original work_finish report. No separate acceptance or reconciliation is required.',readOnly:true,needsApproval:false,stopTurnOnSuccess:false},
+    return {...base,metadata:{...base.metadata,name:'run_external_agent',description:'Delegate a bounded segment of this task to an enabled external agent. The host supplies task identity, tools and scope. Review the external findings and actual tool results, then submit the original work_finish report. No separate acceptance or reconciliation is required.',readOnly:true,needsApproval:false,stopTurnOnSuccess:false},
       permission:{...base.permission,needsApproval:false},resolvePermissionCapability:()=>({needsApproval:false}),
       inputSchema:{type:'object',properties:{agent:{type:'string',enum:available},instruction:{type:'string',minLength:1,maxLength:65536},resume_run_id:{type:'string'}},required:['agent','instruction'],additionalProperties:false},
       handler:async(input:any,context)=>{const actor=this.externalActor(sessionId,profile,runtime(),context);return this.external.run(input.agent,input.instruction,digest([actor.taskId,actor.generation,actor.childSessionId,context.toolCallId]),actor,input.resume_run_id);}};
@@ -766,9 +766,9 @@ export class LakeAgents {
       throw new HttpError(409, "子智能体执行身份不匹配");
     if (!previous && (view.agentRuns ?? []).filter((run) => ['native_subagent','acp_subagent'].includes(run.source??'') && run.taskId === profile.taskId).length >= 7)
       throw new HttpError(409, "同一任务累计最多 7 个临时子智能体；请复用已有结果继续原任务");
-    if(request.agentType==='runtime-acp'||previous?.execution?.kind==='acp'&&previous.execution.agent!=='codex')throw new HttpError(409,'该子任务的外部 Agent 已移除，不能切换或重放旧执行');
-    const externalChild=request.agentType==='codex-acp'?'codex':undefined;
-    if(profile.execution?.kind==='acp'&&!externalChild)throw new HttpError(409,'Codex 专员的子任务也必须使用 Codex');
+    if(request.agentType==='runtime-acp'||previous?.execution?.kind==='acp'&&!isExternalAgentId(previous.execution.agent))throw new HttpError(409,'该子任务的外部 Agent 已移除，不能切换或重放旧执行');
+    const externalChild=externalAgentIds.find(agent=>request.agentType===agent+'-acp');
+    if(profile.execution?.kind==='acp'&&profile.execution.agent!==externalChild)throw new HttpError(409,'专员的子任务必须使用同一执行器');
     if(previous&&(previous.execution?.kind==='acp'?previous.execution.agent!==externalChild:!!externalChild))throw new HttpError(409,'已有子任务不能切换执行后端');
     const run: AgentRun = previous ?? { id: request.agentId, sessionId: parentId, source: externalChild?'acp_subagent':'native_subagent',execution:externalChild?{kind:'acp',agent:externalChild}:{kind:'native'},
       taskId: profile.taskId, workerId: profile.workerId, childSessionId: request.sessionId,
@@ -876,14 +876,14 @@ export class LakeAgents {
   async runtime(sessionId: string) {
     const session = this.store.session(sessionId);
     const profile = this.host?.profile(sessionId);
-    if(profile?.execution?.kind==='acp'&&profile.execution.agent!=='codex')throw new HttpError(409,'该任务的外部 Agent 已移除，不能切换或重放旧执行');
+    if(profile?.execution?.kind==='acp'&&!isExternalAgentId(profile.execution.agent))throw new HttpError(409,'该任务的外部 Agent 已移除，不能切换或重放旧执行');
     await this.store.refreshModels();
     const modelSession = profile?.modelSessionId ? this.store.session(profile.modelSessionId) : session;
     const modelOptions = modelSession === session ? session.options : {...session.options,
       reasoningModelId: modelSession.options.reasoningModelId, reasoningEffort: modelSession.options.reasoningEffort};
     const selection = profile?.execution?.kind==='native'&&profile.execution.model
       ? {providerId:profile.execution.model.providerId!,modelId:profile.execution.model.modelId}:this.store.modelSelection(modelSession.id);
-    const externalWorker=profile?.execution?.kind==='acp'&&profile.execution.agent==='codex';
+    const externalWorker=profile?.execution?.kind==='acp';
     if (!selection&&!externalWorker) throw new HttpError(409, "请先配置模型");
     const {provider:selectedProvider, model:selectedModel} = this.store.resolveModel(selection);
     if (!selectedProvider&&!externalWorker) throw new HttpError(409, '所选模型来源不可用');
@@ -992,7 +992,9 @@ export class LakeAgents {
     // Optional delegation uses already verified capabilities. Starting native
     // inference must not wait for a separate Codex process/connection probe.
     // Actual ACP launches and explicit status requests still validate it.
-    const externalAgents=profile?.taskId?(await this.external.registry.list(session.projectId)).filter(agent=>agent.assignmentReady):[];
+    const backend=profile?.execution;
+    const externalAgents=profile?.taskId?(await this.external.registry.list(session.projectId)).filter(agent=>
+      agent.assignmentReady&&(backend?.kind!=='acp'||backend.agent===agent.id)):[];
     const hasExternal=!!profile?.taskId&&externalAgents.length>0;
     if(hasExternal&&profile){
       const externalTool=this.externalTool(sessionId,profile,()=>runtime,externalAgents.map(agent=>agent.id));
@@ -1026,7 +1028,7 @@ export class LakeAgents {
           { ...createBuiltInGeneralPurposeAgentProfile(), tools: profile.allowlist.filter((name) => !childForbiddenTools.has(name)) },
           { ...createBuiltInExploreAgentProfile(), tools: profile.allowlist.filter((name) => !childForbiddenTools.has(name) && !["Write", "Edit", "call_mcp_tool"].includes(name)) },
         ]),
-        ...(hasExternal?externalAgents.map(agent=>({...createBuiltInGeneralPurposeAgentProfile(),name:'codex-acp',description:`Delegate one bounded child task to ${agent.name} through its local CLI. Its host tools stay scoped to this task.`,injectAgentsMd:false,tools:profile.allowlist.filter(name=>!childForbiddenTools.has(name)&&name!=='run_external_agent')})):[]),
+        ...externalAgents.map(agent=>({...createBuiltInGeneralPurposeAgentProfile(),name:agent.id+'-acp',description:`Delegate one bounded child task to ${agent.name} through its local CLI. Its host tools stay scoped to this task.`,injectAgentsMd:false,tools:profile.allowlist.filter(name=>!childForbiddenTools.has(name)&&name!=='run_external_agent')})),
       ],
       getAllowedTools: () => profile.allowlist.filter((name) => !childForbiddenTools.has(name) && !["Write", "Edit", "call_mcp_tool"].includes(name)),
       emitParentEvent: (event, trace) => runtime.appendEvent(event, trace),

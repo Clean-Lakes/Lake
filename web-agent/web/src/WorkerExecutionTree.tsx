@@ -3,10 +3,9 @@ import type {AICard,AgentRun,SessionSnapshot,SuperWorker} from '../../shared/con
 import {DisclosureSummary} from './DisclosureSummary';
 import {AssistantMarkdown,ReplyReferenceScope} from './AssistantMarkdown';
 import {Glyph,ResourceIcon} from './Icons';
-import {ProviderIcon} from './ProviderIcon';
 import {AgentExecution} from './AgentExecution';
 import {ExecutionAgentIcon} from './ExecutionAgentIcon';
-import {agentBackendName,executionCardTitle} from '../../shared/external-agents';
+import {agentBackendName,executionCardTitle,isExternalAgentId} from '../../shared/external-agents';
 import {ToolStep} from './ThinkingTimeline';
 import {MiniBox} from './MiniBox';
 import {isTerminalCommand,type MiniBoxScope} from './miniBoxModel';
@@ -40,7 +39,7 @@ function Calls({cards,paths}:{cards:AICard[];paths:Map<string,string>}){
  if(!calls.length)return null;
  return <ol className="thinking-steps worker-execution-calls">{calls.map(card=>{
   const data=card.data&&typeof card.data==='object'?card.data as Record<string,unknown>:{};
-  if(data.source==='external_agent')return <li key={card.id} className="worker-external-run"><Branch active={needsExecutionAttention(card.status)} summary={<>{data.external_agent==='codex'?<ProviderIcon brand="openai" size={15}/>:<Glyph name="code" size={15}/>}<span className="worker-execution-name">{executionCardTitle(card)}</span><State status={card.status}/></>}><div className="worker-child-detail"><p className="settings-note">外部执行报告 · 业务结果以本任务实际工具回执为准</p><p className="settings-note">{data.external_usage&&typeof data.external_usage==='object'?`外部 token：输入 ${Number((data.external_usage as Record<string,unknown>).inputTokens)} · 输出 ${Number((data.external_usage as Record<string,unknown>).outputTokens)}`:'外部用量未报告'}</p>{card.content&&<div className="external-execution-report">{card.content}</div>}</div></Branch></li>;
+  if(data.source==='external_agent')return <li key={card.id} className="worker-external-run"><Branch active={needsExecutionAttention(card.status)} summary={<>{isExternalAgentId(data.external_agent)?<ExecutionAgentIcon agent={data.external_agent} size={15}/>:<Glyph name="code" size={15}/>}<span className="worker-execution-name">{executionCardTitle(card)}</span><State status={card.status}/></>}><div className="worker-child-detail"><p className="settings-note">外部执行报告 · 业务结果以本任务实际工具回执为准</p><p className="settings-note">{data.external_usage&&typeof data.external_usage==='object'?`外部 token：输入 ${Number((data.external_usage as Record<string,unknown>).inputTokens)} · 输出 ${Number((data.external_usage as Record<string,unknown>).outputTokens)}`:'外部用量未报告'}</p>{card.content&&<div className="external-execution-report">{card.content}</div>}</div></Branch></li>;
   const path=typeof data.resource_id==='string'?paths.get(data.resource_id):undefined;
   const commands=typeof data.resource_id==='string'?groups.get(data.resource_id):undefined;
   if(mini&&commands){

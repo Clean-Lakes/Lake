@@ -11,12 +11,16 @@ import {currentReasoningLabel} from "./reasoningLabels";
 import {modelBrand} from "./modelBrand";
 import {ContextUsage,type ContextUsageProps} from "./ContextUsage";
 import {codexModelValue,type ComposerExternalAgent} from './composerAgentModel';
+import {externalAgentName} from '../../shared/external-agents';
+import {executionAgentBrands} from './ExecutionAgentIcon';
 export {codexModelValue,codexSettingsValue} from './composerAgentModel';
 
 export type ProviderMenuRequest={providers:{id:string;name:string}[];value:string;anchor:{left:number;top:number;width:number;height:number}};
 export type ComposerModelSelectProps={externalAgent?:ComposerExternalAgent;onExternalAgentSettings?:()=>void;available:AvailableModels&{loading:boolean};modelName:string|null;selection?:AvailableModelEntry;configured:boolean;open:boolean;disabled:boolean;onOpenChange:(open:boolean)=>void;onSelect:(model:AvailableModelEntry|string)=>void;onSettings:()=>void;reasoning?:ReasoningSelectorProps;contextUsage?:Pick<ContextUsageProps,"view"|"model"|"status">;presentation?:number;onProviderMenu?:(request:ProviderMenuRequest)=>Promise<string|null>};
 export function ComposerModelSelect({externalAgent,onExternalAgentSettings,available,modelName,selection,configured,open,disabled,onOpenChange,onSelect,onSettings,reasoning,contextUsage,presentation,onProviderMenu}:ComposerModelSelectProps) {
-  const codexOnly=!!externalAgent&&!externalAgent.configurationOnly;
+  const externalOnly=!!externalAgent&&!externalAgent.configurationOnly;
+  const agentId=externalAgent?.id??'codex',agentName=externalAgentName(agentId),agentBrand=executionAgentBrands[agentId];
+  const agentSource='agent:'+agentId,agentValue=agentId==='codex'?codexModelValue:agentSource;
   const anchor=useRef<HTMLSpanElement>(null);
   const providerAnchor=useRef<HTMLDivElement>(null);
   const [level,setLevel]=useState<{session:string;providerId?:string;settings:ReasoningSettings}|null>(null);
@@ -24,61 +28,61 @@ export function ComposerModelSelect({externalAgent,onExternalAgentSettings,avail
   const session=reasoning?.session,modelId=reasoning?.modelId,providerId=selection?.providerId;
   useEffect(()=>{
     let cancelled=false;
-    if(session&&modelId&&!codexOnly)void api.reasoning(session).then(settings=>{
+    if(session&&modelId&&!externalOnly)void api.reasoning(session).then(settings=>{
       if(!cancelled&&settings.modelId===modelId)setLevel({session,providerId,settings});
     }).catch(()=>{if(!cancelled)setLevel(null);});
     return()=>{cancelled=true;};
-  },[session,modelId,providerId,reasoningRevision,codexOnly]);
+  },[session,modelId,providerId,reasoningRevision,externalOnly]);
   const trackedReasoning=reasoning?{...reasoning,onSaving:(saving:boolean,savingSession=reasoning.session)=>{
     reasoning.onSaving(saving,savingSession);
     // Native popovers have a separate webview. Re-read the saved, model-scoped
     // setting after either surface finishes, including after it closes.
     if(!saving&&savingSession===session)setReasoningRevision(value=>value+1);
   }}:undefined;
-  const canChooseModel=configured || hasComposerModelChoices(available) || codexOnly;
-  const native=useNativeModelPanel({externalAgent,onExternalAgentSettings,available,modelName,selection,configured:canChooseModel,open,disabled,onOpenChange,onSelect,onSettings,reasoning:codexOnly?undefined:trackedReasoning,contextUsage:codexOnly?undefined:contextUsage},anchor);
+  const canChooseModel=configured || hasComposerModelChoices(available) || externalOnly;
+  const native=useNativeModelPanel({externalAgent,onExternalAgentSettings,available,modelName,selection,configured:canChooseModel,open,disabled,onOpenChange,onSelect,onSettings,reasoning:externalOnly?undefined:trackedReasoning,contextUsage:externalOnly?undefined:contextUsage},anchor);
   const [search,setSearch]=useState("");
   const [providerOpen,setProviderOpen]=useState(false);
   useEffect(()=>{if(!open)setProviderOpen(false);},[open]);
   const [source,setSource]=useState<string|null>(null);
-  useEffect(()=>{setSource(codexOnly?'agent:codex':selection?'provider:'+selection.providerId:null);setSearch("");},[presentation,codexOnly]);
+  useEffect(()=>{setSource(externalOnly?agentSource:selection?'provider:'+selection.providerId:null);setSearch("");},[presentation,externalOnly,agentSource]);
   if (!canChooseModel) return <button type="button" className="composer-model-setup" aria-label="连接模型" aria-haspopup="dialog" disabled={disabled} onClick={onSettings} title="打开模型设置"><Glyph name="settings" size={16}/><span>连接模型</span></button>;
   const modelRows=available.entries?.map(entry=>({value:JSON.stringify([entry.providerId,entry.modelId]),label:entry.displayName,name:entry.name,group:entry.providerName,groupId:'provider:'+entry.providerId,model:entry as AvailableModelEntry|string,external:false}))??available.models.map(name=>({value:name,label:name,name,group:"",groupId:"provider:",model:name as AvailableModelEntry|string,external:false}));
-  const allRows=codexOnly?[{value:codexModelValue,label:'Codex',name:'Codex CLI',group:'Codex · Agent',groupId:'agent:codex',model:codexModelValue,external:true}]:modelRows;
+  const allRows=externalOnly?[{value:agentValue,label:agentName,name:agentName,group:agentName,groupId:agentSource,model:agentValue,external:true}]:modelRows;
   // Refreshing the catalog must not remove cached rows or resize an open panel.
   const rows=allRows;
   const current=currentComposerModel(available,modelName,selection);
   const groups=[...new Set(rows.map(row=>row.groupId))];
-  const selectedSource=codexOnly?'agent:codex':'provider:'+(current?.providerId??'');
+  const selectedSource=externalOnly?agentSource:'provider:'+(current?.providerId??'');
   const activeSource=source!==null&&groups.includes(source)?source:groups.includes(selectedSource)?selectedSource:groups[0]||"";
   const currentSource=rows.find(row=>row.groupId===activeSource);
   const sourceRows=rows.filter(row=>row.groupId===activeSource);
   const query=search.trim().toLocaleLowerCase();
   const visible=sourceRows.filter(row=>`${row.label} ${row.name}`.toLocaleLowerCase().includes(query));
   const note=available.message&&(available.source==="magpie"||!available.models.length)?available.message:"";
-  const label=codexOnly?'Codex':configured?(current?composerModelLabel(current.displayName,current.name):modelName?.split("/").pop()||"已配置"):"选择模型";
-  const levelSettings=!codexOnly&&level&&level.session===session&&level.providerId===providerId?level.settings:undefined;
+  const label=externalOnly?agentName:configured?(current?composerModelLabel(current.displayName,current.name):modelName?.split("/").pop()||"已配置"):"选择模型";
+  const levelSettings=!externalOnly&&level&&level.session===session&&level.providerId===providerId?level.settings:undefined;
   const levelLabel=currentReasoningLabel(levelSettings,modelId);
   const effort=levelSettings?.effort||levelSettings?.default||'default';
-  const hasCurrentModel=configured || codexOnly;
+  const hasCurrentModel=configured || externalOnly;
   const effortDescription=levelLabel?`思考强度：${levelLabel}`:'';
-  const accessibleLabel=hasCurrentModel ? `选择模型：${label}${effortDescription?` · ${effortDescription}`:""}${codexOnly?' · 独立 Agent':current?.providerName?` · ${current.providerName}`:""}` : label;
+  const accessibleLabel=hasCurrentModel ? `选择模型：${label}${effortDescription?` · ${effortDescription}`:""}${externalOnly?' · 独立 Agent':current?.providerName?` · ${current.providerName}`:""}` : label;
   const modelTitle=modelName&&label!==modelName?`${label}\n${modelName}`:label;
-  const triggerTitle=codexOnly?externalAgent?.message||'Codex 独立执行':effortDescription?`${modelTitle}\n${effortDescription}`:modelTitle;
+  const triggerTitle=externalOnly?externalAgent?.message||`${agentName} 独立执行`:effortDescription?`${modelTitle}\n${effortDescription}`:modelTitle;
   const triggerLabel=<span className="composer-model-current">
     <span className="composer-model-name">{label}</span>
     {levelLabel&&<span className="composer-model-effort" data-effort={effort}>
       <Glyph name="reasoningLevel" size={14}/><span className="composer-model-effort-label">{levelLabel}</span>
     </span>}
   </span>;
-  const codexFooter=externalAgent&&<div className="composer-codex-footer">{externalAgent.configurationOnly&&<strong>专员 Codex</strong>}<p role="status">{externalAgent.ready?'已连接本机 Codex，复用已有登录与配置':externalAgent.message||'请先配置 Codex'}</p><button type="button" disabled={disabled} onClick={()=>{onOpenChange(false);onExternalAgentSettings?.();}}><Glyph name="settings" size={14}/>配置 Codex</button>{!externalAgent.configurationOnly&&<small>发送后创建独立任务，进度与结果回到当前专员。</small>}</div>;
+  const externalFooter=externalAgent&&<div className="composer-codex-footer">{externalAgent.configurationOnly&&<strong>专员执行器</strong>}{!externalAgent.configurationOnly&&<p role="status">{externalAgent.ready?`已连接 ${agentName}`:externalAgent.message||`请先配置 ${agentName}`}</p>}<button type="button" disabled={disabled} onClick={()=>{onOpenChange(false);onExternalAgentSettings?.();}}><Glyph name="settings" size={14}/>模型配置</button>{!externalAgent.configurationOnly&&<small>发送后创建独立任务，进度与结果回到当前专员。</small>}</div>;
   return <span ref={anchor} className="composer-model-anchor"><AppSelect key={presentation} nativePopup={native} popupMotion={!onProviderMenu} selectionLocked={disabled} className={`composer-model-select ${hasCurrentModel?"":"model-missing"}`} popupClassName="composer-model-popup" popupMinWidth={260} popupAlign="end" popupMaxHeight={420}
-    label={accessibleLabel} title={triggerTitle} value={codexOnly?codexModelValue:current?JSON.stringify([current.providerId,current.modelId]):modelName||""} renderValue={triggerLabel}
-    icon={<ProviderIcon brand={codexOnly?'openai':modelBrand(modelName||"",current?.displayName,current?.providerName)} size={16}/>}
+    label={accessibleLabel} title={triggerTitle} value={externalOnly?agentValue:current?JSON.stringify([current.providerId,current.modelId]):modelName||""} renderValue={triggerLabel}
+    icon={<ProviderIcon brand={externalOnly?agentBrand:modelBrand(modelName||"",current?.displayName,current?.providerName)} size={16}/>}
     open={open} aria-busy={disabled} onOpenChange={next=>{if(next&&disabled) return;if(next) {setSearch("");setSource(selectedSource);}onOpenChange(next);}}
     onChange={event=>{const row=rows.find(row=>row.value===event.target.value);if(row&&!row.external&&!disabled)onSelect(row.model);}}
     popupHeader={({listId,activeId})=><>
-      {currentSource&&!codexOnly&&<div ref={providerAnchor} className="composer-model-provider-heading"><AppSelect className="composer-model-provider" popupClassName="composer-provider-popup" popupPlacement="side" aria-haspopup={onProviderMenu?"menu":"listbox"} label={`切换模型供应商：${currentSource.group||"其他模型"}`} value={activeSource} title={currentSource.group||"其他模型"} renderValue={currentSource.group||"其他模型"} icon={<ProviderIcon brand={currentSource.external?'openai':modelBrand(currentSource.name,currentSource.label,currentSource.group)} size={15}/>} open={providerOpen} nativePopup={!!onProviderMenu}
+      {currentSource&&!externalOnly&&<div ref={providerAnchor} className="composer-model-provider-heading"><AppSelect className="composer-model-provider" popupClassName="composer-provider-popup" popupPlacement="side" aria-haspopup={onProviderMenu?"menu":"listbox"} label={`切换模型供应商：${currentSource.group||"其他模型"}`} value={activeSource} title={currentSource.group||"其他模型"} renderValue={currentSource.group||"其他模型"} icon={<ProviderIcon brand={currentSource.external?'openai':modelBrand(currentSource.name,currentSource.label,currentSource.group)} size={15}/>} open={providerOpen} nativePopup={!!onProviderMenu}
         onOpenChange={next=>{
           setProviderOpen(next);
           const rect=providerAnchor.current?.getBoundingClientRect();
@@ -89,7 +93,7 @@ export function ComposerModelSelect({externalAgent,onExternalAgentSettings,avail
       {sourceRows.length>8&&<label className="composer-model-search"><Glyph name="search" size={15}/><input autoFocus role="combobox" aria-expanded={open} aria-controls={listId} aria-activedescendant={activeId} aria-autocomplete="list" aria-label="搜索模型" placeholder="搜索当前分类…" value={search} onChange={event=>setSearch(event.target.value)}/></label>}
     </>}
     emptyMessage={available.loading?"正在获取可用模型…":query?"没有找到匹配的模型":note||"暂无可用模型，请先添加供应商。"}
-    popupFooter={<>{currentSource?.external?codexFooter:<>{!codexOnly&&reasoning&&<ReasoningSelector key={reasoning.session} {...trackedReasoning!}/>}{!codexOnly&&contextUsage&&<ContextUsage key={contextUsage.view.session} {...contextUsage} presentation="menu"/>}{note&&rows.length>0&&<p className="composer-model-note">{note}</p>}{externalAgent?.configurationOnly&&codexFooter}</>}</>}
-    renderOption={option=>{const row=rows.find(row=>row.value===option.value)!;return <><ProviderIcon brand={row.external?'openai':modelBrand(row.name,row.label,row.group)} size={16}/><span className="composer-model-label" title={row.external?'本机 Codex CLI':row.name===row.label?row.label:`${row.label}\n${row.name}`}><span>{row.external?`Codex · ${externalAgent?.model||'本机默认模型'}`:composerModelLabel(row.label,row.name)}</span></span>{row.external?<small className="composer-model-capability">CLI</small>:available.imageInputCapabilities?.[row.name]&&<small className="composer-model-capability">视觉</small>}</>;}}
+    popupFooter={<>{currentSource?.external?externalFooter:<>{!externalOnly&&reasoning&&<ReasoningSelector key={reasoning.session} {...trackedReasoning!}/>}{!externalOnly&&contextUsage&&<ContextUsage key={contextUsage.view.session} {...contextUsage} presentation="menu"/>}{note&&rows.length>0&&<p className="composer-model-note">{note}</p>}{externalAgent?.configurationOnly&&externalFooter}</>}</>}
+    renderOption={option=>{const row=rows.find(row=>row.value===option.value)!;return <><ProviderIcon brand={row.external?agentBrand:modelBrand(row.name,row.label,row.group)} size={16}/><span className="composer-model-label" title={row.external?`${agentName} CLI`:row.name===row.label?row.label:`${row.label}\n${row.name}`}><span>{row.external?`${agentName} · ${externalAgent?.model||'CLI 默认模型'}`:composerModelLabel(row.label,row.name)}</span></span>{row.external?<small className="composer-model-capability">CLI</small>:available.imageInputCapabilities?.[row.name]&&<small className="composer-model-capability">视觉</small>}</>;}}
   >{visible.map(row=><option key={row.value} value={row.value} disabled={disabled&&reasoning?.disabled!==false}>{composerModelLabel(row.label,row.name)}</option>)}</AppSelect></span>;
 }

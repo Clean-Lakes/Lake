@@ -8,6 +8,7 @@
 .pilot-report-items { display:grid; min-width:0; min-height:0; gap:24px; }
 .pilot-report-strip:has(> .pilot-report-toggle):not([hidden]) + .pilot-report-body:not([aria-hidden=true]) { margin-top:16px; }
 .pilot-report-body[aria-hidden=true] { grid-template-rows:0fr; visibility:hidden; transition-delay:0s,0s,200ms; }
+.pilot-report-body[hidden] { display:none; }
 .pilot-report-body > .pilot-report-items { overflow:clip; overflow-clip-margin:4px; }
 .pilot-report-fold[data-folding] > .pilot-report-body { display:block; overflow:clip; visibility:visible; transition:none; }
 .pilot-report-fold[data-folding] > .pilot-report-strip { overflow:clip; }

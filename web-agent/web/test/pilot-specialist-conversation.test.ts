@@ -202,7 +202,8 @@ function renderedReport(messages:Message[],status='completed',pilotWorkspace=wor
   snapshot,pilotWorkspace,assistantIdentity:{name:'Lake',pilot:true},onInspectSpecialist(){},
  }));
 }
-const collapsedExecution=/<button[^>]*data-placement="inline"[^>]*aria-label="查看执行过程"[^>]*aria-expanded="false"/;
+const collapsedExecution=/<button[^>]*data-placement="inline"[^>]*aria-label="查看[^"]+的执行过程"[^>]*aria-expanded="false"/;
+const hiddenExecution=/class="pilot-report-body" aria-hidden="true" inert="" hidden=""/;
 
 test('a finished single-specialist report has one inline process footer after the conclusion and attachments',()=>{
  const state=workspace();
@@ -211,32 +212,44 @@ test('a finished single-specialist report has one inline process footer after th
  const html=renderedReport([releaseReport],'completed',state);
  const footer=html.match(collapsedExecution);
  assert.ok(footer);
- assert.equal(html.match(/aria-label="查看执行过程"/g)?.length,1);
+ assert.equal(html.match(/aria-label="查看发布专员的执行过程"/g)?.length,1);
  const attachment=html.indexOf('aria-label="下载 发布记录.txt"');
  assert.ok(attachment>html.indexOf('发布记录核对完成。')&&attachment<footer.index!);
  const duration=html.indexOf('4 分钟 42 秒');
- const hiddenProcess=html.indexOf('class="pilot-report-body" aria-hidden="true" inert=""');
+ const hiddenProcess=html.search(hiddenExecution);
  assert.ok(footer.index!<duration&&duration<hiddenProcess&&hiddenProcess<html.indexOf('正在读取发布记录。'));
  assert.equal(html.split('发布记录核对完成。').length-1,1);
  assert.doesNotMatch(html,/data-placement="side"[^>]*data-specialist-process="task-host"/);
 });
 
-test('unfinished work or a dispatch to another specialist prevents the single-specialist fold',()=>{
+test('a delivered report folds its own process independently of other active work',()=>{
  for(const status of ['running','paused','waiting_approval']){
-  assert.doesNotMatch(renderedReport([releaseReport],status),collapsedExecution,status);
+  assert.match(renderedReport([releaseReport],status),collapsedExecution,status);
  }
  const otherDispatch:Message={
   id:'another-dispatch',sessionId:'pilot',role:'assistant',text:'',createdAt:'2026-11-06T00:00:01Z',
   dispatch:{id:'dispatch',sourceMessageId:user.id,roleId:'another-role',roleName:'发布专员',
    workerId:'another-worker',sessionId:'another-session',taskId:'another-task',channelSessionId:'another-channel',instruction:'复核',action:'create'},
  };
- assert.doesNotMatch(renderedReport([otherDispatch,releaseReport]),collapsedExecution);
+ assert.match(renderedReport([otherDispatch,releaseReport]),collapsedExecution);
  const newerQuestion={...user,id:'newer',createdAt:'2026-11-06T00:00:02Z'};
  const delayedDispatch={...otherDispatch,createdAt:'2026-11-06T00:00:04Z'};
- assert.doesNotMatch(renderedReport([releaseReport,newerQuestion,delayedDispatch]),collapsedExecution);
+ assert.match(renderedReport([releaseReport,newerQuestion,delayedDispatch]),collapsedExecution);
  assert.doesNotMatch(renderedReport([{...releaseReport,text:''}]),collapsedExecution);
  const settling=worker();
  settling.task.state='completed';
  settling.pilotReport={messageId:releaseReport.id,executionSettled:false};
- assert.doesNotMatch(renderedReport([releaseReport],'completed',workspace([settling])),collapsedExecution);
+ assert.match(renderedReport([releaseReport],'completed',workspace([settling])),collapsedExecution);
+});
+
+test('multiple saved reports have independent closed execution details',()=>{
+ const second:Message={...releaseReport,id:'report-database',text:'数据库核对完成。',files:[],
+  author:{...releaseReport.author!,name:'数据库专员',roleId:'database',workerId:'database',sessionId:'worker-database',taskId:'task-database'},
+  codexActivity:[{kind:'integration',id:'db-read',text:'读取数据库样例',status:'completed',at}],
+ };
+ const html=renderedReport([releaseReport,second]);
+ assert.match(html,/2 份专员报告/);
+ assert.match(html,/发布记录核对完成。[\s\S]*aria-label="查看发布专员的执行过程"[^>]*aria-expanded="false"/);
+ assert.match(html,/数据库核对完成。[\s\S]*aria-label="查看数据库专员的执行过程"[^>]*aria-expanded="false"/);
+ assert.equal(html.match(new RegExp(hiddenExecution.source,'g'))?.length,2);
 });

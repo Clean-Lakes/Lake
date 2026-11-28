@@ -1,15 +1,19 @@
 # 本机智能体执行
 
-2026-11-16 按用户要求采用 Tutti 的调用分层，将当前 Codex 外部执行从第三方 ACP 包装器迁移为官方 App Server。Lake 使用 TypeScript 独立实现该设计；没有移植 Tutti 的 Go 业务代码。当前只交付 Codex，不把 Claude SDK 或其他 ACP 智能体写作已支持能力。
+2026-11-16 按用户要求采用 Tutti 的调用分层，将当前 Codex 外部执行从第三方 ACP 包装器迁移为官方 App Server。Lake 使用 TypeScript 独立实现该设计；没有移植 Tutti 的 Go 业务代码。2026-11-28 增加 Claude Code 的官方流式 CLI 和 Google Antigravity 的 ACP 连接。
 
 ```mermaid
 flowchart TD
     Host[Lake Task / Worker / 专员对话] --> Service[LakeExternalAgents]
     Service --> Contract[AgentConnection / AgentActivity]
     Contract --> Codex[CodexAppServer]
+    Contract --> Claude[Claude Code CLI]
+    Contract --> Antigravity[Antigravity ACP]
     Codex --> Transport[JsonRpcProcess]
     Transport <-->|stdio NDJSON| Provider[codex app-server 0.170.0]
     Provider --> Bridge[本次执行的私有 MCP 桥]
+    Claude --> Bridge
+    Antigravity --> Bridge
     Bridge --> Executor[原 ToolExecutor / Pilot 权限 / 操作账本]
 ```
 
@@ -27,7 +31,7 @@ flowchart TD
 
 任务详情按运行来源显示执行器。新记录在官方 App Server 完成初始化后写入运行类型。对于旧 Codex 记录，Lake 只读核对项目 CLI 线程索引中的线程 ID、启动方和执行目录。三者匹配时显示“CLI”，无法确认来源时只显示 Agent 名称。
 
-## 会话与轮次
+## Codex 会话与轮次
 
 每个运行独占一个进程。先发送 `initialize`，收到应答后发送 `initialized`；以 `thread/start` 创建任务线程，只有同一冻结执行身份下明确完成的运行才能使用 `thread/resume`。已有线程编号在持久运行中保存，不从模型参数接收。
 
@@ -35,7 +39,7 @@ flowchart TD
 
 停止先撤销原工具执行资格，再请求 `turn/interrupt`；未确认轮次或停止无响应时仍有有界的进程树清理。RPC 或进程退出后不盲目创建新轮次；已派发且未收到明确终态的原运行继续为 unknown，不自动重放。
 
-## 工具和凭据
+## Codex 工具和凭据
 
 沿 Lake 已确认的本机登录合同，Codex 直接读取源 `CODEX_HOME`（默认 `~/.codex`）；Lake 不复制 auth.json，不更改用户 config.toml。SQLite、日志、模型目录和本次执行目录保留在当前 Lake Home 下。该准备策略与 Tutti 的私有 Home/凭据投影不同；本轮采用其调用分层，不改变已确认的凭据约定。
 
@@ -43,14 +47,36 @@ flowchart TD
 
 执行进程使用与选中模型对应的静态目录。Lake 使用固定引擎的模型元数据或生成保守的元数据，结合启动和线程覆盖关闭原生业务工具、继承 MCP、hooks、notify 和递归。仅本次运行的 `lake` MCP 服务连接私有 Unix socket。App Server 的 MCP 工具批准使用 `mcpServer/elicitation/request`；form 请求可能不携带 MCP 调用 ID，因此适配器在准确 thread/turn/server 下消费一条已观察、在本次允许目录内且尚未消费的工具调用。通用表单、URL 请求、原生工具、未知服务器、外来轮次、重复申请和失效宿主均不获准。该批准只允许进入私有桥，真实 I/O 仍经过同一个 ToolExecutor；没有持久批准或全局自动批准。
 
+## Claude Code 和 Google Antigravity
+
+两者自动识别已安装的 CLI。Claude Code 默认让官方 CLI 复用用户登录，Lake 通过 `claude auth status` 核对登录，通过流式初始化读取模型。CLI 自己管理用户登录凭据，Lake 保存登录状态及账户标识的摘要。Google Antigravity 默认通过 `agy acp --login` 打开 Google 授权，授权码交回 agy，凭据由 agy 写入项目在 Lake Home 下的私有目录。随后使用同一凭据建立 ACP 探测会话，检测通过后一起更新连接版本和模型目录。授权取消或探测失败保留先前验证过的连接。
+
+已有项目可继续使用保存在 Lake 私有目录中的 API Key。用 Anthropic API Key 时，Lake 从 Anthropic Models API 读取模型及支持的思考档位。Claude Code 本机登录由 CLI 初始化返回这些信息。Antigravity 在独立探测会话中读取模型和每个模型的思考选项。配置支持选择模型、思考档位或跟随默认值，Claude Code 也支持手动填写模型 ID。执行时将选定档位传给 Claude Code 的 `--effort`，或由 Antigravity ACP 在发送任务前确认会话配置。连接变更会使已冻结的项目执行版本失效。运行工作目录、工具连接和会话标识按执行上下文隔离。
+
+Claude Code 的「自定义 API」支持兼容 Anthropic Messages 的第三方网关。Lake 按项目、规范化的基础地址和认证请求头保存独立凭据。启用后读取该地址的 `/v1/models`，再由用户选定默认模型或保存手填的模型 ID。模型列表不可用时，点击「检测连接」向 `/v1/messages` 发送一条短测试请求，验证通过后可以使用该模型。执行进程在 Bare 模式下使用指定地址和 Bearer Token 或 `x-api-key`，业务工具仍通过本轮的 Lake MCP。
+
+| 执行器 | 支持版本及接口 | 本机执行约束 |
+| --- | --- | --- |
+| Claude Code | 2.1.286 或更新版本，`-p` 的 stream JSON | 本机登录和 API Key 都使用受限模式，关闭原生工具、通用配置和 hooks，显式传入本次 Lake MCP。API Key 路径额外启用 Bare 模式 |
+| Google Antigravity | 1.5.18 或更新版本，`agy acp` | 使用 Google 授权或 Gemini API Key。独立主 Agent 配置排除原生命令、文件、网页和后台调度工具。使用本轮独立的 loopback MCP 端口和短时凭据，针对已观察且匹配的调用发放单次传输许可 |
+
+两者复用 Task/Worker 身份、审批、终止和操作账本。模型选用、CLI 连接及传输许可各自校验。需要延续时使用相同执行上下文的会话标识，Antigravity 的续接依赖本机 CLI 声明 `session/resume`。无法实时确认消费的补充沿 Lake 的既有排队机制处理。
+
+Claude Code 和 Antigravity 的专员任务在群聊、Pilot 对话和专员频道展示已公开的阶段说明与实际 Lake 工具调用。Lake 根据本轮 `TodoWrite` 成功返回的写入前后清单展示逐条待办变化。调用按原 Worker 和执行轮次更新，命令、待办和简短输出沿用脱敏规则，过程随报告保存。历史 Antigravity 报告可从属于同一轮的已存记录显示工具标题与状态。
+
+Antigravity 的无编号文本流沿用同一条消息。Lake 接收正式报告后，将此前的阶段说明保留在执行过程中，结论随报告显示一次。历史报告读取时根据本轮提交前的说明识别重复追加的结论，保留原始执行记录。
+
+支持待办的 Antigravity 任务会收到多步骤工作的 `TodoWrite` 调用示例，指引模型在主要检查前创建待办、在阶段变化时更新。单项查询可直接执行。当前轮收到的 ACP `plan` 清单按变化展示，公开阶段说明沿公开消息流进入执行过程。计划通知只投影进度，工具授权及任务完成仍沿原 Worker 流程。[ACP Agent Plan](https://agentclientprotocol.com/protocol/v1/agent-plan)
+
 ## 迁移与交付边界
 
 profile 升级为 schema3，记录 `runtimeKind: codex-app-server`。schema1/schema2 迁移增加 revision，旧 Worker/run 和来源记录保持原样；新的配置不能静默续接旧执行。官方引擎 0.170.0 安装在现有 Lake Home 的运行时目录。固定引擎和模型目录纳入连接版本。
 
-本批继续保持 macOS 的既有开放范围。Windows、Linux、真实远程业务系统以及其他提供商不因该抽象自动成为已验证能力。
+本机外部执行适配器的验证平台为 macOS。
 
 ## 参考
 
 - [Tutti 固定版本](https://github.com/tutti-os/tutti/tree/207beeea554435618dffd3b579d0ffe112b065c4)：提供商定义、受管理进程、App Server 会话和活动归一分层。
 - [Codex 0.170.0](https://github.com/openai/codex/tree/rust-v0.170.0) 提供固定 App Server 引擎及随附的模型元数据。
+- [Claude Code Headless CLI](https://code.claude.com/docs/en/headless)、[Google Antigravity ACP](https://antigravity.google/docs/ide/extensions/acp/)、[Google Antigravity 自定义 Agent](https://antigravity.google/docs/subagents?tab=cli)。
 - [当前任务报告合同](../security/task-confirmation.md)、[本机登录合同](../../plan/refactor-codex-local-login-1.md)、[迁移实施计划](../../plan/refactor-codex-app-server-1.md)。

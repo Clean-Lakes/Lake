@@ -1,6 +1,8 @@
 import {createHash} from 'node:crypto';
 
 const rawLimit=1024*1024,visibleLimit=32768;
+const publicId=(key:string)=>'acp_message_'+createHash('sha256').update(key).digest('hex');
+export const externalMessageId=(runId:string,messageId:string)=>publicId(JSON.stringify(['message',runId,messageId]));
 
 /** ACP message identity bounds public prose; the run's audit text stays cumulative. */
 export class ExternalPublicText {
@@ -10,10 +12,19 @@ export class ExternalPublicText {
  get auditText(){return this.text;}
  snapshot(text:string,messageId:string,messageText:string){
   this.text=text.slice(0,rawLimit);
-  const key=JSON.stringify(['message',this.runId,messageId]);
   return {text:this.redact(this.text,true).slice(0,visibleLimit),
    publicText:this.redact(messageText,true).slice(0,visibleLimit),
-   publicTextId:'acp_message_'+createHash('sha256').update(key).digest('hex')};
+   publicTextId:externalMessageId(this.runId,messageId)};
+ }
+
+ /** Some runtimes stream individual messages, including final corrections. */
+ replace(messageId:string,messageText:string){
+  const previous=this.messages.get(messageId);
+  if(previous===undefined&&this.text.length>=rawLimit)return this.snapshot(this.text,messageId,'');
+  const available=rawLimit-this.text.length+(previous?.length??0)-(previous===undefined&&this.messages.size?2:0);
+  const accepted=messageText.slice(0,Math.max(0,available));
+  this.messages.set(messageId,accepted);
+  return this.snapshot([...this.messages.values()].join('\n\n'),messageId,accepted);
  }
 
  append(delta:string,messageId:unknown){
@@ -27,6 +38,6 @@ export class ExternalPublicText {
   if(known)this.messages.set(key,current);
   return {text:this.redact(this.text,true).slice(0,visibleLimit),
    publicText:this.redact(current,true).slice(0,visibleLimit),
-   publicTextId:'acp_message_'+createHash('sha256').update(key).digest('hex')};
+   publicTextId:publicId(key)};
  }
 }

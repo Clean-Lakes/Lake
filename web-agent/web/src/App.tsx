@@ -69,6 +69,7 @@ import {currentComposerModel,hasComposerModelChoices} from "./composerModelState
 import {modelBrand} from "./modelBrand";
 import {useSpecialistModel} from "./useSpecialistModel";
 import {CodexModelConfiguration} from "./CodexModelConfiguration";
+import {executionAgentBrands} from "./ExecutionAgentIcon";
 import {BulkCheckbox, BulkNavigationDelete, type BulkSelection} from "./BulkNavigationDelete";
 import {addBulkTargets, bulkCatalogTargets, bulkKey, orderBulkDeletion, type BulkTarget, type BulkDeleteResult} from "./bulkNavigation";
 import {NavigationDelete,NavigationMenu,type NavigationDeleteTarget} from "./NavigationDelete";
@@ -349,11 +350,11 @@ function AppContent() {
   const modelMenuOpen = modelMenuSession !== null && modelMenuSession === route.sessionId;
   const setModelMenuOpen = useCallback((open: boolean) => setModelMenuSession(open ? routeRef.current.sessionId : null), []);
   useEffect(() => { setModelMenuSession(null); }, [route.sessionId]);
-  const [codexConfiguration,setCodexConfiguration]=useState<{projectId:string;anchor?:HTMLElement|null}|null>(null);
-  const openCodexConfiguration=useCallback((projectId:string|undefined,anchor?:HTMLElement|null)=>{
+  const [codexConfiguration,setCodexConfiguration]=useState<{projectId:string;anchor?:HTMLElement|null;channel?:SpecialistChannelInfo}|null>(null);
+  const openCodexConfiguration=useCallback((projectId:string|undefined,anchor?:HTMLElement|null,channel?:SpecialistChannelInfo)=>{
     if(!typescriptBackend||!projectId)return;
     setModelMenuOpen(false);
-    setCodexConfiguration({projectId,anchor});
+    setCodexConfiguration({projectId,anchor,channel});
   },[typescriptBackend,setModelMenuOpen]);
   const [specialistMcp,setSpecialistMcp]=useState<{channel:SpecialistChannelInfo;anchor?:HTMLElement|null}|null>(null);
   const openSpecialistMcp=useCallback((channel:SpecialistChannelInfo,anchor?:HTMLElement|null)=>{
@@ -1229,7 +1230,7 @@ function AppContent() {
   const composerModelSelection=composerModel?.modelSelection??undefined;
   const composerModelEntry=composerModelConfigured&&!specialistComposer
     ? currentComposerModel(modelMenu,composerModelName,composerModelSelection) : undefined;
-  const composerPreviewBrand=specialistComposer ? (codexAssignment?'openai':undefined)
+  const composerPreviewBrand=specialistComposer ? executionAgentBrands[specialistModel.agentId]
     : composerModelConfigured&&composerModelName ? modelBrand(composerModelName,composerModelEntry?.displayName,composerModelEntry?.providerName) : undefined;
   const attachmentUploads=sessionId?attachmentBatches.get(sessionId):undefined;
   const canAttach=canCompose&&sessionConnected&&!selectedResource&&!isPlansPage&&!isWorkspacePage&&!isSpecialistTasks&&!pendingOperation&&!attachmentUploads;
@@ -1622,7 +1623,7 @@ function AppContent() {
       return;
     }
     if(currentAssignment?.checking)return;
-    if(currentAssignment?.blockedReason){openCodexConfiguration(codexSettingsProject);return;}
+    if(currentAssignment?.blockedReason){openCodexConfiguration(codexSettingsProject,undefined,selectedSuperChannel);return;}
     if (!text && !imageDraft.length) return;
     if (imageDraft.length && !acceptsInlineImages) { handleFailure(new Error("当前模型未启用图片输入，请切换到支持图片的模型后发送。")); return; }
     const targetSession=sessionId;
@@ -2315,8 +2316,8 @@ function AppContent() {
           {pilotTaskReference?.sent&&<PilotTaskReferenceChip task={pilotTaskReference} members={pilotTaskMembers} compact onClear={()=>selectPilotTask()}/>}
           <div className="composer-foot-actions"><div className="composer-status"><div className="model-switch-wrap">
           <ComposerModelSelect key={sessionId}
-            externalAgent={codexSettingsProject?{ready:!!specialistModel.agent?.assignmentReady,message:specialistModel.message,model:specialistModel.model,configurationOnly:!specialistComposer}:undefined}
-            onExternalAgentSettings={()=>openCodexConfiguration(codexSettingsProject)}
+            externalAgent={codexSettingsProject?{id:specialistModel.agentId,ready:!!specialistModel.agent?.assignmentReady,message:specialistModel.message,model:specialistModel.model,configurationOnly:!specialistComposer}:undefined}
+            onExternalAgentSettings={()=>openCodexConfiguration(codexSettingsProject,undefined,selectedSuperChannel)}
             contextUsage={activeSnapshot?.ai?{view:{session:activeSnapshot.ai.session,context:activeSnapshot.ai.context,usage:activeSnapshot.ai.usage},model:{modelId:composerModel?.modelId},status:headerPilot?.status==='paused'?'idle':currentSessionStatus}:undefined}
             available={modelMenu} modelName={composerModelName} selection={composerModelSelection} configured={composerModelConfigured}
             open={modelMenuOpen} disabled={!!pendingOperation || savingModelHere || reasoningSaving.has(sessionId)}
@@ -2377,9 +2378,9 @@ function AppContent() {
         onClearSelection={() => setBulkSelected([])}
         onDeleteSelected={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}/>:null}
     </WorkspaceConsole>
-    {codexConfiguration&&!isWorkspacePage&&<CodexModelConfiguration key={codexConfiguration.projectId}
+    {codexConfiguration&&!isWorkspacePage&&<CodexModelConfiguration key={`${codexConfiguration.projectId}:${codexConfiguration.channel?.roleId??''}`}
       {...codexConfiguration} projectName={projectList.find(project=>project.id===codexConfiguration.projectId)?.name??'当前项目'}
-      onClose={()=>setCodexConfiguration(null)}/>}
+      onClose={()=>setCodexConfiguration(null)} onRoleChanged={()=>void pilotWorkspace.refresh()}/>}
     {specialistMcp&&!isWorkspacePage&&<SpecialistMcpDialog key={`${specialistMcp.channel.projectId}:${specialistMcp.channel.roleId}`}
       channel={specialistMcp.channel} anchor={specialistMcp.anchor}
       projectName={projectList.find(project=>project.id===specialistMcp.channel.projectId)?.name??'当前项目'}

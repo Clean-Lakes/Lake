@@ -1,17 +1,19 @@
 import {pilotConfigurationToolNames} from '../configuration-tool-names';
 import type { ExternalAgentId } from './types';
 import {HttpError} from '../store';
-import {externalAgentNames} from '../../../web-agent/shared/external-agents';
+import {externalAgentNames,isExternalAgentId} from '../../../web-agent/shared/external-agents';
 
 /** External product names, not names of Lake's embedded backend. */
 export const externalProducts: Record<ExternalAgentId, { name: string; version: string }> = {
   codex: { name: externalAgentNames.codex, version: '0.170.0' },
+  'claude-code': {name:externalAgentNames['claude-code'],version:'2.1.286'},
+  antigravity: {name:externalAgentNames.antigravity,version:'1.5.18'},
 };
 export const externalAgentIds = Object.keys(externalProducts) as ExternalAgentId[];
 export function externalAgentId(value: unknown): ExternalAgentId {
   if(value==='runtime-acp')throw new HttpError(409,'该外部 Agent 已移除；请为新任务选择 Codex。历史执行不会重放或切换后端。');
-  if (typeof value !== 'string' || !Object.hasOwn(externalProducts, value)) throw new HttpError(400,'请选择当前支持的外部 Agent');
-  return value as ExternalAgentId;
+  if (!isExternalAgentId(value)) throw new HttpError(400,'请选择当前支持的外部 Agent');
+  return value;
 }
 export const externalControlTools = new Set([...pilotConfigurationToolNames,'run_external_agent', 'Agent', 'Task', 'TaskOutput', 'TaskStop', 'SendMessage',
   'route_work', 'manage_specialist', 'create_chat_group', 'list_specialist_execution_options', 'EnterPlanMode', 'ExitPlanMode', 'AskUserQuestion']);

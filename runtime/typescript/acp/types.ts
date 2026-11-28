@@ -1,12 +1,21 @@
 import type { ToolEntry } from '../sdk';
 
-import type {CodexProjectOverrides,ExternalAgentId,ExternalAgentStatus as PublicAgentStatus,ExternalRuntimeKind,StoredExternalAgentId} from '../../../web-agent/shared/external-agents';
+import type {ClaudeGateway,CliAuthentication,CodexProjectOverrides,ExternalAgentId,ExternalAgentStatus as PublicAgentStatus,ExternalRuntimeKind,StoredExternalAgentId} from '../../../web-agent/shared/external-agents';
 export type {ExternalAgentId,AgentBackendRef} from '../../../web-agent/shared/external-agents';
-export type ExternalAgentProfile = CodexProjectOverrides & {
-  schemaVersion: 3; runtimeKind:ExternalRuntimeKind;
-  id: ExternalAgentId; projectId: string; revision: number; enabled: boolean;
-  nodePath?: string; npmPath?:string; authentication:'codex-local';sourceFingerprint:string;updatedAt: string;
+type ProfileFields = CodexProjectOverrides & {
+  schemaVersion:3;projectId:string;revision:number;enabled:boolean;sourceFingerprint:string;updatedAt:string;
 };
+export type CodexAgentProfile = ProfileFields & {
+  id:'codex';runtimeKind:'codex-app-server';authentication:'codex-local';nodePath?:string;npmPath?:string;
+};
+export type CliAgentId = Exclude<ExternalAgentId,'codex'>;
+export type CliAgentProfile = Omit<ProfileFields,'schemaVersion'> & {
+  schemaVersion:4;
+  id:CliAgentId;runtimeKind:'claude-code-cli'|'antigravity-acp';authentication:CliAuthentication;executablePath?:string;
+  googleLoginId?:string;
+  claudeGateway?:ClaudeGateway;
+};
+export type ExternalAgentProfile = CodexAgentProfile | CliAgentProfile;
 export type ExternalAgentStatus = ExternalAgentProfile & PublicAgentStatus & {
   capabilities?: Record<string, unknown>;
 };
@@ -16,8 +25,10 @@ export type CodexModelOption = {
   defaultReasoningEffort?: string;
 };
 export const codexConnectionVersion = 2;
+export const cliCatalogVersion = 1;
 export type CodexConnectionProbe = {
   connectionVersion?: 1 | typeof codexConnectionVersion;
+  cliCatalogVersion?:number;
   revision: number;
   authentication?: string;
   ready: boolean;
@@ -30,6 +41,9 @@ export type CodexConnectionProbe = {
   authMode?: ExternalAgentStatus['authMode'];
   capabilities?: Record<string, unknown>;
   message?: string;
+  cliVersion?:string;
+  accountFingerprint?:string;
+  checkedAt?:number;
 };
 export type ExternalRunState = 'starting' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted' | 'unknown';
 export type ExternalRun = {
@@ -50,6 +64,8 @@ export type ExternalEvent = {
   /** Read-only current ACP message projection; text remains the full run audit. */
   publicText?: string; publicTextId?: string;
   callId?: string; title?: string; status?: string; at: string;
+  toolSource?:'lake-bridge'|'agent-plan';
+  completionDeferred?:true;
   displayKind?:import('../../../web-agent/shared/codex-activity').CodexAction; detail?:string; preview?:string;
   taskState?:import('../../../web-agent/shared/codex-activity').CodexTaskState; createdTask?:boolean;
 };

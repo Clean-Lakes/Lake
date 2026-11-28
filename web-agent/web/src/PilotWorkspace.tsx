@@ -197,7 +197,7 @@ type PilotWorkspaceProps = {
  pilotActivity?:ConversationActivity;pilotDisabled?:boolean;
  onPilot: () => void; onWorker: (worker: SuperWorker) => void; onChannel?: (channel: SpecialistChannelInfo) => void;
  disabled?:boolean; onDeleted?:(channel:SpecialistChannelInfo)=>void;
- onCodexSettings?:(projectId:string,anchor:HTMLButtonElement|null)=>void;
+ onCodexSettings?:(projectId:string,anchor:HTMLButtonElement|null,channel:SpecialistChannelInfo)=>void;
  onSpecialistMcp?:(channel:SpecialistChannelInfo,anchor:HTMLButtonElement|null)=>void;
  createSpecialist?:{projectId:string;onCreated:(channel:SpecialistChannelInfo)=>void};
 };
@@ -350,7 +350,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
   {renderedMenu&&<NavigationMenu key={renderedMenu.id} open={Boolean(menu)} title={renderedMenu.roleName} placement="beside" anchor={anchor} className="specialist-context-menu"
    headerIcon={<SuperRoleAvatar name={renderedMenu.roleName} roleId={renderedMenu.roleId} avatarId={renderedMenu.avatarId} motion="still" size={19}/>}
    onClose={()=>setMenu(null)} actions={[
-   ...(onCodexSettings?[{label:'模型配置',icon:'filter' as const,trailingIcon:'next' as const,disabled,run:()=>onCodexSettings(renderedMenu.projectId,anchor.current)}]:[]),
+   ...(onCodexSettings?[{label:'模型配置',icon:'filter' as const,trailingIcon:'next' as const,disabled,run:()=>onCodexSettings(renderedMenu.projectId,anchor.current,renderedMenu)}]:[]),
    ...(onSpecialistMcp?[{label:'MCP 接入',icon:'plug' as const,trailingIcon:'next' as const,disabled,run:()=>onSpecialistMcp(renderedMenu,anchor.current)}]:[]),
    {label:'删除专员',icon:'trash',separatorBefore:true,danger:true,disabled:disabled||renderedMenu.roleRevision===undefined,run:()=>setDeleting(renderedMenu)},
   ]}/>}

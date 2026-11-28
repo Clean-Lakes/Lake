@@ -1,5 +1,5 @@
 import {CodexActivity} from './CodexActivity';
-import {codexActivity} from '../../shared/codex-activity';
+import {specialistActivity} from '../../shared/codex-activity';
 import {AgentExecution} from './AgentExecution';
 import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 import type {SessionSnapshot,SpecialistChannelEntry,SpecialistChannelPage,SuperWorker} from '../../shared/contracts';
@@ -42,7 +42,7 @@ export function SpecialistLiveReply({text,worker,snapshot,turnId,connected=true}
  const shown=useSmoothText(label,moving);
  const task=snapshot?.superagent?.task;
  const bound=worker&&task&&snapshot.session.id===worker.sessionId&&task.taskId===worker.task.taskId&&snapshot.superagent?.roleId===worker.roleId&&turnId===snapshot.ai?.rootTurnId;
- const items=bound?codexActivity(snapshot.ai,task.executionGoalId??task.taskId,turnId):[];
+ const items=bound?specialistActivity(snapshot.ai,task.executionGoalId??task.taskId,turnId):[];
  const showsTranscript=items.some(item=>item.kind!=='text'||!!item.text.trim());
  const hasProse=!!interim&&moving;
  const showCursor=hasProse&&!!(roleId||worker?.roleName);

@@ -117,7 +117,16 @@ export const api = {
   probeExternalAgent:(project:string,agent:string)=>post(`/api/projects/${encodeURIComponent(project)}/external-agents/${encodeURIComponent(agent)}/probe`,{}),
   installExternalAgent:(project:string,agent:string,npmPath:string)=>post(`/api/projects/${encodeURIComponent(project)}/external-agents/${encodeURIComponent(agent)}/install`,{npmPath}),
   setRoleExecution:(project:string,role:string,expectedRevision:number,execution:import('../../shared/external-agents').AgentBackendRef)=>request<{revision:number;execution:import('../../shared/external-agents').AgentBackendRef}>(`/api/projects/${encodeURIComponent(project)}/superagent/specialists/${encodeURIComponent(role)}/execution`,{method:'PUT',body:JSON.stringify({expectedRevision,execution})}),
-  prepareExternalAgent:(project:string,data:Record<string,unknown>)=>post<{agents:import('../../shared/external-agents').ExternalAgentStatus[]}>(`/api/projects/${encodeURIComponent(project)}/external-agents/codex/prepare`,data),
+  prepareExternalAgent:(project:string,agent:import('../../shared/external-agents').ExternalAgentId,data:Record<string,unknown>)=>post<{agents:import('../../shared/external-agents').ExternalAgentStatus[]}>(`/api/projects/${encodeURIComponent(project)}/external-agents/${encodeURIComponent(agent)}/prepare`,data),
+  startAntigravityGoogleLogin:(project:string,expectedRevision:number,signal:AbortSignal)=>
+    request<import('../../shared/external-agents').AntigravityGoogleAuthorization>(
+      `/api/projects/${encodeURIComponent(project)}/external-agents/antigravity/google-login`,
+      {method:'POST',body:JSON.stringify({expectedRevision}),signal}),
+  completeAntigravityGoogleLogin:(project:string,id:string,code:string)=>
+    post<{agents:import('../../shared/external-agents').ExternalAgentStatus[]}>(
+      `/api/projects/${encodeURIComponent(project)}/external-agents/antigravity/google-login/${encodeURIComponent(id)}`,{code}),
+  cancelAntigravityGoogleLogin:(project:string,id:string)=>
+    request(`/api/projects/${encodeURIComponent(project)}/external-agents/antigravity/google-login/${encodeURIComponent(id)}`,{method:'DELETE'}),
   memoryScopes: (projectId = "", signal?: AbortSignal) => request<{engine: "typescript"; scopes: LayeredMemoryScope[]}>(`/api/memory?projectId=${encodeURIComponent(projectId)}`, {signal}),
   memoryView: (key: string, projectId = "", signal?: AbortSignal) => request<LayeredMemoryView>(`/api/memory/scopes/${encodeURIComponent(key)}?projectId=${encodeURIComponent(projectId)}`, {signal}),
   memorySettings: (key: string, projectId: string, data: LayeredMemorySettings) => request<LayeredMemorySettings>(`/api/memory/scopes/${encodeURIComponent(key)}/settings?projectId=${encodeURIComponent(projectId)}`, {method: "PATCH", body: JSON.stringify({useEnabled: data.useEnabled, extractionEnabled: data.extractionEnabled, expectedRevision: data.revision})}),

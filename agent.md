@@ -2,6 +2,8 @@
 
 2026-11-20 Pilot 的纯文字召集使用独立并发容量，每项目 8 个，全局 16 个。多人召集全部收件人结清后，Pilot 依据实际回应给出简短结论。原始回应按同一人工来源和召集轮次归档，界面以多头像入口展开，失败原因可查看。
 
+2026-11-28 TypeScript 专员支持 Codex、Claude Code 和 Google Antigravity。项目共享连接和模型，由用户在「模型配置」中选定每位专员的默认执行器。新任务和协作回复冻结执行器与配置版本。Claude Code 由官方流式 CLI 复用本机登录，Antigravity 由官方 CLI 完成项目 Google 授权并通过 ACP 加载模型。已有项目 API Key 仍可选用。业务工具经原 Task/Worker 的私有 MCP 桥及 ToolExecutor。Pilot 使用项目的协调模型。见[本机执行架构](docs/design/local-agent-runtime.md)。
+
 2026-11-20 TypeScript 长期专员的新任务、协作回复和受托子任务统一使用本机 Codex App Server。新派单按当前已验证的连接冻结角色、模型与执行身份。旧 Lake Agent 绑定和回执仍可查看，旧执行不能续跑。Pilot 继续使用项目的对话模型。
 
 2026-11-18 Items 保存 Grafana 基础地址和私有服务账号令牌引用。资源详情自动读取目录、仪表盘、数据源、告警规则及活动告警概览。Pilot 和专员可查询仪表盘详情、实际指标和日志，仍使用原 Task/Worker 账本，按准确资源、配置版本、Lake 项目网络权限和 Grafana 组织授权执行。见[只读接入计划](plan/feature-grafana-read-1.md)与[接入说明](docs/grafana-event-receiver.md)。

@@ -1,0 +1,233 @@
+import {rm} from 'node:fs/promises';
+import {join} from 'node:path';
+import type {AgentActivity,AgentConnection,AgentLaunch,AgentTurnResult,ObserveAgentModel,ScopedHttpMcp} from './client';
+import {antigravityProfileArgs,isCliModelId,isCliReasoningEffort} from './cli-profile';
+import {CodexChecklist,readCodexChecklist} from './codex-activity';
+import {JsonRpcProcess} from './process';
+import {privateFile,privatePath} from './private';
+import {digest} from '../tasks';
+import type {CodexModelOption} from './types';
+
+export const antigravityLoginRequired='Google Antigravity 尚未登录，请使用 Google 登录';
+const specialistProgressInstructions=`For work with dependent stages, a wait, or several independently checkable results, create a short checklist once you know the work involved, before starting the substantive checks. Use call_mcp_tool with this input shape, filling in the specific checkpoints in the user's language:
+{"ServerName":"lake","ToolName":"TodoWrite","Arguments":{"todos":[{"content":"First checkpoint","status":"in_progress","priority":"high"},{"content":"Next checkpoint","status":"pending","priority":"medium"}]}}
+Send the full current list on each material change. Mark a checkpoint completed when its result is actually confirmed. Keep unresolved checks open and explain the blocker. A single simple lookup or short answer needs no checklist.
+For substantial work, send a short public assistant message when starting and again when there is a meaningful finding or obstacle. Describe the current check or observed result in the user's language. Continue working after each update. Keep private reasoning separate and avoid narrating every tool call.`;
+
+type SelectConfig={id:string;currentValue:string;options:unknown[]};
+function selectConfig(result:any,category:'model'|'thought_level'):SelectConfig|undefined {
+  if(!Array.isArray(result?.configOptions))return;
+  const valid=category==='model'?isCliModelId:isCliReasoningEffort;
+  return result.configOptions.find((item:any)=>item?.type==='select'&&
+    (item.category===category||item.id===category||category==='thought_level'&&item.id==='thinking_level')&&
+    typeof item.id==='string'&&valid(item.currentValue)&&Array.isArray(item.options));
+}
+function optionValues(config:SelectConfig){
+  return config.options.flatMap((option:any)=>Array.isArray(option?.options)?option.options.map((item:any)=>item?.value):[option?.value]);
+}
+
+/** Google Antigravity's official ACP v1 endpoint. Native action requests are declined. */
+export class Antigravity implements AgentConnection {
+  private readonly rpc:JsonRpcProcess;
+  private sessionId?:string;
+  private resume=false;
+  private readonly googleLogin:boolean;
+  private modelSelection?:SelectConfig;
+  private reasoningSelection?:SelectConfig;
+  private turn?:{
+    messages:Map<string,string>;
+    calls:Map<string,string|false>;
+    plan:CodexChecklist;
+    planSequence:number;
+  };
+  localModel?:string;
+  model?:string;
+  models:string[]=[];
+
+  static async launch(launch:Omit<AgentLaunch,'args'>,publish:(event:AgentActivity)=>void,mcp?:ScopedHttpMcp,
+    model?:string,systemPrompt?:string,observeModel?:ObserveAgentModel,reasoningEffort?:string){
+    const config=await privatePath(launch.env.HOME!,'.gemini','config');
+    const agents=await privatePath(config,'agents');
+    const servers=mcp?{lake:{serverUrl:mcp.serverUrl,headers:mcp.headers}}:{};
+    // The restricted primary agent excludes the native shell, filesystem,
+    // browser, scheduling and subagent tools. It sees this run's MCP only.
+    const manifest=mcp?`Use call_mcp_tool with ServerName "lake", the exact ToolName, and Arguments from the following tool schemas. Use these Lake tools for any task progress, approvals and actions.\n${JSON.stringify(mcp.tools)}`:'';
+    const progress=mcp?.tools.some(tool=>tool.name==='TodoWrite')?specialistProgressInstructions:'';
+    const instructions=['---','name: lake','description: Lake specialist execution','mainAgent: true','subagent: false',
+      'tools: []','commandExecutionPolicy: off',`inheritMcp: ${!!mcp}`,'inheritCustomizations: false','---',progress,systemPrompt??'',manifest].join('\n');
+    await privateFile(agents,'lake.md',instructions);
+    await privateFile(config,'mcp_config.json',JSON.stringify({mcpServers:servers}));
+    return new Antigravity(launch,publish,join(config,'mcp_config.json'),mcp,model,observeModel,reasoningEffort);
+  }
+
+  private constructor(launch:Omit<AgentLaunch,'args'>,private readonly publish:(event:AgentActivity)=>void,
+    private readonly configFile:string,private readonly mcp?:ScopedHttpMcp,private readonly requestedModel?:string,
+    private readonly observeModel?:ObserveAgentModel,private readonly requestedEffort?:string){
+    this.googleLogin=!!launch.env.GEMINI_HOME;
+    this.rpc=new JsonRpcProcess({...launch,args:['acp','--disable-telemetry','--agent','lake',...antigravityProfileArgs(launch.env),
+      ...(mcp?['--process-per-session']:[])]},{
+      request:async(method,params)=>{
+        if(method!=='session/request_permission')throw new Error('该 ACP 请求未获得 Lake 授权');
+        return this.permission(params);
+      },
+      notification:(method,params)=>this.update(method,params),
+    },true);
+  }
+  private scopedCall(event:any){
+    const input=event?.rawInput;
+    return event?.name==='call_mcp_tool'&&typeof event.toolCallId==='string'&&event.toolCallId.length<=256&&input?.ServerName==='lake'&&
+      this.mcp?.tools.some(tool=>tool.name===input.ToolName)===true;
+  }
+  private permission(params:any){
+    const cancelled={outcome:{outcome:'cancelled'}};
+    const turn=this.turn;
+    if(!turn||params?.sessionId!==this.sessionId||!Array.isArray(params.options))return cancelled;
+    const call=params.toolCall;
+    const allowed=this.scopedCall(call)&&turn.calls.get(call.toolCallId)===digest(call.rawInput);
+    const option=params.options.find((option:any)=>option?.kind===(allowed?'allow_once':'reject_once')&&typeof option.optionId==='string');
+    if(!option)return cancelled;
+    if(allowed){
+      turn.calls.set(call.toolCallId,false);
+      this.mcp!.guard();
+    }
+    return {outcome:{outcome:'selected',optionId:option.optionId}};
+  }
+  private async request(method:string,params:unknown,signal:AbortSignal){
+    try{return await this.rpc.request(method,params,signal,method==='session/prompt'?2_147_483_647:20000);}
+    catch(error){
+      signal.throwIfAborted();
+      if(error instanceof Error&&((error as Error & {code?:number}).code===-32000||
+        /authentication required|no browser is available/i.test(error.message)))
+        throw new Error(this.googleLogin?antigravityLoginRequired:'Google Antigravity 未接受 Gemini API Key，请检测连接');
+      throw new Error(`Google Antigravity 的 ${method} 请求未完成`);
+    }
+  }
+  async initialize(signal:AbortSignal){
+    const result=await this.request('initialize',{protocolVersion:1,clientCapabilities:{},clientInfo:{name:'lake',title:'Lake',version:'1'}},signal);
+    if(result?.protocolVersion!==1)throw new Error('Google Antigravity 的 ACP 协议版本不受支持');
+    if(this.googleLogin)await this.request('authenticate',{methodId:'oauth-personal'},signal);
+    const capabilities=result.agentCapabilities?.sessionCapabilities;
+    this.resume=!!capabilities?.resume;
+    return {streaming:true,resume:this.resume,cancel:true};
+  }
+  async openSession(options:{cwd:string;threadId?:string},signal:AbortSignal){
+    if(this.sessionId||options.threadId&&!this.resume)throw new Error('当前 Google Antigravity 连接无法继续原会话');
+    const result=await this.request(options.threadId?'session/resume':'session/new',{
+      cwd:options.cwd,mcpServers:[],...(options.threadId?{sessionId:options.threadId}:{}),
+    },signal);
+    const id=result?.sessionId??options.threadId;
+    if(typeof id!=='string'||!id||id.length>256||options.threadId&&id!==options.threadId)throw new Error('Google Antigravity 没有返回对应会话');
+    this.sessionId=id;
+    this.modelSelection=selectConfig(result,'model');
+    this.reasoningSelection=selectConfig(result,'thought_level');
+    const legacy=result?.models;
+    this.localModel=this.modelSelection?.currentValue??(isCliModelId(legacy?.currentModelId)?legacy.currentModelId:undefined);
+    const values=this.modelSelection?optionValues(this.modelSelection):
+      Array.isArray(legacy?.availableModels)?legacy.availableModels.map((item:any)=>item?.modelId):[];
+    this.models=[...new Set<string>([...values,this.localModel].filter(isCliModelId))].slice(0,256);
+    this.model=this.localModel;
+    if(this.requestedModel&&this.requestedModel!==this.localModel)await this.selectModel(this.requestedModel,signal);
+    if(this.requestedEffort){
+      const config=this.reasoningSelection;
+      if(!config||!optionValues(config).includes(this.requestedEffort))throw new Error('Antigravity 所选模型不支持这个思考强度');
+      if(config.currentValue!==this.requestedEffort){
+        const updated=await this.request('session/set_config_option',{sessionId:id,configId:config.id,value:this.requestedEffort},signal);
+        const confirmed=selectConfig(updated,'thought_level');
+        if(confirmed?.currentValue!==this.requestedEffort)throw new Error('Antigravity 未确认使用所选思考强度');
+        this.reasoningSelection=confirmed;
+      }
+    }
+    return id;
+  }
+  private async selectModel(model:string,signal:AbortSignal){
+    if(!this.models.includes(model))throw new Error('当前 Google Antigravity 账户未提供所选模型');
+    if(this.modelSelection){
+      const updated=await this.request('session/set_config_option',
+        {sessionId:this.sessionId,configId:this.modelSelection.id,value:model},signal);
+      const confirmed=selectConfig(updated,'model');
+      if(confirmed?.currentValue!==model)throw new Error('Google Antigravity 未确认使用所选模型');
+      this.modelSelection=confirmed;
+      this.reasoningSelection=selectConfig(updated,'thought_level');
+    }else{
+      await this.request('session/set_model',{sessionId:this.sessionId,modelId:model},signal);
+      this.reasoningSelection=undefined;
+    }
+    this.model=model;
+  }
+  /** Read model-specific options in the disposable probe session without sending a turn. */
+  async discoverModels(signal:AbortSignal):Promise<CodexModelOption[]> {
+    const inspection=AbortSignal.any([signal,AbortSignal.timeout(20000)]);
+    const catalog=new Map<string,CodexModelOption>(this.models.map(id=>[id,{id,reasoningEfforts:[]}]));
+    const record=()=>{
+      const entry=this.model&&catalog.get(this.model);
+      const config=this.reasoningSelection;
+      if(entry&&config){
+        entry.reasoningEfforts=[...new Set(optionValues(config).filter(isCliReasoningEffort))].slice(0,32);
+        entry.defaultReasoningEffort=config.currentValue;
+      }
+    };
+    const initialModel=this.model;
+    record();
+    if(this.modelSelection){
+      for(const model of this.models){
+        if(inspection.aborted||this.rpc.signal.aborted)break;
+        if(model===initialModel)continue;
+        try{await this.selectModel(model,inspection);record();}
+        catch{signal.throwIfAborted();/* Some listed models cannot be selected for a probe. */}
+      }
+    }
+    signal.throwIfAborted();
+    return [...catalog.values()];
+  }
+  async exec(text:string,signal:AbortSignal):Promise<AgentTurnResult>{
+    if(!this.sessionId||this.turn)throw new Error('Google Antigravity 会话当前不可用');
+    this.turn={messages:new Map(),calls:new Map(),plan:new CodexChecklist(),planSequence:0};
+    if(this.model)this.observeModel?.(this.model,'google-antigravity',this.reasoningSelection?.currentValue);
+    try{
+      const prompt=[{type:'text',text}];
+      const result=await this.request('session/prompt',{sessionId:this.sessionId,prompt},signal);
+      const usage=result?.usage;
+      if(Number.isSafeInteger(usage?.inputTokens)&&usage.inputTokens>=0&&Number.isSafeInteger(usage.outputTokens)&&usage.outputTokens>=0)
+        this.publish({kind:'usage',usage:{inputTokens:usage.inputTokens,outputTokens:usage.outputTokens}});
+      if(result?.stopReason==='end_turn'||result?.stopReason==='cancelled')return {stopReason:result.stopReason};
+      return {stopReason:'failed',error:'Google Antigravity 未完成本轮，请检查账户、模型和工具连接'};
+    }finally{this.turn=undefined;}
+  }
+  private update(method:string,params:any){
+    const turn=this.turn;
+    if(!turn||method!=='session/update'||params?.sessionId!==this.sessionId)return;
+    const event=params.update;
+    if(event?.sessionUpdate==='plan'&&this.mcp){
+      const plan=readCodexChecklist(event.entries,'content');
+      if(!plan)return;
+      for(const change of turn.plan.update(plan)){
+        this.publish({kind:'tool_update',callId:JSON.stringify(['plan',++turn.planSequence]),
+          title:'更新计划',status:'completed',toolSource:'agent-plan',...change});
+      }
+    }else if(event?.sessionUpdate==='agent_message_chunk'&&event.content?.type==='text'&&typeof event.content.text==='string'){
+      const messageId=typeof event.messageId==='string'?event.messageId:this.sessionId!;
+      const current=turn.messages.get(messageId)??'';
+      const delta=event.content.text.slice(0,Math.max(0,65536-current.length));
+      if(delta){
+        const messageText=current+delta;
+        turn.messages.set(messageId,messageText);
+        this.publish({kind:'text',text:delta,messageId,messageText});
+      }
+    }else if(['tool_call','tool_call_update'].includes(event?.sessionUpdate)&&typeof event.toolCallId==='string'){
+      const calls=turn.calls;
+      const knownCall=calls.has(event.toolCallId),scopedTool=knownCall||this.scopedCall(event);
+      if(['completed','failed','cancelled'].includes(event.status)){
+        if(knownCall)calls.set(event.toolCallId,false);
+      }else if(event.sessionUpdate==='tool_call'&&scopedTool&&!knownCall&&calls.size<2048){
+        calls.set(event.toolCallId,digest(event.rawInput));
+      }
+      this.publish({kind:event.sessionUpdate==='tool_call'?'tool':'tool_update',callId:event.toolCallId,
+        title:typeof event.title==='string'?event.title:'Google Antigravity 工具',status:typeof event.status==='string'?event.status:'pending',
+        ...(scopedTool&&{scopedTool:true})});
+    }
+  }
+  async steer(){return false;}
+  async cancel(){if(this.turn&&this.sessionId&&!this.rpc.signal.aborted)this.rpc.notify('session/cancel',{sessionId:this.sessionId});}
+  diagnostics(){return '';}
+  async close(){await this.rpc.close();await rm(this.configFile,{force:true});}
+}

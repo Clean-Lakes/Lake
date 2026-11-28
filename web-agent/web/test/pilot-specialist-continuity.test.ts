@@ -39,6 +39,22 @@ test('both specialist surfaces keep one animal on the latest Codex prose through
  }
 });
 
+test('an Antigravity turn with only saved tool events renders the process before public prose',()=>{
+ const row=advance([],workspace())[0]!,state=snapshot(row),turnId=state.ai!.rootTurnId;
+ state.ai!.cards=[{id:'run',type:'operation',at,status:'running',data:{
+  source:'external_agent',external_agent:'antigravity',external_run_id:'run',taskId:row.worker.task.executionGoalId,root_turn_id:turnId,
+  external_events:[
+   {kind:'tool',callId:'one',title:'检查资源',status:'pending',at},
+   {kind:'tool_update',callId:'one',status:'completed',at},
+   {kind:'tool',callId:'two',title:'核对记录',status:'in_progress',at},
+  ],
+ }}];
+ assert.match(html(row,state),/已调用 1 个工具，正在调用 1 个工具/);
+ assert.doesNotMatch(html(row,state),/工具调用 ·|>检查资源<|>核对记录</);
+ const foreign={...state,ai:{...state.ai!,rootTurnId:'other-root'}};
+ assert.doesNotMatch(html(row,foreign),/已调用 1 个工具|正在调用 1 个工具/);
+});
+
 test('an observed dispatch survives an activity gap in its original slot without inventing work',()=>{
  const state=workspace([worker(),worker('database')]),initial=advance([],state);
  state.workers[0]!.activity=undefined;
@@ -189,7 +205,7 @@ test('a host-confirmed report replaces the same task slot across SDK invocations
  assert.equal(advance(initial,workspace([item]),[user,wrongSource],roots)[0]!.finalReport,undefined);
 });
 
-test('the live specialist process waits for the formal report presentation before folding',()=>{
+test('the live specialist process is hidden as the formal report first arrives',()=>{
  const row=advance([],workspace())[0]!;
  const final:Message={...report(row),author:{...row.author,rootTurnId:'sdk-root',durationMs:135000},codexActivity:[
   {kind:'text',id:'step',text:'正在核对记录。'},
@@ -197,14 +213,13 @@ test('the live specialist process waits for the formal report presentation befor
  ]};
  const delivered={...row,finalReport:final};
  const render=(arriveReport:boolean)=>renderToStaticMarkup(createElement(PilotSpecialistReplyView,{
-  row:delivered,foldSpecialistProcess:true,arriveReport,onInspectSpecialist(){},
+  row:delivered,arriveReport,onInspectSpecialist(){},
  }));
- const presenting=render(true);
- assert.match(presenting,/正在核对记录。[\s\S]*正式结果/);
- assert.match(presenting,/data-placement="side"[^>]*aria-label="查看服务器专员的执行过程"/);
- const settled=render(false);
- assert.match(settled,/正式结果[\s\S]*aria-label="查看执行过程"[^>]*aria-expanded="false"[\s\S]*2 分钟 15 秒[\s\S]*正在核对记录。/);
- assert.doesNotMatch(settled,/data-placement="side"/);
+ for(const arrives of [true,false]){
+  const html=render(arrives);
+  assert.match(html,/正式结果[\s\S]*aria-label="查看服务器专员的执行过程"[^>]*aria-expanded="false"[\s\S]*2 分钟 15 秒[\s\S]*aria-hidden="true" inert="" hidden=""[\s\S]*正在核对记录。/);
+  assert.doesNotMatch(html,/data-placement="side"/);
+ }
 });
 
 test('published stage prose keeps working motion and trims only its terminal full stop',()=>{

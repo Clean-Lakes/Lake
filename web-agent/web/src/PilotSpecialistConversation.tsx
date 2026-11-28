@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {SessionEvent,SessionSnapshot,SpecialistReplyAuthor} from '../../shared/contracts';
 import {SpecialistExecutionProcess} from './CodexActivity';
-import {codexActivity} from '../../shared/codex-activity';
+import {specialistActivity} from '../../shared/codex-activity';
 import {api} from './api';
 import {applyLiveText} from './liveTextUpdates';
 import {acceptSnapshot} from './snapshotUpdates';
@@ -112,7 +112,6 @@ type SpecialistReplyProps={
  onReportPresented?:ReportPresented;
  arriveReport?:boolean;
  taskLabel?:string;
- foldSpecialistProcess?:boolean;
 };
 
 function PilotSpecialistReply({row,connected,subscribeWorkerEvents,...props}:SpecialistReplyProps&{
@@ -130,7 +129,7 @@ function PilotReplyProse({text,active,animateInitial,cursorAvatar}:{text:string;
 /** Public reply presentation is separate from the exact-worker live subscription. */
 export function PilotSpecialistReplyView({
  row,snapshot,livePacket,available=true,visible=true,onSpecialist,onInspectSpecialist,onInspectProcess,onObservedTurn,onReportPresented,
- arriveReport,taskLabel,foldSpecialistProcess=false,
+ arriveReport,taskLabel,
 }:SpecialistReplyProps&{snapshot?:SessionSnapshot;livePacket?:boolean;available?:boolean;visible?:boolean}){
  const appearance=useSpecialistAppearance(row.author);
  const previous=useRef<PilotReplyPresentation&{observed:boolean}>(undefined),binding=pilotSpecialistBinding(row);
@@ -162,13 +161,12 @@ export function PilotSpecialistReplyView({
  },[entry?.reply?.turnId,onObservedTurn,row]);
  const observedRoot=entry?.reply?.turnId??row.observedRootTurnId;
  if(!report&&observedRoot&&row.reportedTurns.includes(observedRoot))return null;
- const transcript=report?.codexActivity??codexActivity(statusSnapshot?.ai,row.worker.task.executionGoalId??row.worker.task.taskId,
+ const transcript=report?.codexActivity??specialistActivity(statusSnapshot?.ai,row.worker.task.executionGoalId??row.worker.task.taskId,
   report?.author?.rootTurnId??entry?.reply?.turnId??row.observedRootTurnId??statusSnapshot?.ai?.rootTurnId);
  const hasActivity=transcript.some(item=>item.kind!=='text');
  const hasTranscriptProse=transcript.some(item=>item.kind==='text'&&!!item.text.trim());
  const showsTranscript=hasActivity||!report&&hasTranscriptProse;
- const collapseProcess=foldSpecialistProcess&&hasActivity&&!!report&&!!text.trim()&&
-  (!arriveReport||presented===report.id);
+ const collapseProcess=hasActivity&&!!report&&!!text.trim();
  const hasProse=!!text.trim()||hasTranscriptProse;
  const statusMotion=working&&visible&&!awaitingReport&&status?.phase!=='settled';
  const thinking=moving&&row.activity.phase==='thinking'&&allowsAnimalThinking(snapshot?.ai)&&(!status||status.phase==='thinking')&&!hasProse&&projected?.card?.type!=='plan_reference';

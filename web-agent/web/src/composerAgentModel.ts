@@ -1,2 +1,4 @@
+import type {ExternalAgentId} from '../../shared/external-agents';
+
 export const codexModelValue='__lake_codex_agent__',codexSettingsValue='__lake_codex_settings__';
-export type ComposerExternalAgent={ready:boolean;message?:string;model?:string;configurationOnly?:boolean};
+export type ComposerExternalAgent={id?:ExternalAgentId;ready:boolean;message?:string;model?:string;configurationOnly?:boolean};

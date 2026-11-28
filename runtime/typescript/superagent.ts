@@ -1,4 +1,4 @@
-import {codexActivity} from '../../web-agent/shared/codex-activity';
+import {specialistActivity,type CodexActivityItem} from '../../web-agent/shared/codex-activity';
 import {redactModelValue} from "./model-errors";
 import type {PilotConfiguration} from "./pilot-configuration";
 import {pilotConfigurationToolNames} from "./configuration-tool-names";
@@ -26,7 +26,7 @@ import { activeResourceGrants } from "./gateway";
 import { resolveGatewayResourceScope } from "./gateway-approvals";
 import type { AgentHost, HostProfile, HostToolContext, TurnOutcome } from "./agent-host";
 import {TaskDeadlineReached} from "./task-deadline";
-import {chooseSpecialistExecution,specialistExecutionOptions,type SpecialistExecutionOption} from './specialist-execution';
+import {chooseSpecialistExecution,isExternalModelId,specialistExecutionOptions,type SpecialistExecutionOption} from './specialist-execution';
 import { LakeAgents } from "./agent";
 import { HttpError, id, LakeStore, now, type StoredSession } from "./store";
 import { canonical, digest, TaskLedger, terminal, text, type Goal, type Operation } from "./tasks";
@@ -53,11 +53,11 @@ import {TaskWatchdog, type WatchdogSample, type WatchdogRecord} from "./watchdog
 import {prepareWatchdogEvidence, watchdogEvidence, transientModelFailure, type WatchdogRetry} from "./watchdog-observation";
 import type {TurnFailure} from "./model-errors";
 import type {WatchdogFinding, WatchdogMode} from "../../web-agent/shared/contracts";
-import type {AgentBackendRef,AgentExecutionSummary,SpecialistAgentAssignment} from '../../web-agent/shared/external-agents';
+import type {AgentBackendRef,AgentExecutionSummary,ExternalAgentId,SpecialistAgentAssignment} from '../../web-agent/shared/external-agents';
 import type {ExternalRun} from './acp/types';
 import {resolveCodexRunOrigins} from './acp/run-origin';
-import {externalExecutionName} from '../../web-agent/shared/external-agents';
-import {isCodexModelId} from './acp/codex-profile';
+import {externalAgentName,externalExecutionName,isExternalAgentId} from '../../web-agent/shared/external-agents';
+import {externalAgentIds} from './acp/catalog';
 
 const questionResultBytes=131072;
 const questionResultBudget={maxInlineBytes:questionResultBytes,maxModelBytes:questionResultBytes,strategy:'truncate' as const,
@@ -121,7 +121,7 @@ const str = { type: "string" }, integer = { type: "integer" };
 const array = (items: unknown) => ({ type: "array", items });
 const specialistProfileFields = {
   name: str, duties: str, avatar_id: str, model_id: str, provider_id: str,
-  execution: objectSchema({kind: {type: "string", enum: ["acp"]}, agent: {type: "string", enum: ["codex"]},
+  execution: objectSchema({kind: {type: "string", enum: ["acp"]}, agent: {type: "string", enum: externalAgentIds},
     model: objectSchema({modelId: str}, ["modelId"])}, ["kind", "agent"]),
 };
 const legacySpecialistExecution = '该历史专员任务使用旧执行后端，请通过 Pilot 发起新的 Codex 任务。';
@@ -783,33 +783,41 @@ export class LakeSuperagent implements AgentHost {
   private roleBackend(projectId:string,backend:unknown,allowRevision=false):AgentBackendRef {
     if(!backend||typeof backend!=='object'||Array.isArray(backend)||Object.keys(backend).some(key=>!['kind','agent','model',...(allowRevision?['revision']:[])].includes(key)))
       throw new HttpError(400,'请选择当前支持的专员执行后端');
-    const value=backend as Record<string,unknown>;
-    this.requireSpecialistExecution(value as AgentBackendRef,400);
-    if(value.revision!==undefined&&(!Number.isSafeInteger(value.revision)||(value.revision as number)<1))throw new HttpError(400,'执行后端版本无效');
+    const value=backend as AgentBackendRef;
+    this.requireSpecialistExecution(value,400);
+    const agent=value.agent;
+    if(value.revision!==undefined&&(!Number.isSafeInteger(value.revision)||value.revision<1))throw new HttpError(400,'执行后端版本无效');
     let model:AgentBackendRef['model'];
     if(value.model!==undefined){
       if(!value.model||typeof value.model!=='object'||Array.isArray(value.model)||Object.keys(value.model).some(key=>!['modelId','providerId'].includes(key)))throw new HttpError(400,'模型引用无效');
-      const ref=value.model as Record<string,unknown>;
+      const ref=value.model;
       model={modelId:text(ref.modelId,'modelId',256),...(ref.providerId!==undefined?{providerId:text(ref.providerId,'providerId',256)}:{})};
-      if(model.providerId!==undefined||!isCodexModelId(model.modelId))throw new HttpError(400,'Codex 模型引用无效');
+      if(model.providerId!==undefined||!isExternalModelId(agent,model.modelId))throw new HttpError(400,'外部执行器模型引用无效');
     }
-    const profile=this.agents.external.registry.get(projectId,'codex');
+    const profile=this.agents.external.registry.get(projectId,agent);
+    if(value.revision!==undefined&&profile.revision!==value.revision)throw new HttpError(409,'执行器配置已变化，请重新检测连接');
     return {kind:'acp',agent:profile.id,...(model?{model}:{})};
   }
-  private requireSpecialistExecution(execution:AgentBackendRef|undefined,status:400|409){
-    if(execution?.kind!=='acp'||execution.agent!=='codex')
-      throw new HttpError(status,status===400?'专员仅支持 Codex 执行':legacySpecialistExecution);
+  private requireSpecialistExecution(execution:AgentBackendRef|undefined,status:400|409):asserts execution is Extract<AgentBackendRef,{kind:'acp'}>&{agent:ExternalAgentId} {
+    if(execution?.kind!=='acp'||!isExternalAgentId(execution.agent))
+      throw new HttpError(status,status===400?'请选择当前支持的专员执行器':legacySpecialistExecution);
   }
   private executionOptions(projectId:string, kind?: AgentBackendRef["kind"]){
-    const registry=this.agents.external?.registry,profile=registry?.get(projectId,'codex');
-    const probe=profile&&registry?.probe(projectId,'codex');
-    const ready=process.platform==='darwin'&&!!profile?.enabled&&probe?.revision===profile.revision&&probe.authentication==='codex-local'&&probe.ready===true&&probe.authenticated===true;
-    return specialistExecutionOptions([],profile?[{...profile,name:'Codex',installed:ready,transportReady:ready,assignmentReady:ready,
-      model:probe?.model,modelOptions:probe?.models?.map(option=>option.id)}]:[]);
+    const registry=this.agents.external?.registry;
+    if(!registry||kind==='native')return [];
+    return specialistExecutionOptions([],externalAgentIds.flatMap(id=>{
+      const profile=registry.get(projectId,id);
+      if(!profile?.enabled||profile.id!==id)return [];
+      const probe=registry.probe(projectId,id);
+      const ready=process.platform==='darwin'&&probe?.revision===profile.revision&&probe.authentication===profile.authentication&&
+        probe.ready===true&&probe.authenticated===true&&(profile.authentication!=='claude-custom-api'||!!profile.modelOverride);
+      return [{...profile,name:externalAgentName(id),installed:ready,transportReady:ready,assignmentReady:ready,
+        model:probe?.model,modelOptions:probe?.models?.map(option=>option.id)}];
+    }));
   }
   private async refreshSpecialistConnection(projectId: string) {
     const adapter = this.agents.external;
-    return adapter?.registry.get(projectId,"codex").enabled ? adapter.status(projectId) : [];
+    return adapter&&externalAgentIds.some(id=>adapter.registry.get(projectId,id).enabled)?adapter.status(projectId):[];
   }
   private async refreshedExecutionOptions(projectId: string, kind?: AgentBackendRef["kind"]) {
     if(kind!=="native")await this.refreshSpecialistConnection(projectId);
@@ -818,15 +826,20 @@ export class LakeSuperagent implements AgentHost {
   private creationExecution(projectId:string,input:Record<string,any>,available?:SpecialistExecutionOption[]):AgentBackendRef{
     const backend=input.execution===undefined?undefined:this.roleBackend(projectId,input.execution);
     let options=available??this.executionOptions(projectId, backend?.kind);
+    if(!backend&&input.model_id===undefined&&options.some(option=>option.execution.kind==='acp'&&option.execution.agent==='codex'&&!option.explicitOnly))
+      options=options.filter(option=>option.execution.kind==='acp'&&option.execution.agent==='codex');
     if(backend?.model)options=options.filter(option=>canonical(option.execution.model)===canonical(backend.model));
-    return chooseSpecialistExecution(options,{kind:backend?.kind,agent:backend?.kind==='acp'?'codex':undefined,
+    const agent=backend?.kind==='acp'&&isExternalAgentId(backend.agent)?backend.agent:undefined;
+    return chooseSpecialistExecution(options,{kind:backend?.kind,agent,
       modelId:input.model_id??backend?.model?.modelId,providerId:input.provider_id});
   }
   private updatedExecution(role:Role,input:Record<string,any>,available?:SpecialistExecutionOption[]):AgentBackendRef|undefined{
-    const backend=input.execution===undefined?role.execution:this.roleBackend(role.projectId,input.execution);
+    const explicit=input.execution===undefined?undefined:this.roleBackend(role.projectId,input.execution);
+    const backend=explicit??role.execution;
     if(input.model_id!==undefined||input.provider_id!==undefined){
-      const current=input.execution===undefined?this.roleExecution(role):backend!;
-      return chooseSpecialistExecution(available??this.executionOptions(role.projectId, current.kind),{kind:current.kind,agent:current.kind==='acp'?'codex':undefined,
+      const current=explicit??this.roleExecution(role);
+      const agent=current.kind==='acp'&&isExternalAgentId(current.agent)?current.agent:undefined;
+      return chooseSpecialistExecution(available??this.executionOptions(role.projectId,current.kind),{kind:current.kind,agent,
         modelId:input.model_id,providerId:input.provider_id??(current.kind==='native'?current.model?.providerId:undefined)});
     }
     const same=backend?.kind===role.execution?.kind&&(backend?.kind!=='acp'||role.execution?.kind==='acp'&&backend.agent===role.execution.agent);
@@ -841,28 +854,30 @@ export class LakeSuperagent implements AgentHost {
     return updated;
   }
   private roleExecution(role:Role,freezeModel=false):AgentBackendRef {
-    const registry=this.agents.external.registry,profile=registry.get(role.projectId,'codex');
-    const saved=role.execution?.kind==='acp'&&role.execution.agent==='codex'?role.execution.model:undefined;
-    const probe=freezeModel?registry.probe(role.projectId,'codex'):undefined;
+    const binding=role.execution?.kind==='acp'?role.execution:undefined;
+    const agent=isExternalAgentId(binding?.agent)?binding.agent:'codex';
+    const registry=this.agents.external.registry,profile=registry.get(role.projectId,agent);
+    const saved=binding?.agent===agent?binding.model:undefined;
+    const probe=freezeModel?registry.probe(role.projectId,agent):undefined;
     const localModel=probe?.localModel??probe?.model;
     const projectModel=freezeModel?profile.modelOverride:undefined;
     const model=projectModel?{modelId:projectModel}:saved??(localModel?{modelId:localModel}:undefined);
-    return {kind:'acp',agent:'codex',revision:profile.revision,...(model?{model:structuredClone(model)}:{})};
+    return {kind:'acp',agent,revision:profile.revision,...(model?{model:structuredClone(model)}:{})};
   }
   private freezeRoleExecution(role:Role):Role {
     const execution=this.roleExecution(role,true);
-    if(execution.kind==='acp'){
-      const profile=this.agents.external.registry.get(role.projectId,execution.agent);
-      const probe=this.agents.external.registry.probe(role.projectId,'codex');
-      const blocker=!profile.enabled?'Codex 尚未启用':probe?.revision!==profile.revision?'Codex 当前连接配置尚未验证':
-        probe.authentication!=='codex-local'?'本机 Codex 登录状态需要重新验证':!probe.ready?probe.message??'Codex 连接测试尚未通过':
-        !probe.authenticated?'本机 Codex 尚未登录，请先在 Codex 中完成登录':undefined;
-      if(blocker)throw new HttpError(409,`专员「${role.name}」的本机 Codex 执行配置不可用。${blocker}。请检查该专员的执行模型，或在模型菜单中重新测试本机 Codex。`);
-      if(execution.model&&(execution.model.providerId!==undefined||!isCodexModelId(execution.model.modelId)))
-        throw new HttpError(409,`专员「${role.name}」的 Codex 模型引用无效，请更新该专员的执行模型。`);
-      return {...role,execution};
-    }
-    throw new HttpError(409,'专员仅支持 Codex 执行');
+    this.requireSpecialistExecution(execution,409);
+    const id=execution.agent,name=externalAgentName(id);
+    const profile=this.agents.external.registry.get(role.projectId,id);
+    const probe=this.agents.external.registry.probe(role.projectId,id);
+    const blocker=!profile.enabled?`${name} 尚未启用`:probe?.revision!==profile.revision?`${name} 当前连接配置尚未验证`:
+      probe.authentication!==profile.authentication?`${name} 认证状态需要重新验证`:!probe.ready?probe.message??`${name} 连接测试尚未通过`:
+      !probe.authenticated?(id==='codex'?'本机 Codex 尚未登录，请先在 Codex 中完成登录':`${name} 登录需要重新验证`):
+      profile.authentication==='claude-custom-api'&&!profile.modelOverride?'请选择第三方模型并保存':undefined;
+    if(blocker)throw new HttpError(409,`专员「${role.name}」的本机 ${name} 执行配置不可用。${blocker}。请在模型配置中检查连接。`);
+    if(execution.model&&(execution.model.providerId!==undefined||!isExternalModelId(id,execution.model.modelId)))
+      throw new HttpError(409,`专员「${role.name}」的 ${name} 模型引用无效，请更新该专员的执行模型。`);
+    return {...role,execution};
   }
   private roleByKey(projectId: string, roleKey: string) {
     const role = this.store.get<Role>("superRoles", digest([projectId, roleKey]));
@@ -916,9 +931,10 @@ export class LakeSuperagent implements AgentHost {
   }
   private savedExecutionLabel(role: Role) {
     const backend = role.execution, model = backend?.model;
-    if (!backend || !model) return;
+    if(!backend)return;
+    if(!model)return backend.kind==='acp'?{agentName:externalAgentName(backend.agent),modelName:'CLI 默认模型'}:undefined;
     const provider = backend.kind === "native" && model.providerId ? this.store.modelProvider(model.providerId) : undefined;
-    return { agentName: backend.kind === "native" ? "Lake 原生" : "Codex",
+    return { agentName: backend.kind === "native" ? "Lake 原生" : externalAgentName(backend.agent),
       modelName: provider?.models.find(item => item.id === model.modelId)?.name ?? model.modelId };
   }
   private manage(sessionId: string, input: Record<string, any>,available?:SpecialistExecutionOption[]) {
@@ -2286,13 +2302,13 @@ export class LakeSuperagent implements AgentHost {
         }),
       ...(this.configuration?.entries(sessionId,(eventId,quote)=>this.admitted(sessionId,eventId,quote),()=>this.notify(sessionId,"session"))??[]),
       this.entry("list_specialists", "Find specialists in the current Pilot roster by name, stable key, ID or a keyword in their duties. Omit query to list all. Use the same query with nextCursor. Returns exact IDs, revisions, full duties, avatar and future-task execution.", objectSchema({ query: str, cursor: str, limit: integer }), a => this.listRoles(projectId, a.cursor, a.limit, a.query,group?.roleIds)),
-      this.entry('list_specialist_execution_options','List currently available Codex model bindings for specialists. Copy execution for an exact choice. Metadata never grants resource permissions.',objectSchema({cursor:str,limit:integer}),async(a,context)=>{
+      this.entry('list_specialist_execution_options','List currently available Codex, Claude Code, and Google Antigravity bindings for specialists. Copy execution for an exact choice. Metadata never grants resource permissions.',objectSchema({cursor:str,limit:integer}),async(a,context)=>{
         const available=await this.refreshedExecutionOptions(projectId);context.abortSignal.throwIfAborted();
         const limit=a.limit??20;if(!Number.isSafeInteger(limit)||limit<1||limit>50)throw new HttpError(400,'limit must be 1 to 50');
         if(a.cursor!==undefined&&(typeof a.cursor!=='string'||a.cursor!==''&&!/^[a-f0-9]{64}$/.test(a.cursor)))throw new HttpError(400,'Invalid execution options cursor');
         const rows=available.filter(option=>option.id>(a.cursor??'')),items=rows.slice(0,limit);
         while(items.length>1&&Buffer.byteLength(canonical(items))>8192)items.pop();
-        return {items,nextCursor:rows.length>items.length?items.at(-1)!.id:'',selection:'New specialists use Codex. The host saves the configured compatible model when no model is specified.'};
+        return {items,nextCursor:rows.length>items.length?items.at(-1)!.id:'',selection:'The host uses the configured default when no execution or model is specified.'};
       }),
       this.entry('list_specialist_avatars','List Lake local avatar IDs and Chinese names; optional query matches a name, alias or ID. Copy an exact ID to manage_specialist avatar_id; auto restores stable RoleID selection. No images, files or URLs are loaded.',objectSchema({query:str}),a=>{
         if(a.query!==undefined&&(typeof a.query!=='string'||a.query.length>128))throw new HttpError(400,'Invalid avatar query');
@@ -2301,7 +2317,7 @@ export class LakeSuperagent implements AgentHost {
         const exact=query?lakeAvatarCatalog.filter(avatar=>names(avatar).includes(query)):[];
         return {items:exact.length?exact:lakeAvatarCatalog.filter(avatar=>names(avatar).some(value=>value.includes(query))),reset:'auto'};
       }),
-      this.entry("manage_specialist", "Create or partially update a long-lived specialist from an exact admitted human quote, without creating work. Create requires immutable role_key, name and duties. Specialists use Codex. Omit execution/model_id unless a compatible Codex model was explicitly requested. list_specialist_execution_options returns exact choices. Update requires exact role_id/expected_revision and preserves omitted fields. avatar_id is an exact list_specialist_avatars ID or auto. Model bindings affect future Workers, not global/Pilot model selection, local Codex files or existing Workers. Only announce saved choices after a successful receipt.",
+      this.entry("manage_specialist", "Create or partially update a long-lived specialist from an exact admitted human quote, without creating work. Create requires immutable role_key, name and duties. Omit execution/model_id unless the operator requests an executor or model. list_specialist_execution_options returns exact choices. Update requires exact role_id/expected_revision and preserves omitted fields. avatar_id is an exact list_specialist_avatars ID or auto. Model bindings apply to future Workers. Only announce saved choices after a successful receipt.",
         objectSchema({ event_id: str, part_key: str, action: { enum: ["create", "update"], type: "string" }, role_id: str, role_key: str,
           ...specialistProfileFields, expected_revision: integer, quote: str }, ["event_id", "part_key", "action", "quote"]), async(a,context)=>{
             this.admitted(sessionId,a.event_id,text(a.quote,'quote',16384));context.abortSignal.throwIfAborted();
@@ -2724,23 +2740,32 @@ export class LakeSuperagent implements AgentHost {
     const message = this.store.get<Message>("messages", event.messageId);
     if (message?.role === "user" && message.sessionId === event.sessionId) return message;
   }
+  private reportActivity(activity:CodexActivityItem[],report:Message) {
+    return activity.flatMap<CodexActivityItem>(item=>{
+      if(item.kind==='text'){
+        const text=this.agents.external.reportProgressText(item.id,item.text,report.text);
+        if(text===undefined)return [];
+        return [text===item.text?item:{...item,text}];
+      }
+      const text=item.kind==='command'&&(item.text==='内容已隐藏'||item.text.length===240)
+        ?this.agents.external.historicalCommand(item.id,report.author):undefined;
+      return [text?{...item,text}:item];
+    });
+  }
   /** Enrich old report display from its frozen Worker, without rewriting history. */
   private reportMessage(original:Message):Message {
     let message=stoppedReportProjection(this.store,original,id=>this.ledger.unresolved(id));
     const author=message.author;
     const isReport=message.id.startsWith('report_')&&message.role==='assistant'&&!message.conversation;
     if(isReport&&message.text.trim()&&message.codexActivity){
-      const codexActivity=message.codexActivity.filter(item=>item.kind!=='text'||!this.agents.external.isClosingMessage(item.id));
-      const restored=codexActivity.map(item=>{
-        const text=item.kind==='command'&&(item.text==='内容已隐藏'||item.text.length===240)
-          ?this.agents.external.historicalCommand(item.id,author):undefined;
-        return text?{...item,text}:item;
-      });
+      const restored=this.reportActivity(message.codexActivity,message);
       if(restored.some((item,i)=>item!==message.codexActivity![i])||restored.length!==message.codexActivity.length)
         message={...message,codexActivity:restored};
     }
     const recoverDuration=isReport&&author?.execution?.kind==='acp'&&author.durationMs===undefined&&!!author.rootTurnId;
-    if(!author?.taskId || (!recoverDuration&&author.execution&&(message.replyToMessageId||!isReport)))return message;
+    const recoverActivity=isReport&&author?.execution?.kind==='acp'&&author.execution.agent==='antigravity'&&!!author.rootTurnId&&
+      !message.codexActivity&&!!message.text.trim();
+    if(!author?.taskId || (!recoverDuration&&!recoverActivity&&author.execution&&(message.replyToMessageId||!isReport)))return message;
     const worker=this.store.get<Worker>('superWorkers',author.workerId);
     const target=this.store.get<StoredSession>('sessions',message.sessionId);
     if(!worker||!target||worker.projectId!==target.projectId||worker.sessionId!==author.sessionId||worker.roleId!==author.roleId||
@@ -2756,6 +2781,10 @@ export class LakeSuperagent implements AgentHost {
           result = {...message, replyToMessageId:source.id};
         }
       }
+    }
+    if(recoverActivity){
+      const activity=specialistActivity(this.store.view(worker.sessionId),worker.taskId,author.rootTurnId);
+      if(activity.some(item=>item.kind!=='text'))result={...result,codexActivity:this.reportActivity(activity,message)};
     }
     const durationMs=recoverDuration?this.legacyExternalDuration(worker,message):author.durationMs;
     if(author.execution&&durationMs===author.durationMs)return result;
@@ -3179,8 +3208,8 @@ export class LakeSuperagent implements AgentHost {
       const project = this.store.require<SuperProject>("superProjects", worker.projectId), channel = this.store.require<Channel>("superChannels", worker.roleId);
       const pilot=this.groupOfSource(worker.sourceEventId)??project.routerSessionId;
       const presentation = pending.presentation ?? { body: goal.summary ?? "这次检查还没完成。", channelBody: goal.summary ?? "这次检查还没完成。" };
-      const activity = worker.roleSnapshot.execution?.kind==='acp' && worker.roleSnapshot.execution.agent==='codex'
-        ? codexActivity(this.store.view(worker.sessionId),goal.id,pending.rootTurnId) : [];
+      const activity = worker.roleSnapshot.execution?.kind==='acp'
+        ? specialistActivity(this.store.view(worker.sessionId),goal.id,pending.rootTurnId) : [];
       const source = this.reportSourceMessage(worker.projectId, pending.sourceEventId ?? this.reportSourceEventId(worker, pending.inputEventIds));
       this.store.transaction(() => { for (const target of [pilot, channel.sessionId]) {
         const body = target === channel.sessionId ? presentation.channelBody : presentation.body;
