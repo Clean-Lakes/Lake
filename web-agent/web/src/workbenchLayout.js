@@ -65,6 +65,8 @@
   const navigationButtons = '.workbench-navigation button';
   let observedContextPanel;
   const contextResize = new ResizeObserver(() => schedule());
+  let observedConversationIsland = null;
+  const conversationIslandResize = new ResizeObserver(syncChrome);
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
   function paneLimits(sidebarCollapsed, sidebarPreference = preferred.sidebar) {
     const width = shell?.clientWidth || innerWidth;
@@ -495,7 +497,14 @@
   }
   function syncChrome() {
     const bridge = window.webkit?.messageHandlers?.lakeChrome;
-    if (!bridge || !shell) return;
+    if (!bridge) return;
+    const conversationIsland = shell?.querySelector('.island-conversation[data-island-interactive="true"]') ?? null;
+    if (conversationIsland !== observedConversationIsland) {
+      conversationIslandResize.disconnect();
+      if (conversationIsland) conversationIslandResize.observe(conversationIsland, { box: 'border-box' });
+      observedConversationIsland = conversationIsland;
+    }
+    if (!shell) return;
     const rect = element => { const r = element.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; };
     const headers = [...shell.querySelectorAll('.workspace-header, .terminal-panel-header, .session-inspector-heading')].filter(element => element.getBoundingClientRect().width > 0 && !element.closest('[aria-hidden="true"]') && getComputedStyle(element).visibility !== 'hidden');
     const sidebar = shell.querySelector('.sidebar');
@@ -508,6 +517,8 @@
     const sidebarControls = [...shell.querySelectorAll('.sidebar-brand-row :is(button, a, input, select, textarea, [role="button"], [role="combobox"])')]
       .filter(element => element.getBoundingClientRect().width > 0 && !element.closest('[aria-hidden="true"]') && getComputedStyle(element).visibility !== 'hidden');
     const excluded = [...shell.querySelectorAll(`.workbench-splitter, ${navigationButtons}`), ...sidebarControls, ...headers.flatMap(header => [...header.querySelectorAll('button, a, input, select, textarea, [role="button"]')])].map(rect);
+    // The conversation island handles pointer presses on its surface, including the title and timer.
+    if (conversationIsland && getComputedStyle(conversationIsland).visibility === 'visible') excluded.push(rect(conversationIsland));
     if (sidebarSlide?.shell === shell) excluded.push(...sidebarSlide.buttonPaths);
     for (const element of document.querySelectorAll('.conversation-directory-trigger, .modal-scrim, dialog[open], [role="dialog"], [role="menu"], [role="listbox"]')) excluded.push(rect(element));
     const body = JSON.stringify({ regions, excluded, theme: document.documentElement.dataset.theme || 'light', appearance: window.lakeAppearance || 'light' });
@@ -551,7 +562,7 @@
       clearDrag();
     }
     shell = nextShell;
-    if (!shell) return;
+    if (!shell) { syncChrome(); return; }
     addHandle(shell, 'sidebar');
     const terminal = shell.querySelector('.terminal-side-panel');
     if (terminal) addHandle(terminal, 'terminal');
@@ -570,6 +581,9 @@
   window.addEventListener('lake-workbench-layout', sync);
   document.addEventListener('scroll', () => { if (!sidebarSlide) schedule(); }, true);
   window.addEventListener('lake-chrome-resize', schedule);
-  document.addEventListener('transitionend', event => { if (event.target.matches('.app-shell, .terminal-side-panel, .workbench-navigation, .workbench-sidebar-toggle')) schedule(); });
+  document.addEventListener('transitionend', event => {
+    if (event.target === observedConversationIsland) syncChrome();
+    if (event.target.matches('.app-shell, .terminal-side-panel, .workbench-navigation, .workbench-sidebar-toggle')) schedule();
+  });
   schedule();
 })();

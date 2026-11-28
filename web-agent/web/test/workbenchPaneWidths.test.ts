@@ -6,7 +6,8 @@ import {runInNewContext} from 'node:vm';
 // Exercise the shipped browser/native script through its resize and splitter events.
 const source=readFileSync(new URL('../src/workbenchLayout.js',import.meta.url),'utf8');
 const railWidth=52;
-function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sidebarDuration='420ms',railReadingLeft?:number,options?:{dockWidth?:number;chrome?:boolean;sidebarControls?:Array<{x:number;y:number;width:number;height:number;hidden?:boolean}>}){
+type ChromeIsland = { x:number; y:number; width:number; height:number; interactive:boolean };
+function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sidebarDuration='420ms',railReadingLeft?:number,options?:{dockWidth?:number;chrome?:boolean;sidebarControls?:Array<{x:number;y:number;width:number;height:number;hidden?:boolean}>;chromeIsland?:ChromeIsland}){
  const properties=new Map<string,string>(),callbacks=new Map<number,(time:number)=>void>(),events=new Map<string,Function>();
  const widthSaves:Array<typeof saved>=[];
  const chromeMessages:Array<{regions:number[][];excluded:number[][]}>=[];
@@ -75,6 +76,8 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sid
   getBoundingClientRect:()=>({x:control.x,y:control.y,width:control.width,height:control.height,left:control.x,top:control.y,right:control.x+control.width,bottom:control.y+control.height}),
   closest:(selector:string)=>selector==='[aria-hidden="true"]'&&control.hidden?{}:null,
  }));
+ const chromeIsland={ getBoundingClientRect:()=>options?.chromeIsland, closest:()=>null };
+ let islandResized:(()=>void)|undefined;
  const inspector=makeNode(),terminal=makeNode(),shell={...makeNode(properties),clientWidth:1512,inspectorOpen:!docked,terminalOpen:!docked,sidebarCollapsed:false,
  getBoundingClientRect:()=>rect(0), animate:surface.animate,
  querySelectorAll:(selector:string)=>{
@@ -89,6 +92,7 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sid
   if(selector==='.lake-workbench-islands')return docked?islands:null;
   if(selector==='.workbench-navigation')return navigation;
   if(selector==='.island-conversation')return island;
+  if(selector==='.island-conversation[data-island-interactive="true"]')return options?.chromeIsland?.interactive?chromeIsland:null;
   if(selector==='.workbench-conversation-surface')return docked?surface:null;
   if(selector==='.terminal-side-panel')return this.terminalOpen?terminal:null;
   if(selector==='.session-layout > .session-inspector'||selector==='.session-layout > .session-inspector.is-open')return this.inspectorOpen?inspector:null;
@@ -103,11 +107,16 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382},docked=false,sid
   transitionDuration:pseudo==='::before'?'0.42s':'0s',
   transitionTimingFunction:'ease',
  });
- const context={window,Event,innerWidth:1512,innerHeight:900,localStorage:{getItem(){return null;},setItem(_key:string,value:string){widthSaves.push(JSON.parse(value));}},document:{body:{},head:{appendChild(){}},documentElement:{dataset:{theme:'light'},classList:{add(){},remove(){}}},timeline:{currentTime:10},createElement:()=>makeNode(),querySelector:()=>shell,querySelectorAll:()=>[],addEventListener(){}},getComputedStyle,ResizeObserver:class{observe(){}disconnect(){}},MutationObserver:class{observe(){}disconnect(){}},IntersectionObserver:class{observe(){}disconnect(){}takeRecords(){return [];}},requestAnimationFrame:(callback:(time:number)=>void)=>{callbacks.set(++nextFrame,callback);return nextFrame;},cancelAnimationFrame:(frame:number)=>callbacks.delete(frame)};
+ const context={window,Event,innerWidth:1512,innerHeight:900,localStorage:{getItem(){return null;},setItem(_key:string,value:string){widthSaves.push(JSON.parse(value));}},document:{body:{},head:{appendChild(){}},documentElement:{dataset:{theme:'light'},classList:{add(){},remove(){}}},timeline:{currentTime:10},createElement:()=>makeNode(),querySelector:()=>shell,querySelectorAll:()=>[],addEventListener(){}},getComputedStyle,ResizeObserver:class{
+  constructor(private readonly onResize:()=>void){}
+  observe(element:unknown){if(element===chromeIsland)islandResized=this.onResize;}
+  disconnect(){if(islandResized===this.onResize)islandResized=undefined;}
+ },MutationObserver:class{observe(){}disconnect(){}},IntersectionObserver:class{observe(){}disconnect(){}takeRecords(){return [];}},requestAnimationFrame:(callback:(time:number)=>void)=>{callbacks.set(++nextFrame,callback);return nextFrame;},cancelAnimationFrame:(frame:number)=>callbacks.delete(frame)};
  runInNewContext(source,context);
  const flush=(time=0)=>{for(const [id,callback] of callbacks){callbacks.delete(id);callback(time);}};flush();
  return {properties,animations,flush,widthSaves,chromeMessages,conversation,surface,sidebarPane:sidebar,workspace,dock,islands,navigation,shell,
   sidebar:handles.get('sidebar') as ReturnType<typeof makeNode>,
+  resizeIsland(bounds:Partial<ChromeIsland>){Object.assign(options?.chromeIsland??{},bounds);islandResized?.();flush();},
   drag(type:string,clientX:number,pointerId=1){handles.get('sidebar')[type]({type,clientX,pointerId,button:0,preventDefault(){}});},
   resize(width:number){shell.clientWidth=width;context.innerWidth=width;events.get('resize')!();flush();},reset(pane:string){handles.get(pane).dblclick();flush();},toggle(inspectorOpen:boolean,terminalOpen:boolean){shell.inspectorOpen=inspectorOpen;shell.terminalOpen=terminalOpen;events.get('resize')!();flush();},commit(inspectorOpen:boolean,terminalOpen:boolean){shell.inspectorOpen=inspectorOpen;shell.terminalOpen=terminalOpen;events.get('lake-workbench-layout')!();},collapseSidebar(collapsed:boolean){events.get('lake-workbench-sidebar-toggle')!();shell.sidebarCollapsed=collapsed;events.get('lake-workbench-layout')!();},widths(){return ['--sidebar-width','--terminal-panel-width','--inspector-preferred-width'].map(key=>parseFloat(properties.get(key)!));}};
 }
@@ -352,4 +361,25 @@ test('native titlebar chrome excludes visible merged sidebar brand controls from
  assert.ok(chrome.excluded.some(rect=>rect[0]===155&&rect[2]===28&&rect[3]===28));
  assert.ok(chrome.excluded.some(rect=>rect[0]===186&&rect[2]===28&&rect[3]===28));
  assert.equal(chrome.excluded.some(rect=>rect[0]===10&&rect[1]===11&&rect[2]===134&&rect[3]===30),false);
+});
+
+test('native titlebar leaves the interactive island clickable as its running status changes the bounds',()=>{
+ const page=fixture(undefined,true,'420ms',undefined,{chrome:true,
+  chromeIsland:{x:760,y:12,width:180,height:44,interactive:true},
+ });
+ const contains=(rect:number[],x:number,y:number)=>x>=rect[0]!&&x<rect[0]!+rect[2]!&&y>=rect[1]!&&y<rect[1]!+rect[3]!;
+ const isDraggable=(x:number,y:number)=>{
+  const {regions,excluded}=page.chromeMessages.at(-1)!;
+  return regions.some(rect=>contains(rect,x,y))&&!excluded.some(rect=>contains(rect,x,y));
+ };
+ assert.equal(isDraggable(800,34),false,'compact title and status receive clicks');
+ assert.equal(isDraggable(955,34),true,'the titlebar beside the compact island remains draggable');
+
+ page.resizeIsland({x:730,width:240});
+ assert.equal(isDraggable(955,34),false,'the running timer can receive clicks after the compact island widens');
+ assert.equal(isDraggable(985,34),true,'drag space follows the new bounds');
+
+ page.resizeIsland({interactive:false});
+ page.commit(false,false);
+ assert.equal(isDraggable(955,34),true,'noninteractive islands do not claim titlebar drag space');
 });
