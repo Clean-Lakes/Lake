@@ -125,6 +125,7 @@ export function LakeIslandDrawer({
         <button
           type="button"
           className="lake-island-participant-row"
+          title={person.detail ? `${person.name} · ${person.detail}` : person.name}
           disabled={!onOpenSpecialist || !person.roleId}
           onClick={() => {
             if (person.roleId && onOpenSpecialist) {
