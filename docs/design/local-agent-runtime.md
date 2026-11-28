@@ -53,6 +53,8 @@ flowchart TD
 
 已有项目可继续使用保存在 Lake 私有目录中的 API Key。用 Anthropic API Key 时，Lake 从 Anthropic Models API 读取模型及支持的思考档位。Claude Code 本机登录由 CLI 初始化返回这些信息。Antigravity 在独立探测会话中读取模型和每个模型的思考选项。配置支持选择模型、思考档位或跟随默认值，Claude Code 也支持手动填写模型 ID。执行时将选定档位传给 Claude Code 的 `--effort`，或由 Antigravity ACP 在发送任务前确认会话配置。连接变更会使已冻结的项目执行版本失效。运行工作目录、工具连接和会话标识按执行上下文隔离。
 
+Claude Code 的「自定义 API」支持兼容 Anthropic Messages 的第三方网关。Lake 按项目、规范化的基础地址和认证请求头保存独立凭据。启用后读取该地址的 `/v1/models`，再由用户选定默认模型或保存手填的模型 ID。模型列表不可用时，点击「检测连接」向 `/v1/messages` 发送一条短测试请求，验证通过后可以使用该模型。执行进程在 Bare 模式下使用指定地址和 Bearer Token 或 `x-api-key`，业务工具仍通过本轮的 Lake MCP。
+
 | 执行器 | 支持版本及接口 | 本机执行约束 |
 | --- | --- | --- |
 | Claude Code | 2.1.286 或更新版本，`-p` 的 stream JSON | 本机登录和 API Key 都使用受限模式，关闭原生工具、通用配置和 hooks，显式传入本次 Lake MCP。API Key 路径额外启用 Bare 模式 |

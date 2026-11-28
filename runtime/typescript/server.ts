@@ -628,7 +628,7 @@ export async function startLakeServer(options: ServerOptions) {
         else if(path.length===6&&method==='POST'&&['probe','install','prepare'].includes(path[5])){
           const cancel=new AbortController(),abort=()=>cancel.abort();response.on('close',abort);
           const timeout=setTimeout(abort,path[5]==='probe'?90000:300000);
-          try{result=path[5]==='prepare'?await agents.external.prepare(path[2],path[4],data,cancel.signal):path[5]==='probe'?await agents.external.probe(path[2],path[4],cancel.signal):await registry.install(path[2],path[4],data.npmPath,cancel.signal);}
+          try{result=path[5]==='prepare'?await agents.external.prepare(path[2],path[4],data,cancel.signal):path[5]==='probe'?await agents.external.probe(path[2],path[4],cancel.signal,true):await registry.install(path[2],path[4],data.npmPath,cancel.signal);}
           finally{clearTimeout(timeout);response.off('close',abort);}
         }else throw new HttpError(405,'不支持此外部 Agent 请求');
       } else if (path[1] === "projects" && path[3] === "watchdog" && path.length === 4) {

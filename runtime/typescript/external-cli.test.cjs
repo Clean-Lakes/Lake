@@ -1,5 +1,6 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
+const {createServer}=require('node:http');
 const {mkdtemp,mkdir,readdir,writeFile,rm,stat}=require('node:fs/promises');
 const {tmpdir}=require('node:os');
 const {join}=require('node:path');
@@ -18,7 +19,7 @@ if(args.includes('--version')){console.log(agent==='claude-code'?'2.1.332':'1.5.
 const lines=createInterface({input:process.stdin});
 const send=frame=>console.log(JSON.stringify(frame));
 const response=(id,result)=>send({jsonrpc:'2.0',id,result});
-const localClaude=agent==='claude-code'&&!process.env.ANTHROPIC_API_KEY;
+const localClaude=agent==='claude-code'&&!process.env.ANTHROPIC_API_KEY&&!process.env.ANTHROPIC_AUTH_TOKEN;
 assert.equal(process.env.HOME.startsWith(process.cwd()+'/'),!localClaude);
 assert.ok(!process.env.LAKE_TEST_PARENT_ENV);
 let sequence=0;
@@ -84,9 +85,19 @@ if(agent==='claude-code'){
  const session_id=args[args.indexOf('--session-id')+1];
  const mcp=JSON.parse(args[args.indexOf('--mcp-config')+1]).mcpServers;
  assert.deepEqual(Object.keys(mcp),['lake']);
+ const gateway=process.env.ANTHROPIC_BASE_URL;
+ const model=gateway?args[args.indexOf('--model')+1]:'claude-test-model';
  lines.on('line',async line=>{
   assert.equal(JSON.parse(line).session_id,session_id);
-  send({type:'system',subtype:'init',session_id,model:'claude-test-model'});
+  if(gateway){
+   const key=process.env.ANTHROPIC_API_KEY,token=process.env.ANTHROPIC_AUTH_TOKEN;
+   assert.notEqual(!!key,!!token);
+   const headers={'content-type':'application/json',...(token?{authorization:'Bearer '+token}:{'x-api-key':key})};
+   const result=await fetch(gateway+'/v1/messages',{method:'POST',headers,body:JSON.stringify({model,max_tokens:2})});
+   assert.ok(result.ok);
+   await result.body.cancel();
+  }
+  send({type:'system',subtype:'init',session_id,model});
   await reportViaBridge(mcp.lake);
   send({type:'stream_event',session_id,event:{type:'message_start',message:{id:'report'}}});
   for(const text of ['ISOLATED_','CLI_REPORT'])send({type:'stream_event',session_id,event:{type:'content_block_delta',delta:{type:'text_delta',text}}});
@@ -361,4 +372,112 @@ test('CLI account authentication loads the real catalog shape and preserves the 
  assert.deepEqual(await readdir(join(home,'secrets','antigravity',project.id)),[login.id]);
  await request('/antigravity/probe','POST',{});
  assert.equal(googleStatus((await request('')).agents).assignmentReady,true);
+});
+
+test('Claude custom API loads third-party models and isolates gateway credentials from official API keys',
+ {skip:process.platform!=='darwin',timeout:45000},async t=>{
+ const home=await mkdtemp(join(tmpdir(),'lake-claude-gateway-'));
+ const web=join(home,'web'),cli=join(home,'claude');
+ await mkdir(web);
+ await writeFile(join(web,'index.html'),'fixture');
+ await writeFile(cli,cliFixture('claude-code'),{mode:0o700});
+ const app=await startLakeServer({home,data:join(home,'data'),port:0,staticRoot:web});
+ const project=app.store.createProject('custom Claude gateway fixture');
+ const agent='claude-code',base='/api/projects/'+project.id+'/external-agents';
+ const models=['~fixture/flexible','fixture/compact'];
+ const officialKey='synthetic-official-fixture',bearerKey='synthetic-bearer-fixture',headerKey='synthetic-header-fixture';
+ const requests=[];
+ const server=createServer(async (request,response)=>{
+  const [gateway,version,route]=request.url.slice(1).split('/');
+  const valid=gateway==='manual'?request.headers['x-api-key']===headerKey&&!request.headers.authorization:
+   request.headers.authorization==='Bearer '+bearerKey&&!request.headers['x-api-key'];
+  let body;
+  if(request.method==='POST'){
+   let data='';
+   for await(const chunk of request)data+=chunk;
+   body=JSON.parse(data);
+  }
+  requests.push({gateway,version,route,valid,method:request.method,model:body?.model,maxTokens:body?.max_tokens});
+  response.setHeader('Content-Type','application/json');
+  if(!valid){response.writeHead(401).end(JSON.stringify({error:'Invalid fixture token'}));return;}
+  if(version==='v1'&&route==='models'){
+   if(gateway==='manual'){response.writeHead(404).end();return;}
+   response.end(JSON.stringify({data:[...models,'echo-'+bearerKey].map(id=>({id,capabilities:{effort:{supported:true,high:{supported:true}}}}))}));
+   return;
+  }
+  if(version==='v1'&&route==='messages'&&models.includes(body?.model)){
+   response.end(JSON.stringify({type:'message',role:'assistant',content:[{type:'text',text:'Hi'}]}));return;
+  }
+  response.writeHead(404).end();
+ });
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ t.after(async()=>{
+  await Promise.all([app.close(),new Promise(resolve=>server.close(resolve))]);
+  await rm(home,{recursive:true,force:true});
+ });
+ const url='http://127.0.0.1:'+server.address().port;
+ async function request(path,method='GET',body,expected=200){
+  const response=await fetch(app.origin+base+path,{method,headers:{Authorization:'Bearer '+app.token,
+   'Content-Type':'application/json'},...(body&&{body:JSON.stringify(body)})});
+  const content=await response.text();
+  for(const key of [officialKey,bearerKey,headerKey])assert.ok(!content.includes(key),'credential never appears in configuration status');
+  assert.equal(response.status,expected,content);
+  return JSON.parse(content);
+ }
+ const official=await request('/claude-code','PUT',{expectedRevision:0,enabled:false,executablePath:cli,apiKey:officialKey});
+ const prepare=async (revision,settings)=>(await request('/claude-code/prepare','POST',{
+  expectedRevision:revision,enabled:true,authentication:'claude-custom-api',...settings,
+ })).agents.find(row=>row.id===agent);
+ const invalid=await request('/claude-code/prepare','POST',{expectedRevision:official.revision,enabled:true,authentication:'claude-custom-api',
+  claudeGateway:{baseURL:url+'?key=fixture',credentialHeader:'authorization'}},400);
+ assert.match(invalid.error,/API 基础地址/);
+ const configuration={baseURL:url+'/catalog/v1/messages/',credentialHeader:'authorization'};
+ const withoutKey=await prepare(official.revision,{claudeGateway:configuration});
+ assert.equal(withoutKey.keyConfigured,false);
+ assert.equal(withoutKey.assignmentReady,false);
+ assert.deepEqual(requests,[],'the stored official key cannot be sent to the custom service');
+ const wrongKey=await prepare(withoutKey.revision,{apiKey:'synthetic-wrong-fixture'});
+ assert.match(wrongKey.message,/API Key 未通过验证/);
+ assert.equal(wrongKey.transportReady,false);
+ const catalog=await prepare(wrongKey.revision,{apiKey:bearerKey});
+ assert.equal(catalog.claudeGateway.baseURL,url+'/catalog');
+ assert.deepEqual(catalog.modelOptions,models);
+ assert.deepEqual(catalog.modelEffortOptions[models[0]],['high']);
+ assert.equal(catalog.transportReady,true);
+ assert.equal(catalog.assignmentReady,false,'a model must be picked before the executor is used');
+ const selected=await prepare(catalog.revision,{modelOverride:models[0],reasoningEffortOverride:'high'});
+ assert.equal(selected.assignmentReady,true);
+ assert.equal(selected.defaultTaskModel,models[0]);
+ assert.equal(selected.reasoningEffort,'high');
+ assert.ok(requests.every(row=>row.method==='GET'&&row.version==='v1'&&row.route==='models'));
+ const manual={baseURL:url+'/manual',credentialHeader:'x-api-key'};
+ const beforeChange=requests.length;
+ const changed=await prepare(selected.revision,{claudeGateway:manual});
+ assert.equal(changed.keyConfigured,false);
+ assert.equal(changed.modelOverride,undefined);
+ assert.equal(requests.length,beforeChange,'a different endpoint cannot reuse the original gateway key');
+ const manualModel=await prepare(changed.revision,{apiKey:headerKey,modelOverride:models[1]});
+ assert.equal(manualModel.assignmentReady,false);
+ assert.match(manualModel.message,/检测连接/);
+ await request('');
+ assert.equal(requests.filter(row=>row.method==='POST').length,0,'automatic refresh must not run an inference');
+ await request('/claude-code/probe','POST',{});
+ const verified=(await request('')).agents.find(row=>row.id===agent);
+ assert.equal(verified.assignmentReady,true);
+ assert.deepEqual(verified.modelOptions,[models[1]]);
+ assert.deepEqual(requests.at(-1),{gateway:'manual',version:'v1',route:'messages',valid:true,method:'POST',model:models[1],maxTokens:1});
+ const channel=app.superagent.createSpecialist(project.id,{name:'Gateway specialist',duties:'Report a fixture',avatarId:'beaver',requestId:'create-gateway-specialist'});
+ const execution={kind:'acp',agent,revision:verified.revision};
+ const binding=app.superagent.setRoleExecution(project.id,channel.roleId,{expectedRevision:channel.roleRevision,execution});
+ const receipt=await app.superagent.send(channel.sessionId,'Run a fixture against the configured gateway',undefined,false,undefined,
+  {requestId:'gateway-execution-fixture',roleRevision:binding.revision,execution});
+ let run;
+ for(let attempt=0;attempt<250;attempt++){
+  run=app.store.list('acpRuns').find(row=>row.workerId===receipt.assignment.workerId);
+  if(run&&!['starting','running'].includes(run.state))break;
+  await new Promise(resolve=>setTimeout(resolve,35));
+ }
+ assert.equal(run?.state,'completed',run?.error);
+ assert.deepEqual([run.model,run.modelProvider,run.summary],[models[1],'custom','ISOLATED_CLI_REPORT']);
+ assert.deepEqual(requests.at(-1),{gateway:'manual',version:'v1',route:'messages',valid:true,method:'POST',model:models[1],maxTokens:2});
 });

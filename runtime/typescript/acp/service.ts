@@ -14,7 +14,7 @@ import {antigravityAuthorizationCode,launchAntigravityLogin} from './antigravity
 import {antigravityCredentials,cliEnvironment,cliSecretId,cliVersion,isCliModelId} from './cli-profile';
 import { ExternalAgentRegistry } from './registry';
 import { externalAgentId,externalControlTools,externalProducts } from './catalog';
-import {externalAgentName,type AntigravityGoogleAuthorization} from '../../../web-agent/shared/external-agents';
+import {externalAgentName,type AntigravityGoogleAuthorization,type ClaudeGateway} from '../../../web-agent/shared/external-agents';
 import { openHttpToolBridge,openToolBridge } from './bridge';
 import {privatePath} from './private';
 import {codexConfig,tomlValue} from './codex-profile';
@@ -45,6 +45,27 @@ type GoogleLogin={
 const googleExpired='本次 Google 登录已结束，请重新获取授权链接';
 const claudeEfforts=['low','medium','high','xhigh','max'] as const;
 type ClaudeEffortMetadata={supported?:boolean}&Partial<Record<typeof claudeEfforts[number],{supported?:boolean}>>;
+function gatewayHeaders({credentialHeader}:ClaudeGateway,key:string){
+  return {'anthropic-version':'2023-06-01',[credentialHeader]:credentialHeader==='authorization'?`Bearer ${key}`:key};
+}
+
+async function readGatewayJson(response:Response):Promise<unknown>{
+  const reader=response.body?.getReader();
+  if(!reader)return undefined;
+  const chunks:Uint8Array[]=[];
+  let bytes=0;
+  try{
+    for(;;){
+      const {value,done}=await reader.read();
+      if(done)break;
+      bytes+=value.length;
+      if(bytes>4*1024*1024)throw new Error('第三方 API 响应过大');
+      chunks.push(value);
+    }
+    try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{return undefined;}
+  }finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
+}
+
 export class LakeExternalAgents {
   readonly registry:ExternalAgentRegistry;
   private probes=new Map<string,{controller:AbortController;work:Promise<unknown>}>();
@@ -115,36 +136,62 @@ export class LakeExternalAgents {
     return `${product.name} 需要 ${product.version} 或更新版本${version?`（当前 ${version}）`:''}`;
   }
   private async cliCredential(profile:CliAgentProfile){
-    const key=await this.store.secret(cliSecretId(profile.projectId,profile.id));
-    if(!key)throw new HttpError(409,`请配置 ${profile.id==='claude-code'?'Anthropic':'Gemini'} API Key`);
+    const key=await this.store.secret(cliSecretId(profile));
+    if(!key)throw new HttpError(409,`请配置 ${profile.authentication==='claude-custom-api'?'第三方服务':profile.id==='claude-code'?'Anthropic':'Gemini'} API Key`);
     this.registerSecret(key);
     return key;
   }
   private async verifyCliCredential(profile:CliAgentProfile,key:string,signal:AbortSignal):Promise<CodexModelOption[]>{
     const claude=profile.id==='claude-code';
-    const url=claude?'https://api.anthropic.com/v1/models?limit=256':'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1';
-    const headers:HeadersInit=claude?{'x-api-key':key,'anthropic-version':'2023-06-01'}:{'x-goog-api-key':key};
+    const gateway=profile.authentication==='claude-custom-api'?profile.claudeGateway:undefined;
+    const url=gateway?gateway.baseURL+'/v1/models':
+      claude?'https://api.anthropic.com/v1/models?limit=256':'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1';
+    const headers:HeadersInit=gateway?gatewayHeaders(gateway,key):
+      claude?{'x-api-key':key,'anthropic-version':'2023-06-01'}:{'x-goog-api-key':key};
+    const apiName=gateway?'第三方 API':'官方 API';
     const response=await fetch(url,{headers,redirect:'error',signal:AbortSignal.any([signal,AbortSignal.timeout(10000)])}).catch(()=>{
-      signal.throwIfAborted();throw new Error('无法连接官方 API，请检查网络后重试');
+      signal.throwIfAborted();throw new Error(`无法连接${apiName}，请检查地址与网络`);
     });
     if(!response.ok||!claude){
       await response.body?.cancel();
-      if(!response.ok)throw new Error([400,401,403].includes(response.status)?'API Key 未通过验证，请检查 Key 和账户权限':`官方 API 返回 HTTP ${response.status}`);
+      if(!response.ok&&!(gateway&&[404,405,501].includes(response.status)))
+        throw new Error([400,401,403].includes(response.status)?'API Key 未通过验证，请检查 Key、发送方式和账户权限':`${apiName} 返回 HTTP ${response.status}`);
       return [];
     }
-    const result:{data?:({id?:unknown;capabilities?:{effort?:ClaudeEffortMetadata}}|null)[]}|null=await response.json().catch(()=>null);
+    const result=(gateway?await readGatewayJson(response):await response.json().catch(()=>null)) as
+      {data?:({id?:unknown;capabilities?:{effort?:ClaudeEffortMetadata}}|null)[]}|null|undefined;
     signal.throwIfAborted();
-    if(!Array.isArray(result?.data))throw new Error('Anthropic 未返回可用模型目录');
+    if(!Array.isArray(result?.data)){
+      if(gateway)return [];
+      throw new Error('Anthropic 未返回可用模型目录');
+    }
     const models=new Map<string,CodexModelOption>();
     for(const entry of result.data){
       const id=entry?.id;
-      if(!isCliModelId(id)||!id.startsWith('claude-')||models.has(id))continue;
+      if(!isCliModelId(id)||(gateway?id.includes(key):!id.startsWith('claude-'))||models.has(id))continue;
       const effort=entry?.capabilities?.effort;
       const reasoningEfforts=effort?.supported===true?claudeEfforts.filter(level=>effort[level]?.supported===true):[];
       models.set(id,{id,reasoningEfforts});
       if(models.size>=256)break;
     }
     return [...models.values()];
+  }
+  private async verifyGatewayModel(gateway:ClaudeGateway,key:string,model:string,signal:AbortSignal){
+    const headers={...gatewayHeaders(gateway,key),'content-type':'application/json'};
+    const body=JSON.stringify({model,max_tokens:1,messages:[{role:'user',content:'Hi'}]});
+    const response=await fetch(gateway.baseURL+'/v1/messages',{method:'POST',headers,body,redirect:'error',
+      signal:AbortSignal.any([signal,AbortSignal.timeout(20000)])}).catch(()=>{
+      signal.throwIfAborted();throw new Error('无法连接第三方 API，请检查地址与网络');
+    });
+    if(!response.ok){
+      await response.body?.cancel();
+      throw new Error([401,403].includes(response.status)?'API Key 未通过验证，请检查 Key、发送方式和模型权限':
+        `模型测试返回 HTTP ${response.status}，请检查模型 ID 和 Anthropic Messages 地址`);
+    }
+    const message=await readGatewayJson(response) as {type?:unknown;role?:unknown;content?:unknown}|undefined;
+    signal.throwIfAborted();
+    if(message?.type!=='message'||message.role!=='assistant'||!Array.isArray(message.content))
+      throw new Error('第三方 API 未返回 Anthropic Messages 格式，请检查服务地址');
   }
   private async antigravityCatalog(environment:Omit<AgentLaunch,'args'>,signal:AbortSignal){
     const connection=await Antigravity.launch(environment,()=>{});
@@ -170,7 +217,7 @@ export class LakeExternalAgents {
     const parent=await privatePath(this.store.data,'external-agents','probe',projectId,agent);
     return mkdtemp(join(parent,'check-'));
   }
-  private async probeCli(profile:CliAgentProfile,directory:string,signal:AbortSignal){
+  private async probeCli(profile:CliAgentProfile,directory:string,signal:AbortSignal,testModel:boolean){
     const {projectId,id,authentication}=profile,name=externalAgentName(id);
     const probe:CodexConnectionProbe={revision:profile.revision,authentication:profile.authentication,ready:false,cliCatalogVersion};
     try{
@@ -191,6 +238,14 @@ export class LakeExternalAgents {
         if(id==='claude-code'){
           probe.model=profile.modelOverride;
           probe.models=models;
+          if(authentication==='claude-custom-api'&&profile.claudeGateway){
+            if(testModel&&probe.model){
+              await this.verifyGatewayModel(profile.claudeGateway,key,probe.model,signal);
+              if(!models.length)probe.models=[{id:probe.model,reasoningEfforts:[]}];
+            }else if(!models.length){
+              throw new Error(probe.model?'服务商未提供模型列表，点击「检测连接」测试所填模型':'服务商未提供模型列表，请填写模型 ID 并保存');
+            }
+          }
         }else{
           inspected.environment.env.GEMINI_API_KEY=key;
           Object.assign(probe,await this.antigravityCatalog(inspected.environment,signal));
@@ -198,7 +253,8 @@ export class LakeExternalAgents {
         probe.authMode='api_key';
       }
       probe.ready=true;probe.authenticated=true;
-      probe.message=authentication==='claude-local'?'已复用本机 Claude Code 登录':`${name} 已连接`;
+      probe.message=authentication==='claude-local'?'已复用本机 Claude Code 登录':
+        authentication==='claude-custom-api'?(testModel&&probe.model?'第三方模型检测通过':'已加载第三方模型列表'):`${name} 已连接`;
     }catch(error){probe.message=this.redact(error instanceof Error?error.message:`${name} 连接失败`);}
     signal.throwIfAborted();
     if(this.registry.get(projectId,id).revision!==profile.revision)throw new HttpError(409,'CLI 配置已变化，请重新检测连接');
@@ -216,11 +272,11 @@ export class LakeExternalAgents {
     if(!probe.ready)throw new HttpError(409,probe.message??`${name} 连接失败`);
     return {ok:true,capabilities:probe.capabilities};
   }
-  async probe(projectId:string,agent:unknown,signal:AbortSignal){
+  async probe(projectId:string,agent:unknown,signal:AbortSignal,testModel=false){
     const profile=this.registry.get(projectId,agent);
     if(profile.id!=='codex'){
       const directory=await this.probeDirectory(projectId,profile.id);
-      try{return await this.probeCli(profile,directory,signal);}
+      try{return await this.probeCli(profile,directory,signal,testModel);}
       finally{await rm(directory,{recursive:true,force:true});}
     }
     const directory=await privatePath(this.store.data,'external-agents','probe',projectId,profile.id);
@@ -380,7 +436,18 @@ export class LakeExternalAgents {
         const account=await claudeLocalAccount(inspected.environment,signal);
         if(probe?.revision!==profile.revision||probe.accountFingerprint!==account)
           throw new HttpError(409,'本机 Claude Code 登录已变化，请重新检测连接');
-      }else inspected.environment.env.ANTHROPIC_API_KEY=await this.cliCredential(profile);
+      }else{
+        const key=await this.cliCredential(profile);
+        const env=inspected.environment.env;
+        if(profile.authentication==='claude-custom-api'){
+          if(!profile.claudeGateway||!selected)throw new HttpError(409,'请为自定义 API 选择模型并保存');
+          env.ANTHROPIC_BASE_URL=profile.claudeGateway.baseURL;
+          if(profile.claudeGateway.credentialHeader==='authorization'){
+            env.ANTHROPIC_API_KEY='';
+            env.ANTHROPIC_AUTH_TOKEN=key;
+          }else env.ANTHROPIC_API_KEY=key;
+        }else env.ANTHROPIC_API_KEY=key;
+      }
       return new ClaudeCode(inspected.environment,publish,mcp&&'command' in mcp?mcp:undefined,selected,observeModel,supportedEffort);
     }
     if(profile.authentication==='antigravity-google'){

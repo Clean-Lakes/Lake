@@ -5,7 +5,7 @@ import {readlink,symlink} from 'node:fs/promises';
 import {homedir} from 'node:os';
 import {dirname,isAbsolute,join} from 'node:path';
 import {promisify} from 'node:util';
-import type {CliAuthentication} from '../../../web-agent/shared/external-agents';
+import {cliDefaultAuthentication,type ClaudeGateway,type CliAuthentication} from '../../../web-agent/shared/external-agents';
 import {HttpError} from '../store';
 import {externalProducts} from './catalog';
 import {privateFile,privatePath} from './private';
@@ -16,7 +16,7 @@ const binaries:Record<CliAgentId,string>={'claude-code':'claude',antigravity:'ag
 export const cliRuntimeKinds={'claude-code':'claude-code-cli',antigravity:'antigravity-acp'} as const;
 export const antigravityAppData = 'antigravity-acp';
 export function isCliModelId(value:unknown):value is string {
-  return typeof value==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_.:+/@-]{0,199}$/.test(value);
+  return typeof value==='string'&&value.length<=200&&/^~?[a-zA-Z0-9][a-zA-Z0-9_.:+/@-]*$/.test(value);
 }
 export function isCliReasoningEffort(value:unknown):value is string {
   return typeof value==='string'&&/^[a-z][a-z0-9_-]{0,31}$/i.test(value);
@@ -33,22 +33,48 @@ export function cliExecutable(home:string,id:CliAgentId,custom?:string) {
   }
 }
 
-export function cliSecretId(projectId:string,id:CliAgentId){
-  return `external-${id}-${createHash('sha256').update(projectId).digest('hex')}`;
+export function isCliAuthentication(id:CliAgentId,value:unknown):value is CliAuthentication {
+  return value===cliDefaultAuthentication[id]||value==='cli-api-key'||id==='claude-code'&&value==='claude-custom-api';
+}
+
+export function claudeGatewayConfig(value:unknown):ClaudeGateway {
+  const settings=value as Partial<ClaudeGateway>|null;
+  const address=settings?.baseURL;
+  const invalidAddress='API 基础地址需为 HTTP(S) 地址，且不能包含凭据、查询参数或片段';
+  if(typeof address!=='string'||address.length>2048||/[?#\s]/.test(address))throw new HttpError(400,invalidAddress);
+  let url:URL;
+  try{url=new URL(address);}catch{throw new HttpError(400,invalidAddress);}
+  if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw new HttpError(400,invalidAddress);
+  const credentialHeader=settings?.credentialHeader;
+  if(credentialHeader!=='authorization'&&credentialHeader!=='x-api-key')throw new HttpError(400,'请选择服务商支持的 API Key 发送方式');
+  // The Claude SDK appends /v1/messages to this base.
+  const path=url.pathname.replace(/\/+$/,'').replace(/\/v1(?:\/messages)?$/,'');
+  const baseURL=url.origin+path;
+  return {baseURL,credentialHeader};
+}
+
+type CliSourceSettings=Pick<CliAgentProfile,'projectId'|'id'|'executablePath'|'authentication'|'claudeGateway'>;
+export function cliSecretId(profile:CliSourceSettings){
+  const gateway=profile.authentication==='claude-custom-api'?profile.claudeGateway:undefined;
+  const identity=gateway?JSON.stringify([profile.projectId,gateway.baseURL,gateway.credentialHeader]):profile.projectId;
+  const prefix=gateway?'external-claude-gateway':`external-${profile.id}`;
+  return `${prefix}-${createHash('sha256').update(identity).digest('hex')}`;
 }
 function localClaudeConfig(){
   const configured=process.env.CLAUDE_CONFIG_DIR;
   return configured&&isAbsolute(configured)?configured:undefined;
 }
 
-export function cliSource(home:string,projectId:string,id:CliAgentId,path:string|undefined,authentication:CliAuthentication){
-  const executable=cliExecutable(home,id,path);
+export function cliSource(home:string,profile:CliSourceSettings){
+  const {id,executablePath,authentication,claudeGateway}=profile;
+  const executable=cliExecutable(home,id,executablePath);
   let keyIdentity:string|undefined;
   try {
-    const info=lstatSync(join(home,'secrets',`model-${cliSecretId(projectId,id)}.json`));
+    const info=lstatSync(join(home,'secrets',`model-${cliSecretId(profile)}.json`));
     if(info.isFile()&&(info.mode&0o077)===0&&info.uid===process.getuid?.())keyIdentity=JSON.stringify([info.dev,info.ino,info.mtimeMs,info.ctimeMs]);
   }catch {/* A missing or unreadable credential is not configured. */}
-  const source=authentication==='cli-api-key'?[executable?.fingerprint,keyIdentity]:
+  const source=authentication==='claude-custom-api'?[executable?.fingerprint,authentication,claudeGateway,keyIdentity]:
+    authentication==='cli-api-key'?[executable?.fingerprint,keyIdentity]:
     [executable?.fingerprint,authentication,authentication==='claude-local'?localClaudeConfig():undefined];
   const fingerprint=createHash('sha256').update(JSON.stringify(source)).digest('hex');
   return {executable,keyConfigured:!!keyIdentity,fingerprint};
@@ -63,7 +89,7 @@ export function antigravityProfileArgs(env:NodeJS.ProcessEnv){
 }
 
 export async function cliEnvironment(home:string,profile:CliAgentProfile,cwd:string,googleLoginId=profile.googleLoginId) {
-  const {executable,fingerprint}=cliSource(home,profile.projectId,profile.id,profile.executablePath,profile.authentication);
+  const {executable,fingerprint}=cliSource(home,profile);
   if(!executable)throw new HttpError(409,`未找到 ${externalProducts[profile.id].name} CLI，请安装或填写路径`);
   if(fingerprint!==profile.sourceFingerprint)throw new HttpError(409,'CLI 配置已变化，请重新检测连接');
   const configHome=await privatePath(cwd,'provider-home');

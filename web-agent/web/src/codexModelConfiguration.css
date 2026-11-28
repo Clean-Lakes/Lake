@@ -215,6 +215,8 @@
 .codex-config-readiness[data-ready="true"]::before { background:var(--success); }
 .codex-config-cli-status { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:13px; }
 .codex-config-cli-status strong { font-weight:var(--font-weight-semibold); }
+.codex-config-cli-status .codex-config-actions { justify-content:flex-end; }
+.codex-config-cli-status button { display:inline-flex; align-items:center; gap:5px; }
 .codex-config-cli-status a { display:flex; align-items:center; gap:4px; font-size:var(--font-size-toolbar); }
 .codex-config-cli .app-select { min-inline-size:0; }
 .codex-config-cli .app-select-trigger { inline-size:100%; min-block-size:30px; }

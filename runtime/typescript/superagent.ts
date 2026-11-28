@@ -809,7 +809,8 @@ export class LakeSuperagent implements AgentHost {
       const profile=registry.get(projectId,id);
       if(!profile?.enabled||profile.id!==id)return [];
       const probe=registry.probe(projectId,id);
-      const ready=process.platform==='darwin'&&probe?.revision===profile.revision&&probe.authentication===profile.authentication&&probe.ready===true&&probe.authenticated===true;
+      const ready=process.platform==='darwin'&&probe?.revision===profile.revision&&probe.authentication===profile.authentication&&
+        probe.ready===true&&probe.authenticated===true&&(profile.authentication!=='claude-custom-api'||!!profile.modelOverride);
       return [{...profile,name:externalAgentName(id),installed:ready,transportReady:ready,assignmentReady:ready,
         model:probe?.model,modelOptions:probe?.models?.map(option=>option.id)}];
     }));
@@ -871,7 +872,8 @@ export class LakeSuperagent implements AgentHost {
     const probe=this.agents.external.registry.probe(role.projectId,id);
     const blocker=!profile.enabled?`${name} 尚未启用`:probe?.revision!==profile.revision?`${name} 当前连接配置尚未验证`:
       probe.authentication!==profile.authentication?`${name} 认证状态需要重新验证`:!probe.ready?probe.message??`${name} 连接测试尚未通过`:
-      !probe.authenticated?(id==='codex'?'本机 Codex 尚未登录，请先在 Codex 中完成登录':`${name} 登录需要重新验证`):undefined;
+      !probe.authenticated?(id==='codex'?'本机 Codex 尚未登录，请先在 Codex 中完成登录':`${name} 登录需要重新验证`):
+      profile.authentication==='claude-custom-api'&&!profile.modelOverride?'请选择第三方模型并保存':undefined;
     if(blocker)throw new HttpError(409,`专员「${role.name}」的本机 ${name} 执行配置不可用。${blocker}。请在模型配置中检查连接。`);
     if(execution.model&&(execution.model.providerId!==undefined||!isExternalModelId(id,execution.model.modelId)))
       throw new HttpError(409,`专员「${role.name}」的 ${name} 模型引用无效，请更新该专员的执行模型。`);

@@ -10,7 +10,7 @@ import { codexCatalogRevision, codexModelCatalog, codexStartupArgs, isCodexModel
 import {CodexLocalSource,codexHomePresent} from './codex-local';
 import {discoverCodexRuntime,validateCodexNode} from './runtime-paths';
 import {codexConnectionVersion} from './types';
-import {cliExecutable,cliRuntimeKinds,cliSecretId,cliSource,isCliModelId,isCliReasoningEffort} from './cli-profile';
+import {claudeGatewayConfig,cliExecutable,cliRuntimeKinds,cliSecretId,cliSource,isCliAuthentication,isCliModelId,isCliReasoningEffort} from './cli-profile';
 import {cliDefaultAuthentication} from '../../../web-agent/shared/external-agents';
 
 function projectOverride(input:unknown,current:string|undefined,isValid:(value:unknown)=>value is string,invalid:string){
@@ -58,14 +58,17 @@ export class ExternalAgentRegistry {
     const defaultAuthentication=cliDefaultAuthentication[id];
     if(current&&(
       ![3,4].includes(current.schemaVersion)||current.runtimeKind!==cliRuntimeKinds[id]||
-      current.authentication!=='cli-api-key'&&current.authentication!==defaultAuthentication
+      !isCliAuthentication(id,current.authentication)||
+      current.authentication==='claude-custom-api'&&!current.claudeGateway
     ))
       throw new HttpError(409,'外部 Agent 配置版本不受当前版本支持');
-    const source=cliSource(this.store.home,projectId,id,current?.executablePath,current?.authentication??defaultAuthentication);
+    const settings={projectId,id,executablePath:current?.executablePath,
+      authentication:current?.authentication??defaultAuthentication,claudeGateway:current?.claudeGateway};
+    const source=cliSource(this.store.home,settings);
     const authentication=current?.schemaVersion===3&&!source.keyConfigured?defaultAuthentication:
       current?.authentication??defaultAuthentication;
     const sourceFingerprint=authentication===current?.authentication||!current?source.fingerprint:
-      cliSource(this.store.home,projectId,id,current.executablePath,authentication).fingerprint;
+      cliSource(this.store.home,{...settings,authentication}).fingerprint;
     if(current){
       if(current.schemaVersion===4&&current.sourceFingerprint===sourceFingerprint)return current;
       const revision=current.revision+Number(current.sourceFingerprint!==sourceFingerprint);
@@ -111,7 +114,7 @@ export class ExternalAgentRegistry {
   }
   private cliStatus(profile:CliAgentProfile):ExternalAgentStatus {
     const {id,projectId}=profile;
-    const {executable,keyConfigured}=cliSource(this.store.home,projectId,id,profile.executablePath,profile.authentication);
+    const {executable,keyConfigured}=cliSource(this.store.home,profile);
     const probe=this.probe(projectId,id);
     const current=probe?.revision===profile.revision&&probe.authentication===profile.authentication?probe:undefined;
     const name=externalProducts[id].name;
@@ -126,6 +129,7 @@ export class ExternalAgentRegistry {
       !current?`正在检测 ${name} 连接`:!transportReady||!current.authenticated?current.message??`${name} 连接不可用`:
       id==='antigravity'&&profile.modelOverride&&profile.modelOverride!==current.localModel&&
       !modelOptions?.includes(profile.modelOverride)?'所选模型在当前账号下不可用，请重新选择':
+      profile.authentication==='claude-custom-api'&&!selectedModel?'请选择第三方模型并保存':
       effortUnavailable?'所选模型的思考强度已变化，请重新选择':undefined;
     const {googleLoginId:_login,...preferences}=profile;
     return {...preferences,name,installed:!!executable,transportReady,assignmentReady:!assignmentBlocker,assignmentBlocker,
@@ -188,12 +192,25 @@ export class ExternalAgentRegistry {
     const {id}=current;
     if(input.model!==undefined||input.nodePath!==undefined||input.npmPath!==undefined)
       throw new HttpError(400,'请使用当前 CLI 支持的配置项');
-    const modelOverride=projectOverride(input.modelOverride,current.modelOverride,isCliModelId,'模型 ID 无效');
-    const reasoningEffortOverride=projectOverride(input.reasoningEffortOverride,current.reasoningEffortOverride,isCliReasoningEffort,'思考强度无效');
-    if(reasoningEffortOverride&&(modelOverride!==current.modelOverride||reasoningEffortOverride!==current.reasoningEffortOverride)){
+    const apiKey=input.apiKey;
+    const inferredAuthentication=typeof apiKey==='string'&&current.authentication!=='claude-custom-api'?'cli-api-key':current.authentication;
+    const authentication=input.authentication===undefined?inferredAuthentication:input.authentication;
+    if(!isCliAuthentication(id,authentication))throw new HttpError(400,'请选择当前执行器支持的登录方式');
+    let claudeGateway=current.claudeGateway;
+    if(input.claudeGateway!==undefined){
+      if(authentication!=='claude-custom-api')throw new HttpError(400,'请选择自定义 API 后设置服务地址');
+      claudeGateway=claudeGatewayConfig(input.claudeGateway);
+    }
+    if(authentication==='claude-custom-api'&&!claudeGateway)throw new HttpError(400,'请填写自定义 API 基础地址');
+    const gatewayChanged=(authentication==='claude-custom-api'||current.authentication==='claude-custom-api')&&
+      (authentication!==current.authentication||claudeGateway?.baseURL!==current.claudeGateway?.baseURL||
+        claudeGateway?.credentialHeader!==current.claudeGateway?.credentialHeader);
+    const modelOverride=projectOverride(input.modelOverride,gatewayChanged?undefined:current.modelOverride,isCliModelId,'模型 ID 无效');
+    const reasoningEffortOverride=projectOverride(input.reasoningEffortOverride,gatewayChanged?undefined:current.reasoningEffortOverride,isCliReasoningEffort,'思考强度无效');
+    if(reasoningEffortOverride&&(gatewayChanged||modelOverride!==current.modelOverride||reasoningEffortOverride!==current.reasoningEffortOverride)){
       const probe=this.probe(current.projectId,id);
       const model=modelOverride??probe?.localModel??probe?.model;
-      if(probe?.revision!==current.revision||!probe.ready||probe.authentication!==current.authentication||
+      if(gatewayChanged||probe?.revision!==current.revision||!probe.ready||probe.authentication!==current.authentication||
         !probe.models?.find(option=>option.id===model)?.reasoningEfforts.includes(reasoningEffortOverride))
         throw new HttpError(400,'所选模型不支持这个思考强度');
     }
@@ -208,21 +225,14 @@ export class ExternalAgentRegistry {
       }
     }
     if(this.get(current.projectId,id).revision!==current.revision)throw new HttpError(409,'外部 Agent 配置已变化，请刷新后重试');
-    const apiKey=input.apiKey;
-    const requestedAuthentication=input.authentication;
-    const defaultAuthentication=cliDefaultAuthentication[id];
-    if(requestedAuthentication!==undefined&&requestedAuthentication!=='cli-api-key'&&requestedAuthentication!==defaultAuthentication)
-      throw new HttpError(400,'请选择当前执行器支持的登录方式');
-    const authentication=requestedAuthentication===undefined?(typeof apiKey==='string'?'cli-api-key':current.authentication):
-      requestedAuthentication==='cli-api-key'?'cli-api-key':defaultAuthentication;
+    const settings={...current,authentication,claudeGateway,executablePath,modelOverride,reasoningEffortOverride,enabled:input.enabled===true};
     if(apiKey!==undefined){
-      if(authentication!=='cli-api-key')throw new HttpError(400,'请选择 API Key 登录方式后保存凭据');
+      if(authentication!=='cli-api-key'&&authentication!=='claude-custom-api')throw new HttpError(400,'请选择 API Key 登录方式后保存凭据');
       if(apiKey!==null&&(typeof apiKey!=='string'||!apiKey||apiKey.length>4096||/[^\x21-\x7e]/.test(apiKey)))throw new HttpError(400,'API Key 格式无效');
-      await this.store.secret(cliSecretId(current.projectId,id),apiKey);
+      await this.store.secret(cliSecretId(settings),apiKey);
     }
     const verified=this.get(current.projectId,id);
-    const profile:CliAgentProfile={...current,authentication,executablePath,modelOverride,reasoningEffortOverride,enabled:input.enabled===true,
-      sourceFingerprint:cliSource(this.store.home,current.projectId,id,executablePath,authentication).fingerprint,
+    const profile:CliAgentProfile={...settings,sourceFingerprint:cliSource(this.store.home,settings).fingerprint,
       revision:Math.max(verified.revision,current.revision+1),updatedAt:now()};
     return this.store.put('acpProfiles',key,profile);
   }

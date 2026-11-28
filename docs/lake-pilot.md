@@ -227,6 +227,8 @@ Pilot、专员、临时子智能体和多专员共同任务不再因累计模型
 
 Codex 读取本机 CODEX_HOME 的登录与模型设置。Claude Code 默认沿用官方 CLI 的本机登录。Google Antigravity 选择「使用 Google 登录」，在浏览器完成授权后将授权码粘贴回 Lake，确认后自动加载账号可用模型。两者也支持项目 API Key。安装相应 CLI 后可以自动识别路径，也可填写绝对路径。「检测连接」可以重新检查 CLI 和刷新模型。具体版本和凭据处理见[本机执行架构](design/local-agent-runtime.md)。
 
+使用第三方模型时，在 Claude Code 中选「自定义 API」，填写兼容 Anthropic Messages 的基础地址、API Key 和服务商要求的 Key 发送方式。勾选「项目启用」并保存后，从列表选定模型再保存。服务商没有模型列表时，手动填写模型 ID 后保存，点击「检测连接」验证该模型。检测会发送一条短测试请求。
+
 专员频道与任务详情显示原执行器的品牌、实际进度和报告。各 CLI 通过本次任务的私有工具桥访问 Lake 工具。模型的执行结果仍依照 Task/Worker 记录汇总。Pilot 使用项目的协调模型。
 
 ## 接入渠道（MCP，TypeScript Dev）

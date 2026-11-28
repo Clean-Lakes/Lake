@@ -1,17 +1,22 @@
 import {useEffect,useId,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 import type {SpecialistChannelInfo} from '../../shared/contracts';
-import {cliDefaultAuthentication,externalAgentName,isExternalAgentId,type AntigravityGoogleAuthorization,type CliAuthentication,
+import {cliDefaultAuthentication,externalAgentName,isExternalAgentId,type AntigravityGoogleAuthorization,type ClaudeGateway,type CliAuthentication,
   type ExternalAgentId,type ExternalAgentStatus} from '../../shared/external-agents';
 import {api,ApiRequestError,readableError} from './api';
 import {AppSelect} from './AppSelect';
 import {ExecutionAgentIcon} from './ExecutionAgentIcon';
 import {Glyph} from './Icons';
+import {ProviderIcon} from './ProviderIcon';
+import {modelBrand} from './modelBrand';
 import {reasoningLabels} from './reasoningLabels';
 import {TabSelectionIndicator} from './TabSelectionIndicator';
 import {navigateSettingsTabs} from './settingsFocus';
 import './codexModelConfiguration.css';
 
-type Preferences = {model:string;effort:string;enabled:boolean;nodePath:string;npmPath:string;executablePath:string;authentication?:CliAuthentication};
+type Preferences = {
+  model:string;effort:string;enabled:boolean;nodePath:string;npmPath:string;executablePath:string;authentication?:CliAuthentication;
+  gatewayBaseURL:string;gatewayCredentialHeader:ClaudeGateway['credentialHeader'];
+};
 const executors:ExternalAgentId[]=['codex','claude-code','antigravity'];
 const installGuides={'claude-code':'https://code.claude.com/docs/en/quickstart',antigravity:'https://antigravity.google/docs/ide/extensions/acp/'};
 const narrowPanel = '(max-width: 600px)';
@@ -21,7 +26,8 @@ function preferences(agent:ExternalAgentStatus):Preferences {
   return {model:agent.modelOverride??'',effort:agent.reasoningEffortOverride??'',enabled:agent.enabled,
     nodePath:agent.nodePath??'',npmPath:agent.npmPath??'',executablePath:agent.executablePath??'',
     authentication:agent.id==='codex'?undefined:
-      agent.authentication==='cli-api-key'?'cli-api-key':cliDefaultAuthentication[agent.id]};
+      agent.authentication&&agent.authentication!=='codex-local'?agent.authentication:cliDefaultAuthentication[agent.id],
+    gatewayBaseURL:agent.claudeGateway?.baseURL??'',gatewayCredentialHeader:agent.claudeGateway?.credentialHeader??'authorization'};
 }
 
 function modelEfforts(agent:ExternalAgentStatus,model:string){
@@ -51,6 +57,7 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
   projectId:string;projectName:string;anchor?:HTMLElement|null;channel?:SpecialistChannelInfo;onClose:()=>void;onRoleChanged?:()=>void;
 }){
   const titleId=useId(),dialog=useRef<HTMLDialogElement>(null),search=useRef<HTMLInputElement>(null);
+  const gatewayAddress=useRef<HTMLInputElement>(null);
   const panelId=titleId+'-panel',connectionId=titleId+'-connection';
   const [role,setRole]=useState(channel);
   const binding=role?.execution?.kind==='acp'?role.execution.agent:undefined;
@@ -73,8 +80,14 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
   const agent=agents.find(agent=>agent.id===executor);
   const initial=agent&&preferences(agent),draft=drafts[executor]??initial;
   const codexSelected=executor==='codex';
-  const showModels=codexSelected||agent?.transportReady===true;
   const manualModel=executor==='claude-code';
+  const customGateway=draft?.authentication==='claude-custom-api';
+  const gatewayChanged=initial?.gatewayBaseURL!==draft?.gatewayBaseURL||initial?.gatewayCredentialHeader!==draft?.gatewayCredentialHeader;
+  const authChanged=initial?.authentication!==draft?.authentication;
+  const connectionChanged=authChanged||customGateway&&gatewayChanged||initial?.executablePath!==draft?.executablePath;
+  const showModels=codexSelected||agent?.transportReady===true&&!connectionChanged;
+  const keyMode=draft?.authentication==='cli-api-key'||customGateway;
+  const keyConfigured=agent?.keyConfigured&&(customGateway?!authChanged&&!gatewayChanged:initial?.authentication!=='claude-custom-api');
   const editingModel=manualModel&&(editingClaudeModel||!!(draft?.model&&!agent?.modelOptions?.includes(draft.model)));
   const apiKey=keys[executor];
   const googleSelected=draft?.authentication==='antigravity-google';
@@ -138,6 +151,9 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
   useLayoutEffect(()=>{
     if(awaitingGoogle)googleLink.current?.focus({preventScroll:true});
   },[awaitingGoogle]);
+  useLayoutEffect(()=>{
+    if(customGateway&&authChanged)gatewayAddress.current?.focus({preventScroll:true});
+  },[customGateway,authChanged]);
 
   const dirty=apiKey!==undefined||!!(initial&&draft&&Object.keys(initial).some(key=>initial[key as keyof Preferences]!==draft[key as keyof Preferences]));
   const options=agent&&draft?modelEfforts(agent,draft.model):[];
@@ -150,15 +166,23 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
   const matching=models.filter(model=>model.toLowerCase().includes(filter));
   const followsLocal=codexSelected||draft?.authentication==='claude-local';
   const followModel=followsLocal?`跟随本机 ${name}`:`跟随 ${name} 默认`;
-  const cliStatus=agent?.transportReady?agent.assignmentBlocker:
-    agent?.message??(agent?.installed
-      ?draft?.authentication==='cli-api-key'&&!agent.keyConfigured?'配置项目 API Key 并启用后，自动读取可用模型。':
+  const cliStatus=showModels?agent?.assignmentBlocker:
+    (connectionChanged?undefined:agent?.message)??(agent?.installed
+      ?customGateway?undefined:
+        draft?.authentication==='cli-api-key'&&!keyConfigured?'配置项目 API Key 并启用后，自动读取可用模型。':
         googleSelected?'完成 Google 授权后自动加载模型。':
         draft?.authentication==='claude-local'?'启用后自动读取本机 Claude Code 的登录和模型。':agent.assignmentBlocker
       :agent?.assignmentBlocker);
   const status=error||feedback||(awaitingGoogle?(busy?'正在处理 Google 授权…':''):
     codexSelected?agent?.assignmentBlocker:cliStatus);
   const update=(value:Partial<Preferences>)=>{setFeedback('');if(draft)setDrafts(current=>({...current,[executor]:{...draft,...value}}));};
+  const selectAuthentication=(authentication:CliAuthentication)=>{
+    const gatewaySwitch=authentication==='claude-custom-api'||customGateway;
+    setKeys(previous=>({...previous,[executor]:undefined}));
+    setError('');
+    setEditingClaudeModel(false);
+    update({authentication,effort:'',...(gatewaySwitch&&{model:''})});
+  };
   const requestClose=()=>{if(!flight.current)onClose();};
   const optionsFor=(model:string)=>agent&&draft&&modelEfforts(agent,model).includes(draft.effort)?draft.effort:'';
 
@@ -177,7 +201,7 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
       if(!mounted.current)return;
       if(!next)throw new Error(`未找到此项目的 ${name} 配置`);
       setAgents(current);setDrafts(previous=>({...previous,[executor]:undefined}));setKeys(previous=>({...previous,[executor]:undefined}));
-      if(!agent?.transportReady&&next.transportReady)setConnectionOpen(false);
+      if(!showModels&&next.transportReady)setConnectionOpen(false);
       setFeedback(next.enabled&&!next.assignmentReady?next.assignmentBlocker??success:success);
     }catch(cause){
       if(!mounted.current)return;
@@ -200,7 +224,8 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
       nodePath:autoDetect?'':draft.nodePath,npmPath:autoDetect?'':draft.npmPath,
       ...(autoDetect&&{autoDetect}),
     }:{executablePath:draft.executablePath.trim(),authentication:draft.authentication,
-      ...(draft.authentication==='cli-api-key'&&{apiKey:apiKey?.trim()||apiKey})};
+      ...(keyMode&&{apiKey:apiKey?.trim()||apiKey}),
+      ...(customGateway&&{claudeGateway:{baseURL:draft.gatewayBaseURL.trim(),credentialHeader:draft.gatewayCredentialHeader}})};
     void change(()=>api.prepareExternalAgent(projectId,executor,{
       expectedRevision:agent.revision,enabled:draft.enabled,modelOverride:draft.model.trim()||null,
       reasoningEffortOverride:draft.effort||null,...runtime,
@@ -318,10 +343,10 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
                 <label className="codex-config-search"><Glyph name="search" size={16}/><input ref={search} type="search"
                   placeholder="搜索模型" aria-label="搜索模型" value={query} onChange={event=>setQuery(event.target.value)}/></label>
                 <div className="codex-config-options" role="radiogroup" aria-label={name+' 模型'}>
-                  {!filter&&<Choice name={titleId+'-model'} value="" selected={!draft.model&&!editingModel} icon={<Glyph name="local" size={15}/>}
+                  {!filter&&!customGateway&&<Choice name={titleId+'-model'} value="" selected={!draft.model&&!editingModel} icon={<Glyph name="local" size={15}/>}
                     onChange={()=>{setEditingClaudeModel(false);update({model:'',effort:optionsFor('')});}}>{followModel}</Choice>}
                   {matching.map(model=><Choice key={model} name={titleId+'-model'} value={model} selected={!editingModel&&draft.model===model}
-                    icon={<ExecutionAgentIcon agent={executor} size={15}/>}
+                    icon={customGateway?<ProviderIcon brand={modelBrand(model)} size={15}/>:<ExecutionAgentIcon agent={executor} size={15}/>}
                     onChange={()=>{setEditingClaudeModel(false);update({model,effort:optionsFor(model)});}}>{model}</Choice>)}
                   {manualModel&&!filter&&<Choice name={titleId+'-model'} value={manualModelOption} selected={editingModel}
                     icon={<Glyph name="edit" size={15}/>} onChange={()=>setEditingClaudeModel(true)}>手动填写模型</Choice>}
@@ -356,30 +381,50 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
             </div>:<div id={connectionId} hidden={!connectionExpanded}>
             <div className="codex-config-cli-status">
               <strong>{agent.installed?(agent.cliVersion?`CLI ${agent.cliVersion}`:'已检测到 CLI'):'未检测到 CLI'}</strong>
-              <a href={installGuides[executor]} target="_blank" rel="noreferrer">CLI 安装说明 <Glyph name="next" size={12}/></a>
+              <div className="codex-config-actions">
+                {manualModel&&!customGateway&&<button type="button" className="button secondary"
+                  onClick={()=>selectAuthentication('claude-custom-api')}><Glyph name="plug" size={13}/>自定义 API</button>}
+                <a href={installGuides[executor]} target="_blank" rel="noreferrer">CLI 安装说明 <Glyph name="next" size={12}/></a>
+              </div>
             </div>
             <div className="codex-config-connection-fields">
-              {observed&&<p>{observed}</p>}
+              {observed&&!connectionChanged&&<p>{observed}</p>}
               <label><span>项目启用</span><input type="checkbox" checked={draft.enabled} disabled={awaitingGoogle}
                 onChange={event=>update({enabled:event.target.checked})}/></label>
               <label><span>CLI 路径</span><input value={draft.executablePath} placeholder={agent.detectedExecutable??'自动识别或填写绝对路径'} spellCheck={false} disabled={awaitingGoogle}
                 onChange={event=>update({executablePath:event.target.value})}/></label>
               <label><span>登录方式</span><AppSelect label="登录方式" value={draft.authentication??cliDefaultAuthentication[executor]} disabled={busy||awaitingGoogle}
-                onChange={event=>{
-                  setKeys(previous=>({...previous,[executor]:undefined}));
-                  update({authentication:event.target.value as CliAuthentication,effort:''});
-                }}>
+                onChange={event=>selectAuthentication(event.target.value as CliAuthentication)}>
                 <option value={cliDefaultAuthentication[executor]}>{executor==='claude-code'?'复用本机登录':'Google 登录'}</option>
                 <option value="cli-api-key">{executor==='claude-code'?'Anthropic API Key':'Gemini API Key'}</option>
+                {manualModel&&<option value="claude-custom-api">自定义 API</option>}
               </AppSelect></label>
-              {!showModels&&manualModel&&<label><span>模型 ID</span><input value={draft.model} placeholder="跟随 CLI" spellCheck={false}
-                onChange={event=>update({model:event.target.value,effort:''})}/></label>}
-              {draft.authentication==='cli-api-key'&&<div className="codex-config-credential">
+              {customGateway&&<>
+                <label><span>API 基础地址</span><input ref={gatewayAddress} type="url" value={draft.gatewayBaseURL} placeholder="https://openrouter.ai/api"
+                  autoComplete="off" spellCheck={false}
+                  onChange={event=>{
+                    if(apiKey===null)setKeys(previous=>({...previous,[executor]:undefined}));
+                    update({gatewayBaseURL:event.target.value,effort:''});
+                  }}/></label>
+                <label><span>Key 发送方式</span><AppSelect label="Key 发送方式" value={draft.gatewayCredentialHeader}
+                  onChange={event=>{
+                    if(apiKey===null)setKeys(previous=>({...previous,[executor]:undefined}));
+                    update({gatewayCredentialHeader:event.target.value as ClaudeGateway['credentialHeader'],effort:''});}}>
+                  <option value="authorization">Bearer Token</option>
+                  <option value="x-api-key">x-api-key</option>
+                </AppSelect></label>
+              </>}
+              {keyMode&&<div className="codex-config-credential">
                 <label><span>API Key</span><input type="password" autoComplete="off" spellCheck={false} value={apiKey??''}
-                  placeholder={apiKey===null?'保存后移除':agent.keyConfigured?'已保存 · 输入新 Key 替换':executor==='antigravity'?'Gemini API Key':'Anthropic API Key'}
+                  placeholder={apiKey===null?'保存后移除':keyConfigured?'已保存 · 输入新 Key 替换':
+                    customGateway?'第三方服务 API Key':executor==='antigravity'?'Gemini API Key':'Anthropic API Key'}
                   onChange={event=>{setFeedback('');const value=event.target.value;setKeys(previous=>({...previous,[executor]:value||undefined}));}}/></label>
-                {agent.keyConfigured&&<button type="button" className="button secondary" onClick={()=>setKeys(previous=>({...previous,[executor]:apiKey===null?undefined:null}))}>{apiKey===null?'撤销':'移除'}</button>}
+                {keyConfigured&&<button type="button" className="button secondary" onClick={()=>setKeys(previous=>({...previous,[executor]:apiKey===null?undefined:null}))}>{apiKey===null?'撤销':'移除'}</button>}
               </div>}
+              {!showModels&&manualModel&&<label><span>模型 ID</span><input value={draft.model}
+                placeholder={customGateway?'可手填，或保存后从列表选择':'跟随 CLI'} spellCheck={false}
+                onChange={event=>update({model:event.target.value,effort:''})}/></label>}
+              {customGateway&&<p>地址需兼容 Anthropic Messages。可手填模型 ID。选择模型后，「检测连接」会发送一条短测试请求。</p>}
               {googleSelected&&(googleLogin?<form className="codex-config-google" aria-label="Google 授权" onSubmit={event=>{event.preventDefault();submitGoogleCode();}}>
                 <p>在浏览器完成授权后，将页面显示的授权码粘贴到这里。</p>
                 <label><span>授权码</span><input type="password" autoComplete="off" spellCheck={false}
@@ -406,10 +451,13 @@ export function CodexModelConfiguration({projectId,projectName,anchor,channel,on
             {showModels&&<button type="button" className="codex-config-connection" disabled={busy||awaitingGoogle} aria-controls={connectionId}
               aria-expanded={connectionExpanded} onClick={()=>setConnectionOpen(open=>!open)}>
               <Glyph name="plug" size={15}/><span>连接设置</span>
-              <span className="codex-config-readiness" data-ready={agent.assignmentReady===true}>{agent.assignmentReady?'已就绪':'待连接'}</span>
+              <span className="codex-config-readiness" data-ready={agent.assignmentReady===true}>
+                {agent.assignmentReady?'已就绪':customGateway&&agent.transportReady&&!agent.defaultTaskModel?'待选模型':'待连接'}
+              </span>
               <Glyph name={connectionExpanded?'chevron':'next'} size={13}/>
             </button>}
-            <button type="button" className="button primary" disabled={busy||!dirty} onClick={()=>save()}>{busy?'正在处理…':'保存配置'}</button>
+            <button type="button" className="button primary" disabled={busy||!dirty||customGateway&&!draft.gatewayBaseURL.trim()}
+              onClick={()=>save()}>{busy?'正在处理…':'保存配置'}</button>
         </footer>}
       </div>
     </div>

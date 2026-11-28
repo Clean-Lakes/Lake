@@ -1,6 +1,6 @@
 import type { ToolEntry } from '../sdk';
 
-import type {CliAuthentication,CodexProjectOverrides,ExternalAgentId,ExternalAgentStatus as PublicAgentStatus,ExternalRuntimeKind,StoredExternalAgentId} from '../../../web-agent/shared/external-agents';
+import type {ClaudeGateway,CliAuthentication,CodexProjectOverrides,ExternalAgentId,ExternalAgentStatus as PublicAgentStatus,ExternalRuntimeKind,StoredExternalAgentId} from '../../../web-agent/shared/external-agents';
 export type {ExternalAgentId,AgentBackendRef} from '../../../web-agent/shared/external-agents';
 type ProfileFields = CodexProjectOverrides & {
   schemaVersion:3;projectId:string;revision:number;enabled:boolean;sourceFingerprint:string;updatedAt:string;
@@ -13,6 +13,7 @@ export type CliAgentProfile = Omit<ProfileFields,'schemaVersion'> & {
   schemaVersion:4;
   id:CliAgentId;runtimeKind:'claude-code-cli'|'antigravity-acp';authentication:CliAuthentication;executablePath?:string;
   googleLoginId?:string;
+  claudeGateway?:ClaudeGateway;
 };
 export type ExternalAgentProfile = CodexAgentProfile | CliAgentProfile;
 export type ExternalAgentStatus = ExternalAgentProfile & PublicAgentStatus & {

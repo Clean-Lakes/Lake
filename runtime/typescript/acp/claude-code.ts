@@ -89,7 +89,8 @@ export class ClaudeCode implements AgentConnection {
     signal.throwIfAborted();
     if(this.session||options.threadId&&!uuid.test(options.threadId))throw new Error('Claude Code 会话标识无效');
     const id=options.threadId??randomUUID();
-    const args=[...streamArgs,...(this.launch.env.ANTHROPIC_API_KEY?['--bare']:[]),'--include-partial-messages',
+    const apiCredentials=this.launch.env.ANTHROPIC_API_KEY||this.launch.env.ANTHROPIC_AUTH_TOKEN;
+    const args=[...streamArgs,...(apiCredentials?['--bare']:[]),'--include-partial-messages',
       options.threadId?'--resume':'--session-id',id];
     if(this.mcp){
       args.push('--mcp-config',JSON.stringify({mcpServers:{lake:{type:'stdio',command:this.mcp.command,args:this.mcp.args}}}),
@@ -119,7 +120,7 @@ export class ClaudeCode implements AgentConnection {
       const process=new JsonLineProcess({...this.launch,args:session.args},frame=>{
         if(frame.session_id!==session.id||frame.parent_tool_use_id)return;
         if(frame.type==='system'&&frame.subtype==='init'){
-          if(isCliModelId(frame.model))this.observeModel(frame.model,'anthropic',this.reasoningEffort);
+          if(isCliModelId(frame.model))this.observeModel(frame.model,this.launch.env.ANTHROPIC_BASE_URL?'custom':'anthropic',this.reasoningEffort);
         }else if(frame.type==='stream_event'){
           const event=frame.event;
           if(event?.type==='message_start'&&typeof event.message?.id==='string'){
