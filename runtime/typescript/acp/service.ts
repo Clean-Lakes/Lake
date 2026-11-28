@@ -6,7 +6,7 @@ import { LakeStore,HttpError,id,now } from '../store';
 import { digest } from '../tasks';
 import {TaskDeadlineReached,watchTaskDeadline} from '../task-deadline';
 import type {AgentActivity,AgentConnection,AgentLaunch,ObserveAgentModel,ScopedHttpMcp,ScopedStdioMcp} from './client';
-import {codexToolDetail,commandLimit,outputLine} from './codex-activity';
+import {codexChecklistChanges,codexToolDetail,commandLimit,outputLine,readCodexChecklist,type CodexDetail} from './codex-activity';
 import {CodexAppServer} from './codex-app-server';
 import {ClaudeCode,claudeLocalAccount,discoverClaudeModels} from './claude-code';
 import {Antigravity,antigravityLoginRequired} from './antigravity';
@@ -510,18 +510,27 @@ export class LakeExternalAgents {
     const invoke=async(name:string,input:unknown,callId:string)=>{
       activePrompt();
       if(!tools.some(tool=>tool.metadata.name===name))throw new HttpError(403,'外部执行不能调用此工具');
-      const detail=bridgeActivity?codexToolDetail({type:'mcpToolCall',server:'lake',tool:name,arguments:input},this.redact):undefined;
-      const recorded=bridgeActivity&&(detail||name==='work_finish');
+      const checklistWrite=bridgeActivity&&name==='TodoWrite';
+      const detail=bridgeActivity&&!checklistWrite?codexToolDetail({type:'mcpToolCall',server:'lake',tool:name,arguments:input},this.redact):undefined;
+      const recorded=bridgeActivity&&(detail||checklistWrite||name==='work_finish');
       const tool={callId,title:name,toolSource:'lake-bridge' as const,...detail};
       if(recorded)event({kind:'tool',status:'running',...tool});
       let status='failed';
       let preview:string|undefined;
+      let changes:CodexDetail[]|undefined;
       try{
         const result=await actor.executeTool(name,input,run.id+':'+callId,controller.signal);
         guard();
         status='completed';
         if(actor.purpose==='worker'&&name==='work_finish'&&typeof (input as any)?.summary==='string')
           submittedReport=this.redact((input as any).summary).slice(0,32768);
+        if(checklistWrite){
+          // TodoWrite returns the prior and saved snapshots from this Worker.
+          const saved=result as {oldTodos?:unknown;todos?:unknown}|undefined;
+          const before=readCodexChecklist(saved?.oldTodos,'content');
+          const after=readCodexChecklist(saved?.todos,'content');
+          if(before&&after)changes=codexChecklistChanges(before,after);
+        }
         if(detail?.displayKind==='command'&&!detail.suppressOutput){
           const stdout=(result as {stdout?:string|{text?:unknown}}|undefined)?.stdout;
           const text=typeof stdout==='string'?stdout:stdout?.text;
@@ -529,8 +538,14 @@ export class LakeExternalAgents {
         }
         return result;
       }finally{
-        if(recorded&&!controller.signal.aborted&&run.state==='running')
-          event({kind:'tool_update',status,...tool,...(preview&&{preview})});
+        if(recorded&&!controller.signal.aborted&&run.state==='running'){
+          event({kind:'tool_update',status,...tool,...(preview&&{preview}),
+            ...(checklistWrite&&!changes&&{displayKind:'task',detail:'更新任务清单'})});
+          for(const [index,change] of (changes??[]).entries()){
+            if(controller.signal.aborted)break;
+            event({kind:'tool_update',...tool,callId:JSON.stringify(['checklist',callId,index]),status,...change});
+          }
+        }
       }
     };
     persist();

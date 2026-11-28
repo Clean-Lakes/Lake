@@ -62,7 +62,7 @@ Claude Code 的「自定义 API」支持兼容 Anthropic Messages 的第三方�
 
 两者复用 Task/Worker 身份、审批、终止和操作账本。模型选用、CLI 连接及传输许可各自校验。需要延续时使用相同执行上下文的会话标识，Antigravity 的续接依赖本机 CLI 声明 `session/resume`。无法实时确认消费的补充沿 Lake 的既有排队机制处理。
 
-Claude Code 和 Antigravity 的专员任务在群聊、Pilot 对话和专员频道展示已公开的阶段说明与实际 Lake 工具调用。调用按原 Worker 和执行轮次更新，命令和简短输出沿用脱敏规则，过程随报告保存。历史 Antigravity 报告可从属于同一轮的已存记录显示工具标题与状态。
+Claude Code 和 Antigravity 的专员任务在群聊、Pilot 对话和专员频道展示已公开的阶段说明与实际 Lake 工具调用。Lake 根据本轮 `TodoWrite` 成功返回的写入前后清单展示逐条待办变化。调用按原 Worker 和执行轮次更新，命令、待办和简短输出沿用脱敏规则，过程随报告保存。历史 Antigravity 报告可从属于同一轮的已存记录显示工具标题与状态。
 
 ## 迁移与交付边界
 

@@ -23,6 +23,22 @@ const localClaude=agent==='claude-code'&&!process.env.ANTHROPIC_API_KEY&&!proces
 assert.equal(process.env.HOME.startsWith(process.cwd()+'/'),!localClaude);
 assert.ok(!process.env.LAKE_TEST_PARENT_ENV);
 let sequence=0;
+async function submitReport(rpc){
+ const tools=(await rpc('tools/list',{})).tools;
+ for(const name of ['TodoWrite','work_finish'])assert.ok(tools.some(tool=>tool.name===name),name);
+ const writeTodos=todos=>rpc('tools/call',{name:'TodoWrite',arguments:{todos}});
+ const first={content:'查看样例目录',status:'pending',priority:'high'};
+ const second={content:'核对样例记录',status:'pending',priority:'medium'};
+ const running={...first,status:'in_progress'};
+ assert.ok(!(await writeTodos([first,second])).isError);
+ assert.ok((await writeTodos([{...first,content:'x'.repeat(100001),status:'completed'}])).isError);
+ assert.ok(!(await writeTodos([running,second])).isError);
+ assert.ok(!(await writeTodos([running,second])).isError);
+ assert.ok(!(await rpc('tools/call',{name:'list_assets',arguments:{query:'isolated-fixture'}})).isError);
+ assert.ok(!(await writeTodos([{...first,status:'completed'},second])).isError);
+ const result=await rpc('tools/call',{name:'work_finish',arguments:{summary:'ISOLATED_CLI_REPORT',outcome:'completed'}});
+ assert.ok(result&&!result.isError);
+}
 async function reportViaBridge(mcp){
  assert.ok(mcp);
  if(mcp.serverUrl){
@@ -33,10 +49,7 @@ async function reportViaBridge(mcp){
     body:JSON.stringify({jsonrpc:'2.0',id:++sequence,method,params})});
    assert.equal(response.status,200);return (await response.json()).result;
   };
-  assert.ok((await rpc('tools/list',{})).tools.some(tool=>tool.name==='work_finish'));
-  assert.ok(!(await rpc('tools/call',{name:'list_assets',arguments:{query:'isolated-fixture'}})).isError);
-  const result=await rpc('tools/call',{name:'work_finish',arguments:{summary:'ISOLATED_CLI_REPORT',outcome:'completed'}});
-  assert.ok(result&&!result.isError);
+  await submitReport(rpc);
   return;
  }
  const child=spawn(mcp.command,mcp.args,{stdio:['pipe','pipe','inherit']});
@@ -51,11 +64,7 @@ async function reportViaBridge(mcp){
  try{
   await rpc('initialize',{protocolVersion:'2025-11-25',capabilities:{},clientInfo:{name:'cli-fixture',version:'1'}});
   child.stdin.write(JSON.stringify({jsonrpc:'2.0',method:'notifications/initialized'})+'\n');
-  const tools=await rpc('tools/list',{});
-  assert.ok(tools.tools.some(tool=>tool.name==='work_finish'));
-  assert.ok(!(await rpc('tools/call',{name:'list_assets',arguments:{query:'isolated-fixture'}})).isError);
-  const result=await rpc('tools/call',{name:'work_finish',arguments:{summary:'ISOLATED_CLI_REPORT',outcome:'completed'}});
-  assert.ok(!result.isError);
+  await submitReport(rpc);
  }finally{child.stdin.end();child.kill();}
 }
 
@@ -263,14 +272,26 @@ test('CLI profiles bind specialists, dispatch through the private bridge, and pu
    ['tool','running','lake-bridge'],['tool_update','completed','lake-bridge'],
   ]);
   assert.equal(toolSteps[0].callId,toolSteps[1].callId);
+  const changes=[
+   ['查看样例目录','pending',true],['核对样例记录','pending',true],
+   ['查看样例目录','in_progress',false],['查看样例目录','completed',false],
+  ];
+  const todoEvents=run.events.filter(event=>event.title==='TodoWrite'&&event.displayKind==='task');
+  assert.deepEqual(todoEvents.filter(event=>event.taskState).map(event=>[event.detail,event.taskState,!!event.createdTask]),changes);
+  assert.deepEqual(todoEvents.filter(event=>!event.taskState).map(event=>event.status),['failed']);
+  assert.ok(todoEvents.every(event=>event.toolSource==='lake-bridge'));
+  assert.equal(new Set(todoEvents.map(event=>event.callId)).size,todoEvents.length);
   const liveProcess=app.store.view(worker.sessionId).cards.find(card=>card.id===run.id)?.data.codex_activity;
   assert.equal(liveProcess?.filter(item=>item.text==='list_assets'&&item.status==='completed').length,1);
+  const checklist=items=>items?.filter(item=>item.kind==='task'&&item.taskState).map(item=>[item.text,item.taskState,!!item.createdTask]);
+  assert.deepEqual(checklist(liveProcess),changes);
   let report;
   for(let attempt=0;attempt<150&&!report;attempt++){
    report=app.store.list('messages').find(message=>message.sessionId===channel.sessionId&&message.author?.workerId===worker.id&&message.id.startsWith('report_'));
    if(!report)await new Promise(resolve=>setTimeout(resolve,35));
   }
   assert.ok(report?.codexActivity?.some(item=>item.text==='list_assets'&&item.status==='completed'),'delivered report keeps the process');
+  assert.deepEqual(checklist(report.codexActivity),changes);
   if(agent==='antigravity'){
    const {codexActivity,...oldReport}=report;
    app.store.put('messages',oldReport.id,oldReport);
