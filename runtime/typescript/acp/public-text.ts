@@ -16,6 +16,16 @@ export class ExternalPublicText {
    publicTextId:'acp_message_'+createHash('sha256').update(key).digest('hex')};
  }
 
+ /** Some runtimes stream individual messages, including final corrections. */
+ replace(messageId:string,messageText:string){
+  const previous=this.messages.get(messageId);
+  if(previous===undefined&&this.text.length>=rawLimit)return this.snapshot(this.text,messageId,'');
+  const available=rawLimit-this.text.length+(previous?.length??0)-(previous===undefined&&this.messages.size?2:0);
+  const accepted=messageText.slice(0,Math.max(0,available));
+  this.messages.set(messageId,accepted);
+  return this.snapshot([...this.messages.values()].join('\n\n'),messageId,accepted);
+ }
+
  append(delta:string,messageId:unknown){
   // Share the existing run text budget rather than retaining an unbounded copy
   // for each message. No timing, punctuation or tool call guesses a boundary.

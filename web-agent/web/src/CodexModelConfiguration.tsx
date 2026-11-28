@@ -1,6 +1,9 @@
 import {useEffect,useId,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
-import type {ExternalAgentStatus} from '../../shared/external-agents';
+import type {SpecialistChannelInfo} from '../../shared/contracts';
+import {externalAgentName,isExternalAgentId,type ExternalAgentId,type ExternalAgentStatus} from '../../shared/external-agents';
 import {api,readableError} from './api';
+import {AppSelect} from './AppSelect';
+import {ExecutionAgentIcon} from './ExecutionAgentIcon';
 import {Glyph} from './Icons';
 import {ProviderIcon} from './ProviderIcon';
 import {reasoningLabels} from './reasoningLabels';
@@ -8,22 +11,14 @@ import {TabSelectionIndicator} from './TabSelectionIndicator';
 import {navigateSettingsTabs} from './settingsFocus';
 import './codexModelConfiguration.css';
 
-type Preferences = {model:string;effort:string;enabled:boolean;nodePath:string;npmPath:string};
-const executors = [
-  {id:'codex',name:'Codex',brand:'openai'},
-  {id:'claude-code',name:'Claude Code',brand:'claude'},
-  {id:'z-code',name:'Z Code'},
-] as const;
-type Executor = typeof executors[number];
+type Preferences = {model:string;effort:string;enabled:boolean;nodePath:string;npmPath:string;executablePath:string};
+const executors:ExternalAgentId[]=['codex','claude-code','antigravity'];
+const installGuides={'claude-code':'https://code.claude.com/docs/en/quickstart',antigravity:'https://antigravity.google/docs/cli/acp/'};
 const narrowPanel = '(max-width: 600px)';
-
-function ExecutorIcon({executor,size}:{executor:Executor;size:number}){
-  return 'brand' in executor?<ProviderIcon brand={executor.brand} size={size}/>:<Glyph name="terminal" size={size}/>;
-}
 
 function preferences(agent:ExternalAgentStatus):Preferences {
   return {model:agent.modelOverride??'',effort:agent.reasoningEffortOverride??'',enabled:agent.enabled,
-    nodePath:agent.nodePath??'',npmPath:agent.npmPath??''};
+    nodePath:agent.nodePath??'',npmPath:agent.npmPath??'',executablePath:agent.executablePath??''};
 }
 
 function modelEfforts(agent:ExternalAgentStatus,model:string){
@@ -49,19 +44,28 @@ function revealSelected(list:HTMLElement){
   else if(selected.top<bounds.top)list.scrollTop+=selected.top-bounds.top;
 }
 
-export function CodexModelConfiguration({projectId,projectName,anchor,onClose}:{
-  projectId:string;projectName:string;anchor?:HTMLElement|null;onClose:()=>void;
+export function CodexModelConfiguration({projectId,projectName,anchor,channel,onClose,onRoleChanged}:{
+  projectId:string;projectName:string;anchor?:HTMLElement|null;channel?:SpecialistChannelInfo;onClose:()=>void;onRoleChanged?:()=>void;
 }){
   const titleId=useId(),dialog=useRef<HTMLDialogElement>(null),search=useRef<HTMLInputElement>(null);
   const panelId=titleId+'-panel',connectionId=titleId+'-connection';
-  const [executor,setExecutor]=useState<Executor>(executors[0]);
+  const [role,setRole]=useState(channel);
+  const binding=role?.execution?.kind==='acp'?role.execution.agent:undefined;
+  const roleAgent=isExternalAgentId(binding)?binding:'codex';
+  const [executor,setExecutor]=useState<ExternalAgentId>(roleAgent);
+  const name=externalAgentName(executor);
   const [compact,setCompact]=useState(()=>window.matchMedia(narrowPanel).matches);
   const [connectionOpen,setConnectionOpen]=useState(false);
-  const [agent,setAgent]=useState<ExternalAgentStatus>();
-  const [draft,setDraft]=useState<Preferences>();
+  const [agents,setAgents]=useState<ExternalAgentStatus[]>([]);
+  const [drafts,setDrafts]=useState<Partial<Record<ExternalAgentId,Preferences>>>({});
+  const [keys,setKeys]=useState<Partial<Record<ExternalAgentId,string|null>>>({});
   const [query,setQuery]=useState(''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
   const [error,setError]=useState(''),[feedback,setFeedback]=useState('');
   const flight=useRef(false),mounted=useRef(false);
+  const agent=agents.find(agent=>agent.id===executor);
+  const initial=agent&&preferences(agent),draft=drafts[executor]??initial;
+  const codexSelected=executor==='codex';
+  const apiKey=keys[executor];
 
   useLayoutEffect(()=>{
     const node=dialog.current;
@@ -99,10 +103,8 @@ export function CodexModelConfiguration({projectId,projectName,anchor,onClose}:{
     mounted.current=true;
     void api.externalAgents(projectId,controller.signal).then(({agents})=>{
       if(controller.signal.aborted)return;
-      const next=agents.find(row=>row.id==='codex');
-      setAgent(next);
-      if(next)setDraft(preferences(next));
-      else setError('未找到此项目的 Codex 配置');
+      setAgents(agents);
+      if(!agents.length)setError('未找到此项目的执行器配置');
     }).catch(cause=>{
       if(!controller.signal.aborted)setError(readableError(cause));
     }).finally(()=>{
@@ -115,8 +117,7 @@ export function CodexModelConfiguration({projectId,projectName,anchor,onClose}:{
     if(!loading)search.current?.focus({preventScroll:true});
   },[loading]);
 
-  const initial=agent&&preferences(agent);
-  const dirty=!!(initial&&draft&&Object.keys(initial).some(key=>initial[key as keyof Preferences]!==draft[key as keyof Preferences]));
+  const dirty=apiKey!==undefined||!!(initial&&draft&&Object.keys(initial).some(key=>initial[key as keyof Preferences]!==draft[key as keyof Preferences]));
   const options=agent&&draft?modelEfforts(agent,draft.model):[];
   const observed=agent&&[agent.authMode==='chatgpt'?'ChatGPT 登录':agent.authMode==='api_key'?'Codex API 登录':
     agent.authMode==='provider'?'本机服务':undefined,agent.model,agent.reasoningEffort&&
@@ -124,9 +125,8 @@ export function CodexModelConfiguration({projectId,projectName,anchor,onClose}:{
   const models=[...new Set([...(agent?.modelOptions??[]),draft?.model].filter((model):model is string=>!!model))];
   const filter=query.trim().toLowerCase();
   const matching=models.filter(model=>model.toLowerCase().includes(filter));
-  const codexSelected=executor.id==='codex';
-  const status=error||feedback||agent?.assignmentBlocker;
-  const update=(value:Partial<Preferences>)=>{setFeedback('');setDraft(current=>current&&({...current,...value}));};
+  const status=error||feedback||(codexSelected?agent?.assignmentBlocker:agent?.message??agent?.assignmentBlocker);
+  const update=(value:Partial<Preferences>)=>{setFeedback('');if(draft)setDrafts(current=>({...current,[executor]:{...draft,...value}}));};
   const requestClose=()=>{if(!flight.current)onClose();};
   const optionsFor=(model:string)=>agent&&draft&&modelEfforts(agent,model).includes(draft.effort)?draft.effort:'';
 
@@ -140,16 +140,20 @@ export function CodexModelConfiguration({projectId,projectName,anchor,onClose}:{
     setBusy(true);setError('');setFeedback('');
     try{
       const response=await operation();
-      const next=(response.agents??(await api.externalAgents(projectId)).agents).find(row=>row.id==='codex');
+      const current=response.agents??(await api.externalAgents(projectId)).agents;
+      const next=current.find(row=>row.id===executor);
       if(!mounted.current)return;
-      if(!next)throw new Error('未找到此项目的 Codex 配置');
-      setAgent(next);setDraft(preferences(next));setFeedback(success);
+      if(!next)throw new Error(`未找到此项目的 ${name} 配置`);
+      setAgents(current);setDrafts(previous=>({...previous,[executor]:undefined}));setKeys(previous=>({...previous,[executor]:undefined}));
+      setFeedback(next.enabled&&!next.assignmentReady?next.assignmentBlocker??success:success);
     }catch(cause){
       if(!mounted.current)return;
       setError(readableError(cause));
       try{
-        const next=(await api.externalAgents(projectId)).agents.find(row=>row.id==='codex');
-        if(mounted.current&&next){setAgent(next);if(next.revision!==agent?.revision)setDraft(preferences(next));}
+        const current=(await api.externalAgents(projectId)).agents,next=current.find(row=>row.id===executor);
+        if(mounted.current&&next){setAgents(current);if(next.revision!==agent?.revision){
+          setDrafts(previous=>({...previous,[executor]:undefined}));setKeys(previous=>({...previous,[executor]:undefined}));
+        }}
       }catch{/* Keep the first error and the editable preferences. */}
     }finally{
       flight.current=false;
@@ -159,18 +163,31 @@ export function CodexModelConfiguration({projectId,projectName,anchor,onClose}:{
 
   function save(autoDetect=false){
     if(!agent||!draft)return;
-    void change(()=>api.prepareExternalAgent(projectId,{
-      expectedRevision:agent.revision,enabled:draft.enabled,
+    const runtime=codexSelected?{
       nodePath:autoDetect?'':draft.nodePath,npmPath:autoDetect?'':draft.npmPath,
-      modelOverride:draft.model||null,reasoningEffortOverride:draft.effort||null,...(autoDetect&&{autoDetect}),
+      reasoningEffortOverride:draft.effort||null,...(autoDetect&&{autoDetect}),
+    }:{executablePath:draft.executablePath.trim(),apiKey:apiKey?.trim()||apiKey};
+    void change(()=>api.prepareExternalAgent(projectId,executor,{
+      expectedRevision:agent.revision,enabled:draft.enabled,modelOverride:draft.model.trim()||null,...runtime,
     }),autoDetect?'已重新识别运行路径':'模型配置已保存');
   }
 
   function reconnect(){
-    void change(async()=>{await api.probeExternalAgent(projectId,'codex');return {};},'Codex 连接已刷新');
+    void change(async()=>{await api.probeExternalAgent(projectId,executor);return {};},`${name} 连接已刷新`);
   }
 
-  return <dialog ref={dialog} className="codex-config" aria-labelledby={titleId} data-anchored={anchor?true:undefined}
+  function applyRole(){
+    if(!role?.roleRevision||!agent?.assignmentReady||dirty||roleAgent===executor)return;
+    const {roleId,roleRevision}=role;
+    void change(async()=>{
+      const result=await api.setRoleExecution(projectId,roleId,roleRevision,{kind:'acp',agent:executor,revision:agent.revision});
+      if(mounted.current)setRole({...role,execution:result.execution,roleRevision:result.revision});
+      onRoleChanged?.();
+      return {};
+    },`已为${role.roleName}启用 ${name}`);
+  }
+
+  return <dialog ref={dialog} role="dialog" className="codex-config" aria-labelledby={titleId} data-anchored={anchor?true:undefined}
     onCancel={event=>{event.preventDefault();requestClose();}}
     onClick={event=>{
       if(event.target!==event.currentTarget)return;
@@ -191,15 +208,20 @@ export function CodexModelConfiguration({projectId,projectName,anchor,onClose}:{
     <div className="codex-config-body">
       <div className="codex-config-executors" role="tablist" aria-label="执行器" aria-orientation={compact?'horizontal':'vertical'}
         onKeyDown={event=>navigateSettingsTabs(event,event.currentTarget)}>
-        {executors.map(option=><button key={option.id} type="button" role="tab" id={titleId+'-'+option.id}
+        {executors.map(option=><button key={option} type="button" role="tab" id={titleId+'-'+option} title={externalAgentName(option)}
           aria-selected={option===executor} aria-controls={option===executor?panelId:undefined} tabIndex={option===executor?0:-1}
-          disabled={busy} onClick={()=>setExecutor(option)}>
-          <ExecutorIcon executor={option} size={16}/><span>{option.name}</span>
+          disabled={busy} onClick={()=>{setExecutor(option);setQuery('');setError('');setFeedback('');}}>
+          <ExecutionAgentIcon agent={option} size={16}/><span>{option==='antigravity'?'Antigravity':externalAgentName(option)}</span>
         </button>)}
-        <TabSelectionIndicator selection={executor.id}/>
+        <TabSelectionIndicator selection={executor}/>
       </div>
-      <div className="codex-config-panel" id={panelId} role="tabpanel" aria-labelledby={titleId+'-'+executor.id}
+      <div className="codex-config-panel" id={panelId} role="tabpanel" aria-labelledby={titleId+'-'+executor}
         tabIndex={!codexSelected||!draft?0:undefined}>
+        {role&&<div className="codex-config-role">
+          <div><strong title={role.roleName}>{role.roleName}</strong><span><ExecutionAgentIcon agent={roleAgent} size={13}/>{externalAgentName(roleAgent)}</span></div>
+          {roleAgent===executor?<span className="codex-config-role-current"><Glyph name="check" size={14}/>当前执行器</span>:
+            <button type="button" className="button secondary" disabled={busy||dirty||!role.roleRevision||!agent?.assignmentReady} onClick={applyRole}>用于此专员</button>}
+        </div>}
         {codexSelected?<>
           {agent&&draft&&<fieldset className="codex-config-fields" disabled={busy}>
             <div className="codex-config-columns">
@@ -246,7 +268,37 @@ export function CodexModelConfiguration({projectId,projectName,anchor,onClose}:{
             </button>
             <button type="button" className="button primary" disabled={busy||!dirty} onClick={()=>save()}>{busy?'正在处理…':'保存配置'}</button>
           </footer>}
-        </>:<div className="codex-config-pending"><ExecutorIcon executor={executor} size={26}/><h3>{executor.name}</h3><p>待接入</p></div>}
+        </>:<>
+          {agent&&draft&&<fieldset className="codex-config-fields codex-config-cli" disabled={busy}>
+            <div className="codex-config-cli-status">
+              <strong>{agent.installed?(agent.cliVersion?`CLI ${agent.cliVersion}`:'已检测到 CLI'):'未检测到 CLI'}</strong>
+              <a href={installGuides[executor]} target="_blank" rel="noreferrer">CLI 安装说明 <Glyph name="next" size={12}/></a>
+            </div>
+            <div className="codex-config-connection-fields">
+              <label><span>项目启用</span><input type="checkbox" checked={draft.enabled} onChange={event=>update({enabled:event.target.checked})}/></label>
+              <label><span>CLI 路径</span><input value={draft.executablePath} placeholder={agent.detectedExecutable??'自动识别或填写绝对路径'} spellCheck={false}
+                onChange={event=>update({executablePath:event.target.value})}/></label>
+              <label><span>默认模型</span>{executor==='antigravity'?<AppSelect label="默认模型" value={draft.model} disabled={busy}
+                onChange={event=>update({model:event.target.value})}>
+                <option value="">{agent.localModel?`跟随 CLI · ${agent.localModel}`:'跟随 CLI'}</option>
+                {models.map(model=><option key={model} value={model}>{model}</option>)}
+              </AppSelect>:<input value={draft.model} placeholder="跟随 CLI" spellCheck={false} onChange={event=>update({model:event.target.value})}/>}
+              </label>
+              <div className="codex-config-credential">
+                <label><span>API Key</span><input type="password" autoComplete="off" spellCheck={false} value={apiKey??''}
+                  placeholder={apiKey===null?'保存后移除':agent.keyConfigured?'已保存 · 输入新 Key 替换':executor==='antigravity'?'Gemini API Key':'Anthropic API Key'}
+                  onChange={event=>{setFeedback('');const value=event.target.value;setKeys(previous=>({...previous,[executor]:value||undefined}));}}/></label>
+                {agent.keyConfigured&&<button type="button" className="button secondary" onClick={()=>setKeys(previous=>({...previous,[executor]:apiKey===null?undefined:null}))}>{apiKey===null?'撤销':'移除'}</button>}
+              </div>
+            </div>
+          </fieldset>}
+          {(loading||status)&&<p className="codex-config-feedback" role={error?'alert':'status'}>{loading?'正在读取连接…':status}</p>}
+          {agent&&draft&&<footer className="codex-config-footer">
+            {dirty&&agent.enabled&&<small>保存会中止此项目正在运行的 {name} 调用。</small>}
+            <button type="button" className="button secondary" disabled={busy||dirty||!agent.installed} onClick={reconnect}>检测连接</button>
+            <button type="button" className="button primary" disabled={busy||!dirty} onClick={()=>save()}>{busy?'正在处理…':'保存配置'}</button>
+          </footer>}
+        </>}
       </div>
     </div>
   </dialog>;

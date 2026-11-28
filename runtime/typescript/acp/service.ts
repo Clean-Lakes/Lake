@@ -4,17 +4,20 @@ import { isSea } from 'node:sea';
 import { LakeStore,HttpError,id,now } from '../store';
 import { digest } from '../tasks';
 import {TaskDeadlineReached,watchTaskDeadline} from '../task-deadline';
-import type {AgentConnection,AgentLaunch} from './client';
+import type {AgentActivity,AgentConnection,AgentLaunch,ObserveAgentModel,ScopedHttpMcp,ScopedStdioMcp} from './client';
 import {commandLimit} from './codex-activity';
 import {CodexAppServer} from './codex-app-server';
+import {ClaudeCode} from './claude-code';
+import {Antigravity} from './antigravity';
+import {cliEnvironment,cliSecretId,cliVersion,isCliModelId} from './cli-profile';
 import { ExternalAgentRegistry } from './registry';
 import { externalAgentId,externalControlTools,externalProducts } from './catalog';
 import {externalAgentName} from '../../../web-agent/shared/external-agents';
-import { openToolBridge } from './bridge';
+import { openHttpToolBridge,openToolBridge } from './bridge';
 import {privatePath} from './private';
 import {codexConfig,tomlValue} from './codex-profile';
 import {ExternalPublicText} from './public-text';
-import type { CodexConnectionProbe,CodexModelOption,ExternalActor,ExternalAgentProfile,ExternalEvent,ExternalResult,ExternalRun } from './types';
+import type { CliAgentProfile,CodexAgentProfile,CodexConnectionProbe,CodexModelOption,ExternalActor,ExternalEvent,ExternalResult,ExternalRun } from './types';
 import {codexConnectionVersion,maxExternalConversationRuns} from './types';
 import type {SpecialistReplyAuthor} from '../../../web-agent/shared/contracts';
 import {codexClosingMessageIds,legacyCommandBodies} from '../codex-conversation';
@@ -62,7 +65,7 @@ export class LakeExternalAgents {
     for(const id of codexClosingMessageIds(run))this.closingMessages.add(id);
   }
   isClosingMessage(id:string){return this.closingMessages.has(id);}
-  private async launch(profile:ExternalAgentProfile,directory:string,signal:AbortSignal,mcp?:{command:string;args:string[]},model?:string,purpose:'run'|'probe'='run'):
+  private async launch(profile:CodexAgentProfile,directory:string,signal:AbortSignal,mcp?:{command:string;args:string[]},model?:string,purpose:'run'|'probe'='run'):
     Promise<AgentLaunch & {localModel:string;models:CodexModelOption[]}>{
     if(process.platform!=='darwin')throw new HttpError(409,'当前平台的 Codex 工具隔离尚未验证');
     if(!profile.nodePath)throw new HttpError(409,'请先配置 Codex 使用的 Node 运行时');
@@ -79,8 +82,64 @@ export class LakeExternalAgents {
       cwd:directory,observed:prepared.observed,threadConfig,env:{...prepared.environment,TMPDIR:directory},
       models:prepared.models,localModel:prepared.localModel};
   }
+  private async inspectCli(profile:CliAgentProfile,directory:string,signal:AbortSignal){
+    if(process.platform!=='darwin')throw new HttpError(409,'当前平台尚未开放本机 CLI 执行');
+    const environment=await cliEnvironment(this.store.home,profile,directory);
+    const version=await cliVersion(profile.id,environment,signal);
+    return {environment,...version};
+  }
+  private cliVersionMessage(profile:CliAgentProfile,version:string|undefined){
+    const product=externalProducts[profile.id];
+    return `${product.name} 需要 ${product.version} 或更新版本${version?`（当前 ${version}）`:''}`;
+  }
+  private async cliCredential(profile:CliAgentProfile){
+    const key=await this.store.secret(cliSecretId(profile.projectId,profile.id));
+    if(!key)throw new HttpError(409,`请配置 ${profile.id==='claude-code'?'Anthropic':'Gemini'} API Key`);
+    this.registerSecret(key);
+    return key;
+  }
+  private async verifyCliCredential(profile:CliAgentProfile,key:string,signal:AbortSignal){
+    const claude=profile.id==='claude-code';
+    const url=claude?'https://api.anthropic.com/v1/models?limit=1':'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1';
+    const headers:HeadersInit=claude?{'x-api-key':key,'anthropic-version':'2023-06-01'}:{'x-goog-api-key':key};
+    const response=await fetch(url,{headers,redirect:'error',signal:AbortSignal.any([signal,AbortSignal.timeout(10000)])}).catch(()=>{
+      signal.throwIfAborted();throw new Error('无法连接官方 API，请检查网络后重试');
+    });
+    await response.body?.cancel();
+    if(!response.ok)throw new Error([400,401,403].includes(response.status)?'API Key 未通过验证，请检查 Key 和账户权限':`官方 API 返回 HTTP ${response.status}`);
+  }
+  private async probeCli(profile:CliAgentProfile,directory:string,signal:AbortSignal){
+    const {projectId,id}=profile,name=externalAgentName(id);
+    const probe:CodexConnectionProbe={revision:profile.revision,authentication:profile.authentication,ready:false};
+    let connection:Antigravity|undefined;
+    try{
+      const inspected=await this.inspectCli(profile,directory,signal);
+      probe.cliVersion=inspected.version;
+      if(!inspected.supported)throw new Error(this.cliVersionMessage(profile,inspected.version));
+      const key=await this.cliCredential(profile);
+      await this.verifyCliCredential(profile,key,signal);
+      if(id==='claude-code'){
+        probe.model=profile.modelOverride;
+      }else{
+        inspected.environment.env.GEMINI_API_KEY=key;
+        connection=await Antigravity.launch(inspected.environment,()=>{},undefined,profile.modelOverride);
+        probe.capabilities=await connection.initialize(signal);
+        await connection.openSession({cwd:directory},signal);
+        probe.model=connection.model;probe.localModel=connection.localModel;
+        probe.models=connection.models.map(id=>({id,reasoningEfforts:[]}));
+      }
+      probe.ready=true;probe.authenticated=true;probe.authMode='api_key';probe.message=`${name} 已连接`;
+    }catch(error){probe.message=this.redact(error instanceof Error?error.message:`${name} 连接失败`);}
+    finally{await connection?.close();}
+    signal.throwIfAborted();
+    if(this.registry.get(projectId,id).revision!==profile.revision)throw new HttpError(409,'CLI 配置已变化，请重新检测连接');
+    this.store.put('acpProbes',projectId+':'+id,probe);
+    if(!probe.ready)throw new HttpError(409,probe.message??`${name} 连接失败`);
+    return {ok:true,capabilities:probe.capabilities};
+  }
   async probe(projectId:string,agent:unknown,signal:AbortSignal){
     const profile=this.registry.get(projectId,agent),directory=await privatePath(this.store.data,'external-agents','probe',projectId,profile.id);
+    if(profile.id!=='codex')return this.probeCli(profile,directory,signal);
     let transport:AgentConnection|undefined;
     try{
       const launch=await this.launch(profile,directory,signal,undefined,undefined,'probe');
@@ -104,23 +163,42 @@ export class LakeExternalAgents {
     const agents=await this.registry.list(projectId);
     await Promise.all(agents.map(async agent=>{
       const probe=this.registry.probe(projectId,agent.id);
-      if(!agent.enabled||!agent.installed||probe?.revision===agent.revision&&probe.authentication==='codex-local')return;
+      if(!agent.enabled||!agent.installed||probe?.revision===agent.revision&&probe.authentication===agent.authentication)return;
       const key=projectId+':'+agent.id;
       const previous=this.probes.get(key);if(previous){await previous.work;return;}
-      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(new Error('读取本机 Codex 配置超时')),90000);
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(new Error('读取本机执行器状态超时')),90000);
       const work=this.probe(projectId,agent.id,controller.signal).catch(()=>{}).finally(()=>{clearTimeout(timer);this.probes.delete(key);});
       this.probes.set(key,{controller,work});await work;
     }));
     return this.registry.list(projectId);
   }
   async prepare(projectId:string,agent:unknown,input:Record<string,unknown>,signal:AbortSignal){
-    if(input.enabled===true&&process.platform!=='darwin')throw new HttpError(409,'当前平台的 Codex 执行尚未开放');
+    if(input.enabled===true&&process.platform!=='darwin')throw new HttpError(409,'当前平台尚未开放本机执行器');
     const profile=await this.registry.save(projectId,agent,input);signal.throwIfAborted();
     if(profile.enabled){
-      if(!(await this.registry.list(projectId))[0]?.installed)await this.registry.install(projectId,profile.id,profile.npmPath,signal);
-      signal.throwIfAborted();await this.probe(projectId,profile.id,signal);
+      if(profile.id==='codex'){
+        if(!(await this.registry.list(projectId)).find(status=>status.id===profile.id)?.installed)
+          await this.registry.install(projectId,profile.id,profile.npmPath,signal);
+        signal.throwIfAborted();await this.probe(projectId,profile.id,signal);
+      }else{
+        // Connection failure is reported alongside the saved CLI preferences.
+        await this.probe(projectId,profile.id,signal).catch(error=>{if(!(error instanceof HttpError)||error.status!==409)throw error;});
+      }
     }
     return {agents:await this.registry.list(projectId)};
+  }
+  private async connectCli(profile:CliAgentProfile,directory:string,signal:AbortSignal,publish:(event:AgentActivity)=>void,mcp:ScopedStdioMcp|ScopedHttpMcp|undefined,model:string|undefined,systemPrompt:string|undefined,observeModel:ObserveAgentModel){
+    const selected=model??profile.modelOverride;
+    if(selected!==undefined&&!isCliModelId(selected))throw new HttpError(400,'模型 ID 无效');
+    const inspected=await this.inspectCli(profile,directory,signal);
+    if(!inspected.supported)throw new HttpError(409,this.cliVersionMessage(profile,inspected.version));
+    const key=await this.cliCredential(profile);
+    if(profile.id==='claude-code'){
+      inspected.environment.env.ANTHROPIC_API_KEY=key;
+      return new ClaudeCode(inspected.environment,publish,mcp&&'command' in mcp?mcp:undefined,selected,observeModel);
+    }
+    inspected.environment.env.GEMINI_API_KEY=key;
+    return Antigravity.launch(inspected.environment,publish,mcp&&'serverUrl' in mcp?mcp:undefined,selected,systemPrompt,observeModel);
   }
   private result(run:ExternalRun):ExternalResult{const last=run.events.findLast(event=>event.kind==='text'&&event.publicTextId&&typeof event.publicText==='string');return {run_id:run.id,agent:externalAgentName(run.agent),state:run.state,summary:run.summary??run.error??'',
     ...(run.stopReason==='deadline_reached'&&{stop_reason:'deadline_reached' as const}),
@@ -153,7 +231,8 @@ export class LakeExternalAgents {
       const current=this.registry.get(actor.projectId,agentId);if(!current.enabled||current.revision!==profile.revision)throw new HttpError(409,'外部 Agent 配置已变化');};
     live.guard=guard;
     const fence=setInterval(()=>{try{guard();}catch(error){controller.abort(error);}},1000);
-    let bridge:Awaited<ReturnType<typeof openToolBridge>>|undefined,submittedReport='',eventBytes=0;
+    let bridge:Awaited<ReturnType<typeof openToolBridge>>|undefined,httpBridge:Awaited<ReturnType<typeof openHttpToolBridge>>|undefined;
+    let submittedReport='',eventBytes=0;
     const text=new ExternalPublicText(run.id,this.redact);
     const persist=()=>{run.updatedAt=now();this.store.put('acpRuns',run.id,run);};
     const event=(value:Omit<ExternalEvent,'sequence'|'at'>)=>{
@@ -179,12 +258,16 @@ export class LakeExternalAgents {
     try{
       guard();
       const directory=await privatePath(this.store.data,'external-agents','runs',run.contextId);
-      if(agentId==='codex'&&actor.purpose!=='conversation')bridge=await openToolBridge(tools.map(tool=>({name:tool.metadata.name,description:tool.metadata.description??tool.metadata.name,inputSchema:tool.inputSchema as Record<string,unknown>})),invoke);
+      const toolDefinitions=tools.map(tool=>({name:tool.metadata.name,description:tool.metadata.description??tool.metadata.name,inputSchema:tool.inputSchema as Record<string,unknown>}));
+      if(tools.length&&actor.purpose!=='conversation'){
+        if(agentId==='antigravity'){
+          httpBridge=await openHttpToolBridge(toolDefinitions,invoke);
+          this.registerSecret(httpBridge.headers.Authorization.slice('Bearer '.length));
+        }else bridge=await openToolBridge(toolDefinitions,invoke);
+      }
       const launcher=ownLauncher('--internal-acp-mcp');
       const mcp=bridge?{command:'/usr/bin/env',args:['-i','PATH='+process.env.PATH,'HOME='+directory,'TMPDIR='+directory,'LANG='+(process.env.LANG??'en_US.UTF-8'),'LAKE_TS_IMPORT_ONLY=0',launcher.executable,...launcher.args,bridge.socket]}:undefined;
-      const launch=await this.launch(profile,directory,controller.signal,mcp,actor.model??prior?.model);
-      if(launch.observed){run.model=launch.observed.model;run.modelProvider=launch.observed.modelProvider;run.reasoningEffort=launch.observed.reasoningEffort;persist();}
-      const transport:AgentConnection=new CodexAppServer(launch,update=>{
+      const publish=(update:AgentActivity)=>{
         if(controller.signal.aborted||!['dispatching','sent'].includes(run.dispatchPhase))return;
         if(update.kind==='input'){guard();actor.inputConsumed?.(update.inputId);}
         else if(update.kind==='usage'){run.usage=update.usage;persist();}
@@ -192,12 +275,24 @@ export class LakeExternalAgents {
           if(actor.purpose==='worker'&&update.preview)actor.event(run,{kind:'tool_update',status:update.status,callId:this.redact(update.callId),
             displayKind:update.displayKind,detail:this.redact(update.detail??'').slice(0,update.displayKind==='command'?commandLimit:512),preview:this.redact(update.preview,true).slice(0,200),sequence:run.events.length,at:now()});
         }
-        else if(update.kind==='text')event({kind:'text',...text.snapshot(update.text,update.messageId,update.messageText)});
+        else if(update.kind==='text')event({kind:'text',...(profile.id==='codex'?text.snapshot(update.text,update.messageId,update.messageText):text.replace(update.messageId,update.messageText))});
         else if(actor.purpose==='worker'&&!actor.childSessionId&&!actor.agentRunId)event(update);
         else event({kind:update.kind,callId:update.callId,title:update.title,status:update.status});
-      },bridge?{server:'lake',tools:new Set(tools.map(tool=>tool.metadata.name)),guard:activePrompt}:undefined,this.redact);
+      };
+      const model=actor.model??prior?.model;
+      let transport:AgentConnection;
+      if(profile.id==='codex'){
+        const launch=await this.launch(profile,directory,controller.signal,mcp,model);
+        if(launch.observed){run.model=launch.observed.model;run.modelProvider=launch.observed.modelProvider;run.reasoningEffort=launch.observed.reasoningEffort;persist();}
+        transport=new CodexAppServer(launch,publish,bridge?{server:'lake',tools:new Set(toolDefinitions.map(tool=>tool.name)),guard:activePrompt}:undefined,this.redact);
+      }else{
+        const endpoint=httpBridge?{serverUrl:httpBridge.serverUrl,headers:httpBridge.headers}:mcp;
+        transport=await this.connectCli(profile,directory,controller.signal,publish,endpoint&&{...endpoint,tools:toolDefinitions,guard:activePrompt},model,actor.systemPrompt,(reported,provider)=>{
+          run.model=reported;run.modelProvider=provider;persist();
+        });
+      }
       live.process=transport;
-      const cancel=()=>{void transport.cancel().finally(()=>transport.close());};controller.signal.addEventListener('abort',cancel,{once:true});
+      const cancel=()=>{void transport.cancel().finally(()=>transport.close()).catch(()=>{});};controller.signal.addEventListener('abort',cancel,{once:true});
       await transport.initialize(controller.signal);
       run.runtimeKind=profile.runtimeKind;
       run.externalSessionId=await transport.openSession({cwd:directory,threadId:prior?.externalSessionId,systemPrompt:actor.systemPrompt},controller.signal);
@@ -216,7 +311,12 @@ export class LakeExternalAgents {
       run.summary=this.redact(text.auditText).slice(0,32768);
       run.state=run.dispatchPhase==='not_sent'?(controller.signal.aborted||run.stopReason==='deadline_reached'?'cancelled':'failed'):'unknown';persist();event({kind:'status',status:run.state});
       if(run.state==='failed'&&!run.summary)throw new HttpError(409,run.error);return this.result(run);
-    }finally{this.indexClosingMessages(run);stopDeadline();clearInterval(fence);controller.abort(new Error('外部执行已结束'));actor.signal.removeEventListener('abort',stop);await bridge?.close();await live.process?.close();this.live.delete(run.id);}
+    }finally{
+      this.indexClosingMessages(run);stopDeadline();clearInterval(fence);controller.abort(new Error('外部执行已结束'));
+      actor.signal.removeEventListener('abort',stop);
+      await Promise.allSettled([bridge?.close(),httpBridge?.close(),live.process?.close()]);
+      this.live.delete(run.id);
+    }
   }
   active(sessionId:string){return [...this.live.keys()].some(id=>this.store.get<ExternalRun>('acpRuns',id)?.sessionId===sessionId);}
   async steer(sessionId:string,input:string,inputId:string,agentRunId?:string){

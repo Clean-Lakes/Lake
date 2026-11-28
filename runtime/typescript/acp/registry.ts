@@ -3,13 +3,14 @@ import { join, isAbsolute, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import {createHash} from 'node:crypto';
 import { externalAgentId, externalAgentIds, externalProducts } from './catalog';
-import type { CodexConnectionProbe, CodexModelOption, ExternalAgentId, ExternalAgentProfile, ExternalAgentStatus } from './types';
+import type { CliAgentId, CliAgentProfile, CodexAgentProfile, CodexConnectionProbe, CodexModelOption, ExternalAgentId, ExternalAgentProfile, ExternalAgentStatus } from './types';
 import { HttpError, LakeStore, now } from '../store';
 import { privateFile, privatePath } from './private';
 import { codexCatalogRevision, codexModelCatalog, codexStartupArgs, isCodexModelId, isCodexReasoningEffort, tomlValue } from './codex-profile';
 import {CodexLocalSource,codexHomePresent} from './codex-local';
 import {discoverCodexRuntime,validateCodexNode} from './runtime-paths';
 import {codexConnectionVersion} from './types';
+import {cliExecutable,cliRuntimeKinds,cliSecretId,cliSource,isCliModelId} from './cli-profile';
 
 function projectOverride(input:unknown,current:string|undefined,isValid:(value:unknown)=>value is string,invalid:string){
   if(input===undefined)return current;
@@ -36,8 +37,11 @@ export class ExternalAgentRegistry {
     catch(error){return {home:this.local.home,fingerprint:createHash('sha256').update('unavailable:'+this.local.home).digest('hex'),environment:{} as NodeJS.ProcessEnv,mcpIds:[],hooks:{},error:error instanceof Error?error.message:'无法读取本机 Codex 配置'};}
   }
   private key(projectId: string, id: ExternalAgentId) { this.store.require('projects', projectId); return projectId + ':' + id; }
+  get(projectId:string,agent:'codex'):CodexAgentProfile;
+  get(projectId:string,agent:unknown):ExternalAgentProfile;
   get(projectId: string, agent: unknown): ExternalAgentProfile {
     const id = externalAgentId(agent), key = this.key(projectId, id);
+    if(id!=='codex')return this.getCli(projectId,id,key);
     const source=this.source(),current=this.store.get<any>('acpProfiles',key);
     if(current&&![1,2,3].includes(current.schemaVersion))throw new HttpError(409,'外部 Agent 配置版本不受当前版本支持');
     if(current&&(current.schemaVersion!==3||current.runtimeKind!=='codex-app-server'||current.sourceFingerprint!==source.fingerprint)){
@@ -48,6 +52,17 @@ export class ExternalAgentRegistry {
     }
     return current??{schemaVersion:3,runtimeKind:'codex-app-server',id,projectId,revision:0,enabled:false,authentication:'codex-local',sourceFingerprint:source.fingerprint,updatedAt:now()};
   }
+  private getCli(projectId:string,id:CliAgentId,key:string):CliAgentProfile {
+    const current=this.store.get<CliAgentProfile>('acpProfiles',key);
+    if(current&&(current.schemaVersion!==3||current.runtimeKind!==cliRuntimeKinds[id]||current.authentication!=='cli-api-key'))
+      throw new HttpError(409,'外部 Agent 配置版本不受当前版本支持');
+    const {fingerprint:sourceFingerprint}=cliSource(this.store.home,projectId,id,current?.executablePath);
+    if(current){
+      if(current.sourceFingerprint===sourceFingerprint)return current;
+      return this.store.put('acpProfiles',key,{...current,sourceFingerprint,revision:current.revision+1,updatedAt:now()});
+    }
+    return {schemaVersion:3,id,projectId,runtimeKind:cliRuntimeKinds[id],revision:0,enabled:false,authentication:'cli-api-key',sourceFingerprint,updatedAt:now()};
+  }
   revision(projectId: string) { return externalAgentIds.map(id => this.get(projectId, id).revision).join(':'); }
   // Retain the installed engine location across the transport migration.
   runtimeRoot() { return join(this.store.home, 'external-agents', 'adapters', 'codex'); }
@@ -55,6 +70,7 @@ export class ExternalAgentRegistry {
   async list(projectId: string): Promise<ExternalAgentStatus[]> {
     return Promise.all(externalAgentIds.map(async id => {
       const profile = this.get(projectId, id);
+      if(profile.id!=='codex')return this.cliStatus(profile);
       let installed = false;
       try {
         const engine = JSON.parse(await readFile(join(this.runtimeRoot(), 'node_modules/@openai/codex/package.json'), 'utf8'));
@@ -83,11 +99,29 @@ export class ExternalAgentRegistry {
         message:current?probe.message:undefined,capabilities:current?probe.capabilities:undefined};
     }));
   }
+  private cliStatus(profile:CliAgentProfile):ExternalAgentStatus {
+    const {id,projectId}=profile;
+    const {executable,keyConfigured}=cliSource(this.store.home,projectId,id,profile.executablePath);
+    const probe=this.probe(projectId,id);
+    const current=probe?.revision===profile.revision&&probe.authentication===profile.authentication?probe:undefined;
+    const name=externalProducts[id].name;
+    const transportReady=!!executable&&current?.ready===true;
+    const assignmentBlocker=!profile.enabled?`请启用 ${name} 并保存`:
+      process.platform!=='darwin'?'当前平台尚未开放本机 CLI 执行':!executable?`未找到 ${name} CLI，请安装或填写路径`:
+      !current?`正在检测 ${name} 连接`:!transportReady||!current.authenticated?current.message??`${name} 连接不可用`:undefined;
+    return {...profile,name,installed:!!executable,transportReady,assignmentReady:!assignmentBlocker,assignmentBlocker,
+      detectedExecutable:executable?.path,cliVersion:current?.cliVersion,keyConfigured,
+      authMode:current?.authenticated?'api_key':'none',
+      localModel:current?.localModel,model:current?.model,defaultTaskModel:profile.modelOverride??current?.model,
+      modelOptions:current?.models?.map(model=>model.id),message:current?.message};
+  }
   probe(projectId:string,agent:ExternalAgentId) {
     const probe = this.store.get<CodexConnectionProbe>('acpProbes',this.key(projectId,agent));
     // Retry older failures once with the corrected startup configuration.
-    return probe?.ready === false && probe.connectionVersion !== codexConnectionVersion ? undefined : probe;
+    return agent==='codex'&&probe?.ready===false&&probe.connectionVersion!==codexConnectionVersion?undefined:probe;
   }
+  save(projectId:string,agent:'codex',input:Record<string,unknown>):Promise<CodexAgentProfile>;
+  save(projectId:string,agent:unknown,input:Record<string,unknown>):Promise<ExternalAgentProfile>;
   async save(projectId: string, agent: unknown, input: Record<string, unknown>) {
     const id=externalAgentId(agent), key=this.key(projectId,id), previous=this.mutations.get(key)??Promise.resolve();
     const work=previous.catch(()=>{}).then(async()=>{
@@ -95,6 +129,7 @@ export class ExternalAgentRegistry {
       const stale='外部 Agent 配置已变化，请刷新后重试';
       if(input.expectedRevision!==current.revision)throw new HttpError(409,stale);
       if(typeof input.enabled!=='boolean')throw new HttpError(400,'需要明确是否启用 Agent');
+      if(current.id!=='codex')return this.saveCli(current,input,key);
       if(input.apiKey!==undefined)throw new HttpError(400,'Codex 已复用本机登录，请在本机 Codex 中管理认证');
       if(input.model!==undefined)throw new HttpError(400,'请通过项目的 Codex 模型选项设置模型');
       const modelOverride=projectOverride(input.modelOverride,current.modelOverride,isCodexModelId,'Codex 模型 ID 无效');
@@ -128,6 +163,32 @@ export class ExternalAgentRegistry {
     this.mutations.set(key,work);
     try{return await work;}finally{if(this.mutations.get(key)===work)this.mutations.delete(key);}
   }
+  private async saveCli(current:CliAgentProfile,input:Record<string,unknown>,key:string){
+    const {id}=current;
+    if(input.model!==undefined||input.reasoningEffortOverride!=null||input.nodePath!==undefined||input.npmPath!==undefined)
+      throw new HttpError(400,'请使用当前 CLI 支持的配置项');
+    const modelOverride=projectOverride(input.modelOverride,current.modelOverride,isCliModelId,'模型 ID 无效');
+    let executablePath=current.executablePath;
+    if(input.executablePath!==undefined){
+      const path=input.executablePath;
+      if(path==='')executablePath=undefined;
+      else {
+        if(typeof path!=='string'||!isAbsolute(path)||/[\0\r\n]/.test(path)||!cliExecutable(this.store.home,id,path))
+          throw new HttpError(400,'CLI 路径必须指向可执行文件');
+        executablePath=path;
+      }
+    }
+    if(this.get(current.projectId,id).revision!==current.revision)throw new HttpError(409,'外部 Agent 配置已变化，请刷新后重试');
+    const apiKey=input.apiKey;
+    if(apiKey!==undefined){
+      if(apiKey!==null&&(typeof apiKey!=='string'||!apiKey||apiKey.length>4096||/[^\x21-\x7e]/.test(apiKey)))throw new HttpError(400,'API Key 格式无效');
+      await this.store.secret(cliSecretId(current.projectId,id),apiKey);
+    }
+    const verified=this.get(current.projectId,id);
+    const profile:CliAgentProfile={...current,executablePath,modelOverride,enabled:input.enabled===true,
+      sourceFingerprint:cliSource(this.store.home,current.projectId,id,executablePath).fingerprint,revision:Math.max(verified.revision,current.revision+1),updatedAt:now()};
+    return this.store.put('acpProfiles',key,profile);
+  }
   async validateNode(path:string){await validateCodexNode(path);}
   async prepareHome(profile:ExternalAgentProfile){
     const home=await privatePath(this.store.home,'external-agents','profiles',profile.projectId,profile.id);
@@ -140,7 +201,7 @@ export class ExternalAgentRegistry {
     await privateFile(home,file,contents);
     return join(home,file);
   }
-  private async launchConfiguration(profile:ExternalAgentProfile,signal:AbortSignal,discoverModels:boolean,model?:string){
+  private async launchConfiguration(profile:CodexAgentProfile,signal:AbortSignal,discoverModels:boolean,model?:string){
     const source=this.source();if(source.error)throw new HttpError(409,source.error);
     if(!codexHomePresent(source.home))throw new HttpError(409,'未找到本机 Codex 配置目录，请先在 Codex 中完成登录');
     const requested=model??profile.modelOverride;
@@ -167,16 +228,17 @@ export class ExternalAgentRegistry {
         authenticated:config.authenticated,authMode:config.authMode}};
   }
 
-  prepareConnection(profile:ExternalAgentProfile,signal:AbortSignal) {
+  prepareConnection(profile:CodexAgentProfile,signal:AbortSignal) {
     return this.launchConfiguration(profile,signal,true);
   }
 
-  prepareLaunch(profile:ExternalAgentProfile,signal:AbortSignal,model?:string) {
+  prepareLaunch(profile:CodexAgentProfile,signal:AbortSignal,model?:string) {
     return this.launchConfiguration(profile,signal,false,model);
   }
 
   async install(projectId: string, agent: unknown, npmPath: unknown, signal: AbortSignal) {
     const profile=this.get(projectId,agent);
+    if(profile.id!=='codex')throw new HttpError(400,`请通过 ${externalProducts[profile.id].name} 的官方安装方式更新 CLI`);
     if(this.installation)throw new HttpError(409,'Codex 引擎正在安装');
     npmPath=npmPath??profile.npmPath;
     if(!profile.nodePath||typeof npmPath!=='string'||!isAbsolute(npmPath)||/[\0\r\n]/.test(npmPath))throw new HttpError(400,'未识别到 Node/npm，请重新启用自动识别或检查高级设置');
