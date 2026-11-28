@@ -49,12 +49,12 @@ export function DesktopUpdate({visible,onUnreadChange}:{
   if(!visible)return null;
   const actionLabel=busy?state.status==="downloading"?"下载中…":"正在处理…":available&&!readonly?"下载并安装":"重新检查";
   return <section id="workspace-updates-page" className="workspace-page desktop-update-page" role="tabpanel" aria-labelledby="updates-console-tab">
-      <WorkspacePageHeader id="desktop-update-title" title="检查更新" actions={
-        <button type="button" className="button primary" aria-label={actionLabel} title={actionLabel} disabled={busy}
-          onClick={()=>void command(available&&!readonly?"install":"check")}><Glyph name={available&&!readonly?'down':'refresh'} size={15}/><span>{actionLabel}</span></button>
-      }/>
+      <WorkspacePageHeader id="desktop-update-title" title="检查更新"/>
       <div className="desktop-update-layout">
-        <WorkspaceSettingSection id="desktop-update-status-title" title="版本状态">
+        <WorkspaceSettingSection id="desktop-update-status-title" title="版本状态" actions={
+          <button type="button" className="button workspace-soft-primary" aria-label={actionLabel} title={actionLabel} disabled={busy}
+            onClick={()=>void command(available&&!readonly?"install":"check")}><Glyph name={available&&!readonly?'down':'refresh'} size={15}/><span>{actionLabel}</span></button>
+        }>
           <div className="workspace-setting-card">
             <div className="workspace-setting-row">
               <div className="workspace-setting-copy"><strong>当前版本</strong>

@@ -86,11 +86,14 @@ function CurrentProject({project, resourceCount, canRename, canDelete, onRename,
     }
   };
 
-  return <WorkspaceSettingSection id="workspace-current-project-title" title="当前项目">
+  return <section className="workspace-setting-section" aria-label="当前项目">
     <div id="workspace-current-project" className="workspace-setting-card">
       <div className="workspace-setting-row">
         <div className="workspace-setting-copy">
-          <strong aria-live="polite">{project.name}</strong>
+          <div className="workspace-current-project-head">
+            <strong aria-live="polite">{project.name}</strong>
+            <span className="workspace-current-project-badge">当前项目</span>
+          </div>
           <dl className="workspace-project-facts">
             <div><dt>资源</dt><dd>{resourceCount} 项</dd></div>
             {!Number.isNaN(createdAt.getTime()) && <div>
@@ -119,7 +122,7 @@ function CurrentProject({project, resourceCount, canRename, canDelete, onRename,
         {error && <p className="form-error" role="alert">{error}</p>}
       </form>}
     </div>
-  </WorkspaceSettingSection>;
+  </section>;
 }
 
 export function WorkspacePage({projects, project, resources, connected, bulkSelection, bulkSelectedCount,
@@ -167,16 +170,30 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
     }
   };
   return <section id="workspace-page" className="workspace-page workspace-project-page" role="tabpanel" aria-labelledby="workspace-console-tab">
-    <WorkspacePageHeader id="workspace-page-title" title="项目" actions={
-      <button type="button" className="button primary" aria-label="新建项目" title="新建项目" disabled={!connected} onClick={onCreateProject}>
-        <Glyph name="plus" size={15}/><span>新建项目</span>
-      </button>
-    }/>
+    <WorkspacePageHeader id="workspace-page-title" title="项目"/>
     <div className="workspace-page-layout">
-      <WorkspaceSettingSection id="workspace-project-directory-title" title="项目列表" actions={!!projects.length &&
-        <span className="workspace-directory-count" role="status">
-          {needle ? `${visibleProjects.length} / ${projects.length}` : projects.length} 个项目
+      {project && <CurrentProject project={project} resourceCount={resourceCounts.get(project.id) ?? 0}
+        canRename={connected && !bulkSelection} canDelete={connected && !bulkSelection}
+        onRename={onRenameProject ? name => onRenameProject(project, name) : undefined}
+        onDelete={() => onDeleteProject(project)}/>}
+      <WorkspaceSettingSection id="workspace-project-directory-title" title={
+        <span className="workspace-section-title-group">
+          <span>全部项目</span>
+          {!!projects.length && <span className="workspace-directory-count" role="status">
+            {needle ? `${visibleProjects.length} / ${projects.length}` : `${projects.length} 个`}
+          </span>}
         </span>
+      } actions={
+        <>
+          {!!projects.length && <button type="button" className="workspace-text-button workspace-bulk-toggle" aria-pressed={!!bulkSelection}
+            aria-label={bulkSelection ? '完成' : '批量管理'} title={bulkSelection ? '完成' : '批量管理'}
+            disabled={!connected && !bulkSelection} onClick={onToggleBulk}>
+            <Glyph name={bulkSelection ? 'check' : 'listTasks'} size={16}/><span>{bulkSelection ? '完成' : '批量管理'}</span>
+          </button>}
+          <button type="button" className="button workspace-soft-primary" aria-label="新建项目" title="新建项目" disabled={!connected} onClick={onCreateProject}>
+            <Glyph name="plus" size={15}/><span>新建项目</span>
+          </button>
+        </>
       }>
         {!!projects.length && <div className="workspace-project-toolbar">
           <div className="workspace-project-search">
@@ -187,11 +204,6 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
             {query && <button type="button" className="icon-button" aria-label="清除项目搜索"
               onClick={() => {setQuery(''); search.current?.focus();}}><Glyph name="close" size={14}/></button>}
           </div>
-          <button type="button" className="workspace-text-button workspace-bulk-toggle" aria-pressed={!!bulkSelection}
-            aria-label={bulkSelection ? '完成' : '批量管理'} title={bulkSelection ? '完成' : '批量管理'}
-            disabled={!connected && !bulkSelection} onClick={onToggleBulk}>
-            <Glyph name={bulkSelection ? 'check' : 'listTasks'} size={16}/><span>{bulkSelection ? '完成' : '批量管理'}</span>
-          </button>
         </div>}
         {bulkSelection && <div className="workspace-bulk-actions" aria-label="项目批量管理">
           <span role="status">已选 {bulkSelectedCount} 项</span>
@@ -233,10 +245,6 @@ export function WorkspacePage({projects, project, resources, connected, bulkSele
           </div>}
         </div>
       </WorkspaceSettingSection>
-      {project && <CurrentProject project={project} resourceCount={resourceCounts.get(project.id) ?? 0}
-        canRename={connected && !bulkSelection} canDelete={connected && !bulkSelection}
-        onRename={onRenameProject ? name => onRenameProject(project, name) : undefined}
-        onDelete={() => onDeleteProject(project)}/>}
     </div>
   </section>;
 }

@@ -75,10 +75,10 @@ test('memory and watchdog settings are absent from the console and category sear
 
 test('workspace actions render in the page, including a creation path for an empty workspace',()=>{
  const html=renderToStaticMarkup(createElement(WorkspacePage,{...props,project}));
- for(const label of ['当前项目',project.name,'新建项目','批量管理','重命名','删除项目','打开当前项目','搜索项目'])assert.ok(html.includes(label),label);
+ for(const label of ['当前项目','全部项目',project.name,'新建项目','批量管理','重命名','删除项目','打开当前项目','搜索项目'])assert.ok(html.includes(label),label);
  assert.match(html,/id="workspace-page"/);
- assert.match(html,/<h1 id="workspace-page-title"[^>]*>项目<\/h1>/);
- assert.match(html,/<header[\s\S]*新建项目[\s\S]*<\/header>[\s\S]*搜索项目[\s\S]*批量管理/);
+ assert.match(html,/<header class="workspace-page-header"><h1 id="workspace-page-title"[^>]*>项目<\/h1><\/header>/);
+ assert.match(html,/id="workspace-current-project"[\s\S]*全部项目[\s\S]*批量管理[\s\S]*新建项目[\s\S]*搜索项目/);
  assert.doesNotMatch(html,/关闭控制台/);
  assert.equal((html.match(/type="search"/g)??[]).length,1);
  assert.doesNotMatch(html,/role="dialog"|composer-dock|message-input|检查更新|已删除|搜索会话和资源|进入项目/);
@@ -95,7 +95,7 @@ test('the console owns one close control outside the project page header',()=>{
   children:createElement(WorkspacePage,{...props,project}),
  }));
  assert.equal((html.match(/aria-label="关闭控制台"/g)??[]).length,1);
- assert.match(html,/class="workspace-console-content"><button [^>]*aria-label="关闭控制台"[\s\S]*<header [^>]*>[\s\S]*新建项目/);
+ assert.match(html,/class="workspace-console-content"><button [^>]*aria-label="关闭控制台"[\s\S]*<header class="workspace-page-header"><h1 id="workspace-page-title"[^>]*>项目<\/h1><\/header>[\s\S]*新建项目/);
 });
 
 test('the rail opens the console dialog and signals unread updates',()=>{
